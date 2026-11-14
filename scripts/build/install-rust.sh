@@ -14,7 +14,7 @@
 # RUSTUP_TOOLCHAIN, rustup never reads the file during the build.
 #
 # usage: scripts/build/install-rust.sh [TARGET ...]
-# tests/test_ci/test_rust_toolchain.py holds the workflows to it.
+# tests/test_ci/test_workflows.py holds the workflows to it.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

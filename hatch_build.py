@@ -15,6 +15,9 @@ there is tagged for that interpreter alone.
   link-time optimisation, and puts the module in ``src/opentide/``.
 - ``OPENTIDE_ENGINE_PROFILE`` picks another profile (the wheel install tests
   build ``develop`` wheels).
+- ``OPENTIDE_ENGINE_PREBUILT`` names a ``_native`` library cargo already built
+  (CI's build job builds it once for every Python job): it is used as is, and
+  nothing is compiled.
 
 Building needs a Rust toolchain (stable, see ``rust-version`` in
 ``Cargo.toml``). The library is wherever cargo reports writing it, so
@@ -46,6 +49,7 @@ MANIFEST = ROOT / "Cargo.toml"
 PACKAGE = "opentide-native"
 LIBRARY = "_native"
 PROFILE_ENV = "OPENTIDE_ENGINE_PROFILE"
+PREBUILT_ENV = "OPENTIDE_ENGINE_PREBUILT"
 #: The oldest CPython whose stable ABI the extension uses (``abi3-py310``).
 ABI3_FLOOR = "cp310"
 
@@ -186,6 +190,17 @@ def build_engine(profile: str) -> Path:
     return library
 
 
+def engine_library(profile: str) -> Path:
+    """The ``_native`` library: ``OPENTIDE_ENGINE_PREBUILT``'s when set, else compiled."""
+    prebuilt = os.environ.get(PREBUILT_ENV)
+    if prebuilt:
+        library = Path(prebuilt)
+        if not library.is_file():
+            raise RuntimeError(f"{PREBUILT_ENV} names {library}, which is not a file")
+        return library
+    return build_engine(profile)
+
+
 class EngineBuildHook(BuildHookInterface):
     """Compile ``bindings/python/`` into ``opentide/_native`` for every wheel, editable included."""
 
@@ -196,7 +211,7 @@ class EngineBuildHook(BuildHookInterface):
             return
         editable = version == "editable"
         profile = os.environ.get(PROFILE_ENV) or ("develop" if editable else "release")
-        library = build_engine(profile)
+        library = engine_library(profile)
         name = module_name()
         if editable:
             # The editable wheel points at src/: the module goes next to the sources.

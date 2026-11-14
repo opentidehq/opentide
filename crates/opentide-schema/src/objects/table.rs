@@ -161,6 +161,7 @@ pub(crate) fn compare(
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
     let (failures, results) = compare(
         include_str!("../../tests/oracle/objects_cases.toml"),

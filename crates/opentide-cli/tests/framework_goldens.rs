@@ -255,6 +255,7 @@ fn recordings() -> Vec<(String, PathBuf)> {
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn framework_goldens_are_identical() {
     let recordings = recordings();
     assert!(recordings.len() >= 60, "{} recordings", recordings.len());

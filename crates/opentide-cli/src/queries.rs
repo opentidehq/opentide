@@ -232,9 +232,12 @@ impl CheckedQuery {
 
 /// The profiles of one workspace: its Elastic tenants, read from
 /// [`ELASTIC_CONFIGURATION`]. Built by [`Profiles::install`], which also
-/// installs the datasets of its [`VISIBILITY_CONFIGURATION`].
+/// installs the datasets of its [`VISIBILITY_CONFIGURATION`]; dropping it
+/// installs the ones in use before again (drop it before [`ENGINE`]).
 pub struct Profiles {
     host: MemoryWorkspace,
+    /// Puts the datasets in use before [`Profiles::install`] back on drop.
+    _restore: Option<opentide_analysis::RestoreVisibility>,
     /// Why the declared datasets could not be read, when they could not.
     pub visibility_problem: Option<String>,
     /// The workspace's Graylog tenants ([`GRAYLOG_CONFIGURATION`]); none when
@@ -260,6 +263,7 @@ impl Profiles {
             let bytes = fs.read(&path).map_err(|error| error.to_string())?;
             decode(&bytes).map(Some)
         };
+        let restore = opentide_analysis::save_visibility();
         let visibility_problem = match read(VISIBILITY_CONFIGURATION)
             .and_then(|text| opentide_analysis::install_visibility(text.as_deref()))
         {
@@ -284,6 +288,7 @@ impl Profiles {
         };
         Self {
             host: MemoryWorkspace { files },
+            _restore: Some(restore),
             visibility_problem,
             graylog_tenants,
         }
@@ -997,6 +1002,7 @@ mod tests {
                     SecurityEvent\n";
         let profiles = Profiles {
             host: MemoryWorkspace { files: Vec::new() },
+            _restore: None,
             visibility_problem: None,
             graylog_tenants: Vec::new(),
         };

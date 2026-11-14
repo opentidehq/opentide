@@ -458,7 +458,11 @@ impl Shard {
 
     /// The file's text: sorted keys, a two-space indent, one trailing new
     /// line (`render`).
-    pub fn render(&self) -> String {
+    ///
+    /// # Errors
+    ///
+    /// When the payload does not serialise: never an empty file in its place.
+    pub fn render(&self) -> std::io::Result<String> {
         let mut payload = self.extra.clone();
         payload.insert("schema".into(), SCHEMA_ID.into());
         payload.insert("object_uuid".into(), self.object_uuid.clone().into());
@@ -478,9 +482,9 @@ impl Shard {
             })
             .collect();
         payload.insert("platforms".into(), serde_json::Value::Object(platforms));
-        let mut text = python_dumps(&serde_json::Value::Object(payload));
+        let mut text = python_dumps(&serde_json::Value::Object(payload))?;
         text.push('\n');
-        text
+        Ok(text)
     }
 
     /// Writes the shard durably, or removes the file when no platform is
@@ -496,7 +500,7 @@ impl Shard {
             self.exists = false;
             return Ok(());
         }
-        write_durable(&self.path, &self.render())?;
+        write_durable(&self.path, &self.render()?)?;
         self.exists = true;
         Ok(())
     }
@@ -530,9 +534,10 @@ fn ordered_keys(
 
 /// *value* as `json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False)`
 /// writes it: serde_json's map sorts its keys, and its pretty printer
-/// indents by two spaces with `": "` and `","` between items.
-fn python_dumps(value: &serde_json::Value) -> String {
-    serde_json::to_string_pretty(value).unwrap_or_default()
+/// indents by two spaces with `": "` and `","` between items. A failure is
+/// an error, never an empty text that would replace the state.
+fn python_dumps(value: &serde_json::Value) -> std::io::Result<String> {
+    serde_json::to_string_pretty(value).map_err(std::io::Error::other)
 }
 
 /// Persists a rename or an unlink; not every platform can open a folder.

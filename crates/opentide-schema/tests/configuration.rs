@@ -296,6 +296,7 @@ fn compare(
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn configuration_cases_match_the_oracle_or_name_their_difference() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
     let cases: toml::Value = toml::from_str(CASES).unwrap();

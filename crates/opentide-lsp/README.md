@@ -42,7 +42,7 @@ The workflow runs both on the published assets before it publishes the crates.
 
 crates.io publishing uses [trusted publishing](https://crates.io/docs/trusted-publishing): a crate's first version publishes with the `CARGO_REGISTRY_TOKEN` secret (scopes `publish-new`, `publish-update`, `trusted-publishing`), which also registers `publish.yml` as each crate's trusted publisher; later releases log in with the workflow's OIDC identity.
 
-The crates embed catalogs and grammars from the repository root; `scripts/engine/release.py vendor` copies them into each crate first, and CI packages every crate (nightly, on every push, and on a pull request that changes the Cargo manifests or carries the `full-ci` label) so a missing file fails there.
+The crates embed catalogs and grammars from the repository root; `scripts/engine/release.py vendor` copies them into each crate first, and CI packages every crate (nightly and on Run workflow) so a missing file fails there.
 
 ## Quick start
 

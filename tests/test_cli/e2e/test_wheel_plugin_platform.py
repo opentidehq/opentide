@@ -62,11 +62,13 @@ def _workspace(root: Path) -> Path:
     return repo
 
 
-def test_a_plugin_runs_on_opentide_installed_from_its_wheel(tmp_path: Path) -> None:
+def test_a_plugin_runs_on_opentide_installed_from_its_wheel(
+    tmp_path: Path, wheel_cache: Path
+) -> None:
     uv = shutil.which("uv")
     if uv is None:
         pytest.skip("uv is required to build and install the wheel")
-    wheel = _build_wheel(uv, tmp_path / "dist")
+    wheel = _build_wheel(uv, tmp_path / "dist", wheel_cache)
     env_dir = tmp_path / "wheel-venv"
     python = _install(uv, env_dir, str(wheel))
     _install_plugin(python)

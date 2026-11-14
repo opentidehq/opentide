@@ -211,7 +211,7 @@ bash scripts/engine/check-names.sh
 bash scripts/engine/validate-skills.sh
 cargo run --quiet --locked -p opentide-lsp -- generate-highlights --check
 
-echo "==> Docs structure (validate-docs.sh, as docs.yml runs it)"
+echo "==> Docs structure (validate-docs.sh, as ci.yml's docs job runs it)"
 bash scripts/validate-docs.sh
 
 echo "==> The engine's bundled Tide catalog and the generated artifacts match the models"

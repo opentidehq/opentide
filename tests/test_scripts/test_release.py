@@ -205,3 +205,31 @@ def test_the_cli_prints_a_candidates_notes(repo: Path, capsys: pytest.CaptureFix
     assert capsys.readouterr().out.startswith("Release candidate 1 of 1.3.0")
     assert script.main(["check-candidate", "v1.3.0-rc.1"]) == 0
     assert script.main(["check-candidate", "v1.2.0-rc.1"]) == 1
+
+
+def test_an_internal_candidates_notes_say_no_registry_has_it(repo: Path) -> None:
+    """publish.yml's internal channel: a draft GitHub pre-release, nothing on
+    PyPI, crates.io or npm, its packages listed in PACKAGES-SHA256SUMS."""
+    fixed = "## [Unreleased]\n\n### Fixed\n\n- **A fix.**\n"
+    _edit(repo / "CHANGELOG.md", "## [Unreleased]\n", fixed)
+    script = _script()
+    notes = script.notes(repo, "v1.3.0-rc.2", internal=True)
+    assert notes.startswith("Internal release candidate 2 of 1.3.0, for testing ")
+    assert "a draft GitHub pre-release only, nothing on PyPI, crates.io or npm" in notes
+    assert "PACKAGES-SHA256SUMS" in notes
+    assert "pip install --pre" not in notes
+    assert "- **A fix.**" in notes
+    assert "Minor." not in notes
+    with pytest.raises(script.ReleaseError, match="not a release candidate tag"):
+        script.notes(repo, "v1.2.0", internal=True)
+
+
+def test_the_cli_prints_an_internal_candidates_notes(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    script = _script()
+    script.ROOT = repo
+    assert script.main(["notes", "--internal", "v1.3.0-rc.1"]) == 0
+    assert capsys.readouterr().out.startswith("Internal release candidate 1 of 1.3.0")
+    assert script.main(["notes", "--internal", "v1.2.0"]) == 1
+    assert "not a release candidate tag" in capsys.readouterr().err

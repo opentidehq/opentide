@@ -311,3 +311,34 @@ def test_without_a_base_interpreter_the_running_one_is_read(
     monkeypatch.delenv("PYO3_PYTHON", raising=False)
     monkeypatch.setattr(sys, "_base_executable", str(tmp_path / "missing"), raising=False)
     assert hook.pyo3_python() == sys.executable
+
+
+def test_a_prebuilt_library_is_used_without_compiling(
+    hook: types.ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    library = tmp_path / "lib_native.so"
+    library.write_bytes(b"\x7fELF")
+    monkeypatch.setenv(hook.PREBUILT_ENV, str(library))
+
+    def no_build(profile: str) -> Path:
+        raise AssertionError(f"compiled the {profile} profile despite a prebuilt library")
+
+    monkeypatch.setattr(hook, "build_engine", no_build)
+    assert hook.engine_library("develop") == library
+
+
+def test_a_prebuilt_library_that_is_missing_fails_the_build(
+    hook: types.ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv(hook.PREBUILT_ENV, str(tmp_path / "absent.so"))
+    with pytest.raises(RuntimeError, match="not a file"):
+        hook.engine_library("develop")
+
+
+def test_without_a_prebuilt_library_the_engine_is_compiled(
+    hook: types.ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv(hook.PREBUILT_ENV, raising=False)
+    built = tmp_path / "lib_native.so"
+    monkeypatch.setattr(hook, "build_engine", lambda profile: built)
+    assert hook.engine_library("develop") == built

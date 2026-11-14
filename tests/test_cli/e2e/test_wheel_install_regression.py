@@ -13,6 +13,8 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
+import time
 import zipfile
 from pathlib import Path
 
@@ -45,7 +47,7 @@ def _run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
 
 
 def test_pip_installed_wheel_validate_generate_and_skills(
-    tmp_path: Path, tide_corpus_repo: Path
+    tmp_path: Path, tide_corpus_repo: Path, wheel_cache: Path
 ) -> None:
     uv = shutil.which("uv")
     if uv is None:
@@ -56,7 +58,7 @@ def test_pip_installed_wheel_validate_generate_and_skills(
     skills_dest = tmp_path / "skills-repo"
     skills_dest.mkdir()
 
-    wheel = _build_wheel(uv, dist)
+    wheel = _build_wheel(uv, dist, wheel_cache)
 
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
@@ -203,24 +205,44 @@ def test_pip_installed_wheel_validate_generate_and_skills(
     assert "KeyError" not in dry_run.stdout + dry_run.stderr
 
 
-def _build_wheel(uv: str, dist: Path) -> Path:
-    """opentide's wheel, with the engine compiled in (hatch_build.py).
+def _build_wheel(uv: str, dist: Path, shared: Path) -> Path:
+    """opentide's wheel, with the engine compiled in (hatch_build.py), copied into *dist*.
 
     The engine builds with the ``develop`` profile, which ``uv sync`` already
     compiled, so cargo reuses that build instead of a release one.
-    """
-    import os
 
-    build = _run(
-        [uv, "build", "--wheel", "--out-dir", str(dist)],
-        cwd=str(ROOT),
-        env={**os.environ, "OPENTIDE_ENGINE_PROFILE": "develop"},
-        timeout=900,
-    )
-    assert build.returncode == 0, build.stdout + build.stderr
-    wheels = list(dist.glob("opentide-*.whl"))
-    assert len(wheels) == 1, f"expected one wheel in {dist}: {wheels}"
-    return wheels[0]
+    One test run builds the wheel once, in *shared* (``wheel_cache``), under a
+    lock its xdist workers share: every build writes ``src/opentide/_version.py``
+    and ``build/`` in the checkout, so two at once could package a half-written
+    ``_version.py`` (``cannot import name '__version__'``).
+    """
+    shared.mkdir(exist_ok=True)
+    lock = shared / ".lock"
+    deadline = time.monotonic() + 1200
+    while True:
+        try:
+            lock.mkdir()
+            break
+        except FileExistsError:
+            if time.monotonic() > deadline:
+                pytest.fail(f"another worker held {lock} for 20 minutes")
+            time.sleep(1)
+    try:
+        wheels = list(shared.glob("opentide-*.whl"))
+        if not wheels:
+            build = _run(
+                [uv, "build", "--wheel", "--out-dir", str(shared)],
+                cwd=str(ROOT),
+                env={**os.environ, "OPENTIDE_ENGINE_PROFILE": "develop"},
+                timeout=900,
+            )
+            assert build.returncode == 0, build.stdout + build.stderr
+            wheels = list(shared.glob("opentide-*.whl"))
+    finally:
+        lock.rmdir()
+    assert len(wheels) == 1, f"expected one wheel in {shared}: {wheels}"
+    dist.mkdir(parents=True, exist_ok=True)
+    return Path(shutil.copy2(wheels[0], dist))
 
 
 def _install(uv: str, env_dir: Path, spec: str) -> Path:
@@ -258,7 +280,7 @@ def _initialize_response(result: subprocess.CompletedProcess[str]) -> dict[str, 
 
 
 def test_bare_wheel_mcp_start_answers_a_stdio_initialize(
-    tmp_path: Path, tide_corpus_repo: Path
+    tmp_path: Path, tide_corpus_repo: Path, wheel_cache: Path
 ) -> None:
     """Issue #526: a BARE install must start the server, with no extra.
 
@@ -274,7 +296,7 @@ def test_bare_wheel_mcp_start_answers_a_stdio_initialize(
     if uv is None:
         pytest.skip("uv is required to build and install the wheel")
 
-    wheel = _build_wheel(uv, tmp_path / "dist")
+    wheel = _build_wheel(uv, tmp_path / "dist", wheel_cache)
     env_dir = tmp_path / "bare-venv"
     _install(uv, env_dir, str(wheel))
 
@@ -306,7 +328,7 @@ def test_bare_wheel_mcp_start_answers_a_stdio_initialize(
 
 
 def test_wheel_installed_with_a_retired_extra_still_answers_a_stdio_initialize(
-    tmp_path: Path, tide_corpus_repo: Path
+    tmp_path: Path, tide_corpus_repo: Path, wheel_cache: Path
 ) -> None:
     """An install command written for an older release still installs a working server.
 
@@ -320,7 +342,7 @@ def test_wheel_installed_with_a_retired_extra_still_answers_a_stdio_initialize(
     if uv is None:
         pytest.skip("uv is required to build and install the wheel")
 
-    wheel = _build_wheel(uv, tmp_path / "dist")
+    wheel = _build_wheel(uv, tmp_path / "dist", wheel_cache)
     env_dir = tmp_path / "mcp-venv"
     _install(uv, env_dir, f"{wheel}[mcp]")
 
@@ -370,7 +392,7 @@ _REMOVED_DEPENDENCIES = (
 _NOT_INSTALLED = ("pandas", "numpy", "openpyxl")
 
 
-def test_bare_wheel_has_no_extras_and_no_vendor_sdks(tmp_path: Path) -> None:
+def test_bare_wheel_has_no_extras_and_no_vendor_sdks(tmp_path: Path, wheel_cache: Path) -> None:
     """A bare install, resolved with uv's default pre-release policy, is the slim package.
 
     uv refuses a transitive pre-release, so a pre-release-only dependency would
@@ -381,7 +403,7 @@ def test_bare_wheel_has_no_extras_and_no_vendor_sdks(tmp_path: Path) -> None:
     if uv is None:
         pytest.skip("uv is required to build and install the wheel")
 
-    wheel = _build_wheel(uv, tmp_path / "dist")
+    wheel = _build_wheel(uv, tmp_path / "dist", wheel_cache)
     python = _install(uv, tmp_path / "sdk-venv", str(wheel))
 
     print_extras = (
@@ -399,13 +421,13 @@ def test_bare_wheel_has_no_extras_and_no_vendor_sdks(tmp_path: Path) -> None:
         assert f"'{gone}'" not in installed.stdout, installed.stdout + installed.stderr
 
 
-def test_bare_wheel_installs_the_engine_with_no_extra(tmp_path: Path) -> None:
+def test_bare_wheel_installs_the_engine_with_no_extra(tmp_path: Path, wheel_cache: Path) -> None:
     """``pip install opentide`` brings the analysis engine: offline queries and the LSP (#332)."""
     uv = shutil.which("uv")
     if uv is None:
         pytest.skip("uv is required to build and install the wheel")
 
-    wheel = _build_wheel(uv, tmp_path / "dist")
+    wheel = _build_wheel(uv, tmp_path / "dist", wheel_cache)
     # One wheel carries the engine, for every CPython from 3.10 on.
     assert "-cp310-abi3-" in wheel.name, wheel.name
     python = _install(uv, tmp_path / "engine-venv", str(wheel))
@@ -447,3 +469,35 @@ def _assert_json_ok(result: subprocess.CompletedProcess[str]) -> None:
     assert result.returncode == 0, combined
     payload = json.loads(result.stdout)
     assert payload.get("ok") is True
+
+
+def test_concurrent_wheel_builds_share_one_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Workers that need the wheel at once build it once, so no two builds race on the checkout."""
+    builds: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        builds.append(cmd)
+        time.sleep(0.2)
+        out = Path(cmd[cmd.index("--out-dir") + 1])
+        (out / "opentide-0.0.0-py3-none-any.whl").write_bytes(b"wheel")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(sys.modules[__name__], "_run", fake_run)
+    shared = tmp_path / "shared"
+    found: list[Path] = []
+    threads = [
+        threading.Thread(
+            target=lambda n=n: found.append(_build_wheel("uv", tmp_path / f"d{n}", shared))
+        )
+        for n in range(4)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(builds) == 1
+    assert sorted(p.parent.name for p in found) == ["d0", "d1", "d2", "d3"]
+    assert all(p.read_bytes() == b"wheel" for p in found)

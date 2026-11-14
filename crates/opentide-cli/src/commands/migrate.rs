@@ -223,7 +223,7 @@ fn migrate(root: &Path, fields: &[&ScopedField], apply: bool) -> Result<Migratio
             let mut text = String::new();
             text.extend(bom);
             text.push_str(&updated);
-            std::fs::write(path, text.as_bytes())
+            super::deploy_state::write_durable(path, &text)
                 .map_err(|error| format!("{}: {error}", path.display()))?;
         }
     }
@@ -475,6 +475,25 @@ objective:
                 .replace("- Process", "- Host::Process")
                 .replace("host::Hostname", "Host::Hostname")
         );
+    }
+
+    #[test]
+    fn apply_replaces_a_file_and_never_truncates_it_in_place() {
+        let dir = workspace(&[("objects/objectives/o.yaml", OBJECTIVE)]);
+        let file = dir.path().join("objects/objectives/o.yaml");
+        // A second name for the file's contents as they were: a write in
+        // place (truncate, then write) changes it, a durable replacement
+        // (a temporary file renamed over the path) leaves it whole.
+        let before = dir.path().join("before.yaml");
+        std::fs::hard_link(&file, &before).unwrap();
+        let args = Args {
+            apply: true,
+            ..Args::default()
+        };
+        assert_eq!(run_in(dir.path(), &args).outcome.exit_code, 0);
+        assert_eq!(std::fs::read_to_string(&before).unwrap(), OBJECTIVE);
+        assert_ne!(std::fs::read_to_string(&file).unwrap(), OBJECTIVE);
+        assert!(!dir.path().join("objects/objectives/.o.yaml.tmp").exists());
     }
 
     #[test]
