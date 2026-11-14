@@ -46,7 +46,7 @@ Every check has a code that keeps its meaning. A check that repeats per platform
 
 `skip` marks an optional integration that is not set up, or a check that did not run. It never changes the exit code.
 
-`doctor` runs neither `python_version` nor `platform_sdk`, which opentide 0.23.0 listed: the command line does not run on Python, and its platforms are its own connectors, which import no Python SDK. Their rows are left out of the checklist, `checks` and the summary counts.
+`doctor` runs neither `python_version` nor `platform_sdk`, which opentide 0.28.1 listed: the command line does not run on Python, and its platforms are its own connectors, which import no Python SDK. Their rows are left out of the checklist, `checks` and the summary counts.
 
 When `configuration` fails, the checks that read the configuration (`templates_fresh`, `schemas_fresh`, `platforms_enabled`, `platform_sdk`, `credentials`, `vscode_settings`, `vscode_snippets`) are skipped with `Not checked: the configuration does not load`, so one broken file is reported once, where it is.
 
@@ -62,7 +62,7 @@ A check that raises an unexpected error fails under its own codes with `The chec
 
 `opentide_latest` asks `https://pypi.org/pypi/opentide/json`, and `proxy` opens a TCP connection to the proxy, each with a 3-second timeout. Both go through `--proxy` and honour `NO_PROXY`. Offline, `opentide_latest` is a warning, not a failure; `--offline` skips both.
 
-A failed check names what went wrong as the Python exception it maps to (`ProxyError`, `ConnectionError`, `ConnectTimeout`, `HTTPError` for `opentide_latest`; `ConnectionRefusedError`, `TimeoutError`, `gaierror` for `proxy`), as opentide 0.23.0's Python command line named them. Versions are ordered as PEP 440 orders them.
+A failed check names what went wrong as the Python exception it maps to (`ProxyError`, `ConnectionError`, `ConnectTimeout`, `HTTPError` for `opentide_latest`; `ConnectionRefusedError`, `TimeoutError`, `gaierror` for `proxy`), as opentide 0.28.1's Python command line named them. Versions are ordered as PEP 440 orders them.
 
 ## Exit codes
 

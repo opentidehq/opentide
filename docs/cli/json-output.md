@@ -148,7 +148,7 @@ Where the log goes, what it holds and how to report the bug: [Troubleshooting](.
 
 Every command runs on opentide's Rust core, compiled into the package: `opentide` and `python -m opentide` hand their arguments to it in the process you started, with nothing in between, so Ctrl-C (`error: interrupted`, exit `130`) and SIGTERM reach the command itself (`opentide serve` exits `143`, `opentide mcp start` ends). The same core is the `opentide` binary of the npm package and of `cargo install opentide --features cli`.
 
-The Python implementation each command had is gone, and the variable that chose between the two with it ([#841](https://github.com/opentidehq/opentide/issues/841)). Each command was compared with the Python release it replaced (opentide 0.23.0) on every documented corpus before its Python implementation went; where the two differ on purpose, the changelog says so. The documents on this site are the contract.
+The Python implementation each command had is gone, and the variable that chose between the two with it ([#841](https://github.com/opentidehq/opentide/issues/841)). Each command was compared with the Python release it replaced (opentide 0.23.0, and since the 0.28 catch-up opentide 0.28.1) on every documented corpus before its Python implementation went; where the two differ on purpose, the changelog says so. The documents on this site are the contract.
 
 ## Progress events
 

@@ -142,7 +142,7 @@ minutes (#1047). The rust-caches left, target trees: `fuzz` (`fuzz-smoke`: the n
 `fuzz/target` and cargo-fuzz in `~/.cargo/bin`), plus coverage.yml's, golden.yml's, schema.yml's
 and oracle.yml's own; each saves on the nightly and on pushes to `development` only
 (`github.event_name == 'schedule' || github.ref == 'refs/heads/development'`), whose caches every
-pull request reads (golden-preview.yml, on the 0.28 train only, saves on that branch's pushes). The release dry run
+pull request reads. The release dry run
 (`engine-release-build.yml`; a release restores none) keeps sccache families of its own,
 `release-<os>-<arch>` per runner for the binaries (one cell per runner saves; the Intel macOS
 cross build restores Apple silicon's) and `release-wasm`, saved from a push when the key missed;
@@ -303,15 +303,6 @@ removed from the rule too, or every pull request that does not run it waits for 
   or golden.yml: the check runs when it does, or with the `full-ci` label. The determinism run is in the full set
   (the `full-ci` label on a pull request). The trigger itself has no path filter, so
   `integration/unified-core` requires `Golden paths` and the check (Required checks, above).
-- [`golden-preview.yml`](workflows/golden-preview.yml), on every push to `train/catchup-0.28`,
-  every pull request into it and on demand (no other branch): the preview of the next oracle
-  (O1 of `docs/internal/catchup-0.28-plan.md`). It records every case from the release
-  `tests/golden/ORACLE.next` names (0.28.1) with `cargo xtask golden record --oracle
-  tests/golden/ORACLE.next --out DIR` into an actions cache keyed on the oracle, the cases and
-  their inputs (saved from pushes only), then runs `cargo xtask golden check --engine rust
-  --recordings DIR` and uploads its report (`golden-preview` artifact) with the summary line in
-  the job summary. Report only: a difference from 0.28.1 passes (exit status 1), a check that
-  cannot run fails (2). Not a required check (`tests/test_ci/test_golden_preview_workflow.py`).
 - [`docs.yml`](workflows/docs.yml) (`scripts/validate-docs.sh`) and
   [`publish-dry-run.yml`](workflows/publish-dry-run.yml) (every publish rehearsed, nothing
   published) are in the full set: nightly, on demand, on a push to `development` or

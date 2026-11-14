@@ -58,7 +58,7 @@ usage).
 case) and `--jobs N`; `check` and `diff` take
 `--engine python|rust`: `python` runs the oracle, `rust` this repository's CLI.
 
-**Preview of the next oracle** (`tests/golden/ORACLE.next`, 0.28.1 during the catch-up): judge a
+**Preview of the next oracle** (a file in `ORACLE`'s format naming the next release, such as `tests/golden/ORACLE.next`; none is committed now): judge a
 port against it without committing recordings, `cargo xtask golden record --oracle
 tests/golden/ORACLE.next --out target/golden-next --filter '<area>/*'`, then `cargo xtask golden
 check --engine rust --recordings target/golden-next --filter '<area>/*'`, and post its summary in
