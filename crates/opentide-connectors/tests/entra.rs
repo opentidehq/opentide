@@ -34,6 +34,17 @@ struct Stand {
 
 impl Stand {
     fn new(name: &str, tenant_id: &str, secret: &str, proxy: Option<&str>) -> Self {
+        Self::with_settings(name, tenant_id, secret, proxy, &HttpSettings::default())
+    }
+
+    /// A Sentinel tenant on *settings* (its retry policy).
+    fn with_settings(
+        name: &str,
+        tenant_id: &str,
+        secret: &str,
+        proxy: Option<&str>,
+        settings: &HttpSettings,
+    ) -> Self {
         let setup: toml::Table = toml::from_str(
             "azure_tenant_id = \"$TENANT_ID\"\nazure_client_id = \"app-id\"\n\
              azure_client_secret = \"$SECRET\"\n",
@@ -48,7 +59,7 @@ impl Stand {
             &setup,
             &env,
             Mode::Required,
-            &HttpSettings::default(),
+            settings,
         )
         .unwrap();
         let http = HttpClient::new(&tenant.label, &tenant.http, &env, proxy).unwrap();
@@ -108,6 +119,7 @@ fn form(request: &Request) -> Vec<(String, String)> {
 /// discovery, no MSAL headers, no `client_info`.
 #[tokio::test]
 async fn the_sign_in_is_one_client_credentials_post() {
+    logs();
     let server = MockServer::start().await;
     issuing(
         &server,
@@ -184,6 +196,7 @@ fn each_resource_has_its_scope_and_each_platform_its_names() {
 /// the Log Analytics one.
 #[tokio::test]
 async fn a_token_serves_only_its_scope() {
+    logs();
     let server = MockServer::start().await;
     let issued = Arc::new(Mutex::new(0));
     let counter = Arc::clone(&issued);
@@ -236,15 +249,27 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Logs {
     }
 }
 
+/// The log of every test of this file: installed as the global subscriber
+/// by the first test to start, before any sign-in, so no event is missed
+/// (a thread's own default can miss a callsite another test's thread
+/// registered first).
+fn logs() -> &'static Logs {
+    use tracing_subscriber::layer::SubscriberExt as _;
+    static LOGS: std::sync::OnceLock<Logs> = std::sync::OnceLock::new();
+    LOGS.get_or_init(|| {
+        let logs = Logs::default();
+        tracing::subscriber::set_global_default(tracing_subscriber::registry().with(logs.clone()))
+            .unwrap();
+        logs
+    })
+}
+
 /// Requirement 7: a wrong tenant id, a wrong secret and an expired secret
 /// are authentication failures naming the platform and the tenant, with
 /// Entra's description; the secret is in no error, no `Debug` and no log.
 #[tokio::test]
 async fn entra_refusals_name_the_tenant_and_never_the_secret() {
-    use tracing_subscriber::layer::SubscriberExt as _;
-    let logs = Logs::default();
-    let _guard =
-        tracing::subscriber::set_default(tracing_subscriber::registry().with(logs.clone()));
+    let logs = logs();
     let refusals = [
         (
             400,
@@ -261,6 +286,11 @@ async fn entra_refusals_name_the_tenant_and_never_the_secret() {
             401,
             "invalid_client",
             "AADSTS7000222: The provided client secret keys for app 'app-id' are expired.",
+        ),
+        (
+            400,
+            "invalid_client",
+            "AADSTS7000215: Invalid client secret provided.",
         ),
     ];
     for (status, error, description) in refusals {
@@ -300,26 +330,174 @@ async fn entra_refusals_name_the_tenant_and_never_the_secret() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path(token_path(TENANT_ID)))
-        .respond_with(ResponseTemplate::new(401).set_body_json(
-            serde_json::json!({"error_description": format!("bad secret {SECRET}")}),
-        ))
+        .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({
+            "error": "invalid_client",
+            "error_description": format!("bad secret {SECRET}"),
+        })))
         .mount(&server)
         .await;
     let stand = Stand::new("prod", TENANT_ID, SECRET, None);
     let refused = entra::sign_in_at(stand.cx(), &server.uri(), NAMES, ARM)
         .await
         .unwrap_err();
+    assert!(matches!(refused, ConnectorError::Authentication { .. }));
     assert!(!format!("{refused} {refused:?}").contains(SECRET));
+    // The same echo in an answer that is no refusal: not repeated either.
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(token_path(TENANT_ID)))
+        .respond_with(ResponseTemplate::new(500).set_body_string(format!("oops {SECRET}")))
+        .mount(&server)
+        .await;
+    let failed = entra::sign_in_at(stand.cx(), &server.uri(), NAMES, ARM)
+        .await
+        .unwrap_err();
+    assert!(!matches!(failed, ConnectorError::Authentication { .. }));
+    let shown = format!("{failed} {failed:?} {}", failed.text());
+    assert!(shown.contains("oops ***"), "{shown}");
+    assert!(!shown.contains(SECRET), "{shown}");
     assert!(!format!("{:?}", stand.tenant).contains(SECRET));
+    // The log is not empty: each sign-in is a debug event naming the
+    // tenant and the scope, and none of its fields holds the secret.
     let logged = logs.0.lock().unwrap().clone();
-    assert!(!logged.contains(SECRET), "{logged}");
-    assert!(!logged.contains(&SECRET.replace(' ', "+")), "{logged}");
+    assert!(
+        logged.matches("signing in to Entra ID").count() >= 6,
+        "{logged}"
+    );
+    assert!(logged.contains("tenant=prod"), "{logged}");
+    assert!(logged.contains(&format!("scope=\"{ARM}\"")), "{logged}");
+    for leaked in [
+        SECRET.to_owned(),
+        SECRET.replace(' ', "+"),
+        url::form_urlencoded::byte_serialize(SECRET.as_bytes()).collect(),
+    ] {
+        assert!(!logged.contains(&leaked), "{logged}");
+    }
+}
+
+/// Requirement 7, the other side: an answer without a token that is no
+/// refusal of the credentials (a rate limit or an outage the retries did not
+/// outlast, a proxy's page, a `400` without OAuth's `error`) is a service
+/// error naming Entra ID and the status, never an authentication failure.
+#[tokio::test]
+async fn answers_that_are_no_refusal_name_entra_and_the_status() {
+    logs();
+    let html = "<html><head><title>Proxy Error</title></head></html>";
+    let cases: [(u16, &str, &str); 4] = [
+        (
+            429,
+            r#"{"error":"temporarily_unavailable","error_description":"AADSTS50196: throttled"}"#,
+            "Entra ID answered HTTP 429 and issued no token: AADSTS50196: throttled",
+        ),
+        (
+            500,
+            html,
+            "Entra ID answered HTTP 500 and issued no token: HTTP 500 with an HTML page titled \"Proxy Error\"",
+        ),
+        (
+            400,
+            html,
+            "Entra ID answered HTTP 400 and issued no token: HTTP 400 with an HTML page",
+        ),
+        (
+            200,
+            r#"{"token_type":"Bearer"}"#,
+            "Entra ID answered HTTP 200 and issued no token: no access token",
+        ),
+    ];
+    for (status, body, expected) in cases {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path(token_path(TENANT_ID)))
+            .respond_with(
+                ResponseTemplate::new(status)
+                    .insert_header("Retry-After", "0")
+                    .set_body_string(body),
+            )
+            .mount(&server)
+            .await;
+        let stand = Stand::with_settings(
+            "prod",
+            TENANT_ID,
+            SECRET,
+            None,
+            &sentinel::http_settings(std::time::Duration::from_secs(10)),
+        );
+        let failed = entra::sign_in_at(stand.cx(), &server.uri(), NAMES, ARM)
+            .await
+            .unwrap_err();
+        let ConnectorError::Answer { tenant, reason, .. } = &failed else {
+            panic!("HTTP {status}: not a service error: {failed:?}");
+        };
+        assert_eq!(tenant, "prod");
+        assert!(reason.starts_with(expected), "{reason}");
+        // A 429 is retried (the token POST is idempotent); the others are not.
+        let sent = server.received_requests().await.unwrap().len();
+        assert_eq!(sent, if status == 429 { 4 } else { 1 }, "HTTP {status}");
+    }
+}
+
+/// A `503` from the identity platform is retried; one that lasts is a
+/// gateway error naming Entra ID, the status and the tenant.
+#[tokio::test]
+async fn a_503_is_retried_and_one_that_lasts_is_a_service_error() {
+    logs();
+    let settings = sentinel::http_settings(std::time::Duration::from_secs(10));
+    // Once, then a token: two POSTs, one token.
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(token_path(TENANT_ID)))
+        .respond_with(ResponseTemplate::new(503).insert_header("Retry-After", "0"))
+        .up_to_n_times(1)
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    issuing(
+        &server,
+        TENANT_ID,
+        serde_json::json!({"access_token": "tok", "expires_in": 3599}),
+    )
+    .await;
+    let stand = Stand::with_settings("prod", TENANT_ID, SECRET, None, &settings);
+    let tokens = TokenCache::new();
+    assert_eq!(token(&tokens, stand.cx(), &server.uri(), ARM).await, "tok");
+    assert_eq!(token(&tokens, stand.cx(), &server.uri(), ARM).await, "tok");
+    assert_eq!(server.received_requests().await.unwrap().len(), 2);
+    // Every time: the retries run out, and the error says who and what.
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(token_path(TENANT_ID)))
+        .respond_with(ResponseTemplate::new(503).insert_header("Retry-After", "0"))
+        .mount(&server)
+        .await;
+    let failed = entra::sign_in_at(stand.cx(), &server.uri(), NAMES, ARM)
+        .await
+        .unwrap_err();
+    let ConnectorError::Gateway {
+        platform,
+        tenant,
+        message,
+        status,
+    } = &failed
+    else {
+        panic!("not a gateway error: {failed:?}");
+    };
+    assert_eq!(
+        (platform.as_str(), tenant.as_str(), *status),
+        ("sentinel", "prod", 503)
+    );
+    assert!(
+        message.starts_with("Entra ID answered HTTP 503 when tenant prod signed in"),
+        "{message}"
+    );
+    assert_eq!(server.received_requests().await.unwrap().len(), 4);
 }
 
 /// Requirement 8: the sign-in goes through the tenant's own client, so its
 /// proxy applies to the identity platform too.
 #[tokio::test]
 async fn the_sign_in_uses_the_tenants_proxy() {
+    logs();
     let proxy = MockServer::start().await;
     issuing(
         &proxy,
@@ -341,6 +519,7 @@ async fn the_sign_in_uses_the_tenants_proxy() {
 /// each get their own token.
 #[tokio::test]
 async fn tenants_signing_in_at_once_get_their_own_tokens() {
+    logs();
     let server = MockServer::start().await;
     let (a, b) = (
         "aaaaaaaa-0000-4000-8000-000000000000",
