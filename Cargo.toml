@@ -162,13 +162,12 @@ rayon = "1.12"
 # reqwest on rustls with ring (no aws-lc-rs: its C build and its OpenSSL
 # licence), HTTP/1.1 only as `requests` speaks it, no system proxy lookup: the
 # proxies and the CA bundle come from the environment the CLI passes, per
-# tenant. tokio runs it; tokio-util cancels; backon schedules retries.
+# tenant. tokio runs it and waits between retries; tokio-util cancels.
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = "0.8"
 tokio = { version = "1.48", default-features = false }
 tokio-util = { version = "0.7", default-features = false }
-backon = { version = "1", default-features = false }
 # The recorded-HTTP harness (opentide-cassette, never shipped): wiremock
 # replays cassettes; the recording proxy terminates TLS with a CA rcgen makes
 # for the run (tokio-rustls, hyper's server).
