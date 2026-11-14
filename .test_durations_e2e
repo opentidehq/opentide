@@ -709,16 +709,5 @@
     "tests/test_docs/test_docs_commands_golden.py::test_documented_output_samples_match_the_live_command[docs/usage/tutorial.md:39-no-color]": 2.729669375345111,
     "tests/test_docs/test_docs_commands_golden.py::test_info_json_carries_the_documented_envelope": 0.3163552498444915,
     "tests/test_docs/test_docs_commands_golden.py::test_the_sample_issue_299_reported_fails_the_output_check": 0.5382580840960145,
-    "tests/test_docs/test_docs_commands_golden.py::test_troubleshooting_states_the_exit_code_deploy_metadata_returns": 0.02106083370745182,
-    "tests/test_mcp/e2e/test_mcp_stdio_e2e.py::test_content_length_headers_are_reported_as_protocol_errors": 0.5096267079934478,
-    "tests/test_mcp/e2e/test_mcp_stdio_e2e.py::test_coverage_over_stdio": 0.6924031251110137,
-    "tests/test_mcp/e2e/test_mcp_stdio_e2e.py::test_initialize_handshake": 0.6207759990356863,
-    "tests/test_mcp/e2e/test_mcp_stdio_e2e.py::test_logs_never_bleed_onto_the_jsonrpc_stream": 0.8767552077770233,
-    "tests/test_mcp/e2e/test_mcp_stdio_e2e.py::test_resource_rule_body_over_stdio": 0.7602826249785721,
-    "tests/test_mcp/e2e/test_mcp_stdio_e2e.py::test_resource_vocabularies_over_stdio_is_json": 0.8517014998942614,
-    "tests/test_mcp/e2e/test_mcp_stdio_e2e.py::test_resources_list_and_read_platforms": 0.751551166176796,
-    "tests/test_mcp/e2e/test_mcp_stdio_e2e.py::test_search_over_stdio_returns_summary_list": 0.7071317918598652,
-    "tests/test_mcp/e2e/test_mcp_stdio_e2e.py::test_search_platform_filter_over_stdio": 0.7089335429482162,
-    "tests/test_mcp/e2e/test_mcp_stdio_e2e.py::test_text_blocks_agree_with_structured_content": 0.7144889580085874,
-    "tests/test_mcp/e2e/test_mcp_stdio_e2e.py::test_tools_list_advertises_every_tool": 0.45121754379943013
+    "tests/test_docs/test_docs_commands_golden.py::test_troubleshooting_states_the_exit_code_deploy_metadata_returns": 0.02106083370745182
 }
