@@ -11,7 +11,6 @@ cargo xtask golden record                       # run every case through the ora
 cargo xtask golden record --check-determinism   # the same, each case twice: both runs must agree
 cargo xtask golden check --engine python        # a fresh run against the recordings
 cargo xtask golden diff --filter 'validate/*'   # check, printing every difference in full
-cargo xtask golden check --engine rust --keep DIR  # also write each differing case's candidate run to DIR
 cargo xtask golden lock                         # rewrite oracle-requirements.txt from ORACLE
 ```
 
@@ -19,12 +18,28 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
 leading parts (`validate/*` is every `validate` case; `*` never crosses a `/`). The code is
 `xtask/src/golden/`, a library the comparator (UC-0.7) reuses.
 
+**In CI: none of it, since 2026-11-14.** The Rust port is done, and the maintainer took the oracle
+policing out of CI: no workflow records, checks or compares the goldens (golden compare and check,
+golden determinism, the golden preview, the corpora, the MCP replay, the payload, config,
+validate and lint diffs, `codegen --check --oracle`), and `APPROVED_DIFFS.toml` gates nothing.
+Every command here stays, run by hand when a change calls for it: a re-record, a new oracle, or a
+behaviour change you want measured against the oracle. The Rust crates' own tests that replay the
+recordings in-process (`crates/opentide-cli/tests/command_goldens.rs`, `framework_goldens.rs`,
+`generate_goldens.rs` and every other test that diffs against recorded Python output) are
+`#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]`:
+no CI tier runs them. Run them by hand:
+
+```bash
+cargo nextest run -p opentide-cli --run-ignored only   # the oracle replays only
+cargo nextest run --workspace --run-ignored all        # everything, the replays included
+```
+
 ### A preview of the next oracle
 
-A file in `ORACLE`'s format that names another release, with its own requirements beside it
-(say `ORACLE.next` and `oracle-requirements.next.txt`), is a preview of the next oracle. Nothing
-committed is recorded from it: a change compares its work with it in a directory of its own,
-before the oracle moves.
+`ORACLE.next` names the next oracle (opentide 0.28.1, while its features are ported; O1 of
+`docs/internal/catchup-0.28-plan.md`), in `ORACLE`'s format, with its own requirements,
+`oracle-requirements.next.txt`. Nothing committed is recorded from it: a port compares its work
+with it in a directory of its own.
 
 ```bash
 cargo xtask golden lock --oracle tests/golden/ORACLE.next          # its requirements, beside it
@@ -39,7 +54,8 @@ refused, and so is `record --oracle` without `--out`. `check --recordings DIR` a
 --recordings DIR` compare with those recordings and DIR's oracle, without the `COVERAGE.md`
 check, and with `--engine rust` without the stale-ledger check (the ledger approves differences
 from the committed oracle). `cargo xtask cassettes record --oracle FILE` and `cargo xtask mcp
-record --oracle FILE` take the same file.
+record --oracle FILE` take the same file. Run the record and the check by hand (the
+`Golden preview` workflow left CI).
 
 ## Review rules
 
@@ -50,13 +66,19 @@ record --oracle FILE` take the same file.
    `cases.toml`, a fixture change, a normalisation rule (with its unit test), or a new oracle.
    Review the diff of `cases/` as you would code: each changed line follows from that cause.
 3. **The oracle changes only in a PR of its own**: edit `ORACLE` (tag, wheel, its SHA-256 from
-   PyPI), run `cargo xtask golden lock` and `cargo xtask golden record`, and review every
-   difference: each one is a behaviour change between the two releases.
+   PyPI), run `cargo xtask golden lock` (`git diff` must show the new requirements only) and
+   `cargo xtask golden record --check-determinism`, and review every difference: each one is a
+   behaviour change between the two releases.
 4. **Normalisation hides only what differs between two runs of the same case** (below). A rule
    is code in `crates/opentide-compare/src/normalise.rs` (moved there by UC-0.7 so the CLI's compare mode shares it) with a unit test; widening one to make a difference
    go away is a review failure.
-5. **Recording is deterministic**: CI records every case twice and fails on any difference, and
-   on any difference from the committed recordings (`.github/workflows/golden.yml`).
+5. **Recording is deterministic**: a pull request that re-records runs
+   `cargo xtask golden record --check-determinism` before it is opened, and says so in its
+   description. It records every case twice (about 26 minutes on a CI runner) and fails, writing
+   nothing, on any difference between the runs; `git diff tests/golden` must then show only the
+   change the pull request is for. CI does not re-record or check the recordings: the oracle is
+   a pinned, frozen release, so only a re-record can change them, and its pull request runs
+   `cargo xtask golden check --engine python` by hand as well.
 6. **Coverage**: every command path has at least one case in every mode. `COVERAGE.md` is
    generated with the recordings; `record` and `check` fail when a path or mode has none, or when
    the recordings outgrow their budget.
@@ -99,7 +121,7 @@ record --oracle FILE` take the same file.
 
 ## The oracle
 
-[`ORACLE`](ORACLE) names the release (`v0.28.1`, commit `164450af`; 0.23.0 until O2 of the 0.28 catch-up train), its manylinux x86-64
+[`ORACLE`](ORACLE) names the release (`v0.23.0`, commit `f41fe5e5`), its manylinux x86-64
 wheel and the wheel's SHA-256, the CPython it runs on (uv-managed, so every machine runs the same
 build) and the platform. [`oracle-requirements.txt`](oracle-requirements.txt) pins every package
 with its hashes; the opentide line carries the ORACLE wheel's hash alone, so the install fails
@@ -176,7 +198,6 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 | `vscode-ambiguous` | `vscode` with one declared edit: `Account`, defined under two stages, which `migrate vocab-scope` leaves for a person (exit 2), beside `Process`, which it rewrites |
 | `heavy-small` | UC-0.6's generator, seed 1: 30 threats, 30 objectives, 50 rules (`cargo xtask corpus generate`), generated once per run and copied per case, never committed |
 | `fault` | UC-0.6's fault workspace (`cargo xtask corpus faults`), likewise generated; its outputs are recorded as they are, not asserted against the fault manifest |
-| `fault-lint` | `fault` with one declared edit: a `lint.toml` that turns lint's `recommended` check off. opentide 0.28.1's recommended check crashes on the fault workspace's invalid configuration files ([#1081](https://github.com/opentidehq/opentide/issues/1081)), so the `lint` cases run here and compare; `lint/json/fault/recommended-crash` records the crash |
 | `setup-merge` | [`fixtures/setup-merge/`](fixtures/setup-merge/): the files `setup` merges into, a `.vscode/mcp.json` with a byte-order mark, comments and a trailing comma, and a `sentinel.toml` with `enabled = false` |
 | `live-tenants` | [`fixtures/live-tenants/`](fixtures/live-tenants/): the platforms' stand-in tenants of `tests/cassettes/<platform>/tenant.py` (credentials as `$NAME`s the cases set) and a rule or more for each platform whose tenants check queries, for `validate query --live` (UC-4.6) |
 | `deploy-tenants` | [`fixtures/deploy-tenants/`](fixtures/deploy-tenants/): the `tenants` workspace with Sysdig's stand-in tenant, tenants that take `PREVIEW` and `RELEASE` runs, rules to create, update, retire and refuse on each platform, and the deployment state of the rules already deployed, for a deploy that sends (UC-4.6); a cassette's client copies it before the deploy writes state |

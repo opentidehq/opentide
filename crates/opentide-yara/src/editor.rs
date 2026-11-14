@@ -662,6 +662,10 @@ fn word_at(source: &str, offset: usize) -> (usize, &str) {
 /// Hover at `offset`: a module member, a module, a string, a rule, or a
 /// built-in word.
 pub fn hover(source: &str, offset: usize) -> Option<String> {
+    // An offset inside a character (a decoded escape) has nothing to show.
+    if !source.is_char_boundary(offset.min(source.len())) {
+        return None;
+    }
     let catalog = Catalog::cached();
     let (start, word) = word_at(source, offset);
     if word.is_empty() {
@@ -807,8 +811,12 @@ fn strings_in_rule(source: &str, offset: usize) -> Vec<String> {
 
 /// Completion at `offset`.
 pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
-    let catalog = Catalog::cached();
     let offset = offset.min(source.len());
+    // An offset inside a character (a decoded escape) completes nothing.
+    if !source.is_char_boundary(offset) {
+        return Vec::new();
+    }
+    let catalog = Catalog::cached();
     let line_start = source[..offset].rfind('\n').map_or(0, |i| i + 1);
     let before = &source[line_start..offset];
     // `import "`.
@@ -922,6 +930,10 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
 )]
 pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
     let offset = offset.min(source.len());
+    // An offset inside a character (a decoded escape) has nothing to show.
+    if !source.is_char_boundary(offset) {
+        return None;
+    }
     let bytes = source.as_bytes();
     // The innermost `(` still open before the cursor.
     let mut depth = 0i32;
@@ -1114,5 +1126,16 @@ mod tests {
         let spans = folding(SIG);
         assert!(spans.iter().any(|s| &SIG[s.0..s.0 + 4] == "rule"));
         assert!(spans.iter().any(|s| SIG[s.0..].starts_with("strings:")));
+    }
+
+    #[test]
+    fn an_offset_inside_a_character_is_answered_empty() {
+        // A cursor inside a decoded escape (`\u00e9` in a double-quoted Tide
+        // query) can reach the engine as the second byte of `\u{e9}`.
+        let src = "rule r { strings: $a = \"\u{e9}\" condition: $a }";
+        let inside = src.find('\u{e9}').unwrap() + 1;
+        assert!(completions(src, inside).is_empty());
+        assert_eq!(hover(src, inside), None);
+        assert!(signature_help(src, inside).is_none());
     }
 }

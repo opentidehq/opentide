@@ -31,6 +31,7 @@ fn every_platform_template_is_the_committed_one() {
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn every_object_template_is_the_oracles_on_the_tide_corpus() {
     // tide-corpus requires lint's default metadata keys.
     let dir = repo()

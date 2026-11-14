@@ -78,6 +78,7 @@ fn check(fixture: &str, target: Target, case: &str) {
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn every_export_is_the_oracles() {
     for fixture in ["tide-corpus", "vscode"] {
         for target in Target::ALL {
@@ -88,6 +89,7 @@ fn every_export_is_the_oracles() {
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn generate_exports_writes_the_oracles_three_files() {
     let (_dir, workspace) = open("tide-corpus");
     let settings = Settings::new(workspace.configuration(), workspace.root());

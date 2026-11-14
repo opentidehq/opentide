@@ -163,26 +163,31 @@ fn check(flavor: &str) {
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn every_page_is_0_28s() {
     check("generic");
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn every_github_page_is_0_28s() {
     check("github");
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn every_gitlab_page_is_0_28s() {
     check("gitlab");
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn every_azure_devops_page_is_0_28s() {
     check("azure_devops");
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn an_object_that_does_not_validate_fails_as_the_oracle_does() {
     let (_dir, workspace) = open("vscode");
     let error = render(&workspace, None).unwrap_err();

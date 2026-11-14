@@ -13,7 +13,9 @@
 //! Declarations are per `system`, so a Splunk sourcetype never makes a
 //! Sentinel table known.
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::marker::PhantomData;
 use std::sync::{Arc, OnceLock, RwLock};
 
 /// The kind of dataset a log source's `name` is, by its `system`.
@@ -316,8 +318,46 @@ pub fn install(datasets: Option<DeclaredDatasets>) {
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = Arc::new(datasets.unwrap_or_default());
 }
 
-/// The datasets in use.
+thread_local! {
+    /// The datasets this thread uses instead of the installed ones
+    /// ([`scope_thread`]).
+    static SCOPED: RefCell<Option<Arc<DeclaredDatasets>>> = const { RefCell::new(None) };
+}
+
+/// While it lives, [`current`] on its thread returns the datasets
+/// [`scope_thread`] gave it; dropping it gives back what the thread used
+/// before. It stays on the thread that made it.
+#[must_use = "dropping it at once ends the scope at once"]
+pub struct ThreadScope {
+    previous: Option<Arc<DeclaredDatasets>>,
+    /// Not `Send`: the scope belongs to its thread.
+    _thread: PhantomData<*const ()>,
+}
+
+impl Drop for ThreadScope {
+    fn drop(&mut self) {
+        let previous = self.previous.take();
+        SCOPED.with(|scoped| *scoped.borrow_mut() = previous);
+    }
+}
+
+/// Use `datasets` on this thread only, whatever is installed, until the
+/// returned scope drops. `None` declares nothing.
+pub fn scope_thread(datasets: Option<DeclaredDatasets>) -> ThreadScope {
+    let datasets = Arc::new(datasets.unwrap_or_default());
+    let previous = SCOPED.with(|scoped| scoped.borrow_mut().replace(datasets));
+    ThreadScope {
+        previous,
+        _thread: PhantomData,
+    }
+}
+
+/// The datasets in use: this thread's ([`scope_thread`]), else the
+/// installed ones.
 pub fn current() -> Arc<DeclaredDatasets> {
+    if let Some(scoped) = SCOPED.with(|scoped| scoped.borrow().clone()) {
+        return scoped;
+    }
     installed()
         .read()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -340,6 +380,32 @@ mod tests {
         assert!(glob_matches("exact", "exact"));
         assert!(!glob_matches("exact", "Exact"));
         assert!(glob_matches("*", ""));
+    }
+
+    #[test]
+    fn a_thread_scope_applies_to_its_thread_until_it_drops() {
+        let declared = |name: &str| current().status("sentinel", name);
+        let only = DeclaredDatasets::from_visibility(
+            "[[logsources]]\nname = \"ScopedOnlyTable\"\ndescription = \"x\"\nsystem = \"sentinel\"\n",
+        )
+        .unwrap();
+        let outer = scope_thread(Some(only));
+        assert_eq!(declared("ScopedOnlyTable"), Declaration::Declared);
+        assert_eq!(declared("OtherTable"), Declaration::Undeclared);
+        // Another thread keeps the installed datasets.
+        let elsewhere = std::thread::spawn(|| {
+            current().status("sentinel", "ScopedOnlyTable") == Declaration::Declared
+        })
+        .join()
+        .unwrap();
+        assert!(!elsewhere);
+        {
+            let _inner = scope_thread(None);
+            assert_eq!(declared("ScopedOnlyTable"), Declaration::Unchecked);
+        }
+        assert_eq!(declared("ScopedOnlyTable"), Declaration::Declared);
+        drop(outer);
+        assert!(SCOPED.with(|scoped| scoped.borrow().is_none()));
     }
 
     #[test]
