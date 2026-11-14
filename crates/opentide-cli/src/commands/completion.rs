@@ -104,7 +104,7 @@ pub fn named_shell(words: &[String], option: &str) -> Result<Option<&'static str
             Ok(SHELLS.iter().copied().find(|shell| shell == word))
         }
         _ => Err(format!(
-            "Invalid value for '{option}': '{}' is not a supported shell. Use: {}",
+            "{option}: {:?} is not a supported shell. Use: {}",
             words.join(" "),
             form(option)
         )),
@@ -360,11 +360,9 @@ mod tests {
         );
         assert_eq!(
             named_shell(&words("bash zsh"), "--show-completion"),
-            Err(
-                "Invalid value for '--show-completion': 'bash zsh' is not a supported shell. \
+            Err("--show-completion: \"bash zsh\" is not a supported shell. \
                  Use: opentide --show-completion [bash|zsh|fish|powershell|pwsh]"
-                    .to_owned()
-            )
+                .to_owned())
         );
         assert!(named_shell(&words("bosh"), "--install-completion").is_err());
     }

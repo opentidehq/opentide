@@ -10,6 +10,8 @@
 //! [`Environment`], not the process's, so each tenant's client is built from
 //! what the command was given.
 
+use hyper_util::client::proxy::matcher::Matcher;
+
 use crate::Environment;
 
 /// The proxies of a run.
@@ -47,8 +49,8 @@ impl ProxySettings {
 
     /// The proxy *url* goes through, as `scheme://host[:port]` without
     /// credentials; `None` when it goes direct: no proxy for its scheme, or
-    /// its host in `no_proxy` (`*`, a host or an IP address, a domain and its
-    /// subdomains), as the transport reads the list.
+    /// its host in `no_proxy` (`*`, a host or an IP address, a CIDR range, a
+    /// domain and its subdomains), as the transport reads the list.
     pub fn route(&self, url: &url::Url) -> Option<String> {
         let proxy = match url.scheme() {
             "https" => self.https.as_deref(),
@@ -86,29 +88,25 @@ impl ProxySettings {
         })
     }
 
-    /// Whether `no_proxy` sends *url* direct: an entry that is `*`, the host,
-    /// or a domain the host is in. An entry with a port matches no host, as
-    /// reqwest reads the list.
-    fn bypassed(&self, url: &url::Url) -> bool {
+    /// Whether `no_proxy` sends *url* direct, as reqwest decides it: the
+    /// list is read by the proxy matcher reqwest's transport uses (`*`, a
+    /// host or an IP address, a CIDR range such as `10.0.0.0/8`, a domain and
+    /// its subdomains; an entry with a port matches no host).
+    pub fn bypassed(&self, url: &url::Url) -> bool {
         let Some(list) = self.no_proxy.as_deref() else {
             return false;
         };
-        let host = url
-            .host_str()
-            .unwrap_or_default()
-            .trim_start_matches('[')
-            .trim_end_matches(']')
-            .to_ascii_lowercase();
-        list.split(',')
-            .map(|entry| entry.trim().to_ascii_lowercase())
-            .filter(|entry| !entry.is_empty())
-            .any(|entry| {
-                if entry == "*" {
-                    return true;
-                }
-                let entry = entry.trim_start_matches('.');
-                host == entry || host.ends_with(&format!(".{entry}"))
-            })
+        let Some(destination) = destination(url) else {
+            return false;
+        };
+        // The matcher answers for the list alone: its proxy is a stand-in
+        // that always parses, so `None` means the list sends *url* direct.
+        Matcher::builder()
+            .all("http://proxy.invalid")
+            .no(list)
+            .build()
+            .intercept(&destination)
+            .is_none()
     }
 
     /// The reqwest proxies, each with the `no_proxy` list.
@@ -136,6 +134,21 @@ impl ProxySettings {
         }
         Ok(proxies)
     }
+}
+
+/// *url*'s scheme and authority, as the matcher reads a destination.
+fn destination(url: &url::Url) -> Option<http::Uri> {
+    let host = url.host_str()?;
+    let authority = match url.port() {
+        Some(port) => format!("{host}:{port}"),
+        None => host.to_owned(),
+    };
+    http::Uri::builder()
+        .scheme(url.scheme())
+        .authority(authority)
+        .path_and_query("/")
+        .build()
+        .ok()
 }
 
 #[cfg(not(target_os = "wasi"))]
@@ -216,5 +229,23 @@ mod tests {
         assert!(!direct("https://example.com.evil.net/x"));
         let everything = settings(Some("http://proxy.corp:3128"), None, Some("*"));
         assert_eq!(route(&everything, "https://any.where/x"), None);
+    }
+
+    #[test]
+    fn no_proxy_cidr_ranges_send_their_addresses_direct() {
+        let proxies = settings(
+            Some("http://proxy.corp:3128"),
+            Some("http://proxy.corp:3128"),
+            Some("10.0.0.0/8, fd00::/8"),
+        );
+        let direct = |url: &str| route(&proxies, url).is_none();
+        assert!(direct("https://10.1.2.3:8089/x"));
+        assert!(direct("http://10.255.0.1/x"));
+        assert!(direct("https://[fd00::7]:8089/x"));
+        assert!(!direct("https://11.0.0.1/x"));
+        assert!(!direct("https://[fe80::1]/x"));
+        assert!(!direct("https://splunk.example.com/x"));
+        let handed = url::Url::parse("https://10.1.2.3/x").map(|url| proxies.proxy_for(&url));
+        assert_eq!(handed, Ok(None));
     }
 }

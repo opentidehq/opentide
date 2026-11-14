@@ -68,17 +68,11 @@ impl Folder {
 pub struct Instance<'a> {
     /// `<workspace>/.opentide/configurations`, when it exists.
     pub workspace: Option<&'a Folder>,
-    /// The test fixture overlay (`tests/fixtures/generation/configurations`
-    /// of the repository) the oracle merges after the workspace when
-    /// `OPENTIDE_TIDE_WORKSPACE` is set and that folder exists. It does not
-    /// skip the parent: [`Self::skip_parent`] does.
-    pub overlay: Option<&'a Folder>,
     /// `<workspace>/../.opentide/configurations`, when it exists and is not
     /// the workspace's own.
     pub parent: Option<&'a Folder>,
     /// Leave [`Self::parent`] out, retired entries included: set it whenever
-    /// `OPENTIDE_TIDE_WORKSPACE` is set (generation sets it), whether or not
-    /// there is an overlay, as the oracle does.
+    /// `OPENTIDE_TIDE_WORKSPACE` is set (generation sets it).
     pub skip_parent: bool,
 }
 
@@ -304,10 +298,6 @@ pub fn resolve(instance: &Instance<'_>) -> Result<Resolved, ResolveError> {
         let layer = fetch(workspace, &mut parsed)?;
         merge_layer(&mut unified, &layer);
     }
-    if let Some(overlay) = instance.overlay {
-        let layer = fetch(overlay, &mut parsed)?;
-        merge_layer(&mut unified, &layer);
-    }
     if let Some(parent) = instance.parent.filter(|_| !instance.skip_parent) {
         reject_retired(parent)?;
         let layer = fetch(parent, &mut parsed)?;
@@ -395,7 +385,6 @@ mod tests {
         );
         let resolved = resolve(&Instance {
             workspace: Some(&workspace),
-            overlay: None,
             parent: Some(&parent),
             skip_parent: false,
         })
@@ -440,12 +429,11 @@ mod tests {
     }
 
     #[test]
-    fn skip_parent_leaves_the_parent_out_with_or_without_an_overlay() {
+    fn skip_parent_leaves_the_parent_out() {
         let workspace = folder(
             &[("deployment.toml", "default_responders = \"soc\"\n")],
             &[],
         );
-        let overlay = folder(&[("paths.toml", "overlay = true\n")], &[]);
         let parent = folder(
             &[
                 ("deployment.toml", "default_responders = \"cert\"\n"),
@@ -453,30 +441,17 @@ mod tests {
             ],
             &[],
         );
-        let with_overlay = resolve(&Instance {
+        let skipped = resolve(&Instance {
             workspace: Some(&workspace),
-            overlay: Some(&overlay),
             parent: Some(&parent),
             skip_parent: true,
         })
         .unwrap()
         .to_json();
-        assert_eq!(with_overlay["paths"]["overlay"], true);
-        assert_eq!(with_overlay["deployment"]["default_responders"], "soc");
-        let without_overlay = resolve(&Instance {
-            workspace: Some(&workspace),
-            overlay: None,
-            parent: Some(&parent),
-            skip_parent: true,
-        })
-        .unwrap()
-        .to_json();
-        assert_eq!(without_overlay["deployment"]["default_responders"], "soc");
-        assert!(without_overlay["paths"].get("overlay").is_none());
+        assert_eq!(skipped["deployment"]["default_responders"], "soc");
         // Without the flag the parent is read, its retired entry included.
         let error = resolve(&Instance {
             workspace: Some(&workspace),
-            overlay: Some(&overlay),
             parent: Some(&parent),
             skip_parent: false,
         })
