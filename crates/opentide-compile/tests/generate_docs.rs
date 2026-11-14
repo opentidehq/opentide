@@ -211,6 +211,29 @@ fn documentation(ws: &Path, toml: &str) {
     std::fs::write(ws.join(".opentide/configurations/documentation.toml"), toml).unwrap();
 }
 
+/// A `documentation.toml` its model refuses stops the docs phase, naming
+/// the file and the first error.
+#[test]
+fn an_invalid_documentation_toml_names_the_file() {
+    let (_dir, workspace) = open_edited("tide-corpus", |ws| {
+        documentation(ws, "output = 5\n");
+    });
+    let error = Settings::resolve(
+        &workspace.configuration().resolved,
+        workspace.root(),
+        None,
+        None,
+        &FlavorHints::default(),
+    )
+    .err()
+    .unwrap();
+    assert!(
+        error.detail.starts_with("documentation.toml is invalid: "),
+        "{}",
+        error.detail
+    );
+}
+
 /// The flavour a run renders without `--flavor`: the CI it runs in (Azure,
 /// then GitHub, then GitLab), then the host of the `origin` remote, then
 /// `documentation.toml`; `--flavor` before all of them.
@@ -298,6 +321,20 @@ fn the_flavour_comes_from_ci_then_origin_then_the_configuration() {
             Some("https://github.com/o/r")
         ),
         Flavor::Generic
+    );
+    // A flavour that is none of them is refused, naming the choices.
+    let unknown = Settings::resolve(
+        resolved,
+        workspace.root(),
+        None,
+        Some("wiki"),
+        &FlavorHints::default(),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(
+        unknown.detail,
+        "unknown docs flavor `wiki` (expected generic, github, gitlab or azure-devops)"
     );
     // Without documentation.toml the default is CommonMark.
     let (_dir, plain) = open("tide-corpus");

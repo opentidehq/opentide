@@ -280,15 +280,12 @@ impl ExabeamEvery {
 #[from_node(union)]
 pub enum ExabeamValueItem {
     /// A string.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     Text(String),
     /// An integer.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Int(i64),
     /// A number.
-    #[from_node(tag = "float")]
     #[schemars(
         description = "",
         schema_with = "crate::objects::platform::number_schema"
@@ -303,18 +300,15 @@ pub enum ExabeamValueItem {
 #[from_node(union)]
 pub enum ExabeamValue {
     /// An integer.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Int(i64),
     /// A number.
-    #[from_node(tag = "float")]
     #[schemars(
         description = "",
         schema_with = "crate::objects::platform::number_schema"
     )]
     Float(f64),
     /// A list of strings or numbers.
-    #[from_node(tag = "list[union[str,int,float]]")]
     #[schemars(description = "")]
     List(Vec<ExabeamValueItem>),
 }
@@ -326,11 +320,9 @@ pub enum ExabeamValue {
 #[from_node(union)]
 pub enum ExabeamDays {
     /// Weekday names.
-    #[from_node(tag = "list[str]")]
     #[schemars(description = "")]
     Names(Vec<String>),
     /// Day numbers.
-    #[from_node(tag = "list[int]")]
     #[schemars(description = "")]
     Numbers(Vec<i64>),
 }

@@ -273,7 +273,11 @@ fn a_priority_falco_does_not_know_fails() {
     let (_, reason) =
         body("    status: STAGING\n    condition: proc.name = x\n    priority: urgent\n")
             .unwrap_err();
-    assert_eq!(reason, "Sysdig cannot compile this rule: \"URGENT\"");
+    assert_eq!(
+        reason,
+        "Sysdig cannot compile this rule: unknown priority \"URGENT\" (expected EMERGENCY, \
+         ALERT, CRITICAL, ERROR, WARNING, NOTICE, INFORMATIONAL or DEBUG)"
+    );
 }
 
 #[test]

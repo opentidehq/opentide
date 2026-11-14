@@ -93,6 +93,24 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
     }
 }
 
+/// The HTTP settings a deploy mounts for *platform* (`opentide deploy` and
+/// `opentide::Connection::deploy`). A deploy takes no `--timeout`, so each
+/// client reads for the timeout 0.28's deployer used: Sentinel's ARM session
+/// 60 s (a deploy sends no query, so azure-core's 300 s does not apply),
+/// Elastic 30 s, Google SecOps 60 s, and the transport's 120 s for the
+/// clients that take the caller's; the others keep their own, as in
+/// [`http_settings`]. Only the timeout follows 0.28: the retries are the
+/// connectors' own ([`retry::RetryPolicy`]).
+pub fn deploy_http_settings(platform: &str) -> HttpSettings {
+    use std::time::Duration;
+    match platform {
+        "sentinel" => sentinel::http_settings(Duration::from_secs(60)),
+        "elastic" => elastic::http_settings(Duration::from_secs(30)),
+        "google_secops" => google_secops::http_defaults(),
+        _ => http_settings(platform, http::DEFAULT_TIMEOUT),
+    }
+}
+
 /// The built-in platforms with a connector, in the order Python lists them
 /// ([`plugin::BUILTIN`], the platform table's connector order): CrowdStrike,
 /// HarfangLab and Sysdig (UC-4.2a), Defender for Endpoint, Elastic and
@@ -173,6 +191,37 @@ mod tests {
         assert_eq!(
             super::http_settings("unknown", timeout),
             super::HttpSettings::default()
+        );
+    }
+
+    #[test]
+    fn a_deploy_reads_for_each_python_deployers_client_timeout() {
+        // Every platform in the registry, so none goes unchecked.
+        for platform in opentide_schema::platforms::PLATFORMS.iter().map(|p| p.id) {
+            let seconds = match platform {
+                "sentinel" | "google_secops" => 60,
+                "elastic" | "exabeam" | "sysdig" | "bitdefender" | "graylog" => 30,
+                "defender_for_endpoint"
+                | "splunk"
+                | "sentinel_one"
+                | "carbon_black_cloud"
+                | "crowdstrike"
+                | "harfanglab" => 120,
+                other => panic!("{other}: no deploy timeout pinned"),
+            };
+            assert_eq!(
+                super::deploy_http_settings(platform).timeout,
+                Duration::from_secs(seconds),
+                "{platform}"
+            );
+        }
+        assert_eq!(
+            super::deploy_http_settings("sysdig"),
+            super::sysdig::http_defaults()
+        );
+        assert_eq!(
+            super::deploy_http_settings("sentinel").retry,
+            super::sentinel::http_settings(Duration::from_secs(60)).retry
         );
     }
 

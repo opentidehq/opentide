@@ -315,7 +315,7 @@ fn a_live_check_with_no_answer_within_the_check_timeout_fails() {
         "{message}"
     );
     assert!(
-        message.contains("Read timed out. (read timeout=1)"),
+        message.contains(&format!("no answer from http://{address} within 1s")),
         "{message}"
     );
     let advice = document["advice"].as_str().unwrap();

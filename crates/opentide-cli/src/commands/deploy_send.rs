@@ -32,7 +32,7 @@ use opentide_workspace::{OsFs, Workspace, root};
 use tokio_util::sync::CancellationToken;
 
 use super::deploy_state::{self, ExternalId, StateError};
-use super::query::{Configured, http_settings, log_unset, toml_value};
+use super::query::{Configured, log_unset, toml_value};
 use super::validate_live::{Batch, batches};
 use super::{Report, placement};
 use crate::env::Env;
@@ -1732,18 +1732,7 @@ impl Sender<'_, '_> {
             .iter()
             .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
             .collect();
-        let timeout = match platform {
-            "elastic" => 30,
-            "sentinel" => 60,
-            _ => 120,
-        };
-        let settings = match platform {
-            "sysdig" => opentide_connectors::sysdig::http_defaults(),
-            "bitdefender" => opentide_connectors::bitdefender::http_defaults(),
-            "google_secops" => opentide_connectors::google_secops::http_defaults(),
-            "graylog" => opentide_connectors::graylog::http_defaults(),
-            _ => http_settings(platform, Duration::from_secs(timeout)),
-        };
+        let settings = opentide_connectors::deploy_http_settings(platform);
         let tenant = Tenant::from_setup(
             platform,
             &batch.tenant.name,

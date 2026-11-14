@@ -1794,9 +1794,7 @@ fn elastic_run(
         .map_err(|error| match error {
             opentide_connectors::elastic::FindError::Status(text) => format!("HTTPError: {text}"),
             opentide_connectors::elastic::FindError::Connector(error) => connector_message(&error),
-            opentide_connectors::elastic::FindError::NotJson(text) => {
-                format!("JSONDecodeError: {text}")
-            }
+            opentide_connectors::elastic::FindError::NotJson(text) => text,
         })?;
         let rules = match answer.get("data") {
             Some(CJson::Array(rules)) => rules.clone(),

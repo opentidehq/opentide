@@ -13,7 +13,7 @@ use crate::Context;
 use crate::attack::{TACTIC_ORDER, non_enterprise, tactic, techniques};
 use crate::duration;
 use crate::json::{Json, Object};
-use crate::rule::{CompileError, Rule};
+use crate::rule::{CompileError, Rule, codes};
 use crate::strategy::StatusStrategy;
 
 /// The platform's display name, in messages.
@@ -151,22 +151,39 @@ fn get<'j>(object: &'j Json, key: &str) -> Option<&'j Json> {
     object.get(key).filter(|value| !value.is_null())
 }
 
-fn text_of(value: &Json) -> Result<&str, String> {
-    value
-        .as_str()
-        .ok_or_else(|| format!("Duration must be a string, got {}", python_type(value)))
+/// A duration field's text; anything but a string refuses the rule, naming
+/// `field` (under `configurations.elastic`).
+fn text_of<'j>(value: &'j Json, field: &str) -> Result<&'j str, CompileError> {
+    value.as_str().ok_or_else(|| {
+        let kind = match value {
+            Json::Null => "null",
+            Json::Bool(_) => "a boolean",
+            Json::Int(_) | Json::Float(_) => "a number",
+            Json::Str(_) => "a string",
+            Json::Array(_) => "a list",
+            Json::Object(_) => "a mapping",
+        };
+        let mut path = vec!["configurations", "elastic"];
+        path.extend(field.split('.'));
+        CompileError::new(
+            codes::COMPILE_INVALID_VALUE,
+            format!("configurations.elastic.{field} must be a duration string, got {kind}"),
+            None,
+        )
+        .at(&path)
+    })
 }
 
-fn python_type(value: &Json) -> &'static str {
-    match value {
-        Json::Null => "NoneType",
-        Json::Bool(_) => "bool",
-        Json::Int(_) => "int",
-        Json::Float(_) => "float",
-        Json::Str(_) => "str",
-        Json::Array(_) => "list",
-        Json::Object(_) => "dict",
-    }
+/// `configurations.elastic.<field>` is absent.
+fn missing(field: &str) -> CompileError {
+    let mut path = vec!["configurations", "elastic"];
+    path.extend(field.split('.'));
+    CompileError::new(
+        codes::COMPILE_MISSING_FIELD,
+        format!("configurations.elastic.{field} is missing"),
+        None,
+    )
+    .at(&path)
 }
 
 fn failed(message: String) -> CompileError {
@@ -371,7 +388,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
         .to_owned();
     let status = get(block, "status")
         .and_then(Json::as_str)
-        .ok_or_else(|| failed("'status'".to_owned()))?;
+        .ok_or_else(|| missing("status"))?;
     let strategy = cx
         .statuses
         .strategy(status)
@@ -403,8 +420,8 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
     let lookback = get(&scheduling, "lookback")
         .cloned()
         .unwrap_or_else(|| "1m".into());
-    let interval = text_of(&interval).map_err(failed)?;
-    let lookback = text_of(&lookback).map_err(failed)?;
+    let interval = text_of(&interval, "scheduling.interval")?;
+    let lookback = text_of(&lookback, "scheduling.lookback")?;
     let window = duration::elastic_format(
         duration::elastic_seconds(interval, false)
             .map_err(failed)?
@@ -511,8 +528,8 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
         );
         let start = new_terms
             .get("history_window_start")
-            .ok_or_else(|| failed("'history_window_start'".to_owned()))?;
-        let start = text_of(start).map_err(failed)?;
+            .ok_or_else(|| missing("new_terms.history_window_start"))?;
+        let start = text_of(start, "new_terms.history_window_start")?;
         body.insert(
             "history_window_start".into(),
             format!(
@@ -670,11 +687,11 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
             let group_by = suppression
                 .get("group_by")
                 .filter(|value| !value.is_null())
-                .ok_or_else(|| failed("'NoneType' object is not iterable".to_owned()))?;
+                .ok_or_else(|| missing("suppression.group_by"))?;
             out.insert("group_by".into(), group_by.clone());
         }
         if let Some(window) = suppression.get("duration").filter(|value| value.truthy()) {
-            let window = text_of(window).map_err(failed)?;
+            let window = text_of(window, "suppression.duration")?;
             let (amount, unit) = duration::elastic_amount(window, "hms").map_err(failed)?;
             let mut duration = Object::new();
             duration.insert(
@@ -935,4 +952,49 @@ pub fn threat(cx: &Context<'_>, rule: &Rule) -> Vec<Json> {
         }
     }
     threat
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A missing or mistyped field is named under `configurations.elastic`,
+    /// with its code and path.
+    #[test]
+    fn missing_and_mistyped_fields_are_named() {
+        let error = missing("new_terms.history_window_start");
+        assert_eq!(error.code, codes::COMPILE_MISSING_FIELD);
+        assert_eq!(
+            error.reason,
+            "configurations.elastic.new_terms.history_window_start is missing"
+        );
+        assert_eq!(
+            error.field,
+            [
+                "configurations",
+                "elastic",
+                "new_terms",
+                "history_window_start"
+            ]
+        );
+        assert_eq!(
+            text_of(&Json::Str("5m".into()), "scheduling.interval"),
+            Ok("5m")
+        );
+        let error = text_of(&Json::Null, "scheduling.interval").unwrap_err();
+        assert_eq!(error.code, codes::COMPILE_INVALID_VALUE);
+        assert_eq!(
+            error.reason,
+            "configurations.elastic.scheduling.interval must be a duration string, got null"
+        );
+        let error = text_of(&Json::Int(5), "suppression.duration").unwrap_err();
+        assert_eq!(
+            error.reason,
+            "configurations.elastic.suppression.duration must be a duration string, got a number"
+        );
+        assert_eq!(
+            error.field,
+            ["configurations", "elastic", "suppression", "duration"]
+        );
+    }
 }

@@ -92,7 +92,7 @@ The engine's one Python binding is `bindings/python/` (PyO3), which maturin comp
 
 The native binary ships on crates.io (`cargo install opentide-lsp`) and as per-target binaries on each GitHub Release. CI job `engine-package` (`ci.yml`) runs `scripts/engine/release.py vendor` and `cargo package --workspace --exclude opentide-native`, which builds every crate from its packaged sources. A crate that reads a file outside `OPENTIDE_ASSETS` fails that job.
 
-Cutting a release, and the opentide pin PR that finishes one, is `.agents/skills/engine-release/SKILL.md`.
+Releases go out with the release train (`.github/workflows/publish.yml`), with the rest of opentide at one version: `.agents/skills/release-management/SKILL.md`.
 
 ## Names
 

@@ -630,10 +630,13 @@ pub fn api_body(compiled: &FalcoRule) -> Result<Json, CompileError> {
         return Ok(Json::Object(body));
     }
     let Some(priority) = api_priority(&compiled.priority) else {
-        // The oracle's `API_PRIORITY[...]` raises a KeyError.
         return Err(CompileError::failed(
             DISPLAY,
-            &format!("{:?}", compiled.priority),
+            &format!(
+                "unknown priority {:?} (expected EMERGENCY, ALERT, CRITICAL, ERROR, WARNING, \
+                 NOTICE, INFORMATIONAL or DEBUG)",
+                compiled.priority
+            ),
         ));
     };
     details.insert("source".into(), compiled.source.clone().into());

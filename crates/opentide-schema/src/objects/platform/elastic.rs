@@ -471,11 +471,9 @@ model! {
 #[from_node(union)]
 pub enum JobId {
     /// One job.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     One(String),
     /// Several jobs.
-    #[from_node(tag = "list[str]")]
     #[schemars(description = "")]
     Many(Vec<String>),
 }
@@ -497,11 +495,9 @@ model! {
 #[from_node(union)]
 pub enum SeverityChoice {
     /// An `alert_severity` value.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     Level(String),
     /// A default plus severity overrides.
-    #[from_node(tag = "ElasticSeverity")]
     #[schemars(description = "")]
     Mapped(ElasticSeverity),
 }
@@ -512,11 +508,9 @@ pub enum SeverityChoice {
 #[from_node(union)]
 pub enum RiskChoice {
     /// A score 0–100.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Score(i64),
     /// A score plus risk score overrides.
-    #[from_node(tag = "ElasticRisk")]
     #[schemars(description = "")]
     Mapped(ElasticRisk),
 }
@@ -528,11 +522,9 @@ pub enum RiskChoice {
 #[from_node(union)]
 pub enum IntegrationChoice {
     /// A package name.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     Package(String),
     /// A package, policy template and version range.
-    #[from_node(tag = "ElasticIntegration")]
     #[schemars(description = "")]
     Detailed(ElasticIntegration),
 }

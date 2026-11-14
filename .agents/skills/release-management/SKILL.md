@@ -39,7 +39,7 @@ Never tag by hand. Trunk is `development`.
 | Version before the tag | Newest dated `CHANGELOG.md` heading: `uv run python scripts/build/release.py version` |
 | Lockstep | The crates are at that version: `python3 scripts/engine/release.py lockstep 0.x.y` (the workspace version and every internal pin). The workflow writes it into the npm packages (`release.py npm-version`) and checks them (`lockstep --npm`) |
 | Auth | OIDC trusted publishing on all three registries. PyPI environment `pypi`, for releases and candidates (no TestPyPI). Workflow filename `publish.yml` everywhere. `CARGO_REGISTRY_TOKEN` only for a crate's first version (the first candidate's, for the six new names) |
-| Engine tags | The engine's own `engine-vX.Y.Z` series (`engine-release.yml`) ended with the release train; the engine skill is retired |
+| Engine tags | The engine's own `engine-vX.Y.Z` series (`engine-release.yml`) ended with the release train; its skill, `engine-release`, was removed |
 
 ## What a release publishes
 
@@ -171,8 +171,6 @@ Search the repo for the old pin (`opentide==0.1.3` or whatever the previous vers
 | `docs/usage/troubleshooting.md` | Pins **and** mention the new patch in the relevant bug sections |
 | `docs/usage/workflows/agentic-setup.md` | |
 | `docs/usage/workflows/ci-cd.md` | Hand-written pipeline examples and the callout above them |
-| `docs/usage/migration/index.md` | |
-| `docs/usage/migration/prompt.md` | |
 | `docs/cli/index.md` | |
 | `docs/mcp/index.md` | |
 | `docs/mcp/installation.md` | |

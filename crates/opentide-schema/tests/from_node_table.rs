@@ -70,9 +70,7 @@ enum Kind {
 #[serde(untagged)]
 #[from_node(union)]
 enum Either {
-    #[from_node(tag = "str")]
     Str(String),
-    #[from_node(tag = "int")]
     Int(i64),
 }
 
@@ -80,9 +78,7 @@ enum Either {
 #[serde(untagged)]
 #[from_node(union)]
 enum StrOrList {
-    #[from_node(tag = "str")]
     Str(String),
-    #[from_node(tag = "list[str]")]
     List(Vec<String>),
 }
 

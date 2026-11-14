@@ -34,7 +34,9 @@ use std::future::Future;
 use std::time::Duration;
 
 use opentide_connectors::credentials::Mode;
-use opentide_connectors::{ConnectorError, Environment, HttpClient, Platform, Registry, Tenant};
+use opentide_connectors::{
+    ConnectorError, Environment, HttpClient, HttpSettings, Platform, Registry, Tenant,
+};
 use tokio_util::sync::CancellationToken;
 
 use crate::{Error, Workspace};
@@ -209,10 +211,11 @@ pub struct ConnectOptions {
     /// The proxy every request goes through (`--proxy`), before the
     /// environment's.
     pub proxy: Option<String>,
-    /// How long a tenant may take to answer a read, for the platforms whose
-    /// client takes the caller's (Elastic, Splunk, Carbon Black Cloud,
-    /// Sentinel); the others keep their own. Default:
-    /// [`DEFAULT_QUERY_TIMEOUT`].
+    /// How long a tenant may take to answer a read in a query or a live
+    /// check, for the platforms whose client takes the caller's (Elastic,
+    /// Splunk, Carbon Black Cloud, Sentinel, Google SecOps); the others keep
+    /// their own. A deploy reads for `opentide deploy`'s timeout instead.
+    /// Default: [`DEFAULT_QUERY_TIMEOUT`].
     pub timeout: Option<Duration>,
 }
 
@@ -254,16 +257,18 @@ impl ConnectOptions {
         self
     }
 
-    /// Gives a tenant `timeout` to answer a read.
+    /// Gives a tenant `timeout` to answer a read in a query or a live check.
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
         self
     }
 }
 
-/// One tenant's client: its HTTP client, built from the tenant's own
+/// One tenant's client: its HTTP clients, built from the tenant's own
 /// settings (never another tenant's), its resolved credentials, and the
-/// platform's connector. Secrets never reach a message, a log or a `Debug`.
+/// platform's connector. Queries and live checks read for the
+/// [`ConnectOptions::timeout`]; a deploy reads for the timeout `opentide
+/// deploy` reads for ([`opentide_connectors::deploy_http_settings`]). Secrets never reach a message, a log or a `Debug`.
 ///
 /// It is `Send + Sync`: one connection serves many operations, at once or in
 /// turn, and keeps what the platform reuses between them (a sign-in token).
@@ -271,6 +276,9 @@ pub struct Connection {
     platform: String,
     tenant: Tenant,
     http: HttpClient,
+    /// The tenant and its client as a deploy reaches it: the same
+    /// credentials and TLS, `opentide deploy`'s timeout and retries.
+    deploy: (Tenant, HttpClient),
     registry: Registry,
     cancel: CancellationToken,
 }
@@ -324,10 +332,23 @@ impl Connection {
             options.proxy.as_deref(),
         )
         .map_err(Error::from)?;
+        let mut deployed = resolved.clone();
+        deployed.http = HttpSettings {
+            tls: resolved.http.tls.clone(),
+            ..opentide_connectors::deploy_http_settings(&tenant.platform)
+        };
+        let deploy_http = HttpClient::new(
+            &deployed.label,
+            &deployed.http,
+            &environment,
+            options.proxy.as_deref(),
+        )
+        .map_err(Error::from)?;
         Ok(Self {
             platform: tenant.platform.clone(),
             tenant: resolved,
             http,
+            deploy: (deployed, deploy_http),
             registry,
             cancel: CancellationToken::new(),
         })
@@ -440,7 +461,13 @@ impl Connection {
             .connector()
             .and_then(Platform::deployer)
             .ok_or_else(|| self.unsupported("has no deployer"))?;
-        Ok(deployer.deploy(self.context(), request).await?)
+        let (tenant, http) = &self.deploy;
+        let cx = opentide_connectors::connector::TenantContext {
+            tenant,
+            http,
+            cancel: &self.cancel,
+        };
+        Ok(deployer.deploy(cx, request).await?)
     }
 }
 
@@ -667,6 +694,26 @@ mod tests {
         let cancelled = Error::from(ConnectorError::Cancelled);
         assert_eq!(cancelled.code(), "interrupted");
         assert_eq!(cancelled.to_string(), "interrupted");
+    }
+
+    #[test]
+    fn a_deploy_reads_for_opentide_deploys_settings_and_a_query_for_the_options() {
+        for platform in opentide_schema::platforms::PLATFORMS.iter().map(|p| p.id) {
+            let tenant = TenantConfig::new(platform, "t", [("url", "https://t.invalid")]);
+            let options = ConnectOptions::default().timeout(Duration::from_secs(7));
+            let connection = Connection::open(&tenant, &options)
+                .unwrap_or_else(|error| panic!("{platform}: {error}"));
+            assert_eq!(
+                connection.deploy.0.http,
+                opentide_connectors::deploy_http_settings(platform),
+                "{platform}'s deploy"
+            );
+            assert_eq!(
+                connection.tenant.http,
+                opentide_connectors::http_settings(platform, Duration::from_secs(7)),
+                "{platform}'s queries"
+            );
+        }
     }
 
     #[test]

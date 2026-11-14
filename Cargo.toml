@@ -89,6 +89,9 @@ anyhow = "1"
 lsp-server = "0.10"
 lsp-types = "0.97"
 url = "2.5"
+# Percent-decoding a URL path segment (opentide-cassette's matcher). The
+# version `url` already locks.
+percent-encoding = "2.3"
 regex = "1"
 # Look-around and back-references, which `regex` has not: the oracle's
 # Markdown-to-text patterns of the generated schemas (opentide-schema, UC-1.8).

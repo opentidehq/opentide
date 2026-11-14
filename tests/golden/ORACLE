@@ -3,7 +3,7 @@
 # this file, run `cargo xtask golden lock` and `cargo xtask golden record`.
 # The wheel's SHA-256 is PyPI's (https://pypi.org/pypi/opentide/0.28.1/json);
 # exclude_newer follows the wheel's upload, 2026-11-13T11:29:31Z (0.28.0 added
-# google-auth). O2 of docs/internal/catchup-0.28-plan.md moved it from 0.23.0.
+# google-auth). The 0.28 catch-up train (#1122) moved it from 0.23.0.
 tag = "v0.28.1"
 commit = "164450afcc1b81a9c3e39a0bc5f3ee0fb0d3b54b"
 package = "opentide"

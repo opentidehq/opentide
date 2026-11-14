@@ -33,11 +33,9 @@ use super::falco_text::join_lines;
 #[from_node(union)]
 pub enum OneOrMany {
     /// One.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     One(String),
     /// Several.
-    #[from_node(tag = "list[str]")]
     #[schemars(description = "")]
     Many(Vec<String>),
 }
@@ -49,15 +47,12 @@ pub enum OneOrMany {
 #[from_node(union)]
 pub enum ListItem {
     /// A string.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     Text(String),
     /// An integer.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Int(i64),
     /// A number.
-    #[from_node(tag = "float")]
     #[schemars(
         description = "",
         schema_with = "crate::objects::platform::number_schema"
