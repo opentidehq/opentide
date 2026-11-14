@@ -2682,6 +2682,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "ctrlc",
+ "dunce",
  "form_urlencoded",
  "humantime",
  "indexmap",
@@ -2724,6 +2725,7 @@ dependencies = [
  "unicode-width",
  "url",
  "uuid",
+ "walkdir",
  "which",
 ]
 

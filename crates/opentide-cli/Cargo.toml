@@ -103,6 +103,13 @@ jsonc-parser = { version = "0.26", features = ["cst", "serde"] }
 # a path resolved where it exists and kept where it does not (`Path.resolve()`).
 pathdiff = "0.2"
 soft-canonicalize = { version = "0.5", default-features = false, features = ["dunce"] }
+# A path resolved without Windows' `\\?\` prefix where it can be written
+# without one (`new`'s printed and written paths).
+dunce = "1"
+# The folder walks on disk (`new`, `migrate`, `doctor`, `setup skills`):
+# sorted siblings, links to folders not followed, or followed with loops cut.
+# The workspace's `FileSystem` (opentide-workspace) walks its own trees.
+walkdir = "2.5"
 # Percent-encoded paths in links and SARIF URIs.
 percent-encoding = "2.3"
 # `opentide explain <code>` in human mode: the page's Markdown, parsed for the terminal.
