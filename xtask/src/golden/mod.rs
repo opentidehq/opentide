@@ -959,7 +959,9 @@ mod tests {
 
     /// A generated fixture with an edit is generated and edited once; each
     /// case's copy of it applies the edit no second time (an edit that writes
-    /// a new file would otherwise find it there and fail).
+    /// a new file would otherwise find it there and fail). The workspace path
+    /// reaches the shell as an argument, never in its script: sh reads a
+    /// Windows path's backslashes as escapes.
     #[test]
     fn a_generated_fixture_is_edited_once() {
         let spec = Spec::parse(
@@ -971,7 +973,7 @@ timeout_secs = 10
 
 [fixtures.made]
 kind = "generated"
-argv = ["sh", "-c", "echo made > {out}/a.txt"]
+argv = ["sh", "-c", "echo made > \"$1/a.txt\"", "sh", "{out}"]
 edits = [{ path = "b.txt", find = "", replace = "edited\n" }]
 
 [[case]]
