@@ -49,14 +49,14 @@ opentide validate --check queries
 Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A note (a finding worth knowing that is not wrong) prints only with the global [`--verbose`](./global-options.md): without it the line still counts the notes and is followed by the same command with `--verbose`. `--json` and the reports always include notes, `validate query` prints them the same way, and `--watch` shows every finding. A typo in a vocabulary value:
 
 ```text illustrative
-error[vocab_unknown]: 'clearr' is not a TLP value
+error[vocab_unknown]: "clearr" is not a TLP value
   ╭─▶ objects/rules/sentinel-kql-rule.yaml:8:8
   │
 7 │   modified: 2026-01-02
 8 │   tlp: clearr
   │        ━━━━━━ not in tlp::1.0
   │
-  ╰─ help: did you mean 'clear'?
+  ╰─ help: did you mean "clear"?
 
 ✗ 1 error in 1 file · 3 objects checked · 0.9s
 → opentide explain vocab_unknown · how to fix it
@@ -88,7 +88,7 @@ Each entry of `report.issues` and `report.warnings` keeps its keys (`yaml_line` 
 | `line` | One-based line of what the frame points at. `null` when unknown. Not always `yaml_line + 1`: for a block value (a mapping or a list) it is the line of the key, where `yaml_line` is the block's first child; for a missing field it is the key of the mapping the field belongs in |
 | `column`, `end_column` | One-based columns of the value (of the key, for a block, a missing field or an unknown key); `end_column` is just past the last character, on `end_line`. Columns count Unicode code points (`🔥` is one column), not UTF-16 code units. Best effort, `null` when unknown |
 | `end_line` | One-based line of the span's last character: the span runs from (`line`, `column`) up to (`end_line`, `end_column`). Equal to `line` for a span on one line, which is every finding but a `queries` finding over several lines of a query (a block scalar). A span whose last character is a line break (a KQL bracket left open at the end of a line) ends on that line. `null` when `line` is |
-| `help` | What to do, in prose (`did you mean 'clear'?`), or `null` |
+| `help` | What to do, in prose (`did you mean "clear"?`), or `null` |
 | `fix` | `null`, or `{ "safe": bool, "edits": [{ "line", "column", "end_line", "end_column", "replacement" }] }`: replace the text from (`line`, `column`) up to (`end_line`, `end_column`). Every suggested value gets a fix. `safe` is `true` only when the two values spell the same word (they differ in case, spaces, `-` or `_`) and neither has a digit, so an ATT&CK id, a UUID or `clearr` → `clear` is left for a person or an agent to confirm. A reference fix is never safe |
 | `explain` | `opentide explain <code>` |
 
@@ -126,7 +126,7 @@ opentide validate --fix
 fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'Clear' → 'clear'
 fixed: objects/threats/simulated-actor.yaml:9:8 'Clear' → 'clear'
 
-error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'
+error[invalid_ref]: Unknown objective or signal reference "00000000-0000-4000-8002-DEADBEEF0000"
    ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18
    │
 16 │ techniques: [T1059]

@@ -40,19 +40,24 @@ The CLI is `opentide-cli` (clap). Python's console script is `opentide = "openti
 line is `opentide-cli`, run in-process from the Python package. Only how the console script
 reaches it changes.
 
-1. **The console script and `python -m opentide` are `opentide.cli.launch:main`**, a small
-   Python entry, not `opentide._native:main`. It imports nothing heavy (no Typer, no `typing`)
+1. **The console script and `python -m opentide` are a small Python entry**, not
+   `opentide._native:main`: `opentide.cli.launch:main` when this was decided, and since UC-6.2
+   ([#841](https://github.com/opentidehq/opentide/issues/841)), which removed the Python CLI and
+   its fallback, `opentide._cli:main`. It imports nothing heavy (no Typer, no `typing`)
    before it decides which implementation runs.
 2. **It calls `opentide._native:main` when the run needs the engine and the engine loads.**
    A run that the environment and the root options alone give to Python (the default engine,
    `--version`, `--help`) does not load it. `_native.main` hands the arguments back to
    `opentide.cli.launch.run`, which runs a Rust command in the same process, with the GIL
-   released, and gives every other run to the Python CLI in the same process.
+   released, and gives every other run to the Python CLI in the same process. Since UC-6.2
+   there is no Python CLI: `opentide._cli:main` imports `opentide._native` and hands it every
+   run (`cli_main`).
 3. **When the engine cannot be imported, the Python CLI answers every run.** The commands that
    need the engine fail with `engine_unavailable`, `OPENTIDE_ENGINE=rust` runs included. This
    keeps the rule in `AGENTS.md` ("Analysis engine"): a missing engine is `engine_unavailable`
    and never takes the Python commands down. A console script inside the extension module could
-   not start at all without it.
+   not start at all without it. Since UC-6.2 no command runs without the engine:
+   `opentide._cli:main` says so on stderr and exits 1.
 4. **Startup.** These figures come from `cargo xtask bench --engine rust --only startup,explain`,
    10 runs per round over three rounds, on a shared 2.3 GHz Xeon (load average 3 to 6). They are
    taken through `.venv/bin/opentide` with the engine in the `develop` profile:

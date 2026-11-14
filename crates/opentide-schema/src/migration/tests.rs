@@ -343,7 +343,7 @@ fn migrate_to_refuses_backwards_across_families_and_unregistered() {
     );
     assert_eq!(
         MigrationError::Unregistered("rule::9.0".into()).to_string(),
-        "unknown schema identifier: 'rule::9.0'"
+        "unknown schema identifier: \"rule::9.0\""
     );
 }
 

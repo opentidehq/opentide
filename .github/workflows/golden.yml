@@ -147,8 +147,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          # Saved from pushes only: a pull request's cache serves no other (#841).
-          save-if: ${{ github.event_name == 'push' }}
+          # Saved by the nightly and pushes to development only (the default
+          # branch, whose caches every pull request reads): a target tree per
+          # integration merge, whose Cargo.lock nearly always changed, evicted
+          # the compiler caches pull requests restore (#841).
+          save-if: ${{ github.event_name == 'schedule' || github.ref == 'refs/heads/development' }}
           workspaces: . -> target
 
       - name: Check the goldens against the oracle
@@ -192,8 +195,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          # Saved from pushes only: a pull request's cache serves no other (#841).
-          save-if: ${{ github.event_name == 'push' }}
+          # Saved by the nightly and pushes to development only (the default
+          # branch, whose caches every pull request reads): a target tree per
+          # integration merge, whose Cargo.lock nearly always changed, evicted
+          # the compiler caches pull requests restore (#841).
+          save-if: ${{ github.event_name == 'schedule' || github.ref == 'refs/heads/development' }}
           workspaces: . -> target
 
       - name: The oracle's lock file is the one golden lock writes

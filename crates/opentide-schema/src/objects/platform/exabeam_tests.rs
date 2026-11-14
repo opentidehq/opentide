@@ -403,9 +403,9 @@ fn the_messages_name_the_values() {
     assert_eq!(
         messages,
         [
-            "'median' is not an Exabeam function: count, unique_count, value, max, min, sum, average",
-            "'High' is not an Exabeam severity: none, low, medium, high, critical (lower case)",
-            "['x'] is not alert, case or none",
+            "\"median\" is not an Exabeam function: count, unique_count, value, max, min, sum, average",
+            "\"High\" is not an Exabeam severity: none, low, medium, high, critical (lower case)",
+            "[\"x\"] is not alert, case or none",
             "delay is 7 to 180 minutes, written in m or h: 7m to 180m, 1h to 3h",
         ]
     );
@@ -417,7 +417,7 @@ fn the_messages_name_the_values() {
     assert_eq!(
         messages,
         [
-            "count takes the operator more_than or less_than, not 'in'",
+            "count takes the operator more_than or less_than, not \"in\"",
             "the Exabeam rule name is 130 characters, more than 128: set a shorter \
              configurations.exabeam.name",
         ]
@@ -845,7 +845,7 @@ fn duplicate_names_compare_case_insensitively_among_enabled_blocks() {
     );
     assert_eq!(
         found[0].message,
-        "Exabeam rule name 'Failed logins' is also the name of rule(s) b, compared \
+        "Exabeam rule name \"Failed logins\" is also the name of rule(s) b, compared \
          case-insensitively; Exabeam rule names are unique"
     );
     assert_eq!(found[0].value.as_deref(), Some("Failed logins"));

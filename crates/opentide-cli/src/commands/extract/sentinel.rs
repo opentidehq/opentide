@@ -17,8 +17,8 @@ use std::time::{Duration, Instant};
 
 use opentide_compile::json::{Json as CJson, Object};
 use opentide_connectors::connector::TenantContext;
-use opentide_connectors::python::python_str;
 use opentide_connectors::sentinel::Sentinel;
+use opentide_connectors::text::json_text;
 use opentide_connectors::{ConnectorError, Environment};
 use tokio_util::sync::CancellationToken;
 
@@ -194,7 +194,7 @@ fn convert_period(period: &str) -> String {
 /// otherwise. A value of several lines is a JSON string, which YAML reads as
 /// a double-quoted scalar, as the oracle wrote it.
 pub(crate) fn scalar(value: &CJson) -> String {
-    let text = python_str(value);
+    let text = json_text(value);
     if !text.contains('\n') {
         let options = serde_saphyr::ser_options! {
             indent_step: 2,
@@ -252,7 +252,7 @@ fn items(object: &Object, key: &str) -> Result<Vec<CJson>, String> {
 /// `_alert_techniques`: each sub-technique in place of its parent, a parent
 /// without one kept, an orphan sub-technique after them, each once.
 fn alert_techniques(techniques: &[CJson], sub_techniques: &[CJson]) -> Vec<CJson> {
-    let text = |value: &CJson| python_str(value);
+    let text = |value: &CJson| json_text(value);
     let mut result: Vec<CJson> = Vec::new();
     for technique in techniques {
         let parent = text(technique);
@@ -324,12 +324,12 @@ pub(crate) fn render(rule: &Object, tenant_name: &str) -> Result<Option<(String,
         "DISABLED"
     };
     let kind = rule.get("kind");
-    let (trigger, scheduling) = if kind.map_or_else(String::new, python_str).to_uppercase() == "NRT"
+    let (trigger, scheduling) = if kind.map_or_else(String::new, json_text).to_uppercase() == "NRT"
     {
         (TRIGGER_TEMPLATE.to_owned(), NRT_SCHEDULING.to_owned())
     } else if kind == Some(&CJson::Str("Scheduled".into())) {
         let operator = scalar(required(rule, "trigger_operator")?);
-        let threshold = python_str(required(rule, "trigger_threshold")?);
+        let threshold = json_text(required(rule, "trigger_threshold")?);
         let frequency = convert_period(required_text(rule, "query_frequency", "removeprefix")?);
         let lookback = convert_period(required_text(rule, "query_period", "removeprefix")?);
         (
@@ -347,7 +347,7 @@ pub(crate) fn render(rule: &Object, tenant_name: &str) -> Result<Option<(String,
     };
     let create_incident = mapping(rule, "incident_configuration")?
         .and_then(|incident| incident.get("create_incident"))
-        .map_or_else(|| "false".to_owned(), python_str);
+        .map_or_else(|| "false".to_owned(), json_text);
     let alert_suppression = if rule.get("suppression_enabled").is_none()
         || rule.get("suppression_enabled") == Some(&CJson::Bool(false))
     {
@@ -467,7 +467,7 @@ pub(crate) fn render(rule: &Object, tenant_name: &str) -> Result<Option<(String,
     } else {
         let reopen = grouping
             .get("reopen_closed_incident")
-            .map_or_else(|| "false".to_owned(), python_str);
+            .map_or_else(|| "false".to_owned(), json_text);
         let lookback = convert_period(required_text(
             grouping,
             "lookback_duration",
@@ -710,7 +710,7 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
             if written.contains(&stem.to_lowercase()) {
                 let id: String = rule
                     .get("name")
-                    .map(python_str)
+                    .map(json_text)
                     .unwrap_or_default()
                     .chars()
                     .take(8)
@@ -793,7 +793,7 @@ mod tests {
         assert_eq!(text("Ünïcode — ok"), "Ünïcode — ok");
         assert_eq!(text("two\nlines"), "\"two\\nlines\"");
         assert_eq!(scalar(&CJson::Int(5)), "\"5\"");
-        assert_eq!(scalar(&CJson::Bool(true)), "\"True\"");
+        assert_eq!(scalar(&CJson::Bool(true)), "\"true\"");
         let long = "x ".repeat(200);
         assert!(!scalar(&CJson::Str(long)).contains('\n'));
     }

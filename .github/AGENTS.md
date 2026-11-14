@@ -59,19 +59,21 @@ golden compare), plus CodeQL's 2, for 11.5 minutes first job to last; Windows's 
 (11.4 minutes) were the long pole, then golden compare (8.6) and the vocabulary corpus part
 (8.4). After: Linux only, 12 building or testing (lint, engine lint, 2 engine test shards, deny,
 Python 3.14, 4 E2E shards, GitLab CI lint, golden compare); the gathering checks, the 3.10 cell
-and CodeQL report in seconds. The long poles are golden compare and engine lint.
+and CodeQL report in seconds. Then golden compare in three parts (#841's next cut), the wheel
+from the sdist moved to the full set, the release dry run's and the benchmarks' caches made
+per-runner sccache or restore-only, and engine lint building xtask once.
 
 **Core gates** (every pull request):
 
 | Job | What it checks |
 |-----|----------------|
-| `lint` | ruff, ty (the dependencies installed without the project), actionlint 1.7.7 over the workflows with shellcheck over their scripts (`.github/actionlint.yaml`), `uv build` (the wheel from the sdist, the `develop` profile, into the cached target directory) and `twine check`; the vocabulary drift gate and the model field descriptions (below) when their files change |
-| `engine` | rustfmt, clippy `-D warnings`, `cargo xtask check-layers`, `cargo xtask cassettes check` (#831: one deploy cassette per scenario of `tests/cassettes/scenarios.toml`, recorded and redacted, none edited by hand), `cargo doc --no-deps --workspace` with `RUSTDOCFLAGS=-D warnings`, the engine's invariant scripts (`check-io-free.sh`, `check-names.sh`, `validate-skills.sh`, `generate-highlights --check`), the bundled Tide catalog test and the engine release script's tests |
-| `engine-test` | (`engine-test-part`: Linux in two shards, `nextest --partition hash:N/2`, on every pull request; macOS and Windows whole in the full set, through a matrix that depends on the scope, `include: ${{ fromJSON(<full set> && '[...]' || '[...]') }}`; `engine-test` gathers them under each OS's required check, as `corpus` does, #841, and on a pull request reports macOS's and Windows's as the Linux shards') `cargo nextest run --workspace --profile ci` on Linux, macOS and Windows (one test compares with Python's difflib: setup-python's interpreter, `OPENTIDE_PYTHON`; nothing is synced); the doctests (`cargo test --doc`) on Linux; fails when the tests leave a file in the checkout that `git status` shows (#931) |
+| `lint` | ruff, ty (the dependencies installed without the project), actionlint 1.7.7 over the workflows with shellcheck over their scripts (`.github/actionlint.yaml`), `uv build --sdist` and `twine check` (the full set also builds the wheel from the sdist, the `develop` profile, into the cached target directory); the vocabulary drift gate and the model field descriptions (below) when their files change |
+| `engine` | rustfmt, clippy `-D warnings`, one `cargo build` of xtask and `opentide-lsp` whose binaries the later steps run: `xtask check-layers`, `xtask cassettes check` (#831: one deploy cassette per scenario of `tests/cassettes/scenarios.toml`, recorded and redacted, none edited by hand), `cargo doc --no-deps --workspace` with `RUSTDOCFLAGS=-D warnings`, the engine's invariant scripts (`check-io-free.sh`, `check-names.sh`, `validate-skills.sh`, `generate-highlights --check`), the bundled Tide catalog test and the engine release script's tests |
+| `engine-test` | (`engine-test-part`: Linux in three shards by package, each building and testing only its packages (`matrix.packages`, `-p` per package: a test harness is a binary, which sccache does not cache, so a `--partition` shard compiled every test of the workspace again), on every pull request; `tests/test_ci/test_ci_scope.py` holds the shards to every workspace member exactly once, to even shares, and to the features `--workspace` enables on each member (`cargo tree -e features`: the bindings turn on the facade's `cli`, `python` and the rest and opentide-schema's `python`, which gate tests, so shards 1 and 2 name them with `--features`); opentide-schema's compile-fail cases (`opentide-schema::ui`, trybuild, a minute) run in the full set and on a pull request that changes the derive, the crate, the cases, `Cargo.lock`, the toolchain or ci.yml (the shard reads the merge commit's diff, and runs them when it cannot); macOS and Windows whole in the full set, through a matrix that depends on the scope, `include: ${{ fromJSON(<full set> && '[...]' || '[...]') }}`; `engine-test` gathers them under each OS's required check, as `corpus` does, #841, and on a pull request reports macOS's and Windows's as the Linux shards') `cargo nextest run --profile ci` on Linux (each shard's packages), macOS and Windows (`--workspace`) (one test compares with Python's difflib: setup-python's interpreter, `OPENTIDE_PYTHON`; nothing is synced); the doctests (`cargo test --doc`, each shard its packages') on Linux; fails when the tests leave a file in the checkout that `git status` shows (#931) |
 | `deny` | `cargo deny check` against [`deny.toml`](../deny.toml) (licences, RustSec advisories, duplicate versions, OpenSSL, sources) for the workspace and the `publishing/` placeholder crate, and advisories, bans and sources for `fuzz/`; cargo-deny 0.20.2, prebuilt and checksum-checked ([`docs/internal/supply-chain.md`](../docs/internal/supply-chain.md)) |
 | `test` | Python **3.14** with the coverage gate; the **3.10** cell runs in the full set (on a pull request it starts and skips its steps, `env.RUNS`, so its required check reports); `test-full` adds 3.11–3.13 in the full set |
 | `cli-e2e`, `gitlab-ci-lint` | The sharded E2E suite (4 shards) and the generated GitLab pipelines; neither waits for `test`. The E2E tests that only repeat a golden case through the same console script run in the full set (`full_set`): `test_opentide_console_script_help`, `test_opentide_console_script_json_is_single_document`, `test_opentide_console_script_validates_corpus` and `test_workflow_subprocess_e2e.py` |
-| `golden-compare` | `cargo xtask golden check --engine rust` (UC-0.7; every case since UC-6.2, #841): every golden case through this repository's CLI, the Rust core, against the oracle's recording and `tests/golden/APPROVED_DIFFS.toml`; then `cargo xtask mcp replay --engine rust` (the recorded Python MCP sessions against the Rust server) and the MCP stdio tests. The check keeps its name, `Golden compare`, a required check's; the `golden-compare` artifact holds the report |
+| `golden-compare` | `cargo xtask golden check --engine rust` (UC-0.7; every case since UC-6.2, #841): every golden case through this repository's CLI, the Rust core, against the oracle's recording and `tests/golden/APPROVED_DIFFS.toml`; `cargo xtask mcp replay --engine rust` (the recorded Python MCP sessions against the Rust server) and the MCP stdio tests. In three parts (`golden-compare-part`, `Golden compare (part K/3)`): each runs `--partition K/3`, the cases whose id's FNV-1a hash falls in it, and writes the ledger entries it did not apply (`--unused`, the `golden-unused-K` artifact); part 2 replays the MCP sessions, part 3 runs the MCP tests. `golden-compare` gathers them under the required check's name, `Golden compare`, with `if: ${{ !cancelled() }}`: it fails unless every part passed, and on an entry every part lists, a stale one (on the catch-up train, where `tests/golden/REPORT_ONLY` is committed, the parts export that and the gather reports stale entries as warnings instead, as `golden check` does there). The `golden-compare-K` artifacts hold the reports |
 | `corpus` | On a pull request that changes the corpora's inputs (above), and in the full set. (`corpus-part` in five parts on five runners: `Corpus (generator)`, `(faults)`, `(diffs)`, `(editor)`, `(vocabulary)`; `corpus` gathers them under the required check's name, with `if: ${{ !cancelled() }}` so that a failed part fails it, #841) The corpora of UC-0.6 against opentide 0.23.0 from PyPI, hash-pinned in its own venv: the heavy workspace has no finding, `cargo xtask corpus faults --check` (every fault kind reports exactly its codes), the code inventory and `COVERAGE.md` are current ([`tests/corpora/README.md`](../tests/corpora/README.md)); opentide-schema's object models against the oracle (UC-1.3): `corpus faults --check --engine rust --only objects` and `cargo xtask schema diff --against python` (JSON Schemas, findings on every corpus); the platform-block and configuration fault kinds through the Rust engine, finding for finding (`corpus faults --check --engine rust --only platforms` and `--only configuration`, UC-1.4 #810 and UC-1.5 #811, the `faults` part, about a minute); every workspace's resolved configuration and its configuration findings against the oracle's (`cargo xtask config diff --against python`, UC-1.5 #811, the `diffs` part, seconds); `cargo xtask validate diff` (UC-2.2: opentide-workspace's validate against the recordings of `validate --json`, every difference approved, none stale; UC-2.3: its `--fix` and `--fix --dry-run` cases too) and `cargo xtask lint diff` (UC-2.3: its lint against the recordings of `lint --json`) |
 | `changes` | `CI paths`: whether the pull request changes the release's inputs, the grammars, the corpora's inputs, the Node package's or the facade's (above) |
 
@@ -118,23 +120,35 @@ rustup installs nothing in the middle of a build; the Linux wheels' containers d
 **Compiler caches, one strategy** (`tests/test_ci/test_rust_caches.py`, #841, #1047): the Rust
 jobs of ci.yml wrap rustc in sccache (`RUSTC_WRAPPER`, 0.19.0 from taiki-e/install-action), whose
 directory (`SCCACHE_DIR`, `.sccache/` in the checkout, gitignored: actions/cache refuses a path
-with `..`) actions/cache keeps under `sccache-<family>-<hash of Cargo.lock and rust-toolchain.toml>`,
-restored with the family as `restore-keys`. The key does not hash the sources: sccache is
-content-addressed, so a copy made some merges ago still serves every crate that did not change,
-and a push to a base branch saves nothing until the lockfile or the toolchain changes. Each family
-has one job that saves it (`actions/cache/save`, from a push, only when the key missed):
-`lint`, `engine-check` (`engine`), `engine-dev-<os>` (`engine-test-part`'s first shard per OS;
-`clients` and `elastic-sweep` restore Linux's), `corpus` (`corpus-part`'s generator; the other
+with `..`) actions/cache keeps under `sccache-<family>-<hash of rust-toolchain.toml>-<ISO week>`
+(the week from a `week` step just before the restore, `date -u +%G-W%V`), restored with the
+family and toolchain as `restore-keys`. The key hashes neither the sources nor `Cargo.lock`:
+sccache is content-addressed, so a copy a few days old still serves every crate that did not
+change, and a family is saved once a week, by the first push of the week. A key on `Cargo.lock`,
+which most merges change, saved every family again on each merge, and with the target trees
+below that passed the 10 GB GitHub keeps, so the families pull requests restore were evicted
+before the next one read them (the engine tests built cold). Each family has one job that saves
+it (`actions/cache/save`, from a push, only when the key missed):
+`lint`, `engine-check` (`engine`), `engine-dev-<os>-<n>` (each `engine-test-part` shard per OS;
+`clients` and `elastic-sweep` restore Linux shard 2's, which tests `opentide-lsp` and `opentide-analysis`), `corpus` (`corpus-part`'s generator; the other
 parts and `corpus-queries` restore it), `python-engine` (`test`'s 3.14 cell; the other Linux
-Python jobs restore it), `golden-compare`, and `full-set-<OS>` (`conformance` on each OS; the full
+Python jobs restore it), `golden-compare` (part 1; the other parts restore it), and `full-set-<OS>` (`conformance` on each OS; the full
 set's other Rust jobs restore their OS's: `facade`, `node`, `npm-install`, `engine-wasm`,
 `engine-package`, `bench`, `cli-windows-smoke`). No job with a compiler cache restores a
 rust-cache target tree too: that tree (about 0.7 GB a family) is what sccache covers, and the
 two together, with a key per source tree, saved about 4 GB a push, more than GitHub's 10 GB per
 repository keeps once a few pushes land, so the caches pull requests read were evicted within
-minutes (#1047). The rust-caches left: `fuzz` (`fuzz-smoke`: the nightly's `fuzz/target` and
-cargo-fuzz in `~/.cargo/bin`) and the release dry run's per target (`engine-release-build.yml`;
-a release restores none), plus the other workflows' own. Every Python job names the same
+minutes (#1047). The rust-caches left, target trees: `fuzz` (`fuzz-smoke`: the nightly's
+`fuzz/target` and cargo-fuzz in `~/.cargo/bin`), plus coverage.yml's, golden.yml's, schema.yml's
+and oracle.yml's own; each saves on the nightly and on pushes to `development` only
+(`github.event_name == 'schedule' || github.ref == 'refs/heads/development'`), whose caches every
+pull request reads (golden-preview.yml, on the 0.28 train only, saves on that branch's pushes). The release dry run
+(`engine-release-build.yml`; a release restores none) keeps sccache families of its own,
+`release-<os>-<arch>` per runner for the binaries (one cell per runner saves; the Intel macOS
+cross build restores Apple silicon's) and `release-wasm`, saved from a push when the key missed;
+its highlights, licences and SBOM jobs build without one. `bench.yml` restores `full-set-Linux`
+(with `conformance`'s environment) and saves nothing: its two target trees evicted the pull
+requests' families. Every Python job names the same
 interpreter for PyO3 (`PYO3_PYTHON: /usr/bin/python3`): the binding is abi3, and a different
 interpreter reruns PyO3's build script and rebuilds every crate above it.
 **A pull request reads its base branch's caches** and the default branch's (`development`) only,
@@ -238,11 +252,15 @@ removed from the rule too, or every pull request that does not run it waits for 
   workflow that `publish.yml` and ci.yml's `packages` job call.
 - [`engine-fuzz.yml`](workflows/engine-fuzz.yml) fuzzes every target for ten minutes a night with
   the corpus it keeps, and uploads what crashed; a schedule of its own, so not part of ci.yml.
-- [`bench.yml`](workflows/bench.yml), nightly on `development`, on demand and on a pull request
-  labelled `perf`: `cargo xtask bench` for the `python` (the oracle, opentide 0.23.0 from PyPI)
-  and `rust` engines on `ubuntu-24.04`, then `cargo xtask bench --check --require-reference`
-  against `tests/bench/budgets.toml` and the last successful `development` run's
-  `bench-<engine>` artifact on the same CPU (a command compared with nothing fails). The rules
+- [`bench.yml`](workflows/bench.yml), on every push to `integration/unified-core`, nightly on
+  `development`, on demand and on a pull request labelled `perf`: `cargo xtask bench` for the
+  `python` (the oracle, opentide 0.23.0 from PyPI) and `rust` (the `opentide` binary, the
+  language server, the workspace load) engines on `ubuntu-24.04`, a strace proof that
+  `deploy --dry-run` and `generate docs` open no network connection, then `cargo xtask bench
+  --check --require-reference` against `tests/bench/budgets.toml` and the `bench-<engine>`
+  artifact of the last successful run on the comparison base, `BASE_BRANCH`
+  (`integration/unified-core` until the Unified Core merges into development), on the same CPU
+  (a command compared with nothing fails). The rules
   (10% over the last development result or the oracle baseline of the runner's CPU, the absolute
   plan section 11 target for `rust`, the noise floor, the ceiling on an unrecorded CPU, the
   waiver) are in [`xtask/AGENTS.md`](../xtask/AGENTS.md), "bench"; the table lands in the job

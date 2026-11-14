@@ -537,7 +537,7 @@ fn optional(text: Option<&String>) -> Json {
 }
 
 fn shown(text: Option<&String>) -> String {
-    text.cloned().unwrap_or_else(|| "None".to_owned())
+    text.cloned().unwrap_or_else(|| "null".to_owned())
 }
 
 /// Where the rules are: `paths.toml`'s rule folder, else `objects/rules`.

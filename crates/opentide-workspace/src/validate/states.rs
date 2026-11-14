@@ -379,16 +379,16 @@ fn external_id_problem(platform: &str, value: &str) -> Option<String> {
     if value.trim().is_empty() {
         return Some(format!("{platform} external id is empty"));
     }
-    match opentide_schema::platforms::external_id_problem(platform, value)? {
+    match crate::state::id_kind(platform).shape_problem(value)? {
         IdShape::CanonicalDecimal => Some(format!(
             "{platform} external id {} is not a canonical decimal integer (no sign, no leading \
              zeroes)",
             quote(value)
         )),
         IdShape::Pattern(pattern) => Some(format!(
-            "{platform} external id {} does not match {}",
+            "{platform} external id {} is not {}",
             quote(value),
-            quote(pattern)
+            pattern.shape
         )),
     }
 }
@@ -427,7 +427,7 @@ mod tests {
             (
                 r#"{"schema":"x"}"#,
                 "deployment_state_shape",
-                "has schema 'x', expected 'deployment.state::1.0'",
+                "has schema \"x\", expected \"deployment.state::1.0\"",
             ),
             (
                 r#"{"schema":"deployment.state::1.0","object_uuid":"0b9b4c4c-7c1a-4b0e-9a5e-6b1e1d5c2a12","platforms":{}}"#,
@@ -471,7 +471,7 @@ mod tests {
         assert!(
             scan(&fs, Path::new("/w"))[0]
                 .message
-                .ends_with("graylog external id '65F1' does not match '[0-9a-f]{24}'")
+                .ends_with("graylog external id \"65F1\" is not 24 lower-case hex digits")
         );
         let (fs, _) = shard(&format!(
             r#"{{"schema":"deployment.state::1.0","object_uuid":"{UUID}","platforms":{{"graylog":{{"t":"65f1c0ffee0123456789abcd"}}}}}}"#
@@ -498,12 +498,44 @@ mod tests {
             assert_eq!(
                 errors[0].message,
                 format!(
-                    "{} platforms.bitdefender.prod: bitdefender external id '{malformed}' does \
-                     not match '^[0-9a-f]{{24}}$'",
+                    "{} platforms.bitdefender.prod: bitdefender external id \"{malformed}\" is \
+                     not 24 lower-case hex digits",
                     path.display()
                 ),
             );
         }
+    }
+
+    #[test]
+    fn a_patterned_platforms_id_has_its_shape() {
+        use crate::state::test_platform::PATTERNED;
+        let body = |id: &str| {
+            format!(
+                r#"{{"schema":"deployment.state::1.0","object_uuid":"{UUID}","platforms":{{"{PATTERNED}":{{"lab":{id}}}}}}}"#
+            )
+        };
+        let (fs, _) = shard(&body(r#""0123456789abcdef01234567""#));
+        assert!(scan(&fs, Path::new("/w")).is_empty());
+        let (fs, _) = shard(&body(r#""12""#));
+        let errors = scan(&fs, Path::new("/w"));
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].code, "deployment_state_shape");
+        assert!(
+            errors[0].message.ends_with(
+                "platforms.patterned_test.lab: patterned_test external id \"12\" is not 24 \
+                 lower-case hex digits"
+            ),
+            "{}",
+            errors[0].message
+        );
+        // A number is refused before its shape is looked at, as for every
+        // platform.
+        let (fs, _) = shard(&body("12"));
+        assert!(
+            scan(&fs, Path::new("/w"))[0]
+                .message
+                .ends_with("platforms.patterned_test.lab is int, not a string")
+        );
     }
 
     #[test]

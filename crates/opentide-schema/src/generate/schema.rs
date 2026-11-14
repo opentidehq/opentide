@@ -36,7 +36,7 @@
 //! descriptions, key order, `type` arrays where Pydantic writes `anyOf` with
 //! `null`) are recorded in `tests/golden/APPROVED_DIFFS.toml`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use schemars::generate::SchemaSettings;
@@ -828,17 +828,16 @@ fn vocabulary_offer(vocabularies: &Vocabularies, reference: &str, options: &Voca
         vocabulary.metadata.key == KeyKind::Id || OBJECT_TYPES.contains(&vocab.field.as_str());
     let hints = model && vocabulary.search_hints();
     let mut hint_offer = Offer::default();
+    // The values offered so far: a lookup, not a scan of `offer.values` that
+    // builds a JSON string per comparison (quadratic in a vocabulary's size).
+    let mut offered: HashSet<String> = HashSet::new();
     let active = vocabulary
         .entries
         .values()
         .filter(|entry| vocab.pin.is_none_or(|pin| entry.active_at(pin)));
     for entry in active {
-        let emit = |offer: &mut Offer, value: String, stages: &[String]| -> bool {
-            if offer
-                .values
-                .iter()
-                .any(|known| known == &Value::from(value.as_str()))
-            {
+        let mut emit = |offer: &mut Offer, value: String, stages: &[String]| -> bool {
+            if !offered.insert(value.clone()) {
                 return false;
             }
             offer.markdown.push(dropdown(&vocabulary, entry, stages));

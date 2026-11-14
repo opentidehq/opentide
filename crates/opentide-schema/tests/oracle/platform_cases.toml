@@ -8,6 +8,11 @@
 # differs names the `[[difference]]` that explains it.
 
 [[difference]]
+id = "messages-quote-values"
+reason = "Every message quotes a value with Rust's string formatting, in double quotes with Rust's escapes (`\"x\"`, `\"a\\u{a0}b\"`), and writes any other value as YAML and JSON write it (`null`, `true`, `1.5`), where the oracle used Python's `repr` (`'x'`, `'a\\xa0b'`, `None`, `True`). Codes, paths and the rest of each message are unchanged."
+changelog = "**Messages quote values the same way everywhere**"
+
+[[difference]]
 id = "yaml-1-2-booleans"
 reason = "As crates/opentide-schema/YAML.md `booleans`: YAML 1.2 has two booleans, `true` and `false`. `on`, `yes` and `no` are strings, so a block written `sentinel: on` is a string (the error's `input` is `on`, where PyYAML read `True`), and a boolean field written `no` or `yes` is `bool_type`, where PyYAML read a boolean."
 changelog = "**Tide objects are read as YAML 1.2**"
@@ -245,6 +250,7 @@ configurations:
 
 [[case]]
 id = "platform-base-wrong-schema"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -305,6 +311,7 @@ configurations:
 
 [[case]]
 id = "platform-base-schema-quote"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -612,6 +619,7 @@ configurations:
 
 [[case]]
 id = "platform-sentinel-technique-unknown"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -885,6 +893,7 @@ configurations:
 
 [[case]]
 id = "platform-defender-schedule"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -907,6 +916,7 @@ configurations:
 
 [[case]]
 id = "platform-defender-schedule-int"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -1141,6 +1151,7 @@ configurations:
 
 [[case]]
 id = "platform-s1-type"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -1430,6 +1441,7 @@ configurations:
 
 [[case]]
 id = "platform-elastic-no-status"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -2356,6 +2368,7 @@ configurations:
 
 [[case]]
 id = "platform-elastic-severity-mapping-fields"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule

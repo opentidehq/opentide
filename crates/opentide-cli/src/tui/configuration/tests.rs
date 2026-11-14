@@ -218,8 +218,8 @@ fn secret_names_and_comment_descriptions() {
 }
 
 #[test]
-fn floats_show_as_rust_prints_them() {
-    for (float, shown) in [(1.5, "1.5"), (2.0, "2"), (f64::INFINITY, "inf")] {
+fn floats_show_as_yaml_writes_them() {
+    for (float, shown) in [(1.5, "1.5"), (2.0, "2.0"), (f64::INFINITY, ".inf")] {
         assert_eq!(scalar_text(&Value::Float(float)), shown);
     }
 }

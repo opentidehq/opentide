@@ -215,7 +215,7 @@ pub fn compare(
 /// that were there before the run (whose UUIDs are not fresh).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Normalisation<'a> {
-    /// The command's extra rules: `fresh-uuids`, `host-git`.
+    /// The command's extra rules: `fresh-uuids`, `host-git`, `live-frames`.
     pub rules: &'a [normalise::Rule],
     /// The texts of the workspace before the run.
     pub known: &'a [String],

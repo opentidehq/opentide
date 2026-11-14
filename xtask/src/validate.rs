@@ -36,6 +36,7 @@ use crate::corpus::cli::{Scratch, repo_root};
 use crate::golden::case::{Case, Spec};
 use crate::golden::recording::Recording;
 use crate::golden::snapshot::{ChangeKind, Snapshot};
+use crate::lint::unquoted_json;
 use opentide_workspace::fix::FixRun;
 use opentide_workspace::validate::{Check, Options, QueriesMode, Selection};
 use opentide_workspace::{OsFs, RootOptions, Workspace};
@@ -136,6 +137,14 @@ pub const APPROVED: &[Approved] = &[
         changelog: "**The editor and `opentide explain` know YARA, YARA-L, the Exabeam Query \
                     Language and Graylog's Lucene**",
         applies: harfanglab_yara,
+    },
+    Approved {
+        id: "messages-quote-values",
+        reason: "a message and its help quote a value in double quotes with Rust's escapes, \
+                 where the oracle used Python's repr ('x', None, True): the finding is the \
+                 same but for the quote characters around its values",
+        changelog: "**Messages quote values the same way everywhere**",
+        applies: crate::lint::quoting_only,
     },
     Approved {
         id: "splunk-advanced",
@@ -337,8 +346,9 @@ fn suggestions(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
         && rust["suggestion"].is_null()
         && rust["help"].is_null()
         && rust["fix"].is_null()
-        && without(oracle, &["suggestion", "help", "fix"])
-            == without(rust, &["suggestion", "help", "fix"])
+        // The message's quotes are `messages-quote-values`' business.
+        && unquoted_json(&without(oracle, &["suggestion", "help", "fix"]))
+            == unquoted_json(&without(rust, &["suggestion", "help", "fix"]))
 }
 
 fn yaml_error_text(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
@@ -402,7 +412,8 @@ fn invalid_uuid_every_file(
         && oracle_list.iter().any(|reported| {
             code(reported) == "invalid_uuid"
                 && reported["object_uuid"] == rust["object_uuid"]
-                && reported["message"] == rust["message"]
+                // In the same words but for the quotes (`messages-quote-values`).
+                && unquoted_json(&reported["message"]) == unquoted_json(&rust["message"])
                 && reported["field_path"] == rust["field_path"]
                 && reported["file_path"] != rust["file_path"]
         })
@@ -1270,6 +1281,10 @@ mod tests {
         assert!(!invalid_uuid_every_file(None, Some(&spurious), &[]));
         // The oracle's finding on the same file is not another file's.
         assert!(!invalid_uuid_every_file(None, Some(&kept), &oracle));
+        // The same words in Rust's quotes are the oracle's.
+        let mut requoted = displaced.clone();
+        requoted["message"] = json!("UUID \"not-a-uuid\" is not a valid UUIDv4");
+        assert!(invalid_uuid_every_file(None, Some(&requoted), &oracle));
         // Other words for the same value are not the oracle's.
         let mut reworded = displaced.clone();
         reworded["message"] = json!("UUID 'not-a-uuid' is bad");
@@ -1310,6 +1325,13 @@ mod tests {
     fn only_a_lost_suggestion_is_approved() {
         let oracle = vocab_finding(Some("Host::File"));
         assert!(suggestions(Some(&oracle), Some(&vocab_finding(None)), &[]));
+        // Lost along with the oracle's quotes in the message.
+        let mut quoted = (vocab_finding(Some("Host::File")), vocab_finding(None));
+        quoted.0["message"] = json!("Value 'Host::Gizmo' is unknown");
+        quoted.1["message"] = json!("Value \"Host::Gizmo\" is unknown");
+        assert!(suggestions(Some(&quoted.0), Some(&quoted.1), &[]));
+        quoted.1["message"] = json!("Value \"Host::Other\" is unknown");
+        assert!(!suggestions(Some(&quoted.0), Some(&quoted.1), &[]));
         // A different suggestion (another object's UUID) needs review.
         let other = vocab_finding(Some("e305cca1-c265-4ae9-a34e-2ffaee82a359"));
         assert!(!suggestions(Some(&oracle), Some(&other), &[]));
