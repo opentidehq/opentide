@@ -5,7 +5,7 @@ description: The built-in platforms, and platform plugins (opentide.plugins) tha
 
 # Platforms API
 
-The nine built-in platforms are the Rust core's connectors: the command line, the [Workspace](./workspace.md) and its [tenant operations](./workspace.md#tenant-operations) reach them, and `opentide.Connection.capabilities` says what each can do ([capability matrix](#capability-matrix)). Python adds a platform through a **plugin**.
+The thirteen built-in platforms are the Rust core's connectors: the command line, the [Workspace](./workspace.md) and its [tenant operations](./workspace.md#tenant-operations) reach them, and `opentide.Connection.capabilities` says what each can do ([capability matrix](#capability-matrix)). Python adds a platform through a **plugin**.
 
 The Python platform registry (`Opentide.Platforms`, `opentide.platforms`, the `declare()` entry points of the built-in platforms) is gone with the Python implementation ([#841](https://github.com/opentidehq/opentide/issues/841)).
 

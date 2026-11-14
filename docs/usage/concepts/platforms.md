@@ -1,11 +1,11 @@
 ---
 title: Platforms
-description: Nine deployment platforms, six query validators (five offline), eight query runners, and where each platform block schema is specified.
+description: Thirteen deployment platforms, nine query validators on a tenant and ten offline, eleven query runners, and where each platform block schema is specified.
 ---
 
 # Platforms
 
-opentide integrates with **nine detection platforms** through connectors built into its Rust core. All ship in the base PyPI package; a Python package can add another as a [platform plugin](../../sdk/platforms.md#platform-plugins).
+opentide integrates with **thirteen detection platforms** through connectors built into its Rust core. All ship in the base PyPI package; a Python package can add another as a [platform plugin](../../sdk/platforms.md#platform-plugins).
 
 ## Capability matrix
 
@@ -20,6 +20,8 @@ opentide integrates with **nine detection platforms** through connectors built i
 | CrowdStrike Falcon | `crowdstrike` | yes | no | yes | yes | correlation rule (CQL) |
 | HarfangLab | `harfanglab` | yes | no | YARA | telemetry filters | Sigma or YARA |
 | Sysdig Secure (Falco) | `sysdig` | yes | no | yes | no | Falco condition |
+| Bitdefender GravityZone | `bitdefender` | yes | no | YARA | no | Basic criteria or YARA |
+| Graylog | `graylog` | yes | yes | no | yes | Lucene (Graylog dialect) |
 | Exabeam New-Scale SIEM | `exabeam` | yes | yes (the filter) | no | yes | Exabeam Query Language |
 | Google Security Operations | `google_secops` | yes | yes (`verifyRuleText`) | yes (YARA-L) | yes (`udmSearch`) | YARA-L 2.0 |
 
@@ -166,7 +168,7 @@ for platform in ws.info()["platforms"]:
 
 ## Query validation policy
 
-Only platforms with `can_validate=True` check queries on the tenant. CrowdStrike, HarfangLab and Sysdig have no tenant check: CLI and MCP return `supported: false` for them with `--live` (`live: true`), and for HarfangLab offline too — **never fake validation**. CrowdStrike's CQL and Sysdig's Falco conditions are checked offline only.
+Only platforms with `can_validate=True` check queries on the tenant. CrowdStrike, HarfangLab, Sysdig and Bitdefender have no tenant check: CLI and MCP return `supported: false` for them with `--live` (`live: true`) — **never fake validation**. CrowdStrike's CQL, Sysdig's Falco conditions and HarfangLab's and Bitdefender's YARA are checked offline only. SentinelOne, Graylog and Exabeam are checked on the tenant only: without `--live`, `validate query` exits `2` and names `--live`.
 
 ```bash
 opentide validate query --platform crowdstrike          # the offline CQL check

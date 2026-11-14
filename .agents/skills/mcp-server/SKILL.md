@@ -29,8 +29,10 @@ removed with the Python implementation (UC-6.2, #841); its recorded sessions
   opentide's words.
 - **No filesystem paths as inputs.** Tools take UUIDs, names and platform identifiers and
   resolve them in the workspace, so a client cannot read or write outside it.
-- **Capabilities are honest.** CrowdStrike, HarfangLab and Sysdig cannot validate queries on a
-  tenant: return `supported: False`, never a fake pass. `run_query` and `validate_query` contact
+- **Capabilities are honest.** CrowdStrike, HarfangLab, Sysdig and Bitdefender cannot validate
+  queries on a tenant, and Sysdig and Bitdefender run no `opentide query`: return
+  `supported: False`, never a fake pass. The registry (`opentide_schema::platforms`) says which
+  platform can do what ([`AGENTS.md`](../../../AGENTS.md#platforms)); read it, never a list of names. `run_query` and `validate_query` contact
   a tenant only with `live: true`. `deploy_rule` defaults to `dry_run=True`.
 - **Freshness.** The server is long-lived. Anything answering "is this valid now?" must see
   the files on disk, not the index from start-up.

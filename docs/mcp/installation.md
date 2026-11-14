@@ -19,7 +19,7 @@ Command: **`opentide mcp start`**. The server is the command line's own, in Rust
 Until 0.23.0 the server was Python, on the `mcp` package, which opentide declared as a base dependency (`mcp>=2.3,<3`). The Rust server replaced it, and opentide no longer depends on `mcp`.
 </Callout>
 
-All nine platform adapters ship in the same wheel — enable them in the repo with `opentide setup platforms`.
+All thirteen platform adapters ship in the same wheel — enable them in the repo with `opentide setup platforms`.
 
 ## Verify
 

@@ -4,7 +4,7 @@ description: Install opentide from PyPI — one package, CLI, MCP, and all platf
 ---
 
 <Callout type="info">
-One install gets the CLI, the MCP server (`opentide mcp start`), all nine platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
+One install gets the CLI, the MCP server (`opentide mcp start`), all thirteen platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
 </Callout>
 
 ## Requirements
@@ -65,7 +65,7 @@ uv pip install 'opentide==0.28.1'    # pin the current release
 
 </Tabs>
 
-That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, the language server and its query analysis engine, and all nine platforms with every vendor SDK they call. `pip install opentide` is the only install — there are no extras. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
+That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, the language server and its query analysis engine, and all thirteen platforms. `pip install opentide` is the only install — there are no extras. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
 
 ### MCP server
 
