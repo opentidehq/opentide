@@ -14,8 +14,8 @@ use crate::fs::{EntryKind, FileSystem};
 
 /// The `schema` a shard declares.
 pub const SCHEMA_ID: &str = "deployment.state::1.0";
-/// Platforms whose deployer addresses the remote rule by a vendor id, by
-/// name ([`opentide_schema::platforms::state_platforms`]).
+/// Platforms whose deployer addresses the remote rule by a vendor id, in the
+/// platform table's order ([`opentide_schema::platforms::state_platforms`]).
 pub fn state_platforms() -> Vec<&'static str> {
     opentide_schema::platforms::state_platforms()
 }

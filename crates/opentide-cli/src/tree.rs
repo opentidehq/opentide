@@ -147,18 +147,18 @@ pub enum ReportFormat {
 pub enum Platform {
     #[value(name = "sentinel")]
     Sentinel,
-    #[value(name = "splunk")]
-    Splunk,
-    #[value(name = "crowdstrike")]
-    Crowdstrike,
     #[value(name = "defender_for_endpoint")]
     DefenderForEndpoint,
+    #[value(name = "splunk")]
+    Splunk,
     #[value(name = "sentinel_one")]
     SentinelOne,
-    #[value(name = "carbon_black_cloud")]
-    CarbonBlackCloud,
+    #[value(name = "crowdstrike")]
+    Crowdstrike,
     #[value(name = "harfanglab")]
     Harfanglab,
+    #[value(name = "carbon_black_cloud")]
+    CarbonBlackCloud,
     #[value(name = "elastic")]
     Elastic,
     #[value(name = "sysdig")]
@@ -484,7 +484,7 @@ pub struct SetupArgs {
         help = "One-line description, used in the README"
     )]
     pub description: Option<String>,
-    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
+    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
     #[arg(
         long = "ci",
@@ -1014,21 +1014,21 @@ pub struct SetupPlatformsArgs {
     pub path_flag: String,
     #[arg(long = "sentinel", help = "Enable Microsoft Sentinel")]
     pub sentinel: bool,
-    #[arg(long = "splunk", help = "Enable Splunk Enterprise Security")]
-    pub splunk: bool,
-    #[arg(long = "crowdstrike", help = "Enable CrowdStrike Falcon")]
-    pub crowdstrike: bool,
     #[arg(
         long = "defender-for-endpoint",
         help = "Enable Microsoft Defender for Endpoint"
     )]
     pub defender_for_endpoint: bool,
+    #[arg(long = "splunk", help = "Enable Splunk Enterprise Security")]
+    pub splunk: bool,
     #[arg(long = "sentinel-one", help = "Enable SentinelOne")]
     pub sentinel_one: bool,
-    #[arg(long = "carbon-black-cloud", help = "Enable Carbon Black Cloud")]
-    pub carbon_black_cloud: bool,
+    #[arg(long = "crowdstrike", help = "Enable CrowdStrike Falcon")]
+    pub crowdstrike: bool,
     #[arg(long = "harfanglab", help = "Enable HarfangLab")]
     pub harfanglab: bool,
+    #[arg(long = "carbon-black-cloud", help = "Enable Carbon Black Cloud")]
+    pub carbon_black_cloud: bool,
     #[arg(long = "elastic", help = "Enable Elastic Security")]
     pub elastic: bool,
     #[arg(long = "sysdig", help = "Enable Sysdig Secure (Falco)")]
@@ -1083,7 +1083,7 @@ pub struct SetupRepoArgs {
         help = "One-line description, used in the README"
     )]
     pub description: Option<String>,
-    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
+    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
     #[arg(
         long = "plan",
@@ -1261,7 +1261,7 @@ pub struct SharePushArgs {
 pub struct DeployArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+        help = "Detection platform: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
         value_name = "PLATFORM",
         value_parser = PlatformName
     )]
@@ -1325,7 +1325,7 @@ pub struct DeployArgs {
 pub struct DeployMetadataArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+        help = "Detection platform: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
         value_name = "PLATFORM"
     )]
     pub platform: Platform,
@@ -1559,7 +1559,7 @@ pub struct NewArgs {
 pub struct NewRuleArgs {
     #[arg(long = "name", help = "Object name; the filename is its slug")]
     pub name: Option<String>,
-    #[arg(long = "platform", help = "Add a configuration block for this platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
+    #[arg(long = "platform", help = "Add a configuration block for this platform (repeatable): sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
     #[arg(
         long = "objective",
@@ -1604,7 +1604,7 @@ pub struct NewThreatArgs {
 pub struct InfoArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+        help = "Detection platform: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
         value_name = "PLATFORM"
     )]
     pub platform: Option<Platform>,
@@ -1668,7 +1668,7 @@ pub struct QueryArgs {
     pub query: Option<String>,
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+        help = "Detection platform: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
         value_name = "PLATFORM",
         value_parser = PlatformName
     )]
@@ -1780,16 +1780,16 @@ pub struct ValidateArgs {
 
 /// `validate query --platform`'s help, from the platform table
 /// (`opentide_schema::platforms`): the platforms the engine parses offline
-/// and those `--live` checks on a tenant, each list by name. A platform row
+/// and those `--live` checks on a tenant, each in the table's order. A platform row
 /// changes both.
 #[must_use]
 pub fn validate_query_platform_help() -> String {
-    use opentide_schema::platforms::{Order, ids_where};
+    use opentide_schema::platforms::ids_where;
     format!(
         "Check this platform's queries. Offline, default every platform the engine parses: \
          {}. --live needs one of: {}",
-        ids_where(Order::Name, |platform| platform.offline().is_some()).join(", "),
-        ids_where(Order::Name, |platform| platform.live_check).join(", ")
+        ids_where(|platform| platform.offline().is_some()).join(", "),
+        ids_where(|platform| platform.live_check).join(", ")
     )
 }
 
@@ -2444,20 +2444,20 @@ mod tests {
     use clap::{Args, ValueEnum};
 
     use super::{Platform, SetupPlatformsArgs};
-    use opentide_schema::platforms::{Order, ordered, select};
+    use opentide_schema::platforms::{IDS, select};
 
     #[test]
-    fn platform_choices_are_the_platform_tables_in_its_cli_order() {
+    fn platform_choices_are_the_platform_tables_in_its_order() {
         let names: Vec<String> = Platform::value_variants()
             .iter()
             .filter_map(|platform| platform.to_possible_value())
             .map(|value| value.get_name().to_owned())
             .collect();
-        assert_eq!(names, ordered(Order::Cli));
+        assert_eq!(names, IDS);
     }
 
     #[test]
-    fn setup_platforms_has_one_flag_per_platform_in_the_cli_order() {
+    fn setup_platforms_has_one_flag_per_platform_in_the_tables_order() {
         let command = SetupPlatformsArgs::augment_args(clap::Command::new("platforms"));
         let flags: Vec<(String, String)> = command
             .get_arguments()
@@ -2469,13 +2469,10 @@ mod tests {
                 )
             })
             .collect();
-        let expected: Vec<String> = ordered(Order::Cli)
-            .iter()
-            .map(|id| (*id).to_owned())
-            .collect();
+        let expected: Vec<String> = IDS.iter().map(|id| (*id).to_owned()).collect();
         let ids: Vec<String> = flags.iter().map(|(id, _)| id.clone()).collect();
         assert_eq!(ids, expected);
-        for (platform, (id, help)) in select(Order::Cli, |_| true).into_iter().zip(&flags) {
+        for (platform, (id, help)) in select(|_| true).into_iter().zip(&flags) {
             assert_eq!(platform.id, id);
             assert!(
                 help.starts_with(&format!("Enable {}", platform.label)),

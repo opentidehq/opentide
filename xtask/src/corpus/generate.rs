@@ -109,7 +109,7 @@ pub struct Options {
     /// The `paths.toml` variant.
     pub layout: Layout,
     /// The platforms rules get blocks for and configurations are written
-    /// for, in connector order: every platform ([`vocab::PLATFORMS`]) but
+    /// for, in the generator's order: every platform ([`vocab::PLATFORMS`]) but
     /// where a run is measured against an oracle that knows fewer (the
     /// benchmarks', `tests/bench/budgets.toml`). Generation is seeded on the
     /// list's length and order.
@@ -1660,6 +1660,11 @@ mod tests {
     #[test]
     fn the_generated_corpus_holds_every_platform_by_default() {
         assert_eq!(super::Options::new(1).platforms, vocab::PLATFORMS);
+        let mut named = vocab::PLATFORMS.to_vec();
+        let mut table = opentide_schema::platforms::ids();
+        named.sort_unstable();
+        table.sort_unstable();
+        assert_eq!(named, table, "the generator names every platform once");
     }
 
     #[test]

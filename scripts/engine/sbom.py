@@ -131,17 +131,17 @@ def add_component(bom: Bom, component: Bom) -> Bom:
 
 
 def wheel_version(explicit: str | None, root: Path) -> str | None:
-    """The wheel's version: ``explicit``, else the one hatch-vcs wrote into
-    ``src/opentide/_version.py`` when the package was built (``uv sync``),
-    else none (``uv export`` names the project without one: it is dynamic)."""
+    """The wheel's version: ``explicit``, else the Cargo workspace's, which
+    maturin builds the wheel at (``bindings/python/`` takes it), else none."""
     if explicit:
         return explicit
-    path = root / "src" / "opentide" / "_version.py"
+    path = root / "Cargo.toml"
     if not path.is_file():
         return None
-    text = path.read_text(encoding="utf-8")
     match = re.search(
-        r"^__version__\s*=\s*(?:version\s*=\s*)?['\"]([^'\"]+)['\"]", text, re.MULTILINE
+        r'^\[workspace\.package\]\nversion = "([^"]+)"$',
+        path.read_text(encoding="utf-8"),
+        re.MULTILINE,
     )
     return match.group(1) if match else None
 
@@ -341,7 +341,7 @@ def generate(out: Path, version: str | None = None, npm_version: str | None = No
         if resolved is None:
             raise SystemExit(
                 "sbom.py: the wheel's version is unknown: pass --wheel-version "
-                "(CI: `hatch version`) or build the package first (`uv sync`)"
+                "(the workspace's: `scripts/engine/release.py version`)"
             )
         wheel = merge_wheel(python, native, resolved)
         _check_dependencies("opentide-wheel.cdx.json", wheel)
@@ -434,9 +434,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     gen = sub.add_parser("generate", help="write every SBOM into OUT_DIR")
     gen.add_argument("out", type=Path)
-    gen.add_argument(
-        "--wheel-version", help="the wheel's version (default: src/opentide/_version.py)"
-    )
+    gen.add_argument("--wheel-version", help="the wheel's version (default: the Cargo workspace's)")
     gen.add_argument(
         "--npm-version", help="@opentide/opentide's version (default: its package.json's)"
     )

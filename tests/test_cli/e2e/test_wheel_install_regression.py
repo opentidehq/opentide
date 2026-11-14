@@ -206,16 +206,23 @@ def test_pip_installed_wheel_validate_generate_and_skills(
 
 
 def _build_wheel(uv: str, dist: Path, shared: Path) -> Path:
-    """opentide's wheel, with the engine compiled in (hatch_build.py), copied into *dist*.
+    """opentide's wheel, with the engine compiled in (maturin), copied into *dist*.
 
-    The engine builds with the ``develop`` profile, which ``uv sync`` already
-    compiled, so cargo reuses that build instead of a release one.
+    ``OPENTIDE_TEST_WHEELHOUSE`` names a folder holding one opentide wheel
+    already built (CI's build job builds it once for every Python job): that
+    wheel is used, and nothing is compiled. Otherwise ``uv build`` builds it,
+    with the ``develop`` profile (pyproject.toml's ``[tool.uv]``), which ``uv
+    sync`` already compiled, so cargo reuses that build instead of a release one.
 
     One test run builds the wheel once, in *shared* (``wheel_cache``), under a
-    lock its xdist workers share: every build writes ``src/opentide/_version.py``
-    and ``build/`` in the checkout, so two at once could package a half-written
-    ``_version.py`` (``cannot import name '__version__'``).
+    lock its xdist workers share, rather than once per worker.
     """
+    wheelhouse = os.environ.get("OPENTIDE_TEST_WHEELHOUSE")
+    if wheelhouse:
+        built = sorted(Path(wheelhouse).glob("opentide-*.whl"))
+        assert len(built) == 1, f"expected one opentide wheel in {wheelhouse}: {built}"
+        dist.mkdir(parents=True, exist_ok=True)
+        return Path(shutil.copy2(built[0], dist))
     shared.mkdir(exist_ok=True)
     lock = shared / ".lock"
     deadline = time.monotonic() + 1200
@@ -233,7 +240,6 @@ def _build_wheel(uv: str, dist: Path, shared: Path) -> Path:
             build = _run(
                 [uv, "build", "--wheel", "--out-dir", str(shared)],
                 cwd=str(ROOT),
-                env={**os.environ, "OPENTIDE_ENGINE_PROFILE": "develop"},
                 timeout=900,
             )
             assert build.returncode == 0, build.stdout + build.stderr
@@ -485,6 +491,7 @@ def test_concurrent_wheel_builds_share_one_build(
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr(sys.modules[__name__], "_run", fake_run)
+    monkeypatch.delenv("OPENTIDE_TEST_WHEELHOUSE", raising=False)
     shared = tmp_path / "shared"
     found: list[Path] = []
     threads = [
@@ -501,3 +508,21 @@ def test_concurrent_wheel_builds_share_one_build(
     assert len(builds) == 1
     assert sorted(p.parent.name for p in found) == ["d0", "d1", "d2", "d3"]
     assert all(p.read_bytes() == b"wheel" for p in found)
+
+
+def test_a_wheelhouse_wheel_is_used_without_building(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CI builds opentide's wheel once (the gate's `build` job): the tests install that one."""
+
+    def no_build(cmd: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError(f"built a wheel: {cmd}")
+
+    monkeypatch.setattr(sys.modules[__name__], "_run", no_build)
+    wheelhouse = tmp_path / "wheelhouse"
+    wheelhouse.mkdir()
+    (wheelhouse / "opentide-1.0.0-cp310-abi3-linux_x86_64.whl").write_bytes(b"wheel")
+    monkeypatch.setenv("OPENTIDE_TEST_WHEELHOUSE", str(wheelhouse))
+    wheel = _build_wheel("uv", tmp_path / "dist", tmp_path / "shared")
+    assert wheel == tmp_path / "dist" / "opentide-1.0.0-cp310-abi3-linux_x86_64.whl"
+    assert wheel.read_bytes() == b"wheel"

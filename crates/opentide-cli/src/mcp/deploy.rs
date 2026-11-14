@@ -145,7 +145,7 @@ pub fn deploy_rule(
     let statuses = Statuses::from_resolved(&workspace.configuration().resolved);
     let strategy = statuses
         .strategy(&status)
-        .map_err(|problem| problem.exception_text())?;
+        .map_err(|problem| problem.to_string())?;
     let runs = deployed_by(strategy);
     let deployed = |message: &str| {
         Json::object([

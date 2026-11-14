@@ -25,8 +25,8 @@ pub const PREVIEW_TENANT: &str = "corpus-tenant";
 /// with no tenant (`OFFLINE_COMPILERS`), that this crate compiles: those
 /// [`compile_offline`] compiles.
 pub fn offline() -> Vec<&'static str> {
-    use opentide_schema::platforms::{Order, ids_where};
-    ids_where(Order::Container, |platform| platform.compiles_offline)
+    use opentide_schema::platforms::ids_where;
+    ids_where(|platform| platform.compiles_offline)
 }
 
 /// The request body a deploy would send for `rule` on `platform` with no
@@ -85,10 +85,8 @@ fn bitdefender_request(
 /// Defender, SentinelOne and CrowdStrike, the deployment state): those
 /// [`compile_tenant`] builds writes for.
 pub fn deployers() -> Vec<&'static str> {
-    use opentide_schema::platforms::{Order, ids_where};
-    ids_where(Order::Container, |platform| {
-        platform.deploys && !platform.compiles_offline
-    })
+    use opentide_schema::platforms::ids_where;
+    ids_where(|platform| platform.deploys && !platform.compiles_offline)
 }
 
 /// What a deployer's body depends on besides the rule and the tenant.

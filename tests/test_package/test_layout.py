@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fnmatch
 import importlib.util
 import re
 import subprocess
@@ -82,7 +81,7 @@ def test_engines_package_absorbed() -> None:
 
 
 def _ignored(paths: list[str]) -> set[str]:
-    """The paths .gitignore hides, whether or not they exist (hatchling leaves
+    """The paths .gitignore hides, whether or not they exist (maturin leaves
     the same ones out of the sdist)."""
     result = subprocess.run(
         ["git", "check-ignore", "--no-index", "--stdin"],
@@ -233,23 +232,29 @@ _TARGET_TABLES = {
 
 
 def _sdist_excludes() -> list[str]:
+    """The globs ``[tool.maturin] exclude`` leaves out of the sdist."""
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    return list(pyproject["tool"]["hatch"]["build"]["targets"]["sdist"]["exclude"])
+    return [
+        entry["path"]
+        for entry in pyproject["tool"]["maturin"]["exclude"]
+        if isinstance(entry, dict) and entry.get("format") == "sdist"
+    ]
+
+
+def _glob(pattern: str) -> re.Pattern[str]:
+    """maturin's glob from the root: `*` one path segment's characters, `**/` any folders."""
+    parts = re.split(r"(\*\*/|\*)", pattern)
+    regex = "".join(
+        "(?:.*/)?" if part == "**/" else "[^/]*" if part == "*" else re.escape(part)
+        for part in parts
+    )
+    return re.compile(regex)
 
 
 def _excluded(relative: str, patterns: list[str]) -> bool:
-    """Whether hatchling leaves *relative* (a `/`-separated path from the root)
-    out of the sdist: an anchored pattern names a path or a folder above it,
-    each `*` standing for one path segment."""
-    parts = relative.split("/")
-    for pattern in patterns:
-        wanted = pattern.strip("/").split("/")
-        if len(wanted) <= len(parts) and all(
-            fnmatch.fnmatchcase(part, glob)
-            for part, glob in zip(parts[: len(wanted)], wanted, strict=True)
-        ):
-            return True
-    return False
+    """Whether maturin leaves *relative* (a `/`-separated path from the root)
+    out of the sdist."""
+    return any(_glob(pattern).fullmatch(relative) for pattern in patterns)
 
 
 def _declared_target_files(member: str, manifest: dict[str, object]) -> list[str]:

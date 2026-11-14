@@ -1749,7 +1749,7 @@ fn elastic_run(
             connector.find_rules(context, page, per_page).await
         })?
         .map_err(|error| match error {
-            opentide_connectors::elastic::FindError::Status(text) => format!("HTTPError: {text}"),
+            opentide_connectors::elastic::FindError::Status(text) => text,
             opentide_connectors::elastic::FindError::Connector(error) => connector_message(&error),
             opentide_connectors::elastic::FindError::NotJson(text) => text,
         })?;

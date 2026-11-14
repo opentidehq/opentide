@@ -16,9 +16,9 @@ use serde::Serialize;
 
 use crate::fields::{get, mapping};
 
-/// Every platform, by name ([`opentide_schema::platforms`]).
-fn by_name() -> Vec<&'static opentide_schema::platforms::Platform> {
-    opentide_schema::platforms::select(opentide_schema::platforms::Order::Name, |_| true)
+/// Every platform, in the table's order ([`opentide_schema::platforms`]).
+fn all_platforms() -> Vec<&'static opentide_schema::platforms::Platform> {
+    opentide_schema::platforms::select(|_| true)
 }
 
 /// The strategies a run deploys, in order.
@@ -171,7 +171,7 @@ pub fn platforms(
     only: Option<&str>,
     is_set: &dyn Fn(&str) -> bool,
 ) -> Vec<PlatformInfo> {
-    by_name()
+    all_platforms()
         .into_iter()
         .filter(|platform| only.is_none_or(|only| only == platform.id))
         .map(|platform| {

@@ -101,8 +101,7 @@ pub struct RuleConfigurations {
 
 impl RuleConfigurations {
     /// The platforms, in the container's order ([`crate::platforms`]).
-    pub const PLATFORMS: [&'static str; crate::platforms::COUNT] =
-        crate::platforms::ordered(crate::platforms::Order::Container);
+    pub const PLATFORMS: [&'static str; crate::platforms::COUNT] = crate::platforms::IDS;
 
     /// Each block's `status`, keyed by platform, in the container's order,
     /// for the blocks that are set and have one: what deploy and promotion
