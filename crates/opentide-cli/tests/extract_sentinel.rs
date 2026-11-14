@@ -5,9 +5,12 @@
 //! the oracle's files and document in `tests/extract_sentinel/oracle/`. Here the
 //! Rust command runs in a copy of the same workspace, its ids fixed the same
 //! way, against that cassette: it must send exactly the oracle's requests,
-//! write `output-soc.json` with the oracle's data, and write each rule file as the
-//! oracle did, but for the differences `tests/golden/APPROVED_DIFFS.toml`
-//! approves (case `cassette:sentinel/extract`), and load to the oracle's data.
+//! and write each rule file as the oracle did, but for the differences
+//! `tests/golden/APPROVED_DIFFS.toml` approves (case
+//! `cassette:sentinel/extract`), and load to the oracle's data. Two things
+//! the oracle did are left out on purpose: it dumped the listing to
+//! `output-<tenant>.json` in the working directory, and it padded each file
+//! name with a space at both ends ([`unpadded`]).
 
 #![cfg(unix)]
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
@@ -119,6 +122,23 @@ fn extract() -> (tempfile::TempDir, PathBuf, opentide_cli::commands::Report) {
     (scratch, ws, report)
 }
 
+/// The oracle's file name as the command writes it: the oracle named a file
+/// `sanitize_filename(f'"{name}"')`, so each name had a space at both ends
+/// (` Rule - soc .yaml`, ` Rule - soc  00000000.yaml` for a second rule of
+/// that name); the command writes `Rule - soc.yaml`, `Rule - soc 00000000.yaml`.
+fn unpadded(oracle: &str) -> String {
+    let (folder, name) = oracle.rsplit_once('/').unwrap();
+    let name = name.strip_prefix(' ').unwrap();
+    let name = match name.strip_suffix(" .yaml") {
+        Some(stem) => format!("{stem}.yaml"),
+        None => {
+            let (stem, id) = name.rsplit_once("  ").unwrap();
+            format!("{stem} {id}")
+        }
+    };
+    format!("{folder}/{name}")
+}
+
 fn as_data(path: &str, bytes: &[u8]) -> String {
     let text = std::str::from_utf8(bytes).unwrap();
     let loaded = opentide_schema::node::load(text)
@@ -165,25 +185,40 @@ fn sentinel_rules_are_extracted_as_the_oracle_extracted_them() {
         ]
     );
 
-    // The listing's dump: the oracle's data, laid out four spaces a level
-    // (strings in UTF-8 where the oracle escaped them).
-    let dump = std::fs::read_to_string(ws.join("output-soc.json")).unwrap();
-    let oracle_dump = std::fs::read_to_string(here().join("oracle/output-soc.json")).unwrap();
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&dump).unwrap(),
-        serde_json::from_str::<serde_json::Value>(&oracle_dump).unwrap()
-    );
-    assert!(dump.contains("\n    {\n        \"kind\": \"Scheduled\","));
-    assert!(dump.contains("Encoded PowerShell — Ünïcode"));
+    // No debug dump of the listing in the working directory (the oracle
+    // wrote `output-<tenant>.json` there on every run).
+    let dumped: Vec<_> = std::fs::read_dir(&ws)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with("output-"))
+        .collect();
+    assert!(dumped.is_empty(), "{dumped:?}");
 
-    // The rule files: the oracle's bytes but for the approved differences,
-    // and the oracle's data.
+    // The rule files: named as the oracle named them without its padding,
+    // and holding the oracle's bytes but for the approved differences, and
+    // the oracle's data. They are compared under the oracle's names, which
+    // the ledger's entries name.
     let oracle_files = files(&here().join("oracle"), "Imported");
-    let candidate_files = files(&ws, "Imported");
+    let written = files(&ws, "Imported");
     assert_eq!(
-        oracle_files.keys().collect::<Vec<_>>(),
-        candidate_files.keys().collect::<Vec<_>>()
+        written.keys().cloned().collect::<Vec<_>>(),
+        [
+            "Imported/Encoded PowerShell — Ünïcode - soc 00000000.yaml",
+            "Imported/Encoded PowerShell — Ünïcode - soc.yaml",
+            "Imported/Quotes  and  back slash  a  name  - soc.yaml",
+            "Imported/Sign-in from a new country - soc.yaml",
+        ]
     );
+    let candidate_files: BTreeMap<String, Vec<u8>> = oracle_files
+        .keys()
+        .map(|path| {
+            let bytes = written
+                .get(&unpadded(path))
+                .unwrap_or_else(|| panic!("{path}: not written as {}", unpadded(path)));
+            (path.clone(), bytes.clone())
+        })
+        .collect();
+    assert_eq!(candidate_files.len(), written.len());
     for (path, bytes) in &oracle_files {
         assert_eq!(
             as_data(path, &candidate_files[path]),
