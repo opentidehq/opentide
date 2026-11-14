@@ -195,7 +195,7 @@ parity branch, ~1 day to land through review):
 | 11 | kql | biggest grammar, three parses per analysis | 860 / 208 | 7–9 | 7–10 |
 | F | final | delete `grammars/`, `opentide-syntax` (or its tree-sitter half), `cc`, the `grammars` CI job, wasi-sdk + `libc_syscalls.rs`, the tree-sitter skill; rewrite LANGUAGE-HARNESS step 2, add-language skill, ARCHITECTURE, AGENTS.md; `forbid(unsafe_code)` widened | — | 3 | 2–3 |
 
-Total ≈ 48–60 PRs, **~37–52 working days** including P0 (~3). The previous 66–107-day estimate was
+Total ≈ 48–60 PRs, **~39–54 working days** sequential, including P0 (~3) and the ES|QL pilot split across both phases. The previous 66–107-day estimate was
 for human-written parsers; the pilot suggests agent implementation is 5–10× faster on grammar work
 but review-bound. Treat the large-language numbers as ±50 % until lucene and eql land.
 
@@ -231,7 +231,7 @@ with the old code.
 | 6 | 75 % of broken inputs change on some surface; users type in broken states | Mitigable | Baseline snapshots of broken input in P0, changes reviewed per language and recorded in `APPROVED_DIFFS.toml` (already 4,593 entries; cost is real). |
 | 7 | Gains not shown: binary +62.7 KB, crate build slower, WASM/fuzz/Kibana oracle not run; speed moves no unified-core §11 metric | Partly accepted | Speed is not a reason for this ADR. WASM, fuzz and oracle measured at G1. |
 | 8 | Fuel exhaustion and a new depth limit hide failures | Bug | Fixed before landing (above). |
-| 9 | Opportunity cost: UC-1.2 → UC-6 not started; 37–52 (to ~78) days | **Strong** | For the maintainer to rank; Phase A is ~10–12 days and independently useful (5 crates off tree-sitter). |
+| 9 | Opportunity cost: UC-1.2 → UC-6 not started; 39–54 (to ~80) days | **Strong** | For the maintainer to rank; Phase A is ~12–15 days and independently useful (5 crates off tree-sitter). |
 | 10 | Hybrid: hand-write only falco, exabeam, yara | Fallback | Becomes the outcome if G1 fails. |
 
 Reviewer's conditions for approval: a large-language pilot with a wide `TokenSet`; WASM size, build
