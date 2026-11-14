@@ -1068,6 +1068,10 @@ const KEYWORDS: &[(&str, &str)] = &[
 /// position once, with `opentide_core::position_to_offset`).
 pub fn hover(text: &str, offset: usize, ctx: &Context) -> Option<String> {
     let offset = offset.min(text.len());
+    // An offset inside a character (a decoded escape) has nothing to show.
+    if !text.is_char_boundary(offset) {
+        return None;
+    }
     let tree = ts_parse(LanguageId::Falco, text)?;
     let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
     let word = node_text(node, text);
@@ -1426,7 +1430,10 @@ fn resolve_field<'c>(toks: &[Tok], at: Option<usize>, ctx: &Context) -> Option<&
 /// Completion in a condition: what the cursor's position takes, filtered by the
 /// word already typed (a dotted prefix, `proc.ex`, included).
 pub fn completions(text: &str, offset: usize, ctx: &Context) -> Vec<CompletionItem> {
-    let before = &text[..offset.min(text.len())];
+    // An offset inside a character (a decoded escape) completes nothing.
+    let Some(before) = text.get(..offset.min(text.len())) else {
+        return Vec::new();
+    };
     let prefix_start = before
         .char_indices()
         .rev()
@@ -1501,7 +1508,10 @@ pub fn completions(text: &str, offset: usize, ctx: &Context) -> Vec<CompletionIt
 /// Completion in an output template: fields after `%` (or `%(`), filtered by
 /// the word already typed; nothing elsewhere.
 pub fn output_completions(text: &str, offset: usize, ctx: &Context) -> Vec<CompletionItem> {
-    let before = &text[..offset.min(text.len())];
+    // An offset inside a character (a decoded escape) completes nothing.
+    let Some(before) = text.get(..offset.min(text.len())) else {
+        return Vec::new();
+    };
     let prefix_start = before
         .char_indices()
         .rev()
@@ -1942,5 +1952,17 @@ mod tests {
             assert!(codes::describe(code).is_some(), "{code}");
             let _ = severity;
         }
+    }
+
+    #[test]
+    fn an_offset_inside_a_character_is_answered_empty() {
+        // A cursor inside a decoded escape (`\u00e9` in a double-quoted Tide
+        // query) can reach the engine as the second byte of `\u{e9}`.
+        let src = "proc.name = \u{e9}";
+        let inside = src.find('\u{e9}').unwrap() + 1;
+        let ctx = Context::default();
+        assert!(completions(src, inside, &ctx).is_empty());
+        assert!(output_completions(src, inside, &ctx).is_empty());
+        assert_eq!(hover(src, inside, &ctx), None);
     }
 }
