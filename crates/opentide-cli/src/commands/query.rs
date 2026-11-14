@@ -54,8 +54,6 @@ pub const MAX_LIMIT: i64 = 5_000;
 pub const DEFAULT_SINCE: &str = "24h";
 /// Columns the table shows when `--columns` names none (`TABLE_COLUMNS`).
 pub const TABLE_COLUMNS: usize = 8;
-/// Characters a table cell shows before it is cut (`CELL_WIDTH`).
-pub const CELL_WIDTH: usize = 60;
 
 /// The languages each platform's runner takes; the first is the default
 /// (`PLATFORM_LANGUAGES`).
@@ -1141,22 +1139,15 @@ fn payload(
     report
 }
 
-/// A cell as the table shows it (`_cell`): whitespace collapsed, cut at
-/// [`CELL_WIDTH`] characters with an ellipsis.
+/// A cell as the table shows it (`_cell`): whitespace collapsed; the table
+/// cuts it at its width.
 fn cell(value: Option<&Json>) -> String {
     let text = match value {
         None | Some(Json::Null) => return String::new(),
         Some(value @ (Json::Object(_) | Json::Array(_))) => compact(value),
         Some(value) => scalar_text(value),
     };
-    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if text.chars().count() <= CELL_WIDTH {
-        text
-    } else {
-        let mut cut: String = text.chars().take(CELL_WIDTH - 1).collect();
-        cut.push('…');
-        cut
-    }
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// A row's value as text: a string as is, anything else as its JSON.
@@ -1380,45 +1371,17 @@ fn tables(args: &Args, outcomes: &[TenantResult], terminal: &Terminal) -> Vec<Bl
     blocks
 }
 
-/// The rows under their headers: each column as wide as its widest cell, at
-/// most [`CELL_WIDTH`] cells (a longer cell is cut with `…`), two spaces
-/// between columns, the header in bold over a rule. On a terminal (`width`),
-/// a line wider than it is cut at its edge with `…`.
+/// The rows under their headers, as every table is drawn
+/// ([`grid`](crate::render::table::grid)); on a terminal (`width`) fitted to it.
 fn table(headers: &[String], rows: &[Vec<String>], width: Option<usize>) -> Vec<Text> {
-    use crate::render::text::cell_len;
-    let widths: Vec<usize> = headers
-        .iter()
-        .enumerate()
-        .map(|(at, header)| {
-            rows.iter()
-                .map(|row| cell_len(&row[at]))
-                .fold(cell_len(header), usize::max)
-                .min(CELL_WIDTH)
-        })
-        .collect();
-    let line = |cells: &[String], style: &Style| -> Text {
-        let mut line = Text::plain("");
-        for (at, value) in cells.iter().enumerate() {
-            if at > 0 {
-                line.push_str("  ");
-            }
-            let mut cell = Text::styled(value, style);
-            cell.truncate_ellipsis(widths[at]);
-            let pad = widths[at].saturating_sub(cell.cell_len());
-            line.append_text(&cell);
-            line.push_str(&" ".repeat(pad));
-        }
-        line.rstrip();
-        if let Some(width) = width {
-            line.truncate_ellipsis(width);
-        }
-        line
+    let headers: Vec<&str> = headers.iter().map(String::as_str).collect();
+    let mut grid = crate::render::table::grid(&headers);
+    grid.add_rows(rows);
+    let table = crate::render::table::Table {
+        grid,
+        ..Default::default()
     };
-    let plain = Style::new();
-    let rule: Vec<String> = widths.iter().map(|width| "-".repeat(*width)).collect();
-    let mut lines = vec![line(headers, &Style::new().bold()), line(&rule, &plain)];
-    lines.extend(rows.iter().map(|row| line(row, &plain)));
-    lines
+    table.render(width)
 }
 
 #[cfg(test)]
@@ -1530,7 +1493,6 @@ mod tests {
         assert_eq!(cell(row.get("a")), "x y");
         assert_eq!(cell(row.get("b")), r#"[1,"é"]"#);
         assert_eq!(cell(row.get("c")), "");
-        assert_eq!(cell(Some(&Json::str("z".repeat(70)))).chars().count(), 60);
         assert_eq!(csv_field("a,\"b\""), "\"a,\"\"b\"\"\"");
         assert_eq!(csv_value(Some(&Json::Bool(true))), "true");
         let table = |headers: &[&str], row: &[&str], width: Option<usize>| -> Vec<String> {
@@ -1544,24 +1506,24 @@ mod tests {
         // Each column as wide as its widest cell, two spaces between.
         assert_eq!(
             table(&["A", "Bee"], &["long", "b"], None),
-            ["A     Bee", "----  ---", "long  b"]
+            ["A     Bee", "----- ----", "long  b"]
         );
         // A cell is cut at CELL_WIDTH cells, a wide character counted twice.
         let wide = "一".repeat(40);
         let lines = table(&["x", "y"], &[&wide, "1"], None);
-        assert_eq!(lines[1], format!("{}  -", "-".repeat(CELL_WIDTH)));
-        assert_eq!(lines[2], format!("{}…  1", "一".repeat(29) + " "));
-        // On a terminal, a line wider than it is cut at its edge; no width
+        let (cut, rest) = lines[2].split_once('…').expect("a cut cell");
+        assert!(crate::render::text::cell_len(cut) < 60, "{cut}");
+        assert_eq!(rest.trim(), "1");
+        // On a terminal the columns fit its width, a row to a line; no width
         // (a pipe or a file) keeps the whole line.
         let row = ["c:\\windows\\cmd.exe", "4001", "ws-1", "ORGKEY01-0001"];
         let headers = ["process_name", "pid", "device", "guid"];
-        assert_eq!(
-            table(&headers, &row, Some(20)),
-            [
-                "process_name       …",
-                "------------------ …",
-                "c:\\windows\\cmd.exe …"
-            ]
+        let narrow = table(&headers, &row, Some(20));
+        assert_eq!(narrow.len(), 3, "{narrow:?}");
+        assert!(
+            narrow
+                .iter()
+                .all(|line| crate::render::text::cell_len(line) <= 20)
         );
         assert_eq!(
             table(&headers, &row, None)[2],
@@ -1892,13 +1854,13 @@ mod tests {
             out,
             "prod  2 rows\n\
              host  note\n\
-             ----  ------\n\
+             ----- -------\n\
              pc-1  a, \"b\"\n\
              pc-2\n\
              \n\
              lab  1 row\n\
              host  count\n\
-             ----  -----\n\
+             ----- ------\n\
              pc-3  4\n\
              \n"
         );
@@ -1950,7 +1912,7 @@ mod tests {
             out,
             "soc  1 row (more matched; raise --limit)\n\
              c9  c1\n\
-             --  --\n\
+             --- ---\n\
              9   1\n\
              \n"
         );

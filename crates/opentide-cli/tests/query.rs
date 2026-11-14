@@ -609,7 +609,7 @@ fn rows_are_printed_as_a_table_json_lines_or_csv() {
         table.stdout.starts_with(
             "good  2 rows\n\
              host.name  count\n\
-             ---------  -----\n\
+             ---------- ------\n\
              pc-1       3\n\
              pc-2\n\
              \n"

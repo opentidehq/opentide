@@ -121,6 +121,9 @@ clap = { version = "4", features = ["derive"] }
 # versions clap already locks.
 anstyle = "1.0"
 anstream = "1.0"
+# The command line's tables (opentide-cli `render::table`): layout, widths,
+# truncation. No `tty` feature: the renderers style the lines themselves.
+comfy-table = { version = "7.2", default-features = false }
 tree-sitter = "0.25"
 # `LanguageFn`, the type tree-sitter 0.25 builds a Language from (opentide-syntax).
 tree-sitter-language = "0.1"

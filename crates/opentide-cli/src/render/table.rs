@@ -1,151 +1,98 @@
 //! Tables and aligned columns, as `info` prints them.
 //!
-//! A [`Table`] is plain text: an optional bold title, then the columns two
-//! spaces apart, the header in bold over a `-` rule, each column as wide as
-//! its widest cell up to [`CELL_WIDTH`] (a longer cell is cut with `…`), and
-//! an optional dim caption. On a terminal, a line wider than it is cut at its
-//! edge with `…`; in a pipe it is whole. [`columns`] lays rows out as label
-//! and value columns without a header.
+//! A [`Table`] is a [`comfy_table::Table`] laid out by [`grid`] (no borders,
+//! the columns two spaces apart, a `-` rule under the header, a cell longer
+//! than [`CELL_WIDTH`] cut with `…` unless its column is kept [`whole`]) with
+//! an optional bold title and dim caption; the header is bold. On a terminal
+//! comfy-table fits the columns to its width; in a pipe the lines are whole.
+//! [`columns`] lays styled rows out as label and value columns without a
+//! header.
 
 use crate::render::text::{Text, char_width};
 use anstyle::Style;
+use comfy_table::{CellAlignment, ColumnConstraint, ContentArrangement, TableComponent, Width};
 
 /// The cells a table cell shows before it is cut with `…`.
-pub const CELL_WIDTH: usize = 60;
+pub const CELL_WIDTH: u16 = 60;
 
-/// The blanks between two columns.
-const GAP: &str = "  ";
-
-/// How a column aligns its cells.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Justify {
-    /// Against the left edge.
-    Left,
-    /// Against the right edge.
-    Right,
-}
-
-/// One column.
-#[derive(Clone, Debug)]
-pub struct Column {
-    /// The header.
-    pub header: String,
-    /// The alignment.
-    pub justify: Justify,
-    /// Whether the column keeps its widest cell whole, past [`CELL_WIDTH`].
-    pub no_wrap: bool,
-    /// The narrowest the column may be.
-    pub min_width: Option<u16>,
-}
-
-impl Column {
-    /// A left-aligned column, cut at [`CELL_WIDTH`].
-    pub fn new(header: &str) -> Column {
-        Column {
-            header: header.to_owned(),
-            justify: Justify::Left,
-            no_wrap: false,
-            min_width: None,
-        }
-    }
-
-    /// Right-aligned.
-    pub fn right(mut self) -> Column {
-        self.justify = Justify::Right;
-        self
-    }
-
-    /// Never cut: as wide as its widest cell.
-    pub fn no_wrap(mut self) -> Column {
-        self.no_wrap = true;
-        self
-    }
-
-    /// At least `width` cells wide.
-    pub fn min_width(mut self, width: u16) -> Column {
-        self.min_width = Some(width);
-        self
-    }
-}
-
-/// A table.
+/// A grid with a title above and a caption below.
 #[derive(Clone, Debug, Default)]
 pub struct Table {
     /// The title, above.
     pub title: Option<String>,
     /// The caption, below.
     pub caption: Option<String>,
-    /// The columns.
-    pub columns: Vec<Column>,
-    /// The rows, one string per column.
-    pub rows: Vec<Vec<String>>,
+    /// The header and rows.
+    pub grid: comfy_table::Table,
+}
+
+/// A grid with `headers`, as every table here is drawn: no borders, a `-`
+/// rule under the header, two spaces between columns, cells cut at [`CELL_WIDTH`].
+pub fn grid(headers: &[&str]) -> comfy_table::Table {
+    let mut header = comfy_table::Row::from(headers.to_vec());
+    header.max_height(1);
+    let mut grid = comfy_table::Table::new();
+    grid.load_preset(comfy_table::presets::NOTHING)
+        .set_style(TableComponent::HeaderLines, '-')
+        .set_style(TableComponent::MiddleHeaderIntersections, ' ')
+        .set_style(TableComponent::VerticalLines, ' ')
+        .set_truncation_indicator("…")
+        .set_header(header);
+    for column in grid.column_iter_mut() {
+        column
+            .set_padding((0, 1))
+            .set_constraint(ColumnConstraint::UpperBoundary(Width::Fixed(CELL_WIDTH)));
+    }
+    grid
+}
+
+/// Keeps the cells of the columns at `indexes` whole, past [`CELL_WIDTH`].
+pub fn whole(grid: &mut comfy_table::Table, indexes: &[usize]) {
+    for column in grid
+        .column_iter_mut()
+        .filter(|c| indexes.contains(&c.index))
+    {
+        column.set_constraint(ColumnConstraint::ContentWidth);
+    }
+}
+
+/// Aligns the columns at `indexes` against their right edge.
+pub fn right(grid: &mut comfy_table::Table, indexes: &[usize]) {
+    for column in grid
+        .column_iter_mut()
+        .filter(|c| indexes.contains(&c.index))
+    {
+        column.set_cell_alignment(CellAlignment::Right);
+    }
 }
 
 impl Table {
-    /// The width of each column: its widest cell, header included, at least
-    /// its `min_width`, at most [`CELL_WIDTH`] unless it is `no_wrap`.
-    fn widths(&self) -> Vec<usize> {
-        self.columns
-            .iter()
-            .enumerate()
-            .map(|(at, column)| {
-                let widest = self
-                    .rows
-                    .iter()
-                    .map(|row| row.get(at).map_or(0, |cell| Text::plain(cell).cell_len()))
-                    .fold(Text::plain(&column.header).cell_len(), usize::max);
-                let capped = if column.no_wrap {
-                    widest
-                } else {
-                    widest.min(CELL_WIDTH)
-                };
-                capped.max(column.min_width.map_or(0, usize::from))
-            })
-            .collect()
-    }
-
-    /// The table's lines; on a terminal `width` cells wide (`Some`), each
-    /// line cut at its edge.
+    /// The table's lines; on a terminal `width` cells wide (`Some`), the
+    /// columns fitted to it, each row on one line.
     pub fn render(&self, width: Option<usize>) -> Vec<Text> {
-        let widths = self.widths();
-        let line = |cells: &[&str], style: &Style| -> Text {
-            let mut line = Text::default();
-            for (at, (column, column_width)) in self.columns.iter().zip(&widths).enumerate() {
-                if at > 0 {
-                    line.push_str(GAP);
-                }
-                let mut cell = Text::styled(cells.get(at).copied().unwrap_or(""), style);
-                cell.truncate_ellipsis(*column_width);
-                let pad = " ".repeat(column_width.saturating_sub(cell.cell_len()));
-                if column.justify == Justify::Right {
-                    line.push_str(&pad);
-                    line.append_text(&cell);
-                } else {
-                    line.append_text(&cell);
-                    line.push_str(&pad);
-                }
-            }
+        let mut grid = self.grid.clone();
+        for row in grid.row_iter_mut() {
+            row.max_height(1);
+        }
+        if let Some(width) = width {
+            grid.set_content_arrangement(ContentArrangement::Dynamic)
+                .set_width(u16::try_from(width).unwrap_or(u16::MAX));
+        }
+        let bold = Style::new().bold();
+        let mut out: Vec<Text> = self.title.iter().map(|t| Text::styled(t, &bold)).collect();
+        let header = grid.header().is_some();
+        for (index, line) in grid.lines().enumerate().filter(|_| header) {
+            let style = if index == 0 { bold } else { Style::new() };
+            let mut line = Text::styled(&line, &style);
             line.rstrip();
-            line
-        };
-        let mut out = Vec::new();
-        if let Some(title) = &self.title {
-            out.push(Text::styled(title, &Style::new().bold()));
+            out.push(line);
         }
-        if !self.columns.is_empty() {
-            let headers: Vec<&str> = self.columns.iter().map(|c| c.header.as_str()).collect();
-            out.push(line(&headers, &Style::new().bold()));
-            let rule: Vec<String> = widths.iter().map(|width| "-".repeat(*width)).collect();
-            let rule: Vec<&str> = rule.iter().map(String::as_str).collect();
-            out.push(line(&rule, &Style::default()));
-            for row in &self.rows {
-                let cells: Vec<&str> = row.iter().map(String::as_str).collect();
-                out.push(line(&cells, &Style::default()));
-            }
-        }
-        if let Some(caption) = &self.caption {
-            out.push(Text::styled(caption, &Style::new().dimmed()));
-        }
+        let dim = Style::new().dimmed();
+        out.extend(
+            self.caption
+                .iter()
+                .map(|caption| Text::styled(caption, &dim)),
+        );
         if let Some(width) = width {
             for line in &mut out {
                 line.truncate_ellipsis(width);
@@ -287,26 +234,24 @@ mod tests {
     }
 
     fn rules() -> Table {
+        let mut grid = grid(&["UUID", "Name", "Platforms"]);
+        whole(&mut grid, &[0]);
+        grid.add_rows([
+            [
+                "00000000-0000-4000-8003-000000000002",
+                "Defender KQL Rule",
+                "defender_for_endpoint",
+            ],
+            [
+                "3619eda3-a6ca-43c3-b079-972f387190c8",
+                "Covert Beacon Rule 0185",
+                "carbon_black_cloud, defender_for_endpoint, elastic",
+            ],
+        ]);
         Table {
             title: Some("Rules (2)".into()),
             caption: None,
-            columns: vec![
-                Column::new("UUID").no_wrap(),
-                Column::new("Name"),
-                Column::new("Platforms"),
-            ],
-            rows: vec![
-                vec![
-                    "00000000-0000-4000-8003-000000000002".into(),
-                    "Defender KQL Rule".into(),
-                    "defender_for_endpoint".into(),
-                ],
-                vec![
-                    "3619eda3-a6ca-43c3-b079-972f387190c8".into(),
-                    "Covert Beacon Rule 0185".into(),
-                    "carbon_black_cloud, defender_for_endpoint, elastic".into(),
-                ],
-            ],
+            grid,
         }
     }
 
@@ -317,7 +262,7 @@ mod tests {
             [
                 "Rules (2)",
                 "UUID                                  Name                     Platforms",
-                "------------------------------------  -----------------------  --------------------------------------------------",
+                "------------------------------------- ------------------------ ---------------------------------------------------",
                 "00000000-0000-4000-8003-000000000002  Defender KQL Rule        defender_for_endpoint",
                 "3619eda3-a6ca-43c3-b079-972f387190c8  Covert Beacon Rule 0185  carbon_black_cloud, defender_for_endpoint, elastic",
             ]
@@ -325,39 +270,41 @@ mod tests {
     }
 
     #[test]
-    fn a_terminal_cuts_lines_at_its_edge_and_a_pipe_keeps_them() {
-        let narrow = plain(&rules().render(Some(50)));
+    fn a_terminal_fits_the_columns_and_a_pipe_keeps_them_whole() {
+        let narrow = plain(&rules().render(Some(60)));
         assert_eq!(narrow[0], "Rules (2)");
-        assert_eq!(
-            narrow[3],
-            "00000000-0000-4000-8003-000000000002  Defender KQ…"
-        );
-        assert!(narrow.iter().all(|line| Text::plain(line).cell_len() <= 50));
+        assert!(narrow[3].starts_with("00000000-0000-4000-8003-000000000002  "));
+        assert_eq!(narrow.len(), 5, "one line a row: {narrow:?}");
+        assert!(narrow.iter().all(|line| Text::plain(line).cell_len() <= 60));
         // Every cell is still there in a pipe, however long the line.
         let whole = plain(&rules().render(None));
         assert!(whole[4].ends_with("defender_for_endpoint, elastic"));
     }
 
     #[test]
-    fn a_cell_wider_than_the_cap_is_cut_unless_its_column_never_is() {
-        let long = "x".repeat(CELL_WIDTH + 10);
-        let table = Table {
-            columns: vec![Column::new("Kept").no_wrap(), Column::new("Cut")],
-            rows: vec![vec![long.clone(), long.clone()]],
+    fn a_cell_wider_than_the_cap_is_cut_unless_its_column_is_whole() {
+        let long = "x".repeat(usize::from(CELL_WIDTH) + 10);
+        let mut table = Table {
+            grid: grid(&["Kept", "Cut"]),
             ..Table::default()
         };
+        whole(&mut table.grid, &[0]);
+        table.grid.add_row([long.clone(), long.clone()]);
         let lines = plain(&table.render(None));
-        let cut = format!("{}…", "x".repeat(CELL_WIDTH - 1));
-        assert_eq!(lines[2], format!("{long}  {cut}"));
+        let (kept, cut) = lines[2].split_once("  ").expect("two columns");
+        assert_eq!(kept, long);
+        assert!(cut.ends_with('…') && cut.chars().count() <= usize::from(CELL_WIDTH));
     }
 
     #[test]
     fn header_title_and_caption_are_styled_and_numbers_align_right() {
+        let mut grid = grid(&["A", "Count"]);
+        right(&mut grid, &[1]);
+        grid.add_row(["x", "3"]);
         let table = Table {
             title: Some("T".into()),
             caption: Some("none".into()),
-            columns: vec![Column::new("A"), Column::new("Count").right().min_width(8)],
-            rows: vec![vec!["x".into(), "3".into()]],
+            grid,
         };
         let lines: Vec<String> = table
             .render(Some(80))
@@ -368,9 +315,9 @@ mod tests {
             lines,
             [
                 "\u{1b}[1mT\u{1b}[0m",
-                "\u{1b}[1mA\u{1b}[0m     \u{1b}[1mCount\u{1b}[0m",
-                "-  --------",
-                "x         3",
+                "\u{1b}[1mA  Count\u{1b}[0m",
+                "-- ------",
+                "x      3",
                 "\u{1b}[2mnone\u{1b}[0m",
             ]
         );

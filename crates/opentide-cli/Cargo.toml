@@ -61,7 +61,8 @@ anstream.workspace = true
 # feature that holds `CompleteEnv` and `ArgValueCompleter`: outside
 # clap_complete's semver promise, so the version is pinned to the minor.
 clap_complete = { version = "~4.6.11", features = ["unstable-dynamic"] }
-# The boxed tables of `info` (the rows, columns and wrapping are the crate's).
+# The tables of `info` and `query` (the rows, columns and truncation are the crate's).
+comfy-table.workspace = true
 # The query lines of a code frame, coloured as the editor colours them.
 opentide-analysis.workspace = true
 # The commands ported onto the framework (UC-2.4): the workspace, its

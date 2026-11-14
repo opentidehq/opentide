@@ -149,7 +149,7 @@ pub enum Block {
     /// Lines, wrapped at the stream's width when wider.
     Lines(Vec<Text>),
     /// A table, laid out at the stream's width.
-    Table(crate::render::table::Table),
+    Table(Box<crate::render::table::Table>),
     /// Lines wrapped at words on a terminal, each with the indent its
     /// continued rows take (`doctor`'s checklist).
     Hanging(Vec<(Text, usize)>),

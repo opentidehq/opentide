@@ -21,7 +21,7 @@ use crate::env::Env;
 use crate::envelope::Failure;
 use crate::json::Json;
 use crate::render::glyphs::SEPARATOR;
-use crate::render::table::{Column, Table, columns};
+use crate::render::table::{Table, columns, grid, right, whole};
 use crate::render::text::Text;
 use anstyle::{AnsiColor, Style};
 
@@ -165,7 +165,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             body.push(if uuids.is_empty() {
                 Block::Lines(vec![Text::plain(&format!("No {family} found"))])
             } else {
-                Block::Table(objects_table(index, family, &uuids))
+                Block::Table(Box::new(objects_table(index, family, &uuids)))
             });
         }
         Some("catalog") => {
@@ -207,7 +207,11 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 if found.count == 1 { "" } else { "s" }
             ))]));
             if !found.rules.is_empty() {
-                body.push(Block::Table(objects_table(index, "rules", &found.rules)));
+                body.push(Block::Table(Box::new(objects_table(
+                    index,
+                    "rules",
+                    &found.rules,
+                ))));
             }
         }
         Some("vocab") => {
@@ -217,7 +221,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                     let rows: Vec<data::VocabOverview> =
                         files.iter().map(|v| data::overview(v)).collect();
                     out.push(("vocabularies".into(), json(&rows)));
-                    body.push(Block::Table(vocab_list_table(&rows)));
+                    body.push(Block::Table(Box::new(vocab_list_table(&rows))));
                 }
                 Some(name) => {
                     let Some(vocabulary) = files.iter().find(|v| v.field() == name) else {
@@ -236,7 +240,11 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                     };
                     let detail = data::detail(vocabulary);
                     out.push(("vocabulary".into(), json(&detail)));
-                    body.extend(vocab_detail_tables(&detail).into_iter().map(Block::Table));
+                    body.extend(
+                        vocab_detail_tables(&detail)
+                            .into_iter()
+                            .map(|table| Block::Table(Box::new(table))),
+                    );
                 }
             }
         }
@@ -371,11 +379,13 @@ fn title(section: &str) -> &str {
 /// UUID and name per object; rules also list their platforms.
 fn objects_table(index: &Index, section: &str, uuids: &[String]) -> Table {
     let family = singular(section);
-    let mut columns = vec![Column::new("UUID").no_wrap(), Column::new("Name")];
-    if family == "rule" {
-        columns.push(Column::new("Platforms"));
-    }
-    let rows = uuids
+    let mut grid = grid(if family == "rule" {
+        &["UUID", "Name", "Platforms"]
+    } else {
+        &["UUID", "Name"]
+    });
+    whole(&mut grid, &[0]);
+    let rows: Vec<Vec<String>> = uuids
         .iter()
         .map(|uuid| {
             let root = index
@@ -400,11 +410,11 @@ fn objects_table(index: &Index, section: &str, uuids: &[String]) -> Table {
             row
         })
         .collect();
+    grid.add_rows(rows);
     Table {
         title: Some(format!("{} ({})", title(section), uuids.len())),
         caption: None,
-        columns,
-        rows,
+        grid,
     }
 }
 
@@ -492,28 +502,22 @@ fn yes_no(value: Option<bool>) -> String {
 }
 
 fn vocab_list_table(rows: &[data::VocabOverview]) -> Table {
+    let mut grid = grid(&["Name", "Entries", "Removed", "Latest revision", "Staged"]);
+    whole(&mut grid, &[0]);
+    right(&mut grid, &[1, 2]);
+    grid.add_rows(rows.iter().map(|vocab| {
+        vec![
+            vocab.name.clone(),
+            vocab.entries.to_string(),
+            vocab.removed.to_string(),
+            vocab.latest_revision.clone().unwrap_or_else(|| "-".into()),
+            yes_no(Some(vocab.staged)),
+        ]
+    }));
     Table {
         title: Some(format!("Vocabularies ({})", rows.len())),
         caption: None,
-        columns: vec![
-            Column::new("Name").no_wrap(),
-            Column::new("Entries").right(),
-            Column::new("Removed").right(),
-            Column::new("Latest revision"),
-            Column::new("Staged"),
-        ],
-        rows: rows
-            .iter()
-            .map(|vocab| {
-                vec![
-                    vocab.name.clone(),
-                    vocab.entries.to_string(),
-                    vocab.removed.to_string(),
-                    vocab.latest_revision.clone().unwrap_or_else(|| "-".into()),
-                    yes_no(Some(vocab.staged)),
-                ]
-            })
-            .collect(),
+        grid,
     }
 }
 
@@ -536,34 +540,44 @@ fn vocab_detail_tables(vocab: &data::VocabDetail) -> Vec<Table> {
     if !vocab.stages.is_empty() {
         summary.push(vec!["Stages".to_owned(), vocab.stages.join(", ")]);
     }
+    let mut keys = grid(&["Key", "Value"]);
+    keys.add_rows(summary);
+    let mut revisions = grid(&["Revision", "Introduced", "Removed", "Admitted"]);
+    right(&mut revisions, &[1, 2, 3]);
+    revisions.add_rows(vocab.revisions.iter().map(|r| {
+        vec![
+            r.revision.clone(),
+            r.introduced.to_string(),
+            r.removed.to_string(),
+            r.admitted.to_string(),
+        ]
+    }));
+    let mut pins = grid(&["Schema", "Field", "Revision", "Admitted", "Scoped"]);
+    whole(&mut pins, &[0]);
+    right(&mut pins, &[3]);
+    pins.add_rows(vocab.pins.iter().map(|pin| {
+        vec![
+            pin.schema.clone(),
+            pin.field.clone(),
+            if pin.defined {
+                pin.revision.clone()
+            } else {
+                format!("{} (undefined)", pin.revision)
+            },
+            pin.admitted.to_string(),
+            yes_no(pin.scoped),
+        ]
+    }));
     vec![
         Table {
             title: Some(format!("Vocabulary {}", overview.name)),
             caption: None,
-            columns: vec![Column::new("Key"), Column::new("Value")],
-            rows: summary,
+            grid: keys,
         },
         Table {
             title: Some("Revisions".into()),
             caption: None,
-            columns: vec![
-                Column::new("Revision"),
-                Column::new("Introduced").right(),
-                Column::new("Removed").right(),
-                Column::new("Admitted").right(),
-            ],
-            rows: vocab
-                .revisions
-                .iter()
-                .map(|r| {
-                    vec![
-                        r.revision.clone(),
-                        r.introduced.to_string(),
-                        r.removed.to_string(),
-                        r.admitted.to_string(),
-                    ]
-                })
-                .collect(),
+            grid: revisions,
         },
         Table {
             title: Some("Pins".into()),
@@ -571,30 +585,7 @@ fn vocab_detail_tables(vocab: &data::VocabDetail) -> Vec<Table> {
                 .pins
                 .is_empty()
                 .then(|| "No object schema pins this vocabulary".to_owned()),
-            columns: vec![
-                Column::new("Schema").no_wrap(),
-                Column::new("Field"),
-                Column::new("Revision"),
-                Column::new("Admitted").right(),
-                Column::new("Scoped"),
-            ],
-            rows: vocab
-                .pins
-                .iter()
-                .map(|pin| {
-                    vec![
-                        pin.schema.clone(),
-                        pin.field.clone(),
-                        if pin.defined {
-                            pin.revision.clone()
-                        } else {
-                            format!("{} (undefined)", pin.revision)
-                        },
-                        pin.admitted.to_string(),
-                        yes_no(pin.scoped),
-                    ]
-                })
-                .collect(),
+            grid: pins,
         },
     ]
 }
