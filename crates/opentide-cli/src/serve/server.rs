@@ -486,7 +486,9 @@ impl Server {
         }
         let writer = Arc::downgrade(&self.inner);
         let runs = Arc::downgrade(&self.inner);
-        let fetcher = super::fetch::Fetcher::new(
+        let input = Arc::downgrade(&self.inner);
+        let jobs = Arc::downgrade(&self.inner);
+        let fetcher = super::fetch::Fetcher::with_input(
             move |message: &str| {
                 if let Some(inner) = writer.upgrade() {
                     Server { inner }.send(message);
@@ -496,6 +498,17 @@ impl Server {
                 let inner = runs.upgrade()?;
                 let state = inner.state.lock().unwrap_or_else(PoisonError::into_inner);
                 state.active.as_ref().map(|(id, _)| id.clone())
+            },
+            // Reads nothing unless the server reads its input inline (WASI).
+            move || input.upgrade().is_some_and(|inner| Server { inner }.pump()),
+            move || {
+                jobs.upgrade().is_some_and(|inner| {
+                    let state = inner.state.lock().unwrap_or_else(PoisonError::into_inner);
+                    state
+                        .active
+                        .as_ref()
+                        .is_some_and(|(_, job)| job.cancelled())
+                })
             },
         );
         let installed =

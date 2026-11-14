@@ -122,6 +122,18 @@ The client asks for it at `initialize`, with `{"capabilities": {"fetch": true}}`
 - **Withdrawal.** A run cancelled while a request is pending withdraws it with `$/cancelRequest` `{"id": "h1"}`, and stops at once. A late answer to a withdrawn request is ignored. If no answer comes within the two limits plus 5 seconds, the request times out on the server's side.
 - **Without the capability.** A client that does not ask gets the `initialize` answer it always had, and opentide makes the requests itself. The WASI build has no HTTP client of its own, so there a tenant command outside such a server fails with `this command needs the network; run the opentide CLI`.
 
+### What goes through the client
+
+In the WASI build, every HTTP request a command makes goes through `opentide/fetch`:
+
+- **Tenants:** `query`, `validate --live`, `deploy` (other than `--dry-run`), `share` and `extract`.
+- **Other services:** the CVE lookups, `doctor`'s check for a newer release on PyPI, and `skills`, which fetches the agent skills.
+
+Two things need more than an HTTP request, so the WASI build does without them, even through a client that makes its requests:
+
+- **`doctor`'s proxy check.** It opens a TCP connection to the proxy itself, which needs a socket, so the WASI build skips it. Its other checks run.
+- **Platforms from Python plugins.** A plugin runs in a Python process, which the WASI host cannot start. The built-in platforms are unaffected.
+
 ## Related
 
 - [JSON output](./json-output.md)

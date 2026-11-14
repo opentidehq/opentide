@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } f
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
@@ -370,10 +370,11 @@ class ServeClient {
   private next = 0;
   readonly host: FetchHost;
 
-  constructor(binary: string, ws: string, perform: (params: FetchParams) => Promise<FetchResult>) {
-    this.process = spawn(binary, ["serve"], {
+  constructor(server: Server, ws: string, perform: (params: FetchParams) => Promise<FetchResult>) {
+    // WASI gives the module no working directory: the host names it in PWD.
+    this.process = spawn(server.command, [...server.args, "serve"], {
       cwd: ws,
-      env: { PATH: process.env.PATH ?? "", HOME: ws, NO_COLOR: "1", TZ: "UTC", LANG: "C.UTF-8" },
+      env: { PATH: process.env.PATH ?? "", HOME: ws, PWD: ws, NO_COLOR: "1", TZ: "UTC", LANG: "C.UTF-8" },
     });
     this.host = new FetchHost((message) => this.write(message), { perform });
     this.process.stdout.setEncoding("utf8");
@@ -405,10 +406,18 @@ class ServeClient {
     return new Promise((resolve) => this.waiting.push(resolve));
   }
 
-  async call(method: string, params: object): Promise<Record<string, unknown>> {
+  /** Sends a request; its id. */
+  request(method: string, params: object): number {
     this.next += 1;
-    const id = this.next;
-    this.write({ jsonrpc: "2.0", id, method, params });
+    this.write({ jsonrpc: "2.0", id: this.next, method, params });
+    return this.next;
+  }
+
+  async call(method: string, params: object): Promise<Record<string, unknown>> {
+    return this.answer(this.request(method, params));
+  }
+
+  async answer(id: number): Promise<Record<string, unknown>> {
     for (;;) {
       const message = await this.message();
       if (message.id === id) return message;
@@ -422,11 +431,33 @@ class ServeClient {
   }
 }
 
+/** How to start `opentide serve`: a command and the arguments before `serve`. */
+interface Server {
+  name: string;
+  command: string;
+  args: string[];
+}
+
 // The native server: CI sets OPENTIDE_BIN; locally the debug build is used
-// when it exists. The WASI build runs the same cases once it is built
-// (OPENTIDE_WASI_CLI, W1).
+// when it exists. The WASI build (`scripts/engine/build-wasm.sh cli`) runs
+// the same cases under Node's own WASI when OPENTIDE_WASI_CLI names it: the
+// module has no network, so every tenant request goes through the host.
 const debugBinary = join(root, "target/debug/opentide-cli");
 const nativeBinary = process.env.OPENTIDE_BIN ?? (existsSync(debugBinary) ? debugBinary : undefined);
+const wasiModule = process.env.OPENTIDE_WASI_CLI === undefined ? undefined : resolve(process.env.OPENTIDE_WASI_CLI);
+const SERVERS: (Server | string)[] = [
+  nativeBinary === undefined
+    ? "native: no opentide binary (OPENTIDE_BIN)"
+    : { name: "native", command: nativeBinary, args: [] },
+  wasiModule === undefined
+    ? "wasi: no WASI module (OPENTIDE_WASI_CLI)"
+    : {
+        name: "wasi",
+        command: process.execPath,
+        // Node's fast WASI calls can crash a large instance (scripts/engine/wasi-run.mjs).
+        args: ["--no-turbo-fast-api-calls", join(root, "scripts/engine/wasi-run.mjs"), wasiModule],
+      },
+];
 
 interface GoldenCase {
   fixture: string;
@@ -478,28 +509,79 @@ const CASES: GoldenCase[] = [
   },
 ];
 
-for (const golden of CASES) {
+for (const server of SERVERS) {
+  for (const golden of CASES) {
+    const name = typeof server === "string" ? server.split(":")[0] : server.name;
+    test(
+      `serve (${name}): ${golden.argv.slice(0, 2).join(" ")} through the host, from ${golden.cassette}`,
+      { skip: typeof server === "string" ? server : false },
+      async () => {
+        const scratch = realpathSync(mkdtempSync(join(tmpdir(), "wasi-host-")));
+        const ws = join(scratch, "ws");
+        cpSync(join(root, "tests/golden/fixtures", golden.fixture), ws, { recursive: true });
+        const cassette = cassetteHost(golden.cassette);
+        const client = new ServeClient(server as Server, ws, cassette.perform);
+        try {
+          const initialized = await client.call("initialize", FETCH_CAPABILITY);
+          assert.deepEqual((initialized.result as Record<string, unknown>).capabilities, { fetch: true });
+          const answer = await client.call("run", {
+            argv: golden.argv,
+            env: { [golden.credential]: SECRET },
+          });
+          const result = answer.result as { exit_code: number; document: Record<string, unknown> };
+          assert.equal(result.exit_code, golden.exit, JSON.stringify(result.document));
+          assert.deepEqual(cassette.mismatches, []);
+          const recording: Cassette = JSON.parse(readFileSync(join(root, `tests/cassettes/${golden.cassette}.json`), "utf8"));
+          assert.equal(cassette.asked, recording.interactions.length, "every recorded request, and no other");
+        } finally {
+          await client.close();
+          rmSync(scratch, { recursive: true, force: true });
+        }
+      },
+    );
+  }
+}
+
+// A run cancelled while the host holds its request: the server withdraws the
+// request (the host aborts it) and the run ends interrupted. The WASI build
+// has no thread reading the client while the run waits: the run reads the
+// cancel itself (`Server::pump`), so this is its proof there.
+for (const server of SERVERS) {
+  const name = typeof server === "string" ? server.split(":")[0] : server.name;
   test(
-    `serve: ${golden.argv.slice(0, 2).join(" ")} through the host, from ${golden.cassette}`,
-    { skip: nativeBinary === undefined ? "no opentide binary (OPENTIDE_BIN)" : false },
+    `serve (${name}): a run cancelled while the host holds its request is interrupted`,
+    { skip: typeof server === "string" ? server : false },
     async () => {
       const scratch = realpathSync(mkdtempSync(join(tmpdir(), "wasi-host-")));
       const ws = join(scratch, "ws");
-      cpSync(join(root, "tests/golden/fixtures", golden.fixture), ws, { recursive: true });
-      const cassette = cassetteHost(golden.cassette);
-      const client = new ServeClient(nativeBinary as string, ws, cassette.perform);
-      try {
-        const initialized = await client.call("initialize", FETCH_CAPABILITY);
-        assert.deepEqual((initialized.result as Record<string, unknown>).capabilities, { fetch: true });
-        const answer = await client.call("run", {
-          argv: golden.argv,
-          env: { [golden.credential]: SECRET },
+      cpSync(join(root, "tests/golden/fixtures/tenants"), ws, { recursive: true });
+      let held: () => void = () => {};
+      const asked = new Promise<void>((resolve) => {
+        held = resolve;
+      });
+      let aborted = false;
+      const client = new ServeClient(server as Server, ws, (_params, signal) => {
+        held();
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => {
+            aborted = true;
+            reject(new Error("aborted"));
+          });
         });
+      });
+      try {
+        await client.call("initialize", FETCH_CAPABILITY);
+        const id = client.request("run", {
+          argv: ["query", "--platform", "elastic", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "FROM logs-*"],
+          env: { ELASTIC_API_KEY: SECRET },
+        });
+        await asked;
+        client.write({ jsonrpc: "2.0", method: "$/cancelRequest", params: { id } });
+        const answer = await client.answer(id);
         const result = answer.result as { exit_code: number; document: Record<string, unknown> };
-        assert.equal(result.exit_code, golden.exit, JSON.stringify(result.document));
-        assert.deepEqual(cassette.mismatches, []);
-        const recording: Cassette = JSON.parse(readFileSync(join(root, `tests/cassettes/${golden.cassette}.json`), "utf8"));
-        assert.equal(cassette.asked, recording.interactions.length, "every recorded request, and no other");
+        assert.equal(result.exit_code, 130, JSON.stringify(result.document));
+        assert.ok(aborted, "the server withdraws its request");
+        assert.equal(client.host.pending, 0);
       } finally {
         await client.close();
         rmSync(scratch, { recursive: true, force: true });

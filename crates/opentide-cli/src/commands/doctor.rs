@@ -217,26 +217,33 @@ fn latest_version(offline: bool, cx: &Context<'_>) -> Check {
         return Check::new("opentide_latest", "skip", "Not checked: --offline");
     }
     let environment = opentide_connectors::Environment::from_pairs(cx.env.iter());
-    match network::fetch_latest(&environment, cx.proxy) {
+    latest_check(network::fetch_latest(&environment, cx.proxy), cx.version)
+}
+
+/// The `opentide_latest` check for what asking PyPI gave.
+fn latest_check(found: Result<String, network::Failed>, version: &str) -> Check {
+    match found {
+        Err(network::Failed(network::NO_NETWORK)) => Check::new(
+            "opentide_latest",
+            "skip",
+            "Not checked: this build of opentide has no network",
+        ),
         Err(network::Failed(name)) => Check::new(
             "opentide_latest",
             "warn",
             format!("Could not ask PyPI for the latest release ({name})"),
         )
         .fix("check the network or --proxy, or pass --offline to skip network checks"),
-        Ok(latest) if network::newer(&latest, cx.version) => Check::new(
+        Ok(latest) if network::newer(&latest, version) => Check::new(
             "opentide_latest",
             "warn",
-            format!(
-                "opentide {latest} is available; {} is installed",
-                cx.version
-            ),
+            format!("opentide {latest} is available; {version} is installed"),
         )
         .fix(network::UPGRADE_COMMAND),
         Ok(_) => Check::new(
             "opentide_latest",
             "pass",
-            format!("No newer release on PyPI than {}", cx.version),
+            format!("No newer release on PyPI than {version}"),
         ),
     }
 }
@@ -858,6 +865,17 @@ impl Doctor<'_> {
             return Check::new("proxy", "fail", message).fix("pass --proxy http://host:port");
         };
         let port = port.unwrap_or(if scheme == "https" { 443 } else { 80 });
+        // WASI has no sockets: the check would fail as if the name did not
+        // resolve. The requests through the proxy are the client's to make.
+        if cfg!(target_os = "wasi") {
+            return Check::new(
+                "proxy",
+                "skip",
+                format!(
+                    "Proxy {shown} not checked: this build of opentide cannot open a connection"
+                ),
+            );
+        }
         match network::connect(&host, port, network::NETWORK_TIMEOUT) {
             Ok(()) => Check::new(
                 "proxy",
@@ -1446,6 +1464,25 @@ mod tests {
                 (get("code"), get("status"), get("message"))
             })
             .collect()
+    }
+
+    #[test]
+    fn a_build_without_a_network_skips_the_pypi_check() {
+        // The WASI build outside a serve whose client makes its requests.
+        let check = latest_check(Err(network::Failed(network::NO_NETWORK)), "1.0.0");
+        assert_eq!(
+            (check.status, check.message.as_str()),
+            ("skip", "Not checked: this build of opentide has no network")
+        );
+        assert!(check.fix.is_none());
+        // Any other failure is still a warning that names it.
+        let check = latest_check(Err(network::Failed("ConnectionError")), "1.0.0");
+        assert_eq!(check.status, "warn");
+        assert!(
+            check.message.ends_with("(ConnectionError)"),
+            "{}",
+            check.message
+        );
     }
 
     #[test]
