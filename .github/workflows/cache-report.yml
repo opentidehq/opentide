@@ -5,12 +5,19 @@ name: Cache report
 # per family into the job summary (scripts/cache_report.py). The caches pull
 # requests restore were evicted within hours more than once; this shows which
 # families and refs crowd them out. Read-only: `actions: read` lists the
-# caches, and the job runs the default branch's own script, never a pull
-# request's code.
+# caches, and the job runs a base branch's own script, never a pull
+# request's code. GitHub starts a schedule, and Run workflow, from the default
+# branch's copy only: a push to a base branch that changes the report runs it
+# too, so it runs where it lands first.
 on:
   schedule:
     - cron: "41 5 * * 1"
   workflow_dispatch:
+  push:
+    branches: [development, integration/unified-core]
+    paths:
+      - .github/workflows/cache-report.yml
+      - scripts/cache_report.py
 
 permissions:
   contents: read

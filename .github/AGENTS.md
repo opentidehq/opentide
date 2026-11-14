@@ -272,7 +272,8 @@ removed from the rule too, or every pull request that does not run it waits for 
   plan section 11 target for `rust`, the noise floor, the ceiling on an unrecorded CPU, the
   waiver) are in [`xtask/AGENTS.md`](../xtask/AGENTS.md), "bench"; the table lands in the job
   summary. Never required: it runs on demand and its numbers depend on the runner's CPU.
-- [`cache-report.yml`](workflows/cache-report.yml), weekly and on Run workflow: every Actions
+- [`cache-report.yml`](workflows/cache-report.yml), weekly, on Run workflow (both from
+  `development`'s copy only) and on a push to a base branch that changes it: every Actions
   cache with its ref, key family (the key without its hashes and week), size and last use,
   summed per ref and per family against the 10 GB GitHub keeps, in the job summary and the log
   (`scripts/cache_report.py`). It shows what crowds out the families pull requests restore

@@ -92,7 +92,13 @@ def test_the_workflow_reads_the_caches_and_runs_no_pull_requests_code() -> None:
     )
     # PyYAML reads the key `on` as True.
     triggers = workflow.get("on", workflow.get(True))
-    assert set(triggers) == {"schedule", "workflow_dispatch"}
+    assert set(triggers) == {"schedule", "workflow_dispatch", "push"}
+    # A push runs it only where it lands: a base branch, and a change to the report.
+    assert triggers["push"]["branches"] == ["development", "integration/unified-core"]
+    assert set(triggers["push"]["paths"]) == {
+        ".github/workflows/cache-report.yml",
+        "scripts/cache_report.py",
+    }
     assert workflow["permissions"] == {"contents": "read"}
     (job,) = workflow["jobs"].values()
     assert job["permissions"] == {"contents": "read", "actions": "read"}
