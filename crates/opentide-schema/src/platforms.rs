@@ -392,7 +392,7 @@ pub const PLATFORMS: &[Platform] = &[
         runner_languages: &["yaral"],
         // The offline YARA-L check arrives with the engine import (E1).
         offline_languages: &["yaral"],
-        query_file_suffixes: &["yaral"],
+        query_file_suffixes: &["yaral", "yl2"],
         cli_rank: 12,
         connector_rank: 12,
         configuration_rank: 12,
@@ -714,7 +714,7 @@ mod tests {
             query_file_suffixes(),
             [
                 "kql", "spl", "cql", "yar", "yara", "lucene", "esql", "eql", "kuery", "falco",
-                "yaral"
+                "yaral", "yl2"
             ]
         );
     }
