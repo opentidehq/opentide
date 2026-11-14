@@ -13,7 +13,7 @@ opentide validate --strict --json
 opentide --debug --no-color generate
 ```
 
-A word that starts with `-` is an option, never the value of the option before it: `opentide setup skills discover --query --json` is a usage error (exit `2`, `--query requires a value`). To give a value that starts with `-`, join it with `=`: `--query=--json` searches for `--json`. A negative number is a value (`--limit -1`). There are no short forms of the global flags (`-q` belongs to `--query`).
+A word that starts with `-` is an option, never the value of the option before it: `opentide setup skills discover --query --json` is a usage error (exit `2`, `a value is required for '--query <QUERY>' but none was supplied`). To give a value that starts with `-`, join it with `=`: `--query=--json` searches for `--json`. A negative number is a value (`--limit -1`). There are no short forms of the global flags (`-q` belongs to `--query`).
 
 ## Options
 

@@ -64,39 +64,50 @@ fn context(error: &clap::Error, kind: ContextKind) -> Option<String> {
     }
 }
 
-/// `--check <CHECK>` → `--check`, `<ci_platform>` → `ci_platform`,
+/// `--check <CHECK>` → `--check`, `<ci_platform>` or `[name]` → the name,
 /// `--json=1` → `--json`.
 fn argument_name(shown: &str) -> String {
     let word = shown.split_whitespace().next().unwrap_or_default();
     let word = word.split('=').next().unwrap_or_default();
-    word.trim_start_matches('<')
-        .trim_end_matches(['>', '.'])
+    word.trim_start_matches(['<', '['])
+        .trim_end_matches(['>', ']', '.'])
         .to_owned()
 }
 
-/// clap's suggestions without hidden options and commands: a hidden one is
-/// removed or internal, never to be offered.
-fn drop_hidden_suggestions(error: &mut clap::Error, root: &Command, path: &[String]) {
-    let visible_option = |name: &str| {
-        let long = name.trim_start_matches('-');
-        (0..=path.len()).any(|depth| {
-            command_at(root, &path[..depth])
-                .get_arguments()
-                .any(|arg| !arg.is_hide_set() && arg.get_long() == Some(long))
-        })
-    };
+/// Every hidden long option in `command` and below it.
+fn hidden_longs(command: &Command, into: &mut Vec<String>) {
+    into.extend(
+        command
+            .get_arguments()
+            .filter(|arg| arg.is_hide_set())
+            .filter_map(|arg| arg.get_long().map(|long| format!("--{long}"))),
+    );
+    for sub in command.get_subcommands() {
+        hidden_longs(sub, into);
+    }
+}
+
+/// clap's error context without hidden options and commands (a hidden one is
+/// removed or internal, never to be offered), and a value's suggestion by the
+/// command line's one rule ([`crate::suggest`]: case and `-`/`_` do not count)
+/// where clap's Jaro finds none.
+fn tidy_context(error: &mut clap::Error, root: &Command, path: &[String]) {
+    let mut hidden = Vec::new();
+    hidden_longs(root, &mut hidden);
     let command = command_at(root, path);
     let visible_command = |name: &str| {
         command
             .find_subcommand(name)
             .is_some_and(|sub| !sub.is_hide_set())
     };
+    let visible_option = |name: &str| !hidden.iter().any(|long| long == name);
     for (kind, visible) in [
         (
             ContextKind::SuggestedArg,
             &visible_option as &dyn Fn(&str) -> bool,
         ),
         (ContextKind::SuggestedSubcommand, &visible_command),
+        (ContextKind::ValidSubcommand, &visible_command),
     ] {
         let kept: Vec<String> = match error.remove(kind) {
             Some(ContextValue::String(name)) => vec![name],
@@ -110,16 +121,44 @@ fn drop_hidden_suggestions(error: &mut clap::Error, root: &Command, path: &[Stri
             error.insert(kind, ContextValue::Strings(kept));
         }
     }
+    // `tip: 'deploy --plan' exists`: a tip that names a hidden option goes.
+    if let Some(ContextValue::StyledStrs(tips)) = error.remove(ContextKind::Suggested) {
+        let kept: Vec<_> = tips
+            .into_iter()
+            .filter(|tip| {
+                let text = tip.to_string();
+                !hidden.iter().any(|long| {
+                    text.split(|c: char| c.is_whitespace() || c == '\'')
+                        .any(|word| word == long)
+                })
+            })
+            .collect();
+        if !kept.is_empty() {
+            error.insert(ContextKind::Suggested, ContextValue::StyledStrs(kept));
+        }
+    }
+    if error.kind() == ErrorKind::InvalidValue
+        && error.get(ContextKind::SuggestedValue).is_none()
+        && let (Some(ContextValue::String(value)), Some(ContextValue::Strings(valid))) = (
+            error.get(ContextKind::InvalidValue),
+            error.get(ContextKind::ValidValue),
+        )
+        && let Some(closest) = crate::suggest::did_you_mean(value, valid.iter().map(String::as_str))
+    {
+        error.insert(ContextKind::SuggestedValue, ContextValue::String(closest));
+    }
 }
 
 /// The failure for a clap error, in the command `args` named.
 pub fn describe(root: &Command, args: &[String], mut error: clap::Error) -> UsageError {
     let path = crate::app::command_words(root, args);
     let command = command_at(root, &path);
-    drop_hidden_suggestions(&mut error, root, &path);
+    tidy_context(&mut error, root, &path);
     let error = &error;
-    let argument = match error.kind() {
-        ErrorKind::InvalidSubcommand => context(error, ContextKind::InvalidSubcommand),
+    let argument = match (error.kind(), error.get(ContextKind::InvalidArg)) {
+        (ErrorKind::InvalidSubcommand, _) => context(error, ContextKind::InvalidSubcommand),
+        // Several missing: the first, as `--help` lists them.
+        (_, Some(ContextValue::Strings(shown))) => shown.first().cloned(),
         _ => context(error, ContextKind::InvalidArg),
     }
     .map(|shown| argument_name(&shown));
@@ -135,7 +174,10 @@ pub fn describe(root: &Command, args: &[String], mut error: clap::Error) -> Usag
         ErrorKind::UnknownArgument if command.has_subcommands() => code::USAGE_UNKNOWN_COMMAND,
         ErrorKind::InvalidValue if empty_value => code::USAGE_ERROR,
         ErrorKind::InvalidValue | ErrorKind::ValueValidation
-            if error.get(ContextKind::ValidValue).is_some() =>
+            if matches!(
+                error.get(ContextKind::ValidValue),
+                Some(ContextValue::Strings(valid)) if !valid.is_empty()
+            ) =>
         {
             code::USAGE_INVALID_CHOICE
         }
@@ -151,7 +193,11 @@ pub fn describe(root: &Command, args: &[String], mut error: clap::Error) -> Usag
                 .filter(|sub| !sub.is_hide_set())
                 .map(Command::get_name)
                 .collect();
-            format!("missing command: choose from {}", names.join(", "))
+            if names.is_empty() {
+                "missing command".to_owned()
+            } else {
+                format!("missing command: choose from {}", names.join(", "))
+            }
         }
         _ => first_line(error),
     };
@@ -310,7 +356,7 @@ mod tests {
     }
 
     #[test]
-    fn framework_usage_hidden_options_and_commands_are_never_suggested() {
+    fn framework_usage_hidden_options_and_commands_are_never_named() {
         let synthetic = Command::new("opentide")
             .arg(
                 clap::Arg::new("plan")
@@ -325,14 +371,33 @@ mod tests {
             )
             .subcommand(Command::new("plumb").hide(true))
             .subcommand(Command::new("deploy"));
-        // `--plam` is closest to the hidden `--plan`: the visible `--place` is offered.
+        // `--plam` is closest to the hidden `--plan`: clap keeps only its
+        // best match, so nothing is suggested.
         let option = parse_in(&synthetic, "--plam");
         assert_eq!(option.failure.code, code::USAGE_UNKNOWN_OPTION);
-        assert_ne!(option.failure.suggestion.as_deref(), Some("--plan"));
-        // `plumc` is closest to the hidden `plumb`.
+        assert_eq!(option.failure.suggestion, None);
+        assert!(!option.rendered.to_string().contains("--plan"));
         let command = parse_in(&synthetic, "plumc");
         assert_eq!(command.failure.code, code::USAGE_UNKNOWN_COMMAND);
-        assert_ne!(command.failure.suggestion.as_deref(), Some("plumb"));
+        assert_eq!(command.failure.suggestion, None);
+        assert!(!command.rendered.to_string().contains("plumb"));
+        // The tree's own: the hidden commands are not listed, and the
+        // removed `--plan` of `deploy` is not offered from the root.
+        let bare = parse("");
+        let text = format!("{} {}", bare.failure.message, bare.rendered);
+        for hidden in ["document", "export", "extract"] {
+            assert!(!text.contains(hidden), "{text}");
+        }
+        let removed = parse("--plan deploy").rendered.to_string();
+        assert!(!removed.contains("tip:"), "{removed}");
+    }
+
+    #[test]
+    fn framework_usage_a_value_suggestion_ignores_case() {
+        let upper = parse("lint --check FILENAMES");
+        assert_eq!(upper.failure.code, code::USAGE_INVALID_CHOICE);
+        assert_eq!(upper.failure.suggestion.as_deref(), Some("filenames"));
+        assert!(upper.rendered.to_string().contains("'filenames'"));
     }
 
     #[test]
