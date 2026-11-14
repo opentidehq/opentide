@@ -16,8 +16,9 @@ use crate::http::HttpClient;
 /// (`SLOW_ANSWER_SECONDS`).
 pub const SLOW_ANSWER: Duration = Duration::from_secs(30);
 
-/// One answer.
-#[derive(Clone, Debug)]
+/// One answer. Its `Debug` leaves the body out: a token endpoint's answer
+/// carries a bearer token.
+#[derive(Clone)]
 pub struct Answer {
     /// The HTTP status.
     pub status: u16,
@@ -27,6 +28,17 @@ pub struct Answer {
     pub body: Vec<u8>,
     /// From sending the request to its headers (`requests`' `elapsed`).
     pub elapsed: Duration,
+}
+
+impl std::fmt::Debug for Answer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Answer")
+            .field("status", &self.status)
+            .field("content_type", &self.content_type)
+            .field("body_bytes", &self.body.len())
+            .field("elapsed", &self.elapsed)
+            .finish()
+    }
 }
 
 impl Answer {
@@ -180,6 +192,22 @@ pub fn describe_answer(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn debug_leaves_the_body_out() {
+        let answer = Answer {
+            status: 200,
+            content_type: Some("application/json".into()),
+            body: br#"{"access_token":"eyJ.secret.token","expires_in":3599}"#.to_vec(),
+            elapsed: Duration::from_millis(5),
+        };
+        let shown = format!("{answer:?}");
+        assert!(!shown.contains("eyJ.secret.token"), "{shown}");
+        assert!(
+            shown.contains("status: 200") && shown.contains("body_bytes: 53"),
+            "{shown}"
+        );
+    }
 
     #[test]
     fn a_gateway_page_is_named_by_its_title() {

@@ -205,6 +205,75 @@ async fn a_second_401_is_an_authentication_failure_and_no_loop() {
 }
 
 #[tokio::test]
+async fn a_second_401_keeps_what_the_api_said_with_no_token() {
+    let stand = Stand::start("lab", SECRET).await;
+    stand.issuing().await;
+    Mock::given(method("POST"))
+        .and(path("/rules"))
+        .respond_with(|request: &Request| {
+            let bearer = request
+                .headers
+                .get("authorization")
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default()
+                .to_owned();
+            ResponseTemplate::new(401).set_body_string(format!(
+                "{{\"error\":{{\"code\":\"InvalidAuthenticationToken\",\"seen\":\"{bearer}\"}}}}"
+            ))
+        })
+        .mount(&stand.server)
+        .await;
+    let error = post(&stand, &TokenCache::new()).await.unwrap_err();
+    let ConnectorError::Authentication {
+        detail: Some(detail),
+        ..
+    } = &error
+    else {
+        panic!("no detail: {error:?}");
+    };
+    assert!(detail.contains("InvalidAuthenticationToken"), "{detail}");
+    assert!(detail.contains("Bearer ***"), "{detail}");
+    for shown in [detail.clone(), error.text(), format!("{error:?}")] {
+        assert!(
+            !shown.contains("t1") && !shown.contains("t2") && !shown.contains(SECRET),
+            "{shown}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn calls_answered_401_at_once_sign_in_again_once() {
+    let stand = Stand::start("a", SECRET).await;
+    stand.issuing().await;
+    Mock::given(method("POST"))
+        .and(path("/rules"))
+        .and(header("authorization", "Bearer t1"))
+        .respond_with(ResponseTemplate::new(401).set_delay(Duration::from_millis(30)))
+        .mount(&stand.server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/rules"))
+        .and(header("authorization", "Bearer t2"))
+        .respond_with(ResponseTemplate::new(201))
+        .mount(&stand.server)
+        .await;
+    let tokens = TokenCache::new();
+    let all = tokio::join!(
+        post(&stand, &tokens),
+        post(&stand, &tokens),
+        post(&stand, &tokens)
+    );
+    assert_eq!(
+        (all.0.unwrap(), all.1.unwrap(), all.2.unwrap()),
+        (201, 201, 201)
+    );
+    // One first sign-in shared, one new sign-in after the 401s shared:
+    // no call forgot the token another had just signed in for.
+    assert_eq!(stand.count("/token").await, 2);
+    assert_eq!(stand.count("/rules").await, 6);
+}
+
+#[tokio::test]
 async fn a_403_is_the_answer_and_no_new_sign_in() {
     let stand = Stand::start("a", SECRET).await;
     stand.issuing().await;

@@ -500,11 +500,11 @@ fn issue(
     merged: &Merged,
     entry: Option<String>,
 ) -> SharingIssue {
-    let place = format!(
-        "[[{INTEGRATION_MISP}]] block {}",
-        block.map_or_else(|| "None".to_owned(), repr::quote)
+    let place = block.map_or_else(
+        || format!("[[{INTEGRATION_MISP}]] block without a name"),
+        |name| format!("[[{INTEGRATION_MISP}]] block {}", repr::quote(name)),
     );
-    let entry = entry.unwrap_or_else(|| "None".to_owned());
+    let entry = entry.unwrap_or_default();
     let message = match code {
         codes::MISSING_FIELD => format!("{place} is missing {field}."),
         codes::UNKNOWN_KEY => format!("Unknown key {field:?} in {place}."),

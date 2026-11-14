@@ -89,6 +89,6 @@ fn the_invalid_elastic_fixture_reports_its_codes() {
     assert_eq!(errors.len(), 1);
     assert_eq!(
         errors[0].message,
-        format!("Value error, ElasticConfig validation failed with code(s): {expected}")
+        format!("ElasticConfig validation failed with code(s): {expected}")
     );
 }

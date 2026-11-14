@@ -368,10 +368,11 @@ async fn create(
         }
     };
     let Some(rule_id) = returned_rule_id(created.get("name")) else {
-        let shown = created
-            .get("name")
-            .map_or_else(|| "None".to_owned(), python_repr);
-        create_no_id(outcome, &rule.assembled, &format!("name {shown}"));
+        let shown = match created.get("name") {
+            None | Some(Json::Null) => "no name".to_owned(),
+            Some(name) => format!("name {}", name.to_compact()),
+        };
+        create_no_id(outcome, &rule.assembled, &shown);
         return Ok(());
     };
     outcome.state = StateChange::Record(rule_id.clone());
@@ -379,15 +380,6 @@ async fn create(
         outcome.deployment_failed(&rule_id, &api(failure)?);
     }
     Ok(())
-}
-
-/// Python's `repr` of a JSON scalar.
-fn python_repr(value: &Json) -> String {
-    match value {
-        Json::Str(text) => opentide_schema::configuration::repr::quote(text),
-        Json::Null => "None".to_owned(),
-        other => opentide_compile::deploy::text(other),
-    }
 }
 
 /// A bound rule: read it, unarchive, update its text, its scope, then its

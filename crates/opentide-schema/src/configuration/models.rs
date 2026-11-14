@@ -1082,7 +1082,7 @@ pub fn tenant_targets(node: &Node, cx: &mut Context) -> Option<Option<Bitdefende
     {
         value_error(
             cx,
-            "Value error, targets sets exactly one of endpoint_tags and companies \
+            "targets sets exactly one of endpoint_tags and companies \
              (bitdefender_targets_shape); leave targets out for the whole company",
             node,
         );
@@ -1449,10 +1449,9 @@ pub struct PlatformConfiguration {
     pub tenants: Vec<GenericTenant>,
 }
 
-/// The platform identifiers with a model of their own, in the oracle's order
-/// ([`crate::platforms::Order::Configuration`]).
-pub const PLATFORMS: [&str; crate::platforms::COUNT] =
-    crate::platforms::ordered(crate::platforms::Order::Configuration);
+/// The platform identifiers with a model of their own, in the table's order
+/// ([`crate::platforms::IDS`]).
+pub const PLATFORMS: [&str; crate::platforms::COUNT] = crate::platforms::IDS;
 
 // --- visibility.toml -------------------------------------------------------------------
 
@@ -1984,7 +1983,7 @@ fn only_connector_arrays(node: &Node, cx: &mut Context) -> bool {
                 value_error(
                     cx,
                     format!(
-                        "Value error, {} is not a connector array; the top level holds \
+                        "{} is not a connector array; the top level holds \
                          [[misp]] blocks",
                         super::repr::quote(&key)
                     ),

@@ -215,9 +215,8 @@ fn sentinel_query_sends_what_the_python_runner_sent() {
         [
             "Log Analytics refused the query on replayed: Query could not be parsed at 'whre' on \
              line [1,22]",
-            "Log Analytics refused the query on replayed: (REDACTED) The provided credentials \
-             have insufficient access to perform the requested operation\nCode: REDACTED\nMessage: \
-             The provided credentials have insufficient access to perform the requested operation",
+            "Log Analytics refused the query on replayed: REDACTED: The provided credentials \
+             have insufficient access to perform the requested operation",
         ]
     );
 }

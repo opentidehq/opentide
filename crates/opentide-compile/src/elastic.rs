@@ -392,7 +392,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
     let strategy = cx
         .statuses
         .strategy(status)
-        .map_err(|error| failed(error.exception_text()))?;
+        .map_err(|error| failed(error.to_string()))?;
     let enabled = strategy != StatusStrategy::Disablement;
     let level = alert_level(block, rule);
     let (_, severity, default_risk) = SEVERITY_TABLE

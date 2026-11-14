@@ -1136,7 +1136,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "schema"
         ],
         "input": "Rule::1.1",
-        "msg": "Value error, unknown schema identifier: \"Rule::1.1\"; checked against rule::1.1, the newest rule revision, without the unknown-key check",
+        "msg": "unknown schema identifier: \"Rule::1.1\"; checked against rule::1.1, the newest rule revision, without the unknown-key check",
         "span": [
           4,
           11,
@@ -1159,7 +1159,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "schema"
         ],
         "input": "objective::2.0",
-        "msg": "Value error, unknown schema identifier: \"objective::2.0\"; checked against objective::1.0, the newest objective revision, without the unknown-key check",
+        "msg": "unknown schema identifier: \"objective::2.0\"; checked against objective::1.0, the newest objective revision, without the unknown-key check",
         "span": [
           4,
           11,
@@ -1253,7 +1253,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "schema"
         ],
         "input": "rule::7.0",
-        "msg": "Value error, unknown schema identifier: \"rule::7.0\"; checked against rule::1.1, the newest rule revision, without the unknown-key check",
+        "msg": "unknown schema identifier: \"rule::7.0\"; checked against rule::1.1, the newest rule revision, without the unknown-key check",
         "span": [
           4,
           11,
@@ -1276,7 +1276,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "schema"
         ],
         "input": "rule::1.2",
-        "msg": "Value error, unknown schema identifier: \"rule::1.2\"; checked against rule::1.1, the newest rule revision, without the unknown-key check",
+        "msg": "unknown schema identifier: \"rule::1.2\"; checked against rule::1.1, the newest rule revision, without the unknown-key check",
         "span": [
           4,
           11,
@@ -1295,7 +1295,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": "someday",
-        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "msg": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
         "span": [
           9,
           13,
@@ -1334,7 +1334,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "schema"
         ],
         "input": "threat::1.5",
-        "msg": "Value error, unknown schema identifier: \"threat::1.5\"; checked against threat::1.0, the newest threat revision, without the unknown-key check",
+        "msg": "unknown schema identifier: \"threat::1.5\"; checked against threat::1.0, the newest threat revision, without the unknown-key check",
         "span": [
           5,
           11,
@@ -2315,7 +2315,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": "٢٠٢٦-٠٩-٠١",
-        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "msg": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
         "span": [
           9,
           14,
@@ -2338,7 +2338,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": null,
-        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "msg": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
         "span": [
           9,
           13,
@@ -2361,7 +2361,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": "\u001c2026-09-01",
-        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "msg": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
         "span": [
           9,
           14,
@@ -2384,7 +2384,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": "2026-09-01\u001f",
-        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "msg": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
         "span": [
           9,
           14,
@@ -2474,7 +2474,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": "2026-01-01T25:00:00Z",
-        "msg": "Value error, metadata.reviewed is not a valid date or time: parameter 'hour' is not in the required range of 0..=23",
+        "msg": "metadata.reviewed is not a valid date or time: parameter 'hour' is not in the required range of 0..=23",
         "span": [
           9,
           14,
@@ -2497,7 +2497,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": "2026-02-30",
-        "msg": "Value error, metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`",
+        "msg": "metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`",
         "span": [
           9,
           13,
@@ -2520,7 +2520,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": "2026-02-30",
-        "msg": "Value error, metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`",
+        "msg": "metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`",
         "span": [
           9,
           14,
@@ -2560,7 +2560,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": null,
-        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "msg": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
         "span": [
           9,
           3,
@@ -2583,7 +2583,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": "2026-09-01T15:04:05",
-        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "msg": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
         "span": [
           9,
           14,
@@ -2622,7 +2622,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": null,
-        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "msg": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
         "span": [
           9,
           13,
@@ -2662,7 +2662,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": "9999-12-31T23:59:59-23:59",
-        "msg": "Value error, metadata.reviewed is not a valid date or time: the time in UTC is not between the years 0001 and 9999",
+        "msg": "metadata.reviewed is not a valid date or time: the time in UTC is not between the years 0001 and 9999",
         "span": [
           9,
           14,
@@ -2685,7 +2685,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": "0001-01-01T00:00:00+23:59",
-        "msg": "Value error, metadata.reviewed is not a valid date or time: the time in UTC is not between the years 0001 and 9999",
+        "msg": "metadata.reviewed is not a valid date or time: the time in UTC is not between the years 0001 and 9999",
         "span": [
           9,
           14,
@@ -2759,7 +2759,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": "yesterday",
-        "msg": "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
+        "msg": "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime",
         "span": [
           9,
           13,
@@ -2782,7 +2782,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": "0000-01-01",
-        "msg": "Value error, metadata.reviewed is not a valid date or time: the year 0000 is not between 0001 and 9999",
+        "msg": "metadata.reviewed is not a valid date or time: the year 0000 is not between 0001 and 9999",
         "span": [
           9,
           14,
@@ -2805,7 +2805,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "reviewed"
         ],
         "input": "0000-01-01T00:00:00Z",
-        "msg": "Value error, metadata.reviewed is not a valid date or time: the year 0000 is not between 0001 and 9999",
+        "msg": "metadata.reviewed is not a valid date or time: the year 0000 is not between 0001 and 9999",
         "span": [
           9,
           14,

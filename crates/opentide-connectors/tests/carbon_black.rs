@@ -185,7 +185,9 @@ fn carbon_black_query_sends_what_the_python_runner_sent() {
              {\"query\":\"process_name:(cmd.exe\",\"sort\":null,\"time_range\":\
              {\"end\":\"2026-10-27T08:00:00.000Z\",\"start\":\"2026-10-26T08:00:00.000Z\"}}: \
              unbalanced parenthesis",
-            "Carbon Black Cloud refused the query on replayed: Received error code 403 from API: \
+            "Carbon Black Cloud refused the query on replayed: Carbon Black Cloud answered HTTP \
+             403 Forbidden to POST \
+             https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_jobs: \
              {\"error_code\": \"FORBIDDEN\", \"message\": \"Access denied to process search\"}",
         ]
     );

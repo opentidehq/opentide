@@ -123,7 +123,7 @@ fn no_legacy(node: &Node, cx: &mut Context) -> bool {
     if node.get("legacy").is_some() {
         cx.error_with(
             ErrorKind::InvalidValue("value_error"),
-            "Value error, legacy is not supported",
+            "legacy is not supported",
             node,
             &[("error", "legacy is not supported".to_owned())],
         );

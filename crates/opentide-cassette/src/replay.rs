@@ -30,10 +30,11 @@
 //!   a client may leave out ([`optional`]): a `POST` to an OAuth2 token
 //!   endpoint that repeats an earlier recorded one (the same URL and
 //!   body), where the recording client signed in again and the replayed one
-//!   still holds a valid token (the first sign-in is never optional); and a
-//!   `GET` of an OpenID Provider configuration
-//!   (`…/.well-known/openid-configuration`), the discovery MSAL made before
-//!   a client-credentials sign-in, which needs none.
+//!   still holds a valid token (the first sign-in of every pass is never
+//!   optional); and a `GET` of Entra ID's OpenID Provider configuration
+//!   (`https://login.microsoftonline.com/…/.well-known/openid-configuration`),
+//!   the discovery MSAL made before a client-credentials sign-in, which
+//!   needs none.
 //!
 //! A cassette replays as many times as it is run through: after its last
 //! interaction the next request is compared with its first. Each pass must
@@ -107,9 +108,10 @@ pub fn received(
 /// Whether the client may leave out the request at *position* of the
 /// cassette's cycle (interaction `position % len`): a `POST` to an OAuth2
 /// token endpoint (a path ending in `/oauth2/token` or
-/// `/oauth2/v2.0/token`) whose URL and body an earlier position of the
-/// cycle already holds. A client that keeps its token until it nearly
-/// expires does not sign in again where the recording client did.
+/// `/oauth2/v2.0/token`) whose URL and body an earlier interaction of the
+/// same pass already holds. A client that keeps its token until it nearly
+/// expires does not sign in again where the recording client did; the
+/// first sign-in of each pass is never optional.
 pub fn optional(interactions: &[Interaction], position: usize) -> bool {
     let len = interactions.len();
     if len == 0 {
@@ -124,13 +126,9 @@ pub fn optional(interactions: &[Interaction], position: usize) -> bool {
     if request.method != "POST" || !is_token_endpoint(&request.url) {
         return false;
     }
-    // In a later pass, every interaction came before.
-    let earlier = if position >= len {
-        interactions
-    } else {
-        &interactions[..position]
-    };
-    earlier.iter().any(|earlier| {
+    // Within its own pass only: each pass signs in at least once, as each
+    // run of a command starts with no token.
+    interactions[..position % len].iter().any(|earlier| {
         earlier.request.method == request.method
             && earlier.request.url == request.url
             && earlier.request.body == request.body
