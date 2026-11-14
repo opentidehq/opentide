@@ -333,13 +333,16 @@ jobs:
         id: week
         shell: bash
         run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+      # `v2`: the build's settings (RUSTFLAGS, the profile's debuginfo and
+      # strip) are in every compile's sccache key: bump it with them, or the
+      # week's copy, already saved, keeps the old compiles and none is saved.
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-build-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-build-${{ hashFiles('rust-toolchain.toml') }}-
+          key: sccache-build-v2-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-build-v2-${{ hashFiles('rust-toolchain.toml') }}-
 
       # As hatch_build.py builds it, in the profile the tests are built in, first:
       # the Python jobs start while the tests build, on the same dependencies.
@@ -540,7 +543,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-build-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          key: sccache-build-v2-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
   # The affected crates' tests, from the build's archive, in partitions
   # (`changes` picks two when the heavy crates are affected, else one). No

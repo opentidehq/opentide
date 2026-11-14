@@ -68,7 +68,7 @@ FULL_SET_SAVE = (
 # The PR gate's compiler caches: `build` (the gate's one build: the test
 # archive, xtask, the language server, the `_native` extension) and
 # `engine-lint` (clippy and rustdoc), each restored and saved by its job alone.
-GATE_FAMILIES = {"build": "sccache-build-", "engine-lint": "sccache-engine-check-"}
+GATE_FAMILIES = {"build": "sccache-build-v2-", "engine-lint": "sccache-engine-check-"}
 # The jobs that run from the build: they compile nothing, and keep no cache.
 FROM_THE_BUILD = ("rust-tests", "python", "e2e", "gitlab-ci-lint", "test-full", "e2e-full")
 
