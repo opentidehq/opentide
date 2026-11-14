@@ -2399,7 +2399,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_bare_wildcard
 
@@ -2415,7 +2415,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_clause_order
 
@@ -2431,7 +2431,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_context_table_limit
 
@@ -2447,7 +2447,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_context_table_or
 
@@ -2463,7 +2463,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_context_table_trigger
 
@@ -2628,7 +2628,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_foreach_position
 
@@ -2644,7 +2644,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_foreach_reference
 
@@ -2660,7 +2660,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_free_text_special
 
@@ -2676,7 +2676,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_function_arity
 
@@ -2692,7 +2692,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_group_by
 
@@ -2726,7 +2726,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_group_by_select_star
 
@@ -2742,7 +2742,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_implicit_and
 
@@ -2758,7 +2758,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_implicit_operator
 
@@ -2774,7 +2774,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_ipv6_range
 
@@ -2790,7 +2790,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_keyword_case
 
@@ -2806,7 +2806,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_leading_slash
 
@@ -2822,7 +2822,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_legacy_regex
 
@@ -2838,7 +2838,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_mixed_boolean
 
@@ -2854,7 +2854,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_name_conflict
 
@@ -2925,7 +2925,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_outcome
 
@@ -2977,7 +2977,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_pipe_limit
 
@@ -2993,7 +2993,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_pipe_misuse
 
@@ -3009,7 +3009,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_range
 
@@ -3025,7 +3025,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_regex
 
@@ -3041,7 +3041,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_request_failed
 
@@ -3089,7 +3089,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_rgx_extract_limit
 
@@ -3105,7 +3105,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_rule_auto_disabled
 
@@ -3243,7 +3243,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_string_field_number
 
@@ -3259,7 +3259,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_tenant_unauthorized
 
@@ -3367,7 +3367,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_unknown_field
 
@@ -3383,7 +3383,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_unknown_function
 
@@ -3399,7 +3399,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_unknown_value
 
@@ -3435,7 +3435,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## exabeam_wildcard_in_phrase
 
@@ -3451,7 +3451,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/search/all/search-guide/) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Exabeam Query Language reference](https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html) describes the syntax and the commands the engine checks against.
 
 ## external_id_in_rule
 
