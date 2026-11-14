@@ -1,6 +1,6 @@
 # opentide — Agent Guide
 
-**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across nine security platforms, with a Rust engine (query languages, Tide YAML, the language server) compiled in.
+**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across thirteen security platforms, with a Rust engine (query languages, Tide YAML, the language server) compiled in.
 
 **Entry point:** this file is the map; people start at [`CONTRIBUTING.md`](CONTRIBUTING.md). Read the guide of the area you change (below), then the skill that matches the task.
 
@@ -172,6 +172,36 @@ Configuration: `pyproject.toml` → `[tool.ruff]`, `[tool.ty]`; `Cargo.toml`, `c
 `rustfmt.toml`. Skills: [ruff](.agents/skills/ruff/SKILL.md),
 [python-typing](.agents/skills/python-typing/SKILL.md),
 [rust-engine](.agents/skills/rust-engine/SKILL.md).
+
+## Platforms
+
+Thirteen built-in platforms. The one source of truth is the registry,
+[`crates/opentide-schema/src/platforms.rs`](crates/opentide-schema/src/platforms.rs) (`PLATFORMS`):
+`--platform`'s choices, `setup`, `info`, `doctor`, the connectors and the MCP capabilities read it, and
+`opentide info --json` (`platforms[].can_deploy`, `can_validate`, `can_query`) prints it. Change a
+capability there, not in a list of names.
+
+| `--platform` | Product | Deploy | Compiled without a tenant (`validate`'s compile check, the dry run's payload) | Tenant check (`validate query --live`) | Offline engine (`validate`'s `queries` check, `validate query`) | `opentide query` |
+|---|---|:-:|:-:|:-:|---|---|
+| `sentinel` | Microsoft Sentinel | ✅ | ✅ | ✅ | KQL | KQL |
+| `defender_for_endpoint` | Microsoft Defender for Endpoint | ✅ | — | ✅ | KQL | KQL |
+| `splunk` | Splunk Enterprise Security | ✅ | — | ✅ | SPL | SPL |
+| `sentinel_one` | SentinelOne | ✅ | — | ✅ | — (`--live` required) | PowerQuery |
+| `crowdstrike` | CrowdStrike Falcon | ✅ | — | `supported: false` | CQL | CQL |
+| `harfanglab` | HarfangLab | ✅ | — | `supported: false` | YARA (HarfangLab profile; `.yar`, `.yara`) | telemetry search |
+| `carbon_black_cloud` | Carbon Black Cloud | ✅ | — | ✅ | Lucene (Carbon Black dialect) | Lucene |
+| `elastic` | Elastic Security | ✅ | ✅ | ✅ | ES\|QL, EQL, Kibana KQL, Lucene | the same four |
+| `sysdig` | Sysdig Secure | ✅ | ✅ | `supported: false` | Falco | — |
+| `bitdefender` | Bitdefender GravityZone | ✅ | ✅ | `supported: false` | YARA (Bitdefender profile; `.yar`, `.yara`) | — |
+| `graylog` | Graylog | ✅ | ✅ | ✅ | — (`--live` required) | Lucene |
+| `exabeam` | Exabeam New-Scale SIEM | ✅ | ✅ | ✅ | — (`--live` required) | Exabeam Query Language |
+| `google_secops` | Google Security Operations | ✅ | ✅ | ✅ | YARA-L 2.0 (`.yaral`, `.yl2`) | YARA-L 2.0 |
+
+All 13 deploy; 9 have a tenant check, 10 an offline engine, 11 `opentide query`. A check a platform
+does not have is `supported: false` (or, offline, a usage error naming `--live`), never a fake pass.
+Every platform's block is also checked by its model (`opentide validate`'s `schema` check) and, in the
+editor, by the language server. A change to this table is a change to the registry, the user docs
+(`docs/cli/validate.md`, `docs/usage/concepts/platforms.md`) and opentidehq/skills (item 5 below).
 
 ## Definition of done
 

@@ -584,7 +584,7 @@ there is nothing to check.
 
 ### Supported platforms
 
-Live query validation works on **eight platforms**; the offline engine on ten, seven of them the same:
+Live query validation works on **nine platforms**; the offline engine on twelve, eight of them the same:
 
 | Platform | `--live` | Offline |
 |----------|:--------:|:-------:|
@@ -598,6 +598,7 @@ Live query validation works on **eight platforms**; the offline engine on ten, s
 | `crowdstrike` (CQL) | ❌ `supported: false` | ✅ |
 | `harfanglab` (YARA) | ❌ `supported: false` | ✅ |
 | `bitdefender` (YARA) | ❌ `supported: false` | ✅ YARA |
+| `graylog` (Lucene, Graylog dialect) | ✅ | ✅ |
 | `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ✅ |
 | `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ✅ YARA-L |
 

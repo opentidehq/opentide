@@ -887,6 +887,12 @@ impl Run<'_> {
                 self.emit_report(&report, out, err)
             }
             "mcp start" => {
+                // The server never polls the interrupt and serves stdio until
+                // its client closes stdin: after a Ctrl-C it does not start
+                // ([`run`] reports the interrupt).
+                if self.interrupted() {
+                    return Ok(INTERRUPTED_EXIT_CODE);
+                }
                 // stdout is JSON-RPC's: nothing is emitted around the server.
                 let resolved =
                     |path: Option<&str>| path.map(|path| self.resolve(path).display().to_string());
@@ -900,6 +906,12 @@ impl Run<'_> {
                 crate::mcp::serve(&launch, &self.host.version)
             }
             "serve" => {
+                // The server never polls the interrupt and serves stdio until
+                // its client closes stdin: after a Ctrl-C it does not start
+                // ([`run`] reports the interrupt).
+                if self.interrupted() {
+                    return Ok(INTERRUPTED_EXIT_CODE);
+                }
                 // stdout is JSON-RPC's: nothing is emitted around the server.
                 let resolved =
                     |path: Option<&str>| path.map(|path| self.resolve(path).display().to_string());
@@ -3360,9 +3372,40 @@ mod tests {
         assert_eq!(err, b"error: interrupted\n");
     }
 
+    /// Runs `test` on a thread of its own and fails if it has not finished
+    /// within `limit`: a test that would hang (a server reading the test
+    /// process's own stdin, which `cargo test` leaves open) fails fast
+    /// instead of holding the run.
+    fn within(limit: std::time::Duration, test: impl FnOnce() + Send + 'static) {
+        let (done, finished) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            test();
+            let _ignored = done.send(());
+        });
+        match finished.recv_timeout(limit) {
+            Ok(()) => thread.join().unwrap(),
+            // The test panicked: its panic is the failure.
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                std::panic::resume_unwind(thread.join().unwrap_err());
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                panic!("the test did not finish within {limit:?}");
+            }
+        }
+    }
+
     #[test]
     fn framework_interrupt_lets_a_polling_job_clean_up_and_prints_no_document() {
-        for line in ["--json commands", "commands", "mcp start"] {
+        within(
+            Duration::from_secs(60),
+            framework_interrupt_lets_a_polling_job_clean_up,
+        );
+    }
+
+    fn framework_interrupt_lets_a_polling_job_clean_up() {
+        // `mcp start` and `serve` serve stdio until the client closes stdin:
+        // dispatched after the Ctrl-C, they do not start.
+        for line in ["--json commands", "commands", "mcp start", "serve"] {
             let cleaned = std::cell::Cell::new(false);
             let result = ran(line, &[], false, |run, out, err| {
                 // Ctrl-C while the job runs: it polls, stops and cleans up.
