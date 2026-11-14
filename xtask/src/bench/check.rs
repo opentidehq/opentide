@@ -245,6 +245,23 @@ pub struct CommandBudget {
     pub rss_waiver: Option<String>,
     /// The peak RSS the miss was measured at, in MiB.
     pub waived_rss_mib: Option<f64>,
+    /// A change of the command's numbers accepted on purpose: `"#123, why"`.
+    /// A last result of the base branch measured before `accepted_unix` is
+    /// not compared with for this command (its absolute budget still holds),
+    /// so the first run after it records the new reference. Older results
+    /// expire on their own: keep it until a later change needs a new one.
+    pub accepted: Option<String>,
+    /// When the change was accepted, in seconds since the Unix epoch: the
+    /// merge of the change that moved the numbers.
+    pub accepted_unix: Option<u64>,
+}
+
+impl CommandBudget {
+    /// Whether `previous` was measured before the accepted change.
+    fn predates_acceptance(&self, previous: &Report) -> bool {
+        self.accepted_unix
+            .is_some_and(|accepted| previous.created_unix < accepted)
+    }
 }
 
 /// Whether a waiver names the issue that closes it (`#123`).
@@ -359,6 +376,7 @@ impl Budgets {
                 ("target_waiver", &budget.target_waiver),
                 ("time_waiver", &budget.time_waiver),
                 ("rss_waiver", &budget.rss_waiver),
+                ("accepted", &budget.accepted),
             ] {
                 if let Some(waiver) = waiver
                     && !names_an_issue(waiver)
@@ -384,6 +402,9 @@ impl Budgets {
                 if waiver.is_some() != waived.is_some() {
                     bail!("commands.{id}: {names} go together");
                 }
+            }
+            if budget.accepted.is_some() != budget.accepted_unix.is_some() {
+                bail!("commands.{id}: accepted and accepted_unix go together");
             }
             if budget.target_waiver.is_some()
                 && (budget.target_s.is_none() || budget.rust_baseline_s.is_none())
@@ -735,7 +756,22 @@ fn check_against(budgets: &Budgets, report: &Report, previous: Option<&Report>) 
     let mut rows = Vec::new();
     for result in &report.results {
         let budget = budgets.commands.get(&result.id);
-        let prior = previous.and_then(|p| p.results.iter().find(|r| r.id == result.id));
+        let accepted = budget.zip(previous).and_then(|(budget, previous)| {
+            budget
+                .predates_acceptance(previous)
+                .then_some(budget.accepted.as_deref())
+                .flatten()
+        });
+        if let Some(why) = accepted {
+            notes.push(format!(
+                "{}: {} predates an accepted change ({why}); not compared",
+                result.id,
+                last_result()
+            ));
+        }
+        let prior = previous
+            .filter(|_| accepted.is_none())
+            .and_then(|p| p.results.iter().find(|r| r.id == result.id));
         let row = check_one(
             report,
             result,
@@ -1373,6 +1409,58 @@ target_s = 0.03
             "{:?}",
             outcome.failures
         );
+    }
+
+    /// A change accepted in the budgets (`accepted`, `accepted_unix`) is not
+    /// held to a last result measured before it; one measured after it is.
+    #[test]
+    fn an_accepted_change_is_not_held_to_an_older_last_result() {
+        let accepted = BUDGETS.replace(
+            "[commands.validate_clean]\n",
+            "[commands.validate_clean]\naccepted = \"#1, more checks\"\naccepted_unix = 100\n",
+        );
+        let budgets = Budgets::parse(&accepted).unwrap();
+        let mut previous = report(
+            "python",
+            vec![
+                measured("validate_clean", 2.5, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        let current = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        previous.created_unix = 99;
+        let outcome = check(&budgets, &current, Some(&previous));
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(outcome.rows[0].delta_previous.is_none());
+        assert!(
+            outcome
+                .notes
+                .iter()
+                .any(|n| n.contains("validate_clean") && n.contains("#1, more checks")),
+            "{:?}",
+            outcome.notes
+        );
+        previous.created_unix = 100;
+        let outcome = check(&budgets, &current, Some(&previous));
+        assert!(!outcome.passed());
+        assert!(outcome.failures[0].contains(&last_result()));
+
+        let unpaired = BUDGETS.replace(
+            "[commands.explain]\n",
+            "[commands.explain]\naccepted_unix = 100\n",
+        );
+        assert!(Budgets::parse(&unpaired).is_err());
+        let no_issue = BUDGETS.replace(
+            "[commands.explain]\n",
+            "[commands.explain]\naccepted = \"faster\"\naccepted_unix = 100\n",
+        );
+        assert!(Budgets::parse(&no_issue).is_err());
     }
 
     #[test]

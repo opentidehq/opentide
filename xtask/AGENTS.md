@@ -86,7 +86,10 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   (time or RSS) that a `time_waiver` / `rss_waiver` names an issue for (`"#123, why"`, refused
   without one) is reported as waived, not failed, up to its measured `waived_s` /
   `waived_rss_mib` + 10%; past that, or against the last result, it fails, and the budget
-  itself stays. With `--require-reference`
+  itself stays. A change of a command's numbers made on purpose is `accepted` (`"#123, why"`)
+  with `accepted_unix`, its merge time: a last result measured before then is not compared
+  with for that command, so the next run on the base branch becomes its reference; record
+  it with the profile that explains the change, as `[commands.lint]` does. With `--require-reference`
   (CI), a measured command that no baseline, target or comparable previous result applies to
   fails, and so does a report without a CPU model. It prints, and with `--summary` appends, a
   Markdown table per command.
