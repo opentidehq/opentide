@@ -181,7 +181,9 @@ FEATURES: Mapping[str, str] = {
 }
 
 #: The Rust test partitions: two when the heavy crates are affected, one
-#: otherwise (a run of the light crates takes well under a minute).
+#: otherwise (the light crates' tests take well under a minute). Not more:
+#: each partition downloads the whole archive (measured: 1.7 min of a
+#: partition's 3.5, its tests 41 s).
 HEAVY_CRATES = frozenset({"opentide-cli", "opentide-analysis", "opentide-lsp", "xtask", "opentide"})
 
 
@@ -208,10 +210,10 @@ class Plan:
             "crates": " ".join(crates),
             "packages": "--workspace" if everything else " ".join(f"-p {c}" for c in crates),
             "features": _features(crates),
-            "partitions": json.dumps([1, 2] if (everything or HEAVY_CRATES & set(crates)) else [1]),
+            "partitions": json.dumps([1, 2] if HEAVY_CRATES & set(crates) else [1]),
             "rust": _bool(rust),
             "python": _bool(python),
-            "build": _bool(rust or python or "gitlab" in self.areas or "node" in self.areas),
+            "build": _bool(rust or python or "gitlab" in self.areas),
             # The lint job: its steps read pylint, ci, skills and rust.
             "lint": _bool(rust or bool(self.areas & {"pylint", "ci", "skills"})),
         }
