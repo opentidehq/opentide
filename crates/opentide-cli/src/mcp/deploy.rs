@@ -180,7 +180,14 @@ pub fn deploy_rule(
         || std::path::PathBuf::from("."),
         std::path::Path::to_path_buf,
     );
-    let run = crate::embed::run_captured(&argv, context.env, &cwd, context.version, false);
+    let run = crate::embed::run_interruptible(
+        &argv,
+        context.env,
+        &cwd,
+        context.version,
+        false,
+        context.interrupt.cloned().unwrap_or_default(),
+    );
     let document = Json::parse(String::from_utf8_lossy(&run.stdout).trim()).ok();
     let message = document
         .as_ref()
@@ -230,6 +237,7 @@ mod tests {
             repo: None,
             version: "1",
             workspace_problem: Some("workspace_not_found: none".into()),
+            interrupt: None,
         };
         assert_eq!(
             deploy_rule("u", "sentinel", true, &context),

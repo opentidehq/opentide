@@ -207,6 +207,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Fixed
 
+- **The MCP server answers while a tool runs, and a cancelled call stops** ([#790](https://github.com/opentidehq/opentide/issues/790)). A long `run_query`, `validate_query` or `deploy_rule` held the server, as it did through 0.28.1: no `ping` or list was answered and `notifications/cancelled` was ignored until it ended. Calls still run one at a time; cancelling one stops its tenant requests and it answers nothing.
 - **`opentide migrate --apply` no longer leaves a half-written object file.** It writes each file beside the original and renames it into place, so an interrupted run leaves the file as it was, as `deploy` writes its state.
 - **A tenant whose certificate is refused fails at once.** A certificate the tenant's TLS settings do not trust (self-signed, expired, issued for another host) was handshaken four times, with 3.5 seconds of waits, before the run reported it, as if it were a connection the network dropped. It is now reported on the first refusal; a connection refused, a DNS failure or a connect timeout is still retried ([Configuration → Retries](docs/usage/configuration.md#retries)).
 - **`generate extract` keeps a single string as one value, and Sentinel's files are named cleanly.** Three behaviours inherited from the Python CLI are gone:

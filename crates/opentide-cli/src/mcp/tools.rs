@@ -25,6 +25,9 @@ pub struct Context<'a> {
     pub version: &'a str,
     /// Why there is no workspace to serve (`workspace_not_found`), if so.
     pub workspace_problem: Option<String>,
+    /// What stops this call's command runs (the client's
+    /// `notifications/cancelled`); none, a run no one stops.
+    pub interrupt: Option<&'a crate::app::Interrupt>,
 }
 
 /// What a tool returns.
@@ -426,6 +429,7 @@ mod tests {
             repo: None,
             version: "1",
             workspace_problem: None,
+            interrupt: None,
         }
     }
 
@@ -541,6 +545,7 @@ mod tests {
             repo: None,
             version: "1",
             workspace_problem: Some("workspace_not_found: set OPENTIDE_REPO_ROOT".into()),
+            interrupt: None,
         };
         let result = call("validation_report", &Map::new(), &context);
         assert_eq!(result["isError"], true);
@@ -559,6 +564,7 @@ mod tests {
             repo: None,
             version: "1",
             workspace_problem: Some("workspace_not_found: no workspace".into()),
+            interrupt: None,
         };
         let result = call(
             "validation_report",
