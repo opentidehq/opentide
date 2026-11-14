@@ -281,7 +281,7 @@ fn outcomes(block: &Json, name: &str) -> Json {
         );
         out.insert(
             "attachCsv".into(),
-            Json::Bool(field(email, "attach_csv").is_some_and(Json::truthy)),
+            Json::Bool(field(email, "attach_csv").is_some_and(Json::is_true)),
         );
         outcomes.insert("email".into(), Json::Object(out));
     }
@@ -337,7 +337,7 @@ fn recurrence(recurrence: &Json) -> Result<Json, CompileError> {
             );
             out.insert(
                 "lastDayOfMonth".into(),
-                Json::Bool(field(recurrence, "last_day").is_some_and(Json::truthy)),
+                Json::Bool(field(recurrence, "last_day").is_some_and(Json::is_true)),
             );
         }
         "days" => {
@@ -383,7 +383,7 @@ pub fn compile_body(
     }
     sequences_config.insert("outcomes".into(), outcomes(block, &name));
     let test_mode = match field(block, "test_mode") {
-        Some(flag) => flag.truthy(),
+        Some(flag) => flag.is_true(),
         None => tenant_test_mode,
     };
     let mut body = Object::new();
@@ -453,7 +453,7 @@ pub fn tenant_test_mode(tenant: Option<&Json>) -> bool {
     tenant
         .and_then(|tenant| tenant.get("setup"))
         .and_then(|setup| setup.get("test_mode"))
-        .is_some_and(Json::truthy)
+        .is_some_and(Json::is_true)
 }
 
 /// What `rule` deploys under `strategy` on the tenant whose table is given

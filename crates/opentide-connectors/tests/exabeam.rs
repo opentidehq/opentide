@@ -1131,6 +1131,7 @@ async fn the_platform_deploys_through_the_generic_interface() {
         rule_id: String::new(),
         operation: Operation::Create,
         body: body.clone(),
+        policies: None,
     };
     let outcome = deployer.deploy(stand.cx(), &request).await.unwrap();
     assert_eq!(outcome.remote_id.as_deref(), Some(FIRST_ID));

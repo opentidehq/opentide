@@ -69,7 +69,7 @@ fn infer_type(body: &Json) -> Option<String> {
     if let Some(Json::Str(schema)) = section(body, "metadata").and_then(|m| m.get("schema")) {
         return Some(schema.split("::").next().unwrap_or_default().to_owned());
     }
-    let has = |key: &str| body.get(key).is_some_and(Json::truthy);
+    let has = |key: &str| body.get(key).is_some_and(Json::is_filled);
     if has("configurations") {
         Some("rule".into())
     } else if has("objective") {
@@ -117,8 +117,8 @@ fn status(body: &Json) -> Json {
 fn actors(body: &Json) -> Vec<Json> {
     let from_threat = section(body, "threat")
         .and_then(|threat| threat.get("actors"))
-        .filter(|actors| actors.truthy());
-    let list = from_threat.or_else(|| body.get("actors").filter(|actors| actors.truthy()));
+        .filter(|actors| actors.is_filled());
+    let list = from_threat.or_else(|| body.get("actors").filter(|actors| actors.is_filled()));
     let Some(Json::Array(items)) = list else {
         return Vec::new();
     };
@@ -173,13 +173,13 @@ fn related_count(uuid: &str, flat: &Object) -> i64 {
     match infer_type(body).as_deref() {
         Some("objective") => {
             let threats = section(body, "objective").and_then(|o| o.get("threats"));
-            count += i64::try_from(length(threats.filter(|t| t.truthy()))).unwrap_or(i64::MAX);
+            count += i64::try_from(length(threats.filter(|t| t.is_filled()))).unwrap_or(i64::MAX);
         }
         Some("signal" | "rule") => {
-            let owner = body.get("owner").filter(|v| v.truthy());
+            let owner = body.get("owner").filter(|v| v.is_name());
             if owner
                 .or_else(|| body.get("detection_model"))
-                .is_some_and(Json::truthy)
+                .is_some_and(Json::is_name)
             {
                 count += 1;
             }
@@ -259,21 +259,21 @@ fn chaining(threats: &Object) -> Json {
     for threat in threats.values() {
         let Some(uuid) = section(threat, "metadata")
             .and_then(|metadata| metadata.get("uuid"))
-            .filter(|uuid| uuid.truthy())
+            .filter(|uuid| uuid.is_name())
         else {
             continue;
         };
         let Some(Json::Array(links)) = section(threat, "threat")
             .and_then(|section| section.get("chaining"))
-            .filter(|links| links.truthy())
+            .filter(|links| links.is_filled())
         else {
             continue;
         };
         let relations = chains.entry(text(uuid)).or_default();
         for link in links {
             let (Some(relation), Some(vector)) = (
-                link.get("relation").filter(|value| value.truthy()),
-                link.get("vector").filter(|value| value.truthy()),
+                link.get("relation").filter(|value| value.is_name()),
+                link.get("vector").filter(|value| value.is_name()),
             ) else {
                 continue;
             };
@@ -321,7 +321,7 @@ fn summary(
     };
     let name = body
         .get("name")
-        .filter(|name| name.truthy())
+        .filter(|name| name.is_name())
         .cloned()
         .unwrap_or_else(|| Json::from(uuid));
     let techniques = crate::attack::techniques(index, uuid).map_err(Cause::from)?;
@@ -441,7 +441,7 @@ pub fn search(bundle: &Json) -> Json {
             let content: String = body.to_compact().chars().take(CONTENT_LIMIT).collect();
             let status = summary
                 .get("status")
-                .filter(|status| status.truthy())
+                .filter(|status| status.is_filled())
                 .cloned()
                 .unwrap_or_else(|| Json::from(""));
             let mut document = Object::new();

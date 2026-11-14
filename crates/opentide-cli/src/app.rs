@@ -15,8 +15,9 @@ use crate::logging::{self, LogLayer, Sink};
 use crate::mode::{self, Inputs, Mode};
 use crate::redact::{Redactor, url_secrets, workspace_redactor};
 use crate::render::outcome::{Console, OutcomeKind};
-use crate::render::text::{Color, Colour, Style, Text};
+use crate::render::text::{Colour, Text};
 use crate::usage;
+use anstyle::{AnsiColor, Style};
 use clap::parser::ValueSource;
 use std::cell::RefCell;
 use std::io::Write;
@@ -246,7 +247,7 @@ impl Run<'_> {
             Mode::Mcp => {}
             _ => {
                 let console = self.console(self.host.stdout_tty);
-                let bold = Style::BOLD;
+                let bold = Style::new().bold();
                 for line in lines {
                     out.write_all(console.line(&Text::styled(line, &bold)).as_bytes())?;
                 }
@@ -261,6 +262,30 @@ impl Run<'_> {
         out.flush()?;
         err.flush()?;
         Ok(outcome.exit_code)
+    }
+
+    /// A clap parse error: the envelope under `--json`, else clap's own
+    /// rendered error on stderr. Exit 2.
+    fn emit_usage(
+        &self,
+        problem: usage::UsageError,
+        out: &mut dyn Write,
+        err: &mut dyn Write,
+    ) -> std::io::Result<i32> {
+        if self.mode == Mode::Json {
+            let outcome = Outcome::failed(&problem.command, USAGE_EXIT_CODE, problem.failure);
+            return self.emit(&outcome, &[], &[], out, err);
+        }
+        let console = self.console(self.host.stderr_tty);
+        let text = if console.colour == Colour::Full {
+            problem.rendered.ansi().to_string()
+        } else {
+            problem.rendered.to_string()
+        };
+        err.write_all(text.as_bytes())?;
+        err.write_all(console.agent_tip(self.mode).as_bytes())?;
+        err.flush()?;
+        Ok(USAGE_EXIT_CODE)
     }
 
     /// The stream the lines go to: colour in `human` mode, bold and dim only
@@ -475,9 +500,8 @@ impl Run<'_> {
                     }
                     _ => {}
                 }
-                let problem = usage::describe(&self.root, &self.args, &error);
-                let outcome = Outcome::failed(&problem.command, USAGE_EXIT_CODE, problem.failure);
-                return self.emit(&outcome, &problem.notes, &[], out, err);
+                let problem = usage::describe(&self.root, &self.args, error);
+                return self.emit_usage(problem, out, err);
             }
         };
         let mut words = command_path(&matches);
@@ -522,10 +546,8 @@ impl Run<'_> {
                     if error.kind() == clap::error::ErrorKind::DisplayHelp {
                         return self.help(&words, 0, out);
                     }
-                    let problem = usage::describe(&self.root, &reparsed, &error);
-                    let outcome =
-                        Outcome::failed(&problem.command, USAGE_EXIT_CODE, problem.failure);
-                    return self.emit(&outcome, &problem.notes, &[], out, err);
+                    let problem = usage::describe(&self.root, &reparsed, error);
+                    return self.emit_usage(problem, out, err);
                 }
             }
         }
@@ -675,7 +697,7 @@ impl Run<'_> {
                         .get_one::<crate::tree::ReportFormat>("report_format")
                         .is_none_or(|format| *format == crate::tree::ReportFormat::Text);
                 if status {
-                    let mut line = Text::styled("⠋", &Style::fg(Color::Cyan).bold());
+                    let mut line = Text::styled("⠋", &AnsiColor::Cyan.on_default().bold());
                     line.push_str(" Validating objects");
                     err.write_all(b"\x1b[?25l")?;
                     err.write_all(line.render(Colour::Full, false).as_bytes())?;
@@ -2025,7 +2047,10 @@ impl Run<'_> {
         }
         err.write_all(result_err.as_bytes())?;
         if !run.refused && !self.globals.quiet && text_out {
-            let note = Text::styled(crate::commands::deploy::DRY_RUN_NOTE, &Style::DIM);
+            let note = Text::styled(
+                crate::commands::deploy::DRY_RUN_NOTE,
+                &Style::new().dimmed(),
+            );
             out.write_all(stdout.line(&note).as_bytes())?;
         }
         out.flush()?;
@@ -3008,8 +3033,10 @@ pub fn main(argv: &[String], version: &str) -> i32 {
         width: terminal_width(),
         interrupt,
     };
-    let mut out = std::io::stdout().lock();
-    let mut err = std::io::stderr();
+    // The renderers decide whether to style (`App::console`); the console
+    // streams only make a Windows console read what they write.
+    let mut out = anstream::AutoStream::always(std::io::stdout()).lock();
+    let mut err = anstream::AutoStream::always(std::io::stderr());
     run(argv, &env, &host, &mut out, &mut err)
 }
 
@@ -3236,7 +3263,7 @@ mod tests {
     }
 
     #[test]
-    fn framework_usage_error_at_a_narrow_terminal_is_the_outcome_renderer() {
+    fn framework_usage_error_in_the_text_modes_is_clap_rendering() {
         let word = "--an-option-whose-name-is-wider-than-the-terminal";
         let line = format!("validate {word}");
         for (mode, colour) in [("plain", Colour::Mono), ("human", Colour::Full)] {
@@ -3244,25 +3271,17 @@ mod tests {
             assert_eq!(result.code, USAGE_EXIT_CODE, "{mode}");
             // A word is never split: the option stays whole on its row.
             assert!(result.stderr.contains(word), "{mode}: {}", result.stderr);
-            let message = format!("Unknown option {word:?}.");
-            let console = Console {
-                colour,
-                width: Some(30),
-            };
-            let notes = [
-                (
-                    "usage".to_owned(),
-                    "opentide validate [OPTIONS] [COMMAND]".to_owned(),
-                ),
-                (
-                    "help".to_owned(),
-                    "run 'opentide validate --help'".to_owned(),
-                ),
-            ];
+            // clap's error, styled only in `human` mode.
+            assert!(
+                result.stderr.starts_with("error: ") || result.stderr.starts_with('\u{1b}'),
+                "{mode}: {}",
+                result.stderr
+            );
             assert_eq!(
-                result.stderr,
-                console.error(&message, &notes, Mode::Plain, false),
-                "{mode}"
+                result.stderr.contains('\u{1b}'),
+                colour == Colour::Full,
+                "{mode}: {}",
+                result.stderr
             );
         }
         // The agent tip, as the outcome renderer writes it.
@@ -3843,7 +3862,8 @@ mod tests {
         }
         let plain = dispatched("-- commands", &[], false);
         assert_eq!(plain.code, USAGE_EXIT_CODE);
-        // `validate -- --json`: an unknown option of validate, not a command.
+        // `validate -- --json`: after `--`, `--json` is a word where
+        // validate expects its command.
         let option = dispatched("--json validate -- --json", &[], false);
         assert_eq!(option.code, 2);
         assert!(
@@ -3851,12 +3871,8 @@ mod tests {
             "{}",
             option.stdout
         );
-        assert!(option.stdout.contains("\"code\":\"usage_unknown_option\""));
-        assert!(
-            option
-                .stdout
-                .contains(r#""message":"Unknown option \"--json\".""#)
-        );
+        assert!(option.stdout.contains("\"code\":\"usage_unknown_command\""));
+        assert!(option.stdout.contains(r#""argument":"--json""#));
     }
 
     #[test]
@@ -3909,14 +3925,14 @@ mod tests {
         let new = dispatched("--json new", &[], false);
         assert!(
             new.stdout
-                .contains("\"error\":\"Missing command: choose from threat, objective, rule.\"")
+                .contains("\"error\":\"missing command: choose from threat, objective, rule\"")
         );
         let agent = dispatched("mcp", &[("AI_AGENT", "a")], false);
         assert!(agent.stdout.is_empty());
         assert!(
             agent
                 .stderr
-                .starts_with("error: Missing command: choose from start.\n")
+                .starts_with("error: missing command: choose from start\n")
         );
     }
 
@@ -4139,7 +4155,12 @@ mod tests {
         // A bare argv in machine mode is the usage error, not help.
         let bare = dispatched("--json", &[], false);
         assert_eq!(bare.code, 2);
-        assert!(bare.stdout.contains("\"error\":\"Missing command.\""));
+        assert!(
+            bare.stdout
+                .contains("requires a subcommand but one was not provided"),
+            "{}",
+            bare.stdout
+        );
         // `-h` is no option, as in the Python CLI (#841): `--help` is the
         // one help option.
         let short = dispatched("--json -h", &[], false);
@@ -4149,13 +4170,13 @@ mod tests {
             "{}",
             short.stdout
         );
-        // A flag given a value: the usual usage error, with its notes.
+        // A flag given a value: clap's usage error.
         let valued = dispatched("--json=1 explain x", &[], false);
         assert_eq!(valued.code, 2);
         assert!(
             valued
                 .stderr
-                .starts_with("error: --json does not take a value.\n  usage: "),
+                .starts_with("error: unexpected value '1' for '--json' found"),
             "{}",
             valued.stderr
         );
