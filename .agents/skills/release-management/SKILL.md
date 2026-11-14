@@ -2,7 +2,7 @@
 name: release-management
 description: >-
   Cut opentide releases with the release train (publish.yml): changelog, install pins, the
-  lockstep version, release candidates, then one Run workflow that tags and publishes the
+  lockstep version, internal release candidates (a draft GitHub pre-release, no registry), then one Run workflow that tags and publishes the
   wheels, crates, npm packages and binaries with OIDC, and the follow-up review of the
   opentidehq/skills agent skills. Use when releasing, tagging v*, publishing to PyPI, crates.io
   or npm, or preparing 0.x.y notes.
@@ -34,7 +34,7 @@ Never tag by hand. Trunk is `development`.
 | Fact | Detail |
 |------|--------|
 | Package | `opentide` on PyPI |
-| Tag | `v0.x.y` (leading `v`); a release candidate `v1.0.0-rc.N` (the Rust-core transition: 1.0.0, held at candidates) |
+| Tag | `v0.x.y` (leading `v`); a release candidate `v1.0.0-rc.N` (the Rust-core transition: 1.0.0, held at candidates; internal only for now: a draft GitHub pre-release) |
 | Release | **Run workflow** on `development`, no inputs → [`publish.yml`](../../../.github/workflows/publish.yml) checks, builds, smoke-tests, attests, creates the tag + GitHub Release, then publishes to PyPI, crates.io and npm. Nothing else publishes: no workflow runs on a `v*` tag or a Release made by hand |
 | Version before the tag | Newest dated `CHANGELOG.md` heading: `uv run python scripts/build/release.py version` |
 | Lockstep | The crates are at that version: `python3 scripts/engine/release.py lockstep 0.x.y` (the workspace version and every internal pin). The workflow writes it into the npm packages (`release.py npm-version`) and checks them (`lockstep --npm`) |
@@ -71,7 +71,7 @@ State the rationale in the GitHub Release body ("It is a minor because …"), ne
 
 ## Required two-step flow
 
-- **Step 0** — the version: `release.py bump X.Y.Z` merged, and a release candidate run green (for a release that changes what is built or how; optional for a docs-only patch).
+- **Step 0** — the version: `release.py bump X.Y.Z` merged, and an internal candidate run green (for a release that changes what is built or how; optional for a docs-only patch).
 - **Step 1** — notes PR, merge to `development`.
 - **Step 1b** — CI green on that PR.
 - **Step 2** — Run **Publish** on `development` (this tags, creates the GitHub Release and publishes everywhere). Works from a cloud session.
@@ -82,7 +82,7 @@ Do not skip Step 1. The tag must sit on the merge commit that **already contains
 
 ---
 
-### Step 0 — Bump the crates, and run a release candidate
+### Step 0 — Bump the crates, and run an internal candidate
 
 The crates carry the product version: in a pull request to `development` (it can be the notes PR of Step 1, or come before it so that a candidate can run first), or to `integration/unified-core` for a candidate cut there before it merges:
 
@@ -93,7 +93,13 @@ python3 scripts/engine/release.py lockstep 1.0.0  # what the release guard check
 
 The `Cargo.lock` diff is only the workspace crates' `version` lines; anything else means Cargo re-resolved: restore the lock and bump again.
 
-**Release candidate** (for the Rust-core transition; it may be retired after). Once the bump is on the branch, Run **Publish** on `integration/unified-core` (or `development`) with `release_candidate: 1` (then 2, ...); the guard refuses a candidate from any other branch, and a release from anything but `development`. It publishes `v1.0.0-rc.N` as pre-releases:
+**Internal candidate.** Once the bump is on the branch, Run **Publish** on `integration/unified-core` (or `development`) with `internal_candidate: 1` (then 2, ...) and no other input. **Nothing reaches PyPI, crates.io or npm**, and no OIDC token is minted. The guard refuses another branch, `internal_candidate` combined with `release_candidate`, `dry_run` or `checkout_ref`, an existing tag, crates off the version (lockstep) and a version not above the last release (`release.py check-candidate`). Everything is built and smoke-tested as for a release; then the `internal-release` job (`contents: write` only) pushes the tag `v1.0.0-rc.N` on the commit built and creates a **draft** pre-release (never Latest), `1.0.0-rc.N (internal)`, with every binary and release asset (`SHA256SUMS`, SBOMs), every wheel, the sdist, every `.crate` and every npm tarball, plus `PACKAGES-SHA256SUMS` over those packages. `attest`, `release`, `verify-assets`, `pypi`, `crates`, `npm` and `smoke-registries` are skipped.
+
+- Find it: Releases page, **Draft** at the top (write access only), or `gh release download v1.0.0-rc.N --dir rcN`.
+- Promote it: edit the draft, **Publish release** (still a pre-release, still on no registry).
+- Delete it: `gh release delete v1.0.0-rc.N --cleanup-tag --yes` (the draft and its tag), then rerun N or cut N+1.
+
+**Public release candidate: disabled while the internal channel exists.** The guard refuses `release_candidate` unless `dry_run` is set (a rehearsal), and refuses to resume a `vX.Y.Z-rc.N` tag with `checkout_ref`; its code paths stay in `publish.yml`, re-enabled by `public_candidates=true` in the guard. When enabled, `release_candidate: N` publishes `v1.0.0-rc.N` as pre-releases:
 
 | Where | What |
 |-------|------|
@@ -208,7 +214,7 @@ Required success:
 | Unit matrix Python 3.10–3.14 | 3.10–3.13 run in CI's nightly set: Run workflow on `development` before a release if the last nightly is not green |
 | lint | ruff + ty |
 | CLI E2E | Do **not** treat a skipped job (because unit tests failed) as success |
-| docs | In the nightly set (`docs.yml`): Run workflow on the notes PR's branch so it runs |
+| docs | ci.yml's `docs` job: on every pull request that changes `docs/`, and in a release pull request's checks |
 | CodeQL Analyze (python) | |
 | CodeQL Analyze (actions) | |
 
@@ -226,7 +232,7 @@ Run **Publish** on `development` with no inputs:
 
 | Where | How |
 |-------|-----|
-| Cloud session (no `gh`) | GitHub MCP `actions_run_trigger`: `method: run_workflow`, `workflow_id: publish.yml`, `ref: development`, no inputs (a candidate: `ref: integration/unified-core`, `inputs: {release_candidate: "1"}`) |
+| Cloud session (no `gh`) | GitHub MCP `actions_run_trigger`: `method: run_workflow`, `workflow_id: publish.yml`, `ref: development`, no inputs (an internal candidate: `ref: integration/unified-core`, `inputs: {internal_candidate: "1"}`) |
 | Browser | Actions → Publish → Run workflow → branch `development`, inputs empty |
 | Local | `gh workflow run publish.yml --repo opentidehq/opentide --ref development` |
 
@@ -334,7 +340,10 @@ Link that pull request from the tracking issue in Step 4.
 | Guard: `the workspace version in Cargo.toml is …, not 0.x.y` | Step 0: `release.py bump 0.x.y` in a pull request, merged |
 | Guard: `… is not newer than …, the last release` (a candidate) | Bump the workspace past the last release first (Step 0) |
 | Guard: `Run the release from development` | Run workflow was started on another branch. Pick `development` (a `dry_run` runs anywhere) |
-| Guard: `Run a release candidate from integration/unified-core or development` | A candidate was started on another branch. Pick one of those two |
+| Guard: `Run a release candidate from integration/unified-core or development` / `Run an internal candidate from …` | A candidate was started on another branch. Pick one of those two |
+| Guard: `public release candidates are disabled while the internal channel exists` | Use `internal_candidate: N` (or `release_candidate` with `dry_run`, as a rehearsal). A `checkout_ref=vX.Y.Z-rc.N` resume is refused for the same reason |
+| Guard: `internal_candidate cannot be combined with …` | Pass `internal_candidate` alone |
+| `internal-release`: `two assets are named …` | Two artifacts carry one file name; fix the build, rerun (delete the draft and tag first if they were created) |
 | Run workflow does not list Publish, or the API cannot find `publish.yml` | `publish.yml` is not on `development`, the default branch, yet: land the stub (`docs/internal/publishing.md`, "Release candidates") |
 | A smoke test failed | Nothing was tagged or published. Fix on `development`, run again |
 | A registry job failed after the **GitHub Release** job created the tag | Run workflow with `checkout_ref=v0.x.y` (cloud: `actions_run_trigger` with `inputs: {checkout_ref: v0.x.y}`). Do not delete the tag or the Release |

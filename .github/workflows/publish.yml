@@ -21,18 +21,26 @@
 #     CHANGELOG.md heading (scripts/build/release.py) and refuses unless the
 #     notes PR merged, the crates are at that version (lockstep:
 #     scripts/engine/release.py bump), and the tag does not exist yet.
-#   - release_candidate: N, a release candidate of the workspace version
-#     (Cargo.toml, set by `release.py bump`), for the Rust-core transition
-#     (it may be retired after): run on integration/unified-core or
-#     development, it publishes the tag vX.Y.Z-rc.N, a GitHub pre-release with
-#     every asset and attestation, the wheels and sdist on PyPI as a
-#     pre-release (X.Y.ZrcN: `pip install --pre opentide`), and the crates on
-#     crates.io as pre-releases (X.Y.Z-rc.N, which can be yanked, never
-#     deleted). Nothing on npm: ci.yml's `packages` artifacts carry the npm
-#     tarballs to test.
+#   - internal_candidate: N, an internal candidate of the workspace version
+#     (Cargo.toml, set by `release.py bump`; 1.0.0-rc.N), which the maintainer
+#     tests before anything reaches a package manager: run on
+#     integration/unified-core or development, it builds and smoke-tests
+#     everything as a release does, pushes the tag vX.Y.Z-rc.N on the commit
+#     built, and creates a DRAFT GitHub pre-release (never Latest) carrying
+#     every binary and release asset (with SHA256SUMS and the SBOMs), every
+#     wheel, the sdist, every crate package and every npm tarball, with
+#     PACKAGES-SHA256SUMS over the packages (`internal-release`). It publishes
+#     nothing to PyPI, crates.io or npm and mints no OIDC token: no attest,
+#     verify-assets, registry or smoke-registries job runs. It cannot be
+#     combined with release_candidate, dry_run or checkout_ref.
+#   - release_candidate: N, a PUBLIC release candidate (pre-releases on GitHub,
+#     PyPI as X.Y.ZrcN and crates.io as X.Y.Z-rc.N, nothing on npm). Disabled
+#     while the internal channel exists: the guard refuses it (and refuses to
+#     resume a vX.Y.Z-rc.N tag) unless it is a dry run. Its code paths stay;
+#     `public_candidates=true` in the guard re-enables it.
 #   - dry_run: build and smoke-test everything, publish nothing: no tag, no
 #     release, no attestation, no upload. Any branch.
-#   - checkout_ref: vX.Y.Z (or vX.Y.Z-rc.N): resume an existing release whose
+#   - checkout_ref: vX.Y.Z (or vX.Y.Z-rc.N, while public candidates are on): resume an existing release whose
 #     publishing failed partway. It builds from that tag, uploads nothing to
 #     its GitHub Release (consumers pinned those digests), checks the
 #     published assets, and publishes only what each registry lacks.
@@ -42,7 +50,9 @@
 # Jobs: the guard; `checks` (every crate built from its package, the licence
 # scan); the builds (`release-assets`, `packages`: the wheels and npm packages of
 # build-packages.yml, and `sdist`);
-# a smoke test per artifact (`smoke-*`); then, unless a dry run, `attest`
+# a smoke test per artifact (`smoke-*`); then for an internal candidate
+# `internal-release` (the tag and the draft, nothing else), and for a release
+# (or a public candidate) `attest`
 # (GitHub artifact attestations of every artifact), `release` (the tag and the
 # GitHub Release, created with GITHUB_TOKEN, which starts no other workflow),
 # `verify-assets` (the published assets, their sums and attestations), the
@@ -51,7 +61,8 @@
 #
 # Only attest, pypi, crates and npm may mint an OIDC token: crates.io and npm
 # trust this workflow file as a whole, so a token from any of its jobs could
-# publish. Nothing restores a cache: a release builds from nothing.
+# publish. Each of them, and every job after them, runs for channel `release`
+# or `rc` only: none runs for `internal` or `dry-run`. Nothing restores a cache: a release builds from nothing.
 #
 # The registries' trusted publishers name this file, `publish.yml`, and PyPI's
 # the environment `pypi`: docs/internal/publishing.md,
@@ -61,8 +72,13 @@ name: Publish
 on:
   workflow_dispatch:
     inputs:
+      internal_candidate:
+        description: "Internal candidate number N: build and smoke-test vX.Y.Z-rc.N of the workspace version, push its tag and create a DRAFT GitHub pre-release with every asset and package. Nothing reaches PyPI, crates.io or npm. Run on integration/unified-core or development. Empty: not an internal candidate."
+        required: false
+        default: ""
+        type: string
       release_candidate:
-        description: "Release candidate number N (the Rust-core transition): publish vX.Y.Z-rc.N of the workspace version as pre-releases on GitHub, PyPI and crates.io, not npm. Run on integration/unified-core or development. Empty: a release."
+        description: "Public release candidate number N: disabled while the internal channel exists (use internal_candidate); allowed only with dry_run, as a rehearsal. Empty: a release."
         required: false
         default: ""
         type: string
@@ -97,6 +113,7 @@ jobs:
     env:
       CHECKOUT_REF: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref }}
       RELEASE_CANDIDATE: ${{ github.event.inputs.release_candidate }}
+      INTERNAL_CANDIDATE: ${{ github.event.inputs.internal_candidate }}
       DRY_RUN: ${{ github.event.inputs.dry_run }}
     outputs:
       tag: ${{ steps.version.outputs.tag }}
@@ -128,11 +145,39 @@ jobs:
         run: |
           set -euo pipefail
           create_release=true
+          # Public release candidates (PyPI and crates.io pre-releases) are
+          # disabled while the internal channel exists. Their code paths below
+          # stay intact: setting this to true re-enables them.
+          public_candidates=false
           if [[ -n "${RELEASE_CANDIDATE}" && ! "${RELEASE_CANDIDATE}" =~ ^[1-9][0-9]*$ ]]; then
             echo "::error::release_candidate is a number from 1, not ${RELEASE_CANDIDATE}." >&2
             exit 1
           fi
-          if [[ -n "${CHECKOUT_REF}" ]]; then
+          if [[ -n "${INTERNAL_CANDIDATE}" && ! "${INTERNAL_CANDIDATE}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::internal_candidate is a number from 1, not ${INTERNAL_CANDIDATE}." >&2
+            exit 1
+          fi
+          if [[ -n "${INTERNAL_CANDIDATE}" ]]; then
+            # An internal candidate builds, tags and drafts; it never combines
+            # with another mode.
+            if [[ -n "${RELEASE_CANDIDATE}" || "${DRY_RUN}" == "true" || -n "${CHECKOUT_REF}" ]]; then
+              echo "::error::internal_candidate cannot be combined with release_candidate, dry_run or checkout_ref: pass internal_candidate alone." >&2
+              exit 1
+            fi
+            if [[ "${GITHUB_REF}" != "refs/heads/integration/unified-core" && "${GITHUB_REF}" != "refs/heads/development" ]]; then
+              echo "::error::Run an internal candidate from integration/unified-core or development, not ${GITHUB_REF_NAME}." >&2
+              exit 1
+            fi
+            tag="$(python scripts/engine/release.py tag)-rc.${INTERNAL_CANDIDATE}"
+            python scripts/build/release.py check-candidate "${tag}"
+            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null \
+              || gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+              echo "::error::${tag} is already tagged. Cut the next internal candidate (internal_candidate=$((INTERNAL_CANDIDATE + 1))), or delete the draft and its tag first." >&2
+              exit 1
+            fi
+            create_release=false
+            channel=internal
+          elif [[ -n "${CHECKOUT_REF}" ]]; then
             # Resume: the tag exists, with its GitHub Release, and is this checkout.
             if [[ ! "${CHECKOUT_REF}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[1-9][0-9]*)?$ ]] \
               || ! git tag --points-at HEAD | grep -qx "${CHECKOUT_REF}"; then
@@ -145,7 +190,17 @@ jobs:
             fi
             tag="${CHECKOUT_REF}"
             create_release=false
-            if [[ "${tag}" == *-rc.* ]]; then channel=rc; else channel=release; fi
+            if [[ "${tag}" == *-rc.* ]]; then
+              # Resuming a candidate publishes it to PyPI and crates.io: an
+              # internal candidate's tag must never get there.
+              if [[ "${public_candidates}" != "true" ]]; then
+                echo "::error::public release candidates are disabled while the internal channel exists: ${tag} cannot be resumed to the registries." >&2
+                exit 1
+              fi
+              channel=rc
+            else
+              channel=release
+            fi
           elif [[ "${DRY_RUN}" == "true" ]]; then
             # A rehearsal, from any branch: the workspace version's tag.
             tag="$(python scripts/engine/release.py tag)"
@@ -166,6 +221,10 @@ jobs:
               python scripts/build/release.py check "${tag}"
               channel=release
             else
+              if [[ "${public_candidates}" != "true" ]]; then
+                echo "::error::public release candidates are disabled while the internal channel exists: run internal_candidate=${RELEASE_CANDIDATE} instead (or release_candidate with dry_run, as a rehearsal)." >&2
+                exit 1
+              fi
               # A candidate of the next version: the workspace's, bumped past
               # the last release. From integration/unified-core (or
               # development), for the Rust-core transition.
@@ -485,7 +544,106 @@ jobs:
           if (-not ($out -like "*$env:VERSION*")) { throw "opentide --version printed $out, not $env:VERSION" }
           & (Join-Path $env:OPENTIDE_INSTALL_DIR 'opentide-lsp.exe') --version
 
-  # --- Publishing: none of it on a dry run ----------------------------------
+  # --- An internal candidate: a tag and a draft, no registry ---------------
+
+  # The tag vX.Y.Z-rc.N on the commit built, then a DRAFT GitHub pre-release
+  # (never Latest) carrying everything a release would publish: the Release's
+  # assets (with their SHA256SUMS and SBOMs), every wheel and the sdist, every
+  # crate package and every npm tarball, with PACKAGES-SHA256SUMS over the
+  # packages. GITHUB_TOKEN only (contents: write here alone, starting no other
+  # workflow): no OIDC token, no attestation, nothing on PyPI, crates.io or
+  # npm. A draft does not create its tag, so the job pushes it first.
+  internal-release:
+    name: Internal candidate (draft GitHub pre-release)
+    needs: [guard, checks, release-assets, packages, sdist, smoke-wheel, smoke-sdist, smoke-npm, smoke-cargo, smoke-installer]
+    if: needs.guard.outputs.channel == 'internal'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.guard.outputs.tag }}
+      VERSION: ${{ needs.guard.outputs.version }}
+      REVISION: ${{ needs.guard.outputs.revision }}
+    steps:
+      # The notes quote CHANGELOG.md at the commit built.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.guard.outputs.revision }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets
+          path: ${{ runner.temp }}/dist/release
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: ${{ runner.temp }}/dist/python
+          pattern: wheels-*
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdist
+          path: ${{ runner.temp }}/dist/python
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: crates
+          path: ${{ runner.temp }}/dist/crates
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-packages
+          path: ${{ runner.temp }}/dist/npm
+      # One flat directory: the Release's assets as built, then each package
+      # under its own name (the npm artifact's subdirectories flattened). Two
+      # files of one name fail the job rather than one replacing the other.
+      - name: Gather the assets and the packages, and PACKAGES-SHA256SUMS
+        run: |
+          set -euo pipefail
+          shopt -s failglob
+          dist="${RUNNER_TEMP}/dist"
+          upload="${RUNNER_TEMP}/upload"
+          mkdir "${upload}"
+          cp -- "${dist}"/release/* "${upload}/"
+          packages=()
+          for file in "${dist}"/python/* "${dist}"/crates/*.crate "${dist}"/npm/*/*.tgz; do
+            name="$(basename -- "${file}")"
+            if [[ -e "${upload}/${name}" || "${name}" == "PACKAGES-SHA256SUMS" ]]; then
+              echo "::error::two assets are named ${name}: refusing to replace one with the other." >&2
+              exit 1
+            fi
+            cp -- "${file}" "${upload}/${name}"
+            packages+=("${name}")
+          done
+          if [[ -e "${upload}/PACKAGES-SHA256SUMS" ]]; then
+            echo "::error::the release assets already hold a PACKAGES-SHA256SUMS." >&2
+            exit 1
+          fi
+          (cd "${upload}" && sha256sum -- "${packages[@]}" > PACKAGES-SHA256SUMS)
+          ls -l "${upload}"
+      - name: Push the tag and create the draft pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/build/release.py notes --internal "${TAG}" > "${RUNNER_TEMP}/notes.md"
+          # A re-run finds the tag it pushed: the same commit is fine, another is not.
+          if existing="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq .object.sha 2>/dev/null)"; then
+            if [[ "${existing}" != "${REVISION}" ]]; then
+              echo "::error::${TAG} already points at ${existing}, not ${REVISION}." >&2
+              exit 1
+            fi
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/git/refs" -f ref="refs/tags/${TAG}" -f sha="${REVISION}"
+          fi
+          gh release create "${TAG}" "${RUNNER_TEMP}"/upload/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag \
+            --draft \
+            --prerelease \
+            --latest=false \
+            --title "${VERSION} (internal)" \
+            --notes-file "${RUNNER_TEMP}/notes.md"
+          echo "### Draft ${TAG}: Releases > Drafts, nothing on a registry" >> "$GITHUB_STEP_SUMMARY"
+
+  # --- Publishing: a release (or a public candidate) only -------------------
 
   # Sigstore-signed SLSA build provenance for every artifact: the GitHub
   # Release's assets (SHA256SUMS and the SBOMs included), the wheels and the
@@ -494,7 +652,9 @@ jobs:
   attest:
     name: Attestations
     needs: [guard, checks, release-assets, packages, sdist, smoke-wheel, smoke-sdist, smoke-npm, smoke-cargo, smoke-installer]
-    if: needs.guard.outputs.channel != 'dry-run'
+    # A release or a public candidate only: never a dry run or an internal
+    # candidate, which mint no OIDC token.
+    if: needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -539,7 +699,7 @@ jobs:
   release:
     name: GitHub Release
     needs: [guard, attest]
-    if: needs.guard.outputs.create_release == 'true'
+    if: needs.guard.outputs.create_release == 'true' && (needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -583,7 +743,7 @@ jobs:
   verify-assets:
     name: Verify the published assets
     needs: [guard, attest, release]
-    if: ${{ !cancelled() && needs.attest.result == 'success' && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
+    if: ${{ !cancelled() && (needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc') && needs.attest.result == 'success' && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
     runs-on: ubuntu-latest
     # `gh attestation verify` reads the repository's attestations with this
     # job's token.
@@ -628,6 +788,7 @@ jobs:
   pypi:
     name: Publish to PyPI
     needs: [guard, verify-assets]
+    if: needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc'
     runs-on: ubuntu-latest
     # A candidate is a PyPI pre-release (X.Y.ZrcN): pip and uv install it only
     # when asked (`pip install --pre`, `uv pip install --prerelease=allow`) or
@@ -843,6 +1004,7 @@ jobs:
   crates:
     name: Publish to crates.io
     needs: [guard, verify-assets]
+    if: needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     permissions:
@@ -946,7 +1108,7 @@ jobs:
   smoke-registries:
     name: Smoke the registries
     needs: [guard, pypi, npm, crates]
-    if: ${{ !cancelled() && needs.pypi.result == 'success' && needs.crates.result == 'success' && (needs.npm.result == 'success' || (needs.npm.result == 'skipped' && needs.guard.outputs.channel == 'rc')) }}
+    if: ${{ !cancelled() && (needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc') && needs.pypi.result == 'success' && needs.crates.result == 'success' && (needs.npm.result == 'success' || (needs.npm.result == 'skipped' && needs.guard.outputs.channel == 'rc')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:

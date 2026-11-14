@@ -1,6 +1,7 @@
 """Contract for ``publish.yml``, the release train (#840): its PyPI job, its
-guard, and the modes Run workflow starts (a release, a release candidate, a dry
-run, resuming a tag).
+guard, and the modes Run workflow starts (a release, an internal candidate, a
+public release candidate, which the guard refuses while the internal channel
+exists, a dry run, resuming a tag).
 
 A retry after a PyPI 5xx must be safe. On 0.4.0 the wheel upload got ``502 Bad
 Gateway`` but PyPI kept the file, so the version briefly had a wheel and no
@@ -109,8 +110,8 @@ def test_the_triggers_are_run_workflow_and_the_resume_dispatch() -> None:
     # No `release: published` and no tag push: the train creates its tag.
     assert set(triggers) == {"workflow_dispatch", "repository_dispatch"}
     inputs = triggers["workflow_dispatch"]["inputs"]
-    assert set(inputs) == {"release_candidate", "dry_run", "checkout_ref"}
-    for name in ("release_candidate", "checkout_ref"):
+    assert set(inputs) == {"internal_candidate", "release_candidate", "dry_run", "checkout_ref"}
+    for name in ("internal_candidate", "release_candidate", "checkout_ref"):
         assert inputs[name]["required"] is False
         assert inputs[name]["default"] == ""
     assert inputs["dry_run"]["type"] == "boolean"
@@ -353,7 +354,10 @@ def _job(name: str) -> dict[str, Any]:
 
 def test_the_release_job_tags_the_built_commit_before_any_registry() -> None:
     release = _job("release")
-    assert release["if"] == "needs.guard.outputs.create_release == 'true'"
+    assert release["if"] == (
+        "needs.guard.outputs.create_release == 'true' && "
+        "(needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc')"
+    )
     # Built, smoke-tested and attested first, so a failed build leaves no tag;
     # the registries, which are permanent, after.
     assert release["needs"] == ["guard", "attest"]
@@ -376,6 +380,7 @@ def test_the_guard_reads_every_mode_from_the_inputs() -> None:
             "${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref }}"
         ),
         "RELEASE_CANDIDATE": "${{ github.event.inputs.release_candidate }}",
+        "INTERNAL_CANDIDATE": "${{ github.event.inputs.internal_candidate }}",
         "DRY_RUN": "${{ github.event.inputs.dry_run }}",
     }
     assert set(guard["outputs"]) == {
@@ -442,14 +447,22 @@ def development(tmp_path: Path) -> Path:
     return repo
 
 
+#: The guard's one-line switch for public release candidates.
+PUBLIC_CANDIDATES_OFF = "public_candidates=false\n"
+
+
 def _run_guard(
-    repo: Path, *, gh_has_release: bool = False, **env: str
+    repo: Path, *, gh_has_release: bool = False, public_candidates: bool = False, **env: str
 ) -> tuple[subprocess.CompletedProcess[str], dict[str, str]]:
     bash = shutil.which("bash")
     if bash is None:
         pytest.skip("bash is required to run the workflow step")
     steps = _job("guard")["steps"]
     script = next(step for step in steps if step.get("id") == GUARD_STEP_ID)["run"]
+    assert script.count(PUBLIC_CANDIDATES_OFF) == 1
+    if public_candidates:
+        # The public candidate's paths, as re-enabling them would run them.
+        script = script.replace(PUBLIC_CANDIDATES_OFF, "public_candidates=true\n")
     stubs = repo.parent / "bin"
     stubs.mkdir(exist_ok=True)
     # `gh release view` answers whether the Release exists; `python` is this one.
@@ -475,6 +488,7 @@ def _run_guard(
             "GITHUB_REF_NAME": "development",
             "CHECKOUT_REF": "",
             "RELEASE_CANDIDATE": "",
+            "INTERNAL_CANDIDATE": "",
             "DRY_RUN": "false",
             **env,
         },
@@ -543,6 +557,7 @@ def test_a_candidate_runs_from_integration_or_development(development: Path, bra
     (development / "Cargo.toml").write_text(_cargo("1.3.0"), encoding="utf-8")
     result, outputs = _run_guard(
         development,
+        public_candidates=True,
         RELEASE_CANDIDATE="1",
         GITHUB_REF=f"refs/heads/{branch}",
         GITHUB_REF_NAME=branch,
@@ -560,6 +575,7 @@ def test_a_candidate_from_another_branch_is_refused(development: Path, branch: s
     (development / "Cargo.toml").write_text(_cargo("1.3.0"), encoding="utf-8")
     result, outputs = _run_guard(
         development,
+        public_candidates=True,
         RELEASE_CANDIDATE="1",
         GITHUB_REF=f"refs/heads/{branch}",
         GITHUB_REF_NAME=branch,
@@ -576,6 +592,7 @@ def test_a_candidate_from_integration_must_be_above_the_last_release(development
     """check-candidate holds on integration/unified-core as on development."""
     result, outputs = _run_guard(
         development,
+        public_candidates=True,
         RELEASE_CANDIDATE="1",
         GITHUB_REF="refs/heads/integration/unified-core",
         GITHUB_REF_NAME="integration/unified-core",
@@ -612,7 +629,7 @@ def test_the_guard_refuses_before_the_notes_pr_merges(development: Path) -> None
 
 def test_a_candidate_is_of_the_bumped_workspace_version(development: Path) -> None:
     (development / "Cargo.toml").write_text(_cargo("1.3.0"), encoding="utf-8")
-    result, outputs = _run_guard(development, RELEASE_CANDIDATE="2")
+    result, outputs = _run_guard(development, public_candidates=True, RELEASE_CANDIDATE="2")
     assert result.returncode == 0, result.stdout + result.stderr
     assert outputs == {
         "tag": "v1.3.0-rc.2",
@@ -625,7 +642,7 @@ def test_a_candidate_is_of_the_bumped_workspace_version(development: Path) -> No
 
 
 def test_a_candidate_of_a_released_version_is_refused(development: Path) -> None:
-    result, outputs = _run_guard(development, RELEASE_CANDIDATE="1")
+    result, outputs = _run_guard(development, public_candidates=True, RELEASE_CANDIDATE="1")
     assert result.returncode == 1
     assert "1.2.0 is not newer than 1.2.0" in result.stderr
     assert outputs == {}
@@ -656,6 +673,291 @@ def test_resuming_needs_the_tag_and_its_release(development: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert outputs["channel"] == "release"
     assert outputs["create_release"] == "false"
+
+
+# --- The internal channel: a tag and a draft, no registry --------------------
+
+#: The jobs that publish, attest or check what was published: none may run for
+#: an internal candidate (or a dry run).
+PUBLISHING_JOBS = (
+    "attest",
+    "release",
+    "verify-assets",
+    "pypi",
+    "crates",
+    "npm",
+    "smoke-registries",
+)
+
+
+@pytest.mark.parametrize("branch", ["integration/unified-core", "development"])
+def test_an_internal_candidate_runs_from_integration_or_development(
+    development: Path, branch: str
+) -> None:
+    (development / "Cargo.toml").write_text(_cargo("1.3.0"), encoding="utf-8")
+    result, outputs = _run_guard(
+        development,
+        INTERNAL_CANDIDATE="2",
+        GITHUB_REF=f"refs/heads/{branch}",
+        GITHUB_REF_NAME=branch,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert outputs == {
+        "tag": "v1.3.0-rc.2",
+        "version": "1.3.0-rc.2",
+        "base": "1.3.0",
+        "pypi_version": "1.3.0rc2",
+        "channel": "internal",
+        # The `release` job never runs for it; `internal-release` drafts it.
+        "create_release": "false",
+    }
+
+
+@pytest.mark.parametrize("branch", ["feature", "main", "integration/other"])
+def test_an_internal_candidate_from_another_branch_is_refused(
+    development: Path, branch: str
+) -> None:
+    (development / "Cargo.toml").write_text(_cargo("1.3.0"), encoding="utf-8")
+    result, outputs = _run_guard(
+        development,
+        INTERNAL_CANDIDATE="1",
+        GITHUB_REF=f"refs/heads/{branch}",
+        GITHUB_REF_NAME=branch,
+    )
+    assert result.returncode == 1
+    assert (
+        f"Run an internal candidate from integration/unified-core or development, not {branch}"
+        in result.stderr
+    )
+    assert outputs == {}
+
+
+@pytest.mark.parametrize(
+    "other", [{"RELEASE_CANDIDATE": "1"}, {"DRY_RUN": "true"}, {"CHECKOUT_REF": "v1.2.0"}]
+)
+def test_an_internal_candidate_combines_with_no_other_mode(
+    development: Path, other: dict[str, str]
+) -> None:
+    (development / "Cargo.toml").write_text(_cargo("1.3.0"), encoding="utf-8")
+    _git(development, "tag", "v1.2.0")
+    result, outputs = _run_guard(development, gh_has_release=True, INTERNAL_CANDIDATE="1", **other)
+    assert result.returncode == 1
+    assert (
+        "internal_candidate cannot be combined with release_candidate, dry_run or checkout_ref"
+        in result.stderr
+    )
+    assert outputs == {}
+
+
+def test_an_internal_candidate_is_checked_as_a_candidate(development: Path) -> None:
+    """check-candidate, the number, an existing tag or Release, and lockstep."""
+    result, outputs = _run_guard(development, INTERNAL_CANDIDATE="1")
+    assert result.returncode == 1
+    assert "1.2.0 is not newer than 1.2.0" in result.stderr
+    assert outputs == {}
+    result, _ = _run_guard(development, INTERNAL_CANDIDATE="0")
+    assert result.returncode == 1
+    assert "internal_candidate is a number from 1, not 0" in result.stderr
+    (development / "Cargo.toml").write_text(_cargo("1.3.0"), encoding="utf-8")
+    result, _ = _run_guard(development, gh_has_release=True, INTERNAL_CANDIDATE="1")
+    assert result.returncode == 1
+    assert "v1.3.0-rc.1 is already tagged" in result.stderr
+    assert "internal_candidate=2" in result.stderr
+    _git(development, "tag", "v1.3.0-rc.1")
+    result, _ = _run_guard(development, INTERNAL_CANDIDATE="1")
+    assert result.returncode == 1
+    assert "v1.3.0-rc.1 is already tagged" in result.stderr
+
+
+def test_an_internal_candidate_needs_the_crates_at_its_version(development: Path) -> None:
+    (development / "Cargo.toml").write_text(
+        _cargo("1.3.0").replace('version = "=1.3.0"', 'version = "=1.2.0"'), encoding="utf-8"
+    )
+    result, outputs = _run_guard(development, INTERNAL_CANDIDATE="1")
+    assert result.returncode == 1
+    assert "opentide-core is pinned to =1.2.0, not =1.3.0" in result.stderr
+    assert outputs == {}
+
+
+@pytest.mark.parametrize("branch", ["integration/unified-core", "development"])
+def test_a_public_release_candidate_is_refused(development: Path, branch: str) -> None:
+    """Public candidates (PyPI and crates.io pre-releases) are disabled while
+    the internal channel exists; the guard points at internal_candidate."""
+    (development / "Cargo.toml").write_text(_cargo("1.3.0"), encoding="utf-8")
+    result, outputs = _run_guard(
+        development,
+        RELEASE_CANDIDATE="1",
+        GITHUB_REF=f"refs/heads/{branch}",
+        GITHUB_REF_NAME=branch,
+    )
+    assert result.returncode == 1
+    assert (
+        "public release candidates are disabled while the internal channel exists: "
+        "run internal_candidate=1 instead"
+    ) in result.stderr
+    assert outputs == {}
+
+
+def test_a_public_release_candidate_may_still_be_rehearsed(development: Path) -> None:
+    (development / "Cargo.toml").write_text(_cargo("1.3.0"), encoding="utf-8")
+    result, outputs = _run_guard(
+        development,
+        RELEASE_CANDIDATE="1",
+        DRY_RUN="true",
+        GITHUB_REF="refs/heads/feature",
+        GITHUB_REF_NAME="feature",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert outputs["channel"] == "dry-run"
+    assert outputs["tag"] == "v1.3.0-rc.1"
+    assert outputs["create_release"] == "false"
+
+
+def test_a_candidates_tag_is_not_resumed_to_the_registries(development: Path) -> None:
+    """An internal candidate's tag must never reach PyPI or crates.io through
+    checkout_ref; with public candidates on, a candidate's tag resumes."""
+    (development / "Cargo.toml").write_text(_cargo("1.3.0"), encoding="utf-8")
+    _git(development, "tag", "v1.3.0-rc.1")
+    result, outputs = _run_guard(development, gh_has_release=True, CHECKOUT_REF="v1.3.0-rc.1")
+    assert result.returncode == 1
+    assert "public release candidates are disabled" in result.stderr
+    assert outputs == {}
+    result, outputs = _run_guard(
+        development, gh_has_release=True, public_candidates=True, CHECKOUT_REF="v1.3.0-rc.1"
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert outputs["channel"] == "rc"
+
+
+def _channels_allowed(condition: str) -> set[str]:
+    """The guard channels for which a job's `if` can hold: every channel is
+    substituted in turn, the rest of the condition taken as true."""
+    allowed = set()
+    for channel in ("release", "rc", "internal", "dry-run"):
+        expression = condition.removeprefix("${{").removesuffix("}}").strip()
+        expression = expression.replace("needs.guard.outputs.channel", repr(channel))
+        expression = re.sub(r"!cancelled\(\)", "True", expression)
+        expression = re.sub(r"needs\.[\w-]+\.result == '\w+'", "True", expression)
+        expression = re.sub(r"needs\.guard\.outputs\.\w+ == '\w+'", "True", expression)
+        expression = expression.replace("&&", " and ").replace("||", " or ")
+        assert re.fullmatch(r"[\w'\-=!() ]+", expression), expression
+        if eval(expression, {"__builtins__": {}}, {"True": True}):
+            allowed.add(channel)
+    return allowed
+
+
+def test_no_job_publishes_attests_or_mints_a_token_for_an_internal_candidate() -> None:
+    jobs = _workflow()["jobs"]
+    for name in PUBLISHING_JOBS:
+        # Explicit, not through a skipped dependency: each job's own `if`.
+        assert _channels_allowed(jobs[name]["if"]) <= {"release", "rc"}, name
+    assert _channels_allowed(jobs["npm"]["if"]) == {"release"}
+    assert _channels_allowed(jobs["internal-release"]["if"]) == {"internal"}
+    # Every job that holds an OIDC token is one of those; every other job that
+    # can run for an internal candidate holds none.
+    minting = {
+        name for name, job in jobs.items() if job.get("permissions", {}).get("id-token") == "write"
+    }
+    assert minting == {"attest", "pypi", "crates", "npm"}
+    for name, job in jobs.items():
+        if name not in PUBLISHING_JOBS:
+            assert "id-token" not in job.get("permissions", {}), name
+    assert "id-token" not in _workflow()["permissions"]
+
+
+def test_the_internal_release_drafts_a_tagged_pre_release_after_every_smoke_test() -> None:
+    jobs = _workflow()["jobs"]
+    job = jobs["internal-release"]
+    assert job["permissions"] == {"contents": "write"}
+    assert job["if"] == "needs.guard.outputs.channel == 'internal'"
+    # The same builds, and every smoke test, pass first.
+    smokes = {name for name in jobs if name.startswith("smoke-") and name != "smoke-registries"}
+    assert {"guard", "checks", "release-assets", "packages", "sdist", *smokes} <= set(job["needs"])
+    assert set(jobs["attest"]["needs"]) == set(job["needs"])
+    downloads = [s["with"] for s in job["steps"] if "download-artifact@" in str(s.get("uses"))]
+    assert {d.get("name") or d.get("pattern") for d in downloads} == {
+        "release-assets",
+        "wheels-*",
+        "sdist",
+        "crates",
+        "npm-packages",
+    }
+    run = " ".join(
+        " ".join(str(s.get("run", "")) for s in job["steps"]).replace("\\\n", " ").split()
+    )
+    # The tag first (a draft does not create it), on the commit built.
+    tag = (
+        'gh api "repos/${GITHUB_REPOSITORY}/git/refs"'
+        ' -f ref="refs/tags/${TAG}" -f sha="${REVISION}"'
+    )
+    assert tag in run
+    assert job["env"]["REVISION"] == "${{ needs.guard.outputs.revision }}"
+    create = run[run.index("gh release create") :]
+    assert run.index(tag) < run.index("gh release create")
+    for flag in ("--draft", "--prerelease", "--verify-tag", "--latest=false"):
+        assert flag in create, flag
+    assert 'python3 scripts/build/release.py notes --internal "${TAG}"' in run
+    # Nothing that reaches a registry, and no attestation.
+    for word in ("pypi-publish", "cargo publish", "release.py publish", "npm publish", "attest"):
+        assert word not in run, word
+
+
+def _run_gather(tmp_path: Path, files: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    bash = shutil.which("bash")
+    if bash is None or shutil.which("sha256sum") is None:
+        pytest.skip("bash and sha256sum are required to run the workflow step")
+    steps = _job("internal-release")["steps"]
+    script = next(s for s in steps if str(s.get("name", "")).startswith("Gather"))["run"]
+    for name, text in files.items():
+        (tmp_path / "dist" / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "dist" / name).write_text(text, encoding="utf-8")
+    return subprocess.run(
+        [bash, "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
+        env={"PATH": os.environ.get("PATH", ""), "RUNNER_TEMP": str(tmp_path)},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+
+_BUILT = {
+    "release/SHA256SUMS": "sums",
+    "release/opentide-v1.3.0-rc.1-x86_64-unknown-linux-gnu.tar.gz": "bin",
+    "python/opentide-1.3.0rc1-cp310-abi3-win_amd64.whl": "wheel",
+    "python/opentide-1.3.0rc1.tar.gz": "sdist",
+    "crates/opentide-1.3.0-rc.1.crate": "crate",
+    "npm/1-native/opentide-opentide-linux-x64-gnu-1.3.0-rc.1.tgz": "native",
+    "npm/2-package/opentide-opentide-1.3.0-rc.1.tgz": "package",
+}
+
+
+def test_the_internal_release_flattens_the_packages_and_sums_them(tmp_path: Path) -> None:
+    result = _run_gather(tmp_path, _BUILT)
+    assert result.returncode == 0, result.stdout + result.stderr
+    upload = tmp_path / "upload"
+    names = {path.name for path in upload.iterdir()}
+    assert names == {Path(name).name for name in _BUILT} | {"PACKAGES-SHA256SUMS"}
+    # The release assets' own SHA256SUMS is untouched; the packages get theirs.
+    assert (upload / "SHA256SUMS").read_text(encoding="utf-8") == "sums"
+    listed = (upload / "PACKAGES-SHA256SUMS").read_text(encoding="utf-8").splitlines()
+    packages = sorted(Path(name).name for name in _BUILT if not name.startswith("release/"))
+    assert sorted(line.split()[1] for line in listed) == packages
+    check = subprocess.run(
+        ["sha256sum", "--check", "--strict", "PACKAGES-SHA256SUMS"],
+        cwd=upload,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert check.returncode == 0, check.stdout + check.stderr
+
+
+def test_the_internal_release_fails_on_a_name_collision(tmp_path: Path) -> None:
+    built = {**_BUILT, "npm/3-alias/opentide-opentide-1.3.0-rc.1.tgz": "alias"}
+    result = _run_gather(tmp_path, built)
+    assert result.returncode == 1
+    assert "two assets are named opentide-opentide-1.3.0-rc.1.tgz" in result.stderr
 
 
 def _run_reject(cwd: Path, expected: str) -> subprocess.CompletedProcess[str]:
