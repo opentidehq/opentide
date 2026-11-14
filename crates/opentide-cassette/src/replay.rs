@@ -364,7 +364,7 @@ fn segments(url: &url::Url) -> Vec<Vec<u8>> {
         .collect()
 }
 
-/// Whether two [`FORM`] texts (a form body, a query string) hold the same
+/// Whether two `application/x-www-form-urlencoded` texts (a form body, a query string) hold the same
 /// fields once decoded: `+` and `%20`, `~` and `%7E`, `%2f` and `%2F` are
 /// the same. Names may come in any order; the values of a repeated name must
 /// come in the same order. A value is compared as text: `True` is not
