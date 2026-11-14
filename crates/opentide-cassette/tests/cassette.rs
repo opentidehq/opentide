@@ -509,7 +509,13 @@ fn only_a_repeated_token_request_may_be_left_out() {
         ),
     ];
     let optional_at: Vec<bool> = (0..7).map(|at| optional(&interactions, at)).collect();
-    assert_eq!(optional_at, [false, false, true, false, false, true, false]);
+    // Positions 5 and 6 begin the second pass: its first sign-in is not
+    // optional.
+    assert_eq!(
+        optional_at,
+        [false, false, true, false, false, false, false]
+    );
+    assert!(optional(&interactions, 7));
     let sent = |indices: &[usize]| -> Vec<Request> {
         indices
             .iter()
@@ -520,11 +526,15 @@ fn only_a_repeated_token_request_may_be_left_out() {
     assert_eq!(verify(&interactions, &sent(&[0, 1, 3, 4])), Vec::new());
     // As recorded.
     assert_eq!(verify(&interactions, &sent(&[0, 1, 2, 3, 4])), Vec::new());
-    // A second pass that keeps the first pass's tokens.
+    // A second pass signs in again, then may keep that token.
     assert_eq!(
-        verify(&interactions, &sent(&[0, 1, 2, 3, 4, 1, 3])),
+        verify(&interactions, &sent(&[0, 1, 2, 3, 4, 0, 1, 3, 4])),
         Vec::new()
     );
+    // A second pass with no sign-in of its own is a difference: each pass
+    // needs at least one.
+    let mismatches = verify(&interactions, &sent(&[0, 1, 2, 3, 4, 1, 3]));
+    assert_eq!(mismatches.first().map(|mismatch| mismatch.index), Some(5));
     // The first sign-in, or another client's, is never left out.
     let mismatches = verify(&interactions, &sent(&[1, 3, 4]));
     assert_eq!(mismatches[0].index, 0);

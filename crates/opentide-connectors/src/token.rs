@@ -3,14 +3,17 @@
 //! the platform answers `401` ([`TokenCache::send`]).
 //!
 //! - A token is reused until [`REFRESH_MARGIN`] before its `expires_in`
-//!   runs out (whole seconds, as a JSON number or as text). A token whose
-//!   answer names no lifetime, or one too short to outlive the margin,
-//!   serves the request it was asked for and is not kept.
+//!   runs out (whole seconds, as a JSON number or as text), and never longer
+//!   than [`MAX_LIFETIME`]. A token whose answer names no lifetime, or one
+//!   too short to outlive the margin, serves the request it was asked for
+//!   and is not kept.
+//! - One sign-in at a time per tenant and scope: calls that find no usable
+//!   token wait for the first one's sign-in and share its token.
 //! - A `401` from the API means the call was not processed: the token is
-//!   forgotten, the platform is signed in to again once, and the call is
-//!   sent again once, whatever its method. A second `401` is an
-//!   authentication failure naming the tenant. A `403` is the platform's
-//!   answer to a valid token and is returned as it is.
+//!   forgotten (unless a newer one has replaced it), the platform is signed
+//!   in to again once, and the call is sent again once, whatever its method.
+//!   A second `401` is an authentication failure naming the tenant. A `403`
+//!   is the platform's answer to a valid token and is returned as it is.
 //! - Tokens are keyed by the tenant's label (platform and tenant) and the
 //!   scope, so one tenant's token never reaches another tenant or another
 //!   resource. Neither the cache's `Debug` nor any error carries a token.
@@ -19,6 +22,7 @@
 //! function it is given when it holds no usable token.
 
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -32,6 +36,13 @@ use crate::{Secret, TenantLabel};
 
 /// How long before its expiry a token is asked for again.
 pub const REFRESH_MARGIN: Duration = Duration::from_secs(300);
+
+/// The longest a token is kept, whatever its `expires_in` says (Entra's
+/// and CrowdStrike's last an hour or less).
+pub const MAX_LIFETIME: Duration = Duration::from_hours(24);
+
+/// How many characters of the API's answer a second `401` reports.
+const DETAIL_CHARS: usize = 300;
 
 /// A token a sign-in issued, and how long it lives, when the answer says.
 #[derive(Clone, Debug)]
@@ -56,15 +67,29 @@ pub fn lifetime(expires_in: Option<&Json>) -> Option<Duration> {
 /// What tells the time: [`Instant::now`] in a run, a test's own clock.
 pub type Clock = Arc<dyn Fn() -> Instant + Send + Sync>;
 
-/// A token kept, and when it is asked for again.
+/// A tenant and a scope.
+type Key = (TenantLabel, String);
+
+/// A token kept, when it is asked for again, and which sign-in issued it.
 struct Kept {
     token: Secret,
     renew_at: Instant,
+    issue: u64,
+}
+
+/// A token handed out, and which sign-in issued it.
+struct Handed {
+    token: Secret,
+    issue: u64,
 }
 
 /// The tokens of a platform's tenants, per tenant and scope.
 pub struct TokenCache {
-    tokens: Mutex<BTreeMap<(TenantLabel, String), Kept>>,
+    tokens: Mutex<BTreeMap<Key, Kept>>,
+    /// One sign-in at a time per key.
+    signing: Mutex<BTreeMap<Key, Arc<tokio::sync::Mutex<()>>>>,
+    /// Numbers each sign-in, so a `401` forgets only the token it got.
+    issued: AtomicU64,
     now: Clock,
 }
 
@@ -97,13 +122,17 @@ impl TokenCache {
     pub fn with_clock(now: Clock) -> Self {
         Self {
             tokens: Mutex::new(BTreeMap::new()),
+            signing: Mutex::new(BTreeMap::new()),
+            issued: AtomicU64::new(0),
             now,
         }
     }
 
     /// The token of *label* for *scope*: the one kept while it is not due
     /// for renewal, else a new one from *sign_in*, kept when its lifetime
-    /// outlives [`REFRESH_MARGIN`].
+    /// outlives [`REFRESH_MARGIN`]. Calls for one key that find no usable
+    /// token sign in one after another, and a call that finds the token
+    /// the one before it kept uses it.
     ///
     /// # Errors
     ///
@@ -118,28 +147,66 @@ impl TokenCache {
         S: FnOnce() -> F,
         F: Future<Output = Result<Issued, ConnectorError>>,
     {
+        Ok(self.handed(label, scope, sign_in).await?.token)
+    }
+
+    /// The kept token of *key* while it is not due for renewal.
+    fn kept(&self, key: &Key) -> Option<Handed> {
+        let tokens = self.tokens.lock().unwrap_or_else(PoisonError::into_inner);
+        tokens
+            .get(key)
+            .filter(|kept| (self.now)() < kept.renew_at)
+            .map(|kept| Handed {
+                token: kept.token.clone(),
+                issue: kept.issue,
+            })
+    }
+
+    /// [`Self::token`], with which sign-in issued it.
+    async fn handed<S, F>(
+        &self,
+        label: &TenantLabel,
+        scope: &str,
+        sign_in: S,
+    ) -> Result<Handed, ConnectorError>
+    where
+        S: FnOnce() -> F,
+        F: Future<Output = Result<Issued, ConnectorError>>,
+    {
         let key = (label.clone(), scope.to_owned());
-        {
-            let tokens = self.tokens.lock().unwrap_or_else(PoisonError::into_inner);
-            if let Some(kept) = tokens.get(&key)
-                && (self.now)() < kept.renew_at
-            {
-                return Ok(kept.token.clone());
-            }
+        if let Some(handed) = self.kept(&key) {
+            return Ok(handed);
+        }
+        let gate = Arc::clone(
+            self.signing
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .entry(key.clone())
+                .or_default(),
+        );
+        let _signing = gate.lock().await;
+        // Another call may have signed in while this one waited.
+        if let Some(handed) = self.kept(&key) {
+            return Ok(handed);
         }
         let issued = sign_in().await?;
-        let mut tokens = self.tokens.lock().unwrap_or_else(PoisonError::into_inner);
-        match issued
+        let issue = self.issued.fetch_add(1, Ordering::Relaxed);
+        let now = (self.now)();
+        let renew_at = issued
             .lifetime
+            .map(|lifetime| lifetime.min(MAX_LIFETIME))
             .and_then(|lifetime| lifetime.checked_sub(REFRESH_MARGIN))
             .filter(|usable| !usable.is_zero())
-        {
-            Some(usable) => {
+            .and_then(|usable| now.checked_add(usable));
+        let mut tokens = self.tokens.lock().unwrap_or_else(PoisonError::into_inner);
+        match renew_at {
+            Some(renew_at) => {
                 tokens.insert(
                     key,
                     Kept {
                         token: issued.token.clone(),
-                        renew_at: (self.now)() + usable,
+                        renew_at,
+                        issue,
                     },
                 );
             }
@@ -147,7 +214,10 @@ impl TokenCache {
                 tokens.remove(&key);
             }
         }
-        Ok(issued.token)
+        Ok(Handed {
+            token: issued.token,
+            issue,
+        })
     }
 
     /// Forgets the token of *label* for *scope*.
@@ -156,6 +226,16 @@ impl TokenCache {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .remove(&(label.clone(), scope.to_owned()));
+    }
+
+    /// Forgets the token of *label* for *scope* when it is still the one
+    /// sign-in *issue* issued, not one a sibling call signed in for since.
+    fn forget_issue(&self, label: &TenantLabel, scope: &str, issue: u64) {
+        let key = (label.clone(), scope.to_owned());
+        let mut tokens = self.tokens.lock().unwrap_or_else(PoisonError::into_inner);
+        if tokens.get(&key).is_some_and(|kept| kept.issue == issue) {
+            tokens.remove(&key);
+        }
     }
 
     /// Sends the request *build* makes with the tenant's token for *scope*
@@ -190,23 +270,36 @@ impl TokenCache {
             });
             async move { Answer::fetch(cx.http, request?, cancel).await }
         };
-        let answer = once(&self.token(label, scope, &sign_in).await?).await?;
+        let first = self.handed(label, scope, &sign_in).await?;
+        let answer = once(&first.token).await?;
         if answer.status != 401 {
             return Ok(answer);
         }
-        self.forget(label, scope);
-        let answer = once(&self.token(label, scope, &sign_in).await?).await?;
+        self.forget_issue(label, scope, first.issue);
+        let second = self.handed(label, scope, &sign_in).await?;
+        let answer = once(&second.token).await?;
         if answer.status == 401 {
-            self.forget(label, scope);
-            return Err(ConnectorError::authentication(
-                &label.platform,
-                &label.tenant,
-                format!(
-                    "tenant {} refused a new token too (HTTP 401): check the credentials' \
-                     permissions",
-                    label.tenant
-                ),
-            ));
+            self.forget_issue(label, scope, second.issue);
+            let message = format!(
+                "tenant {} refused a new token too (HTTP 401): check the credentials' \
+                 permissions",
+                label.tenant
+            );
+            // What the API said, any token it echoes masked.
+            let said = [&first.token, &second.token]
+                .iter()
+                .map(|token| token.expose())
+                .filter(|token| !token.is_empty())
+                .fold(answer.text_head(DETAIL_CHARS), |text, token| {
+                    text.replace(token, "***")
+                });
+            let said = said.trim();
+            return Err(ConnectorError::Authentication {
+                platform: label.platform.clone(),
+                tenant: label.tenant.clone(),
+                message,
+                detail: (!said.is_empty()).then(|| said.to_owned()),
+            });
         }
         Ok(answer)
     }
@@ -322,5 +415,95 @@ mod tests {
             Some("b/arm".to_owned())
         );
         assert!(!format!("{cache:?}").contains("a/arm"));
+    }
+
+    #[tokio::test]
+    async fn a_huge_expires_in_is_kept_a_day_at_most_and_never_overflows() {
+        let json = |text: &str| serde_json::from_str::<Json>(text).unwrap_or(Json::Null);
+        // u64::MAX as text parses; as a number it is no integer, so no
+        // lifetime: either way no panic adding it to the clock.
+        assert_eq!(
+            lifetime(Some(&json("\"18446744073709551615\""))),
+            Some(Duration::from_secs(u64::MAX))
+        );
+        assert_eq!(lifetime(Some(&json("18446744073709551615"))), None);
+        for seconds in [u64::MAX, u64::MAX / 2, 10 * 365 * 24 * 3600] {
+            let (now, at) = clock();
+            let cache = TokenCache::with_clock(now);
+            let signed = std::sync::atomic::AtomicUsize::new(0);
+            let a = label("a");
+            let get = || {
+                cache.token(&a, "s", || {
+                    let n = signed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    async move { Ok(issue(&format!("t{n}"), Some(seconds))) }
+                })
+            };
+            assert_eq!(
+                get().await.ok().map(|t| t.expose().to_owned()),
+                Some("t0".into())
+            );
+            *at.lock().unwrap_or_else(PoisonError::into_inner) +=
+                Duration::from_secs(24 * 3600 - 300 - 1);
+            assert_eq!(
+                get().await.ok().map(|t| t.expose().to_owned()),
+                Some("t0".into())
+            );
+            *at.lock().unwrap_or_else(PoisonError::into_inner) += Duration::from_secs(1);
+            assert_eq!(
+                get().await.ok().map(|t| t.expose().to_owned()),
+                Some("t1".into()),
+                "{seconds}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn calls_that_find_no_token_at_once_sign_in_once() {
+        let cache = TokenCache::new();
+        let signed = std::sync::atomic::AtomicUsize::new(0);
+        let a = label("a");
+        let get = || {
+            cache.token(&a, "s", || {
+                signed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                async {
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                    Ok(issue("t", Some(3600)))
+                }
+            })
+        };
+        let all = tokio::join!(get(), get(), get(), get());
+        assert!(all.0.is_ok() && all.1.is_ok() && all.2.is_ok() && all.3.is_ok());
+        assert_eq!(signed.load(std::sync::atomic::Ordering::SeqCst), 1);
+        // Another key signs in on its own.
+        let other = cache
+            .token(&label("b"), "s", || async { Ok(issue("u", Some(3600))) })
+            .await;
+        assert_eq!(other.ok().map(|t| t.expose().to_owned()), Some("u".into()));
+    }
+
+    #[tokio::test]
+    async fn a_401_never_forgets_a_newer_token_than_the_one_it_got() {
+        let cache = TokenCache::new();
+        let a = label("a");
+        let first = cache
+            .handed(&a, "s", || async { Ok(issue("old", Some(3600))) })
+            .await
+            .map(|handed| handed.issue)
+            .unwrap_or(u64::MAX);
+        // A sibling's 401 forgot the old token and signed in again.
+        cache.forget_issue(&a, "s", first);
+        let newer = cache
+            .token(&a, "s", || async { Ok(issue("new", Some(3600))) })
+            .await;
+        assert_eq!(
+            newer.ok().map(|t| t.expose().to_owned()),
+            Some("new".into())
+        );
+        // This call's 401 on the old token leaves the newer one kept.
+        cache.forget_issue(&a, "s", first);
+        let kept = cache
+            .token(&a, "s", || async { Ok(issue("third", Some(3600))) })
+            .await;
+        assert_eq!(kept.ok().map(|t| t.expose().to_owned()), Some("new".into()));
     }
 }
