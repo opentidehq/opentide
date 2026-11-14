@@ -25,7 +25,8 @@ pub const MISSING_UUID: &str = "missing_uuid";
 pub const DUPLICATE_ID: &str = "duplicate_id";
 /// The family the registry files signals under.
 pub const SIGNAL_FAMILY: &str = "signal";
-/// The index-only field naming the objective a signal is defined in.
+/// The field naming the objective a signal is defined in, beside the
+/// signal's own fields where the index is written out (MCP's resources).
 pub const SIGNAL_OWNER_FIELD: &str = "owner";
 
 /// One indexed object.
