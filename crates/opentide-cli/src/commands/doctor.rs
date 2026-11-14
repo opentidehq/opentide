@@ -41,7 +41,8 @@ use crate::env::Env;
 use crate::envelope::Failure;
 use crate::json::Json;
 use crate::render::glyphs;
-use crate::render::text::{Style, Text};
+use crate::render::text::Text;
+use anstyle::{AnsiColor, Style};
 
 const COMMAND: &str = "doctor";
 
@@ -1427,27 +1428,30 @@ fn report(checks: &[Check], text: bool) -> Report {
 /// each with the indent its wrapped rows take.
 fn lines(check: &Check) -> Vec<(Text, usize)> {
     let (glyph, style) = match check.status {
-        "pass" => (glyphs::OK, "bold green"),
-        "fail" => (glyphs::FAILED, "bold red"),
-        "skip" => (glyphs::SKIP, "bold dim"),
-        _ => (glyphs::WARNING, "bold yellow"),
+        "pass" => (glyphs::OK, AnsiColor::Green.on_default().bold()),
+        "fail" => (glyphs::FAILED, AnsiColor::Red.on_default().bold()),
+        "skip" => (glyphs::SKIP, Style::new().bold().dimmed()),
+        _ => (glyphs::WARNING, AnsiColor::Yellow.on_default().bold()),
     };
     let mut line = Text::default();
-    line.append(glyph, &Style::new(style));
+    line.append(glyph, &style);
     line.push_str(" ");
     line.push_str(&check.message);
     line.append(
         &format!(" {} {}", glyphs::SEPARATOR, check.code),
-        &Style::new("dim"),
+        &Style::new().dimmed(),
     );
     let mut out = vec![(line, 2)];
     if let Some(fix) = &check.fix
         && matches!(check.status, "warn" | "fail" | "skip")
     {
         let mut hint = Text::plain("  ");
-        hint.append(&format!("{} ", glyphs::NEXT), &Style::new("bold cyan"));
+        hint.append(
+            &format!("{} ", glyphs::NEXT),
+            &AnsiColor::Cyan.on_default().bold(),
+        );
         if check.status == "skip" {
-            hint.append(fix, &Style::new("dim"));
+            hint.append(fix, &Style::new().dimmed());
         } else {
             hint.push_str(fix);
         }

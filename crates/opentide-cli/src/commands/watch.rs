@@ -18,7 +18,8 @@ use crate::mode::Mode;
 use crate::queries::EngineQueries;
 use crate::render::diagnostic::{Diagnostic, SourceFiles};
 use crate::render::outcome::{OutcomeKind, outcome_text};
-use crate::render::text::{Style, Text};
+use crate::render::text::Text;
+use anstyle::Style;
 
 /// The folder that holds every watched one, relative to `cwd`.
 pub fn shown(roots: &[PathBuf], cwd: &Path) -> String {
@@ -111,7 +112,7 @@ pub fn live_lines(
         out.extend(frames[..kept].iter().cloned());
         out.push(Text::styled(
             &format!("… {} more lines", frames.len() - kept),
-            &Style::new("dim"),
+            &Style::new().dimmed(),
         ));
     } else {
         out.extend(frames.iter().cloned());
@@ -204,7 +205,7 @@ pub fn run(
                         (usize::from(w.0), usize::from(h.0))
                     });
                 let clock = jiff::Zoned::now().strftime("%H:%M:%S").to_string();
-                let footer = Text::styled(&footer(&watching, pass, &clock), &Style::new("dim"));
+                let footer = Text::styled(&footer(&watching, pass, &clock), &Style::new().dimmed());
                 let lines = live_lines(&lines, outcome, footer, width, height);
                 let mut text = String::new();
                 if drawn > 0 {
