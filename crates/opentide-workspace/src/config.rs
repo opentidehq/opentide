@@ -9,11 +9,12 @@
 
 use std::path::{Path, PathBuf};
 
-use opentide_schema::FromNode;
+use opentide_schema::configuration::codes;
 use opentide_schema::configuration::models::PathsConfiguration;
 use opentide_schema::configuration::resolve::{Folder, Instance, ResolveError, Resolved, resolve};
 use opentide_schema::from_node::Context;
 use opentide_schema::node::{Node, Value};
+use opentide_schema::{FromNode, Surface};
 
 use crate::fs::{EntryKind, FileSystem};
 use crate::root::{OPENTIDE_DIR, Roots};
@@ -43,8 +44,15 @@ pub enum ConfigError {
         message: String,
     },
     /// The merged `paths.toml` does not fit its model.
-    #[error("paths.toml: {}", .0.join("; "))]
-    Paths(Vec<String>),
+    #[error("paths.toml: {}", .problems.join("; "))]
+    Paths {
+        /// The first problem's code: `missing_field`, `unknown_key` or
+        /// `schema_validation`, as `validate`'s configuration check reports
+        /// it.
+        code: &'static str,
+        /// Each problem, `field.path: message`.
+        problems: Vec<String>,
+    },
 }
 
 fn resolve_message(error: &ResolveError) -> String {
@@ -55,13 +63,12 @@ fn resolve_message(error: &ResolveError) -> String {
 }
 
 impl ConfigError {
-    /// The diagnostic code, where the oracle gives one.
+    /// The diagnostic code; `None` for a retired proxy setting.
     pub fn code(&self) -> Option<&'static str> {
         match self {
             Self::Resolve(error) => error.code(),
             Self::Unreadable { .. } => Some(opentide_schema::configuration::codes::CONFIG_PARSE),
-            // The oracle raises a plain `ValueError` (`ConfigurationError`).
-            Self::Paths(_) => None,
+            Self::Paths { code, .. } => Some(code),
         }
     }
 }
@@ -214,22 +221,11 @@ struct Merged {
 fn read(fs: &dyn FileSystem, roots: &Roots) -> Result<Merged, ConfigError> {
     let mut files_read = 0;
     let own_dir = roots.workspace.join(OPENTIDE_DIR).join("configurations");
-    let overlay_dir = roots
-        .repo
-        .join("tests")
-        .join("fixtures")
-        .join("generation")
-        .join("configurations");
     let parent_dir = roots
         .workspace
         .parent()
         .map(|parent| parent.join(OPENTIDE_DIR).join("configurations"));
     let own = read_folder(fs, &own_dir, &mut files_read)?;
-    let overlay = if roots.tide_workspace {
-        read_folder(fs, &overlay_dir, &mut files_read)?
-    } else {
-        None
-    };
     // `parent_dir` is never `own_dir`: a folder's parent is not the folder.
     let parent = match &parent_dir {
         Some(dir) if !roots.tide_workspace => read_folder(fs, dir, &mut files_read)?,
@@ -237,15 +233,12 @@ fn read(fs: &dyn FileSystem, roots: &Roots) -> Result<Merged, ConfigError> {
     };
     let resolved = resolve(&Instance {
         workspace: own.as_ref(),
-        overlay: overlay.as_ref(),
         parent: parent.as_ref(),
         skip_parent: roots.tide_workspace,
     })
     .map_err(ConfigError::Resolve)?;
     let mut folders = vec![own_dir];
-    if roots.tide_workspace {
-        folders.push(overlay_dir);
-    } else if let Some(dir) = parent_dir {
+    if let Some(dir) = parent_dir.filter(|_| !roots.tide_workspace) {
         folders.push(dir);
     }
     Ok(Merged {
@@ -290,21 +283,25 @@ pub fn load(fs: &dyn FileSystem, roots: &Roots) -> Result<Configuration, ConfigE
             match model {
                 Some(model) if errors.is_empty() => model,
                 _ => {
-                    return Err(ConfigError::Paths(
-                        errors
+                    return Err(ConfigError::Paths {
+                        code: errors.first().map_or(codes::SCHEMA_VALIDATION, |error| {
+                            error.code(Surface::Configuration)
+                        }),
+                        problems: errors
                             .iter()
                             .map(|error| {
                                 format!("{}: {}", error.field_path().join("."), error.message)
                             })
                             .collect(),
-                    ));
+                    });
                 }
             }
         }
         None => {
-            return Err(ConfigError::Paths(vec![
-                "the bundled paths.toml is missing".to_owned(),
-            ]));
+            return Err(ConfigError::Paths {
+                code: codes::MISSING_FIELD,
+                problems: vec!["the bundled paths.toml is missing".to_owned()],
+            });
         }
     };
     let paths_node = paths_node

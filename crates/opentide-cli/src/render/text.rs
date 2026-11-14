@@ -314,7 +314,7 @@ impl Text {
             let style = over().fold(Style::new(), |style, span| layer(style, span.style));
             let style = match colour {
                 Colour::None => Style::new(),
-                Colour::Mono => style.fg_color(None).bg_color(None),
+                Colour::Mono => style.fg_color(None).bg_color(None).underline_color(None),
                 Colour::Full => style,
             };
             let link = over()
@@ -331,6 +331,8 @@ impl Text {
                 _ => runs.push((style, link, chars.collect())),
             }
         }
+        // OSC 8 without an `id=`: no run here splits a link, so a terminal's
+        // grouping by URI is enough.
         let mut out = String::new();
         for (style, link, text) in runs {
             match link {
