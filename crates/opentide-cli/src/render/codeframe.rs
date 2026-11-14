@@ -934,9 +934,13 @@ mod tests {
             engine_reference("yara_slow_pattern").map(|(language, _)| language),
             Some("YARA rule")
         );
+        // 0.28.1's reference page, word for word.
         assert_eq!(
-            engine_reference("exabeam_unknown_value").map(|(language, _)| language),
-            Some("Exabeam Query Language")
+            engine_reference("exabeam_unknown_value"),
+            Some((
+                "Exabeam Query Language",
+                "https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html"
+            ))
         );
         assert_eq!(position("ab\ncd", 4), (2, 2));
     }
