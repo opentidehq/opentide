@@ -1908,6 +1908,7 @@ impl Sender<'_, '_> {
                         rule_id: rule.uuid.clone(),
                         operation: Operation::Delete,
                         body: Vec::new(),
+                        policies: None,
                     }
                 } else {
                     let body = opentide_compile::sentinel::compile(self.compile, rule, tenant)
@@ -1916,6 +1917,7 @@ impl Sender<'_, '_> {
                         rule_id: rule.uuid.clone(),
                         operation: Operation::Update,
                         body: body.to_compact().into_bytes(),
+                        policies: None,
                     }
                 };
                 let context = self.context(connection);
@@ -2043,6 +2045,7 @@ impl Sender<'_, '_> {
                     } else {
                         serde_json::to_vec(&write.body).unwrap_or_default()
                     },
+                    policies: None,
                 };
                 let context = self.context(connection);
                 self.block(deployer.deploy(context, &request))
@@ -2403,6 +2406,7 @@ impl Sender<'_, '_> {
             body: plugin_body(rule, platform, stored)
                 .to_compact()
                 .into_bytes(),
+            policies: None,
         };
         let context = self.context(connection);
         let done = self
@@ -2909,12 +2913,8 @@ impl Sender<'_, '_> {
                     .get("details")
                     .and_then(|details| details.get("append"))
                     .is_some_and(CJson::truthy);
-                let policies = match rule.block("sysdig").and_then(|block| block.get("policies")) {
-                    Some(CJson::Array(items)) => {
-                        items.iter().map(opentide_compile::deploy::text).collect()
-                    }
-                    _ => tenant_policies.clone(),
-                };
+                let policies = opentide_compile::sysdig::block_policies(rule)
+                    .unwrap_or_else(|| tenant_policies.clone());
                 let root = self.workspace.root().to_path_buf();
                 let recreate_refusal = match opentide_compile::git::state_ignore(&root) {
                     Some(ignore) => Some(StateError {

@@ -224,6 +224,7 @@ fn deploy(proxy: &Proxy, rule: &Rule, as_compiled: bool) -> Result<(String, u16)
                     rule_id: rule.rule_id.to_owned(),
                     operation: Operation::Create,
                     body: serde_json::to_vec(rule).unwrap(),
+                    policies: None,
                 },
             )
             .await?;
@@ -239,6 +240,7 @@ fn deploy(proxy: &Proxy, rule: &Rule, as_compiled: bool) -> Result<(String, u16)
                     rule_id: remote.clone(),
                     operation: Operation::Update,
                     body: serde_json::to_vec(&tuned).unwrap(),
+                    policies: None,
                 },
             )
             .await?;
@@ -249,6 +251,7 @@ fn deploy(proxy: &Proxy, rule: &Rule, as_compiled: bool) -> Result<(String, u16)
                     rule_id: remote.clone(),
                     operation: Operation::Disable,
                     body: serde_json::to_vec(&serde_json::json!({"enabled": false})).unwrap(),
+                    policies: None,
                 },
             )
             .await?;
