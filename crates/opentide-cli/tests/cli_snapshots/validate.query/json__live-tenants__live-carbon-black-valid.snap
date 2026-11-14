@@ -1,0 +1,37 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/live-tenants/live-carbon-black-valid
+---
+args: opentide --json validate query --live --platform carbon_black_cloud --uuid 00000000-0000-4000-8046-000000000004
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate query",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "1 query valid on 1 tenant",
+  "mode": "live",
+  "next_actions": [],
+  "ok": true,
+  "platform": "carbon_black_cloud",
+  "queries_per_tenant": {
+    "lab": 1
+  },
+  "queries_validated": 1,
+  "schema_version": 1,
+  "scope": "selected",
+  "status": "passed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "queries": 1,
+    "tenants": 1
+  },
+  "supported": true
+}
+
+━━━ stderr · empty

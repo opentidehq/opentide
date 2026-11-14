@@ -1,0 +1,14 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/plain/tide-corpus/typo-choice
+---
+args: opentide query --platform sentinal x
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: Invalid value "sentinal" for --platform: choose from sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops.
+  help: did you mean "sentinel"?
+  usage: opentide query [OPTIONS] --platform <PLATFORM> [query]
+  help: run 'opentide query --help'

@@ -105,6 +105,10 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
         ],
         275,
     ),
+    // Dry runs, and sends to tenants served from cassettes.
+    ("deploy", &["deploy", "deploy.migrate-state"], 157),
+    // Offline, and against tenants served from cassettes.
+    ("query", &["query", "validate.query"], 218),
     // The MISP destinations served from cassettes.
     (
         "share",
@@ -161,6 +165,64 @@ fn setup() {
 }
 
 #[test]
+fn deploy() {
+    group("deploy");
+}
+
+#[test]
+fn query() {
+    group("query");
+}
+
+#[test]
 fn share() {
     group("share");
+}
+
+/// Every case of the manifest is in a group (a new command's cases are not
+/// left without a snapshot), and every committed snapshot is a case's (a
+/// case removed or renamed takes its snapshot with it).
+#[test]
+fn every_case_has_a_group_and_every_snapshot_a_case() {
+    let cases = snapshot::cases();
+    let grouped: Vec<&str> = GROUPS
+        .iter()
+        .flat_map(|(_, commands, _)| commands.iter().copied())
+        .collect();
+    let orphans: Vec<&str> = cases
+        .iter()
+        .filter(|case| !grouped.contains(&case.command_dir.as_str()))
+        .map(|case| case.id.as_str())
+        .collect();
+    assert!(orphans.is_empty(), "cases in no group: {orphans:#?}");
+    let expected: std::collections::BTreeSet<String> = cases
+        .iter()
+        .map(|case| {
+            format!(
+                "{}/{}.snap",
+                case.command_dir,
+                snapshot::snapshot_name(case)
+            )
+        })
+        .collect();
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/cli_snapshots");
+    let mut stale = Vec::new();
+    for command in std::fs::read_dir(&dir).unwrap() {
+        let command = command.unwrap();
+        for file in std::fs::read_dir(command.path()).unwrap() {
+            let name = format!(
+                "{}/{}",
+                command.file_name().to_string_lossy(),
+                file.unwrap().file_name().to_string_lossy()
+            );
+            if std::path::Path::new(&name)
+                .extension()
+                .is_some_and(|ext| ext == "snap")
+                && !expected.contains(&name)
+            {
+                stale.push(name);
+            }
+        }
+    }
+    assert!(stale.is_empty(), "snapshots of no case: {stale:#?}");
 }
