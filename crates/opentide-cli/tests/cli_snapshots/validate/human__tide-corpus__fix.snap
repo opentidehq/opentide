@@ -6,8 +6,8 @@ args: opentide validate --fix
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m 12 objects valid · 8 queries · <SECONDS>
+␛[1m␛[32m✓␛[0m 12 objects valid · 8 queries · <SECONDS>
 
 ━━━ stderr
-␛[?25l<LIVE>␛[1;36m<SPIN>␛[0m Validating objects</LIVE>␛[?25h
+␛[?25l<LIVE>␛[1m␛[36m<SPIN>␛[0m Validating objects</LIVE>␛[?25h
 ⏎ no final newline

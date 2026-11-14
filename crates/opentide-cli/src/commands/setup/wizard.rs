@@ -17,7 +17,8 @@ use crate::mode::Mode;
 use crate::render::brand::pill;
 use crate::render::outcome::Console;
 use crate::render::table::columns;
-use crate::render::text::{Colour, Style, Text};
+use crate::render::text::{Colour, Text};
+use anstyle::Style;
 
 /// Why a wizard stopped before it was answered.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -195,7 +196,7 @@ impl Screen<'_> {
 
     /// `Target: <path>` (`[bold]Target:[/] ...`).
     fn target(&mut self, root: &Path) -> Answer<()> {
-        let mut line = Text::styled("Target:", &Style::new("bold"));
+        let mut line = Text::styled("Target:", &Style::new().bold());
         line.push_str(&format!(" {}", root.display()));
         self.line(&line)
     }
@@ -359,7 +360,7 @@ pub fn mcp(
     let picked = prompter.checkbox("MCP hosts", &labels(&MCP), &[], true)?;
     let hosts = keys(&MCP, &picked);
     screen.target(root)?;
-    let mut line = Text::styled("Hosts:", &Style::new("bold"));
+    let mut line = Text::styled("Hosts:", &Style::new().bold());
     line.push_str(&format!(" {}", hosts.join(", ")));
     screen.line(&line)?;
     Ok(prompter
@@ -391,7 +392,7 @@ pub fn confirm_skills(
     targets: &[String],
 ) -> Answer<bool> {
     screen.target(root)?;
-    let mut line = Text::styled("Agent environments:", &Style::new("bold"));
+    let mut line = Text::styled("Agent environments:", &Style::new().bold());
     line.push_str(&format!(" {}", targets.join(", ")));
     screen.line(&line)?;
     prompter.confirm("Install these agent skills?", true)
@@ -439,7 +440,7 @@ fn plan_rows(
 
 /// `Setup plan` and its rows, with a blank line around them (`render_plan`).
 fn render_plan(console: Console, rows: &[(String, String)]) -> String {
-    let bold = Style::new("bold");
+    let bold = Style::new().bold();
     let mut out = console.line(&Text::default());
     out.push_str(&console.line(&Text::styled("Setup plan", &bold)));
     let cells: Vec<Vec<Text>> = rows
@@ -508,28 +509,28 @@ pub fn welcome(console: Console, mode: Mode, version: &str) -> String {
             for row in logo(console.colour) {
                 out.push_str(&console.line(&row));
             }
-            let mut line = Text::styled(&format!("  {TAGLINE}"), &Style::new("italic"));
-            line.append(&format!("{separator}{version}"), &Style::new("dim"));
+            let mut line = Text::styled(&format!("  {TAGLINE}"), &Style::new().italic());
+            line.append(&format!("{separator}{version}"), &Style::new().dimmed());
             out.push_str(&console.line(&line));
         } else {
             let mut line = Text::plain("  ");
             line.append_text(&pill(console.colour));
-            line.append(&format!("{separator}{version}"), &Style::new("dim"));
+            line.append(&format!("{separator}{version}"), &Style::new().dimmed());
             out.push_str(&console.line(&line));
             out.push_str(&console.line(&Text::styled(
                 &format!("  {TAGLINE}"),
-                &Style::new("italic"),
+                &Style::new().italic(),
             )));
         }
     } else {
-        let mut line = Text::styled("opentide setup", &Style::new("bold"));
+        let mut line = Text::styled("opentide setup", &Style::new().bold());
         line.push_str(&format!("{separator}{TAGLINE}"));
         out.push_str(&console.line(&line));
     }
     out.push_str(&console.line(&Text::default()));
     out.push_str(&console.line(&Text::styled(
         &format!("  {WELCOME_LINE}"),
-        &Style::new("dim"),
+        &Style::new().dimmed(),
     )));
     out.push_str(&console.line(&Text::default()));
     out

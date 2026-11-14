@@ -779,12 +779,13 @@ async fn a_refused_or_failing_token_stops_the_tenant() {
 
 #[tokio::test]
 async fn an_unreachable_tenant_stops() {
-    let stand = Stand::start().await;
-    let address = stand.server.address().to_owned();
-    drop(stand.server);
-    // Nothing listens there any more.
-    let server = MockServer::start().await;
-    let _ = server;
+    // A port held but never listening: a connect is refused, and no other
+    // server can take the port while the test runs. (Dropping a
+    // `MockServer` is no such address: wiremock pools its servers, and a
+    // dropped one goes on listening for the next test that takes it.)
+    let closed = tokio::net::TcpSocket::new_v4().unwrap();
+    closed.bind("127.0.0.1:0".parse().unwrap()).unwrap();
+    let address = closed.local_addr().unwrap();
     let setup: toml::Table = toml::from_str(&format!(
         "region = \"eu\"\nclient_id = \"$A\"\nclient_secret = \"$B\"\napi_url = \"http://{address}\"\n"
     ))
@@ -818,6 +819,9 @@ async fn an_unreachable_tenant_stops() {
         "{}",
         failure.message
     );
+    // Refused before any answer: no HTTP status was read.
+    assert!(!failure.message.contains("HTTP"), "{}", failure.message);
+    drop(closed);
 }
 
 #[tokio::test]
@@ -1127,6 +1131,7 @@ async fn the_platform_deploys_through_the_generic_interface() {
         rule_id: String::new(),
         operation: Operation::Create,
         body: body.clone(),
+        policies: None,
     };
     let outcome = deployer.deploy(stand.cx(), &request).await.unwrap();
     assert_eq!(outcome.remote_id.as_deref(), Some(FIRST_ID));

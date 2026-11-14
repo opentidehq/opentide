@@ -68,6 +68,23 @@ mod lint {
         serde_json::to_string(finding).unwrap()
     }
 
+    /// The finding as `lint --json` writes it.
+    fn entry(finding: &LintFinding) -> serde_json::Value {
+        serde_json::to_value(finding).unwrap()
+    }
+
+    /// The fields of the finding's JSON entry, sorted.
+    fn keys(finding: &LintFinding) -> Vec<String> {
+        let mut keys: Vec<String> = entry(finding)
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        keys.sort_unstable();
+        keys
+    }
+
     #[test]
     fn a_clean_catalogue_passes_with_its_count() {
         let fs = workspace();
@@ -145,20 +162,39 @@ mod lint {
         assert!(report.next_actions.is_empty());
         let note = &report.findings[0];
         assert_eq!(note.code(), "metadata_recommended");
-        assert_eq!(note.json["path"], "objects/rules/sentinel-kql-rule.yaml");
+        assert_eq!(entry(note)["path"], "objects/rules/sentinel-kql-rule.yaml");
         // Read from the file at its new name: the `metadata` key's place.
-        assert_eq!(note.json["line"], 2);
+        assert_eq!(entry(note)["line"], 2);
         let first = &report.findings[1];
-        assert_eq!(first.json["fixed"], true);
-        assert_eq!(first.json["from"], "objects/rules/rule-0001.yaml");
-        assert_eq!(first.json["path"], "objects/rules/sentinel-kql-rule.yaml");
-        // `fixed` and `from` follow the message; a fixed finding has no step.
-        let keys: Vec<&str> = first.json.keys().map(String::as_str).collect();
+        assert_eq!(entry(first)["fixed"], true);
+        assert_eq!(entry(first)["from"], "objects/rules/rule-0001.yaml");
+        assert_eq!(entry(first)["path"], "objects/rules/sentinel-kql-rule.yaml");
+        // A fixed finding carries `expected`, `fixed` and `from` beside the
+        // fields every finding has, and no step.
         assert_eq!(
-            keys[5..10],
-            ["expected", "message", "fixed", "from", "code"]
+            keys(first),
+            [
+                "check",
+                "code",
+                "column",
+                "end_column",
+                "end_line",
+                "expected",
+                "explain",
+                "field_path",
+                "fix",
+                "fixed",
+                "from",
+                "help",
+                "line",
+                "message",
+                "path",
+                "severity",
+                "uuid",
+                "yaml_line",
+            ]
         );
-        assert_eq!(first.json["help"], serde_json::Value::Null);
+        assert_eq!(entry(first)["help"], serde_json::Value::Null);
         assert_eq!(
             first.diagnostic.notes,
             [(
@@ -188,7 +224,7 @@ mod lint {
         // `a.yaml` holds the slug; the other object gets its UUID's prefix.
         assert_eq!(report.findings.len(), 1);
         assert_eq!(
-            report.findings[0].json["expected"],
+            entry(&report.findings[0])["expected"],
             "objects/rules/a-22222222.yaml"
         );
         assert!(fs.is_file(Path::new("/ws/objects/rules/a-22222222.yaml")));
@@ -209,14 +245,14 @@ mod lint {
             .iter()
             .find(|f| f.code() == "filename_mismatch")
             .unwrap();
-        assert_eq!(mismatch.json["fixed"], false);
+        assert_eq!(entry(mismatch)["fixed"], false);
         assert!(
-            mismatch.json["message"]
+            entry(mismatch)["message"]
                 .as_str()
                 .unwrap()
                 .ends_with("; --fix skipped because objects/rules/two.yaml exists"),
             "{}",
-            mismatch.json["message"]
+            entry(mismatch)["message"]
         );
         assert!(fs.is_file(Path::new("/ws/objects/rules/one.yaml")));
         assert_eq!(report.fixed, 0);
@@ -232,19 +268,19 @@ mod lint {
         assert_eq!(bad.code(), "yaml_parse");
         assert_eq!(bad.severity(), "error");
         assert!(
-            bad.json["message"]
+            entry(bad)["message"]
                 .as_str()
                 .unwrap()
                 .starts_with("Could not parse object YAML: ")
         );
-        assert!(bad.json["line"].is_u64() && bad.json["column"].is_u64());
-        assert_eq!(bad.json["end_line"], bad.json["line"]);
+        assert!(entry(bad)["line"].is_u64() && entry(bad)["column"].is_u64());
+        assert_eq!(entry(bad)["end_line"], entry(bad)["line"]);
         let empty = &report.findings[1];
         assert_eq!(
-            empty.json["message"],
+            entry(empty)["message"],
             "Could not parse object YAML: expected a mapping at the top of the file, found an empty file"
         );
-        assert_eq!(empty.json["line"], serde_json::Value::Null);
+        assert_eq!(entry(empty)["line"], serde_json::Value::Null);
         assert_eq!(report.summary.unwrap().errors, 2);
         assert_eq!(report.status, LintStatus::Issues);
         // Errors do not fail the run; --strict does.
@@ -272,16 +308,16 @@ mod lint {
         let finding = &report.findings[0];
         assert_eq!(finding.code(), "name_missing");
         assert_eq!(
-            finding.json["message"],
+            entry(finding)["message"],
             "Object has no name; cannot check filename slug"
         );
         // The `name` key is on the first line.
-        assert_eq!(finding.json["yaml_line"], 0);
-        assert_eq!(finding.json["line"], 1);
-        assert_eq!(finding.json["column"], 1);
-        assert_eq!(finding.json["end_column"], 5);
+        assert_eq!(entry(finding)["yaml_line"], 0);
+        assert_eq!(entry(finding)["line"], 1);
+        assert_eq!(entry(finding)["column"], 1);
+        assert_eq!(entry(finding)["end_column"], 5);
         assert_eq!(
-            finding.json["help"],
+            entry(finding)["help"],
             "add a name: the file name is derived from it"
         );
     }
@@ -441,7 +477,7 @@ mod lint {
                 (
                     finding.code(),
                     finding.path(),
-                    finding.json["message"].as_str().unwrap(),
+                    finding.entry.message.as_str(),
                 )
             })
             .collect();
@@ -484,10 +520,10 @@ mod lint {
             .filter(|f| f.code() == "placeholder")
             .map(|f| {
                 (
-                    f.json["message"].as_str().unwrap().to_owned(),
-                    f.json["line"].as_u64().unwrap(),
-                    f.json["column"].as_u64().unwrap(),
-                    f.json["end_column"].as_u64().unwrap(),
+                    entry(f)["message"].as_str().unwrap().to_owned(),
+                    entry(f)["line"].as_u64().unwrap(),
+                    entry(f)["column"].as_u64().unwrap(),
+                    entry(f)["end_column"].as_u64().unwrap(),
                 )
             })
             .collect();
@@ -514,25 +550,25 @@ mod lint {
                 ),
             ]
         );
-        let keys: Vec<&str> = report.findings[0].json.keys().map(String::as_str).collect();
+        // Every field a finding has, and none of a file name finding's.
         assert_eq!(
-            keys,
+            keys(&report.findings[0]),
             [
                 "check",
-                "severity",
-                "path",
-                "yaml_line",
-                "uuid",
-                "help",
-                "line",
+                "code",
                 "column",
                 "end_column",
-                "message",
-                "code",
-                "field_path",
                 "end_line",
+                "explain",
+                "field_path",
                 "fix",
-                "explain"
+                "help",
+                "line",
+                "message",
+                "path",
+                "severity",
+                "uuid",
+                "yaml_line",
             ]
         );
     }
@@ -546,7 +582,7 @@ mod lint {
             codes(&report),
             [("nested_object_file", "objects/rules/team/r.yaml")]
         );
-        assert!(report.findings[0].json["message"]
+        assert!(entry(&report.findings[0])["message"]
             .as_str()
             .unwrap()
             .starts_with("objects/rules/team/r.yaml is in a subfolder of objects/rules and is not an object instance"));
@@ -575,7 +611,7 @@ mod lint {
             ]
         );
         assert_eq!(
-            report.findings[1].json["help"],
+            entry(&report.findings[1])["help"],
             "rename the file so its name matches the pattern R-.*"
         );
         assert_eq!(report.findings[1].diagnostic.severity, Severity::Error);
@@ -612,7 +648,7 @@ mod lint {
             [("filename_mismatch", "objects/rules/b.yaml")]
         );
         assert_eq!(
-            report.findings[0].json["expected"],
+            entry(&report.findings[0])["expected"],
             "objects/rules/a-22222222.yaml"
         );
         assert_eq!(report.summary.unwrap().files, 1);
@@ -659,7 +695,7 @@ mod lint {
             .findings
             .iter()
             .filter(|finding| finding.code() == "filename_mismatch")
-            .map(|finding| (finding.path(), finding.json["expected"].as_str().unwrap()))
+            .map(|finding| (finding.path(), finding.entry.expected.as_deref().unwrap()))
             .collect();
         expected.sort_unstable();
         assert_eq!(
@@ -752,13 +788,7 @@ mod lint {
         assert_eq!(
             found
                 .iter()
-                .map(|f| (
-                    f.code(),
-                    f.json
-                        .get("expected")
-                        .and_then(|e| e.as_str())
-                        .unwrap_or("")
-                ))
+                .map(|f| (f.code(), f.entry.expected.as_deref().unwrap_or("")))
                 .collect::<Vec<_>>(),
             [
                 ("metadata_recommended", ""),
@@ -942,7 +972,7 @@ mod lint {
         );
         let finding = LintFinding::from_engine("objects/rules/r.yaml", Some(U1), engine.clone());
         assert_eq!(finding.diagnostic.object_uuid, U1);
-        assert_eq!(finding.json["uuid"], serde_json::json!(U1));
+        assert_eq!(entry(&finding)["uuid"], serde_json::json!(U1));
         let without = LintFinding::from_engine("objects/rules/r.yaml", None, engine);
         assert_eq!(without.diagnostic.object_uuid, "");
     }

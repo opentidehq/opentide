@@ -9,5 +9,5 @@ exit: 2
 
 ━━━ stderr
 error: Missing command.
-  usage: opentide migrate <COMMAND>
+  usage: opentide migrate [OPTIONS] <COMMAND>
   help: run 'opentide migrate --help'

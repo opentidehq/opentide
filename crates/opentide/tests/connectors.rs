@@ -245,6 +245,7 @@ async fn a_deploy_sends_the_compiled_body() {
         rule_id: rule.to_owned(),
         operation: Operation::Create,
         body: body.as_bytes().to_vec(),
+        policies: None,
     };
     let outcome = connection.deploy(&request).await.unwrap();
     assert_eq!(outcome.operation, Operation::Create);
@@ -259,6 +260,7 @@ async fn a_platform_without_the_operation_says_so() {
         rule_id: "r".into(),
         operation: Operation::Delete,
         body: Vec::new(),
+        policies: None,
     };
     let error = connection.deploy(&request).await.unwrap_err();
     assert_eq!(code(&error), connectors::OPERATION_UNSUPPORTED);
@@ -325,6 +327,7 @@ fn block_on_runs_an_operation_from_synchronous_code() {
         rule_id: "r".into(),
         operation: Operation::Update,
         body: Vec::new(),
+        policies: None,
     };
     let error = connectors::block_on(connection.deploy(&request))
         .unwrap()
