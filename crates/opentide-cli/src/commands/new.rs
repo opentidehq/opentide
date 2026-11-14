@@ -277,29 +277,21 @@ fn is_workspace_root(path: &Path) -> bool {
     opentide_workspace::root::is_workspace_root(&opentide_workspace::OsFs, path)
 }
 
-/// The `.yaml` and `.yml` files under `root`, in path order.
+/// The `.yaml` and `.yml` files under `root`, in path order. A link to a
+/// folder is not entered, so a link that points back up ends.
 fn object_files(root: &Path) -> Vec<PathBuf> {
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.is_file()
-                && path
-                    .extension()
-                    .is_some_and(|ext| ext == "yaml" || ext == "yml")
-            {
-                out.push(path);
-            }
-        }
-    }
-    let mut files = Vec::new();
-    walk(root, &mut files);
-    files.sort_by(|a, b| a.components().cmp(b.components()));
-    files
+    walkdir::WalkDir::new(root)
+        .min_depth(1)
+        .sort_by_file_name()
+        .into_iter()
+        .filter_map(Result::ok)
+        .map(walkdir::DirEntry::into_path)
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|ext| ext == "yaml" || ext == "yml")
+                && path.is_file()
+        })
+        .collect()
 }
 
 /// A file's `metadata` mapping, if it parses and has one.
@@ -477,8 +469,10 @@ fn workspace_relative(path: &Path, root: &Path) -> String {
     )
 }
 
+/// `path` resolved, without Windows' `\\?\` prefix where the path can be
+/// written without it; `path` as given when it cannot be resolved.
 fn dunce_canonical(path: &Path) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+    dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// Today's date where the run is (`TZ`, else the system's zone).

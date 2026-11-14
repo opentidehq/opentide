@@ -900,6 +900,7 @@ fn deploy_through_platform(
         rule_id: rule_id.to_owned(),
         operation,
         body,
+        policies: None,
     };
     let outcome = runtime.block_on(Graylog.deploy(cx, &request));
     (
@@ -974,6 +975,17 @@ fn the_platform_refuses_fields_the_tenants_version_does_not_take() {
     let text = outcome.unwrap_err().text();
     assert!(text.contains("graylog_field_unsupported_version"), "{text}");
     assert!(text.contains("tags"), "{text}");
+    assert_eq!(requests.len(), 1, "only the version is read");
+}
+
+/// A body `compile_definition` built for 7.2 (what `deploy_plan` holds) is
+/// refused below 7.2 as it comes, without a field added by hand.
+#[test]
+fn the_platform_refuses_a_body_compiled_for_7_2_below_7_2() {
+    let (outcome, requests) = create_on(&definition(Version(7, 2, 0)), "7.1.3");
+    let text = outcome.unwrap_err().text();
+    assert!(text.contains("graylog_field_unsupported_version"), "{text}");
+    assert!(text.contains("Graylog 7.1.3"), "{text}");
     assert_eq!(requests.len(), 1, "only the version is read");
 }
 

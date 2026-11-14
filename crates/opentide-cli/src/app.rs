@@ -15,8 +15,9 @@ use crate::logging::{self, LogLayer, Sink};
 use crate::mode::{self, Inputs, Mode};
 use crate::redact::{Redactor, url_secrets, workspace_redactor};
 use crate::render::outcome::{Console, OutcomeKind};
-use crate::render::text::{Colour, Style, Text};
+use crate::render::text::{Colour, Text};
 use crate::usage;
+use anstyle::Style;
 use clap::FromArgMatches;
 use clap::parser::ValueSource;
 
@@ -245,7 +246,7 @@ impl Run<'_> {
             Mode::Mcp => {}
             _ => {
                 let console = self.console(self.host.stdout_tty);
-                let bold = Style::BOLD;
+                let bold = Style::new().bold();
                 for line in lines {
                     out.write_all(console.line(&Text::styled(line, &bold)).as_bytes())?;
                 }
@@ -1909,7 +1910,10 @@ impl Run<'_> {
         }
         err.write_all(result_err.as_bytes())?;
         if !run.refused && !self.globals.quiet && text_out {
-            let note = Text::styled(crate::commands::deploy::DRY_RUN_NOTE, &Style::DIM);
+            let note = Text::styled(
+                crate::commands::deploy::DRY_RUN_NOTE,
+                &Style::new().dimmed(),
+            );
             out.write_all(stdout.line(&note).as_bytes())?;
         }
         out.flush()?;
@@ -2863,8 +2867,10 @@ pub fn main(argv: &[String], version: &str) -> i32 {
         width: terminal_width(),
         interrupt,
     };
-    let mut out = std::io::stdout().lock();
-    let mut err = std::io::stderr();
+    // The renderers decide whether to style (`App::console`); the console
+    // streams only make a Windows console read what they write.
+    let mut out = anstream::AutoStream::always(std::io::stdout()).lock();
+    let mut err = anstream::AutoStream::always(std::io::stderr());
     run(argv, &env, &host, &mut out, &mut err)
 }
 

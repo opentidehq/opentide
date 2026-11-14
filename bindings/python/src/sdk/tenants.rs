@@ -254,13 +254,16 @@ impl Connection {
     /// Applies *operation* (`create`, `update`, `disable` or `delete`) to the
     /// rule *rule_id* on the tenant, sending *body* (a deploy plan's
     /// payload) as its bytes: an awaitable of `{remote_id, operation}`, as
-    /// JSON.
+    /// JSON. *policies* are Sysdig's runtime policies for the rule (a plan
+    /// entry's `policies`); `None` takes the tenant's.
+    #[pyo3(signature = (rule_id, operation, body, *, policies=None))]
     fn deploy<'py>(
         &self,
         py: Python<'py>,
         rule_id: String,
         operation: &str,
         body: Vec<u8>,
+        policies: Option<Vec<String>>,
     ) -> PyResult<Pending<'py>> {
         let operation = match operation {
             "create" => Operation::Create,
@@ -277,6 +280,7 @@ impl Connection {
             rule_id,
             operation,
             body,
+            policies,
         };
         let connection = Arc::clone(&self.inner);
         pending(py, async move {
