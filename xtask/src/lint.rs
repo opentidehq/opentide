@@ -192,7 +192,7 @@ fn yaml_error_text(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bo
 /// the tab and names the scalar it interrupts (`while scanning a plain
 /// scalar that starts at line L, column C`); saphyr places it at that
 /// scalar, L:C, one column wide.
-fn tab_in_scalar(oracle: &Json, rust: &Json) -> bool {
+pub(crate) fn tab_in_scalar(oracle: &Json, rust: &Json) -> bool {
     let words = oracle["message"].as_str().unwrap_or("");
     let Some(start) = words
         .split("while scanning a plain scalar that starts at line ")

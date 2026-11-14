@@ -86,8 +86,9 @@ pub const APPROVED: &[Approved] = &[
         id: "yaml-error-text",
         reason: "a file that is not YAML is reported in the words of the YAML 1.2 parser \
                  (saphyr), at the line and column the oracle names (one column later where \
-                 saphyr names the tab it refuses); the code, the file and the help are the \
-                 same (as in `cargo xtask registry diff`)",
+                 saphyr names the tab it refuses, or at the plain scalar a tab interrupts, \
+                 where the oracle named the tab's line); the code, the file and the help are \
+                 the same (as in `cargo xtask registry diff`)",
         changelog: "**Tide objects are read as YAML 1.2**",
         applies: yaml_error_text,
     },
@@ -294,12 +295,16 @@ fn yaml_error_text(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bo
         (Some(1), Some(1)) => message.contains("tab"),
         _ => false,
     };
+    let place = ["message", "column", "end_column"];
+    // A tab inside a multi-line plain scalar: the oracle places the error at
+    // the tab, saphyr at the scalar it interrupts (`crate::lint`'s rule).
+    let scalar = ["message", "line", "column", "end_line", "end_column"];
     code(oracle) == "yaml_parse"
         && code(rust) == "yaml_parse"
         && message.starts_with("Could not parse object YAML: ")
-        && columns
-        && without(oracle, &["message", "column", "end_column"])
-            == without(rust, &["message", "column", "end_column"])
+        && ((columns && without(oracle, &place) == without(rust, &place))
+            || (crate::lint::tab_in_scalar(oracle, rust)
+                && without(oracle, &scalar) == without(rust, &scalar)))
 }
 
 fn yaml_1_2_dates(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
@@ -1225,6 +1230,39 @@ mod tests {
             Some(&earlier),
             &[]
         ));
+    }
+
+    /// A tab inside a multi-line plain scalar: the oracle names the tab's
+    /// line, saphyr the scalar it interrupts (0.28.1's fault workspace).
+    #[test]
+    fn a_tab_in_a_plain_scalar_is_placed_at_the_scalar() {
+        let oracle = json!({
+            "code": "yaml_parse",
+            "file_path": "a.yaml",
+            "line": 45,
+            "end_line": 45,
+            "column": 1,
+            "end_column": 2,
+            "message": "Could not parse object YAML: found a tab character that violates \
+                        indentation at line 45, column 1 (while scanning a plain scalar that \
+                        starts at line 44, column 18)",
+        });
+        let mut rust = oracle.clone();
+        rust["line"] = json!(44);
+        rust["end_line"] = json!(44);
+        rust["column"] = json!(18);
+        rust["end_column"] = json!(19);
+        rust["message"] = json!(
+            "Could not parse object YAML: while scanning a plain scalar, found a tab at line 44, column 18"
+        );
+        assert!(yaml_error_text(Some(&oracle), Some(&rust), &[]));
+        // Anywhere but the scalar the oracle names: no.
+        let mut elsewhere = rust.clone();
+        elsewhere["column"] = json!(17);
+        assert!(!yaml_error_text(Some(&oracle), Some(&elsewhere), &[]));
+        let mut other_file = rust;
+        other_file["file_path"] = json!("b.yaml");
+        assert!(!yaml_error_text(Some(&oracle), Some(&other_file), &[]));
     }
 
     /// `id`'s recorded case and a fresh copy of its fixture, as `run` lays a
