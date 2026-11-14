@@ -1,9 +1,10 @@
 # opentide-native (bindings/python/) — agent guide
 
 The PyO3 binding of the engine, compiled into the `opentide` Python package as `opentide._native`
-(package name `opentide-native`, library `_native`, `publish = false`). It binds
-`opentide-analysis` by path; `hatch_build.py` runs `cargo build -p
-opentide-native` whenever a wheel or an editable install of opentide is built. Python reaches it
+(package name `opentide-native`, library `_native`, `publish = false`). It binds the facade
+crate `opentide` by path, and nothing else from the workspace, with the features `cli`,
+`analysis`, `python`, `connectors` and `plugins` (`Cargo.toml`); `hatch_build.py` runs `cargo
+build -p opentide-native` whenever a wheel or an editable install of opentide is built. Python reaches it
 through `src/opentide/analysis.py`; the SDK (`src/opentide/sdk.py`, `opentide.Workspace`) loads it
 there, then imports its submodule `sdk`. [`README.md`](README.md) describes the build.
 
@@ -16,12 +17,14 @@ there, then imports its submodule `sdk`. [`README.md`](README.md) describes the 
 
 ## Place
 
-bindings (`xtask/layers.toml`): depends on opentide-analysis, opentide-schema
-(`models`) and opentide-cli (`cli_main`, which the console script runs), the facade `opentide` with `cli` and
-`connectors` (`sdk`, UC-5.2) and pyo3-async-runtimes (the tenant operations as awaitables), and
-opentide-connectors with opentide-compile and tokio (the plugin host, UC-4.5); nothing depends on it. The plan's `bindings/python` (§4): once the engine functions move behind the
-facade it depends on `opentide` alone (D-5). It inherits the workspace lints, `unsafe_code = "forbid"` included: PyO3's macros
-need no `unsafe` of its own.
+bindings (`xtask/layers.toml`, `may_depend_on = ["opentide"]`): from the workspace it depends
+on the facade `opentide` alone (D-5, ADR 0005, UC-5.1 #836): `opentide::analysis` (the engine
+behind `opentide.analysis`), `opentide::cli` (`cli_main`, which the console script runs),
+`opentide::python` (the models), the facade's `Workspace` and tenant operations (`sdk`, UC-5.2)
+and `opentide::plugins` (the plugin host, UC-4.5). Outside it: pyo3, pyo3-async-runtimes and
+tokio (the tenant operations as awaitables) and serde. Nothing depends on it. What the binding
+needs goes into the facade's API first. It inherits the workspace lints, `unsafe_code =
+"forbid"` included: PyO3's macros need no `unsafe` of its own.
 
 ## Invariants
 
@@ -49,7 +52,7 @@ need no `unsafe` of its own.
 ```bash
 cargo nextest run --profile fast -p opentide-native     # the binding's unit tests
 uv sync --group dev                                      # rebuild _native into src/opentide/
-uv run pytest tests/test_lsp tests/test_validation -q --no-cov
+uv run pytest tests/test_sdk tests/test_lsp -q --no-cov
 ```
 
 `uv sync` builds with the `develop` profile and rebuilds when the workspace's manifests, lock,
