@@ -2777,6 +2777,7 @@ version = "0.12.0"
 dependencies = [
  "base64 0.22.1",
  "http",
+ "hyper-util",
  "jiff",
  "jsonwebtoken",
  "opentide-compile",
