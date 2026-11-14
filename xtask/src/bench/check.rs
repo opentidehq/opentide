@@ -1,10 +1,10 @@
 //! `cargo xtask bench --check BUDGETS BENCH.json [--previous LAST.json]`:
-//! a report against its budgets and the last `development` result.
+//! a report against its budgets and the last result of the base branch.
 //!
 //! A command fails when:
 //!
 //! - its median or peak RSS is more than `policy.regression` (10%) above the
-//!   last `development` result of the same engine, scale and seed
+//!   last result of the base branch (`BASE_BRANCH`) of the same engine, scale and seed
 //!   (`--previous`);
 //! - for the `python` engine, more than `policy.regression` above the oracle
 //!   baseline recorded in the budgets (`baseline_s`, `baseline_rss_mib`), when
@@ -499,7 +499,7 @@ pub struct Row {
     /// The median against the reference (the oracle baseline for `python`,
     /// the plan target for `rust`), as a fraction: 0.05 is 5% slower.
     pub delta_reference: Option<f64>,
-    /// The median against the last `development` result, as a fraction.
+    /// The median against the base branch's last result, as a fraction.
     pub delta_previous: Option<f64>,
     /// The verdict.
     pub verdict: Verdict,
@@ -588,8 +588,23 @@ fn incomparable(report: &Report, previous: &Report) -> Option<String> {
     None
 }
 
-/// Checks `report` against `budgets` and, when given, the last `development`
-/// result.
+/// The branch whose last result `--previous` is: bench.yml's `BASE_BRANCH`
+/// (integration/unified-core until the Unified Core merges into development).
+fn base_branch() -> String {
+    std::env::var("BASE_BRANCH")
+        .ok()
+        .map(|branch| branch.trim().to_owned())
+        .filter(|branch| !branch.is_empty())
+        .unwrap_or_else(|| "base-branch".to_owned())
+}
+
+/// The previous report, as the messages name it.
+fn last_result() -> String {
+    format!("the last {} result", base_branch())
+}
+
+/// Checks `report` against `budgets` and, when given, the last result of the
+/// base branch (bench.yml's `BASE_BRANCH`).
 pub fn check(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> Outcome {
     check_with(budgets, report, previous, false)
 }
@@ -705,8 +720,8 @@ fn check_against(budgets: &Budgets, report: &Report, previous: Option<&Report>) 
     let previous = previous.and_then(|previous| match incomparable(report, previous) {
         Some(why) => {
             notes.push(format!(
-                "the last development result is not comparable ({why}); \
-                 no regression check against it"
+                "{} is not comparable ({why}); no regression check against it",
+                last_result()
             ));
             None
         }
@@ -1018,9 +1033,10 @@ fn check_one(
             fail(
                 &mut row,
                 format!(
-                    "median {median:.3} s is {:+.1}% against the last development result \
-                     {prior_median:.3} s (more than {:.0}%)",
+                    "median {median:.3} s is {:+.1}% against {} {prior_median:.3} s \
+                     (more than {:.0}%)",
                     (median / prior_median - 1.0) * 100.0,
+                    last_result(),
                     policy.regression * 100.0
                 ),
             );
@@ -1029,10 +1045,10 @@ fn check_one(
             fail(
                 &mut row,
                 format!(
-                    "peak RSS {:.1} MiB is {:+.1}% against the last development result \
-                     {:.1} MiB (more than {:.0}%)",
+                    "peak RSS {:.1} MiB is {:+.1}% against {} {:.1} MiB (more than {:.0}%)",
                     rss / MIB,
                     (rss / prior_rss - 1.0) * 100.0,
+                    last_result(),
                     prior_rss / MIB,
                     policy.regression * 100.0
                 ),
@@ -1071,6 +1087,7 @@ fn percent(value: Option<f64>) -> String {
 pub fn summary_markdown(outcome: &Outcome, report: &Report) -> String {
     let mut out = String::new();
     let verdict = if outcome.passed() { "passed" } else { "FAILED" };
+    let base = base_branch();
     let _ = writeln!(
         out,
         "### Benchmarks: {} engine, scale {}: {verdict}\n",
@@ -1079,7 +1096,7 @@ pub fn summary_markdown(outcome: &Outcome, report: &Report) -> String {
     let _ = writeln!(
         out,
         "Median of {} cold process runs (after {} warm-up) and the median peak RSS \
-         (`wait4`), on {} ({} CPUs{}). Reference: {}. Last `development` result: {}.\n",
+         (`wait4`), on {} ({} CPUs{}). Reference: {}. Last `{base}` result: {}.\n",
         report.runs,
         report.warmup,
         report
@@ -1097,9 +1114,10 @@ pub fn summary_markdown(outcome: &Outcome, report: &Report) -> String {
         outcome.reference,
         outcome.previous.as_deref().unwrap_or("none found")
     );
-    out.push_str(
+    let _ = writeln!(
+        out,
         "| Command | Median | Peak RSS | Budget (time) | Budget (RSS) | Δ reference | \
-         Δ last `development` | Result |\n",
+         Δ last `{base}` | Result |",
     );
     out.push_str("|---|---:|---:|---:|---:|---:|---:|---|\n");
     for row in &outcome.rows {
@@ -1358,7 +1376,7 @@ target_s = 0.03
     }
 
     #[test]
-    fn a_regression_against_the_last_development_result_fails() {
+    fn a_regression_against_the_last_base_branch_result_fails() {
         let previous = report(
             "python",
             vec![
@@ -1366,7 +1384,7 @@ target_s = 0.03
                 measured("explain", 0.2, 33.0),
             ],
         );
-        // Within the baseline budget, but 20% slower than development.
+        // Within the baseline budget, but 20% slower than the base branch.
         let current = report(
             "python",
             vec![
@@ -1377,7 +1395,7 @@ target_s = 0.03
         let outcome = check(&budgets(), &current, Some(&previous));
         assert!(!outcome.passed());
         assert!(
-            outcome.failures[0].contains("last development result"),
+            outcome.failures[0].contains(&last_result()),
             "{:?}",
             outcome.failures
         );
@@ -1864,10 +1882,7 @@ target_s = 0.03
         let outcome = check(&waived, &rust(0.9, 140.0), Some(&last));
         assert!(!outcome.passed());
         assert!(
-            outcome
-                .failures
-                .iter()
-                .any(|f| f.contains("last development result")),
+            outcome.failures.iter().any(|f| f.contains(&last_result())),
             "{:?}",
             outcome.failures
         );
