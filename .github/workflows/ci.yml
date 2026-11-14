@@ -436,6 +436,9 @@ jobs:
       - name: Install mold
         run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
 
+      - name: Runner CPU
+        run: grep -m1 "model name" /proc/cpuinfo
+
       - name: Compiler cache week
         id: week
         shell: bash
@@ -566,6 +569,8 @@ jobs:
       - name: cargo nextest (profile ci)
         env:
           OPENTIDE_PYTHON: python
+          # EXPERIMENT (#1141): are the tests wait-bound?
+          NEXTEST_TEST_THREADS: "8"
         run: |
           read -ra pkg_args <<< "${PACKAGES}"
           read -ra feature_args <<< "${FEATURES}"
