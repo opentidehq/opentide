@@ -706,7 +706,7 @@ fn field_row(
         node.insert("default".into(), Json::from(default));
     }
     if let Some(min_items) = min_items(root, &spec) {
-        node.insert("min_items".into(), Json::Number(min_items.into()));
+        node.insert("min_items".into(), Json::from(min_items));
     }
     Row {
         schema: identifier.to_owned(),
