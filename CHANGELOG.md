@@ -222,7 +222,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
   - `opentide new` quotes a name by YAML 1.2's rule: `1e3` and `0o17` are quoted, `1_000` is not.
 - **JSON files are written as serde_json writes them, in UTF-8, with the same data** ([#790](https://github.com/opentidehq/opentide/issues/790)). The JSON Schemas of `generate schemas`, the files of `generate exports` and `generate explorer`, and the `mcp.json` and `settings.json` files `setup` creates parse into the documents they held; a diff shows these lines as changed:
   - a character past ASCII is written as itself (`é`), where it was escaped (`\u00e9`);
-  - `generate explorer`'s files are one compact line (`{"a":1}`), where a space followed each `,` and `:`;
+  - `generate explorer`'s files are one compact line (`{"a":1}`), where a space followed each `,` and `:`, and so is each search document's `content` (the object's body as JSON), so its 4,000 characters hold more of the object;
   - a Tide mapping key that is a float is written as JSON writes the number (`0.00001`), where it was Python's text (`1e-05`).
   - The YAML opentide quotes keeps its characters too: a platform status a deploy promotes a rule to, and a value of a `generate templates` template, are double-quoted as YAML where they need quoting (`"a: é"`), where they were quoted as JSON with non-ASCII escaped (`"a: \u00e9"`).
 - **`setup ci` writes its pipeline with LF line endings on every OS** ([#916](https://github.com/opentidehq/opentide/issues/916)), Windows included, where it wrote CRLF there.

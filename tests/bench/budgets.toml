@@ -28,7 +28,7 @@
 #                                 budget itself stays. Remove both when the summary says
 #                                 the command meets its budget
 #
-# Every run is also held to the last development result (--previous): more than
+# Every run is also held to the last result of the base branch (--previous, BASE_BRANCH): more than
 # policy.regression above it fails. A difference within the noise floor never does.
 # To re-record the baseline: run the Benchmarks workflow on development, check the run's
 # runner and numbers, and copy its medians here in a change of its own that says why.
