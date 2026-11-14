@@ -1732,9 +1732,9 @@ fn early(platform: &str, tenant: &str, error: ConnectorError) -> Early {
         ConnectorError::Setup { message, .. } => Early::Failed(message),
         ConnectorError::Cancelled => Early::Failed("interrupted".to_owned()),
         ConnectorError::Authentication { message, .. } => {
-            Early::Crashed(format!("TenantConnectionError: {message}"))
+            Early::Crashed(format!("{platform} tenant '{tenant}': {message}"))
         }
-        other => Early::Crashed(format!("ConnectorError: {other}")),
+        other => Early::Crashed(other.to_string()),
     }
 }
 
