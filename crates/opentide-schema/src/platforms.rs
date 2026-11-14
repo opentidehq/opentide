@@ -396,10 +396,10 @@ pub const PLATFORMS: &[Platform] = &[
         live_check: true,
         query_runner: true,
         runner_languages: &["exabeam"],
-        // The Exabeam Query Language comes with the engine import (E1):
-        // until then the engine parses none of these queries offline.
-        offline_languages: &[],
-        query_file_suffixes: &[],
+        // The sequence filters, profile `rule`, and a `.exabeam` file or an
+        // `system: exabeam` hunt, profile `search` (exabeam-1.0).
+        offline_languages: &["exabeam"],
+        query_file_suffixes: &["exabeam"],
         cli_rank: 11,
         connector_rank: 11,
         configuration_rank: 11,
@@ -758,7 +758,7 @@ mod tests {
             query_file_suffixes(),
             [
                 "kql", "spl", "cql", "yar", "yara", "lucene", "esql", "eql", "kuery", "falco",
-                "yaral", "yl2"
+                "exabeam", "yaral", "yl2"
             ]
         );
     }

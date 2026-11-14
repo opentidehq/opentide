@@ -94,13 +94,10 @@ fn items<'j>(table: &'j Json, key: &str) -> &'j [Json] {
     }
 }
 
-/// Python's `str()` of a scalar.
-fn py_str(value: &Json) -> String {
+/// A value as text: a string as itself, any other value in its JSON form
+/// (`null`, `true`, `false`, `42`), as the Rust messages write it (#1068).
+fn scalar_text(value: &Json) -> String {
     match value {
-        Json::Null => "None".to_owned(),
-        Json::Bool(true) => "True".to_owned(),
-        Json::Bool(false) => "False".to_owned(),
-        Json::Int(integer) => integer.to_string(),
         Json::Str(text) => text.clone(),
         other => other.to_compact(),
     }
@@ -120,7 +117,7 @@ fn block_of(rule: &Rule) -> Result<&Json, CompileError> {
 pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, CompileError> {
     let status = block_of(rule)?
         .get("status")
-        .map_or_else(|| "None".to_owned(), py_str);
+        .map_or_else(|| "null".to_owned(), scalar_text);
     cx.statuses
         .strategy(&status)
         .map_err(|error| CompileError::failed(DISPLAY, &error.exception_text()))
@@ -163,7 +160,7 @@ pub fn derive_severity(rule: &Rule, block: &Json) -> String {
     else {
         return DEFAULT_SEVERITY.to_owned();
     };
-    alert_severity(&python_strip(&py_str(severity)).to_lowercase())
+    alert_severity(&python_strip(&scalar_text(severity)).to_lowercase())
         .unwrap_or(DEFAULT_SEVERITY)
         .to_owned()
 }
@@ -192,7 +189,7 @@ pub fn threshold_value(value: Option<&Json>) -> String {
             Json::Float(float) if float.fract() == 0.0 && float.is_finite() => {
                 format!("{float:.0}")
             }
-            other => py_str(other),
+            other => scalar_text(other),
         }
     }
     match value {
@@ -203,7 +200,12 @@ pub fn threshold_value(value: Option<&Json>) -> String {
 }
 
 fn strings(values: &[Json]) -> Json {
-    Json::Array(values.iter().map(|value| py_str(value).into()).collect())
+    Json::Array(
+        values
+            .iter()
+            .map(|value| scalar_text(value).into())
+            .collect(),
+    )
 }
 
 fn condition(sequence: &Json) -> Result<Object, CompileError> {
@@ -216,7 +218,9 @@ fn condition(sequence: &Json) -> Result<Object, CompileError> {
     let Some(threshold) = threshold else {
         return Ok(condition);
     };
-    let function = field(threshold, "function").map(py_str).unwrap_or_default();
+    let function = field(threshold, "function")
+        .map(scalar_text)
+        .unwrap_or_default();
     condition.insert("functionType".into(), function.into());
     let column = text(threshold, "field");
     condition.insert(
@@ -226,7 +230,9 @@ fn condition(sequence: &Json) -> Result<Object, CompileError> {
     if let Some(column) = column {
         condition.insert("field".into(), column.into());
     }
-    let operator = field(threshold, "operator").map(py_str).unwrap_or_default();
+    let operator = field(threshold, "operator")
+        .map(scalar_text)
+        .unwrap_or_default();
     condition.insert("operator".into(), operator.into());
     condition.insert(
         "value".into(),
@@ -243,7 +249,9 @@ fn sequence(sequence: &Json) -> Result<Json, CompileError> {
     if let Some(name) = text(sequence, "name") {
         entry.insert("name".into(), name.into());
     }
-    let query = field(sequence, "query").map(py_str).unwrap_or_default();
+    let query = field(sequence, "query")
+        .map(scalar_text)
+        .unwrap_or_default();
     entry.insert("query".into(), python_strip(&query).into());
     entry.insert("condition".into(), Json::Object(condition(sequence)?));
     Ok(Json::Object(entry))
@@ -295,21 +303,21 @@ fn recurrence(recurrence: &Json) -> Result<Json, CompileError> {
     out.insert(
         "startTime".into(),
         field(recurrence, "from")
-            .map(py_str)
+            .map(scalar_text)
             .unwrap_or_default()
             .into(),
     );
     out.insert(
         "endTime".into(),
         field(recurrence, "to")
-            .map(py_str)
+            .map(scalar_text)
             .unwrap_or_default()
             .into(),
     );
     let upper = |key: &str| {
         field(recurrence, key)
-            .map(py_str)
-            .unwrap_or_else(|| "None".to_owned())
+            .map(scalar_text)
+            .unwrap_or_else(|| "null".to_owned())
             .to_uppercase()
     };
     match every {
@@ -319,7 +327,7 @@ fn recurrence(recurrence: &Json) -> Result<Json, CompileError> {
                 Json::Array(
                     items(recurrence, "days")
                         .iter()
-                        .map(|day| py_str(day).to_uppercase().into())
+                        .map(|day| scalar_text(day).to_uppercase().into())
                         .collect(),
                 ),
             );

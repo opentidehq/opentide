@@ -462,3 +462,22 @@ fn the_deployment_follows_the_status() {
     });
     assert_eq!(error.code, "compile_failed");
 }
+
+/// A status that is not a string is named in its JSON form, `true` or
+/// `null` when missing, never Python's `True` or `None` (#1068).
+#[test]
+fn a_status_is_named_in_its_json_form() {
+    for (status, named) in [("    status: true\n", "true"), ("", "null")] {
+        let text = block_rule(ONE_SEQUENCE, "").replace("    status: STAGING\n", status);
+        let error = with_rule(&text, UUID, |cx, rule| {
+            exabeam::compile_deployment(cx, rule, None).unwrap_err()
+        });
+        assert_eq!(error.code, "compile_failed");
+        assert!(error.reason.contains(named), "{}", error.reason);
+        assert!(
+            !error.reason.contains("True") && !error.reason.contains("None"),
+            "{}",
+            error.reason
+        );
+    }
+}

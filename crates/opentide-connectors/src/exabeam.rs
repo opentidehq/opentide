@@ -242,12 +242,10 @@ impl From<ConnectorError> for Failure {
     }
 }
 
-/// Python's `str()` of a JSON scalar.
-fn py_str(value: &Json) -> String {
+/// A value as text: a string as itself, any other value in its JSON form
+/// (`null`, `true`, `false`, `42`), as the Rust messages write it (#1068).
+fn scalar_text(value: &Json) -> String {
     match value {
-        Json::Null => "None".to_owned(),
-        Json::Bool(true) => "True".to_owned(),
-        Json::Bool(false) => "False".to_owned(),
         Json::Str(text) => text.clone(),
         other => other.to_compact(),
     }
@@ -259,20 +257,20 @@ fn error_entry(entry: &Object) -> String {
     let message = entry
         .get("message")
         .filter(|message| message.truthy())
-        .map(|message| python_strip(&py_str(message)).to_owned())
+        .map(|message| python_strip(&scalar_text(message)).to_owned())
         .unwrap_or_default();
     let mut text = match code {
-        Some(code) if !message.is_empty() => format!("{}: {message}", py_str(code)),
-        Some(code) => py_str(code),
+        Some(code) if !message.is_empty() => format!("{}: {message}", scalar_text(code)),
+        Some(code) => scalar_text(code),
         None => message,
     };
     match entry.get("fields") {
         Some(Json::Array(fields)) if !fields.is_empty() => {
-            let names: Vec<String> = fields.iter().map(py_str).collect();
+            let names: Vec<String> = fields.iter().map(scalar_text).collect();
             text.push_str(&format!(" (fields: {})", names.join(", ")));
         }
         Some(fields @ (Json::Str(_) | Json::Object(_))) if fields.truthy() => {
-            text.push_str(&format!(" (fields: {})", py_str(fields)));
+            text.push_str(&format!(" (fields: {})", scalar_text(fields)));
         }
         _ => {}
     }
@@ -295,7 +293,7 @@ pub fn api_error(action: &str, reply: &Reply) -> ApiError {
         error.trace_id = payload
             .get("traceId")
             .filter(|trace| trace.truthy())
-            .map(py_str);
+            .map(scalar_text);
         message = error
             .errors
             .iter()
@@ -308,7 +306,7 @@ pub fn api_error(action: &str, reply: &Reply) -> ApiError {
                 .get("message")
                 .filter(|value| value.truthy())
                 .or_else(|| payload.get("error").filter(|value| value.truthy()))
-                .map(py_str)
+                .map(scalar_text)
                 .unwrap_or_default();
         }
     }
@@ -994,7 +992,9 @@ pub fn name_matches<'r>(rules: &'r [Object], name: &str) -> Vec<&'r Object> {
     let wanted = caseless_fold(name);
     rules
         .iter()
-        .filter(|rule| caseless_fold(&rule.get("name").map(py_str).unwrap_or_default()) == wanted)
+        .filter(|rule| {
+            caseless_fold(&rule.get("name").map(scalar_text).unwrap_or_default()) == wanted
+        })
         .collect()
 }
 
@@ -1170,7 +1170,7 @@ async fn create_unnamed(
     if !existing.is_empty() {
         let ids = existing
             .iter()
-            .map(|rule| rule.get("id").map_or_else(|| "?".to_owned(), py_str))
+            .map(|rule| rule.get("id").map_or_else(|| "?".to_owned(), scalar_text))
             .collect::<Vec<_>>()
             .join(", ");
         outcome.failure = Some(
@@ -1237,10 +1237,10 @@ async fn create_unnamed(
     };
     let Some(rule_id) = returned_rule_id(&result) else {
         let id = result.get("id").map_or_else(
-            || "None".to_owned(),
+            || "null".to_owned(),
             |id| match id {
                 Json::Str(text) => opentide_schema::configuration::repr::quote(text),
-                other => py_str(other),
+                other => scalar_text(other),
             },
         );
         outcome.failure = Some(Event::new(
