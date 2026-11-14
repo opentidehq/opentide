@@ -30,8 +30,9 @@ const RULE_FILE: &str = "objects/rules/rule-0001-sentinel-kql.yaml";
 struct Client {
     child: Child,
     stdin: Option<ChildStdin>,
-    /// Each line of stdout; `None` at its end.
-    lines: Receiver<Option<String>>,
+    /// Each line of stdout, an error for one that is not UTF-8; `None` at
+    /// its end.
+    lines: Receiver<Option<Result<String, String>>>,
     stderr: Arc<Mutex<String>>,
     next_id: i64,
 }
@@ -48,8 +49,17 @@ fn start(cwd: &Path, args: &[&str], env: &[(&str, &Path)]) -> Client {
         }
     }
     command.env("CI", "true").env("PWD", cwd);
-    for name in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"] {
+    for name in [
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+    ] {
         command.env(name, "http://127.0.0.1:9");
+    }
+    for name in ["NO_PROXY", "no_proxy", "all_proxy"] {
+        command.env_remove(name);
     }
     for (name, value) in env {
         command.env(name, value);
@@ -64,7 +74,8 @@ fn start(cwd: &Path, args: &[&str], env: &[(&str, &Path)]) -> Client {
     let stdout = BufReader::new(child.stdout.take().unwrap());
     std::thread::spawn(move || {
         for line in stdout.lines() {
-            let _ = sender.send(Some(line.unwrap_or_default()));
+            let line = line.map_err(|error| error.to_string());
+            let _ = sender.send(Some(line));
         }
         let _ = sender.send(None);
     });
@@ -121,6 +132,7 @@ impl Client {
         loop {
             let line = self.lines.recv_timeout(PATIENCE).ok().flatten();
             let line = line.unwrap_or_else(|| panic!("no answer to {method}: {}", self.stderr()));
+            let line = self.text(line);
             if line.trim().is_empty() {
                 continue;
             }
@@ -173,6 +185,12 @@ impl Client {
         serde_json::from_str(text).unwrap()
     }
 
+    /// A line of stdout, which must be text: bytes that are not UTF-8 are
+    /// no JSON-RPC frame.
+    fn text(&self, line: Result<String, String>) -> String {
+        line.unwrap_or_else(|error| panic!("garbled stdout ({error}): {}", self.stderr()))
+    }
+
     fn stderr(&self) -> String {
         self.stderr.lock().unwrap().clone()
     }
@@ -182,6 +200,7 @@ impl Client {
     fn close(mut self) {
         drop(self.stdin.take());
         while let Some(line) = self.lines.recv_timeout(PATIENCE).expect("stdout to close") {
+            let line = self.text(line);
             if !line.trim().is_empty() {
                 frame(&line);
             }
@@ -425,7 +444,7 @@ fn content_length_headers_are_skipped_and_the_body_is_answered() {
         .recv_timeout(PATIENCE)
         .unwrap()
         .expect("an answer");
-    let answer = frame(&line);
+    let answer = frame(&client.text(line));
     assert_eq!(answer["id"], 1, "{answer}");
     assert_eq!(answer["result"]["serverInfo"]["name"], "opentide");
     client.close();

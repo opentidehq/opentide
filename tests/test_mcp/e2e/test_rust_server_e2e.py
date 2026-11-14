@@ -22,6 +22,8 @@ from typing import Any
 import pytest
 from tests.corpus_support import CORPUS_RULE_UUIDS, materialise_corpus
 
+import opentide
+
 pytestmark = pytest.mark.cli_smoke
 
 PROTOCOL_VERSION = "2024-11-05"
@@ -109,8 +111,8 @@ class StdioClient:
             if envelope.get("id") == request_id:
                 return envelope
 
-    def handshake(self) -> None:
-        self.request(
+    def handshake(self) -> dict[str, Any]:
+        response = self.request(
             "initialize",
             {
                 "protocolVersion": PROTOCOL_VERSION,
@@ -119,6 +121,7 @@ class StdioClient:
             },
         )
         self._send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        return response["result"]
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         result = self.request("tools/call", {"name": name, "arguments": arguments})["result"]
@@ -163,7 +166,8 @@ def test_stray_output_in_the_process_never_reaches_the_frames(tmp_path: Path) ->
     )
     client = StdioClient(process)
     try:
-        client.handshake()
+        # The version the launcher passes the engine: the package's.
+        assert client.handshake()["serverInfo"]["version"] == opentide.__version__
         hits = client.call_tool("search", {"query": CORPUS_RULE_UUIDS["sentinel"]})
         assert [hit["uuid"] for hit in hits] == [CORPUS_RULE_UUIDS["sentinel"]]
         report = client.call_tool("validation_report", {})
