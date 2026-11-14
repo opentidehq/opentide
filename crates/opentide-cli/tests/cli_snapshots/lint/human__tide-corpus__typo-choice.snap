@@ -1,0 +1,15 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lint/human/tide-corpus/typo-choice
+---
+args: opentide lint --check filenamez
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+␛[1;31merror:␛[0m Invalid value "filenamez" for --check: choose from filenames, metadata, recommended,
+       placeholders, queries.
+  ␛[1;36mhelp:␛[0m did you mean "filenames"?
+  ␛[1musage:␛[0m opentide lint [OPTIONS]
+  ␛[1;36mhelp:␛[0m run 'opentide lint --help'

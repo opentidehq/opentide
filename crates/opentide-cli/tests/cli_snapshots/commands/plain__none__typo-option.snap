@@ -1,0 +1,13 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: commands/plain/none/typo-option
+---
+args: opentide commands --jsno
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: Unknown option "--jsno".
+  usage: opentide commands
+  help: run 'opentide commands --help'

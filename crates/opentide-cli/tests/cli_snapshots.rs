@@ -37,6 +37,55 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
     ),
     ("explain", &["explain"], 22),
     ("validate", &["validate"], 190),
+    // The read-only reports, and the protocol commands' help and refusals.
+    (
+        "reports_and_protocols",
+        &[
+            "lint",
+            "info",
+            "commands",
+            "doctor",
+            "tui",
+            "serve",
+            "lsp.start",
+            "mcp.start",
+        ],
+        222,
+    ),
+    (
+        "generate",
+        &[
+            "generate",
+            "generate.docs",
+            "generate.docs.index",
+            "generate.docs.objectives",
+            "generate.docs.rules",
+            "generate.docs.threats",
+            "generate.explorer",
+            "generate.exports",
+            "generate.exports.navigator",
+            "generate.exports.objects",
+            "generate.exports.revisions",
+            "generate.extract.defender",
+            "generate.extract.elastic",
+            "generate.extract.sentinel",
+            "generate.inflight",
+            "generate.inflight.prune",
+        ],
+        274,
+    ),
+    // The commands that write objects.
+    (
+        "new_migrate_and_rules",
+        &[
+            "new.threat",
+            "new.rule",
+            "new.objective",
+            "migrate.vocab-scope",
+            "rules.unreviewed",
+        ],
+        114,
+    ),
 ];
 
 fn group(name: &str) {
@@ -57,4 +106,19 @@ fn explain() {
 #[test]
 fn validate() {
     group("validate");
+}
+
+#[test]
+fn reports_and_protocols() {
+    group("reports_and_protocols");
+}
+
+#[test]
+fn generate() {
+    group("generate");
+}
+
+#[test]
+fn new_migrate_and_rules() {
+    group("new_migrate_and_rules");
 }

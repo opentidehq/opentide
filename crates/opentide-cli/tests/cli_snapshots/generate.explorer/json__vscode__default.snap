@@ -1,0 +1,32 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.explorer/json/vscode/default
+---
+args: opentide --json generate explorer
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "generate explorer",
+  "duration_ms": 0,
+  "error": "explorer: missing key `objective` while rendering 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "explorer: missing key `objective` while rendering 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f",
+    "suggestion": null
+  },
+  "message": "explorer: missing key `objective` while rendering 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f",
+  "next_actions": [],
+  "ok": false,
+  "phase": "explorer",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty
+
+━━━ ws/.opentide/exports/ · created 0755
