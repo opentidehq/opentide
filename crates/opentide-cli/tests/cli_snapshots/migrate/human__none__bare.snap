@@ -1,0 +1,13 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: migrate/human/none/bare
+---
+args: opentide migrate
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+␛[1m␛[31merror:␛[0m Missing command.
+  ␛[1musage:␛[0m opentide migrate [OPTIONS] <COMMAND>
+  ␛[1m␛[36mhelp:␛[0m run 'opentide migrate --help'

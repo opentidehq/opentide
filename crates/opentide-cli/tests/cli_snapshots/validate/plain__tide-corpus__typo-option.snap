@@ -1,0 +1,14 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/plain/tide-corpus/typo-option
+---
+args: opentide validate --strictt
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: Unknown option "--strictt".
+  help: did you mean "--strict"?
+  usage: opentide validate [OPTIONS] [COMMAND]
+  help: run 'opentide validate --help'

@@ -54,23 +54,32 @@ pub fn path_to_uri(path: &str) -> String {
     // Not an absolute path on this platform (a Windows drive path read
     // elsewhere): encode it by hand, as a Windows host would write it.
     let normalized = path.replace('\\', "/");
-    let mut out = String::from("file://");
-    if !normalized.starts_with('/') {
-        out.push('/');
-    }
-    for ch in normalized.chars() {
-        let keep = ch.is_ascii_alphanumeric() || "/-._~:!$&'()*+,;=@".contains(ch);
-        if keep {
-            out.push(ch);
-        } else {
-            let mut buf = [0u8; 4];
-            for byte in ch.encode_utf8(&mut buf).bytes() {
-                out.push_str(&format!("%{byte:02X}"));
-            }
-        }
-    }
-    out
+    let slash = if normalized.starts_with('/') { "" } else { "/" };
+    let encoded = percent_encoding::utf8_percent_encode(&normalized, PATH_ESCAPED);
+    format!("file://{slash}{encoded}")
 }
+
+/// What [`path_to_uri`] escapes: every byte but the unreserved characters,
+/// the sub-delimiters, `/`, `:` and `@` (RFC 3986's `pchar` and `/`).
+const PATH_ESCAPED: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
+    .remove(b'/')
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'_')
+    .remove(b'~')
+    .remove(b':')
+    .remove(b'!')
+    .remove(b'$')
+    .remove(b'&')
+    .remove(b'\'')
+    .remove(b'(')
+    .remove(b')')
+    .remove(b'*')
+    .remove(b'+')
+    .remove(b',')
+    .remove(b';')
+    .remove(b'=')
+    .remove(b'@');
 
 /// What `url` makes of a `file:` URL on a platform with file paths.
 /// `wasm32-unknown-unknown` (the browser build) has none: [`uri_to_path`]
@@ -101,23 +110,12 @@ fn file_uri_of(_path: &str) -> Option<String> {
     None
 }
 
+/// `text` with its `%XX` escapes decoded; a `%` not followed by two hex
+/// digits is kept, and a path that does not decode to UTF-8 is kept as it is.
 fn percent_decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).ok();
-            if let Some(value) = hex.and_then(|h| u8::from_str_radix(h, 16).ok()) {
-                out.push(value);
-                i += 3;
-                continue;
-            }
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8(out).unwrap_or_else(|_| text.to_string())
+    percent_encoding::percent_decode_str(text)
+        .decode_utf8()
+        .map_or_else(|_| text.to_string(), std::borrow::Cow::into_owned)
 }
 
 #[cfg(test)]
@@ -137,6 +135,32 @@ mod tests {
             assert_eq!(uri_to_path(&path_to_uri(path)), path, "{path}");
         }
         assert_eq!(path_to_uri("/a b"), "file:///a%20b");
+    }
+
+    #[test]
+    fn escapes_decode_to_the_end_and_bad_ones_are_kept() {
+        assert_eq!(percent_decode("/a%20b%20"), "/a b ");
+        assert_eq!(percent_decode("/r%23"), "/r#");
+        assert_eq!(percent_decode("/d%C3%A9t"), "/dét");
+        // Not an escape: `%` with fewer than two hex digits after it.
+        assert_eq!(percent_decode("/100%"), "/100%");
+        assert_eq!(percent_decode("/a%2"), "/a%2");
+        assert_eq!(percent_decode("/a%zz"), "/a%zz");
+        // Not UTF-8 once decoded: the path as it came.
+        assert_eq!(percent_decode("/a%FF"), "/a%FF");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_drive_path_read_elsewhere_is_escaped_as_a_windows_host_writes_it() {
+        assert_eq!(
+            path_to_uri(r"c:\Users\u\My Detections\dét (1)#~.yaml"),
+            "file:///c:/Users/u/My%20Detections/d%C3%A9t%20(1)%23~.yaml"
+        );
+        assert_eq!(
+            uri_to_path("file://server/share/My%20Rule%20"),
+            "//server/share/My Rule "
+        );
     }
 
     #[test]
