@@ -386,7 +386,7 @@ def test_a_job_that_wraps_rustc_in_sccache_installs_it_first() -> None:
     """RUSTC_WRAPPER=sccache without the binary fails every cargo command."""
     jobs = _ci()["jobs"]
     wrapped = [job_id for job_id, job in jobs.items() if _wraps_with_sccache(job)]
-    expected = {"engine-test-part", "test", "cli-e2e", "golden-compare-part", "corpus-part"}
+    expected = {"engine-test-part", "test", "cli-e2e", "golden-compare-part", "corpus-part", "wasi"}
     assert expected <= set(wrapped)
     for job_id in wrapped:
         steps = jobs[job_id]["steps"]
@@ -625,6 +625,23 @@ def test_the_full_set_shares_one_compiler_cache_per_os() -> None:
     assert sorted(matrix) == ["macos-latest", "ubuntu-latest", "windows-latest"]
     used = {str(jobs[j]["runs-on"]) for j in FULL_SET_JOBS if j != "conformance"}
     assert used <= set(matrix), used
+
+
+def test_the_wasi_job_keeps_a_core_family_of_its_own() -> None:
+    """The WASI command line's job is in the core set and builds what no other
+    job does (the module for wasm32-wasip1 in the `wasi` profile, and xtask):
+    it restored the full set's family, which it never saved, and compiled most
+    of it again on every run (#841)."""
+    cache = _compiler_cache("wasi")
+    family = "sccache-wasi-" + STABLE_HASH
+    assert cache.restores == cache.saves == family
+    assert str(cache.save_condition).startswith(PUSH_ONLY), cache.save_condition
+    assert {c.job for c in _compiler_caches() if c.restores == family} == {"wasi"}
+    names = [str(s.get("name", "")) for s in _ci()["jobs"]["wasi"]["steps"]]
+    # xtask builds in a step of its own, before the compare that runs it.
+    assert names.index("Build xtask") < names.index(
+        "Every golden case that needs no network, through the WASI module"
+    )
 
 
 def test_only_the_fuzz_jobs_keep_a_target_tree_in_ci() -> None:

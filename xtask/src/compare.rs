@@ -388,6 +388,7 @@ fn precompiled(wasmtime: &Path, module: &Path, dir: &Path) -> Result<std::path::
         (Some(source), Some(output)) if output >= source
     );
     if !fresh {
+        let started = std::time::Instant::now();
         let status = std::process::Command::new(wasmtime)
             .arg("compile")
             .arg("-o")
@@ -398,6 +399,11 @@ fn precompiled(wasmtime: &Path, module: &Path, dir: &Path) -> Result<std::path::
         if !status.success() {
             bail!("`wasmtime compile {}` failed: {status}", module.display());
         }
+        eprintln!(
+            "wasmtime compile: {} in {:.1}s",
+            module.display(),
+            started.elapsed().as_secs_f64()
+        );
     }
     Ok(compiled)
 }
