@@ -43,6 +43,6 @@ exit: 0
 ␛[1mopentide-detection-objective␛[0m  ␛[2mAuthor objectives as objective::1.0 YAML under objects/objectives/.␛[0m
 ␛[1mopentide-detection-rule␛[0m       ␛[2mAuthor rules as rule::1.1 YAML under objects/rules/.␛[0m
 ␛[1mopentide-threat-vector␛[0m        ␛[2mAuthor threats as threat::1.0 YAML under objects/threats/.␛[0m
-␛[1;32m✓␛[0m 37 skills available · 0 installed · opentidehq/skills@main
+␛[1m␛[32m✓␛[0m 37 skills available · 0 installed · opentidehq/skills@main
 
 ━━━ stderr · empty

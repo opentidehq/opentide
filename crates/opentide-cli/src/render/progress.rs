@@ -17,9 +17,10 @@
 //! ```
 
 use super::glyphs;
-use super::text::{Color, Colour, Style, Text};
+use super::text::{Colour, Text};
 use crate::env::Env;
 use crate::json::Json;
+use anstyle::{AnsiColor, Style};
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
@@ -126,11 +127,11 @@ impl Step {
     /// Its glyph and the glyph's style; a running step shows as failed.
     fn mark(&self) -> Text {
         let (glyph, style) = match self.status {
-            StepStatus::Ok => (glyphs::OK, Style::fg(Color::Green).bold()),
+            StepStatus::Ok => (glyphs::OK, AnsiColor::Green.on_default().bold()),
             StepStatus::Failed | StepStatus::Running => {
-                (glyphs::FAILED, Style::fg(Color::Red).bold())
+                (glyphs::FAILED, AnsiColor::Red.on_default().bold())
             }
-            StepStatus::Skipped => (glyphs::DISABLE, Style::DIM),
+            StepStatus::Skipped => (glyphs::DISABLE, Style::new().dimmed()),
         };
         Text::styled(glyph, &style)
     }
@@ -141,7 +142,7 @@ pub fn step_line(step: &Step) -> Text {
     let mut line = step.mark();
     line.push_str(" ");
     line.push_str(&step.name);
-    let dim = Style::DIM;
+    let dim = Style::new().dimmed();
     for part in step.facts() {
         line.append(&format!(" {} ", glyphs::SEPARATOR), &dim);
         line.push_str(&part);
@@ -159,7 +160,7 @@ pub fn checklist(steps: &[Step], width: usize, colour: Colour) -> String {
         .map(|count| count.to_string().len())
         .max()
         .unwrap_or(0);
-    let dim = Style::DIM;
+    let dim = Style::new().dimmed();
     let rows: Vec<Vec<Text>> = steps
         .iter()
         .map(|step| {
@@ -181,7 +182,7 @@ pub fn checklist(steps: &[Step], width: usize, colour: Colour) -> String {
             }
             vec![
                 step.mark(),
-                Text::styled(&step.name, &Style::BOLD),
+                Text::styled(&step.name, &Style::new().bold()),
                 Text::styled(&count, &dim),
                 Text::styled(&seconds_text(step.seconds), &dim),
                 Text::styled(step.place.as_deref().unwrap_or_default(), &dim),

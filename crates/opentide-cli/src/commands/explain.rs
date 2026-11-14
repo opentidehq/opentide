@@ -11,7 +11,8 @@ use super::{Block, Report, Terminal, USAGE_INVALID_CHOICE};
 use crate::explain::{self, Page};
 use crate::json::Json;
 use crate::mode::Mode;
-use crate::render::text::{Style, Text};
+use crate::render::text::{Text, layer};
+use anstyle::{AnsiColor, Style};
 
 /// Runs `explain`, with `code` when one was given.
 pub fn run(code: Option<&str>, terminal: &Terminal) -> Report {
@@ -82,7 +83,7 @@ fn list(terminal: &Terminal) -> Report {
 /// itself between words on a terminal.
 fn index_text(pages: &[Page], terminal: &Terminal) -> String {
     let width = pages.iter().map(|page| page.code.len()).max().unwrap_or(0);
-    let bold = Style::new("bold");
+    let bold = Style::new().bold();
     let mut out = String::new();
     for page in pages {
         let mut line = Text::styled(&format!("{:<width$}  ", page.code), &bold);
@@ -114,17 +115,17 @@ pub fn render_markdown(markdown: &str, terminal: &Terminal) -> String {
     let style = |styles: &[Style]| {
         styles
             .iter()
-            .fold(Style::default(), |acc, style| acc.combine(style))
+            .fold(Style::new(), |acc, style| layer(acc, *style))
     };
     for event in Parser::new(markdown) {
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
                 let bold = if level == HeadingLevel::H1 {
-                    "bold underline"
+                    Style::new().bold().underline()
                 } else {
-                    "bold"
+                    Style::new().bold()
                 };
-                styles.push(Style::new(bold));
+                styles.push(bold);
             }
             Event::End(TagEnd::Heading(_)) => {
                 styles.pop();
@@ -154,19 +155,19 @@ pub fn render_markdown(markdown: &str, terminal: &Terminal) -> String {
                     ));
                 }
             }
-            Event::Start(Tag::Emphasis) => styles.push(Style::new("italic")),
-            Event::Start(Tag::Strong) => styles.push(Style::new("bold")),
+            Event::Start(Tag::Emphasis) => styles.push(Style::new().italic()),
+            Event::Start(Tag::Strong) => styles.push(Style::new().bold()),
             Event::End(TagEnd::Emphasis | TagEnd::Strong) => {
                 styles.pop();
             }
             Event::Start(Tag::Link { dest_url, .. }) => {
-                styles.push(Style::new("underline"));
+                styles.push(Style::new().underline());
                 target = Some(dest_url.to_string());
             }
             Event::End(TagEnd::Link) => {
                 styles.pop();
                 if let Some(url) = target.take() {
-                    current.append(&format!(" ({url})"), &Style::new("dim"));
+                    current.append(&format!(" ({url})"), &Style::new().dimmed());
                 }
             }
             Event::Start(Tag::CodeBlock(_)) => {
@@ -185,7 +186,10 @@ pub fn render_markdown(markdown: &str, terminal: &Terminal) -> String {
                 }
             }
             Event::Code(text) => {
-                current.append(&text, &style(&styles).combine(&Style::new("bold cyan")));
+                current.append(
+                    &text,
+                    &layer(style(&styles), AnsiColor::Cyan.on_default().bold()),
+                );
             }
             Event::SoftBreak => {
                 current.append(" ", &style(&styles));
@@ -210,7 +214,7 @@ pub fn render_markdown(markdown: &str, terminal: &Terminal) -> String {
                 out.push_str(&console.print_line(&line, bullet.chars().count()));
             }
             Part::Code(lines) => {
-                let style = Style::new("cyan");
+                let style = AnsiColor::Cyan.on_default();
                 for line in lines {
                     out.push_str(&console.line(&Text::styled(&format!("    {line}"), &style)));
                 }

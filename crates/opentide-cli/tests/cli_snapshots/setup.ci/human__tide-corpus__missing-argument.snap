@@ -8,6 +8,6 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-␛[1;31merror:␛[0m Missing argument ci_platform: choose from github, gitlab, azure.
+␛[1m␛[31merror:␛[0m Missing argument ci_platform: choose from github, gitlab, azure.
   ␛[1musage:␛[0m opentide setup ci [OPTIONS] <ci_platform>
-  ␛[1;36mhelp:␛[0m run 'opentide setup ci --help'
+  ␛[1m␛[36mhelp:␛[0m run 'opentide setup ci --help'

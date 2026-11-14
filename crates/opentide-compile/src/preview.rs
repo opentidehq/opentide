@@ -341,8 +341,22 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
         // The oracle names Sentinel in a Sysdig failure (`_compile_failure`
         // calls `compile_diagnostic(exc)` without the platform); this names
         // Sysdig (tests/golden/payloads/APPROVED.toml).
+        // The block's own policies, which a deploy takes before the tenant's,
+        // beside the body (they are not in it): only when the block names
+        // them.
         "sysdig" => match sysdig::compile_body(cx, rule, None) {
-            Ok(body) => compiled(rule, body),
+            Ok(body) => {
+                let mut entry = compiled(rule, body);
+                if let (Json::Object(fields), Some(policies)) =
+                    (&mut entry, sysdig::block_policies(rule))
+                {
+                    fields.insert(
+                        "policies".into(),
+                        Json::Array(policies.into_iter().map(Json::Str).collect()),
+                    );
+                }
+                entry
+            }
             Err(error) => failure(rule, &error),
         },
         "exabeam" => exabeam_preview(cx, rule, &[]),

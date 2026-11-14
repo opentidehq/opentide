@@ -20,9 +20,9 @@
 //! whose name is not its object's, unless another file already holds the
 //! name.
 //!
-//! A finding is a [`LintFinding`]: the JSON entry of `lint --json`'s
-//! `findings`, key for key in the oracle's order, and the [`Diagnostic`] its
-//! frame, SARIF and CI annotations are drawn from. Lint's `info` is
+//! A finding is a [`LintFinding`]: its [`LintEntry`], the entry of
+//! `lint --json`'s `findings`, and the [`Diagnostic`] its frame, SARIF and CI
+//! annotations are drawn from. Lint's `info` is
 //! [`Severity::Info`]: the JSON says `info`, the frame says `note`. A note
 //! (a missing optional field) never fails a run, `--strict` included.
 
@@ -37,7 +37,7 @@ use rayon::prelude::*;
 use serde::Serialize;
 use serde_json::{Value as Json, json};
 
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{Diagnostic, Fix, Severity};
 use crate::discover;
 use crate::fs::{FileSystem, WriteFs, case_only_rename};
 use crate::index::posix;
@@ -218,11 +218,57 @@ impl std::fmt::Debug for LintOptions<'_> {
 pub struct LintFinding {
     /// The check that found it.
     pub check: LintCheck,
-    /// The entry of `findings`, its keys in the oracle's order.
-    pub json: IndexMap<String, Json>,
+    /// The entry of `findings`.
+    pub entry: LintEntry,
     /// The finding as a diagnostic: what a frame, SARIF and a CI annotation
     /// show (its message may be the parser's, where the JSON keeps lint's).
     pub diagnostic: Diagnostic,
+}
+
+/// One entry of `lint --json`'s `findings`. A field without a value is
+/// `null`, except `expected`, `fixed` and `from`, which are left out: only
+/// a file name finding has them.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct LintEntry {
+    /// The check that found it.
+    pub check: LintCheck,
+    /// `error`, `warning` or `info`.
+    pub severity: String,
+    /// The file, relative to the workspace, `/` separated.
+    pub path: String,
+    /// The line of the field, from 0.
+    pub yaml_line: Option<usize>,
+    /// The object's UUID, when the file has one.
+    pub uuid: Option<String>,
+    /// The file name the object's name gives (`filename_mismatch`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected: Option<String>,
+    /// The problem, in words.
+    pub message: String,
+    /// Whether `--fix` renamed the file, when it tried.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fixed: Option<bool>,
+    /// The file's path before `--fix` renamed it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
+    /// The diagnostic code.
+    pub code: String,
+    /// The field, key by key.
+    pub field_path: Vec<String>,
+    /// Where it starts, from 1.
+    pub line: Option<usize>,
+    /// The column it starts at, from 1.
+    pub column: Option<usize>,
+    /// Where it ends, from 1.
+    pub end_line: Option<usize>,
+    /// The column after its end, from 1.
+    pub end_column: Option<usize>,
+    /// What to do about it.
+    pub help: Option<String>,
+    /// Edits that resolve it.
+    pub fix: Option<Fix>,
+    /// The command that explains the code.
+    pub explain: String,
 }
 
 impl LintFinding {
@@ -234,37 +280,41 @@ impl LintFinding {
         {
             uuid.clone_into(&mut diagnostic.object_uuid);
         }
-        let mut json = IndexMap::new();
-        json.insert("check".to_owned(), json!("queries"));
-        json.insert("severity".to_owned(), json!(diagnostic.severity.as_str()));
-        json.insert("path".to_owned(), json!(relative));
-        json.insert(
-            "yaml_line".to_owned(),
-            json!(diagnostic.line.map(|line| line.saturating_sub(1))),
-        );
-        json.insert("uuid".to_owned(), json!(uuid));
-        json.insert("message".to_owned(), json!(diagnostic.message));
-        json.insert("code".to_owned(), json!(diagnostic.code));
-        json.insert("field_path".to_owned(), json!(diagnostic.field_path));
-        annotate(&mut json, &diagnostic);
+        let entry = LintEntry {
+            check: LintCheck::Queries,
+            severity: diagnostic.severity.as_str().to_owned(),
+            path: relative.to_owned(),
+            yaml_line: diagnostic.line.map(|line| line.saturating_sub(1)),
+            uuid: uuid.map(str::to_owned),
+            expected: None,
+            message: diagnostic.message.clone(),
+            fixed: None,
+            from: None,
+            code: diagnostic.code.clone(),
+            field_path: diagnostic.field_path.clone(),
+            line: diagnostic.line,
+            column: diagnostic.column,
+            end_line: diagnostic.end_line,
+            end_column: diagnostic.end_column,
+            help: diagnostic.help.clone(),
+            fix: diagnostic.fix.clone(),
+            explain: diagnostic.explain(),
+        };
         Self {
             check: LintCheck::Queries,
-            json,
+            entry,
             diagnostic,
         }
     }
 
     /// `severity` in the JSON.
     pub fn severity(&self) -> &str {
-        self.json
-            .get("severity")
-            .and_then(Json::as_str)
-            .unwrap_or("")
+        &self.entry.severity
     }
 
     /// `path` in the JSON.
     pub fn path(&self) -> &str {
-        self.json.get("path").and_then(Json::as_str).unwrap_or("")
+        &self.entry.path
     }
 
     /// `code`.
@@ -274,13 +324,13 @@ impl LintFinding {
 
     /// Whether `--fix` fixed it.
     pub fn is_fixed(&self) -> bool {
-        self.json.get("fixed") == Some(&Json::Bool(true))
+        self.entry.fixed == Some(true)
     }
 }
 
 impl Serialize for LintFinding {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.json.serialize(serializer)
+        self.entry.serialize(serializer)
     }
 }
 
@@ -559,7 +609,7 @@ fn lint_with(
     }
     for finding in &mut engine {
         if let Some(severity) = check_severity(config, finding.check) {
-            finding.json.insert("severity".to_owned(), json!(severity));
+            severity.clone_into(&mut finding.entry.severity);
             finding.diagnostic.severity = Severity::parse(severity).unwrap_or(Severity::Warning);
         }
     }
@@ -1009,7 +1059,7 @@ fn placeholder_lines(text: &str) -> Vec<Marked> {
     marked
 }
 
-/// A finding before its diagnostic fields: the oracle's dict, in order.
+/// A finding before its diagnostic: what the check found.
 #[derive(Debug, Clone)]
 struct Draft {
     check: LintCheck,
@@ -1017,15 +1067,22 @@ struct Draft {
     path: String,
     yaml_line: Option<usize>,
     uuid: Option<String>,
-    /// Keys between `uuid` and `message` (`expected`, `help`, `line`, ...).
-    extra: Vec<(&'static str, Json)>,
+    /// The file name the object's name gives (`filename_mismatch`).
+    expected: Option<String>,
+    /// What to do, when the check says.
+    help: Option<String>,
+    /// Where it starts, from 1, when the check knows: the parser's
+    /// position of a file that does not parse, a placeholder's span.
+    line: Option<usize>,
+    column: Option<usize>,
+    end_column: Option<usize>,
     message: String,
-    /// `fixed` and `from`, after `message`, when `--fix` acted.
-    fix_keys: Vec<(&'static str, Json)>,
+    /// Whether `--fix` renamed the file, when it tried.
+    fixed: Option<bool>,
+    /// The file's path before the rename.
+    from: Option<String>,
     code: &'static str,
     field_path: Vec<String>,
-    /// The parser's position of a file that does not parse.
-    position: Option<(usize, usize)>,
 }
 
 impl Draft {
@@ -1039,82 +1096,83 @@ impl Draft {
         yaml_line: Option<usize>,
     ) -> Self {
         Self {
-            check,
-            severity: severity.to_owned(),
-            path: record.relative.clone(),
-            yaml_line,
             uuid: record.uuid.clone(),
-            extra: Vec::new(),
-            message,
-            fix_keys: Vec::new(),
-            code,
+            yaml_line,
             field_path: field
                 .map(|field| vec![field.to_owned()])
                 .unwrap_or_default(),
-            position: None,
+            ..Self::bare(check, severity, record.relative.clone(), message, code)
         }
     }
 
-    fn extra(&self, key: &str) -> Option<&Json> {
-        self.extra
-            .iter()
-            .chain(&self.fix_keys)
-            .find(|(name, _)| *name == key)
-            .map(|(_, value)| value)
+    /// A finding at `path` with nothing more known.
+    fn bare(
+        check: LintCheck,
+        severity: &str,
+        path: String,
+        message: String,
+        code: &'static str,
+    ) -> Self {
+        Self {
+            check,
+            severity: severity.to_owned(),
+            path,
+            yaml_line: None,
+            uuid: None,
+            expected: None,
+            help: None,
+            line: None,
+            column: None,
+            end_column: None,
+            message,
+            fixed: None,
+            from: None,
+            code,
+            field_path: Vec::new(),
+        }
     }
 
     fn fixed(&self) -> bool {
-        self.extra("fixed") == Some(&Json::Bool(true))
+        self.fixed == Some(true)
     }
 
-    /// The JSON entry and the diagnostic (`_add_diagnostic_fields`,
-    /// `diagnostic_from_lint_finding`).
+    /// The JSON entry and the diagnostic. The entry keeps lint's message and
+    /// the check's own position, where the diagnostic takes the parser's.
     fn finish(self, root: &Path, sources: &mut Sources<'_>) -> LintFinding {
         let diagnostic = self.diagnostic(root, sources);
-        let mut json = IndexMap::new();
-        json.insert("check".to_owned(), json!(self.check.name()));
-        json.insert("severity".to_owned(), json!(self.severity));
-        json.insert("path".to_owned(), json!(self.path));
-        json.insert("yaml_line".to_owned(), json!(self.yaml_line));
-        json.insert("uuid".to_owned(), json!(self.uuid));
-        for (key, value) in &self.extra {
-            json.insert((*key).to_owned(), value.clone());
-        }
-        json.insert("message".to_owned(), json!(self.message));
-        for (key, value) in &self.fix_keys {
-            json.insert((*key).to_owned(), value.clone());
-        }
-        json.insert("code".to_owned(), json!(self.code));
-        json.insert("field_path".to_owned(), json!(self.field_path));
-        if let Some((line, column)) = self.position {
-            json.insert("line".to_owned(), json!(line));
-            json.insert("column".to_owned(), json!(column));
-        }
-        annotate(&mut json, &diagnostic);
+        let entry = LintEntry {
+            check: self.check,
+            severity: self.severity,
+            path: self.path,
+            yaml_line: self.yaml_line,
+            uuid: self.uuid,
+            expected: self.expected,
+            message: self.message,
+            fixed: self.fixed,
+            from: self.from,
+            code: self.code.to_owned(),
+            field_path: self.field_path,
+            line: self.line.or(diagnostic.line),
+            column: self.column.or(diagnostic.column),
+            end_line: diagnostic.end_line,
+            end_column: diagnostic.end_column,
+            help: diagnostic.help.clone(),
+            fix: diagnostic.fix.clone(),
+            explain: diagnostic.explain(),
+        };
         LintFinding {
             check: self.check,
-            json,
+            entry,
             diagnostic,
         }
     }
 
     fn diagnostic(&self, root: &Path, sources: &mut Sources<'_>) -> Diagnostic {
         let file_path = root.join(&self.path);
-        let as_usize = |key: &str| {
-            self.extra(key)
-                .and_then(Json::as_u64)
-                .and_then(|v| usize::try_from(v).ok())
-        };
-        let mut line = self
-            .position
-            .map(|(line, _)| line)
-            .or_else(|| as_usize("line"));
-        let mut column = self
-            .position
-            .map(|(_, column)| column)
-            .or_else(|| as_usize("column"));
-        let mut end_column = as_usize("end_column");
-        let mut end_line = as_usize("end_line");
+        let mut line = self.line;
+        let mut column = self.column;
+        let mut end_column = self.end_column;
+        let mut end_line = None;
         if column.is_some() && end_column.is_none() {
             end_column = column.map(|column| column + 1);
         }
@@ -1144,7 +1202,7 @@ impl Draft {
             end_line = None;
             notes.extend(parse_notes);
         }
-        let expected = self.extra("expected").and_then(Json::as_str);
+        let expected = self.expected.as_deref();
         let help = if self.code == codes::FILENAME && expected.is_some() && !self.fixed() {
             expected.map(|expected| format!("rename it to {expected}"))
         } else if self.code == codes::NAME {
@@ -1152,13 +1210,10 @@ impl Draft {
         } else if self.code == codes::METADATA {
             Some("add the missing keys under metadata".to_owned())
         } else {
-            self.extra("help")
-                .and_then(Json::as_str)
-                .filter(|help| !help.is_empty())
-                .map(str::to_owned)
+            self.help.clone().filter(|help| !help.is_empty())
         };
         if self.fixed()
-            && let Some(from) = self.extra("from").and_then(Json::as_str)
+            && let Some(from) = &self.from
         {
             notes.push(("note".to_owned(), format!("renamed from {from}")));
         }
@@ -1179,27 +1234,6 @@ impl Draft {
         diagnostic.help = help;
         diagnostic.notes = notes;
         diagnostic
-    }
-}
-
-/// Adds the diagnostic fields a finding does not have yet (`annotate`:
-/// `setdefault`), in their order.
-fn annotate(json: &mut IndexMap<String, Json>, diagnostic: &Diagnostic) {
-    let fields = [
-        ("path", json!(diagnostic.path)),
-        ("line", json!(diagnostic.line)),
-        ("column", json!(diagnostic.column)),
-        ("end_line", json!(diagnostic.end_line)),
-        ("end_column", json!(diagnostic.end_column)),
-        ("help", json!(diagnostic.help)),
-        (
-            "fix",
-            serde_json::to_value(&diagnostic.fix).unwrap_or(Json::Null),
-        ),
-        ("explain", json!(diagnostic.explain())),
-    ];
-    for (key, value) in fields {
-        json.entry(key.to_owned()).or_insert(value);
     }
 }
 
@@ -1334,7 +1368,10 @@ impl RecommendedFields {
                 line,
             );
             draft.field_path = path.split('.').map(str::to_owned).collect();
-            draft.position = line.map(|line| (line + 1, 1));
+            if let Some(line) = line {
+                draft.line = Some(line + 1);
+                draft.column = Some(1);
+            }
             findings.push(draft);
         }
         findings
@@ -1360,12 +1397,10 @@ fn placeholder_findings<'r>(records: impl Iterator<Item = &'r Record>) -> Vec<Dr
                 None,
                 Some(marked.line),
             );
-            draft.extra = vec![
-                ("help", json!(PLACEHOLDER_HELP)),
-                ("line", json!(marked.line + 1)),
-                ("column", json!(marked.column)),
-                ("end_column", json!(marked.end_column)),
-            ];
+            draft.help = Some(PLACEHOLDER_HELP.to_owned());
+            draft.line = Some(marked.line + 1);
+            draft.column = Some(marked.column);
+            draft.end_column = Some(marked.end_column);
             findings.push(draft);
         }
     }
@@ -1478,7 +1513,10 @@ fn filename_findings(
                 None,
                 None,
             );
-            draft.position = record.parse_position;
+            if let Some((line, column)) = record.parse_position {
+                draft.line = Some(line);
+                draft.column = Some(column);
+            }
             findings.push(draft);
             continue;
         }
@@ -1522,23 +1560,23 @@ fn filename_findings(
                 None,
                 None,
             );
-            draft.extra = vec![("expected", json!(dest_relative))];
             if let Some(writer) = writer {
                 if fs.kind(&dest).is_ok() && !case_only_rename(writer, &record.path, &dest) {
-                    draft.fix_keys.push(("fixed", json!(false)));
+                    draft.fixed = Some(false);
                     draft.message = format!(
                         "{}; --fix skipped because {dest_relative} exists",
                         draft.message
                     );
                 } else if writer.rename_file(&record.path, &dest).is_ok() {
-                    draft.fix_keys.push(("fixed", json!(true)));
-                    draft.fix_keys.push(("from", json!(record.relative)));
-                    draft.path = dest_relative;
+                    draft.fixed = Some(true);
+                    draft.from = Some(record.relative.clone());
+                    draft.path.clone_from(&dest_relative);
                     current = dest;
                 } else {
-                    draft.fix_keys.push(("fixed", json!(false)));
+                    draft.fixed = Some(false);
                 }
             }
+            draft.expected = Some(dest_relative);
             findings.push(draft);
         }
         if let Some(pattern) = &config.regex
@@ -1556,13 +1594,10 @@ fn filename_findings(
                 None,
                 None,
             );
-            draft.extra = vec![(
-                "help",
-                json!(format!(
-                    "rename the file so its name matches the pattern {}",
-                    config.pattern.as_deref().unwrap_or_default()
-                )),
-            )];
+            draft.help = Some(format!(
+                "rename the file so its name matches the pattern {}",
+                config.pattern.as_deref().unwrap_or_default()
+            ));
             findings.push(draft);
         }
     }
@@ -1574,10 +1609,7 @@ fn rewrite_renamed_paths(findings: &mut [Draft]) {
     let renamed: Vec<(String, String)> = findings
         .iter()
         .filter(|draft| draft.fixed())
-        .filter_map(|draft| {
-            let from = draft.extra("from")?.as_str()?.to_owned();
-            Some((from, draft.path.clone()))
-        })
+        .filter_map(|draft| Some((draft.from.clone()?, draft.path.clone())))
         .collect();
     for draft in findings {
         if let Some((_, to)) = renamed.iter().find(|(from, _)| *from == draft.path) {
@@ -1590,23 +1622,18 @@ fn rewrite_renamed_paths(findings: &mut [Draft]) {
 fn nested_finding(root: &Path, path: &Path) -> Draft {
     let relative = relative(root, path);
     let folder = relative.split('/').take(2).collect::<Vec<_>>().join("/");
-    Draft {
-        check: LintCheck::Filenames,
-        severity: "warning".to_owned(),
-        path: relative.clone(),
-        yaml_line: None,
-        uuid: None,
-        extra: Vec::new(),
-        message: format!(
-            "{relative} is in a subfolder of {folder} and is not an object instance: it is not \
-             indexed, validated, shared, documented or deployed (opentide reads only files \
-             directly in {folder}; see {NESTED_OBJECTS_ISSUE})"
-        ),
-        fix_keys: Vec::new(),
-        code: codes::NESTED,
-        field_path: Vec::new(),
-        position: None,
-    }
+    let message = format!(
+        "{relative} is in a subfolder of {folder} and is not an object instance: it is not \
+         indexed, validated, shared, documented or deployed (opentide reads only files \
+         directly in {folder}; see {NESTED_OBJECTS_ISSUE})"
+    );
+    Draft::bare(
+        LintCheck::Filenames,
+        "warning",
+        relative,
+        message,
+        codes::NESTED,
+    )
 }
 
 fn plural(count: usize, noun: &str) -> String {
@@ -1697,12 +1724,7 @@ fn report(
     };
     let renamable = findings
         .iter()
-        .filter(|f| {
-            f.json
-                .get("expected")
-                .is_some_and(|e| !e.is_null() && e != "")
-                && !f.is_fixed()
-        })
+        .filter(|f| f.entry.expected.as_deref().is_some_and(|e| !e.is_empty()) && !f.is_fixed())
         .count();
     let fixed = findings.iter().filter(|f| f.is_fixed()).count();
     let count = |severity: &str| left.iter().filter(|f| f.severity() == severity).count();

@@ -191,7 +191,7 @@ impl HostRunner {
     /// How `request` goes: with the request's environment over the server's,
     /// and progress events on stderr.
     fn own_plan(&self, request: &RunRequest) -> Plan {
-        let words = crate::hoist::command_words(&self.root, &request.argv);
+        let words = crate::app::command_words(&self.root, &request.argv);
         let mut env = self.run_environment(request);
         env.retain(|(name, _)| name != "OPENTIDE_PROGRESS");
         env.push(("OPENTIDE_PROGRESS".into(), "json".into()));

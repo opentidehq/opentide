@@ -9,6 +9,6 @@ exit: 2
 
 ━━━ stderr
 error: Unknown option "--jsno".
-  usage: opentide commands
+  usage: opentide commands [OPTIONS]
   help: run 'opentide commands --help'
 tip: add --json for machine-readable output

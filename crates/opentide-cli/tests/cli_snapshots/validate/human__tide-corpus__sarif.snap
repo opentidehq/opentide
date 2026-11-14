@@ -6,7 +6,7 @@ args: opentide validate --strict --format sarif --output opentide-reports/valida
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m 12 objects valid · 8 queries · <SECONDS>
+␛[1m␛[32m✓␛[0m 12 objects valid · 8 queries · <SECONDS>
 
 ━━━ stderr · empty
 

@@ -12,14 +12,14 @@ exit: 0
   ␛[1m.opentide/configurations/platforms/sentinel.toml␛[0m   ␛[2mplatform configuration␛[0m
   ␛[1m.github/workflows/opentide.yml␛[0m                     ␛[2mGitHub Actions pipeline␛[0m
 
-␛[1;32m✓␛[0m Created ws here
+␛[1m␛[32m✓␛[0m Created ws here
 
-␛[1;38;5;231;48;5;18m ≋ ␛[0m ␛[1mNext steps␛[0m
+␛[1m␛[38;5;231m␛[48;5;18m ≋ ␛[0m ␛[1mNext steps␛[0m
 ␛[2m  1  ␛[0m␛[1mopentide generate␛[0m␛[2m · schemas, templates and editor snippets␛[0m
 ␛[2m  2  ␛[0m␛[1mopentide validate␛[0m␛[2m · check every object before you commit␛[0m
 
 ━━━ stderr
-␛[1;33mwarning:␛[0m This folder is not a git repository yet, so the pipeline targets "main"; create it on that
+␛[1m␛[33mwarning:␛[0m This folder is not a git repository yet, so the pipeline targets "main"; create it on that
          branch with 'git init -b main', or write the pipeline for another one with 'opentide setup
          ci <provider> --default-branch <branch>'.
 

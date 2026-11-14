@@ -7,6 +7,6 @@ exit: 0
 
 ━━━ stdout
 objects/rules/suspicious-lsass-access.yaml  absent  rule::1.1  -
-␛[1;33m!␛[0m 1 rule unreviewed for 90 days
+␛[1m␛[33m!␛[0m 1 rule unreviewed for 90 days
 
 ━━━ stderr · empty

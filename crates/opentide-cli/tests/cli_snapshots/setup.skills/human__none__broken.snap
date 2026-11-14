@@ -8,5 +8,5 @@ exit: 1
 ━━━ stdout · empty
 
 ━━━ stderr
-␛[1;31merror:␛[0m Could not download skill 'broken-skill' from opentidehq/skills@main. Check network access and
+␛[1m␛[31merror:␛[0m Could not download skill 'broken-skill' from opentidehq/skills@main. Check network access and
        that the skills repository is publicly reachable.

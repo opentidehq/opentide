@@ -6,13 +6,13 @@ args: opentide generate schemas templates vocabs snippets
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m Generated 22 files in <SECONDS> · 4 phases
+␛[1m␛[32m✓␛[0m Generated 22 files in <SECONDS> · 4 phases
 
 ━━━ stderr
-  ␛[1;32m✓␛[0m  ␛[1mschemas␛[0m       ␛[2m 8 files␛[0m ␛[2m<SECONDS>␛[0m ␛[2m.opentide/␛[0m
-  ␛[1;32m✓␛[0m  ␛[1mtemplates␛[0m     ␛[2m13 files␛[0m ␛[2m<SECONDS>␛[0m ␛[2m.opentide/templates/␛[0m
-  ␛[1;32m✓␛[0m  ␛[1mvocabularies␛[0m  ␛[2m 0 files␛[0m ␛[2m<SECONDS>␛[0m
-  ␛[1;32m✓␛[0m  ␛[1msnippets␛[0m      ␛[2m 1 file␛[0m ␛[2m<SECONDS>␛[0m ␛[2m.vscode/␛[0m
+  ␛[1m␛[32m✓␛[0m  ␛[1mschemas␛[0m       ␛[2m 8 files␛[0m ␛[2m<SECONDS>␛[0m ␛[2m.opentide/␛[0m
+  ␛[1m␛[32m✓␛[0m  ␛[1mtemplates␛[0m     ␛[2m13 files␛[0m ␛[2m<SECONDS>␛[0m ␛[2m.opentide/templates/␛[0m
+  ␛[1m␛[32m✓␛[0m  ␛[1mvocabularies␛[0m  ␛[2m 0 files␛[0m ␛[2m<SECONDS>␛[0m
+  ␛[1m␛[32m✓␛[0m  ␛[1msnippets␛[0m      ␛[2m 1 file␛[0m ␛[2m<SECONDS>␛[0m ␛[2m.vscode/␛[0m
 
 ━━━ ws/.opentide/lsp/ · created 0755
 

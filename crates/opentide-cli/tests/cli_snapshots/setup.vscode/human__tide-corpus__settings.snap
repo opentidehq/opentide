@@ -8,10 +8,10 @@ exit: 0
 ━━━ stdout
   ␛[1m.vscode/extensions.json␛[0m   ␛[2meditor settings␛[0m
 
-␛[1;32m✓␛[0m Wrote .vscode/extensions.json
+␛[1m␛[32m✓␛[0m Wrote .vscode/extensions.json
 
 ━━━ stderr
-␛[1;33mwarning:␛[0m opentide setup vscode is deprecated and will be removed when the opentide VS Code extension
+␛[1m␛[33mwarning:␛[0m opentide setup vscode is deprecated and will be removed when the opentide VS Code extension
          ships with a bundled language server and template actions
 
 ━━━ ws/.opentide/lsp/ · created 0755

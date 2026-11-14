@@ -12,7 +12,7 @@ exit: 0
   ␛[1m.claude/skills/sample-skill/SKILL.md␛[0m
   ␛[1mAGENTS.md␛[0m
 
-␛[1;32m✓␛[0m Wrote 5 files
+␛[1m␛[32m✓␛[0m Wrote 5 files
 
 ━━━ stderr · empty
 

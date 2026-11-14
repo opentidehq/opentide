@@ -6,10 +6,10 @@ args: opentide generate exports
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m Generated 3 files in <SECONDS> · exports
+␛[1m␛[32m✓␛[0m Generated 3 files in <SECONDS> · exports
 
 ━━━ stderr
-  ␛[1;32m✓␛[0m  ␛[1mexports␛[0m  ␛[2m3 files␛[0m ␛[2m<SECONDS>␛[0m ␛[2m.opentide/exports/␛[0m
+  ␛[1m␛[32m✓␛[0m  ␛[1mexports␛[0m  ␛[2m3 files␛[0m ␛[2m<SECONDS>␛[0m ␛[2m.opentide/exports/␛[0m
 
 ━━━ ws/.opentide/exports/attack-navigator.json · created 0644
 {

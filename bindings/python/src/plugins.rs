@@ -530,6 +530,7 @@ mod tests {
             rule_id: "r".into(),
             operation: Operation::Disable,
             body: br#"{"b": 1}"#.to_vec(),
+            policies: None,
         };
         let sent: Value = serde_json::from_str(&deploy_json(&request)).expect("json");
         assert_eq!(sent["operation"], "disable");

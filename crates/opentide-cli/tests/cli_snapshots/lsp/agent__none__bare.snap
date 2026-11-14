@@ -9,6 +9,6 @@ exit: 2
 
 ━━━ stderr
 error: Missing command: choose from start.
-  usage: opentide lsp <COMMAND>
+  usage: opentide lsp [OPTIONS] <COMMAND>
   help: run 'opentide lsp --help'
 tip: add --json for machine-readable output

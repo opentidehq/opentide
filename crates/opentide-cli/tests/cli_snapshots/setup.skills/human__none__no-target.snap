@@ -8,5 +8,5 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-␛[1;31merror:␛[0m Choose at least one skills target (--cursor, --claude-code, --generic, --github-copilot,
+␛[1m␛[31merror:␛[0m Choose at least one skills target (--cursor, --claude-code, --generic, --github-copilot,
        --plugin)

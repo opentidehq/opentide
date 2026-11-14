@@ -8,10 +8,10 @@ exit: 0
 ━━━ stdout
   ␛[1m.claude/settings.json␛[0m
 
-␛[1;32m✓␛[0m Wrote .claude/settings.json
+␛[1m␛[32m✓␛[0m Wrote .claude/settings.json
 
 ━━━ stderr
-␛[1;33mwarning:␛[0m Left CLAUDE.md unchanged because the file already exists; point it at .agents/skills/ by
+␛[1m␛[33mwarning:␛[0m Left CLAUDE.md unchanged because the file already exists; point it at .agents/skills/ by
          hand, or delete it and re-run to write opentide's template.
 
 ━━━ ws/.claude/settings.json · modified 0644

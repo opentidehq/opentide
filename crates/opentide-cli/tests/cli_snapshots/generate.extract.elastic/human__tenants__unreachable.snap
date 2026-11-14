@@ -8,8 +8,8 @@ exit: 1
 ━━━ stdout · empty
 
 ━━━ stderr
-  ␛[1;31m✗␛[0m  ␛[1mimport from elastic␛[0m ␛[2m<SECONDS>␛[0m
-␛[1;31merror:␛[0m Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request:
+  ␛[1m␛[31m✗␛[0m  ␛[1mimport from elastic␛[0m ␛[2m<SECONDS>␛[0m
+␛[1m␛[31merror:␛[0m Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request:
        client error (Connect): tunnel error: failed to create underlying connection: tcp connect
        error: Connection refused (os error <ECONNREFUSED>)
 

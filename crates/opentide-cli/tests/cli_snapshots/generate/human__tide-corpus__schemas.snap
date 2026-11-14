@@ -6,10 +6,10 @@ args: opentide generate schemas
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m Generated 8 files in <SECONDS> · schemas
+␛[1m␛[32m✓␛[0m Generated 8 files in <SECONDS> · schemas
 
 ━━━ stderr
-  ␛[1;32m✓␛[0m  ␛[1mschemas␛[0m  ␛[2m8 files␛[0m ␛[2m<SECONDS>␛[0m ␛[2m.opentide/␛[0m
+  ␛[1m␛[32m✓␛[0m  ␛[1mschemas␛[0m  ␛[2m8 files␛[0m ␛[2m<SECONDS>␛[0m ␛[2m.opentide/␛[0m
 
 ━━━ ws/.opentide/lsp/ · created 0755
 

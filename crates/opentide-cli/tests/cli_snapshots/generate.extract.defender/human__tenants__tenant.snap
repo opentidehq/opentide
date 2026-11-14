@@ -6,10 +6,10 @@ args: opentide generate extract defender
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m Imported 3 rules from defender
+␛[1m␛[32m✓␛[0m Imported 3 rules from defender
 
 ━━━ stderr
-  ␛[1;32m✓␛[0m  ␛[1mimport from defender␛[0m  ␛[2m3 rules␛[0m ␛[2m<SECONDS>␛[0m
+  ␛[1m␛[32m✓␛[0m  ␛[1mimport from defender␛[0m  ␛[2m3 rules␛[0m ␛[2m<SECONDS>␛[0m
 
 ━━━ ws/.opentide/states/ · created 0755
 

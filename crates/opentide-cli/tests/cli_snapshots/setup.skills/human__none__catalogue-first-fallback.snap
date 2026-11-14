@@ -10,11 +10,11 @@ exit: 0
   ␛[1m.agents/skills/detection-engineering/SKILL.md␛[0m
   ␛[1mAGENTS.md␛[0m
 
-␛[1;32m✓␛[0m Wrote 3 files
+␛[1m␛[32m✓␛[0m Wrote 3 files
 
 ━━━ stderr
 warning: Skill installed from package · slug: detection-engineering · source: opentidehq/skills · ref: main
-␛[1;33mwarning:␛[0m Installed opentide's short packaged copy of .agents/skills/detection-engineering: the
+␛[1m␛[33mwarning:␛[0m Installed opentide's short packaged copy of .agents/skills/detection-engineering: the
          catalogue's could not be downloaded from opentidehq/skills@main. Run the command again for
          the full skill.
 
