@@ -57,6 +57,11 @@ pub struct DeployRequest {
     /// The request body, as `opentide-compile` wrote it: bytes, so the key
     /// order and layout the platform receives are the compiled ones.
     pub body: Vec<u8>,
+    /// Sysdig's runtime policies for the rule: `None` takes the tenant's
+    /// (its setup's `policies`), `Some` exactly these, as `opentide deploy`
+    /// takes a block's own `policies` first (a deploy plan's Sysdig entry
+    /// carries them). Other platforms read none.
+    pub policies: Option<Vec<String>>,
 }
 
 /// What a deploy did.

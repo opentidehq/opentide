@@ -9,10 +9,11 @@
 //! whole; at a terminal narrower than a line it is broken between words, never
 //! inside one, and continued under its text.
 
-use super::text::{Color, Colour, Style, Text, cell_len, char_width};
+use super::text::{Colour, Text, cell_len, char_width};
 use super::{brand, glyphs};
 use crate::envelope::NextAction;
 use crate::mode::Mode;
+use anstyle::{AnsiColor, Style};
 
 /// At most this many next steps follow an outcome line.
 pub const MAX_NEXT_ACTIONS: usize = 3;
@@ -54,10 +55,10 @@ impl OutcomeKind {
 
     fn style(self) -> Style {
         match self {
-            OutcomeKind::Ok => Style::fg(Color::Green).bold(),
-            OutcomeKind::Warning => Style::fg(Color::Yellow).bold(),
-            OutcomeKind::Failed => Style::fg(Color::Red).bold(),
-            OutcomeKind::Skipped | OutcomeKind::Plan => Style::BOLD,
+            OutcomeKind::Ok => AnsiColor::Green.on_default().bold(),
+            OutcomeKind::Warning => AnsiColor::Yellow.on_default().bold(),
+            OutcomeKind::Failed => AnsiColor::Red.on_default().bold(),
+            OutcomeKind::Skipped | OutcomeKind::Plan => Style::new().bold(),
         }
     }
 }
@@ -172,13 +173,13 @@ impl Console {
         let header = if mode == Mode::Human {
             brand::header("Next steps", self.colour)
         } else {
-            Text::styled("Next steps", &Style::BOLD)
+            Text::styled("Next steps", &Style::new().bold())
         };
         out.push_str(&self.line(&header));
-        let dim = Style::DIM;
+        let dim = Style::new().dimmed();
         for (number, action) in shown.iter().enumerate() {
             let mut line = Text::styled(&format!("  {}  ", number + 1), &dim);
-            line.append(&action.command, &Style::BOLD);
+            line.append(&action.command, &Style::new().bold());
             if !action.reason.is_empty() {
                 line.append(&format!(" {} ", glyphs::SEPARATOR), &dim);
                 line.append(&action.reason, &dim);
@@ -236,11 +237,11 @@ pub fn outcome_text(kind: OutcomeKind, message: &str) -> Text {
 /// The style of a line's label.
 fn label_style(label: &str) -> Style {
     match label {
-        "error" => Style::fg(Color::Red).bold(),
-        "warning" => Style::fg(Color::Yellow).bold(),
-        "note" => Style::fg(Color::Blue).bold(),
-        "help" | "tip" => Style::fg(Color::Cyan).bold(),
-        _ => Style::BOLD,
+        "error" => AnsiColor::Red.on_default().bold(),
+        "warning" => AnsiColor::Yellow.on_default().bold(),
+        "note" => AnsiColor::Blue.on_default().bold(),
+        "help" | "tip" => AnsiColor::Cyan.on_default().bold(),
+        _ => Style::new().bold(),
     }
 }
 
@@ -256,11 +257,11 @@ pub fn labelled_text(label: &str, message: &str, indent: usize) -> Text {
 /// `→ opentide lint --fix · rename 2 files to match their names`.
 pub fn next_action_text(action: &NextAction) -> Text {
     let mut line = Text::default();
-    line.append(glyphs::NEXT, &Style::fg(Color::Cyan).bold());
+    line.append(glyphs::NEXT, &AnsiColor::Cyan.on_default().bold());
     line.push_str(" ");
-    line.append(&action.command, &Style::BOLD);
+    line.append(&action.command, &Style::new().bold());
     if !action.reason.is_empty() {
-        let dim = Style::DIM;
+        let dim = Style::new().dimmed();
         line.append(&format!(" {} ", glyphs::SEPARATOR), &dim);
         line.append(&action.reason, &dim);
     }
@@ -491,7 +492,7 @@ mod tests {
         };
         assert_eq!(
             terminal.numbered_next_actions(&actions, Mode::Human),
-            "\n\u{1b}[1;38;5;231;48;5;18m ≋ \u{1b}[0m \u{1b}[1mNext steps\u{1b}[0m\n\
+            "\n\u{1b}[1m\u{1b}[38;5;231m\u{1b}[48;5;18m ≋ \u{1b}[0m \u{1b}[1mNext steps\u{1b}[0m\n\
              \u{1b}[2m  1  \u{1b}[0m\u{1b}[1mopentide lint --fix\u{1b}[0m\u{1b}[2m · rename 2 files\u{1b}[0m\n"
         );
         assert_eq!(
@@ -627,7 +628,7 @@ mod tests {
             render_result(&numbered, full, PIPE, Mode::Human, false)
                 .0
                 .contains(
-                    "\n\u{1b}[1;38;5;231;48;5;18m \u{224b} \u{1b}[0m \u{1b}[1mNext steps\u{1b}[0m\n"
+                    "\n\u{1b}[1m\u{1b}[38;5;231m\u{1b}[48;5;18m \u{224b} \u{1b}[0m \u{1b}[1mNext steps\u{1b}[0m\n"
                 )
         );
         let plan = ResultView {

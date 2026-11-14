@@ -116,6 +116,11 @@ unicode-properties = { version = "0.1", default-features = false, features = ["g
 # version Cargo.lock already holds.
 ryu = "1"
 clap = { version = "4", features = ["derive"] }
+# The command line's terminal styles (anstyle) and the console streams that
+# write them (anstream: VT processing, or the legacy Windows console API). The
+# versions clap already locks.
+anstyle = "1.0"
+anstream = "1.0"
 tree-sitter = "0.25"
 # `LanguageFn`, the type tree-sitter 0.25 builds a Language from (opentide-syntax).
 tree-sitter-language = "0.1"
