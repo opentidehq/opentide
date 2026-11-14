@@ -152,8 +152,9 @@ fn criteria_advisories(detection: &Node) -> Vec<Advisory> {
                     field_path: path,
                     message: format!(
                         "contains {} has no * or ? wildcard, so GravityZone matches it as \
-                         written; write '*{first}*' for a substring",
-                        quote(first)
+                         written; write {} for a substring",
+                        quote(first),
+                        quote(&format!("*{first}*"))
                     ),
                 });
             }
@@ -341,7 +342,7 @@ mod tests {
                 "Registry.Key starts with a full hive name, which GravityZone accepts and never \
                  matches; write HKLU",
                 "contains \"it's\" has no * or ? wildcard, so GravityZone matches it as written; \
-                 write '*it's*' for a substring",
+                 write \"*it's*\" for a substring",
                 "GravityZone has three severities: alert_severity  Critical  is sent as High; set \
                  configurations.bitdefender.severity to choose",
             ]
