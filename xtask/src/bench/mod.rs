@@ -12,7 +12,7 @@
 //! each in a fresh copy of the workspace) and reports each one's median wall
 //! time and median peak RSS (`wait4(2)`) as JSON ([`report::Report`]).
 //! `--check` holds such a report to `tests/bench/budgets.toml` and the last
-//! `development` result ([`check`]).
+//! result of the base branch ([`check`]).
 //!
 //! The modules split computing from running: [`report`] and [`check`] are
 //! pure and tested without a process; [`measure`], [`lsp`], [`oracle`] and
@@ -67,8 +67,8 @@ stdout (progress goes to stderr); --out writes it to FILE as well.
                     explain (default: .venv/bin/opentide, from uv sync)
 
 --check holds BENCH.json to BUDGETS (tests/bench/budgets.toml) and, with
---previous, to the last development result: a median or peak RSS more than
-10% over its reference fails. It prints a Markdown table per command
+--previous, to the last result of the base branch (BASE_BRANCH): a median or
+peak RSS more than 10% over its reference fails. It prints a Markdown table per command
 (median, RSS, budget, deltas), and appends it to FILE with --summary.
 
 exit status: 0 done or passed, 1 a budget or regression check failed,
@@ -374,7 +374,7 @@ pub struct CheckOptions {
     pub budgets: PathBuf,
     /// The report to check.
     pub report: PathBuf,
-    /// The last `development` result.
+    /// The base branch's last result.
     pub previous: Option<PathBuf>,
     /// A file to append the Markdown summary to (`$GITHUB_STEP_SUMMARY`).
     pub summary: Option<PathBuf>,
