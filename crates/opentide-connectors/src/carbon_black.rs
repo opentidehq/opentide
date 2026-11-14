@@ -43,19 +43,18 @@ pub fn http_settings(timeout: Duration) -> HttpSettings {
     }
 }
 
-/// An error status as the SDK's exception (`http_request`): its class and
-/// its text.
+/// An error status Carbon Black Cloud answered, by what it means for the
+/// run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SdkError {
-    /// HTTP 401 (`UnauthorizedError`).
+    /// HTTP 401: the API key was refused.
     Unauthorized(String),
-    /// Any other error status (`ServerError`, `ObjectNotFoundError`,
-    /// `QuerySyntaxError`, `ClientError`): an `ApiError`.
+    /// Any other error status.
     Api(String),
 }
 
 impl SdkError {
-    /// The exception's `str`.
+    /// What happened.
     pub fn text(&self) -> &str {
         match self {
             Self::Unauthorized(text) | Self::Api(text) => text,
@@ -63,52 +62,33 @@ impl SdkError {
     }
 }
 
-/// The SDK's exception for *answer* to `method uri`, or `None` for a 2xx
-/// or 3xx.
+/// The error *answer* to `method uri` is, or `None` for a 2xx or 3xx:
+/// `Carbon Black Cloud answered HTTP <status> <reason> to <method> <uri>`,
+/// then the body's text when there is one.
 fn sdk_error(method: &str, uri: &str, answer: &Answer) -> Option<SdkError> {
     let status = answer.status;
     if status < 400 {
         return None;
     }
+    let reason = crate::transport::StatusCode::from_u16(status)
+        .ok()
+        .and_then(|status| status.canonical_reason())
+        .map(|reason| format!(" {reason}"))
+        .unwrap_or_default();
+    let mut message =
+        format!("Carbon Black Cloud answered HTTP {status}{reason} to {method} {uri}");
+    if status == 401 {
+        message.push_str(" (check the API ID and key)");
+    }
     let text = answer.text();
-    Some(if status >= 500 {
-        let details = if text.is_empty() {
-            " (No further information provided)".to_owned()
-        } else {
-            format!(" ({text})")
-        };
-        SdkError::Api(format!(
-            "Received error code {status} from API <{uri}>{details}"
-        ))
-    } else if status == 404 {
-        let mut message = format!("Received 404 (Object Not Found) for {uri}");
-        if !text.is_empty() {
-            message.push_str(&format!(": {text}"));
-        }
-        SdkError::Api(message)
-    } else if status == 401 {
-        SdkError::Unauthorized(if text.is_empty() {
-            format!("Unauthorized (Check API creds): attempted to {method} {uri}")
-        } else {
-            format!("Check your API Credentials: {text}")
-        })
-    } else if status == 400
-        && answer
-            .json()
-            .and_then(|body| body.get("reason").cloned())
-            .is_some_and(|reason| reason.as_str() == Some("query_malformed_syntax"))
-    {
-        let mut message = format!("Received query syntax error for {uri}");
-        if !text.is_empty() {
-            message.push_str(&format!(": {text}"));
-        }
-        SdkError::Api(message)
-    } else if text.is_empty() {
-        SdkError::Api(format!(
-            "Received error code {status} from API (No further information provided)"
-        ))
+    let text = text.trim();
+    if !text.is_empty() {
+        message.push_str(&format!(": {text}"));
+    }
+    Some(if status == 401 {
+        SdkError::Unauthorized(message)
     } else {
-        SdkError::Api(format!("Received error code {status} from API: {text}"))
+        SdkError::Api(message)
     })
 }
 
@@ -232,10 +212,10 @@ impl CarbonBlack {
         }
         match serde_json::from_slice::<Value>(&answer.body) {
             Ok(value) => Ok(Ok(Some(value))),
-            Err(_) => Ok(Err(SdkError::Api(format!(
-                "Received error code {} from API (Cannot parse response as JSON: {:?})",
+            Err(error) => Ok(Err(SdkError::Api(format!(
+                "Carbon Black Cloud answered HTTP {} with a body that is not JSON ({error}): {}",
                 answer.status,
-                String::from_utf8_lossy(&answer.body)
+                String::from_utf8_lossy(&answer.body).trim()
             )))),
         }
     }
@@ -531,7 +511,7 @@ impl CarbonBlack {
         .await?
         .map_err(refused)?
         .unwrap_or(Value::Null);
-        if !validated.get("valid").is_some_and(truthy) {
+        if validated.get("valid").and_then(Value::as_bool) != Some(true) {
             let message = validated
                 .get("invalid_message")
                 .map(value_str)
@@ -592,7 +572,7 @@ impl CarbonBlack {
                     tenant: tenant.clone(),
                     message: format!(
                         "the process search did not finish within {}s on {tenant}",
-                        seconds_g(request.timeout)
+                        request.timeout.as_secs_f64()
                     ),
                     detail: Some("narrow the window or raise --timeout".into()),
                     timeout: request.timeout,
@@ -698,7 +678,7 @@ impl CarbonBlack {
                 });
             }
         };
-        if !validated.get("valid").is_some_and(truthy) {
+        if validated.get("valid").and_then(Value::as_bool) != Some(true) {
             return Err(ConnectorError::refused(
                 PLATFORM,
                 &tenant,
@@ -710,33 +690,11 @@ impl CarbonBlack {
     }
 }
 
-/// Python's truth of a JSON value.
-fn truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(flag) => *flag,
-        Value::Number(number) => number.as_f64().is_some_and(|n| n != 0.0),
-        Value::String(text) => !text.is_empty(),
-        Value::Array(items) => !items.is_empty(),
-        Value::Object(map) => !map.is_empty(),
-    }
-}
-
 /// `str(value)` of a JSON value from the SDK.
 fn value_str(value: &Value) -> String {
     match value {
         Value::String(text) => text.clone(),
         other => other.to_string(),
-    }
-}
-
-/// `{seconds:g}`.
-fn seconds_g(duration: Duration) -> String {
-    let seconds = duration.as_secs_f64();
-    if seconds.fract() == 0.0 {
-        format!("{seconds:.0}")
-    } else {
-        format!("{seconds}")
     }
 }
 
@@ -852,48 +810,57 @@ mod tests {
     }
 
     #[test]
-    fn error_statuses_read_as_the_sdk_words_them() {
+    fn error_statuses_name_the_status_the_call_and_the_answer() {
         let uri = "https://cbc.invalid/x?y=1";
         assert_eq!(sdk_error("GET", uri, &answer(200, b"")), None);
         assert_eq!(
             sdk_error("GET", uri, &answer(502, b"")),
             Some(SdkError::Api(
-                "Received error code 502 from API <https://cbc.invalid/x?y=1> (No further information provided)".into()
+                "Carbon Black Cloud answered HTTP 502 Bad Gateway to GET https://cbc.invalid/x?y=1"
+                    .into()
             ))
         );
         assert_eq!(
-            sdk_error("GET", uri, &answer(404, b"gone")),
+            sdk_error("GET", uri, &answer(404, b"gone\n")),
             Some(SdkError::Api(
-                "Received 404 (Object Not Found) for https://cbc.invalid/x?y=1: gone".into()
+                "Carbon Black Cloud answered HTTP 404 Not Found to GET https://cbc.invalid/x?y=1: \
+                 gone"
+                    .into()
             ))
         );
         assert_eq!(
             sdk_error("POST", uri, &answer(401, b"")),
             Some(SdkError::Unauthorized(
-                "Unauthorized (Check API creds): attempted to POST https://cbc.invalid/x?y=1"
+                "Carbon Black Cloud answered HTTP 401 Unauthorized to POST \
+                 https://cbc.invalid/x?y=1 (check the API ID and key)"
                     .into()
             ))
         );
         assert_eq!(
-            sdk_error("POST", uri, &answer(400, br#"{"reason": "query_malformed_syntax"}"#)),
+            sdk_error(
+                "POST",
+                uri,
+                &answer(400, br#"{"reason": "query_malformed_syntax"}"#)
+            ),
             Some(SdkError::Api(
-                "Received query syntax error for https://cbc.invalid/x?y=1: {\"reason\": \"query_malformed_syntax\"}".into()
+                "Carbon Black Cloud answered HTTP 400 Bad Request to POST \
+                 https://cbc.invalid/x?y=1: {\"reason\": \"query_malformed_syntax\"}"
+                    .into()
             ))
         );
-        assert_eq!(seconds_g(Duration::from_millis(1500)), "1.5");
-        assert_eq!(seconds_g(Duration::from_secs(120)), "120");
+        assert_eq!(
+            format!("{}s", Duration::from_millis(1500).as_secs_f64()),
+            "1.5s"
+        );
+        assert_eq!(
+            format!("{}s", Duration::from_secs(120).as_secs_f64()),
+            "120s"
+        );
     }
 
     #[test]
     fn the_sdk_values_read_as_python_reads_them() {
         let value = |text: &str| serde_json::from_str::<Value>(text).unwrap_or(Value::Null);
-        // Python's truth: `search_validation`'s `valid`.
-        for falsy in ["null", "false", "0", "0.0", "\"\"", "[]", "{}"] {
-            assert!(!truthy(&value(falsy)), "{falsy}");
-        }
-        for truthful in ["true", "1", "-0.5", "\"no\"", "[0]", "{\"a\": null}"] {
-            assert!(truthy(&value(truthful)), "{truthful}");
-        }
         // A string as it is, anything else as its JSON (the job status's
         // `message`, a tag that is not a string).
         assert_eq!(
