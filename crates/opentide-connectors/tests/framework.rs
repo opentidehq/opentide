@@ -97,6 +97,53 @@ fn tls_server(ca: &TestCa) -> (tokio::runtime::Runtime, u16) {
     (runtime, port)
 }
 
+/// A certificate the tenant does not trust is refused once, not retried: a
+/// second handshake would be refused the same way. A connection refused
+/// outright still is retried (the request never left).
+#[test]
+fn framework_a_refused_certificate_is_not_retried() {
+    let ca = TestCa::new().unwrap();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let config = ca.server_config("localhost").unwrap();
+    let listener = runtime
+        .block_on(tokio::net::TcpListener::bind("127.0.0.1:0"))
+        .unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let accepted = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&accepted);
+    runtime.spawn(async move {
+        loop {
+            let Ok((stream, _)) = listener.accept().await else {
+                return;
+            };
+            counter.fetch_add(1, Ordering::SeqCst);
+            let acceptor = tokio_rustls::TlsAcceptor::from(config.clone());
+            tokio::spawn(async move {
+                let _ = acceptor.accept(stream).await;
+            });
+        }
+    });
+    let retrying = HttpSettings {
+        retry: RetryPolicy {
+            max_retries: 3,
+            base_delay: Duration::from_millis(10),
+        },
+        ..HttpSettings::default()
+    };
+    let url = format!("https://localhost:{port}/");
+    let refused = get("verifying", &retrying, &Environment::default(), None, &url).unwrap_err();
+    assert!(refused.is_unreachable(), "{refused}");
+    assert!(
+        refused.to_string().to_lowercase().contains("certificate"),
+        "{refused}"
+    );
+    assert_eq!(
+        accepted.load(Ordering::SeqCst),
+        1,
+        "one handshake, no retry"
+    );
+}
+
 fn write_ca(ca: &str) -> tempfile::NamedTempFile {
     let mut file = tempfile::NamedTempFile::new().unwrap();
     file.write_all(ca.as_bytes()).unwrap();
