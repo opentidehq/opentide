@@ -50,6 +50,9 @@ doc = false
 
 [dependencies]
 clap = { workspace = true, features = ["env", "string"] }
+# The renderers' styles (render::text) and the console streams they reach.
+anstyle.workspace = true
+anstream.workspace = true
 # Shell completion (#841): `--show-completion` and `--install-completion`
 # write clap_complete's registration for each shell, and a Tab press runs the
 # binary with `_OPENTIDE_COMPLETE` set (`CompleteEnv`), which completes the
@@ -85,6 +88,9 @@ anyhow.workspace = true
 # terminal, read back into ratatui's text for the Results tab.
 ratatui = { version = "0.30", default-features = false, features = ["crossterm", "underline-color"], optional = true }
 ansi-to-tui = { version = "8.0", default-features = false, optional = true }
+# ratatui's own conversion of the renderers' anstyle styles (the query
+# highlights the Detail pane shares with the code frames).
+ratatui-core = { version = "0.1", default-features = false, features = ["anstyle"], optional = true }
 indexmap = "2"
 # `validate`'s queries check analyses the objects on every core (#817).
 rayon.workspace = true
@@ -151,7 +157,7 @@ base64.workspace = true
 default = ["terminal"]
 # The terminal UI (`tui`) and the `setup` wizard's questions, on crossterm.
 # Off, as in the WASI build, they refuse as they do without a terminal.
-terminal = ["dep:ratatui", "dep:ansi-to-tui", "dep:inquire"]
+terminal = ["dep:ratatui", "dep:ratatui-core", "dep:ansi-to-tui", "dep:inquire"]
 
 [target.'cfg(not(target_os = "wasi"))'.dependencies]
 # Ctrl-C (`app::install_interrupt_handler`). WASI delivers no signals.
