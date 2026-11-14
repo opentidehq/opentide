@@ -203,6 +203,11 @@ impl InjectedQuery {
 ///
 /// Offsets are in the text after a leading byte-order mark
 /// ([`opentide_core::strip_bom`]); `offset` may count the mark.
+///
+/// The inner offset is always on a character boundary of the query: a
+/// decoded escape (`\u00e9` in a double-quoted scalar) maps every byte of
+/// its character onto the escape's source, so a cursor inside the escape
+/// lands on the character's start.
 pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery, usize)> {
     let (source, offset) = opentide_core::strip_bom_at(source, offset);
     for inj in extract_injections(source) {
@@ -212,6 +217,7 @@ pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery
             .enumerate()
             .position(|(i, &h)| h == offset && !inj.is_synthetic(i))
         {
+            let inner = inj.inner.floor_char_boundary(inner);
             return Some((inj, inner));
         }
         // An assembled injection covers only its parts' text.
@@ -238,6 +244,7 @@ pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery
                     .saturating_sub(1)
                     .min(inj.host_map.len().saturating_sub(1)),
             );
+            let inner = inj.inner.floor_char_boundary(inner);
             return Some((inj, inner));
         }
     }
@@ -2208,5 +2215,23 @@ configurations:
         let deep = format!("{WHER}deep: {}{}\n", "[".repeat(200), "]".repeat(200));
         assert_eq!(codes(&deep), [codes::KQL_UNKNOWN_OPERATOR]);
         assert!(index_object("r.yaml", &deep).is_some());
+    }
+
+    #[test]
+    fn a_cursor_inside_an_escape_lands_on_its_character_boundary() {
+        // The escape decodes to `é`, two bytes that map onto its backslash
+        // and its `u`: a cursor on the `u` once landed on the second byte.
+        // Its hex digits map onto nothing and land on a boundary as well.
+        let source =
+            "name: R\nconfigurations:\n  sentinel:\n    query: \"T | where A == \\u00e9\"\n";
+        let escape = source.find("\\u00e9").unwrap();
+        for offset in escape..escape + "\\u00e9".len() {
+            let (inj, inner) = injection_at_offset(source, offset).unwrap();
+            assert!(inj.inner.is_char_boundary(inner), "{offset} -> {inner}");
+        }
+        for offset in [escape, escape + 1] {
+            let (inj, inner) = injection_at_offset(source, offset).unwrap();
+            assert_eq!(&inj.inner[inner..], "\u{e9}", "{offset}");
+        }
     }
 }

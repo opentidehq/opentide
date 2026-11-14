@@ -1733,9 +1733,12 @@ const COLUMN_OPERATORS: &[&str] = &[
 ];
 
 pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<CompletionItem> {
+    // An offset inside a character (a decoded escape) completes nothing.
+    let Some(before) = source.get(..offset.min(source.len())) else {
+        return Vec::new();
+    };
     let workspace = Catalog::for_workspace(profile, source);
     let catalog = &*workspace;
-    let before = &source[..offset.min(source.len())];
     let trimmed = before.trim_end();
     let lower = trimmed.to_ascii_lowercase();
     if lower.ends_with("evaluate") && before.ends_with(' ') || lower.ends_with("| evaluate") {
@@ -1985,9 +1988,13 @@ fn prefix_option_items(op: &str, options: &[&OperatorOption]) -> Vec<CompletionI
 /// Hover at byte `offset` of `source` (an LSP host converts the editor's
 /// UTF-16 position once, with `opentide_core::position_to_offset`).
 pub fn hover(source: &str, offset: usize, profile: Profile) -> Option<String> {
+    let offset = offset.min(source.len());
+    // An offset inside a character (a decoded escape) has nothing to show.
+    if !source.is_char_boundary(offset) {
+        return None;
+    }
     let workspace = Catalog::for_workspace(profile, source);
     let catalog = &*workspace;
-    let offset = offset.min(source.len());
     let word = word_at(source, offset)?;
     if let Some(md) = column_hover(source, offset, catalog) {
         return Some(md);
@@ -2108,9 +2115,10 @@ pub fn hover(source: &str, offset: usize, profile: Profile) -> Option<String> {
     reason = "a signature has a handful of parameters, far below u32::MAX"
 )]
 pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<SignatureHelp> {
+    // An offset inside a character (a decoded escape) has nothing to show.
+    let before = source.get(..offset.min(source.len()))?;
     let workspace = Catalog::for_workspace(profile, source);
     let catalog = &*workspace;
-    let before = &source[..offset.min(source.len())];
     if let Some((name, active)) = innermost_call(before)
         && let Some(mut help) = signature_for_name(catalog, &name, active)
     {
@@ -3243,5 +3251,16 @@ mod tests {
             "{}",
             help.signatures[0].label
         );
+    }
+
+    #[test]
+    fn an_offset_inside_a_character_is_answered_empty() {
+        // A cursor inside a decoded escape (`\u00e9` in a double-quoted Tide
+        // query) can reach the engine as the second byte of `\u{e9}`.
+        let src = "T | where A == \"\u{e9}\" | project B";
+        let inside = src.find('\u{e9}').unwrap() + 1;
+        assert!(completions(src, inside, Profile::Sentinel).is_empty());
+        assert_eq!(hover(src, inside, Profile::Sentinel), None);
+        assert!(signature_help(src, inside, Profile::Sentinel).is_none());
     }
 }

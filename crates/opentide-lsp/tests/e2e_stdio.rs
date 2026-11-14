@@ -192,6 +192,38 @@ fn unknown_spl_command_is_published() {
 }
 
 #[test]
+fn a_cursor_inside_an_escape_in_a_quoted_query_is_answered() {
+    // `\u00e9` decodes to a two-byte `é` whose bytes both map onto the
+    // escape: a cursor on its `u` once reached the KQL engine inside the
+    // character and failed the request ("not a char boundary").
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    let uri = "file:///tmp/escape.yaml";
+    let line = r#"    query: "SecurityEvent | where Account == \"\u00e9\"""#;
+    let text = format!(
+        "name: Escape\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\nconfigurations:\n  sentinel:\n{line}\n"
+    );
+    published_codes(&mut lsp, uri, "opentide-yaml", &text);
+    let escape = line.find(r"\u00e9").unwrap();
+    for character in escape..escape + r"\u00e9".len() {
+        for method in ["textDocument/completion", "textDocument/hover"] {
+            let reply = lsp.request(
+                method,
+                json!({
+                    "textDocument": { "uri": uri },
+                    "position": { "line": 6, "character": character }
+                }),
+            );
+            assert!(
+                reply.get("error").is_none(),
+                "{method} at {character}: {reply}"
+            );
+        }
+    }
+}
+
+#[test]
 fn tide_yaml_pull_diagnostics_and_symbols() {
     let mut lsp = Lsp::spawn();
     let root = repo_root().join("crates/testdata/workspaces/tide_corpus");
