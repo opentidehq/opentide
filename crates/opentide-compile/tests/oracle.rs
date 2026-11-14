@@ -13,11 +13,21 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use opentide_compile::json::Json;
-use opentide_compile::preview::{self, Inputs, PROBE_CLOCK, PROBE_TIMESTAMP};
-use opentide_compile::{CompileError, Owned, Rule};
+use opentide_compile::preview::{self, Inputs};
+use opentide_compile::{CompileError, Owned, Rule, splunk};
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, Options, OsFs, RootOptions, Workspace};
 use serde_json::Value;
+
+/// The Splunk clock the oracle's probe pins (`xtask/src/payloads/probe.py`):
+/// a random minute and hour of 7, the time 03:04 UTC.
+const PROBE_CLOCK: splunk::Clock = splunk::Clock {
+    random: (7, 7),
+    now: (4, 3),
+};
+
+/// The Carbon Black report timestamp the oracle's probe pins.
+const PROBE_TIMESTAMP: i64 = 1_767_225_600;
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")

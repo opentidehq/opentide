@@ -1,7 +1,9 @@
 //! Tide YAML objects: schema/vocab diagnostics, UUID graph, query injection.
 //!
-//! Pydantic remains CLI authority. The LSP emits the same `{code, field_path, severity}`
-//! with real source ranges. opentide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
+//! The Rust models (`opentide-schema`) are the authority for Tide objects:
+//! `opentide validate` (`opentide-workspace`) reports their findings, and the
+//! LSP publishes the same `{code, field_path, severity}` with real source
+//! ranges. opentide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
 //!
 //! Internal to opentide, with no stability promise: depend on the
 //! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.

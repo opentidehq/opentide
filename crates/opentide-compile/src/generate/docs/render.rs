@@ -2448,8 +2448,7 @@ fn status_colours(definitions: &[super::facts::StatusDefinition]) -> Vec<(String
     colours
 }
 
-/// `done` of `total` as a whole percentage, rounded half to even as
-/// Python's `round` rounds it.
+/// `done` of `total` as a whole percentage, a half rounded up.
 fn percent(done: usize, total: usize) -> String {
     if total == 0 {
         return "0".to_owned();
@@ -2459,7 +2458,7 @@ fn percent(done: usize, total: usize) -> String {
         reason = "catalogue counts are far below 2^52"
     )]
     let share = 100.0 * done as f64 / total as f64;
-    format!("{}", share.round_ties_even())
+    format!("{}", share.round())
 }
 
 fn icon(scope: Scope) -> &'static str {

@@ -15,7 +15,6 @@
 //! package's `opentide.cli.services.serve` was until UC-3.8: the payloads
 //! are its.
 
-pub mod decode;
 pub mod fetch;
 pub mod runner;
 pub mod server;

@@ -16,7 +16,6 @@ use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 
-use super::decode;
 use super::runner::{EventSink, Job, RunOutcome, RunRequest, Runner, compact, failure};
 use crate::envelope::INTERRUPTED_EXIT_CODE;
 use crate::json::Json;
@@ -402,7 +401,7 @@ impl Server {
         if text.trim().is_empty() {
             return;
         }
-        let message = match decode::parse(&text) {
+        let message = match Json::parse(&text) {
             Ok(message) => message,
             Err(problem) => {
                 self.error(&Json::Null, PARSE_ERROR, &format!("Parse error: {problem}"));
