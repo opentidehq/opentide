@@ -27,8 +27,9 @@
 
 use super::diagnostic::{Diagnostic, Severity, Sources, relative_path, sort_diagnostics};
 use super::glyphs;
-use super::text::{Color, Colour, Style, Text, cell_len, char_width};
+use super::text::{Colour, Text, cell_len, char_width};
 use crate::env::Env;
+use anstyle::{AnsiColor, Style};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -68,22 +69,22 @@ pub fn engine_reference(code: &str) -> Option<(&'static str, &'static str)> {
 /// The style of a severity's header and underline.
 fn severity_style(severity: Severity) -> Style {
     match severity {
-        Severity::Error => Style::fg(Color::Red).bold(),
-        Severity::Warning => Style::fg(Color::Yellow).bold(),
-        Severity::Note => Style::fg(Color::Blue).bold(),
+        Severity::Error => AnsiColor::Red.on_default().bold(),
+        Severity::Warning => AnsiColor::Yellow.on_default().bold(),
+        Severity::Note => AnsiColor::Blue.on_default().bold(),
     }
 }
 
 fn note_style(label: &str) -> Style {
     match label {
-        "help" | "fix" => Style::fg(Color::Cyan).bold(),
-        "note" => Style::fg(Color::Blue).bold(),
-        _ => Style::BOLD,
+        "help" | "fix" => AnsiColor::Cyan.on_default().bold(),
+        "note" => AnsiColor::Blue.on_default().bold(),
+        _ => Style::new().bold(),
     }
 }
 
 fn gutter_style() -> Style {
-    Style::fg(Color::Blue)
+    AnsiColor::Blue.on_default()
 }
 
 /// What a path keeps unencoded in a link or a SARIF URI: the RFC 3986
@@ -383,14 +384,14 @@ pub trait LineStyles {
 /// terminal's colour.
 pub fn query_style(capture: &str) -> Option<Style> {
     Some(match capture {
-        "keyword" | "operator.pipe" => Style::fg(Color::Magenta).bold(),
-        "operator" => Style::fg(Color::Magenta),
-        "function" | "function.builtin" | "macro" => Style::fg(Color::Cyan),
-        "type" => Style::fg(Color::BrightCyan),
-        "string" => Style::fg(Color::Green),
-        "number" | "boolean" | "constant" => Style::fg(Color::Yellow),
-        "comment" => Style::DIM,
-        "error" => Style::fg(Color::Red),
+        "keyword" | "operator.pipe" => AnsiColor::Magenta.on_default().bold(),
+        "operator" => AnsiColor::Magenta.on_default(),
+        "function" | "function.builtin" | "macro" => AnsiColor::Cyan.on_default(),
+        "type" => AnsiColor::BrightCyan.on_default(),
+        "string" => AnsiColor::Green.on_default(),
+        "number" | "boolean" | "constant" => AnsiColor::Yellow.on_default(),
+        "comment" => Style::new().dimmed(),
+        "error" => AnsiColor::Red.on_default(),
         _ => return None,
     })
 }
@@ -484,7 +485,7 @@ impl Frames {
         mut styles: Option<&mut dyn LineStyles>,
     ) -> Vec<Text> {
         let style = severity_style(diagnostic.severity);
-        let bold = Style::BOLD;
+        let bold = Style::new().bold();
         let mut header = Text::default();
         header.append(
             &format!("{}[{}]", diagnostic.severity.as_str(), diagnostic.code),
@@ -558,7 +559,10 @@ impl Frames {
             if let Some(columns) = self.columns.filter(|columns| *columns > 0) {
                 shown = shorten_path(&shown, columns.saturating_sub(line.cell_len()));
             }
-            line.append(&shown, &url.map(Style::link).unwrap_or_default());
+            match url {
+                Some(url) => line.append_link(&shown, url),
+                None => line.push_str(&shown),
+            };
             lines.push(line);
         }
 
@@ -761,15 +765,15 @@ pub fn render_diff(diff: &str, colour: Colour) -> String {
     let mut out = String::new();
     for raw in diff.lines() {
         let style = if raw.starts_with("+++") || raw.starts_with("---") {
-            Style::BOLD
+            Style::new().bold()
         } else if raw.starts_with("@@") {
-            Style::fg(Color::Cyan)
+            AnsiColor::Cyan.on_default()
         } else if raw.starts_with('+') {
-            Style::fg(Color::Green)
+            AnsiColor::Green.on_default()
         } else if raw.starts_with('-') {
-            Style::fg(Color::Red)
+            AnsiColor::Red.on_default()
         } else {
-            Style::PLAIN
+            Style::new()
         };
         let mut line = Text::styled(raw, &style);
         line.expand_tabs();
@@ -809,7 +813,7 @@ pub fn render_fixed(changes: &[FixedValue], cwd: &Path, colour: Colour) -> Strin
             shown.clone_from(&change.path);
         }
         let mut line = Text::default();
-        line.append("fixed:", &Style::fg(Color::Green).bold());
+        line.append("fixed:", &AnsiColor::Green.on_default().bold());
         line.push_str(&format!(
             " {shown}:{}:{} {:?} ",
             change.line, change.column, change.before
@@ -1107,13 +1111,13 @@ mod tests {
         let styles = styled_line("q.kql", text, 1);
         let string = styles
             .iter()
-            .find(|(_, _, style)| *style == Style::fg(Color::Green))
+            .find(|(_, _, style)| *style == AnsiColor::Green.on_default())
             .map(|(column, end, _)| (*column, *end));
         // `"é名"` runs from column 19 up to 23 (exclusive).
         assert_eq!(string, Some((19, 23)), "{styles:?}");
         let number = styles
             .iter()
-            .find(|(_, _, style)| *style == Style::fg(Color::Yellow))
+            .find(|(_, _, style)| *style == AnsiColor::Yellow.on_default())
             .map(|(column, end, _)| (*column, *end));
         assert_eq!(number, Some((36, 37)), "{styles:?}");
         // A token over two lines is left without colour on both.
@@ -1123,7 +1127,7 @@ mod tests {
             assert!(
                 styles
                     .iter()
-                    .all(|(_, _, style)| *style != Style::fg(Color::Green)),
+                    .all(|(_, _, style)| *style != AnsiColor::Green.on_default()),
                 "line {line}: {styles:?}"
             );
         }

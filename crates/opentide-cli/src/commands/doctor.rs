@@ -41,7 +41,8 @@ use crate::env::Env;
 use crate::envelope::Failure;
 use crate::json::Json;
 use crate::render::glyphs;
-use crate::render::text::{Style, Text};
+use crate::render::text::Text;
+use anstyle::{AnsiColor, Style};
 
 const COMMAND: &str = "doctor";
 
@@ -1247,26 +1248,29 @@ impl Doctor<'_> {
 }
 
 /// Every `*.toml` file under `dir`, at any depth, none in a folder whose
-/// name starts with `.` or `__`.
-#[expect(
-    clippy::case_sensitive_file_extension_comparisons,
-    reason = "the oracle's `rglob(\"*.toml\")` matches `.toml` case-sensitively on Linux"
-)]
+/// name starts with `.` or `__`. A link to a folder is entered, once: a link
+/// that points back up ends. `.toml` is matched case-sensitively, as the
+/// oracle's `rglob("*.toml")` matches it on Linux.
 fn collect_toml(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
+    let hidden = |entry: &walkdir::DirEntry| {
+        let name = entry.file_name().to_string_lossy();
+        entry.depth() > 0
+            && entry.file_type().is_dir()
+            && (name.starts_with('.') || name.starts_with("__"))
     };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if path.is_dir() {
-            if !(name.starts_with('.') || name.starts_with("__")) {
-                collect_toml(&path, out);
-            }
-        } else if name.ends_with(".toml") && path.is_file() {
-            out.push(path);
-        }
-    }
+    out.extend(
+        walkdir::WalkDir::new(dir)
+            .min_depth(1)
+            .follow_links(true)
+            .into_iter()
+            .filter_entry(|entry| !hidden(entry))
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry.file_type().is_file()
+                    && entry.file_name().to_string_lossy().ends_with(".toml")
+            })
+            .map(walkdir::DirEntry::into_path),
+    );
 }
 
 /// The line and reason `path` does not parse as TOML, or `None` when it
@@ -1423,27 +1427,30 @@ fn report(checks: &[Check], text: bool) -> Report {
 /// each with the indent its wrapped rows take.
 fn lines(check: &Check) -> Vec<(Text, usize)> {
     let (glyph, style) = match check.status {
-        "pass" => (glyphs::OK, "bold green"),
-        "fail" => (glyphs::FAILED, "bold red"),
-        "skip" => (glyphs::SKIP, "bold dim"),
-        _ => (glyphs::WARNING, "bold yellow"),
+        "pass" => (glyphs::OK, AnsiColor::Green.on_default().bold()),
+        "fail" => (glyphs::FAILED, AnsiColor::Red.on_default().bold()),
+        "skip" => (glyphs::SKIP, Style::new().bold().dimmed()),
+        _ => (glyphs::WARNING, AnsiColor::Yellow.on_default().bold()),
     };
     let mut line = Text::default();
-    line.append(glyph, &Style::new(style));
+    line.append(glyph, &style);
     line.push_str(" ");
     line.push_str(&check.message);
     line.append(
         &format!(" {} {}", glyphs::SEPARATOR, check.code),
-        &Style::new("dim"),
+        &Style::new().dimmed(),
     );
     let mut out = vec![(line, 2)];
     if let Some(fix) = &check.fix
         && matches!(check.status, "warn" | "fail" | "skip")
     {
         let mut hint = Text::plain("  ");
-        hint.append(&format!("{} ", glyphs::NEXT), &Style::new("bold cyan"));
+        hint.append(
+            &format!("{} ", glyphs::NEXT),
+            &AnsiColor::Cyan.on_default().bold(),
+        );
         if check.status == "skip" {
-            hint.append(fix, &Style::new("dim"));
+            hint.append(fix, &Style::new().dimmed());
         } else {
             hint.push_str(fix);
         }

@@ -79,6 +79,8 @@ opentide-connectors = { path = "crates/opentide-connectors", version = "=0.12.0"
 opentide-cassette = { path = "crates/opentide-cassette" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Canonical paths without Windows' `\\?\` prefix (the CLI's E2E tests).
+dunce = "1"
 toml = "0.8"
 # Spans of configuration TOML keys (opentide-analysis `config`); `display`
 # writes an edited document back (opentide-cli `setup platforms`). The version
@@ -90,8 +92,8 @@ anyhow = "1"
 lsp-server = "0.10"
 lsp-types = "0.97"
 url = "2.5"
-# Percent-decoding a URL path segment (opentide-cassette's matcher). The
-# version `url` already locks.
+# Percent-decoding a URL path segment (opentide-cassette's matcher,
+# opentide-lsp's `file:` URIs). The version `url` already locks.
 percent-encoding = "2.3"
 regex = "1"
 # Look-around and back-references, which `regex` has not: the oracle's
@@ -117,6 +119,11 @@ unicode-properties = { version = "0.1", default-features = false, features = ["g
 # version Cargo.lock already holds.
 ryu = "1"
 clap = { version = "4", features = ["derive"] }
+# The command line's terminal styles (anstyle) and the console streams that
+# write them (anstream: VT processing, or the legacy Windows console API). The
+# versions clap already locks.
+anstyle = "1.0"
+anstream = "1.0"
 tree-sitter = "0.25"
 # `LanguageFn`, the type tree-sitter 0.25 builds a Language from (opentide-syntax).
 tree-sitter-language = "0.1"
