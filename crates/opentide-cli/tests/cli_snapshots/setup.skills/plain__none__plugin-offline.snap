@@ -15,15 +15,15 @@ error: Could not fetch skills catalogue from opentidehq/skills@main. Check netwo
 
 ━━━ ws/.claude/settings.json · created 0644
 {
-  "enabledPlugins": {
-    "opentide@opentide": true
-  },
   "extraKnownMarketplaces": {
     "opentide": {
       "source": {
-        "repo": "opentidehq/skills",
-        "source": "github"
+        "source": "github",
+        "repo": "opentidehq/skills"
       }
     }
+  },
+  "enabledPlugins": {
+    "opentide@opentide": true
   }
 }

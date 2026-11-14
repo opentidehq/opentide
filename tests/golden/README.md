@@ -29,16 +29,28 @@ snapshot holds the arguments, the exit code, stdout, stderr, and every file the 
 modified or deleted under the workspace, home and the temporary directory, with its mode.
 Byte-for-byte parity with Python is not what they check; what the Rust CLI does today is.
 
-- **JSON is its parsed value**: a stream or a `.json` file that is one JSON document is
-  pretty-printed with sorted keys, so its fields and values are checked and its spacing is not.
+- **A JSON stream is its parsed value**: stdout or stderr that is one JSON document is
+  pretty-printed with sorted keys, under a header with its line count and final newline, so its
+  fields and values are checked and its spacing and key order are not. A **written file** is
+  its text as written (key order, indentation and final newline included), with control
+  characters shown.
 - **Control characters are shown**: ESC as `␛`, so a colour or cursor change is a visible diff.
-- **A file over 64 KiB** (the editor schemas) or one that is not UTF-8 is its size and SHA-256.
-- **Normalised, and only because it differs between two runs** (`opentide-compare`'s normaliser,
-  the rules below): the case's temporary root (`<WS>`, `<HOME>`, `<TMP>`, a root of fixed
-  length, so wrapping is stable), the clock (dates, timestamps, durations, `<SECONDS>`), the
-  spinner's glyph and a live frame's content where the case opts in, crash-log names, catalog
-  fingerprints, and UUIDs a run mints where the case opts in (`fresh-uuids`). The host reports a
-  fixed version (`0.28.1`, `tests/common/snapshot.rs` `VERSION`), so a release changes nothing.
+- **A file over 64 KiB**: a JSON one (the editor schemas, the SARIF report) keeps its structure
+  with strings over 200 characters, then its largest parts (a schema's definitions, SARIF's rule
+  catalogue), replaced by their size and SHA-256 until it fits in 16 KiB; any other is its size
+  and SHA-256. Only the case's paths are replaced in such a file (the full normaliser takes
+  seconds on megabytes), so it must hold nothing else that changes between runs.
+- **Normalised, and only because it differs between two runs or two hosts** (`opentide-compare`'s
+  normaliser, the rules below): the case's temporary root (`<WS>`, `<HOME>`, `<TMP>`, a root of
+  fixed length, so wrapping is stable), the clock (dates, timestamps, durations, `<SECONDS>`;
+  the week back only for `query`'s default window), the spinner's glyph and a live frame's
+  content where the case opts in, crash-log names, catalog fingerprints, UUIDs a run mints where
+  the case opts in (`fresh-uuids`), the host's git version where the case opts in (`host-git`),
+  a refused connection's errno (`<ECONNREFUSED>`), and `validate`'s worker counts in JSON
+  (`<CORES>`). The host reports a fixed version (`0.28.1`, `tests/common/snapshot.rs`
+  `VERSION`), so a release changes nothing. Every case runs under umask 022 with `/dev/null` as
+  standard input, and the fixtures get fixed modes.
+- **Fails, never snapshotted**: a request a case's cassette does not hold, and a panic.
 - **Left out**: cases on the generated fixtures (`fault`, `fault-lint`, `heavy-small`: `cargo
   xtask corpus` builds them, which a crate test cannot), and `serve`'s session, which feeds
   standard input (`tests/serve.rs` drives it).

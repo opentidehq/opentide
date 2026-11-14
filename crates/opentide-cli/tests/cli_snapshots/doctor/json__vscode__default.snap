@@ -18,7 +18,7 @@ exit: 1
     {
       "code": "opentide_latest",
       "fix": "check the network or --proxy, or pass --offline to skip network checks",
-      "message": "Could not ask PyPI for the latest release (Cannot reach pypi tenant 'pypi.org' at https://pypi.org: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111))",
+      "message": "Could not ask PyPI for the latest release (Cannot reach pypi tenant 'pypi.org' at https://pypi.org: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>))",
       "status": "warn",
       "subject": null
     },
@@ -32,7 +32,7 @@ exit: 1
     {
       "code": "git",
       "fix": null,
-      "message": "git 2.43.0",
+      "message": "git <GIT_VERSION>",
       "status": "pass",
       "subject": null
     },
@@ -88,7 +88,7 @@ exit: 1
     {
       "code": "proxy",
       "fix": "check --proxy, OPENTIDE_PROXY or HTTPS_PROXY, and that the proxy is up",
-      "message": "Cannot connect to proxy http://127.0.0.1:9 (Connection refused (os error 111))",
+      "message": "Cannot connect to proxy http://127.0.0.1:9 (Connection refused (os error <ECONNREFUSED>))",
       "status": "fail",
       "subject": null
     },

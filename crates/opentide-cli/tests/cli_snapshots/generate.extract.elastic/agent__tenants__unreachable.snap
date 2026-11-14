@@ -9,7 +9,7 @@ exit: 1
 
 ━━━ stderr
 ✗ import from elastic · <SECONDS>
-error: Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)
+error: Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 tip: add --json for machine-readable output
 
 ━━━ ws/Imported/ · created 0755
