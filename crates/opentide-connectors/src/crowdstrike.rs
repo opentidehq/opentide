@@ -3,25 +3,30 @@
 //!
 //! A port of `platforms/crowdstrike/client.py` (`CrowdstrikeService`: the
 //! OAuth2 client-credentials token, then create, update and delete),
-//! `deployer.py` (one token per tenant for a run, then one request per rule)
+//! `deployer.py` (a token per tenant, then one request per rule)
 //! and `runner.py` (a query job started, polled until done and stopped when
 //! the runner stops waiting for it), request for request. CrowdStrike has no
 //! live validation: the platform has no [`crate::connector::LiveValidator`]
 //! (`supported: False`).
 //!
+//! The token comes from the cloud's own OAuth2 endpoint
+//! (`<api>/oauth2/token`), never Entra ID's, and is kept in the platform's
+//! [`TokenCache`] until five minutes before its `expires_in`, for deploys
+//! and searches alike; a `401` gets one new token and one resend.
+//!
 //! The rule bodies are `opentide-compile`'s (`crowdstrike::compile`), as
 //! bytes: a create's correlation rule, an update's (or a disable's) one-rule
 //! list with the id.
 
-use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use opentide_compile::Json;
 use opentide_compile::deploy::PATH_SEGMENT;
 use percent_encoding::utf8_percent_encode;
-use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
+use crate::Secret;
 use crate::answer::Answer;
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, QueryOutcome,
@@ -30,7 +35,7 @@ use crate::connector::{
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
 use crate::retry::RetryPolicy;
-use crate::{Secret, TenantLabel};
+use crate::token::{Issued, TokenCache, lifetime};
 
 /// The platform's identifier.
 pub const PLATFORM: &str = "crowdstrike";
@@ -90,71 +95,79 @@ fn build(
     })
 }
 
+/// Signs in to the cloud at *base* with the tenant's `client_id` and
+/// `client_secret`: a form `POST` to `/oauth2/token`, answered 201 with an
+/// `access_token` and its `expires_in`.
+async fn sign_in(cx: TenantContext<'_>, base: &str) -> Result<Issued, ConnectorError> {
+    let client_id = cx.tenant.secret("client_id")?;
+    let client_secret = cx.tenant.secret("client_secret")?;
+    let form = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("client_id", client_id.expose())
+        .append_pair("client_secret", client_secret.expose())
+        .finish();
+    let request = build(
+        cx.http
+            .request(
+                crate::transport::Method::POST,
+                &format!("{base}/oauth2/token"),
+            )
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(form),
+        cx,
+    )?;
+    let answer = Answer::fetch(cx.http, request, cx.cancel).await?;
+    let tenant = &cx.tenant.label.tenant;
+    if answer.status != 201 {
+        return Err(refused(
+            cx,
+            format!(
+                "Cannot authenticate against {tenant} (HTTP {})",
+                answer.status
+            ),
+            None,
+        ));
+    }
+    // The answer is a bearer credential: never logged nor quoted.
+    let body = answer.json();
+    let token = body
+        .as_ref()
+        .and_then(|body| body.get("access_token").and_then(Json::as_str))
+        .filter(|token| !token.is_empty());
+    match token {
+        Some(token) => Ok(Issued {
+            token: Secret::new(token),
+            lifetime: lifetime(body.as_ref().and_then(|body| body.get("expires_in"))),
+        }),
+        None => Err(refused(
+            cx,
+            format!("CrowdStrike authentication for {tenant} returned no access token"),
+            None,
+        )),
+    }
+}
+
 /// One tenant's authenticated client (`CrowdstrikeService`).
 #[derive(Debug)]
 pub struct Session<'a> {
     cx: TenantContext<'a>,
     base: &'static str,
-    token: Secret,
+    tokens: Arc<TokenCache>,
 }
 
 impl<'a> Session<'a> {
-    /// Authenticates with the tenant's `client_id` and `client_secret`
-    /// (`_get_access_token`: a form `POST` to `/oauth2/token`, answered 201
-    /// with an `access_token`).
+    /// A session with a token cache of its own, signed in at once, so a
+    /// tenant that refuses the credentials fails here.
     pub async fn connect(cx: TenantContext<'a>) -> Result<Self, ConnectorError> {
-        let base = base_api(cx)?;
-        let client_id = cx.tenant.secret("client_id")?;
-        let client_secret = cx.tenant.secret("client_secret")?;
-        let form = url::form_urlencoded::Serializer::new(String::new())
-            .extend_pairs([
-                ("client_id", client_id.expose()),
-                ("client_secret", client_secret.expose()),
-            ])
-            .finish();
-        let request = build(
-            cx.http
-                .request(
-                    crate::transport::Method::POST,
-                    &format!("{base}/oauth2/token"),
-                )
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .body(form),
+        let session = Self {
             cx,
-        )?;
-        let answer = Answer::fetch(cx.http, request, cx.cancel).await?;
-        let tenant = &cx.tenant.label.tenant;
-        if answer.status != 201 {
-            return Err(refused(
-                cx,
-                format!(
-                    "Cannot authenticate against {tenant} (HTTP {})",
-                    answer.status
-                ),
-                None,
-            ));
-        }
-        // The answer is a bearer credential: never logged nor quoted.
-        let token = answer
-            .json()
-            .and_then(|body| {
-                body.get("access_token")
-                    .and_then(Json::as_str)
-                    .map(str::to_owned)
-            })
-            .filter(|token| !token.is_empty());
-        match token {
-            Some(token) => Ok(Self {
-                cx,
-                base,
-                token: Secret::new(token),
-            }),
-            None => Err(refused(
-                cx,
-                format!("CrowdStrike authentication for {tenant} returned no access token"),
-                None,
-            )),
-        }
+            base: base_api(cx)?,
+            tokens: Arc::new(TokenCache::new()),
+        };
+        session
+            .tokens
+            .token(&cx.tenant.label, session.base, || sign_in(cx, session.base))
+            .await?;
+        Ok(session)
     }
 
     /// The cloud's API (`https://api.eu-1.crowdstrike.com`).
@@ -162,26 +175,36 @@ impl<'a> Session<'a> {
         self.base
     }
 
-    /// A request with the session's headers.
-    fn request(
+    /// Sends *method* *url* (with *body*, JSON) with the session's token
+    /// and headers; a `401` gets one new token and one resend.
+    async fn call(
         &self,
         method: crate::transport::Method,
         url: &str,
-    ) -> crate::transport::RequestBuilder {
-        self.cx
-            .http
-            .request(method, url)
-            .header("Authorization", format!("Bearer {}", self.token.expose()))
-            .header("Content-Type", "application/json")
-            .header("accept", "application/json")
-    }
-
-    async fn send(
-        &self,
-        builder: crate::transport::RequestBuilder,
+        body: Option<&[u8]>,
         cancel: &CancellationToken,
     ) -> Result<Answer, ConnectorError> {
-        Answer::fetch(self.cx.http, build(builder, self.cx)?, cancel).await
+        let (cx, base) = (self.cx, self.base);
+        self.tokens
+            .send(
+                cx,
+                base,
+                || sign_in(cx, base),
+                |token| {
+                    let builder = cx
+                        .http
+                        .request(method.clone(), url)
+                        .header("Authorization", format!("Bearer {}", token.expose()))
+                        .header("Content-Type", "application/json")
+                        .header("accept", "application/json");
+                    match body {
+                        Some(body) => builder.body(body.to_vec()),
+                        None => builder,
+                    }
+                },
+                cancel,
+            )
+            .await
     }
 
     /// Creates a correlation rule from its compiled *body*, returning its id
@@ -189,9 +212,10 @@ impl<'a> Session<'a> {
     pub async fn create_detection_rule(&self, body: &[u8]) -> Result<String, ConnectorError> {
         let url = format!("{}{RULES}", self.base);
         let answer = self
-            .send(
-                self.request(crate::transport::Method::POST, &url)
-                    .body(body.to_vec()),
+            .call(
+                crate::transport::Method::POST,
+                &url,
+                Some(body),
                 self.cx.cancel,
             )
             .await?;
@@ -236,9 +260,10 @@ impl<'a> Session<'a> {
     ) -> Result<(), ConnectorError> {
         let url = format!("{}{RULES}", self.base);
         let answer = self
-            .send(
-                self.request(crate::transport::Method::PATCH, &url)
-                    .body(body.to_vec()),
+            .call(
+                crate::transport::Method::PATCH,
+                &url,
+                Some(body),
                 self.cx.cancel,
             )
             .await?;
@@ -266,10 +291,7 @@ impl<'a> Session<'a> {
                 .finish()
         );
         let answer = self
-            .send(
-                self.request(crate::transport::Method::DELETE, &url),
-                self.cx.cancel,
-            )
+            .call(crate::transport::Method::DELETE, &url, None, self.cx.cancel)
             .await?;
         if answer.status == 200 {
             return Ok(());
@@ -312,9 +334,10 @@ impl<'a> Session<'a> {
         let body = serde_json::to_vec(&start)
             .map_err(|error| refused(self.cx, error.to_string(), None))?;
         let started = self
-            .send(
-                self.request(crate::transport::Method::POST, &jobs)
-                    .body(body),
+            .call(
+                crate::transport::Method::POST,
+                &jobs,
+                Some(&body),
                 self.cx.cancel,
             )
             .await?;
@@ -381,10 +404,7 @@ impl<'a> Session<'a> {
         let tenant = &self.cx.tenant.label.tenant;
         loop {
             let answer = self
-                .send(
-                    self.request(crate::transport::Method::GET, url),
-                    self.cx.cancel,
-                )
+                .call(crate::transport::Method::GET, url, None, self.cx.cancel)
                 .await?;
             let status = self.object(&answer, "read the search")?;
             if status.get("cancelled").is_some_and(Json::truthy) {
@@ -420,10 +440,10 @@ impl<'a> Session<'a> {
 
     /// Stops the search at *url*, which the runner no longer waits for; a
     /// failure to stop it is not the caller's error (`_stop`). It is sent
-    /// even when the run was cancelled, so its own token is fresh.
+    /// even when the run was cancelled.
     async fn stop(&self, url: &str) {
         let cancel = CancellationToken::new();
-        let stopping = self.send(self.request(crate::transport::Method::DELETE, url), &cancel);
+        let stopping = self.call(crate::transport::Method::DELETE, url, None, &cancel);
         let _ = tokio::time::timeout(STOP_TIMEOUT, stopping).await;
     }
 
@@ -489,12 +509,11 @@ pub fn cql_with_limit(query: &str, limit: usize) -> String {
     }
 }
 
-/// The platform: a deployer that authenticates once per tenant for the run,
-/// and the CQL runner. No live validator.
+/// The platform: a deployer and the CQL runner, which share each tenant's
+/// token until it is due for renewal. No live validator.
 #[derive(Debug, Default)]
 pub struct Crowdstrike {
-    /// The token of each tenant the deployer reached in this run.
-    tokens: Mutex<BTreeMap<TenantLabel, Secret>>,
+    tokens: Arc<TokenCache>,
 }
 
 impl Crowdstrike {
@@ -503,19 +522,19 @@ impl Crowdstrike {
         Self::default()
     }
 
-    /// The tenant's session: its token from earlier in the run, else a new one.
-    async fn session<'a>(&self, cx: TenantContext<'a>) -> Result<Session<'a>, ConnectorError> {
-        let mut tokens = self.tokens.lock().await;
-        if let Some(token) = tokens.get(&cx.tenant.label) {
-            return Ok(Session {
-                cx,
-                base: base_api(cx)?,
-                token: token.clone(),
-            });
-        }
-        let session = Session::connect(cx).await?;
-        tokens.insert(cx.tenant.label.clone(), session.token.clone());
-        Ok(session)
+    /// A platform whose tokens are kept in *tokens*.
+    pub fn with_tokens(tokens: Arc<TokenCache>) -> Self {
+        Self { tokens }
+    }
+
+    /// The tenant's session on the platform's tokens; it signs in on its
+    /// first call when no token is kept.
+    fn session<'a>(&self, cx: TenantContext<'a>) -> Result<Session<'a>, ConnectorError> {
+        Ok(Session {
+            cx,
+            base: base_api(cx)?,
+            tokens: Arc::clone(&self.tokens),
+        })
     }
 }
 
@@ -529,7 +548,7 @@ impl Deployer for Crowdstrike {
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, ConnectorError>> {
         Box::pin(async move {
-            let session = self.session(cx).await?;
+            let session = self.session(cx)?;
             let remote_id = match request.operation {
                 Operation::Create => Some(session.create_detection_rule(&request.body).await?),
                 Operation::Update | Operation::Disable => {
@@ -552,8 +571,8 @@ impl Deployer for Crowdstrike {
 }
 
 impl QueryRunner for Crowdstrike {
-    /// A CQL search on one repository (`--index` once at most), with a
-    /// token of its own, as each Python run authenticates afresh.
+    /// A CQL search on one repository (`--index` once at most), on the
+    /// tenant's kept token.
     fn run<'a>(
         &'a self,
         cx: TenantContext<'a>,
@@ -567,8 +586,7 @@ impl QueryRunner for Crowdstrike {
                     Some(format!("got {}", request.index.join(", "))),
                 ));
             }
-            let session = Session::connect(cx).await?;
-            session.search(request).await
+            self.session(cx)?.search(request).await
         })
     }
 }

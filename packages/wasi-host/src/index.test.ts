@@ -322,6 +322,54 @@ function sameBody(want: string, got: string): boolean {
   }
 }
 
+/** Whether *headers* (as recorded: names in lower case) say the body is a form. */
+function isForm(headers: [string, string][]): boolean {
+  return headers.some(
+    ([name, value]) => name === "content-type" && value.split(";")[0].trim().toLowerCase() === "application/x-www-form-urlencoded",
+  );
+}
+
+/**
+ * A form text's decoded fields, ordered by name (a stable sort: a repeated
+ * name's values stay in the order they came), as opentide-cassette's
+ * `replay::fields`: `+` and `%20`, `~` and `%7E` are the same.
+ */
+function formFields(text: string): [string, string][] {
+  return [...new URLSearchParams(text)].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+}
+
+/**
+ * Whether two `application/x-www-form-urlencoded` bodies hold the same
+ * fields once decoded, names in any order (opentide-cassette's
+ * `replay::same_form`, which the Rust replays use).
+ */
+function sameForm(want: string, got: string): boolean {
+  return want === got || JSON.stringify(formFields(want)) === JSON.stringify(formFields(got));
+}
+
+/** Whether a body sent agrees with the recorded one, by the recorded request's type. */
+function sameRequestBody(want: Recorded, wantBody: string, got: string): boolean {
+  return isForm(want.headers) ? sameForm(wantBody, got) : sameBody(wantBody, got);
+}
+
+test("a form body is compared as its decoded fields, in any order", () => {
+  const recorded = "client_id=app&client_secret=REDACTED&grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default";
+  // The fields in another order, another (valid) encoding of the same text.
+  assert.ok(sameForm(recorded, "grant_type=client_credentials&client_id=app&client_secret=REDACTED&scope=https%3a%2f%2fgraph.microsoft.com%2f.default"));
+  assert.ok(sameForm("q=a+b&n=%7E", "n=~&q=a%20b"));
+  // A value, a field more or less, or a repeated name's values in another order: different.
+  assert.ok(!sameForm(recorded, recorded.replace("client_id=app", "client_id=other")));
+  assert.ok(!sameForm(recorded, `${recorded}&client_info=1`));
+  assert.ok(!sameForm("a=1&a=2", "a=2&a=1"));
+  assert.ok(!sameForm("flag=True", "flag=true"));
+  // Only a recorded form body is read as a form; JSON stays JSON data.
+  const form: Recorded = { method: "POST", url: "https://x.invalid/t", headers: [["content-type", "application/x-www-form-urlencoded"]], body: "" };
+  const json: Recorded = { method: "POST", url: "https://x.invalid/t", headers: [["content-type", "application/json"]], body: "" };
+  assert.ok(sameRequestBody(form, "a=1&b=2", "b=2&a=1"));
+  assert.ok(!sameRequestBody(json, "a=1&b=2", "b=2&a=1"));
+  assert.ok(sameRequestBody(json, '{"a": 1, "b": 2}', '{"a":1,"b":2}'));
+});
+
 /** Answers from *name*'s cassette in order; checks each request against it. */
 function cassetteHost(name: string): { perform: (params: FetchParams) => Promise<FetchResult>; mismatches: string[]; asked: number } {
   const cassette: Cassette = JSON.parse(readFileSync(join(root, `tests/cassettes/${name}.json`), "utf8"));
@@ -346,7 +394,7 @@ function cassetteHost(name: string): { perform: (params: FetchParams) => Promise
         got.method !== want.method ||
         got.url !== want.url ||
         JSON.stringify(got.headers) !== JSON.stringify(want.headers) ||
-        !sameBody(wantBody, got.body as string)
+        !sameRequestBody(want, wantBody, got.body as string)
       ) {
         state.mismatches.push(`request ${state.asked - 1}: ${JSON.stringify(got)} is not ${JSON.stringify(want)}`);
       }

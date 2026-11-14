@@ -43,7 +43,7 @@ The output is plain text even with `--json`. For the version inside a JSON docum
 
 When `--repo` is omitted, opentide walks up from the current directory and stops at the first directory holding `.opentide/` or `objects/`. That is the detection workspace, so every command sees the same catalogue whether you start at its root, in `objects/rules`, or in `.opentide/configurations/platforms`.
 
-The walk never leaves the enclosing git checkout. A workspace kept in a subdirectory of a larger repository (`monorepo/detections/`) is found from anywhere inside `detections/`, while markers above the checkout are ignored. When nothing on the way up is marked, the root is the git top level, or the current directory outside git. Git's own `.git/objects` and a Python package named `objects/` (one with an `__init__.py`) are not markers.
+The walk never leaves the enclosing git checkout. A workspace kept in a subdirectory of a larger repository (`monorepo/detections/`) is found from anywhere inside `detections/`, while markers above the checkout are ignored. When nothing on the way up is marked, the root is the git top level, or the current directory outside git. Only opentide's own markers count: any `objects/` folder is one, whatever it holds, and nothing inside `.git` is (git keeps its object store in `.git/objects`).
 
 In order, the first of these wins:
 
@@ -52,6 +52,8 @@ In order, the first of these wins:
 3. `OPENTIDE_TIDE_WORKSPACE` (selects the objects read; the repository root is still resolved as below)
 4. The nearest `.opentide/` or `objects/` walking up from the current directory
 5. The git top level, or the current directory outside git
+
+`OPENTIDE_REPO_ROOT` or `OPENTIDE_TIDE_WORKSPACE` set to the empty string counts as unset: it names no folder.
 
 Git commands such as `generate docs --changed` and `generate inflight` still run against the whole checkout when the workspace sits below its top level: changed paths are reported relative to the git top level (`detections/objects/rules/…`).
 
