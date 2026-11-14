@@ -70,6 +70,7 @@ fn opentide(cwd: &Path, args: &[&str], env: &[(&str, &Path)]) -> Run {
     for name in LEAKED {
         command.env_remove(name);
     }
+    isolate_git(&mut command);
     for (name, value) in env {
         command.env(name, value);
     }
@@ -83,21 +84,36 @@ fn opentide(cwd: &Path, args: &[&str], env: &[(&str, &Path)]) -> Run {
 
 /// `git <args>` in `dir`, which must succeed.
 fn git(dir: &Path, args: &[&str]) {
-    let output = Command::new("git")
+    let mut command = Command::new("git");
+    command
         .args(["-c", "user.email=e2e@opentide.test", "-c", "user.name=e2e"])
         .args(["-c", "commit.gpgsign=false"])
         .args(args)
-        .current_dir(dir)
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .output()
-        .unwrap();
+        .current_dir(dir);
+    isolate_git(&mut command);
+    let output = command.output().unwrap();
     assert!(output.status.success(), "git {args:?}: {output:?}");
 }
 
-/// A fresh folder, its path canonical (macOS's `/var` is `/private/var`).
+/// Keeps git, run by a test or by the binary, to the scratch folders: no
+/// repository above the temporary directory (a checkout the tests run in),
+/// no system configuration, and none of the variables that point git at
+/// another repository (a hook running the tests sets them).
+fn isolate_git(command: &mut Command) {
+    let temp = dunce::canonicalize(std::env::temp_dir()).unwrap();
+    command.env("GIT_CEILING_DIRECTORIES", temp);
+    command.env("GIT_CONFIG_NOSYSTEM", "1");
+    for name in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"] {
+        command.env_remove(name);
+    }
+}
+
+/// A fresh folder, its path canonical (macOS's `/var` is `/private/var`)
+/// and, on Windows, without the `\\?\` prefix `std::fs::canonicalize` adds:
+/// git and the binary print the plain form, and the paths are compared.
 fn scratch() -> (tempfile::TempDir, PathBuf) {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().canonicalize().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
     (dir, root)
 }
 
@@ -257,27 +273,38 @@ fn a_workspace_nested_in_the_checkout_still_sees_its_changes() {
 }
 
 /// #294: with no `--repo` or `OPENTIDE_*`, the checkout's root won over the
-/// workspace in it.
-#[test]
-fn a_nested_workspace_is_found_from_the_cwd_for_changed_objects() {
-    for start in ["detections", "detections/objects/rules"] {
-        let (_dir, root) = scratch();
-        let checkout = root.join("checkout");
-        let ws = checkout.join("detections");
-        catalogue(&ws);
-        on_a_feature_branch(&checkout, "main");
-        bump_rule(&ws);
-        git(&checkout, &["commit", "-qam", "bump rule version"]);
+/// workspace in it. `start` is where the run starts, under the checkout.
+fn nested_workspace_found_from(start: &str) {
+    let (_dir, root) = scratch();
+    let checkout = root.join("checkout");
+    let ws = checkout.join("detections");
+    catalogue(&ws);
+    on_a_feature_branch(&checkout, "main");
+    bump_rule(&ws);
+    git(&checkout, &["commit", "-qam", "bump rule version"]);
 
-        let cwd = checkout.join(start);
-        let docs = opentide(&cwd, &["generate", "docs", "--changed"], &[]).ok();
-        let changed = format!("detections/{}", tutorial::RULE_FILE);
-        assert_eq!(changed_paths(&docs), [changed.as_str()], "{start}: {docs}");
-        assert!(docs["counts"]["rules"].as_u64() >= Some(1), "{docs}");
-        assert_eq!(Path::new(docs["output"].as_str().unwrap()), ws.join("docs"));
-        opentide(&cwd, &["generate", "inflight"], &[]).ok();
-        assert_eq!(shards(&ws), the_rule_shard(), "{start}");
-    }
+    let cwd = checkout.join(start);
+    let docs = opentide(&cwd, &["generate", "docs", "--changed"], &[]).ok();
+    let changed = format!("detections/{}", tutorial::RULE_FILE);
+    assert_eq!(changed_paths(&docs), [changed.as_str()], "{start}: {docs}");
+    assert!(
+        docs["counts"]["rules"].as_u64() >= Some(1),
+        "{start}: {docs}"
+    );
+    let output = Path::new(docs["output"].as_str().unwrap());
+    assert_eq!(output, ws.join("docs"), "{start}: {docs}");
+    opentide(&cwd, &["generate", "inflight"], &[]).ok();
+    assert_eq!(shards(&ws), the_rule_shard(), "{start}");
+}
+
+#[test]
+fn a_nested_workspace_is_found_from_its_root_for_changed_objects() {
+    nested_workspace_found_from("detections");
+}
+
+#[test]
+fn a_nested_workspace_is_found_from_a_subfolder_for_changed_objects() {
+    nested_workspace_found_from("detections/objects/rules");
 }
 
 /// A repository whose `feature` branch is pushed with `-u`, so that it
