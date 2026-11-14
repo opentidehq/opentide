@@ -79,7 +79,7 @@ fn stats_rows(stats: &Json) -> (Vec<QueryColumn>, Vec<Row>) {
         .map(|(index, item)| {
             QueryColumn::named(
                 item.get("column")
-                    .filter(|value| value.truthy())
+                    .filter(|value| value.is_filled())
                     .map_or_else(|| format!("column_{index}"), opentide_compile::deploy::text),
             )
         })
@@ -114,10 +114,11 @@ pub fn search_result(answer: &Json, limit: usize) -> QueryOutcome {
         .filter(|stats| stats.as_object().is_some());
     let has_stats = stats
         .and_then(|stats| stats.get("results"))
-        .is_some_and(Json::truthy);
+        .is_some_and(Json::is_filled);
     let (columns, rows, truncated) = if let (true, Some(stats)) = (has_stats, stats) {
         let (columns, rows) = stats_rows(stats);
-        let truncated = stats.get("tooManyResults").is_some_and(Json::truthy) || rows.len() > limit;
+        let truncated =
+            stats.get("tooManyResults").is_some_and(Json::is_true) || rows.len() > limit;
         (columns, rows, truncated)
     } else {
         let mut raw = answer.get("events");
@@ -139,7 +140,7 @@ pub fn search_result(answer: &Json, limit: usize) -> QueryOutcome {
         };
         let columns = columns_of(&rows[..rows.len().min(limit)]);
         let truncated =
-            answer.get("moreDataAvailable").is_some_and(Json::truthy) || rows.len() > limit;
+            answer.get("moreDataAvailable").is_some_and(Json::is_true) || rows.len() > limit;
         (columns, rows, truncated)
     };
     QueryOutcome {

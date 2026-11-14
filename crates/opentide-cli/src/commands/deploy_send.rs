@@ -1938,8 +1938,11 @@ impl Sender<'_, '_> {
                     .and_then(|block| block.get("correlation_search"))
                 {
                     Some(CJson::Bool(set)) => *set,
-                    _ => opentide_compile::deploy::setup(&batch.table, "enterprise_security")
-                        .is_some_and(CJson::truthy),
+                    // `true`, `false`, or a `$NAME` placeholder, which leaves it on.
+                    _ => !matches!(
+                        opentide_compile::deploy::setup(&batch.table, "enterprise_security"),
+                        None | Some(CJson::Bool(false))
+                    ),
                 };
                 if correlation {
                     name.push_str(" - Rule");
@@ -2682,7 +2685,7 @@ impl Sender<'_, '_> {
             for sent in &batch.rules {
                 let rule = &sent.rule;
                 let mut result = RuleResult::new("elastic", Some(&tenant), &rule.uuid, &rule.name);
-                let Some(raw) = rule.block("elastic").filter(|block| block.truthy()) else {
+                let Some(raw) = rule.block("elastic").filter(|block| block.is_filled()) else {
                     result.skip("no Elastic configuration");
                     log.finished(result);
                     continue;
@@ -2904,7 +2907,7 @@ impl Sender<'_, '_> {
                 let tuning = body
                     .get("details")
                     .and_then(|details| details.get("append"))
-                    .is_some_and(CJson::truthy);
+                    .is_some_and(CJson::is_true);
                 let policies = match rule.block("sysdig").and_then(|block| block.get("policies")) {
                     Some(CJson::Array(items)) => {
                         items.iter().map(opentide_compile::deploy::text).collect()
@@ -3038,7 +3041,7 @@ impl Sender<'_, '_> {
             }
             let connection = self.connect(PLATFORM, batch)?;
             let automatic = opentide_compile::deploy::setup(&batch.table, "automatic_actions")
-                .is_none_or(CJson::truthy);
+                .is_none_or(CJson::is_true);
             for (rule, action) in planned {
                 let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
                 let strategy = match self.strategy_of(rule, PLATFORM) {
