@@ -25,7 +25,7 @@ writes (`replay.rs`, `differences`):
 | Part | Compared as |
 |------|-------------|
 | Method | equal |
-| Order | the requests in the order recorded, in whole passes |
+| Order | the requests in the order recorded, in whole passes; a client may leave out only an `optional` request: a `POST` to an OAuth2 token endpoint (`…/oauth2/token`, `…/oauth2/v2.0/token`) repeating an earlier recorded one (same URL and body), which a client that keeps its token until it nearly expires does not send. The first sign-in is never optional |
 | URL (`same_url`) | the same scheme, user info, host, port and fragment; the path's segments percent-decoded (`%7E` = `~`, `%2f` = `%2F`, an encoded `/` stays in its segment); the query as decoded form fields (`+` = `%20` = space), names in any order, a repeated name's values in the order sent |
 | Headers | equal after redaction, leaving out on both sides `IDENTITY_HEADERS`: the client library's name, version, OS, CPU and telemetry (MSAL's `x-client-*`, `x-ms-lib-capability`) and its per-request ids (`client-request-id`, `return-client-request-id`, `x-ms-client-request-id`). Authorization, `Content-Type`, `Accept` and every other header are compared by value |
 | Form body (recorded `Content-Type: application/x-www-form-urlencoded`) | decoded fields, as the query (`same_form`); a value is text: `True` is not `true` |
