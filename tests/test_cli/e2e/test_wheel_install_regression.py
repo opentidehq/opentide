@@ -13,6 +13,10 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+import threading
+import time
+import uuid
 import zipfile
 from pathlib import Path
 
@@ -204,23 +208,45 @@ def test_pip_installed_wheel_validate_generate_and_skills(
 
 
 def _build_wheel(uv: str, dist: Path) -> Path:
-    """opentide's wheel, with the engine compiled in (hatch_build.py).
+    """opentide's wheel, with the engine compiled in (hatch_build.py), copied into *dist*.
 
     The engine builds with the ``develop`` profile, which ``uv sync`` already
     compiled, so cargo reuses that build instead of a release one.
-    """
-    import os
 
-    build = _run(
-        [uv, "build", "--wheel", "--out-dir", str(dist)],
-        cwd=str(ROOT),
-        env={**os.environ, "OPENTIDE_ENGINE_PROFILE": "develop"},
-        timeout=900,
-    )
-    assert build.returncode == 0, build.stdout + build.stderr
-    wheels = list(dist.glob("opentide-*.whl"))
-    assert len(wheels) == 1, f"expected one wheel in {dist}: {wheels}"
-    return wheels[0]
+    One test run builds the wheel once, under a lock its xdist workers share:
+    every build writes ``src/opentide/_version.py`` and ``build/`` in the
+    checkout, so two at once could package a half-written ``_version.py``
+    (``cannot import name '__version__'``).
+    """
+    run = os.environ.get("PYTEST_XDIST_TESTRUNUID") or str(os.getpid())
+    shared = Path(tempfile.gettempdir()) / f"opentide-wheel-{run}"
+    shared.mkdir(exist_ok=True)
+    lock = shared / ".lock"
+    deadline = time.monotonic() + 1200
+    while True:
+        try:
+            lock.mkdir()
+            break
+        except FileExistsError:
+            if time.monotonic() > deadline:
+                pytest.fail(f"another worker held {lock} for 20 minutes")
+            time.sleep(1)
+    try:
+        wheels = list(shared.glob("opentide-*.whl"))
+        if not wheels:
+            build = _run(
+                [uv, "build", "--wheel", "--out-dir", str(shared)],
+                cwd=str(ROOT),
+                env={**os.environ, "OPENTIDE_ENGINE_PROFILE": "develop"},
+                timeout=900,
+            )
+            assert build.returncode == 0, build.stdout + build.stderr
+            wheels = list(shared.glob("opentide-*.whl"))
+    finally:
+        lock.rmdir()
+    assert len(wheels) == 1, f"expected one wheel in {shared}: {wheels}"
+    dist.mkdir(parents=True, exist_ok=True)
+    return Path(shutil.copy2(wheels[0], dist))
 
 
 def _install(uv: str, env_dir: Path, spec: str) -> Path:
@@ -447,3 +473,33 @@ def _assert_json_ok(result: subprocess.CompletedProcess[str]) -> None:
     assert result.returncode == 0, combined
     payload = json.loads(result.stdout)
     assert payload.get("ok") is True
+
+
+def test_concurrent_wheel_builds_share_one_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Workers that need the wheel at once build it once, so no two builds race on the checkout."""
+    builds: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        builds.append(cmd)
+        time.sleep(0.2)
+        out = Path(cmd[cmd.index("--out-dir") + 1])
+        (out / "opentide-0.0.0-py3-none-any.whl").write_bytes(b"wheel")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(sys.modules[__name__], "_run", fake_run)
+    monkeypatch.setenv("PYTEST_XDIST_TESTRUNUID", uuid.uuid4().hex)
+    found: list[Path] = []
+    threads = [
+        threading.Thread(target=lambda n=n: found.append(_build_wheel("uv", tmp_path / f"d{n}")))
+        for n in range(4)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(builds) == 1
+    assert sorted(p.parent.name for p in found) == ["d0", "d1", "d2", "d3"]
+    assert all(p.read_bytes() == b"wheel" for p in found)
