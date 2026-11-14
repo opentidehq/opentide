@@ -167,12 +167,12 @@ mod tests {
             [
                 Deprecated {
                     field_path: vec!["old".into()],
-                    message: "Field 'old' is deprecated: use `new`".into(),
+                    message: "Field \"old\" is deprecated: use `new`".into(),
                     deprecation: "use `new`".into(),
                 },
                 Deprecated {
                     field_path: vec!["block".into(), "legacy".into()],
-                    message: "Field 'block.legacy' is deprecated: gone in 2.0".into(),
+                    message: "Field \"block.legacy\" is deprecated: gone in 2.0".into(),
                     deprecation: "gone in 2.0".into(),
                 },
             ]

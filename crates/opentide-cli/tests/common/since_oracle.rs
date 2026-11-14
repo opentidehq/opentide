@@ -9,7 +9,7 @@
 //!   `QueryChecked.language` gains `cql`.
 //! - #899 (0.25.0, H1): HarfangLab's YARA offline. The `--platform` help
 //!   names `harfanglab`, `--file` reads `.yar` and `.yara` (and Google
-//!   SecOps' `.yaral`), and `QueryChecked.language` is 0.28.1's (`yara`,
+//!   SecOps' `.yaral` and `.yl2`), and `QueryChecked.language` is 0.28.1's (`yara`,
 //!   `exabeam`, `yaral`), with `cql`. Both help texts are derived from the
 //!   platform table (`opentide_cli::tree`).
 //! - P-EX (0.28.1): Exabeam's Exabeam Query Language offline. `--file`
@@ -25,7 +25,7 @@ const HELP: &[(&str, &str)] = &[
     ),
     (
         "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco) offline (repeatable)",
-        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .cql, .exabeam) offline (repeatable)",
+        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2, .cql, .exabeam) offline (repeatable)",
     ),
 ];
 

@@ -20,7 +20,7 @@ use crate::connector::{
     kql_code, utc_z,
 };
 use crate::error::ConnectorError;
-use crate::python::python_str;
+use crate::text::json_text;
 use crate::{HttpSettings, Secret};
 
 /// The platform's identifier.
@@ -263,14 +263,14 @@ impl SentinelOne {
                         _ => None,
                     })
                     .and_then(|error| error.get("detail"))
-                    .map_or_else(|| python_str(&body), python_str);
+                    .map_or_else(|| json_text(&body), json_text);
                 Ok(QueryValidation::Refused(detail))
             }
             status => Err(SentinelOneError::Unforeseen {
                 status,
                 context: answer
                     .json()
-                    .map_or_else(|| answer.text(), |b| python_str(&b)),
+                    .map_or_else(|| answer.text(), |b| json_text(&b)),
             }),
         }
     }
@@ -309,7 +309,7 @@ impl SentinelOne {
         let query_id = data
             .get("queryId")
             .filter(|id| id.truthy())
-            .map(python_str)
+            .map(json_text)
             .filter(|id| !id.is_empty());
         let ping = format!("{}{PING_PATH}", setup.url);
         let mut delay = Duration::from_millis(500);
@@ -371,7 +371,7 @@ impl SentinelOne {
             Some(Json::Array(items)) => items
                 .iter()
                 .filter(|item| item.truthy())
-                .map(python_str)
+                .map(json_text)
                 .collect(),
             _ => Vec::new(),
         };
@@ -427,7 +427,7 @@ fn http_error(answer: &Answer) -> SentinelOneError {
         404 => SentinelOneError::NotFound { detail },
         status => SentinelOneError::Unforeseen {
             status,
-            context: answer.json().map_or(detail, |body| python_str(&body)),
+            context: answer.json().map_or(detail, |body| json_text(&body)),
         },
     }
 }
@@ -451,7 +451,7 @@ pub fn powerquery_with_limit(query: &str, limit: usize) -> String {
 fn finished(data: &Json, tenant: &str) -> Result<bool, ConnectorError> {
     let status = data
         .get("status")
-        .map(python_str)
+        .map(json_text)
         .unwrap_or_default()
         .to_uppercase();
     if ["FAILED", "FAILED_CLIENT", "TIMED_OUT", "CANCELLED"].contains(&status.as_str()) {
@@ -460,7 +460,7 @@ fn finished(data: &Json, tenant: &str) -> Result<bool, ConnectorError> {
             .filter(|value| value.truthy())
             .or_else(|| data.get("error"))
             .filter(|value| value.truthy())
-            .map(python_str)
+            .map(json_text)
             .filter(|text| !text.is_empty());
         return Err(ConnectorError::refused(
             PLATFORM,
@@ -496,7 +496,7 @@ fn data(answer: &Answer, tenant: &str) -> Result<Json, ConnectorError> {
                     .or_else(|| error.get("title"))
             })
             .filter(|value| value.truthy())
-            .map(python_str)
+            .map(json_text)
             .filter(|text| !text.is_empty());
         let text: String = answer.text().chars().take(500).collect();
         return Err(ConnectorError::refused(
@@ -523,9 +523,9 @@ fn column_name(column: &Json) -> String {
             .filter(|value| value.truthy())
             .or_else(|| column.get("title"))
             .filter(|value| value.truthy())
-            .map(python_str)
+            .map(json_text)
             .unwrap_or_default(),
-        other => python_str(other),
+        other => json_text(other),
     }
 }
 

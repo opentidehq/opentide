@@ -8,7 +8,6 @@
     reason = "an integration test file: its helpers sit outside #[test]"
 )]
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use serde_json::json;
@@ -39,8 +38,7 @@ done
         package = package.display()
     );
     let path = dir.join(name);
-    std::fs::write(&path, script).unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    xtask::script::write_executable(&path, &script).unwrap();
     path
 }
 
@@ -218,13 +216,11 @@ fn the_package_directory_is_what_the_interpreter_finds() {
     let missing = dir.path().join("no-python");
     assert!(xtask::mcp::package_dir(&missing).is_err());
     let elsewhere = dir.path().join("elsewhere");
-    std::fs::write(&elsewhere, "#!/bin/sh\necho /no/such/dir\n").unwrap();
-    std::fs::set_permissions(&elsewhere, std::fs::Permissions::from_mode(0o755)).unwrap();
+    xtask::script::write_executable(&elsewhere, "#!/bin/sh\necho /no/such/dir\n").unwrap();
     let message = format!("{:#}", xtask::mcp::package_dir(&elsewhere).unwrap_err());
     assert!(message.contains("is not a directory"), "{message}");
     let failing = dir.path().join("failing");
-    std::fs::write(&failing, "#!/bin/sh\nexit 1\n").unwrap();
-    std::fs::set_permissions(&failing, std::fs::Permissions::from_mode(0o755)).unwrap();
+    xtask::script::write_executable(&failing, "#!/bin/sh\nexit 1\n").unwrap();
     let message = format!("{:#}", xtask::mcp::package_dir(&failing).unwrap_err());
     assert!(
         message.contains("could not find the opentide package"),

@@ -465,6 +465,11 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     warnings.extend(crate::plugins::workspace_warnings(
         ws.configuration().resolved.get("platforms"),
     ));
+    // The workspace is not read after this. Freeing its index (every
+    // object's nodes) was the largest serial step left in `validate --file`
+    // on the heavy workspace; a worker frees it while the report is built,
+    // and a command line that exits first leaves it to the system (#817).
+    rayon::spawn(move || drop(ws));
     let mut next = Vec::new();
     if empty && !root::is_workspace_root(&OsFs, &root) {
         next.push(NextAction::new(

@@ -529,7 +529,7 @@ fn annotate_one(
     diagnostic.headline = (message != diagnostic.message).then_some(message);
 }
 
-/// `'clearr' is not a TLP value`, `'x' is not a configured status`: the
+/// `"clearr" is not a TLP value`, `"x" is not a configured status`: the
 /// sentence a person reads for a finding about one value.
 fn value_message(diagnostic: &Diagnostic, value: &str) -> Option<String> {
     let context = |key: &str| diagnostic.context.get(key).and_then(ContextValue::as_str);
@@ -641,16 +641,16 @@ mod tests {
         for (name, noun) in [("tlp", "TLP"), ("pap", "PAP"), ("rsit", "RSIT")] {
             assert_eq!(
                 value_message(&vocab(&format!("{name}::1.0")), "x").as_deref(),
-                Some(format!("'x' is not a {noun} value").as_str())
+                Some(format!("\"x\" is not a {noun} value").as_str())
             );
         }
         assert_eq!(
             value_message(&vocab("signal.entities::1.0"), "Host::Gizmo").as_deref(),
-            Some("'Host::Gizmo' is not a signal entities value")
+            Some("\"Host::Gizmo\" is not a signal entities value")
         );
         assert_eq!(
             value_message(&vocab("alert_severity"), "high").as_deref(),
-            Some("'high' is not a alert severity value")
+            Some("\"high\" is not a alert severity value")
         );
         assert_eq!(
             value_message(&Diagnostic::error("vocab_unknown", "x"), "v"),
@@ -660,15 +660,15 @@ mod tests {
             |name: &str| Diagnostic::error("config_enum_unknown", "x").with("setting", name);
         assert_eq!(
             value_message(&setting("statuses"), "LIVE").as_deref(),
-            Some("'LIVE' is not a configured status")
+            Some("\"LIVE\" is not a configured status")
         );
         assert_eq!(
             value_message(&setting("responders"), "soc").as_deref(),
-            Some("'soc' is not a configured responder")
+            Some("\"soc\" is not a configured responder")
         );
         assert_eq!(
             value_message(&setting("tiers"), "t9").as_deref(),
-            Some("'t9' is not a configured tiers")
+            Some("\"t9\" is not a configured tiers")
         );
         assert_eq!(
             value_message(&Diagnostic::error("invalid_ref", "x"), "v"),
@@ -685,7 +685,7 @@ mod tests {
         assert_eq!(
             duplicate_message(&duplicate(serde_json::json!({"name": "First"})), Some(uuid))
                 .as_deref(),
-            Some(format!("UUID {uuid} is also used by 'First'").as_str())
+            Some(format!("UUID {uuid} is also used by \"First\"").as_str())
         );
         for original in [serde_json::json!({"name": ""}), serde_json::json!({})] {
             assert_eq!(

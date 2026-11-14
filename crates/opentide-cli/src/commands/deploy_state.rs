@@ -124,33 +124,55 @@ impl ExternalId {
 /// *value* as the shard stores it, or `external_id_shape`
 /// (`normalise_external_id`).
 pub fn normalise_external_id(platform: &str, value: &ExternalId) -> Result<String, StateError> {
+    let kind = id_kind(platform);
     match value {
-        ExternalId::Int(number) if *number < 0 => Err(StateError::new(
-            "external_id_shape",
-            format!("{platform} external id {number} is negative"),
-        )),
-        ExternalId::Int(number) => Ok(number.to_string()),
+        ExternalId::Int(number) => {
+            if let Some(pattern) = kind.refuses_number() {
+                return Err(StateError::new(
+                    "external_id_shape",
+                    format!(
+                        "{platform} external id {number} is a number, not {}",
+                        pattern.shape
+                    ),
+                ));
+            }
+            if *number < 0 {
+                return Err(StateError::new(
+                    "external_id_shape",
+                    format!("{platform} external id {number} is negative"),
+                ));
+            }
+            Ok(number.to_string())
+        }
         ExternalId::Text(text) if text.trim().is_empty() => Err(StateError::new(
             "external_id_shape",
             format!("{platform} external id is empty"),
         )),
-        ExternalId::Text(text) => {
-            match opentide_schema::platforms::external_id_problem(platform, text) {
-                Some(IdShape::CanonicalDecimal) => Err(StateError::new(
-                    "external_id_shape",
-                    format!(
-                        "{platform} external id {text:?} is not a canonical decimal integer (no sign, \
+        ExternalId::Text(text) => match kind.shape_problem(text) {
+            Some(IdShape::CanonicalDecimal) => Err(StateError::new(
+                "external_id_shape",
+                format!(
+                    "{platform} external id {text:?} is not a canonical decimal integer (no sign, \
                      no leading zeroes)"
-                    ),
-                )),
-                Some(IdShape::Pattern(pattern)) => Err(StateError::new(
-                    "external_id_shape",
-                    format!("{platform} external id {text:?} does not match {pattern:?}"),
-                )),
-                None => Ok(text.clone()),
-            }
-        }
+                ),
+            )),
+            Some(IdShape::Pattern(pattern)) => Err(StateError::new(
+                "external_id_shape",
+                format!("{platform} external id {text:?} is not {}", pattern.shape),
+            )),
+            None => Ok(text.clone()),
+        },
     }
+}
+
+/// How *platform* stores its external ids ([`opentide_schema::platforms`]).
+/// The tests add one patterned platform the table does not have yet.
+fn id_kind(platform: &str) -> opentide_schema::platforms::ExternalId {
+    #[cfg(test)]
+    if platform == tests::PATTERNED {
+        return tests::PATTERNED_KIND;
+    }
+    opentide_schema::platforms::external_id_kind(platform)
 }
 
 /// Python's type name of a JSON value (`type(value).__name__`).
@@ -674,6 +696,74 @@ mod tests {
 
     const UUID: &str = "0b4d0e4e-1c33-4f53-8a6b-4c5b6e7f8a9b";
 
+    /// A test-only platform whose ids are patterned text, until the table
+    /// has one ([`id_kind`]).
+    pub(super) const PATTERNED: &str = "patterned_test";
+    /// Its ids: 24 lower-case hex digits, as Graylog's and Bitdefender's.
+    pub(super) const PATTERNED_KIND: opentide_schema::platforms::ExternalId =
+        opentide_schema::platforms::ExternalId::Text {
+            pattern: Some(opentide_schema::platforms::IdPattern {
+                regex: "[0-9a-f]{24}",
+                shape: "24 lower-case hex digits",
+            }),
+        };
+
+    #[test]
+    fn a_patterned_platforms_id_is_text_of_its_shape() {
+        // The oracle refuses a number outright, before its sign.
+        for number in [12, -1] {
+            let error = normalise_external_id(PATTERNED, &ExternalId::Int(number)).unwrap_err();
+            assert_eq!(error.code, "external_id_shape");
+            assert_eq!(
+                error.message,
+                format!(
+                    "patterned_test external id {number} is a number, not 24 lower-case hex digits"
+                )
+            );
+        }
+        let error = normalise_external_id(PATTERNED, &ExternalId::Text("12".into())).unwrap_err();
+        assert_eq!(
+            error.message,
+            "patterned_test external id \"12\" is not 24 lower-case hex digits"
+        );
+        let id = "0123456789abcdef01234567";
+        assert_eq!(
+            normalise_external_id(PATTERNED, &ExternalId::Text(id.into())).unwrap(),
+            id
+        );
+        // Recording a number refuses it and leaves no shard behind.
+        let dir = tempfile::tempdir().unwrap();
+        let refused =
+            record_created(dir.path(), UUID, PATTERNED, "lab", &ExternalId::Int(12)).unwrap_err();
+        assert!(
+            refused.message.contains("is a number, not"),
+            "{}",
+            refused.message
+        );
+        assert!(!state_dir(dir.path()).join(format!("{UUID}.json")).exists());
+        // A shard holding the wrong shape is refused when it is read.
+        std::fs::create_dir_all(state_dir(dir.path())).unwrap();
+        std::fs::write(
+            state_dir(dir.path()).join(format!("{UUID}.json")),
+            shard_text(r#"{"patterned_test": {"lab": "12"}}"#),
+        )
+        .unwrap();
+        let read = Shard::load(dir.path(), UUID).unwrap_err();
+        assert!(
+            read.message.ends_with(
+                "platforms.patterned_test.lab: patterned_test external id \"12\" is not 24 \
+                 lower-case hex digits"
+            ),
+            "{}",
+            read.message
+        );
+        // Free text (CrowdStrike) still stores a number as its decimal text.
+        assert_eq!(
+            normalise_external_id("crowdstrike", &ExternalId::Int(12)).unwrap(),
+            "12"
+        );
+    }
+
     fn shard_text(platforms: &str) -> String {
         format!(
             r#"{{"schema": "deployment.state::1.0", "object_uuid": "{UUID}", "platforms": {platforms}}}"#
@@ -724,8 +814,8 @@ mod tests {
         assert_eq!(refused.code, "external_id_shape");
         assert_eq!(
             refused.message,
-            "google_secops external id \"rule-1\" does not match \
-             \"^ru_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$\""
+            "google_secops external id \"rule-1\" is not ru_ and a lower-case UUID \
+             (ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1)"
         );
     }
 
@@ -743,7 +833,7 @@ mod tests {
             normalise_external_id("graylog", &ExternalId::Text("65F1".into()))
                 .unwrap_err()
                 .message,
-            "graylog external id \"65F1\" does not match \"[0-9a-f]{24}\""
+            "graylog external id \"65F1\" is not 24 lower-case hex digits"
         );
     }
 
@@ -754,13 +844,13 @@ mod tests {
             normalise_external_id("exabeam", &ExternalId::Text(id.into())).unwrap(),
             id
         );
-        let pattern = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
+        let shape = "a canonical lower-case UUID (8-4-4-4-12 hex digits)";
         for bad in [id.to_uppercase(), format!("{id}x"), "rule-1".to_owned()] {
             assert_eq!(
                 normalise_external_id("exabeam", &ExternalId::Text(bad.clone()))
                     .unwrap_err()
                     .message,
-                format!("exabeam external id {bad:?} does not match {pattern:?}"),
+                format!("exabeam external id {bad:?} is not {shape}"),
             );
         }
         // record_created refuses it, naming the shape, and writes no shard.
@@ -775,9 +865,9 @@ mod tests {
         .unwrap_err();
         assert_eq!(refused.code, "deployment_state_write_failed");
         assert!(
-            refused.message.contains(&format!(
-                "exabeam external id \"RULE\" does not match {pattern:?}"
-            )),
+            refused
+                .message
+                .contains(&format!("exabeam external id \"RULE\" is not {shape}")),
             "{}",
             refused.message
         );

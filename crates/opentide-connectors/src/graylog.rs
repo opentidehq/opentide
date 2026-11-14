@@ -1397,7 +1397,7 @@ mod tests {
         assert!(
             failure
                 .reason
-                .contains("the title 'A rule' or the tag 'opentide.u'"),
+                .contains("the title \"A rule\" or the tag \"opentide.u\""),
             "{}",
             failure.reason
         );

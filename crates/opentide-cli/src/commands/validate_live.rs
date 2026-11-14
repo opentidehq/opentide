@@ -1111,11 +1111,11 @@ fn timeout_text(reason: &str, timeout: f64) -> String {
 fn tenant_host(platform: &str, tenant: &Configured) -> String {
     let text = |key: &str| tenant.setup.get(key).map(opentide_compile::deploy::text);
     if platform == "splunk" {
-        return format!(
-            "{}:{}",
-            text("url").unwrap_or_default(),
-            text("port").unwrap_or_else(|| "None".to_owned())
-        );
+        let url = text("url").unwrap_or_default();
+        return match text("port") {
+            Some(port) => format!("{url}:{port}"),
+            None => url,
+        };
     }
     if platform == "google_secops" {
         // The instance's endpoint, else its location's (`_tenant_host`).
@@ -2068,7 +2068,7 @@ async fn elastic_rule(
         for entry in logs.iter().filter(|entry| entry.as_object().is_some()) {
             if let Some(CJson::Array(items)) = entry.get("warnings") {
                 for item in items {
-                    let warning = opentide_connectors::python::python_str(item);
+                    let warning = opentide_connectors::text::json_text(item);
                     tracing::warn!(
                         rule = rule.name.as_str(),
                         warning = warning.as_str(),
@@ -2080,7 +2080,7 @@ async fn elastic_rule(
             }
             if let Some(CJson::Array(items)) = entry.get("errors") {
                 for item in items {
-                    let error = opentide_connectors::python::python_str(item);
+                    let error = opentide_connectors::text::json_text(item);
                     if error.contains("preview-index") || error.contains("preview.alerts") {
                         return Err(RuleFailure::Tenant(format!(
                             "Tenant configuration error: missing preview-index privilege ({error})"

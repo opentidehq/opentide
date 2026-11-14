@@ -418,7 +418,6 @@ fn stringify(value: &Json) -> String {
         Json::Null => String::new(),
         Json::Bool(flag) => if *flag { "true" } else { "false" }.to_owned(),
         Json::Int(number) => number.to_string(),
-        Json::Float(number) => opentide_schema::configuration::repr::float_text(*number),
         Json::Str(text) => text.clone(),
         Json::Array(items) => items
             .iter()
@@ -426,7 +425,7 @@ fn stringify(value: &Json) -> String {
             .filter(|text| !text.is_empty())
             .collect::<Vec<_>>()
             .join(", "),
-        Json::Object(_) => value.to_compact(),
+        Json::Float(_) | Json::Object(_) => value.to_compact(),
     }
 }
 

@@ -321,7 +321,6 @@ pub fn candidate_version(opentide: &Path) -> Result<String> {
 /// `PATH` is the harness's own).
 #[cfg(unix)]
 pub fn node_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::Engine> {
-    use std::os::unix::fs::PermissionsExt;
     let package = repo.join("bindings").join("node");
     let cli = package.join("cli.js");
     let built = std::fs::read_dir(&package)
@@ -350,17 +349,14 @@ pub fn node_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::
     let bin_dir = target.join("golden-node");
     std::fs::create_dir_all(&bin_dir).with_context(|| format!("create {}", bin_dir.display()))?;
     let launcher = bin_dir.join("opentide");
-    std::fs::write(
+    crate::script::write_executable(
         &launcher,
-        format!(
+        &format!(
             "#!/bin/sh\nexec {} {} \"$@\"\n",
             quoted(&node)?,
             quoted(&cli)?
         ),
-    )
-    .with_context(|| format!("write {}", launcher.display()))?;
-    std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o755))
-        .with_context(|| format!("make {} executable", launcher.display()))?;
+    )?;
     Ok(crate::golden::run::Engine {
         name: "node".into(),
         bin_dir,
@@ -438,6 +434,19 @@ pub fn run_of(recording: &crate::golden::recording::Recording) -> Run {
     }
 }
 
+/// How a run of `golden check --engine rust` judges the ledger's stale entries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StaleCheck<'a> {
+    /// A whole run: an entry that applied to no case fails it.
+    Fail,
+    /// One part of a whole run (`--partition`): the entries that applied to
+    /// no case of the part are written to the file (`--unused`), and an entry
+    /// is stale when every part lists it.
+    Write(Option<&'a Path>),
+    /// A filtered run, or one against a preview's recordings: none is judged.
+    Skip,
+}
+
 /// `golden check --engine rust`: every case the candidate ran against its
 /// recording, through the comparator and the ledger;
 /// a stale ledger entry fails the run. Whether it passed.
@@ -450,7 +459,7 @@ pub fn golden(
     cases: &Path,
     blobs: &Path,
     results: &[Result<crate::golden::recording::Recording>],
-    complete: bool,
+    stale_check: StaleCheck<'_>,
     report_path: Option<&Path>,
     full: bool,
     (oracle_version, candidate_version): (&str, &str),
@@ -565,10 +574,25 @@ pub fn golden(
         }
     }
     // A ledger entry is stale only when it applied nowhere in a complete run.
-    let report = if complete && failed == 0 {
-        opentide_compare::RunReport::new(reports, &ledger, &usage)
-    } else {
-        opentide_compare::RunReport::partial(reports)
+    let report = match stale_check {
+        StaleCheck::Fail if failed == 0 => {
+            opentide_compare::RunReport::new(reports, &ledger, &usage)
+        }
+        StaleCheck::Write(path) if failed == 0 => {
+            let unused = opentide_compare::RunReport::new(Vec::new(), &ledger, &usage).stale;
+            println!(
+                "golden rust: {} ledger entr{} applied to no case of this part",
+                unused.len(),
+                if unused.len() == 1 { "y" } else { "ies" }
+            );
+            if let Some(path) = path {
+                let text = serde_json::to_string_pretty(&unused).context("serialise")?;
+                std::fs::write(path, text + "\n")
+                    .with_context(|| format!("write {}", path.display()))?;
+            }
+            opentide_compare::RunReport::partial(reports)
+        }
+        _ => opentide_compare::RunReport::partial(reports),
     };
     for stale in &report.stale {
         eprintln!(

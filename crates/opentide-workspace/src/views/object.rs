@@ -622,7 +622,7 @@ pub fn build_object_view(
         kind: kind.to_owned(),
         unset: fields.map(|fields| unset(root, fields)).unwrap_or_default(),
         unknown_schema: fields.is_none().then(|| {
-            format!("opentide does not know the fields of '{shown}': they are shown as written")
+            format!("opentide does not know the fields of {shown:?}: they are shown as written")
         }),
         schema,
         header,
@@ -762,7 +762,7 @@ mod tests {
         let view = build_object_view(document.root().unwrap(), "rule", &BTreeMap::new(), &nodes());
         assert_eq!(
             view.unknown_schema.as_deref(),
-            Some("opentide does not know the fields of 'rule::9.9': they are shown as written")
+            Some("opentide does not know the fields of \"rule::9.9\": they are shown as written")
         );
         assert!(view.unset.is_empty());
         // A bare family takes its newest revision.

@@ -237,9 +237,7 @@ fn without_a_dep_info_the_tracked_rust_sources_are_the_inputs() {
 
 #[cfg(unix)]
 fn script(path: &Path, body: &str) {
-    use std::os::unix::fs::PermissionsExt;
-    write(path, &format!("#!/bin/sh\n{body}\n"));
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    xtask::script::write_executable(path, &format!("#!/bin/sh\n{body}\n")).unwrap();
 }
 
 #[cfg(unix)]

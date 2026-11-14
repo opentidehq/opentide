@@ -164,7 +164,7 @@ mod tests {
         let list = SentinelAttack::bundled();
         let message = list.check("T1086").unwrap_err();
         assert!(
-            message.starts_with("'T1086' is not an ATT&CK v18 technique"),
+            message.starts_with("\"T1086\" is not an ATT&CK v18 technique"),
             "{message}"
         );
         assert!(message.contains("ATT&CK retired T1086 (PowerShell) before v18: use T1059.001"));

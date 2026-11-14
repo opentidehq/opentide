@@ -43,6 +43,7 @@ pub fn node_of(value: &Json) -> Node {
                         value: Value::Str(key.clone()),
                         start: Mark::default(),
                         end: Mark::default(),
+                        text: None,
                     }
                     .into(),
                     value: node_of(item).into(),
@@ -54,6 +55,7 @@ pub fn node_of(value: &Json) -> Node {
         value,
         start: Mark::default(),
         end: Mark::default(),
+        text: None,
     }
 }
 

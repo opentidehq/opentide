@@ -226,12 +226,9 @@ fn truthy(value: Option<&Json>) -> bool {
     }
 }
 
-/// Python's `str()` of a JSON value.
-fn py_str(value: &Json) -> String {
+/// A JSON value as text: a string as it is, anything else as its JSON.
+fn value_text(value: &Json) -> String {
     match value {
-        Json::Null => "None".to_owned(),
-        Json::Bool(true) => "True".to_owned(),
-        Json::Bool(false) => "False".to_owned(),
         Json::Str(text) => text.clone(),
         other => crate::json::document_text(other, false)
             .trim_end()
@@ -265,7 +262,7 @@ fn items(value: Option<&Json>) -> Vec<&Json> {
 }
 
 fn status_kind(result: &Json) -> &'static str {
-    let status = result.get("status").map(py_str).unwrap_or_default();
+    let status = result.get("status").map(value_text).unwrap_or_default();
     if status == "failed" || result.get("ok") == Some(&Json::Bool(false)) {
         return "failed";
     }
@@ -324,7 +321,7 @@ fn strategies_line(result: &Json, lines: &mut Vec<String>) {
     if truthy(result.get("strategies")) {
         let named: Vec<String> = items(result.get("strategies"))
             .into_iter()
-            .map(|item| code(&py_str(item)))
+            .map(|item| code(&value_text(item)))
             .collect();
         lines.push(String::new());
         lines.push(format!("Strategies: {}", named.join(", ")));
@@ -334,7 +331,7 @@ fn strategies_line(result: &Json, lines: &mut Vec<String>) {
 fn message_line(result: &Json, message: Option<&str>) -> String {
     match message.filter(|message| !message.is_empty()) {
         Some(message) => cell(message),
-        None => cell(&result.get("message").map(py_str).unwrap_or_default()),
+        None => cell(&result.get("message").map(value_text).unwrap_or_default()),
     }
 }
 
@@ -344,11 +341,13 @@ fn rule_line(uuid: &str, entry: Option<&Json>) -> String {
     };
     let mut line = format!(
         "- {} ({})",
-        cell(&entry.get("name").map(py_str).unwrap_or_default()),
+        cell(&entry.get("name").map(value_text).unwrap_or_default()),
         code(uuid)
     );
-    if entry.get("status").map(py_str).as_deref() == Some("failed") && truthy(entry.get("error")) {
-        let error = entry.get("error").map(py_str).unwrap_or_default();
+    if entry.get("status").map(value_text).as_deref() == Some("failed")
+        && truthy(entry.get("error"))
+    {
+        let error = entry.get("error").map(value_text).unwrap_or_default();
         line.push_str(&format!(
             " — would fail: {}",
             cell(&shorten(&error, MAX_ERROR_LINES, MAX_ERROR_CHARS))
@@ -380,7 +379,7 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
     let tenants = members(result.get("tenants"));
     let deployed: Vec<String> = items(result.get("deployed"))
         .into_iter()
-        .map(py_str)
+        .map(value_text)
         .collect();
     let mut rows: Vec<Vec<String>> = Vec::new();
     for (platform, uuids) in plan {
@@ -438,7 +437,7 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
                 .rev()
                 .find(|entry| {
                     matches!(entry, Json::Object(_))
-                        && entry.get("uuid").map(py_str).as_deref() == Some(uuid)
+                        && entry.get("uuid").map(value_text).as_deref() == Some(uuid)
                 })
                 .copied()
         };
@@ -452,7 +451,7 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
         ));
         lines.push(String::new());
         for uuid in items(Some(uuids)).into_iter().take(MAX_ROWS) {
-            let uuid = py_str(uuid);
+            let uuid = value_text(uuid);
             lines.push(rule_line(&uuid, named(&uuid)));
         }
         if count > MAX_ROWS {
@@ -466,7 +465,7 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
 
 /// Live query validation: queries sent per tenant, and the verdict.
 pub fn query_summary(result: &Json, message: Option<&str>) -> String {
-    let platform = result.get("platform").map(py_str).unwrap_or_default();
+    let platform = result.get("platform").map(value_text).unwrap_or_default();
     let title = format!("opentide validate query --platform {platform}")
         .trim_end_matches(is_space)
         .to_owned();
@@ -480,7 +479,7 @@ pub fn query_summary(result: &Json, message: Option<&str>) -> String {
     if !reach.is_empty() {
         let rows: Vec<Vec<String>> = reach
             .iter()
-            .map(|(tenant, count)| vec![cell(tenant), py_str(count)])
+            .map(|(tenant, count)| vec![cell(tenant), value_text(count)])
             .collect();
         lines.push(String::new());
         let shown: Vec<Vec<String>> = rows.iter().take(MAX_ROWS).cloned().collect();
