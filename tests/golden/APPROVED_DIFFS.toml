@@ -24282,7 +24282,7 @@ reason = "The message quotes a value in double quotes with Rust's escapes and wr
 issue = "https://github.com/opentidehq/opentide/issues/841"
 changelog = "**Messages quote values the same way everywhere**"
 
-# Catch-up of 0.24.0 to 0.28.0 (docs/internal/catchup-0.28-plan.md): fixes
+# Catch-up of 0.24.0 to 0.28.0 (the 0.28 catch-up train, #1122): fixes
 # development shipped after the oracle, recorded on fixtures that reach them.
 
 # 0.24.0 (#878): a Splunk block's `advanced` table validates: the rule passes where the oracle refused the key.

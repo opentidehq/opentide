@@ -53,9 +53,8 @@
 | `data/catalogs/`, HighlightSpec, conformance corpora, the vendor-parser oracles | [`.agents/skills/catalogs/SKILL.md`](.agents/skills/catalogs/SKILL.md) |
 | A new query language in the engine | [`.agents/skills/add-language/SKILL.md`](.agents/skills/add-language/SKILL.md) |
 | `crates/CHANGELOG.md`, the engine crates' release notes | [`.agents/skills/engine-release-notes/SKILL.md`](.agents/skills/engine-release-notes/SKILL.md) |
-| The engine's own releases before the release train (`engine-v*`, retired: release with release-management) | [`.agents/skills/engine-release/SKILL.md`](.agents/skills/engine-release/SKILL.md) |
 
-The engine's skills (the last eight rows) came from opentidehq/language-server; their own index, with
+The engine's skills (the last seven rows) came from opentidehq/language-server; their own index, with
 the engine's hard rules, is [`crates/AGENTS.md`](crates/AGENTS.md). Claude Code discovers the skills
 through `.claude/skills` (a symlink to `.agents/skills`); cloud sessions run
 `.claude/hooks/session-start.sh`, which syncs the dev environment.
