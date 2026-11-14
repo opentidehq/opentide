@@ -129,15 +129,21 @@ pub async fn sign_in_at(
             lifetime: lifetime(body.as_ref().and_then(|body| body.get("expires_in"))),
         });
     }
-    // Entra never echoes the secret; should an answer do, it is not repeated.
+    // Entra never echoes the secret. Should an answer do (a proxy or server
+    // echoing the form it was sent), in any form it may take there, it is
+    // masked in the whole body before any of it is read, so an excerpt can
+    // never hold part of it either.
+    let forms = secret_forms(client_secret.expose());
     let mask = |text: String| {
-        let secret = client_secret.expose();
-        if secret.is_empty() {
-            text
-        } else {
-            text.replace(secret, "***")
-        }
+        forms
+            .iter()
+            .fold(text, |text, form| text.replace(form.as_str(), "***"))
     };
+    let answer = Answer {
+        body: mask(answer.text()).into_bytes(),
+        ..answer
+    };
+    let body = answer.json();
     let field = |name: &str| {
         body.as_ref()
             .and_then(|body| body.get(name))
@@ -184,4 +190,96 @@ pub async fn sign_in_at(
         address: crate::error::origin(&url),
         reason: format!("Entra ID answered HTTP {status} and issued no token: {said}"),
     })
+}
+
+/// The forms *secret* may be echoed in: as it is; form-encoded, a space as
+/// `+` or `%20`; percent-encoded as a URI component or byte by byte; each
+/// escape's hex in either case; and as a JSON string's content. Longest
+/// first, so a longer form is masked whole; none when the secret is empty.
+fn secret_forms(secret: &str) -> Vec<String> {
+    use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
+    /// RFC 3986's unreserved characters left as they are.
+    const UNRESERVED: &AsciiSet = &NON_ALPHANUMERIC
+        .remove(b'-')
+        .remove(b'.')
+        .remove(b'_')
+        .remove(b'~');
+    /// JavaScript's `encodeURIComponent`.
+    const COMPONENT: &AsciiSet = &UNRESERVED
+        .remove(b'!')
+        .remove(b'*')
+        .remove(b'\'')
+        .remove(b'(')
+        .remove(b')');
+    if secret.is_empty() {
+        return Vec::new();
+    }
+    let encoded = [
+        url::form_urlencoded::byte_serialize(secret.as_bytes()).collect(),
+        utf8_percent_encode(secret, NON_ALPHANUMERIC).to_string(),
+        utf8_percent_encode(secret, UNRESERVED).to_string(),
+        utf8_percent_encode(secret, COMPONENT).to_string(),
+    ];
+    // A `+` the secret holds is `%2B` in each: a `+` there is a space.
+    let mut forms: Vec<String> = encoded
+        .iter()
+        .flat_map(|text| [text.replace('+', "%20"), text.replace("%20", "+")])
+        .flat_map(|text| [lower_hex(&text), text])
+        .collect();
+    forms.push(secret.to_owned());
+    if let Ok(quoted) = serde_json::to_string(secret)
+        && let Some(inner) = quoted.strip_prefix('"').and_then(|q| q.strip_suffix('"'))
+    {
+        forms.push(inner.to_owned());
+    }
+    forms.sort_by_key(|form| std::cmp::Reverse(form.len()));
+    forms.dedup();
+    forms
+}
+
+/// *text* with the hex digits of each `%XX` escape in lower case.
+fn lower_hex(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut after = 0;
+    for c in text.chars() {
+        if c == '%' {
+            after = 2;
+            out.push(c);
+        } else if after > 0 {
+            after -= 1;
+            out.push(c.to_ascii_lowercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_secret_is_masked_in_every_form_it_may_be_echoed_in() {
+        let secret = "aB3~Q8_x.y+z/w=v&u%t s~9";
+        let forms = secret_forms(secret);
+        for echoed in [
+            secret,
+            "aB3%7EQ8_x.y%2Bz%2Fw%3Dv%26u%25t+s%7E9",
+            "aB3%7EQ8_x.y%2Bz%2Fw%3Dv%26u%25t%20s%7E9",
+            "aB3~Q8_x.y%2Bz%2Fw%3Dv%26u%25t+s~9",
+            "aB3~Q8_x.y%2Bz%2Fw%3Dv%26u%25t%20s~9",
+            "aB3~Q8_x.y%2bz%2fw%3dv%26u%25t+s~9",
+            "aB3%7EQ8%5Fx%2Ey%2Bz%2Fw%3Dv%26u%25t%20s%7E9",
+        ] {
+            assert!(
+                forms.iter().any(|form| form == echoed),
+                "{echoed}: {forms:?}"
+            );
+        }
+        assert!(secret_forms("").is_empty());
+        // Longest first: the `+` form is masked before a shorter one could
+        // leave part of it.
+        assert!(forms.windows(2).all(|pair| pair[0].len() >= pair[1].len()));
+    }
 }

@@ -563,3 +563,86 @@ async fn tenants_signing_in_at_once_get_their_own_tokens() {
     );
     assert_eq!(server.received_requests().await.unwrap().len(), 2);
 }
+
+/// Requirement 7 (second review, N1): a proxy or server that echoes the
+/// form it was sent echoes the secret form-encoded. No form of it reaches
+/// an error, its `Debug` or the log, nor part of one through an excerpt
+/// cut in the middle of it.
+#[tokio::test]
+async fn an_echoed_form_body_never_shows_the_secret_in_any_encoding() {
+    let logs = logs();
+    let form_encoded: String = url::form_urlencoded::byte_serialize(SECRET.as_bytes()).collect();
+    let leaks = [
+        SECRET.to_owned(),
+        form_encoded.clone(),
+        form_encoded.replace('+', "%20"),
+        // Python's `quote_plus`, which leaves `~` as it is.
+        "aB3~Q8_x.y%2Bz%2Fw%3Dv%26u%25t+s~9".to_owned(),
+        "aB3~Q8_x.y%2Bz%2Fw%3Dv%26u%25t%20s~9".to_owned(),
+        "aB3~Q8_x.y%2bz%2fw%3dv%26u%25t+s~9".to_owned(),
+        // What an excerpt cut inside the secret would keep.
+        "aB3~Q8".to_owned(),
+        "aB3%7EQ8".to_owned(),
+    ];
+    // (status, type, the answer): `{}` is the form as it arrived.
+    let echoes: [(u16, &str, &str); 5] = [
+        (500, "text/plain", "upstream failed for {}"),
+        (502, "text/plain", "bad gateway, request was {}"),
+        (400, "text/plain", "cannot parse {}"),
+        // An excerpt that ends in the middle of the secret.
+        (400, "text/plain", "PAD{}"),
+        (
+            400,
+            "application/json",
+            r#"{"error":"invalid_request","error_description":"AADSTS900144: in {}"}"#,
+        ),
+    ];
+    for (status, kind, wrap) in echoes {
+        let server = MockServer::start().await;
+        let wrap = wrap.to_owned();
+        Mock::given(method("POST"))
+            .and(path(token_path(TENANT_ID)))
+            .respond_with(move |request: &Request| {
+                let sent = String::from_utf8_lossy(&request.body).into_owned();
+                // The secret's value starts 190 bytes in: a 200-byte
+                // excerpt of the raw body would cut it after 10.
+                let at = sent.find("client_secret=").unwrap() + "client_secret=".len();
+                let body = wrap
+                    .replace("PAD", &"x".repeat(190 - at))
+                    .replace("{}", &sent);
+                ResponseTemplate::new(status)
+                    .insert_header("Retry-After", "0")
+                    .set_body_raw(body, kind)
+            })
+            .mount(&server)
+            .await;
+        let stand = Stand::with_settings(
+            "prod",
+            TENANT_ID,
+            SECRET,
+            None,
+            &sentinel::http_settings(std::time::Duration::from_secs(10)),
+        );
+        let failed = entra::sign_in_at(stand.cx(), &server.uri(), NAMES, ARM)
+            .await
+            .unwrap_err();
+        let shown = format!("{failed}\n{failed:?}\n{}", failed.text());
+        assert!(shown.contains("prod"), "HTTP {status}: {shown}");
+        if kind == "text/plain" {
+            assert!(
+                shown.contains("client_secret=***"),
+                "HTTP {status}: {shown}"
+            );
+        }
+        for leak in &leaks {
+            assert!(
+                !shown.contains(leak.as_str()),
+                "HTTP {status}: {leak} in {shown}"
+            );
+        }
+    }
+    let logged = logs.0.lock().unwrap().clone();
+    for leak in &leaks {
+        assert!(!logged.contains(leak.as_str()), "{leak} in {logged}");
+    }
+}
