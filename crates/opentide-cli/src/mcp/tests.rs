@@ -225,3 +225,31 @@ fn generated_schemas_and_templates_are_served() {
     assert_eq!(index["json_schemas"]["rule::1.1"]["title"], "eleven");
     assert!(index["framework_schemas"]["rule::1.0"].is_string());
 }
+
+/// `deployment_status` reads the platform blocks from `configurations`, else
+/// from the legacy `platforms`: a `configurations` that is not a table, such
+/// as the string "false", holds no block and does not hide `platforms` (the
+/// Python CLI's truth value counted the string as holding blocks).
+#[test]
+fn deployment_status_reads_platforms_past_a_configurations_that_is_not_a_table() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let path = ws.join("objects/rules/rule-0001-sentinel-kql.yaml");
+    let text = std::fs::read_to_string(&path).unwrap();
+    let text = text.replacen(
+        "configurations:\n",
+        "configurations: 'false'\nplatforms:\n",
+        1,
+    );
+    std::fs::write(&path, text).unwrap();
+    let status = call(
+        &server(&ws),
+        "deployment_status",
+        json!({"uuid": SENTINEL_RULE}),
+    );
+    assert_eq!(status["found"], true, "{status}");
+    assert_eq!(
+        status["platforms"]["sentinel"]["deployed"], false,
+        "{status}"
+    );
+}

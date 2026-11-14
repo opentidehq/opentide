@@ -223,3 +223,60 @@ fn floats_show_as_yaml_writes_them() {
         assert_eq!(scalar_text(&Value::Float(float)), shown);
     }
 }
+
+fn yaml(text: &str) -> Node {
+    opentide_schema::node::load(text)
+        .unwrap()
+        .root()
+        .unwrap()
+        .as_ref()
+        .clone()
+}
+
+/// A platform card is enabled only by the boolean `true`, as `deploy` reads
+/// `enabled`: the string "false" (or "0") is not on, as it was under the
+/// Python CLI's truth value. A tenant's name and a block's status are read as
+/// the strings they are.
+#[test]
+fn a_platform_is_enabled_only_by_the_boolean_true() {
+    let resolved = yaml(concat!(
+        "deployment:\n",
+        "  statuses:\n",
+        "    - {name: STAGING, strategy: RELEASE}\n",
+        "platforms:\n",
+        "  on:\n",
+        "    platform: {enabled: true}\n",
+        "    tenants: [{name: lab, strategies: [RELEASE]}, {name: ''}]\n",
+        "  off: {platform: {enabled: false}}\n",
+        "  text: {platform: {enabled: 'false'}}\n",
+        "  zero: {enabled: '0'}\n",
+        "  flat: {enabled: true}\n",
+    ));
+    let rule = yaml("configurations:\n  on: {status: STAGING}\n");
+    let rules = [("r".to_owned(), &rule)];
+    let cards = platform_cards(&resolved, &rules, &env(&[]));
+    let enabled: Vec<(&str, bool)> = cards
+        .iter()
+        .map(|card| (card.platform.as_str(), card.enabled))
+        .collect();
+    assert_eq!(
+        enabled,
+        [
+            ("flat", true),
+            ("off", false),
+            ("on", true),
+            ("text", false),
+            ("zero", false)
+        ]
+    );
+    let on = cards.iter().find(|card| card.platform == "on").unwrap();
+    let tenants: Vec<(&str, &[String])> = on
+        .tenants
+        .iter()
+        .map(|tenant| (tenant.name.as_str(), tenant.rules.as_slice()))
+        .collect();
+    assert_eq!(
+        tenants,
+        [("lab", &["r".to_owned()][..]), ("tenant 2", &[][..])]
+    );
+}
