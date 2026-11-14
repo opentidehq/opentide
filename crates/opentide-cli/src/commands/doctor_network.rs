@@ -24,6 +24,11 @@ pub const PYPI_URL: &str = "https://pypi.org/pypi/opentide/json";
 /// The fix a newer release names (`UPGRADE_COMMAND`).
 pub const UPGRADE_COMMAND: &str = "pip install --upgrade opentide";
 
+/// The [`Failed`] name for a build with no network of its own (the WASI
+/// build outside an `opentide serve` whose client makes its requests): no
+/// Python exception has it, since the Python CLI always has a network.
+pub const NO_NETWORK: &str = "network_unavailable";
+
 /// Why the newest release could not be read: the Python exception's name.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Failed(pub &'static str);
@@ -86,8 +91,10 @@ pub fn fetch_latest(env: &Environment, proxy: Option<&str>) -> Result<String, Fa
         ..HttpSettings::default()
     };
     let label = TenantLabel::new("pypi", "pypi.org");
-    let client =
-        HttpClient::new(&label, &settings, env, proxy).map_err(|_| Failed("InvalidURL"))?;
+    let client = HttpClient::new(&label, &settings, env, proxy).map_err(|error| match error {
+        ConnectorError::NetworkUnavailable { .. } => Failed(NO_NETWORK),
+        _ => Failed("InvalidURL"),
+    })?;
     let proxied = url::Url::parse(PYPI_URL)
         .ok()
         .and_then(|url| client.route(&url))

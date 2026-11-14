@@ -64,6 +64,11 @@ pub struct Fetcher {
     run: Box<dyn Fn() -> Option<String> + Send + Sync>,
     pending: Mutex<HashMap<String, oneshot::Sender<Reply>>>,
     next: AtomicU64,
+    /// Reads the client's next message on this thread, when the server has
+    /// no reading thread (the WASI build): whether one came.
+    pump: Box<dyn Fn() -> bool + Send + Sync>,
+    /// Whether the run in progress was cancelled.
+    cancelled: Box<dyn Fn() -> bool + Send + Sync>,
 }
 
 impl std::fmt::Debug for Fetcher {
@@ -78,11 +83,27 @@ impl Fetcher {
         send: impl Fn(&str) + Send + Sync + 'static,
         run: impl Fn() -> Option<String> + Send + Sync + 'static,
     ) -> Arc<Self> {
+        Self::with_input(send, run, || false, || false)
+    }
+
+    /// A fetcher that, while it waits for an answer, reads the client's
+    /// messages itself with *pump* (`Server::pump`: the WASI build's serve
+    /// loop has no reading thread), and stops waiting once *cancelled* says
+    /// the run was cancelled. A *pump* that reads nothing (a server with a
+    /// reading thread) leaves the answer to that thread.
+    pub fn with_input(
+        send: impl Fn(&str) + Send + Sync + 'static,
+        run: impl Fn() -> Option<String> + Send + Sync + 'static,
+        pump: impl Fn() -> bool + Send + Sync + 'static,
+        cancelled: impl Fn() -> bool + Send + Sync + 'static,
+    ) -> Arc<Self> {
         Arc::new(Self {
             send: Box::new(send),
             run: Box::new(run),
             pending: Mutex::new(HashMap::new()),
             next: AtomicU64::new(1),
+            pump: Box::new(pump),
+            cancelled: Box::new(cancelled),
         })
     }
 
@@ -361,6 +382,38 @@ impl Transport for ClientTransport {
                 fetcher: &fetcher,
                 id: &id,
             };
+            // With no reading thread, the answer comes only as this thread
+            // reads it: pump the client's messages until it is taken. Each
+            // message is handled as the reading thread would handle it (a
+            // cancel reaches the run), so the run's cancellation is checked
+            // after each: the command's own watch cannot run meanwhile.
+            let mut reply = reply;
+            loop {
+                match reply.try_recv() {
+                    Ok(answer) => {
+                        drop(pending);
+                        return match answer {
+                            Err(error) => Err(failure(&error)),
+                            Ok(result) => response(&result, &url, started.elapsed()),
+                        };
+                    }
+                    Err(oneshot::error::TryRecvError::Closed) => {
+                        drop(pending);
+                        return Err(TransportFailure::Unreachable {
+                            reason: "the client that made the tenant's requests has gone"
+                                .to_owned(),
+                        });
+                    }
+                    Err(oneshot::error::TryRecvError::Empty) => {}
+                }
+                if cancel.is_cancelled() || (fetcher.cancelled)() {
+                    return Err(TransportFailure::Cancelled);
+                }
+                if !(fetcher.pump)() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
             let limit = self.timeout + read + GRACE;
             let outcome = tokio::select! {
                 biased;

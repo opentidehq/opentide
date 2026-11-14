@@ -1172,7 +1172,9 @@ jobs:
   # every golden case that needs no network run through it under wasmtime
   # (`golden check --runner wasi`). The cases it leaves out are the cassette
   # cases and those tests/golden/WASI_EXCLUDED.toml lists, which xtask's
-  # tests hold to network cases. In the core set: it is the extension's gate.
+  # tests hold to network cases; tenant commands then run through the module
+  # with @opentide/wasi-host performing their requests from the cassettes.
+  # In the core set: it is the extension's gate.
   wasi:
     name: WASI command line (size, golden)
     runs-on: ubuntu-latest
@@ -1217,6 +1219,21 @@ jobs:
 
       - name: Every golden case that needs no network, through the WASI module
         run: cargo xtask golden check --runner wasi --report golden-wasi.json
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      # The cases that need the network, through the WASI module: tenant
+      # commands under `opentide serve` in Node's WASI, every request made by
+      # @opentide/wasi-host's FetchHost and answered from the golden cassettes
+      # (no network in the module; the extension host performs the requests).
+      - name: Tenant commands through the host's opentide/fetch, in the WASI module
+        env:
+          OPENTIDE_WASI_CLI: target/wasm32-wasip1/wasi/opentide.wasm
+        run: |
+          (cd packages/wasi-host && npm ci)
+          node --experimental-strip-types --test --test-name-pattern='^serve \(wasi\)' packages/wasi-host/src/index.test.ts
 
       - name: Upload the report
         if: always()
@@ -1297,11 +1314,19 @@ jobs:
 
       - name: npm packages build and pack
         run: |
-          for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done
+          for p in lsp-client lsp-worker wasi-host; do (cd "packages/$p" && npm ci); done
           node scripts/engine/check-npm-packs.mjs
 
-      - name: Native language server
-        run: cargo build --locked -p opentide-lsp
+      - name: Native language server and command line
+        run: cargo build --locked -p opentide-lsp -p opentide-cli
+
+      # The extension host's half of `opentide/fetch` (W2): its HTTP stack on
+      # the loopback, the protocol, and `opentide serve` running tenant
+      # commands whose requests the host answers from the golden cassettes.
+      - name: wasi-host (opentide/fetch against opentide serve)
+        env:
+          OPENTIDE_BIN: target/debug/opentide-cli
+        run: node --experimental-strip-types --test packages/wasi-host/src/index.test.ts
 
       # node:wasi's path_open is a V8 fast API call whose allocation can start
       # a GC inside the call, which segfaults node 22 once the WASI instances
