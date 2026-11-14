@@ -578,10 +578,7 @@ pub fn occurs_delimited(text: &str, name: &str) -> bool {
         if delim(text[..start].chars().next_back()) && delim(text[end..].chars().next()) {
             return true;
         }
-        from = start + 1;
-        while !text.is_char_boundary(from) {
-            from += 1;
-        }
+        from = text.ceil_char_boundary(start + 1);
     }
     false
 }
