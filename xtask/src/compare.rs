@@ -17,7 +17,7 @@ use anyhow::{Context, Result, bail};
 use opentide_compare::ledger::Ledger;
 use opentide_compare::{FileState, Run};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// The ledger's place in the repository.
 pub const LEDGER: &str = "tests/golden/APPROVED_DIFFS.toml";
@@ -380,7 +380,7 @@ pub fn node_candidate(_repo: &Path, _target: &Path) -> Result<crate::golden::run
 /// The launch turns wasmtime's own cache off (`-C cache=n`): it would make
 /// `~/.cache/wasmtime` in every case's home, which the oracle never writes.
 #[cfg(unix)]
-fn precompiled(wasmtime: &Path, module: &Path, dir: &Path) -> Result<PathBuf> {
+fn precompiled(wasmtime: &Path, module: &Path, dir: &Path) -> Result<std::path::PathBuf> {
     let compiled = dir.join("opentide.cwasm");
     let modified = |path: &Path| std::fs::metadata(path).and_then(|m| m.modified()).ok();
     let fresh = matches!(
@@ -418,7 +418,7 @@ pub fn wasi_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::
                 .join("wasi")
                 .join("opentide.wasm")
         },
-        PathBuf::from,
+        std::path::PathBuf::from,
     );
     if !module.is_file() {
         bail!(
