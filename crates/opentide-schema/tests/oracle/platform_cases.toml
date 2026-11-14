@@ -32,11 +32,6 @@ id = "sentinel-durations"
 reason = "`scheduling.frequency`, `scheduling.lookback`, `grouping.alert.grouping_lookback` and a string `alert.suppression` must be what Sentinel's deploy converts to ISO 8601: ISO 8601 (`PT1H`, `P1D`, any case) or shorthand (`30m`, `1h10m`), around blanks; empty stays deploy's to judge. The oracle accepted `frequency: hourly` and failed at deploy; the Rust model refuses it as `value_error` on the field (UC-1.4 Known gap). A duration longer than deploy's `timedelta` holds (999999999 days, 23:59:59: `1000000000d`, `P99999999999D`, `P142857143W`) is refused the same way, where the oracle accepted it and deploy crashed with `OverflowError`. Digits are ASCII only."
 changelog = "**Sentinel durations are checked when the rule is validated**"
 
-[[difference]]
-id = "harfanglab-1-2"
-reason = "harfanglab-1.0 1.2 (#899, 0.25.0): a block is a Sigma rule or a YARA rule, not both, so `sigma` beside `yara` is `harfanglab_rule_kind` on the block, where the oracle (0.23.0) deployed the Sigma rule. A `yara` object is a whole `signature` or the decomposed `meta`, `strings` and `condition`; without a `signature` the three are required together, one `value_error` on the object naming the missing keys, where the oracle reported each as `missing`."
-changelog = "**A HarfangLab block is a Sigma rule or a YARA rule, not both**"
-
 [[case]]
 id = "platform-unknown-key"
 family = "rule"
@@ -1224,7 +1219,6 @@ configurations:
 [[case]]
 id = "platform-harfanglab-full"
 family = "rule"
-difference = ["harfanglab-1-2"]
 yaml = '''
 name: Rule
 metadata:
@@ -1326,7 +1320,6 @@ configurations:
 [[case]]
 id = "platform-harfanglab-yara-missing"
 family = "rule"
-difference = ["harfanglab-1-2"]
 yaml = '''
 name: Rule
 metadata:
