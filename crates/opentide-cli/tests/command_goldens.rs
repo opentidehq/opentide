@@ -177,7 +177,7 @@ fn a_watch_shows_a_pass_and_ctrl_c_exits_0() {
     let stdout = String::from_utf8(out).unwrap();
     assert_eq!(code, 0, "{stdout}");
     assert!(
-        stdout.starts_with("error[vocab_unknown]: 'high' is not a alert severity value\n"),
+        stdout.starts_with("error[vocab_unknown]: \"high\" is not a alert severity value\n"),
         "{stdout}"
     );
     assert!(

@@ -53,3 +53,21 @@ def cells(job: dict[str, Any], scope: str = "full") -> list[dict[str, str]]:
     if not axes and include:
         found = [{str(k): str(v) for k, v in entry.items()} for entry in include]
     return found
+
+
+def selection(packages: str) -> tuple[list[str], list[str]]:
+    """An engine-test cell's `packages`: the packages its `-p` name, and the
+    `--features` it enables (`pkg/feature`)."""
+    words = packages.split()
+    names: list[str] = []
+    features: list[str] = []
+    at = 0
+    while at < len(words):
+        flag, value = words[at], words[at + 1] if at + 1 < len(words) else ""
+        assert flag in ("-p", "--features") and value, packages
+        if flag == "-p":
+            names.append(value)
+        else:
+            features.extend(value.split(","))
+        at += 2
+    return names, features

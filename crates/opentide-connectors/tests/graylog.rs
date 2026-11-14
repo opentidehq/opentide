@@ -619,7 +619,7 @@ fn the_version_is_read_once_and_bounded_below() {
         error.text().contains("graylog_version_unsupported"),
         "{error:?}"
     );
-    assert!(error.text().contains("'6.2.9+abc'"), "{error:?}");
+    assert!(error.text().contains("\"6.2.9+abc\""), "{error:?}");
 }
 
 #[test]

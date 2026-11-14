@@ -68,7 +68,6 @@ struct Patterns {
     assignment_key: Regex,
     assignment_value: Regex,
     env_reference: Regex,
-    parts: Regex,
 }
 
 #[expect(
@@ -102,14 +101,15 @@ fn patterns() -> &'static Patterns {
         assignment_value: Regex::new(r#"^(?:"[^"\n]*"|'[^'\n]*'|[^\s"',;&)}\]]+)"#)
             .expect("pattern"),
         env_reference: Regex::new(r"^\$\{?(?P<name>[A-Za-z_][A-Za-z0-9_]*)\}?$").expect("pattern"),
-        parts: Regex::new(r"[^a-z0-9]+").expect("pattern"),
     })
 }
 
+/// The runs of `a-z0-9` in `lowered` (a split on `[^a-z0-9]+`). Without a
+/// regex: every run's redactor checks each environment variable's name, and
+/// compiling [`patterns`] for that was most of `opentide --version` (#830).
 fn parts(lowered: &str) -> Vec<&str> {
-    patterns()
-        .parts
-        .split(lowered)
+    lowered
+        .split(|c: char| !(c.is_ascii_lowercase() || c.is_ascii_digit()))
         .filter(|part| !part.is_empty())
         .collect()
 }
@@ -452,6 +452,30 @@ fn read_toml(path: &Path) -> Option<toml::Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_name_splits_into_the_parts_the_pattern_gave() {
+        let pattern = Regex::new(r"[^a-z0-9]+").unwrap();
+        for name in [
+            "",
+            "_",
+            "api_key",
+            "__x__y__",
+            "opentide_proxy",
+            "aws-secret.access2key",
+            "élan_token",
+            "a\u{a0}b",
+            "ÄBC_def",
+            "x9__",
+        ] {
+            let lowered = name.to_lowercase();
+            let expected: Vec<&str> = pattern
+                .split(&lowered)
+                .filter(|part| !part.is_empty())
+                .collect();
+            assert_eq!(parts(&lowered), expected, "{name:?}");
+        }
+    }
 
     #[test]
     fn framework_redact_secret_names() {

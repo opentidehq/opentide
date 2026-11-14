@@ -606,23 +606,23 @@ name = "PIPE"
         let index = index();
         assert_eq!(
             index.resolve("Account").detail(),
-            "'Account' is defined under several stages: 'Host::Account', 'Cloud::Account'"
+            "\"Account\" is defined under several stages: \"Host::Account\", \"Cloud::Account\""
         );
         assert_eq!(
             index.resolve("Cloud::Process").detail(),
-            "'Cloud::Process' names a stage the key is not defined under; valid: 'Host::Process'"
+            "\"Cloud::Process\" names a stage the key is not defined under; valid: \"Host::Process\""
         );
         assert_eq!(
             index.resolve("Process").detail(),
-            "'Process' -> 'Host::Process'"
+            "\"Process\" -> \"Host::Process\""
         );
         assert_eq!(
             index.resolve("host::Process").detail(),
-            "'host::Process' -> 'Host::Process' (stage casing)"
+            "\"host::Process\" -> \"Host::Process\" (stage casing)"
         );
         assert_eq!(
             index.resolve("Gizmo").detail(),
-            "'Gizmo' is not a known vocabulary value"
+            "\"Gizmo\" is not a known vocabulary value"
         );
         assert!(!index.resolve("Host::Process").changed());
         assert!(index.resolve("Process").changed());
@@ -751,7 +751,7 @@ objective:
         assert_eq!(
             verify(&document, &outside, &plan).as_deref(),
             Some(
-                "rewrite of 'entities' did not match the plan (expected {\"Account\": 1, \"Host::Process\": 3, \"host::process\": 1}, got {\"Account\": 1, \"Host::Process\": 1, \"Process\": 2, \"host::process\": 1})"
+                "rewrite of \"entities\" did not match the plan (expected {\"Account\": 1, \"Host::Process\": 3, \"host::process\": 1}, got {\"Account\": 1, \"Host::Process\": 1, \"Process\": 2, \"host::process\": 1})"
             )
         );
         let (updated, _) = rewrite(&document, &plan);

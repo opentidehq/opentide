@@ -18,7 +18,7 @@ xtask --`): the repository's Rust tooling, as a workspace member that is never p
 | `codegen [--check]` | The artifacts generated from the Rust model (`opentide_schema::generate`, UC-1.8 #814; `src/codegen.rs`): writes the committed platform templates (`src/opentide/schemas/data/platform_templates`); `--check` fails when they are stale, and when the templates, snippets or router schema generated from a fixture's resolved configuration differ by a byte from those of a golden recording of an `opentide generate` that ran the `schemas`, `templates` and `snippets` phases and exited 0 (each fixture and mode: tide-corpus, and vscode through `generate schemas templates vocabs snippets`), or either side has one the other has not. It also writes and drift-checks each revision's editor schema in `data/catalogs/tide/schemas/` (bundled configuration, no workspace objects, enum essays shortened), and `--check` compares the JSON Schemas of the `schemas` phase (each revision's, `visibility.toml`'s) in those recordings and the configuration schemas (`crates/opentide-schema/tests/oracle/configuration_schemas.json`, written by `configuration_schemas.py` with the oracle) with Rust's by verdict, not text (`src/verdict.rs`, the `jsonschema` crate, UC-1.8b #900): every object and configuration file of the fixtures, every fault of `tests/corpora/faults.toml` applied alone, the configuration table's texts and the bundled configuration files must be accepted or refused by both; the configuration router must be the same document. CI's `Engine lint` job runs it. The language server's field catalog is not generated yet (UC-2.6) |
 | `golden record [--check-determinism]`, `check`, `diff`, `lock`, `coverage` | Records what the frozen Python CLI (the oracle, `tests/golden/ORACLE`) does for every case of `tests/golden/cases.toml`, and checks an engine against the recordings: [`tests/golden/README.md`](../tests/golden/README.md) |
 | `golden record --oracle FILE --out DIR`, `golden check\|diff --recordings DIR`, `golden lock --oracle FILE` | A preview of the next oracle (`tests/golden/ORACLE.next`): recorded into DIR, never into `tests/golden`, and compared there; no `COVERAGE.md`, no stale-ledger check. CI's `Golden preview` job on `train/catchup-0.28` ([`tests/golden/README.md`](../tests/golden/README.md), "A preview of the next oracle") |
-| `golden check --engine rust [--report FILE]` | Runs every case through this repository's CLI (the console script of `.venv`, the Rust core) and compares it with the recording through `opentide-compare` and `tests/golden/APPROVED_DIFFS.toml`; a stale ledger entry fails it (UC-0.7, #805; every case since UC-6.2, #841; CI job `Golden compare`) |
+| `golden check --engine rust [--report FILE] [--partition K/N [--unused FILE]]` | Runs every case through this repository's CLI (the console script of `.venv`, the Rust core) and compares it with the recording through `opentide-compare` and `tests/golden/APPROVED_DIFFS.toml`; a stale ledger entry fails it (UC-0.7, #805; every case since UC-6.2, #841; CI job `Golden compare`). `--partition K/N`: only the cases whose id's FNV-1a hash falls in part K; `--unused FILE` writes the entries the part did not apply instead of failing (an entry in every part's file is stale: CI's gather) |
 | `golden check --runner node [--report FILE]` | The same cases and comparison, with the candidate launched as the npm package's `opentide` bin (`bindings/node/cli.js` under `node`, after `npm run build` in `bindings/node`): the Node runner of UC-5.3 (#838); CI job `Node package`. It would leave out, and count, the runs the PyPI CLI still answers in Python (`compare::node_leaves_out`, #977), and so find no stale ledger entry; none is left out now: `--help` is the Rust command line's on both since UC-6.0b, and `doctor` is compared on every fixture since it checks nothing in Python (UC-6.0d) |
 | `cassettes record <scenario>…\|--all [--oracle FILE]`, `cassettes check`, `cassettes list` | The recorded-HTTP cassettes (UC-4.1, #831, `src/cassettes.rs`): `record` runs each scenario of `tests/cassettes/scenarios.toml` (the oracle as the client, with a stand-in tenant where it names one) behind `opentide-cassette`'s recording proxy and writes `tests/cassettes/<scenario>.json`; `check` fails on a digest that does not match (a hand edit), on anything redaction would still change and on a scenario without its cassette. A golden case with `cassette = "<scenario>"` is served from it by a replaying proxy, and fails unless its requests are the cassette's |
 | `mcp record --python PATH\|--oracle FILE [--only NAME]`, `mcp replay --engine rust FILE...` | The recorded MCP sessions (UC-3.7, #829, `src/mcp.rs`): the recordings in `tests/golden/mcp/<session>.jsonl` are the Python server's answers, frozen since UC-6.2 (#841); `record` writes them again from the Python server of an opentide release that has one (`--python`, with `OPENTIDE_ENGINE=python` for it), and `replay` sends each session to this repository's server and compares every answer through `opentide-compare` (JSON text blocks as their documents, keys sorted, the workspace path, the version and `wall_ms` hidden); a difference only through `APPROVED_DIFFS.toml` (command `mcp start`, case `<session>/<step>`, which `golden check` leaves to it), none stale on a complete run. CI's `Golden compare` job |
@@ -61,9 +61,10 @@ of it): a command that failed early would measure nothing, so the bench stops wi
 - `--engine python` runs the oracle, opentide 0.23.0 from its PyPI wheel, installed with uv into
   `<target>/xtask-bench/oracle` from [`tests/bench/oracle-requirements.txt`](../tests/bench/oracle-requirements.txt)
   (every file's SHA-256 pinned) on a uv-managed CPython (`ORACLE_PYTHON`), bytecode compiled at
-  install. `--engine rust` builds `opentide-lsp --release` for the language server and
-  opentide-workspace's `load` example (`--release`) for `load`, and reports "no Rust yet" for every
-  other command. `load` is the workspace's load and index: the oracle runs `Opentide.initialise()`
+  install. `--engine rust` builds the `opentide` binary (`-p opentide --features cli
+  --release`, what `cargo install opentide --features cli` installs) for every command-line
+  scenario, `opentide-lsp --release` for the language server and opentide-workspace's `load`
+  example (`--release`) for `load`. `load` is the workspace's load and index: the oracle runs `Opentide.initialise()`
   with its interpreter (`ORACLE_LOAD`), the Rust engine the example, each timed spawn to exit.
 - `startup` (`opentide --version`, 20 ms) and, under `--engine rust`, `explain` (30 ms) run the
   console script, `opentide._cli:main` (UC-3.8b, #960; UC-6.2, #841): the
@@ -77,8 +78,14 @@ of it): a command that failed early would measure nothing, so the bench stops wi
 - `--check` (`src/bench/check.rs`) fails a median or peak RSS more than `policy.regression` (10%)
   over the last `development` result (`--previous`) or over the oracle baseline in the budgets
   (`python`), and a rust result over the absolute plan section 11 target (or, where a
-  `target_waiver` names the work item that will meet it, more than 10% over the Rust baseline);
-  differences within the noise floor (20 ms, 2 MiB) never fail. With `--require-reference`
+  `target_waiver` names the work item that will meet it, more than 10% over the Rust baseline;
+  where the plan names no target, over the oracle's median on the same CPU, or on a CPU recorded
+  nowhere over the slowest recorded + 20%: never slower than the implementation it replaces);
+  differences within the noise floor (20 ms, 2 MiB) never fail. A miss of a rust absolute budget
+  (time or RSS) that a `time_waiver` / `rss_waiver` names an issue for (`"#123, why"`, refused
+  without one) is reported as waived, not failed, up to its measured `waived_s` /
+  `waived_rss_mib` + 10%; past that, or against the last result, it fails, and the budget
+  itself stays. With `--require-reference`
   (CI), a measured command that no baseline, target or comparable previous result applies to
   fails, and so does a report without a CPU model. It prints, and with `--summary` appends, a
   Markdown table per command.
@@ -99,13 +106,22 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   pass for the command's now and then (more often under load and coverage instrumentation).
   What xtask touches after the exec (the language server's reader thread and messages) is not
   in the child's floor, so the read does not wait for the reap.
+- A command-line scenario runs through a fresh xtask process (`bench --internal-measure`,
+  `measure::run_isolated`) that spawns the command, waits for it and writes its time and
+  `wait4` numbers to a file: the floor is that small process's memory (a few MiB), not the
+  benchmark's (18 to 32 MiB by profile), which the smallest Rust commands (`rules unreviewed`,
+  about 14 MiB) peak under. The language server is spawned directly: its time ends at its first
+  diagnostics, and it peaks far above the floor.
 - The `memory_*` tests of `measure` and `lsp` measure this process's own mark, which the other
   tests of a plain `cargo test` (threads of one process) move: each runs itself again in a child
   process of the test binary, alone (`bench::measured_alone`), under `cargo test` and nextest alike.
 - `XTASK_BENCH_INJECT_SLEEP_MS` is test-only: a sleep inside every measured run's timed window.
   `tests/bench.rs` proves that it makes the check fail.
-- CI: [`bench.yml`](../.github/workflows/bench.yml). Re-record the baseline only from a CI run on
-  its runner class, in a change of its own.
+- CI: [`bench.yml`](../.github/workflows/bench.yml). "The last development result" (`--previous`)
+  is the last result of the workflow's comparison base, `BASE_BRANCH`: `integration/unified-core`
+  (its pushes, nightly and manual runs) while development has no Rust command line, and
+  development again once the Unified Core merges there. Re-record the baseline only from a CI run
+  on its runner class, in a change of its own.
 
 ## Invariants
 

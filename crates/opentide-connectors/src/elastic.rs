@@ -23,8 +23,8 @@ use crate::connector::{
     QueryColumn, QueryOutcome, QueryRequest, Row, TimeWindow, columns_of, flatten, utc_z,
 };
 use crate::error::ConnectorError;
-use crate::python::python_str;
 use crate::retry::RetryPolicy;
+use crate::text::json_text;
 use crate::{Credential, HttpSettings};
 
 /// The platform's identifier.
@@ -314,7 +314,7 @@ impl Client {
         payload: &Json,
     ) -> Result<Answer, ConnectorError> {
         let url = match payload.get("rule_id").filter(|id| id.truthy()) {
-            Some(id) => self.rule_query(&python_str(id)),
+            Some(id) => self.rule_query(&json_text(id)),
             None => self.rules(),
         };
         self.call(cx, reqwest::Method::PUT, &url, Some(payload), true)
@@ -431,10 +431,10 @@ fn object_or_empty<'j>(block: &'j Json, key: &str) -> Option<&'j Object> {
         .and_then(Json::as_object)
 }
 
-/// The strings of a list value (`str()` of each).
+/// The strings of a list value, each as text.
 fn strings(value: Option<&Json>) -> Vec<String> {
     match value {
-        Some(Json::Array(items)) => items.iter().map(python_str).collect(),
+        Some(Json::Array(items)) => items.iter().map(json_text).collect(),
         _ => Vec::new(),
     }
 }
@@ -478,12 +478,12 @@ fn error_payload(answer: &Answer) -> (String, String, String) {
     let kind = error
         .get("type")
         .filter(|value| value.truthy())
-        .map(python_str)
+        .map(json_text)
         .unwrap_or_default();
     let reason = error
         .get("reason")
         .filter(|value| value.truthy())
-        .map_or_else(|| text.clone(), python_str);
+        .map_or_else(|| text.clone(), json_text);
     (kind, reason, error.to_compact())
 }
 
@@ -544,14 +544,14 @@ impl Elastic {
             let query = block
                 .get("query")
                 .filter(|q| q.truthy())
-                .map(python_str)
+                .map(json_text)
                 .unwrap_or_default();
             let sources = esql_sources(&query);
             let explicit = !sources.is_empty();
             return Ok((explicit.then_some(sources), explicit));
         }
         if let Some(view) = block.get("data_view_id").filter(|id| id.truthy()) {
-            let view = python_str(view);
+            let view = json_text(view);
             let answer = client.data_view(cx, &view).await?;
             if matches!(answer.status, 401 | 403) {
                 return Err(ElasticError::Tenant(format!(
@@ -644,7 +644,7 @@ impl Elastic {
         let rule_type = get_or(block, "type", &query_type).clone();
         let mut esql_columns: Option<Vec<Json>> = None;
         if rule_type.as_str() == Some("esql") && block.get("query").is_some_and(Json::truthy) {
-            let query = block.get("query").map(python_str).unwrap_or_default();
+            let query = block.get("query").map(json_text).unwrap_or_default();
             esql_columns = Some(Self::esql_preflight(&client, cx, &query, &mut warnings).await?);
         }
         let resolved = Self::resolve_rule_sources(&client, cx, block, setup_index).await?;
@@ -679,14 +679,14 @@ impl Elastic {
         fields.extend(strings(group_by));
         if let Some(threshold) = object_or_empty(block, "threshold") {
             match threshold.get("field").filter(|f| f.truthy()) {
-                Some(Json::Array(items)) => fields.extend(items.iter().map(python_str)),
-                Some(other) => fields.push(python_str(other)),
+                Some(Json::Array(items)) => fields.extend(items.iter().map(json_text)),
+                Some(other) => fields.push(json_text(other)),
                 None => {}
             }
             if let Some(cardinality) = threshold.get("cardinality").and_then(Json::as_object)
                 && let Some(field) = cardinality.get("field").filter(|f| f.truthy())
             {
-                fields.push(python_str(field));
+                fields.push(json_text(field));
             }
         }
         if let Some(new_terms) = object_or_empty(block, "new_terms") {
@@ -701,7 +701,7 @@ impl Elastic {
             if let (false, Some(columns)) = (group_by.is_empty(), esql_columns) {
                 let mut names: Vec<String> = columns
                     .iter()
-                    .filter_map(|column| column.get("name").map(python_str))
+                    .filter_map(|column| column.get("name").map(json_text))
                     .collect();
                 if names.is_empty() {
                     return Ok(());
@@ -768,7 +768,7 @@ impl Elastic {
                 .into_iter()
                 .flatten()
                 .filter(|field| field.truthy())
-                .map(python_str)
+                .map(json_text)
                 .filter(|field| field != "@timestamp")
                 .collect(),
         );
@@ -874,10 +874,10 @@ impl Elastic {
                 if let Some(Json::Array(entries)) = group.get("entries") {
                     for entry in entries.iter().filter(|e| e.as_object().is_some()) {
                         if let Some(field) = entry.get("field").filter(|f| f.truthy()) {
-                            event_fields.push(python_str(field));
+                            event_fields.push(json_text(field));
                         }
                         if let Some(value) = entry.get("value").filter(|v| v.truthy()) {
-                            indicator_fields.push(python_str(value));
+                            indicator_fields.push(json_text(value));
                         }
                     }
                 }
@@ -889,7 +889,7 @@ impl Elastic {
             Some(Json::Array(items)) => items
                 .iter()
                 .filter(|item| item.truthy())
-                .map(python_str)
+                .map(json_text)
                 .collect::<Vec<_>>()
                 .join(","),
             _ => String::new(),
@@ -1159,10 +1159,10 @@ impl Elastic {
         if let Some(Json::Array(logs)) = preview.get("logs") {
             for entry in logs.iter().filter(|entry| entry.as_object().is_some()) {
                 if let Some(Json::Array(items)) = entry.get("warnings") {
-                    warnings.extend(items.iter().map(python_str));
+                    warnings.extend(items.iter().map(json_text));
                 }
                 if let Some(Json::Array(items)) = entry.get("errors") {
-                    for error in items.iter().map(python_str) {
+                    for error in items.iter().map(json_text) {
                         if error.contains("preview-index") || error.contains("preview.alerts") {
                             return Err(ElasticError::Tenant(format!(
                                 "Tenant configuration error: missing preview-index privilege ({error})"
@@ -1312,7 +1312,7 @@ fn write_failed(
 fn kibana_error(answer: &Answer) -> String {
     match answer.json() {
         Some(body) => match body.get("message").filter(|m| m.truthy()) {
-            Some(message) if body.as_object().is_some() => python_str(message),
+            Some(message) if body.as_object().is_some() => json_text(message),
             _ => answer.text(),
         },
         None => answer.text(),
@@ -1337,7 +1337,7 @@ fn data_view_title(body: &Json) -> Option<String> {
         .get("data_view")
         .filter(|view| view.truthy())
         .unwrap_or(body);
-    view.get("title").filter(|t| t.truthy()).map(python_str)
+    view.get("title").filter(|t| t.truthy()).map(json_text)
 }
 
 /// `format_utc_ms`: UTC to the second, `.000Z`.
@@ -1429,16 +1429,16 @@ fn body(answer: &Answer, tenant: &str, what: &str) -> Result<Json, ConnectorErro
                         .filter(|root| root.as_object().is_some())
                         .and_then(|root| root.get("reason"))
                         .filter(|r| r.truthy())
-                        .map(python_str);
+                        .map(json_text);
                     if reason.is_none() {
-                        reason = error.get("reason").filter(|r| r.truthy()).map(python_str);
+                        reason = error.get("reason").filter(|r| r.truthy()).map(json_text);
                     }
                 }
-                Some(error) if error.truthy() => reason = Some(python_str(error)),
+                Some(error) if error.truthy() => reason = Some(json_text(error)),
                 _ => {}
             }
             if reason.is_none() {
-                reason = body.get("message").filter(|m| m.truthy()).map(python_str);
+                reason = body.get("message").filter(|m| m.truthy()).map(json_text);
             }
         }
         let detail = reason.unwrap_or_else(|| answer.text().chars().take(500).collect());
@@ -1544,8 +1544,8 @@ async fn esql(
         .iter()
         .filter(|column| column.as_object().is_some())
         .map(|column| QueryColumn {
-            name: column.get("name").map_or_else(|| "None".into(), python_str),
-            kind: column.get("type").filter(|t| !t.is_null()).map(python_str),
+            name: column.get("name").map_or_else(|| "null".into(), json_text),
+            kind: column.get("type").filter(|t| !t.is_null()).map(json_text),
         })
         .collect();
     let rows: Vec<Json> = list(body.get("values"))
@@ -1723,7 +1723,7 @@ async fn kuery_preview(
         .iter()
         .filter(|entry| entry.as_object().is_some())
         .flat_map(|entry| list(entry.get("errors")))
-        .map(|error| python_str(&error))
+        .map(|error| json_text(&error))
         .collect();
     if !errors.is_empty() {
         return Err(ConnectorError::refused(
@@ -1736,7 +1736,7 @@ async fn kuery_preview(
     let preview_id = preview
         .get("previewId")
         .filter(|id| id.truthy())
-        .map(python_str)
+        .map(json_text)
         .unwrap_or_default();
     if preview_id.is_empty() {
         return Err(ConnectorError::refused(
@@ -2137,7 +2137,7 @@ pub fn advisories(
         scheduling
             .and_then(|s| s.get(key))
             .filter(|value| !value.is_null())
-            .map_or_else(|| default.to_owned(), python_str)
+            .map_or_else(|| default.to_owned(), json_text)
     };
     let interval = text("interval", "5m");
     let lookback = text("lookback", "1m");
@@ -2153,7 +2153,7 @@ pub fn advisories(
     if rule_type == "threshold" && lookback_secs > interval_secs {
         warnings.push(opentide_core::codes::THRESHOLD_LOOKBACK.to_owned());
     }
-    let query = block.get("query").filter(|q| q.truthy()).map(python_str);
+    let query = block.get("query").filter(|q| q.truthy()).map(json_text);
     if rule_type == "esql"
         && let Some(query) = &query
         && !esql_aggregates(query)

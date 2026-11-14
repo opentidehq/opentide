@@ -208,7 +208,7 @@ fn select_a_rule_run_validate_and_see_its_diagnostic() {
             .unwrap_or_else(|| panic!("{text} not in {source}"))
     };
     assert!(at("tlp: clearr") < at("error[vocab_unknown]:"));
-    at("help: did you mean 'clear'?");
+    at("help: did you mean \"clear\"?");
     assert_eq!(
         tree(&app, 80).last().unwrap(),
         "    └── Sentinel KQL Rule  ✗ 1"
@@ -220,7 +220,7 @@ fn select_a_rule_run_validate_and_see_its_diagnostic() {
     let log = results(&app);
     assert!(log.contains("$ opentide validate"), "{log}");
     assert!(
-        log.contains("error[vocab_unknown]: 'clearr' is not a TLP value"),
+        log.contains("error[vocab_unknown]: \"clearr\" is not a TLP value"),
         "{log}"
     );
     assert!(log.contains(&format!("╭─▶ {RULE_FILE}:8:8")), "{log}");
@@ -1177,7 +1177,7 @@ fn a_crowdstrike_query_is_checked_coloured_and_named_cql() {
         (unknown.code.as_str(), unknown.line, unknown.column),
         ("cql_unknown_function", Some(25), Some(9))
     );
-    assert_eq!(unknown.help.as_deref(), Some("did you mean 'groupBy'?"));
+    assert_eq!(unknown.help.as_deref(), Some("did you mean \"groupBy\"?"));
     assert!(
         live.iter()
             .all(|item| item.code != "crowdstrike_unsupported"),

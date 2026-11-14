@@ -870,11 +870,28 @@ fn clean_enum(values: &[Value], docs: &[Value]) -> (Vec<String>, Vec<String>) {
     (cleaned, short)
 }
 
-/// The part of a dropdown's Markdown after its last `---`, on one line.
+/// The part of a dropdown's Markdown after its last `---`, on one line,
+/// capped ([`cap_doc`]). Only the words the cap keeps are joined: the part
+/// is a vocabulary entry's whole description, often thousands of characters,
+/// and the catalog offers each one in many fields (#806).
 fn short_doc(markdown: &str) -> String {
     let text = markdown.trim();
     let text = text.rsplit("---").next().unwrap_or(text).trim();
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+    let mut line = String::new();
+    let mut chars = 0;
+    for word in text.split_whitespace() {
+        if !line.is_empty() {
+            line.push(' ');
+            chars += 1;
+        }
+        line.push_str(word);
+        chars += word.chars().count();
+        // Past the cap, the first DOC_CAP - 1 characters are all cap_doc keeps.
+        if chars > DOC_CAP {
+            break;
+        }
+    }
+    cap_doc(&line)
 }
 
 fn cap_doc(text: &str) -> String {

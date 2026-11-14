@@ -9,6 +9,11 @@
 # entry.
 
 [[difference]]
+id = "messages-quote-values"
+reason = "Every message quotes a value with Rust's string formatting, in double quotes with Rust's escapes (`\"x\"`, `\"a\\u{a0}b\"`), and writes any other value as YAML and JSON write it (`null`, `true`, `1.5`), where the oracle used Python's `repr` (`'x'`, `'a\\xa0b'`, `None`, `True`). Codes, paths and the rest of each message are unchanged."
+changelog = "**Messages quote values the same way everywhere**"
+
+[[difference]]
 id = "strict-types"
 reason = "A field takes its declared type and nothing else, as the generated JSON Schemas say: an integer field an integer, a boolean field `true` or `false`, a string field a string, a number field an integer or a float. Pydantic's lax mode coerced `\"42\"`, `\" 7 \"` and `3.0` into integers, `\"yes\"`, `1` and `0.0` into booleans and `\"2.5\"` into a float, and gave each failed coercion its own error type (`int_parsing`, `bool_parsing`, `float_parsing`, `int_from_float`, `finite_number`, `int_parsing_size`). Each is now the type's one error (`int_type`, `bool_type`, `float_type`) with its message."
 changelog = "**Field types are checked as declared**"
@@ -316,26 +321,31 @@ yaml = "text: t\nmapping: [a]\n"
 
 [[case]]
 id = "literal-errors"
+difference = ["messages-quote-values"]
 model = "Probe"
 yaml = "text: t\nchoice: three\n"
 
 [[case]]
 id = "literal-int"
+difference = ["messages-quote-values"]
 model = "Probe"
 yaml = "text: t\nchoice: 1\n"
 
 [[case]]
 id = "enum-errors"
+difference = ["messages-quote-values"]
 model = "Probe"
 yaml = "text: t\nkind: delta\n"
 
 [[case]]
 id = "enum-case"
+difference = ["messages-quote-values"]
 model = "Probe"
 yaml = "text: t\nkind: ALPHA\n"
 
 [[case]]
 id = "enum-int"
+difference = ["messages-quote-values"]
 model = "Probe"
 yaml = "text: t\nkind: 3\n"
 
@@ -416,6 +426,7 @@ yaml = "text: t\nvocab: Data Breach\n"
 
 [[case]]
 id = "vocab-packed"
+difference = ["messages-quote-values"]
 model = "Probe"
 yaml = "text: t\nvocab: 'a;b'\n"
 

@@ -1,6 +1,5 @@
 ---
 source: crates/opentide-schema/src/objects/platform/table.rs
-assertion_line: 23
 expression: "serde_json::to_string_pretty(&results).unwrap()"
 ---
 {
@@ -232,7 +231,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "unknown platform schema \"it's\": this block's schema is 'platform::splunk::1.0'"
+          "error": "unknown platform schema \"it's\": this block's schema is \"platform::splunk::1.0\""
         },
         "field_path": [
           "configurations",
@@ -240,7 +239,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "schema"
         ],
         "input": "it's",
-        "msg": "Value error, unknown platform schema \"it's\": this block's schema is 'platform::splunk::1.0'",
+        "msg": "Value error, unknown platform schema \"it's\": this block's schema is \"platform::splunk::1.0\"",
         "span": [
           14,
           14,
@@ -354,7 +353,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "unknown platform schema 'platform::sentinel::1.0': this block's schema is 'platform::splunk::1.0'"
+          "error": "unknown platform schema \"platform::sentinel::1.0\": this block's schema is \"platform::splunk::1.0\""
         },
         "field_path": [
           "configurations",
@@ -362,7 +361,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "schema"
         ],
         "input": "platform::sentinel::1.0",
-        "msg": "Value error, unknown platform schema 'platform::sentinel::1.0': this block's schema is 'platform::splunk::1.0'",
+        "msg": "Value error, unknown platform schema \"platform::sentinel::1.0\": this block's schema is \"platform::splunk::1.0\"",
         "span": [
           14,
           13,
@@ -579,7 +578,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       },
       {
         "ctx": {
-          "expected": "'Allow' or 'Block'"
+          "expected": "\"Allow\" or \"Block\""
         },
         "field_path": [
           "configurations",
@@ -590,7 +589,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "action"
         ],
         "input": "allow",
-        "msg": "Input should be 'Allow' or 'Block'",
+        "msg": "Input should be \"Allow\" or \"Block\"",
         "span": [
           18,
           45,
@@ -602,7 +601,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       },
       {
         "ctx": {
-          "expected": "'All' or 'Specific'"
+          "expected": "\"All\" or \"Specific\""
         },
         "field_path": [
           "configurations",
@@ -611,7 +610,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "selection"
         ],
         "input": "Some",
-        "msg": "Input should be 'All' or 'Specific'",
+        "msg": "Input should be \"All\" or \"Specific\"",
         "span": [
           17,
           24,
@@ -686,7 +685,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "expected": "'NRT', '1H', '3H', '12H' or '24H'"
+          "expected": "\"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\""
         },
         "field_path": [
           "configurations",
@@ -694,7 +693,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "scheduling"
         ],
         "input": "2H",
-        "msg": "Input should be 'NRT', '1H', '3H', '12H' or '24H'",
+        "msg": "Input should be \"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\"",
         "span": [
           16,
           17,
@@ -710,7 +709,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "expected": "'NRT', '1H', '3H', '12H' or '24H'"
+          "expected": "\"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\""
         },
         "field_path": [
           "configurations",
@@ -718,7 +717,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "scheduling"
         ],
         "input": null,
-        "msg": "Input should be 'NRT', '1H', '3H', '12H' or '24H'",
+        "msg": "Input should be \"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\"",
         "span": [
           16,
           17,
@@ -956,7 +955,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "expected": "'kuery' or 'lucene'"
+          "expected": "\"kuery\" or \"lucene\""
         },
         "field_path": [
           "configurations",
@@ -964,7 +963,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "language"
         ],
         "input": "KQL",
-        "msg": "Input should be 'kuery' or 'lucene'",
+        "msg": "Input should be \"kuery\" or \"lucene\"",
         "span": [
           19,
           15,
@@ -1080,7 +1079,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       },
       {
         "ctx": {
-          "expected": "'keyword', 'constant_keyword', 'wildcard', 'text', 'match_only_text', 'long', 'integer', 'short', 'byte', 'unsigned_long', 'double', 'float', 'half_float', 'scaled_float', 'date', 'date_nanos', 'boolean', 'ip', 'version', 'binary', 'geo_point', 'geo_shape', 'object', 'flattened' or 'nested'"
+          "expected": "\"keyword\", \"constant_keyword\", \"wildcard\", \"text\", \"match_only_text\", \"long\", \"integer\", \"short\", \"byte\", \"unsigned_long\", \"double\", \"float\", \"half_float\", \"scaled_float\", \"date\", \"date_nanos\", \"boolean\", \"ip\", \"version\", \"binary\", \"geo_point\", \"geo_shape\", \"object\", \"flattened\" or \"nested\""
         },
         "field_path": [
           "configurations",
@@ -1090,7 +1089,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "type"
         ],
         "input": "str",
-        "msg": "Input should be 'keyword', 'constant_keyword', 'wildcard', 'text', 'match_only_text', 'long', 'integer', 'short', 'byte', 'unsigned_long', 'double', 'float', 'half_float', 'scaled_float', 'date', 'date_nanos', 'boolean', 'ip', 'version', 'binary', 'geo_point', 'geo_shape', 'object', 'flattened' or 'nested'",
+        "msg": "Input should be \"keyword\", \"constant_keyword\", \"wildcard\", \"text\", \"match_only_text\", \"long\", \"integer\", \"short\", \"byte\", \"unsigned_long\", \"double\", \"float\", \"half_float\", \"scaled_float\", \"date\", \"date_nanos\", \"boolean\", \"ip\", \"version\", \"binary\", \"geo_point\", \"geo_shape\", \"object\", \"flattened\" or \"nested\"",
         "span": [
           17,
           39,
@@ -1850,7 +1849,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       },
       {
         "ctx": {
-          "expected": "'query', 'eql', 'esql', 'threshold', 'new_terms', 'threat_match' or 'machine_learning'"
+          "expected": "\"query\", \"eql\", \"esql\", \"threshold\", \"new_terms\", \"threat_match\" or \"machine_learning\""
         },
         "field_path": [
           "configurations",
@@ -1858,7 +1857,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "type"
         ],
         "input": "bogus",
-        "msg": "Input should be 'query', 'eql', 'esql', 'threshold', 'new_terms', 'threat_match' or 'machine_learning'",
+        "msg": "Input should be \"query\", \"eql\", \"esql\", \"threshold\", \"new_terms\", \"threat_match\" or \"machine_learning\"",
         "span": [
           12,
           11,
@@ -2369,7 +2368,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       },
       {
         "ctx": {
-          "expected": "'equals'"
+          "expected": "\"equals\""
         },
         "field_path": [
           "configurations",
@@ -2381,7 +2380,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "operator"
         ],
         "input": "is",
-        "msg": "Input should be 'equals'",
+        "msg": "Input should be \"equals\"",
         "span": [
           15,
           5,
@@ -2393,7 +2392,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       },
       {
         "ctx": {
-          "expected": "'low', 'medium', 'high' or 'critical'"
+          "expected": "\"low\", \"medium\", \"high\" or \"critical\""
         },
         "field_path": [
           "configurations",
@@ -2405,7 +2404,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "severity"
         ],
         "input": "urgent",
-        "msg": "Input should be 'low', 'medium', 'high' or 'critical'",
+        "msg": "Input should be \"low\", \"medium\", \"high\" or \"critical\"",
         "span": [
           15,
           5,
@@ -3748,7 +3747,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "expected": "'Single Event' or 'Correlation'"
+          "expected": "\"Single Event\" or \"Correlation\""
         },
         "field_path": [
           "configurations",
@@ -3757,7 +3756,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "type"
         ],
         "input": "single event",
-        "msg": "Input should be 'Single Event' or 'Correlation'",
+        "msg": "Input should be \"Single Event\" or \"Correlation\"",
         "span": [
           13,
           23,
@@ -3827,7 +3826,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "Duration 'one hour' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)"
+          "error": "Duration \"one hour\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)"
         },
         "field_path": [
           "configurations",
@@ -3836,7 +3835,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "suppression"
         ],
         "input": "one hour",
-        "msg": "Value error, Duration 'one hour' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+        "msg": "Value error, Duration \"one hour\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
         "span": [
           15,
           27,
@@ -3848,7 +3847,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       },
       {
         "ctx": {
-          "error": "Duration '5 hours' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)"
+          "error": "Duration \"5 hours\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)"
         },
         "field_path": [
           "configurations",
@@ -3858,7 +3857,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "grouping_lookback"
         ],
         "input": "5 hours",
-        "msg": "Value error, Duration '5 hours' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+        "msg": "Value error, Duration \"5 hours\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
         "span": [
           16,
           78,
@@ -3874,7 +3873,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "Duration '1000000000d' is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)"
+          "error": "Duration \"1000000000d\" is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)"
         },
         "field_path": [
           "configurations",
@@ -3883,7 +3882,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "frequency"
         ],
         "input": "1000000000d",
-        "msg": "Value error, Duration '1000000000d' is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
+        "msg": "Value error, Duration \"1000000000d\" is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
         "span": [
           14,
           29,
@@ -3895,7 +3894,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       },
       {
         "ctx": {
-          "error": "Duration 'P99999999999D' is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)"
+          "error": "Duration \"P99999999999D\" is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)"
         },
         "field_path": [
           "configurations",
@@ -3904,7 +3903,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "lookback"
         ],
         "input": "P99999999999D",
-        "msg": "Value error, Duration 'P99999999999D' is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
+        "msg": "Value error, Duration \"P99999999999D\" is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
         "span": [
           14,
           52,
@@ -3916,7 +3915,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       },
       {
         "ctx": {
-          "error": "Duration 'P142857143W' is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)"
+          "error": "Duration \"P142857143W\" is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)"
         },
         "field_path": [
           "configurations",
@@ -3925,7 +3924,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "suppression"
         ],
         "input": "P142857143W",
-        "msg": "Value error, Duration 'P142857143W' is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
+        "msg": "Value error, Duration \"P142857143W\" is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
         "span": [
           15,
           26,
@@ -3973,7 +3972,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "errors": [
       {
         "ctx": {
-          "error": "Duration 'hourly' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)"
+          "error": "Duration \"hourly\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)"
         },
         "field_path": [
           "configurations",
@@ -3982,7 +3981,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "frequency"
         ],
         "input": "hourly",
-        "msg": "Value error, Duration 'hourly' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+        "msg": "Value error, Duration \"hourly\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
         "span": [
           14,
           29,
@@ -3994,7 +3993,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       },
       {
         "ctx": {
-          "error": "Duration 'daily' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)"
+          "error": "Duration \"daily\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)"
         },
         "field_path": [
           "configurations",
@@ -4003,7 +4002,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "lookback"
         ],
         "input": "daily",
-        "msg": "Value error, Duration 'daily' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+        "msg": "Value error, Duration \"daily\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
         "span": [
           14,
           47,
@@ -4492,7 +4491,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       {
         "ctx": {
           "hint": "; did you mean T1059.001 (Command and Scripting Interpreter: PowerShell)?",
-          "value": "'T1059.01'",
+          "value": "\"T1059.01\"",
           "version": "18"
         },
         "field_path": [
@@ -4503,7 +4502,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "0"
         ],
         "input": "T1059.01",
-        "msg": "'T1059.01' is not an ATT&CK v18 technique or sub-technique id, which is what Sentinel is aligned to; did you mean T1059.001 (Command and Scripting Interpreter: PowerShell)?",
+        "msg": "\"T1059.01\" is not an ATT&CK v18 technique or sub-technique id, which is what Sentinel is aligned to; did you mean T1059.001 (Command and Scripting Interpreter: PowerShell)?",
         "span": [
           15,
           26,
@@ -4520,7 +4519,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       {
         "ctx": {
           "hint": "",
-          "value": "'T9999'",
+          "value": "\"T9999\"",
           "version": "18"
         },
         "field_path": [
@@ -4531,7 +4530,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "0"
         ],
         "input": "T9999",
-        "msg": "'T9999' is not an ATT&CK v18 technique or sub-technique id, which is what Sentinel is aligned to",
+        "msg": "\"T9999\" is not an ATT&CK v18 technique or sub-technique id, which is what Sentinel is aligned to",
         "span": [
           15,
           26,

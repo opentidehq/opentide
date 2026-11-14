@@ -466,6 +466,15 @@ fn google_secops_sections_and_yaral_files_are_checked_offline() {
     );
     assert_eq!(file.code, 0, "{}", file.stdout);
     assert_eq!(file.json()["queries"][0]["language"], "yaral");
+    // `.yl2` is YARA-L too, as 0.28.1 reads it.
+    std::fs::copy(ws.join("search.yaral"), ws.join("search.yl2")).unwrap();
+    let yl2 = opentide(
+        &ws,
+        &["--json", "validate", "query", "--file", "search.yl2"],
+        &[],
+    );
+    assert_eq!(yl2.code, 0, "{}", yl2.stdout);
+    assert_eq!(yl2.json()["queries"][0]["language"], "yaral");
 }
 
 #[test]

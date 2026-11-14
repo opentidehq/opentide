@@ -139,8 +139,7 @@ pub fn page_title(body: &[u8]) -> Option<String> {
 }
 
 /// One line on an answer that is not the API's JSON: its status, its body
-/// and a gateway's reading (`describe_answer`). Quoted texts are written
-/// as Python's `repr` quotes them.
+/// and a gateway's reading (`describe_answer`).
 pub fn describe_answer(
     status: u16,
     body: &[u8],

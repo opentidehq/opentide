@@ -2698,6 +2698,7 @@ dependencies = [
  "percent-encoding",
  "pulldown-cmark",
  "ratatui",
+ "rayon",
  "regex",
  "reqwest",
  "rmcp",
@@ -2996,7 +2997,6 @@ dependencies = [
  "titlecase",
  "toml",
  "toml_edit",
- "unicode-properties",
 ]
 
 [[package]]

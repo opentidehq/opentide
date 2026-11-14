@@ -145,11 +145,11 @@ fn the_vocab_unknown_findings_of_the_goldens() {
         assert_eq!(unknown.suggestion.as_deref(), suggestion, "{value}");
         assert_eq!(
             unknown.message(),
-            format!("Value '{value}' is not a valid '{vocab}' vocabulary entry")
+            format!("Value {value:?} is not a valid {vocab:?} vocabulary entry")
         );
         assert_eq!(
             unknown.help(),
-            suggestion.map(|s| format!("did you mean '{s}'?"))
+            suggestion.map(|s| format!("did you mean {s:?}?"))
         );
     }
     assert_eq!(set.check("amber", &selector("tlp::1.0", false)), None);
@@ -195,34 +195,32 @@ fn a_value_with_the_wrong_stage_prefix_suggests_the_key() {
 }
 
 #[test]
-fn quotes_as_the_cli_does() {
-    assert_eq!(quote("amber"), "'amber'");
+fn quotes_as_every_message_does() {
+    assert_eq!(quote("amber"), "\"amber\"");
     assert_eq!(quote("it's"), "\"it's\"");
-    assert_eq!(quote("it's \"x\""), "'it\\'s \"x\"'");
-    assert_eq!(quote("a\\b\n\t\u{7}"), "'a\\\\b\\n\\t\\x07'");
-    assert_eq!(quote("Zürich"), "'Zürich'");
+    assert_eq!(quote("it's \"x\""), "\"it's \\\"x\\\"\"");
+    assert_eq!(quote("a\\b\n\t\u{7}"), "\"a\\\\b\\n\\t\\u{7}\"");
+    assert_eq!(quote("Zürich"), "\"Zürich\"");
     // C1 controls (NEL) and DEL.
-    assert_eq!(quote("\u{85}"), "'\\x85'");
-    assert_eq!(quote("\u{7f}"), "'\\x7f'");
+    assert_eq!(quote("\u{85}"), "\"\\u{85}\"");
+    assert_eq!(quote("\u{7f}"), "\"\\u{7f}\"");
 }
 
-/// A character that does not print is escaped as Python's `repr` escapes it
-/// (the oracle's `f"Value {item!r} ..."`), so `High` and a no-break space
-/// never reads as `High`. The expected strings are CPython's `repr`.
+/// A character that does not show is escaped, so `High` and a no-break space
+/// never reads as `High`.
 #[test]
 fn quotes_invisible_characters_escaped() {
     let cases = [
-        ("High\u{a0}", r"'High\xa0'"),
-        ("a\u{ad}b", r"'a\xadb'"),
-        ("a\u{200b}b", r"'a\u200bb'"),
-        ("a\u{2028}b", r"'a\u2028b'"),
-        ("a\u{3000}b", r"'a\u3000b'"),
-        ("\u{e0001}", r"'\U000e0001'"),
-        ("\u{10ffff}", r"'\U0010ffff'"),
-        // What prints stays as written: a space, an emoji, a combining mark.
-        ("a b", "'a b'"),
-        ("\u{1f600}", "'\u{1f600}'"),
-        ("e\u{301}", "'e\u{301}'"),
+        ("High\u{a0}", r#""High\u{a0}""#),
+        ("a\u{ad}b", r#""a\u{ad}b""#),
+        ("a\u{200b}b", r#""a\u{200b}b""#),
+        ("a\u{2028}b", r#""a\u{2028}b""#),
+        ("a\u{3000}b", r#""a\u{3000}b""#),
+        ("\u{e0001}", r#""\u{e0001}""#),
+        ("\u{10ffff}", r#""\u{10ffff}""#),
+        // What shows stays as written: a space, an emoji.
+        ("a b", "\"a b\""),
+        ("\u{1f600}", "\"\u{1f600}\""),
     ];
     for (text, quoted) in cases {
         assert_eq!(quote(text), quoted, "{text:?}");
@@ -234,7 +232,7 @@ fn quotes_invisible_characters_escaped() {
     };
     assert_eq!(
         unknown.message(),
-        r"Value 'High\xa0' is not a valid 'alert_severity::1.0' vocabulary entry"
+        r#"Value "High\u{a0}" is not a valid "alert_severity::1.0" vocabulary entry"#
     );
 }
 

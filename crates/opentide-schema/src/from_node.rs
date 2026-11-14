@@ -66,7 +66,7 @@ pub mod messages {
     /// The expected values, quoted: `'a'`, `'a' or 'b'`, `'a', 'b' or 'c'`
     /// (`literal_error`, `enum`).
     pub fn expected(values: &[&str]) -> String {
-        let quoted: Vec<String> = values.iter().map(|value| format!("'{value}'")).collect();
+        let quoted: Vec<String> = values.iter().map(|value| format!("{value:?}")).collect();
         match quoted.split_last() {
             None => String::new(),
             Some((last, [])) => last.clone(),
@@ -458,7 +458,7 @@ pub fn require_vocab_list(node: &Node, cx: &mut Context) -> bool {
     let mut message =
         format!("must be a YAML list of {field} vocabulary names, not a single string");
     if text.contains(';') {
-        message.push_str(&format!("; list each name in '{text}' as its own item"));
+        message.push_str(&format!("; list each name in {text:?} as its own item"));
     }
     cx.error_with(
         ErrorKind::InvalidValue("vocab_list_type"),

@@ -148,13 +148,10 @@ pub fn slug_is_contained(slug: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
 }
 
-/// A JSON value as Python's `str()` writes it, for the manifest's fields.
+/// A manifest field as text: a string as it is, anything else as its JSON.
 fn text_of(value: &serde_json::Value) -> String {
     match value {
         serde_json::Value::String(text) => text.clone(),
-        serde_json::Value::Null => "None".to_owned(),
-        serde_json::Value::Bool(true) => "True".to_owned(),
-        serde_json::Value::Bool(false) => "False".to_owned(),
         other => other.to_string(),
     }
 }
