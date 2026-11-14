@@ -1,0 +1,195 @@
+# Throwaway measurement (exp/cranelift-measure only): Cranelift vs LLVM on a
+# nightly, and the cost of the `develop` vs `dev` profile for the `_native`
+# extension. Cold: no caches anywhere. Never merged.
+name: exp-cranelift
+
+on:
+  push:
+    branches: [exp/cranelift-measure]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  INSTA_UPDATE: "no"
+  PYO3_PYTHON: /usr/bin/python3
+  NIGHTLY: nightly-2026-11-13
+
+jobs:
+  rust:
+    name: ${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [A-llvm, B-cranelift-all, C-cranelift-workspace]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the nightly
+        run: |
+          rustup toolchain install "$NIGHTLY" --profile minimal --no-self-update --component rustc-codegen-cranelift-preview
+          echo "RUSTUP_TOOLCHAIN=$NIGHTLY" >> "$GITHUB_ENV"
+
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: cargo-nextest@0.9.148
+
+      - name: Configure the variant
+        run: |
+          case "${{ matrix.variant }}" in
+            B-cranelift-all)
+              echo "CARGO_UNSTABLE_CODEGEN_BACKEND=true" >> "$GITHUB_ENV"
+              echo "CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift" >> "$GITHUB_ENV"
+              ;;
+            C-cranelift-workspace)
+              echo "CARGO_UNSTABLE_CODEGEN_BACKEND=true" >> "$GITHUB_ENV"
+              python3 - <<'EOF'
+          from pathlib import Path
+          p = Path("Cargo.toml")
+          t = p.read_text()
+          head = '[profile.dev.package."*"]\n'
+          assert head in t, "no [profile.dev.package.\"*\"]"
+          assert "\n[profile.dev]\n" not in t, "[profile.dev] already present"
+          t = t.replace(head, head + 'codegen-backend = "llvm"\n', 1)
+          t += '\n[profile.dev]\ncodegen-backend = "cranelift"\n'
+          p.write_text(t)
+          EOF
+              git diff -- Cargo.toml
+              ;;
+          esac
+          rustc -Vv
+          cargo -V
+
+      - name: Measure
+        shell: bash
+        run: |
+          set +e
+          S="$GITHUB_STEP_SUMMARY"
+          echo "## ${{ matrix.variant }}" >> "$S"
+          echo '```' >> "$S"
+          rustc -V >> "$S"
+          for c in ring memchr aho-corasick simd-json; do
+            if cargo tree -i "$c" --workspace --locked -e normal,build,dev --depth 0 >/dev/null 2>&1; then echo "dep present: $c" >> "$S"; else echo "dep absent: $c" >> "$S"; fi
+          done
+
+          export CARGO_INCREMENTAL=0
+          t0=$(date +%s)
+          cargo nextest run --workspace --locked --profile fast --no-run --cargo-verbose --cargo-verbose > build.log 2>&1
+          rc=$?
+          t1=$(date +%s)
+          echo "cold build: $((t1-t0)) s (exit $rc)" >> "$S"
+          echo "rustc lines with codegen-backend=cranelift: $(grep -c 'codegen-backend=cranelift' build.log)" >> "$S"
+          echo "rustc lines (Running \`...rustc): $(grep -c 'Running `.*rustc' build.log)" >> "$S"
+          grep -m1 'codegen-backend' build.log | cut -c1-400 >> "$S"
+          if [ $rc -ne 0 ]; then
+            echo "--- build errors (first 40) ---" >> "$S"
+            grep -E '^(error|warning: .*panicked)|error\[' build.log | head -40 >> "$S"
+            tail -40 build.log
+          fi
+
+          t0=$(date +%s)
+          cargo nextest run --workspace --locked --profile fast --no-fail-fast > test.log 2>&1
+          rc=$?
+          t1=$(date +%s)
+          echo "test run: $((t1-t0)) s (exit $rc)" >> "$S"
+          grep -E '^\s*Summary \[' test.log >> "$S"
+          echo "--- failing tests ---" >> "$S"
+          grep -E '^\s*(FAIL|SIGSEGV|SIGILL|SIGABRT|ABORT|TIMEOUT)' test.log | sort -u | head -40 >> "$S"
+          echo "--- first error lines ---" >> "$S"
+          grep -E 'panicked at|error:|not yet implemented|unsupported|llvm\.|intrinsic|inline asm|SIGILL' test.log | head -40 >> "$S"
+
+          export CARGO_INCREMENTAL=1
+          t0=$(date +%s)
+          cargo nextest run --workspace --locked --profile fast --no-run > inc1.log 2>&1
+          rc=$?
+          t1=$(date +%s)
+          echo "incremental initial build (CARGO_INCREMENTAL=1): $((t1-t0)) s (exit $rc)" >> "$S"
+          echo "// exp-cranelift: touch" >> crates/opentide-cli/src/lib.rs
+          t0=$(date +%s)
+          cargo nextest run --workspace --locked --profile fast --no-run > inc2.log 2>&1
+          rc=$?
+          t1=$(date +%s)
+          echo "incremental rebuild after editing opentide-cli/src/lib.rs: $((t1-t0)) s (exit $rc)" >> "$S"
+          grep -c 'Compiling' inc2.log | sed 's/^/crates recompiled: /' >> "$S"
+          echo '```' >> "$S"
+          cat "$S"
+          tail -5 test.log
+
+      - name: Logs
+        if: always()
+        run: |
+          echo "=== test.log failures ==="
+          grep -E -B2 -A25 '^\s*(FAIL|SIGSEGV|SIGILL|SIGABRT)' test.log | head -400 || true
+
+  native:
+    name: D-${{ matrix.profile }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [develop, dev]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Rust (pinned stable)
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+
+      - name: Measure
+        shell: bash
+        run: |
+          set +e
+          S="$GITHUB_STEP_SUMMARY"
+          echo "## D-${{ matrix.profile }}" >> "$S"
+          echo '```' >> "$S"
+          uv sync --group dev --no-install-project
+          export CARGO_INCREMENTAL=0
+          t0=$(date +%s)
+          PYO3_BUILD_EXTENSION_MODULE=1 PYO3_PYTHON=/usr/bin/python3 cargo build --locked -p opentide-native --lib --profile ${{ matrix.profile }}
+          rc=$?
+          t1=$(date +%s)
+          echo "build _native (--profile ${{ matrix.profile }}): $((t1-t0)) s (exit $rc)" >> "$S"
+          dir=${{ matrix.profile }}; [ "$dir" = dev ] && dir=debug
+          ls -la target/$dir/lib_native.so
+          echo "lib_native.so size: $(stat -c %s target/$dir/lib_native.so) bytes" >> "$S"
+          cp target/$dir/lib_native.so src/opentide/_native.abi3.so
+          t0=$(date +%s)
+          OPENTIDE_ENGINE_PREBUILT=$PWD/src/opentide/_native.abi3.so uv sync --group dev
+          rc=$?
+          echo "uv sync with prebuilt: $(( $(date +%s)-t0 )) s (exit $rc)" >> "$S"
+
+          t0=$(date +%s)
+          uv run pytest tests/ -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint" -n 4 --no-cov -q -p no:cacheprovider > unit.log 2>&1
+          rc=$?
+          t1=$(date +%s)
+          echo "unit suite: $((t1-t0)) s (exit $rc)" >> "$S"
+          tail -1 unit.log >> "$S"
+          grep -E '^FAILED' unit.log | head -20 >> "$S"
+
+          t0=$(date +%s)
+          uv run pytest tests/ -m "(cli_e2e or cli_smoke) and not full_set" -n 4 --no-cov -q -p no:cacheprovider > e2e.log 2>&1
+          rc=$?
+          t1=$(date +%s)
+          echo "e2e suite: $((t1-t0)) s (exit $rc)" >> "$S"
+          tail -1 e2e.log >> "$S"
+          grep -E '^FAILED' e2e.log | head -20 >> "$S"
+          echo '```' >> "$S"
+          cat "$S"
+          tail -30 unit.log; tail -30 e2e.log
