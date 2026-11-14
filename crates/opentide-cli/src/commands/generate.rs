@@ -1671,12 +1671,12 @@ mod tests {
 
     /// The files under `dir`, at any depth.
     fn walk(dir: &Path) -> usize {
-        std::fs::read_dir(dir)
-            .unwrap()
-            .map(|entry| {
-                let path = entry.unwrap().path();
-                if path.is_dir() { walk(&path) } else { 1 }
-            })
-            .sum()
+        walkdir::WalkDir::new(dir)
+            .min_depth(1)
+            .follow_links(true)
+            .into_iter()
+            .map(Result::unwrap)
+            .filter(|entry| !entry.file_type().is_dir())
+            .count()
     }
 }
