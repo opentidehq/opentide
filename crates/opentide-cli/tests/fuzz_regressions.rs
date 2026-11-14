@@ -5,9 +5,7 @@
 //!
 //! Each test runs its command lines in a temporary folder of its own: a line
 //! such as `generate docs` writes files where it runs, and never in the source
-//! tree (#931). The tests that replay arbitrary lines run them in a child of
-//! the test binary whose stdin is closed, within a time limit: a line can be a
-//! server on stdio (`with_stdin_closed`).
+//! tree (#931).
 
 #![expect(
     clippy::unwrap_used,
@@ -17,9 +15,7 @@
 use opentide_cli::env::Env;
 use opentide_cli::{Host, run};
 use std::path::Path;
-use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
 #[derive(Clone, Default)]
@@ -62,69 +58,8 @@ fn replay(data: &[u8], cwd: &Path) -> (i32, String) {
     (code, stderr)
 }
 
-/// Set in the child [`with_stdin_closed`] starts: the test runs its body.
-const CHILD: &str = "OPENTIDE_FUZZ_REGRESSIONS_CHILD";
-
-/// How long a test of arbitrary command lines may take, in a debug build.
-const LIMIT: Duration = Duration::from_secs(600);
-
-/// Runs `body`, the test `name`, in a child of this test binary whose stdin
-/// is closed, and fails if it has not finished within [`LIMIT`].
-///
-/// An arbitrary command line can be a server on stdio (`serve`, `mcp start`,
-/// `lsp start`), which serves the process's own stdin until it closes.
-/// nextest and the fuzzer give a test `/dev/null`, but `cargo test` passes on
-/// the shell's stdin, and an open pipe (an agent's shell, a CI step) never
-/// closes: the test hung for good. In the child, stdin ends at once.
-fn with_stdin_closed(name: &str, body: impl FnOnce()) {
-    if std::env::var_os(CHILD).is_some() {
-        body();
-        return;
-    }
-    let output = tempfile::tempfile().unwrap();
-    let mut child = Command::new(std::env::current_exe().unwrap())
-        .args([name, "--exact", "--nocapture", "--test-threads=1"])
-        .env(CHILD, "1")
-        .stdin(Stdio::null())
-        .stdout(output.try_clone().unwrap())
-        .stderr(output.try_clone().unwrap())
-        .spawn()
-        .unwrap();
-    let started = Instant::now();
-    let status = loop {
-        if let Some(status) = child.try_wait().unwrap() {
-            break Some(status);
-        }
-        if started.elapsed() > LIMIT {
-            let _ignored = child.kill();
-            let _ignored = child.wait();
-            break None;
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    };
-    let printed = {
-        use std::io::{Read, Seek};
-        let mut output = output;
-        let mut printed = String::new();
-        output.rewind().unwrap();
-        let _ignored = output.read_to_string(&mut printed);
-        printed
-    };
-    match status {
-        Some(status) => assert!(status.success(), "{name} failed:\n{printed}"),
-        None => panic!("{name} did not finish within {LIMIT:?}:\n{printed}"),
-    }
-}
-
 #[test]
 fn framework_fuzz_seeds_and_regressions_do_not_crash() {
-    with_stdin_closed(
-        "framework_fuzz_seeds_and_regressions_do_not_crash",
-        seeds_and_regressions,
-    );
-}
-
-fn seeds_and_regressions() {
     let fuzz = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fuzz");
     let cwd = scratch();
     let mut ran = 0;
@@ -173,13 +108,6 @@ fn framework_fuzz_odd_arguments_do_not_crash() {
 /// deterministic sweep on stable Rust beside the fuzz target.
 #[test]
 fn framework_fuzz_random_command_lines_do_not_crash() {
-    with_stdin_closed(
-        "framework_fuzz_random_command_lines_do_not_crash",
-        random_command_lines,
-    );
-}
-
-fn random_command_lines() {
     let root = opentide_cli::catalog::root();
     let mut words: Vec<String> = vec![
         "--".into(),
