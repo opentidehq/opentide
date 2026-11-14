@@ -271,7 +271,12 @@ fn golden_refuses_the_preview_flags_where_they_do_not_belong() {
         .expect("the repository")
         .to_path_buf();
     let path = |p: &str| repo.join(p).to_string_lossy().into_owned();
-    let next = path("tests/golden/ORACLE");
+    // A preview oracle: an oracle file that is not the committed one (with
+    // that file, `record --oracle` is the committed recording itself).
+    let preview = tempfile::tempdir().unwrap();
+    let next = preview.path().join("ORACLE.next");
+    std::fs::copy(repo.join("tests/golden/ORACLE"), &next).unwrap();
+    let next = next.to_string_lossy().into_owned();
     let out = tempfile::tempdir().unwrap();
     let out = out.path().to_string_lossy().into_owned();
     let inside = path("tests/golden/cases/../next");
