@@ -373,6 +373,35 @@ pub fn node_candidate(_repo: &Path, _target: &Path) -> Result<crate::golden::run
     bail!("--runner node runs on Unix only")
 }
 
+/// `module` compiled ahead of time by `wasmtime compile`, into `dir`: a
+/// launch of the precompiled module skips Cranelift, which otherwise compiles
+/// the whole module again for every case (seconds each, hours over a run).
+/// Compiled again only when `module` is newer than the last compilation.
+/// The launch turns wasmtime's own cache off (`-C cache=n`): it would make
+/// `~/.cache/wasmtime` in every case's home, which the oracle never writes.
+#[cfg(unix)]
+fn precompiled(wasmtime: &Path, module: &Path, dir: &Path) -> Result<PathBuf> {
+    let compiled = dir.join("opentide.cwasm");
+    let modified = |path: &Path| std::fs::metadata(path).and_then(|m| m.modified()).ok();
+    let fresh = matches!(
+        (modified(module), modified(&compiled)),
+        (Some(source), Some(output)) if output >= source
+    );
+    if !fresh {
+        let status = std::process::Command::new(wasmtime)
+            .arg("compile")
+            .arg("-o")
+            .arg(&compiled)
+            .arg(module)
+            .status()
+            .with_context(|| format!("run {} compile", wasmtime.display()))?;
+        if !status.success() {
+            bail!("`wasmtime compile {}` failed: {status}", module.display());
+        }
+    }
+    Ok(compiled)
+}
+
 /// The WASI build of the command line (`scripts/engine/build-wasm.sh cli`,
 /// ADR 0007's amendment), as `--runner wasi` launches it: under wasmtime, or
 /// the runtime `$OPENTIDE_WASI_RUNTIME` names (`node`, Node's own WASI,
@@ -413,12 +442,18 @@ pub fn wasi_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::
         }
         Ok(format!("'{text}'"))
     };
+    let bin_dir = target.join("golden-wasi");
+    std::fs::create_dir_all(&bin_dir).with_context(|| format!("create {}", bin_dir.display()))?;
     let command = match runtime.as_str() {
-        "wasmtime" => format!(
-            "{} run -S inherit-env --dir /::/ -- {}",
-            quoted(&on_path("wasmtime")?)?,
-            quoted(&module)?
-        ),
+        "wasmtime" => {
+            let wasmtime = on_path("wasmtime")?;
+            let compiled = precompiled(&wasmtime, &module, &bin_dir)?;
+            format!(
+                "{} run --allow-precompiled -C cache=n -S inherit-env --dir /::/ -- {}",
+                quoted(&wasmtime)?,
+                quoted(&compiled)?
+            )
+        }
         "node" => format!(
             "{} --no-turbo-fast-api-calls --no-warnings {} {}",
             quoted(&on_path("node")?)?,
@@ -427,8 +462,6 @@ pub fn wasi_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::
         ),
         other => bail!("unknown OPENTIDE_WASI_RUNTIME `{other}`: wasmtime or node"),
     };
-    let bin_dir = target.join("golden-wasi");
-    std::fs::create_dir_all(&bin_dir).with_context(|| format!("create {}", bin_dir.display()))?;
     crate::script::write_executable(
         &bin_dir.join("opentide"),
         &format!(
