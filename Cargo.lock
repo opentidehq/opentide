@@ -3259,7 +3259,6 @@ dependencies = [
  "shlex 2.0.1",
  "signal-hook",
  "soft-canonicalize",
- "strsim",
  "tempfile",
  "terminal_size",
  "textwrap",

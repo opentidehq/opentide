@@ -9,6 +9,7 @@
 //! an `activity_type`, `subject` or `outcome` value it lacks the warning
 //! `exabeam_unknown_value`.
 
+use opentide_core::suggest::{self, Candidates};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -112,8 +113,8 @@ pub struct Catalog {
     pub activity_types: Vec<ActivityType>,
     pub outcomes: Vec<String>,
     by_name: HashMap<String, usize>,
-    /// Each field's name in lower case, as characters, for [`Catalog::suggest`].
-    lower_chars: Vec<Vec<char>>,
+    /// The fields' names, prepared once for [`Catalog::suggest`].
+    names: Candidates,
 }
 
 impl Catalog {
@@ -134,13 +135,9 @@ impl Catalog {
                 .enumerate()
                 .map(|(i, f)| (f.name.to_lowercase(), i))
                 .collect();
-            let lower_chars = fields
-                .fields
-                .iter()
-                .map(|f| f.name.to_lowercase().chars().collect())
-                .collect();
+            let names = Candidates::new(fields.fields.iter().map(|f| f.name.as_str()));
             Catalog {
-                lower_chars,
+                names,
                 fields: fields.fields,
                 prefixes: fields.prefixes,
                 subjects: values.subjects,
@@ -178,23 +175,11 @@ impl Catalog {
 
     /// A known field one edit (two for names of 12 characters or more) from
     /// `name`, for the warning's message; none for a name under 3 characters.
+    /// The shared rule ([`opentide_core::suggest`]) ranks the near misses.
     pub fn suggest(&self, name: &str) -> Option<&str> {
-        let lower = name.to_lowercase();
-        // One or two letters are a field name of nearly anything: no hint.
-        if lower.chars().count() < 3 {
-            return None;
-        }
-        let chars: Vec<char> = lower.chars().collect();
-        let limit = if chars.len() >= 12 { 2 } else { 1 };
-        self.fields
-            .iter()
-            .zip(&self.lower_chars)
-            .filter_map(|(f, candidate)| {
-                let d = edit_distance(&chars, candidate, limit)?;
-                Some((d, f.name.as_str()))
-            })
-            .min_by_key(|(d, _)| *d)
-            .map(|(_, n)| n)
+        let limit = suggestion_limit(name)?;
+        let index = self.names.ranked(name, limit, 1).into_iter().next()?;
+        Some(self.fields[index].name.as_str())
     }
 
     pub fn subject(&self, name: &str) -> Option<&Subject> {
@@ -235,19 +220,8 @@ impl Catalog {
     /// A value of `field` one edit (two for values of 12 characters or more)
     /// from `value`, for the warning's message; none under 3 characters.
     pub fn suggest_value(&self, field: ValueField, value: &str) -> Option<&str> {
-        let chars: Vec<char> = value.to_lowercase().chars().collect();
-        if chars.len() < 3 {
-            return None;
-        }
-        let limit = if chars.len() >= 12 { 2 } else { 1 };
-        self.values(field)
-            .into_iter()
-            .filter_map(|candidate| {
-                let lower: Vec<char> = candidate.to_lowercase().chars().collect();
-                Some((edit_distance(&chars, &lower, limit)?, candidate))
-            })
-            .min_by_key(|(d, _)| *d)
-            .map(|(_, v)| v)
+        let limit = suggestion_limit(value)?;
+        suggest::closest_within(value, self.values(field), limit)
     }
 
     /// The activity types of the subject `value` starts with
@@ -305,28 +279,15 @@ impl ValueField {
     }
 }
 
-/// Levenshtein distance between `a` and `b`, or `None` when it exceeds
-/// `limit`.
-fn edit_distance(a: &[char], b: &[char], limit: usize) -> Option<usize> {
-    if a.len().abs_diff(b.len()) > limit {
-        return None;
+/// How many edits a suggestion for `text` may be: one, two from 12
+/// characters; none under 3 characters, where one or two letters are a name
+/// of nearly anything.
+fn suggestion_limit(text: &str) -> Option<usize> {
+    match text.chars().count() {
+        0..3 => None,
+        3..12 => Some(1),
+        _ => Some(2),
     }
-    let mut previous: Vec<usize> = (0..=b.len()).collect();
-    for (i, ca) in a.iter().enumerate() {
-        let mut current = vec![i + 1; b.len() + 1];
-        for (j, cb) in b.iter().enumerate() {
-            let cost = usize::from(ca != cb);
-            current[j + 1] = (previous[j] + cost)
-                .min(previous[j + 1] + 1)
-                .min(current[j] + 1);
-        }
-        if current.iter().min().copied().unwrap_or(0) > limit {
-            return None;
-        }
-        previous = current;
-    }
-    let d = previous[b.len()];
-    (d <= limit).then_some(d)
 }
 
 #[cfg(test)]
