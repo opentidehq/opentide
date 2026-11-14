@@ -14,6 +14,7 @@ use std::io::Read;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
+use serde::Deserialize as _;
 use sha2::{Digest, Sha256};
 
 use super::runner::{EventSink, Job, RunOutcome, RunRequest, Runner, compact, failure};
@@ -134,12 +135,11 @@ fn id_key(id: &Json) -> String {
     compact(id)
 }
 
-/// The last member `key` of an object, as Python's `dict` keeps it.
-fn member<'a>(object: &'a Json, key: &str) -> Option<&'a Json> {
-    match object {
-        Json::Object(members) => members.iter().rev().find(|(k, _)| k == key).map(|(_, v)| v),
-        _ => None,
-    }
+/// One line from the client as a message. It is read into serde_json's
+/// map first, where a key written twice keeps its last value, so every
+/// object in a message has each key once.
+fn parse_message(text: &str) -> Result<Json, serde_json::Error> {
+    serde_json::from_str::<serde_json::Value>(text).and_then(Json::deserialize)
 }
 
 /// A path `invalidate` names: a string as is, anything else as its JSON.
@@ -165,7 +165,7 @@ fn run_params(params: &Json) -> Result<RunRequest, ProtocolError> {
         INVALID_PARAMS,
         "run needs argv: a non-empty list of strings",
     );
-    let Some(Json::Array(items)) = member(params, "argv") else {
+    let Some(Json::Array(items)) = params.get("argv") else {
         return Err(bad_argv);
     };
     let mut argv = Vec::with_capacity(items.len());
@@ -178,12 +178,12 @@ fn run_params(params: &Json) -> Result<RunRequest, ProtocolError> {
     if argv.is_empty() {
         return Err(bad_argv);
     }
-    let cwd = match member(params, "cwd") {
+    let cwd = match params.get("cwd") {
         None | Some(Json::Null) => None,
         Some(Json::Str(text)) => Some(text.clone()),
         Some(_) => return Err(ProtocolError(INVALID_PARAMS, "cwd must be a string")),
     };
-    let env = match member(params, "env") {
+    let env = match params.get("env") {
         None | Some(Json::Null) => None,
         Some(Json::Object(members)) => {
             let mut pairs: Vec<(String, String)> = Vec::new();
@@ -194,7 +194,6 @@ fn run_params(params: &Json) -> Result<RunRequest, ProtocolError> {
                         "env must map names to strings",
                     ));
                 };
-                pairs.retain(|(existing, _)| existing != name);
                 pairs.push((name.clone(), value.clone()));
             }
             Some(pairs)
@@ -401,7 +400,7 @@ impl Server {
         if text.trim().is_empty() {
             return;
         }
-        let message = match Json::parse(&text) {
+        let message = match parse_message(&text) {
             Ok(message) => message,
             Err(problem) => {
                 self.error(&Json::Null, PARSE_ERROR, &format!("Parse error: {problem}"));
@@ -416,19 +415,19 @@ impl Server {
             );
             return;
         }
-        let method = match member(&message, "method") {
+        let method = match message.get("method") {
             Some(Json::Str(method)) => method.clone(),
             _ if self.answered_fetch(&message) => return,
             _ => {
-                let id = member(&message, "id").cloned().unwrap_or(Json::Null);
+                let id = message.get("id").cloned().unwrap_or(Json::Null);
                 self.error(&id, INVALID_REQUEST, "Invalid request: no method");
                 return;
             }
         };
         match method.as_str() {
             "$/cancelRequest" => {
-                if let Some(params @ Json::Object(_)) = member(&message, "params")
-                    && let Some(id) = member(params, "id")
+                if let Some(params @ Json::Object(_)) = message.get("params")
+                    && let Some(id) = params.get("id")
                 {
                     self.cancel(id);
                 }
@@ -439,7 +438,7 @@ impl Server {
                 return;
             }
             "run" => {
-                if let Some(id) = member(&message, "id") {
+                if let Some(id) = message.get("id") {
                     *self.state().queued.entry(id_key(id)).or_default() += 1;
                 }
             }
@@ -451,13 +450,13 @@ impl Server {
     /// Hands the client's answer to one of the server's `opentide/fetch`
     /// requests to the run waiting for it; whether *message* was one.
     fn answered_fetch(&self, message: &Json) -> bool {
-        let Some(Json::Str(id)) = member(message, "id") else {
+        let Some(Json::Str(id)) = message.get("id") else {
             return false;
         };
         if !id.starts_with(super::fetch::ID_PREFIX) {
             return false;
         }
-        let reply = match (member(message, "result"), member(message, "error")) {
+        let reply = match (message.get("result"), message.get("error")) {
             (Some(result), None) => Ok(result.clone()),
             (None, Some(error)) => Err(error.clone()),
             _ => return false,
@@ -629,7 +628,7 @@ impl Server {
             }));
             if handled.is_err() {
                 tracing::error!("serve_message_failed");
-                if let Some(id) = member(&message, "id") {
+                if let Some(id) = message.get("id") {
                     self.error(id, INTERNAL_ERROR, "Internal error");
                 }
             }
@@ -637,17 +636,17 @@ impl Server {
     }
 
     fn handle(&self, message: &Json) {
-        let method = match member(message, "method") {
+        let method = match message.get("method") {
             Some(Json::Str(method)) => method.as_str(),
             _ => return,
         };
-        let id = member(message, "id");
-        let params = match member(message, "params") {
+        let id = message.get("id");
+        let params = match message.get("params") {
             None | Some(Json::Null) => Json::Object(Vec::new()),
             Some(params) => params.clone(),
         };
         if method == "invalidate" {
-            if let Some(Json::Array(paths)) = member(&params, "paths") {
+            if let Some(Json::Array(paths)) = params.get("paths") {
                 let paths: Vec<String> = paths.iter().map(path_text).collect();
                 self.inner.runner.invalidate(&paths);
                 tracing::debug!(paths = paths.len(), "serve_invalidated");
@@ -676,8 +675,9 @@ impl Server {
         }
         match method {
             "initialize" => {
-                let fetch = member(&params, "capabilities")
-                    .and_then(|capabilities| member(capabilities, "fetch"))
+                let fetch = params
+                    .get("capabilities")
+                    .and_then(|capabilities| capabilities.get("fetch"))
                     == Some(&Json::Bool(true));
                 if fetch {
                     self.enable_fetch();
@@ -760,7 +760,7 @@ mod tests {
     use super::*;
 
     fn params(text: &str) -> Result<RunRequest, &'static str> {
-        run_params(&Json::parse(text).unwrap_or(Json::Null)).map_err(|ProtocolError(_, m)| m)
+        run_params(&parse_message(text).unwrap_or(Json::Null)).map_err(|ProtocolError(_, m)| m)
     }
 
     #[test]
@@ -797,6 +797,42 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn a_key_written_twice_keeps_its_last_value() {
+        let message = parse_message(
+            "{\"method\": \"shutdown\", \"id\": 1, \"method\": \"run\", \
+             \"params\": {\"id\": 1, \"id\": \"two\"}}",
+        )
+        .unwrap_or(Json::Null);
+        assert_eq!(message.get("method"), Some(&Json::str("run")));
+        assert_eq!(
+            message.get("params").and_then(|params| params.get("id")),
+            Some(&Json::str("two"))
+        );
+        let request = params(
+            "{\"argv\": [\"info\"], \"argv\": [\"validate\"], \
+             \"env\": {\"A\": \"1\", \"B\": \"b\", \"A\": \"2\"}}",
+        );
+        assert_eq!(
+            request.as_ref().map(|request| request.argv.clone()),
+            Ok(vec!["validate".to_owned()])
+        );
+        let mut env = request
+            .ok()
+            .and_then(|request| request.env)
+            .unwrap_or_default();
+        env.sort();
+        assert_eq!(
+            env,
+            [
+                ("A".to_owned(), "2".to_owned()),
+                ("B".to_owned(), "b".to_owned())
+            ]
+        );
+        // What JSON does not allow is still a parse error.
+        assert!(parse_message("{\"a\": NaN}").is_err());
     }
 
     #[test]
