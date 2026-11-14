@@ -342,11 +342,10 @@ pub const PLATFORMS: &[Platform] = &[
         live_check: true,
         query_runner: true,
         runner_languages: &["lucene"],
-        // The Graylog dialect of Lucene comes with the engine import (E1):
-        // until then no query is parsed offline, rather than parsed as
-        // Elastic's Lucene.
-        offline_languages: &[],
-        query_file_suffixes: &[],
+        // Lucene in the engine's Graylog dialect (graylog-1.0, "Query
+        // dialect"): Elastic's checks and Graylog's own.
+        offline_languages: &["lucene"],
+        query_file_suffixes: &["lucene"],
         cli_rank: 10,
         connector_rank: 10,
         configuration_rank: 10,
