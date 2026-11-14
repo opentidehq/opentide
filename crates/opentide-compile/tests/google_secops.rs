@@ -68,13 +68,16 @@ struct Compiled {
 
 fn compile(stem: &str) -> Compiled {
     let path = fixtures().join(format!("rule-google-secops-{stem}-1.0.yaml"));
-    let text = std::fs::read_to_string(&path).unwrap();
+    compile_text(&std::fs::read_to_string(&path).unwrap())
+}
+
+fn compile_text(text: &str) -> Compiled {
     let uuid = text
         .lines()
         .find_map(|line| line.trim().strip_prefix("uuid: "))
         .unwrap()
         .to_owned();
-    let workspace = workspace(&text);
+    let workspace = workspace(text);
     let owned = Owned::new(
         &Vocabularies::bundled(),
         &workspace.configuration().resolved,
@@ -113,6 +116,27 @@ fn strategy(status: &str) -> opentide_compile::strategy::StatusStrategy {
         "STAGING" => StatusStrategy::Preview,
         _ => StatusStrategy::Release,
     }
+}
+
+/// A rule without `metadata.version` deploys without `opentide_version` in
+/// its meta: Python's `str(None)` sent the string `"None"` to the tenant.
+#[test]
+fn a_rule_without_a_version_sends_no_opentide_version() {
+    let text = std::fs::read_to_string(fixtures().join("rule-google-secops-process-1.0.yaml"))
+        .unwrap()
+        .replace("  version: 3\n", "");
+    let compiled = compile_text(&text);
+    assert!(
+        !compiled.text.contains("opentide_version"),
+        "{}",
+        compiled.text
+    );
+    assert!(!compiled.text.contains("\"None\""), "{}", compiled.text);
+    assert!(
+        compiled.text.contains("opentide_uuid = "),
+        "{}",
+        compiled.text
+    );
 }
 
 #[test]

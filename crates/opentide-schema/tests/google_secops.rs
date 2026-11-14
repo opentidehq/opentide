@@ -67,7 +67,7 @@ fn facts(root: &Node) -> RuleFacts {
     RuleFacts {
         title: text(root.get("name")).unwrap_or_default(),
         uuid: text(metadata.get("uuid")).unwrap_or_default(),
-        version: text(metadata.get("version")).unwrap_or_default(),
+        version: text(metadata.get("version")),
         author: text(metadata.get("author")),
         description: text(root.get("description")).unwrap_or_default(),
         alert_severity: root

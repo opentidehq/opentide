@@ -76,7 +76,7 @@ pub fn facts(cx: &Context<'_>, rule: &Rule) -> RuleFacts {
     RuleFacts {
         title: rule.name.clone(),
         uuid: rule.uuid.clone(),
-        version: field("version").unwrap_or_else(|| "None".to_owned()),
+        version: field("version"),
         author: field("author"),
         description: rule.description().to_owned(),
         alert_severity: rule

@@ -554,13 +554,19 @@ pub fn deployment_status(workspace: &Workspace, uuid: &str) -> Json {
             ),
         };
     let mut platforms: Vec<(String, Json)> = Vec::new();
-    let configurations = body.and_then(|body| {
+    // The platform blocks: `configurations`, else the legacy `platforms`,
+    // whichever is a table with a block in it. A value of any other type
+    // holds no block, so it does not hide the other key.
+    let blocks = body.and_then(|body| {
         ["configurations", "platforms"]
             .into_iter()
             .filter_map(|key| body.get(key))
-            .find(|node| !matches!(&node.value, Value::Null) && truthy(node))
+            .find_map(|node| match &node.value {
+                Value::Map(blocks) if !blocks.is_empty() => Some(blocks),
+                _ => None,
+            })
     });
-    if let Some(Value::Map(blocks)) = configurations.map(|node| &node.value) {
+    if let Some(blocks) = blocks {
         for entry in blocks {
             let name = entry.key.value.to_string();
             let block = matches!(entry.value.value, Value::Map(_)).then_some(entry.value.as_ref());
@@ -581,19 +587,6 @@ pub fn deployment_status(workspace: &Workspace, uuid: &str) -> Json {
         payload.push(("state_error".to_owned(), error));
     }
     Json::Object(payload)
-}
-
-/// Python's truthiness of a YAML value.
-fn truthy(node: &Node) -> bool {
-    match &node.value {
-        Value::Null => false,
-        Value::Bool(flag) => *flag,
-        Value::Int(number) => *number != 0,
-        Value::Float(number) => *number != 0.0,
-        Value::Str(text) | Value::Datetime(text) => !text.is_empty(),
-        Value::Seq(items) => !items.is_empty(),
-        Value::Map(entries) => !entries.is_empty(),
-    }
 }
 
 /// The platforms opentide knows (`Opentide.Platforms`), in name order.
@@ -919,19 +912,5 @@ mod tests {
         ]);
         assert_eq!(legacy(&entry), "a.0: bad");
         assert_eq!(legacy(&Json::object([("message", Json::str("m"))])), "m");
-    }
-
-    #[test]
-    fn truthiness_is_pythons() {
-        let node = |text: &str| {
-            opentide_schema::node::load(text)
-                .unwrap()
-                .root()
-                .unwrap()
-                .as_ref()
-                .clone()
-        };
-        assert!(!truthy(&node("[]")) && truthy(&node("[1]")) && !truthy(&node("0")));
-        assert!(!truthy(&node("''")) && truthy(&node("{a: 1}")) && !truthy(&node("false")));
     }
 }
