@@ -1,0 +1,14 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: new/agent/none/bare
+---
+args: opentide new
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: Missing command: choose from threat, objective, rule.
+  usage: opentide new [OPTIONS] <COMMAND>
+  help: run 'opentide new --help'
+tip: add --json for machine-readable output

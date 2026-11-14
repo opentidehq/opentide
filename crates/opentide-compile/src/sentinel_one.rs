@@ -57,7 +57,7 @@ fn severity(name: &str) -> Result<&'static str, CompileError> {
     })
 }
 
-/// A string the block sets, Python-truthy.
+/// A string the block sets, not empty.
 fn text<'j>(value: Option<&'j Json>, key: &str) -> Option<&'j str> {
     value
         .and_then(|value| value.get(key))
@@ -89,7 +89,7 @@ pub fn without_nulls(value: Json) -> Json {
 /// The rule body `rule` deploys to `tenant` (`DetectionRule`: `data` and
 /// `filter`), `null` values left out.
 pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, CompileError> {
-    let Some(block) = rule.block(PLATFORM).filter(|block| block.truthy()) else {
+    let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Err(bare());
     };
     let mut name = Json::Str(rule.name.clone());
@@ -106,39 +106,41 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
     } else {
         "Active"
     };
-    if let Some(details) = block.get("details").filter(|details| details.truthy()) {
-        if let Some(value) = details.get("name").filter(|value| value.truthy()) {
+    if let Some(details) = block.get("details").filter(|details| details.is_filled()) {
+        if let Some(value) = details.get("name").filter(|value| value.is_filled()) {
             name = value.clone();
         }
-        if let Some(value) = details.get("description").filter(|value| value.truthy()) {
+        if let Some(value) = details.get("description").filter(|value| value.is_filled()) {
             description = value.clone();
         }
-        if let Some(value) = details.get("severity").filter(|value| value.truthy()) {
+        if let Some(value) = details.get("severity").filter(|value| value.is_filled()) {
             rule_severity = value.clone();
         }
-        if let Some(value) = details.get("expiration").filter(|value| value.truthy()) {
+        if let Some(value) = details.get("expiration").filter(|value| value.is_filled()) {
             expiration_mode = "Temporary";
             expiration = value.clone();
         }
     }
-    let (treat_as_threat, network_quarantine) =
-        match block.get("response").filter(|response| response.truthy()) {
-            Some(response) => {
-                let treat = match response.get("treat_as_threat") {
-                    Some(Json::Bool(false)) => Json::Str("UNDEFINED".into()),
-                    Some(value) => value.clone(),
-                    None => Json::Null,
-                };
-                (
-                    treat,
-                    response
-                        .get("network_quarantine")
-                        .cloned()
-                        .unwrap_or(Json::Null),
-                )
-            }
-            None => (Json::Null, Json::Null),
-        };
+    let (treat_as_threat, network_quarantine) = match block
+        .get("response")
+        .filter(|response| response.is_filled())
+    {
+        Some(response) => {
+            let treat = match response.get("treat_as_threat") {
+                Some(Json::Bool(false)) => Json::Str("UNDEFINED".into()),
+                Some(value) => value.clone(),
+                None => Json::Null,
+            };
+            (
+                treat,
+                response
+                    .get("network_quarantine")
+                    .cloned()
+                    .unwrap_or(Json::Null),
+            )
+        }
+        None => (Json::Null, Json::Null),
+    };
     let condition = block.get("condition");
     let mut cool_off = Json::Null;
     if let Some(span) = text(condition, "cool_off") {
@@ -159,7 +161,7 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
         Some("Single Event") => {
             let Some(single) = condition
                 .and_then(|condition| condition.get("single_event"))
-                .filter(|single| single.truthy())
+                .filter(|single| single.is_filled())
             else {
                 return Err(bare());
             };
@@ -169,7 +171,7 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
         Some("Correlation") => {
             let Some(correlation) = condition
                 .and_then(|condition| condition.get("correlation"))
-                .filter(|correlation| correlation.truthy())
+                .filter(|correlation| correlation.is_filled())
             else {
                 return Err(bare());
             };
@@ -223,13 +225,13 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
     data.insert("coolOffSetting".into(), cool_off);
     data.insert("correlationParams".into(), correlation_params);
     let mut filter = Object::new();
-    if let Some(site) = deploy::setup(tenant, "site_id").filter(|site| site.truthy()) {
+    if let Some(site) = deploy::setup(tenant, "site_id").filter(|site| site.is_filled()) {
         filter.insert("accountIds".into(), Json::Null);
         filter.insert(
             "siteIds".into(),
             Json::Array(vec![Json::Str(deploy::text(site))]),
         );
-    } else if let Some(account) = deploy::setup(tenant, "account_id").filter(|id| id.truthy()) {
+    } else if let Some(account) = deploy::setup(tenant, "account_id").filter(|id| id.is_filled()) {
         filter.insert(
             "accountIds".into(),
             Json::Array(vec![Json::Str(deploy::text(account))]),

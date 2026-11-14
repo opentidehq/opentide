@@ -1,0 +1,13 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/human/empty/default
+---
+args: opentide validate
+exit: 0
+
+━━━ stdout
+␛[1m␛[32m✓␛[0m Validation passed, but no detection objects were found under ./
+
+━━━ stderr
+␛[?25l<LIVE>␛[1m␛[36m<SPIN>␛[0m Validating objects</LIVE>␛[?25h
+⏎ no final newline

@@ -772,13 +772,13 @@ pub fn overlapping_runs(block: &Node) -> Option<(u128, u128)> {
     (window > every).then_some((window, every))
 }
 
-/// `schedule.every`, unless it is falsy (`schedule.get("every") or "5m"`:
-/// a falsy interval is the default).
+/// `schedule.every`, unless it is left out, null or empty: the interval is
+/// then the default.
 fn every_node(schedule: &Node) -> Option<&Node> {
     schedule
         .get("every")
         .map(AsRef::as_ref)
-        .filter(|node| super::truthy(Some(node)))
+        .filter(|node| !matches!(&node.value, Value::Null) && node.value.as_str() != Some(""))
 }
 
 /// `graylog_overlapping_window`: a filter that searches a longer window than
