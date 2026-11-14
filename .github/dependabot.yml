@@ -21,7 +21,7 @@ updates:
       # deserves its own PR.
       test-toolchain:
         dependency-type: "development"
-        patterns: ["pytest*", "coverage", "syrupy", "pexpect", "pre-commit"]
+        patterns: ["pytest*", "coverage", "syrupy", "pre-commit"]
 
   # Actions in .github/workflows are pinned by commit SHA with a version
   # comment; Dependabot updates both.
