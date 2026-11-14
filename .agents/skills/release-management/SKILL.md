@@ -10,7 +10,7 @@ description: >-
 
 # Release management — opentide
 
-SOP for shipping a version of opentide. One version and one tag (`vX.Y.Z`) publish everything: the PyPI wheels and sdist, the crates (the `opentide` facade and the engine crates), the npm packages (`@opentide/opentide`, its native packages, the `opentide` alias, `@opentide/lsp-client`, `@opentide/lsp-worker`, `@opentide/wasi-host`), and a GitHub Release with the `opentide` and `opentide-lsp` binaries, their installers, the engine assets editors pin, the SBOMs and `SHA256SUMS` ([`publish.yml`](../../../.github/workflows/publish.yml), UC-5.5). The Python version is **dynamic from git tags** via hatch-vcs (`pyproject.toml` `[tool.hatch.version] source = "vcs"`); do **not** hand-edit `src/opentide/_version.py`. The crates carry the same version in `Cargo.toml` (`[workspace.package]`), which `scripts/engine/release.py bump` sets; the npm packages get it from the workflow.
+SOP for shipping a version of opentide. One version and one tag (`vX.Y.Z`) publish everything: the PyPI wheels and sdist, the crates (the `opentide` facade and the engine crates), the npm packages (`@opentide/opentide`, its native packages, the `opentide` alias, `@opentide/lsp-client`, `@opentide/lsp-worker`, `@opentide/wasi-host`), and a GitHub Release with the `opentide` and `opentide-lsp` binaries, their installers, the engine assets editors pin, the SBOMs and `SHA256SUMS` ([`publish.yml`](../../../.github/workflows/publish.yml), UC-5.5). The version is the Cargo workspace's (`[workspace.package]` in `Cargo.toml`), which `scripts/engine/release.py bump` sets: the crates carry it, and maturin builds the Python wheel at it (`bindings/python/` takes the workspace's; a candidate's `X.Y.ZrcN` is written in the workflow's checkout by `release.py pypi-version`); the npm packages get it from the workflow.
 
 ## When to use
 
@@ -45,7 +45,7 @@ Never tag by hand. Trunk is `development`.
 
 | Where | What | Built by |
 |-------|------|----------|
-| PyPI | One `cp310-abi3` wheel per platform (manylinux_2_28 x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm64) and the sdist | cibuildwheel, hatchling and `hatch_build.py` (`[tool.cibuildwheel]` in `pyproject.toml`), `uv build --sdist` |
+| PyPI | One `cp310-abi3` wheel per platform (manylinux_2_28 x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm64) and the sdist | maturin (`[tool.maturin]` in `pyproject.toml`) through PyO3/maturin-action in `build-packages.yml`, each wheel smoke-tested on its own OS; `maturin sdist` |
 | crates.io | Every crate without `publish = false`, dependencies first: the engine crates, `opentide-schema`, `-schema-derive`, `-workspace`, `-compile`, `-connectors`, `-cli`, `-lsp`, and the facade `opentide` (`cargo install opentide --features cli`) | `scripts/engine/release.py publish` |
 | npm | `@opentide/opentide` and its six native packages (napi-rs), the `opentide` alias, `@opentide/lsp-client`, `@opentide/lsp-worker`, `@opentide/wasi-host`, with provenance | `bindings/node/build.mjs` per target, `npm pack` |
 | GitHub Release | `opentide-vX.Y.Z-<target>` and `opentide-lsp-vX.Y.Z-<target>` for six targets, `opentide-installer.sh` and `.ps1`, `highlights-vX.Y.Z.zip`, `opentide-wasm-web-vX.Y.Z.zip`, the WASI build, the licences, seven CycloneDX SBOMs, `SHA256SUMS` (`release.py assets vX.Y.Z` lists them) | `engine-release-build.yml` |
@@ -184,9 +184,13 @@ rg -n 'opentide==0\.[0-9]+\.[0-9]+' --glob '!CHANGELOG.md' --glob '!.github/rele
 
 Leave older historical sections in `CHANGELOG.md` / `docs/usage/releases.md` / old `.github/release-notes/` files alone.
 
-#### 5. Do not touch generated version
+#### 5. The version is the workspace's
 
-`src/opentide/_version.py` is written by hatch-vcs. Do not commit edits to it.
+The wheel's version is the Cargo workspace's (`bindings/python/` takes it; maturin writes it into
+the wheel), so `scripts/engine/release.py bump X.Y.Z` in the notes PR sets the Python package's
+version too. Never give `bindings/python/Cargo.toml` a version of its own: a candidate's
+(`X.Y.ZrcN`) and a CI build's (`X.Y.Z.devN`) are written there by `release.py pypi-version` in the
+workflow's checkout only.
 
 #### 6. Local check
 

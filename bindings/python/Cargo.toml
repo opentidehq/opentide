@@ -1,8 +1,11 @@
 [package]
 name = "opentide-native"
-# Compiled into the opentide package as opentide._native (hatch_build.py),
-# whose version comes from its git tag; this crate is never published.
-version = "0.0.0"
+# Compiled into the opentide package as opentide._native by maturin
+# (pyproject.toml's [tool.maturin]), which takes the package's version from
+# this crate: the workspace's, the product version (a candidate's or a CI
+# build's is written here in the workflow: scripts/engine/release.py
+# pypi-version). This crate is never published.
+version.workspace = true
 edition = "2024"
 rust-version = "1.95"
 license = "EUPL-1.2"

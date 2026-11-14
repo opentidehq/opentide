@@ -249,6 +249,68 @@ class BumpTest(unittest.TestCase):
                 self._bump(version)
 
 
+class PypiVersionTest(unittest.TestCase):
+    """`pypi-version` writes a wheel's version (PEP 440) into the Python
+    package's crate, in Cargo's spelling, which maturin reads back as PEP 440."""
+
+    MANIFEST = (
+        '[package]\nname = "opentide-native"\n# A comment.\nversion.workspace = true\n'
+        'edition = "2024"\n\n[dependencies]\nserde = { version = "1" }\n'
+    )
+
+    LOCK = (
+        '[[package]]\nname = "opentide-lsp"\nversion = "0.12.0"\n\n'
+        '[[package]]\nname = "opentide-native"\nversion = "0.12.0"\n'
+        'dependencies = [\n "opentide",\n]\n'
+    )
+
+    def _set(self, version: str) -> str:
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root)
+        manifest = root / "Cargo.toml"
+        manifest.write_text(self.MANIFEST, encoding="utf-8")
+        lock = root / "Cargo.lock"
+        lock.write_text(self.LOCK, encoding="utf-8")
+        with (
+            mock.patch.object(release, "PYTHON_BINDING", manifest),
+            mock.patch.object(release, "LOCK", lock),
+            mock.patch.object(release.subprocess, "run") as run,
+        ):
+            release.set_pypi_version(version)
+        run.assert_not_called()
+        # The lock carries the same version: a --locked build accepts it.
+        cargo = release.cargo_version(version)
+        self.assertEqual(
+            lock.read_text(encoding="utf-8"),
+            self.LOCK.replace(
+                'name = "opentide-native"\nversion = "0.12.0"',
+                f'name = "opentide-native"\nversion = "{cargo}"',
+            ),
+        )
+        return manifest.read_text(encoding="utf-8")
+
+    def test_each_wheel_version_in_cargos_spelling(self) -> None:
+        for pypi, cargo in [
+            ("1.0.0", "1.0.0"),
+            ("1.0.0rc1", "1.0.0-rc.1"),
+            ("0.12.0.dev2474", "0.12.0-dev.2474"),
+        ]:
+            with self.subTest(pypi=pypi):
+                text = self._set(pypi)
+                self.assertEqual(
+                    text, self.MANIFEST.replace("version.workspace = true", f'version = "{cargo}"')
+                )
+
+    def test_a_version_already_written_is_replaced(self) -> None:
+        self.MANIFEST = self.MANIFEST.replace("version.workspace = true", 'version = "1.0.0"')
+        self.assertIn('version = "1.0.0-rc.2"', self._set("1.0.0rc2"))
+
+    def test_anything_else_is_refused(self) -> None:
+        for version in ["1.0", "v1.0.0", "1.0.0-rc.1", "1.0.0rc0", "1.0.0.dev0", "1.0.0b1"]:
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                self._set(version)
+
+
 class CratePatchTest(unittest.TestCase):
     def setUp(self) -> None:
         self.dir = Path(tempfile.mkdtemp())
@@ -655,7 +717,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # a job builds comes from `rustup target add`, which with no toolchain
         # named adds it to the pinned release. (A build from the sdist, which
         # leaves the pin out, runs pip with the runner's Rust, as a user's does.)
-        # The package builds (build-packages.yml) are stricter: they run
+        # The npm addons (build-packages.yml) are stricter: they run
         # scripts/build/install-rust.sh, which installs that release by name
         # with the minimal profile, without the file's components, adds the
         # target and names the release in RUSTUP_TOOLCHAIN, so that rustup
@@ -690,7 +752,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
             ],
         )
         by_script = sorted(job for job, body in jobs.items() if script in body)
-        self.assertEqual(by_script, ["npm-native", "wheels"])
+        self.assertEqual(by_script, ["npm-native"])
+        # The wheels build with maturin-action, which installs rust-toolchain.toml's
+        # release itself (in the manylinux container on Linux) and sets it as the
+        # directory's override: no other toolchain is named.
+        wheels = jobs["wheels"]
+        self.assertIn("uses: PyO3/maturin-action@", wheels)
+        self.assertNotIn("rust-toolchain:", wheels)
+        self.assertNotIn("rustup", wheels)
         # npm-native cross-compiles: the script adds its target.
         self.assertIn(f'{script} "${{TARGET}}"', jobs["npm-native"])
         for job, body in jobs.items():

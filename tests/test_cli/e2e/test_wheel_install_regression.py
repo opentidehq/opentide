@@ -206,16 +206,23 @@ def test_pip_installed_wheel_validate_generate_and_skills(
 
 
 def _build_wheel(uv: str, dist: Path, shared: Path) -> Path:
-    """opentide's wheel, with the engine compiled in (hatch_build.py), copied into *dist*.
+    """opentide's wheel, with the engine compiled in (maturin), copied into *dist*.
 
-    The engine builds with the ``develop`` profile, which ``uv sync`` already
-    compiled, so cargo reuses that build instead of a release one.
+    ``OPENTIDE_TEST_WHEELHOUSE`` names a folder holding one opentide wheel
+    already built (CI's build job builds it once for every Python job): that
+    wheel is used, and nothing is compiled. Otherwise ``uv build`` builds it,
+    with the ``develop`` profile (pyproject.toml's ``[tool.uv]``), which ``uv
+    sync`` already compiled, so cargo reuses that build instead of a release one.
 
     One test run builds the wheel once, in *shared* (``wheel_cache``), under a
-    lock its xdist workers share: every build writes ``src/opentide/_version.py``
-    and ``build/`` in the checkout, so two at once could package a half-written
-    ``_version.py`` (``cannot import name '__version__'``).
+    lock its xdist workers share, rather than once per worker.
     """
+    wheelhouse = os.environ.get("OPENTIDE_TEST_WHEELHOUSE")
+    if wheelhouse:
+        built = sorted(Path(wheelhouse).glob("opentide-*.whl"))
+        assert len(built) == 1, f"expected one opentide wheel in {wheelhouse}: {built}"
+        dist.mkdir(parents=True, exist_ok=True)
+        return Path(shutil.copy2(built[0], dist))
     shared.mkdir(exist_ok=True)
     lock = shared / ".lock"
     deadline = time.monotonic() + 1200
@@ -233,7 +240,6 @@ def _build_wheel(uv: str, dist: Path, shared: Path) -> Path:
             build = _run(
                 [uv, "build", "--wheel", "--out-dir", str(shared)],
                 cwd=str(ROOT),
-                env={**os.environ, "OPENTIDE_ENGINE_PROFILE": "develop"},
                 timeout=900,
             )
             assert build.returncode == 0, build.stdout + build.stderr

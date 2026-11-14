@@ -2,8 +2,9 @@
 
 The PyO3 binding of the engine, compiled into the `opentide` Python package as `opentide._native`
 (package name `opentide-native`, library `_native`, `publish = false`). It binds
-`opentide-analysis` by path; `hatch_build.py` runs `cargo build -p
-opentide-native` whenever a wheel or an editable install of opentide is built. Python reaches it
+`opentide-analysis` by path; maturin (`[tool.maturin]` in the root `pyproject.toml`) compiles
+it whenever a wheel or an editable install of opentide is built, and takes the package's version
+from it (`version.workspace = true`). Python reaches it
 through `src/opentide/analysis.py`; the SDK (`src/opentide/sdk.py`, `opentide.Workspace`) loads it
 there, then imports its submodule `sdk`. [`README.md`](README.md) describes the build.
 
@@ -60,8 +61,10 @@ sources or compiled-in data change (`cache-keys` in `pyproject.toml`). `scripts/
 
 - Add logic, caching or I/O here: it belongs in the engine crates.
 - Hand-edit `src/opentide/_native.*.so`; it is built, and gitignored.
-- Change `crate-type`, the module name `_native` or the abi3 feature: `hatch_build.py` and the
-  release wheels depend on them.
+- Change `crate-type`, the module name `_native` or the abi3 feature: `[tool.maturin]` and the
+  release wheels (`cp310-abi3`) depend on them.
+- Give the crate a version of its own: the package's is the workspace's, which
+  `scripts/engine/release.py pypi-version` overrides in a candidate's or a CI build's checkout.
 
 ## Work items that change this crate
 
