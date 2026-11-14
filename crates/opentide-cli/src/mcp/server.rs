@@ -75,6 +75,17 @@ pub struct Server {
     turn: Arc<tokio::sync::Mutex<()>>,
 }
 
+/// Interrupts a call's work when its handler ends ([`Server::apart`]).
+#[cfg(not(target_os = "wasi"))]
+struct StopOnDrop(Interrupt);
+
+#[cfg(not(target_os = "wasi"))]
+impl Drop for StopOnDrop {
+    fn drop(&mut self) {
+        self.0.request();
+    }
+}
+
 /// What the tools and resources run against.
 struct State {
     env: Env,
@@ -154,14 +165,15 @@ impl Server {
                     work(&state, &interrupt)
                 }
             });
+            // Cancelled, or dropped unfinished (the session ending drops its
+            // handlers), the work is interrupted; once it has finished,
+            // interrupting it changes nothing.
+            let _stop = StopOnDrop(interrupt);
             tokio::select! {
                 ran = running => ran.map_err(|_| {
                     ErrorData::internal_error("the call stopped unexpectedly", None)
                 }),
-                () = cancelled.cancelled() => {
-                    interrupt.request();
-                    Err(stopped())
-                }
+                () = cancelled.cancelled() => Err(stopped()),
             }
         }
     }

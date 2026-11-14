@@ -4,11 +4,12 @@
 //! until something stops it. Meanwhile the server answers a `ping`, and
 //! `notifications/cancelled` stops the call: the request is dropped at the
 //! tenant, the call answers nothing (MCP's outcome for a cancelled request),
-//! and the next call runs and reaches the tenant uninterrupted.
+//! and the next call runs and reaches the tenant uninterrupted. A call still
+//! running when the client closes stdin is stopped too, and the server exits.
 //!
-//! Every wait gives up after [`PATIENCE`] and says what it waited for: the
-//! query's own timeout (120 s) is longer, so a server that stays busy fails
-//! the test instead of passing late.
+//! Every wait gives up after [`PATIENCE`], says what it waited for and shows
+//! the server's stderr: the query's own timeout (120 s) is longer, so a
+//! server that stays busy fails the test instead of passing late.
 
 #![expect(
     clippy::unwrap_used,
@@ -17,8 +18,9 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
-use std::process::{ChildStdin, Command, Stdio};
+use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{Receiver, channel};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
@@ -68,18 +70,31 @@ fn stalling_tenant() -> (String, Receiver<Seen>) {
     (address, events)
 }
 
-/// The server's stdin and the messages it wrote, line by line.
-struct Client {
-    stdin: ChildStdin,
+/// The server, its stdin, what it wrote and what the stand-in saw.
+struct Session {
+    child: Child,
+    stdin: Option<ChildStdin>,
     messages: Receiver<Value>,
     /// Every message read so far.
     read: Vec<Value>,
+    stderr: Arc<Mutex<Vec<u8>>>,
+    tenant: Receiver<Seen>,
 }
 
-impl Client {
+impl Session {
+    fn fail(&self, what: &str) -> ! {
+        let stderr = self.stderr.lock().unwrap();
+        panic!(
+            "{what} within {PATIENCE:?}\nread: {:?}\nstderr:\n{}",
+            self.read,
+            String::from_utf8_lossy(&stderr)
+        )
+    }
+
     fn send(&mut self, message: &Value) {
-        writeln!(self.stdin, "{message}").unwrap();
-        self.stdin.flush().unwrap();
+        let stdin = self.stdin.as_mut().unwrap();
+        writeln!(stdin, "{message}").unwrap();
+        stdin.flush().unwrap();
     }
 
     /// The answer to request `id`.
@@ -88,10 +103,7 @@ impl Client {
         loop {
             let left = deadline.saturating_duration_since(Instant::now());
             let Ok(message) = self.messages.recv_timeout(left) else {
-                panic!(
-                    "no answer to {waiting_for} within {PATIENCE:?}; read: {:?}",
-                    self.read
-                )
+                self.fail(&format!("no answer to {waiting_for}"))
             };
             self.read.push(message.clone());
             if message["id"] == id {
@@ -99,11 +111,27 @@ impl Client {
             }
         }
     }
-}
 
-fn expect(events: &Receiver<Seen>, wanted: &Seen) {
-    let seen = events.recv_timeout(PATIENCE);
-    assert_eq!(seen.as_ref().ok(), Some(wanted), "{seen:?}");
+    /// The stand-in's next event, which must be `wanted`.
+    fn expect(&self, wanted: &Seen) {
+        match self.tenant.recv_timeout(PATIENCE) {
+            Ok(seen) if seen == *wanted => {}
+            seen => self.fail(&format!("the tenant saw {seen:?}, not {wanted:?},")),
+        }
+    }
+
+    /// Closes stdin and waits for the exit.
+    fn close(&mut self) {
+        self.stdin = None;
+        let deadline = Instant::now() + PATIENCE;
+        while self.child.try_wait().unwrap().is_none() {
+            if Instant::now() > deadline {
+                let _ = self.child.kill();
+                self.fail("the server did not exit after its stdin closed");
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
 }
 
 fn run_query(id: i64) -> Value {
@@ -123,8 +151,7 @@ fn ping(id: i64) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "method": "ping"})
 }
 
-#[test]
-fn a_running_tool_call_leaves_the_server_answering_and_is_cancelled() {
+fn start() -> (Session, tempfile::TempDir) {
     let (address, tenant) = stalling_tenant();
     let scratch = tempfile::tempdir().unwrap();
     let root = std::fs::canonicalize(scratch.path()).unwrap();
@@ -143,15 +170,23 @@ fn a_running_tool_call_leaves_the_server_answering_and_is_cancelled() {
     )
     .unwrap();
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_opentide-cli"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_opentide-cli"));
+    command
         .args(["mcp", "start"])
         .current_dir(&ws)
         .env_clear()
         .env("HOME", &home)
-        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default());
+    // Winsock does not start without them.
+    for name in ["SYSTEMROOT", "USERPROFILE"] {
+        if let Some(value) = std::env::var_os(name) {
+            command.env(name, value);
+        }
+    }
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .unwrap();
     let stdout = child.stdout.take().unwrap();
@@ -164,56 +199,70 @@ fn a_running_tool_call_leaves_the_server_answering_and_is_cancelled() {
             }
         }
     });
-    let mut client = Client {
-        stdin: child.stdin.take().unwrap(),
+    let stderr = Arc::new(Mutex::new(Vec::new()));
+    let mut pipe = child.stderr.take().unwrap();
+    let kept = Arc::clone(&stderr);
+    std::thread::spawn(move || {
+        let mut chunk = [0_u8; 4096];
+        while let Ok(read @ 1..) = pipe.read(&mut chunk) {
+            kept.lock().unwrap().extend_from_slice(&chunk[..read]);
+        }
+    });
+    let mut session = Session {
+        stdin: child.stdin.take(),
+        child,
         messages,
         read: Vec::new(),
+        stderr,
+        tenant,
     };
-
-    client.send(
+    session.send(
         &json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
             "protocolVersion": "2025-06-18",
             "capabilities": {},
             "clientInfo": {"name": "test", "version": "0"},
         }}),
     );
-    client.answer(1, "initialize");
-    client.send(&json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
+    session.answer(1, "initialize");
+    session.send(&json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
+    (session, scratch)
+}
+
+#[test]
+fn a_running_tool_call_leaves_the_server_answering_and_is_cancelled() {
+    let (mut session, _scratch) = start();
 
     // A call that runs until it is stopped.
-    client.send(&run_query(2));
-    expect(&tenant, &Seen::Request("POST /_query HTTP/1.1".into()));
+    session.send(&run_query(2));
+    session.expect(&Seen::Request("POST /_query HTTP/1.1".into()));
 
     // The server reads the client meanwhile.
-    client.send(&ping(3));
-    let pong = client.answer(3, "a ping while a tool call runs");
+    session.send(&ping(3));
+    let pong = session.answer(3, "a ping while a tool call runs");
     assert_eq!(pong["result"], json!({}), "{pong}");
-    client.send(&cancel(2));
-    expect(&tenant, &Seen::Closed);
+    session.send(&cancel(2));
+    session.expect(&Seen::Closed);
 
     // The next call is not interrupted: it reaches the tenant too.
-    client.send(&run_query(4));
-    expect(&tenant, &Seen::Request("POST /_query HTTP/1.1".into()));
-    client.send(&cancel(4));
-    expect(&tenant, &Seen::Closed);
-    client.send(&ping(5));
-    client.answer(5, "a ping after two cancelled calls");
+    session.send(&run_query(4));
+    session.expect(&Seen::Request("POST /_query HTTP/1.1".into()));
+    session.send(&cancel(4));
+    session.expect(&Seen::Closed);
+    session.send(&ping(5));
+    session.answer(5, "a ping after two cancelled calls");
     assert!(
-        client
+        session
             .read
             .iter()
             .all(|message| message["id"] != 2 && message["id"] != 4),
         "a cancelled call answers nothing: {:?}",
-        client.read
+        session.read
     );
 
-    drop(client);
-    let deadline = Instant::now() + PATIENCE;
-    while child.try_wait().unwrap().is_none() {
-        if Instant::now() > deadline {
-            let _ = child.kill();
-            panic!("the server did not exit {PATIENCE:?} after its stdin closed");
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    }
+    // A call still running when the client leaves is stopped, and the
+    // server exits.
+    session.send(&run_query(6));
+    session.expect(&Seen::Request("POST /_query HTTP/1.1".into()));
+    session.close();
+    session.expect(&Seen::Closed);
 }

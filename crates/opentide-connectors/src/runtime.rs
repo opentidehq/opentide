@@ -52,78 +52,28 @@ pub fn apart<T: Send>(work: impl FnOnce() -> T + Send) -> Option<T> {
 
 /// Runs *work* to completion on a runtime of its own.
 ///
-/// tokio refuses to start a runtime's `block_on` on a thread that is already
-/// driving one (it panics), so a caller inside a runtime is served without
-/// it: on a multi-thread runtime's thread, the work runs in
-/// [`tokio::task::block_in_place`], which hands that thread's tasks to
-/// another worker first; on a current-thread runtime's (the MCP server's),
-/// it is polled on this thread while the new runtime's own workers drive its
-/// timers, sockets and tasks. That thread is blocked meanwhile, as any
-/// blocking call blocks it. WASI has no thread to drive the new runtime: the
-/// work is refused there, never polled into a deadlock.
-///
 /// # Errors
 ///
-/// The runtime cannot start, or (WASI) the caller is inside a runtime.
+/// The runtime cannot start; or, on WASI, the caller is inside a runtime
+/// (the MCP server's): tokio refuses to start one there (it panics), and
+/// WASI has no other thread to hand the work to (`apart` runs it on this
+/// one).
 pub fn block_on<F: Future>(work: F) -> Result<F::Output, String> {
+    #[cfg(target_os = "wasi")]
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return Err(INSIDE_A_RUNTIME.into());
+    }
     let runtime = builder()
         .enable_all()
         .build()
         .map_err(|error| format!("cannot start the network runtime: {error}"))?;
-    let Ok(outer) = tokio::runtime::Handle::try_current() else {
-        return Ok(runtime.block_on(work));
-    };
-    #[cfg(not(target_os = "wasi"))]
-    {
-        // The new runtime is dropped where blocking is allowed (dropping it
-        // waits for its blocking pool), or shut down without waiting.
-        if outer.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread {
-            return Ok(tokio::task::block_in_place(move || runtime.block_on(work)));
-        }
-        let output = poll_here(&runtime, work);
-        runtime.shutdown_background();
-        Ok(output)
-    }
-    #[cfg(target_os = "wasi")]
-    {
-        // Dropping a runtime in an async context panics too.
-        runtime.shutdown_background();
-        let _ = (outer, work);
-        Err("cannot start the network runtime inside another on a target without threads".into())
-    }
+    Ok(runtime.block_on(work))
 }
 
-/// Polls *work* on this thread, parked between wake-ups, with *runtime* as
-/// the context its timers, sockets and tasks register with: its own workers
-/// drive them. Unconstrained, as the caller's task budget is not this work's.
-#[cfg(not(target_os = "wasi"))]
-fn poll_here<F: Future>(runtime: &tokio::runtime::Runtime, work: F) -> F::Output {
-    use std::task::{Context, Poll, Wake, Waker};
-
-    /// Wakes the parked thread.
-    struct Unpark(std::thread::Thread);
-
-    impl Wake for Unpark {
-        fn wake(self: Arc<Self>) {
-            self.0.unpark();
-        }
-
-        fn wake_by_ref(self: &Arc<Self>) {
-            self.0.unpark();
-        }
-    }
-
-    let _inside = runtime.enter();
-    let waker = Waker::from(Arc::new(Unpark(std::thread::current())));
-    let mut context = Context::from_waker(&waker);
-    let mut work = std::pin::pin!(tokio::task::unconstrained(work));
-    loop {
-        if let Poll::Ready(output) = work.as_mut().poll(&mut context) {
-            return output;
-        }
-        std::thread::park();
-    }
-}
+/// [`block_on`]'s refusal inside a runtime on WASI.
+#[cfg(target_os = "wasi")]
+const INSIDE_A_RUNTIME: &str =
+    "cannot start the network runtime inside another on a target without threads";
 
 /// Cancels *token* once *requested* returns true, checking every 50 ms
 /// until the token is cancelled. For the CLI's Ctrl-C flag.
@@ -284,34 +234,12 @@ fn panic_message(failure: tokio::task::JoinError) -> String {
     }
 }
 
-#[cfg(all(test, not(target_os = "wasi")))]
+#[cfg(all(test, target_os = "wasi"))]
 mod tests {
     use super::*;
 
-    /// Work that needs the runtime: a timer, and a task it waits for.
-    async fn needs_the_runtime() -> u8 {
-        tokio::time::sleep(Duration::from_millis(5)).await;
-        tokio::spawn(async { 7 }).await.unwrap_or_default()
-    }
-
-    #[test]
-    fn block_on_outside_a_runtime_runs_the_work() {
-        assert_eq!(block_on(needs_the_runtime()), Ok(7));
-    }
-
     #[tokio::test(flavor = "current_thread")]
-    async fn block_on_inside_a_current_thread_runtime_does_not_panic() {
-        assert_eq!(block_on(needs_the_runtime()), Ok(7));
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn block_on_inside_a_multi_thread_runtime_does_not_panic() {
-        assert_eq!(block_on(needs_the_runtime()), Ok(7));
-    }
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn block_on_on_a_blocking_thread_runs_the_work() {
-        let ran = tokio::task::spawn_blocking(|| block_on(needs_the_runtime())).await;
-        assert_eq!(ran.ok(), Some(Ok(7)));
+    async fn block_on_inside_a_runtime_is_refused_not_a_panic() {
+        assert_eq!(block_on(async { 7 }), Err(INSIDE_A_RUNTIME.to_owned()));
     }
 }
