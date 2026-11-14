@@ -133,9 +133,14 @@ pub struct Defender {
 /// other error as it is.
 fn authentication(error: ConnectorError) -> DefenderError {
     match error {
-        ConnectorError::Authentication { message, .. } => {
-            DefenderError::Authentication { detail: message }
-        }
+        ConnectorError::Authentication {
+            message, detail, ..
+        } => DefenderError::Authentication {
+            detail: match detail {
+                Some(said) => format!("{message}: {said}"),
+                None => message,
+            },
+        },
         other => DefenderError::Connector(other),
     }
 }
