@@ -29,10 +29,10 @@ Serves MCP over stdio until the host closes stdin. It takes no options of its ow
 opentide mcp
 ```
 
+At a terminal it prints the group's help on stdout (exit `2`); a coding agent (the `agent` mode) gets one line on stderr:
+
 ```text illustrative
-error: Missing command: choose from start.
-  usage: opentide mcp <COMMAND>
-  help: run 'opentide mcp --help'
+error: missing command: choose from start
 ```
 
 This is not captured by the docs harness, which does not run `mcp`; `opentide mcp --help` prints the help and exits `0`.
