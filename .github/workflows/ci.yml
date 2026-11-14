@@ -14,9 +14,9 @@ run-name: >-
 # - The PR gate, on a pull request into integration/unified-core,
 #   development or train/*: Linux only, and only what the change affects.
 #   The changed workspace crates and their reverse dependencies are built
-#   ONCE (`build`: their tests, which it runs, and the `_native`
-#   extension), and every other job runs from that build: the Python suite
-#   and E2E on the prebuilt extension. Each specialised job (Node, WASI, grammars, TextMate, GitLab CI
+#   ONCE (`build`: their tests, which it runs), and the `_native` extension
+#   once (`native`), on which the Python suite and E2E run. Each
+#   specialised job (Node, WASI, grammars, TextMate, GitLab CI
 #   lint, the facade's semver checks, cargo deny, docs) runs only when its
 #   paths change. One required check, `PR gate`, passes when every job that
 #   was needed passed and every other was skipped.
@@ -85,8 +85,8 @@ env:
 # toolchain), so that its next push is warm. sccache is content-addressed, so a copy a few days old still
 # serves every crate that did not change. Linux only.
 #
-#   build           `build`: the tests, xtask, the language server and
-#                   the `_native` extension (the gate's one build)
+#   build           `build`: the tests, xtask and the language server
+#   native          `native`: the `_native` extension
 #   engine-check    `engine-lint`: clippy and rustdoc
 #   wasi            `wasi`: the WASI module
 #   full-set-Linux  `node`, `facade` and the nightly's Linux Rust jobs:
@@ -113,7 +113,8 @@ jobs:
       crates: ${{ steps.plan.outputs.crates }}
       packages: ${{ steps.plan.outputs.packages }}
       features: ${{ steps.plan.outputs.features }}
-      build: ${{ steps.plan.outputs.build }}
+      filter: ${{ steps.plan.outputs.filter }}
+      native: ${{ steps.plan.outputs.native }}
       rust: ${{ steps.plan.outputs.rust }}
       python: ${{ steps.plan.outputs.python }}
       lint: ${{ steps.plan.outputs.lint }}
@@ -216,7 +217,6 @@ jobs:
         run: uvx twine check dist/*
 
       - name: Engine invariants (I/O-free crates, names)
-        if: env.RUST == 'true'
         run: |
           bash scripts/engine/check-io-free.sh
           bash scripts/engine/check-names.sh
@@ -300,19 +300,96 @@ jobs:
           path: ${{ env.SCCACHE_DIR }}
           key: sccache-engine-check-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
-  # The gate's one build, and the Rust tests run where they were built. The
-  # `_native` extension first (uploaded, for the Python jobs), then the
-  # affected crates' tests, xtask and the language server with one compiler
-  # cache; the generated-artifact and layer checks; the tests
+  # The `_native` extension, as hatch_build.py builds it, for the Python
+  # jobs: a job of its own, so they start after this short build instead of
+  # after the tests (a push's Python job waited 8.4 min for the build, its
+  # tests included). Its own compiler cache family: the extension's features
+  # and PYO3_BUILD_EXTENSION_MODULE are not the tests'.
+  native:
+    name: Build the _native extension
+    needs: changes
+    if: needs.changes.outputs.native == 'true' || needs.changes.outputs.mode == 'nightly'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_STRIP: debuginfo
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      # One interpreter for PyO3's configuration: the binding is abi3, so the
+      # extension serves every Python from 3.10.
+      PYO3_PYTHON: /usr/bin/python3
+      PYO3_BUILD_EXTENSION_MODULE: "1"
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: sccache@0.19.0
+
+      - name: Install mold
+        run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
+
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+      - name: Restore the compiler cache
+        id: sccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-native-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-native-${{ hashFiles('rust-toolchain.toml') }}-
+
+      - name: Build the _native extension
+        run: |
+          cargo build --locked -p opentide-native --lib
+          mkdir -p "${RUNNER_TEMP}/native"
+          cp target/debug/lib_native.so "${RUNNER_TEMP}/native/_native.abi3.so"
+
+      - name: Upload the _native extension
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native
+          path: ${{ runner.temp }}/native/_native.abi3.so
+          retention-days: 3
+
+      - name: Compiler cache statistics
+        if: ${{ !cancelled() }}
+        run: sccache --show-stats
+
+      - name: Save the compiler cache
+        if: steps.sccache.outputs.cache-hit != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.sccache.outputs.cache-matched-key == '')
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-native-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+
+  # The gate's one build of the tests, and the Rust tests run where they were
+  # built: the affected crates' tests, xtask and the language server with one
+  # compiler cache; the generated-artifact and layer checks; the tests
   # (`cargo nextest run`), the doctests and opentide-schema's compile-fail
   # cases. No test archive: moving one to test jobs cost more than the
   # partitions saved (measured on a leaf change, 2026-11-14: a 1.5 GB archive,
   # 18 s to pack, 15-33 s to download and 41 s to extract per partition,
   # against 42-48 s of tests each).
   build:
-    name: Build
+    name: Build and Rust tests
     needs: changes
-    if: needs.changes.outputs.build == 'true'
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -335,11 +412,11 @@ jobs:
       SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 3G
       SCCACHE_IDLE_TIMEOUT: "0"
-      RUST: ${{ needs.changes.outputs.rust }}
-      # Not PYTHON: the conformance tests run $PYTHON as the interpreter.
-      NATIVE: ${{ needs.changes.outputs.python == 'true' || needs.changes.outputs.gitlab == 'true' || needs.changes.outputs.mode == 'nightly' }}
       PACKAGES: ${{ needs.changes.outputs.packages }}
       FEATURES: ${{ needs.changes.outputs.features }}
+      # The affected crates' tests: the build also compiles the anchors
+      # (scripts/ci/changes.py, ANCHORS), whose tests run only when affected.
+      FILTER: ${{ needs.changes.outputs.filter }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -373,29 +450,9 @@ jobs:
           key: sccache-build-v2-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
           restore-keys: sccache-build-v2-${{ hashFiles('rust-toolchain.toml') }}-
 
-      # As hatch_build.py builds it, in the profile the tests are built in, first:
-      # the Python jobs start while the tests build, on the same dependencies.
-      - name: Build the _native extension
-        if: env.NATIVE == 'true'
-        env:
-          PYO3_BUILD_EXTENSION_MODULE: "1"
-        run: |
-          cargo build --locked -p opentide-native --lib
-          mkdir -p "${RUNNER_TEMP}/native"
-          cp target/debug/lib_native.so "${RUNNER_TEMP}/native/_native.abi3.so"
-
-      - name: Upload the _native extension
-        if: env.NATIVE == 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: native
-          path: ${{ runner.temp }}/native/_native.abi3.so
-          retention-days: 3
-
       # The affected crates' test binaries, with the binaries their tests run
       # (CARGO_BIN_EXE_*). `--timings`: the report is uploaded below.
       - name: Build the Rust tests
-        if: env.RUST == 'true'
         run: |
           read -ra pkg_args <<< "${PACKAGES}"
           read -ra feature_args <<< "${FEATURES}"
@@ -407,7 +464,6 @@ jobs:
       # Building them again without those features recompiled for minutes.
       - name: Which checks the build can run
         id: bins
-        if: env.RUST == 'true'
         env:
           CRATES: ${{ needs.changes.outputs.crates }}
         run: |
@@ -493,10 +549,8 @@ jobs:
       # and the Python the test that compares with difflib runs
       # (OPENTIDE_PYTHON): after the build, which reads PYO3_PYTHON only.
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        if: env.RUST == 'true'
 
       - name: Set up Python
-        if: env.RUST == 'true'
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -505,23 +559,20 @@ jobs:
       # temporary folder, never in the checkout (#931); noted after the
       # specifications' checkout.
       - name: Note the checkout's state
-        if: env.RUST == 'true'
         run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
 
       # The compile-fail cases run below, when their inputs change.
       - name: cargo nextest (profile ci)
-        if: env.RUST == 'true'
         env:
           OPENTIDE_PYTHON: python
         run: |
           read -ra pkg_args <<< "${PACKAGES}"
           read -ra feature_args <<< "${FEATURES}"
           cargo nextest run --locked --profile ci "${pkg_args[@]}" "${feature_args[@]}" \
-            --no-tests=pass -E 'not binary_id(/^opentide-schema::ui$/)'
+            --no-tests=pass -E "(${FILTER}) and not binary_id(/^opentide-schema::ui\$/)"
 
       # nextest runs no doctests.
       - name: Doctests
-        if: env.RUST == 'true'
         run: |
           read -ra pkg_args <<< "${PACKAGES}"
           read -ra feature_args <<< "${FEATURES}"
@@ -533,7 +584,6 @@ jobs:
       # push and nightly.
       - name: Whether to run opentide-schema's compile-fail cases
         id: ui
-        if: env.RUST == 'true'
         env:
           MODE: ${{ needs.changes.outputs.mode }}
           UI_PATHS: |
@@ -564,10 +614,14 @@ jobs:
 
       - name: opentide-schema's compile-fail cases
         if: steps.ui.outputs.run == 'true'
-        run: cargo nextest run --locked --profile ci -p opentide-schema --features opentide-schema/python -E 'binary_id(opentide-schema::ui)'
+        # The build's own packages and features (opentide-schema is among them
+        # whenever a case's input changed): nothing is built again.
+        run: |
+          read -ra pkg_args <<< "${PACKAGES}"
+          read -ra feature_args <<< "${FEATURES}"
+          cargo nextest run --locked --profile ci "${pkg_args[@]}" "${feature_args[@]}" -E 'binary_id(opentide-schema::ui)'
 
       - name: The checks and tests left the checkout as they found it
-        if: env.RUST == 'true'
         run: |
           git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-after"
           if ! diff -u "$RUNNER_TEMP/tree-before" "$RUNNER_TEMP/tree-after"; then
@@ -576,7 +630,7 @@ jobs:
           fi
 
       - name: Upload the JUnit report
-        if: failure() && env.RUST == 'true'
+        if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         # A report for reading, not a gate.
         continue-on-error: true
@@ -586,7 +640,7 @@ jobs:
           retention-days: 14
 
       - name: Upload the build's timings
-        if: ${{ !cancelled() && env.RUST == 'true' }}
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         continue-on-error: true
         with:
@@ -616,7 +670,7 @@ jobs:
   # request and the nightly add Python 3.10-3.13 and the `full_set` E2E tests.
   python:
     name: Python (3.14, package and E2E, coverage)
-    needs: [changes, build]
+    needs: [changes, native]
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -709,7 +763,7 @@ jobs:
   # gitlab-ci-verify: when the renderer, the test or the linters change.
   gitlab-ci-lint:
     name: GitLab CI lint
-    needs: [changes, build]
+    needs: [changes, native]
     if: needs.changes.outputs.gitlab == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -1437,7 +1491,7 @@ jobs:
   # abi3 extension: `python`'s run without coverage.
   test-full:
     name: Python (${{ matrix.python-version }})
-    needs: [changes, build]
+    needs: [changes, native]
     if: needs.changes.outputs.mode == 'nightly' || needs.changes.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1478,7 +1532,7 @@ jobs:
   # whose `uv build` alone takes minutes.
   e2e-full:
     name: E2E (3.14, full set)
-    needs: [changes, build]
+    needs: [changes, native]
     if: needs.changes.outputs.mode == 'nightly' || needs.changes.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -2269,6 +2323,7 @@ jobs:
       - changes
       - lint
       - engine-lint
+      - native
       - build
       - python
       - gitlab-ci-lint
