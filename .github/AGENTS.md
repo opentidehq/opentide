@@ -129,12 +129,17 @@ change, and a family is saved once a week, by the first push of the week. A key 
 which most merges change, saved every family again on each merge, and with the target trees
 below that passed the 10 GB GitHub keeps, so the families pull requests restore were evicted
 before the next one read them (the engine tests built cold). Each family has one job that saves
-it (`actions/cache/save`, from a push, only when the key missed):
+it (`actions/cache/save`, only when the key missed). The core families, which every pull request's
+jobs restore, are saved from a push to each base branch, since a pull request reads its base
+branch's caches; the full set's and the release dry run's are saved on `development` and by the
+nightly only (`github.event_name == 'schedule' || github.ref == 'refs/heads/development'`), whose
+caches every branch reads: with integration and a release train both active, a copy of those per
+base branch did not fit beside the core families and evicted them (#841). The families:
 `lint`, `engine-check` (`engine`), `engine-dev-<os>-<n>` (each `engine-test-part` shard per OS;
 `clients` and `elastic-sweep` restore Linux shard 2's, which tests `opentide-lsp` and `opentide-analysis`), `corpus` (`corpus-part`'s generator; the other
 parts and `corpus-queries` restore it), `python-engine` (`test`'s 3.14 cell; the other Linux
-Python jobs restore it), `golden-compare` (part 1; the other parts restore it), and `full-set-<OS>` (`conformance` on each OS; the full
-set's other Rust jobs restore their OS's: `facade`, `node`, `npm-install`, `engine-wasm`,
+Python jobs restore it), `golden-compare` (part 1; the other parts restore it), and `full-set-<OS>` (`conformance` on each OS, on `development` and by the
+nightly only; the full set's other Rust jobs restore their OS's, on any branch development's: `facade`, `node`, `npm-install`, `engine-wasm`,
 `engine-package`, `bench`, `cli-windows-smoke`). No job with a compiler cache restores a
 rust-cache target tree too: that tree (about 0.7 GB a family) is what sccache covers, and the
 two together, with a key per source tree, saved about 4 GB a push, more than GitHub's 10 GB per
@@ -146,7 +151,8 @@ and oracle.yml's own; each saves on the nightly and on pushes to `development` o
 pull request reads (golden-preview.yml, on the 0.28 train only, saves on that branch's pushes). The release dry run
 (`engine-release-build.yml`; a release restores none) keeps sccache families of its own,
 `release-<os>-<arch>` per runner for the binaries (one cell per runner saves; the Intel macOS
-cross build restores Apple silicon's) and `release-wasm`, saved from a push when the key missed;
+cross build restores Apple silicon's) and `release-wasm`, saved on `development` and by the nightly
+when the key missed;
 its highlights, licences and SBOM jobs build without one. `bench.yml` restores `full-set-Linux`
 (with `conformance`'s environment) and saves nothing: its two target trees evicted the pull
 requests' families. Every Python job names the same

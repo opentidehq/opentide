@@ -371,12 +371,16 @@ jobs:
   #   golden-compare      `golden-compare-part` (its first part); the others restore it
   #   full-set-<OS>       the full set's other Rust jobs (facade, node,
   #                       npm-install, engine-wasm, engine-package, bench,
-  #                       cli-windows-smoke): `conformance` saves it on each OS
+  #                       cli-windows-smoke): `conformance` saves it on each OS,
+  #                       on development and by the nightly only
   #
+  # The families above full-set-<OS> are saved from a push to each base branch
+  # (a pull request reads its base branch's caches); full-set-<OS> and the
+  # release dry run's (engine-release-build.yml, one per runner) on development
+  # and by the nightly only, whose caches every branch reads: a copy per base
+  # branch did not fit beside the core families in 10 GB (#841).
   # The one rust-cache left: `fuzz` (fuzz-smoke, the fuzz/NIGHTLY nightly,
   # fuzz/target and cargo-fuzz in ~/.cargo/bin).
-  # The release dry run (engine-release-build.yml) keeps sccache families of
-  # its own, one per runner, and saves them from a push only.
   # ---------------------------------------------------------------------------
 
   # rustfmt, clippy, rustdoc, the crate layers and the engine's invariants.
@@ -1151,9 +1155,12 @@ jobs:
         run: sccache --show-stats
 
       # The full set's compiler cache for this OS, which the other full-set
-      # jobs restore: saved from a push, once per Cargo.lock and toolchain.
+      # jobs restore: saved by the nightly and pushes to development only
+      # (the default branch, whose caches every branch reads), once a week.
+      # A copy per base branch did not fit beside the core families in the
+      # 10 GB GitHub keeps (#841).
       - name: Save the compiler cache
-        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true'
+        if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development') && steps.sccache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}

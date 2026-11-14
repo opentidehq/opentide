@@ -19,9 +19,10 @@ name: Engine release build
 #
 # Only the dry run restores a Rust cache: a release builds from nothing. The
 # dry run's is sccache, one family per runner for the binaries and one for the
-# WebAssembly builds, saved from a push when Cargo.lock or the toolchain
-# changes; the small jobs (highlights, licences, SBOMs) build without one, so
-# that the caches pull requests restore stay within the 10 GB GitHub keeps.
+# WebAssembly builds, saved by the nightly and pushes to development (the
+# default branch, whose caches every branch reads) once a week; the small
+# jobs (highlights, licences, SBOMs) build without one, so that the caches
+# pull requests restore stay within the 10 GB GitHub keeps.
 on:
   workflow_call:
     inputs:
@@ -207,7 +208,7 @@ jobs:
           cp "target/${{ matrix.target }}/release/opentide-lsp${ext}" "dist/opentide-lsp-${VERSION}-${{ matrix.target }}${ext}"
           cp "target/${{ matrix.target }}/release/opentide${ext}" "product/opentide-${VERSION}-${{ matrix.target }}${ext}"
       - name: Save the compiler cache
-        if: github.event_name == 'push' && inputs.dry-run && steps.sccache.outputs.cache-hit != 'true' && matrix.saves
+        if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development') && inputs.dry-run && steps.sccache.outputs.cache-hit != 'true' && matrix.saves
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .sccache
@@ -295,7 +296,7 @@ jobs:
           cp -r licenses pkg/licenses
           (cd pkg && zip -r "../dist/opentide-wasm-web-${VERSION}.zip" .)
       - name: Save the compiler cache
-        if: github.event_name == 'push' && inputs.dry-run && steps.sccache.outputs.cache-hit != 'true'
+        if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development') && inputs.dry-run && steps.sccache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .sccache
