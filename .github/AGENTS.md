@@ -211,7 +211,7 @@ merging** → add `PR gate`, remove the others → **Save changes**.
   artifact of the last successful run on the comparison base, `BASE_BRANCH`
   (`integration/unified-core` until the Unified Core merges into development), on the same CPU
   (a command compared with nothing fails). The rules
-  (10% over the last development result or the oracle baseline of the runner's CPU, the absolute
+  (10% over the base branch's last result or the oracle baseline of the runner's CPU, the absolute
   plan section 11 target for `rust`, the noise floor, the ceiling on an unrecorded CPU, the
   waiver) are in [`xtask/AGENTS.md`](../xtask/AGENTS.md), "bench"; the table lands in the job
   summary. Never required: it runs on demand and its numbers depend on the runner's CPU.
