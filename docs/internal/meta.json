@@ -1,4 +1,4 @@
 {
   "title": "Internal",
-  "pages": ["cli-experience", "test-plan", "pypi-trusted-publishing", "publishing", "behaviour-inventory", "vocab-upstream", "query", "adr", "unsafe", "supply-chain", "test-strength", "default-flip-readiness", "unified-core", "catchup-0.28-plan", "catchup-0.28"]
+  "pages": ["cli-experience", "test-plan", "pypi-trusted-publishing", "publishing", "behaviour-inventory", "vocab-upstream", "query", "adr", "unsafe", "supply-chain", "test-strength", "default-flip-readiness", "unified-core", "vscode-wasi", "catchup-0.28-plan", "catchup-0.28"]
 }
