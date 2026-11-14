@@ -7,7 +7,13 @@ Kusto is `opentide-kql`.
 
 ## Place
 
-foundation, tier 2: depends on opentide-core, -ecs, -syntax, -highlight. Used by opentide-tide and -analysis.
+foundation, tier 2: depends on opentide-core, -ecs, -parse, -highlight, and -syntax (only for the
+Lucene cross-check of `kuery_looks_like_lucene`). Used by opentide-tide and -analysis.
+
+EXPERIMENT (exp/pure-rust-parser-kuery, never merged): the parser is pure Rust: `src/syntax.rs`
+(kinds, logos lexer), `src/parser.rs` (grammar functions over opentide-parse), a rowan tree;
+highlighting maps kinds to HighlightSpec captures in `capture()`. `tests/differential.rs` holds
+it to the tree-sitter implementation, kept verbatim in `tests/legacy/`.
 
 ## Invariants
 

@@ -16,7 +16,16 @@ workspace = true
 [dependencies]
 opentide-core.workspace = true
 opentide-ecs.workspace = true
+# Only for the Lucene cross-check (`kuery_looks_like_lucene`): kuery's own
+# grammar is pure Rust.
 opentide-syntax.workspace = true
 opentide-highlight.workspace = true
-tree-sitter.workspace = true
+opentide-parse.workspace = true
+logos.workspace = true
+rowan.workspace = true
 regex.workspace = true
+
+[dev-dependencies]
+# The tree-sitter implementation, kept in tests/legacy for the differential test.
+tree-sitter.workspace = true
+insta.workspace = true

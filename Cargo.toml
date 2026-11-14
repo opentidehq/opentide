@@ -16,6 +16,7 @@ members = [
     "crates/opentide-esql",
     "crates/opentide-eql",
     "crates/opentide-kuery",
+    "crates/opentide-parse",
     "crates/opentide-lucene",
     "crates/opentide-falco",
     "crates/opentide-cql",
@@ -59,6 +60,7 @@ opentide-spl = { path = "crates/opentide-spl", version = "=0.12.0" }
 opentide-esql = { path = "crates/opentide-esql", version = "=0.12.0" }
 opentide-eql = { path = "crates/opentide-eql", version = "=0.12.0" }
 opentide-kuery = { path = "crates/opentide-kuery", version = "=0.12.0" }
+opentide-parse = { path = "crates/opentide-parse", version = "=0.12.0" }
 opentide-lucene = { path = "crates/opentide-lucene", version = "=0.12.0" }
 opentide-falco = { path = "crates/opentide-falco", version = "=0.12.0" }
 opentide-cql = { path = "crates/opentide-cql", version = "=0.12.0" }
@@ -93,6 +95,10 @@ url = "2.5"
 # version `url` already locks.
 percent-encoding = "2.3"
 regex = "1"
+# The pure-Rust parser toolkit (opentide-parse, exp/pure-rust-parser-kuery): the
+# versions yara-x-parser already locks.
+logos = "0.16.1"
+rowan = "0.17.0"
 # Look-around and back-references, which `regex` has not: the oracle's
 # Markdown-to-text patterns of the generated schemas (opentide-schema, UC-1.8).
 fancy-regex = "0.14"
