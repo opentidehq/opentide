@@ -1225,19 +1225,6 @@ fn sharing_findings(folders: &[PathBuf], resolved: &Node) -> Vec<ConfigFinding> 
         .collect()
 }
 
-/// Python's truth value of a configuration value.
-fn truthy(node: Option<&Node>) -> bool {
-    node.is_some_and(|node| match &node.value {
-        Value::Null => false,
-        Value::Bool(flag) => *flag,
-        Value::Int(number) => *number != 0,
-        Value::Float(number) => *number != 0.0,
-        Value::Str(text) | Value::Datetime(text) => !text.is_empty(),
-        Value::Seq(items) => !items.is_empty(),
-        Value::Map(entries) => !entries.is_empty(),
-    })
-}
-
 /// Status name to strategy, from `deployment.toml` as written
 /// (`_status_strategies`).
 fn status_strategies(
@@ -1280,12 +1267,16 @@ fn platform_cards(resolved: &Node, rules: &[(String, &Node)], env: &Env) -> Vec<
         if !matches!(document.value, Value::Map(_)) {
             continue;
         }
-        let enabled = match document.get("platform") {
-            Some(section) if matches!(section.value, Value::Map(_)) => {
-                truthy(section.get("enabled").map(AsRef::as_ref))
-            }
-            _ => truthy(document.get("enabled").map(AsRef::as_ref)),
-        };
+        // On only when `enabled` is the boolean `true`, as `deploy` reads it
+        // (`plan::enabled_with`): the string "false" is not on.
+        let section = document
+            .get("platform")
+            .filter(|section| matches!(section.value, Value::Map(_)))
+            .unwrap_or(document);
+        let enabled = matches!(
+            section.get("enabled").map(|node| &node.value),
+            Some(Value::Bool(true))
+        );
         let with_block: Vec<(&str, &Node)> = rules
             .iter()
             .filter_map(|(uuid, rule)| {
@@ -1307,11 +1298,9 @@ fn platform_cards(resolved: &Node, rules: &[(String, &Node)], env: &Env) -> Vec<
             }
             let name = tenant
                 .get("name")
-                .filter(|name| truthy(Some(name)))
-                .map_or_else(
-                    || format!("tenant {}", index + 1),
-                    |name| scalar_text(&name.value),
-                );
+                .and_then(|name| name.value.as_str())
+                .filter(|name| !name.is_empty())
+                .map_or_else(|| format!("tenant {}", index + 1), str::to_owned);
             let accepted: Vec<String> = match tenant.get("strategies").map(|node| &node.value) {
                 Some(Value::Seq(items)) => items
                     .iter()
@@ -1364,12 +1353,8 @@ fn platform_cards(resolved: &Node, rules: &[(String, &Node)], env: &Env) -> Vec<
                 if manual {
                     continue;
                 }
-                let status = block
-                    .get("status")
-                    .filter(|status| truthy(Some(status)))
-                    .map(|status| scalar_text(&status.value))
-                    .unwrap_or_default();
-                let Some(strategy) = strategies.get(&status) else {
+                let status = block.get("status").and_then(|status| status.value.as_str());
+                let Some(strategy) = status.and_then(|status| strategies.get(status)) else {
                     continue;
                 };
                 let runs = opentide_compile::strategy::deployed_by(*strategy);

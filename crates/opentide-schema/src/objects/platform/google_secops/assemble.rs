@@ -93,8 +93,9 @@ pub struct RuleFacts {
     pub title: String,
     /// `metadata.uuid`, as Python's `UUID` writes it.
     pub uuid: String,
-    /// `metadata.version`, as Python's `str()` writes it.
-    pub version: String,
+    /// `metadata.version`; the meta leaves `opentide_version` out when the
+    /// rule has none.
+    pub version: Option<String>,
     /// `metadata.author`.
     pub author: Option<String>,
     /// `description`.
@@ -159,7 +160,9 @@ pub fn meta_entries(facts: &RuleFacts, block: &Node) -> Vec<(String, String)> {
         entries.push(("technique".to_owned(), facts.techniques.join(",")));
     }
     entries.push(("opentide_uuid".to_owned(), facts.uuid.clone()));
-    entries.push(("opentide_version".to_owned(), facts.version.clone()));
+    if let Some(version) = &facts.version {
+        entries.push(("opentide_version".to_owned(), version.clone()));
+    }
     if let Some(Value::Map(meta)) = block.get("meta").map(|node| &node.value) {
         for entry in meta {
             entries.push((yaral::key_text(&entry.key), yaral::key_text(&entry.value)));

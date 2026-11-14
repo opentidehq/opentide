@@ -10,7 +10,7 @@ mod cassette_support;
 
 use std::time::Duration;
 
-use cassette_support::{json, replay, rows, tenant, window};
+use cassette_support::{json, replay, replay_cassette, rows, tenant, window};
 use opentide_compile::Json;
 use opentide_connectors::ConnectorError;
 use opentide_connectors::Registry;
@@ -196,9 +196,26 @@ fn query(text: &str, limit: usize, timeout: Duration) -> QueryRequest {
     }
 }
 
+/// `harfanglab/query` as the connector sends it: the Python client sent a
+/// search its gateway answered with a 502 once; the connector retries a
+/// `GET` three times, so the gateway answers the three copies alike.
+fn query_cassette() -> opentide_cassette::Cassette {
+    let mut cassette = cassette_support::cassette("harfanglab/query");
+    let gateway = cassette
+        .interactions
+        .iter()
+        .position(|recorded| recorded.request.method == "GET" && recorded.response.status == 502)
+        .unwrap();
+    let retried = cassette.interactions[gateway].clone();
+    cassette
+        .interactions
+        .splice(gateway..gateway, std::iter::repeat_n(retried, 3));
+    cassette
+}
+
 #[test]
 fn harfanglab_searches_telemetry_as_the_python_runner_does() {
-    let replay = replay("harfanglab/query", &[TOKEN]);
+    let replay = replay_cassette(query_cassette(), &[TOKEN]);
     let (tenant, http) = tenant(
         &replay,
         "harfanglab",
