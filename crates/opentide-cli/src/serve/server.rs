@@ -19,7 +19,7 @@ use sha2::{Digest, Sha256};
 
 use super::runner::{EventSink, Job, RunOutcome, RunRequest, Runner, compact, failure};
 use crate::envelope::INTERRUPTED_EXIT_CODE;
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// `initialize`'s `protocol`: bumped only when a message changes meaning.
 pub const PROTOCOL_VERSION: i64 = 1;
@@ -230,7 +230,7 @@ pub fn commands_digest(document: &Json) -> String {
                     .map(|(key, value)| (key.clone(), sorted(value)))
                     .collect();
                 members.sort_by(|a, b| a.0.cmp(&b.0));
-                Json::Object(members)
+                Json::object(members)
             }
             Json::Array(items) => Json::Array(items.iter().map(sorted).collect()),
             other => other.clone(),
@@ -642,7 +642,7 @@ impl Server {
         };
         let id = message.get("id");
         let params = match message.get("params") {
-            None | Some(Json::Null) => Json::Object(Vec::new()),
+            None | Some(Json::Null) => Json::Object(Object::new()),
             Some(params) => params.clone(),
         };
         if method == "invalidate" {

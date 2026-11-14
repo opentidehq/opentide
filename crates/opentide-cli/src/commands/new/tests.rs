@@ -149,7 +149,7 @@ fn prompted(
 }
 
 fn written(report: &Report, dir: &Path) -> String {
-    let data = Json::Object(report.outcome.data.clone());
+    let data = Json::object(report.outcome.data.clone());
     let Some(Json::Str(path)) = data.get("path") else {
         panic!("no path: {:?}", report.outcome);
     };

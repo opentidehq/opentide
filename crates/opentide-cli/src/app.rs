@@ -2129,16 +2129,13 @@ impl Run<'_> {
                 && let crate::json::Json::Object(members) = &mut document
             {
                 let at = members
-                    .iter()
-                    .position(|(key, _)| key == "message")
+                    .get_index_of("message")
                     .map_or(members.len(), |at| at + 1);
-                members.insert(
+                members.shift_insert(
                     at,
-                    (
-                        "warnings".into(),
-                        crate::json::Json::Array(
-                            report.warnings.iter().map(crate::json::Json::str).collect(),
-                        ),
+                    "warnings".into(),
+                    crate::json::Json::Array(
+                        report.warnings.iter().map(crate::json::Json::str).collect(),
                     ),
                 );
             }

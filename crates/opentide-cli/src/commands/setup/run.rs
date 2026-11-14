@@ -1335,7 +1335,7 @@ fn execute(
                 recorder
                     .steps
                     .iter()
-                    .map(|step| Json::Object(step.fields.clone()))
+                    .map(|step| Json::object(step.fields.clone()))
                     .collect(),
             ),
         ),

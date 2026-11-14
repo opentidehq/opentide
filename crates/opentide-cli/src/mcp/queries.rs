@@ -239,10 +239,10 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         );
         payload.push(("query_preview".to_owned(), Json::Str(preview(query))));
         payload.push(("next_actions".to_owned(), Json::Array(vec![live_step])));
-        return Json::Object(payload);
+        return Json::object(payload);
     };
     if query.trim().is_empty() {
-        return Json::Object(failed(
+        return Json::object(failed(
             payload,
             "query is empty: pass the query text to check".to_owned(),
         ));
@@ -256,7 +256,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         .then(|| opentide_analysis::LanguageId::from_extension(&chosen))
         .flatten()
     else {
-        return Json::Object(failed(
+        return Json::object(failed(
             payload,
             format!(
                 "{platform} queries are in {}, not {chosen:?}; pass one of those as language",
@@ -373,7 +373,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         ("query_preview".to_owned(), Json::Str(preview(query))),
         ("next_actions".to_owned(), Json::Array(actions)),
     ]);
-    Json::Object(payload)
+    Json::object(payload)
 }
 
 /// `run_query`: refused without `live`, with the call that runs it; with
@@ -474,7 +474,7 @@ pub fn run_query(run: &QueryRun, context: &Context<'_>) -> Result<Json, String> 
             "next_actions",
             Json::Array(vec![next_action(
                 "run_query",
-                Json::Object(arguments),
+                Json::object(arguments),
                 &shown,
                 &format!(
                     "run it on {platform}: this contacts the tenant with the configured \

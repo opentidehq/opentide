@@ -12,7 +12,7 @@ use serde_json::json;
 use super::catalog::{PLATFORMS, get_object, node_json, require, workspace};
 use super::server::Answer;
 use super::tools::Context;
-use crate::json::{Json, document_text};
+use crate::json::{Json, Object, document_text};
 
 /// The resources with a fixed URI, and whether each needs the workspace.
 const FIXED: [(&str, bool); 6] = [
@@ -370,8 +370,8 @@ fn templates(workspace: &Workspace) -> Vec<(String, Json)> {
         }
     }
     match out.iter_mut().find(|(key, _)| key == "systems") {
-        Some((_, existing)) => *existing = Json::Object(systems),
-        None => out.push(("systems".to_owned(), Json::Object(systems))),
+        Some((_, existing)) => *existing = Json::object(systems),
+        None => out.push(("systems".to_owned(), Json::object(systems))),
     }
     out
 }
@@ -453,7 +453,7 @@ fn index_vocabulary(vocabulary: &Vocabulary) -> Json {
                     members.push((key.to_owned(), Json::str(value)));
                 }
             }
-            Json::Object(members)
+            Json::object(members)
         })
         .collect();
     let mut meta = vec![
@@ -491,11 +491,11 @@ fn index_vocabulary(vocabulary: &Vocabulary) -> Json {
             for (name, value) in &entry.extra {
                 members.push((name.clone(), toml_json(value)));
             }
-            (key.clone(), Json::Object(members))
+            (key.clone(), Json::object(members))
         })
         .collect();
     Json::object([
-        ("metadata", Json::Object(meta)),
+        ("metadata", Json::object(meta)),
         ("entries", Json::Object(entries)),
     ])
 }
@@ -601,7 +601,7 @@ fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
             if description != Json::Null {
                 entry.push(("description".to_owned(), description));
             }
-            entries.push((uuid.to_owned(), Json::Object(entry)));
+            entries.push((uuid.to_owned(), Json::object(entry)));
             if family != "objective" {
                 continue;
             }
@@ -644,12 +644,12 @@ fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
                         entry.push((key.to_owned(), value));
                     }
                 }
-                entries.push((signal_uuid, Json::Object(entry)));
+                entries.push((signal_uuid, Json::object(entry)));
             }
         }
         out.push((
             family.to_owned(),
-            Json::object([("metadata", metadata), ("entries", Json::Object(entries))]),
+            Json::object([("metadata", metadata), ("entries", Json::object(entries))]),
         ));
     }
     out
@@ -695,7 +695,7 @@ fn text_member(members: &[(String, Json)], key: &str) -> String {
 fn definition(vocabulary: &Json) -> Json {
     let members = |key: &str| match vocabulary.get(key) {
         Some(Json::Object(members)) => members.clone(),
-        _ => Vec::new(),
+        _ => Object::new(),
     };
     let meta = members("metadata");
     let key = match meta
@@ -993,7 +993,7 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
                     .collect(),
             ),
         ),
-        ("tide".to_owned(), Json::Object(tide.clone())),
+        ("tide".to_owned(), Json::object(tide.clone())),
     ]);
     let _ = context;
     let schemas = json_schemas(workspace);
@@ -1036,9 +1036,9 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
     ));
     let object_vocab = object_vocabularies(workspace);
     Json::object([
-        ("paths", Json::Object(paths)),
+        ("paths", Json::object(paths)),
         ("configurations", node_json(config)),
-        ("vocabs", Json::Object(index_vocabularies(Some(workspace)))),
+        ("vocabs", Json::object(index_vocabularies(Some(workspace)))),
         (
             "framework_schemas",
             Json::Object(
@@ -1057,7 +1057,7 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
                     .collect(),
             ),
         ),
-        ("templates", Json::Object(templates(workspace))),
+        ("templates", Json::object(templates(workspace))),
         (
             "parse_errors",
             Json::Array(
@@ -1108,7 +1108,7 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
                     .collect(),
             ),
         ),
-        ("objects", Json::Object(families)),
+        ("objects", Json::object(families)),
         (
             "files",
             Json::Object(
@@ -1131,7 +1131,7 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
         ),
         (
             "indexes",
-            Json::object([("objects", Json::Object(object_vocab))]),
+            Json::object([("objects", Json::object(object_vocab))]),
         ),
     ])
 }

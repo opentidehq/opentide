@@ -16,7 +16,7 @@ use opentide_workspace::{OsFs, root};
 use super::{COMMAND_FAILED, open, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction, Outcome, USAGE_EXIT_CODE, code};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::diagnostic::{Diagnostic, Severity};
 use crate::render::glyphs;
 use crate::render::progress::{columns, plural};
@@ -129,27 +129,21 @@ impl DryRun {
         let error = if had_error {
             None
         } else {
-            members
-                .iter()
-                .position(|(key, _)| key == "error")
-                .map(|at| members.remove(at))
+            members.shift_remove("error")
         };
         let mut at = members
-            .iter()
-            .position(|(key, _)| key == "message")
+            .get_index_of("message")
             .map_or(members.len(), |at| at + 1);
         if !self.warnings.is_empty() {
-            members.insert(
+            members.shift_insert(
                 at,
-                (
-                    "warnings".into(),
-                    Json::Array(self.warnings.iter().map(Json::str).collect()),
-                ),
+                "warnings".into(),
+                Json::Array(self.warnings.iter().map(Json::str).collect()),
             );
             at += 1;
         }
         if let Some(error) = error {
-            members.insert(at, error);
+            members.shift_insert(at, "error".into(), error);
         }
         Json::Object(members)
     }
@@ -346,7 +340,7 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
     }
     let summary = match outcome.summary.as_ref().map(convert) {
         Some(Json::Object(members)) => members,
-        _ => Vec::new(),
+        _ => Object::new(),
     };
     let diagnostics = result
         .get("diagnostics")

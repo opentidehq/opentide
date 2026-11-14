@@ -8,7 +8,7 @@
 //! `OPENTIDE_CLI_BLESS=1 cargo nextest run -p opentide-cli framework_schemas`
 //! rewrites it, and the same test fails when it drifts from the recording.
 
-use crate::json::Json;
+use crate::json::{Json, Object};
 use std::sync::OnceLock;
 
 /// The generated file, as text.
@@ -32,12 +32,12 @@ impl Schemas {
         let document = Json::parse(text).unwrap_or(Json::Null);
         let by_path = match document.get("output_schemas") {
             Some(Json::Object(members)) => members.clone(),
-            _ => Vec::new(),
+            _ => Object::new(),
         };
         let defs = document
             .get("$defs")
             .cloned()
-            .unwrap_or(Json::Object(Vec::new()));
+            .unwrap_or(Json::Object(Object::new()));
         Schemas { by_path, defs }
     }
 
@@ -65,6 +65,6 @@ mod tests {
         assert!(matches!(schemas.output_schema("validate"), Json::Object(_)));
         assert_eq!(schemas.output_schema("no such"), Json::Null);
         let empty = Schemas::parse("not json");
-        assert_eq!(empty.defs(), Json::Object(Vec::new()));
+        assert_eq!(empty.defs(), Json::Object(Object::new()));
     }
 }

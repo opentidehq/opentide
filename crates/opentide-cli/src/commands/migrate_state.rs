@@ -613,7 +613,7 @@ pub fn migrate(workspace: &Path, rules_dir: &Path) -> Report {
                 members.extend(binding);
             }
             unused.push((
-                Json::Object(members),
+                Json::object(members),
                 format!(
                     "external_id_unused: {} tenant {} id {} removed from {relative} (never read \
                      by its deployer; not stored)",

@@ -21,7 +21,7 @@ use opentide_schema::vocab::bundled;
 use super::{ISSUES_FOUND, Report, placement};
 use crate::env::Env;
 use crate::envelope::Failure;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::outcome::OutcomeKind;
 
 const COMMAND: &str = "migrate vocab-scope";
@@ -613,17 +613,17 @@ objective:
                 .clone()
         };
         let entities = field("entities");
-        assert_eq!(member(&entities, "blocked"), Json::Object(Vec::new()));
-        assert_eq!(member(&entities, "rewrites"), Json::Object(Vec::new()));
+        assert_eq!(member(&entities, "blocked"), Json::Object(Object::new()));
+        assert_eq!(member(&entities, "rewrites"), Json::Object(Object::new()));
         assert_eq!(
             member(&entities, "by_status"),
-            Json::Object(vec![("scoped".to_owned(), Json::Int(3))])
+            Json::object(vec![("scoped".to_owned(), Json::Int(3))])
         );
         let surface = field("surface");
-        assert_eq!(member(&surface, "blocked"), Json::Object(Vec::new()));
+        assert_eq!(member(&surface, "blocked"), Json::Object(Object::new()));
         assert_eq!(
             member(&surface, "by_status"),
-            Json::Object(vec![("scoped".to_owned(), Json::Int(1))])
+            Json::object(vec![("scoped".to_owned(), Json::Int(1))])
         );
     }
 
@@ -644,7 +644,7 @@ objective:
         );
         assert_eq!(report.outcome.exit_code, 0, "{}", report.outcome.message);
         assert!(report.outcome.failure.is_none());
-        assert_eq!(data(&report, "failed_files"), &Json::Object(Vec::new()));
+        assert_eq!(data(&report, "failed_files"), &Json::Object(Object::new()));
         assert_eq!(data(&report, "scanned"), &Json::Int(1));
         assert_eq!(
             data(&report, "changed_files"),

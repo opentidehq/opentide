@@ -329,7 +329,7 @@ fn with_member(mut members: Vec<(String, Json)>, key: &str, value: Json) -> Json
         Some((_, slot)) => *slot = value,
         None => members.push((key.to_owned(), value)),
     }
-    Json::Object(members)
+    Json::object(members)
 }
 
 /// Writes or merges `.vscode/extensions.json` recommending the extension
@@ -472,7 +472,7 @@ fn write_settings(
                 .collect(),
         )
     } else {
-        with_member(existing.clone(), "yaml.schemas", Json::Object(kept.clone()))
+        with_member(existing.clone(), "yaml.schemas", Json::object(kept.clone()))
     };
     let edited = jsonc::edit(&text, |object| {
         let member = object
