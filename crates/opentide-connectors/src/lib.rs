@@ -93,6 +93,22 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
     }
 }
 
+/// The HTTP settings `opentide deploy` mounts for *platform*: a deploy takes
+/// no `--timeout`, so each client reads for the timeout its Python deployer
+/// builds it with: Sentinel's ARM session 60 s (`AlertRules`; a deploy sends
+/// no query, so azure-core's 300 s does not apply), Elastic's client 30 s,
+/// Google SecOps' 60 s, and the transport's 120 s for the clients that take
+/// the caller's. The others keep their own, as in [`http_settings`].
+pub fn deploy_http_settings(platform: &str) -> HttpSettings {
+    use std::time::Duration;
+    match platform {
+        "sentinel" => sentinel::http_settings(Duration::from_secs(60)),
+        "elastic" => elastic::http_settings(Duration::from_secs(30)),
+        "google_secops" => google_secops::http_defaults(),
+        _ => http_settings(platform, http::DEFAULT_TIMEOUT),
+    }
+}
+
 /// The built-in platforms with a connector, in the order Python lists them
 /// ([`plugin::BUILTIN`], the platform table's connector order): CrowdStrike,
 /// HarfangLab and Sysdig (UC-4.2a), Defender for Endpoint, Elastic and
@@ -173,6 +189,37 @@ mod tests {
         assert_eq!(
             super::http_settings("unknown", timeout),
             super::HttpSettings::default()
+        );
+    }
+
+    #[test]
+    fn a_deploy_reads_for_each_python_deployers_client_timeout() {
+        let timeout = |platform| super::deploy_http_settings(platform).timeout;
+        for (platform, seconds) in [
+            ("sentinel", 60),
+            ("elastic", 30),
+            ("google_secops", 60),
+            ("exabeam", 30),
+            ("sysdig", 30),
+            ("bitdefender", 30),
+            ("graylog", 30),
+            ("splunk", 120),
+            ("carbon_black_cloud", 120),
+            ("crowdstrike", 120),
+        ] {
+            assert_eq!(
+                timeout(platform),
+                Duration::from_secs(seconds),
+                "{platform}"
+            );
+        }
+        assert_eq!(
+            super::deploy_http_settings("sysdig"),
+            super::sysdig::http_defaults()
+        );
+        assert_eq!(
+            super::deploy_http_settings("sentinel").retry,
+            super::sentinel::http_settings(Duration::from_secs(60)).retry
         );
     }
 

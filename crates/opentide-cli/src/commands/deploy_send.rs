@@ -32,7 +32,7 @@ use opentide_workspace::{OsFs, Workspace, root};
 use tokio_util::sync::CancellationToken;
 
 use super::deploy_state::{self, ExternalId, StateError};
-use super::query::{Configured, http_settings, log_unset, toml_value};
+use super::query::{Configured, log_unset, toml_value};
 use super::validate_live::{Batch, batches};
 use super::{Report, placement};
 use crate::env::Env;
@@ -1625,6 +1625,14 @@ impl Raised {
     }
 }
 
+/// The HTTP settings a tenant's client mounts for `deploy`, which takes no
+/// `--timeout`: the connectors' own
+/// ([`opentide_connectors::deploy_http_settings`]), the one table the SDK
+/// reads too.
+fn deploy_http_settings(platform: &str) -> opentide_connectors::HttpSettings {
+    opentide_connectors::deploy_http_settings(platform)
+}
+
 /// The HTTP status an SDK exception carries: Splunk's `HTTP 400 Bad
 /// Request -- ...`, Sentinel's `... failed with HTTP 400 ...`.
 fn http_status(detail: &str) -> Option<u16> {
@@ -1732,18 +1740,7 @@ impl Sender<'_, '_> {
             .iter()
             .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
             .collect();
-        let timeout = match platform {
-            "elastic" => 30,
-            "sentinel" => 60,
-            _ => 120,
-        };
-        let settings = match platform {
-            "sysdig" => opentide_connectors::sysdig::http_defaults(),
-            "bitdefender" => opentide_connectors::bitdefender::http_defaults(),
-            "google_secops" => opentide_connectors::google_secops::http_defaults(),
-            "graylog" => opentide_connectors::graylog::http_defaults(),
-            _ => http_settings(platform, Duration::from_secs(timeout)),
-        };
+        let settings = deploy_http_settings(platform);
         let tenant = Tenant::from_setup(
             platform,
             &batch.tenant.name,
@@ -3944,7 +3941,32 @@ pub fn shard_path(workspace: &Path, uuid: &str) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+    use super::super::query::http_settings;
     use super::*;
+
+    #[test]
+    fn every_platform_mounts_the_sdks_http_settings() {
+        // The command line's clients and the SDK's read one table: a
+        // platform the CLI lists apart drifts (Sysdig, Bitdefender, Exabeam
+        // and Google SecOps were missing, and Google SecOps' --timeout went
+        // unread).
+        for platform in opentide_schema::platforms::PLATFORMS.iter().map(|p| p.id) {
+            // `query`'s and `validate query --live`'s default --timeout, and
+            // one a user gives.
+            for timeout in [Duration::from_secs(120), Duration::from_secs(7)] {
+                assert_eq!(
+                    http_settings(platform, timeout),
+                    opentide_connectors::http_settings(platform, timeout),
+                    "{platform} at {timeout:?}"
+                );
+            }
+            assert_eq!(
+                deploy_http_settings(platform),
+                opentide_connectors::deploy_http_settings(platform),
+                "{platform}'s deploy"
+            );
+        }
+    }
 
     fn result(status: &'static str, action: &str, tenant: Option<&str>, id: &str) -> RuleResult {
         let mut result = RuleResult::new("elastic", tenant, id, "Rule");

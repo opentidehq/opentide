@@ -199,6 +199,8 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Fixed
 
+- **`--timeout` reaches Google SecOps, and each platform's client waits as long as the SDK's.** `query` and `validate query --live` on Google SecOps waited 120 s whatever `--timeout` said, and Exabeam's sign-in 120 s instead of 30 s. `deploy` waits 30 s on Exabeam and 60 s on Sentinel, as 0.28.0 did, not 120 s and 300 s.
+
 - **Exabeam messages name a value as JSON.** A block status that is not a string, or a missing one, a recurrence day and a create that answers no id are named `true`, `false` or `null`, as the other platforms' messages name them, not Python's `True`, `False` or `None`.
 
 - **Falco receives a Sysdig list item or exception value as the file writes it** ([#841](https://github.com/opentidehq/opentide/issues/841)). A number or a boolean in `lists[].items` or `exceptions[].values` reached Falco in Python's spelling: `1.50` as `1.5`, `0x1F` as `31`, `True` as `true` in the condition, and an exception value as a JSON number. Falco reads every item as its text, so `deploy` now sends the scalar as written, an exception value as a string, and `validate` checks the block with the same text. A null exception value is refused (`exceptions.N.values.M: Value error, an exception value cannot be null`) where `None` was sent: quote it (`"null"`) to match that word.
