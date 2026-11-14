@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 use opentide_compile::json::{Json as CJson, Object};
 use opentide_connectors::connector::TenantContext;
 use opentide_connectors::credentials::Mode as Resolve;
-use opentide_connectors::{ConnectorError, Environment, HttpClient, Tenant};
+use opentide_connectors::{Environment, HttpClient, Tenant};
 use tokio_util::sync::CancellationToken;
 
 use super::query::{Configured, http_settings, toml_value};
@@ -115,13 +115,7 @@ fn write_text(path: &Path, text: &str) -> Result<(), String> {
     } else {
         text.to_owned()
     };
-    std::fs::write(path, text.as_bytes()).map_err(|error| {
-        format!(
-            "{}: {}",
-            path.display(),
-            super::deploy_state::os_error_text(&error, path)
-        )
-    })
+    std::fs::write(path, text.as_bytes()).map_err(|error| format!("{}: {error}", path.display()))
 }
 
 /// The run as a report: one checklist step, then `Imported 3 rules from
@@ -194,38 +188,33 @@ const NO_RECOMMENDATION_TEMPLATE: &str = "\n      #recommendation: |\n        #T
 const RECOMMENDATION_TEMPLATE: &str = "\n      recommendation: |\n{recommendation}\n";
 const TECHNIQUES_TEMPLATE: &str = "\n      techniques:\n        {techniques_list}\n";
 
-/// `str.format` of `template` with `values`, in one pass: a value is never
-/// read as a field.
-pub(crate) fn format(template: &str, values: &[(&str, &str)]) -> String {
+/// `template` with each `{name}` placeholder that `values` names replaced by
+/// its value, in one pass: a value is never read as a placeholder, and a
+/// placeholder `values` does not name is kept as it is.
+pub(crate) fn fill(template: &str, values: &[(&str, &str)]) -> String {
     let mut out = String::with_capacity(template.len());
     let mut rest = template;
     while let Some(start) = rest.find('{') {
         out.push_str(&rest[..start]);
         let after = &rest[start + 1..];
-        match after.find('}') {
-            Some(end) => {
-                let name = &after[..end];
-                match values.iter().find(|(key, _)| *key == name) {
-                    Some((_, value)) => out.push_str(value),
-                    None => {
-                        out.push('{');
-                        out.push_str(name);
-                        out.push('}');
-                    }
-                }
-                rest = &after[end + 1..];
-            }
-            None => {
-                out.push_str(&rest[start..]);
-                rest = "";
-            }
+        let Some(end) = after.find('}') else {
+            out.push_str(&rest[start..]);
+            rest = "";
+            break;
+        };
+        let name = &after[..end];
+        match values.iter().find(|(key, _)| *key == name) {
+            Some((_, value)) => out.push_str(value),
+            None => out.push_str(&rest[start..start + end + 2]),
         }
+        rest = &after[end + 1..];
     }
     out.push_str(rest);
     out
 }
 
-/// Each non-blank line stripped and indented (`fix_multiline`).
+/// Each non-blank line of `text`, without its surrounding whitespace, on
+/// its own line indented by `indentation` spaces.
 fn fix_multiline(text: &str, indentation: usize) -> String {
     text.lines()
         .map(str::trim)
@@ -235,8 +224,8 @@ fn fix_multiline(text: &str, indentation: usize) -> String {
         .join("\n")
 }
 
-/// A space before each capital but the first character
-/// (`add_space_before_uppercase`).
+/// Graph's category in words: a space before each capital but the first
+/// character (`InitialAccess` is `Initial Access`).
 fn space_before_uppercase(text: &str) -> String {
     let mut out = String::new();
     for (index, c) in text.chars().enumerate() {
@@ -248,31 +237,12 @@ fn space_before_uppercase(text: &str) -> String {
     out
 }
 
-/// The characters a file name cannot hold, as spaces (`sanitize_filename`).
+/// `name` as a file name on every system: each character Windows refuses
+/// in a file name (`< > : " / \ | ? *`) is a space.
 fn sanitize_filename(name: &str) -> String {
     name.chars()
         .map(|c| if "<>:\"/\\|?*".contains(c) { ' ' } else { c })
         .collect()
-}
-
-/// `str.title()`.
-fn title(text: &str) -> String {
-    let mut out = String::new();
-    let mut previous_cased = false;
-    for c in text.chars() {
-        if c.is_alphabetic() {
-            if previous_cased {
-                out.extend(c.to_lowercase());
-            } else {
-                out.extend(c.to_uppercase());
-            }
-            previous_cased = true;
-        } else {
-            out.push(c);
-            previous_cased = false;
-        }
-    }
-    out
 }
 
 /// `text` as a JSON string.
@@ -288,145 +258,186 @@ fn capitalised(text: &str) -> String {
     })
 }
 
-/// What a missing key raises in the importer: `KeyError: 'name'`.
-fn key_error(key: &str) -> String {
-    format!("KeyError: '{key}'")
+/// A field of a listed rule that an import needs, missing (or `null`), or
+/// of another type than it reads: the rule is skipped and reported.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FieldError {
+    /// The field, as a dotted path in the listing (`schedule.period`).
+    pub field: String,
+    /// What the field should be (`a string`), none when it is missing.
+    pub expected: Option<&'static str>,
 }
 
-fn text_at<'j>(rule: &'j CJson, key: &str) -> Result<&'j str, String> {
-    match rule.get(key) {
-        Some(CJson::Str(text)) => Ok(text),
-        Some(_) => Err(format!("AttributeError: '{key}' is not a string")),
-        None => Err(key_error(key)),
+impl FieldError {
+    pub(crate) fn missing(field: &str) -> Self {
+        Self {
+            field: field.to_owned(),
+            expected: None,
+        }
+    }
+
+    pub(crate) fn not(field: &str, expected: &'static str) -> Self {
+        Self {
+            field: field.to_owned(),
+            expected: Some(expected),
+        }
+    }
+
+    /// The error of a field read inside `parent` (`parent.field`).
+    pub(crate) fn under(mut self, parent: &str) -> Self {
+        self.field = format!("{parent}.{}", self.field);
+        self
     }
 }
 
+impl std::fmt::Display for FieldError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.expected {
+            None => write!(f, "field `{}` is missing", self.field),
+            Some(expected) => write!(f, "field `{}` is not {expected}", self.field),
+        }
+    }
+}
+
+/// The value of `key` in `value`, which `shown` names in an error; `null`
+/// counts as missing.
+fn need<'j>(value: &'j CJson, key: &str, shown: &str) -> Result<&'j CJson, FieldError> {
+    value
+        .get(key)
+        .filter(|value| !value.is_null())
+        .ok_or_else(|| FieldError::missing(shown))
+}
+
+/// The string at `key` in `value`.
+fn need_text<'j>(value: &'j CJson, key: &str, shown: &str) -> Result<&'j str, FieldError> {
+    need(value, key, shown)?
+        .as_str()
+        .ok_or_else(|| FieldError::not(shown, "a string"))
+}
+
+/// The date of an ISO 8601 timestamp (`2026-01-02` of `2026-01-02T03:04:05Z`).
+fn date(timestamp: &str) -> &str {
+    timestamp.split('T').next().unwrap_or_default()
+}
+
 /// The file name and YAML of one custom detection, which targets
-/// `tenant_names` (`_render_rule`).
+/// `tenant_names`, or the field that keeps it from being imported.
 #[expect(
     clippy::too_many_lines,
-    reason = "the oracle's `_render_rule`, field by field, in one place"
+    reason = "the template's fields, one by one, in one place"
 )]
-fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String), String> {
-    let name = text_at(rule, "displayName")?;
-    let uuid = text_at(rule, "detectorId")?;
-    let created = text_at(rule, "createdDateTime")?
-        .split('T')
-        .next()
-        .unwrap_or_default();
-    let modified = text_at(rule, "lastModifiedDateTime")?
-        .split('T')
-        .next()
-        .unwrap_or_default();
-    let action = rule
-        .get("detectionAction")
-        .ok_or_else(|| key_error("detectionAction"))?;
+fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String), FieldError> {
+    const TECHNIQUES: &str = "detectionAction.alertTemplate.mitreTechniques";
+    let name = need_text(rule, "displayName", "displayName")?;
+    let uuid = need_text(rule, "detectorId", "detectorId")?;
+    let created = date(need_text(rule, "createdDateTime", "createdDateTime")?);
+    let modified = date(need_text(
+        rule,
+        "lastModifiedDateTime",
+        "lastModifiedDateTime",
+    )?);
+    let action = need(rule, "detectionAction", "detectionAction")?;
     let empty = CJson::Object(Object::new());
     let template = action.get("alertTemplate").unwrap_or(&empty);
-    let field = |key: &str| template.get(key).filter(|value| !value.is_null());
-    let severity = field("severity")
-        .and_then(CJson::as_str)
-        .ok_or("AttributeError: 'NoneType' object has no attribute 'title'")?;
-    let author = text_at(rule, "createdBy")?;
-    let mut description = field("description")
-        .and_then(CJson::as_str)
-        .ok_or("AttributeError: 'NoneType' object has no attribute 'splitlines'")?
-        .to_owned();
-    let period = rule
-        .get("schedule")
-        .ok_or_else(|| key_error("schedule"))?
-        .get("period")
-        .ok_or_else(|| key_error("period"))?;
-    let period = match period {
+    let alert = |key: &str| -> Result<&str, FieldError> {
+        need_text(
+            template,
+            key,
+            &format!("detectionAction.alertTemplate.{key}"),
+        )
+    };
+    let severity = alert("severity")?;
+    let author = need_text(rule, "createdBy", "createdBy")?;
+    let mut description = alert("description")?.to_owned();
+    let schedule = match need(
+        need(rule, "schedule", "schedule")?,
+        "period",
+        "schedule.period",
+    )? {
+        CJson::Str(text) if text == "0" => "NRT".to_owned(),
+        CJson::Int(0) => "NRT".to_owned(),
         CJson::Str(text) => text.clone(),
-        other => opentide_connectors::text::json_text(other),
+        CJson::Int(number) => number.to_string(),
+        _ => return Err(FieldError::not("schedule.period", "a string")),
     };
-    let schedule = if period == "0" {
-        "NRT".to_owned()
-    } else {
-        period
-    };
-    let category = space_before_uppercase(
-        field("category")
-            .and_then(CJson::as_str)
-            .ok_or("TypeError: 'NoneType' object is not iterable")?,
-    );
-    let query = rule
-        .get("queryCondition")
-        .ok_or_else(|| key_error("queryCondition"))?
-        .get("queryText")
-        .and_then(CJson::as_str)
-        .ok_or("AttributeError: 'NoneType' object has no attribute 'splitlines'")?;
-    let status = if rule.get("isEnabled").is_some_and(CJson::truthy) {
+    let category = space_before_uppercase(alert("category")?);
+    let query = need_text(
+        need(rule, "queryCondition", "queryCondition")?,
+        "queryText",
+        "queryCondition.queryText",
+    )?;
+    let status = if rule.get("isEnabled") == Some(&CJson::Bool(true)) {
         "PRODUCTION"
     } else {
         "DISABLED"
     };
-    let modified_by = rule
-        .get("lastModifiedBy")
-        .ok_or_else(|| key_error("lastModifiedBy"))?;
-    let contributors = if modified_by.as_str() == Some(author) {
-        NO_CONTRIBUTORS_TEMPLATE.trim().to_owned()
-    } else {
-        let contributor = match modified_by {
-            CJson::Str(text) => text.clone(),
-            other => opentide_connectors::text::json_text(other),
-        };
-        format(CONTRIBUTORS_TEMPLATE, &[("contributor", &contributor)])
-            .trim()
-            .to_owned()
+    // A rule last changed by someone other than its author names them as a
+    // contributor.
+    let contributors = match rule.get("lastModifiedBy") {
+        Some(CJson::Str(editor)) if editor != author => {
+            fill(CONTRIBUTORS_TEMPLATE, &[("contributor", editor)])
+                .trim()
+                .to_owned()
+        }
+        _ => NO_CONTRIBUTORS_TEMPLATE.trim().to_owned(),
     };
-    let mut techniques = String::new();
-    if let Some(CJson::Array(items)) = field("mitreTechniques")
-        && !items.is_empty()
-    {
-        let names: Vec<String> = items
-            .iter()
-            .map(|item| match item {
-                CJson::Str(text) => text.clone(),
-                other => opentide_connectors::text::json_text(other),
-            })
-            .collect();
-        let list = format!("- {}", names.join("\n        - "));
-        format(TECHNIQUES_TEMPLATE, &[("techniques_list", &list)])
-            .trim_end()
-            .clone_into(&mut techniques);
-    }
-    let alert_recommendation = match field("recommendedActions").filter(|value| value.truthy()) {
-        None => NO_RECOMMENDATION_TEMPLATE.trim().to_owned(),
-        Some(recommended) => {
-            let recommended = recommended
-                .as_str()
-                .ok_or("TypeError: can only concatenate str (not \"list\") to str")?;
+    let techniques = match template.get("mitreTechniques") {
+        None | Some(CJson::Null) => String::new(),
+        Some(CJson::Array(items)) if items.is_empty() => String::new(),
+        Some(CJson::Array(items)) => {
+            let names = items
+                .iter()
+                .map(|item| {
+                    item.as_str()
+                        .ok_or_else(|| FieldError::not(TECHNIQUES, "a list of strings"))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let list = format!("- {}", names.join("\n        - "));
+            fill(TECHNIQUES_TEMPLATE, &[("techniques_list", &list)])
+                .trim_end()
+                .to_owned()
+        }
+        Some(_) => return Err(FieldError::not(TECHNIQUES, "a list of strings")),
+    };
+    let alert_recommendation = match template.get("recommendedActions") {
+        None | Some(CJson::Null) => NO_RECOMMENDATION_TEMPLATE.trim().to_owned(),
+        Some(CJson::Str(recommended)) if recommended.is_empty() => {
+            NO_RECOMMENDATION_TEMPLATE.trim().to_owned()
+        }
+        Some(CJson::Str(recommended)) => {
             description.push_str("\n\n---\nRecommended Actions : ");
             description.push_str(recommended);
-            format(
+            fill(
                 RECOMMENDATION_TEMPLATE,
                 &[("recommendation", &fix_multiline(recommended, 8))],
             )
             .trim()
             .to_owned()
         }
+        Some(_) => {
+            return Err(FieldError::not(
+                "detectionAction.alertTemplate.recommendedActions",
+                "a string",
+            ));
+        }
     };
     let mut impacted_device = "#device:".to_owned();
     let mut impacted_user = "#user:".to_owned();
     let mut impacted_entities_flag = "#";
     let assets = match template.get("impactedAssets") {
-        Some(CJson::Array(items)) => items,
-        Some(_) => return Err("TypeError: 'NoneType' object is not iterable".into()),
-        None => return Err(key_error("impactedAssets")),
+        None | Some(CJson::Null) => &[][..],
+        Some(CJson::Array(items)) => items.as_slice(),
+        Some(_) => {
+            return Err(FieldError::not(
+                "detectionAction.alertTemplate.impactedAssets",
+                "a list",
+            ));
+        }
     };
     for asset in assets {
-        let kind = asset
-            .get("@odata.type")
-            .and_then(CJson::as_str)
-            .ok_or_else(|| key_error("@odata.type"))?;
-        let identifier = || {
-            asset
-                .get("identifier")
-                .and_then(CJson::as_str)
-                .ok_or_else(|| key_error("identifier"))
-        };
+        let shown = |key: &str| format!("detectionAction.alertTemplate.impactedAssets[].{key}");
+        let kind = need_text(asset, "@odata.type", &shown("@odata.type"))?;
+        let identifier = || need_text(asset, "identifier", &shown("identifier"));
         if kind.ends_with("impactedDeviceAsset") {
             impacted_device = format!("device: {}", capitalised(identifier()?));
             impacted_entities_flag = "";
@@ -441,7 +452,7 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
         .map(|name| json_string(name))
         .collect::<Vec<_>>()
         .join("\n      - ");
-    let body = format(
+    let body = fill(
         TEMPLATE,
         &[
             ("name", &json_string(name)),
@@ -449,7 +460,7 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
             ("uuid", uuid),
             ("created", created),
             ("modified", modified),
-            ("alert_severity", &title(severity)),
+            ("alert_severity", &capitalised(&severity.to_lowercase())),
             ("alert_recommendation", &alert_recommendation),
             ("impacted_device", &impacted_device),
             ("impacted_user", &impacted_user),
@@ -505,6 +516,7 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
         .map_err(|error| format!("{}: {error}", destination.display()))?;
     let connector = opentide_connectors::defender::Defender::new();
     let mut listed: Vec<(String, Vec<(String, CJson)>)> = Vec::new();
+    let mut skipped = Skipped::new(DEFENDER_LOGGER, "defender_import_rule_skipped");
     for configured in &tenants {
         let (tenant, http) = tenant(
             DEFENDER,
@@ -530,23 +542,38 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
                     critical = true,
                     "fatal_error"
                 );
-                "TenantConnectionError: Cannot authenticate with the tenant configuration"
-                    .to_owned()
+                format!(
+                    "cannot authenticate against Defender for Endpoint tenant '{}' with its configuration",
+                    configured.name
+                )
             }
             opentide_connectors::defender::DefenderError::Refused { message, .. } => message,
-            opentide_connectors::defender::DefenderError::Connector(error) => {
-                connector_message(&error)
-            }
+            opentide_connectors::defender::DefenderError::Connector(error) => error.to_string(),
         })?;
         for rule in rules {
-            let detector = text_at(&rule, "detectorId")?.to_owned();
-            let id = rule.get("id").ok_or_else(|| key_error("id"))?;
-            let external = match id {
-                CJson::Int(number) => super::deploy_state::ExternalId::Int(*number),
-                CJson::Str(text) => super::deploy_state::ExternalId::Text(text.clone()),
-                other => super::deploy_state::ExternalId::Text(
-                    opentide_connectors::text::json_text(other),
-                ),
+            let shown = rule
+                .get("displayName")
+                .and_then(CJson::as_str)
+                .unwrap_or_default()
+                .to_owned();
+            let detector = match need_text(&rule, "detectorId", "detectorId") {
+                Ok(detector) => detector.to_owned(),
+                Err(error) => {
+                    skipped.push(&shown, &error.to_string());
+                    continue;
+                }
+            };
+            let external = match rule.get("id") {
+                Some(CJson::Int(number)) => super::deploy_state::ExternalId::Int(*number),
+                Some(CJson::Str(text)) => super::deploy_state::ExternalId::Text(text.clone()),
+                Some(CJson::Null) | None => {
+                    skipped.push(&shown, &FieldError::missing("id").to_string());
+                    continue;
+                }
+                Some(_) => {
+                    skipped.push(&shown, &FieldError::not("id", "a string").to_string());
+                    continue;
+                }
             };
             record_external_id(&root, &detector, &configured.name, &external)?;
             match listed.iter_mut().find(|(seen, _)| *seen == detector) {
@@ -559,16 +586,16 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
     for (detector, copies) in &listed {
         let names: Vec<String> = copies.iter().map(|(name, _)| name.clone()).collect();
         let first = &copies[0].1;
+        let shown = first
+            .get("displayName")
+            .and_then(CJson::as_str)
+            .unwrap_or(detector);
         if copies[1..]
             .iter()
             .any(|(_, rule)| content(rule) != content(first))
         {
-            let shown = first
-                .get("displayName")
-                .map(opentide_connectors::text::json_text)
-                .unwrap_or_default();
             tracing::warn!(
-                rule = shown.as_str(),
+                rule = shown,
                 uuid = detector.as_str(),
                 logger = DEFENDER_LOGGER,
                 detail = format!(
@@ -580,7 +607,13 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
                 "defender_import_tenants_differ"
             );
         }
-        let (mut filename, body) = render_rule(first, &names)?;
+        let (mut filename, body) = match render_rule(first, &names) {
+            Ok(rendered) => rendered,
+            Err(error) => {
+                skipped.push(shown, &format!("rule {detector}: {error}"));
+                continue;
+            }
+        };
         if written.contains(&filename.to_lowercase()) {
             let short: String = detector.chars().take(8).collect();
             filename = format!("{filename} {short}");
@@ -592,11 +625,52 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
             *written_count += 1;
         }
     }
-    Ok(Vec::new())
+    Ok(skipped.into_keys())
 }
 
-/// Binds the tenant's Graph id in the rule's deployment state
-/// (`record_external_id`).
+/// The rules an import left out, each logged as it is skipped and listed
+/// under `skipped` in the result, with the reason.
+pub(crate) struct Skipped {
+    logger: &'static str,
+    event: &'static str,
+    rules: Vec<Json>,
+}
+
+impl Skipped {
+    pub(crate) fn new(logger: &'static str, event: &'static str) -> Self {
+        Self {
+            logger,
+            event,
+            rules: Vec::new(),
+        }
+    }
+
+    /// Logs and lists the rule `name`, left out for `reason`.
+    pub(crate) fn push(&mut self, name: &str, reason: &str) {
+        tracing::warn!(
+            rule = name,
+            reason = reason,
+            logger = self.logger,
+            "{}",
+            self.event
+        );
+        self.rules.push(Json::object([
+            ("name", Json::str(name)),
+            ("reason", Json::str(reason)),
+        ]));
+    }
+
+    /// The result's keys: `skipped`, when a rule was.
+    pub(crate) fn into_keys(self) -> Vec<(String, Json)> {
+        if self.rules.is_empty() {
+            Vec::new()
+        } else {
+            vec![("skipped".to_owned(), Json::Array(self.rules))]
+        }
+    }
+}
+
+/// Binds the tenant's Graph id in the rule's deployment state.
 fn record_external_id(
     workspace: &Path,
     uuid: &str,
@@ -604,70 +678,51 @@ fn record_external_id(
     id: &super::deploy_state::ExternalId,
 ) -> Result<(), String> {
     let mut shard = super::deploy_state::Shard::load(workspace, uuid)
-        .map_err(|error| format!("ValueError: {}", error.message))?;
+        .map_err(|error| format!("the deployment state of rule {uuid}: {}", error.message))?;
     shard
         .set(DEFENDER, tenant, id)
-        .map_err(|error| format!("ValueError: {}", error.message))?;
-    shard.save().map_err(|error| format!("OSError: {error}"))
-}
-
-/// A transport failure as the importer's exception reads.
-fn connector_message(error: &ConnectorError) -> String {
-    let text = error.to_string();
-    match error {
-        ConnectorError::Timeout { .. } => format!("ReadTimeout: {text}"),
-        _ => format!("ConnectionError: {text}"),
-    }
+        .map_err(|error| format!("the deployment state of rule {uuid}: {}", error.message))?;
+    shard
+        .save()
+        .map_err(|error| format!("the deployment state of rule {uuid}: {error}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// A tenant that answers nothing within the import's 60 s (too long for
-    /// a test to wait out) fails as the importer's `ReadTimeout`; one that
-    /// cannot be reached, as its `ConnectionError` (the `unreachable`
-    /// golden cases, UC-4.4, #834).
-    #[test]
-    fn a_timeout_and_an_unreachable_tenant_read_as_the_importers_exceptions() {
-        let timeout = ConnectorError::Timeout {
-            platform: DEFENDER.into(),
-            tenant: "lab".into(),
-            address: "https://graph.microsoft.com".into(),
-            seconds: 60,
-        };
-        let message = connector_message(&timeout);
-        assert!(message.starts_with("ReadTimeout: "), "{message}");
-        assert!(message.ends_with(&timeout.to_string()), "{message}");
-        let refused = ConnectorError::Unreachable {
-            platform: ELASTIC.into(),
-            tenant: "soc".into(),
-            address: "https://kibana.elastic.invalid".into(),
-            reason: "tcp connect error: Connection refused (os error 111)".into(),
-        };
-        assert_eq!(
-            connector_message(&refused),
-            format!("ConnectionError: {refused}")
-        );
-    }
-
     #[test]
     fn templates_fill_in_one_pass() {
         assert_eq!(
-            format("a {x} {y} {z}", &[("x", "{y}"), ("y", "2")]),
+            fill("a {x} {y} {z}", &[("x", "{y}"), ("y", "2")]),
             "a {y} 2 {z}"
         );
-        assert_eq!(format("a {", &[]), "a {");
+        assert_eq!(fill("a {", &[]), "a {");
+        assert_eq!(fill("{a}{b}", &[("b", "B")]), "{a}B");
         assert_eq!(fix_multiline("  a \n\n\tb\r\n", 2), "  a\n  b");
         assert_eq!(
             space_before_uppercase("SuspiciousActivity"),
             "Suspicious Activity"
         );
         assert_eq!(sanitize_filename("a:b/c?"), "a b c ");
-        assert_eq!(title("high"), "High");
-        assert_eq!(title("hIGH-risk"), "High-Risk");
+        assert_eq!(
+            sanitize_filename("Encoded PowerShell"),
+            "Encoded PowerShell"
+        );
         assert_eq!(capitalised("deviceId"), "DeviceId");
         assert_eq!(json_string("a\"é"), "\"a\\\"é\"");
+    }
+
+    #[test]
+    fn a_field_error_names_the_field_and_the_problem() {
+        assert_eq!(
+            FieldError::missing("schedule.period").to_string(),
+            "field `schedule.period` is missing"
+        );
+        assert_eq!(
+            FieldError::not("displayName", "a string").to_string(),
+            "field `displayName` is not a string"
+        );
     }
 
     fn rule() -> CJson {
@@ -686,13 +741,14 @@ mod tests {
     }
 
     #[test]
-    fn a_detection_renders_as_the_oracle_writes_it() {
+    fn a_detection_renders_into_the_template() {
         let (name, body) = render_rule(&rule(), &["lab".into(), "prod".into()]).unwrap();
         assert_eq!(name, "Encoded  \"x\"".replace('"', " "));
         assert!(
             body.starts_with("name: \"Encoded: \\\"x\\\"\"\n#references:"),
             "{body}"
         );
+        assert!(body.contains("  alert_severity: Medium\n"), "{body}");
         assert!(body.contains("    contributors:\n      - b@x\n"), "{body}");
         assert!(
             body.contains("      - \"lab\"\n      - \"prod\"\n"),
@@ -718,17 +774,46 @@ mod tests {
             body.ends_with("    query: |\n      T\n      | take 1"),
             "{body}"
         );
-        let mut missing = rule();
-        if let CJson::Object(object) = &mut missing {
-            object.shift_remove("detectorId");
-        }
+    }
+
+    #[test]
+    fn a_missing_or_mistyped_field_names_the_field() {
+        let failed = |edit: &dyn Fn(&mut Object)| {
+            let mut rule = rule();
+            if let CJson::Object(object) = &mut rule {
+                edit(object);
+            }
+            render_rule(&rule, &[]).unwrap_err().to_string()
+        };
         assert_eq!(
-            render_rule(&missing, &[]).unwrap_err(),
-            "KeyError: 'detectorId'"
+            failed(&|rule| {
+                rule.shift_remove("detectorId");
+            }),
+            "field `detectorId` is missing"
+        );
+        assert_eq!(
+            failed(&|rule| {
+                rule.insert("displayName".into(), CJson::Int(3));
+            }),
+            "field `displayName` is not a string"
+        );
+        assert_eq!(
+            failed(&|rule| {
+                rule.insert("schedule".into(), CJson::Object(Object::new()));
+            }),
+            "field `schedule.period` is missing"
+        );
+        assert_eq!(
+            failed(&|rule| {
+                rule.insert(
+                    "detectionAction".into(),
+                    serde_json::from_str(r#"{"alertTemplate": {"severity": null}}"#).unwrap(),
+                );
+            }),
+            "field `detectionAction.alertTemplate.severity` is missing"
         );
     }
 }
-
 // ----------------------------------------------------------------- Elastic
 
 const ELASTIC: &str = "elastic";
@@ -789,8 +874,26 @@ fn get<'j>(rule: &'j CJson, key: &str) -> Option<&'j CJson> {
     rule.get(key).filter(|value| !value.is_null())
 }
 
-fn truthy<'j>(rule: &'j CJson, key: &str) -> Option<&'j CJson> {
-    rule.get(key).filter(|value| value.truthy())
+/// Whether Kibana set a value: `null`, `false` and an empty string, list or
+/// object are each how its export writes a field it leaves unset.
+fn is_set(value: &CJson) -> bool {
+    match value {
+        CJson::Null | CJson::Bool(false) => false,
+        CJson::Str(text) => !text.is_empty(),
+        CJson::Array(items) => !items.is_empty(),
+        CJson::Object(members) => !members.is_empty(),
+        CJson::Bool(true) | CJson::Int(_) | CJson::Float(_) => true,
+    }
+}
+
+/// The value of `key` when Kibana set it ([`is_set`]).
+fn given<'j>(rule: &'j CJson, key: &str) -> Option<&'j CJson> {
+    rule.get(key).filter(|value| is_set(value))
+}
+
+/// Whether `key` holds `true`.
+fn flag(rule: &CJson, key: &str) -> bool {
+    rule.get(key) == Some(&CJson::Bool(true))
 }
 
 fn py(value: &CJson) -> String {
@@ -826,10 +929,10 @@ fn extract_techniques(threats: Option<&CJson>) -> Vec<CJson> {
             continue;
         };
         for technique in techniques {
-            match truthy(technique, "subtechnique") {
+            match given(technique, "subtechnique") {
                 Some(CJson::Array(subs)) => {
                     for sub in subs {
-                        if let Some(id) = truthy(sub, "id")
+                        if let Some(id) = given(sub, "id")
                             && !found.contains(id)
                         {
                             found.push(id.clone());
@@ -837,7 +940,7 @@ fn extract_techniques(threats: Option<&CJson>) -> Vec<CJson> {
                     }
                 }
                 _ => {
-                    if let Some(id) = truthy(technique, "id")
+                    if let Some(id) = given(technique, "id")
                         && !found.contains(id)
                     {
                         found.push(id.clone());
@@ -875,7 +978,7 @@ fn clean_empty(value: &Object) -> Object {
 }
 
 fn is_prebuilt(rule: &CJson) -> bool {
-    truthy(rule, "immutable").is_some()
+    given(rule, "immutable").is_some()
         || rule
             .get("rule_source")
             .and_then(|source| source.get("type"))
@@ -914,24 +1017,21 @@ fn extract_filter(entry: &CJson) -> CJson {
     let empty = CJson::Object(Object::new());
     let meta = entry
         .get("meta")
-        .filter(|meta| meta.truthy())
+        .filter(|meta| is_set(meta))
         .unwrap_or(&empty);
     let query = meta
         .get("params")
         .and_then(|params| params.get("query"))
-        .filter(|query| query.truthy());
+        .filter(|query| is_set(query));
     if meta.get("type").and_then(CJson::as_str) == Some("phrase")
-        && let Some(key) = truthy(meta, "key")
+        && let Some(key) = given(meta, "key")
         && let Some(query) = query
-        && !meta.get("disabled").is_some_and(CJson::truthy)
+        && !flag(meta, "disabled")
     {
         return object(vec![
             ("field", key.clone()),
             ("value", CJson::Str(py(query))),
-            (
-                "negate",
-                CJson::Bool(meta.get("negate").is_some_and(CJson::truthy)),
-            ),
+            ("negate", CJson::Bool(flag(meta, "negate"))),
         ]);
     }
     let mut raw = entry.as_object().cloned().unwrap_or_default();
@@ -951,8 +1051,8 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     };
     let kind = rule_type.as_str().unwrap_or_default();
     let prebuilt = is_prebuilt(rule);
-    let raw_rule_id = truthy(rule, "rule_id")
-        .or_else(|| truthy(rule, "id"))
+    let raw_rule_id = given(rule, "rule_id")
+        .or_else(|| given(rule, "id"))
         .map(py)
         .unwrap_or_default();
     let rule_id = if make_custom && prebuilt {
@@ -1012,7 +1112,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         "critical" => "Critical",
         _ => "Medium",
     };
-    let status = if rule.get("enabled").is_some_and(CJson::truthy) {
+    let status = if flag(rule, "enabled") {
         "PRODUCTION"
     } else {
         "DISABLED"
@@ -1026,7 +1126,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         kind,
         "query" | "eql" | "esql" | "threshold" | "new_terms" | "threat_match"
     ) {
-        if let Some(query) = truthy(rule, "query") {
+        if let Some(query) = given(rule, "query") {
             block.insert("query".into(), CJson::Str(py(query).trim().to_owned()));
         }
         if matches!(kind, "query" | "threshold" | "new_terms" | "threat_match")
@@ -1037,9 +1137,9 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         }
     }
     if kind != "esql" && kind != "machine_learning" {
-        if let Some(view) = truthy(rule, "data_view_id") {
+        if let Some(view) = given(rule, "data_view_id") {
             block.insert("data_view_id".into(), view.clone());
-        } else if let Some(index) = truthy(rule, "index") {
+        } else if let Some(index) = given(rule, "index") {
             block.insert("index".into(), string_list(index));
         }
     }
@@ -1083,11 +1183,11 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     let mut scheduling = Object::new();
     scheduling.insert("interval".into(), interval);
     scheduling.insert("lookback".into(), CJson::Str(lookback));
-    if let Some(max) = truthy(rule, "max_signals") {
+    if let Some(max) = given(rule, "max_signals") {
         scheduling.insert("max_alerts".into(), max.clone());
     }
     block.insert("scheduling".into(), CJson::Object(scheduling));
-    if let Some(CJson::Array(mapping)) = truthy(rule, "severity_mapping") {
+    if let Some(CJson::Array(mapping)) = given(rule, "severity_mapping") {
         block.insert(
             "severity".into(),
             object(vec![
@@ -1105,7 +1205,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         );
     }
     if let Some(score) = get(rule, "risk_score") {
-        match truthy(rule, "risk_score_mapping") {
+        match given(rule, "risk_score_mapping") {
             Some(CJson::Array(mapping)) => {
                 block.insert(
                     "risk".into(),
@@ -1128,14 +1228,14 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
             }
         }
     }
-    if let Some(suppression) = truthy(rule, "alert_suppression") {
+    if let Some(suppression) = given(rule, "alert_suppression") {
         let mut out = Object::new();
         if kind != "threshold"
-            && let Some(group_by) = truthy(suppression, "group_by")
+            && let Some(group_by) = given(suppression, "group_by")
         {
             out.insert("group_by".into(), string_list(group_by));
         }
-        match truthy(suppression, "duration") {
+        match given(suppression, "duration") {
             Some(CJson::Object(duration)) => {
                 let part = |key: &str| duration.get(key).map_or_else(|| "None".to_owned(), py);
                 out.insert(
@@ -1148,14 +1248,14 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
             }
             _ => {}
         }
-        if let Some(strategy) = truthy(suppression, "missing_fields_strategy") {
+        if let Some(strategy) = given(suppression, "missing_fields_strategy") {
             out.insert("missing_fields_strategy".into(), strategy.clone());
         }
         if !out.is_empty() {
             block.insert("suppression".into(), CJson::Object(out));
         }
     }
-    if let Some(CJson::Array(filters)) = truthy(rule, "filters")
+    if let Some(CJson::Array(filters)) = given(rule, "filters")
         && kind != "esql"
         && kind != "machine_learning"
     {
@@ -1166,15 +1266,15 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     }
     if let Some(fields) = rule
         .get("investigation_fields")
-        .filter(|fields| fields.truthy())
-        .and_then(|fields| truthy(fields, "field_names"))
+        .filter(|fields| is_set(fields))
+        .and_then(|fields| given(fields, "field_names"))
     {
         block.insert("highlighted_fields".into(), string_list(fields));
     }
-    if let Some(CJson::Array(required)) = truthy(rule, "required_fields") {
+    if let Some(CJson::Array(required)) = given(rule, "required_fields") {
         let mut fields = Vec::new();
         for field in required {
-            let Some(name) = truthy(field, "name").filter(|_| field.as_object().is_some()) else {
+            let Some(name) = given(field, "name").filter(|_| field.as_object().is_some()) else {
                 continue;
             };
             let kind = field.get("type");
@@ -1200,18 +1300,18 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
             block.insert("required_fields".into(), CJson::Array(fields));
         }
     }
-    if let Some(CJson::Array(integrations)) = truthy(rule, "related_integrations") {
+    if let Some(CJson::Array(integrations)) = given(rule, "related_integrations") {
         let mut out = Vec::new();
         for integration in integrations {
             let Some(package) =
-                truthy(integration, "package").filter(|_| integration.as_object().is_some())
+                given(integration, "package").filter(|_| integration.as_object().is_some())
             else {
                 continue;
             };
-            let version = truthy(integration, "version")
+            let version = given(integration, "version")
                 .cloned()
                 .unwrap_or_else(|| CJson::Str("*".into()));
-            let named = truthy(integration, "integration");
+            let named = given(integration, "integration");
             if named.is_some() || version != CJson::Str("*".into()) {
                 let mut item = vec![("package", package.clone()), ("version", version)];
                 if let Some(named) = named {
@@ -1227,22 +1327,22 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         }
     }
     let mut guide = Object::new();
-    if let Some(note) = truthy(rule, "note") {
+    if let Some(note) = given(rule, "note") {
         guide.insert(
             "investigation".into(),
             CJson::Str(py(note).trim().to_owned()),
         );
     }
-    if let Some(setup) = truthy(rule, "setup") {
+    if let Some(setup) = given(rule, "setup") {
         guide.insert("setup".into(), CJson::Str(py(setup).trim().to_owned()));
     }
     if !guide.is_empty() {
         block.insert("guide".into(), CJson::Object(guide));
     }
-    if let Some(positives) = truthy(rule, "false_positives") {
+    if let Some(positives) = given(rule, "false_positives") {
         block.insert("false_positives".into(), string_list(positives));
     }
-    if let Some(CJson::Array(tags)) = truthy(rule, "tags") {
+    if let Some(CJson::Array(tags)) = given(rule, "tags") {
         block.insert(
             "tags".into(),
             CJson::Array(
@@ -1254,10 +1354,10 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         );
     }
     let mut overrides = Object::new();
-    if let Some(name) = truthy(rule, "rule_name_override") {
+    if let Some(name) = given(rule, "rule_name_override") {
         overrides.insert("name".into(), name.clone());
     }
-    if let Some(timestamp) = truthy(rule, "timestamp_override") {
+    if let Some(timestamp) = given(rule, "timestamp_override") {
         overrides.insert("timestamp".into(), timestamp.clone());
     }
     if let Some(disabled) = get(rule, "timestamp_override_fallback_disabled") {
@@ -1267,17 +1367,17 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         block.insert("overrides".into(), CJson::Object(overrides));
     }
     let mut actions = Object::new();
-    if let Some(notify) = truthy(rule, "actions") {
+    if let Some(notify) = given(rule, "actions") {
         actions.insert("notify".into(), notify.clone());
     }
-    if let Some(CJson::Array(responses)) = truthy(rule, "response_actions") {
+    if let Some(CJson::Array(responses)) = given(rule, "response_actions") {
         let mut out = Vec::new();
         for response in responses {
             let action = response.get("action_type_id").and_then(CJson::as_str);
             let empty = CJson::Object(Object::new());
             let params = response
                 .get("params")
-                .filter(|p| p.truthy())
+                .filter(|p| is_set(p))
                 .unwrap_or(&empty);
             match action {
                 Some(".endpoint") => {
@@ -1298,22 +1398,19 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                         continue;
                     }
                     let mut item = vec![("endpoint", command.cloned().unwrap_or(CJson::Null))];
-                    if let Some(comment) = truthy(params, "comment") {
+                    if let Some(comment) = given(params, "comment") {
                         item.push(("comment", comment.clone()));
                     }
-                    let config = params
-                        .get("config")
-                        .filter(|c| c.truthy())
-                        .unwrap_or(&empty);
-                    if let Some(field) = truthy(config, "field")
-                        && !config.get("overwrite").is_some_and(CJson::truthy)
+                    let config = params.get("config").filter(|c| is_set(c)).unwrap_or(&empty);
+                    if let Some(field) = given(config, "field")
+                        && !flag(config, "overwrite")
                     {
                         item.push(("field", field.clone()));
                     }
                     out.push(object(item));
                 }
                 Some(".osquery") => {
-                    if params.as_object().is_some() && truthy(params, "query").is_some() {
+                    if params.as_object().is_some() && given(params, "query").is_some() {
                         out.push(object(vec![("osquery", params.clone())]));
                     } else {
                         tracing::warn!(
@@ -1332,7 +1429,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
             actions.insert("respond".into(), CJson::Array(out));
         }
     }
-    if let Some(timeline) = truthy(rule, "timeline_id") {
+    if let Some(timeline) = given(rule, "timeline_id") {
         actions.insert(
             "timeline".into(),
             object(vec![
@@ -1349,7 +1446,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     if !actions.is_empty() {
         block.insert("actions".into(), CJson::Object(actions));
     }
-    if let Some(CJson::Array(exceptions)) = truthy(rule, "exceptions_list") {
+    if let Some(CJson::Array(exceptions)) = given(rule, "exceptions_list") {
         let endpoint = exceptions
             .iter()
             .any(|e| e.get("type").and_then(CJson::as_str) == Some("endpoint"));
@@ -1398,7 +1495,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         }
     }
     if kind == "threshold"
-        && let Some(threshold) = truthy(rule, "threshold")
+        && let Some(threshold) = given(rule, "threshold")
     {
         let cardinality = match threshold.get("cardinality") {
             Some(CJson::Array(items)) if !items.is_empty() => object(vec![
@@ -1413,7 +1510,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
             ]),
             _ => CJson::Null,
         };
-        let field = match truthy(threshold, "field") {
+        let field = match given(threshold, "field") {
             Some(field) => string_list(field),
             None => CJson::Array(Vec::new()),
         };
@@ -1439,7 +1536,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
             object(vec![
                 (
                     "fields",
-                    truthy(rule, "new_terms_fields")
+                    given(rule, "new_terms_fields")
                         .map_or_else(|| CJson::Array(Vec::new()), string_list),
                 ),
                 (
@@ -1456,7 +1553,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
             "event_category_override",
             "tiebreaker_field",
         ] {
-            if let Some(value) = truthy(rule, key) {
+            if let Some(value) = given(rule, key) {
                 eql.insert(key.to_owned(), value.clone());
             }
         }
@@ -1465,7 +1562,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         }
     }
     if kind == "threat_match" {
-        let mapping: Vec<CJson> = match truthy(rule, "threat_mapping") {
+        let mapping: Vec<CJson> = match given(rule, "threat_mapping") {
             Some(CJson::Array(groups)) => groups
                 .iter()
                 .map(|group| {
@@ -1497,7 +1594,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                 .collect(),
             _ => Vec::new(),
         };
-        let filters: Vec<CJson> = match truthy(rule, "threat_filters") {
+        let filters: Vec<CJson> = match given(rule, "threat_filters") {
             Some(CJson::Array(filters)) => filters.iter().map(extract_filter).collect(),
             _ => Vec::new(),
         };
@@ -1506,7 +1603,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
             object(vec![
                 (
                     "index",
-                    truthy(rule, "threat_index")
+                    given(rule, "threat_index")
                         .map_or_else(|| CJson::Array(Vec::new()), string_list),
                 ),
                 (
@@ -1517,7 +1614,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                 ),
                 (
                     "language",
-                    truthy(rule, "threat_language")
+                    given(rule, "threat_language")
                         .cloned()
                         .unwrap_or_else(|| CJson::Str("kuery".into())),
                 ),
@@ -1566,7 +1663,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     if rule.get("building_block_type").and_then(CJson::as_str) == Some("default") {
         block.insert("building_block".into(), CJson::Bool(true));
     }
-    let references = match truthy(rule, "references") {
+    let references = match given(rule, "references") {
         Some(CJson::Array(items)) => {
             let public: Object = items
                 .iter()
@@ -1613,22 +1710,20 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     clean_empty(document.as_object().unwrap_or(&Object::new()))
 }
 
-/// Whether `text` reads as a UUID as `uuid.UUID` reads one.
-fn python_uuid(text: &str) -> bool {
-    let text = text.replace("urn:", "").replace("uuid:", "");
-    let text = text.trim_matches(|c| c == '{' || c == '}').replace('-', "");
-    text.len() == 32 && text.chars().all(|c| c.is_ascii_hexdigit())
+/// Whether `text` is a UUID: hyphenated, simple, braced or a `urn:uuid:`.
+fn is_uuid(text: &str) -> bool {
+    uuid::Uuid::try_parse(text).is_ok()
 }
 
-/// Why `document` must not be written (`_unwritable_reason`): every file
-/// written must load as `rule::1.0`.
+/// Why `document` must not be written: every file written must load as
+/// `rule::1.0`. The reason names the first error and counts the others.
 fn unwritable_reason(document: &Object, text: &str) -> Option<String> {
     let id = document
         .get("metadata")
         .and_then(|metadata| metadata.get("uuid"))
         .map(py)
         .unwrap_or_default();
-    if !python_uuid(&id) {
+    if !is_uuid(&id) {
         return Some(format!("Kibana rule_id {id:?} is not a UUID"));
     }
     let loaded = opentide_schema::node::load(text).ok()?;
@@ -1637,12 +1732,9 @@ fn unwritable_reason(document: &Object, text: &str) -> Option<String> {
     let _ =
         <opentide_schema::objects::RuleV1_0 as opentide_schema::FromNode>::from_node(root, &mut cx);
     let errors = cx.into_errors();
-    if errors.is_empty() {
-        return None;
-    }
-    // The platform block is validated first, on its own model
-    // (`load_platform_config`): its errors are the ones raised.
-    let elastic = |error: &&opentide_schema::SchemaError| {
+    // The platform block's errors come first: the block is what the import
+    // converted, and what a deploy of the file would refuse.
+    let in_block = |error: &&opentide_schema::SchemaError| {
         matches!(
             error.path.as_slice(),
             [
@@ -1652,16 +1744,21 @@ fn unwritable_reason(document: &Object, text: &str) -> Option<String> {
             ] if first == "configurations" && second == ELASTIC
         )
     };
-    let in_block = errors.iter().filter(elastic).count();
-    let (count, model) = if in_block > 0 {
-        (in_block, "ElasticConfig")
-    } else {
-        (errors.len(), "DetectionRule")
+    let (model, found): (&str, Vec<&opentide_schema::SchemaError>) =
+        if errors.iter().any(|error| in_block(&error)) {
+            (
+                "platform::elastic::1.0",
+                errors.iter().filter(in_block).collect(),
+            )
+        } else {
+            ("rule::1.0", errors.iter().collect())
+        };
+    let first = found.first()?;
+    let more = match found.len() {
+        1 => String::new(),
+        count => format!(" (and {} more)", count - 1),
     };
-    Some(format!(
-        "does not validate as platform::elastic::1.0: {count} validation error{} for {model}",
-        if count == 1 { "" } else { "s" }
-    ))
+    Some(format!("does not validate as {model}: {first}{more}"))
 }
 
 /// An extracted rule as YAML (#834), written by serde-saphyr's emitter, not
@@ -1676,7 +1773,7 @@ fn rule_yaml(document: &Object) -> Result<String, String> {
         min_fold_chars: usize::MAX,
     };
     serde_saphyr::to_string_with_options(&CJson::Object(document.clone()), options)
-        .map_err(|error| format!("YAMLError: {error}"))
+        .map_err(|error| format!("cannot write the rule as YAML: {error}"))
 }
 
 /// `sanitize_filename` of the Elastic importer: invalid characters as
@@ -1748,11 +1845,7 @@ fn elastic_run(
             };
             connector.find_rules(context, page, per_page).await
         })?
-        .map_err(|error| match error {
-            opentide_connectors::elastic::FindError::Status(text) => format!("HTTPError: {text}"),
-            opentide_connectors::elastic::FindError::Connector(error) => connector_message(&error),
-            opentide_connectors::elastic::FindError::NotJson(text) => text,
-        })?;
+        .map_err(|error| error.to_string())?;
         let rules = match answer.get("data") {
             Some(CJson::Array(rules)) => rules.clone(),
             _ => Vec::new(),
@@ -1861,8 +1954,8 @@ mod elastic_tests {
             "{text}"
         );
         assert!(unwritable_reason(&converted, &text).is_none() || text.contains("name: Encoded"));
-        assert!(python_uuid("{11111111-1111-4111-8111-111111111111}"));
-        assert!(!python_uuid("rule-1"));
+        assert!(is_uuid("{11111111-1111-4111-8111-111111111111}"));
+        assert!(!is_uuid("rule-1"));
         assert_eq!(elastic_filename("a:  b"), "a b");
         assert_eq!(uuid5(&migration_namespace(), "x").get_version_num(), 5);
     }
@@ -1892,6 +1985,40 @@ mod elastic_tests {
             "{text}"
         );
         assert!(!text.contains("- l\n"), "{text}");
+    }
+
+    /// A rule that would not load is skipped with the first error, by its
+    /// path, and a count of the others, not a Pydantic summary line.
+    #[test]
+    fn an_unwritable_rule_names_its_first_error() {
+        let kibana = r#"{"rule_id": "11111111-1111-4111-8111-111111111111", "name": "One",
+            "description": "d", "severity": "low", "type": "query", "language": "kuery",
+            "query": "x", "index": ["logs-*"]}"#;
+        let converted = kibana_to_opentide(&rule(kibana), true);
+        let text = rule_yaml(&converted).unwrap();
+        assert_eq!(unwritable_reason(&converted, &text), None, "{text}");
+        let broken = kibana_to_opentide(
+            &rule(&kibana.replace("\"type\": \"query\"", "\"type\": \"saved_query\"")),
+            true,
+        );
+        let text = rule_yaml(&broken).unwrap();
+        let reason = unwritable_reason(&broken, &text).unwrap_or_else(|| panic!("{text}"));
+        assert!(
+            reason
+                .starts_with("does not validate as platform::elastic::1.0: configurations.elastic"),
+            "{reason}"
+        );
+        assert!(reason.contains("type_block"), "{reason}");
+        assert!(!reason.contains("validation error for"), "{reason}");
+        let mut unnamed = converted;
+        unnamed.insert(
+            "metadata".into(),
+            serde_json::from_str(r#"{"uuid": "rule-1"}"#).unwrap(),
+        );
+        assert_eq!(
+            unwritable_reason(&unnamed, "").unwrap(),
+            "Kibana rule_id \"rule-1\" is not a UUID"
+        );
     }
 
     /// serde-saphyr's YAML for an extracted rule (#834): keys in order, a
