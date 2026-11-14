@@ -4,7 +4,9 @@
 # 0007's amendment). Only a case that needs the network may be listed, which
 # xtask's tests hold the list to (xtask/src/golden/wasi.rs): its fixture
 # reaches tenants, a MISP instance or CVE lookups, or its command sends
-# requests. Every other case passes against the WASI build.
+# requests. The one other reason is a capability WASI preview 1 lacks
+# (`limit`: `process` or `permissions`), which the entry names. Every other
+# case passes against the WASI build.
 #
 # [[case]]
 # id = "<command>/<mode>/<fixture>/<variant>"   # a glob, as --filter reads one
@@ -41,3 +43,20 @@ reason = "`share push --changed` shares to a MISP instance; its preflight also r
 [[case]]
 id = "doctor/*/*/default"
 reason = "`doctor` without --offline asks PyPI for the newest release (its recording holds the refused connection)"
+
+# ---- What WASI preview 1 cannot do at all (`limit`): not network cases ----
+
+[[case]]
+id = "doctor/*/*/offline"
+limit = "process"
+reason = "the git check runs `git --version`, and WASI runs no program: it reports \"git found; version not checked (no subprocesses under WASI)\" (the repository itself is read with gix, as git reads it)"
+
+[[case]]
+id = "setup.hooks/*/*/*"
+limit = "permissions"
+reason = "WASI has no file permissions: the hook is written without its executable bit, and the run says so with the exact `chmod +x` line"
+
+[[case]]
+id = "setup/*/*/plan"
+limit = "permissions"
+reason = "`setup`'s plan writes the pre-commit hook as `setup hooks` does: WASI has no file permissions, so it is written without its executable bit, and the run says so with the exact `chmod +x` line"

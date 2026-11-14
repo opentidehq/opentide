@@ -1083,3 +1083,49 @@ fn outside_ci_the_diff_needs_since_and_a_checkout_with_a_commit() {
         ))
     );
 }
+
+/// `git::checkout` says what `git` itself says of a checkout (`opentide
+/// doctor` under WASI, which cannot run git): its top level, origin's
+/// default branch when origin/HEAD is set, and the current branch.
+#[test]
+fn a_checkout_is_read_as_git_reads_it() {
+    let history = history();
+    let root = &history.root;
+    let nested = root.join("objects/rules");
+    let found = git::checkout(&nested).unwrap();
+    assert_eq!(found.top, *root);
+    assert_eq!(
+        (
+            found.default_branch.as_deref(),
+            found.has_origin,
+            found.current_branch.as_deref()
+        ),
+        (None, false, Some("main"))
+    );
+    git_cmd(
+        root,
+        &["remote", "add", "origin", "https://example.invalid/r.git"],
+    );
+    git_cmd(
+        root,
+        &["update-ref", "refs/remotes/origin/main", &history.m],
+    );
+    let found = git::checkout(root).unwrap();
+    assert_eq!((found.default_branch, found.has_origin), (None, true));
+    git_cmd(
+        root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    );
+    assert_eq!(
+        git::checkout(root).unwrap().default_branch.as_deref(),
+        Some("main")
+    );
+    git_cmd(root, &["checkout", "-q", "--detach", "HEAD"]);
+    assert_eq!(git::checkout(root).unwrap().current_branch, None);
+    let outside = tempfile::tempdir().unwrap();
+    assert_eq!(git::checkout(outside.path()), None);
+}

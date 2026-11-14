@@ -93,7 +93,13 @@ pub fn compare_case(
         &workspace.configuration().resolved,
     );
     let request = request(&case.argv, ws);
-    let env = |name: &str| case.env.get(name).cloned();
+    // The case's environment with its workspace placeholder expanded, as the
+    // golden runner expands it (`GITHUB_WORKSPACE = "<WS>"`).
+    let env = |name: &str| {
+        case.env
+            .get(name)
+            .map(|value| value.replace("<WS>", &ws.to_string_lossy()))
+    };
     let changed = |rules: &Path, folder: &str| -> Result<(Scope, Option<String>), String> {
         dry_run::git_scope(ws, ws, &env, rules, folder)
     };

@@ -58,6 +58,10 @@ A check that raises an unexpected error fails under its own codes with `The chec
 
 `doctor` never prints a secret. `credentials` names the variables a tenant's setup refers to and whether each is set, never a value, and never a value written into the TOML. A proxy is shown as `scheme://host:port`, without its user and password, even when the password holds an unencoded `/`, `#`, `?` or `@`; a URL that cannot be parsed is shown as `<unparseable proxy URL>`.
 
+### In the VS Code extension
+
+The extension runs the WASI build of opentide, which cannot start another program. There the `git` check passes when git is on `PATH` and says `git found; version not checked (no subprocesses under WASI)`, and `git_repository` reads the repository itself (its top level, origin's default branch, the current branch), so it reports what it reports elsewhere. The network checks fail with "this command needs the network" unless `--offline` skips them.
+
 ### Network
 
 `opentide_latest` asks `https://pypi.org/pypi/opentide/json`, and `proxy` opens a TCP connection to the proxy, each with a 3-second timeout. Both go through `--proxy` and honour `NO_PROXY`. Offline, `opentide_latest` is a warning, not a failure; `--offline` skips both.

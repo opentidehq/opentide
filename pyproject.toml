@@ -86,6 +86,8 @@ cache-keys = [
     { file = "crates/*/Cargo.toml" },
     { file = "crates/*/build.rs" },
     { file = "crates/*/src/**/*.rs" },
+    { file = "vendor/*/Cargo.toml" },
+    { file = "vendor/*/src/**/*.rs" },
     # What the engine crates compile in (include_str!, build.rs).
     { file = "data/catalogs/**" },
     { file = "grammars/*/src/**" },

@@ -239,6 +239,14 @@ A workspace in a subdirectory of a larger repository (for example `security/dete
 
 A repository has a single Git `pre-commit` hook, so running `setup hooks` for a second workspace in the same repository adds it to the installed hook rather than replacing the first. The hook lists its workspaces on `# opentide-workspace:` lines, validates every one of them even after a failure, and blocks the commit if any fails. Re-running setup drops, with a warning, a listed workspace that no longer has `.opentide/`. The versioned copy under each workspace's `.opentide/hooks/` validates that workspace only.
 
+**In the VS Code extension** (the WASI build of opentide, which cannot set file permissions), the hooks are written without their executable bit, and git skips a hook that is not executable. The run warns and prints the line that fixes it, as in this sample (illustrative: only the WASI build prints it, so the docs' output check, which runs the native command line, cannot capture it):
+
+```text illustrative
+warning: This build of opentide cannot set file permissions (WASI), so the hook is not executable and git will skip it; make it executable: chmod +x .opentide/hooks/pre-commit
+```
+
+Run that line in the repository once (or run `opentide setup hooks` from the opentide CLI).
+
 Set `OPENTIDE_SKIP_HOOKS=1` to bypass the hook for a single commit. Existing `.pre-commit-config.yaml` files keep other repos; the opentide hook is appended when missing, and an `entry:` written by an older release is refreshed in place.
 
 ### setup mcp
