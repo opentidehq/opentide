@@ -283,10 +283,7 @@ fn garde_decomposed_form(value: &HarfangLabYara, _pins: &Pins) -> garde::Result 
     if missing.is_empty() {
         Ok(())
     } else {
-        Err(garde::Error::new(format!(
-            "Value error, {}",
-            decomposed_form_message(&missing)
-        )))
+        Err(garde::Error::new(decomposed_form_message(&missing)))
     }
 }
 
@@ -357,6 +354,6 @@ pub fn rule_name(name: &str, block: Option<&HarfangLabConfig>) -> Option<String>
     Some(format!(
         "DetectionRule validation failed with code(s): {} (rule {}: {problem})",
         yara::codes::RULE_NAME,
-        yara::python_repr(name)
+        crate::vocab::quote(name)
     ))
 }

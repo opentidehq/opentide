@@ -330,10 +330,7 @@ fn an_unknown_key_in_an_event_field_map_fails() {
 fn a_bad_grace_period_fails() {
     let (value, errors) = convert(&block("grace_period: soon"));
     assert!(value.is_none());
-    assert_eq!(
-        errors[0].message,
-        "Value error, Invalid duration format: \"soon\""
-    );
+    assert_eq!(errors[0].message, "Invalid duration format: \"soon\"");
     let (value, _) = convert(&block("grace_period: 0s"));
     assert_eq!(value.unwrap().grace_period.as_deref(), Some("0s"));
 }

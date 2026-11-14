@@ -239,7 +239,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "schema"
         ],
         "input": "it's",
-        "msg": "Value error, unknown platform schema \"it's\": this block's schema is \"platform::splunk::1.0\"",
+        "msg": "unknown platform schema \"it's\": this block's schema is \"platform::splunk::1.0\"",
         "span": [
           14,
           14,
@@ -361,7 +361,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "schema"
         ],
         "input": "platform::sentinel::1.0",
-        "msg": "Value error, unknown platform schema \"platform::sentinel::1.0\": this block's schema is \"platform::splunk::1.0\"",
+        "msg": "unknown platform schema \"platform::sentinel::1.0\": this block's schema is \"platform::splunk::1.0\"",
         "span": [
           14,
           13,
@@ -740,7 +740,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "msg": "ElasticConfig validation failed with code(s): type_block",
         "span": [
           11,
           3,
@@ -763,7 +763,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+        "msg": "ElasticConfig validation failed with code(s): duration",
         "span": [
           11,
           3,
@@ -786,7 +786,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+        "msg": "ElasticConfig validation failed with code(s): duration",
         "span": [
           11,
           3,
@@ -870,7 +870,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "msg": "ElasticConfig validation failed with code(s): type_block",
         "span": [
           11,
           3,
@@ -893,7 +893,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): esql_source, language",
+        "msg": "ElasticConfig validation failed with code(s): esql_source, language",
         "span": [
           11,
           3,
@@ -916,7 +916,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): exception_type",
+        "msg": "ElasticConfig validation failed with code(s): exception_type",
         "span": [
           11,
           3,
@@ -939,7 +939,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): exception_type",
+        "msg": "ElasticConfig validation failed with code(s): exception_type",
         "span": [
           11,
           3,
@@ -1105,7 +1105,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): filter_shape",
+        "msg": "ElasticConfig validation failed with code(s): filter_shape",
         "span": [
           11,
           3,
@@ -1128,7 +1128,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): filter_shape",
+        "msg": "ElasticConfig validation failed with code(s): filter_shape",
         "span": [
           11,
           3,
@@ -1300,7 +1300,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): index_xor_data_view",
+        "msg": "ElasticConfig validation failed with code(s): index_xor_data_view",
         "span": [
           11,
           3,
@@ -1323,7 +1323,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): index_list",
+        "msg": "ElasticConfig validation failed with code(s): index_list",
         "span": [
           11,
           3,
@@ -1346,7 +1346,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): index_list",
+        "msg": "ElasticConfig validation failed with code(s): index_list",
         "span": [
           11,
           3,
@@ -1393,7 +1393,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+        "msg": "ElasticConfig validation failed with code(s): duration",
         "span": [
           11,
           3,
@@ -1416,7 +1416,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): esql_source, index_list, index_xor_data_view, language, risk_score, severity, type_block",
+        "msg": "ElasticConfig validation failed with code(s): esql_source, index_list, index_xor_data_view, language, risk_score, severity, type_block",
         "span": [
           11,
           3,
@@ -1522,7 +1522,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): language",
+        "msg": "ElasticConfig validation failed with code(s): language",
         "span": [
           11,
           3,
@@ -1545,7 +1545,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): esql_source, type_block",
+        "msg": "ElasticConfig validation failed with code(s): esql_source, type_block",
         "span": [
           11,
           3,
@@ -1629,7 +1629,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): duration, new_terms_fields",
+        "msg": "ElasticConfig validation failed with code(s): duration, new_terms_fields",
         "span": [
           11,
           3,
@@ -1652,7 +1652,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): new_terms_fields",
+        "msg": "ElasticConfig validation failed with code(s): new_terms_fields",
         "span": [
           11,
           3,
@@ -1675,7 +1675,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): new_terms_fields",
+        "msg": "ElasticConfig validation failed with code(s): new_terms_fields",
         "span": [
           11,
           3,
@@ -1732,7 +1732,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "msg": "ElasticConfig validation failed with code(s): type_block",
         "span": [
           11,
           3,
@@ -1798,7 +1798,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "query"
         ],
         "input": "  ",
-        "msg": "Value error, query must not be empty",
+        "msg": "query must not be empty",
         "span": [
           14,
           13,
@@ -1821,7 +1821,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "msg": "ElasticConfig validation failed with code(s): type_block",
         "span": [
           11,
           3,
@@ -1844,7 +1844,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "msg": "ElasticConfig validation failed with code(s): type_block",
         "span": [
           11,
           3,
@@ -1867,7 +1867,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "msg": "ElasticConfig validation failed with code(s): type_block",
         "span": [
           11,
           3,
@@ -1890,7 +1890,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "msg": "ElasticConfig validation failed with code(s): type_block",
         "span": [
           11,
           3,
@@ -1913,7 +1913,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): response_action",
+        "msg": "ElasticConfig validation failed with code(s): response_action",
         "span": [
           11,
           3,
@@ -1936,7 +1936,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): response_action",
+        "msg": "ElasticConfig validation failed with code(s): response_action",
         "span": [
           11,
           3,
@@ -1959,7 +1959,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): response_action",
+        "msg": "ElasticConfig validation failed with code(s): response_action",
         "span": [
           11,
           3,
@@ -1982,7 +1982,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): response_action",
+        "msg": "ElasticConfig validation failed with code(s): response_action",
         "span": [
           11,
           3,
@@ -2029,7 +2029,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): risk_score",
+        "msg": "ElasticConfig validation failed with code(s): risk_score",
         "span": [
           11,
           3,
@@ -2052,7 +2052,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): risk_score",
+        "msg": "ElasticConfig validation failed with code(s): risk_score",
         "span": [
           11,
           3,
@@ -2075,7 +2075,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): risk_score",
+        "msg": "ElasticConfig validation failed with code(s): risk_score",
         "span": [
           11,
           3,
@@ -2156,7 +2156,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): risk_score",
+        "msg": "ElasticConfig validation failed with code(s): risk_score",
         "span": [
           11,
           3,
@@ -2230,7 +2230,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): severity",
+        "msg": "ElasticConfig validation failed with code(s): severity",
         "span": [
           11,
           3,
@@ -2303,7 +2303,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): severity",
+        "msg": "ElasticConfig validation failed with code(s): severity",
         "span": [
           11,
           3,
@@ -2326,7 +2326,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): severity",
+        "msg": "ElasticConfig validation failed with code(s): severity",
         "span": [
           11,
           3,
@@ -2349,7 +2349,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+        "msg": "ElasticConfig validation failed with code(s): suppression_shape",
         "span": [
           11,
           3,
@@ -2372,7 +2372,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+        "msg": "ElasticConfig validation failed with code(s): duration",
         "span": [
           11,
           3,
@@ -2395,7 +2395,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): duration",
+        "msg": "ElasticConfig validation failed with code(s): duration",
         "span": [
           11,
           3,
@@ -2418,7 +2418,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+        "msg": "ElasticConfig validation failed with code(s): suppression_shape",
         "span": [
           11,
           3,
@@ -2441,7 +2441,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+        "msg": "ElasticConfig validation failed with code(s): suppression_shape",
         "span": [
           11,
           3,
@@ -2464,7 +2464,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+        "msg": "ElasticConfig validation failed with code(s): suppression_shape",
         "span": [
           11,
           3,
@@ -2487,7 +2487,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+        "msg": "ElasticConfig validation failed with code(s): suppression_shape",
         "span": [
           11,
           3,
@@ -2510,7 +2510,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): filter_shape, index_list",
+        "msg": "ElasticConfig validation failed with code(s): filter_shape, index_list",
         "span": [
           11,
           3,
@@ -2585,7 +2585,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "msg": "ElasticConfig validation failed with code(s): type_block",
         "span": [
           11,
           3,
@@ -2672,7 +2672,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): threshold_fields",
+        "msg": "ElasticConfig validation failed with code(s): threshold_fields",
         "span": [
           11,
           3,
@@ -2731,7 +2731,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): threshold_fields",
+        "msg": "ElasticConfig validation failed with code(s): threshold_fields",
         "span": [
           11,
           3,
@@ -2754,7 +2754,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "msg": "ElasticConfig validation failed with code(s): type_block",
         "span": [
           11,
           3,
@@ -2777,7 +2777,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): suppression_shape",
+        "msg": "ElasticConfig validation failed with code(s): suppression_shape",
         "span": [
           11,
           3,
@@ -2800,7 +2800,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "msg": "ElasticConfig validation failed with code(s): type_block",
         "span": [
           11,
           3,
@@ -2823,7 +2823,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic"
         ],
         "input": null,
-        "msg": "Value error, ElasticConfig validation failed with code(s): type_block",
+        "msg": "ElasticConfig validation failed with code(s): type_block",
         "span": [
           11,
           3,
@@ -2934,7 +2934,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "harfanglab"
         ],
         "input": null,
-        "msg": "Value error, HarfangLabConfig validation failed with code(s): harfanglab_rule_kind",
+        "msg": "HarfangLabConfig validation failed with code(s): harfanglab_rule_kind",
         "span": [
           11,
           3,
@@ -3095,7 +3095,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "query"
         ],
         "input": "   ",
-        "msg": "Value error, query must not be empty",
+        "msg": "query must not be empty",
         "span": [
           13,
           13,
@@ -3119,7 +3119,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "query"
         ],
         "input": "",
-        "msg": "Value error, query must not be empty",
+        "msg": "query must not be empty",
         "span": [
           13,
           5,
@@ -3165,7 +3165,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "query"
         ],
         "input": " ",
-        "msg": "Value error, query must not be empty",
+        "msg": "query must not be empty",
         "span": [
           13,
           13,
@@ -3211,7 +3211,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "query"
         ],
         "input": "\u001c",
-        "msg": "Value error, query must not be empty",
+        "msg": "query must not be empty",
         "span": [
           13,
           13,
@@ -3535,7 +3535,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "suppression"
         ],
         "input": "one hour",
-        "msg": "Value error, Duration \"one hour\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+        "msg": "Duration \"one hour\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
         "span": [
           15,
           27,
@@ -3557,7 +3557,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "grouping_lookback"
         ],
         "input": "5 hours",
-        "msg": "Value error, Duration \"5 hours\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+        "msg": "Duration \"5 hours\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
         "span": [
           16,
           78,
@@ -3582,7 +3582,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "frequency"
         ],
         "input": "1000000000d",
-        "msg": "Value error, Duration \"1000000000d\" is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
+        "msg": "Duration \"1000000000d\" is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
         "span": [
           14,
           29,
@@ -3603,7 +3603,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "lookback"
         ],
         "input": "P99999999999D",
-        "msg": "Value error, Duration \"P99999999999D\" is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
+        "msg": "Duration \"P99999999999D\" is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
         "span": [
           14,
           52,
@@ -3624,7 +3624,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "suppression"
         ],
         "input": "P142857143W",
-        "msg": "Value error, Duration \"P142857143W\" is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
+        "msg": "Duration \"P142857143W\" is longer than a rule can be deployed with (at most 999999999 days, 23 hours, 59 minutes and 59 seconds)",
         "span": [
           15,
           26,
@@ -3681,7 +3681,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "frequency"
         ],
         "input": "hourly",
-        "msg": "Value error, Duration \"hourly\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+        "msg": "Duration \"hourly\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
         "span": [
           14,
           29,
@@ -3702,7 +3702,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "lookback"
         ],
         "input": "daily",
-        "msg": "Value error, Duration \"daily\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+        "msg": "Duration \"daily\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
         "span": [
           14,
           47,
@@ -4451,7 +4451,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_rule_shape",
         "span": [
           11,
           3,
@@ -4474,7 +4474,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_rule_shape",
         "span": [
           11,
           3,
@@ -4497,7 +4497,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_rule_shape",
         "span": [
           11,
           3,
@@ -4520,7 +4520,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_duplicate",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_definition_duplicate",
         "span": [
           11,
           3,
@@ -4543,7 +4543,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_name",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_definition_name",
         "span": [
           11,
           3,
@@ -4608,7 +4608,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_definition_order",
         "span": [
           11,
           3,
@@ -4631,7 +4631,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_definition_order",
         "span": [
           11,
           3,
@@ -4785,7 +4785,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_exception_shape",
         "span": [
           11,
           3,
@@ -4808,7 +4808,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_exception_shape",
         "span": [
           11,
           3,
@@ -4831,7 +4831,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_exception_shape",
         "span": [
           11,
           3,
@@ -4854,7 +4854,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_exception_shape",
         "span": [
           11,
           3,
@@ -4958,7 +4958,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_list_in_value",
         "span": [
           11,
           3,
@@ -5051,7 +5051,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_list_in_value",
         "span": [
           11,
           3,
@@ -5074,7 +5074,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_list_in_value",
         "span": [
           11,
           3,
@@ -5136,7 +5136,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_list_in_value",
         "span": [
           11,
           3,
@@ -5159,7 +5159,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_list_in_value",
         "span": [
           11,
           3,
@@ -5182,7 +5182,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_list_in_value",
         "span": [
           11,
           3,
@@ -5238,7 +5238,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_definition_order",
         "span": [
           11,
           3,
@@ -5261,7 +5261,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_definition_order",
         "span": [
           11,
           3,
@@ -5284,7 +5284,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_order",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_definition_order",
         "span": [
           11,
           3,
@@ -5307,7 +5307,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_definition_name",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_definition_name",
         "span": [
           11,
           3,
@@ -5352,7 +5352,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_priority",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_priority",
         "span": [
           11,
           3,
@@ -5400,7 +5400,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_priority",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_priority",
         "span": [
           11,
           3,
@@ -5423,7 +5423,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_source",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_source",
         "span": [
           11,
           3,
@@ -5446,7 +5446,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_source",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_source",
         "span": [
           11,
           3,
@@ -5469,7 +5469,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_source",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_source",
         "span": [
           11,
           3,
@@ -5517,7 +5517,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_rule_shape",
         "span": [
           11,
           3,
@@ -5540,7 +5540,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_rule_shape",
         "span": [
           11,
           3,
@@ -5596,7 +5596,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_source, sysdig_tuning_keys",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_source, sysdig_tuning_keys",
         "span": [
           11,
           3,
@@ -5619,7 +5619,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "sysdig"
         ],
         "input": null,
-        "msg": "Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape",
+        "msg": "SysdigConfig validation failed with code(s): sysdig_rule_shape",
         "span": [
           11,
           3,
