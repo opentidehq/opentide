@@ -813,8 +813,10 @@ fn deploy(
     let tenant_count: usize = targets.values().map(IndexMap::len).sum();
     let started = Instant::now();
     let separator = format!(" {} ", glyphs::SEPARATOR);
+    // The header is bold throughout, its labels bold and dim.
+    let bold_dim = Style::new("bold dim");
     let mut header = Text::styled("Deploy plan", &Style::new("bold"));
-    header.append(&format!("{separator}strategy "), &Style::new("dim"));
+    header.append(&format!("{separator}strategy "), &bold_dim);
     let strategy_names: Vec<&str> = runs.iter().map(|run| run.name()).collect();
     header.append(&strategy_names.join(" "), &Style::new("bold"));
     header.append(
@@ -822,12 +824,8 @@ fn deploy(
             "{separator}{}",
             plan::scope_text(deployment.len(), tenant_count)
         ),
-        &Style::new("dim"),
+        &bold_dim,
     );
-    // The header's own style is bold, under the dim parts too (a Rich
-    // `Text` with a base style).
-    let length = header.len();
-    header.stylize(&Style::new("bold"), 0, length);
     cx.lines.line(&header, false);
     cx.lines.line(
         &Text::styled(&plan::message(&changes), &Style::new("dim")),
@@ -1486,12 +1484,9 @@ fn header_line(platform: &str, tenant: Option<&str>, rules: Option<usize>) -> Te
     if let Some(rules) = rules {
         line.append(
             &format!(" {} {}", glyphs::SEPARATOR, plural(rules, "rule", None)),
-            &Style::new("dim"),
+            &Style::new("bold dim"),
         );
     }
-    // Rich's `Text("Deploying to ", style="bold")`: bold is the base style.
-    let length = line.len();
-    line.stylize(&bold, 0, length);
     line
 }
 

@@ -1,41 +1,12 @@
 //! JSON as the exports write it, UTF-8 throughout: serde_json's pretty
-//! printer at an indent of `n` spaces, serde_json's compact line, or one
-//! line with a space after each `,` and `:` for a value that becomes text
-//! (the explorer's search content, where the space keeps words apart).
-
-use std::io;
+//! printer at an indent of `n` spaces for a file. A value on one line (the
+//! explorer's bundle and search content, the inflight change metadata) is
+//! serde_json's compact text, [`Json::to_compact`].
 
 use serde::Serialize;
-use serde_json::ser::{Formatter, PrettyFormatter};
+use serde_json::ser::PrettyFormatter;
 
 use crate::json::{Json, Object};
-
-/// serde_json's [`CompactFormatter`] with a space after each separator.
-struct Spaced;
-
-impl Formatter for Spaced {
-    fn begin_array_value<W: ?Sized + io::Write>(
-        &mut self,
-        writer: &mut W,
-        first: bool,
-    ) -> io::Result<()> {
-        if first {
-            Ok(())
-        } else {
-            writer.write_all(b", ")
-        }
-    }
-    fn begin_object_key<W: ?Sized + io::Write>(
-        &mut self,
-        writer: &mut W,
-        first: bool,
-    ) -> io::Result<()> {
-        self.begin_array_value(writer, first)
-    }
-    fn begin_object_value<W: ?Sized + io::Write>(&mut self, writer: &mut W) -> io::Result<()> {
-        writer.write_all(b": ")
-    }
-}
 
 /// `value` as a file: laid out at `indent` spaces, with a final newline.
 pub fn pretty(value: &Json, indent: usize) -> String {
@@ -52,18 +23,6 @@ pub fn pretty(value: &Json, indent: usize) -> String {
     let mut text = String::from_utf8(bytes).unwrap_or_default();
     text.push('\n');
     text
-}
-
-/// `value` as text on one line, `, ` and `: ` between items, without a final
-/// newline.
-pub fn line(value: &Json) -> String {
-    let mut bytes = Vec::new();
-    let mut serializer = serde_json::Serializer::with_formatter(&mut bytes, Spaced);
-    // Writing to a Vec cannot fail; a float JSON cannot carry is written `null`.
-    if value.serialize(&mut serializer).is_err() {
-        bytes.clear();
-    }
-    String::from_utf8(bytes).unwrap_or_default()
 }
 
 /// `value` with every object's keys sorted, by code point (UTF-8 byte
@@ -104,7 +63,7 @@ mod tests {
     }
 
     #[test]
-    fn one_line_with_a_space_after_each_separator() {
+    fn one_line_is_compact_utf8_in_key_order() {
         let mut object = Object::new();
         object.insert("a".into(), Json::Array(vec![Json::Int(1), Json::Null]));
         object.insert("b".into(), Json::Object(Object::new()));
@@ -114,8 +73,8 @@ mod tests {
         inner.insert("y".into(), Json::Float(1.5));
         object.insert("c".into(), Json::Object(inner));
         assert_eq!(
-            line(&Json::Object(object)),
-            "{\"a\": [1, null], \"b\": {}, \"\u{e9}\": [], \"c\": {\"x\": true, \"y\": 1.5}}"
+            Json::Object(object).to_compact(),
+            "{\"a\":[1,null],\"b\":{},\"\u{e9}\":[],\"c\":{\"x\":true,\"y\":1.5}}"
         );
     }
 

@@ -8,7 +8,7 @@
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use opentide_compile::Json;
@@ -17,8 +17,9 @@ use opentide_connectors::connector::{
 };
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::exabeam::{
-    self, Action, Exabeam, Pacer, RuleDeploy, RuleOutcome, Session, StateChange, deploy_rule,
+    self, Action, Exabeam, RuleDeploy, RuleOutcome, Session, StateChange, deploy_rule,
 };
+use opentide_connectors::pace::{Clock, Pacer};
 use opentide_connectors::{ConnectorError, Environment, HttpClient, Platform, Tenant};
 use tokio_util::sync::CancellationToken;
 use wiremock::matchers::{body_partial_json, header, method, path, query_param};
@@ -43,12 +44,36 @@ fn as_json(value: &Json) -> serde_json::Value {
     serde_json::to_value(value).unwrap()
 }
 
+/// A clock that sleeps by moving its time, and records each sleep.
+#[derive(Default)]
+struct Recorded {
+    now: Mutex<Duration>,
+    slept: Mutex<Vec<Duration>>,
+}
+
+impl Clock for Recorded {
+    fn now(&self) -> Duration {
+        *self.now.lock().unwrap()
+    }
+
+    fn sleep<'a>(
+        &'a self,
+        duration: Duration,
+        _cancel: &'a CancellationToken,
+    ) -> opentide_connectors::connector::BoxFuture<'a, Result<(), ConnectorError>> {
+        *self.now.lock().unwrap() += duration;
+        self.slept.lock().unwrap().push(duration);
+        Box::pin(async { Ok(()) })
+    }
+}
+
 /// A stand-in tenant and what a call needs.
 struct Stand {
     server: MockServer,
     tenant: Tenant,
     http: HttpClient,
     cancel: CancellationToken,
+    clock: Arc<Recorded>,
     pacer: Arc<Pacer>,
 }
 
@@ -79,12 +104,18 @@ impl Stand {
         )
         .unwrap();
         let http = HttpClient::new(&tenant.label, &tenant.http, &env, None).unwrap();
+        let clock = Arc::new(Recorded::default());
         Self {
             server,
             tenant,
             http,
             cancel: CancellationToken::new(),
-            pacer: Arc::new(Pacer::default()),
+            clock: Arc::clone(&clock),
+            pacer: Arc::new(Pacer::with_clock(
+                exabeam::PACED_CALLS,
+                exabeam::PACE_WINDOW,
+                clock,
+            )),
         }
     }
 
@@ -775,7 +806,11 @@ async fn an_unreachable_tenant_stops() {
         http: &http,
         cancel: &cancel,
     };
-    let session = Session::new(cx, Arc::new(Pacer::default())).unwrap();
+    let session = Session::new(
+        cx,
+        Arc::new(Pacer::new(exabeam::PACED_CALLS, exabeam::PACE_WINDOW)),
+    )
+    .unwrap();
     let failure = deploy_rule(&session, &create_rule()).await.unwrap_err();
     assert_eq!(failure.code, exabeam::UNREACHABLE);
     assert!(
@@ -826,9 +861,16 @@ async fn a_long_or_endless_rate_limit_fails_the_rule() {
     let failure = outcome.failure.unwrap();
     assert_eq!(failure.code, "exabeam_request_failed");
     assert!(
-        failure.message.contains("more than 300s"),
+        failure
+            .message
+            .contains("still rate limited after 10 waits"),
         "{}",
         failure.message
+    );
+    // A long Retry-After is waited for at most 120 s, as on every platform.
+    assert_eq!(
+        *stand.clock.slept.lock().unwrap(),
+        [Duration::from_secs(120); 10]
     );
 
     let stand = Stand::start().await;
@@ -873,7 +915,11 @@ async fn an_unset_credential_fails_before_any_call() {
         http: &stand.http,
         cancel: &stand.cancel,
     };
-    let error = Session::new(cx, Arc::new(Pacer::default())).unwrap_err();
+    let error = Session::new(
+        cx,
+        Arc::new(Pacer::new(exabeam::PACED_CALLS, exabeam::PACE_WINDOW)),
+    )
+    .unwrap_err();
     assert!(matches!(error, ConnectorError::MissingCredential { .. }));
     assert!(stand.routes().await.is_empty());
 }
@@ -1021,7 +1067,7 @@ async fn the_live_check_reads_200_400_and_anything_else() {
         ),
         (
             ResponseTemplate::new(429).insert_header("Retry-After", "900"),
-            "Exabeam could not run the search on exabeam-eu: rate limited",
+            "Exabeam could not run the search on exabeam-eu: still rate limited after 10 waits",
         ),
     ] {
         let stand = Stand::start().await;

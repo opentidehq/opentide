@@ -324,10 +324,7 @@ fn schema(workspace: &Workspace, object_type: &str) -> Json {
         None => Json::object([
             (
                 "error",
-                Json::Str(format!(
-                    "No JSON Schema generated for {}",
-                    crate::render::codeframe::quoted(object_type)
-                )),
+                Json::Str(format!("No JSON Schema generated for {object_type:?}")),
             ),
             ("available", sorted_names(&names)),
             ("hint", Json::str("run 'opentide generate schemas'")),
@@ -413,10 +410,7 @@ fn template(workspace: &Workspace, object_type: &str) -> Json {
         None => Json::object([
             (
                 "error",
-                Json::Str(format!(
-                    "No template available for {}",
-                    crate::render::codeframe::quoted(object_type)
-                )),
+                Json::Str(format!("No template available for {object_type:?}")),
             ),
             ("available", sorted_names(&names)),
         ]),
@@ -845,13 +839,7 @@ fn vocabulary(objects: Option<&Workspace>, name: &str) -> Json {
     match all.iter().find(|(field, _)| field == name) {
         Some((_, vocabulary)) => definition(vocabulary),
         None => Json::object([
-            (
-                "error",
-                Json::Str(format!(
-                    "Unknown vocabulary {}",
-                    crate::render::codeframe::quoted(name)
-                )),
-            ),
+            ("error", Json::Str(format!("Unknown vocabulary {name:?}"))),
             (
                 "available",
                 sorted_names(all.iter().map(|(field, _)| field)),

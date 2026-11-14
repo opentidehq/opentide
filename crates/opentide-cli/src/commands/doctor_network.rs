@@ -1,16 +1,13 @@
-//! `doctor`'s network checks (UC-4.4, #834; `check_latest_version` and
-//! `check_proxy` of `cli/services/doctor.py`): the newest opentide release
-//! on PyPI, and whether the proxy accepts a connection. `--offline` skips
-//! both, as before.
-//!
-//! A failure is named as the oracle names it, by the Python exception
-//! `requests` or `socket` raises for it (`ProxyError`,
-//! `ConnectionRefusedError`): the checklist's message carries that name.
+//! `doctor`'s network checks (UC-4.4, #834): the newest opentide release on
+//! PyPI, and whether the proxy accepts a connection. `--offline` skips both,
+//! as before. A failure is named by what went wrong: the HTTP client's
+//! error, PyPI's status or answer, or the operating system's error for the
+//! proxy's connection.
 
-use std::io::ErrorKind;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
+use opentide_connectors::proxy::ProxySettings;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, HttpSettings, TenantLabel};
 use tokio_util::sync::CancellationToken;
 
@@ -24,62 +21,32 @@ pub const PYPI_URL: &str = "https://pypi.org/pypi/opentide/json";
 /// The fix a newer release names (`UPGRADE_COMMAND`).
 pub const UPGRADE_COMMAND: &str = "pip install --upgrade opentide";
 
-/// The [`Failed`] name for a build with no network of its own (the WASI
-/// build outside an `opentide serve` whose client makes its requests): no
-/// Python exception has it, since the Python CLI always has a network.
-pub const NO_NETWORK: &str = "network_unavailable";
-
-/// Why the newest release could not be read: the Python exception's name.
+/// Why the newest release could not be read.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Failed(pub &'static str);
+pub enum Failed {
+    /// A build with no network of its own (the WASI build outside an
+    /// `opentide serve` whose client makes its requests).
+    NoNetwork,
+    /// What went wrong, in words.
+    Problem(String),
+}
 
-/// The Python exception `requests` raises for `error` on a request whose
-/// route is `proxied` (`requests.exceptions`' names).
-pub fn request_error_name(error: &ConnectorError, proxied: bool) -> &'static str {
-    match error {
-        ConnectorError::Unreachable { reason, .. } => {
-            let reason = reason.to_ascii_lowercase();
-            if reason.contains("certificate") || reason.contains("tls") || reason.contains("ssl") {
-                "SSLError"
-            } else if proxied {
-                "ProxyError"
-            } else if reason.contains("timed out") || reason.contains("timeout") {
-                "ConnectTimeout"
-            } else {
-                "ConnectionError"
-            }
-        }
-        ConnectorError::Timeout { .. } => "ReadTimeout",
-        ConnectorError::Setup { .. } => "InvalidURL",
-        _ => "ConnectionError",
+impl Failed {
+    fn problem(text: impl Into<String>) -> Self {
+        Self::Problem(text.into())
     }
 }
 
-/// The version in PyPI's answer (`response.json()["info"]["version"]`), or
-/// the exception reading it raises.
+/// The version in PyPI's answer (`info.version`), or why it cannot be read.
 pub fn version_of(status: u16, body: &[u8]) -> Result<String, Failed> {
     if status >= 400 {
-        return Err(Failed("HTTPError"));
+        return Err(Failed::problem(format!("PyPI answered HTTP {status}")));
     }
-    let parsed: serde_json::Value =
-        serde_json::from_slice(body).map_err(|_| Failed("JSONDecodeError"))?;
-    let info = match &parsed {
-        serde_json::Value::Object(map) => map.get("info").ok_or(Failed("KeyError"))?,
-        serde_json::Value::Array(_) | serde_json::Value::String(_) => {
-            return Err(Failed("TypeError"));
-        }
-        _ => return Err(Failed("TypeError")),
-    };
-    let version = match info {
-        serde_json::Value::Object(map) => map.get("version").ok_or(Failed("KeyError"))?,
-        serde_json::Value::Array(_) | serde_json::Value::String(_) => {
-            return Err(Failed("TypeError"));
-        }
-        _ => return Err(Failed("TypeError")),
-    };
-    match version {
-        serde_json::Value::String(text) if !text.is_empty() => Ok(text.clone()),
-        _ => Err(Failed("ValueError")),
+    let parsed: serde_json::Value = serde_json::from_slice(body)
+        .map_err(|error| Failed::problem(format!("PyPI's answer is not JSON: {error}")))?;
+    match parsed.pointer("/info/version") {
+        Some(serde_json::Value::String(text)) if !text.is_empty() => Ok(text.clone()),
+        _ => Err(Failed::problem("PyPI's answer has no `info.version`")),
     }
 }
 
@@ -92,34 +59,31 @@ pub fn fetch_latest(env: &Environment, proxy: Option<&str>) -> Result<String, Fa
     };
     let label = TenantLabel::new("pypi", "pypi.org");
     let client = HttpClient::new(&label, &settings, env, proxy).map_err(|error| match error {
-        ConnectorError::NetworkUnavailable { .. } => Failed(NO_NETWORK),
-        _ => Failed("InvalidURL"),
+        ConnectorError::NetworkUnavailable { .. } => Failed::NoNetwork,
+        other => Failed::problem(other.to_string()),
     })?;
-    let proxied = url::Url::parse(PYPI_URL)
-        .ok()
-        .and_then(|url| client.route(&url))
-        .is_some();
+    let stopped = || Failed::problem("the request stopped unexpectedly");
     crate::threads::run_apart(|| {
         opentide_connectors::runtime::block_on(async {
             let cancel = CancellationToken::new();
             let request = client
                 .request(opentide_connectors::transport::Method::GET, PYPI_URL)
                 .build()
-                .map_err(|_| Failed("InvalidURL"))?;
+                .map_err(|error| Failed::problem(error.to_string()))?;
             let answer = client
                 .send(request, &cancel)
                 .await
-                .map_err(|error| Failed(request_error_name(&error, proxied)))?;
+                .map_err(|error| Failed::problem(error.to_string()))?;
             let status = answer.status().as_u16();
             let body = client
                 .bytes(answer, &cancel)
                 .await
-                .map_err(|error| Failed(request_error_name(&error, proxied)))?;
+                .map_err(|error| Failed::problem(error.to_string()))?;
             version_of(status, &body)
         })
-        .unwrap_or(Err(Failed("RuntimeError")))
+        .unwrap_or_else(|_| Err(stopped()))
     })
-    .unwrap_or(Err(Failed("RuntimeError")))
+    .unwrap_or_else(|_| Err(stopped()))
 }
 
 /// Whether `latest` is a newer release than `installed` (PEP 440, as
@@ -136,7 +100,8 @@ pub fn newer(latest: &str, installed: &str) -> bool {
     }
 }
 
-/// `tuple(int(part) if part.isdigit() else 0 for part in text.split(".")[:3])`.
+/// The first three dotted parts of `text` as numbers, a part that is not
+/// one as 0.
 fn loose_key(text: &str) -> Vec<u128> {
     text.split('.')
         .take(3)
@@ -150,106 +115,51 @@ fn loose_key(text: &str) -> Vec<u128> {
         .collect()
 }
 
-/// The Python exception `socket.create_connection` raises for `error`.
-pub fn socket_error_name(error: &std::io::Error) -> &'static str {
-    match error.kind() {
-        ErrorKind::ConnectionRefused => "ConnectionRefusedError",
-        ErrorKind::ConnectionReset => "ConnectionResetError",
-        ErrorKind::ConnectionAborted => "ConnectionAbortedError",
-        ErrorKind::TimedOut | ErrorKind::WouldBlock => "TimeoutError",
-        ErrorKind::PermissionDenied => "PermissionError",
-        ErrorKind::InvalidInput => "ValueError",
-        _ => "OSError",
-    }
-}
-
-/// Opens and closes a TCP connection to `host:port` (`connect`): each
-/// address the name resolves to in turn, as `socket.create_connection`
-/// tries them; the last address's error when none accepts.
+/// Opens and closes a TCP connection to `host:port`: each address the name
+/// resolves to in turn; the last address's error when none accepts.
 ///
 /// # Errors
 ///
-/// The name does not resolve (`gaierror`), or no address accepts: the
-/// Python exception's name.
-pub fn connect(host: &str, port: u16, timeout: Duration) -> Result<(), &'static str> {
+/// The name does not resolve, or no address accepts: what went wrong, in
+/// the operating system's words.
+pub fn connect(host: &str, port: u16, timeout: Duration) -> Result<(), String> {
     let addresses: Vec<_> = (host, port)
         .to_socket_addrs()
-        .map_err(|_| "gaierror")?
+        .map_err(|error| format!("cannot resolve {host}: {error}"))?
         .collect();
-    if addresses.is_empty() {
-        return Err("gaierror");
-    }
-    let mut last = "OSError";
+    let mut last = format!("cannot resolve {host}: no address");
     for address in addresses {
         match TcpStream::connect_timeout(&address, timeout) {
             Ok(stream) => {
                 drop(stream);
                 return Ok(());
             }
-            Err(error) => last = socket_error_name(&error),
+            Err(error) => last = error.to_string(),
         }
     }
     Err(last)
 }
 
-/// The scheme, host and port of a proxy URL (`proxy_endpoint`), the
-/// credentials cut off at the last `@`; `None` when it cannot be parsed.
-pub fn proxy_endpoint(url: &str) -> Option<(String, String, Option<u16>)> {
+/// A proxy URL as the connectors read it: one written without a scheme
+/// (`proxy.internal:8080`) is an HTTP proxy.
+///
+/// # Errors
+///
+/// The text is not a URL: the parser's reason.
+pub fn parse_proxy(url: &str) -> Result<url::Url, url::ParseError> {
     let url = url.trim();
-    let (scheme, rest) = match url.split_once("://") {
-        Some((scheme, rest)) => (scheme, rest),
-        None => ("http", url),
-    };
-    if scheme.is_empty() || !scheme.chars().all(char::is_alphanumeric) {
-        return None;
-    }
-    let host_port = rest.rsplit_once('@').map_or(rest, |(_, after)| after);
-    let host_port = host_port.split(['/', '?', '#']).next().unwrap_or_default();
-    let (host, port) = split_host_port(host_port)?;
-    Some((scheme.to_owned(), host, port))
-}
-
-/// `urlsplit`'s `hostname` (lowercase, IPv6 without brackets) and `port`.
-fn split_host_port(text: &str) -> Option<(String, Option<u16>)> {
-    let (host, port) = if let Some(rest) = text.strip_prefix('[') {
-        let (host, after) = rest.split_once(']')?;
-        let port = match after.strip_prefix(':') {
-            Some(port) => Some(port),
-            None if after.is_empty() => None,
-            None => return None,
-        };
-        (host.to_owned(), port)
+    if url.contains("://") {
+        url::Url::parse(url)
     } else {
-        match text.rsplit_once(':') {
-            Some((host, port)) => (host.to_owned(), Some(port)),
-            None => (text.to_owned(), None),
-        }
-    };
-    let port = match port {
-        None | Some("") => None,
-        Some(port) => {
-            if !port.chars().all(|c| c.is_ascii_digit()) {
-                return None;
-            }
-            Some(port.parse::<u16>().ok()?)
-        }
-    };
-    Some((host.to_lowercase(), port))
+        url::Url::parse(&format!("http://{url}"))
+    }
 }
 
-/// Whether `NO_PROXY` sends requests to `host` direct (`_bypasses_proxy`).
-pub fn bypasses_proxy(host: &str, no_proxy: &str) -> bool {
-    no_proxy
-        .split(',')
-        .map(|entry| entry.trim().to_lowercase())
-        .filter(|entry| !entry.is_empty())
-        .any(|entry| {
-            if entry == "*" {
-                return true;
-            }
-            let entry = entry.trim_start_matches('.');
-            host == entry || host.ends_with(&format!(".{entry}"))
-        })
+/// Whether a request to *url* goes direct by `no_proxy` (else `NO_PROXY`),
+/// asked of the connectors' own proxy settings, so the route `doctor`
+/// reports is the one its requests take.
+pub fn bypasses_proxy(env: &Environment, proxy: Option<&str>, url: &str) -> bool {
+    url::Url::parse(url).is_ok_and(|url| ProxySettings::from_env(env, proxy).bypassed(&url))
 }
 
 #[cfg(test)]
@@ -269,90 +179,31 @@ mod tests {
     }
 
     #[test]
-    fn pypi_answers_read_as_python_reads_them() {
+    fn pypi_answers_name_what_is_wrong() {
         assert_eq!(
             version_of(200, br#"{"info": {"version": "1.2.3"}}"#),
             Ok("1.2.3".to_owned())
         );
-        assert_eq!(version_of(503, b""), Err(Failed("HTTPError")));
-        assert_eq!(version_of(200, b"<html>"), Err(Failed("JSONDecodeError")));
-        assert_eq!(version_of(200, b"{}"), Err(Failed("KeyError")));
-        assert_eq!(version_of(200, br#"{"info": {}}"#), Err(Failed("KeyError")));
-        assert_eq!(version_of(200, b"[]"), Err(Failed("TypeError")));
-        assert_eq!(version_of(200, br#"{"info": 1}"#), Err(Failed("TypeError")));
         assert_eq!(
-            version_of(200, br#"{"info": []}"#),
-            Err(Failed("TypeError"))
+            version_of(503, b""),
+            Err(Failed::problem("PyPI answered HTTP 503"))
         );
-        assert_eq!(
-            version_of(200, br#"{"info": {"version": ""}}"#),
-            Err(Failed("ValueError"))
-        );
-        assert_eq!(
-            version_of(200, br#"{"info": {"version": 3}}"#),
-            Err(Failed("ValueError"))
-        );
-    }
-
-    #[test]
-    fn request_errors_take_requests_names() {
-        let unreachable = |reason: &str| ConnectorError::Unreachable {
-            platform: "pypi".into(),
-            tenant: "pypi.org".into(),
-            address: "https://pypi.org".into(),
-            reason: reason.into(),
+        let Err(Failed::Problem(text)) = version_of(200, b"<html>") else {
+            panic!("HTML read as a version");
         };
-        assert_eq!(
-            request_error_name(&unreachable("connection refused"), true),
-            "ProxyError"
-        );
-        assert_eq!(
-            request_error_name(&unreachable("connection refused"), false),
-            "ConnectionError"
-        );
-        assert_eq!(
-            request_error_name(&unreachable("operation timed out"), false),
-            "ConnectTimeout"
-        );
-        assert_eq!(
-            request_error_name(&unreachable("invalid peer certificate"), true),
-            "SSLError"
-        );
-        let timeout = ConnectorError::Timeout {
-            platform: "pypi".into(),
-            tenant: "pypi.org".into(),
-            address: "https://pypi.org".into(),
-            seconds: 3,
-        };
-        assert_eq!(request_error_name(&timeout, false), "ReadTimeout");
-        assert_eq!(
-            request_error_name(&ConnectorError::Cancelled, false),
-            "ConnectionError"
-        );
-        let setup = ConnectorError::Setup {
-            platform: "pypi".into(),
-            tenant: "pypi.org".into(),
-            message: "bad".into(),
-        };
-        assert_eq!(request_error_name(&setup, false), "InvalidURL");
-    }
-
-    #[test]
-    fn socket_errors_take_pythons_names() {
-        let named = |kind: ErrorKind| socket_error_name(&std::io::Error::from(kind));
-        assert_eq!(
-            named(ErrorKind::ConnectionRefused),
-            "ConnectionRefusedError"
-        );
-        assert_eq!(named(ErrorKind::ConnectionReset), "ConnectionResetError");
-        assert_eq!(
-            named(ErrorKind::ConnectionAborted),
-            "ConnectionAbortedError"
-        );
-        assert_eq!(named(ErrorKind::TimedOut), "TimeoutError");
-        assert_eq!(named(ErrorKind::PermissionDenied), "PermissionError");
-        assert_eq!(named(ErrorKind::InvalidInput), "ValueError");
-        assert_eq!(named(ErrorKind::Other), "OSError");
+        assert!(text.starts_with("PyPI's answer is not JSON: "), "{text}");
+        let unread = Err(Failed::problem("PyPI's answer has no `info.version`"));
+        for body in [
+            &b"{}"[..],
+            br#"{"info": {}}"#,
+            b"[]",
+            br#"{"info": 1}"#,
+            br#"{"info": []}"#,
+            br#"{"info": {"version": ""}}"#,
+            br#"{"info": {"version": 3}}"#,
+        ] {
+            assert_eq!(version_of(200, body), unread, "{body:?}");
+        }
     }
 
     #[test]
@@ -361,47 +212,71 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         assert_eq!(connect("127.0.0.1", port, NETWORK_TIMEOUT), Ok(()));
         drop(listener);
-        assert_eq!(
-            connect("127.0.0.1", port, NETWORK_TIMEOUT),
-            Err("ConnectionRefusedError")
+        let refused = connect("127.0.0.1", port, NETWORK_TIMEOUT).unwrap_err();
+        assert!(refused.to_lowercase().contains("refused"), "{refused}");
+        let unresolved = connect("name.invalid", 80, NETWORK_TIMEOUT).unwrap_err();
+        assert!(
+            unresolved.starts_with("cannot resolve name.invalid: "),
+            "{unresolved}"
         );
     }
 
+    /// The scheme, host and port the proxy check connects to.
+    fn endpoint(url: &str) -> Option<(String, String, Option<u16>)> {
+        let parsed = parse_proxy(url).ok()?;
+        Some((
+            parsed.scheme().to_owned(),
+            parsed.host_str()?.to_owned(),
+            parsed.port_or_known_default(),
+        ))
+    }
+
     #[test]
-    fn proxy_urls_split_as_urlsplit_does() {
+    fn proxy_urls_parse_as_the_connectors_read_them() {
         assert_eq!(
-            proxy_endpoint("http://user:p/a#ss@Proxy.Example:8080/x"),
+            endpoint("http://user:p%2Fa%23ss@Proxy.Example:8080/x"),
             Some(("http".into(), "proxy.example".into(), Some(8080)))
         );
         assert_eq!(
-            proxy_endpoint("proxy:3128"),
+            endpoint("proxy:3128"),
             Some(("http".into(), "proxy".into(), Some(3128)))
         );
         assert_eq!(
-            proxy_endpoint("https://[::1]:443"),
-            Some(("https".into(), "::1".into(), Some(443)))
+            endpoint("https://[::1]:8443"),
+            Some(("https".into(), "[::1]".into(), Some(8443)))
         );
         assert_eq!(
-            proxy_endpoint("https://[::1]"),
-            Some(("https".into(), "::1".into(), None))
+            endpoint("https://[::1]"),
+            Some(("https".into(), "[::1]".into(), Some(443)))
         );
-        assert_eq!(proxy_endpoint("http://host:99999"), None);
-        assert_eq!(proxy_endpoint("http://host:8x"), None);
-        assert_eq!(proxy_endpoint("http://[::1"), None);
-        assert_eq!(proxy_endpoint("http://[::1]x"), None);
-        assert_eq!(proxy_endpoint("ht tp://host"), None);
-        assert_eq!(
-            proxy_endpoint("http://"),
-            Some(("http".into(), String::new(), None))
-        );
+        for unparsed in [
+            "http://host:99999",
+            "http://host:8x",
+            "http://[::1",
+            "http://[::1]x",
+            "ht tp://host",
+            "http://",
+        ] {
+            assert!(parse_proxy(unparsed).is_err(), "{unparsed}");
+        }
     }
 
     #[test]
-    fn no_proxy_entries_match_hosts_and_their_subdomains() {
-        assert!(bypasses_proxy("pypi.org", "localhost, .pypi.org"));
-        assert!(bypasses_proxy("files.pypi.org", "pypi.org"));
-        assert!(bypasses_proxy("pypi.org", "*"));
-        assert!(!bypasses_proxy("pypi.org", "example.org,,"));
-        assert!(!bypasses_proxy("notpypi.org", "pypi.org"));
+    fn no_proxy_entries_match_hosts_their_subdomains_and_address_ranges() {
+        let direct = |no_proxy: &str, url: &str| {
+            let env = Environment::from_pairs([("NO_PROXY", no_proxy)]);
+            bypasses_proxy(&env, Some("http://proxy:3128"), url)
+        };
+        assert!(direct("localhost, .pypi.org", PYPI_URL));
+        assert!(direct("pypi.org", "https://files.pypi.org/x"));
+        assert!(direct("*", PYPI_URL));
+        assert!(!direct("example.org,,", PYPI_URL));
+        assert!(!direct("pypi.org", "https://notpypi.org/x"));
+        // A CIDR entry covers the addresses in its range, as reqwest reads it.
+        assert!(direct("10.0.0.0/8", "https://10.1.2.3:8089/x"));
+        assert!(!direct("10.0.0.0/8", "https://11.1.2.3:8089/x"));
+        // The lower-case spelling wins, as the connectors read it.
+        let env = Environment::from_pairs([("no_proxy", "example.org"), ("NO_PROXY", "pypi.org")]);
+        assert!(!bypasses_proxy(&env, None, PYPI_URL));
     }
 }

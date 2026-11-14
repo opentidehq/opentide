@@ -405,16 +405,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "comfy-table"
-version = "7.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "958c5d6ecf1f214b4c2bbbbf6ab9523a864bd136dcf71a7e8904799acfe1ad47"
-dependencies = [
- "unicode-segmentation",
- "unicode-width",
-]
-
-[[package]]
 name = "compact_str"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1620,6 +1610,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "h2"
+version = "0.4.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d29020232d6aa3fb1daca64c1127cf662cf97f254ae16c18c05b8ab635fc118"
+dependencies = [
+ "atomic-waker",
+ "bytes",
+ "fnv",
+ "futures-core",
+ "futures-sink",
+ "http",
+ "indexmap",
+ "slab",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "hash32"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1738,7 +1747,9 @@ checksum = "2c3e324da4c95177d6291d4c8730197c0d1822f8a9766814a4a44fa5ab797c9c"
 dependencies = [
  "atomic-waker",
  "bytes",
+ "futures-channel",
  "futures-core",
+ "h2",
  "http",
  "http-body",
  "httparse",
@@ -2668,7 +2679,6 @@ dependencies = [
  "base64 0.22.1",
  "clap",
  "clap_complete",
- "comfy-table",
  "ctrlc",
  "form_urlencoded",
  "humantime",
@@ -2701,7 +2711,6 @@ dependencies = [
  "shlex",
  "signal-hook",
  "soft-canonicalize",
- "strsim",
  "terminal_size",
  "textwrap",
  "tokio",
@@ -2767,6 +2776,7 @@ version = "0.12.0"
 dependencies = [
  "base64 0.22.1",
  "http",
+ "hyper-util",
  "jiff",
  "jsonwebtoken",
  "opentide-compile",
@@ -3613,6 +3623,7 @@ dependencies = [
  "base64 0.23.1",
  "bytes",
  "futures-core",
+ "h2",
  "http",
  "http-body",
  "http-body-util",

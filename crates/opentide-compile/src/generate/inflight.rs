@@ -86,14 +86,14 @@ pub fn object_version(body: &Node) -> i64 {
 
 /// An object's UUID (`_object_uuid`): `uuid`, else `metadata.uuid`.
 pub fn object_uuid(body: &Node) -> Option<String> {
-    let truthy = |node: &&Arc<Node>| opentide_workspace::index::truthy(node);
+    let named = |node: &&Arc<Node>| opentide_workspace::index::holds_name(node);
     body.get("uuid")
-        .filter(truthy)
+        .filter(named)
         .or_else(|| {
             body.get("metadata")
                 .filter(|m| matches!(m.value, Value::Map(_)))
                 .and_then(|metadata| metadata.get("uuid"))
-                .filter(truthy)
+                .filter(named)
         })
         .map(|uuid| node_text(uuid))
 }
@@ -112,7 +112,7 @@ pub fn object_family(body: &Node) -> Option<String> {
     }
     let has = |key: &str| {
         body.get(key)
-            .is_some_and(|value| opentide_workspace::index::truthy(value))
+            .is_some_and(|value| matches!(&value.value, Value::Map(entries) if !entries.is_empty()))
     };
     if has("threat") {
         Some("threat".into())
@@ -482,7 +482,7 @@ mod tests {
                     .map(|(_, value)| (*value).to_owned())
             }
         };
-        let line = |json: &Json| crate::generate::json_text::line(json);
+        let line = Json::to_compact;
         let local = vars(&[]);
         assert_eq!(
             line(&change(
@@ -492,13 +492,13 @@ mod tests {
                 None,
                 "t"
             )),
-            "{\"platform\": \"local\", \"number\": null, \"url\": null, \"title\": null, \"head_ref\": null, \"base_ref\": null, \"head_sha\": null, \"source_path\": \"objects/rules/a.yaml\", \"recorded_at\": \"t\"}"
+            "{\"platform\":\"local\",\"number\":null,\"url\":null,\"title\":null,\"head_ref\":null,\"base_ref\":null,\"head_sha\":null,\"source_path\":\"objects/rules/a.yaml\",\"recorded_at\":\"t\"}"
         );
         let github = vars(&[("GITHUB_HEAD_REF", ""), ("GITHUB_SHA", "abc")]);
         let event = r#"{"pull_request": {"number": 7, "html_url": "u", "title": "T", "head": {"ref": "feat", "sha": "def"}, "base": {"ref": "main"}}}"#;
         assert_eq!(
             line(&change(&github, Ci::GitHub, "p", Some(event), "t")),
-            "{\"platform\": \"github\", \"number\": 7, \"url\": \"u\", \"title\": \"T\", \"head_ref\": \"feat\", \"base_ref\": \"main\", \"head_sha\": \"abc\", \"source_path\": \"p\", \"recorded_at\": \"t\"}"
+            "{\"platform\":\"github\",\"number\":7,\"url\":\"u\",\"title\":\"T\",\"head_ref\":\"feat\",\"base_ref\":\"main\",\"head_sha\":\"abc\",\"source_path\":\"p\",\"recorded_at\":\"t\"}"
         );
         let gitlab = vars(&[
             ("CI_MERGE_REQUEST_IID", "12"),
@@ -530,7 +530,7 @@ mod tests {
         )]);
         assert_eq!(
             line(&change(&given, Ci::GitHub, "p", None, "now")),
-            "{\"platform\": \"manual\", \"recorded_at\": \"then\", \"source_path\": \"p\"}"
+            "{\"platform\":\"manual\",\"recorded_at\":\"then\",\"source_path\":\"p\"}"
         );
     }
 

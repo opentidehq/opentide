@@ -121,7 +121,7 @@ pub fn kind(value: &Value) -> &'static str {
 /// A refused value as the refusal shows it: a string quoted, else its kind.
 fn shown(value: &Value) -> String {
     match value {
-        Value::String(text) => crate::render::codeframe::quoted(text),
+        Value::String(text) => format!("{text:?}"),
         other => kind(other).to_owned(),
     }
 }
@@ -166,7 +166,7 @@ mod tests {
         assert!(!args.boolean("c", true).unwrap());
         assert_eq!(
             args.boolean("d", false).unwrap_err(),
-            "argument d must be a boolean (true or false), not 'sometimes'"
+            "argument d must be a boolean (true or false), not \"sometimes\""
         );
         assert!(args.boolean("e", false).is_err());
         assert!(args.boolean("f", false).is_err());
@@ -184,7 +184,7 @@ mod tests {
         assert!(args.integer("d", 0).is_err());
         assert_eq!(
             args.integer("e", 0).unwrap_err(),
-            "argument e must be an integer, not 'many'"
+            "argument e must be an integer, not \"many\""
         );
         assert!(args.integer("f", 0).is_err());
         assert_eq!(args.integer("g", 100).unwrap(), 100);

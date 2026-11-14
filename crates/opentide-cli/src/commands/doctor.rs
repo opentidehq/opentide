@@ -222,15 +222,15 @@ fn latest_version(offline: bool, cx: &Context<'_>) -> Check {
 /// The `opentide_latest` check for what asking PyPI gave.
 fn latest_check(found: Result<String, network::Failed>, version: &str) -> Check {
     match found {
-        Err(network::Failed(network::NO_NETWORK)) => Check::new(
+        Err(network::Failed::NoNetwork) => Check::new(
             "opentide_latest",
             "skip",
             "Not checked: this build of opentide has no network",
         ),
-        Err(network::Failed(name)) => Check::new(
+        Err(network::Failed::Problem(problem)) => Check::new(
             "opentide_latest",
             "warn",
-            format!("Could not ask PyPI for the latest release ({name})"),
+            format!("Could not ask PyPI for the latest release ({problem})"),
         )
         .fix("check the network or --proxy, or pass --offline to skip network checks"),
         Ok(latest) if network::newer(&latest, version) => Check::new(
@@ -892,29 +892,33 @@ impl Doctor<'_> {
                 format!("Proxy {shown} not checked: --offline"),
             );
         }
-        let no_proxy = self
-            .cx
-            .env
-            .get("NO_PROXY")
-            .filter(|value| !value.is_empty())
-            .or_else(|| self.cx.env.get("no_proxy"))
-            .unwrap_or_default();
-        let note = if network::bypasses_proxy("pypi.org", no_proxy) {
+        let environment = opentide_connectors::Environment::from_pairs(self.cx.env.iter());
+        let note = if network::bypasses_proxy(&environment, self.cx.proxy, network::PYPI_URL) {
             "; pypi.org bypasses it (NO_PROXY)"
         } else {
             ""
         };
-        let endpoint = network::proxy_endpoint(url);
-        let Some((scheme, host, port)) = endpoint.clone().filter(|(_, host, _)| !host.is_empty())
-        else {
-            let message = if endpoint.is_some() {
-                format!("Proxy {shown} has no host")
-            } else {
-                "The proxy URL cannot be parsed".to_owned()
-            };
-            return Check::new("proxy", "fail", message).fix("pass --proxy http://host:port");
+        let parsed = match network::parse_proxy(url) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                return Check::new(
+                    "proxy",
+                    "fail",
+                    format!("The proxy URL cannot be parsed: {error}"),
+                )
+                .fix("pass --proxy http://host:port");
+            }
         };
-        let port = port.unwrap_or(if scheme == "https" { 443 } else { 80 });
+        let host = match parsed.host() {
+            Some(url::Host::Ipv6(address)) => address.to_string(),
+            Some(host) => host.to_string(),
+            None => String::new(),
+        };
+        if host.is_empty() {
+            return Check::new("proxy", "fail", format!("Proxy {shown} has no host"))
+                .fix("pass --proxy http://host:port");
+        }
+        let port = parsed.port_or_known_default().unwrap_or(80);
         // WASI has no sockets: the check would fail as if the name did not
         // resolve. The requests through the proxy are the client's to make.
         if cfg!(target_os = "wasi") {
@@ -1293,20 +1297,12 @@ fn toml_problem(path: &Path) -> Option<(Option<usize>, String)> {
     }
 }
 
-/// `url` without its user and password: `http://proxy:8080` (`redact_url`).
+/// `url` without its user and password: `http://proxy:8080`.
 fn redact_url(url: &str) -> String {
-    let Some((scheme, host, port)) = network::proxy_endpoint(url) else {
-        return "<unparseable proxy URL>".to_owned();
-    };
-    let host = if host.contains(':') {
-        format!("[{host}]")
-    } else {
-        host
-    };
-    match port.filter(|port| *port != 0) {
-        Some(port) => format!("{scheme}://{host}:{port}"),
-        None => format!("{scheme}://{host}"),
-    }
+    network::parse_proxy(url).map_or_else(
+        |_| "<unparseable proxy URL>".to_owned(),
+        |parsed| opentide_connectors::error::origin(&parsed),
+    )
 }
 
 /// A JSON file as VS Code reads it (comments, trailing commas, a byte order
@@ -1523,19 +1519,21 @@ mod tests {
     #[test]
     fn a_build_without_a_network_skips_the_pypi_check() {
         // The WASI build outside a serve whose client makes its requests.
-        let check = latest_check(Err(network::Failed(network::NO_NETWORK)), "1.0.0");
+        let check = latest_check(Err(network::Failed::NoNetwork), "1.0.0");
         assert_eq!(
             (check.status, check.message.as_str()),
             ("skip", "Not checked: this build of opentide has no network")
         );
         assert!(check.fix.is_none());
         // Any other failure is still a warning that names it.
-        let check = latest_check(Err(network::Failed("ConnectionError")), "1.0.0");
+        let check = latest_check(
+            Err(network::Failed::Problem("PyPI answered HTTP 503".into())),
+            "1.0.0",
+        );
         assert_eq!(check.status, "warn");
-        assert!(
-            check.message.ends_with("(ConnectionError)"),
-            "{}",
-            check.message
+        assert_eq!(
+            check.message,
+            "Could not ask PyPI for the latest release (PyPI answered HTTP 503)"
         );
     }
 
@@ -1555,15 +1553,28 @@ mod tests {
             .find(|(code, ..)| code == "opentide_latest")
             .unwrap();
         assert_eq!(latest.1, "warn");
-        assert_eq!(
-            latest.2,
-            "Could not ask PyPI for the latest release (ProxyError)"
+        // The HTTP client's words: the tenant it could not reach, and why.
+        assert!(
+            latest
+                .2
+                .starts_with("Could not ask PyPI for the latest release (Cannot reach pypi"),
+            "{}",
+            latest.2
         );
         let checked = found.iter().find(|(code, ..)| code == "proxy").unwrap();
         assert_eq!(checked.1, "fail");
-        assert_eq!(
-            checked.2,
-            format!("Cannot connect to proxy {proxy} (ConnectionRefusedError)")
+        // The operating system's words for the refused connection.
+        assert!(
+            checked
+                .2
+                .starts_with(&format!("Cannot connect to proxy {proxy} (")),
+            "{}",
+            checked.2
+        );
+        assert!(
+            checked.2.to_lowercase().contains("refused"),
+            "{}",
+            checked.2
         );
     }
 
@@ -1601,7 +1612,10 @@ mod tests {
         let check = doctor.proxy(false);
         assert_eq!(
             (check.status, check.message.as_str()),
-            ("fail", "The proxy URL cannot be parsed")
+            (
+                "fail",
+                "The proxy URL cannot be parsed: relative URL without a base"
+            )
         );
         let hostless = Context {
             proxy: Some("http://:8080"),
@@ -1614,7 +1628,7 @@ mod tests {
         let check = doctor.proxy(false);
         assert_eq!(
             (check.status, check.message.as_str()),
-            ("fail", "Proxy http://:8080 has no host")
+            ("fail", "The proxy URL cannot be parsed: empty host")
         );
     }
 
@@ -1755,7 +1769,7 @@ mod tests {
     #[test]
     fn proxies_are_shown_without_credentials() {
         assert_eq!(
-            redact_url("http://user:p@ss/w#rd@proxy:8080"),
+            redact_url("http://user:p%40ss%2Fw%23rd@proxy:8080"),
             "http://proxy:8080"
         );
         assert_eq!(redact_url("proxy.example"), "http://proxy.example");

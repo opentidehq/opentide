@@ -12,8 +12,6 @@
 
 use std::io::Write as _;
 use std::path::Path;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use opentide_cassette::{Cassette, Mode, Proxy, Redaction};
 use opentide_cli::commands::validate_live::{Context, Live, run};
@@ -269,15 +267,7 @@ fn sentinel_signs_in_once_and_searches_each_rule() {
             ),
         ],
     );
-    // `client.py`'s request ids: the n-th id of the run, from 1.
-    let next = Arc::new(AtomicU64::new(0));
-    let sentinel = opentide_connectors::sentinel::Sentinel::with_identity(
-        Arc::new(move || {
-            let number = next.fetch_add(1, Ordering::SeqCst) + 1;
-            format!("00000000-0000-4000-8000-{number:012x}")
-        }),
-        "linux",
-    );
+    let sentinel = opentide_connectors::sentinel::Sentinel::new();
     let mut registry = Registry::new();
     registry.register(Box::new(sentinel)).unwrap();
     let (live, mismatches) = live(
@@ -544,8 +534,8 @@ fn a_refused_credential_or_an_unreachable_tenant_stops_the_check() {
     assert_eq!(
         value(&live, "message"),
         &Json::str(
-            "Query validation for splunk failed: TenantConnectionError: Cannot authenticate with \
-             the tenant configuration"
+            "Query validation for splunk failed: splunk tenant 'lab': Cannot authenticate \
+             with the tenant configuration"
         )
     );
     assert_eq!(value(&live, "queries_validated"), &Json::Int(2));

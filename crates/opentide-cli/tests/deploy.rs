@@ -459,7 +459,7 @@ fn a_typo_in_the_strategy_is_the_commands_usage_error_and_writes_no_summary() {
     assert_eq!(
         plain.stderr,
         "error: --strategy \"PREVEW\" is not a deployable strategy. Use PREVIEW or RELEASE\n  \
-         help: did you mean 'PREVIEW'?\n"
+         help: did you mean \"PREVIEW\"?\n"
     );
     let _ = std::fs::remove_dir_all(&ws);
 }
