@@ -2,9 +2,9 @@
 # (xtask/src/bench/) on the heavy workspace, held by `cargo xtask bench --check` to
 # tests/bench/budgets.toml and to the last result of the comparison base.
 #
-# When: on every push to integration/unified-core and development, nightly on the
-# default branch (development), on demand, and on a pull request that carries the `perf` label (adding
-# the label starts a run; every push then reruns it). A run measures each command as
+# When: nightly on the default branch (development) and on demand (Run workflow,
+# which on a branch is how a change is measured): the nightly set, never on a pull
+# request or a push. A run measures each command as
 # fresh processes on one runner class, ubuntu-24.04 (4 vCPU, the class the baseline in
 # budgets.toml was recorded on): numbers from another class are not comparable.
 #
@@ -18,20 +18,17 @@
 # re-recorded on purpose. Each run keeps its own results as the bench-<engine>
 # artifact for 90 days.
 #
-# Safety: `pull_request`, never `pull_request_target`: a PR's code runs with a
-# read-only token and no secrets, and the label only decides whether the job runs.
+# Safety: no `pull_request_target`; a run has a read-only token and no secrets.
 # The benchmarks reach no tenant: `deploy` runs with --dry-run, and every measured
 # process gets proxies that lead nowhere (xtask/src/bench/measure.rs).
 name: Benchmarks
 
 on:
-  schedule:
-    - cron: "17 3 * * *"
+  # Part of the nightly: ci.yml calls this workflow (its `nightly` scope,
+  # .github/AGENTS.md); Run workflow runs it alone. Never on a pull request
+  # or a push, so it never blocks a merge.
+  workflow_call:
   workflow_dispatch:
-  push:
-    branches: [development, integration/unified-core]
-  pull_request:
-    types: [opened, synchronize, reopened, labeled]
 
 permissions:
   contents: read
@@ -43,16 +40,11 @@ env:
 jobs:
   bench:
     name: Benchmarks (${{ matrix.engine }})
-    # A PR runs only with the `perf` label, and adding another label to it starts nothing.
-    if: >-
-      github.event_name != 'pull_request' || (
-        contains(github.event.pull_request.labels.*.name, 'perf') &&
-        (github.event.action != 'labeled' || github.event.label.name == 'perf'))
     # On the job, not the workflow, so that a skipped run (another label) cancels
     # nothing, and per engine, so that a run's two jobs never wait for each other.
     # A new push to a PR replaces its run; every other run (a push to
     # integration/unified-core, the nightly, Run workflow) has a group of its own,
-    # its run id, so each push keeps a complete result (tests/test_ci/test_concurrency.py).
+    # its run id, so each push keeps a complete result (tests/test_ci/test_workflows.py).
     concurrency:
       group: bench-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}-${{ matrix.engine }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -90,7 +82,7 @@ jobs:
         with:
           tool: sccache@0.19.0
       # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      # so a family is saved once a week (tests/test_ci/test_workflows.py).
       - name: Compiler cache week
         id: week
         shell: bash

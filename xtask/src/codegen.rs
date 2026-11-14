@@ -9,7 +9,7 @@
 //!   `generate templates` writes for the bundled configuration (#814; a file
 //!   there no snippet reads is stale). Without `--check` they are written;
 //!   with it, a difference fails.
-//! - **Golden parity** (`--check` only): each recording in
+//! - **Golden parity** (`--check --oracle` only, by hand): each recording in
 //!   `tests/golden/cases` of an `opentide generate` that exited 0 and ran
 //!   the `schemas`, `templates` and `snippets` phases (a bare `generate`,
 //!   or those phases named with others) holds the templates, the snippets
@@ -21,7 +21,7 @@
 //!   configuration, must be byte-identical, and neither side may hold one
 //!   the other has not.
 //!
-//! - **Schemas by verdict** (`--check` only; UC-1.8b, #900): the JSON
+//! - **Schemas by verdict** (`--check --oracle` only, by hand; UC-1.8b, #900): the JSON
 //!   Schemas of the `schemas` phase (each object revision's, and
 //!   `visibility.toml`'s) in each such recording and in each recording of
 //!   `opentide new` that generated them, and every configuration
@@ -44,12 +44,15 @@
 //!   `data/catalogs/tide/schemas/`, generated from the bundled configuration
 //!   with no workspace objects, vocabulary essays shortened.
 //!
-//! - **Language-server catalogs** (`--check` only; UC-3.5d, #933): the
-//!   `fields.json` and `deprecations.json` the `schemas` phase writes, from
-//!   `opentide_schema::generate::catalog`: byte for byte as in each golden
-//!   recording of `opentide generate` that wrote them (the oracle's version
-//!   as the label), and the committed copy in `data/catalogs/tide/generated/`
-//!   by content, its labels aside.
+//! - **Language-server catalogs** (UC-3.5d, #933): the `fields.json` and
+//!   `deprecations.json` the `schemas` phase writes, from
+//!   `opentide_schema::generate::catalog`: the committed copy in
+//!   `data/catalogs/tide/generated/` (`--check`), and, with `--check
+//!   --oracle` by hand, byte for byte as in each golden recording of
+//!   `opentide generate` that wrote them (the oracle's version as the label).
+//!
+//! The comparisons with the oracle (`--oracle`) left CI with the rest of the
+//! oracle policing (2026-11-14): Engine lint runs `codegen --check`.
 
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -78,7 +81,7 @@ use crate::golden::snapshot::{ChangeKind, Kind};
 use crate::verdict::{self, Instances};
 
 /// The usage of `cargo xtask codegen`.
-pub const USAGE: &str = "usage: cargo xtask codegen [--check]
+pub const USAGE: &str = "usage: cargo xtask codegen [--check [--oracle]]
 
   (no option)  write the committed artifacts generated from the Rust model:
                src/opentide/schemas/data/platform_templates/*.template.yaml,
@@ -87,16 +90,18 @@ pub const USAGE: &str = "usage: cargo xtask codegen [--check]
                server's catalogs (data/catalogs/tide/generated/), the key
                lists of highlights/queries/tide/highlights.scm and the
                diagnostics reference (docs/cli/diagnostics.md)
-  --check      compare them instead of writing; compare what `opentide
-               generate` writes (templates, snippets, the router schema) with
-               each golden recording of an `opentide generate` that ran
-               those phases and exited 0, byte for byte; and compare the
-               JSON Schemas it writes (each revision's, visibility.toml's)
-               and the configuration schemas with the oracle's by verdict on
-               every corpus object, configuration file and fault; compare
-               the language server's catalogs with the recordings, byte for
-               byte, and with data/catalogs/tide/generated; exit 1 on a
-               difference
+  --check      compare them instead of writing, and the language server's
+               catalogs with data/catalogs/tide/generated; exit 1 on a
+               difference (CI's Engine lint)
+  --oracle     with --check, also compare with the frozen Python oracle (by
+               hand: no workflow runs it): what `opentide generate` writes
+               (templates, snippets, the router schema) with each golden
+               recording of an `opentide generate` that ran those phases and
+               exited 0, byte for byte; the JSON Schemas it writes (each
+               revision's, visibility.toml's) and the configuration schemas
+               with the oracle's by verdict on every corpus object,
+               configuration file and fault; and the language server's
+               catalogs with the recordings, byte for byte
 ";
 
 /// Where the committed editor schemas live, relative to the repository.
@@ -135,9 +140,11 @@ pub const EDITOR_TEMPLATE_NAMES: [&str; 3] = [
 /// Runs `codegen`: `Ok(0)` passed, `Ok(1)` a difference.
 pub fn run(args: &[String]) -> Result<u8> {
     let mut check = false;
+    let mut oracle = false;
     for arg in args {
         match arg.as_str() {
             "--check" => check = true,
+            "--oracle" => oracle = true,
             "help" | "--help" | "-h" => {
                 print!("{USAGE}");
                 return Ok(0);
@@ -145,13 +152,21 @@ pub fn run(args: &[String]) -> Result<u8> {
             other => bail!("unknown option `{other}`\n\n{USAGE}"),
         }
     }
+    if oracle && !check {
+        bail!("--oracle compares with the oracle: it needs --check\n\n{USAGE}");
+    }
     let root = repo_root();
     let mut problems = committed(&root, check)?;
     problems.extend(engine_catalog(&root, check)?);
     let mut compared = 0;
     let mut judged = 0;
-    let mut oracle = Vec::new();
-    if check {
+    let mut differences = Vec::new();
+    if check && !oracle {
+        // `--check` alone: the committed language-server catalogs' drift
+        // from the generator, no recordings of the oracle read.
+        problems.extend(catalog_drift(&root)?.1);
+    }
+    if oracle {
         let ledger_path = root.join("tests/golden/APPROVED_DIFFS.toml");
         let ledger = opentide_compare::ledger::Ledger::parse(
             &std::fs::read_to_string(&ledger_path)
@@ -177,28 +192,30 @@ pub fn run(args: &[String]) -> Result<u8> {
         });
         let (count, golden) = golden?;
         compared = count;
-        oracle.extend(golden);
+        differences.extend(golden);
         let (count, verdicts) = verdicts?;
         judged = count;
-        oracle.extend(verdicts);
+        differences.extend(verdicts);
         let (count, drift, catalogs) = catalogs?;
         compared += count;
         problems.extend(drift);
-        oracle.extend(catalogs);
+        differences.extend(catalogs);
     }
-    // The differences from the oracle's recordings gate with the committed
-    // artifacts' drift from the generator.
-    problems.extend(oracle);
+    // Under `--oracle`, the differences from the oracle's recordings gate
+    // with the committed artifacts' drift from the generator.
+    problems.extend(differences);
     for problem in &problems {
         eprintln!("error: {problem}");
     }
     if problems.is_empty() {
-        if check {
+        if oracle {
             println!(
                 "codegen: the committed artifacts are current, {compared} files of the \
                  golden recordings of `opentide generate` match byte for byte, and the \
                  schemas agree with the oracle's on {judged} verdicts"
             );
+        } else if check {
+            println!("codegen: the committed artifacts are current");
         }
         Ok(0)
     } else {
@@ -796,15 +813,12 @@ fn written(bytes: Vec<u8>) -> opentide_compare::FileState {
     opentide_compare::FileState::Written { mode: 0o644, bytes }
 }
 
-fn catalog_parity(
-    root: &Path,
-    ledger: &opentide_compare::ledger::Ledger,
-    usage: &mut opentide_compare::ledger::Usage,
-) -> Result<(usize, Vec<String>, Vec<String>)> {
-    use opentide_compare::Run;
-    use opentide_schema::generate::catalog::{CATALOG_DIR, catalog_texts};
+/// The committed language-server catalogs' drift from what the Rust
+/// generator writes for the bundled configuration, labels aside: the files
+/// that match and the problems.
+fn catalog_drift(root: &Path) -> Result<(usize, Vec<String>)> {
+    use opentide_schema::generate::catalog::catalog_texts;
     let mut drift = Vec::new();
-    let mut problems = Vec::new();
     let mut compared = 0;
     let sources = bundled_sources()?;
     for (name, text) in catalog_texts("", &sources) {
@@ -817,6 +831,18 @@ fn catalog_parity(
             Err(_) => drift.push(format!("{path}: missing")),
         }
     }
+    Ok((compared, drift))
+}
+
+fn catalog_parity(
+    root: &Path,
+    ledger: &opentide_compare::ledger::Ledger,
+    usage: &mut opentide_compare::ledger::Usage,
+) -> Result<(usize, Vec<String>, Vec<String>)> {
+    use opentide_compare::Run;
+    use opentide_schema::generate::catalog::{CATALOG_DIR, catalog_texts};
+    let mut problems = Vec::new();
+    let (mut compared, drift) = catalog_drift(root)?;
 
     let golden = root.join("tests/golden");
     let oracle =
@@ -1238,6 +1264,18 @@ fn compare(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_oracle_comparison_needs_check_and_unknown_options_fail() {
+        // `--oracle` alone would write the committed artifacts, not compare.
+        let error = run(&["--oracle".to_owned()]).unwrap_err().to_string();
+        assert!(
+            error.contains("--oracle compares with the oracle"),
+            "{error}"
+        );
+        assert!(run(&["--orcale".to_owned()]).is_err());
+        assert!(USAGE.contains("--check [--oracle]"));
+    }
 
     #[test]
     fn the_generated_files_are_recognised() {

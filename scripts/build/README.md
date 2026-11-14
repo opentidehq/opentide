@@ -101,4 +101,4 @@ npm native package; the Linux wheels' containers do the same in `[tool.cibuildwh
 `before-all` (`pyproject.toml`). Without it, rustup read `rust-toolchain.toml` in the checkout
 and installed the release with its components in the middle of the build, which failed now and
 then (`detected conflict: 'bin/cargo-clippy'`, `'cargo' is not installed for the toolchain`).
-`tests/test_ci/test_rust_toolchain.py` holds the workflows and the script to this.
+`tests/test_ci/test_workflows.py` holds the workflows and the script to this.

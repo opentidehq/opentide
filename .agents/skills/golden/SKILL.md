@@ -12,11 +12,17 @@ compares the Rust result with the oracle's. The source of this skill is the plan
 §5.1 and §5.2 ([`unified-core.md`](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#5-correctness-strategy)),
 and the issues of the two items that build the tools.
 
-**Status.** These tools are being built:
+**In CI: none of it, since 2026-11-14.** The port is done, and the maintainer took the oracle
+policing out of CI: no workflow runs `golden record`, `check` or `diff`, the corpora's diffs, the
+MCP replay or `codegen --check --oracle`, and `APPROVED_DIFFS.toml` gates nothing. Every command
+below stays, run by hand: before a re-record's or a new oracle's pull request, or to measure a
+behaviour change against the oracle (`tests/golden/README.md`).
+
+**Status.** These tools were built:
 
 | Tool | Work item | State |
 |------|-----------|-------|
-| `cargo xtask golden`, `tests/golden/` (`ORACLE`, `cases.toml`, `cases/`, `blobs/`, `COVERAGE.md`, `README.md`) | UC-0.5, [#803](https://github.com/opentidehq/opentide/issues/803) | Present: 1809 cases recorded from opentide 0.28.1; `.github/workflows/golden.yml` runs `check` and `record --check-determinism` |
+| `cargo xtask golden`, `tests/golden/` (`ORACLE`, `cases.toml`, `cases/`, `blobs/`, `COVERAGE.md`, `README.md`) | UC-0.5, [#803](https://github.com/opentidehq/opentide/issues/803) | Present: 1160 cases recorded from opentide 0.23.0; run by hand (no workflow runs them) |
 | The comparator, `tests/golden/APPROVED_DIFFS.toml`, `golden check --engine rust` | UC-0.7, [#805](https://github.com/opentidehq/opentide/issues/805); UC-6.2, [#841](https://github.com/opentidehq/opentide/issues/841) | Present: every case runs on the Rust core, the only implementation; `OPENTIDE_ENGINE` and compare mode were removed with the Python implementation |
 
 **`tests/golden/README.md` is the reference** for the commands, the case and recording layout,
@@ -47,7 +53,7 @@ usage).
 | Command | What it does |
 |---------|--------------|
 | `cargo xtask golden record` | Runs every case of `cases.toml` through the oracle and writes `cases/`, `blobs/` and `COVERAGE.md`. Only the oracle records: `record` takes no `--engine` |
-| `cargo xtask golden record --check-determinism` | Runs every case twice and fails, writing nothing, unless both runs agree byte for byte |
+| `cargo xtask golden record --check-determinism` | Runs every case twice and fails, writing nothing, unless both runs agree byte for byte. **Run it, with `golden lock`, before opening any pull request that re-records**: no workflow runs it |
 | `cargo xtask golden check --engine python` | A fresh run against the recordings; also checks `COVERAGE.md` and that no recording is missing or orphaned |
 | `cargo xtask golden diff` | `check`, printing every difference in full |
 | `cargo xtask golden lock` | Rewrites `oracle-requirements.txt` from `ORACLE` |
@@ -58,7 +64,7 @@ usage).
 case) and `--jobs N`; `check` and `diff` take
 `--engine python|rust`: `python` runs the oracle, `rust` this repository's CLI.
 
-**Preview of the next oracle** (a file in `ORACLE`'s format naming the next release, such as `tests/golden/ORACLE.next`; none is committed now): judge a
+**Preview of the next oracle** (`tests/golden/ORACLE.next`, 0.28.1 during the catch-up): judge a
 port against it without committing recordings, `cargo xtask golden record --oracle
 tests/golden/ORACLE.next --out target/golden-next --filter '<area>/*'`, then `cargo xtask golden
 check --engine rust --recordings target/golden-next --filter '<area>/*'`, and post its summary in
@@ -90,8 +96,8 @@ instead; `--runner wasi` launches the WASI build of the command line
 (`build-wasm.sh cli`) under wasmtime, or Node's WASI with `OPENTIDE_WASI_RUNTIME=node`, and leaves
 out the cases that need the network: those with a cassette, and those
 `tests/golden/WASI_EXCLUDED.toml` lists, each with its reason and network evidence (a network
-fixture or command, or a refused request in the oracle's recording), which xtask's tests check. CI's `Golden compare` job runs it on every pull request, with `--report` for the JSON
-report, in three parts: `--partition K/N` runs the cases whose id hashes (FNV-1a) to part K, so
+fixture or command, or a refused request in the oracle's recording), which xtask's tests check. Run by hand (CI's `Golden compare` job left with the oracle
+policing), with `--report` for the JSON report; `--partition K/N` runs the cases whose id hashes (FNV-1a) to part K, so
 parts 1/N to N/N run every case once, and `--unused FILE` writes the ledger entries the part did
 not apply instead of failing on them; an entry every part lists is stale, and the gather fails.
 

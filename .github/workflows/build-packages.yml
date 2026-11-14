@@ -52,6 +52,16 @@ on:
         required: false
         default: 0
         type: number
+    outputs:
+      crates:
+        description: "The crates' version (the workspace's)."
+        value: ${{ jobs.versions.outputs.crates }}
+      pypi:
+        description: "The wheels' version."
+        value: ${{ jobs.versions.outputs.pypi }}
+      npm:
+        description: "The npm packages' version."
+        value: ${{ jobs.versions.outputs.npm }}
 
 permissions:
   contents: read

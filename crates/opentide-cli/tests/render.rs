@@ -266,16 +266,19 @@ fn fault(command: &str) {
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn render_validate_fault_workspace_frames_reports_and_sinks() {
     fault("validate");
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn render_lint_fault_workspace_frames_reports_and_sinks() {
     fault("lint");
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn render_every_code_frame_human_and_plain() {
     let data = input("codes.input.json");
     let items = diagnostics(&data["diagnostics"]);
@@ -352,6 +355,7 @@ fn step(spec: &Value) -> Step {
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn render_every_outcome_line_variant() {
     let data = input("outcome.input.json");
     for case in data["cases"].as_array().unwrap() {
@@ -448,6 +452,7 @@ fn strings(value: &Value) -> Vec<String> {
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn render_ci_sinks_escaping_caps_and_summaries() {
     let data = input("ci.input.json");
     for case in data["cases"].as_array().unwrap() {
@@ -572,6 +577,7 @@ fn render_ci_sinks_escaping_caps_and_summaries() {
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn render_progress_events_and_tickers() {
     let text = std::fs::read_to_string(dir().join("progress.input.json")).unwrap();
     let data = Json::parse(&text).unwrap();

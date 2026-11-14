@@ -60,6 +60,7 @@ fn a_case_root_is_as_long_as_the_golden_checks() {
 /// network refused, and the catalogue served from its cassette
 /// (`tests/cassettes/skills/manifest.json`), the requests checked against it.
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn skills_catalogue_cases_are_the_oracles() {
     check(&["setup.skills.discover", "setup.skills.show"], 20);
 }
@@ -70,6 +71,7 @@ fn skills_catalogue_cases_are_the_oracles() {
 /// served from its cassette (`tests/cassettes/skills/`), and the files
 /// written compared with the oracle's.
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn skills_install_cases_are_the_oracles() {
     check(&["setup.skills"], 40);
 }
@@ -80,6 +82,7 @@ fn skills_install_cases_are_the_oracles() {
 /// bare groups, which print their help to a person and a usage error to a
 /// program.
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn root_and_group_cases_are_the_oracles() {
     check(
         &[
@@ -98,6 +101,7 @@ fn root_and_group_cases_are_the_oracles() {
 /// `--help` on every command path, in every mode (#841): clap's help, held
 /// to the oracle's by what it says (the ledger's `help` entries).
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn help_cases_are_the_oracles() {
     let (problems, ran) = replay::replay_variant("help");
     assert!(ran >= 236, "only {ran} help cases found");
@@ -110,11 +114,13 @@ fn help_cases_are_the_oracles() {
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn explain_cases_are_the_oracles() {
     check(&["explain"], 12);
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn validate_cases_are_the_oracles() {
     check(&["validate"], 100);
 }
@@ -123,6 +129,7 @@ fn validate_cases_are_the_oracles() {
 /// can use the UI, and its help. The UI itself is recorded nowhere (a
 /// full-screen app redraws on a timer).
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn tui_cases_are_the_oracles() {
     check(&["tui"], 6);
 }
@@ -131,6 +138,7 @@ fn tui_cases_are_the_oracles() {
 /// that send, each platform's tenant served from its cassette and the
 /// deployment state it writes compared with the oracle's.
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn deploy_cases_are_the_oracles() {
     check(&["deploy"], 60);
 }
@@ -139,6 +147,7 @@ fn deploy_cases_are_the_oracles() {
 /// UC-4.6, #979): Splunk's, Carbon Black Cloud's and Elastic's tenants served
 /// from their cassettes.
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn validate_query_cases_are_the_oracles() {
     check(&["validate.query"], 20);
 }
@@ -193,6 +202,7 @@ fn a_watch_shows_a_pass_and_ctrl_c_exits_0() {
 /// a table, JSON lines, CSV and the JSON document, the requests checked
 /// against each cassette.
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn query_cases_are_the_oracles() {
     check(&["query"], 60);
 }
@@ -200,6 +210,7 @@ fn query_cases_are_the_oracles() {
 /// `deploy migrate-state` (UC-4.4, #834): ids moved into shards, a rule
 /// refused, a clean run.
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn deploy_migrate_state_cases_are_the_oracles() {
     check(&["deploy.migrate-state"], 16);
 }
@@ -208,6 +219,7 @@ fn deploy_migrate_state_cases_are_the_oracles() {
 /// cassettes for a push and a retract, and the runs that stop before any
 /// request; `share push --changed` on the git checkouts of a push (UC-4.4e).
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn share_cases_are_the_oracles() {
     check(
         &[
@@ -228,6 +240,7 @@ fn share_cases_are_the_oracles() {
 /// runs without a tenant (UC-4.4e; its tenant's run is
 /// `tests/extract_sentinel.rs`').
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn generate_extract_cases_are_the_oracles() {
     check(
         &[
@@ -244,6 +257,7 @@ fn generate_extract_cases_are_the_oracles() {
 /// file a stand-in tenant's case writes loads to the oracle's data, every
 /// value and every key in the oracle's order.
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn extracted_elastic_rules_load_as_the_oracles_data() {
     use opentide_compare::FileState;
     let as_data = |path: &str, bytes: &[u8]| {
@@ -294,11 +308,13 @@ fn extracted_elastic_rules_load_as_the_oracles_data() {
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn lint_cases_are_the_oracles() {
     check(&["lint"], 50);
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn commands_cases_are_the_oracles() {
     check(&["commands"], 10);
 }
@@ -402,16 +418,19 @@ fn a_scoped_run_that_matches_nothing_is_not_an_empty_workspace() {
 /// templates and schemas generated first, the failures. One test per family,
 /// so nextest runs them side by side: each case generates the schemas.
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn new_threat_cases_are_the_oracles() {
     check(&["new.threat"], 23);
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn new_objective_cases_are_the_oracles() {
     check(&["new.objective"], 8);
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn new_rule_cases_are_the_oracles() {
     check(&["new.rule"], 11);
 }
@@ -505,6 +524,7 @@ fn new_warns_when_the_file_breaks_the_lint_filename_pattern() {
 /// `vocabs` and `snippets` phases; and a bare `generate`, the full pipeline
 /// (UC-6.0, #841).
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn generate_phase_cases_are_the_oracles() {
     check(&["generate"], 12);
 }
@@ -512,6 +532,7 @@ fn generate_phase_cases_are_the_oracles() {
 /// `setup` and its file-writing subcommands (UC-3.6, #828): plan mode and
 /// non-interactive runs with the files written, and the wizard's refusals.
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn setup_cases_are_the_oracles() {
     check(
         &[

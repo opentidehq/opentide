@@ -127,4 +127,4 @@ Scaffolding notes: [`fumadocs/`](./fumadocs/). The website repo syncs `docs/` at
 scripts/validate-docs.sh
 ```
 
-CI runs the same check via [`.github/workflows/docs.yml`](../.github/workflows/docs.yml) on docs changes.
+CI runs the same check in [`ci.yml`](../.github/workflows/ci.yml)'s `docs` job on every pull request that changes `docs/` (a docs-only pull request runs it alone).

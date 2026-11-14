@@ -11,7 +11,7 @@
 | Path | What it is | Read first |
 |------|------------|------------|
 | `src/opentide/` | The PyPI package: the console script, the SDK, the models, the plugin API, bundled data (`src/opentide/data/`) around the Rust core | [`src/AGENTS.md`](src/AGENTS.md) |
-| `tests/` | The Python suite: the SDK, the plugin API, the console script's E2E (sharded), MCP and LSP stdio, docs and CI contracts | the testing skills below |
+| `tests/` | The Python suite: the SDK, the plugin API, the console script's E2E, MCP and LSP stdio, docs and CI contracts | the testing skills below |
 | `tests/golden/` | The goldens of the frozen Python CLI (the oracle): `cargo xtask golden record\|check` | [`tests/golden/README.md`](tests/golden/README.md) |
 | `Cargo.toml`, `Cargo.lock` | One Cargo workspace: lints, shared dependencies, profiles | [`crates/AGENTS.md`](crates/AGENTS.md) |
 | `crates/opentide/` | The `opentide` crate: the Rust SDK (the facade), the only crate with a stability promise | [`crates/opentide/AGENTS.md`](crates/opentide/AGENTS.md) |
@@ -146,8 +146,16 @@ uv sync --group dev                             # this worktree's .venv; _native
 | Lint and types | `scripts/ci-local.sh --quick` (ruff, ty, cargo fmt, clippy, layers, engine checks, `uv build`) |
 | Before a push | `scripts/ci-local.sh --full` (adds nextest `ci`, doctests, rustdoc, the crates' package and licence scan, pytest with the coverage gate, the E2E suite, GitLab CI lint; WebAssembly, grammars and fuzz smoke when their tools are installed) |
 
-CI runs the core gates on every pull request and the full set nightly, on every push to `development`
-and `integration/unified-core`, on Run workflow and on a pull request labelled `full-ci`.
+CI (`ci.yml`, [`.github/AGENTS.md`](.github/AGENTS.md)) runs, on a pull request, only what the
+change affects, on Linux: the changed crates and their reverse dependencies built **once** (a
+nextest archive and the `_native` extension) and tested from that build, the Python suite and E2E
+when the command line or Python changed, each specialised job (Node, WASI, grammars, GitLab CI
+lint, the facade's semver checks, cargo deny, docs) when its paths changed; one required check,
+`PR gate`. A push to a base branch runs every job on Linux; a release pull request adds every
+package and its install on each OS; the nightly adds macOS and Windows, the other Pythons,
+coverage, benchmarks, fuzz smoke and the vendor-parser oracles, and never gates. Nothing compares
+with the frozen Python oracle: `cargo xtask golden`, `compare` and `corpus` run by hand
+(`tests/golden/README.md`).
 The test profiles are in [`.config/nextest.toml`](.config/nextest.toml); CI's jobs are in
 [`.github/AGENTS.md`](.github/AGENTS.md).
 

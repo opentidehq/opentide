@@ -3,8 +3,8 @@ name: cli-e2e-testing
 description: >-
   Write and debug opentide's console-script end-to-end tests: subprocess smoke tests of the
   installed `opentide`, the MCP and LSP stdio tests, the wheel install tests, the tide_corpus
-  fixture workspace, E2E shards, the full_set marker and .test_durations_e2e. Use when adding
-  or changing a test that runs the console script, or when an E2E shard fails.
+  fixture workspace, the full_set marker and CI's one Python job. Use when adding
+  or changing a test that runs the console script, or when the Python job's E2E tests fail.
 ---
 
 # CLI E2E Testing
@@ -56,18 +56,19 @@ uv run pytest tests/ -m "(cli_e2e or cli_smoke) and not full_set" --no-cov
 # Unit tests (excludes E2E markers — matches CI matrix)
 uv run pytest tests/ -m "not cli_e2e and not cli_smoke"
 
-# The full set's E2E: a wheel built and installed per test
+# The nightly set's E2E: a wheel built and installed per test
 uv run pytest tests/ -m full_set --no-cov
 ```
 
 ## CI
 
-- **Unit matrix** (Python 3.10 and 3.14 on every pull request, 3.11–3.13 in the full set): `-m "not cli_e2e and not cli_smoke"`
-- **`cli-e2e` job** (Python 3.14 only, 4 shards, not gated on `test`): `tests/ -m "(cli_e2e or cli_smoke) and not full_set"` — whole
-  tree, so a new E2E directory is picked up by its marker alone
-- **`cli-e2e-full` job** (the full set: nightly, pushes, Run workflow, the `full-ci` label): `tests/ -m full_set` —
-  E2E tests too slow for every pull request, such as a wheel built and installed per test
-  (`test_wheel_plugin_platform.py`). A `full_set` test also carries `cli_e2e`, so the unit matrix leaves it out
+- **`python` job** (the PR gate, Python 3.14): ONE pytest run of the unit tests and the E2E
+  suite together, `tests/ --ignore=tests/test_ci -m "not full_set and not gitlab_ci_lint" -n 4`,
+  with the coverage gate, on the gate build's prebuilt `_native` (no shards). Whole tree, so a
+  new E2E directory is picked up by its marker alone. It runs when Python or a crate the binding
+  depends on changes. 3.10–3.13 run the same nightly (`test-full`).
+- **`e2e-full` job** (the nightly): `tests/ -m full_set` — E2E tests too slow for every pull
+  request, such as a wheel built and installed per test (`test_wheel_plugin_platform.py`)
 - **`cli-windows-smoke` job**: `test_console_script_smoke.py -m cli_smoke` — the only coverage of `spawn` platforms; `test_launcher_signals_e2e.py`, Ctrl-C (CTRL_BREAK_EVENT) through the console script
 
 E2E does not contribute to coverage metrics.

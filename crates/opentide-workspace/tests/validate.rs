@@ -1438,6 +1438,7 @@ mod diagnostic_json {
     }
 
     #[test]
+    #[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
     fn every_recorded_finding_round_trips() {
         let root =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/cases/validate/json");

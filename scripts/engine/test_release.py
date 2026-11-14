@@ -659,7 +659,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # scripts/build/install-rust.sh, which installs that release by name
         # with the minimal profile, without the file's components, adds the
         # target and names the release in RUSTUP_TOOLCHAIN, so that rustup
-        # installs nothing mid-build (tests/test_ci/test_rust_toolchain.py).
+        # installs nothing mid-build (tests/test_ci/test_workflows.py).
         install = "rustup toolchain install --profile minimal --no-self-update"
         script = "scripts/build/install-rust.sh"
         target = r"--target (\$\{\{[^}]*\}\}|\S+)"
@@ -755,8 +755,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
             smokes, ["smoke-cargo", "smoke-installer", "smoke-npm", "smoke-sdist", "smoke-wheel"]
         )
         self.assertLessEqual(set(smokes), set(needs.group(1).split(", ")))
-        # A dry run stops before attest, and so before every write after it.
-        self.assertIn("if: needs.guard.outputs.channel != 'dry-run'", jobs["attest"])
+        # A dry run and an internal candidate stop before attest, and so
+        # before every write after it.
+        self.assertIn(
+            "if: needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc'",
+            jobs["attest"],
+        )
         self.assertIn("needs.attest.result == 'success'", jobs["verify-assets"])
 
     def test_the_npm_smoke_installs_from_a_local_registry(self) -> None:
@@ -830,8 +834,13 @@ class ReleaseWorkflowTest(unittest.TestCase):
         """For the Rust-core transition: a candidate publishes pre-releases on
         GitHub, PyPI and crates.io, and nothing on npm."""
         jobs = workflow_jobs()
-        # crates.io: every crate at X.Y.Z-rc.N, a pre-release, as for a release.
-        self.assertNotRegex(jobs["crates"], r"\n    if: ")
+        # crates.io: every crate at X.Y.Z-rc.N, a pre-release, as for a release
+        # (never for an internal candidate or a dry run).
+        self.assertRegex(
+            jobs["crates"],
+            r"\n    if: needs\.guard\.outputs\.channel == 'release' "
+            r"\|\| needs\.guard\.outputs\.channel == 'rc'\n",
+        )
         bump = 'python3 scripts/engine/release.py bump "${VERSION}"'
         for job in ["checks", "crates"]:
             body = jobs[job]
@@ -923,7 +932,16 @@ class ReleaseWorkflowTest(unittest.TestCase):
             refuse_rc,
         )
         self.assertEqual(guard[refuse_rc:].splitlines()[1].strip(), "exit 1")
-        self.assertLess(refuse_rc, guard.index("check-candidate"))
+        self.assertLess(refuse_rc, guard.index("check-candidate", refuse_rc))
+        # An internal candidate: the same two branches, and check-candidate.
+        refuse_internal = guard.index(
+            "Run an internal candidate from integration/unified-core or development, not"
+        )
+        self.assertEqual(guard[refuse_internal:].splitlines()[1].strip(), "exit 1")
+        self.assertLess(refuse_internal, guard.index("check-candidate", refuse_internal))
+        # A public candidate is refused while the internal channel exists.
+        self.assertIn("public_candidates=false", guard)
+        self.assertLess(guard.index("public release candidates are disabled", candidate), refuse_rc)
         # A release or a candidate never reuses a tag; resuming one needs its Release.
         self.assertIn('git rev-parse -q --verify "refs/tags/${tag}"', guard)
         self.assertIn("has no GitHub Release to resume", guard)
