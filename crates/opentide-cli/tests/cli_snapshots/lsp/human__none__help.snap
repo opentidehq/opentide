@@ -17,7 +17,7 @@ The server is the analysis engine that pip install opentide installs: KQL, SPL, 
 
 ␛[1m␛[4mOptions:␛[0m
       ␛[1m--help␛[0m
-          Show this message and exit.
+          Print help
 
 Examples:
   $ opentide lsp start

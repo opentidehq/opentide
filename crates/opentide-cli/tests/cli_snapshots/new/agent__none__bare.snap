@@ -9,6 +9,6 @@ exit: 2
 
 ━━━ stderr
 error: Missing command: choose from threat, objective, rule.
-  usage: opentide new [OPTIONS] COMMAND [ARGS]...
+  usage: opentide new <COMMAND>
   help: run 'opentide new --help'
 tip: add --json for machine-readable output

@@ -15,7 +15,7 @@ Detection rule maintenance
 
 ␛[1m␛[4mOptions:␛[0m
       ␛[1m--help␛[0m
-          Show this message and exit.
+          Print help
 
 Examples:
   $ opentide rules unreviewed --older-than 90d

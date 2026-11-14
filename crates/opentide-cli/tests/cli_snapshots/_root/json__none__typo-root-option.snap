@@ -5,20 +5,20 @@ description: _root/json/none/typo-root-option
 args: opentide --json --jsn validate
 exit: 2
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "command": "",
   "duration_ms": 0,
-  "error": "No such option: --jsn",
+  "error": "Unknown option \"--jsn\".",
   "exit_code": 2,
   "failure": {
     "argument": "--jsn",
     "code": "usage_unknown_option",
     "crash_log": null,
-    "message": "No such option: --jsn",
+    "message": "Unknown option \"--jsn\".",
     "suggestion": "--json"
   },
-  "message": "No such option: --jsn",
+  "message": "Unknown option \"--jsn\".",
   "next_actions": [],
   "ok": false,
   "schema_version": 1,

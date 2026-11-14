@@ -5,7 +5,7 @@ description: validate/json/tide-corpus/typo-choice
 args: opentide --json validate --type rulez
 exit: 2
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "command": "validate",
   "duration_ms": 0,

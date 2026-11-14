@@ -5,7 +5,7 @@ description: validate/json/vscode/check-schema
 args: opentide --json validate --check schema
 exit: 1
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "check": "schema",
   "checks": {

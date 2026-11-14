@@ -15,7 +15,7 @@ Commands:
 
 Options:
       --help
-          Show this message and exit.
+          Print help
 
 Examples:
   $ opentide rules unreviewed --older-than 90d

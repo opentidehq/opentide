@@ -5,7 +5,7 @@ description: validate/json/vscode/uuid
 args: opentide --json validate --uuid ff8bf67e-64dc-460d-b5df-48db643f3560
 exit: 1
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "checks": {
     "configuration": {

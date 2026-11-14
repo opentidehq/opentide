@@ -8,8 +8,8 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-error: No such option: --jsn
-  help: did you mean '--json'?
-  usage: opentide [OPTIONS] COMMAND [ARGS]...
+error: Unknown option "--jsn".
+  help: did you mean "--json"?
+  usage: opentide [OPTIONS] <COMMAND>
   help: run 'opentide --help'
 tip: add --json for machine-readable output

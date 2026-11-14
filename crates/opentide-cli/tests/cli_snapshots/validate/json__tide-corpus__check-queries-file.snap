@@ -5,7 +5,7 @@ description: validate/json/tide-corpus/check-queries-file
 args: opentide --json validate --check queries --file objects/rules/rule-0001-sentinel-kql.yaml
 exit: 0
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "check": "queries",
   "checks": {

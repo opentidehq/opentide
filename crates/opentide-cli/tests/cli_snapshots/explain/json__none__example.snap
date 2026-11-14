@@ -5,7 +5,7 @@ description: explain/json/none/example
 args: opentide --json explain vocab_unknown
 exit: 0
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "code": "vocab_unknown",
   "command": "explain",

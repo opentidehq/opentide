@@ -5,7 +5,7 @@ description: validate/json/vscode/file
 args: opentide --json validate --file objects/rules/suspicious-lsass-access.yaml
 exit: 1
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "checks": {
     "configuration": {

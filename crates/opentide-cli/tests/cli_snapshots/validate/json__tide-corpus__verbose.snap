@@ -5,7 +5,7 @@ description: validate/json/tide-corpus/verbose
 args: opentide --json validate --verbose
 exit: 0
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "checks": {
     "configuration": {

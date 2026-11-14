@@ -8,7 +8,7 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-␛[1;31merror:␛[0m No such option: --jsn
-  ␛[1;36mhelp:␛[0m did you mean '--json'?
-  ␛[1musage:␛[0m opentide [OPTIONS] COMMAND [ARGS]...
+␛[1;31merror:␛[0m Unknown option "--jsn".
+  ␛[1;36mhelp:␛[0m did you mean "--json"?
+  ␛[1musage:␛[0m opentide [OPTIONS] <COMMAND>
   ␛[1;36mhelp:␛[0m run 'opentide --help'

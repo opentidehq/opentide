@@ -362,7 +362,7 @@ fn pushed_from_cases(name: &str, ws: &Path) {
 /// `xtask/src/golden/fixture.rs`'s `fix_modes` does: a checkout's modes follow
 /// the umask of whoever cloned, and status promotion keeps a rule file's mode
 /// (#987), which the recordings name.
-fn fix_modes(dir: &Path) {
+pub fn fix_modes(dir: &Path) {
     use std::os::unix::fs::PermissionsExt;
     for entry in std::fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();

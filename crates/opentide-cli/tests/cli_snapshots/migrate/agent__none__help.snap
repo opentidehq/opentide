@@ -15,7 +15,7 @@ Commands:
 
 Options:
       --help
-          Show this message and exit.
+          Print help
 
 Examples:
   $ opentide migrate vocab-scope

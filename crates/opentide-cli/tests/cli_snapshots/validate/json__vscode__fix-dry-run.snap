@@ -5,7 +5,7 @@ description: validate/json/vscode/fix-dry-run
 args: opentide --json validate --fix --dry-run
 exit: 1
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "checks": {
     "configuration": {

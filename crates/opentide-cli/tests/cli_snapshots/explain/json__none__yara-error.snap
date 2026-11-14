@@ -5,7 +5,7 @@ description: explain/json/none/yara-error
 args: opentide --json explain yara_unknown_module
 exit: 0
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "code": "yara_unknown_module",
   "command": "explain",

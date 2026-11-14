@@ -15,12 +15,15 @@ mod replay;
 #[path = "common/snapshot.rs"]
 mod snapshot;
 
-/// The root's own runs: `--version`, a bare `opentide`, typos, `--repo`,
-/// `--debug`; and the bare groups, which print their help to a person and
-/// a usage error to a program.
-#[test]
-fn root_and_groups() {
-    snapshot::check(
+/// Every group: its test, its command directories, and how many cases the
+/// manifest expands for them. One test per group, so nextest runs the
+/// groups side by side.
+const GROUPS: &[(&str, &[&str], usize)] = &[
+    // The root's own runs (`--version`, a bare `opentide`, typos, `--repo`,
+    // `--debug`) and the bare groups, which print their help to a person
+    // and a usage error to a program.
+    (
+        "root_and_groups",
         &[
             "_root",
             "generate.extract",
@@ -30,16 +33,28 @@ fn root_and_groups() {
             "new",
             "rules",
         ],
-        60,
-    );
+        80,
+    ),
+    ("explain", &["explain"], 22),
+    ("validate", &["validate"], 190),
+];
+
+fn group(name: &str) {
+    let (_, commands, expected) = GROUPS.iter().find(|group| group.0 == name).unwrap();
+    snapshot::check(commands, *expected);
+}
+
+#[test]
+fn root_and_groups() {
+    group("root_and_groups");
 }
 
 #[test]
 fn explain() {
-    snapshot::check(&["explain"], 20);
+    group("explain");
 }
 
 #[test]
 fn validate() {
-    snapshot::check(&["validate"], 190);
+    group("validate");
 }

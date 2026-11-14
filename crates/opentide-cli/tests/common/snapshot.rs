@@ -16,7 +16,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use opentide_cli::env::Env;
@@ -212,31 +212,94 @@ fn base_env(mode: &str) -> BTreeMap<String, String> {
     env
 }
 
-/// A folder's files and subfolders before a run.
-type Snapshot = (
-    BTreeMap<String, Vec<u8>>,
-    std::collections::BTreeSet<String>,
-);
+/// One path under a root, links not followed.
+#[derive(PartialEq)]
+enum Entry {
+    File(u32, Vec<u8>),
+    Link(String),
+    Dir(u32),
+}
+
+/// Every path under `root` (relative; a folder's ends in `/`).
+fn entries(root: &Path) -> BTreeMap<String, Entry> {
+    use std::os::unix::fs::PermissionsExt;
+    let mut out = BTreeMap::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            let relative = path
+                .strip_prefix(root)
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
+            let meta = std::fs::symlink_metadata(&path).unwrap();
+            let mode = meta.permissions().mode() & 0o7777;
+            if meta.is_symlink() {
+                let target = std::fs::read_link(&path).unwrap().display().to_string();
+                out.insert(relative, Entry::Link(target));
+            } else if meta.is_dir() {
+                out.insert(format!("{relative}/"), Entry::Dir(mode));
+                pending.push(path);
+            } else {
+                out.insert(relative, Entry::File(mode, std::fs::read(&path).unwrap()));
+            }
+        }
+    }
+    out
+}
+
+/// What happened to one path, and a file's new bytes.
+fn change<'a>(
+    before: Option<&Entry>,
+    after: Option<&'a Entry>,
+) -> Option<(String, Option<&'a [u8]>)> {
+    let mode = |old: u32, new: u32| {
+        if old == new {
+            String::new()
+        } else {
+            format!(" (mode was {old:04o})")
+        }
+    };
+    Some(match (before, after) {
+        (Some(old), Some(new)) if old == new => return None,
+        (_, None) => ("deleted".to_owned(), None),
+        (Some(Entry::File(old, bytes_before)), Some(Entry::File(new, bytes)))
+            if bytes_before == bytes =>
+        {
+            (format!("mode {new:04o}{}", mode(*old, *new)), None)
+        }
+        (Some(Entry::File(old, _)), Some(Entry::File(new, bytes))) => (
+            format!("modified {new:04o}{}", mode(*old, *new)),
+            Some(bytes),
+        ),
+        (Some(Entry::Dir(old)), Some(Entry::Dir(new))) => {
+            (format!("mode {new:04o}{}", mode(*old, *new)), None)
+        }
+        (_, Some(Entry::File(new, bytes))) => (format!("created {new:04o}"), Some(bytes)),
+        (_, Some(Entry::Dir(new))) => (format!("created {new:04o}"), None),
+        (_, Some(Entry::Link(target))) => (format!("link → {target}"), None),
+    })
+}
 
 /// Runs `case` and renders what it did as the snapshot's text.
 pub fn run_case(case: &Case) -> String {
     let scratch = replay::case_root();
+    // `<TMP>` is the case's root, which holds `ws/`, `home/` and `tmp/`
+    // (`$TMPDIR`), as `cargo xtask golden` lays it out.
     let root = std::fs::canonicalize(scratch.path()).unwrap();
     let (home, tmp, ws) = (root.join("home"), root.join("tmp"), root.join("ws"));
     for folder in [&home, &tmp, &ws] {
         std::fs::create_dir_all(folder).unwrap();
     }
     replay::fixture(&case.fixture, &ws);
-    std::fs::create_dir_all(tmp.join("tmp")).unwrap();
+    replay::fix_modes(&ws);
     let roots = [
         ("ws", ws.clone()),
-        ("tmp", tmp.join("tmp")),
+        ("tmp", tmp.clone()),
         ("home", home.clone()),
     ];
-    let before: Vec<_> = roots
-        .iter()
-        .map(|(_, root)| (replay::files(root), replay::dirs(root)))
-        .collect();
+    let before: Vec<_> = roots.iter().map(|(_, root)| entries(root)).collect();
     let proxy = case.cassette.as_ref().map(|name| {
         let text =
             std::fs::read_to_string(replay::repo().join(format!("tests/cassettes/{name}.json")))
@@ -248,7 +311,7 @@ pub fn run_case(case: &Case) -> String {
             opentide_cassette::Redaction::default(),
         )
         .unwrap();
-        std::fs::write(tmp.join("cassette-ca.pem"), proxy.ca_pem()).unwrap();
+        std::fs::write(root.join("cassette-ca.pem"), proxy.ca_pem()).unwrap();
         proxy
     });
     let proxy_url = proxy
@@ -258,7 +321,7 @@ pub fn run_case(case: &Case) -> String {
         let value = value
             .replace("<CASSETTE_PROXY>", &proxy_url)
             .replace("<HOME>", &home.display().to_string())
-            .replace("<TMP>", &tmp.display().to_string())
+            .replace("<TMP>", &root.display().to_string())
             .replace("<WS>", &ws.display().to_string());
         (key.clone(), value)
     }));
@@ -280,39 +343,16 @@ pub fn run_case(case: &Case) -> String {
     };
     let mut out = Vec::new();
     let mut err = stderr.clone();
+    let started = std::time::SystemTime::now();
     let exit_code = run(&case.args, &env, &host, &mut out, &mut err);
-    let mut normaliser = normaliser(case, &before, [&ws, &home, &tmp]);
+    let literals = [
+        (ws.display().to_string(), "<WS>"),
+        (home.display().to_string(), "<HOME>"),
+        (root.display().to_string(), "<TMP>"),
+    ];
+    let mut normaliser = normaliser(case, &before, &literals, started);
     let stdout = normaliser.text(&String::from_utf8_lossy(&out));
     let stderr = normaliser.text(&String::from_utf8_lossy(&stderr.0.lock().unwrap()));
-
-    // Every path the run touched: what happened to it, and a file's bytes.
-    let mut changes: BTreeMap<String, (String, Option<Vec<u8>>)> = BTreeMap::new();
-    for ((prefix, root), (files_before, folders_before)) in roots.iter().zip(&before) {
-        let after = replay::files(root);
-        for (path, bytes) in &after {
-            let what = match files_before.get(path) {
-                Some(old) if old == bytes => continue,
-                Some(_) => "modified",
-                None => "created",
-            };
-            let what = format!("{what} {:04o}", mode_of(&root.join(path)));
-            changes.insert(format!("{prefix}/{path}"), (what, Some(bytes.clone())));
-        }
-        for path in files_before
-            .keys()
-            .filter(|path| !after.contains_key(*path))
-        {
-            changes.insert(format!("{prefix}/{path}"), ("deleted".into(), None));
-        }
-        let folders_after = replay::dirs(root);
-        for folder in folders_before.difference(&folders_after) {
-            changes.insert(format!("{prefix}/{folder}/"), ("removed".into(), None));
-        }
-        for folder in folders_after.difference(folders_before) {
-            let what = format!("created {:04o}", mode_of(&root.join(folder)));
-            changes.insert(format!("{prefix}/{folder}/"), (what, None));
-        }
-    }
 
     let mut text = String::new();
     writeln!(text, "args: {}", shell_words(&case.args)).unwrap();
@@ -324,25 +364,41 @@ pub fn run_case(case: &Case) -> String {
     }
     section(&mut text, "stdout", &stdout);
     section(&mut text, "stderr", &stderr);
-    for (path, (what, bytes)) in changes {
-        writeln!(text, "\n━━━ {path} · {what}").unwrap();
-        if let Some(bytes) = bytes {
-            text.push_str(&file_body(&mut normaliser, &path, &bytes));
+    // Every path the run touched, in path order (the order fresh UUIDs are
+    // numbered in).
+    for ((prefix, root), before) in roots.iter().zip(&before) {
+        let after = entries(root);
+        let paths: std::collections::BTreeSet<&String> =
+            before.keys().chain(after.keys()).collect();
+        for path in paths {
+            let Some((what, bytes)) = change(before.get(path), after.get(path)) else {
+                continue;
+            };
+            writeln!(text, "\n━━━ {prefix}/{path} · {what}").unwrap();
+            if let Some(bytes) = bytes {
+                text.push_str(&file_body(&mut normaliser, &literals, path, bytes));
+            }
         }
     }
     text
 }
 
-/// The goldens' normaliser for `case`: its root's paths, the clock (today
-/// and the week before, which a default query window reaches back to), and
-/// the case's own rules, with the UUIDs no run mints (the fixture's, the
+/// The goldens' normaliser for `case`: its root's paths, the clock (the
+/// dates the run spans and, for `query`'s default window, the week before),
+/// and the case's own rules, with the UUIDs no run mints (the fixture's, the
 /// arguments', the package's data).
-fn normaliser(case: &Case, before: &[Snapshot], [ws, home, tmp]: [&PathBuf; 3]) -> Normaliser {
-    let day = |days: u64| {
-        opentide_compare::normalise::utc_date(
-            std::time::SystemTime::now() - std::time::Duration::from_secs(days * 86_400),
-        )
+fn normaliser(
+    case: &Case,
+    before: &[BTreeMap<String, Entry>],
+    literals: &[(String, &str)],
+    started: std::time::SystemTime,
+) -> Normaliser {
+    let day = |at: std::time::SystemTime, days: u64| {
+        opentide_compare::normalise::utc_date(at - std::time::Duration::from_secs(days * 86_400))
     };
+    let mut dates = vec![day(started, 0), day(std::time::SystemTime::now(), 0)];
+    dates.dedup();
+    let windowed = matches!(case.command_dir.as_str(), "query" | "validate.query");
     let mut known_uuids = std::collections::BTreeSet::new();
     if case.normalise.contains(&Rule::FreshUuids) {
         for arg in &case.args {
@@ -352,33 +408,30 @@ fn normaliser(case: &Case, before: &[Snapshot], [ws, home, tmp]: [&PathBuf; 3]) 
     }
     let fixture_text: Vec<String> = before
         .iter()
-        .flat_map(|(files, _)| files.values())
-        .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+        .flat_map(BTreeMap::values)
+        .filter_map(|entry| match entry {
+            Entry::File(_, bytes) => Some(String::from_utf8_lossy(bytes).into_owned()),
+            _ => None,
+        })
         .collect();
     Normaliser::new(
         &Volatile {
-            literals: vec![
-                (ws.display().to_string(), "<WS>".into()),
-                (home.display().to_string(), "<HOME>".into()),
-                (tmp.display().to_string(), "<TMP>".into()),
-            ],
-            dates: vec![day(0)],
-            recent_dates: (1..=7).map(day).collect(),
+            literals: literals
+                .iter()
+                .map(|(literal, placeholder)| (literal.clone(), (*placeholder).to_owned()))
+                .collect(),
+            dates,
+            recent_dates: if windowed {
+                (1..=7).map(|days| day(started, days)).collect()
+            } else {
+                Vec::new()
+            },
             known_uuids,
             ..Volatile::default()
         },
         &case.normalise,
         fixture_text.iter().map(String::as_str),
     )
-}
-
-fn mode_of(path: &Path) -> u32 {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::symlink_metadata(path)
-        .unwrap()
-        .permissions()
-        .mode()
-        & 0o7777
 }
 
 /// The arguments as a person would type them.
@@ -412,7 +465,19 @@ fn section(text: &mut String, name: &str, body: &str) {
     }
     match as_json(body) {
         Some(pretty) => {
-            writeln!(text, "\n━━━ {name} · json").unwrap();
+            // The layout the document came in: its line count and final
+            // newline (one line for NDJSON and `--json`, pretty for people).
+            let newline = if body.ends_with('\n') {
+                ""
+            } else {
+                ", no final newline"
+            };
+            writeln!(
+                text,
+                "\n━━━ {name} · json, {} lines{newline}",
+                body.lines().count()
+            )
+            .unwrap();
             text.push_str(&pretty);
         }
         None => {
@@ -437,38 +502,133 @@ fn as_json(text: &str) -> Option<String> {
     Some(pretty)
 }
 
-/// A written file's body: its text (a JSON file as its parsed value), or,
-/// past [`INLINE_LIMIT`] or not UTF-8, its size and SHA-256.
-fn file_body(normaliser: &mut Normaliser, path: &str, bytes: &[u8]) -> String {
-    use sha2::Digest as _;
-    let text = std::str::from_utf8(bytes)
-        .ok()
-        .map(|text| normaliser.text(text));
-    match text {
-        Some(text) if text.len() <= INLINE_LIMIT => {
-            if Path::new(path)
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-                && let Some(pretty) = as_json(&text)
-            {
-                return pretty;
-            }
-            let mut body = visible(&text);
-            if !text.is_empty() && !text.ends_with('\n') {
-                body.push_str("\n⏎ no final newline\n");
-            }
-            body
+/// A written file's body: its text (a JSON file as its parsed value). Past
+/// [`INLINE_LIMIT`] only the case's paths are replaced (the full normaliser
+/// takes seconds on megabytes), and a JSON document keeps its structure with
+/// every long string as its length and digest; anything else, or a document
+/// still too large, is its size and SHA-256.
+fn file_body(
+    normaliser: &mut Normaliser,
+    literals: &[(String, &str)],
+    path: &str,
+    bytes: &[u8],
+) -> String {
+    // A `.json` or `.sarif` file, or any other one document (`as_json`).
+    let json = Path::new(path)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("json") || ext.eq_ignore_ascii_case("sarif"));
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return digest_line(bytes);
+    };
+    if text.len() <= INLINE_LIMIT {
+        let text = normaliser.text(text);
+        if json && let Some(pretty) = as_json(&text) {
+            return pretty;
         }
-        _ => {
-            let body = text.map_or_else(|| bytes.to_vec(), String::into_bytes);
-            let digest = sha2::Sha256::digest(&body);
-            let hex = digest.iter().fold(String::new(), |mut hex, byte| {
-                let _ = write!(hex, "{byte:02x}");
-                hex
-            });
-            format!("({} bytes, sha256 {hex})\n", body.len())
+        let mut body = visible(&text);
+        if !text.is_empty() && !text.ends_with('\n') {
+            body.push_str("\n⏎ no final newline\n");
         }
+        return body;
     }
+    let mut text = text.to_owned();
+    for (literal, placeholder) in literals {
+        text = text.replace(literal.as_str(), placeholder);
+    }
+    if json {
+        return large_json(&text).unwrap_or_else(|| digest_line(text.as_bytes()));
+    }
+    digest_line(text.as_bytes())
+}
+
+/// A large JSON document (`text`, its paths replaced) in at most 16 KiB:
+/// its long strings and largest parts elided ([`elide`], [`shrink`]).
+/// Rendered once per content in a test process: the editor schemas recur
+/// in every case that generates them.
+fn large_json(text: &str) -> Option<String> {
+    static RENDERED: Mutex<BTreeMap<String, Option<String>>> = Mutex::new(BTreeMap::new());
+    let key = digest_line(text.as_bytes());
+    if let Some(done) = RENDERED.lock().unwrap().get(&key) {
+        return done.clone();
+    }
+    let rendered = serde_json::from_str::<serde_json::Value>(text)
+        .ok()
+        .map(|mut value| {
+            elide(&mut value);
+            shrink(&mut value, INLINE_LIMIT / 4);
+            let pretty = serde_json::to_string_pretty(&value).unwrap();
+            format!(
+                "({} bytes; long strings and the largest parts elided)\n{pretty}\n",
+                text.len()
+            )
+        });
+    RENDERED.lock().unwrap().insert(key, rendered.clone());
+    rendered
+}
+
+/// Every string over 200 characters in `value`, as its length and digest.
+fn elide(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::String(text) if text.chars().count() > 200 => {
+            *text = format!(
+                "<{} chars, {}>",
+                text.chars().count(),
+                &digest_line(text.as_bytes())[1..]
+            );
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(elide),
+        serde_json::Value::Object(fields) => fields.values_mut().for_each(elide),
+        _ => {}
+    }
+}
+
+/// Replaces the largest part of `value` by its size and digest until it
+/// fits in `limit` bytes: the part found by descending into the largest
+/// child while that child is over a quarter of the limit (a SARIF report's
+/// rule catalogue, a schema's definitions), so the rest stays readable.
+fn shrink(value: &mut serde_json::Value, limit: usize) {
+    let size =
+        |value: &serde_json::Value| serde_json::to_string(value).map_or(0, |text| text.len());
+    while size(value) > limit {
+        // Find the part immutably, as a JSON pointer, then replace it.
+        let (mut node, mut pointer) = (&*value, String::new());
+        loop {
+            let children: Vec<(String, &serde_json::Value)> = match node {
+                serde_json::Value::Array(items) => items
+                    .iter()
+                    .enumerate()
+                    .map(|(index, item)| (index.to_string(), item))
+                    .collect(),
+                serde_json::Value::Object(fields) => fields
+                    .iter()
+                    .map(|(key, item)| (key.replace('~', "~0").replace('/', "~1"), item))
+                    .collect(),
+                _ => Vec::new(),
+            };
+            match children.into_iter().max_by_key(|(_, child)| size(child)) {
+                Some((key, child)) if size(child) > limit / 4 => {
+                    write!(pointer, "/{key}").unwrap();
+                    node = child;
+                }
+                _ => break,
+            }
+        }
+        let digest = digest_line(serde_json::to_string(node).unwrap().as_bytes());
+        let elided = format!("<elided {}>", digest.trim_end().trim_matches(['(', ')']));
+        *value.pointer_mut(&pointer).unwrap() = serde_json::Value::String(elided);
+    }
+}
+
+/// `(N bytes, sha256 HEX)`.
+fn digest_line(bytes: &[u8]) -> String {
+    use sha2::Digest as _;
+    let hex = sha2::Sha256::digest(bytes)
+        .iter()
+        .fold(String::new(), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        });
+    format!("({} bytes, sha256 {hex})\n", bytes.len())
 }
 
 /// Control characters other than newline and tab, shown: ESC as `␛`, the
@@ -490,23 +650,28 @@ fn visible(text: &str) -> String {
 /// `_root`) on every core, each case's text held to its snapshot,
 /// `tests/cli_snapshots/<command>/<mode>__<fixture>__<variant>.snap`. Every
 /// mismatch is reported (and, outside CI, written as a `.snap.new` for
-/// `cargo insta review`) before the test fails. `OPENTIDE_SNAPSHOT_FILTER`
+/// `cargo insta review`) before the test fails. `expected` is the group's
+/// case count: a case the manifest stops expanding fails it. `OPENTIDE_SNAPSHOT_FILTER`
 /// (part of a case id) narrows a run.
-pub fn check(commands: &[&str], at_least: usize) {
+pub fn check(commands: &[&str], expected: usize) {
     let filter = std::env::var("OPENTIDE_SNAPSHOT_FILTER").unwrap_or_default();
     let selected: Vec<Case> = cases()
         .into_iter()
         .filter(|case| commands.contains(&case.command_dir.as_str()) && case.id.contains(&filter))
         .collect();
     if filter.is_empty() {
-        assert!(
-            selected.len() >= at_least,
-            "only {} cases found",
-            selected.len()
+        assert_eq!(
+            selected.len(),
+            expected,
+            "the group's case count changed: update it with the manifest"
         );
     }
+    isolate_process();
     let failed = for_each_parallel(&selected, |case| {
-        let text = run_case(case);
+        let Ok(text) = std::panic::catch_unwind(|| run_case(case)) else {
+            eprintln!("{}: the case panicked", case.id);
+            return true;
+        };
         let mut settings = insta::Settings::clone_current();
         settings.set_snapshot_path(
             Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -516,10 +681,9 @@ pub fn check(commands: &[&str], at_least: usize) {
         settings.set_prepend_module_to_snapshot(false);
         settings.set_omit_expression(true);
         settings.set_description(case.id.clone());
-        let name = format!("{}__{}__{}", case.mode, case.fixture, case.variant);
         settings.bind(|| {
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                insta::assert_snapshot!(name, text);
+                insta::assert_snapshot!(snapshot_name(case), text);
             }))
             .is_err()
         })
@@ -530,6 +694,24 @@ pub fn check(commands: &[&str], at_least: usize) {
         failed.len(),
         failed.join("\n")
     );
+}
+
+/// A case's snapshot file name (without `.snap`).
+pub fn snapshot_name(case: &Case) -> String {
+    format!("{}__{}__{}", case.mode, case.fixture, case.variant)
+}
+
+/// What the process gives every case alike, whoever runs the tests: the
+/// umask (files are created `0644`, as a snapshot records them) and a
+/// standard input that is no terminal (`/dev/null`, as nextest gives it;
+/// `cargo test` from a terminal would otherwise show a prompt).
+fn isolate_process() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        rustix::process::umask(rustix::fs::Mode::from_raw_mode(0o022));
+        let null = std::fs::File::open("/dev/null").unwrap();
+        rustix::stdio::dup2_stdin(&null).unwrap();
+    });
 }
 
 /// Runs `work` on each case on every core (a case runs the CLI in process

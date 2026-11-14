@@ -5,7 +5,7 @@ description: validate/json/tide-corpus-typo/fix-typo-dry-run
 args: opentide --json validate --fix --dry-run
 exit: 1
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "checks": {
     "configuration": {

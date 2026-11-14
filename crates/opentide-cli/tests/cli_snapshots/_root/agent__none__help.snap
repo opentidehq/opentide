@@ -51,7 +51,7 @@ Options:
           Print the script instead; name a shell after it to pick one
 
       --help
-          Show this message and exit.
+          Print help
 
 Author:
   validate  Validate objects and queries

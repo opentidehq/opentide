@@ -57,7 +57,7 @@ Options:
           Write the --format report to this file and print the usual text output too
 
       --help
-          Show this message and exit.
+          Print help
 
 Examples:
   $ opentide validate

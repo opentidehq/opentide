@@ -9,5 +9,5 @@ exit: 2
 
 ━━━ stderr
 error: Missing command.
-  usage: opentide generate extract [OPTIONS] COMMAND [ARGS]...
+  usage: opentide generate extract <COMMAND>
   help: run 'opentide generate extract --help'

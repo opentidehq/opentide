@@ -19,7 +19,7 @@ Commands:
 
 Options:
       --help
-          Show this message and exit.
+          Print help
 
 Examples:
   $ opentide new threat --name "Credential Dumping"

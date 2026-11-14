@@ -5,7 +5,7 @@ description: validate/json/tide-corpus/debug-true
 args: opentide --json validate
 exit: 0
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "checks": {
     "configuration": {
@@ -64,7 +64,7 @@ exit: 0
   "workspace": "<WS>"
 }
 
-━━━ stderr · json
+━━━ stderr · json, 1 lines
 {
   "errors": 0,
   "event": "Validated the workspace",

@@ -5,20 +5,20 @@ description: validate/json/tide-corpus/typo-option
 args: opentide --json validate --strictt
 exit: 2
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "command": "validate",
   "duration_ms": 0,
-  "error": "No such option: --strictt",
+  "error": "Unknown option \"--strictt\".",
   "exit_code": 2,
   "failure": {
     "argument": "--strictt",
     "code": "usage_unknown_option",
     "crash_log": null,
-    "message": "No such option: --strictt",
+    "message": "Unknown option \"--strictt\".",
     "suggestion": "--strict"
   },
-  "message": "No such option: --strictt",
+  "message": "Unknown option \"--strictt\".",
   "next_actions": [],
   "ok": false,
   "schema_version": 1,

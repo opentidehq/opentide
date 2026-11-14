@@ -5,7 +5,7 @@ description: validate/json/tide-corpus/check-schema
 args: opentide --json validate --check schema
 exit: 0
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "check": "schema",
   "checks": {

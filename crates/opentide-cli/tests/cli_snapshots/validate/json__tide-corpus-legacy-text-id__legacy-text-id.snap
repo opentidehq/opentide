@@ -5,7 +5,7 @@ description: validate/json/tide-corpus-legacy-text-id/legacy-text-id
 args: opentide --json validate
 exit: 1
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "checks": {
     "configuration": {

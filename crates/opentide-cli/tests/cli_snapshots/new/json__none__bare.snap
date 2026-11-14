@@ -5,7 +5,7 @@ description: new/json/none/bare
 args: opentide --json new
 exit: 2
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "command": "new",
   "duration_ms": 0,

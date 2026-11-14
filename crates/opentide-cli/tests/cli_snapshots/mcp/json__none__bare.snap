@@ -5,7 +5,7 @@ description: mcp/json/none/bare
 args: opentide --json mcp
 exit: 2
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "command": "mcp",
   "duration_ms": 0,

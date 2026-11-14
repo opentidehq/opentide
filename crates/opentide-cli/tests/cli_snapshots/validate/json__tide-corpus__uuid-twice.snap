@@ -5,7 +5,7 @@ description: validate/json/tide-corpus/uuid-twice
 args: opentide --json validate --uuid 00000000-0000-4000-8003-000000000001 --uuid 00000000-0000-4000-8002-000000000001
 exit: 0
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "checks": {
     "configuration": {

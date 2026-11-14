@@ -8,7 +8,7 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-error: No such command 'valdiate'.
-  help: did you mean 'validate'?
-  usage: opentide [OPTIONS] COMMAND [ARGS]...
+error: Unknown command "valdiate".
+  help: did you mean "validate"?
+  usage: opentide [OPTIONS] <COMMAND>
   help: run 'opentide --help'

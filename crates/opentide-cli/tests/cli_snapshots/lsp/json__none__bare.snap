@@ -5,7 +5,7 @@ description: lsp/json/none/bare
 args: opentide --json lsp
 exit: 2
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "command": "lsp",
   "duration_ms": 0,

@@ -5,7 +5,7 @@ description: validate/json/tide-corpus/queries-warn
 args: opentide --json validate --queries warn
 exit: 0
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "checks": {
     "configuration": {

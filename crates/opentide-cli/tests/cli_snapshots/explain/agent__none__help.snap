@@ -18,7 +18,7 @@ Arguments:
 
 Options:
       --help
-          Show this message and exit.
+          Print help
 
 Examples:
   $ opentide explain vocab_unknown

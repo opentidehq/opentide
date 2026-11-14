@@ -18,7 +18,7 @@ Prints what the code means, an example, and how to fix it.
 
 ␛[1m␛[4mOptions:␛[0m
       ␛[1m--help␛[0m
-          Show this message and exit.
+          Print help
 
 Examples:
   $ opentide explain vocab_unknown

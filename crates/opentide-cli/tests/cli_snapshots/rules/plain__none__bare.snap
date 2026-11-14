@@ -9,5 +9,5 @@ exit: 2
 
 ━━━ stderr
 error: Missing command.
-  usage: opentide rules [OPTIONS] COMMAND [ARGS]...
+  usage: opentide rules <COMMAND>
   help: run 'opentide rules --help'

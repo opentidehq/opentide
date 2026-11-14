@@ -5,7 +5,7 @@ description: validate/json/tide-corpus/fix
 args: opentide --json validate --fix
 exit: 0
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "checks": {
     "configuration": {

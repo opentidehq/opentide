@@ -5,7 +5,7 @@ description: validate/json/vscode/check-queries-file
 args: opentide --json validate --check queries --file objects/rules/suspicious-lsass-access.yaml
 exit: 1
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "check": "queries",
   "checks": {

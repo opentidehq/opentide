@@ -5,7 +5,7 @@ description: explain/json/none/list
 args: opentide --json explain
 exit: 0
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "codes": [
     {

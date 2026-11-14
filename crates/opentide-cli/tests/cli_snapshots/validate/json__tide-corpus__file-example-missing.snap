@@ -5,7 +5,7 @@ description: validate/json/tide-corpus/file-example-missing
 args: opentide --json validate --file objects/rules/example.yaml
 exit: 1
 
-━━━ stdout · json
+━━━ stdout · json, 1 lines
 {
   "checks": {
     "configuration": {

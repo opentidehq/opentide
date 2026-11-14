@@ -9,6 +9,6 @@ exit: 2
 
 ━━━ stderr
 error: Missing command: choose from start.
-  usage: opentide mcp [OPTIONS] COMMAND [ARGS]...
+  usage: opentide mcp <COMMAND>
   help: run 'opentide mcp --help'
 tip: add --json for machine-readable output
