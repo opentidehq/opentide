@@ -608,11 +608,12 @@ pub fn render_match(node: &Node) -> Option<String> {
     Some(text)
 }
 
-/// A scalar as Python's `str()` writes it.
+/// A scalar as YARA-L spells it: a string as written, a boolean as `true`
+/// or `false`, anything else as its YAML text.
 fn scalar_text(node: &Node) -> String {
     match &node.value {
         Value::Str(text) | Value::Datetime(text) => text.clone(),
-        Value::Bool(flag) => if *flag { "True" } else { "False" }.to_owned(),
+        Value::Bool(flag) => flag.to_string(),
         _ => repr::node(node),
     }
 }
@@ -673,11 +674,7 @@ pub fn render_options(node: &Node) -> Vec<String> {
             let (_, value) = entries
                 .iter()
                 .find(|(name, value)| name == key && !matches!(value.value, Value::Null))?;
-            let text = match &value.value {
-                Value::Bool(flag) => flag.to_string(),
-                _ => scalar_text(value),
-            };
-            Some(format!("{key} = {text}"))
+            Some(format!("{key} = {}", scalar_text(value)))
         })
         .collect()
 }
@@ -851,6 +848,25 @@ mod tests {
             "window None is not a duration in m, h or d (10m, 1h, 2d)"
         );
         assert_eq!(render_match(&no_window), None);
+    }
+
+    /// A boolean in `match` is refused, and deploy writes it as YARA-L spells
+    /// it, never Python's `True`.
+    #[test]
+    fn a_boolean_in_match_is_written_lowercase() {
+        let flagged =
+            yaml("group_by: [true]\nwindow: 1h\ntype: sliding\npivot: $e\ndirection: false\n");
+        assert_eq!(
+            codes(&match_findings(&flagged)),
+            [
+                ("yaral_match_shape", "match.group_by".to_owned()),
+                ("yaral_match_shape", "match".to_owned()),
+            ]
+        );
+        assert_eq!(
+            render_match(&flagged).as_deref(),
+            Some("true over 1h false $e")
+        );
     }
 
     #[test]
