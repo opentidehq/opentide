@@ -58,30 +58,8 @@ FORBIDDEN = (
 )
 #: The workflow's whole trigger set: no `pull_request_target` or `workflow_run`,
 #: which run with the base repository's token and secrets.
-TRIGGERS = {"pull_request", "push", "schedule", "workflow_dispatch"}
-#: A pull request runs the jobs only in ci.yml's full set (the `full-ci` label).
-FULL_SET = (
-    "github.event_name != 'pull_request' || "
-    "contains(github.event.pull_request.labels.*.name, 'full-ci')"
-)
-#: What a release builds from, besides the placeholders and this workflow.
-#: `crates/**`, `Cargo.toml`, `Cargo.lock` and `rust-toolchain.toml` arrive
-#: with UC-0.2, which compiles the engine from a root Cargo workspace.
-PUBLISHED_FROM = {
-    "publishing/**",
-    ".github/workflows/publish-dry-run.yml",
-    "pyproject.toml",
-    "hatch_build.py",
-    "bindings/python/**",
-    "crates/**",
-    "Cargo.toml",
-    "Cargo.lock",
-    "rust-toolchain.toml",
-    "README.md",
-    "LICENSE",
-    "CHANGELOG.md",
-    "scripts/build/release.py",
-}
+#: The nightly set (test_ci_scope.py): nightly and on Run workflow only.
+TRIGGERS = {"schedule", "workflow_dispatch"}
 #: Where a shell command ends: `;`, `&&`, `||`, `&`, a pipe, a subshell or a
 #: command substitution, a backtick, or the end of the line.
 _COMMAND_END = re.compile(r"&&|\|\||[;&|()`\n]")
@@ -310,19 +288,14 @@ def test_no_expression_is_interpolated_into_a_script(workflow: dict[Any, Any]) -
     assert [run for run in _runs(workflow) if "${{" in run] == []
 
 
-def test_runs_whenever_what_is_published_changes(workflow: dict[Any, Any]) -> None:
-    """Every push that changes what is published, nightly and on demand; on a
-    pull request, in ci.yml's full set (the `full-ci` label)."""
+def test_runs_nightly_and_on_demand(workflow: dict[Any, Any]) -> None:
+    """Nightly and on Run workflow, every job: never on a pull request or a
+    push (the nightly set), so a release's rehearsal never blocks a merge."""
     triggers = _triggers(workflow)
-    paths = triggers["push"]["paths"]
-    assert set(paths) >= PUBLISHED_FROM, sorted(PUBLISHED_FROM - set(paths))
-    assert triggers["push"]["branches"] == ["development", "integration/unified-core"]
-    # No path filter on the pull request: the label must reach the jobs.
-    assert triggers["pull_request"] is None
     assert len(triggers["schedule"]) == 1
     assert "workflow_dispatch" in triggers
     for name, job in workflow["jobs"].items():
-        assert job.get("if") == FULL_SET, name
+        assert "if" not in job, name
 
 
 def test_runs_on_no_trigger_that_carries_the_base_repository_secrets(

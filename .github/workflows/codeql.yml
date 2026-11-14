@@ -44,14 +44,13 @@ jobs:
       # On a pull request, a language is analysed only when its files change:
       # Python (*.py, pyproject.toml, uv.lock) or the workflows and actions.
       # The job still starts, so its required check reports either way. Every
-      # push, the weekly run and a pull request labelled `full-ci` analyse both;
+      # push and the weekly run analyse both;
       # so does a checkout that is not a pull request's merge commit (it fails
       # open). Bash patterns, one a line; `*` matches `/` too.
       - name: Whether this language's files changed
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-          FULL_CI: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
           LANGUAGE: ${{ matrix.language }}
           PYTHON_PATHS: |
             *.py
@@ -62,7 +61,7 @@ jobs:
             .github/actions/*
         run: |
           set -euo pipefail
-          if [[ "${EVENT_NAME}" != "pull_request" || "${FULL_CI}" == true ]] \
+          if [[ "${EVENT_NAME}" != "pull_request" ]] \
             || ! git rev-parse --verify --quiet HEAD^2 >/dev/null; then
             echo "analyse=true" >> "$GITHUB_OUTPUT"
             exit 0

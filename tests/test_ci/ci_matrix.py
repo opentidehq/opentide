@@ -1,9 +1,9 @@
 """The matrices of ci.yml, as the contract tests read them.
 
-A job whose cells differ between a pull request and the full set names its
-`include` as one expression: the full set's cells, else the pull request's.
+A job whose cells differ between a pull request and the nightly set names its
+`include` as one expression: the nightly set's cells, else the pull request's.
 
-    include: ${{ fromJSON((<full set>) && '[...]' || '[...]') }}
+    include: ${{ fromJSON((<nightly set>) && '[...]' || '[...]') }}
 
 ``cells`` returns the cells of either scope; a static matrix is the same in
 both.
@@ -15,11 +15,9 @@ import json
 import re
 from typing import Any
 
-# The condition under which a job runs in the full set (test_ci_scope.FULL_SET).
-FULL_SET = (
-    "github.event_name != 'pull_request' || "
-    "contains(github.event.pull_request.labels.*.name, 'full-ci')"
-)
+# The condition under which a job runs in the nightly set
+# (test_ci_scope.NIGHTLY_SET): nightly and on Run workflow.
+FULL_SET = "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"
 DYNAMIC = re.compile(
     r"\$\{\{\s*fromJSON\(\((?P<condition>.+)\)"
     r" && '(?P<full>\[.*\])' \|\| '(?P<pull>\[.*\])'\)\s*\}\}",

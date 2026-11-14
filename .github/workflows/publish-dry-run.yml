@@ -21,33 +21,9 @@
 name: Publish dry run
 
 on:
-  # Every pull request, but its jobs run only in the full set (ci.yml's header):
-  # a pull request with the `full-ci` label. A pull request that changes what
-  # is published (the paths below) should carry it.
-  pull_request:
-  push:
-    branches: [development, integration/unified-core]
-    paths:
-      - "publishing/**"
-      - ".github/workflows/publish-dry-run.yml"
-      - "pyproject.toml"
-      - "hatch_build.py"
-      - "bindings/python/**"
-      # The engine the wheel compiles, once UC-0.2 builds it from a root Cargo
-      # workspace (a filter for a path that does not exist yet matches nothing).
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      # The packages' long descriptions and licence (twine check, the placeholders' copies).
-      - "README.md"
-      - "LICENSE"
-      # The version a release builds, and the script that reads it. The filter
-      # cannot tell a release notes pull request from an [Unreleased] entry, so
-      # CHANGELOG.md about doubles how often this runs: decision 7 in
-      # docs/internal/publishing.md.
-      - "CHANGELOG.md"
-      - "scripts/build/release.py"
+  # Nightly (or as scheduled) and on Run workflow only: never on a pull
+  # request or a push, so it never blocks a merge (.github/AGENTS.md, the
+  # nightly set).
   schedule:
     - cron: "7 2 * * *"
   workflow_dispatch:
@@ -69,7 +45,6 @@ jobs:
   # `cargo publish --dry-run -p opentide` and the placeholder goes.
   crate:
     name: crates.io (opentide)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -103,7 +78,6 @@ jobs:
 
   npm:
     name: npm (@opentide/opentide, opentide)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -175,7 +149,6 @@ jobs:
   # (docs/internal/publishing.md, "The release train").
   pypi:
     name: PyPI (wheels and sdist)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:

@@ -26,15 +26,11 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
 BASE_BRANCHES = ("development", "integration/unified-core")
 # The workflows a push to a base branch runs that hold a concurrency group (the
-# guard against this list going stale is below).
+# guard against this list going stale is below). The nightly set's workflows
+# run on no push (test_ci_scope.py).
 EXPECTED = {
-    "bench.yml",
     "ci.yml",
     "codeql.yml",
-    "coverage.yml",
-    "docs.yml",
-    "publish-dry-run.yml",
-    "schema.yml",
 }
 
 EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}")

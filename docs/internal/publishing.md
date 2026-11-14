@@ -123,7 +123,7 @@ The guard runs `scripts/build/release.py check-candidate`, which refuses a candi
 
 ### Testing a build without publishing
 
-ci.yml's full set (nightly, every push to `development` and `integration/unified-core`, Run workflow, and a pull request labelled `full-ci`) runs [`build-packages.yml`](../../.github/workflows/build-packages.yml), the build `publish.yml` uses, as its `packages` job, at a development version of the workspace's (PyPI `X.Y.Z.devN`, npm `X.Y.Z-dev.N`, N the run number), and keeps the result for 14 days as the run's artifacts:
+ci.yml's nightly set (nightly, and Run workflow on any branch) runs [`build-packages.yml`](../../.github/workflows/build-packages.yml), the build `publish.yml` uses, as its `packages` job, at a development version of the workspace's (PyPI `X.Y.Z.devN`, npm `X.Y.Z-dev.N`, N the run number), and keeps the result for 14 days as the run's artifacts:
 
 | Artifact | Holds |
 |----------|-------|
@@ -131,7 +131,7 @@ ci.yml's full set (nightly, every push to `development` and `integration/unified
 | `npm-linux-x64-gnu`, `npm-linux-arm64-gnu`, `npm-darwin-x64`, `npm-darwin-arm64`, `npm-win32-x64-msvc`, `npm-win32-arm64-msvc` | `@opentide/opentide` and that platform's native package |
 
 ```bash
-# A run of ci.yml that ran the full set: Actions, CI, the run's page (its id is in the URL)
+# A run of ci.yml that ran the nightly set: Actions, CI, the run's page (its id is in the URL)
 gh run download <run-id> -R opentidehq/opentide -n wheels-linux-x64
 uv venv && uv pip install opentide-*.whl        # or: python -m pip install opentide-*.whl
 .venv/bin/opentide --version

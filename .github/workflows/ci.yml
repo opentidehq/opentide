@@ -1,7 +1,7 @@
 name: CI
 # A push's run names the commit's first line, which for a merge is "Merge pull
-# request #N from ...": a failure in the full set on a base branch names the
-# pull request that brought it.
+# request #N from ...": a failure on a base branch names the pull request
+# that brought it.
 run-name: >-
   ${{ github.event_name == 'push'
   && format('CI on {0}: {1}', github.ref_name, github.event.head_commit.message)
@@ -9,28 +9,28 @@ run-name: >-
 
 # Two scopes (.github/AGENTS.md, "What runs where"; tests/test_ci/test_ci_scope.py):
 #
-# - A pull request runs the lean set, on Linux: lint (with actionlint), engine
-#   lint, the engine tests in four shards, Python 3.14, E2E, GitLab CI lint,
-#   golden compare in three parts and cargo deny, the core gates, whose jobs
-#   carry no `if`;
-#   and the path-scoped jobs whose inputs it changes (the `changes` job): the
-#   corpora, the Node package, the facade crate, the release dry run and the
-#   grammar checks. The required checks keep their names: macOS's and
-#   Windows's engine tests are gathered from the Linux shards, golden compare
-#   from its parts, the Python 3.10 cell starts and skips its steps, and the
-#   corpus check passes when its parts were not needed. The lint job builds
-#   the sdist on every pull request, and the wheel from it in the full set.
-# - The full set adds the rest: macOS and Windows engine tests, Python
-#   3.10-3.13, the engine release dry run, WebAssembly, crate packaging,
+# - The gate, on every pull request and every push to a base branch, on
+#   Linux: lint (ruff, ty, actionlint, the sdist), engine lint (fmt, clippy,
+#   rustdoc, the layers, the generated artifacts), the engine tests in four
+#   shards, Python 3.14 with its coverage gate, E2E in four shards and cargo
+#   deny; CodeQL in codeql.yml. Its jobs carry no `if`, and they are the
+#   required checks. Nothing else runs on a pull request.
+# - The nightly set, nightly and on Run workflow only (never on a pull request
+#   or a push, so it never blocks a merge): macOS and Windows engine tests,
+#   Python 3.10-3.13, the E2E tests marked `full_set`, the installable wheels
+#   and npm tarballs, the cross-SDK conformance suite on three OSes, the
+#   engine release dry run, the WASI build, WebAssembly, crate packaging,
 #   grammars, the Elastic sweep, fuzz smoke, the Windows CLI smoke, the facade
 #   crate's every feature and semver checks, the Node package and its install
-#   from a local registry, the installable wheels and npm tarballs as run
-#   artifacts, the cross-SDK conformance suite on three OSes, the corpora, the
-#   query fault kinds against the Rust engine, LSP clients and benchmarks. It
-#   runs nightly, on every push to development, integration/unified-core and a
-#   catch-up train (train/catchup-*), on Run workflow, and on a pull request
-#   that carries the `full-ci` label (read at each push: add the label, then
-#   push, or Run workflow on the branch).
+#   from a local registry, GitLab CI lint, LSP clients and benchmarks. Its
+#   jobs' `if` is exactly the nightly condition. Run workflow on a branch runs
+#   it by hand; there is no `full-ci` label any more.
+#
+# The comparisons with the frozen Python oracle (golden compare, the corpora,
+# the MCP replay, the payload, config, validate and lint diffs, codegen's
+# oracle comparisons) left CI when the port was done (the maintainer's
+# decision, 2026-11-14): their xtask commands stay, runnable by hand, and the
+# approved-differences ledger gates nothing.
 
 on:
   push:
@@ -39,12 +39,12 @@ on:
     # the caches those pull requests restore (a pull request reads only its base
     # branch's caches and the default branch's).
     branches: [main, development, integration/unified-core, "train/catchup-*"]
-  # Run workflow, as language-server's engine CI had: the full set.
+  # Run workflow: the gate and the nightly set, by hand.
   workflow_dispatch:
   pull_request:
     # All base branches: a stacked PR targets the branch below it, not development.
   schedule:
-    # Nightly on the default branch (development): the full set.
+    # Nightly on the default branch (development): the gate and the nightly set.
     - cron: "11 1 * * *"
 
 concurrency:
@@ -64,100 +64,6 @@ env:
   COVERAGE_PYTHON: "3.14"
 
 jobs:
-  # Whether a pull request changes the inputs of the jobs that run on a pull
-  # request only when it does: the engine release (its workflows and release
-  # scripts; not Cargo.toml or Cargo.lock, which most pull requests touch) and
-  # the grammars.
-  # Bash patterns, one a line; `*` matches `/` too. Anything but a pull
-  # request, and a checkout that is not the pull request's merge commit,
-  # counts as a change; the jobs that read it also run when it fails.
-  changes:
-    name: CI paths
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    outputs:
-      release: ${{ steps.paths.outputs.release }}
-      grammars: ${{ steps.paths.outputs.grammars }}
-      corpus: ${{ steps.paths.outputs.corpus }}
-      node: ${{ steps.paths.outputs.node }}
-      facade: ${{ steps.paths.outputs.facade }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # The merge commit and its first parent, the base branch's tip.
-          fetch-depth: 2
-          persist-credentials: false
-
-      - name: Detect changes to the path-scoped jobs' inputs
-        id: paths
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          RELEASE_PATHS: |
-            .github/workflows/engine-release*.yml
-            scripts/engine/release*
-          GRAMMARS_PATHS: |
-            grammars/*
-            highlights/*
-            scripts/engine/check-grammars.sh
-          # The corpora against the oracle and its recordings: the comparisons
-          # (xtask), the crates they hold to the oracle (the models, the
-          # workspace, the compiler, the editor's diagnostics) and their data.
-          # A change to a query engine alone is held by the Rust tests and
-          # golden compare on the pull request, and by the corpora on merge.
-          CORPUS_PATHS: |
-            xtask/*
-            crates/opentide-core/*
-            crates/opentide-schema/*
-            crates/opentide-schema-derive/*
-            crates/opentide-workspace/*
-            crates/opentide-compile/*
-            crates/opentide-lsp/*
-            tests/corpora/*
-            tests/golden/cases*
-            tests/golden/vocab/*
-            src/opentide/data/*
-            Cargo.lock
-            rust-toolchain.toml
-            .github/workflows/ci.yml
-          NODE_PATHS: |
-            bindings/node/*
-            crates/opentide/*
-            scripts/engine/npm-local-registry/*
-            Cargo.lock
-            .github/workflows/ci.yml
-          FACADE_PATHS: |
-            crates/opentide/*
-            Cargo.lock
-            .github/workflows/ci.yml
-        run: |
-          set -euo pipefail
-          outputs=(release grammars corpus node facade)
-          if [[ "${EVENT_NAME}" != "pull_request" ]] || ! git rev-parse --verify --quiet HEAD^2 >/dev/null; then
-            for output in "${outputs[@]}"; do
-              echo "${output}=true" >> "$GITHUB_OUTPUT"
-            done
-            exit 0
-          fi
-          changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"
-          for output in "${outputs[@]}"; do
-            patterns_var="${output^^}_PATHS"
-            patterns="${!patterns_var}"
-            value=false
-            while IFS= read -r file; do
-              [[ -n "${file}" ]] || continue
-              while IFS= read -r pattern; do
-                # Unquoted on the right: a pattern, not a string.
-                # shellcheck disable=SC2053
-                if [[ -n "${pattern}" && "${file}" == ${pattern} ]]; then
-                  echo "${output} input changed: ${file}"
-                  value=true
-                fi
-              done <<<"${patterns}"
-            done <<<"${changed}"
-            echo "${output}=${value}" >> "$GITHUB_OUTPUT"
-          done
 
   lint:
     name: Lint
@@ -248,9 +154,9 @@ jobs:
       # cache put the dependencies: the release profile's link-time
       # optimisation is the release's to prove (publish-dry-run.yml, the
       # engine release dry run), and it took minutes here (#841).
-      # The full set: a pull request builds the sdist above and checks it.
+      # The nightly set: a pull request builds the sdist above and checks it.
       - name: Build the wheel from the sdist
-        if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         env:
           OPENTIDE_ENGINE_PROFILE: develop
           CARGO_TARGET_DIR: ${{ github.workspace }}/target
@@ -466,11 +372,10 @@ jobs:
         run: target/debug/xtask cassettes check
 
       # The artifacts generated from the Rust model (opentide-schema's
-      # `generate`): the committed platform templates are current, and the
-      # templates, snippets and router schema are byte for byte what the oracle
-      # wrote in each golden recording of an `opentide generate` that ran the
-      # schemas, templates and snippets phases and exited 0 (runs missing one
-      # of them, and failed runs, are not compared; UC-1.8, #814).
+      # `generate`) are the committed ones: the platform and editor
+      # templates, the editor schemas, the language server's catalogs and the
+      # diagnostics reference (UC-1.8, #814). `codegen --check --oracle`, the
+      # comparisons with the oracle's recordings, runs by hand only.
       - name: generated artifacts
         run: target/debug/xtask codegen --check
 
@@ -516,10 +421,11 @@ jobs:
   # holds them to every workspace member exactly once, and to an even share
   # (cargo-metadata's lines of Rust and test binaries per package). A fourth
   # Linux shard runs command_goldens' slowest groups out of shard 1's
-  # (HEAVY_GOLDENS below): the same test set, split by a nextest filter. macOS
-  # and Windows spend their time compiling, which a shard would repeat, so
-  # they run whole. `engine-test` below gathers the shards under each
-  # operating system's required check.
+  # (HEAVY_GOLDENS below): the same test set, split by a nextest filter.
+  # macOS and Windows run the same four shards, nightly and on Run workflow
+  # only, without a compiler cache (#841): whole, cold, they took 17 to 19
+  # minutes; a shard builds a quarter of the workspace. `engine-test` below
+  # gathers the shards under each operating system's check.
   engine-test-part:
     name: Engine tests (${{ matrix.os }}, ${{ matrix.shard }}/${{ matrix.shards }})
     runs-on: ${{ matrix.os }}
@@ -527,10 +433,10 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      # Linux in four shards on every pull request; macOS and Windows join in
-      # the full set (the gathering job keeps their required checks' names).
+      # Linux in four shards on every pull request and push; macOS and Windows
+      # in the same four, nightly and on Run workflow.
       matrix:
-        include: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '[{"os":"ubuntu-latest","shard":1,"shards":4,"goldens":"rest","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"ubuntu-latest","shard":2,"shards":4,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight --features opentide-schema/python"},{"os":"ubuntu-latest","shard":3,"shards":4,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"},{"os":"ubuntu-latest","shard":4,"shards":4,"goldens":"heavy","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"macos-latest","shard":1,"shards":1,"packages":"--workspace"},{"os":"windows-latest","shard":1,"shards":1,"packages":"--workspace"}]' || '[{"os":"ubuntu-latest","shard":1,"shards":4,"goldens":"rest","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"ubuntu-latest","shard":2,"shards":4,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight --features opentide-schema/python"},{"os":"ubuntu-latest","shard":3,"shards":4,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"},{"os":"ubuntu-latest","shard":4,"shards":4,"goldens":"heavy","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"}]') }}
+        include: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '[{"os":"ubuntu-latest","shard":1,"shards":4,"goldens":"rest","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"ubuntu-latest","shard":2,"shards":4,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight --features opentide-schema/python"},{"os":"ubuntu-latest","shard":3,"shards":4,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"},{"os":"ubuntu-latest","shard":4,"shards":4,"goldens":"heavy","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"macos-latest","shard":1,"shards":4,"goldens":"rest","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"macos-latest","shard":2,"shards":4,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight --features opentide-schema/python"},{"os":"macos-latest","shard":3,"shards":4,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"},{"os":"macos-latest","shard":4,"shards":4,"goldens":"heavy","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"windows-latest","shard":1,"shards":4,"goldens":"rest","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"windows-latest","shard":2,"shards":4,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight --features opentide-schema/python"},{"os":"windows-latest","shard":3,"shards":4,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"},{"os":"windows-latest","shard":4,"shards":4,"goldens":"heavy","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"}]' || '[{"os":"ubuntu-latest","shard":1,"shards":4,"goldens":"rest","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"ubuntu-latest","shard":2,"shards":4,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight --features opentide-schema/python"},{"os":"ubuntu-latest","shard":3,"shards":4,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"},{"os":"ubuntu-latest","shard":4,"shards":4,"goldens":"heavy","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"}]') }}
     env:
       RUSTFLAGS: "-Dwarnings"
       # Line tables, not full debuginfo, for the workspace's ~90 test binaries:
@@ -597,15 +503,15 @@ jobs:
         run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
 
       # opentide-schema's compile-fail cases (trybuild, `opentide-schema::ui`)
-      # take a minute, the slowest test of its shard: they run in the full
-      # set and on a pull request that changes what they compile (the derive,
+      # take a minute, the slowest test of its shard: they run in the nightly
+      # set and on a pull request or push that changes what they compile (the derive,
       # the crate, the cases) or the toolchain whose messages they hold; a
       # pull request whose merge commit cannot be read runs them.
       - name: Whether to run opentide-schema's compile-fail cases
         id: ui
         shell: bash
         env:
-          FULL_SET: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          FULL_SET: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
           UI_PATHS: |
             crates/opentide-schema-derive/*
             crates/opentide-schema/src/*
@@ -652,7 +558,7 @@ jobs:
           # The shard that tests opentide-schema; a filter names a binary
           # only where it is built.
           if [[ "${UI}" != true && " ${PACKAGES} " == *" -p opentide-schema "* ]]; then
-            echo "opentide-schema::ui runs in the full set and when its inputs change"
+            echo "opentide-schema::ui runs in the nightly set and when its inputs change"
             filters+=('not binary_id(opentide-schema::ui)')
           fi
           case "${GOLDENS}" in
@@ -727,18 +633,15 @@ jobs:
     permissions: {}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Linux on every pull request and push; macOS and Windows nightly and
+        # on Run workflow, never in the pull request gate.
+        include: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '[{"os":"ubuntu-latest"},{"os":"macos-latest"},{"os":"windows-latest"}]' || '[{"os":"ubuntu-latest"}]') }}
     steps:
       - name: Every part passed
         env:
           RESULT: ${{ needs.engine-test-part.result }}
-          OS: ${{ matrix.os }}
-          FULL_SET: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci') }}
         run: |
           echo "engine test shards: ${RESULT}"
-          if [[ "${OS}" != ubuntu-latest && "${FULL_SET}" != true ]]; then
-            echo "${OS} runs in the full set (pushes, nightly, Run workflow, the full-ci label)"
-          fi
           test "${RESULT}" = success
 
   # The opentide facade crate (UC-5.1, #836) with every feature: its tests and
@@ -750,15 +653,7 @@ jobs:
   # with the facade's features, so it is in the full set.
   facade:
     name: Facade crate (every feature, docs, semver checks)
-    needs: changes
-    # The full set, and a pull request that changes the facade crate.
-    if: >-
-      !cancelled() && (
-        github.event_name != 'pull_request'
-        || contains(github.event.pull_request.labels.*.name, 'full-ci')
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.facade == 'true'
-      )
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -838,23 +733,14 @@ jobs:
   # built and installed in UC-5.3b); the loader and declarations napi-rs
   # generates against the committed ones; the package's tests (the SDK, the
   # bin, the packages, the TypeScript page's snippets and a `tsc --noEmit`
-  # consumer); and its command line against the PyPI CLI's: `--json
-  # commands` byte for byte, and every ported golden case through the
-  # comparator (`cargo xtask golden check --runner node`; it leaves out
-  # `--help`, and `doctor` on a workspace that enables a platform, which the
-  # PyPI CLI still answers with Python: #977). It builds the CLI a second
-  # time, so it is in the full set.
+  # consumer); and its command line against this repository's console
+  # script's: `--json commands` byte for byte. Nightly and on Run workflow.
+  # (`cargo xtask golden check --runner node`, the ported golden cases
+  # through the Node bin, is no gate since the oracle policing left CI; it
+  # stays runnable by hand.)
   node:
-    name: Node package (napi-rs build, tests, golden)
-    needs: changes
-    # The full set, and a pull request that changes the Node package.
-    if: >-
-      !cancelled() && (
-        github.event_name != 'pull_request'
-        || contains(github.event.pull_request.labels.*.name, 'full-ci')
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.node == 'true'
-      )
+    name: Node package (napi-rs build, tests)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -950,18 +836,6 @@ jobs:
           ../../.venv/bin/opentide --json commands | sed -E "$zero" > "$RUNNER_TEMP/pypi.json"
           cmp "$RUNNER_TEMP/node.json" "$RUNNER_TEMP/pypi.json"
 
-      - name: Every ported golden case through the Node bin
-        run: cargo xtask golden check --runner node --report golden-node.json
-
-      - name: Upload the report
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        # A report for reading, not a gate.
-        continue-on-error: true
-        with:
-          name: golden-node
-          path: golden-node.json
-          if-no-files-found: ignore
 
   # The npm packages as a user installs them, as publish.yml's smoke-npm
   # does before a release: the tree's packages at the workspace version
@@ -975,15 +849,7 @@ jobs:
   # It reads the node job's Rust cache.
   npm-install:
     name: npm install from a local registry (linux-x64-gnu)
-    needs: changes
-    # The full set, and a pull request that changes the Node package.
-    if: >-
-      !cancelled() && (
-        github.event_name != 'pull_request'
-        || contains(github.event.pull_request.labels.*.name, 'full-ci')
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.node == 'true'
-      )
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -1066,7 +932,7 @@ jobs:
   # without publishing", says how to install them. The full set only.
   packages:
     name: Installable packages
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
     uses: ./.github/workflows/build-packages.yml
@@ -1083,7 +949,7 @@ jobs:
   # Node bindings, the Rust runner), so it is in the full set.
   conformance:
     name: SDK conformance (${{ matrix.os }})
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     permissions:
@@ -1210,14 +1076,14 @@ jobs:
   # The WASI build of the command line, the one module the VS Code extension
   # runs (ADR 0007's amendment): wasm32-wasip1 with the wasi-sdk
   # build-wasm.sh pins, its deflated size held to the .vsix's 15 MiB, and
-  # every golden case that needs no network run through it under wasmtime
-  # (`golden check --runner wasi`). The cases it leaves out are the cassette
-  # cases and those tests/golden/WASI_EXCLUDED.toml lists, which xtask's
-  # tests hold to network cases; tenant commands then run through the module
-  # with @opentide/wasi-host performing their requests from the cassettes.
-  # In the core set: it is the extension's gate.
+  # tenant commands through the module with @opentide/wasi-host performing
+  # their requests from the cassettes. Nightly and on Run workflow.
+  # (`cargo xtask golden check --runner wasi`, every golden case through the
+  # module, is no gate since the oracle policing left CI; it stays runnable
+  # by hand.)
   wasi:
-    name: WASI command line (size, golden)
+    name: WASI command line (size, serve)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -1247,8 +1113,8 @@ jobs:
         shell: bash
         run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       # A family of its own (#841): the module's crates for wasm32-wasip1 in
-      # the `wasi` profile, and xtask's for the host, which no other job
-      # builds. A core family: saved from a push to the base branch.
+      # the `wasi` profile, which no other job builds. Saved by the nightly
+      # (and pushes to development), whose caches every branch reads.
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -1261,15 +1127,6 @@ jobs:
       # budget; the sizes go to the step summary.
       - name: The WASI module and its size
         run: bash scripts/engine/build-wasm.sh cli
-
-      # A step of its own, so the log tells xtask's build from the compare.
-      - name: Build xtask
-        run: cargo build --locked --package xtask
-
-      # xtask precompiles the module with `wasmtime compile` first (its time
-      # in the log), then runs every case on the precompiled one.
-      - name: Every golden case that needs no network, through the WASI module
-        run: cargo xtask golden check --runner wasi --report golden-wasi.json
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -1291,20 +1148,11 @@ jobs:
         run: sccache --show-stats
 
       - name: Save the compiler cache
-        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true'
+        if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development') && steps.sccache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
           key: sccache-wasi-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-
-      - name: Upload the report
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        continue-on-error: true
-        with:
-          name: golden-wasi
-          path: golden-wasi.json
-          if-no-files-found: ignore
 
   # scripts/engine/build-wasm.sh builds both WebAssembly artifacts with the
   # wasi-sdk it pins and smoke-tests them; the npm packages build and pack only
@@ -1314,7 +1162,7 @@ jobs:
     name: Engine WebAssembly and npm packages
     # The full set (the workflow's header); the release dry run builds the
     # WebAssembly assets too.
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1410,15 +1258,7 @@ jobs:
   # catches an oracle reference here rather than at release time.
   engine-package:
     name: Engine crates package and licence scan
-    needs: changes
-    # The full set, and a pull request that changes the release's inputs.
-    if: >-
-      !cancelled() && (
-        github.event_name != 'pull_request'
-        || contains(github.event.pull_request.labels.*.name, 'full-ci')
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.release == 'true'
-      )
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1517,15 +1357,7 @@ jobs:
   # from its grammar.js (crates/AGENTS.md: never hand-edited).
   grammars:
     name: Grammars regenerate
-    needs: changes
-    # The full set, and a pull request that changes the grammars.
-    if: >-
-      !cancelled() && (
-        github.event_name != 'pull_request'
-        || contains(github.event.pull_request.labels.*.name, 'full-ci')
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.grammars == 'true'
-      )
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1542,14 +1374,7 @@ jobs:
   # The generated grammars as VS Code reads them (language-server#171).
   textmate:
     name: TextMate grammars (vscode-textmate)
-    needs: changes
-    if: >-
-      !cancelled() && (
-        github.event_name != 'pull_request'
-        || contains(github.event.pull_request.labels.*.name, 'full-ci')
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.grammars == 'true'
-      )
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1570,7 +1395,7 @@ jobs:
   # vendored.
   elastic-sweep:
     name: Elastic detection-rules sweep
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1628,7 +1453,7 @@ jobs:
   # it keeps.
   fuzz-smoke:
     name: Fuzz smoke (${{ matrix.targets }})
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1693,17 +1518,7 @@ jobs:
   # (v0.11.0) with this version in their names.
   engine-release-dry-run:
     name: Engine release (dry run)
-    needs: changes
-    # The full set, and a pull request that changes the release's inputs
-    # (`changes`: its workflows, the Cargo manifests and lock, the toolchain,
-    # scripts/engine/release*).
-    if: >-
-      !cancelled() && (
-        github.event_name != 'pull_request'
-        || contains(github.event.pull_request.labels.*.name, 'full-ci')
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.release == 'true'
-      )
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
     uses: ./.github/workflows/engine-release-build.yml
@@ -1751,7 +1566,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     # The full set (the workflow's header).
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
     env:
@@ -1809,7 +1624,7 @@ jobs:
     name: Benchmarks (informational)
     runs-on: ubuntu-latest
     continue-on-error: true
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
     env:
@@ -1848,346 +1663,12 @@ jobs:
           cargo bench --locked -p opentide-analysis --bench analyze | tee bench.txt
           { echo '### analyze() per language'; echo; echo '```'; cat bench.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
-  # The corpora of UC-0.6 (#804, tests/corpora/README.md) against the oracle,
-  # opentide 0.23.0 from PyPI (every wheel hash-pinned): the heavy workspace has
-  # no finding, every fault kind reports exactly its codes, the code inventory is
-  # the oracle's and COVERAGE.md is current with no code missing.
-  # In five parts on five runners (#841): run one after the other they took
-  # 14 to 17 minutes. `corpus` below gathers them under the required check's
-  # name. Each step names its part; the setup is every part's.
-  corpus-part:
-    name: Corpus (${{ matrix.part }})
-    needs: changes
-    # The full set, and a pull request that changes the corpora or what they compare.
-    if: >-
-      !cancelled() && (
-        github.event_name != 'pull_request'
-        || contains(github.event.pull_request.labels.*.name, 'full-ci')
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.corpus == 'true'
-      )
-    runs-on: ubuntu-latest
-    # 45: the object models' comparison (UC-1.3) validates every corpus again;
-    # 60: the index comparison (UC-2.1) loads every corpus and fault kind again;
-    # 70: the editor's comparison with validate (UC-2.6) serves every fault kind.
-    timeout-minutes: 70
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        part: [generator, faults, diffs, editor, vocabulary]
-    env:
-      # The part that builds what every part builds (xtask, and the generator's
-      # test) saves the caches; the others read them.
-      CORPUS_CACHE_PART: generator
-      RUSTFLAGS: "-Dwarnings"
-      CARGO_INCREMENTAL: "0"
-      RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 2G
-      # The server stays up for the whole job: its statistics are the run's.
-      SCCACHE_IDLE_TIMEOUT: "0"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          # The full history: the vocabulary-resolution filter diffs against the base.
-          fetch-depth: 0
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-      # sccache keeps the workspace's own crates, which rust-cache drops:
-      # by content, so a fresh checkout recompiles only what changed (#841).
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: sccache@0.19.0
-      # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
-        id: sccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-corpus-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-corpus-${{ hashFiles('rust-toolchain.toml') }}-
-      - name: Detect vocabulary resolution changes
-        if: matrix.part == 'vocabulary'
-        id: vocab_resolution
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PUSH_BEFORE: ${{ github.event.before }}
-          HEAD_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
-            base_ref="${PR_BASE_SHA}"
-          else
-            base_ref="${PUSH_BEFORE}"
-          fi
-          if [[ -z "$base_ref" || "$base_ref" == "0000000000000000000000000000000000000000" ]] \
-            || ! git cat-file -e "${base_ref}^{commit}" 2>/dev/null; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          changed_files="$(git diff --name-only "$base_ref" "${HEAD_SHA}")"
-          # grep, not rg (not installed on GitHub-hosted runners).
-          if grep -qE "^(crates/opentide-core/src/suggest\\.rs|crates/opentide-schema/src/vocab/.*|src/opentide/data/vocabulary/.*|src/opentide/data/pins/.*|tests/corpora/.*|tests/golden/cases\\.toml|tests/golden/vocab/APPROVED\\.toml|xtask/src/vocab/(diff\\.rs|probe\\.py)|\\.github/workflows/ci\\.yml)$" <<<"$changed_files"; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Install the oracle (opentide 0.23.0, hash-pinned, own venv)
-        run: |
-          uv venv --python 3.12 "$RUNNER_TEMP/oracle"
-          uv pip install --python "$RUNNER_TEMP/oracle/bin/python" --require-hashes \
-            -r tests/corpora/oracle-requirements.txt
-          echo "OPENTIDE_ORACLE=$RUNNER_TEMP/oracle/bin/opentide" >> "$GITHUB_ENV"
-      - name: Generator tests (determinism digests)
-        if: matrix.part == 'generator'
-        run: cargo test --locked -p xtask --test corpus_generate
-      - name: The heavy workspace has zero findings
-        if: matrix.part == 'generator'
-        run: |
-          cargo xtask corpus generate --seed 20261107 --out "$RUNNER_TEMP/heavy"
-          cargo xtask corpus clean --engine python --repo "$RUNNER_TEMP/heavy"
-      - name: Fault catalogue against the oracle
-        if: matrix.part == 'faults'
-        run: cargo xtask corpus faults --check --engine python --report "$RUNNER_TEMP/faults.json"
-      # The platform-block and configuration fault kinds through the Rust
-      # validate, finding for finding against the oracle (UC-1.4 #810, UC-1.5
-      # #811); `corpus-queries` compares the query kinds in the full set.
-      - name: Platform fault kinds against the Rust engine
-        if: matrix.part == 'faults'
-        run: cargo xtask corpus faults --check --engine rust --only platforms
-      - name: Configuration fault kinds against the Rust engine
-        if: matrix.part == 'faults'
-        run: cargo xtask corpus faults --check --engine rust --only configuration
-      - name: Upload the fault report
-        if: ${{ matrix.part == 'faults' && !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        # A report for reading, not a gate: an outage of GitHub's artifact
-        # service must not fail a job whose checks passed.
-        continue-on-error: true
-        with:
-          name: corpus-faults-report
-          path: ${{ runner.temp }}/faults.json
-          if-no-files-found: ignore
-          retention-days: 14
-      # opentide-schema's object models against the oracle (UC-1.3, #809): the
-      # object fault kinds finding for finding, then each model's JSON Schema
-      # and the findings on every object file of every corpus.
-      - name: Object fault kinds against the Rust object models
-        if: matrix.part == 'generator'
-        run: cargo xtask corpus faults --check --engine rust --only objects
-      - name: Object models against the oracle (schemas, corpora)
-        if: matrix.part == 'generator'
-        run: >-
-          cargo xtask schema diff --against python
-          --python "$RUNNER_TEMP/oracle/bin/python"
-          --report "$RUNNER_TEMP/schema-diff.json"
-      - name: Upload the object model report
-        if: ${{ matrix.part == 'generator' && !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        # A report for reading, not a gate: an outage of GitHub's artifact
-        # service must not fail a job whose checks passed.
-        continue-on-error: true
-        with:
-          name: schema-diff-report
-          path: ${{ runner.temp }}/schema-diff.json
-          if-no-files-found: ignore
-          retention-days: 14
-      # opentide-workspace's index against the Python registry's (UC-2.1,
-      # #816): every fixture, the heavy workspace and layouts, and each fault
-      # kind alone; the approved differences are listed in the run, none stale.
-      - name: Workspace index against the oracle (registry diff)
-        if: matrix.part == 'diffs'
-        run: cargo xtask registry diff --against python --corpus all
-      # opentide_schema::configuration::resolve against the oracle's (UC-1.5,
-      # #811): every fixture and generated workspace's resolved configuration
-      # and its `validate --check configuration` findings.
-      - name: Configuration resolution against the oracle (config diff)
-        if: matrix.part == 'diffs'
-        run: cargo xtask config diff --against python
-      # opentide-compile's request bodies against the oracle's (UC-3.1, #823):
-      # every platform block of every rule of every corpus, all nine platforms,
-      # byte for byte: the dry run's body (Sentinel, Elastic, Sysdig), each
-      # configured tenant's body or, for Defender, Splunk, SentinelOne,
-      # CrowdStrike, HarfangLab and Carbon Black, the writes their deployer
-      # sends, and the dry run's payload entry. Only a rule the oracle's data
-      # model refuses, or one the Rust index does not hold, is listed as "not
-      # compared", per corpus.
-      - name: Deploy compile against the oracle (payloads diff)
-        if: matrix.part == 'diffs'
-        run: >-
-          cargo xtask payloads diff --against python --corpus all
-          --python "$RUNNER_TEMP/oracle/bin/python"
-      - name: Deploy dry-run plan against the oracle's recordings
-        if: matrix.part == 'diffs'
-        run: cargo xtask payloads plan
-      - name: Changed rules of a scripted git history against the oracle
-        if: matrix.part == 'diffs'
-        run: >-
-          cargo xtask payloads git --against python
-          --python "$RUNNER_TEMP/oracle/bin/python"
-      # opentide-workspace's validate against the recordings of `validate
-      # --json` (UC-2.2, #817): every recorded case that checks, and the
-      # --fix and --fix --dry-run cases with their diff and the files they
-      # wrote (UC-2.3, #818); each difference is explained by an approved
-      # rule (xtask/src/validate.rs `APPROVED`), none stale. It reads
-      # tests/golden/cases, not the oracle.
-      - name: Validate against the recordings (validate diff)
-        if: matrix.part == 'diffs'
-        run: cargo xtask validate diff
-      # The language server's diagnostics against validate's findings (UC-2.6,
-      # #821): every fault kind `validate` alone reports, applied to the clean
-      # workspace and opened in opentide-lsp in process; per file the same
-      # codes, severities and ranges (code points converted to UTF-16). It
-      # needs neither the oracle nor the recordings.
-      - name: The editor's diagnostics are validate's (lsp parity)
-        if: matrix.part == 'editor'
-        run: cargo xtask lsp parity --corpus faults
-      # opentide-workspace's lint against the recordings of `lint --json`
-      # (UC-2.3, #818): every finding with its keys in order, the verdict,
-      # next steps and the files --fix renamed; approved rules in
-      # xtask/src/lint.rs `APPROVED`, none stale.
-      - name: Lint against the recordings (lint diff)
-        if: matrix.part == 'diffs'
-        run: cargo xtask lint diff
-      - name: The code inventory is the oracle's
-        if: matrix.part == 'generator'
-        run: |
-          cargo xtask corpus codes --engine python > "$RUNNER_TEMP/codes.toml"
-          diff -u tests/corpora/codes.toml "$RUNNER_TEMP/codes.toml"
-      - name: Coverage report is current, no code missing
-        if: matrix.part == 'generator'
-        run: cargo xtask corpus coverage --check
-      # opentide_schema::vocab against the oracle on every corpus value and
-      # every vocab_unknown finding (UC-1.6, #812): the same accepted values and
-      # validity, byte-identical messages, and every suggestion difference
-      # listed in tests/golden/vocab/APPROVED.toml, none of them stale.
-      - name: Vocabulary resolution against the oracle
-        if: matrix.part == 'vocabulary' && steps.vocab_resolution.outputs.changed == 'true'
-        run: >-
-          cargo xtask vocab diff --against python
-          --python "$RUNNER_TEMP/oracle/bin/python"
-          --report "$RUNNER_TEMP/vocab-diff.json"
-      - name: Upload the vocabulary report
-        if: ${{ matrix.part == 'vocabulary' && !cancelled() && steps.vocab_resolution.outputs.changed == 'true' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        # A report for reading, not a gate: an outage of GitHub's artifact
-        # service must not fail a job whose checks passed.
-        continue-on-error: true
-        with:
-          name: vocab-diff-report
-          path: ${{ runner.temp }}/vocab-diff.json
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Compiler cache statistics
-        if: ${{ !cancelled() }}
-        run: sccache --show-stats
-
-      - name: Save the compiler cache
-        if: github.event_name == 'push' && matrix.part == env.CORPUS_CACHE_PART && steps.sccache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-corpus-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
 
-  # The query fault kinds through the Rust validate and lint with the query
-  # engines, finding for finding against the oracle (UC-2.5, #820; UC-3.5b):
-  # about eight minutes on four cores, so in the full set, not a corpus part.
-  # It reads the corpus parts' caches and saves none.
-  corpus-queries:
-    name: Corpus (query fault kinds) against opentide 0.23.0
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    # corpus-part's, which rust-cache hashes into the key it reads.
-    env:
-      RUSTFLAGS: "-Dwarnings"
-      CARGO_INCREMENTAL: "0"
-      RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 2G
-      SCCACHE_IDLE_TIMEOUT: "0"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: sccache@0.19.0
-      # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
-        id: sccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-corpus-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-corpus-${{ hashFiles('rust-toolchain.toml') }}-
-      - name: Install the oracle (opentide 0.23.0, hash-pinned, own venv)
-        run: |
-          uv venv --python 3.12 "$RUNNER_TEMP/oracle"
-          uv pip install --python "$RUNNER_TEMP/oracle/bin/python" --require-hashes \
-            -r tests/corpora/oracle-requirements.txt
-          echo "OPENTIDE_ORACLE=$RUNNER_TEMP/oracle/bin/opentide" >> "$GITHUB_ENV"
-      - name: Query fault kinds against the Rust engine
-        run: cargo xtask corpus faults --check --engine rust --only queries
-      - name: Compiler cache statistics
-        if: ${{ !cancelled() }}
-        run: sccache --show-stats
 
-  # The required check `Corpus (generator, faults, coverage) against opentide
-  # 0.23.0`: it passes only when every part did. `!cancelled()`, not the
-  # implicit success(): a failed part would skip this job, and a skipped
-  # required check passes.
-  corpus:
-    name: Corpus (generator, faults, coverage) against opentide 0.23.0
-    needs: [changes, corpus-part]
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    steps:
-      - name: Every part passed
-        env:
-          RESULT: ${{ needs.corpus-part.result }}
-          # Whether the parts had to run: the full set, a change to their
-          # inputs, or a filter that failed (it fails open). Otherwise they
-          # are skipped, and this required check passes without them.
-          NEEDED: >-
-            ${{ github.event_name != 'pull_request'
-            || contains(github.event.pull_request.labels.*.name, 'full-ci')
-            || needs.changes.result != 'success'
-            || needs.changes.outputs.corpus == 'true' }}
-        run: |
-          echo "corpus parts: ${RESULT} (needed: ${NEEDED})"
-          if [[ "${NEEDED}" == true ]]; then
-            test "${RESULT}" = success
-          else
-            test "${RESULT}" = skipped
-          fi
 
-  # The oldest and newest Python on every pull request; `test-full` adds the
-  # ones between in the full set.
+  # The newest Python, with the coverage gate, on every pull request and push;
+  # `test-full` runs the others nightly.
   test:
     name: Test (${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -2198,14 +1679,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.14"]
+        python-version: ["3.14"]
     # One interpreter for PyO3's configuration in every Python job: the
     # binding is abi3, so it is the same build whatever Python runs the tests,
     # and the jobs share one cache of it (#841).
     env:
-      # The oldest Python (3.10) runs in the full set; on a pull request its
-      # cell starts and skips every step, so its required check reports.
-      RUNS: ${{ matrix.python-version == '3.14' || github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci') }}
       PYO3_PYTHON: /usr/bin/python3
       RUSTC_WRAPPER: sccache
       SCCACHE_DIR: ${{ github.workspace }}/.sccache
@@ -2214,10 +1692,6 @@ jobs:
       SCCACHE_IDLE_TIMEOUT: "0"
 
     steps:
-      - name: Python ${{ matrix.python-version }} runs in the full set
-        if: env.RUNS != 'true'
-        run: echo "This cell runs on pushes, nightly, Run workflow and with the full-ci label."
-
       # PR head commit (not merge commit) so coverage line numbers map to the diff.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: matrix.python-version == env.COVERAGE_PYTHON
@@ -2225,19 +1699,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: env.RUNS == 'true' && (matrix.python-version != env.COVERAGE_PYTHON)
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        if: env.RUNS == 'true'
         with:
           enable-cache: true
 
       - name: Set up Python
-        if: env.RUNS == 'true'
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
@@ -2246,25 +1712,21 @@ jobs:
       # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
-        if: env.RUNS == 'true'
         run: rustup toolchain install --profile minimal --no-self-update
 
 
       # sccache keeps the workspace's own crates, which rust-cache drops:
       # by content, so a fresh checkout recompiles only what changed (#841).
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        if: env.RUNS == 'true'
         with:
           tool: sccache@0.19.0
       # The compiler cache's week: its key is the toolchain and the ISO week,
       # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
       - name: Compiler cache week
         id: week
-        if: env.RUNS == 'true'
         shell: bash
         run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
-        if: env.RUNS == 'true'
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -2273,11 +1735,10 @@ jobs:
           restore-keys: sccache-python-engine-${{ hashFiles('rust-toolchain.toml') }}-
 
       - name: Install dependencies
-        if: env.RUNS == 'true'
         run: uv sync --group dev
 
       - name: Compiler cache statistics
-        if: env.RUNS == 'true' && (!cancelled())
+        if: ${{ !cancelled() }}
         run: sccache --show-stats
 
       - name: Save the compiler cache
@@ -2290,12 +1751,8 @@ jobs:
       # What the Python package holds since UC-6.2 (#841): the SDK, the
       # models, the plugin API, the console script, the docs' snippets and
       # CI's contracts. The command line itself is the Rust core's, held by
-      # the goldens (`golden-check`) and the crates' tests. `-n 4` is pinned
+      # the crates' tests. `-n 4` is pinned
       # for the same reason as the E2E job -- see the note there.
-      - name: Pytest
-        if: env.RUNS == 'true' && (matrix.python-version != env.COVERAGE_PYTHON)
-        run: uv run pytest tests/ --no-cov -q -n 4 -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint"
-
       - name: Pytest with coverage
         if: matrix.python-version == env.COVERAGE_PYTHON
         # sys.monitoring (PEP 669) instead of the C trace function. Same line
@@ -2321,7 +1778,6 @@ jobs:
 
       - name: Upload coverage to GitHub Code Quality
         if: >-
-          env.RUNS == 'true' &&
           matrix.python-version == env.COVERAGE_PYTHON &&
           (github.event_name != 'pull_request' ||
           github.event.pull_request.head.repo.full_name == github.repository)
@@ -2352,18 +1808,18 @@ jobs:
           path: htmlcov/
           retention-days: 14
 
-  # The Python versions between the oldest and the newest, in the full set
-  # (the workflow's header): `test`'s run without coverage, which 3.14 keeps.
+  # The other supported Pythons, the oldest (3.10) included, nightly and on
+  # Run workflow: `test`'s run without coverage, which 3.14 keeps.
   test-full:
     name: Test (${{ matrix.python-version }})
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     # One interpreter for PyO3's configuration in every Python job: the
     # binding is abi3, so it is the same build whatever Python runs the tests,
     # and the jobs share one cache of it (#841).
@@ -2517,7 +1973,7 @@ jobs:
   # whose `uv build` alone takes minutes. The full set (the workflow's header).
   cli-e2e-full:
     name: E2E (3.14, full set)
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     # One interpreter for PyO3's configuration in every Python job: the
     # binding is abi3, so it is the same build whatever Python runs the tests,
@@ -2574,11 +2030,11 @@ jobs:
       - name: E2E pytest (full set)
         run: uv run pytest tests/ -m full_set -q --no-cov
 
-  # Was two trailing steps on cli-e2e, which made a ~20 s check wait out the
-  # longest job in the workflow. It renders the pipeline with `opentide setup
-  # ci gitlab` and lints that, consuming nothing the E2E run produces.
+  # It renders the pipeline with `opentide setup ci gitlab` and lints that.
+  # Nightly and on Run workflow: not part of the pull request gate.
   gitlab-ci-lint:
     name: GitLab CI lint
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     # One interpreter for PyO3's configuration in every Python job: the
     # binding is abi3, so it is the same build whatever Python runs the tests,
@@ -2643,172 +2099,13 @@ jobs:
           OPENTIDE_GITLAB_CI_LINT: "1"
 
 
-  # Every golden case run through this repository's CLI, the Rust core, and
-  # compared with the oracle's recording (crates/opentide-compare,
-  # tests/golden/APPROVED_DIFFS.toml); a stale ledger entry fails it (UC-0.7,
-  # #805; every case since UC-6.2, #841). Here, not in golden.yml, so that it
-  # runs on every pull request: a change anywhere in crates/, bindings/python/
-  # or src/ can change what a command does. In three parts, by a hash of the
-  # case id (`--partition K/3`, about 580 cases each); `golden-compare`
-  # gathers them under the required check's name.
-  golden-compare-part:
-    name: Golden compare (part ${{ matrix.part }}/3)
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        part: [1, 2, 3]
-    env:
-      RUSTFLAGS: -Dwarnings
-      PYO3_PYTHON: /usr/bin/python3
-      RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 2G
-      # The server stays up for the whole job: its statistics are the run's.
-      SCCACHE_IDLE_TIMEOUT: "0"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: ${{ env.COVERAGE_PYTHON }}
-
-      # rustup installs the toolchain rust-toolchain.toml pins.
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-
-      # sccache keeps the workspace's own crates, which rust-cache drops:
-      # by content, so a fresh checkout recompiles only what changed (#841).
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: sccache@0.19.0
-      # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
-        id: sccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-golden-compare-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-golden-compare-${{ hashFiles('rust-toolchain.toml') }}-
-
-      # The candidate is this repository's CLI, with the engine compiled in.
-      # Its version is whatever this checkout builds: the comparison replaces
-      # each side's own version with a placeholder (tests/golden/README.md).
-      - name: Install this repository's CLI
-        run: uv sync --group dev
-
-      # A ledger entry that applies to none of this part's cases does not
-      # fail it: it is listed in the unused file, and the gather fails on an
-      # entry every part lists (a stale one).
-      - name: Compare every command with the recordings
-        env:
-          PART: ${{ matrix.part }}
-        run: >-
-          cargo xtask golden check --engine rust --partition "${PART}/3"
-          --report "golden-compare-${PART}.json" --unused "golden-unused-${PART}.json"
-
-      - name: Upload the unused ledger entries
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: golden-unused-${{ matrix.part }}
-          path: golden-unused-${{ matrix.part }}.json
-          if-no-files-found: error
-
-      # The MCP server (UC-3.7, #829): the recorded sessions of the Python
-      # server replayed against the Rust server, and the MCP stdio tests,
-      # each in a part of its own.
-      - name: Replay the recorded MCP sessions
-        if: matrix.part == 2
-        run: cargo xtask mcp replay --engine rust tests/golden/mcp/*.jsonl
-
-      - name: Run the MCP tests
-        if: matrix.part == 3
-        run: uv run --no-sync pytest tests/test_mcp -q --no-cov -n auto
-
-      - name: Compiler cache statistics
-        if: ${{ !cancelled() }}
-        run: sccache --show-stats
-
-      # The parts compile the same crates: one saves.
-      - name: Save the compiler cache
-        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true' && matrix.part == 1
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-golden-compare-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-
-      - name: Upload the report
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        # A report for reading, not a gate: an outage of GitHub's artifact
-        # service must not fail a job whose checks passed.
-        continue-on-error: true
-        with:
-          name: golden-compare-${{ matrix.part }}
-          path: golden-compare-${{ matrix.part }}.json
-          if-no-files-found: ignore
-
-  # The required check `Golden compare`: every part passed, and every ledger
-  # entry applied to a case in one part at least. An entry each part lists as
-  # unused applied nowhere in the whole run: it is stale, and fails.
-  golden-compare:
-    name: Golden compare
-    needs: golden-compare-part
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    steps:
-      - name: Download the parts' unused ledger entries
-        if: needs.golden-compare-part.result == 'success'
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: golden-unused-*
-          merge-multiple: true
-
-      - name: Every part passed, and no ledger entry is stale
-        env:
-          RESULT: ${{ needs.golden-compare-part.result }}
-          PARTS: "3"
-        run: |
-          echo "golden compare parts: ${RESULT}"
-          test "${RESULT}" = success
-          files=()
-          for part in $(seq 1 "${PARTS}"); do
-            test -f "golden-unused-${part}.json"
-            files+=("golden-unused-${part}.json")
-          done
-          stale="$(jq -rs '
-            (map(map(.entry))) as $parts
-            | .[0][]
-            | select(.entry as $e | $parts | all(any(.[]; . == $e)))
-            | "error: tests/golden/APPROVED_DIFFS.toml entry \(.entry) (\(.command) \(.case) \(.target) \(.rule)) applied to no case: it is stale, remove it"
-          ' "${files[@]}")"
-          if [[ -n "${stale}" ]]; then
-            echo "${stale}"
-            exit 1
-          fi
-          echo "every ledger entry applied in a part"
 
   cli-windows-smoke:
     name: CLI Windows smoke
     # The full set (the workflow's header): `Engine tests (windows-latest)`
     # covers Windows on every pull request.
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     # Also not gated on `test`: a 36 s job that waited ~5 min for a matrix it
     # shares nothing with. Left serial — two small test files, so workers would

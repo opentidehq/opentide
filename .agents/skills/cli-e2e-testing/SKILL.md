@@ -56,16 +56,16 @@ uv run pytest tests/ -m "(cli_e2e or cli_smoke) and not full_set" --no-cov
 # Unit tests (excludes E2E markers — matches CI matrix)
 uv run pytest tests/ -m "not cli_e2e and not cli_smoke"
 
-# The full set's E2E: a wheel built and installed per test
+# The nightly set's E2E: a wheel built and installed per test
 uv run pytest tests/ -m full_set --no-cov
 ```
 
 ## CI
 
-- **Unit matrix** (Python 3.10 and 3.14 on every pull request, 3.11–3.13 in the full set): `-m "not cli_e2e and not cli_smoke"`
+- **Unit matrix** (Python 3.14 on every pull request, 3.10–3.13 in the nightly set): `-m "not cli_e2e and not cli_smoke"`
 - **`cli-e2e` job** (Python 3.14 only, 4 shards, not gated on `test`): `tests/ -m "(cli_e2e or cli_smoke) and not full_set"` — whole
   tree, so a new E2E directory is picked up by its marker alone
-- **`cli-e2e-full` job** (the full set: nightly, pushes, Run workflow, the `full-ci` label): `tests/ -m full_set` —
+- **`cli-e2e-full` job** (the nightly set: nightly and Run workflow): `tests/ -m full_set` —
   E2E tests too slow for every pull request, such as a wheel built and installed per test
   (`test_wheel_plugin_platform.py`). A `full_set` test also carries `cli_e2e`, so the unit matrix leaves it out
 - **`cli-windows-smoke` job**: `test_console_script_smoke.py -m cli_smoke` — the only coverage of `spawn` platforms; `test_launcher_signals_e2e.py`, Ctrl-C (CTRL_BREAK_EVENT) through the console script

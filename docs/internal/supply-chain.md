@@ -12,10 +12,10 @@ Each gate below runs in CI; the required ones are in `.github/AGENTS.md` ("Requi
 |------|-------|------|----------|
 | `cargo deny check` | ci.yml `deny` (Supply chain (cargo deny)) | every pull request and push | a licence not on the list, a RustSec advisory, a second version of a shipped crate, OpenSSL, a source other than crates.io |
 | `cargo audit` (every `Cargo.lock`) | `rust-audit.yml` | daily | an advisory published since the last change; opens or comments on one issue |
-| Fuzz smoke | ci.yml `fuzz-smoke` | the full set (nightly, every push to `development` and `integration/unified-core`, Run workflow, and a pull request with the `full-ci` label) | a panic or a timeout in 60 s of any target |
+| Fuzz smoke | ci.yml `fuzz-smoke` | the nightly set (nightly and Run workflow) | a panic or a timeout in 60 s of any target |
 | Nightly fuzz | `engine-fuzz.yml` | nightly | a panic or a timeout in 10 minutes of any target; the input is uploaded |
 | Unsafe policy | clippy, `xtask/tests/lint_policy.rs`, `xtask/tests/unsafe_listing.rs` | every pull request | `unsafe` outside two crates, a block without `// SAFETY:` or with two operations, a site missing from [Unsafe code](./unsafe.md) |
-| SBOMs | `engine-release-build.yml` `sbom` (Engine release (dry run) / SBOMs) | the dry run in the full set (nightly, every push to `development` and `integration/unified-core`, Run workflow, and a pull request with the `full-ci` label), and on a pull request that changes the release's inputs; every engine release | an SBOM that does not validate against CycloneDX 1.5 |
+| SBOMs | `engine-release-build.yml` `sbom` (Engine release (dry run) / SBOMs) | the dry run in the nightly set (nightly and Run workflow); every release | an SBOM that does not validate against CycloneDX 1.5 |
 
 ## deny.toml
 
@@ -91,7 +91,7 @@ checks each against the schema (cyclonedx-python-lib, pinned) and for references
 
 All seven are assets of every release of the release train (`publish.yml`, UC-5.5, #840), listed
 in `SHA256SUMS` and covered by its provenance attestations, and are generated and validated in
-every dry run (CI's full set). The engine's four are scanned for oracle references like every
+every dry run (CI's nightly set). The engine's four are scanned for oracle references like every
 engine asset, and the product's three (`opentide.cdx.json`, `opentide-node.cdx.json` and, since
 the wheel depends on `pydantic` alone (UC-6.2), `opentide-wheel.cdx.json`) with `--product`.
 Rust SBOMs leave out build dependencies and name workspace crates by their path in

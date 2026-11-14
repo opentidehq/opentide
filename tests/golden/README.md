@@ -18,6 +18,15 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
 leading parts (`validate/*` is every `validate` case; `*` never crosses a `/`). The code is
 `xtask/src/golden/`, a library the comparator (UC-0.7) reuses.
 
+**In CI: none of it, since 2026-11-14.** The Rust port is done, and the maintainer took the oracle
+policing out of CI: no workflow records, checks or compares the goldens (golden compare and check,
+golden determinism, the golden preview, the corpora, the MCP replay, the payload, config,
+validate and lint diffs, `codegen --check --oracle`), and `APPROVED_DIFFS.toml` gates nothing.
+Every command here stays, run by hand when a change calls for it: a re-record, a new oracle, or a
+behaviour change you want measured against the oracle. The Rust crates' own tests that replay the
+recordings in-process (`crates/opentide-cli/tests/command_goldens.rs` and its siblings) still run
+with the engine tests.
+
 ### A preview of the next oracle
 
 `ORACLE.next` names the next oracle (opentide 0.28.1, while its features are ported; O1 of
@@ -38,9 +47,8 @@ refused, and so is `record --oracle` without `--out`. `check --recordings DIR` a
 --recordings DIR` compare with those recordings and DIR's oracle, without the `COVERAGE.md`
 check, and with `--engine rust` without the stale-ledger check (the ledger approves differences
 from the committed oracle). `cargo xtask cassettes record --oracle FILE` and `cargo xtask mcp
-record --oracle FILE` take the same file. CI's `Golden preview` job
-(`.github/workflows/golden-preview.yml`) runs the record and the check on `train/catchup-0.28`,
-report only.
+record --oracle FILE` take the same file. Run the record and the check by hand (the
+`Golden preview` workflow left CI).
 
 ## Review rules
 
@@ -61,11 +69,9 @@ report only.
    `cargo xtask golden record --check-determinism` before it is opened, and says so in its
    description. It records every case twice (about 26 minutes on a CI runner) and fails, writing
    nothing, on any difference between the runs; `git diff tests/golden` must then show only the
-   change the pull request is for. CI no longer re-records: the oracle is a pinned, frozen
-   release, so only a re-record can change the recordings, and
-   `.github/workflows/golden.yml`'s `Golden check (python)` holds them on that pull request (it
-   runs when the recordings, `ORACLE`, the oracle's requirements, the inputs the cases read or
-   the harness change, and weekly).
+   change the pull request is for. CI does not re-record or check the recordings: the oracle is
+   a pinned, frozen release, so only a re-record can change them, and its pull request runs
+   `cargo xtask golden check --engine python` by hand as well.
 6. **Coverage**: every command path has at least one case in every mode. `COVERAGE.md` is
    generated with the recordings; `record` and `check` fail when a path or mode has none, or when
    the recordings outgrow their budget.

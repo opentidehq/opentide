@@ -7,15 +7,14 @@
 # workspace takes a target directory of its own (target/llvm-cov-target) and a
 # cache of its own, and ci.yml is being restructured by UC-0.3 (#801).
 #
-# In the full set (ci.yml's header): nightly, every push to development and
-# integration/unified-core, Run workflow, and a pull request with the
-# `full-ci` label. Not a required check: it does not run on every pull request.
+# In the nightly set (ci.yml's header): nightly and on Run workflow only. Not
+# a required check: it runs on no pull request.
 name: Coverage
 
 on:
-  pull_request:
-  push:
-    branches: [development, integration/unified-core, "train/catchup-*"]
+  # Nightly (or as scheduled) and on Run workflow only: never on a pull
+  # request or a push, so it never blocks a merge (.github/AGENTS.md, the
+  # nightly set).
   schedule:
     - cron: "41 1 * * *"
   workflow_dispatch:
@@ -34,7 +33,6 @@ concurrency:
 jobs:
   rust:
     name: Rust coverage gates
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:

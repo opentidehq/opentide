@@ -394,7 +394,7 @@ def test_a_job_that_wraps_rustc_in_sccache_installs_it_first() -> None:
     """RUSTC_WRAPPER=sccache without the binary fails every cargo command."""
     jobs = _ci()["jobs"]
     wrapped = [job_id for job_id, job in jobs.items() if _wraps_with_sccache(job)]
-    expected = {"engine-test-part", "test", "cli-e2e", "golden-compare-part", "corpus-part", "wasi"}
+    expected = {"engine-test-part", "test", "cli-e2e", "wasi"}
     assert expected <= set(wrapped)
     for job_id in wrapped:
         steps = jobs[job_id]["steps"]
@@ -452,7 +452,7 @@ def test_the_python_jobs_share_one_pyo3_configuration() -> None:
     the binding in the cache is the one it builds (#841)."""
     jobs = _ci()["jobs"]
     python_jobs = [job for workflow, job in (PYTHON_PRODUCER, *PYTHON_READERS)]
-    python_jobs += ["cli-e2e-full", "golden-compare-part"]
+    python_jobs += ["cli-e2e-full"]
     seen = {(jobs[job].get("env") or {}).get("PYO3_PYTHON") for job in python_jobs}
     assert seen == {"/usr/bin/python3"}, seen
 
@@ -498,8 +498,9 @@ def test_no_cache_is_saved_from_a_pull_request() -> None:
                 elif uses.startswith("actions/cache@"):
                     raise AssertionError(f"{where}: actions/cache saves on every event")
     # The jobs that saved rust-cache trees now save one stable compiler cache
-    # per family (#1047): fewer saves, each checked.
-    assert checked >= 15
+    # per family (#1047); the oracle's jobs left CI and the nightly set's
+    # workflows run on no pull request: fewer saves, each checked.
+    assert checked >= 9
 
 
 # The compiler cache's key: one per family (and OS), stable for a week of one
@@ -602,14 +603,13 @@ def test_target_trees_are_saved_by_the_nightly_and_development_only() -> None:
                 if not str(step.get("uses", "")).startswith(RUST_CACHE):
                     continue
                 save_if = (step.get("with") or {}).get("save-if", True)
-                if save_if is False or path.name == "golden-preview.yml":
-                    # golden-preview runs on the 0.28 train only, never on
-                    # development: it saves on that branch's pushes.
+                if save_if is False:
                     continue
                 assert save_if == TARGET_TREE_SAVE, (path.name, job_id, save_if)
                 checked += 1
-    # (golden.yml's determinism job, with one, left CI.)
-    assert checked >= 5
+    # ci.yml's fuzz-smoke: the other workflows with a target tree (coverage,
+    # schema, oracle) run on no pull request any more.
+    assert checked >= 1
 
 
 def test_a_job_with_a_compiler_cache_restores_no_target_tree() -> None:
@@ -673,21 +673,16 @@ def test_only_linux_keeps_a_compiler_cache(name: str) -> None:
     )
 
 
-def test_the_wasi_job_keeps_a_core_family_of_its_own() -> None:
-    """The WASI command line's job is in the core set and builds what no other
-    job does (the module for wasm32-wasip1 in the `wasi` profile, and xtask):
-    it restored the full set's family, which it never saved, and compiled most
-    of it again on every run (#841)."""
+def test_the_wasi_job_keeps_a_family_of_its_own() -> None:
+    """The WASI command line's job builds what no other job does (the module
+    for wasm32-wasip1 in the `wasi` profile). It is in the nightly set: its
+    family is saved by the nightly and on development, whose caches every
+    branch reads."""
     cache = _compiler_cache("wasi")
     family = "sccache-wasi-" + STABLE_HASH
     assert cache.restores == cache.saves == family
-    assert str(cache.save_condition).startswith(PUSH_ONLY), cache.save_condition
+    assert str(cache.save_condition).startswith(DEVELOPMENT_ONLY), cache.save_condition
     assert {c.job for c in _compiler_caches() if c.restores == family} == {"wasi"}
-    names = [str(s.get("name", "")) for s in _ci()["jobs"]["wasi"]["steps"]]
-    # xtask builds in a step of its own, before the compare that runs it.
-    assert names.index("Build xtask") < names.index(
-        "Every golden case that needs no network, through the WASI module"
-    )
 
 
 def test_only_the_fuzz_jobs_keep_a_target_tree_in_ci() -> None:
@@ -711,7 +706,8 @@ def test_only_the_core_families_are_saved_per_base_branch() -> None:
         if cache.saves.startswith("sccache-full-set-"):
             assert condition.startswith(FULL_SET_SAVE), (cache.job, condition)
             full_set_and_release += 1
-        elif cache.saves.startswith("sccache-release-"):
+        elif cache.saves.startswith(("sccache-release-", "sccache-wasi-")):
+            # The nightly set's own families (the WASI build is nightly too).
             assert condition.startswith(DEVELOPMENT_ONLY), (cache.job, condition)
             full_set_and_release += 1
         else:

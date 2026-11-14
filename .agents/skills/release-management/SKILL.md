@@ -106,7 +106,7 @@ Its notes quote `## [Unreleased]`. Every job must be green, `Smoke the registrie
 
 **Dry run.** `dry_run: true` builds and smoke-tests every artifact and publishes nothing (no tag, no release, no attestation): any branch, any time.
 
-**A build to test, nothing published.** ci.yml's full set (`packages`, `build-packages.yml`) keeps the wheels (`wheels-<platform>`) and npm tarballs (`npm-<platform>`) of a development version for 14 days: `gh run download <run-id> -R opentidehq/opentide -n wheels-linux-x64`, then `uv pip install opentide-*.whl`; `npm install ./opentide-opentide-*.tgz`. With a Rust toolchain: `uv tool install "git+https://github.com/opentidehq/opentide@<ref>"`.
+**A build to test, nothing published.** ci.yml's nightly set (`packages`, `build-packages.yml`) keeps the wheels (`wheels-<platform>`) and npm tarballs (`npm-<platform>`) of a development version for 14 days: `gh run download <run-id> -R opentidehq/opentide -n wheels-linux-x64`, then `uv pip install opentide-*.whl`; `npm install ./opentide-opentide-*.tgz`. With a Rust toolchain: `uv tool install "git+https://github.com/opentidehq/opentide@<ref>"`.
 
 ### Step 1 — Prepare notes PR (must merge to `development` first)
 
@@ -205,10 +205,10 @@ Required success:
 
 | Check | Notes |
 |-------|--------|
-| Unit matrix Python 3.10–3.14 | 3.11–3.13 run in CI's full set: Run workflow on `development` before a release if the last nightly is not green |
+| Unit matrix Python 3.10–3.14 | 3.10–3.13 run in CI's nightly set: Run workflow on `development` before a release if the last nightly is not green |
 | lint | ruff + ty |
 | CLI E2E | Do **not** treat a skipped job (because unit tests failed) as success |
-| docs | In CI's full set: give the notes PR the `full-ci` label (then push) so it runs |
+| docs | In the nightly set (`docs.yml`): Run workflow on the notes PR's branch so it runs |
 | CodeQL Analyze (python) | |
 | CodeQL Analyze (actions) | |
 

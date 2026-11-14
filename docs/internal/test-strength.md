@@ -16,7 +16,7 @@ changing. The parity dashboard said how far each command had come against the Py
 
 | | |
 |---|---|
-| Workflow | [`.github/workflows/coverage.yml`](https://github.com/opentidehq/opentide/blob/development/.github/workflows/coverage.yml), job **Rust coverage gates**, in CI's full set: nightly, on every push to `development` and `integration/unified-core`, on demand, and on a pull request with the `full-ci` label |
+| Workflow | [`.github/workflows/coverage.yml`](https://github.com/opentidehq/opentide/blob/development/.github/workflows/coverage.yml), job **Rust coverage gates**, in CI's nightly set: nightly and on demand |
 | Policy | [`xtask/coverage.toml`](https://github.com/opentidehq/opentide/blob/development/xtask/coverage.toml) |
 | Check | `cargo xtask coverage gate --report target/coverage.json` |
 | Python | unchanged: 85% (`fail_under` in `pyproject.toml`), ci.yml's `test` job on Python 3.14 |

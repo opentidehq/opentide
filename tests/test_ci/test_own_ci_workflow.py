@@ -421,62 +421,6 @@ def test_the_scan_check_fails_once_an_excluded_crate_is_published(
     _check_excluded_crates_are_scanned(_EXCLUDED_SCANNED, tmp_path)
 
 
-def _corpus_step(workflow: dict[str, Any], needle: str) -> dict[str, Any]:
-    steps = workflow["jobs"]["corpus-part"]["steps"]
-    found = [step for step in steps if needle in str(step.get("run", ""))]
-    assert len(found) == 1, f"expected exactly one corpus step running {needle!r}"
-    return found[0]
-
-
-def _vocab_resolution_pattern(workflow: dict[str, Any]) -> str:
-    """The ERE the corpus job's ``vocab_resolution`` step greps changed paths with."""
-    steps = workflow["jobs"]["corpus-part"]["steps"]
-    runs = [str(step.get("run", "")) for step in steps if step.get("id") == "vocab_resolution"]
-    assert len(runs) == 1, "expected exactly one vocab_resolution step in the corpus job"
-    match = re.search(r'grep -qE "([^"]+)"', runs[0])
-    assert match is not None, "vocab_resolution must filter paths with grep -qE (no rg)"
-    return match.group(1).replace("\\\\", "\\")
-
-
-@pytest.mark.parametrize(
-    ("path", "gated"),
-    [
-        ("crates/opentide-core/src/suggest.rs", True),
-        ("crates/opentide-schema/src/vocab/mod.rs", True),
-        ("crates/opentide-schema/src/vocab/sentinel.rs", True),
-        ("src/opentide/data/vocabulary/tlp.vocab.toml", True),
-        ("src/opentide/data/pins/rule.toml", True),
-        ("tests/corpora/fault/catalogue.toml", True),
-        ("tests/golden/vocab/APPROVED.toml", True),
-        ("tests/golden/cases.toml", True),
-        ("xtask/src/vocab/diff.rs", True),
-        ("xtask/src/vocab/probe.py", True),
-        (".github/workflows/ci.yml", True),
-        ("crates/opentide-core/src/suggests.rs", False),
-        ("crates/opentide-schema/src/pins.rs", False),
-        ("xtask/src/vocab/sync.rs", False),
-    ],
-)
-def test_vocab_diff_gate_watches_resolution_data_and_approvals(
-    workflow: dict[str, Any], path: str, gated: bool
-) -> None:
-    assert bool(re.search(_vocab_resolution_pattern(workflow), path)) is gated
-
-
-def test_vocab_diff_runs_against_the_installed_oracle(workflow: dict[str, Any]) -> None:
-    """``cargo xtask vocab diff --against python`` enforces APPROVED.toml (UC-1.6)."""
-    steps = workflow["jobs"]["corpus-part"]["steps"]
-    diff = _corpus_step(workflow, "cargo xtask vocab diff --against python")
-    assert diff.get("if") == (
-        "matrix.part == 'vocabulary' && steps.vocab_resolution.outputs.changed == 'true'"
-    )
-    assert '--python "$RUNNER_TEMP/oracle/bin/python"' in str(diff["run"])
-    oracle = _corpus_step(workflow, "oracle-requirements.txt")
-    assert steps.index(oracle) < steps.index(diff), "the oracle is installed before the diff"
-    # The filter diffs against the base commit, so the checkout keeps history.
-    assert steps[0]["with"].get("fetch-depth") == 0
-
-
 def _runs(job: dict[str, Any]) -> str:
     return "\n".join(str(step.get("run", "")) for step in job.get("steps") or [])
 

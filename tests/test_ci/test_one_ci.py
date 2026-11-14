@@ -252,7 +252,7 @@ def test_ci_runs_on_every_pull_request_and_on_development() -> None:
     assert "schedule" in triggers
 
 
-@pytest.mark.parametrize("name", ["ci.yml", "codeql.yml", "oracle.yml"])
+@pytest.mark.parametrize("name", ["ci.yml", "codeql.yml"])
 def test_the_integration_branch_gets_ci_after_each_merge(name: str) -> None:
     """The Unified Core PRs merge into integration/unified-core before development."""
     branches = _triggers(_load(WORKFLOWS / name))["push"]["branches"]
@@ -392,18 +392,14 @@ def test_rustdoc_denies_warnings() -> None:
 
 def test_nextest_runs_on_three_operating_systems() -> None:
     jobs = _ci_jobs()
-    assert jobs["engine-test"]["strategy"]["matrix"]["os"] == [
-        "ubuntu-latest",
-        "macos-latest",
-        "windows-latest",
-    ]
     for scope, systems in (
-        # The full set: three operating systems.
+        # The nightly set: three operating systems.
         ("full", ["ubuntu-latest", "macos-latest", "windows-latest"]),
-        # A pull request: Linux, in the same shards (the gathering job reports
-        # macOS's and Windows's required checks).
+        # A pull request: Linux, in the same shards.
         ("pull", ["ubuntu-latest"]),
     ):
+        gathered = [cell["os"] for cell in ci_matrix.cells(jobs["engine-test"], scope)]
+        assert gathered == systems, scope
         shards: dict[str, list[tuple[int, int]]] = {}
         for cell in ci_matrix.cells(jobs["engine-test-part"], scope):
             shards.setdefault(cell["os"], []).append((int(cell["shard"]), int(cell["shards"])))
@@ -415,11 +411,10 @@ def test_nextest_runs_on_three_operating_systems() -> None:
     full = ci_matrix.cells(jobs["engine-test-part"], "full")
     pull = ci_matrix.cells(jobs["engine-test-part"], "pull")
     assert [c for c in full if c["os"] == "ubuntu-latest"] == pull
-    # Linux by package (test_ci_scope.py holds the packages to the workspace's
-    # members, once each); macOS and Windows whole.
+    # By package on every OS (test_ci_scope.py holds the packages to the
+    # workspace's members, once each): no shard runs the whole workspace.
     for cell in full:
-        whole = cell["os"] != "ubuntu-latest"
-        assert (cell["packages"] == "--workspace") is whole, cell
+        assert cell["packages"] != "--workspace", cell
     for step in jobs["engine-test-part"]["steps"]:
         run = str(step.get("run", ""))
         if NEXTEST in run or DOCTESTS in run:
@@ -465,12 +460,13 @@ def _check_names_of(workflow: dict[str, Any]) -> list[tuple[str, bool]]:
     ]
 
 
-def _expand(name: str, job: dict[str, Any]) -> list[str]:
-    """The check names of a job's cells (the full set's: a superset)."""
+def _expand(name: str, job: dict[str, Any], scope: str = "full") -> list[str]:
+    """The check names of a job's cells in *scope* (the nightly set's, ``full``,
+    is a superset of a pull request's, ``pull``)."""
     pattern = re.compile(r"\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}")
     return [
         pattern.sub(lambda m, cell=cell: cell[m.group(1)], name)
-        for cell in ci_matrix.cells(job, "full")
+        for cell in ci_matrix.cells(job, scope)
     ]
 
 
@@ -517,7 +513,9 @@ def _required_names(path: Path) -> list[str]:
             continue
         if job_id in gathered:
             continue
-        names += _expand(str(job.get("name", job_id)), job)
+        # A pull request's cells: the nightly set's macOS and Windows engine
+        # tests are not required (they never start on a pull request).
+        names += _expand(str(job.get("name", job_id)), job, "pull")
     return names
 
 
@@ -546,23 +544,18 @@ def test_only_report_uploads_may_fail_without_failing_their_job() -> None:
 
     When GitHub's artifact service is down, ``actions/upload-artifact`` fails
     after its retries, and that must not fail a job whose checks passed. No
-    other step in ci.yml may set continue-on-error. The one upload a gate
-    reads, golden compare's unused ledger entries (the gather finds the stale
-    ones in them), fails its part instead.
+    other step in ci.yml may set continue-on-error.
     """
-    gate_inputs = {("golden-compare-part", "Upload the unused ledger entries")}
     uploads = 0
     for job_id, spec in _ci_jobs().items():
         for step in spec.get("steps") or []:
-            if (job_id, step.get("name")) in gate_inputs:
-                assert "continue-on-error" not in step, (job_id, step.get("name"))
-            elif str(step.get("uses", "")).startswith("actions/upload-artifact@"):
+            if str(step.get("uses", "")).startswith("actions/upload-artifact@"):
                 uploads += 1
                 assert step.get("continue-on-error") is True, (job_id, step.get("name"))
             else:
                 label = step.get("name") or step.get("run")
                 assert "continue-on-error" not in step, (job_id, label)
-    assert uploads >= 7
+    assert uploads >= 4
 
 
 def test_the_facade_semver_check_names_the_crate_and_isolates_the_baseline() -> None:
