@@ -1,9 +1,8 @@
 //! `opentide generate extract sentinel` (UC-4.4e, #834;
 //! `extraction/sentinel_importer.py`): the analytics rules of each Sentinel
 //! tenant, listed through the connectors' ARM client
-//! ([`opentide_connectors::sentinel::Sentinel::list`]), dumped as
-//! `output-<tenant>.json` and written as opentide rule files under
-//! `Imported/`.
+//! ([`opentide_connectors::sentinel::Sentinel::list`]), and written as
+//! opentide rule files under `Imported/`.
 //!
 //! A listed rule is read as the oracle read it (`alert_rule_as_flat_dict`):
 //! its `properties` merged up and every key in snake case, the custom
@@ -111,12 +110,6 @@ pub(crate) fn flat_rule(rule: &CJson) -> CJson {
         }
     }
     snake_keys(&CJson::Object(merged))
-}
-
-/// `value` as a file: serde_json's pretty printer at four spaces, UTF-8,
-/// with a final newline.
-pub(crate) fn json_indent4(value: &CJson) -> String {
-    opentide_compile::generate::json_text::pretty(value, 4)
 }
 
 // ------------------------------------------------------ the oracle's helpers
@@ -234,14 +227,15 @@ fn list_items(values: &[CJson], indent: &str) -> String {
     out
 }
 
-/// The items of a list value (`rule.get(key) or []`); a value that is not a
-/// list fails where the oracle iterated it as one.
+/// The items of a list value: none when it is absent or empty, a single
+/// string as its one item; any other value that is not a list fails.
 fn items(object: &Object, key: &str) -> Result<Vec<CJson>, String> {
     match object.get(key) {
         Some(CJson::Array(items)) => Ok(items.clone()),
         Some(value) if !value.truthy() => Ok(Vec::new()),
         None => Ok(Vec::new()),
-        Some(CJson::Str(text)) => Ok(text.chars().map(|c| CJson::Str(c.to_string())).collect()),
+        // A single string is the one item it is, never its characters.
+        Some(text @ CJson::Str(_)) => Ok(vec![text.clone()]),
         Some(other) => Err(format!(
             "TypeError: '{}' object is not iterable",
             type_name(other)
@@ -686,8 +680,6 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
         .map_err(|error| failure(&error))?
         .map_err(|error| error.to_string())?;
         let rules: Vec<CJson> = rules.iter().map(flat_rule).collect();
-        let dump = cx.cwd.join(format!("output-{}.json", configured.name));
-        write_text(&dump, &json_indent4(&CJson::Array(rules.clone())))?;
         for rule in &rules {
             let CJson::Object(rule) = rule else {
                 return Err(no_attribute(rule, "get"));
@@ -706,7 +698,7 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
                 );
                 continue;
             }
-            let mut stem = sanitize_filename(&format!("\"{display_name}\""));
+            let mut stem = sanitize_filename(&display_name);
             if written.contains(&stem.to_lowercase()) {
                 let id: String = rule
                     .get("name")
@@ -773,16 +765,6 @@ mod tests {
     }
 
     #[test]
-    fn the_dump_is_indented_four_spaces() {
-        let value = json(r#"[{"a": [], "b": {}, "c": [1, true, null], "d": "é—\"", "e": 1.5}]"#);
-        assert_eq!(
-            json_indent4(&value),
-            "[\n    {\n        \"a\": [],\n        \"b\": {},\n        \"c\": [\n            1,\n            true,\n            null\n        ],\n        \"d\": \"é—\\\"\",\n        \"e\": 1.5\n    }\n]\n"
-        );
-        assert_eq!(json_indent4(&CJson::Array(Vec::new())), "[]\n");
-    }
-
-    #[test]
     fn a_scalar_is_written_by_serde_saphyr_on_one_line() {
         let text = |value: &str| scalar(&CJson::Str(value.into()));
         assert_eq!(text("Process"), "Process");
@@ -840,6 +822,27 @@ mod tests {
         // A Fusion rule is not imported.
         let fusion = RULE.replace("\"Scheduled\"", "\"Fusion\"");
         assert!(render(&object(&fusion), "soc").unwrap().is_none());
+    }
+
+    /// A single string where a list is expected is the one item it is: a
+    /// rule's `tactics: "Execution"` is `- Execution`, not one item per
+    /// character (the Python importer iterated the string).
+    #[test]
+    fn a_single_string_is_one_item_of_a_list() {
+        let rule = RULE.replace(
+            "\"severity\": \"High\",",
+            "\"severity\": \"High\", \"tactics\": \"Execution\", \"techniques\": \"T1059\",",
+        );
+        let (_, text) = render(&object(&rule), "soc").unwrap().unwrap();
+        assert!(
+            text.contains("\n      tactics:\n        - Execution\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("\n      techniques:\n        - T1059\n"),
+            "{text}"
+        );
+        assert!(!text.contains("- E\n"), "{text}");
     }
 
     #[test]
