@@ -50,7 +50,7 @@ A freshly scaffolded repository (no objects yet) is a valid generate target. Doc
 
 ## When a phase fails
 
-A phase fails the run when it raises, and also when it logs an error and carries on, for example after skipping an object file it could not parse. The run stops at that phase and exits `1`. The result names the phase in `phase` and at the start of `message`. The message keeps the exception type. When the phase failed on one object's docs page, index row or export entry, the message names that object as `while rendering <uuid>`. With `--json`, a failed phase prints this one document instead of a traceback:
+A phase fails the run when it raises, and also when it logs an error and carries on, for example after skipping an object file it could not parse. The run stops at that phase and exits `1`. The result names the phase in `phase` and at the start of `message`. The message says what was wrong, such as ``missing key `version` `` or a reference to an object that does not exist. When the phase failed on one object's docs page, index row or export entry, the message names that object as `while rendering <uuid>`. With `--json`, a failed phase prints this one document instead of a traceback:
 
 ```bash
 opentide --json generate docs
@@ -61,7 +61,7 @@ opentide --json generate docs
   "phase": "docs",
   "ok": false,
   "status": "failed",
-  "message": "docs: Exception: detection_model 00000000-0000-4000-8002-DEADBEEF0000 does not exist in the catalogue while rendering 00000000-0000-4000-8003-000000000001"
+  "message": "docs: detection_model 00000000-0000-4000-8002-DEADBEEF0000 does not exist in the catalogue while rendering 00000000-0000-4000-8003-000000000001"
 }
 ```
 

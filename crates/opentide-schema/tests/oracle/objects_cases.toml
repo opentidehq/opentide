@@ -17,6 +17,11 @@
 # differences are listed in tests/golden/APPROVED_DIFFS.toml too.
 
 [[difference]]
+id = "one-union-error"
+reason = "A value that may be one of several types (`str | list[str]`, `str | int`, a string or a model) is reported as serde and JSON Schema validators report it, not as Pydantic's smart union: when no member's kind of value fits, one error at the value's own path, of the first member's type (`string_type`, `int_type`, `model_type`), naming what is accepted (`expected a string or a list of strings`); when a member's kind fits (a list for `list[str]`, a mapping for a model), that member's errors at their own paths (`killchain.1`). The oracle reported one error per member, each under a path segment naming the member (`killchain.str`, `killchain.list[str].1`), which is no key of the file; with the path now in the file, the error also has its span and `yaml_line`."
+changelog = "**A value of the wrong type is reported once, at its own path**"
+
+[[difference]]
 id = "messages-quote-values"
 reason = "Every message quotes a value with Rust's string formatting, in double quotes with Rust's escapes (`\"x\"`, `\"a\\u{a0}b\"`), and writes any other value as YAML and JSON write it (`null`, `true`, `1.5`), where the oracle used Python's `repr` (`'x'`, `'a\\xa0b'`, `None`, `True`). Codes, paths and the rest of each message are unchanged."
 changelog = "**Messages quote values the same way everywhere**"
@@ -585,6 +590,7 @@ description: d
 
 [[case]]
 id = "rule-version-list"
+difference = ["one-union-error"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -1438,6 +1444,7 @@ threat:
 
 [[case]]
 id = "threat-killchain-number"
+difference = ["one-union-error"]
 family = "threat"
 yaml = '''
 name: Threat
@@ -1463,6 +1470,7 @@ threat:
 
 [[case]]
 id = "threat-killchain-mixed-list"
+difference = ["one-union-error"]
 family = "threat"
 yaml = '''
 name: Threat

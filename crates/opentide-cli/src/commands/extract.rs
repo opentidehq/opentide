@@ -225,58 +225,12 @@ pub(crate) fn format(template: &str, values: &[(&str, &str)]) -> String {
     out
 }
 
-/// Python's `str.isspace` set, as `strip` uses it.
-fn py_space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
-
-/// `str.strip()`.
-pub(crate) fn strip(text: &str) -> &str {
-    text.trim_matches(py_space)
-}
-
-/// `str.splitlines()`.
-pub(crate) fn splitlines(text: &str) -> Vec<&str> {
-    let mut lines = Vec::new();
-    let mut start = 0;
-    let mut chars = text.char_indices().peekable();
-    while let Some((index, c)) = chars.next() {
-        if !matches!(
-            c,
-            '\n' | '\r'
-                | '\u{0b}'
-                | '\u{0c}'
-                | '\u{1c}'
-                | '\u{1d}'
-                | '\u{1e}'
-                | '\u{85}'
-                | '\u{2028}'
-                | '\u{2029}'
-        ) {
-            continue;
-        }
-        lines.push(&text[start..index]);
-        let mut end = index + c.len_utf8();
-        if c == '\r'
-            && let Some((next, '\n')) = chars.peek().copied()
-        {
-            chars.next();
-            end = next + 1;
-        }
-        start = end;
-    }
-    if start < text.len() {
-        lines.push(&text[start..]);
-    }
-    lines
-}
-
 /// Each non-blank line stripped and indented (`fix_multiline`).
 fn fix_multiline(text: &str, indentation: usize) -> String {
-    splitlines(text)
-        .into_iter()
-        .filter(|line| !strip(line).is_empty())
-        .map(|line| format!("{}{}", " ".repeat(indentation), strip(line)))
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(|line| format!("{}{line}", " ".repeat(indentation)))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -412,17 +366,15 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
         .get("lastModifiedBy")
         .ok_or_else(|| key_error("lastModifiedBy"))?;
     let contributors = if modified_by.as_str() == Some(author) {
-        strip(NO_CONTRIBUTORS_TEMPLATE).to_owned()
+        NO_CONTRIBUTORS_TEMPLATE.trim().to_owned()
     } else {
         let contributor = match modified_by {
             CJson::Str(text) => text.clone(),
             other => opentide_connectors::text::json_text(other),
         };
-        strip(&format(
-            CONTRIBUTORS_TEMPLATE,
-            &[("contributor", &contributor)],
-        ))
-        .to_owned()
+        format(CONTRIBUTORS_TEMPLATE, &[("contributor", &contributor)])
+            .trim()
+            .to_owned()
     };
     let mut techniques = String::new();
     if let Some(CJson::Array(items)) = field("mitreTechniques")
@@ -437,21 +389,22 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
             .collect();
         let list = format!("- {}", names.join("\n        - "));
         format(TECHNIQUES_TEMPLATE, &[("techniques_list", &list)])
-            .trim_end_matches(py_space)
+            .trim_end()
             .clone_into(&mut techniques);
     }
     let alert_recommendation = match field("recommendedActions").filter(|value| value.truthy()) {
-        None => strip(NO_RECOMMENDATION_TEMPLATE).to_owned(),
+        None => NO_RECOMMENDATION_TEMPLATE.trim().to_owned(),
         Some(recommended) => {
             let recommended = recommended
                 .as_str()
                 .ok_or("TypeError: can only concatenate str (not \"list\") to str")?;
             description.push_str("\n\n---\nRecommended Actions : ");
             description.push_str(recommended);
-            strip(&format(
+            format(
                 RECOMMENDATION_TEMPLATE,
                 &[("recommendation", &fix_multiline(recommended, 8))],
-            ))
+            )
+            .trim()
             .to_owned()
         }
     };
@@ -511,7 +464,7 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
             ("status", status),
         ],
     );
-    Ok((sanitize_filename(name), strip(&body).to_owned()))
+    Ok((sanitize_filename(name), body.trim().to_owned()))
 }
 
 /// What makes two tenants' copies of one detection the same rule (`_content`).
@@ -933,7 +886,7 @@ fn is_prebuilt(rule: &CJson) -> bool {
 /// Kibana's `now-<n><unit>` as an RFC 0007 duration (`_date_math_duration`).
 fn date_math_duration(value: &CJson) -> String {
     let text = py(value);
-    let text = strip(&text);
+    let text = text.trim();
     let text = text.strip_prefix("now-").unwrap_or(text);
     if let Some(weeks) = text.strip_suffix('w')
         && !weeks.is_empty()
@@ -1013,7 +966,12 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     if make_custom && prebuilt {
         rule_name.push_str(" (Custom)");
     }
-    let description = strip(&rule.get("description").map(py).unwrap_or_default()).to_owned();
+    let description = rule
+        .get("description")
+        .map(py)
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
     let (author, contributors): (String, Vec<CJson>) = match rule.get("author") {
         Some(CJson::Array(authors)) if !authors.is_empty() => (
             py(&authors[0]),
@@ -1069,7 +1027,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         "query" | "eql" | "esql" | "threshold" | "new_terms" | "threat_match"
     ) {
         if let Some(query) = truthy(rule, "query") {
-            block.insert("query".into(), CJson::Str(strip(&py(query)).to_owned()));
+            block.insert("query".into(), CJson::Str(py(query).trim().to_owned()));
         }
         if matches!(kind, "query" | "threshold" | "new_terms" | "threat_match")
             && let Some(language @ CJson::Str(text)) = rule.get("language")
@@ -1272,11 +1230,11 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     if let Some(note) = truthy(rule, "note") {
         guide.insert(
             "investigation".into(),
-            CJson::Str(strip(&py(note)).to_owned()),
+            CJson::Str(py(note).trim().to_owned()),
         );
     }
     if let Some(setup) = truthy(rule, "setup") {
-        guide.insert("setup".into(), CJson::Str(strip(&py(setup)).to_owned()));
+        guide.insert("setup".into(), CJson::Str(py(setup).trim().to_owned()));
     }
     if !guide.is_empty() {
         block.insert("guide".into(), CJson::Object(guide));
@@ -1589,7 +1547,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                 reason = "`int()` of a float truncates toward zero, as here"
             )]
             Some(CJson::Float(number)) => number.trunc() as i64,
-            Some(CJson::Str(text)) => strip(text).parse().unwrap_or(50),
+            Some(CJson::Str(text)) => text.trim().parse().unwrap_or(50),
             _ => 50,
         };
         block.insert(
@@ -1725,8 +1683,7 @@ fn rule_yaml(document: &Object) -> Result<String, String> {
 /// spaces, whitespace runs collapsed.
 fn elastic_filename(name: &str) -> String {
     sanitize_filename(name)
-        .split(py_space)
-        .filter(|part| !part.is_empty())
+        .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -1794,9 +1751,7 @@ fn elastic_run(
         .map_err(|error| match error {
             opentide_connectors::elastic::FindError::Status(text) => format!("HTTPError: {text}"),
             opentide_connectors::elastic::FindError::Connector(error) => connector_message(&error),
-            opentide_connectors::elastic::FindError::NotJson(text) => {
-                format!("JSONDecodeError: {text}")
-            }
+            opentide_connectors::elastic::FindError::NotJson(text) => text,
         })?;
         let rules = match answer.get("data") {
             Some(CJson::Array(rules)) => rules.clone(),

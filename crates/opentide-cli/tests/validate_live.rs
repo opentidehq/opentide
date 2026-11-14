@@ -448,7 +448,8 @@ fn each_outcome_of_a_check_is_the_oracles() {
     assert_eq!(
         first.get("errors"),
         Some(&Json::Array(vec![Json::str(
-            "no answer within the 5s check timeout (timed out). Raise it with --check-timeout or \
+            "no answer within the 5s check timeout (no answer from \
+             https://splunk.invalid:8089 within 5s). Raise it with --check-timeout or \
              OPENTIDE_QUERY_CHECK_TIMEOUT, or make the query cheaper"
         )]))
     );
@@ -559,7 +560,13 @@ fn a_refused_credential_or_an_unreachable_tenant_stops_the_check() {
     );
     assert_eq!(
         value(&live, "message"),
-        &Json::str("Cannot reach splunk tenant 'lab' at splunk.invalid:8089: connection refused")
+        &Json::str(
+            "Cannot reach splunk tenant 'lab' at https://splunk.invalid:8089: connection refused"
+        )
+    );
+    assert_eq!(
+        value(&live, "host"),
+        &Json::str("https://splunk.invalid:8089")
     );
     assert_eq!(value(&live, "tenant"), &Json::str("lab"));
 }

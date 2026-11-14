@@ -79,9 +79,8 @@ pub fn is_builtin(id: &str) -> bool {
 }
 
 /// The identifiers of the built-in platforms, in [`crate::builtin`]'s order
-/// ([`opentide_schema::platforms::Order::Connector`]).
-pub const BUILTIN: [&str; opentide_schema::platforms::COUNT] =
-    opentide_schema::platforms::ordered(opentide_schema::platforms::Order::Connector);
+/// ([`opentide_schema::platforms::IDS`]).
+pub const BUILTIN: [&str; opentide_schema::platforms::COUNT] = opentide_schema::platforms::IDS;
 
 /// What a command line without a plugin host (the native binary, the npm
 /// package) says about *platform*, a platform the workspace enables that is

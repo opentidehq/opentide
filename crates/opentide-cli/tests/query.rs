@@ -560,8 +560,7 @@ fn a_rules_query_runs_as_deploy_would_send_it() {
     assert_eq!(invalid.code, 2);
     assert_eq!(
         invalid.document()["message"],
-        "cannot read the rule in objects/rules/bad.yaml: 1 validation error for DetectionRule\n\
-         metadata.tlp\n  Field required [type=missing]"
+        "cannot read the rule in objects/rules/bad.yaml: metadata.tlp: Field required"
     );
     assert_eq!(invalid.document()["failure"]["argument"], "--file");
     // A UUID no rule has, with the closest; a rule without the platform.
@@ -609,10 +608,10 @@ fn rows_are_printed_as_a_table_json_lines_or_csv() {
     assert!(
         table.stdout.starts_with(
             "good  2 rows\n\
-             host.name ┃ count\n\
-             ━━━━━━━━━━╇━━━━━━\n\
-             pc-1      │ 3    \n\
-             pc-2      │      \n\
+             host.name  count\n\
+             ---------  -----\n\
+             pc-1       3\n\
+             pc-2\n\
              \n"
         ),
         "{}",
@@ -629,8 +628,8 @@ fn rows_are_printed_as_a_table_json_lines_or_csv() {
     assert_eq!(lines.code, 1);
     assert!(
         lines.stdout.starts_with(
-            "{\"_tenant\": \"good\", \"host.name\": \"pc-1\", \"count\": 3}\n\
-             {\"_tenant\": \"good\", \"host.name\": \"pc-2\", \"count\": null}\n"
+            "{\"_tenant\":\"good\",\"host.name\":\"pc-1\",\"count\":3}\n\
+             {\"_tenant\":\"good\",\"host.name\":\"pc-2\",\"count\":null}\n"
         ),
         "{}",
         lines.stdout
@@ -658,13 +657,13 @@ fn rows_are_printed_as_a_table_json_lines_or_csv() {
     assert_eq!(lines.code, 0, "{}", lines.stderr);
     assert_eq!(
         lines.stdout,
-        "{\"_tenant\": \"good\", \"host.name\": \"pc-1\", \"count\": 3}\n\
-         {\"_tenant\": \"good\", \"host.name\": \"pc-2\", \"count\": null}\n"
+        "{\"_tenant\":\"good\",\"host.name\":\"pc-1\",\"count\":3}\n\
+         {\"_tenant\":\"good\",\"host.name\":\"pc-2\",\"count\":null}\n"
     );
 }
 
-/// A tenant that takes the query and never answers: the read timeout, named
-/// as requests names it, and what to do about it.
+/// A tenant that takes the query and never answers: the read timeout, the
+/// address that did not answer, and what to do about it.
 #[test]
 fn a_tenant_that_does_not_answer_in_time_fails_with_advice() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -681,8 +680,10 @@ fn a_tenant_that_does_not_answer_in_time_fails_with_advice() {
     let document = ran.document();
     assert_eq!(
         document["results"][0]["error"],
-        "elastic tenant \"slow\" did not answer the query within 1s: \
-         HTTPSConnectionPool(host='127.0.0.1', port=443): Read timed out. (read timeout=1)"
+        format!(
+            "elastic tenant \"slow\" did not answer the query within 1s (no answer from \
+             {address})"
+        )
     );
     assert_eq!(document["detail"], "narrow the window or raise --timeout");
 }

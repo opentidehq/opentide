@@ -33,11 +33,11 @@ use crate::render::outcome::OutcomeKind;
 /// The command's name in the envelope.
 pub const COMMAND: &str = "validate query";
 
-/// The platforms the engine checks offline, by name, each with the
+/// The platforms the engine checks offline, in the platform table's order, each with the
 /// languages it parses for it (`OFFLINE_QUERY_LANGUAGES`).
 pub fn offline_query_languages() -> Vec<(&'static str, &'static [&'static str])> {
-    use opentide_schema::platforms::{Order, select};
-    select(Order::Name, |_| true)
+    use opentide_schema::platforms::select;
+    select(|_| true)
         .into_iter()
         .filter_map(|platform| Some((platform.id, platform.offline()?)))
         .collect()
@@ -46,8 +46,8 @@ pub fn offline_query_languages() -> Vec<(&'static str, &'static [&'static str])>
 /// The platforms whose queries a tenant checks (`QUERY_VALIDATION_PLATFORMS`),
 /// by name.
 pub fn live_query_platforms() -> Vec<&'static str> {
-    use opentide_schema::platforms::{Order, ids_where};
-    ids_where(Order::Name, |platform| platform.live_check)
+    use opentide_schema::platforms::ids_where;
+    ids_where(|platform| platform.live_check)
 }
 
 /// The help of a rule file whose queries could not be read.
@@ -248,8 +248,8 @@ pub fn refuse(args: &Args) -> Option<Report> {
 /// is answered `supported: false` before any request; the others check on
 /// their tenants (`validate_live`).
 pub fn live_rust_platforms() -> Vec<&'static str> {
-    use opentide_schema::platforms::{Order, ids_where};
-    ids_where(Order::Name, |platform| !platform.live_check)
+    use opentide_schema::platforms::ids_where;
+    ids_where(|platform| !platform.live_check)
 }
 
 /// The answer of a platform whose tenants check no query (`supported:

@@ -31,7 +31,7 @@ fn workspace_with(top: &str, block: &str) -> Workspace {
         "/ws/objects/rules/r.yaml",
         format!(
             "name: Rule\nmetadata:\n  uuid: {UUID}\n  schema: rule::1.0\n\
-             description: \"a\\u001cb  c\"\n{top}configurations:\n  sysdig:\n{block}"
+             description: \"a\\tb \\n c\"\n{top}configurations:\n  sysdig:\n{block}"
         ),
     );
     Workspace::open(
@@ -273,7 +273,11 @@ fn a_priority_falco_does_not_know_fails() {
     let (_, reason) =
         body("    status: STAGING\n    condition: proc.name = x\n    priority: urgent\n")
             .unwrap_err();
-    assert_eq!(reason, "Sysdig cannot compile this rule: \"URGENT\"");
+    assert_eq!(
+        reason,
+        "Sysdig cannot compile this rule: unknown priority \"URGENT\" (expected EMERGENCY, \
+         ALERT, CRITICAL, ERROR, WARNING, NOTICE, INFORMATIONAL or DEBUG)"
+    );
 }
 
 #[test]

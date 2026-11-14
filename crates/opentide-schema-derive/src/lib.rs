@@ -24,7 +24,7 @@
 //! | field | `before = "path"` | the same, on the field's value |
 //! | field | `with = "path"` | `fn(&Node, &mut Context) -> Option<T>` converts the field instead of `T: FromNode` |
 //! | unit enum | `literal` | the error type `literal_error` rather than `enum` |
-//! | enum | `union` | a union of its one-field variants, each with `tag = "str"` |
+//! | enum | `union` | a union of its one-field variants: the first that takes the value, each member's `FromNode::shape` telling which one a value was meant for |
 //!
 //! A struct also gets `opentide_schema::from_node::Model`: its class name and
 //! each field's attribute and serialised names, in order, which the Python
@@ -366,6 +366,10 @@ fn expand_struct(
                 __fields.finish(__cx, #closed, #tolerate);
                 #built
             }
+
+            fn shape() -> ::opentide_schema::from_node::Shape {
+                ::opentide_schema::from_node::Shape::Mapping
+            }
         }
 
         #[automatically_derived]
@@ -488,6 +492,10 @@ fn expand_unit_enum(
                     _ => ::core::option::Option::None,
                 }
             }
+
+            fn shape() -> ::opentide_schema::from_node::Shape {
+                ::opentide_schema::from_node::Shape::String
+            }
         }
     })
 }
@@ -507,6 +515,7 @@ fn expand_union(
         }
     }
     let mut members = Vec::new();
+    let mut shapes = Vec::new();
     for variant in &data.variants {
         let Fields::Unnamed(fields) = &variant.fields else {
             return Err(syn::Error::new(
@@ -522,25 +531,23 @@ fn expand_union(
         };
         let ty = &field.ty;
         let ident = &variant.ident;
-        let tag = items(&variant.attrs, "from_node")?
-            .iter()
-            .find(|item| item.key == "tag")
-            .map(string_of)
-            .transpose()?
-            .ok_or_else(|| {
-                syn::Error::new(
-                    variant.span(),
-                    "a union variant names its tag: #[from_node(tag = \"str\")]",
-                )
-            })?;
+        if let Some(item) = items(&variant.attrs, "from_node")?.first() {
+            return Err(syn::Error::new(
+                item.span,
+                format!("unknown #[from_node({})] on a union variant", item.key),
+            ));
+        }
         members.push(quote! {
             ::opentide_schema::from_node::Member {
-                tag: #tag,
+                shape: <#ty as ::opentide_schema::from_node::FromNode>::shape,
                 convert: |__n: &::opentide_schema::node::Node,
                           __cx: &mut ::opentide_schema::from_node::Context| {
                     <#ty as ::opentide_schema::from_node::FromNode>::from_node(__n, __cx).map(Self::#ident)
                 },
             }
+        });
+        shapes.push(quote! {
+            <#ty as ::opentide_schema::from_node::FromNode>::shape()
         });
     }
     Ok(quote! {
@@ -551,6 +558,10 @@ fn expand_union(
                 __cx: &mut ::opentide_schema::from_node::Context,
             ) -> ::core::option::Option<Self> {
                 ::opentide_schema::from_node::union_value(__node, __cx, &[#(#members),*])
+            }
+
+            fn shape() -> ::opentide_schema::from_node::Shape {
+                ::opentide_schema::from_node::Shape::OneOf(::std::vec![#(#shapes),*])
             }
         }
     })
@@ -658,18 +669,29 @@ mod tests {
     }
 
     #[test]
-    fn unions_name_each_members_tag() {
+    fn unions_try_each_member_by_its_shape() {
         let code = expanded(
             r#"
             #[serde(untagged)]
             #[from_node(union)]
-            enum Either { #[from_node(tag = "str")] Str(String), #[from_node(tag = "int")] Int(i64) }
+            enum Either { Str(String), Int(i64) }
             "#,
         )
         .unwrap();
-        assert!(code.contains("tag : \"str\""), "{code}");
-        assert!(code.contains("tag : \"int\""), "{code}");
+        assert!(
+            code.contains(
+                "shape : < String as :: opentide_schema :: from_node :: FromNode > :: shape"
+            ),
+            "{code}"
+        );
+        assert!(
+            code.contains(
+                "shape : < i64 as :: opentide_schema :: from_node :: FromNode > :: shape"
+            ),
+            "{code}"
+        );
         assert!(code.contains("union_value"), "{code}");
+        assert!(code.contains("Shape :: OneOf"), "{code}");
     }
 
     #[test]
@@ -699,13 +721,16 @@ mod tests {
                 "an untagged enum is a union",
             ),
             ("enum A { B(String) }", "a FromNode enum has unit variants"),
-            ("#[from_node(union)] enum A { B(String) }", "names its tag"),
+            (
+                "#[from_node(union)] enum A { #[from_node(tag = \"x\")] B(String) }",
+                "unknown #[from_node(tag)] on a union variant",
+            ),
             (
                 "#[from_node(union)] enum A { B { x: u8 } }",
                 "a union variant holds one value",
             ),
             (
-                "#[from_node(union)] enum A { #[from_node(tag = \"x\")] B(u8, u8) }",
+                "#[from_node(union)] enum A { B(u8, u8) }",
                 "a union variant holds one value",
             ),
             (

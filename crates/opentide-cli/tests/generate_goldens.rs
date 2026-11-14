@@ -82,7 +82,7 @@ fn exports_before_a_failure_are_written() {
     let stdout = String::from_utf8(out).unwrap();
     assert_eq!(exit_code, 1, "{stdout}");
     assert!(
-        stdout.contains(r#""message":"exports: KeyError: \"version\" while rendering 00000000-0000-4000-8001-000000000001""#),
+        stdout.contains(r#""message":"exports: missing key `version` while rendering 00000000-0000-4000-8001-000000000001""#),
         "{stdout}"
     );
     let exports = ws.join(".opentide/exports");

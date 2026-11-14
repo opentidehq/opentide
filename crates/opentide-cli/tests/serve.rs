@@ -222,9 +222,29 @@ fn protocol_problems_are_json_rpc_errors() {
     assert_eq!(
         parse.get("error").unwrap().get("message"),
         Some(&Json::str(
-            "Parse error: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+            "Parse error: key must be a string at line 1 column 2"
         ))
     );
+    // Every malformed line is -32700 with the place serde_json found the fault at.
+    for (line, place) in [
+        ("not json", "line 1 column 2"),
+        ("%", "line 1 column 1"),
+        ("{\"a\": 1,}", "line 1 column 9"),
+        ("{} x", "line 1 column 4"),
+        ("\u{feff}{}", "line 1 column 1"),
+    ] {
+        client.send(line);
+        let parse = client.message();
+        assert_eq!(code(&parse), Json::Int(-32700), "{line:?}");
+        assert_eq!(parse.get("id"), Some(&Json::Null), "{line:?}");
+        let message = parse.get("error").unwrap().get("message").unwrap();
+        let message = message.as_str().unwrap();
+        assert!(message.starts_with("Parse error: "), "{message}");
+        assert!(message.ends_with(place), "{line:?}: {message}");
+    }
+    let deep = "[".repeat(100_000);
+    client.send(&deep);
+    assert_eq!(code(&client.message()), Json::Int(-32700));
     client.send("[]");
     assert_eq!(code(&client.message()), Json::Int(-32600));
     client.send("{\"jsonrpc\":\"2.0\",\"id\":7}");

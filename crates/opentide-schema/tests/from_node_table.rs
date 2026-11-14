@@ -70,9 +70,7 @@ enum Kind {
 #[serde(untagged)]
 #[from_node(union)]
 enum Either {
-    #[from_node(tag = "str")]
     Str(String),
-    #[from_node(tag = "int")]
     Int(i64),
 }
 
@@ -80,9 +78,7 @@ enum Either {
 #[serde(untagged)]
 #[from_node(union)]
 enum StrOrList {
-    #[from_node(tag = "str")]
     Str(String),
-    #[from_node(tag = "list[str]")]
     List(Vec<String>),
 }
 
@@ -127,7 +123,7 @@ fn no_legacy(node: &Node, cx: &mut Context) -> bool {
     if node.get("legacy").is_some() {
         cx.error_with(
             ErrorKind::InvalidValue("value_error"),
-            "Value error, legacy is not supported",
+            "legacy is not supported",
             node,
             &[("error", "legacy is not supported".to_owned())],
         );

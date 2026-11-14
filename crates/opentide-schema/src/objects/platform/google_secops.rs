@@ -502,8 +502,8 @@ fn meta_findings(meta: Option<&Node>) -> Vec<Finding> {
             "a key deploy writes itself".to_owned()
         } else if !matches!(entry.value.value, Value::Str(_)) {
             format!(
-                "set to a {}: a meta value is a string (quote it)",
-                yaral::python_type(&entry.value)
+                "of type {}: a meta value is a string (quote it)",
+                entry.value.value.type_name()
             )
         } else {
             continue;
@@ -601,4 +601,27 @@ pub fn block_codes(block: &Node) -> BTreeSet<&'static str> {
         .into_iter()
         .map(|finding| finding.code)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_meta_value_that_is_not_a_string_names_its_yaml_type() {
+        let document = crate::node::load("{owner: x, tier: 3, live: true}\n")
+            .unwrap_or_else(|error| panic!("{error:?}"));
+        let meta = document.root().map(AsRef::as_ref);
+        let messages: Vec<String> = meta_findings(meta)
+            .into_iter()
+            .map(|finding| finding.message)
+            .collect();
+        assert_eq!(
+            messages,
+            [
+                "meta key \"tier\" is of type integer: a meta value is a string (quote it)",
+                "meta key \"live\" is of type boolean: a meta value is a string (quote it)",
+            ]
+        );
+    }
 }

@@ -1,7 +1,7 @@
 //! Redaction, the cassette format and wiremock replay.
 
 use opentide_cassette::cassette::{Request, Response};
-use opentide_cassette::replay::same_body;
+use opentide_cassette::replay::{compare, same_body, same_form, same_url};
 use opentide_cassette::{Body, Cassette, Interaction, Redaction, Replay};
 
 #[test]
@@ -296,4 +296,193 @@ fn json_bodies_match_as_data_and_other_bodies_as_bytes() {
     assert!(!matches("{\"a\": 1}", "{\"a\": 1"));
     assert!(same_body(&[0xff, 0x00], &[0xff, 0x00]));
     assert!(!same_body(&[0xff, 0x00], &[0xff, 0x01]));
+}
+
+#[test]
+fn urls_match_once_decoded_and_differ_by_value() {
+    // Python's quote_plus and url's form_urlencoded write the same query.
+    assert!(same_url(
+        "https://t.invalid/a?q=a+b&p=%7E%2a",
+        "https://t.invalid/a?q=a%20b&p=~*"
+    ));
+    assert!(same_url(
+        "https://t.invalid/a?ts=2026-10-26T08%3A00%3A00Z",
+        "https://t.invalid/a?ts=2026-10-26T08%3a00%3a00Z"
+    ));
+    // Parameter names in any order; no query and an empty one alike.
+    assert!(same_url(
+        "https://t.invalid/a?x=1&y=2",
+        "https://t.invalid/a?y=2&x=1"
+    ));
+    assert!(same_url("https://t.invalid/a", "https://t.invalid/a?"));
+    // The path, segment by segment, percent-decoded.
+    assert!(same_url(
+        "https://t.invalid/ws/soc%20workspace/r%7E1",
+        "https://t.invalid/ws/soc%20workspace/r~1"
+    ));
+    assert!(same_url("https://t.invalid:443/a", "https://t.invalid/a"));
+    // A different value, name, path, host or a missing parameter: different.
+    assert!(!same_url(
+        "https://t.invalid/a?q=a+b",
+        "https://t.invalid/a?q=a+c"
+    ));
+    assert!(!same_url(
+        "https://t.invalid/a?q=1",
+        "https://t.invalid/a?r=1"
+    ));
+    assert!(!same_url(
+        "https://t.invalid/a?q=1&r=2",
+        "https://t.invalid/a?q=1"
+    ));
+    assert!(!same_url(
+        "https://t.invalid/a?b=True",
+        "https://t.invalid/a?b=true"
+    ));
+    assert!(!same_url("https://t.invalid/a/b", "https://t.invalid/a/c"));
+    assert!(!same_url("https://t.invalid/a", "https://u.invalid/a"));
+    assert!(!same_url("https://t.invalid/a", "http://t.invalid/a"));
+    // An encoded slash stays inside its segment.
+    assert!(!same_url(
+        "https://t.invalid/a%2Fb",
+        "https://t.invalid/a/b"
+    ));
+    // A repeated name's values keep their order.
+    assert!(same_url(
+        "https://t.invalid/a?id=1&x=0&id=2",
+        "https://t.invalid/a?x=0&id=1&id=2"
+    ));
+    assert!(!same_url(
+        "https://t.invalid/a?id=1&id=2",
+        "https://t.invalid/a?id=2&id=1"
+    ));
+    // Not a URL: equal text only.
+    assert!(same_url("not a url", "not a url"));
+    assert!(!same_url("not a url", "not  a url"));
+}
+
+#[test]
+fn form_bodies_match_as_decoded_fields() {
+    let matches = |want: &str, got: &str| same_form(want.as_bytes(), got.as_bytes());
+    assert!(matches(
+        "scope=https%3A%2F%2Fgraph.microsoft.com%2F.default&grant_type=client_credentials",
+        "grant_type=client_credentials&scope=https%3a%2f%2fgraph.microsoft.com%2f.default"
+    ));
+    assert!(matches(
+        "search=index%3Dmain+%7C+stats+count%0A%7C%60m%28x%29%60",
+        "search=index%3Dmain%20%7C%20stats%20count%0A%7C%60m(x)%60"
+    ));
+    assert!(!matches("a=1&b=2", "a=1&b=3"));
+    assert!(!matches("a=1&b=2", "a=1"));
+    assert!(!matches("a=1", "a=1&b="));
+    assert!(!matches("reload_macros=True", "reload_macros=true"));
+    assert!(!matches("id=1&id=2", "id=2&id=1"));
+}
+
+fn request(method: &str, url: &str, headers: &[(&str, &str)], body: &str) -> Request {
+    Request {
+        method: method.into(),
+        url: url.into(),
+        headers: headers
+            .iter()
+            .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+            .collect(),
+        body: Body::Text(body.into()),
+    }
+}
+
+#[test]
+fn identity_headers_are_ignored_and_meaningful_ones_compared() {
+    const URL: &str = "https://login.invalid/tenant/oauth2/v2.0/token";
+    const ACCEPT: (&str, &str) = ("accept", "application/json");
+    const FORM: (&str, &str) = ("content-type", "application/x-www-form-urlencoded");
+    const BODY: &str =
+        "client_id=app&client_secret=REDACTED&scope=https%3A%2F%2Fx.invalid%2F.default";
+    // What MSAL.Python sent, as recorded.
+    let recorded = request(
+        "POST",
+        URL,
+        &[
+            ACCEPT,
+            ("client-request-id", "00000000-0000-4000-8000-000000000003"),
+            FORM,
+            ("x-client-current-telemetry", "4|730,2|"),
+            ("x-client-last-telemetry", "4|0|||"),
+            ("x-client-os", "linux"),
+            ("x-client-sku", "MSAL.Python"),
+            ("x-client-ver", "1.39.0"),
+            (
+                "x-ms-client-request-id",
+                "00000000-0000-4000-8000-000000000004",
+            ),
+            ("x-ms-lib-capability", "retry-after, h429"),
+        ],
+        BODY,
+    );
+    let differs = |headers: &[(&str, &str)], body: &str| {
+        compare(&[&recorded], &[request("POST", URL, headers, body)])
+            .first()
+            .map(|mismatch| mismatch.detail.clone())
+    };
+    // A plain client: no identity headers, its own encoding and field order.
+    assert_eq!(
+        differs(
+            &[ACCEPT, FORM],
+            "scope=https%3a%2f%2fx.invalid%2f.default&client_secret=REDACTED&client_id=app"
+        ),
+        None
+    );
+    // Other identity values, or other identity headers: still the same.
+    assert_eq!(
+        differs(
+            &[
+                ACCEPT,
+                ("client-request-id", "another-id"),
+                FORM,
+                ("x-client-sku", "some-other-client"),
+            ],
+            BODY
+        ),
+        None
+    );
+    // A meaningful header missing, changed or added: a mismatch.
+    let header_mismatch = |headers: &[(&str, &str)]| {
+        differs(headers, BODY).is_some_and(|detail| detail.starts_with("headers "))
+    };
+    assert!(header_mismatch(&[FORM]));
+    assert!(header_mismatch(&[("accept", "application/xml"), FORM]));
+    assert!(header_mismatch(&[
+        ACCEPT,
+        ("content-type", "application/json")
+    ]));
+    assert!(header_mismatch(&[
+        ACCEPT,
+        ("authorization", "Bearer REDACTED"),
+        FORM
+    ]));
+    // A field's value changed: a mismatch in the body.
+    assert!(
+        differs(
+            &[ACCEPT, FORM],
+            "client_id=app&client_secret=REDACTED&scope=https%3A%2F%2Fy.invalid%2F.default"
+        )
+        .is_some_and(|detail| detail.starts_with("bodies differ"))
+    );
+    // A query encoded otherwise matches; a query value changed does not.
+    let want = request("GET", "https://t.invalid/s?q=a+b%2A&n=1", &[], "");
+    let sent = |url: &str| compare(&[&want], &[request("GET", url, &[], "")]);
+    assert_eq!(sent("https://t.invalid/s?n=1&q=a%20b*"), []);
+    assert!(
+        sent("https://t.invalid/s?n=2&q=a%20b*")[0]
+            .detail
+            .starts_with("URL ")
+    );
+    // The method stays strict.
+    assert!(
+        compare(
+            &[&want],
+            &[request("POST", "https://t.invalid/s?q=a+b%2A&n=1", &[], "")]
+        )[0]
+        .detail
+        .starts_with("method ")
+    );
 }

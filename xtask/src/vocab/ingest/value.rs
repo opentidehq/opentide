@@ -9,8 +9,8 @@
 //!
 //! What is left of the old Python ingest's semantics decides data, not
 //! layout: truthiness for its `x or default` and merge rules ([`truthy`]),
-//! `str()` of an identifier or version ([`text`]), `str.strip()` on
-//! identities ([`strip`]) and `str.title()` on tactic names ([`title`]).
+//! `str()` of an identifier or version ([`text`]) and `str.title()` on
+//! tactic names ([`title`]).
 
 use anyhow::{Context, Result, bail};
 pub use serde_json::Value;
@@ -43,12 +43,6 @@ pub fn text(value: &Value) -> Result<String> {
             bail!("expected a string, found {value}")
         }
     })
-}
-
-/// Python's `str.strip()`: Unicode white space and the four ASCII
-/// separators (`\x1c`-`\x1f`) Python counts too. It decides an identity.
-pub fn strip(text: &str) -> &str {
-    text.trim_matches(|c: char| c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c))
 }
 
 /// Python's `str.title()`, which names a tactic without a display name: each
@@ -158,10 +152,9 @@ mod tests {
     }
 
     #[test]
-    fn title_and_strip_are_pythons() {
+    fn title_is_pythons() {
         assert_eq!(title("command and-control 3d"), "Command And-Control 3D");
         assert_eq!(title("eVASION"), "Evasion");
-        assert_eq!(strip("\u{1c} a b \n"), "a b");
     }
 
     #[test]
