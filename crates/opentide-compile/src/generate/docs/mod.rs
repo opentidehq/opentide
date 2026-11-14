@@ -179,7 +179,7 @@ impl Settings {
                             })
                             .unwrap_or_default();
                         return Err(PhaseError::new(format!(
-                            "ConfigurationError: documentation.toml is invalid: {first}"
+                            "documentation.toml is invalid: {first}"
                         )));
                     }
                 }
@@ -213,8 +213,8 @@ impl Settings {
         let flavor = match flavor.filter(|name| !name.is_empty()) {
             Some(name) => Flavor::from_name(name).ok_or_else(|| {
                 PhaseError::new(format!(
-                    "ValueError: '{}' is not a valid DocumentFlavor",
-                    name.replace('-', "_")
+                    "unknown docs flavor `{name}` (expected generic, github, gitlab or \
+                     azure-devops)"
                 ))
             })?,
             None if hints.azure => Flavor::AzureDevops,
