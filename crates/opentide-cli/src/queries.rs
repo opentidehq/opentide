@@ -27,7 +27,7 @@
 
 use std::borrow::Cow;
 use std::path::Path;
-use std::sync::{Mutex, PoisonError};
+use std::sync::PoisonError;
 
 use indexmap::IndexMap;
 use opentide_analysis::{LineStarts, MemoryWorkspace, Severity as EngineSeverity};
@@ -168,8 +168,9 @@ const MESSAGE_CORRECTIONS: [(&str, &str, &str); 1] = [(
 )];
 
 /// Held while a workspace's datasets are installed in the engines and its
-/// queries checked: the installation is process-wide.
-pub static ENGINE: Mutex<()> = Mutex::new(());
+/// queries checked: the installation is process-wide. The engines' own lock,
+/// which the facade's `analysis::analyze_query` takes too.
+pub use opentide_analysis::ENGINE;
 
 /// One engine finding, in the CLI's coordinates (1-based, code points,
 /// `end_column` exclusive and on `end_line`).
@@ -232,9 +233,12 @@ impl CheckedQuery {
 
 /// The profiles of one workspace: its Elastic tenants, read from
 /// [`ELASTIC_CONFIGURATION`]. Built by [`Profiles::install`], which also
-/// installs the datasets of its [`VISIBILITY_CONFIGURATION`].
+/// installs the datasets of its [`VISIBILITY_CONFIGURATION`]; dropping it
+/// installs the ones in use before again (drop it before [`ENGINE`]).
 pub struct Profiles {
     host: MemoryWorkspace,
+    /// Puts the datasets in use before [`Profiles::install`] back on drop.
+    _restore: Option<opentide_analysis::RestoreVisibility>,
     /// Why the declared datasets could not be read, when they could not.
     pub visibility_problem: Option<String>,
     /// The workspace's Graylog tenants ([`GRAYLOG_CONFIGURATION`]); none when
@@ -260,6 +264,7 @@ impl Profiles {
             let bytes = fs.read(&path).map_err(|error| error.to_string())?;
             decode(&bytes).map(Some)
         };
+        let restore = opentide_analysis::save_visibility();
         let visibility_problem = match read(VISIBILITY_CONFIGURATION)
             .and_then(|text| opentide_analysis::install_visibility(text.as_deref()))
         {
@@ -284,6 +289,7 @@ impl Profiles {
         };
         Self {
             host: MemoryWorkspace { files },
+            _restore: Some(restore),
             visibility_problem,
             graylog_tenants,
         }
@@ -997,6 +1003,7 @@ mod tests {
                     SecurityEvent\n";
         let profiles = Profiles {
             host: MemoryWorkspace { files: Vec::new() },
+            _restore: None,
             visibility_problem: None,
             graylog_tenants: Vec::new(),
         };

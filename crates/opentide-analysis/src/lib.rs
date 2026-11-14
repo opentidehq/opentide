@@ -440,6 +440,38 @@ pub fn install_visibility(text: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
+/// Held while a host installs a workspace's datasets in the engines and checks
+/// queries with them, and while it checks a query on its own: the
+/// installation is process-wide, so a check that does not hold it can see
+/// another run's datasets half-way.
+pub static ENGINE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// The workspace's declared datasets as they were when [`save_visibility`]
+/// made it: dropping it installs them again, so a run that installs its own
+/// leaves the process as it found it, on an early return or a panic too.
+/// Drop it while [`ENGINE`] is still held.
+#[must_use = "dropping it at once restores the datasets at once"]
+pub struct RestoreVisibility {
+    previous: Option<DeclaredDatasets>,
+}
+
+impl Drop for RestoreVisibility {
+    fn drop(&mut self) {
+        set_dataset_layer(true, self.previous.take());
+    }
+}
+
+/// Saves the workspace's declared datasets in use now; see
+/// [`RestoreVisibility`].
+pub fn save_visibility() -> RestoreVisibility {
+    let layers = dataset_layers()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    RestoreVisibility {
+        previous: layers.workspace.clone(),
+    }
+}
+
 fn set_dataset_layer(workspace: bool, datasets: Option<DeclaredDatasets>) {
     let mut layers = dataset_layers()
         .write()

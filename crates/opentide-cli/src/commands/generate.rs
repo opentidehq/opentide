@@ -690,15 +690,15 @@ const UNKNOWN_TABLE_CODE: &str = "kql_unknown_table";
 /// (`dataset_reads`): each rule file is analysed with a visibility that
 /// declares only the probe for every system, so the engines report every
 /// dataset a query reads as undeclared, and the name is the quoted one in the
-/// finding. The workspace's own declarations are installed again after.
+/// finding. The declarations in use before are installed again after.
 fn dataset_reads(
     index: &opentide_workspace::Index,
     files: &opentide_workspace::Index,
-    root: &Path,
 ) -> Vec<DatasetRead> {
     let _engine = crate::queries::ENGINE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _restore = opentide_analysis::save_visibility();
     let mut probe = String::new();
     for system in DATASET_SYSTEMS {
         let _ = write!(
@@ -755,12 +755,6 @@ fn dataset_reads(
             }
         }
     }
-    let own = std::fs::read(root.join(crate::queries::VISIBILITY_CONFIGURATION))
-        .ok()
-        .and_then(|bytes| crate::queries::decode(&bytes).ok());
-    if opentide_analysis::install_visibility(own.as_deref()).is_err() {
-        let _ = opentide_analysis::install_visibility(None);
-    }
     reads
 }
 
@@ -788,7 +782,7 @@ pub fn visibility_report(
             None => inputs.declared = Some(Vec::new()),
         }
     }
-    inputs.reads = dataset_reads(index, workspace.index(), root);
+    inputs.reads = dataset_reads(index, workspace.index());
     visibility::report(index, &inputs)
 }
 
