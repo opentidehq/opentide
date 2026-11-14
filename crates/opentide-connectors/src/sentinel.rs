@@ -53,18 +53,11 @@ pub const MSAL_VERSION: &str = "1.39.0";
 pub const MAX_SERVER_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// The HTTP settings of a Sentinel tenant: *timeout* on each request, and
-/// the ARM session's `Retry(total=3, backoff_factor=0.8,
-/// status_forcelist=[408, 429, 500, 502, 503, 504])` for `GET`, `PUT` and
-/// `DELETE`.
+/// the connectors' retries.
 pub fn http_settings(timeout: Duration) -> HttpSettings {
     HttpSettings {
         timeout,
-        retry: RetryPolicy::urllib3(
-            3,
-            0.8,
-            &[408, 429, 500, 502, 503, 504],
-            &["GET", "PUT", "DELETE"],
-        ),
+        retry: RetryPolicy::standard(),
         ..HttpSettings::default()
     }
 }
