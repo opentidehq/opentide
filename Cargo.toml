@@ -163,10 +163,10 @@ proptest = { version = "1", default-features = false, features = ["std"] }
 rayon = "1.12"
 # The connectors (UC-4.1, #831, plan D-8): the workspace's one HTTP client.
 # reqwest on rustls with ring (no aws-lc-rs: its C build and its OpenSSL
-# licence), HTTP/1.1 only as `requests` speaks it, no system proxy lookup: the
+# licence), HTTP/2 through ALPN or HTTP/1.1, no system proxy lookup: the
 # proxies and the CA bundle come from the environment the CLI passes, per
 # tenant. tokio runs it and waits between retries; tokio-util cancels.
-reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = "0.8"
 tokio = { version = "1.48", default-features = false }
