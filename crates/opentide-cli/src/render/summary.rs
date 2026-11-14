@@ -29,44 +29,6 @@ pub fn explain_url(code: &str) -> String {
     format!("{DIAGNOSTICS_DOCS_URL}#{code}")
 }
 
-/// The line breaks Python's `str.splitlines` splits at.
-pub(crate) fn split_lines(text: &str) -> Vec<&str> {
-    let mut lines = Vec::new();
-    let mut start = 0;
-    let mut chars = text.char_indices().peekable();
-    while let Some((at, ch)) = chars.next() {
-        if matches!(
-            ch,
-            '\n' | '\r'
-                | '\u{b}'
-                | '\u{c}'
-                | '\u{1c}'
-                | '\u{1d}'
-                | '\u{1e}'
-                | '\u{85}'
-                | '\u{2028}'
-                | '\u{2029}'
-        ) {
-            lines.push(&text[start..at]);
-            let mut next = at + ch.len_utf8();
-            if ch == '\r' && chars.peek().is_some_and(|(_, c)| *c == '\n') {
-                chars.next();
-                next += 1;
-            }
-            start = next;
-        }
-    }
-    if start < text.len() {
-        lines.push(&text[start..]);
-    }
-    lines
-}
-
-/// Whitespace as Python's `str.strip` sees it.
-fn is_space(ch: char) -> bool {
-    ch.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&ch)
-}
-
 /// `&`, `<` and `>` as entities (and the quotes, when `quote`).
 fn html_escape(text: &str, quote: bool) -> String {
     let mut out = String::with_capacity(text.len());
@@ -99,9 +61,12 @@ pub fn cell(value: &str) -> String {
                 .chain(std::iter::once(ch))
         })
         .collect();
-    let joined = split_lines(&escaped)
-        .into_iter()
-        .map(|part| part.trim_matches(is_space))
+    // Markdown ends a line at `\n`, `\r\n` and a lone `\r`: each would end
+    // the table row.
+    let joined = escaped
+        .lines()
+        .flat_map(|line| line.split('\r'))
+        .map(str::trim)
         .collect::<Vec<_>>()
         .join("<br>");
     if joined.is_empty() {
@@ -277,15 +242,11 @@ fn status_kind(result: &Json) -> &'static str {
 
 /// The first `lines` lines of `text`, at most `chars` characters, with ` …` when cut.
 pub fn shorten(text: &str, lines: usize, chars: usize) -> String {
-    let full = text.trim_matches(is_space);
-    let mut kept = split_lines(full)
-        .into_iter()
-        .take(lines)
-        .collect::<Vec<_>>()
-        .join("\n");
+    let full = text.trim();
+    let mut kept = full.lines().take(lines).collect::<Vec<_>>().join("\n");
     if kept.chars().count() > chars {
         let cut: String = kept.chars().take(chars.saturating_sub(1)).collect();
-        cut.trim_end_matches(is_space).clone_into(&mut kept);
+        cut.trim_end().clone_into(&mut kept);
     }
     if kept == full { kept } else { kept + " …" }
 }
@@ -302,7 +263,7 @@ pub fn fit(markdown: &str, limit: usize) -> String {
         .saturating_sub("\n</details>\n".len());
     let mut kept: Vec<&str> = Vec::new();
     let mut used = 0;
-    for line in split_lines(markdown) {
+    for line in markdown.lines() {
         let size = line.len() + 1;
         if used + size > budget {
             break;
@@ -467,7 +428,7 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
 pub fn query_summary(result: &Json, message: Option<&str>) -> String {
     let platform = result.get("platform").map(value_text).unwrap_or_default();
     let title = format!("opentide validate query --platform {platform}")
-        .trim_end_matches(is_space)
+        .trim_end()
         .to_owned();
     let mut lines = vec![
         heading(status_kind(result), &title),
@@ -497,10 +458,12 @@ mod tests {
         assert_eq!(cell("<x> & *y*"), "&lt;x&gt; &amp; \\*y\\*");
         assert_eq!(cell(""), " ");
         assert_eq!(cell(" a \n b "), "a<br>b");
+        assert_eq!(cell("a\r\nb\rc\t"), "a<br>b<br>c");
         assert_eq!(code("a`b"), "``a`b``");
         assert_eq!(code("`x`"), "`` `x` ``");
         assert_eq!(heading("plan", "t"), "### t");
         assert_eq!(shorten("a\nb\nc", 2, 300), "a\nb …");
+        assert_eq!(shorten(" a\r\nb\r\nc\n", 2, 300), "a\nb …");
         assert_eq!(shorten("abcdef", 2, 4), "abc …");
         assert_eq!(fit("short\n", 10), "short\n");
     }

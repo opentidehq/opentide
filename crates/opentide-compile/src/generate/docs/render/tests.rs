@@ -348,11 +348,11 @@ fn small_helpers() {
 }
 
 #[test]
-fn percentages_round_half_to_even_as_python_does() {
+fn percentages_round_a_half_up() {
     assert_eq!(percent(1, 2), "50");
-    assert_eq!(percent(1, 8), "12");
+    assert_eq!(percent(1, 8), "13");
     assert_eq!(percent(3, 8), "38");
-    assert_eq!(percent(5, 8), "62");
+    assert_eq!(percent(5, 8), "63");
     assert_eq!(percent(1, 3), "33");
     assert_eq!(percent(2, 3), "67");
     assert_eq!(percent(0, 0), "0");

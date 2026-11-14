@@ -589,9 +589,8 @@ pub fn deployment_status(workspace: &Workspace, uuid: &str) -> Json {
     Json::Object(payload)
 }
 
-/// The platforms opentide knows (`Opentide.Platforms`), in name order.
-pub const PLATFORMS: [&str; opentide_schema::platforms::COUNT] =
-    opentide_schema::platforms::ordered(opentide_schema::platforms::Order::Name);
+/// The platforms opentide knows (`Opentide.Platforms`), in the platform table's order.
+pub const PLATFORMS: [&str; opentide_schema::platforms::COUNT] = opentide_schema::platforms::IDS;
 
 /// Whether `platform` is one opentide deploys to: built in, or an installed
 /// platform plugin's.

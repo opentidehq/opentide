@@ -14,7 +14,6 @@ use opentide_schema::objects::platform::bitdefender::{
     ACTION_TYPES, BitdefenderActions, BitdefenderConfig, Kind, NOT_ON_YARA, ProcessAction,
     ScanType, cut, gravityzone_name, normalise,
 };
-use opentide_schema::objects::platform::is_python_space;
 
 use crate::Context;
 use crate::deploy::{Action, setup};
@@ -129,10 +128,7 @@ pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, Compile
 /// Whitespace collapsed, normalised, cut at 1024 characters with a trailing
 /// `…` (`derive_description`).
 pub fn derive_description(description: &str) -> String {
-    let collapsed: Vec<&str> = description
-        .split(is_python_space)
-        .filter(|word| !word.is_empty())
-        .collect();
+    let collapsed: Vec<&str> = description.split_whitespace().collect();
     let text = normalise(&collapsed.join(" "));
     if text.chars().count() <= DESCRIPTION_LIMIT {
         return text;
@@ -155,8 +151,7 @@ pub fn derive_severity(rule: &Rule, block: &BitdefenderConfig) -> i64 {
         return DEFAULT_SEVERITY;
     };
     let text = crate::deploy::text(written);
-    alert_severity(&opentide_schema::objects::platform::python_strip(&text).to_lowercase())
-        .unwrap_or(DEFAULT_SEVERITY)
+    alert_severity(&text.trim().to_lowercase()).unwrap_or(DEFAULT_SEVERITY)
 }
 
 /// Block, ATT&CK, `opentide`, `opentide:<uuid>` and tenant tags; normalised,

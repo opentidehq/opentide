@@ -259,13 +259,10 @@ fn an_unknown_revision_is_checked_against_the_newest_without_the_unknown_key_che
     assert_eq!(errors[0].kind, ErrorKind::InvalidValue("value_error"));
     assert_eq!(
         errors[0].message,
-        "Value error, unknown schema identifier: \"rule::7.0\"; checked against rule::1.1, the \
+        "unknown schema identifier: \"rule::7.0\"; checked against rule::1.1, the \
          newest rule revision, without the unknown-key check"
     );
-    assert_eq!(
-        errors[0].context["error"],
-        errors[0].message["Value error, ".len()..]
-    );
+    assert_eq!(errors[0].context["error"], errors[0].message["".len()..]);
     assert_eq!(errors[0].code(crate::Surface::Object), "schema_validation");
     assert!(errors[0].span.is_some());
 

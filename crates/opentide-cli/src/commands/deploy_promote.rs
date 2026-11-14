@@ -228,17 +228,18 @@ fn plan(promotion: &Promotion<'_>) -> Planned {
                 return (events, Vec::new(), Some(failed));
             }
         };
-        // A file that does not read as YAML fails the run, as the oracle's
-        // parser's exception does; the words are this loader's (UC-6.0d).
+        // A file that does not read as YAML fails the run (UC-6.0d).
         let document = match node::load_bytes(&bytes) {
             Ok(document) => document,
             Err(error) => {
-                let failed = Stop::Failed(unreadable(path, &error));
+                let message = format!("{}: {}", path.display(), promotion::placed(&error));
+                let failed = Stop::Failed(message);
                 return (events, Vec::new(), Some(failed));
             }
         };
         let root = document.root().map(AsRef::as_ref);
         if let Err(message) = promotion::name_error(root) {
+            let message = format!("{}: {message}", path.display());
             return (events, Vec::new(), Some(Stop::Failed(message)));
         }
         let name = root
@@ -285,36 +286,13 @@ fn plan(promotion: &Promotion<'_>) -> Planned {
                 path: path.display().to_string(),
                 detail,
             }),
-            // `planned_statuses`' `ValueError`, the parser's words this
-            // loader's.
-            Err(Error::Unreadable(words)) => {
-                let message = format!("{}: cannot promote its statuses: {words}", path.display());
-                return (events, Vec::new(), Some(Stop::Failed(message)));
-            }
-            // `expected["configurations"][platform]`'s `KeyError`.
-            Err(Error::KeyError(key)) => {
-                let message = format!("{key:?}");
+            Err(error @ (Error::Unreadable(_) | Error::NonStringKey(_))) => {
+                let message = format!("{}: cannot promote its statuses: {error}", path.display());
                 return (events, Vec::new(), Some(Stop::Failed(message)));
             }
         }
     }
     (events, planned, None)
-}
-
-/// The message of a rule file this loader cannot read as YAML: the oracle
-/// fails the run with its parser's exception, which names the problem and
-/// where it is (`in "<file>", line N, column M`).
-fn unreadable(path: &Path, error: &node::LoadError) -> String {
-    match &error.mark {
-        Some(mark) => format!(
-            "{}\n  in \"{}\", line {}, column {}",
-            error.problem,
-            path.display(),
-            mark.line,
-            mark.column
-        ),
-        None => format!("{}\n  in \"{}\"", error.problem, path.display()),
-    }
 }
 
 /// An I/O error as Python words an `OSError` on `path`
@@ -553,7 +531,10 @@ mod tests {
             false,
             false,
         );
-        assert_eq!(outcome, Err(Stop::Failed("\"name\"".into())));
+        let Err(Stop::Failed(message)) = outcome else {
+            panic!("{outcome:?}");
+        };
+        assert!(message.ends_with("b.yaml: rule has no name"), "{message}");
         assert_eq!(after[0], RULE.as_bytes());
         let (outcome, _, _) = promote(
             &settings(true, "PRODUCTION"),
@@ -561,18 +542,19 @@ mod tests {
             false,
             false,
         );
-        assert_eq!(
-            outcome,
-            Err(Stop::Failed(
-                "'NoneType' object is not subscriptable".into()
-            ))
+        let Err(Stop::Failed(message)) = outcome else {
+            panic!("{outcome:?}");
+        };
+        assert!(
+            message.ends_with("a.yaml: rule file is empty, not a mapping with a name"),
+            "{message}"
         );
-        let result = stopped(&Stop::Failed("\"name\"".into()));
-        assert_eq!(result[1].1, Json::str("\"name\""));
+        let result = stopped(&Stop::Failed("b.yaml: rule has no name".into()));
+        assert_eq!(result[1].1, Json::str("b.yaml: rule has no name"));
     }
 
     /// A rule file that is not YAML, or whose root is no mapping, fails the
-    /// run as the oracle's exception does, and nothing is written (UC-6.0d).
+    /// run naming the file, and nothing is written (UC-6.0d).
     #[test]
     fn a_file_that_does_not_read_or_is_no_mapping_fails_the_run() {
         for (bytes, expected) in [
@@ -580,9 +562,12 @@ mod tests {
             (b"\xff\n", None),
             (
                 b"just text\n",
-                Some("string indices must be integers, not 'str'"),
+                Some("b.yaml: rule file holds a string, not a mapping with a name"),
             ),
-            (b"42\n", Some("'int' object is not subscriptable")),
+            (
+                b"42\n",
+                Some("b.yaml: rule file holds an integer, not a mapping with a name"),
+            ),
         ] {
             let (outcome, drawn, after) = promote(
                 &settings(true, "PRODUCTION"),
@@ -594,8 +579,8 @@ mod tests {
                 panic!("{bytes:?}: {outcome:?}");
             };
             match expected {
-                Some(expected) => assert_eq!(message, expected),
-                None => assert!(message.contains("b.yaml\""), "{bytes:?}: {message}"),
+                Some(expected) => assert!(message.ends_with(expected), "{message}"),
+                None => assert!(message.contains("b.yaml: "), "{bytes:?}: {message}"),
             }
             assert!(drawn.contains("status promotion"), "{drawn}");
             assert_eq!(after, [RULE.as_bytes(), bytes]);
@@ -631,8 +616,8 @@ mod tests {
         );
     }
 
-    /// A promoted block whose key is not a string fails the run with the
-    /// oracle's `KeyError`, nothing written; the other file is not promoted.
+    /// A promoted block whose key is not a string fails the run, naming the
+    /// file and the key, nothing written; the other file is not promoted.
     #[test]
     fn a_promoted_block_whose_key_is_not_a_string_fails_the_run() {
         let keyed = RULE.replace("  splunk:\n", "  1:\n");
@@ -642,12 +627,21 @@ mod tests {
             false,
             false,
         );
-        assert_eq!(outcome, Err(Stop::Failed("\"1\"".into())));
+        let Err(Stop::Failed(message)) = outcome else {
+            panic!("{outcome:?}");
+        };
+        assert!(
+            message.ends_with(
+                "b.yaml: cannot promote its statuses: configurations.1 is not a string key \
+                 (quote the platform name)"
+            ),
+            "{message}"
+        );
         assert_eq!(after, [RULE.as_bytes(), keyed.as_bytes()]);
     }
 
-    /// Promoted text that does not read back fails the run with the
-    /// oracle's `ValueError`, naming the file; nothing is written.
+    /// Promoted text that does not read back fails the run, naming the
+    /// file; nothing is written.
     #[test]
     fn promoted_text_that_does_not_read_back_fails_the_run() {
         let flow = "name: R\nconfigurations:\n  splunk: {status: STAGING, query: x}\n";

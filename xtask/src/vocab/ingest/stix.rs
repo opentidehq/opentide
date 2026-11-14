@@ -7,7 +7,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
-use super::value::{Table, Value, parse_json, strip, text as text_of, title, truthy};
+use super::value::{Table, Value, parse_json, text as text_of, title, truthy};
 
 /// The external reference source that carries ATT&CK ids and links.
 const MITRE_SOURCE: &str = "mitre-attack";
@@ -117,7 +117,7 @@ fn normalise_tactic(name: &str) -> String {
     if name == "Evasion Ics" {
         return "Defense Evasion".to_owned();
     }
-    strip(&name.replace("Ics", "")).to_owned()
+    name.replace("Ics", "").trim().to_owned()
 }
 
 fn technique_stages(object: &Value, tactics: &Table) -> Result<Vec<String>> {

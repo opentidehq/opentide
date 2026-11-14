@@ -25,8 +25,8 @@ pub const PREVIEW_TENANT: &str = "corpus-tenant";
 /// with no tenant (`OFFLINE_COMPILERS`), that this crate compiles: those
 /// [`compile_offline`] compiles.
 pub fn offline() -> Vec<&'static str> {
-    use opentide_schema::platforms::{Order, ids_where};
-    ids_where(Order::Container, |platform| platform.compiles_offline)
+    use opentide_schema::platforms::ids_where;
+    ids_where(|platform| platform.compiles_offline)
 }
 
 /// The request body a deploy would send for `rule` on `platform` with no
@@ -85,10 +85,8 @@ fn bitdefender_request(
 /// Defender, SentinelOne and CrowdStrike, the deployment state): those
 /// [`compile_tenant`] builds writes for.
 pub fn deployers() -> Vec<&'static str> {
-    use opentide_schema::platforms::{Order, ids_where};
-    ids_where(Order::Container, |platform| {
-        platform.deploys && !platform.compiles_offline
-    })
+    use opentide_schema::platforms::ids_where;
+    ids_where(|platform| platform.deploys && !platform.compiles_offline)
 }
 
 /// What a deployer's body depends on besides the rule and the tenant.
@@ -101,16 +99,6 @@ pub struct Inputs {
     /// Carbon Black's report timestamp (UNIX seconds).
     pub timestamp: i64,
 }
-
-/// The Splunk clock the oracle's probe pins (`xtask/src/payloads/probe.py`):
-/// a random minute and hour of 7, the time 03:04 UTC.
-pub const PROBE_CLOCK: splunk::Clock = splunk::Clock {
-    random: (7, 7),
-    now: (4, 3),
-};
-
-/// The Carbon Black report timestamp the oracle's probe pins.
-pub const PROBE_TIMESTAMP: i64 = 1_767_225_600;
 
 /// What a deploy sends for `rule` on `platform` to the tenant named
 /// `tenant`: the body (Sentinel, Elastic, Sysdig) or the writes, in order

@@ -13,7 +13,6 @@ use std::collections::{BTreeSet, HashMap};
 use crate::error::{ErrorKind, PathSegment};
 use crate::from_node::Context;
 use crate::node::{Node, Value};
-use crate::objects::platform::python_strip;
 
 use super::criteria::{Criteria, FieldRow, criteria};
 use super::{ACTION_TYPES, NOT_ON_YARA, PROCESS_ACTIONS};
@@ -561,7 +560,7 @@ pub fn targets_shape_ok(targets: &Node) -> bool {
                     alias
                         .value
                         .as_str()
-                        .is_some_and(|alias| !python_strip(alias).is_empty())
+                        .is_some_and(|alias| !alias.trim().is_empty())
                 })
         }
         _ => false,
@@ -623,7 +622,7 @@ pub fn block_findings(block: &Node) -> Vec<Finding> {
         && signature
             .value
             .as_str()
-            .is_some_and(|text| python_strip(text).is_empty())
+            .is_some_and(|text| text.trim().is_empty())
     {
         found.push(Finding::new(
             EMPTY_SIGNATURE,

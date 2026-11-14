@@ -12,7 +12,6 @@
 //! the bodies.
 
 use opentide_schema::objects::platform::exabeam::{delay_minutes, duration, unit_name};
-use opentide_schema::objects::platform::python_strip;
 
 use crate::Context;
 use crate::elastic::rule_techniques;
@@ -120,7 +119,7 @@ pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, Compile
         .map_or_else(|| "null".to_owned(), scalar_text);
     cx.statuses
         .strategy(&status)
-        .map_err(|error| CompileError::failed(DISPLAY, &error.exception_text()))
+        .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))
 }
 
 /// The shared `name`, else the opentide rule `name` (`exabeam_name`).
@@ -135,8 +134,7 @@ pub fn exabeam_name<'a>(rule_name: &'a str, block_name: Option<&'a str>) -> &'a 
 pub fn derive_description(cx: &Context<'_>, rule: &Rule) -> String {
     let text = rule
         .description()
-        .split(opentide_schema::objects::platform::is_python_space)
-        .filter(|word| !word.is_empty())
+        .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");
     let techniques = rule_techniques(cx, rule);
@@ -160,7 +158,7 @@ pub fn derive_severity(rule: &Rule, block: &Json) -> String {
     else {
         return DEFAULT_SEVERITY.to_owned();
     };
-    alert_severity(&python_strip(&scalar_text(severity)).to_lowercase())
+    alert_severity(&scalar_text(severity).trim().to_lowercase())
         .unwrap_or(DEFAULT_SEVERITY)
         .to_owned()
 }
@@ -252,7 +250,7 @@ fn sequence(sequence: &Json) -> Result<Json, CompileError> {
     let query = field(sequence, "query")
         .map(scalar_text)
         .unwrap_or_default();
-    entry.insert("query".into(), python_strip(&query).into());
+    entry.insert("query".into(), query.trim().into());
     entry.insert("condition".into(), Json::Object(condition(sequence)?));
     Ok(Json::Object(entry))
 }
@@ -528,7 +526,7 @@ pub fn search_body(
     fields: &[String],
 ) -> Json {
     let mut body = Object::new();
-    body.insert("filter".into(), python_strip(query).into());
+    body.insert("filter".into(), query.trim().into());
     body.insert(
         "fields".into(),
         if fields.is_empty() {

@@ -348,8 +348,8 @@ impl<'a> Session<'a> {
                 .map(|item| match item {
                     Json::Object(object) => object
                         .get("message")
-                        .map_or_else(|| python_text(item), python_text),
-                    other => python_text(other),
+                        .map_or_else(|| crate::text::json_text(item), crate::text::json_text),
+                    other => crate::text::json_text(other),
                 })
                 .collect(),
             _ => Vec::new(),
@@ -453,14 +453,6 @@ impl<'a> Session<'a> {
                 answer.not_json_detail(),
             )),
         }
-    }
-}
-
-/// A value as `str()` writes it: a string as it is, anything else as JSON.
-fn python_text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
     }
 }
 

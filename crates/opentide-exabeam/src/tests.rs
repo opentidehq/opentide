@@ -406,3 +406,13 @@ fn every_language_code_is_described_and_classified() {
         WARNINGS.len()
     );
 }
+
+#[test]
+fn an_offset_inside_a_character_is_answered_empty() {
+    // A cursor inside a decoded escape (`\u00e9` in a double-quoted Tide
+    // query) can reach the engine as the second byte of `\u{e9}`.
+    let src = r#"user:"é" AND src_ip:"10.0.0.1""#;
+    let inside = src.find('\u{e9}').unwrap() + 1;
+    assert!(completions(src, inside).is_empty());
+    assert_eq!(hover(src, inside), None);
+}
