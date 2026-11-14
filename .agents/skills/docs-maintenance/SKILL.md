@@ -16,7 +16,7 @@ Use this skill when adding features, changing CLI/MCP/SDK surface area, or autho
 | Usage | `docs/usage/` | Setup flows, workflows, concepts, migration |
 | CLI | `docs/cli/` | Commands, flags, behaviour (the Rust command line) |
 | MCP | `docs/mcp/` | Tools, resources, config templates |
-| SDK | `docs/sdk/` | Public Python API, registry, models |
+| SDK | `docs/sdk/` | Public Python API: Workspace, models, plugins, query checks |
 
 Internal maintainer docs: `docs/internal/` (excluded from public site root).
 
@@ -58,7 +58,9 @@ When modifying source, update docs in the **same PR**:
 | `crates/opentide-cli/src/tree.rs`, `crates/opentide-cli/src/commands/*.rs` | `docs/cli/*.md` |
 | `crates/opentide-cli/src/commands/setup/` | `docs/cli/setup.md`, `docs/usage/repository-setup.md` |
 | `crates/opentide-cli/data/mcp/manifest.json`, `crates/opentide-cli/src/mcp/` | `docs/mcp/tools.md`, `docs/mcp/resources.md` |
-| `src/opentide/core/registry.py` | `docs/sdk/registry.md` |
+| `src/opentide/models/`, the Python classes in `crates/opentide-schema/src/objects/` | `docs/sdk/models.md` |
+| `src/opentide/plugins.py`, `bindings/python/src/plugins.rs` | `docs/sdk/platforms.md` |
+| `src/opentide/analysis.py` | `docs/sdk/validation.md` |
 | `src/opentide/sdk.py`, `bindings/python/src/sdk.rs` | `docs/sdk/workspace.md` (its snippets run in `tests/test_docs/test_sdk_snippets.py`) |
 | `src/opentide/__init__.py` | `docs/sdk/index.md` |
 | `crates/opentide-connectors/` (platforms) | `docs/usage/concepts/platforms.md` (capability matrix only) |

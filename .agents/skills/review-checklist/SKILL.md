@@ -1,6 +1,6 @@
 ---
 name: review-checklist
-description: opentide's correctness checklist for writing and reviewing code — the defect classes that have actually shipped here (HTTP timeouts and TLS, swallowed errors, exit codes and --json purity, file encodings and line endings, overwriting user files, YAML/KQL/Markdown built from strings, per-tenant settings, CI diff bases, stale caches; in Rust, panics on user input, unsafe, suppressions and layering; behaviour changes without an approved-diffs ledger entry and the other golden and compare rules) plus the definition of done for a change. Use before committing any fix or feature, when reviewing a diff or PR, and when touching platforms/, cli/, sharing/, extraction/, deployment/ or the Rust workspace.
+description: opentide's correctness checklist for writing and reviewing code — the defect classes that have actually shipped here (HTTP timeouts and TLS, swallowed errors, exit codes and --json purity, file encodings and line endings, overwriting user files, YAML/KQL/Markdown built from strings, per-tenant settings, CI diff bases, stale caches; in Rust, panics on user input, unsafe, suppressions and layering; behaviour changes without an approved-diffs ledger entry and the other golden and compare rules) plus the definition of done for a change. Use before committing any fix or feature, when reviewing a diff or PR, and when touching the connectors (crates/opentide-connectors), the command line (crates/opentide-cli), the Python package (src/opentide) or anything else in the Rust workspace.
 ---
 
 # Review checklist — opentide
@@ -9,25 +9,29 @@ Each item below is a bug class that reached `development` at least once. Check e
 against the sections it touches. A finding is real only if you can name the input that
 triggers it; drop anything you cannot tie to a trigger.
 
-## Network calls (platforms/, sharing/, extraction/, vulnerability_lookup)
+## Network calls (crates/opentide-connectors, platform plugins)
 
-- [ ] **Every request has a timeout.** `requests` and `urllib` wait forever by default, and
-      a silent tenant hangs a CI job until the runner kills it. Platform clients build their
-      session from `opentide.platforms.transport.TenantSession`; module-level
-      `requests.post(...)` token calls and `urlopen` need an explicit `timeout=`.
-- [ ] **TLS follows the tenant's `ssl` on every call**, token requests included. Never rely on
-      `session.verify` alone with a plain `requests.Session`: `REQUESTS_CA_BUNDLE` /
-      `CURL_CA_BUNDLE` replace it (psf/requests#3829). Use `TenantSession(verify=...)` and
-      `tenant_tls_verify(...)`.
+- [ ] **Every request has a timeout.** reqwest, `requests` and `urllib` wait forever by default,
+      and a silent tenant hangs a CI job until the runner kills it. Everything opentide sends goes
+      through the tenant's `opentide_connectors::HttpClient`, whose `HttpSettings` set the connect
+      and read timeout (`http::DEFAULT_TIMEOUT`, 120 s, when a platform names none); a request
+      that may wait longer sets its own (`RequestBuilder::timeout`). Never build a second client
+      beside it. A platform plugin's own requests pass `timeout=` (the `Tenant.timeout` it gets).
+- [ ] **TLS follows the tenant's `ssl` on every call**, token requests included: sign-ins go
+      through the same tenant's `HttpClient`, whose `TlsSettings` come from that tenant's `ssl`
+      (`tenant.rs`, `tls.rs`). With `ssl = false`, an exported `SSL_CERT_FILE`,
+      `REQUESTS_CA_BUNDLE` or `CURL_CA_BUNDLE` never turns verification back on
+      (psf/requests#3829). A plugin passes `Tenant.verify_tls` to its own client.
 - [ ] **A non-2xx answer is a failure.** Check the status before parsing; a 3xx the client
-      cannot follow (e.g. a gateway's 307) is not success. Don't call `.json()` on an error
-      body without guarding for non-JSON.
+      cannot follow (e.g. a gateway's 307) is not success. Don't parse an error body as the
+      API's JSON without guarding for non-JSON (`answer::Answer::not_json_detail`,
+      `describe_answer`).
 - [ ] **Read a response stream once.** `body.read()` twice returns `b""` the second time.
 - [ ] **Pagination is followed** (`nextLink`, `@odata.nextLink`, `page`), or the limit is
       stated in the docs.
-- [ ] **Right URL, right method.** Retries/fallbacks post to the same endpoint as the first
-      attempt; a custom urllib handler passes `method=` (a body-less DELETE otherwise
-      becomes a GET).
+- [ ] **Right URL, right method.** Retries are `HttpClient`'s (`retry.rs`'s `RetryPolicy`,
+      which re-sends the same request and never re-sends a non-idempotent one after an answer);
+      a fallback posts to the same endpoint, with the same method, as the first attempt.
 
 ## Errors and exit status
 
@@ -58,7 +62,8 @@ triggers it; drop anything you cannot tie to a trigger.
 - [ ] **Names derived from titles collide**: two rules slug to the same filename, or differ
       only by case on macOS/Windows. Detect the collision (suffix with the UUID) and use
       `Path.samefile` for case-only renames.
-- [ ] **State writes are atomic** (temp file + `os.replace`, see `states/deployment.py`).
+- [ ] **State writes are atomic** (a temporary file beside it, then a rename: `write_durable` in
+      `crates/opentide-cli/src/commands/deploy_state.rs`).
 - [ ] **Paths from data stay inside the workspace** (no `..`, no absolute paths from YAML).
 
 ## Serialising data
@@ -138,17 +143,19 @@ and the lint policy: [`rust`](../rust/SKILL.md), [`crates/AGENTS.md`](../../../c
 
 The Python CLI at the frozen tag is the oracle; the rules: [`golden`](../golden/SKILL.md).
 
-- [ ] **A behaviour change has a ledger entry.** A Rust port that prints, writes or exits
-      differently from the oracle needs an entry in `tests/golden/APPROVED_DIFFS.toml` with its
-      reason, its issue and its `CHANGELOG.md` entry. Without one, the difference is a bug.
+- [ ] **A behaviour change is deliberate and in `CHANGELOG.md`.** No CI tier compares with the
+      oracle any more and `tests/golden/APPROVED_DIFFS.toml` gates nothing (since 2026-11-14);
+      when the change is measured against the oracle by hand, each difference it finds has a
+      ledger entry with its reason, its issue and its `CHANGELOG.md` entry, or is a bug.
 - [ ] **Recordings are re-recorded, never hand-edited**: `tests/golden/cases/`, `blobs/` and
       `COVERAGE.md`. Each changed recording has a cause in the same pull request: a new or changed
       case in `cases.toml`, a fixture change, a normalisation rule with its unit test, or a new
       oracle in a PR of its own.
 - [ ] **The comparison is not loosened.** A normalisation rule hides only a value that differs
-      between two runs of the same case, and is code in `xtask/src/golden/normalise.rs` with a unit
-      test; no widened rule; no ledger entry broader than the difference; no stale
-      entry; no skipped, deleted or `#[ignore]`d case.
+      between two runs of the same case, and is code in `crates/opentide-compare/src/normalise.rs`
+      with a unit test; no widened rule; no ledger entry broader than the difference; no stale
+      entry; no skipped, deleted or `#[ignore]`d case beyond the byte-level oracle replays #1121
+      marked `#[ignore = "byte-level replay against the Python oracle: ..."]`.
 - [ ] **No plan §3 invariant moves** in a port: the CLI contract, the command tree, diagnostic
       codes, cross-repository contracts, MCP, workspace formats, SDK import paths, platforms, the
       security posture. A change to one is a separate decision with its own changelog entry.
