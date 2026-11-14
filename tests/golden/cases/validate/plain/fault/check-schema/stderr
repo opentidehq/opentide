@@ -1,5 +1,4 @@
-error: Environment variable missing · detail: Unset configuration variables: $GRAYLOG_LAB_TOKEN · advice: Set those environment variables before a live check.
 warning: Vocabulary not found · vocab: reviewed
 ✗ 40 errors in 39 files · 871 objects checked · <SECONDS>
-→ opentide explain deployment_state_uuid_mismatch · how to fix it
+→ opentide explain deployment_state_shape · how to fix it
 → opentide validate · check again

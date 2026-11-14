@@ -60,16 +60,16 @@ path = "ws/.opentide/schemas/rule.1.0.schema.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 5255512
-blob = "90c46de8fc7e3fdf2c29e563221625002e1929fa227a8a42b5678bb74b7ff066"
+size = 5254812
+blob = "fb4d5dc26e6a21a8440e1dcfaca4aec727d4d7368dfa97b9248133db7e4e3a2b"
 
 [[files]]
 path = "ws/.opentide/schemas/rule.1.1.schema.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 5257722
-blob = "ea076ccca08608ccc998ae4e93d5b858a4939b6cd62499f090e5bba4c5cbe5cb"
+size = 5257022
+blob = "6f193a0554e48f2f59d3e6efe95f10a7c4adbe73069041caa136b7a10c938c9b"
 
 [[files]]
 path = "ws/.opentide/schemas/threat.1.0.schema.json"
