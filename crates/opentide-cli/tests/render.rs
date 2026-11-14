@@ -204,7 +204,6 @@ fn frames(mode: &str) -> Frames {
         colour: if human { Colour::Full } else { Colour::None },
         links: human,
         columns: human.then_some(100),
-        highlight: human,
         cwd: PathBuf::from(ROOT),
         env: Env::from_pairs([("OPENTIDE_LINKS", "file")]),
     }

@@ -1957,7 +1957,6 @@ impl Run<'_> {
                 colour: stderr.colour,
                 links: self.mode == Mode::Human && self.host.stderr_tty,
                 columns: stderr.width,
-                highlight: self.mode == Mode::Human,
                 cwd: self.host.cwd.clone().unwrap_or_default(),
                 env: self.env.clone(),
             };

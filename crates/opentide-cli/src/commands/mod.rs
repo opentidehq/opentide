@@ -249,7 +249,6 @@ impl Terminal {
             colour: self.stdout.colour,
             links: human && self.stdout_tty,
             columns: self.stdout.width,
-            highlight: human && self.stdout.colour == crate::render::text::Colour::Full,
             cwd: cwd.to_path_buf(),
             env: env.clone(),
         }

@@ -113,17 +113,17 @@ A **diagnostic** is the shape every finding takes: validation issues, lint findi
 | `fix` | object \| null | `{ "safe": bool, "edits": [{ "line", "column", "end_column", "replacement" }] }`. `opentide validate --fix` applies every safe edit; an agent can apply any of them. |
 | `explain` | str | `opentide explain <code>` |
 
-Rendered in `human` and `plain`:
+Rendered in `human` and `plain` by annotate-snippets (rustc's renderer, Unicode style):
 
 ```
 error[vocab_unknown]: "clearr" is not a TLP value
-  ╭─▶ objects/rules/sentinel-kql-rule.yaml:8:8
+  ╭▸ objects/rules/sentinel-kql-rule.yaml:8:8
   │
 7 │   modified: 2026-01-02
 8 │   tlp: clearr
   │        ━━━━━━ not in tlp::1.0
   │
-  ╰─ help: did you mean "clear"?
+  ╰ help: did you mean "clear"?
 ```
 
 One finding per cause: an `invalid_ref` and a `vocab_unknown` on the same field and value merge into the `invalid_ref`. YAML parse errors name the file and position, never `<unicode string>`.

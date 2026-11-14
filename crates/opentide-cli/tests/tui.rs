@@ -226,7 +226,7 @@ fn select_a_rule_run_validate_and_see_its_diagnostic() {
         log.contains("error[vocab_unknown]: \"clearr\" is not a TLP value"),
         "{log}"
     );
-    assert!(log.contains(&format!("╭─▶ {RULE_FILE}:8:8")), "{log}");
+    assert!(log.contains(&format!("╭▸ {RULE_FILE}:8:8")), "{log}");
     assert!(log.contains("8 │   tlp: clearr"), "{log}");
     assert!(log.contains("━━━━━━ not in tlp::1.0"), "{log}");
     let counted = Regex::new(r"✗ 1 error in 1 file · 3 objects checked · 1 query · \d").unwrap();

@@ -53,6 +53,8 @@ clap = { workspace = true, features = ["env", "string"] }
 # The renderers' styles (render::text) and the console streams they reach.
 anstyle.workspace = true
 anstream.workspace = true
+# The code frames of `validate`, `lint` and `deploy` (render::codeframe).
+annotate-snippets.workspace = true
 # Shell completion (#841): `--show-completion` and `--install-completion`
 # write clap_complete's registration for each shell, and a Tab press runs the
 # binary with `_OPENTIDE_COMPLETE` set (`CompleteEnv`), which completes the
@@ -62,7 +64,7 @@ anstream.workspace = true
 # clap_complete's semver promise, so the version is pinned to the minor.
 clap_complete = { version = "~4.6.11", features = ["unstable-dynamic"] }
 # The boxed tables of `info` (the rows, columns and wrapping are the crate's).
-# The query lines of a code frame, coloured as the editor colours them.
+# The query engines, and the query lines `opentide tui` colours as the editor does.
 opentide-analysis.workspace = true
 # The commands ported onto the framework (UC-2.4): the workspace, its
 # catalogue, coverage, tenants and review dates, and the one suggestion rule;

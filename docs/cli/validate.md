@@ -50,13 +50,13 @@ Without `--json`, each issue and warning prints as a code frame, grouped by file
 
 ```text illustrative
 error[vocab_unknown]: "clearr" is not a TLP value
-  ╭─▶ objects/rules/sentinel-kql-rule.yaml:8:8
+  ╭▸ objects/rules/sentinel-kql-rule.yaml:8:8
   │
 7 │   modified: 2026-01-02
 8 │   tlp: clearr
   │        ━━━━━━ not in tlp::1.0
   │
-  ╰─ help: did you mean "clear"?
+  ╰ help: did you mean "clear"?
 
 ✗ 1 error in 1 file · 3 objects checked · 0.9s
 → opentide explain vocab_unknown · how to fix it
@@ -127,13 +127,13 @@ fixed: objects/rules/sentinel-kql-rule.yaml:8:8 "Clear" → "clear"
 fixed: objects/threats/simulated-actor.yaml:9:8 "Clear" → "clear"
 
 error[invalid_ref]: Unknown objective or signal reference "00000000-0000-4000-8002-DEADBEEF0000"
-   ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18
+   ╭▸ objects/rules/sentinel-kql-rule.yaml:17:18
    │
 16 │ techniques: [T1059]
 17 │ detection_model: 00000000-0000-4000-8002-DEADBEEF0000   # the objective from step 4
    │                  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
    │
-   ╰─ help: opentide info objectives lists the ones that exist
+   ╰ help: opentide info objectives lists the ones that exist
 
 ✗ 1 error in 1 file · fixed 2 values in 2 files · 3 objects checked · 1.8s
 ```
@@ -280,7 +280,7 @@ A rule may carry a block for a platform this workspace has not enabled, for exam
 
 ```text illustrative
 warning[platform_not_enabled]: this block will not deploy while splunk is disabled in this workspace; enable splunk with 'opentide setup platforms --splunk'
-   ╭─▶ objects/rules/imported.yaml:24:3
+   ╭▸ objects/rules/imported.yaml:24:3
    │
 23 │ configurations:
 24 │   splunk:
@@ -298,12 +298,12 @@ A rule that validates must deploy. Some of a platform's requirements are not in 
 
 ```text illustrative
 error[compile_missing_field]: configurations.sentinel.grouping.alert is missing
-   ╭─▶ objects/rules/lsass-access.yaml:41:5
+   ╭▸ objects/rules/lsass-access.yaml:41:5
    │
 41 │     grouping:
    │     ━━━━━━━━
    │
-   ╰─ help: Sentinel deploy requires incident grouping (grouping.alert.enabled)
+   ╰ help: Sentinel deploy requires incident grouping (grouping.alert.enabled)
 ```
 
 `field_path` names the key at fault; when the key is missing, the frame is the nearest block the file has, and `context.platform` names the platform. Only a rule a deploy would compile is compiled: its block's status deploys (`PREVIEW`, `RELEASE`, `UNIVERSAL` or `DISABLEMENT` strategy), and its platform is enabled. A `DESIGN` (inert) rule, a `REMOVED` rule and a block for a disabled platform are not. Rules are compiled once the run has no other error, so a malformed rule, or one that names an object that failed to load, is reported once, for its cause.
@@ -429,13 +429,13 @@ Each finding prints as a code frame at its place in the rule file, with the quer
 
 ```text illustrative
 error[kql_unknown_operator]: unknown tabular operator 'wher'
-   ╭─▶ objects/rules/sentinel-kql-rule.yaml:31:23
+   ╭▸ objects/rules/sentinel-kql-rule.yaml:31:23
    │
 30 │     query: |
 31 │       SecurityEvent | wher EventID == 4688
    │                       ━━━━━━━━━━━━━━━━━━━━
    │
-   ╰─ help: did you mean 'where'?
+   ╰ help: did you mean 'where'?
 
 ✗ 1 error in 1 file · 3 queries checked
 → opentide explain kql_unknown_operator · how to fix it

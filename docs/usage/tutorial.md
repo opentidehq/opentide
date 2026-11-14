@@ -232,13 +232,13 @@ Each finding prints as a code frame: its code, the file, line and column, the li
 
 ```text output-of="opentide validate" exit=1 state=dangling-reference
 error[invalid_ref]: Unknown objective or signal reference "00000000-0000-4000-8002-DEADBEEF0000"
-   ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18
+   ╭▸ objects/rules/sentinel-kql-rule.yaml:17:18
    │
 16 │ techniques: [T1059]
 17 │ detection_model: 00000000-0000-4000-8002-DEADBEEF0000   # the objective from step 4
    │                  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
    │
-   ╰─ help: opentide info objectives lists the ones that exist
+   ╰ help: opentide info objectives lists the ones that exist
 ```
 
 `opentide explain invalid_ref` says what the code means and how to fix it. With `--json`, the same finding is in `report.issues` with `line`, `column`, `help` and `explain`. This is the **dangling reference** anti-pattern from the [object model](./concepts/object-model.md#anti-patterns-to-avoid). Restore the correct UUID and validation passes again.

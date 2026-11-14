@@ -90,19 +90,28 @@ pub fn footer(watching: &str, run: &WatchRun, clock: &str) -> String {
     parts.join(" · ")
 }
 
-/// The live view's lines: the frames that fit above the outcome line and the
-/// footer in `height` rows (`… N more lines` when they do not), then both.
+/// The rows a written line takes on a terminal `width` cells wide.
+fn rows(line: &str, width: usize) -> usize {
+    let shown = anstream::adapter::strip_str(line).to_string();
+    crate::render::text::cell_len(&shown)
+        .div_ceil(width.max(1))
+        .max(1)
+}
+
+/// The live view's lines, as written: the frames that fit above the outcome
+/// line and the footer in `height` rows (`… N more lines` when they do not),
+/// then both.
 pub fn live_lines(
-    frames: &[Text],
-    outcome: Text,
-    footer: Text,
+    frames: &[String],
+    outcome: String,
+    footer: String,
     width: usize,
     height: usize,
-) -> Vec<Text> {
-    let rows = |line: &Text| line.cell_len().div_ceil(width.max(1)).max(1);
+) -> Vec<String> {
+    let rows = |line: &String| rows(line, width);
     let room = height.saturating_sub(rows(&outcome) + rows(&footer));
     let heights: Vec<usize> = frames.iter().map(rows).collect();
-    let mut out: Vec<Text> = Vec::new();
+    let mut out: Vec<String> = Vec::new();
     if heights.iter().sum::<usize>() > room {
         let (mut kept, mut used) = (0, 1);
         while kept < frames.len() && used + heights[kept] <= room {
@@ -110,10 +119,7 @@ pub fn live_lines(
             kept += 1;
         }
         out.extend(frames[..kept].iter().cloned());
-        out.push(Text::styled(
-            &format!("… {} more lines", frames.len() - kept),
-            &Style::new().dimmed(),
-        ));
+        out.push(format!("… {} more lines", frames.len() - kept));
     } else {
         out.extend(frames.iter().cloned());
     }
@@ -197,25 +203,27 @@ pub fn run(
                 let mut sources = SourceFiles::default();
                 let mut lines = Vec::new();
                 for item in crate::render::diagnostic::sort_diagnostics(&shown) {
-                    lines.extend(frames.diagnostic_lines(item, &mut sources, None));
-                    lines.push(Text::default());
+                    lines.extend(frames.frame(item, &mut sources).lines().map(str::to_owned));
+                    lines.push(String::new());
                 }
                 let (width, height) = terminal_size::terminal_size()
                     .map_or((terminal.width.unwrap_or(80), 24), |(w, h)| {
                         (usize::from(w.0), usize::from(h.0))
                     });
                 let clock = jiff::Zoned::now().strftime("%H:%M:%S").to_string();
+                let colour = terminal.stdout.colour;
                 let footer = Text::styled(&footer(&watching, pass, &clock), &Style::new().dimmed());
+                let (outcome, footer) =
+                    (outcome.render(colour, false), footer.render(colour, false));
                 let lines = live_lines(&lines, outcome, footer, width, height);
                 let mut text = String::new();
                 if drawn > 0 {
                     text.push_str(&format!("\x1b[{drawn}A\r\x1b[J"));
                 }
                 drawn = 0;
-                for mut line in lines {
-                    line.expand_tabs();
-                    drawn += line.cell_len().div_ceil(width.max(1)).max(1);
-                    text.push_str(&line.render(terminal.stdout.colour, frames.links));
+                for line in lines {
+                    drawn += rows(&line, width);
+                    text.push_str(&line);
                     text.push('\n');
                 }
                 text
@@ -295,17 +303,10 @@ mod tests {
 
     #[test]
     fn the_live_view_crops_frames_to_keep_the_outcome_on_screen() {
-        let frames: Vec<Text> = (0..10).map(|n| Text::plain(&format!("line {n}"))).collect();
-        let lines = live_lines(
-            &frames,
-            Text::plain("outcome"),
-            Text::plain("footer"),
-            80,
-            6,
-        );
-        let plain: Vec<String> = lines.iter().map(Text::as_plain).collect();
+        let frames: Vec<String> = (0..10).map(|n| format!("line {n}")).collect();
+        let lines = live_lines(&frames, "outcome".into(), "footer".into(), 80, 6);
         assert_eq!(
-            plain,
+            lines,
             [
                 "line 0",
                 "line 1",
@@ -315,8 +316,13 @@ mod tests {
                 "footer"
             ]
         );
-        let lines = live_lines(&frames[..2], Text::plain("o"), Text::plain("f"), 80, 6);
+        let lines = live_lines(&frames[..2], "o".into(), "f".into(), 80, 6);
         assert_eq!(lines.len(), 4);
+        // Escapes take no cells: a styled line of 80 is one row.
+        assert_eq!(
+            rows(&format!("\u{1b}[1m{}\u{1b}[0m", "x".repeat(80)), 80),
+            1
+        );
     }
 
     #[test]

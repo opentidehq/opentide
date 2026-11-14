@@ -135,8 +135,8 @@ opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
 
 ```text
 error[compile_empty_block]: 'response' is empty, so Sentinel cannot read 'alert_severity'
-  ╭─▶ objects/rules/sentinel-kql-rule.yaml
-  ╰─ help: set response.alert_severity, or configurations.sentinel.alert.severity
+ ╭▸ objects/rules/sentinel-kql-rule.yaml
+ ╰ help: set response.alert_severity, or configurations.sentinel.alert.severity
 
 Plan: 0 to create, 0 to update, 0 to disable, 0 to delete, 1 would fail
 dry run, nothing sent

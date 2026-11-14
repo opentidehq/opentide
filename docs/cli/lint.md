@@ -73,17 +73,17 @@ A finding prints `severity[code]: message` (an `info` finding prints as `note`),
 
 ```text illustrative
 warning[filename_mismatch]: Filename 'Simulated Actor.yaml' does not match slugify(name)='simulated-actor'
-  ╭─▶ objects/threats/Simulated Actor.yaml
-  ╰─ help: rename it to objects/threats/simulated-actor.yaml
+ ╭▸ objects/threats/Simulated Actor.yaml
+ ╰ help: rename it to objects/threats/simulated-actor.yaml
 
 note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/threats/Simulated Actor.yaml:2:1
+  ╭▸ objects/threats/Simulated Actor.yaml:2:1
   │
 1 │ name: Simulated Actor
 2 │ metadata:
   │ ━━━━━━━━
   │
-  ╰─ help: add the missing keys under metadata
+  ╰ help: add the missing keys under metadata
 
 ! 2 findings in 1 file · 1 warning, 1 note
 → opentide lint --fix · rename 1 file to match their names
@@ -201,8 +201,8 @@ With `style = "name"`, case counts (`some rule.yaml` does not match `Some rule`)
 
 ```text illustrative
 warning[filename_pattern]: Filename 'Some rule.yaml' does not match the configured filename pattern
-  ╭─▶ objects/rules/Some rule.yaml
-  ╰─ help: rename the file so its name matches the pattern ^\[(SEN|XDR)\]\[[^\]]+\].+\[[^\]]+\]$
+ ╭▸ objects/rules/Some rule.yaml
+ ╰ help: rename the file so its name matches the pattern ^\[(SEN|XDR)\]\[[^\]]+\].+\[[^\]]+\]$
 ```
 
 A debug fixture (`*.debug.yaml`, `*.debug.yml`) is not in the catalogue, so nothing indexes, validates or deploys it, but lint checks it. Its stem is the name without `.debug`, and `--fix` keeps the suffix whole: `0005 - Testing.debug.yaml`, named `B`, becomes `B.debug.yaml`, never `B.yaml`. A rename never moves a file into or out of the catalogue. `pattern` is matched against the stem without `.debug`, and under `style = "name"` a trailing `.debug` in the name is dropped from the stem (`Probe.debug` expects `Probe`). A fixture and the object it copies are two files, so `B.debug.yaml` and `B.yaml` do not collide; two fixtures that want the same stem do, and the second gets `-{uuid[:8]}`.
@@ -252,13 +252,13 @@ Fill those keys, or delete the block if you set `required` to leave it out: `org
 
 ```text illustrative
 warning[placeholder]: mitre_attack[0] holds a placeholder value written by opentide new
-   ╭─▶ objects/threats/credential-dumping.yaml:30:7
+   ╭▸ objects/threats/credential-dumping.yaml:30:7
    │
 29 │   mitre_attack:
 30 │     - T1548  # opentide:placeholder
    │       ━━━━━
    │
-   ╰─ help: replace the value, then delete the '# opentide:placeholder' comment
+   ╰ help: replace the value, then delete the '# opentide:placeholder' comment
 ```
 
 Plain `lint` and `validate` still pass, so a draft can be committed (a placeholder query, `...`, is not sent to the analysis engine: neither `validate` nor the `queries` check reports it as a query): the commit hook runs `validate --strict` only. The CI pipeline from `opentide setup ci` also runs `lint --strict`, which fails until every marked value is replaced and its marker deleted. A placeholder looks like a real choice, so until then `generate` exports it like one (an ATT&CK technique in the coverage layer, for instance).
@@ -269,13 +269,13 @@ The `queries` check runs the analysis engine that [`opentide validate`](./valida
 
 ```text illustrative
 warning[kql_where_not_first]: `where` is not the first operator after the table reference; filter before later operators
-   ╭─▶ objects/rules/sentinel-kql-rule.yaml:33:9
+   ╭▸ objects/rules/sentinel-kql-rule.yaml:33:9
    │
 32 │       | summarize count() by Account
 33 │       | where Account != ""
    │         ━━━━━━━━━━━━━━━━━━━
    │
-   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+   ╰ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 ```
 
 A warning is `warning`, a note `info`; `[queries] severity` replaces both. A placeholder query is left to the `placeholders` check. When the engine does not load, lint fails with exit `1` and `failure.code` `engine_unavailable`, as `validate` does; `--check` without `queries` does not need it.
