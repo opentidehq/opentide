@@ -18,6 +18,47 @@ cargo xtask golden lock                         # rewrite oracle-requirements.tx
 leading parts (`validate/*` is every `validate` case; `*` never crosses a `/`). The code is
 `xtask/src/golden/`, a library the comparator (UC-0.7) reuses.
 
+## Snapshots: the command line's behaviour, owned by Rust (#1139)
+
+`cases.toml` is also the manifest of the CLI's snapshot tests,
+`crates/opentide-cli/tests/cli_snapshots.rs`. Each case (its command, flags, mode, fixture and
+cassette) runs in-process through `opentide_cli::run` on a fresh copy of its fixture, and what
+it did is held to an insta snapshot of the **Rust CLI's own output**, one file per case:
+`crates/opentide-cli/tests/cli_snapshots/<command>/<mode>__<fixture>__<variant>.snap`. A
+snapshot holds the arguments, the exit code, stdout, stderr, and every file the run created,
+modified or deleted under the workspace, home and the temporary directory, with its mode.
+Byte-for-byte parity with Python is not what they check; what the Rust CLI does today is.
+
+- **JSON is its parsed value**: a stream or a `.json` file that is one JSON document is
+  pretty-printed with sorted keys, so its fields and values are checked and its spacing is not.
+- **Control characters are shown**: ESC as `␛`, so a colour or cursor change is a visible diff.
+- **A file over 64 KiB** (the editor schemas) or one that is not UTF-8 is its size and SHA-256.
+- **Normalised, and only because it differs between two runs** (`opentide-compare`'s normaliser,
+  the rules below): the case's temporary root (`<WS>`, `<HOME>`, `<TMP>`, a root of fixed
+  length, so wrapping is stable), the clock (dates, timestamps, durations, `<SECONDS>`), the
+  spinner's glyph and a live frame's content where the case opts in, crash-log names, catalog
+  fingerprints, and UUIDs a run mints where the case opts in (`fresh-uuids`). The host reports a
+  fixed version (`0.28.1`, `tests/common/snapshot.rs` `VERSION`), so a release changes nothing.
+- **Left out**: cases on the generated fixtures (`fault`, `fault-lint`, `heavy-small`: `cargo
+  xtask corpus` builds them, which a crate test cannot), and `serve`'s session, which feeds
+  standard input (`tests/serve.rs` drives it).
+
+They are ordinary nextest tests, one per command group, in the PR gate whenever `opentide-cli` or
+a crate below it changes. A change to what a command prints or writes fails them, by design:
+
+```bash
+cargo nextest run -p opentide-cli --test cli_snapshots          # every group
+OPENTIDE_SNAPSHOT_FILTER=validate/json cargo nextest run -p opentide-cli --test cli_snapshots
+cargo insta review                                              # read each diff, accept or reject
+INSTA_UPDATE=always cargo nextest run -p opentide-cli --test cli_snapshots   # accept all (then read git diff)
+```
+
+Commit the accepted `.snap` files with the change that causes them: the diff is the review of the
+user-visible change. Never edit a `.snap` by hand, never commit a `.snap.new`, and never widen a
+normalisation rule to make a diff go away. A new case is a `[[case]]` in `cases.toml`; its
+snapshot is written on the first run outside CI (CI sets `INSTA_UPDATE=no`, so a missing
+snapshot fails there).
+
 **In CI: none of it, since 2026-11-14.** The Rust port is done, and the maintainer took the oracle
 policing out of CI: no workflow records, checks or compares the goldens (golden compare and check,
 golden determinism, the golden preview, the corpora, the MCP replay, the payload, config,

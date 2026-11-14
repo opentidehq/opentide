@@ -1,0 +1,14 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lsp/agent/none/bare
+---
+args: opentide lsp
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: Missing command: choose from start.
+  usage: opentide lsp [OPTIONS] COMMAND [ARGS]...
+  help: run 'opentide lsp --help'
+tip: add --json for machine-readable output

@@ -1,0 +1,50 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/tide-corpus/check-cve
+---
+args: opentide --json validate --check cve
+exit: 0
+
+━━━ stdout · json
+{
+  "check": "cve",
+  "checks": {
+    "cve": {
+      "check": "cve",
+      "status": "passed"
+    }
+  },
+  "command": "validate",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Validation passed",
+  "next_actions": [],
+  "ok": true,
+  "report": {
+    "issues": [],
+    "ok": true,
+    "stats": {
+      "id_workers": 0,
+      "object_workers": 0,
+      "objects_checked": 0,
+      "parallel": false,
+      "wall_ms": 0.0,
+      "workers": 0
+    },
+    "warnings": []
+  },
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "errors": 0,
+    "files": 0,
+    "fixable": 0,
+    "objects": 0,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "workspace": "<WS>"
+}
+
+━━━ stderr · empty

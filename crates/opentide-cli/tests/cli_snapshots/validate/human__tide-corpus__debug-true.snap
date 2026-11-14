@@ -1,0 +1,15 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/human/tide-corpus/debug-true
+---
+args: opentide validate
+exit: 0
+
+━━━ stdout
+␛[1;32m✓␛[0m 12 objects valid · 8 queries · <SECONDS>
+
+━━━ stderr
+␛[?25l<LIVE></LIVE>␛[1;36m⠋␛[0m Validating objects
+00:00:00 debug: Validated the workspace · objects: 12 · errors: 0 · warnings: 0 · queries: 8
+␛[?25h
+⏎ no final newline

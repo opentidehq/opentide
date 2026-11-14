@@ -1,0 +1,13 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: rules/plain/none/bare
+---
+args: opentide rules
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: Missing command.
+  usage: opentide rules [OPTIONS] COMMAND [ARGS]...
+  help: run 'opentide rules --help'

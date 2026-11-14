@@ -1,0 +1,14 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: _root/plain/none/typo-command
+---
+args: opentide valdiate
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: No such command 'valdiate'.
+  help: did you mean 'validate'?
+  usage: opentide [OPTIONS] COMMAND [ARGS]...
+  help: run 'opentide --help'

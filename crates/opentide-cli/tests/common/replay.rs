@@ -257,6 +257,11 @@ pub fn fixture(name: &str, ws: &Path) {
         "deploy-push-no-target" | "deploy-push-key" | "deploy-push-unreadable" => {
             pushed_from_cases(name, ws);
         }
+        // #1139: the vscode workspace with the edits cases.toml declares.
+        "vscode-unscoped" | "vscode-ambiguous" => {
+            fixture("vscode", ws);
+            apply_edits(name, ws);
+        }
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");
@@ -532,7 +537,7 @@ pub fn ledger() -> Ledger {
 
 /// The UUIDs in the package's data (`src/opentide`), which no run mints:
 /// `cargo xtask compare`'s `package_uuids`.
-fn package_uuids() -> &'static std::collections::BTreeSet<String> {
+pub fn package_uuids() -> &'static std::collections::BTreeSet<String> {
     static CELL: std::sync::OnceLock<std::collections::BTreeSet<String>> =
         std::sync::OnceLock::new();
     CELL.get_or_init(|| {

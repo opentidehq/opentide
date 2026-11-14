@@ -1,0 +1,13 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.extract/plain/none/bare
+---
+args: opentide generate extract
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: Missing command.
+  usage: opentide generate extract [OPTIONS] COMMAND [ARGS]...
+  help: run 'opentide generate extract --help'

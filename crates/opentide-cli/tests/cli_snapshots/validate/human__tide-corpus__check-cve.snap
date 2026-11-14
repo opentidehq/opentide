@@ -1,0 +1,14 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/human/tide-corpus/check-cve
+---
+args: opentide validate --check cve
+exit: 0
+
+━━━ stdout
+␛[1;32m✓␛[0m Validation passed · <SECONDS>
+
+━━━ stderr
+␛[?25l<LIVE></LIVE>␛[1;36m⠋␛[0m Validating objects
+␛[?25h
+⏎ no final newline

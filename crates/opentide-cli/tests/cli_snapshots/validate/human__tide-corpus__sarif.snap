@@ -1,0 +1,16 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/human/tide-corpus/sarif
+---
+args: opentide validate --strict --format sarif --output opentide-reports/validate.sarif
+exit: 0
+
+━━━ stdout
+␛[1;32m✓␛[0m 12 objects valid · 8 queries · <SECONDS>
+
+━━━ stderr · empty
+
+━━━ ws/opentide-reports/ · created 0755
+
+━━━ ws/opentide-reports/validate.sarif · created 0644
+(987570 bytes, sha256 dc3b0628b7207973537264a61cdbf9a49e3e488b03a0424679a14eb35f885863)

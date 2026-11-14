@@ -1,0 +1,13 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/human/tide-corpus/queries-off
+---
+args: opentide validate --queries off
+exit: 0
+
+━━━ stdout
+␛[1;32m✓␛[0m 12 objects valid · <SECONDS>
+
+━━━ stderr
+␛[?25l<LIVE>␛[1;36m<SPIN>␛[0m Validating objects</LIVE>␛[?25h
+⏎ no final newline

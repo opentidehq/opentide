@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: _root/json/none/typo-command
+---
+args: opentide --json valdiate
+exit: 2
+
+━━━ stdout · json
+{
+  "command": "",
+  "duration_ms": 0,
+  "error": "No such command 'valdiate'.",
+  "exit_code": 2,
+  "failure": {
+    "argument": "valdiate",
+    "code": "usage_unknown_command",
+    "crash_log": null,
+    "message": "No such command 'valdiate'.",
+    "suggestion": "validate"
+  },
+  "message": "No such command 'valdiate'.",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty
