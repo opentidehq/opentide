@@ -88,6 +88,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Fixed
 
+- **Defender's custom-detection column check reads a string before a comment.** `opentide_connectors::defender::defender_xdr_tables_in_query` (and `required_column_groups`, `missing_required_column_groups`) masked `//` comments before strings, so `let u = "http://x"; DeviceNetworkEvents | …` named no table; they mask with `opentide_connectors::connector::kql_code` now, which also reads a doubled quote inside a verbatim string (`@"a""b"`) as part of it. `opentide_connectors::defender::strip_kql_literals_and_comments` and `opentide_kql::defender_required_column_groups`, an unused copy of the same check with the same fault, are removed.
+
 - **"Apply suggestion" keeps a pipe stage's arguments** ([opentide#887](https://github.com/opentidehq/opentide/issues/887)). `kql_unknown_operator` and `spl_unknown_command` cover the whole pipe stage, and the quick fix (and `source.fixAll.opentide`) replaced it all with the suggestion: `index=main | stast count by host` became `index=main | stats`. The edit now replaces only the word the stage starts with (`index=main | stats count by host`); the diagnostics' ranges do not change.
 
 - **`sysdig_list_in_value` sees a value through the block's lists** ([#810](https://github.com/opentidehq/opentide/issues/810)). An exception value that names a block list is that list's items, and a list naming an earlier list is that list's items too, as Falco's loader expands them; an item holding another block list's name inside it (`items: ['x l0']`) is now reported, as `opentide validate` reports it, where the editor said nothing.

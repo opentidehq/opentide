@@ -273,9 +273,18 @@ pub fn kql_code(query: &str) -> String {
             continue;
         }
         if character == '\'' || character == '"' {
+            // A verbatim string (`@"C:\"`) has no escapes: a quote inside
+            // it is doubled (`@"say ""hi"""`).
             let verbatim = index > 0 && chars[index - 1] == '@';
             let mut end = index + 1;
-            while end < length && chars[end] != character {
+            while end < length {
+                if chars[end] == character {
+                    if verbatim && chars.get(end + 1) == Some(&character) {
+                        end += 2;
+                        continue;
+                    }
+                    break;
+                }
                 end += if chars[end] == '\\' && !verbatim {
                     2
                 } else {

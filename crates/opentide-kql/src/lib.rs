@@ -1597,100 +1597,6 @@ pub fn compile_kql_query(base: &str, exclusions: &[Exclusion], tenant: &str) -> 
     out
 }
 
-/// 1.0 Defender profile: the 18 tables whose output-column groups are known.
-/// `defender/tables.toml` lists more tables; those are completable but do not
-/// select an NRT column group until a group is catalogued for them.
-/// Defender required output column groups (OR-groups).
-pub fn defender_required_column_groups(query: &str) -> Vec<Vec<&'static str>> {
-    let stripped = strip_kql_literals_and_comments(query);
-    let mut categories = std::collections::BTreeSet::new();
-    for (table, category) in DEFENDER_TABLES_MAP {
-        if contains_ident(&stripped, table) {
-            categories.insert(*category);
-        }
-    }
-    let mut groups: Vec<Vec<&str>> = Vec::new();
-    if categories.is_empty() {
-        groups.push(vec!["Timestamp", "TimeGenerated"]);
-    } else {
-        groups.push(vec!["Timestamp"]);
-    }
-    if categories.contains(&"endpoint") {
-        groups.push(vec!["DeviceId"]);
-        groups.push(vec!["ReportId"]);
-    }
-    if categories.contains(&"observation") {
-        groups.push(vec!["ObservationId"]);
-    }
-    if (categories.contains(&"xdr") || categories.is_empty())
-        && !groups.iter().any(|g| g == &["ReportId"])
-    {
-        groups.push(vec!["ReportId"]);
-    }
-    if !categories.contains(&"endpoint") {
-        groups.push(vec![
-            "DeviceId",
-            "DeviceName",
-            "RemoteDeviceName",
-            "RecipientEmailAddress",
-            "SenderFromAddress",
-            "SenderMailFromAddress",
-            "SenderObjectId",
-            "RecipientObjectId",
-            "AccountObjectId",
-            "AccountSid",
-            "AccountUpn",
-            "InitiatingProcessAccountSid",
-            "InitiatingProcessAccountUpn",
-            "InitiatingProcessAccountObjectId",
-        ]);
-    }
-    groups
-}
-
-const DEFENDER_TABLES_MAP: &[(&str, &str)] = &[
-    ("DeviceEvents", "endpoint"),
-    ("DeviceFileCertificateInfo", "endpoint"),
-    ("DeviceFileEvents", "endpoint"),
-    ("DeviceImageLoadEvents", "endpoint"),
-    ("DeviceInfo", "endpoint"),
-    ("DeviceLogonEvents", "endpoint"),
-    ("DeviceNetworkEvents", "endpoint"),
-    ("DeviceNetworkInfo", "endpoint"),
-    ("DeviceProcessEvents", "endpoint"),
-    ("DeviceRegistryEvents", "endpoint"),
-    ("AlertEvidence", "alert"),
-    ("AlertInfo", "alert"),
-    ("EmailEvents", "xdr"),
-    ("EmailAttachmentInfo", "xdr"),
-    ("EmailUrlInfo", "xdr"),
-    ("UrlClickEvents", "xdr"),
-    ("IdentityLogonEvents", "xdr"),
-    ("CloudAppEvents", "xdr"),
-];
-
-#[expect(
-    clippy::unwrap_used,
-    reason = "a regex literal: an invalid pattern fails every test that reaches it"
-)]
-fn strip_kql_literals_and_comments(query: &str) -> String {
-    let re_block = regex::Regex::new(r"(?s)/\*.*?\*/").unwrap();
-    let re_line = regex::Regex::new(r"//.*").unwrap();
-    let re_s = regex::Regex::new(r#"'([^']|'')*'"#).unwrap();
-    let re_d = regex::Regex::new(r#""([^"]|"")*""#).unwrap();
-    let mut s = re_block.replace_all(query, " ").into_owned();
-    s = re_line.replace_all(&s, " ").into_owned();
-    s = re_s.replace_all(&s, " ").into_owned();
-    s = re_d.replace_all(&s, " ").into_owned();
-    s
-}
-
-fn contains_ident(haystack: &str, ident: &str) -> bool {
-    haystack
-        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
-        .any(|t| t == ident)
-}
-
 fn complete_item(
     label: impl Into<String>,
     kind: &str,
@@ -2555,13 +2461,6 @@ mod tests {
     }
 
     #[test]
-    fn defender_endpoint_requires_device_and_report() {
-        let groups = defender_required_column_groups("DeviceProcessEvents | take 1");
-        assert!(groups.iter().any(|g| g == &["DeviceId"]));
-        assert!(groups.iter().any(|g| g == &["ReportId"]));
-    }
-
-    #[test]
     fn function_parameters_are_not_tables() {
         let src = "let f = (T:(TimeGenerated:datetime), InDeviceId:string) { T | where TimeGenerated > ago(1d) }; f(DeviceInfo, 'x')";
         let r = analyze(src, Profile::Defender);
@@ -3075,83 +2974,6 @@ mod tests {
                 .iter()
                 .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
                 .collect::<Vec<_>>()
-        );
-    }
-
-    #[test]
-    fn defender_column_groups_follow_table_category() {
-        fn has(groups: &[Vec<&str>], expected: &[&str]) -> bool {
-            groups.iter().any(|group| group.as_slice() == expected)
-        }
-
-        let endpoint = defender_required_column_groups("DeviceProcessEvents | take 1");
-        assert!(has(&endpoint, &["Timestamp"]));
-        assert!(!has(&endpoint, &["Timestamp", "TimeGenerated"]));
-        assert_eq!(
-            endpoint
-                .iter()
-                .filter(|g| g.as_slice() == ["ReportId"])
-                .count(),
-            1
-        );
-        assert!(
-            !endpoint
-                .iter()
-                .any(|g| g.contains(&"RecipientEmailAddress")),
-            "an endpoint table must not also require mailbox columns: {endpoint:?}"
-        );
-
-        let xdr = defender_required_column_groups("EmailEvents | take 1");
-        assert!(has(&xdr, &["Timestamp"]));
-        assert!(!has(&xdr, &["DeviceId"]));
-        assert!(has(&xdr, &["ReportId"]));
-        assert!(
-            xdr.iter()
-                .any(|g| g.contains(&"RecipientEmailAddress") && g.contains(&"AccountUpn")),
-            "{xdr:?}"
-        );
-
-        let alert = defender_required_column_groups("AlertInfo | take 1");
-        assert!(has(&alert, &["Timestamp"]));
-        assert!(!has(&alert, &["ReportId"]));
-        assert!(!has(&alert, &["DeviceId"]));
-        assert!(
-            alert.iter().any(|g| g.contains(&"AccountObjectId")),
-            "{alert:?}"
-        );
-
-        let unknown = defender_required_column_groups("print 1");
-        assert!(has(&unknown, &["Timestamp", "TimeGenerated"]));
-        assert!(has(&unknown, &["ReportId"]));
-        assert!(!has(&unknown, &["DeviceId"]));
-        assert!(
-            unknown
-                .iter()
-                .any(|g| g.contains(&"DeviceId") && g.contains(&"SenderFromAddress")),
-            "{unknown:?}"
-        );
-
-        let commented = defender_required_column_groups(
-            "print 1 /* DeviceProcessEvents */\n| where Name == \"EmailEvents\" // AlertInfo",
-        );
-        assert!(
-            has(&commented, &["Timestamp", "TimeGenerated"]),
-            "comments and string literals are not table references: {commented:?}"
-        );
-        assert!(!has(&commented, &["DeviceId"]));
-
-        let mixed = defender_required_column_groups("DeviceEvents | join EmailEvents on Timestamp");
-        assert!(has(&mixed, &["DeviceId"]));
-        assert_eq!(
-            mixed
-                .iter()
-                .filter(|g| g.as_slice() == ["ReportId"])
-                .count(),
-            1
-        );
-        assert!(
-            !mixed.iter().any(|g| g.contains(&"RecipientEmailAddress")),
-            "naming an endpoint table drops the non-endpoint asset group: {mixed:?}"
         );
     }
 
