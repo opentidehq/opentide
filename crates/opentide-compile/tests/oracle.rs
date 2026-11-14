@@ -325,9 +325,10 @@ fn nulls(value: &Json, at: &str, out: &mut Vec<String>) {
 /// leaves an unset field out, where the oracle printed it `null`
 /// (`[[dump]]` `nulls`, #895). What the tenant receives is not the dump:
 /// [`the_compile_corpus_compiles_as_the_oracle_compiles_it`] holds each
-/// tenant's requests to the oracle's, which carry no `null` field either.
+/// tenant's requests to the oracle's, `null`s included where the oracle
+/// sent one (Defender's `organizationalScope`, for one).
 #[test]
-fn a_model_dump_preview_leaves_unset_fields_out_on_every_platform() {
+fn a_model_dump_preview_leaves_unset_fields_out_on_every_dump_platform() {
     let corpus = dunce::canonicalize(repo().join("tests/golden/payloads/corpus")).unwrap();
     let record: Value = serde_json::from_str(
         &std::fs::read_to_string(repo().join("tests/golden/payloads/oracle.json")).unwrap(),
