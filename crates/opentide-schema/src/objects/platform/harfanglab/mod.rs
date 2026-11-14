@@ -59,23 +59,18 @@ pub struct HarfangLabSigmaLogSource {
 #[from_node(union)]
 pub enum SelectionValue {
     /// A string.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     Text(String),
     /// A Sigma list.
-    #[from_node(tag = "list[str]")]
     #[schemars(description = "")]
     List(Vec<String>),
     /// A boolean.
-    #[from_node(tag = "bool")]
     #[schemars(description = "")]
     Bool(bool),
     /// An integer.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Int(i64),
     /// A number.
-    #[from_node(tag = "float")]
     #[schemars(
         description = "",
         schema_with = "crate::objects::platform::number_schema"

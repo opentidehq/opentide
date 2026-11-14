@@ -102,16 +102,6 @@ pub struct Inputs {
     pub timestamp: i64,
 }
 
-/// The Splunk clock the oracle's probe pins (`xtask/src/payloads/probe.py`):
-/// a random minute and hour of 7, the time 03:04 UTC.
-pub const PROBE_CLOCK: splunk::Clock = splunk::Clock {
-    random: (7, 7),
-    now: (4, 3),
-};
-
-/// The Carbon Black report timestamp the oracle's probe pins.
-pub const PROBE_TIMESTAMP: i64 = 1_767_225_600;
-
 /// What a deploy sends for `rule` on `platform` to the tenant named
 /// `tenant`: the body (Sentinel, Elastic, Sysdig) or the writes, in order
 /// (the deployers). `None` for a platform this crate does not know.

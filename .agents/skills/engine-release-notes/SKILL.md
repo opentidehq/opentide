@@ -34,7 +34,8 @@ version, from `.github/workflows/publish.yml`: the GitHub Release body is openti
 - Each pull request with a user-visible change adds its entries under `## [Unreleased]`, in the
   right part.
 - The release pull request renames the section `## [X.Y.Z] - YYYY-MM-DD`, keeps an empty
-  `## [Unreleased]` above it, and writes the summary (`.agents/skills/engine-release`, step 1).
+  `## [Unreleased]` above it, and writes the summary (before the release train; since then the
+  release pull request is the release train's, `.agents/skills/release-management/SKILL.md`).
 - One line per list item and per paragraph, no hard wraps; nested items are indented two spaces.
 
 ## Write it like an announcement

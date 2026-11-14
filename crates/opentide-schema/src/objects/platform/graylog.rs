@@ -107,11 +107,9 @@ fn default_message(code: &str) -> &'static str {
 #[from_node(union)]
 pub enum StringOrList {
     /// One.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     One(String),
     /// Several.
-    #[from_node(tag = "list[str]")]
     #[schemars(description = "")]
     Many(Vec<String>),
 }
@@ -219,15 +217,12 @@ model! {
 #[from_node(union)]
 pub enum GraylogEventField {
     /// A field name, or a string with a `${...}` template.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     Text(String),
     /// `{template: ...}`.
-    #[from_node(tag = "GraylogEventTemplate")]
     #[schemars(description = "")]
     Template(GraylogEventTemplate),
     /// `{lookup: {table, key_field}}`.
-    #[from_node(tag = "GraylogEventLookup")]
     #[schemars(description = "")]
     Lookup(GraylogEventLookup),
 }

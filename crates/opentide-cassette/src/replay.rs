@@ -1,9 +1,29 @@
 //! Replaying a cassette with wiremock: each recorded answer is served to the
 //! request in its place, in order, and [`Replay::verify`] then asserts that
 //! the requests received are the recorded ones once normalised
-//! ([`crate::redact`]), in the same order. A JSON body matches when it holds
-//! the same data ([`same_body`]): key order, spacing and escapes are layout;
-//! any other body matches byte for byte.
+//! ([`crate::redact`]), in the same order.
+//!
+//! Requests are compared for what they mean, not for the bytes one HTTP
+//! library writes:
+//!
+//! - **Method**: the same.
+//! - **URL** ([`same_url`]): the same scheme, user info, host, port and
+//!   fragment; the same path segments once percent-decoded (`%7E` is `~`,
+//!   `%2f` is `%2F`; an encoded `/` stays inside its segment); the same
+//!   query parameters once decoded as `application/x-www-form-urlencoded`
+//!   (`+` and `%20` are both a space), names in any order, a repeated name's
+//!   values in the order sent.
+//! - **Headers**: the same set, after [`crate::redact`] and leaving out
+//!   [`IDENTITY_HEADERS`] on both sides, the headers in which a client library
+//!   names itself or its telemetry and stamps a fresh correlation id.
+//!   Authorization, content type, `Accept` and every other header are
+//!   compared by value.
+//! - **Body**: a form body (the recorded request's `Content-Type` is
+//!   `application/x-www-form-urlencoded`) as its decoded fields
+//!   ([`same_form`]), as the query; a JSON body as the same data
+//!   ([`same_body`]): key order, spacing and escapes are layout; any other
+//!   body byte for byte.
+//! - **Order**: the requests in the order recorded.
 //!
 //! A cassette replays as many times as it is run through: after its last
 //! interaction the next request is compared with its first. Each pass must
@@ -240,17 +260,22 @@ fn differences(want: &cassette::Request, got: &cassette::Request) -> Option<Stri
             want.method, got.method
         ));
     }
-    if want.url != got.url {
+    if !same_url(&want.url, &got.url) {
         return Some(format!("URL {} was recorded, {} sent", want.url, got.url));
     }
-    if want.headers != got.headers {
+    let (want_headers, got_headers) = (meaningful(&want.headers), meaningful(&got.headers));
+    if want_headers != got_headers {
         return Some(format!(
-            "headers {:?} were recorded, {:?} sent",
-            want.headers, got.headers
+            "headers {want_headers:?} were recorded, {got_headers:?} sent"
         ));
     }
     let (want_body, got_body) = (want.body.bytes(), got.body.bytes());
-    if !same_body(&want_body, &got_body) {
+    let same = if is_form(&want.headers) {
+        same_form(&want_body, &got_body)
+    } else {
+        same_body(&want_body, &got_body)
+    };
+    if !same {
         let at = want_body
             .iter()
             .zip(&got_body)
@@ -263,6 +288,98 @@ fn differences(want: &cassette::Request, got: &cassette::Request) -> Option<Stri
         ));
     }
     None
+}
+
+/// Request headers a client library adds to name itself, report its
+/// telemetry or correlate one request in its logs: MSAL's `x-client-*` and
+/// `x-ms-lib-capability`, the request ids of MSAL and azure-core. They carry
+/// no meaning for the platform, each library writes its own (a fresh id per
+/// request), so the matcher leaves them out on both sides. Only such headers
+/// belong here: never one that authenticates, negotiates content or selects
+/// an API version.
+pub const IDENTITY_HEADERS: [&str; 10] = [
+    "client-request-id",
+    "return-client-request-id",
+    "x-ms-client-request-id",
+    "x-client-sku",
+    "x-client-ver",
+    "x-client-os",
+    "x-client-cpu",
+    "x-client-current-telemetry",
+    "x-client-last-telemetry",
+    "x-ms-lib-capability",
+];
+
+/// *headers* (names in lower case, as recorded) without [`IDENTITY_HEADERS`].
+fn meaningful(headers: &[(String, String)]) -> Vec<&(String, String)> {
+    headers
+        .iter()
+        .filter(|(name, _)| !IDENTITY_HEADERS.contains(&name.as_str()))
+        .collect()
+}
+
+/// The form media type.
+const FORM: &str = "application/x-www-form-urlencoded";
+
+/// Whether *headers* say the body is [`FORM`].
+fn is_form(headers: &[(String, String)]) -> bool {
+    headers.iter().any(|(name, value)| {
+        name == "content-type"
+            && value
+                .split(';')
+                .next()
+                .is_some_and(|kind| kind.trim().eq_ignore_ascii_case(FORM))
+    })
+}
+
+/// Whether a URL sent names what the recorded one does: the same scheme,
+/// user info, host, port and fragment, the same percent-decoded path
+/// segments and the same decoded query parameters ([`same_form`]). Two
+/// texts that are not both URLs match only when equal.
+pub fn same_url(want: &str, got: &str) -> bool {
+    if want == got {
+        return true;
+    }
+    let (Ok(want), Ok(got)) = (url::Url::parse(want), url::Url::parse(got)) else {
+        return false;
+    };
+    want.scheme() == got.scheme()
+        && want.username() == got.username()
+        && want.password() == got.password()
+        && want.host_str() == got.host_str()
+        && want.port_or_known_default() == got.port_or_known_default()
+        && want.fragment() == got.fragment()
+        && segments(&want) == segments(&got)
+        && same_form(
+            want.query().unwrap_or_default().as_bytes(),
+            got.query().unwrap_or_default().as_bytes(),
+        )
+}
+
+/// The path of *url*, split at its `/` and each segment percent-decoded.
+fn segments(url: &url::Url) -> Vec<Vec<u8>> {
+    url.path()
+        .split('/')
+        .map(|segment| percent_encoding::percent_decode_str(segment).collect())
+        .collect()
+}
+
+/// Whether two `application/x-www-form-urlencoded` texts (a form body, a query string) hold the same
+/// fields once decoded: `+` and `%20`, `~` and `%7E`, `%2f` and `%2F` are
+/// the same. Names may come in any order; the values of a repeated name must
+/// come in the same order. A value is compared as text: `True` is not
+/// `true`.
+pub fn same_form(want: &[u8], got: &[u8]) -> bool {
+    want == got || fields(want) == fields(got)
+}
+
+/// The decoded fields of a form text, ordered by name (a stable sort: a
+/// repeated name's values stay in the order they came).
+fn fields(text: &[u8]) -> Vec<(String, String)> {
+    let mut fields: Vec<(String, String)> =
+        url::form_urlencoded::parse(text).into_owned().collect();
+    fields.sort_by(|a, b| a.0.cmp(&b.0));
+    fields
 }
 
 /// Whether a request body sent says what the recorded one does: the same

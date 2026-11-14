@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::FromNode;
 use crate::configuration::repr;
-use crate::from_node::Context;
+use crate::from_node::{Context, Shape};
 use crate::node::Node;
 use crate::objects::any::Any;
 use crate::objects::checks::Violation;
@@ -336,11 +336,9 @@ pub struct SentinelDynamicProperties {
 pub enum Suppression {
     /// A duration, ISO 8601 or shorthand.
     #[schemars(description = "")]
-    #[from_node(tag = "str")]
     Duration(String),
     /// `false` disables suppression.
     #[schemars(description = "")]
-    #[from_node(tag = "bool")]
     Flag(bool),
 }
 
@@ -390,6 +388,10 @@ impl FromNode for SentinelTechnique {
                 None
             }
         }
+    }
+
+    fn shape() -> Shape {
+        Shape::String
     }
 }
 
