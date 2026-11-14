@@ -115,13 +115,7 @@ fn write_text(path: &Path, text: &str) -> Result<(), String> {
     } else {
         text.to_owned()
     };
-    std::fs::write(path, text.as_bytes()).map_err(|error| {
-        format!(
-            "{}: {}",
-            path.display(),
-            super::deploy_state::os_error_text(&error, path)
-        )
-    })
+    std::fs::write(path, text.as_bytes()).map_err(|error| format!("{}: {error}", path.display()))
 }
 
 /// The run as a report: one checklist step, then `Imported 3 rules from

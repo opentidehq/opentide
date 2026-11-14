@@ -206,12 +206,12 @@ fn location(diagnostic: &Diagnostic, cwd: &Path) -> Option<String> {
     Some(shown)
 }
 
-/// A quoted value, as the fix note, `fixed:` and "did you mean" show it.
-///
-/// Quoted as Python's `repr` quotes (`'clear'`, `"it's"`), with what is inside
+/// A value quoted as Python's `repr` quotes (`'clear'`, `"it's"`), with what is inside
 /// escaped by [`str::escape_debug`]: a character that is not printable reads
 /// `\u{a0}` or `\u{1b}` (Python wrote `\xa0`), and only the quote that
-/// delimits the value is escaped.
+/// delimits the value is escaped. Kept only for `explain`'s unknown-code
+/// message (`commands/explain.rs`) until it quotes with `{:?}` as every other
+/// message does; then this goes.
 pub fn quoted(text: &str) -> String {
     let (quote, other) = if text.contains('\'') && !text.contains('"') {
         ('"', '\'')
@@ -248,7 +248,7 @@ fn notes(diagnostic: &Diagnostic) -> Vec<(String, String)> {
         let values: Vec<String> = fix
             .edits
             .iter()
-            .map(|edit| quoted(&edit.replacement))
+            .map(|edit| format!("{:?}", edit.replacement))
             .collect();
         notes.push((
             "fix".to_owned(),
@@ -797,7 +797,7 @@ pub struct FixedValue {
     pub after: String,
 }
 
-/// `fixed: objects/rules/x.yaml:8:8 'clearr' → 'clear'`, one line per value replaced.
+/// `fixed: objects/rules/x.yaml:8:8 "clearr" → "clear"`, one line per value replaced.
 pub fn render_fixed(changes: &[FixedValue], cwd: &Path, colour: Colour) -> String {
     if changes.is_empty() {
         return String::new();
@@ -811,13 +811,11 @@ pub fn render_fixed(changes: &[FixedValue], cwd: &Path, colour: Colour) -> Strin
         let mut line = Text::default();
         line.append("fixed:", &Style::fg(Color::Green).bold());
         line.push_str(&format!(
-            " {shown}:{}:{} {} ",
-            change.line,
-            change.column,
-            quoted(&change.before)
+            " {shown}:{}:{} {:?} ",
+            change.line, change.column, change.before
         ));
         line.push_str(glyphs::NEXT);
-        line.push_str(&format!(" {}", quoted(&change.after)));
+        line.push_str(&format!(" {:?}", change.after));
         out.push_str(&line.render(colour, false));
         out.push('\n');
     }
@@ -1156,12 +1154,12 @@ mod tests {
                 &base.join("ws"),
                 Colour::None
             ),
-            "fixed: objects/x.yaml:8:8 'clearr' → 'clear'\n\n"
+            "fixed: objects/x.yaml:8:8 \"clearr\" → \"clear\"\n\n"
         );
         // Outside the current directory: the workspace path.
         assert_eq!(
             render_fixed(&[change], &base.join("elsewhere"), Colour::None),
-            "fixed: objects/x.yaml:8:8 'clearr' → 'clear'\n\n"
+            "fixed: objects/x.yaml:8:8 \"clearr\" → \"clear\"\n\n"
         );
         assert_eq!(render_fixed(&[], Path::new("/"), Colour::None), "");
     }

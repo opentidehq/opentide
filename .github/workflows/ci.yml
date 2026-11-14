@@ -14,10 +14,9 @@ run-name: >-
 # - The PR gate, on a pull request into integration/unified-core,
 #   development or train/*: Linux only, and only what the change affects.
 #   The changed workspace crates and their reverse dependencies are built
-#   ONCE (`build`: a nextest archive of their tests and the `_native`
-#   extension), and every other job runs from that build: the Rust tests in
-#   partitions of the archive, the Python suite and E2E on the prebuilt
-#   extension. Each specialised job (Node, WASI, grammars, TextMate, GitLab CI
+#   ONCE (`build`: their tests, which it runs), and the `_native` extension
+#   once (`native`), on which the Python suite and E2E run. Each
+#   specialised job (Node, WASI, grammars, TextMate, GitLab CI
 #   lint, the facade's semver checks, cargo deny, docs) runs only when its
 #   paths change. One required check, `PR gate`, passes when every job that
 #   was needed passed and every other was skipped.
@@ -86,8 +85,8 @@ env:
 # toolchain), so that its next push is warm. sccache is content-addressed, so a copy a few days old still
 # serves every crate that did not change. Linux only.
 #
-#   build           `build`: the test archive, xtask, the language server and
-#                   the `_native` extension (the gate's one build)
+#   build           `build`: the tests, xtask and the language server
+#   native          `native`: the `_native` extension
 #   engine-check    `engine-lint`: clippy and rustdoc
 #   wasi            `wasi`: the WASI module
 #   full-set-Linux  `node`, `facade` and the nightly's Linux Rust jobs:
@@ -114,8 +113,8 @@ jobs:
       crates: ${{ steps.plan.outputs.crates }}
       packages: ${{ steps.plan.outputs.packages }}
       features: ${{ steps.plan.outputs.features }}
-      partitions: ${{ steps.plan.outputs.partitions }}
-      build: ${{ steps.plan.outputs.build }}
+      filter: ${{ steps.plan.outputs.filter }}
+      native: ${{ steps.plan.outputs.native }}
       rust: ${{ steps.plan.outputs.rust }}
       python: ${{ steps.plan.outputs.python }}
       lint: ${{ steps.plan.outputs.lint }}
@@ -209,7 +208,6 @@ jobs:
           "${RUNNER_TEMP}/bin/actionlint" -color
 
       - name: Engine invariants (I/O-free crates, names)
-        if: env.RUST == 'true'
         run: |
           bash scripts/engine/check-io-free.sh
           bash scripts/engine/check-names.sh
@@ -293,15 +291,100 @@ jobs:
           path: ${{ env.SCCACHE_DIR }}
           key: sccache-engine-check-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
-  # The gate's one build. The affected crates' tests as a nextest archive,
-  # xtask and the language server, and the `_native` extension, with one
-  # compiler cache; uploaded first, so the test jobs start while this job
-  # goes on to what needs its target directory: the generated-artifact and
-  # layer checks, the doctests, and opentide-schema's compile-fail cases.
-  build:
-    name: Build
+  # opentide's wheel, built by maturin as a release's is (#1157), for the
+  # Python jobs, which install it without compiling: a job of its own, so they
+  # start after this short build instead of after the tests (a push's Python
+  # job waited 8.4 min for the build, its tests included). Its own compiler
+  # cache family: maturin's environment and the extension's features are not
+  # the tests'. A `linux` tag (no manylinux audit): it is installed on this
+  # runner image only.
+  native:
+    name: Build the opentide wheel
     needs: changes
-    if: needs.changes.outputs.build == 'true'
+    if: needs.changes.outputs.native == 'true' || needs.changes.outputs.mode == 'nightly'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_STRIP: debuginfo
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      # One interpreter for PyO3's configuration: the binding is abi3, so the
+      # extension serves every Python from 3.10.
+      PYO3_PYTHON: /usr/bin/python3
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          # maturin as a prebuilt binary: `pipx run` took 7 s to install it.
+          tool: sccache@0.19.0,maturin@1.16.0
+
+      - name: Install mold
+        run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
+
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+      - name: Restore the compiler cache
+        id: sccache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-native-v2-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-native-v2-${{ hashFiles('rust-toolchain.toml') }}-
+
+      # `v2`: maturin's compiles (its environment is in their sccache keys)
+      # replaced cargo's; bump it with the build's settings, or the week's
+      # copy, already saved, keeps the old compiles and none is saved: #1157's
+      # wheel took 94 s to compile against the week's copy of cargo's.
+      - name: Build the opentide wheel
+        run: maturin build --locked --profile dev --compatibility linux --out "${RUNNER_TEMP}/native"
+
+      - name: Upload the opentide wheel
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native
+          path: ${{ runner.temp }}/native/opentide-*.whl
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Compiler cache statistics
+        if: ${{ !cancelled() }}
+        run: sccache --show-stats
+
+      - name: Save the compiler cache
+        if: steps.sccache.outputs.cache-hit != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.sccache.outputs.cache-matched-key == '')
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-native-v2-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+
+  # The gate's one build of the tests, and the Rust tests run where they were
+  # built: the affected crates' tests, xtask and the language server with one
+  # compiler cache; the generated-artifact and layer checks; the tests
+  # (`cargo nextest run`), the doctests and opentide-schema's compile-fail
+  # cases. No test archive: moving one to test jobs cost more than the
+  # partitions saved (measured on a leaf change, 2026-11-14: a 1.5 GB archive,
+  # 18 s to pack, 15-33 s to download and 41 s to extract per partition,
+  # against 42-48 s of tests each).
+  build:
+    name: Build and Rust tests
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -309,10 +392,9 @@ jobs:
     env:
       # mold links the test binaries, the build's longest step warm.
       RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
-      # No debuginfo, stripped at link: the archive every test job downloads
-      # was 4.5 GB with line tables (about 90 statically linked test
-      # binaries). A panic still names its file:line; a backtrace names
-      # functions only (rerun locally for lines).
+      # No debuginfo, stripped at link: about 130 statically linked test
+      # binaries link and write faster without it. A panic still names its
+      # file:line; a backtrace names functions only (rerun locally for lines).
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_PROFILE_DEV_STRIP: debuginfo
       CARGO_INCREMENTAL: "0"
@@ -321,14 +403,16 @@ jobs:
       # One interpreter for PyO3's configuration: the binding is abi3, so the
       # extension serves every Python from 3.10.
       PYO3_PYTHON: /usr/bin/python3
-      RUSTC_WRAPPER: sccache
+      # sccache without CARGO_PRIMARY_PACKAGE (the script says why).
+      RUSTC_WRAPPER: ${{ github.workspace }}/scripts/ci/rustc-wrapper/sccache
       SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 3G
       SCCACHE_IDLE_TIMEOUT: "0"
-      RUST: ${{ needs.changes.outputs.rust }}
-      PYTHON: ${{ needs.changes.outputs.python == 'true' || needs.changes.outputs.gitlab == 'true' || needs.changes.outputs.mode == 'nightly' }}
       PACKAGES: ${{ needs.changes.outputs.packages }}
       FEATURES: ${{ needs.changes.outputs.features }}
+      # The affected crates' tests: the build also compiles the anchors
+      # (scripts/ci/changes.py, ANCHORS), whose tests run only when affected.
+      FILTER: ${{ needs.changes.outputs.filter }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -347,66 +431,38 @@ jobs:
       - name: Install mold
         run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
 
+      - name: Runner CPU
+        run: grep -m1 "model name" /proc/cpuinfo
+
       - name: Compiler cache week
         id: week
         shell: bash
         run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      # `v2`: the build's settings (RUSTFLAGS, the profile's debuginfo and
-      # strip) are in every compile's sccache key: bump it with them, or the
+      # `v5`: the build's settings (RUSTFLAGS, the profile's debuginfo and
+      # strip, the wrapper) are in every compile's sccache key: bump it with them, or the
       # week's copy, already saved, keeps the old compiles and none is saved.
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-build-v2-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-build-v2-${{ hashFiles('rust-toolchain.toml') }}-
-
-      # opentide's wheel, built by maturin as a release's is, in the profile the
-      # tests are built in, first: the Python jobs start while the tests
-      # build, on the same dependencies, and install it without compiling.
-      # A `linux` tag (no manylinux audit): it is installed on this runner image only.
-      - name: Build the opentide wheel
-        if: env.PYTHON == 'true'
-        run: pipx run --spec maturin==1.16.0 maturin build --locked --profile dev --compatibility linux --out "${RUNNER_TEMP}/native"
-
-      - name: Upload the opentide wheel
-        if: env.PYTHON == 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: native
-          path: ${{ runner.temp }}/native/opentide-*.whl
-          if-no-files-found: error
-          retention-days: 3
+          key: sccache-build-v5-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-build-v5-${{ hashFiles('rust-toolchain.toml') }}-
 
       # The affected crates' test binaries, with the binaries their tests run
-      # (CARGO_BIN_EXE_*) and their build scripts' output.
-      - name: Build the Rust tests (nextest archive)
-        if: env.RUST == 'true'
+      # (CARGO_BIN_EXE_*). `--timings`: the report is uploaded below.
+      - name: Build the Rust tests
         run: |
           read -ra pkg_args <<< "${PACKAGES}"
           read -ra feature_args <<< "${FEATURES}"
-          cargo nextest archive --locked "${pkg_args[@]}" "${feature_args[@]}" --archive-file "${RUNNER_TEMP}/tests.tar.zst"
+          cargo nextest run --no-run --locked "${pkg_args[@]}" "${feature_args[@]}" --timings
 
-      - name: Upload the test archive
-        if: env.RUST == 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: nextest-archive
-          path: ${{ runner.temp }}/tests.tar.zst
-          retention-days: 3
-          compression-level: 0
-
-      # --- With the test jobs running: what needs this target directory. ---
-
-
-      # The archive's build left the binaries its tests run in target/debug,
+      # The tests' build left the binaries its tests run in target/debug,
       # with the tests' features: xtask and the language server when they are
       # affected (a change that reaches neither changes nothing they check).
       # Building them again without those features recompiled for minutes.
       - name: Which checks the build can run
         id: bins
-        if: env.RUST == 'true'
         env:
           CRATES: ${{ needs.changes.outputs.crates }}
         run: |
@@ -414,7 +470,7 @@ jobs:
             if [[ -x "target/debug/${bin}" ]]; then found=true; else found=false; fi
             # An affected crate's binary is always built: never skip its checks.
             if [[ "${found}" == false && " ${CRATES} " == *" ${bin} "* ]]; then
-              echo "::error::${bin} is affected but the archive's build left no target/debug/${bin}."
+              echo "::error::${bin} is affected but the tests' build left no target/debug/${bin}."
               exit 1
             fi
             echo "${bin}=${found}" >> "$GITHUB_OUTPUT"
@@ -488,15 +544,38 @@ jobs:
           OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
         run: target/debug/xtask spec-fields
 
-      # The doctests and the compile-fail cases write under a temporary folder,
-      # never in the checkout (#931); noted after the specifications' checkout.
+      # uv for the tests that provision a tool with it (nothing is synced),
+      # and the Python the test that compares with difflib runs
+      # (OPENTIDE_PYTHON): after the build, which reads PYO3_PYTHON only.
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      # The tests, the doctests and the compile-fail cases write under a
+      # temporary folder, never in the checkout (#931); noted after the
+      # specifications' checkout.
       - name: Note the checkout's state
-        if: env.RUST == 'true'
         run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
+
+      # The compile-fail cases run below, when their inputs change.
+      - name: cargo nextest (profile ci)
+        env:
+          OPENTIDE_PYTHON: python
+          # Twice the runner's four cores: many tests wait on the processes and
+          # servers they start (#1141, a one-line opentide-yara change: 85 s at
+          # eight threads; 90-120 s at four, by the runner's CPU).
+          NEXTEST_TEST_THREADS: "8"
+        run: |
+          read -ra pkg_args <<< "${PACKAGES}"
+          read -ra feature_args <<< "${FEATURES}"
+          cargo nextest run --locked --profile ci "${pkg_args[@]}" "${feature_args[@]}" \
+            --no-tests=pass -E "(${FILTER}) and not binary_id(/^opentide-schema::ui\$/)"
 
       # nextest runs no doctests.
       - name: Doctests
-        if: env.RUST == 'true'
         run: |
           read -ra pkg_args <<< "${PACKAGES}"
           read -ra feature_args <<< "${FEATURES}"
@@ -508,7 +587,6 @@ jobs:
       # push and nightly.
       - name: Whether to run opentide-schema's compile-fail cases
         id: ui
-        if: env.RUST == 'true'
         env:
           MODE: ${{ needs.changes.outputs.mode }}
           UI_PATHS: |
@@ -539,16 +617,39 @@ jobs:
 
       - name: opentide-schema's compile-fail cases
         if: steps.ui.outputs.run == 'true'
-        run: cargo nextest run --locked --profile ci -p opentide-schema --features opentide-schema/python -E 'binary_id(opentide-schema::ui)'
+        # The build's own packages and features (opentide-schema is among them
+        # whenever a case's input changed): nothing is built again.
+        run: |
+          read -ra pkg_args <<< "${PACKAGES}"
+          read -ra feature_args <<< "${FEATURES}"
+          cargo nextest run --locked --profile ci "${pkg_args[@]}" "${feature_args[@]}" -E 'binary_id(opentide-schema::ui)'
 
       - name: The checks and tests left the checkout as they found it
-        if: env.RUST == 'true'
         run: |
           git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-after"
           if ! diff -u "$RUNNER_TEMP/tree-before" "$RUNNER_TEMP/tree-after"; then
-            echo "::error::A check or test wrote into the checkout (lines starting with +): write under a temporary folder instead."
+            echo "::error::A check or test wrote into the checkout (lines starting with +): write under a temporary folder (tempfile::tempdir) instead."
             exit 1
           fi
+
+      - name: Upload the JUnit report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate.
+        continue-on-error: true
+        with:
+          name: nextest-junit
+          path: target/nextest/ci/junit.xml
+          retention-days: 14
+
+      - name: Upload the build's timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        continue-on-error: true
+        with:
+          name: cargo-timings
+          path: target/cargo-timings/cargo-timing.html
+          retention-days: 7
 
       - name: Compiler cache statistics
         if: ${{ !cancelled() }}
@@ -559,93 +660,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-build-v2-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-
-  # The affected crates' tests, from the build's archive, in partitions
-  # (`changes` picks two when the heavy crates are affected, else one). No
-  # compilation: nextest runs the archived binaries against this checkout.
-  rust-tests:
-    name: Rust tests (${{ matrix.partition }}/${{ strategy.job-total }})
-    needs: [changes, build]
-    if: needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        partition: ${{ fromJSON(needs.changes.outputs.partitions) }}
-    env:
-      CARGO_TERM_COLOR: always
-      INSTA_UPDATE: "no"
-      # The test that compares with Python's difflib runs this interpreter.
-      OPENTIDE_PYTHON: python
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      # uv for the tests that provision a tool with it; nothing is synced.
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-
-      # cargo and rustc for the tests that run them (xtask's).
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: cargo-nextest@0.9.148
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: nextest-archive
-          path: ${{ runner.temp }}
-
-      # A test writes under a temporary folder, never in the checkout (#931).
-      - name: Note the checkout's state
-        run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
-
-      # The compile-fail cases run in `build`, which has their dependencies.
-      # The archive (target/ alone) is extracted into this checkout: the
-      # tests were built in the build job's checkout, at this same path, and
-      # name its target/ at compile time (env!("CARGO_BIN_EXE_*"),
-      # CARGO_TARGET_TMPDIR). target/ is gitignored.
-      - name: cargo nextest (profile ci)
-        env:
-          PARTITION: ${{ matrix.partition }}
-          TOTAL: ${{ strategy.job-total }}
-        run: >-
-          cargo nextest run --profile ci
-          --archive-file "${RUNNER_TEMP}/tests.tar.zst"
-          --extract-to "${GITHUB_WORKSPACE}" --extract-overwrite
-          --workspace-remap "${GITHUB_WORKSPACE}"
-          --partition "count:${PARTITION}/${TOTAL}"
-          --no-tests=pass
-          -E 'not binary_id(/^opentide-schema::ui$/)'
-
-      - name: The tests left the checkout as they found it
-        run: |
-          git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-after"
-          if ! diff -u "$RUNNER_TEMP/tree-before" "$RUNNER_TEMP/tree-after"; then
-            echo "::error::A test wrote into the checkout (lines starting with +): write under a temporary folder (tempfile::tempdir) instead."
-            exit 1
-          fi
-
-      - name: Upload the JUnit report
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        # A report for reading, not a gate.
-        continue-on-error: true
-        with:
-          name: nextest-junit-${{ matrix.partition }}
-          path: target/nextest/ci/junit.xml
-          retention-days: 14
+          key: sccache-build-v5-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
   # The Python package as a package (Python is the packaging layer): its
   # surface (the SDK, the models, the plugin API, the console script) and the
@@ -658,7 +673,7 @@ jobs:
   # request and the nightly add Python 3.10-3.13 and the `full_set` E2E tests.
   python:
     name: Python (3.14, package and E2E, coverage)
-    needs: [changes, build]
+    needs: [changes, native]
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -759,7 +774,7 @@ jobs:
   # gitlab-ci-verify: when the renderer, the test or the linters change.
   gitlab-ci-lint:
     name: GitLab CI lint
-    needs: [changes, build]
+    needs: [changes, native]
     if: needs.changes.outputs.gitlab == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -848,7 +863,7 @@ jobs:
   # The opentide facade crate (UC-5.1, #836), when its public API changes
   # (crates/opentide/): its docs with every feature, as docs.rs builds them,
   # and its API against the branch it merges into (cargo-semver-checks). Its
-  # tests and doctests run in `build` and `rust-tests` with the tests'
+  # tests and doctests run in `build` with the tests'
   # features (every feature but `stubs`, which schema.yml builds).
   facade:
     name: Facade crate (every feature's docs, semver checks)
@@ -1498,7 +1513,7 @@ jobs:
   # abi3 wheel: `python`'s run without coverage.
   test-full:
     name: Python (${{ matrix.python-version }})
-    needs: [changes, build]
+    needs: [changes, native]
     if: needs.changes.outputs.mode == 'nightly' || needs.changes.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1547,7 +1562,7 @@ jobs:
   # whose `uv build` alone takes minutes.
   e2e-full:
     name: E2E (3.14, full set)
-    needs: [changes, build]
+    needs: [changes, native]
     if: needs.changes.outputs.mode == 'nightly' || needs.changes.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -2345,8 +2360,8 @@ jobs:
       - changes
       - lint
       - engine-lint
+      - native
       - build
-      - rust-tests
       - python
       - gitlab-ci-lint
       - docs

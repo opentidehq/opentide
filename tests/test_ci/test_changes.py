@@ -43,6 +43,8 @@ CRATES: dict[str, tuple[str, list[tuple[str, str | None]]]] = {
     # A test-only dependency affects the crate that tests with it.
     "xtask": ("xtask", [("opentide-schema", "dev")]),
     "opentide-compare": ("crates/opentide-compare", []),
+    # An anchor (changes.ANCHORS): built with every pull request's crates.
+    "opentide-connectors": ("crates/opentide-connectors", [("opentide-schema", None)]),
 }
 MEMBERS = sorted(CRATES)
 ABOVE_SYNTAX = {
@@ -115,8 +117,13 @@ def test_a_leaf_crate_runs_itself_and_its_reverse_dependencies() -> None:
     assert set(outputs["crates"].split()) == ABOVE_SYNTAX
     # A Rust-only change builds no wheel and runs no pytest: the Rust tests
     # cover it (the maintainer's rule); no specialised job either.
-    assert on(outputs) == {"rust", "build", "lint"}
-    assert outputs["packages"].startswith("-p ")
+    assert on(outputs) == {"rust", "lint"}
+    # The anchors are built, so the third-party features resolve as on the
+    # push that saved the compiler cache; only the affected crates' tests run.
+    built = set(outputs["packages"].replace("-p ", "").split())
+    assert built == ABOVE_SYNTAX | {"opentide-connectors"}
+    assert "opentide-connectors" not in outputs["filter"]
+    assert outputs["filter"].count("package(=") == len(ABOVE_SYNTAX)
 
 
 def test_the_python_surface_runs_the_python_job() -> None:
@@ -135,12 +142,6 @@ def test_the_tests_that_need_no_wheel_run_without_the_python_job() -> None:
     assert on(plan("tests/test_ci/test_workflows.py")) == {"ci", "pylint", "lint"}
     assert on(plan("tests/test_docs/test_docs_mdx.py")) == {"docs", "pylint", "lint"}
     assert plan("tests/test_docs/test_sdk_snippets.py")["python"] == "true"
-
-
-def test_a_crate_below_no_heavy_crate_runs_one_partition() -> None:
-    outputs = plan("crates/opentide-compare/src/lib.rs")
-    assert outputs["crates"] == "opentide-compare"
-    assert outputs["partitions"] == "[1]"
 
 
 def test_a_test_only_dependency_counts() -> None:

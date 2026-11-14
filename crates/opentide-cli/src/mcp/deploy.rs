@@ -88,10 +88,7 @@ pub fn deploy_rule(
                 ("platform", Json::str(platform)),
                 (
                     "message",
-                    Json::Str(format!(
-                        "Unknown platform {}",
-                        crate::render::codeframe::quoted(platform)
-                    )),
+                    Json::Str(format!("Unknown platform {platform:?}")),
                 ),
             ],
         ));
@@ -134,10 +131,7 @@ pub fn deploy_rule(
                 ("platform", Json::str(platform)),
                 (
                     "message",
-                    Json::Str(format!(
-                        "Rule {} has no {platform} status to deploy",
-                        crate::render::codeframe::quoted(&name)
-                    )),
+                    Json::Str(format!("Rule {name:?} has no {platform} status to deploy")),
                 ),
             ],
         ));

@@ -394,11 +394,7 @@ fn plan_rule(path: &Path) -> (RuleIds, Option<String>) {
         Err(error) => {
             rule.fail(
                 "yaml_parse",
-                format!(
-                    "cannot read {}: {}",
-                    path.display(),
-                    deploy_state::os_error_text(&error, path)
-                ),
+                format!("cannot read {}: {}", path.display(), error),
             );
             return (rule, None);
         }
@@ -715,12 +711,12 @@ fn write(
         if changed {
             shard
                 .save()
-                .map_err(|error| deploy_state::os_error_text(&error, &shard.path))?;
+                .map_err(|error| format!("{}: {error}", shard.path.display()))?;
         }
         shard_file = Some(display(&shard.path, workspace));
     }
     deploy_state::write_durable(path, edited)
-        .map_err(|error| deploy_state::os_error_text(&error, path))?;
+        .map_err(|error| format!("{}: {error}", path.display()))?;
     Ok((shard_file, changed))
 }
 

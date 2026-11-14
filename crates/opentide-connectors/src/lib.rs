@@ -43,6 +43,7 @@ pub mod graylog;
 pub mod harfanglab;
 pub mod http;
 pub mod misp;
+pub mod pace;
 pub mod plugin;
 pub mod progress;
 pub mod proxy;

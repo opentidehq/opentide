@@ -4,6 +4,17 @@
 //! `test_exabeam_runner.py`.
 
 use super::*;
+use tokio::time::Instant;
+
+/// Waits for the pacer's next call.
+async fn wait(pacer: &Pacer) {
+    assert!(
+        pacer
+            .wait(PACE_KEY, &tokio_util::sync::CancellationToken::new())
+            .await
+            .is_ok()
+    );
+}
 
 fn object(value: serde_json::Value) -> Object {
     match serde_json::from_value::<Json>(value) {
@@ -27,20 +38,20 @@ fn reply(status: u16, body: &str) -> Reply {
 
 #[tokio::test(start_paused = true)]
 async fn the_pacer_lets_a_hundred_through_a_minute() {
-    let pacer = Pacer::default();
+    let pacer = Pacer::new(PACED_CALLS, PACE_WINDOW);
     let started = Instant::now();
     for _ in 0..PACED_CALLS {
-        pacer.wait().await;
+        wait(&pacer).await;
     }
     assert_eq!(Instant::now(), started, "the first hundred do not wait");
-    pacer.wait().await;
+    wait(&pacer).await;
     assert_eq!(
         Instant::now().duration_since(started),
         PACE_WINDOW,
         "the 101st waits for the first to leave the window"
     );
     // The window rolls: the next one waits only until the second call leaves it.
-    pacer.wait().await;
+    wait(&pacer).await;
     assert_eq!(Instant::now().duration_since(started), PACE_WINDOW);
 }
 
@@ -48,23 +59,23 @@ async fn the_pacer_lets_a_hundred_through_a_minute() {
 async fn the_pacer_rolls_with_time_and_resets() {
     let pacer = Pacer::new(2, Duration::from_secs(10));
     let started = Instant::now();
-    pacer.wait().await;
+    wait(&pacer).await;
     tokio::time::advance(Duration::from_secs(4)).await;
-    pacer.wait().await;
-    pacer.wait().await;
+    wait(&pacer).await;
+    wait(&pacer).await;
     assert_eq!(
         Instant::now().duration_since(started),
         Duration::from_secs(10)
     );
-    pacer.wait().await;
+    wait(&pacer).await;
     assert_eq!(
         Instant::now().duration_since(started),
         Duration::from_secs(14)
     );
-    pacer.reset().await;
+    pacer.reset();
     let now = Instant::now();
-    pacer.wait().await;
-    pacer.wait().await;
+    wait(&pacer).await;
+    wait(&pacer).await;
     assert_eq!(Instant::now(), now);
 }
 
@@ -72,8 +83,8 @@ async fn the_pacer_rolls_with_time_and_resets() {
 async fn the_pacer_is_shared_by_every_session_of_the_process() {
     let pacer = shared_pacer();
     assert!(Arc::ptr_eq(&pacer, &shared_pacer()));
-    assert_eq!(pacer.limit, PACED_CALLS);
-    assert_eq!(pacer.window, PACE_WINDOW);
+    assert_eq!(pacer.limit(), PACED_CALLS);
+    assert_eq!(pacer.window(), PACE_WINDOW);
     assert!(Arc::ptr_eq(&Exabeam::new().pacer, &shared_pacer()));
 }
 
@@ -85,7 +96,7 @@ async fn concurrent_sessions_queue_on_one_pacer() {
     for _ in 0..7 {
         let pacer = Arc::clone(&pacer);
         tasks.push(tokio::spawn(async move {
-            pacer.wait().await;
+            wait(&pacer).await;
             Instant::now().duration_since(started)
         }));
     }
@@ -99,23 +110,27 @@ async fn concurrent_sessions_queue_on_one_pacer() {
 }
 
 #[test]
-fn retry_after_reads_seconds_and_dates() {
+fn a_429_waits_as_retry_after_asks_else_a_minute() {
     let now: jiff::Timestamp = "2026-11-11T12:00:00Z".parse().unwrap_or_default();
-    assert_eq!(retry_after(None, now), DEFAULT_RETRY_AFTER);
-    assert_eq!(retry_after(Some("  "), now), DEFAULT_RETRY_AFTER);
-    assert_eq!(retry_after(Some("7"), now), Duration::from_secs(7));
-    assert_eq!(retry_after(Some(" 1.5 "), now), Duration::from_millis(1500));
-    assert_eq!(retry_after(Some("-3"), now), Duration::ZERO);
-    assert_eq!(retry_after(Some("inf"), now), DEFAULT_RETRY_AFTER);
-    assert_eq!(retry_after(Some("NaN"), now), DEFAULT_RETRY_AFTER);
-    assert_eq!(retry_after(Some("soon"), now), DEFAULT_RETRY_AFTER);
+    let wait = |value: Option<&str>| RATE_LIMIT.rate_limit_wait(value, 0, now);
+    let minute = Some(DEFAULT_RETRY_AFTER);
+    assert_eq!(wait(None), minute);
+    for value in ["  ", " 1.5 ", "-3", "inf", "NaN", "soon"] {
+        assert_eq!(wait(Some(value)), minute, "{value:?}");
+    }
+    assert_eq!(wait(Some("7")), Some(Duration::from_secs(7)));
+    assert_eq!(wait(Some("301")), Some(crate::retry::MAX_BACKOFF));
     assert_eq!(
-        retry_after(Some("Wed, 11 Nov 2026 12:00:30 GMT"), now),
-        Duration::from_secs(30)
+        wait(Some("Wed, 11 Nov 2026 12:00:30 GMT")),
+        Some(Duration::from_secs(30))
     );
     assert_eq!(
-        retry_after(Some("Wed, 11 Nov 2026 11:00:00 GMT"), now),
-        Duration::ZERO
+        wait(Some("Wed, 11 Nov 2026 11:00:00 GMT")),
+        Some(Duration::ZERO)
+    );
+    assert_eq!(
+        RATE_LIMIT.rate_limit_wait(Some("7"), MAX_RATE_LIMITED, now),
+        None
     );
 }
 

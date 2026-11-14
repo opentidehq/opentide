@@ -34,11 +34,18 @@
 //!
 //! The platforms whose clients wait out their tenant's rate limits
 //! themselves (Bitdefender GravityZone, Exabeam, Google Security
-//! Operations) mount [`RetryPolicy::none`], so the two never stack.
+//! Operations) mount [`RetryPolicy::none`], so the two never stack. The
+//! first two wait with a policy of their own ([`RetryPolicy::rate_limited`],
+//! [`RetryPolicy::wait_out`]): a rate-limited request was not executed, so
+//! it is sent again whatever its method.
 
 use std::time::Duration;
 
 use http::{Method, StatusCode};
+use tokio_util::sync::CancellationToken;
+
+use crate::error::ConnectorError;
+use crate::pace::Clock;
 
 /// The longest wait before a retry, and the longest `Retry-After` honoured:
 /// one tenant cannot hold a run for an unbounded time.
@@ -152,6 +159,79 @@ impl RetryPolicy {
                     .unwrap_or(backoff),
             ),
             Outcome::Answer { .. } | Outcome::Failed => None,
+        }
+    }
+}
+
+/// One attempt at a request a rate limit may refuse.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Attempt<T> {
+    /// The tenant took the request: what came of it.
+    Done(T),
+    /// The tenant refused it for its rate limit, with the answer's
+    /// `Retry-After` when it has one.
+    RateLimited(Option<String>),
+}
+
+impl RetryPolicy {
+    /// A rate limit's policy: up to *max_retries* resends, each after the
+    /// answer's `Retry-After` (at most [`MAX_BACKOFF`]), else after *wait*.
+    pub const fn rate_limited(max_retries: u32, wait: Duration) -> Self {
+        Self {
+            max_retries,
+            base_delay: wait,
+        }
+    }
+
+    /// The wait before resending a rate-limited request after *retried*
+    /// resends, or `None` when they are spent: the `Retry-After` it was
+    /// answered with ([`parse_retry_after`]), else `base_delay`.
+    pub fn rate_limit_wait(
+        &self,
+        retry_after: Option<&str>,
+        retried: u32,
+        now: jiff::Timestamp,
+    ) -> Option<Duration> {
+        (retried < self.max_retries).then(|| {
+            retry_after
+                .and_then(|value| parse_retry_after(value, now))
+                .unwrap_or(self.base_delay)
+        })
+    }
+
+    /// Sends with *attempt* until the tenant takes the request, waiting on
+    /// *clock* between rate-limited attempts
+    /// ([`rate_limit_wait`](Self::rate_limit_wait)). `Ok(None)` when it is
+    /// still rate limited after the last resend.
+    ///
+    /// # Errors
+    ///
+    /// What *attempt* returns, or [`ConnectorError::Cancelled`] when the run
+    /// is cancelled during a wait.
+    pub async fn wait_out<T, E, F, Fut>(
+        &self,
+        clock: &dyn Clock,
+        cancel: &CancellationToken,
+        mut attempt: F,
+    ) -> Result<Option<T>, E>
+    where
+        F: FnMut() -> Fut,
+        Fut: Future<Output = Result<Attempt<T>, E>>,
+        E: From<ConnectorError>,
+    {
+        let mut retried = 0;
+        loop {
+            let retry_after = match attempt().await? {
+                Attempt::Done(done) => return Ok(Some(done)),
+                Attempt::RateLimited(retry_after) => retry_after,
+            };
+            let Some(wait) =
+                self.rate_limit_wait(retry_after.as_deref(), retried, jiff::Timestamp::now())
+            else {
+                return Ok(None);
+            };
+            clock.sleep(wait, cancel).await?;
+            retried += 1;
         }
     }
 }
@@ -315,5 +395,31 @@ mod tests {
             Some(Duration::ZERO)
         );
         assert_eq!(parse_retry_after("-3", now()), None);
+    }
+
+    #[test]
+    fn a_rate_limit_waits_as_asked_else_its_default_until_the_resends_are_spent() {
+        let policy = RetryPolicy::rate_limited(2, Duration::from_secs(60));
+        assert_eq!(
+            policy.rate_limit_wait(Some("7"), 0, now()),
+            Some(Duration::from_secs(7))
+        );
+        assert_eq!(
+            policy.rate_limit_wait(Some("Wed, 11 Nov 2026 12:00:30 GMT"), 1, now()),
+            Some(Duration::from_secs(30))
+        );
+        assert_eq!(
+            policy.rate_limit_wait(Some("86400"), 0, now()),
+            Some(MAX_BACKOFF)
+        );
+        assert_eq!(
+            policy.rate_limit_wait(Some("soon"), 0, now()),
+            Some(Duration::from_secs(60))
+        );
+        assert_eq!(
+            policy.rate_limit_wait(None, 1, now()),
+            Some(Duration::from_secs(60))
+        );
+        assert_eq!(policy.rate_limit_wait(Some("7"), 2, now()), None);
     }
 }

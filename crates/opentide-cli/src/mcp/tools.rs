@@ -201,8 +201,7 @@ pub fn explain(code: &str) -> Json {
             (
                 "message",
                 Json::Str(format!(
-                    "No diagnostic code {}. Call explain with no code to list them.",
-                    crate::render::codeframe::quoted(wanted)
+                    "No diagnostic code {wanted:?}. Call explain with no code to list them."
                 )),
             ),
             (
@@ -259,9 +258,8 @@ pub fn validation_report(
             (
                 "error",
                 Json::Str(format!(
-                    "queries must be one of {}, got {}",
+                    "queries must be one of {}, got {queries:?}",
                     QUERIES_MODES.join(", "),
-                    crate::render::codeframe::quoted(queries)
                 )),
             ),
         ]));
@@ -500,7 +498,7 @@ mod tests {
         assert_eq!(page["suggestion"], "vocab_unknown");
         assert_eq!(
             page["message"],
-            "No diagnostic code 'vocab_unknwn'. Call explain with no code to list them."
+            "No diagnostic code \"vocab_unknwn\". Call explain with no code to list them."
         );
         let page = text_of(&ok_result(&explain("../vocab_unknown")));
         assert_eq!(page["found"], false);
@@ -532,7 +530,7 @@ mod tests {
         assert_eq!(result["isError"], false);
         assert_eq!(
             text_of(&result),
-            json!({"ok": false, "error": "queries must be one of error, warn, off, got 'loud'"})
+            json!({"ok": false, "error": "queries must be one of error, warn, off, got \"loud\""})
         );
     }
 
