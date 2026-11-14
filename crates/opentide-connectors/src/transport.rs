@@ -34,8 +34,10 @@ use crate::{Environment, TenantLabel};
 pub use http::header::{self, HeaderMap, HeaderName, HeaderValue};
 pub use http::{Method, StatusCode};
 
-/// A request, whole: method, URL, headers in the order written, its body and
-/// the request's own timeout when it sets one (HarfangLab's telemetry search).
+/// A request, whole: method, URL, headers in the order written, its body,
+/// the request's own timeout when it sets one (HarfangLab's telemetry
+/// search), and whether it may be sent again after an answer when that is
+/// not its method's (Sysdig's versioned `PUT`).
 #[derive(Clone, Debug)]
 pub struct Request {
     method: Method,
@@ -43,6 +45,7 @@ pub struct Request {
     headers: HeaderMap,
     body: Option<Vec<u8>>,
     timeout: Option<Duration>,
+    idempotent: Option<bool>,
 }
 
 impl Request {
@@ -54,6 +57,7 @@ impl Request {
             headers: HeaderMap::new(),
             body: None,
             timeout: None,
+            idempotent: None,
         }
     }
 
@@ -97,6 +101,23 @@ impl Request {
         self.timeout = timeout;
     }
 
+    /// Whether sending it twice leaves the tenant as sending it once, so
+    /// that a transient answer may be retried: its method's
+    /// ([`RetryPolicy::is_idempotent`](crate::retry::RetryPolicy::is_idempotent))
+    /// unless [`set_idempotent`](Self::set_idempotent) said otherwise.
+    pub fn is_idempotent(&self) -> bool {
+        self.idempotent
+            .unwrap_or_else(|| crate::retry::RetryPolicy::is_idempotent(&self.method))
+    }
+
+    /// Marks it idempotent or not, whatever its method: a `PUT` that
+    /// carries the version it replaces (optimistic concurrency) is not, as
+    /// a second copy after the tenant applied the first names a stale
+    /// version.
+    pub fn set_idempotent(&mut self, idempotent: bool) {
+        self.idempotent = Some(idempotent);
+    }
+
     #[cfg(not(target_os = "wasi"))]
     fn from_reqwest(request: &reqwest::Request) -> Self {
         Self {
@@ -108,6 +129,7 @@ impl Request {
                 .and_then(reqwest::Body::as_bytes)
                 .map(<[u8]>::to_vec),
             timeout: request.timeout().copied(),
+            idempotent: None,
         }
     }
 
@@ -377,16 +399,18 @@ impl Response {
 /// ([`ConnectorError`](crate::ConnectorError)) and decides on a retry.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TransportFailure {
-    /// No connection: refused, DNS, TLS, the proxy, or the connect limit.
-    /// Sent again when the tenant's retry policy allows.
+    /// No connection: refused, DNS, the proxy, or the connect limit. Sent
+    /// again when the tenant's retry policy allows.
     Connect {
         /// What failed, without the URL.
         reason: String,
     },
     /// Connected, then no answer (or no more of it) within the read limit.
     Timeout,
-    /// The request could not reach the tenant for another reason: a URL,
-    /// header or setting the transport refuses. Never sent again.
+    /// The request could not reach the tenant for another reason: a
+    /// certificate the tenant's TLS settings refuse, or a URL, header or
+    /// setting the transport refuses. Never sent again: it would fail the
+    /// same way.
     Unreachable {
         /// What failed, without the URL.
         reason: String,
@@ -509,6 +533,59 @@ fn default(_spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, MakeError> {
     Err(MakeError::NetworkUnavailable)
 }
 
+/// Whether *error* is a TLS handshake that failed on the certificate: the
+/// tenant's certificate is not trusted, has expired or names another host,
+/// or none was presented. Sending again would fail the same way. rustls's
+/// error reaches reqwest's chain inside `io::Error`s (hyper-util wraps
+/// tokio-rustls's), whose `source` skips what they wrap, so an `io::Error`
+/// is opened with `get_ref` instead.
+#[cfg(not(target_os = "wasi"))]
+fn certificate_refused(error: &(dyn std::error::Error + 'static)) -> bool {
+    let mut current = Some(error);
+    while let Some(error) = current {
+        if matches!(
+            error.downcast_ref::<rustls::Error>(),
+            Some(
+                rustls::Error::InvalidCertificate(_)
+                    | rustls::Error::NoCertificatesPresented
+                    | rustls::Error::InvalidCertRevocationList(_)
+            )
+        ) {
+            return true;
+        }
+        current = match error.downcast_ref::<std::io::Error>() {
+            Some(io) => io
+                .get_ref()
+                .map(|inner| inner as &(dyn std::error::Error + 'static)),
+            None => error.source(),
+        };
+    }
+    false
+}
+
+#[cfg(all(test, not(target_os = "wasi")))]
+mod certificate_tests {
+    use super::certificate_refused;
+    use std::io;
+
+    /// hyper-util's chain: an `io::Error` around tokio-rustls's
+    /// `io::Error` around rustls's error.
+    #[test]
+    fn a_certificate_error_is_found_inside_nested_io_errors() {
+        let rustls = rustls::Error::InvalidCertificate(rustls::CertificateError::UnknownIssuer);
+        let nested = io::Error::other(io::Error::new(io::ErrorKind::InvalidData, rustls));
+        assert!(certificate_refused(&nested));
+        let other = io::Error::other(io::Error::new(
+            io::ErrorKind::InvalidData,
+            rustls::Error::DecryptError,
+        ));
+        assert!(!certificate_refused(&other));
+        assert!(!certificate_refused(&io::Error::from(
+            io::ErrorKind::ConnectionRefused
+        )));
+    }
+}
+
 /// The native transport: reqwest on rustls.
 #[cfg(not(target_os = "wasi"))]
 #[derive(Debug)]
@@ -557,8 +634,9 @@ impl ReqwestTransport {
         }
         let connect = error.is_connect();
         let unreachable = connect || error.is_request() || error.is_timeout();
+        let refused = certificate_refused(&error);
         let reason = crate::error::describe(error);
-        if connect {
+        if connect && !refused {
             TransportFailure::Connect { reason }
         } else if unreachable {
             TransportFailure::Unreachable { reason }

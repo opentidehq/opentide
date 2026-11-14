@@ -832,16 +832,6 @@ pub(crate) fn present(node: Option<&Node>) -> bool {
     !matches!(node.map(|node| &node.value), None | Some(Value::Null))
 }
 
-/// `isinstance(value, int)`: an integer, or a boolean (a Python `bool` is an
-/// `int`). The integer's value, a boolean as 0 or 1.
-pub(crate) fn python_int(node: Option<&Node>) -> Option<i64> {
-    match node.map(|node| &node.value) {
-        Some(Value::Int(integer)) => Some(*integer),
-        Some(Value::Bool(flag)) => Some(i64::from(*flag)),
-        _ => None,
-    }
-}
-
 /// A mapping's value at `key`, when the node is a mapping.
 pub(crate) fn get<'n>(node: Option<&'n Node>, key: &str) -> Option<&'n Node> {
     node.and_then(|node| node.get(key)).map(AsRef::as_ref)
