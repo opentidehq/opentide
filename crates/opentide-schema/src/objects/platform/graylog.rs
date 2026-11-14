@@ -754,9 +754,14 @@ fn seconds(node: Option<&Node>) -> Option<u128> {
         .and_then(|text| duration_seconds(text, false).ok())
 }
 
-/// `graylog_overlapping_window`: a filter that searches a longer window than
-/// its interval alerts once per run on each message the runs share.
-pub fn overlapping_window(block: &Node) -> Option<Advisory> {
+/// How long a filter searches and how often it runs, in seconds, when the
+/// window is the longer: runs overlap, and each message the runs share alerts
+/// once per run. A block with an aggregation, a cron schedule, or a window or
+/// interval that is not a duration has none.
+///
+/// [`overlapping_window`] (validate's advisory) and the engine's block check
+/// in `opentide lint` (`opentide_tide::block_diagnostics`) both read it.
+pub fn overlapping_runs(block: &Node) -> Option<(u128, u128)> {
     let schedule = get(block, "schedule")?;
     if get(block, "aggregation").is_some() || !matches!(schedule.value, Value::Map(_)) {
         return None;
@@ -764,21 +769,30 @@ pub fn overlapping_window(block: &Node) -> Option<Advisory> {
     if get(schedule, "cron").is_some() {
         return None;
     }
-    let window_node = get(schedule, "window")?;
-    // `schedule.get("every") or "5m"`: a falsy interval is the default.
-    let every_node = schedule
-        .get("every")
-        .map(AsRef::as_ref)
-        .filter(|node| super::truthy(Some(node)));
-    let window = seconds(Some(window_node))?;
-    let every = match every_node {
+    let window = seconds(Some(get(schedule, "window")?))?;
+    let every = match every_node(schedule) {
         Some(node) => seconds(Some(node))?,
         None => 300,
     };
-    if window <= every {
-        return None;
-    }
-    let every_text = every_node.map_or_else(|| DEFAULT_EVERY.to_owned(), py_str);
+    (window > every).then_some((window, every))
+}
+
+/// `schedule.every`, unless it is falsy (`schedule.get("every") or "5m"`:
+/// a falsy interval is the default).
+fn every_node(schedule: &Node) -> Option<&Node> {
+    schedule
+        .get("every")
+        .map(AsRef::as_ref)
+        .filter(|node| super::truthy(Some(node)))
+}
+
+/// `graylog_overlapping_window`: a filter that searches a longer window than
+/// its interval alerts once per run on each message the runs share.
+pub fn overlapping_window(block: &Node) -> Option<Advisory> {
+    overlapping_runs(block)?;
+    let schedule = get(block, "schedule")?;
+    let window_node = get(schedule, "window")?;
+    let every_text = every_node(schedule).map_or_else(|| DEFAULT_EVERY.to_owned(), py_str);
     Some(Advisory {
         code: "graylog_overlapping_window",
         field_path: block_path(&["schedule"]),
@@ -859,6 +873,73 @@ pub fn advisories(rule: &Node, tenants: &[TenantView<'_>]) -> Vec<Advisory> {
 pub fn leading_wildcard_allowed(block: &Node, tenants: &[TenantView<'_>]) -> bool {
     let reached = targeted(block, tenants);
     !reached.is_empty() && reached.iter().all(|tenant| tenant.allow_leading_wildcard)
+}
+
+/// A Graylog tenant of the workspace's configuration, as the advisories and
+/// the leading-wildcard filter read it (`configured_tenants`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfiguredTenant {
+    /// The tenant's name.
+    pub name: String,
+    /// Whether its `streams` names any stream.
+    pub has_streams: bool,
+    /// Its `allow_leading_wildcard`.
+    pub allow_leading_wildcard: bool,
+}
+
+impl ConfiguredTenant {
+    /// The tenant as [`advisories`] and [`leading_wildcard_allowed`] read it.
+    pub fn view(&self) -> TenantView<'_> {
+        TenantView {
+            name: &self.name,
+            has_streams: self.has_streams,
+            allow_leading_wildcard: self.allow_leading_wildcard,
+        }
+    }
+}
+
+/// The `[[tenants]]` of the resolved `platforms/graylog.toml`, in order
+/// (`configured_tenants`); `platforms` is the resolved configuration's
+/// `platforms` table.
+pub fn configured_tenants(platforms: Option<&Node>) -> Vec<ConfiguredTenant> {
+    tenants_of(
+        platforms
+            .and_then(|platforms| platforms.get("graylog"))
+            .map(AsRef::as_ref),
+    )
+}
+
+/// The `[[tenants]]` of a Graylog configuration (`platforms/graylog.toml`'s
+/// table), in order. A tenant without a name is not one.
+pub fn tenants_of(graylog: Option<&Node>) -> Vec<ConfiguredTenant> {
+    let Some(Value::Seq(tenants)) = graylog
+        .and_then(|graylog| graylog.get("tenants"))
+        .map(|tenants| &tenants.value)
+    else {
+        return Vec::new();
+    };
+    tenants
+        .iter()
+        .filter_map(|tenant| {
+            let name = tenant.get("name")?.value.as_str()?.to_owned();
+            let setup = tenant.get("setup");
+            Some(ConfiguredTenant {
+                name,
+                has_streams: !list_items(
+                    setup
+                        .and_then(|setup| setup.get("streams"))
+                        .map(AsRef::as_ref),
+                )
+                .is_empty(),
+                allow_leading_wildcard: matches!(
+                    setup
+                        .and_then(|setup| setup.get("allow_leading_wildcard"))
+                        .map(|flag| &flag.value),
+                    Some(Value::Bool(true))
+                ),
+            })
+        })
+        .collect()
 }
 
 /// The event definition title of a rule's enabled Graylog block (the block's

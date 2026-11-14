@@ -444,18 +444,25 @@ pub const NAMED_CHECKS: [NamedCheck; 4] = [
 /// Every block advisory a rule earns, each platform's in the platform
 /// table's order: a warning that never rejects the rule, which `validate`
 /// and `lint`'s `queries` check report at its field path. Bitdefender's
-/// ([`bitdefender::advisories::advisories`]), Exabeam's
-/// ([`exabeam::advisories`]), then Google SecOps'
-/// ([`google_secops::advisories::advisories`]).
-pub fn block_advisories(rule: &Node) -> Vec<Advisory> {
+/// ([`bitdefender::advisories::advisories`]), Graylog's
+/// ([`graylog::advisories`], which read the workspace's Graylog tenants:
+/// `graylog_tenants`), Exabeam's ([`exabeam::advisories`]), then Google
+/// SecOps' ([`google_secops::advisories::advisories`]), as lint orders them.
+pub fn block_advisories(rule: &Node, graylog_tenants: &[graylog::TenantView<'_>]) -> Vec<Advisory> {
+    let convert = |code, field_path, message| Advisory {
+        code,
+        field_path,
+        message,
+    };
     let mut found: Vec<Advisory> = bitdefender::advisories::advisories(rule)
         .into_iter()
-        .map(|advisory| Advisory {
-            code: advisory.code,
-            field_path: advisory.field_path,
-            message: advisory.message,
-        })
+        .map(|advisory| convert(advisory.code, advisory.field_path, advisory.message))
         .collect();
+    found.extend(
+        graylog::advisories(rule, graylog_tenants)
+            .into_iter()
+            .map(|advisory| convert(advisory.code, advisory.field_path, advisory.message)),
+    );
     found.extend(exabeam::advisories(rule));
     found.extend(google_secops::advisories::advisories(rule));
     found

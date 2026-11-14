@@ -73,8 +73,10 @@ pub const OBJECTS: &[(&str, &str)] = &[
 /// are each reported as one `schema_validation` on `configurations.sysdig`
 /// naming its code; Bitdefender's (bitdefender-1.0, the named check
 /// `bitdefender_rule_shape`) under their own code, at the path the
-/// specification fixes ([`MODEL_CONSTRAINT_CODES`]). Bitdefender's advisories
-/// and YARA codes are validate's and the engine's, not the model's.
+/// specification fixes (`MODEL_CONSTRAINT_CODES`), as Graylog's are
+/// (graylog-1.0, `graylog_constraints`). Bitdefender's advisories and YARA
+/// codes, and Graylog's advisories and query codes, are validate's and the
+/// engine's, not the model's.
 pub const PLATFORMS: &[(&str, &str)] = &[
     ("sysdig-constraint-priority", "sysdig_priority"),
     ("sysdig-constraint-source", "sysdig_source"),
@@ -128,6 +130,15 @@ pub const PLATFORMS: &[(&str, &str)] = &[
         "bitdefender_targets_shape",
     ),
     ("bitdefender-severity-lowercase", "bitdefender_severity"),
+    ("graylog-aggregation", "graylog_aggregation"),
+    ("graylog-event-field", "graylog_event_field"),
+    ("graylog-event-key", "graylog_event_key"),
+    ("graylog-event-limit", "graylog_event_limit"),
+    ("graylog-field-name", "graylog_field_name"),
+    ("graylog-list-shape", "graylog_list_shape"),
+    ("graylog-priority", "graylog_priority"),
+    ("graylog-query-blank", "graylog_query_blank"),
+    ("graylog-schedule", "graylog_schedule"),
 ];
 
 /// The kinds `--only <group>` names: `structural` ([`STRUCTURAL`]),
@@ -291,7 +302,7 @@ pub fn check_object_as(family: &str, bytes: &[u8]) -> Vec<Json> {
 
 /// The constraint codes a platform block's model reports under their own
 /// code (`ErrorKind::Constraint`, as 0.28.1 does), not as
-/// `schema_validation`: bitdefender-1.0's.
+/// `schema_validation`: bitdefender-1.0's and graylog-1.0's.
 const MODEL_CONSTRAINT_CODES: &[&str] = {
     use opentide_schema::objects::platform::bitdefender::checks as bitdefender;
     &[
@@ -305,12 +316,23 @@ const MODEL_CONSTRAINT_CODES: &[&str] = {
         bitdefender::ACTION_SCOPE,
         bitdefender::TARGETS_SHAPE,
         bitdefender::SEVERITY,
+        // graylog-1.0's block constraints (the named check
+        // `graylog_constraints`), each at the path the specification fixes.
+        "graylog_aggregation",
+        "graylog_event_field",
+        "graylog_event_key",
+        "graylog_event_limit",
+        "graylog_field_name",
+        "graylog_list_shape",
+        "graylog_priority",
+        "graylog_query_blank",
+        "graylog_schedule",
     ]
 };
 
 /// The oracle's findings for `path` that the Rust conversion owns
 /// (`schema_validation`, a platform model's constraint codes
-/// ([`MODEL_CONSTRAINT_CODES`]) and `yaml_parse`), in
+/// (`MODEL_CONSTRAINT_CODES`) and `yaml_parse`), in
 /// the fields [`check_object`] gives (a `yaml_parse` by its code alone: its message is the loader's,
 /// UC-2.x).
 pub fn oracle_findings(document: &Json, path: &str) -> Vec<Json> {
