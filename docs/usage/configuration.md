@@ -319,3 +319,4 @@ The editor (`opentide lsp start`) reports what `opentide validate` reports; the 
 - [Configuration spec](/docs/specifications/specs/configuration/) — normative merge order and file contract.
 - [Repository setup](./repository-setup.md) — how `opentide setup` scaffolds this directory.
 - [Troubleshooting](./troubleshooting.md) — "unknown status", "platform not loaded", and other config errors.
+
