@@ -10,13 +10,13 @@ exit: 0
   ␛[1m.vscode/settings.json␛[0m     ␛[2meditor settings␛[0m
   ␛[1m.vscode/mcp.json␛[0m          ␛[2mMCP server for VS Code␛[0m
 
-␛[1;32m✓␛[0m Wrote 3 files
-  ␛[1;34mnote:␛[0m The opentide VS Code extension (opentidehq.opentide), which .vscode/extensions.json
+␛[1m␛[32m✓␛[0m Wrote 3 files
+  ␛[1m␛[34mnote:␛[0m The opentide VS Code extension (opentidehq.opentide), which .vscode/extensions.json
         recommends, provides the opentide MCP server to VS Code; .vscode/mcp.json is for teammates
         without it
 
 ━━━ stderr
-␛[1;33mwarning:␛[0m opentide setup vscode is deprecated and will be removed when the opentide VS Code extension
+␛[1m␛[33mwarning:␛[0m opentide setup vscode is deprecated and will be removed when the opentide VS Code extension
          ships with a bundled language server and template actions
 
 ━━━ ws/.vscode/extensions.json · created 0644

@@ -13,7 +13,7 @@ exit: 0
   ␛[1m.cursor/skills/opentide-detection-rule/SKILL.md␛[0m          ␛[2mCursor configuration␛[0m
   ␛[1m.cursor/skills/detection-engineering/SKILL.md␛[0m            ␛[2mCursor configuration␛[0m
 
-␛[1;32m✓␛[0m Wrote 6 files
+␛[1m␛[32m✓␛[0m Wrote 6 files
 
 ━━━ stderr · empty
 

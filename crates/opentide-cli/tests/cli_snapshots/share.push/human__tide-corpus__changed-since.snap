@@ -6,6 +6,6 @@ args: opentide share push --changed --since 0123456789abcdef0123456789abcdef0123
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m No enabled sharing target
+␛[1m␛[32m✓␛[0m No enabled sharing target
 
 ━━━ stderr · empty

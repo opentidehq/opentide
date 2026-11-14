@@ -9,10 +9,10 @@ exit: 0
   ␛[1m.pre-commit-config.yaml␛[0m      ␛[2mvalidate on commit␛[0m
   ␛[1m.opentide/hooks/pre-commit␛[0m
 
-␛[1;32m✓␛[0m Wrote 2 files
+␛[1m␛[32m✓␛[0m Wrote 2 files
 
 ━━━ stderr
-␛[1;33mwarning:␛[0m Not a Git repository; wrote hook files without installing .git/hooks.
+␛[1m␛[33mwarning:␛[0m Not a Git repository; wrote hook files without installing .git/hooks.
 
 ━━━ ws/.opentide/hooks/ · created 0755
 

@@ -8,7 +8,7 @@ exit: 0
 ━━━ stdout
   ␛[1mazure-pipelines.yml␛[0m   ␛[2mAzure Pipelines pipeline␛[0m
 
-␛[1;32m✓␛[0m Wrote azure-pipelines.yml
+␛[1m␛[32m✓␛[0m Wrote azure-pipelines.yml
 
 ━━━ stderr · empty
 

@@ -6,7 +6,7 @@ args: opentide setup platforms --sentinel --yes
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m Platform enabled flags updated
+␛[1m␛[32m✓␛[0m Platform enabled flags updated
 
 ━━━ stderr · empty
 

@@ -10,11 +10,11 @@ exit: 0
   ␛[1m.cursor/skills/opentide-detection-rule/SKILL.md␛[0m   ␛[2mCursor configuration␛[0m
   ␛[1m.cursor/skills/detection-engineering/SKILL.md␛[0m     ␛[2mCursor configuration␛[0m
 
-␛[1;32m✓␛[0m Wrote 3 files
+␛[1m␛[32m✓␛[0m Wrote 3 files
 
 ━━━ stderr
 warning: Skill kept installed copy · slug: detection-engineering · source: opentidehq/skills · ref: main
-␛[1;33mwarning:␛[0m Kept the installed .agents/skills/detection-engineering: its files could not be downloaded
+␛[1m␛[33mwarning:␛[0m Kept the installed .agents/skills/detection-engineering: its files could not be downloaded
          from opentidehq/skills@main. Run the command again to update it.
 
 ━━━ ws/.agents/skills/opentide-detection-rule/ · created 0755

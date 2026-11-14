@@ -8,10 +8,10 @@ exit: 0
 ━━━ stdout
   ␛[1m.vscode/model-templates.code-snippets␛[0m   ␛[2meditor settings␛[0m
 
-␛[1;32m✓␛[0m Wrote .vscode/model-templates.code-snippets
+␛[1m␛[32m✓␛[0m Wrote .vscode/model-templates.code-snippets
 
 ━━━ stderr
-␛[1;33mwarning:␛[0m opentide setup vscode is deprecated and will be removed when the opentide VS Code extension
+␛[1m␛[33mwarning:␛[0m opentide setup vscode is deprecated and will be removed when the opentide VS Code extension
          ships with a bundled language server and template actions
 
 ━━━ ws/.opentide/templates/objective.1.0.template.yaml · created 0644

@@ -6,6 +6,6 @@ args: opentide setup platforms --sentinel --splunk --yes
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m Platform configuration files already present
+␛[1m␛[32m✓␛[0m Platform configuration files already present
 
 ━━━ stderr · empty

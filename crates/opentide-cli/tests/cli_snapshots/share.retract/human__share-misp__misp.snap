@@ -7,13 +7,13 @@ exit: 0
 
 ━━━ stdout
 ␛[1mmisp-prod␛[0m
-  ␛[1;31m× retracted␛[0m  ␛[1mShared rule to update␛[0m                 ␛[2m…000000000012␛[0m
-  ␛[1;31m× retracted␛[0m  ␛[1m00000000-0000-4000-8048-000000000020␛[0m  ␛[2m…000000000020␛[0m
+  ␛[1m␛[31m× retracted␛[0m  ␛[1mShared rule to update␛[0m                 ␛[2m…000000000012␛[0m
+  ␛[1m␛[31m× retracted␛[0m  ␛[1m00000000-0000-4000-8048-000000000020␛[0m  ␛[2m…000000000020␛[0m
 
-␛[1;32m✓␛[0m Retracted 2 objects from misp-prod · 2 retracted
+␛[1m␛[32m✓␛[0m Retracted 2 objects from misp-prod · 2 retracted
 
 ━━━ stderr
-␛[1;33mwarning:␛[0m [[misp]] block "misp-lab" api_key is a literal. Use ${ENV_VAR}. The value was replaced with
+␛[1m␛[33mwarning:␛[0m [[misp]] block "misp-lab" api_key is a literal. Use ${ENV_VAR}. The value was replaced with
          [REDACTED].
 
 ━━━ ws/.opentide/states/sharing.jsonl · modified 0644

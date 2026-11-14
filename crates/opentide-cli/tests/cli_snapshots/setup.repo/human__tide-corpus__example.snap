@@ -10,9 +10,9 @@ exit: 0
   ␛[1mREADME.md␛[0m                             ␛[2mquick start␛[0m
   ␛[1m.gitignore␛[0m                            ␛[2mfiles git leaves out␛[0m
 
-␛[1;32m✓␛[0m Created Detections here
+␛[1m␛[32m✓␛[0m Created Detections here
 
-␛[1;38;5;231;48;5;18m ≋ ␛[0m ␛[1mNext steps␛[0m
+␛[1m␛[38;5;231m␛[48;5;18m ≋ ␛[0m ␛[1mNext steps␛[0m
 ␛[2m  1  ␛[0m␛[1mopentide generate␛[0m␛[2m · schemas, templates and editor snippets␛[0m
 ␛[2m  2  ␛[0m␛[1mopentide validate␛[0m␛[2m · check every object before you commit␛[0m
 

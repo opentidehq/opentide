@@ -28,6 +28,6 @@ exit: 0
 ␛[1msysdig-secure␛[0m                ␛[2mSysdig Secure and Falco detection engineering for opentide…␛[0m
 ␛[1mthreat-hunting␛[0m               ␛[2mThreat hunting hypothesis discipline using the ABLE framework (Actor…␛[0m
 ␛[1mopentide-detection-rule␛[0m      ␛[2mAuthor rules as rule::1.1 YAML under objects/rules/.␛[0m
-␛[1;32m✓␛[0m 22 skills match 'rule' · 0 installed · opentidehq/skills@main
+␛[1m␛[32m✓␛[0m 22 skills match 'rule' · 0 installed · opentidehq/skills@main
 
 ━━━ stderr · empty
