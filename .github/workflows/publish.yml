@@ -6,7 +6,7 @@
 #   - the crates, in dependency order (scripts/engine/release.py publish), the
 #     `opentide` facade with them;
 #   - the npm packages: @opentide/opentide, its native packages (napi-rs), the
-#     `opentide` alias, @opentide/lsp-client and @opentide/lsp-worker, with
+#     `opentide` alias, @opentide/lsp-client, @opentide/lsp-worker and @opentide/wasi-host, with
 #     provenance;
 #   - the GitHub Release: the `opentide` and `opentide-lsp` binaries for each
 #     target with their installers, the engine assets editors pin
