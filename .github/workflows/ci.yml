@@ -409,7 +409,7 @@ jobs:
       # extension serves every Python from 3.10.
       PYO3_PYTHON: /usr/bin/python3
       # sccache without CARGO_PRIMARY_PACKAGE (the script says why).
-      RUSTC_WRAPPER: ${{ github.workspace }}/scripts/ci/sccache-rustc
+      RUSTC_WRAPPER: ${{ github.workspace }}/scripts/ci/rustc-wrapper/sccache
       SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 3G
       SCCACHE_IDLE_TIMEOUT: "0"
@@ -440,7 +440,7 @@ jobs:
         id: week
         shell: bash
         run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      # `v3`: the build's settings (RUSTFLAGS, the profile's debuginfo and
+      # `v4`: the build's settings (RUSTFLAGS, the profile's debuginfo and
       # strip, the wrapper) are in every compile's sccache key: bump it with them, or the
       # week's copy, already saved, keeps the old compiles and none is saved.
       - name: Restore the compiler cache
@@ -448,8 +448,8 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-build-v3-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-build-v3-${{ hashFiles('rust-toolchain.toml') }}-
+          key: sccache-build-v4-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-build-v4-${{ hashFiles('rust-toolchain.toml') }}-
 
       # The affected crates' test binaries, with the binaries their tests run
       # (CARGO_BIN_EXE_*). `--timings`: the report is uploaded below.
@@ -658,7 +658,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-build-v3-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          key: sccache-build-v4-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
   # The Python package as a package (Python is the packaging layer): its
   # surface (the SDK, the models, the plugin API, the console script) and the
