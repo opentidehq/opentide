@@ -112,6 +112,10 @@ token = "$SPLUNK_TOKEN"
 
 `ssl` takes `true` or `false`; from an environment variable, `true`/`false`, `yes`/`no`, `on`/`off` or `1`/`0` in any case. Any other value fails to load and names the tenant. An `ssl = "$VAR"` whose variable is unset fails before the first request, naming the tenant and the variable.
 
+### Retries
+
+Every platform retries a request the same way, and only when sending it twice is safe. A request whose connection could not be made (DNS, refused, TLS, the proxy, the connect timeout) never reached the tenant and is sent again whatever its method. A `GET`, `HEAD`, `OPTIONS`, `PUT` or `DELETE` is also sent again after an HTTP 408, 429, 502, 503 or 504. A request the tenant did not answer within its timeout is not sent again. A `POST` or `PATCH`, which creates rules and starts searches, is sent once: the tenant may have acted on a request its gateway answered with an error, so deploy never creates a rule twice. Up to three retries, waiting 0.5, 1 and 2 seconds, or what a 429 or 503 asks in `Retry-After` (seconds or a date, at most 120 seconds). When the retries run out, the last answer is reported. Bitdefender GravityZone, Exabeam and Google Security Operations wait out their own rate limits instead ([Platforms](./concepts/platforms.md)). There is no setting for it.
+
 ## Deployment statuses and strategies
 
 Every rule's `status` must match a status defined in the merged `deployment.toml`. That is the only constraint — statuses are a configurable set, not a fixed lifecycle, and opentide does not enforce an order between them. Each status maps to a **strategy**, and the strategy alone decides what deploy does. opentide ships this default set; none of these names is special:
