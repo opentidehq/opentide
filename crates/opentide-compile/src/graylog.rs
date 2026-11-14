@@ -54,6 +54,43 @@ const V7_0: Version = Version(7, 0, 0);
 const V7_1: Version = Version(7, 1, 0);
 const V7_2: Version = Version(7, 2, 0);
 
+/// The definition fields a version takes only from a release on: below it,
+/// [`compile_definition`] leaves them out and Graylog would drop them.
+pub const FIELDS_SINCE: [(&str, Version); 3] = [
+    ("event_summary_template", V7_1),
+    ("tags", V7_2),
+    ("tactics_techniques", V7_2),
+];
+/// The release Informational priority (0) comes with; below it,
+/// [`derive_priority`] sends Low (1).
+pub const INFORMATIONAL_SINCE: Version = V7_1;
+
+/// Whether a server of `version` takes the definition field `field`
+/// ([`FIELDS_SINCE`]); a field the table does not name, every version takes.
+pub fn takes(version: Version, field: &str) -> bool {
+    FIELDS_SINCE
+        .iter()
+        .find(|(name, _)| *name == field)
+        .is_none_or(|(_, since)| version >= *since)
+}
+
+/// What `definition`, compiled for some version, carries that a server of
+/// `version` does not take: each field of [`FIELDS_SINCE`] it sets (not
+/// empty) below its release, and an Informational priority below
+/// [`INFORMATIONAL_SINCE`]. Empty when the definition fits the version.
+pub fn unsupported_fields(definition: &Object, version: Version) -> Vec<String> {
+    let mut found: Vec<String> = FIELDS_SINCE
+        .iter()
+        .filter(|(name, _)| !takes(version, name))
+        .filter(|(name, _)| definition.get(*name).is_some_and(Json::truthy))
+        .map(|(name, _)| (*name).to_owned())
+        .collect();
+    if version < INFORMATIONAL_SINCE && definition.get("priority") == Some(&Json::Int(0)) {
+        found.push("priority 0 (Informational)".to_owned());
+    }
+    found
+}
+
 /// The priority of a block and a rule that name none (Medium).
 pub const DEFAULT_PRIORITY: i64 = 2;
 /// The interval of a block that sets none.
@@ -271,7 +308,7 @@ pub fn derive_priority(label: Option<&str>, version: Version) -> i64 {
         .zip(0_i64..)
         .find(|(name, _)| name.to_lowercase() == wanted)
         .map_or(DEFAULT_PRIORITY, |(_, value)| value);
-    if value == 0 && version < V7_1 {
+    if value == 0 && version < INFORMATIONAL_SINCE {
         1
     } else {
         value
@@ -605,7 +642,7 @@ pub fn compile_definition(
         definition.insert("remediation_steps".into(), remediation.into());
     }
     if let Some(summary) = set_text(block, "summary") {
-        if version >= V7_1 {
+        if takes(version, "event_summary_template") {
             definition.insert("event_summary_template".into(), summary.into());
         } else {
             warnings.push((
@@ -617,7 +654,7 @@ pub fn compile_definition(
             ));
         }
     }
-    if version >= V7_2 {
+    if takes(version, "tags") {
         let tenant_tags = as_list(setup.and_then(|setup| setup.get("tags")));
         definition.insert(
             "tags".into(),
@@ -798,6 +835,27 @@ pub fn compile_body(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_fields_a_version_does_not_take() {
+        let mut definition = Object::new();
+        definition.insert("title".into(), "t".into());
+        definition.insert("priority".into(), Json::Int(0));
+        definition.insert("event_summary_template".into(), "s".into());
+        definition.insert("tags".into(), Json::Array(vec!["a".into()]));
+        definition.insert("tactics_techniques".into(), Json::Array(Vec::new()));
+        assert_eq!(
+            unsupported_fields(&definition, Version(6, 3, 12)),
+            [
+                "event_summary_template",
+                "tags",
+                "priority 0 (Informational)"
+            ]
+        );
+        assert_eq!(unsupported_fields(&definition, Version(7, 1, 0)), ["tags"]);
+        assert!(unsupported_fields(&definition, Version(7, 2, 0)).is_empty());
+        assert!(takes(Version(6, 3, 0), "title"));
+    }
 
     #[test]
     fn versions() {
