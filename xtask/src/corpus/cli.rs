@@ -163,6 +163,7 @@ pub fn parse_options(args: &[String]) -> Result<(Options, Option<String>, bool)>
     };
     Ok((
         Options {
+            platforms: crate::corpus::vocab::PLATFORMS,
             seed,
             counts,
             layout,
@@ -791,8 +792,7 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
                 "yara": yara,
                 "yaml_1_2": 0,
             });
-            let counted = crate::validate::crowdstrike_cql(Some(&oracle), Some(&rust), &[])
-                || crate::validate::harfanglab_yara(Some(&oracle), Some(&rust), &[]);
+            let counted = crate::validate::crowdstrike_cql(Some(&oracle), Some(&rust), &[]);
             if counted {
                 approved += 1;
             } else {

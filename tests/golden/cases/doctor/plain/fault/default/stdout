@@ -1,19 +1,19 @@
 ✓ Python 3.13.14 · python_version
-✓ opentide 0.23.0 · opentide_version
+✓ opentide 0.28.1 · opentide_version
 ! Could not ask PyPI for the latest release (ProxyError) · opentide_latest
   → check the network or --proxy, or pass --offline to skip network checks
 ✓ Workspace ./ has .opentide/ (found from the current directory) · workspace
 ✓ git <GIT_VERSION> · git
 ! ./ is not in a git repository · git_repository
   → git init ./
-✓ 13 configuration files load · configuration
+✓ 17 configuration files load · configuration
 ! 4 template(s) missing: objective.1.0.template.yaml, rule.1.0.template.yaml, rule.1.1.template.yaml, threat.1.0.template.yaml · templates_fresh
   → opentide generate templates schemas snippets
 ! 6 schema(s) this version generates are missing: objective.1.0.schema.json, rule.1.0.schema.json, rule.1.1.schema.json, threat.1.0.schema.json, opentide.schema.json, visibility.1.0.schema.json · schemas_fresh
   → opentide generate schemas
 ! opentide cannot generate the language-server catalog (ConfigurationError: deployment.toml is invalid: colour1: unknown key; colour2: unknown key; colour3: unknown key; colour4: unknown key; colour5: unknown key): objects are checked with the committed or bundled one · lsp_catalog
   → opentide doctor --debug
-✓ Enabled: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig · platforms_enabled
+✓ Enabled: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops · platforms_enabled
 ✓ sentinel: azure.identity, azure.monitor.query, requests import · platform_sdk
 ✓ defender_for_endpoint: requests import · platform_sdk
 ✓ splunk: splunklib.client import · platform_sdk
@@ -23,7 +23,11 @@
 ✓ carbon_black_cloud: cbc_sdk import · platform_sdk
 ✓ elastic: requests import · platform_sdk
 ✓ sysdig: requests import · platform_sdk
-✓ The analysis engine (language server 0.11.0) loads · analysis_engine
+✓ bitdefender: requests import · platform_sdk
+✓ graylog: requests import · platform_sdk
+✓ exabeam: requests import · platform_sdk
+✓ google_secops: google.auth, requests import · platform_sdk
+✓ The analysis engine (language server 0.16.1) loads · analysis_engine
 ! sentinel/sentinel-staging: 5 of 5 variables unset: SENTINEL_STAGING_CLIENT_ID, SENTINEL_STAGING_CLIENT_SECRET, SENTINEL_STAGING_SUBSCRIPTION_ID, SENTINEL_STAGING_TENANT_ID, SENTINEL_STAGING_WORKSPACE_ID · credentials
   → set SENTINEL_STAGING_CLIENT_ID, SENTINEL_STAGING_CLIENT_SECRET, SENTINEL_STAGING_SUBSCRIPTION_ID, SENTINEL_STAGING_TENANT_ID, SENTINEL_STAGING_WORKSPACE_ID in the environment (or a .env file you load)
 ! sentinel/sentinel-production: 5 of 5 variables unset: SENTINEL_PRODUCTION_CLIENT_ID, SENTINEL_PRODUCTION_CLIENT_SECRET, SENTINEL_PRODUCTION_SUBSCRIPTION_ID, SENTINEL_PRODUCTION_TENANT_ID, SENTINEL_PRODUCTION_WORKSPACE_ID · credentials
@@ -46,6 +50,14 @@
   → set ELASTIC_PRODUCTION_API_KEY in the environment (or a .env file you load)
 ! sysdig/sysdig-production: 1 of 1 variables unset: SYSDIG_PRODUCTION_API_TOKEN · credentials
   → set SYSDIG_PRODUCTION_API_TOKEN in the environment (or a .env file you load)
+○ bitdefender: no tenant configured · credentials
+  → add a [[tenants]] entry in .opentide/configurations/platforms/bitdefender.toml
+! graylog/graylog-lab: 1 of 1 variables unset: GRAYLOG_LAB_TOKEN · credentials
+  → set GRAYLOG_LAB_TOKEN in the environment (or a .env file you load)
+! exabeam/exabeam-production: 2 of 2 variables unset: EXABEAM_PRODUCTION_CLIENT_ID, EXABEAM_PRODUCTION_CLIENT_SECRET · credentials
+  → set EXABEAM_PRODUCTION_CLIENT_ID, EXABEAM_PRODUCTION_CLIENT_SECRET in the environment (or a .env file you load)
+○ google_secops: no tenant configured · credentials
+  → add a [[tenants]] entry in .opentide/configurations/platforms/google_secops.toml
 ✗ Cannot connect to proxy http://127.0.0.1:9 (ConnectionRefusedError) · proxy
   → check --proxy, OPENTIDE_PROXY or HTTPS_PROXY, and that the proxy is up
 ○ No .vscode/extensions.json: VS Code does not suggest opentidehq.opentide · vscode_settings

@@ -15,6 +15,7 @@ seed = 20261107
 runs = 5
 warmup = 1
 digest = "5978a2ab7c093587"
+platforms = ["sentinel", "defender_for_endpoint", "splunk", "sentinel_one", "carbon_black_cloud", "crowdstrike", "harfanglab", "elastic", "sysdig"]
 runner = "ubuntu-24.04, 4 vCPU"
 cpu_model = "AMD EPYC 7763 64-Core Processor"
 source = "bench.trycmd"

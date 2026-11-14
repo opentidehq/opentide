@@ -1,6 +1,6 @@
 """Write from_node_table.json: what Pydantic and the CLI report for each case of from_node_cases.toml.
 
-Run it with the oracle's interpreter (opentide 0.23.0, tests/corpora/README.md):
+Run it with the oracle's interpreter (tests/corpora/oracle.in, tests/corpora/README.md):
 
     <oracle python> crates/opentide-schema/tests/oracle/from_node_table.py
 

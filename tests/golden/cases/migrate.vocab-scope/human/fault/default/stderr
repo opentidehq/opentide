@@ -1,28 +1,25 @@
 [1;33mwarning:[0m entities: 'Host::Gizmo' is not a known vocabulary value
-[1;33mwarning:[0m objects/rules/encoded-spray-rule-0023.yaml: unreadable: while parsing a flow sequence
+[1;33mwarning:[0m objects/rules/hidden-loader-rule-0024.yaml: unreadable: while scanning for the next token
+         found character '\t' that cannot start any token
+  in "<unicode string>", line 69, column 1:
+         indent: tab
+    ^
+[1;33mwarning:[0m objects/rules/remote-implant-rule-0021.yaml: unreadable: while parsing a flow sequence
   in
-         "<unicode string>", line 52, column 9:
+         "<unicode string>", line 70, column 9:
     broken: [unclosed
             ^
 expected ',' or
          ']', but got '<stream end>'
-  in "<unicode string>", line 53, column 1:
+  in "<unicode string>", line 71, column 1:
     
     ^
-[1;33mwarning:[0m objects/rules/lateral-injection-rule-0024.yaml: unreadable: while scanning for the next
-         token
-found character '\t' that cannot start any token
-  in "<unicode string>", line 68,
-         column 1:
-        indent: tab
-    ^
-[1;33mwarning:[0m objects/rules/rogue-relay-rule-0035.yaml: unreadable: while parsing a flow sequence
-  in
-         "<unicode string>", line 58, column 9:
+[1;33mwarning:[0m objects/rules/silent-exfiltration-rule-0033.yaml: unreadable: while parsing a flow sequence
+         in "<unicode string>", line 70, column 9:
     broken: [unclosed
             ^
 expected ',' or
          ']', but got '<stream end>'
-  in "<unicode string>", line 59, column 1:
+  in "<unicode string>", line 71, column 1:
     
     ^

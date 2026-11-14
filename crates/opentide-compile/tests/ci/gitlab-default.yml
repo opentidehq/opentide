@@ -10,6 +10,11 @@
 #   CBC_URL
 #   ELASTIC_PROD_API_KEY
 #   ELASTIC_STAGING_API_KEY
+#   EXABEAM_CLIENT_ID
+#   EXABEAM_CLIENT_SECRET
+#   GOOGLE_SECOPS_CREDENTIALS
+#   GRAVITYZONE_API_KEY
+#   GRAYLOG_TOKEN
 #   HARFANGLAB_API_TOKEN
 #   MDE_CLIENT_ID
 #   MDE_CLIENT_SECRET
@@ -74,6 +79,12 @@ generate:
     - job: validate_query_defender-for-endpoint
       optional: true
     - job: validate_query_elastic
+      optional: true
+    - job: validate_query_exabeam
+      optional: true
+    - job: validate_query_google-secops
+      optional: true
+    - job: validate_query_graylog
       optional: true
     - job: validate_query_sentinel
       optional: true
@@ -165,6 +176,90 @@ validate_query_elastic:
     - if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
     - git checkout FETCH_HEAD -- .opentide/configurations
     - if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/elastic.toml; then opentide validate query --platform elastic --live --changed; else echo "The default branch has no elastic tenant yet, so no tenant is reviewed. Skipped elastic live query validation without using platform credentials."; fi
+
+validate_query_exabeam:
+  stage: validate
+  image: python:3.12-slim
+  rules:
+    - if: $CI_COMMIT_MESSAGE =~ /\[skip deploy\]/
+      when: never
+    - if: $CI_MERGE_REQUEST_TITLE =~ /\[skip deploy\]/
+      when: never
+    - if: $CI_MERGE_REQUEST_LABELS =~ /(^|,)skip-deploy(,|$)/
+      when: never
+    - when: on_success
+  variables:
+    GIT_DEPTH: "0"
+  artifacts:
+    when: always
+    expose_as: opentide query exabeam
+    paths:
+      - opentide-reports/summary.md
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git > /dev/null
+    - pip install "opentide==$OPENTIDE_VERSION"
+  script:
+    - rm -rf -- .opentide/configurations
+    - if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin "$CI_DEFAULT_BRANCH"; else git fetch origin "$CI_DEFAULT_BRANCH"; fi
+    - if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
+    - git checkout FETCH_HEAD -- .opentide/configurations
+    - if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/exabeam.toml; then opentide validate query --platform exabeam --live --changed; else echo "The default branch has no exabeam tenant yet, so no tenant is reviewed. Skipped exabeam live query validation without using platform credentials."; fi
+
+validate_query_google-secops:
+  stage: validate
+  image: python:3.12-slim
+  rules:
+    - if: $CI_COMMIT_MESSAGE =~ /\[skip deploy\]/
+      when: never
+    - if: $CI_MERGE_REQUEST_TITLE =~ /\[skip deploy\]/
+      when: never
+    - if: $CI_MERGE_REQUEST_LABELS =~ /(^|,)skip-deploy(,|$)/
+      when: never
+    - when: on_success
+  variables:
+    GIT_DEPTH: "0"
+  artifacts:
+    when: always
+    expose_as: opentide query google_secops
+    paths:
+      - opentide-reports/summary.md
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git > /dev/null
+    - pip install "opentide==$OPENTIDE_VERSION"
+  script:
+    - rm -rf -- .opentide/configurations
+    - if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin "$CI_DEFAULT_BRANCH"; else git fetch origin "$CI_DEFAULT_BRANCH"; fi
+    - if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
+    - git checkout FETCH_HEAD -- .opentide/configurations
+    - if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/google_secops.toml; then opentide validate query --platform google_secops --live --changed; else echo "The default branch has no google_secops tenant yet, so no tenant is reviewed. Skipped google_secops live query validation without using platform credentials."; fi
+
+validate_query_graylog:
+  stage: validate
+  image: python:3.12-slim
+  rules:
+    - if: $CI_COMMIT_MESSAGE =~ /\[skip deploy\]/
+      when: never
+    - if: $CI_MERGE_REQUEST_TITLE =~ /\[skip deploy\]/
+      when: never
+    - if: $CI_MERGE_REQUEST_LABELS =~ /(^|,)skip-deploy(,|$)/
+      when: never
+    - when: on_success
+  variables:
+    GIT_DEPTH: "0"
+  artifacts:
+    when: always
+    expose_as: opentide query graylog
+    paths:
+      - opentide-reports/summary.md
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git > /dev/null
+    - pip install "opentide==$OPENTIDE_VERSION"
+  script:
+    - rm -rf -- .opentide/configurations
+    - if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin "$CI_DEFAULT_BRANCH"; else git fetch origin "$CI_DEFAULT_BRANCH"; fi
+    - if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
+    - git checkout FETCH_HEAD -- .opentide/configurations
+    - if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/graylog.toml; then opentide validate query --platform graylog --live --changed; else echo "The default branch has no graylog tenant yet, so no tenant is reviewed. Skipped graylog live query validation without using platform credentials."; fi
 
 validate_query_sentinel:
   stage: validate

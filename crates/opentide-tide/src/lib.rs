@@ -81,7 +81,9 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
         ["configurations", "sentinel", "query"] => Some(LanguageId::Kql),
         ["configurations", "defender_for_endpoint", "query"] => Some(LanguageId::Kql),
         ["configurations", "splunk", "query" | "search"] => Some(LanguageId::Spl),
-        ["configurations", "carbon_black_cloud", "query"] => Some(LanguageId::Lucene),
+        // Lucene in each platform's dialect: the injection's platform
+        // selects it (graylog-1.0, "Query dialect").
+        ["configurations", "carbon_black_cloud" | "graylog", "query"] => Some(LanguageId::Lucene),
         ["configurations", "sysdig", "condition"] => Some(LanguageId::Falco),
         ["configurations", "crowdstrike", "query"] => Some(LanguageId::Cql),
         // A YaraSignature (yara-1.0). HarfangLab's decomposed fragments are
@@ -538,7 +540,9 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 
 /// What a rule's platform blocks say that no query of theirs carries: the
 /// Elastic block's advisories, the Sysdig block's tuning and list
-/// advisories, and, when the block has no query to carry them (none, or a
+/// advisories, the Graylog filter whose runs overlap
+/// (`graylog_overlapping_window`, as the engine words it), and, when the
+/// block has no query to carry them (none, or a
 /// placeholder), its declared datasets, event source and exceptions.
 ///
 /// `opentide lint` reports these (the advisory codes it owns); `validate`
@@ -577,6 +581,22 @@ pub fn block_diagnostics(source: &str, workspace: &[IndexedObject]) -> Vec<Diagn
         if !carried {
             out.extend(falco::exception_diagnostics(source, block));
         }
+    }
+    if let Some(block) = configurations.and_then(|c| c.get("graylog"))
+        && let Some((window, every)) =
+            opentide_schema::objects::platform::graylog::overlapping_runs(block)
+    {
+        let path = ["configurations", "graylog", "schedule"];
+        out.push(
+            Diagnostic::warning(
+                opentide_core::codes::GRAYLOG_OVERLAPPING_WINDOW,
+                format!(
+                    "this filter searches {window}s every {every}s, so runs overlap and each message alerts once per run that sees it; set `window` to `every`, or aggregate"
+                ),
+                elastic::path_range(source, &path),
+            )
+            .with_field_path(path.iter().map(ToString::to_string).collect()),
+        );
     }
     out
 }
@@ -696,9 +716,6 @@ fn analyze_injections(
         .then(|| google_secops::assembled(source, configurations))
         .flatten();
     let mut secops_block = secops.as_ref().map(|found| found.block().to_vec());
-    // Every token and finding of every query is placed in the file: one
-    // index of its lines, not a scan from the start for each (#817).
-    let lines = opentide_core::LineIndex::new(source);
     for inj in injections {
         let mut extra = Vec::new();
         let (found, query_tokens) = match inj.language {
@@ -753,11 +770,9 @@ fn analyze_injections(
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Lucene => {
-                let dialect = if inj.platform == "carbon_black_cloud" {
-                    opentide_lucene::Dialect::CarbonBlack
-                } else {
-                    opentide_lucene::Dialect::Elastic
-                };
+                // Carbon Black's and Graylog's dialects by their block or
+                // hunt `system`; Elastic's otherwise.
+                let dialect = opentide_lucene::Dialect::for_platform(&inj.platform);
                 let mut r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
                 let indices = (dialect == opentide_lucene::Dialect::Elastic)
                     .then(|| elastic::ecs_indices(configurations, &inj.field_path))
@@ -831,12 +846,12 @@ fn analyze_injections(
         // not a query to check: `opentide validate` skips it too.
         let mut diagnostics: Vec<Diagnostic> = Vec::new();
         if !placeholder::is_placeholder_query(source, &inj) {
-            diagnostics.extend(found.into_iter().map(|d| remap_diagnostic(&lines, &inj, d)));
+            diagnostics.extend(found.into_iter().map(|d| remap_diagnostic(source, &inj, d)));
             diagnostics.extend(extra);
         }
         let tokens = query_tokens
             .iter()
-            .filter_map(|t| remap_token(&lines, &inj, t))
+            .filter_map(|t| remap_token(source, &inj, t))
             .collect();
         out.push(QueryAnalysis {
             query: inj,
@@ -855,11 +870,7 @@ fn is_secops_section(inj: &InjectedQuery) -> bool {
     )
 }
 
-fn remap_diagnostic(
-    lines: &opentide_core::LineIndex<'_>,
-    inj: &InjectedQuery,
-    mut d: Diagnostic,
-) -> Diagnostic {
+fn remap_diagnostic(source: &str, inj: &InjectedQuery, mut d: Diagnostic) -> Diagnostic {
     let start = inner_offset(&inj.inner, d.range.start);
     let mut end = inner_offset(&inj.inner, d.range.end).max(start + 1);
     // A finding stays inside the part it starts in.
@@ -870,7 +881,7 @@ fn remap_diagnostic(
         }
     }
     let span = remap_span(inj, ByteSpan::new(start, end));
-    d.range = lines.range(span);
+    d.range = span_to_range(source, span);
     if d.field_path.is_none() {
         d.field_path = Some(inj.field_path.clone());
     }
@@ -903,7 +914,7 @@ fn inner_offset(inner: &str, position: opentide_core::Position) -> usize {
 }
 
 fn remap_token(
-    lines: &opentide_core::LineIndex<'_>,
+    source: &str,
     inj: &InjectedQuery,
     token: &HighlightToken,
 ) -> Option<HighlightToken> {
@@ -913,7 +924,7 @@ fn remap_token(
     let mapped = remap_span(inj, token.span);
     Some(HighlightToken {
         span: mapped,
-        range: lines.range(mapped),
+        range: span_to_range(source, mapped),
         capture: token.capture.clone(),
         token_type: token.token_type,
     })
@@ -972,31 +983,10 @@ fn join_field_path(parent: &str, key: &str) -> String {
     }
 }
 
-/// The patterns [`highlight_scalar`] tells a scalar's kind by, compiled once:
-/// it runs on every scalar of every file, and compiling them each time was
-/// most of `opentide lint`'s time (#806).
-struct ScalarPatterns {
-    uuid: Regex,
-    schema: Regex,
-    technique: Regex,
-    number: Regex,
-}
-
 #[expect(
     clippy::unwrap_used,
-    reason = "regex literals: an invalid pattern fails every test that reaches it"
+    reason = "a regex literal: an invalid pattern fails every test that reaches it"
 )]
-fn scalar_patterns() -> &'static ScalarPatterns {
-    static PATTERNS: std::sync::OnceLock<ScalarPatterns> = std::sync::OnceLock::new();
-    PATTERNS.get_or_init(|| ScalarPatterns {
-        uuid: Regex::new(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-            .unwrap(),
-        schema: Regex::new(r"^[A-Za-z][A-Za-z0-9_]*::[0-9.]+$").unwrap(),
-        technique: Regex::new(r"^T[0-9]{4}(\.[0-9]{3})?$").unwrap(),
-        number: Regex::new(r"^-?[0-9]+(\.[0-9]+)?$").unwrap(),
-    })
-}
-
 fn highlight_scalar(
     spans: &mut Vec<(ByteSpan, &'static str)>,
     skip: &[ByteSpan],
@@ -1022,24 +1012,37 @@ fn highlight_scalar(
             || field.default_value.as_deref() == Some(value)
             || field.const_value.as_deref() == Some(value)
     });
-    let patterns = scalar_patterns();
-    let capture = if patterns.uuid.is_match(value) {
-        "tide.uuid"
-    } else if patterns.schema.is_match(value) {
-        "tide.schema"
-    } else if value == "true" || value == "false" {
-        "boolean"
-    } else if (value.starts_with('"') && value.ends_with('"'))
-        || (value.starts_with('\'') && value.ends_with('\''))
-    {
-        "string"
-    } else if in_enum || patterns.technique.is_match(value) {
-        "constant"
-    } else if patterns.number.is_match(value) {
-        "number"
-    } else {
-        "string"
-    };
+    let capture =
+        if Regex::new(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+            .unwrap()
+            .is_match(value)
+        {
+            "tide.uuid"
+        } else if Regex::new(r"^[A-Za-z][A-Za-z0-9_]*::[0-9.]+$")
+            .unwrap()
+            .is_match(value)
+        {
+            "tide.schema"
+        } else if value == "true" || value == "false" {
+            "boolean"
+        } else if (value.starts_with('"') && value.ends_with('"'))
+            || (value.starts_with('\'') && value.ends_with('\''))
+        {
+            "string"
+        } else if in_enum
+            || Regex::new(r"^T[0-9]{4}(\.[0-9]{3})?$")
+                .unwrap()
+                .is_match(value)
+        {
+            "constant"
+        } else if Regex::new(r"^-?[0-9]+(\.[0-9]+)?$")
+            .unwrap()
+            .is_match(value)
+        {
+            "number"
+        } else {
+            "string"
+        };
     push_span(spans, skip, start, end, capture);
 }
 

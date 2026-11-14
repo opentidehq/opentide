@@ -1,0 +1,686 @@
+{
+  "format": 1,
+  "scenario": "graylog/deploy",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/graylog/client.py",
+    "deploy"
+  ],
+  "digest": "sha256:ab4cfc40fca9135ca56bdd6d21f650ea758fd4595f8b3c1ba2286eda7a862098",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://graylog-tenant.invalid/api/system",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"facility\": \"graylog-server\", \"hostname\": \"127.0.0.1\", \"version\": \"7.2.2+94adc86\", \"is_processing\": true}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graylog-tenant.invalid/api/search/validate",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"timerange\": {\"type\": \"relative\", \"range\": 900}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"status\": \"OK\", \"explanations\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graylog-tenant.invalid/api/events/definitions?schedule=true",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"entity\": {\"_scope\": \"DEFAULT\", \"title\": \"Office application spawns obfuscated PowerShell\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}]}, \"share_request\": null}"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"65f1c0de2a3b4c5d6e7f8091\", \"_scope\": \"DEFAULT\", \"title\": \"Office application spawns obfuscated PowerShell\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://graylog-tenant.invalid/api/events/definitions/65f1c0de2a3b4c5d6e7f8091?schedule=true",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"_scope\": \"DEFAULT\", \"title\": \"Office application spawns obfuscated PowerShell\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}], \"id\": \"65f1c0de2a3b4c5d6e7f8091\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"65f1c0de2a3b4c5d6e7f8091\", \"_scope\": \"DEFAULT\", \"title\": \"Office application spawns obfuscated PowerShell\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://graylog-tenant.invalid/api/events/definitions/65f1c0de2a3b4c5d6e7f8091?schedule=false",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"_scope\": \"DEFAULT\", \"title\": \"Office application spawns obfuscated PowerShell\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}], \"id\": \"65f1c0de2a3b4c5d6e7f8091\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"65f1c0de2a3b4c5d6e7f8091\", \"_scope\": \"DEFAULT\", \"title\": \"Office application spawns obfuscated PowerShell\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://graylog-tenant.invalid/api/events/definitions/65f1c0de2a3b4c5d6e7f8091",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 204,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ]
+        ],
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://graylog-63.invalid/api/system",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"facility\": \"graylog-server\", \"hostname\": \"127.0.0.1\", \"version\": \"7.2.2+94adc86\", \"is_processing\": true}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graylog-63.invalid/api/search/validate",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"timerange\": {\"type\": \"relative\", \"range\": 900}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"status\": \"OK\", \"explanations\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graylog-63.invalid/api/events/definitions?schedule=true",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"entity\": {\"_scope\": \"DEFAULT\", \"title\": \"Office application spawns obfuscated PowerShell\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}]}, \"share_request\": null}"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"65f1c0de2a3b4c5d6e7f8091\", \"_scope\": \"DEFAULT\", \"title\": \"Office application spawns obfuscated PowerShell\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://graylog-63.invalid/api/events/definitions/65f1c0de2a3b4c5d6e7f8091?schedule=true",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"_scope\": \"DEFAULT\", \"title\": \"Office application spawns obfuscated PowerShell\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}], \"id\": \"65f1c0de2a3b4c5d6e7f8091\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"65f1c0de2a3b4c5d6e7f8091\", \"_scope\": \"DEFAULT\", \"title\": \"Office application spawns obfuscated PowerShell\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://graylog-63.invalid/api/events/definitions/65f1c0de2a3b4c5d6e7f8091?schedule=false",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"_scope\": \"DEFAULT\", \"title\": \"Office application spawns obfuscated PowerShell\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}], \"id\": \"65f1c0de2a3b4c5d6e7f8091\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"65f1c0de2a3b4c5d6e7f8091\", \"_scope\": \"DEFAULT\", \"title\": \"Office application spawns obfuscated PowerShell\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://graylog-63.invalid/api/events/definitions/65f1c0de2a3b4c5d6e7f8091",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 204,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ]
+        ],
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graylog-tenant.invalid/api/events/definitions?schedule=true",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"entity\": {\"_scope\": \"DEFAULT\", \"title\": \"Unconfirmed create\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}]}, \"share_request\": null}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "text/html; charset=utf-8"
+          ]
+        ],
+        "body": "<html><head><title>Saved</title></head><body>ok</body></html>"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graylog-tenant.invalid/api/events/definitions?schedule=true",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"entity\": {\"_scope\": \"DEFAULT\", \"title\": \"Refused create\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}]}, \"share_request\": null}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"message\": \"Validation failed\", \"errors\": {\"config.query\": [\"Query is not valid\"]}, \"type\": \"ApiError\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://graylog-tenant.invalid/api/events/definitions/65f1c0de2a3b4c5d6e7f0000?schedule=true",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"_scope\": \"DEFAULT\", \"title\": \"Missing definition\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}], \"id\": \"65f1c0de2a3b4c5d6e7f0000\"}"
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"message\": \"Event definition not found\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://graylog-tenant.invalid/api/events/definitions/65f1c0de2a3b4c5d6e7ff0ff?schedule=true",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"_scope\": \"DEFAULT\", \"title\": \"Immutable definition\", \"description\": \"An Office application started PowerShell with an encoded command.\", \"priority\": 3, \"alert\": true, \"tags\": [\"opentide\", \"managed-by-opentide\"], \"tactics_techniques\": [\"T1059.001\", \"TA0002\"], \"config\": {\"type\": \"aggregation-v1\", \"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"query_parameters\": [], \"filters\": [], \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"group_by\": [\"source\"], \"series\": [{\"id\": \"count-\", \"type\": \"count\"}], \"conditions\": {\"expression\": {\"expr\": \">=\", \"left\": {\"expr\": \"number-ref\", \"ref\": \"count-\"}, \"right\": {\"expr\": \"number\", \"value\": 3}}}, \"search_within_ms\": 900000, \"execute_every_ms\": 300000, \"use_cron_scheduling\": false}, \"field_spec\": {}, \"key_spec\": [], \"notification_settings\": {\"grace_period_ms\": 0, \"backlog_size\": 0}, \"notifications\": [{\"notification_id\": \"65f0c0ffee0123456789abcf\"}], \"id\": \"65f1c0de2a3b4c5d6e7ff0ff\"}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"message\": \"Immutable entity cannot be modified\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://graylog-tenant.invalid/api/events/definitions/65f1c0de2a3b4c5d6einuse",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 409,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"message\": \"The event definition is in use by a notification\", \"type\": \"ApiError\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graylog-tenant.invalid/api/search/validate",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"query\": \"EventID:1 AND (\", \"streams\": [\"65f0c0ffee0123456789abcd\"], \"stream_categories\": [], \"timerange\": {\"type\": \"relative\", \"range\": 900}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"status\": \"ERROR\", \"explanations\": [{\"error_type\": \"QUERY_PARSING_ERROR\", \"error_title\": \"Cannot parse query\", \"error_message\": \"incomplete query, expected `)`\", \"begin_line\": 1, \"begin_column\": 15, \"end_line\": 1, \"end_column\": 16}]}"
+      }
+    }
+  ]
+}

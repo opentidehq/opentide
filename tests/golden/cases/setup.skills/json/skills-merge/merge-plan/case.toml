@@ -7,7 +7,7 @@ fixture = "skills-merge"
 argv = ["opentide", "--json", "setup", "skills", "--cursor", "--claude-code", "--plan"]
 cwd = "."
 timeout_secs = 180
-cassette = "skills/manifest"
+cassette = "skills/catalogue-first"
 
 [env]
 ALL_PROXY = "<CASSETTE_PROXY>"

@@ -72,6 +72,15 @@ fn run(dir: &Path, candidate: &str) -> (bool, serde_json::Value) {
 }
 
 fn run_versions(dir: &Path, candidate: &str, versions: (&str, &str)) -> (bool, serde_json::Value) {
+    run_kept(dir, candidate, versions, None)
+}
+
+fn run_kept(
+    dir: &Path,
+    candidate: &str,
+    versions: (&str, &str),
+    keep: Option<&Path>,
+) -> (bool, serde_json::Value) {
     let golden = dir.join("tests/golden");
     let report = dir.join("report.json");
     let passed = xtask::compare::golden(
@@ -83,6 +92,7 @@ fn run_versions(dir: &Path, candidate: &str, versions: (&str, &str)) -> (bool, s
         Some(&report),
         false,
         versions,
+        keep,
     )
     .expect("the comparison runs");
     let text = std::fs::read_to_string(report).unwrap();
@@ -101,6 +111,25 @@ fn comparator_golden_catches_a_divergent_fake_candidate() {
     );
     let (passed, _) = run(dir.path(), "{\"ok\":true,\"summary\":{\"rules\":3}}\n");
     assert!(passed);
+}
+
+/// `--keep DIR`: a case that differs has its candidate run written as a
+/// recording; a case that matches has none.
+#[test]
+fn comparator_golden_keeps_the_candidate_run_of_a_differing_case() {
+    let dir = tempfile::tempdir().unwrap();
+    repo(dir.path(), "");
+    let keep = dir.path().join("kept");
+    let stdout = "{\"ok\":true,\"summary\":{\"rules\":4}}\n";
+    let (passed, _) = run_kept(dir.path(), stdout, ("0.23.0", "0.23.0"), Some(&keep));
+    assert!(!passed);
+    let kept = Recording::read(&keep.join("cases").join(ID), &keep.join("blobs")).unwrap();
+    assert_eq!(kept.stdout, stdout.as_bytes());
+    let again = dir.path().join("kept-again");
+    let same = "{\"ok\":true,\"summary\":{\"rules\":3}}\n";
+    let (passed, _) = run_kept(dir.path(), same, ("0.23.0", "0.23.0"), Some(&again));
+    assert!(passed);
+    assert!(!again.join("cases").join(ID).exists());
 }
 
 #[test]
@@ -136,6 +165,7 @@ fn comparator_golden_part_writes_its_unused_entries_instead_of_failing() {
             None,
             false,
             ("0.23.0", "0.23.0"),
+            None,
         )
         .expect("the comparison runs")
     };
@@ -216,6 +246,7 @@ fn comparator_golden_against_a_preview_reports_each_missing_case() {
         Some(&report),
         false,
         ("0.28.1", "0.28.1"),
+        None,
     )
     .expect("a missing recording fails its case, not the run");
     assert!(!passed);

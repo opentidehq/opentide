@@ -62,6 +62,10 @@ warmup = 1
 # The heavy workspace's digest (cargo xtask corpus generate --seed 20261107 --digest): a
 # report of another generator output is not held to these numbers.
 digest = "5978a2ab7c093587"
+# The platforms the heavy workspace holds: the ones opentide 0.23.0 knows, in the connector
+# order (xtask's bench::oracle::ORACLE_PLATFORMS). Bitdefender, Graylog, Exabeam and Google
+# SecOps join when the oracle pin moves past 0.28.
+platforms = ["sentinel", "defender_for_endpoint", "splunk", "sentinel_one", "carbon_black_cloud", "crowdstrike", "harfanglab", "elastic", "sysdig"]
 runner = "ubuntu-24.04 (GitHub-hosted, 4 vCPU, image 20261101.360.1)"
 # GitHub's runners of this class come on several CPUs (seen: AMD EPYC 9V45, 9V74 and 7763,
 # Intel Xeon Platinum 8573C). The commands' baseline_s are the medians on cpu_model,

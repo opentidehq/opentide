@@ -31,8 +31,8 @@ path = "ws/.opentide/lsp/catalogs/generated/fields.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 1000027
-blob = "9c005838e0ed2a0e86838344008eff9e55c24261f2df642a8adfb3c63aa8c469"
+size = 1133851
+blob = "d6aa3b9aa10fe5ece8b1baa3254fd8fb463944ef29c5d92c99f3e7742393c7b1"
 
 [[files]]
 path = "ws/.opentide/schemas"
@@ -60,16 +60,16 @@ path = "ws/.opentide/schemas/rule.1.0.schema.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 5035507
-blob = "97bbfa205a36004fd87284aa73e104b0a41d39d39fe804443b2a5090ad4aea59"
+size = 5255512
+blob = "90c46de8fc7e3fdf2c29e563221625002e1929fa227a8a42b5678bb74b7ff066"
 
 [[files]]
 path = "ws/.opentide/schemas/rule.1.1.schema.json"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 5037717
-blob = "15d2d6288cf937f5b69520d0f501bf4caaa9284856b0a8981cf4dcb4698e5bf2"
+size = 5257722
+blob = "ea076ccca08608ccc998ae4e93d5b858a4939b6cd62499f090e5bba4c5cbe5cb"
 
 [[files]]
 path = "ws/.opentide/schemas/threat.1.0.schema.json"
@@ -106,6 +106,13 @@ kind = "dir"
 mode = "0755"
 
 [[files]]
+path = "ws/.opentide/templates/platforms/bitdefender.template.yaml"
+change = "created"
+kind = "file"
+mode = "0644"
+size = 732
+
+[[files]]
 path = "ws/.opentide/templates/platforms/carbon_black_cloud.template.yaml"
 change = "created"
 kind = "file"
@@ -134,11 +141,32 @@ mode = "0644"
 size = 1906
 
 [[files]]
+path = "ws/.opentide/templates/platforms/exabeam.template.yaml"
+change = "created"
+kind = "file"
+mode = "0644"
+size = 738
+
+[[files]]
+path = "ws/.opentide/templates/platforms/google_secops.template.yaml"
+change = "created"
+kind = "file"
+mode = "0644"
+size = 609
+
+[[files]]
+path = "ws/.opentide/templates/platforms/graylog.template.yaml"
+change = "created"
+kind = "file"
+mode = "0644"
+size = 550
+
+[[files]]
 path = "ws/.opentide/templates/platforms/harfanglab.template.yaml"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 626
+size = 655
 
 [[files]]
 path = "ws/.opentide/templates/platforms/sentinel.template.yaml"
@@ -173,14 +201,14 @@ path = "ws/.opentide/templates/rule.1.0.template.yaml"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 9214
+size = 12295
 
 [[files]]
 path = "ws/.opentide/templates/rule.1.1.template.yaml"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 9238
+size = 12319
 
 [[files]]
 path = "ws/.opentide/templates/threat.1.0.template.yaml"
