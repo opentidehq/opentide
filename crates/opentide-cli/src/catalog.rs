@@ -116,9 +116,11 @@ pub const HELP_FLAG_HELP: &str = "Print help";
 /// - an option or flag given twice keeps the last value (`--json commands
 ///   --json`, `--repo a --repo b`), as it always has; a repeatable option
 ///   (`--strategy`) still collects every value;
-/// - an option's value may start with `-` (`--query --json` searches for
-///   `--json`, `--limit -1` is a number out of range): the word after an
-///   option that takes a value is its value;
+/// - a negative number is a value (`--limit -1` is a number out of range);
+///   any other word that starts with `-` is an option, so `--query --json`
+///   is missing its value (`--query=--json` searches for `--json`);
+/// - `--json`, `--no-color`, `--debug`, `--quiet` and `--verbose` are
+///   global: they may follow the command (`validate --json`);
 /// - `--help` is the one help option, on every command, and there is no
 ///   `help` subcommand (`opentide validate help` is no command) and no `-h`,
 ///   as the command tree has always been (#841);
@@ -135,14 +137,8 @@ pub fn parse_settings(command: Command) -> Command {
                 .help(HELP_FLAG_HELP),
         )
         .args_override_self(true)
-        .mut_args(|arg| {
-            let arg = arg.hide_env_values(true);
-            if !arg.is_positional() && crate::hoist::takes_value(&arg) {
-                arg.allow_hyphen_values(true)
-            } else {
-                arg
-            }
-        })
+        .allow_negative_numbers(true)
+        .mut_args(|arg| arg.hide_env_values(true))
         .mut_subcommands(parse_settings)
 }
 

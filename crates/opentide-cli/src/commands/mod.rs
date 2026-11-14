@@ -177,8 +177,7 @@ pub struct Terminal {
     pub quiet: bool,
     /// `--verbose`: `validate`, `lint` and `validate query` print notes.
     pub verbose: bool,
-    /// The arguments as typed, the root's flags hoisted in front: what a
-    /// suggested re-run repeats.
+    /// The arguments as typed: what a suggested re-run repeats.
     pub typed: Vec<String>,
     /// Whether stdout is a terminal.
     pub stdout_tty: bool,
