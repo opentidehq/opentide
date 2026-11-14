@@ -177,7 +177,7 @@ cargo xtask check-layers
   timestamps, durations, hyperlink ids, fresh UUIDs), snapshots, recordings and their round trip,
   the blob store's SHA-256 against FIPS 180-4 vectors, the requirements pin, the coverage report.
 - `tests/cmd/golden.trycmd`: `xtask golden`'s usage errors. Running the cases needs uv and the
-  oracle: `cargo xtask golden check --engine python` (CI: `.github/workflows/golden.yml`).
+  oracle: `cargo xtask golden check --engine python` (by hand only: no workflow runs it).
 - `tests/corpus_generate.rs`: the generator's recorded digests, counts, coverage of platforms and
   features, layouts, slug file names, no literal secret. `src/corpus/*` unit tests: the YAML
   emitter, the PRNG's reference values, the catalogue's parser, selectors, operations and verdicts.

@@ -340,9 +340,9 @@ jobs:
       - name: Build the Rust tests (nextest archive)
         if: env.RUST == 'true'
         run: |
-          read -ra packages <<< "${PACKAGES}"
-          read -ra features <<< "${FEATURES}"
-          cargo nextest archive --locked "${packages[@]}" "${features[@]}" --archive-file "${RUNNER_TEMP}/tests.tar.zst"
+          read -ra pkg_args <<< "${PACKAGES}"
+          read -ra feature_args <<< "${FEATURES}"
+          cargo nextest archive --locked "${pkg_args[@]}" "${feature_args[@]}" --archive-file "${RUNNER_TEMP}/tests.tar.zst"
 
       # As hatch_build.py builds it, in the profile the tests were built in:
       # their dependencies are already compiled.
@@ -450,9 +450,9 @@ jobs:
       - name: Doctests
         if: env.RUST == 'true'
         run: |
-          read -ra packages <<< "${PACKAGES}"
-          read -ra features <<< "${FEATURES}"
-          cargo test --locked --doc "${packages[@]}" "${features[@]}"
+          read -ra pkg_args <<< "${PACKAGES}"
+          read -ra feature_args <<< "${FEATURES}"
+          cargo test --locked --doc "${pkg_args[@]}" "${feature_args[@]}"
 
       # opentide-schema's compile-fail cases (trybuild) compile at test time,
       # so they run here, where the dependencies are: when their inputs (the
@@ -1439,8 +1439,8 @@ jobs:
       - name: cargo nextest (profile ci)
         shell: bash
         run: |
-          read -ra features <<< "${FEATURES}"
-          cargo nextest run --locked --profile ci --workspace "${features[@]}"
+          read -ra feature_args <<< "${FEATURES}"
+          cargo nextest run --locked --profile ci --workspace "${feature_args[@]}"
       - name: Upload the JUnit report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -2374,7 +2374,7 @@ jobs:
             echo "The nightly passed."
             exit 0
           fi
-          body="$(printf 'The nightly on `%s` (%s) failed: %s\n\n%s\n' "${REF}" "${SHA:0:12}" "${RUN_URL}" "${failed}")"
+          body="$(printf 'The nightly on %s (%s) failed: %s\n\n%s\n' "${REF}" "${SHA:0:12}" "${RUN_URL}" "${failed}")"
           echo "${body}" >> "$GITHUB_STEP_SUMMARY"
           gh label create nightly-failure --color B60205 --description "The nightly CI run failed" 2>/dev/null || true
           issue="$(gh issue list --label nightly-failure --state open --limit 1 --json number --jq '.[0].number // empty')"
