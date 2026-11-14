@@ -120,7 +120,7 @@ $ xtask codegen --frobnicate
 ? 2
 xtask codegen: unknown option `--frobnicate`
 
-usage: cargo xtask codegen [--check]
+usage: cargo xtask codegen [--check [--oracle]]
 ...
 
 $ xtask frobnicate
