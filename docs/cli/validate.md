@@ -123,8 +123,8 @@ opentide validate --fix
 `--fix` writes the safe fixes, validates again and prints a `fixed:` line per value, then the findings that are left. Only the replaced value changes in each file: comments, quoting, key order, indentation and line endings stay as they were. Each edit is checked against the file as it is now, not as validation read it. The text it replaces must still be one the fix is safe for, so a value you saved over the typo in the meantime is kept. The file must still parse and differ in that value alone. Otherwise the edit is left out and its finding stays. Each file is written to a temporary file beside it and moved into place, so a write that fails (a full disk, a quota) leaves the original whole. A file that changed between the check and the write is left alone, with a warning. A second run has nothing to apply. The outcome line says what it fixed and what is left:
 
 ```text illustrative
-fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'Clear' → 'clear'
-fixed: objects/threats/simulated-actor.yaml:9:8 'Clear' → 'clear'
+fixed: objects/rules/sentinel-kql-rule.yaml:8:8 "Clear" → "clear"
+fixed: objects/threats/simulated-actor.yaml:9:8 "Clear" → "clear"
 
 error[invalid_ref]: Unknown objective or signal reference "00000000-0000-4000-8002-DEADBEEF0000"
    ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18

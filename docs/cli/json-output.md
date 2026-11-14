@@ -117,7 +117,7 @@ Without `--json` the same error is one line on stderr, with the suggestion under
 
 ```text output-of="opentide info rulez" exit=2
 error: Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab, catalog.
-  help: did you mean 'rules'?
+  help: did you mean "rules"?
 ```
 
 ## An unexpected error

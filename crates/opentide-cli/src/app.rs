@@ -2196,7 +2196,7 @@ impl Run<'_> {
                         }
                     }
                     Block::Table(table) => {
-                        for line in table.render(width) {
+                        for line in table.render(stdout.width) {
                             out.write_all(stdout.line(&line).as_bytes())?;
                         }
                     }

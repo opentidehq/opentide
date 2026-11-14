@@ -86,7 +86,7 @@ When nothing matches, the resource returns a diagnostic rather than an empty obj
 
 ```json
 {
-  "error": "No JSON Schema generated for 'rule'",
+  "error": "No JSON Schema generated for \"rule\"",
   "available": [],
   "hint": "run 'opentide generate schemas'"
 }
@@ -114,7 +114,7 @@ Vocabularies are `model_dump()`-ed to JSON objects, not `repr()` strings:
 }
 ```
 
-An unknown name returns `{ "error": "Unknown vocabulary '…'", "available": [...] }`.
+An unknown name returns `{ "error": "Unknown vocabulary \"…\"", "available": [...] }`.
 
 ## SDK equivalent
 
