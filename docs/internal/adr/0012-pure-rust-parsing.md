@@ -44,15 +44,24 @@ generated TextMate grammars.
 | Tree | **rowan 0.17.0** (not cstree) | Already in the lock; the same tree type yara-x-parser hands us; used by rust-analyzer, taplo, slint, apollo-parser. `SyntaxNode` is `!Send`, which we do not need: rayon workers each parse their own text and the LSP caches `Arc<AnalyzeResponse>`, never a tree. cstree (0.14) adds interning and Send we don't use. Watch rowan 0.18 (alpha.2, already used by rust-analyzer). |
 | Incremental | **No salsa now** | No incremental reuse exists anywhere. salsa 0.28.5 needs MSRV 1.88 (fine) but pulls rayon and inventory into WASM. The cheaper win is a one-parse-per-(text, language) memo: KQL parses the same text three times today (`analyze`, `lower`, `query_captures`). Revisit only if the LSP adopts incremental analysis. |
 | Parser | **Hand-written recursive descent + Pratt over a shared event/marker toolkit** (rust-analyzer / yara-x pattern), not chumsky | chumsky (0.14.1; there is no 1.0) has no lossless/rowan story and heavy generic compile times. The hand-written style gives direct control of recovery points and messages, which our oracles compare text by text; two hand-written parsers already ship (falco `parser.rs`, exabeam `check.rs`). |
-| Errors | Expected-token sets accumulated by `at()`/`eat()`; one message per failure: "near `)`; expected `or`, `and`, or end of input" | Pilot: tree-sitter could only say "near `)`". |
+| Errors | Expected-token sets accumulated by `at()`/`eat()`; one message per failure: "near `)`; expected `or`, `and`, or end of input" | Pilot: our tree-sitter code says only "near `)`". tree-sitter 0.25 *can* produce lookahead sets (`Language::lookahead_iterator`, `Node::parse_state`), so this is a quality gain of the rewrite, not something only a rewrite can deliver. |
 | Trivia | Lossless: whitespace and comments are tokens in the green tree, skipped by lookahead | Pilot `Input`; byte spans stay exact for YAML injection remapping. |
 | Depth | `Grammar::max_depth`: past it, one diagnostic and the rest of the input in one error node; n-ary `and`/`or` nodes so a 20k-term chain is flat | Pilot: 100k nested `(` → one diagnostic on a 1 MB stack; vendor limits (ES|QL 400/301, EQL 250, Falco 100) stay as analysis checks. |
 
-**Why not tree-sitter.** Pure Rust end to end (the workspace can become `forbid(unsafe_code)`
-except `opentide-wasm`'s bindgen, and the C, Node and wasi-sdk toolchains leave the build); error
-messages that say what was expected; no error-tree traps; context-sensitive lexing that our query
-languages need everywhere (Kibana keywords, SPL commands, YARA hex strings) written as code rather
-than fought in a GLR grammar; one pattern for all 13 engines instead of two.
+**Why not tree-sitter.** Pure-Rust *parsing*: the browser build (wasm32-unknown-unknown) becomes
+C-free, losing wasi-sdk's `libc.a` and the 7 syscall shims; `opentide-syntax`'s FFI `unsafe` goes;
+the `grammars` job's Node + tree-sitter-cli goes. Error messages that say what was expected, with
+recovery we control; no error-tree traps; context-sensitive lexing that our query languages need
+everywhere (Kibana keywords, SPL commands, YARA hex strings) written as code rather than fought in a
+GLR grammar; one pattern for all 13 engines instead of two (falco and exabeam are already
+hand-written).
+
+**Scope of "pure Rust", stated honestly.** Native builds and the WASI CLI (wasm32-wasip1) still
+compile C after this ADR: `ring 0.17.14` (via `jsonwebtoken` → `opentide-connectors`, `rustls` →
+`reqwest`, `rcgen` → `opentide-cassette`) builds with `cc`, and `build-wasm.sh` keeps wasi-sdk's
+clang for wasip1. A C-free build of everything is a separate decision about crypto/TLS
+(`jsonwebtoken`'s `rust_crypto` backend is cheap; a pure-Rust rustls provider is not mature) and is
+not claimed here. Node stays for bindings/node, packages/ and docs.
 
 **What is lost.** A declarative grammar file a reader can scan; tree-sitter's generic error
 recovery (ours must be written per rule); a query language (`.scm`) for highlights; the option of
@@ -136,6 +145,23 @@ cost being removed.
 
 ### 5. Migration plan
 
+**Toolkit fixes required before landing (from review of the pilot):** `TokenSet` is a `u128` and
+silently drops kinds ≥ 128 (`opentide-parse/src/lib.rs:56–98`); KQL (172 token kinds) and SPL
+(225) need a wider set (`[u64; N]` const-generic) or the expected messages lose keywords. Fuel
+exhaustion returns EOF silently (`lib.rs:279–283`): it must emit a diagnostic and
+`debug_assert!`. kuery's `MAX_DEPTH = 256` rejects nesting the old engine accepted: raise it to the
+vendor's limit or record the change in the ledger. The differential must compare hover and
+completions at every offset of derived inputs and count all differences, not stop at the first.
+
+**Two phases with a decision gate.** Phase A (committed): P0, toolkit, kuery, lucene, falco,
+exabeam, yara, the languages that are small or where tree-sitter only highlights today, plus a
+**large-language pilot on ES|QL** (C scanner, contextual keywords, depth checks, an oracle) on an
+`exp/` branch. **Gate G1** after Phase A: ES|QL at parity on valid input, its hand-written parser +
+lexer within 2,000 lines, WASM size and fuzz smoke measured, and a side-by-side against a
+tree-sitter `lookahead_iterator` prototype for expected messages. Pass → Phase B (eql, cql, yaral,
+esql, spl, kql, final deletion). Fail → stop at the hybrid: tree-sitter kept for the 6 expression
+and pipe grammars, and this ADR amended.
+
 **P0, gates first (before any language).** (a) A parser-swap baseline: for every corpus,
 conformance and `.broken.` file of every language, an insta snapshot of diagnostics (code, range,
 message) and tokens, recorded on tree-sitter. (b) `deep_queries` for kql, spl, cql, yaral, yara,
@@ -193,6 +219,21 @@ for yara. Per language, the test-only differential (old vs new diagnostics, toke
 completions over every corpus file, its prefixes and mutations) gates the switch and is deleted
 with the old code.
 
-## Counter-arguments considered
+## Counter-arguments (independent adversarial review, arguing to keep tree-sitter)
 
-See the review section appended after the adversarial review.
+| # | Argument | Weight | Response |
+|---|---|---|---|
+| 1 | "Pure Rust / no C / no wasi-sdk" is false for native and WASI: `ring` compiles C | **Decisive against the original wording** | Accepted; claim scoped to parsing and the browser build (above). Full C-freedom is a separate crypto decision. |
+| 2 | kuery is the least representative grammar (19 rules, 32 tokens vs KQL 85/172, SPL 82/225, ES\|QL 90/105); by the pilot's ratio KQL needs 1.7–2.7k and SPL 1.6–3.2k hand-written parser lines; 9.6–14.2k for all but yara, replacing ~4.5k lines of grammar.js | **Strong** | Accepted; gate G1 pilots ES\|QL before the big three are committed; estimates are ±50 % until then. |
+| 3 | `TokenSet` u128 can't hold KQL/SPL kinds | Bug | Fixed before landing (above). |
+| 4 | tree-sitter already exposes lookahead sets; expected messages don't need a rewrite | **Strong** | Accepted as fact; G1 compares both. The rewrite is still justified by recovery control, toolchain and one engine pattern, not by messages alone. |
+| 5 | Maintainability: grammar.js is a readable spec; hand-written parsers drift silently; net hand-written lines grow (#89 criterion fails) | Mitigable | Each parser keeps the vendor grammar as doc comments per function; tree snapshots + oracles detect drift; the #89 line criterion is consciously replaced by "generated code removed". |
+| 6 | 75 % of broken inputs change on some surface; users type in broken states | Mitigable | Baseline snapshots of broken input in P0, changes reviewed per language and recorded in `APPROVED_DIFFS.toml` (already 4,593 entries; cost is real). |
+| 7 | Gains not shown: binary +62.7 KB, crate build slower, WASM/fuzz/Kibana oracle not run; speed moves no unified-core §11 metric | Partly accepted | Speed is not a reason for this ADR. WASM, fuzz and oracle measured at G1. |
+| 8 | Fuel exhaustion and a new depth limit hide failures | Bug | Fixed before landing (above). |
+| 9 | Opportunity cost: UC-1.2 → UC-6 not started; 37–52 (to ~78) days | **Strong** | For the maintainer to rank; Phase A is ~10–12 days and independently useful (5 crates off tree-sitter). |
+| 10 | Hybrid: hand-write only falco, exabeam, yara | Fallback | Becomes the outcome if G1 fails. |
+
+Reviewer's conditions for approval: a large-language pilot with a wide `TokenSet`; WASM size, build
+time, fuzz and oracle measured; a `LookaheadIterator` comparison; the C claim corrected (done);
+the hybrid considered (done, as G1's fallback); the work ranked against UC-1/UC-2 (maintainer).
