@@ -3200,28 +3200,28 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     ]
   },
   "platform-query-separator": {
-    "errors": [
-      {
-        "ctx": {
-          "error": "query must not be empty"
-        },
-        "field_path": [
-          "configurations",
-          "splunk",
-          "query"
-        ],
-        "input": "\u001c",
-        "msg": "query must not be empty",
-        "span": [
-          13,
-          13,
-          17,
-          true
-        ],
-        "type": "value_error",
-        "yaml_line": 12
-      }
-    ]
+    "value": {
+      "configurations": {
+        "splunk": {
+          "enabled": false,
+          "name": "",
+          "query": "\u001c",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
   },
   "platform-s1-correlation-errors": {
     "errors": [
@@ -5228,50 +5228,72 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     }
   },
   "platform-sysdig-macro-form-feed": {
-    "errors": [
-      {
-        "ctx": {
-          "error": "SysdigConfig validation failed with code(s): sysdig_definition_order"
-        },
-        "field_path": [
-          "configurations",
-          "sysdig"
-        ],
-        "input": null,
-        "msg": "SysdigConfig validation failed with code(s): sysdig_definition_order",
-        "span": [
-          11,
-          3,
-          9,
-          true
-        ],
-        "type": "value_error",
-        "yaml_line": 11
-      }
-    ]
+    "value": {
+      "configurations": {
+        "sysdig": {
+          "condition": "spawned_process and proc.name = sh",
+          "enabled": false,
+          "macros": [
+            {
+              "condition": "m2\fand proc.name = x",
+              "name": "m1"
+            },
+            {
+              "condition": "proc.name = sh",
+              "name": "m2"
+            }
+          ],
+          "name": "",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
   },
   "platform-sysdig-macro-line-separator": {
-    "errors": [
-      {
-        "ctx": {
-          "error": "SysdigConfig validation failed with code(s): sysdig_definition_order"
-        },
-        "field_path": [
-          "configurations",
-          "sysdig"
-        ],
-        "input": null,
-        "msg": "SysdigConfig validation failed with code(s): sysdig_definition_order",
-        "span": [
-          11,
-          3,
-          9,
-          true
-        ],
-        "type": "value_error",
-        "yaml_line": 11
-      }
-    ]
+    "value": {
+      "configurations": {
+        "sysdig": {
+          "condition": "spawned_process and proc.name = sh",
+          "enabled": false,
+          "macros": [
+            {
+              "condition": "m2 and proc.name = x",
+              "name": "m1"
+            },
+            {
+              "condition": "proc.name = sh",
+              "name": "m2"
+            }
+          ],
+          "name": "",
+          "status": "STAGING"
+        }
+      },
+      "description": "d",
+      "metadata": {
+        "created": "2026-01-01",
+        "modified": "2026-01-02",
+        "schema": "rule::1.1",
+        "tlp": "clear",
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "version": 1
+      },
+      "name": "Rule",
+      "platforms": {},
+      "techniques": []
+    }
   },
   "platform-sysdig-macro-unparsed": {
     "errors": [

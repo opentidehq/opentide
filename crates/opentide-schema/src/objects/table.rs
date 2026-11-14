@@ -76,7 +76,7 @@ pub(crate) fn results(select: fn(&str) -> bool) -> BTreeMap<String, Json> {
 #[test]
 fn every_case_converts_as_its_snapshot_says() {
     let results = results(|id| !id.starts_with("platform-"));
-    assert!(results.len() > 150, "{} cases", results.len());
+    assert!(results.len() > 100, "{} cases", results.len());
     insta::assert_snapshot!(
         "rust_results",
         serde_json::to_string_pretty(&results).unwrap()

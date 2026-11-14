@@ -1,0 +1,206 @@
+---
+source: crates/opentide-schema/tests/yaml_table.rs
+expression: shown
+---
+
+## bool
+
+bool-words: {"a": "yes", "b": "Yes", "c": "YES", "d": "no", "e": "No", "f": "NO", "g": "on", "h": "On", "i": "ON", "j": "off", "k": "Off", "l": "OFF", "m": true, "n": true, "o": true, "p": false, "q": false, "r": false}
+bool-not-words: {"a": "y", "b": "n", "c": "Y", "d": "N", "e": "yEs", "f": "tRUE", "g": "oN", "h": "yes", "i": "no", "j": "on", "k": "t", "l": "f"}
+bool-keys: {"yes": 1, "off": 2, "y": 3}
+bool-explicit-tag: refused: 'yes' is not a valid value for the tag !!bool (line 1, column 4)
+
+## null
+
+null-forms: {"a": null, "b": null, "c": null, "d": null, "e": null, "f": "nULL", "g": "null", "h": "~", "i": null}
+null-in-flow: {"a": [null, null], "b": {"x": null, "y": null}}
+null-flow-empty-entry: refused: while parsing a node, did not find expected node content (line 1, column 8)
+null-key: refused: the key 'null' is repeated; it is first written on line 1 (line 2, column 1)
+
+## timestamp
+
+date: {"a": "2026-01-01", "b": "2026-01-01", "c": "2026-1-1", "d": 20260101, "e": "2026-01-01T10:00:00Z", "f": "2026-01-01T10:00:00+02:00", "g": "2026-01-01 10:00:00", "h": "2026-01-01t10:00:00z", "i": "2026-01-01T10:00:00.5Z", "j": "2026-01-01T10:00:00.1234567-05:30", "k": "2026-01-01 10:00:00 +02", "l": "2026-1-1T1:00:00", "m": "2026-01-01T10:00:00-00:00", "n": "2026-01-01T10:00:00.000000Z", "o": "2026-01-01T10:00:00.", "p": "2026-01-01  \t10:00:00Z"}
+date-timestamp-tag: refused: the tag !!timestamp is not supported (line 1, column 4)
+date-impossible: {"a": "2026-02-30"}
+date-month-13: {"a": "2026-13-01"}
+timestamp-hour-25: {"a": "2026-01-01T25:00:00"}
+timestamp-offset-99: {"a": "2026-01-01T10:00:00+99"}
+date-year-zero: {"a": "0000-01-01"}
+date-leap-day: {"a": "2024-02-29", "b": "2000-02-29"}
+date-not-leap: {"a": "1900-02-29"}
+date-key: {"2026-01-01": "a"}
+
+## int
+
+int-bases: {"a": 15, "b": 17, "c": 31, "d": "0X1F", "e": "0b101", "f": "0B101", "g": -17, "h": "+0x_1f", "i": 8, "j": 0, "k": 0, "l": 12, "m": 12345670, "n": "0x", "o": "0b2", "p": 0, "q": "0_7"}
+int-big: refused: the integer does not fit in 64 bits (line 1, column 4)
+int-explicit-tag: {"a": 42, "b": 16, "c": "42"}
+int-key: {1: "a", 16: "b", "1": "c"}
+int-binary-empty: {"a": "0b_"}
+int-hex-empty: {"a": "0x_"}
+int-sign-after-prefix: {"a": "0x-A", "b": "0x+A", "c": "0o-7", "d": "0o+7", "e": "0x-8000000000000000"}
+int-octal-digits-8-and-9: {"a": "0o8", "b": "0o9", "c": "0o78"}
+int-explicit-tag-sign-after-prefix: refused: '0x-A' is not a valid value for the tag !!int (line 1, column 4)
+float-explicit-tag-sign-after-prefix: refused: '0o+7' is not a valid value for the tag !!float (line 1, column 4)
+
+## underscore
+
+underscore: {"a": "1_000", "b": "1_000.5", "c": "0b1_0", "d": "0x_FF", "e": "1__0", "f": "_1", "g": "1_", "h": "1_.5", "i": "0_17"}
+
+## sexagesimal
+
+sexagesimal: {"a": "190:20:30", "b": "1:20", "c": "-1:30", "d": "190:20:30.15", "e": "1:60", "f": "01:20", "g": "1:2:3", "h": "12:30:00", "i": "1:5"}
+
+## float
+
+float-special: {"a": inff, "b": -inff, "c": inff, "d": inff, "e": nanf, "f": nanf, "g": nanf, "h": "inf", "i": "nan", "j": "-.nan", "k": ".iNf"}
+float-forms: {"a": 1.0f, "b": 1.0f, "c": 0.5f, "d": 1000.0f, "e": 1000.0f, "f": 1000.0f, "g": 0.001f, "h": -1.5f, "i": 1.5f, "j": inff, "k": 0.1f, "l": 1.5e16f, "m": 1e-5f, "n": 123456789.12345679f, "o": 1000.0f, "p": 0.0001f, "q": 1e16f, "r": 1e17f, "s": -0.0f}
+float-key: {1.5f: "a"}
+
+## duplicate
+
+duplicate-key: refused: the key 'a' is repeated; it is first written on line 1 (line 3, column 1)
+duplicate-key-nested: refused: the key 'x' is repeated; it is first written on line 2 (line 3, column 3)
+duplicate-key-int-and-str: {1: "a", "1": "b"}
+duplicate-key-bool-spellings: {"yes": "a", true: "b"}
+duplicate-key-in-flow: refused: the key 'x' is repeated; it is first written on line 1 (line 1, column 11)
+
+## alias
+
+alias: {"base": {"x": 1, "y": [1, 2]}, "copy": {"x": 1, "y": [1, 2]}, "item": "hello", "again": "hello"}
+alias-undefined: refused: while parsing node, found unknown anchor (line 1, column 4)
+alias-recursive: refused: an alias cannot refer to the node that contains it (line 2, column 6)
+alias-redefined: {"a": 1, "b": 1, "c": 2, "d": 2}
+alias-as-key: {"k": "name", "name": "value"}
+alias-nested-laughs: {"a": ["x", "x"], "b": [["x", "x"], ["x", "x"]], "c": [[["x", "x"], ["x", "x"]], [["x", "x"], ["x", "x"]]], "d": [[[["x", "x"], ["x", "x"]], [["x", "x"], ["x", "x"]]], [[["x", "x"], ["x", "x"]], [["x", "x"], ["x", "x"]]]]}
+
+## merge
+
+merge: {"base": {"x": 1, "y": 2}, "item": {"<<": {"x": 1, "y": 2}, "y": 3, "z": 4}}
+merge-list: {"one": {"a": 1, "b": 1}, "two": {"b": 2, "c": 2}, "item": {"<<": [{"a": 1, "b": 1}, {"b": 2, "c": 2}], "d": 4}}
+merge-own-key-first: {"base": {"x": 1}, "item": {"x": 0, "<<": {"x": 1}}}
+merge-inline: {"item": {"<<": {"x": 1}, "y": 2}}
+merge-scalar: {"item": {"<<": 1}}
+merge-quoted-key: {"item": {"<<": {"x": 1}}}
+merge-nested: {"a": {"x": 1}, "b": {"<<": {"x": 1}, "y": 2}, "c": {"<<": {"<<": {"x": 1}, "y": 2}, "z": 3}}
+merge-twice: refused: the key '<<' is repeated; it is first written on line 3 (line 4, column 3)
+
+## documents
+
+documents-two: refused: a file holds one YAML document; a second one starts here (line 2, column 1)
+documents-explicit-one: {"a": 1}
+documents-start-only: null
+documents-empty: null
+documents-comment-only: null
+documents-end-then-more: refused: a file holds one YAML document; a second one starts here (line 3, column 1)
+documents-yaml-directive: {"a": 1}
+documents-yaml-directive-1-2: {"a": 1}
+
+## bom
+
+bom-leading: {"a": 1}
+bom-twice: {"a": 1}
+bom-in-value: refused: a byte order mark must not appear inside a document (line 1, column 5)
+
+## tabs
+
+tab-indent: refused: tabs disallowed within this context (block indentation) (line 2, column 2)
+tab-after-colon: refused: ':' must be followed by a valid YAML whitespace (line 1, column 4)
+tab-in-value: {"a": "x\ty"}
+tab-appended-key: refused: while scanning a plain scalar, found a tab (line 1, column 4)
+tab-in-flow: {"a": [1, 2]}
+tab-in-block-scalar: {"a": "x\ty\n"}
+tab-before-comment: {"a": 1}
+
+## crlf
+
+crlf: {"a": 1, "b": "x\ny\n", "c": "p q"}
+cr-only: {"a": 1, "b": 2}
+
+## string
+
+string-styles: {"a": "plain text", "b": "single 'quoted'", "c": "double \"quoted\" \t é A", "d": "literal\nblock\n", "e": "folded block\n", "f": "strip", "g": "keep\n\n", "h": "multi line plain"}
+string-value-tag: {"a": "="}
+string-unicode: {"a": "日本 🔥 é", "b": "🔥"}
+string-escapes-1-2: {"a": "/"}
+string-nel-and-ls: {"a": "xy z w v"}
+
+## tags
+
+tag-unknown: refused: the tag !custom is not supported (line 1, column 4)
+tag-python: refused: the tag !!python/name:os.system is not supported (line 1, column 4)
+tag-non-specific: {"a": "12"}
+tag-str-on-map: refused: the tag !!str cannot be used on a mapping (line 1, column 4)
+tag-map-seq: {"a": {"x": 1}, "b": [1]}
+tag-verbatim: {"a": "12"}
+tag-directive: {"a": "12"}
+
+## keys
+
+key-complex-seq: refused: a mapping key must be a scalar, not a sequence or a mapping (line 1, column 3)
+key-complex-map: refused: a mapping key must be a scalar, not a sequence or a mapping (line 1, column 3)
+key-explicit-scalar: {"a": 1}
+key-empty: {null: 1}
+
+## structure
+
+root-scalar: "just text"
+root-sequence: ["a", "b"]
+unclosed-flow: refused: while parsing a flow sequence, expected ',' or ']' (line 3, column 1)
+bad-indent: refused: while parsing a block mapping, did not find expected key (line 3, column 2)
+colon-in-plain: refused: mapping values are not allowed in this context (line 1, column 5)
+nested-flow: {"a": {"b": [1, {"c": "d"}], "e": "f"}}
+control-character: refused: the character U+0001 is not allowed in YAML (line 1, column 5)
+control-character-on-line-3-crlf: refused: the character U+0001 is not allowed in YAML (line 3, column 5)
+not-utf8: refused: not UTF-8 at byte offset 3
+plain-with-hash: {"a": "x#y", "b": "x"}
+empty-flow: {"a": [], "b": {}}
+
+## tags
+
+tag-explicit-errors-bool: refused: 'maybe' is not a valid value for the tag !!bool (line 1, column 4)
+tag-explicit-errors-int: refused: '1.5' is not a valid value for the tag !!int (line 1, column 4)
+tag-explicit-errors-float: refused: 'abc' is not a valid value for the tag !!float (line 1, column 4)
+tag-explicit-errors-timestamp: refused: the tag !!timestamp is not supported (line 1, column 4)
+tag-explicit-null-text: refused: 'text' is not a valid value for the tag !!null (line 1, column 4)
+tag-explicit-float-forms: refused: 'infinity' is not a valid value for the tag !!float (line 2, column 4)
+tag-quoted-non-specific: {"a": "12"}
+tag-merge-as-value: {"a": "<<"}
+tag-value-as-key: {"=": 1}
+
+## unsupported
+
+tag-binary: refused: the tag !!binary is not supported (line 1, column 4)
+tag-set: refused: the tag !!set cannot be used on a mapping (line 1, column 4)
+tag-omap: refused: the tag !!omap cannot be used on a sequence (line 1, column 4)
+tag-pairs: refused: the tag !!pairs cannot be used on a sequence (line 1, column 4)
+
+## structure
+
+deep-nesting: refused: while parsing a flow sequence, expected ',' or ']' (line 2, column 1)
+nel-in-plain: {"a": "xy", "b": 1}
+line-separator: {"a": "x y"}
+
+## keys
+
+key-int-float-bool-merge: {1: "a", 1.0f: "b"}
+
+## merge
+
+merge-overrides-int-key: {"base": {1: "x"}, "item": {"<<": {1: "x"}, true: "y"}}
+
+## eof
+
+eof-block-scalar-without-line-break: {"a": "x"}
+eof-fuzz-block-scalar-ends-the-file: refused: simple key expect ':' (line 3, column 6)
+eof-folded-scalar-without-line-break: {"a": "x y"}
+eof-tag-before-comma: {"a": ["", "x"]}
+eof-escape-at-end: refused: while parsing a quoted scalar, found unknown escape character (line 1, column 4)
+eof-plain-without-line-break: {"a": "x"}
+eof-literal-then-blank-line: {"a": "x\n"}
+eof-folded-then-blank-line: {"a": "x\n"}
+eof-literal-item-then-blank-line: ["x\n"]
+eof-literal-two-lines-then-blank-line: {"a": "x\ny\n"}
+eof-literal-crlf-then-blank-line: {"a": "x\n"}
+eof-literal-then-key-without-line-break: {"a": "x\n", "b": 1}
+eof-literal-then-comment-without-line-break: {"a": "x\n"}

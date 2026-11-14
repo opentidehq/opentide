@@ -1,5 +1,6 @@
-//! The approved-diffs ledger, `tests/golden/APPROVED_DIFFS.toml`: every
-//! intended difference between the oracle and a candidate implementation.
+//! The approved-diffs ledger (`tests/golden/APPROVED_DIFFS.toml` until
+//! #1139 retired it): every intended difference between the oracle and a
+//! candidate implementation.
 //!
 //! ```toml
 //! [[diff]]
