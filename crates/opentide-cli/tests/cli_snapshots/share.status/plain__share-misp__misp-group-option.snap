@@ -1,0 +1,13 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.status/plain/share-misp/misp-group-option
+---
+args: opentide share --dry-run status
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: --dry-run configures `opentide share` itself and would be ignored by `opentide share status`.
+  usage: opentide share status [OPTIONS]
+  help: run 'opentide share status --help'

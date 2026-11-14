@@ -1,0 +1,34 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.push/json/share-misp/misp-typo
+---
+args: opentide --json share push --target misp-prd
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share push",
+  "duration_ms": 0,
+  "error": "Unknown sharing target \"misp-prd\". Configured targets: misp-prod, misp-locked, misp-lab.",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--target",
+    "code": "usage_invalid_choice",
+    "crash_log": null,
+    "message": "Unknown sharing target \"misp-prd\". Configured targets: misp-prod, misp-locked, misp-lab.",
+    "suggestion": "misp-prod"
+  },
+  "message": "Unknown sharing target \"misp-prd\". Configured targets: misp-prod, misp-locked, misp-lab.",
+  "next_actions": [],
+  "ok": false,
+  "preflight": "scope_no_match",
+  "records": [],
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "warnings": [
+    "[[misp]] block \"misp-lab\" api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED]."
+  ]
+}
+
+━━━ stderr · empty

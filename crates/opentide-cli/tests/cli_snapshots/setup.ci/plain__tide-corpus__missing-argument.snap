@@ -1,0 +1,13 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.ci/plain/tide-corpus/missing-argument
+---
+args: opentide setup ci --yes
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: Missing argument ci_platform: choose from github, gitlab, azure.
+  usage: opentide setup ci [OPTIONS] <ci_platform>
+  help: run 'opentide setup ci --help'

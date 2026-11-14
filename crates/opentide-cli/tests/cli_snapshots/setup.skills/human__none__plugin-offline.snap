@@ -1,0 +1,30 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.skills/human/none/plugin-offline
+---
+args: opentide setup skills --plugin --generic --yes
+exit: 1
+
+━━━ stdout · empty
+
+━━━ stderr
+error: Skills manifest remote unavailable · source: opentidehq/skills · ref: main
+␛[1;31merror:␛[0m Could not fetch skills catalogue from opentidehq/skills@main. Check network access and that
+       the skills repository is publicly reachable.
+
+━━━ ws/.claude/ · created 0755
+
+━━━ ws/.claude/settings.json · created 0644
+{
+  "enabledPlugins": {
+    "opentide@opentide": true
+  },
+  "extraKnownMarketplaces": {
+    "opentide": {
+      "source": {
+        "repo": "opentidehq/skills",
+        "source": "github"
+      }
+    }
+  }
+}

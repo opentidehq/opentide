@@ -1,0 +1,32 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.platforms/json/tide-corpus/example
+---
+args: opentide --json setup platforms --sentinel --splunk --yes
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup platforms",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "files": [],
+  "message": "Platform configuration files already present",
+  "next_actions": [],
+  "ok": true,
+  "path": "<WS>",
+  "platforms": [
+    "sentinel",
+    "splunk"
+  ],
+  "schema_version": 1,
+  "skipped": [
+    ".opentide/configurations/platforms/sentinel.toml",
+    ".opentide/configurations/platforms/splunk.toml"
+  ],
+  "status": "completed",
+  "summary": {}
+}
+
+━━━ stderr · empty

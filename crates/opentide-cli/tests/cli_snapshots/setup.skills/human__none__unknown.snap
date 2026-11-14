@@ -1,0 +1,14 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.skills/human/none/unknown
+---
+args: opentide setup skills --generic --install no-such-skill --yes
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+␛[1;31merror:␛[0m Unknown skill slug(s): no-such-skill. Run 'opentide setup skills discover' to list available
+       skills.
+  ␛[1musage:␛[0m opentide setup skills [OPTIONS] [COMMAND]
+  ␛[1;36mhelp:␛[0m run 'opentide setup skills --help'

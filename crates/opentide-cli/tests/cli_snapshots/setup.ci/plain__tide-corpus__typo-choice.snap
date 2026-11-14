@@ -1,0 +1,14 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.ci/plain/tide-corpus/typo-choice
+---
+args: opentide setup ci githb --yes
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: Invalid value "githb" for ci_platform: choose from github, gitlab, azure.
+  help: did you mean "github"?
+  usage: opentide setup ci [OPTIONS] <ci_platform>
+  help: run 'opentide setup ci --help'

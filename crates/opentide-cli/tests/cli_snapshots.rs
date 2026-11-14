@@ -86,6 +86,38 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
         ],
         114,
     ),
+    // `setup` and its subcommands, the skills catalogue served from its
+    // cassettes.
+    (
+        "setup",
+        &[
+            "setup",
+            "setup.ci",
+            "setup.env",
+            "setup.hooks",
+            "setup.mcp",
+            "setup.platforms",
+            "setup.repo",
+            "setup.skills",
+            "setup.skills.discover",
+            "setup.skills.show",
+            "setup.vscode",
+        ],
+        275,
+    ),
+    // The MISP destinations served from cassettes.
+    (
+        "share",
+        &[
+            "share",
+            "share.preview",
+            "share.push",
+            "share.retract",
+            "share.status",
+            "share.targets",
+        ],
+        158,
+    ),
 ];
 
 fn group(name: &str) {
@@ -121,4 +153,14 @@ fn generate() {
 #[test]
 fn new_migrate_and_rules() {
     group("new_migrate_and_rules");
+}
+
+#[test]
+fn setup() {
+    group("setup");
+}
+
+#[test]
+fn share() {
+    group("share");
 }
