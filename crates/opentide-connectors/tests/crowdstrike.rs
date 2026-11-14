@@ -347,6 +347,15 @@ fn crowdstrike_runs_and_stops_query_jobs_as_the_python_runner_does() {
         )
     );
     assert_eq!(replay.proxy.verify(), Vec::new());
+    // One token (expires_in 1799 s) serves every search of the run, where
+    // the recording client signed in before each.
+    let sign_ins = replay
+        .proxy
+        .requests()
+        .iter()
+        .filter(|request| request.url.ends_with("/oauth2/token"))
+        .count();
+    assert_eq!(sign_ins, 1);
 }
 
 #[test]

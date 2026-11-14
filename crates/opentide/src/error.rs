@@ -87,7 +87,7 @@ pub enum Error {
 
 impl Error {
     /// The code `configuration_invalid`: a configuration error without a code
-    /// of its own (a `paths.toml` that does not fit its model).
+    /// of its own (a retired proxy setting).
     pub const CONFIGURATION_INVALID: &'static str = "configuration_invalid";
 
     /// The stable code of this error (the table on [`Error`]).
@@ -180,10 +180,18 @@ mod tests {
     #[cfg(feature = "workspace")]
     #[test]
     fn a_configuration_error_keeps_its_code_or_takes_the_default() {
-        let paths = opentide_workspace::ConfigError::Paths(vec!["unknown key".into()]);
+        let paths = opentide_workspace::ConfigError::Paths {
+            code: "unknown_key",
+            problems: vec!["paths.colour: unknown key".into()],
+        };
         let error = Error::from(paths);
-        assert_eq!(error.code(), Error::CONFIGURATION_INVALID);
-        assert_eq!(error.to_string(), "paths.toml: unknown key");
+        assert_eq!(error.code(), "unknown_key");
+        assert_eq!(error.to_string(), "paths.toml: paths.colour: unknown key");
+
+        let proxy = opentide_workspace::ConfigError::Resolve(
+            opentide_schema::configuration::resolve::ResolveError::Proxy("retired".into()),
+        );
+        assert_eq!(Error::from(proxy).code(), Error::CONFIGURATION_INVALID);
 
         let unreadable = opentide_workspace::ConfigError::Unreadable {
             path: "paths.toml".into(),
