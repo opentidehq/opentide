@@ -1541,6 +1541,8 @@ jobs:
     if: needs.changes.outputs.mode == 'nightly'
     permissions:
       contents: read
+      # bench.yml reads the base branch's last result (gh run list, download).
+      actions: read
     uses: ./.github/workflows/bench.yml
 
   oracle:
