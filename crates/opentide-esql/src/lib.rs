@@ -806,6 +806,10 @@ fn highlight(spec: &HighlightSpec, source: &str, catalog: &Catalog) -> Vec<Highl
 /// UTF-16 position once, with `opentide_core::position_to_offset`).
 pub fn hover(source: &str, offset: usize) -> Option<String> {
     let offset = offset.min(source.len());
+    // An offset inside a character (a decoded escape) has nothing to show.
+    if !source.is_char_boundary(offset) {
+        return None;
+    }
     let tree = ts_parse(LanguageId::Esql, source)?;
     let catalog = Catalog::cached();
     let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
@@ -938,8 +942,11 @@ fn releases_line(snapshot_only: bool, available: Option<Availability>) -> String
 // ---- Completion -----------------------------------------------------------
 
 pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
+    // An offset inside a character (a decoded escape) completes nothing.
+    let Some(before) = source.get(..offset.min(source.len())) else {
+        return Vec::new();
+    };
     let catalog = Catalog::cached();
-    let before = &source[..offset.min(source.len())];
     let segment_start = last_pipe(before).map(|i| i + 1);
     let segment = &before[segment_start.unwrap_or(0)..];
     let trimmed = segment.trim_start();
@@ -1067,7 +1074,8 @@ fn last_pipe(before: &str) -> Option<usize> {
     reason = "a signature has a handful of parameters, far below u32::MAX"
 )]
 pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
-    let before = &source[..offset.min(source.len())];
+    // An offset inside a character (a decoded escape) has nothing to show.
+    let before = source.get(..offset.min(source.len()))?;
     let (name, active) = innermost_call(before)?;
     let row = Catalog::cached().function(&name)?;
     let parameters: Vec<ParameterInformation> = row
@@ -1604,5 +1612,16 @@ mod tests {
         let help = signature_help(src, src.len()).expect("signature");
         assert_eq!(help.active_parameter, 1);
         assert!(help.signatures[0].label.starts_with("STARTS_WITH("));
+    }
+
+    #[test]
+    fn an_offset_inside_a_character_is_answered_empty() {
+        // A cursor inside a decoded escape (`\u00e9` in a double-quoted Tide
+        // query) can reach the engine as the second byte of `\u{e9}`.
+        let src = "FROM logs | WHERE user == \"\u{e9}\"";
+        let inside = src.find('\u{e9}').unwrap() + 1;
+        assert!(completions(src, inside).is_empty());
+        assert_eq!(hover(src, inside), None);
+        assert!(signature_help(src, inside).is_none());
     }
 }
