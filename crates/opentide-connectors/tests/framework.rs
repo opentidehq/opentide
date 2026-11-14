@@ -97,6 +97,53 @@ fn tls_server(ca: &TestCa) -> (tokio::runtime::Runtime, u16) {
     (runtime, port)
 }
 
+/// A certificate the tenant does not trust is refused once, not retried: a
+/// second handshake would be refused the same way. A connection refused
+/// outright still is retried (the request never left).
+#[test]
+fn framework_a_refused_certificate_is_not_retried() {
+    let ca = TestCa::new().unwrap();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let config = ca.server_config("localhost").unwrap();
+    let listener = runtime
+        .block_on(tokio::net::TcpListener::bind("127.0.0.1:0"))
+        .unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let accepted = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&accepted);
+    runtime.spawn(async move {
+        loop {
+            let Ok((stream, _)) = listener.accept().await else {
+                return;
+            };
+            counter.fetch_add(1, Ordering::SeqCst);
+            let acceptor = tokio_rustls::TlsAcceptor::from(config.clone());
+            tokio::spawn(async move {
+                let _ = acceptor.accept(stream).await;
+            });
+        }
+    });
+    let retrying = HttpSettings {
+        retry: RetryPolicy {
+            max_retries: 3,
+            base_delay: Duration::from_millis(10),
+        },
+        ..HttpSettings::default()
+    };
+    let url = format!("https://localhost:{port}/");
+    let refused = get("verifying", &retrying, &Environment::default(), None, &url).unwrap_err();
+    assert!(refused.is_unreachable(), "{refused}");
+    assert!(
+        refused.to_string().to_lowercase().contains("certificate"),
+        "{refused}"
+    );
+    assert_eq!(
+        accepted.load(Ordering::SeqCst),
+        1,
+        "one handshake, no retry"
+    );
+}
+
 fn write_ca(ca: &str) -> tempfile::NamedTempFile {
     let mut file = tempfile::NamedTempFile::new().unwrap();
     file.write_all(ca.as_bytes()).unwrap();
@@ -531,7 +578,10 @@ fn framework_a_cancelled_connection_is_interrupted_every_time() {
 #[test]
 fn framework_a_connection_that_fails_is_retried_for_any_method() {
     let env_for = |url: &str| Environment::from_pairs([("HTTPS_PROXY", url)]);
-    let policy = RetryPolicy::urllib3(2, 0.01, &[503], &["GET"]);
+    let policy = RetryPolicy {
+        max_retries: 2,
+        base_delay: Duration::from_millis(10),
+    };
     let send = |settings: &HttpSettings, env: &Environment, verb: reqwest::Method| {
         let client = HttpClient::new(&label("t"), settings, env, None).unwrap();
         block_on(async {
@@ -548,7 +598,8 @@ fn framework_a_connection_that_fails_is_retried_for_any_method() {
         ..HttpSettings::default()
     };
     // The proxy refuses the tunnel every time: one attempt and two retries,
-    // for a method the policy does not list too (urllib3's `connect`).
+    // for a POST too: a request that never reached the tenant is safe to
+    // send again.
     for verb in [reqwest::Method::GET, reqwest::Method::POST] {
         let (refusing, taken) = fake_proxy(Some(
             "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n",
@@ -571,29 +622,7 @@ fn framework_a_connection_that_fails_is_retried_for_any_method() {
 }
 
 #[test]
-fn framework_retry_waits_as_urllib3_and_for_retry_after() {
-    // urllib3 2.x: no wait before the first retry, then factor * 2^(n-1).
-    let policy = RetryPolicy::urllib3(4, 0.5, &[503], &["GET"]);
-    let delays: Vec<Duration> = policy.delays().collect();
-    assert_eq!(
-        delays,
-        [
-            Duration::ZERO,
-            Duration::from_secs(1),
-            Duration::from_secs(2),
-            Duration::from_secs(4)
-        ]
-    );
-    assert_eq!(RetryPolicy::none().delays().count(), 0);
-    let capped: Vec<Duration> = RetryPolicy::urllib3(10, 60.0, &[503], &["GET"])
-        .delays()
-        .collect();
-    assert_eq!(capped[0], Duration::ZERO);
-    assert_eq!(capped[9], Duration::from_secs(120));
-    assert_eq!(
-        policy.retry_after(429, Some("1000")),
-        Some(Duration::from_secs(120))
-    );
+fn framework_retry_waits_for_retry_after() {
     // send() waits as long as the answer's Retry-After asks, not the
     // (zero) backoff.
     let (_runtime, server) = wiremock();
@@ -611,7 +640,10 @@ fn framework_retry_waits_as_urllib3_and_for_retry_after() {
             .await;
     });
     let settings = HttpSettings {
-        retry: RetryPolicy::urllib3(3, 0.0, &[503], &["GET"]),
+        retry: RetryPolicy {
+            max_retries: 3,
+            base_delay: Duration::ZERO,
+        },
         ..HttpSettings::default()
     };
     let started = std::time::Instant::now();
@@ -782,7 +814,10 @@ fn framework_retry_per_tenant() {
     });
     let env = Environment::default();
     let retrying = HttpSettings {
-        retry: RetryPolicy::urllib3(3, 0.01, &[429, 500, 502, 503, 504], &["GET", "PUT"]),
+        retry: RetryPolicy {
+            max_retries: 3,
+            base_delay: Duration::from_millis(10),
+        },
         ..HttpSettings::default()
     };
     let once = HttpSettings::default();
@@ -797,7 +832,7 @@ fn framework_retry_per_tenant() {
         .unwrap(),
         200
     );
-    // No retries: the 503 is the answer (raise_on_status=False), sent once.
+    // No retries: the 503 is the answer, sent once.
     assert_eq!(
         get(
             "splunk",
@@ -825,7 +860,7 @@ fn framework_retry_per_tenant() {
     let count = |p: &str| received.iter().filter(|r| r.url.path() == p).count();
     assert_eq!(count("/flaky"), 3);
     assert_eq!(count("/down"), 1 + 4);
-    // A method the policy does not retry is sent once.
+    // A POST that may have reached the tenant is sent once.
     let client = HttpClient::new(&label("post"), &retrying, &env, None).unwrap();
     let status = block_on(async {
         let request = client
@@ -846,19 +881,70 @@ fn framework_retry_per_tenant() {
         received.iter().filter(|r| r.url.path() == "/down").count(),
         6
     );
-    // Retry-After is read on a 429 or 503.
-    assert_eq!(
-        retrying.retry.retry_after(503, Some("2")),
-        Some(Duration::from_secs(2))
-    );
-    assert_eq!(retrying.retry.retry_after(500, Some("2")), None);
 }
 
 #[test]
-fn framework_a_read_timeout_is_retried_only_for_a_retried_method() {
-    // urllib3 retries a read timeout only for the methods in its list: the
-    // server may have acted on a POST it never answered in time, and sending
-    // it again could deploy a rule twice. A GET is sent again.
+fn framework_a_rule_create_that_got_a_503_is_sent_once() {
+    // Elastic's client retried every method on a 5xx, a POST included: a
+    // rule create a gateway answered with a 503 after Kibana had stored it
+    // was sent again. Now a POST is sent once, and a GET is still retried.
+    let (_runtime, server) = wiremock();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(503))
+            .up_to_n_times(1)
+            .with_priority(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200))
+            .with_priority(2)
+            .mount(&server)
+            .await;
+    });
+    let settings = opentide_connectors::elastic::http_settings(Duration::from_secs(30));
+    let client =
+        HttpClient::new(&label("elastic"), &settings, &Environment::default(), None).unwrap();
+    let url = format!("{}/api/detection_engine/rules", server.uri());
+    let send = |verb: reqwest::Method| {
+        block_on(async {
+            let request = client.request(verb, &url).build().unwrap();
+            client
+                .send(request, &CancellationToken::new())
+                .await
+                .unwrap()
+                .status()
+                .as_u16()
+        })
+        .unwrap()
+    };
+    let received = |verb: &str| {
+        rt.block_on(server.received_requests())
+            .unwrap()
+            .iter()
+            .filter(|request| request.method.as_str() == verb)
+            .count()
+    };
+    assert_eq!(
+        send(reqwest::Method::POST),
+        503,
+        "the answer is the caller's"
+    );
+    assert_eq!(received("POST"), 1, "a create is never sent twice");
+    assert_eq!(send(reqwest::Method::GET), 200);
+    assert_eq!(received("GET"), 2, "a read is sent again");
+}
+
+#[test]
+fn framework_a_read_timeout_is_not_retried() {
+    // The server may have acted on a POST it never answered in time, and
+    // sending it again could deploy a rule twice. A GET is not sent again
+    // either: the same search would take as long again.
     let (_runtime, server) = wiremock();
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(
@@ -868,7 +954,10 @@ fn framework_a_read_timeout_is_retried_only_for_a_retried_method() {
     );
     let settings = HttpSettings {
         timeout: Duration::from_millis(200),
-        retry: RetryPolicy::urllib3(2, 0.01, &[503], &["GET"]),
+        retry: RetryPolicy {
+            max_retries: 2,
+            base_delay: Duration::from_millis(10),
+        },
         ..HttpSettings::default()
     };
     let env = Environment::default();
@@ -906,7 +995,7 @@ fn framework_a_read_timeout_is_retried_only_for_a_retried_method() {
         matches!(get, Err(ConnectorError::Timeout { .. })),
         "{get:?}"
     );
-    assert_eq!(received("GET"), 1 + 2, "a GET that timed out is retried");
+    assert_eq!(received("GET"), 1, "a GET that timed out is not sent again");
 }
 
 #[test]

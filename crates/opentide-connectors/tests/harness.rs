@@ -192,12 +192,7 @@ fn deploy(proxy: &Proxy, rule: &Rule, as_compiled: bool) -> Result<(String, u16)
         toml::from_str("url = \"https://mock-tenant.invalid\"\ntoken = \"$MOCK_PLATFORM_TOKEN\"")
             .unwrap();
     let defaults = HttpSettings {
-        retry: RetryPolicy::urllib3(
-            3,
-            0.5,
-            &[429, 500, 502, 503, 504],
-            &["GET", "PUT", "PATCH", "POST"],
-        ),
+        retry: RetryPolicy::standard(),
         ..HttpSettings::default()
     };
     let tenant = Tenant::from_setup(

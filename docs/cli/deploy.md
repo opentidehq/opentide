@@ -242,7 +242,7 @@ A deploy that sends goes through each platform's connector, compiled into openti
 - A credential whose `$NAME` is unset is refused before any request.
 - A status promotion that cannot rewrite the push (no promotion target, a platform key that is not a string, a rule file that is not YAML or not a mapping, promoted text that does not read back) fails the run before anything is written (exit `1`); `--skip-promotion` deploys without it.
 
-A status promotion (a `RELEASE` run on a push in CI, without `--skip-promotion`) is the `status promotion` step: each block `status` is replaced in place, a byte-order mark, line endings and the file's permissions are kept, and the file is written atomically. A status written as an anchor, an alias or under a merge key is left as it is, with the `rule_not_promoted` warning.
+A status promotion (a `RELEASE` run on a push in CI, without `--skip-promotion`) is the `status promotion` step: each block `status` is replaced in place, a byte-order mark, line endings and the file's permissions are kept, and the file is written atomically. A status written as an anchor, an alias or under a merge key is left as it is, with the `rule_not_promoted` warning. With `--debug` (or `OPENTIDE_DEBUG=1`), the step promotes every rule file directly in the rules folder, not only the files the push changed. `DEBUG`, which CI systems and other tools set for their own logging, never turns this on, nor does the terminal the run starts in.
 
 ## Subcommands
 

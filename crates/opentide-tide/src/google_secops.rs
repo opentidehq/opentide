@@ -93,7 +93,7 @@ fn facts() -> RuleFacts {
     RuleFacts {
         title: "opentide rule".to_owned(),
         uuid: "00000000-0000-4000-8000-000000000000".to_owned(),
-        version: "1".to_owned(),
+        version: Some("1".to_owned()),
         author: None,
         description: String::new(),
         alert_severity: None,

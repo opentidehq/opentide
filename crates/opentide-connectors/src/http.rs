@@ -17,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::{self, ConnectorError};
 use crate::proxy::ProxySettings;
-use crate::retry::RetryPolicy;
+use crate::retry::{Outcome, RetryPolicy};
 use crate::tls::TlsSettings;
 use crate::transport::{
     self, Method, Request, RequestBuilder, Response, Transport, TransportFailure, TransportSpec,
@@ -151,8 +151,9 @@ impl HttpClient {
         }
     }
 
-    /// Sends *request*, retrying as the tenant's policy says, and returns
-    /// the answer (an error status included: the caller reads it). Stops
+    /// Sends *request*, retrying as the tenant's [`RetryPolicy`] says, and
+    /// returns the answer (an error status included, the last one when the
+    /// retries ran out: the caller reads it). Stops
     /// with [`ConnectorError::Cancelled`] when *cancel* fires.
     pub async fn send(
         &self,
@@ -169,49 +170,37 @@ impl HttpClient {
         };
         let url = request.url().clone();
         let retry = &self.settings.retry;
-        // urllib3 retries a status or a read timeout for the methods in its
-        // list only, and a connection that could not be made for any.
-        let method_retried = retry.retries(request.method().as_str());
-        let mut delays = retry.delays();
+        let mut retried = 0;
         loop {
-            let next = (retry.total > 0).then(|| request.clone());
             let outcome = tokio::select! {
                 biased;
                 () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
                 outcome = self.transport.execute(request.clone(), cancel) => outcome,
             };
-            let wait = match &outcome {
-                Ok(response)
-                    if method_retried && retry.retries_status(response.status().as_u16()) =>
-                {
-                    let after = response
+            let attempt = match &outcome {
+                Ok(response) => Outcome::Answer {
+                    status: response.status(),
+                    retry_after: response
                         .headers()
                         .get(http::header::RETRY_AFTER)
-                        .and_then(|value| value.to_str().ok());
-                    let after = retry.retry_after(response.status().as_u16(), after);
-                    next.is_some()
-                        .then(|| delays.next().map(|delay| after.unwrap_or(delay)))
-                        .flatten()
-                }
-                Ok(_) => None,
-                Err(TransportFailure::Connect { .. }) => {
-                    next.is_some().then(|| delays.next()).flatten()
-                }
-                Err(TransportFailure::Timeout) if method_retried => {
-                    next.is_some().then(|| delays.next()).flatten()
-                }
-                Err(_) => None,
+                        .and_then(|value| value.to_str().ok()),
+                },
+                Err(TransportFailure::Connect { .. }) => Outcome::NotSent,
+                Err(_) => Outcome::Failed,
             };
-            match (wait, outcome) {
-                (Some(delay), _) => {
-                    tokio::select! {
-                        biased;
-                        () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
-                        () = tokio::time::sleep(delay) => {}
-                    }
-                }
-                (None, Ok(response)) => return Ok(response),
-                (None, Err(failure)) => return Err(self.error(failure, &url)),
+            let Some(delay) = retry.wait_for(
+                request.is_idempotent(),
+                attempt,
+                retried,
+                jiff::Timestamp::now(),
+            ) else {
+                return outcome.map_err(|failure| self.error(failure, &url));
+            };
+            retried += 1;
+            tokio::select! {
+                biased;
+                () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
+                () = tokio::time::sleep(delay) => {}
             }
         }
     }
