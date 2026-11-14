@@ -335,7 +335,7 @@ jobs:
       SCCACHE_CACHE_SIZE: 3G
       SCCACHE_IDLE_TIMEOUT: "0"
       RUST: ${{ needs.changes.outputs.rust }}
-      PYTHON: ${{ needs.changes.outputs.python == 'true' || needs.changes.outputs.gitlab == 'true' || needs.changes.outputs.node == 'true' || needs.changes.outputs.mode == 'nightly' }}
+      PYTHON: ${{ needs.changes.outputs.python == 'true' || needs.changes.outputs.gitlab == 'true' || needs.changes.outputs.mode == 'nightly' }}
       PACKAGES: ${{ needs.changes.outputs.packages }}
       FEATURES: ${{ needs.changes.outputs.features }}
     steps:
@@ -618,32 +618,23 @@ jobs:
           name: nextest-archive
           path: ${{ runner.temp }}
 
-      # The tests were built in the build job's checkout, at this same path,
-      # and name it at compile time (env!("CARGO_BIN_EXE_*"),
-      # CARGO_TARGET_TMPDIR): the archive's target/ becomes this checkout's
-      # target/ (gitignored), not a link to it, whose resolved path a test
-      # would print.
-      - name: Extract the archive into target/
-        run: |
-          mkdir -p "${RUNNER_TEMP}/nextest"
-          cargo nextest list --archive-file "${RUNNER_TEMP}/tests.tar.zst" \
-            --workspace-remap "${GITHUB_WORKSPACE}" --extract-to "${RUNNER_TEMP}/nextest" >/dev/null
-          mv "${RUNNER_TEMP}/nextest/target" target
-
       # A test writes under a temporary folder, never in the checkout (#931).
       - name: Note the checkout's state
         run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
 
       # The compile-fail cases run in `build`, which has their dependencies.
+      # The archive (target/ alone) is extracted into this checkout: the
+      # tests were built in the build job's checkout, at this same path, and
+      # name its target/ at compile time (env!("CARGO_BIN_EXE_*"),
+      # CARGO_TARGET_TMPDIR). target/ is gitignored.
       - name: cargo nextest (profile ci)
         env:
           PARTITION: ${{ matrix.partition }}
           TOTAL: ${{ strategy.job-total }}
         run: >-
           cargo nextest run --profile ci
-          --binaries-metadata target/nextest/binaries-metadata.json
-          --cargo-metadata target/nextest/cargo-metadata.json
-          --target-dir-remap "${GITHUB_WORKSPACE}/target"
+          --archive-file "${RUNNER_TEMP}/tests.tar.zst"
+          --extract-to "${GITHUB_WORKSPACE}" --extract-overwrite
           --workspace-remap "${GITHUB_WORKSPACE}"
           --partition "count:${PARTITION}/${TOTAL}"
           --no-tests=pass
@@ -941,7 +932,7 @@ jobs:
   # stays runnable by hand.)
   node:
     name: Node package (napi-rs build, tests)
-    needs: [changes, build]
+    needs: changes
     if: needs.changes.outputs.node == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -1002,18 +993,10 @@ jobs:
       # The other side of the comparisons: this repository's PyPI CLI, whose
       # version the addon is built to report, so that the two documents can
       # be equal byte for byte.
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: native
-          path: .native
-
-      # On the build's extension (hatch_build.py, OPENTIDE_ENGINE_PREBUILT).
-      - name: Install this repository's CLI
-        env:
-          OPENTIDE_ENGINE_PREBUILT: ${{ github.workspace }}/.native/_native.abi3.so
-        run: |
-          uv sync --group dev
-          echo "OPENTIDE_VERSION=$(.venv/bin/opentide --version | cut -d' ' -f2)" >> "$GITHUB_ENV"
+      # The workspace version, as the conformance suite builds the addon: Node
+      # compiles its own addon, so this job starts beside `build`, not after it.
+      - name: The workspace version
+        run: echo "OPENTIDE_VERSION=$(python3 scripts/engine/release.py version)" >> "$GITHUB_ENV"
 
       - name: npm ci
         working-directory: bindings/node
@@ -1036,15 +1019,6 @@ jobs:
         working-directory: bindings/node
         run: npm test
 
-      # The issue's acceptance criterion: the same command tree, byte for
-      # byte, but for the run's own wall time (`duration_ms`).
-      - name: npx --json commands is the PyPI CLI's
-        working-directory: bindings/node
-        run: |
-          zero='s/"duration_ms":[0-9]+/"duration_ms":0/g'
-          npx --no-install . --json commands | sed -E "$zero" > "$RUNNER_TEMP/node.json"
-          ../../.venv/bin/opentide --json commands | sed -E "$zero" > "$RUNNER_TEMP/pypi.json"
-          cmp "$RUNNER_TEMP/node.json" "$RUNNER_TEMP/pypi.json"
 
   # The WASI build of the command line, the one module the VS Code extension
   # runs (ADR 0007's amendment): wasm32-wasip1 with the wasi-sdk
