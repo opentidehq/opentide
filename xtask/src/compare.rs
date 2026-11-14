@@ -377,6 +377,8 @@ pub fn node_candidate(_repo: &Path, _target: &Path) -> Result<crate::golden::run
 /// launch of the precompiled module skips Cranelift, which otherwise compiles
 /// the whole module again for every case (seconds each, hours over a run).
 /// Compiled again only when `module` is newer than the last compilation.
+/// The launch turns wasmtime's own cache off (`-C cache=n`): it would make
+/// `~/.cache/wasmtime` in every case's home, which the oracle never writes.
 #[cfg(unix)]
 fn precompiled(wasmtime: &Path, module: &Path, dir: &Path) -> Result<PathBuf> {
     let compiled = dir.join("opentide.cwasm");
@@ -447,7 +449,7 @@ pub fn wasi_candidate(repo: &Path, target: &Path) -> Result<crate::golden::run::
             let wasmtime = on_path("wasmtime")?;
             let compiled = precompiled(&wasmtime, &module, &bin_dir)?;
             format!(
-                "{} run --allow-precompiled -S inherit-env --dir /::/ -- {}",
+                "{} run --allow-precompiled -C cache=n -S inherit-env --dir /::/ -- {}",
                 quoted(&wasmtime)?,
                 quoted(&compiled)?
             )
