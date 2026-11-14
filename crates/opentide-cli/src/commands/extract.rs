@@ -853,13 +853,11 @@ fn object(members: Vec<(&str, CJson)>) -> CJson {
     )
 }
 
-fn list(value: &CJson) -> CJson {
+/// A field Kibana holds as a list of strings, or as one string, as a list:
+/// `index: "logs-*"` is `["logs-*"]`.
+fn string_list(value: &CJson) -> CJson {
     match value {
-        CJson::Array(items) => CJson::Array(items.clone()),
-        CJson::Str(text) => CJson::Array(text.chars().map(|c| CJson::Str(c.to_string())).collect()),
-        CJson::Object(object) => {
-            CJson::Array(object.keys().map(|key| CJson::Str(key.clone())).collect())
-        }
+        CJson::Str(_) => CJson::Array(vec![value.clone()]),
         other => other.clone(),
     }
 }
@@ -1084,7 +1082,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         if let Some(view) = truthy(rule, "data_view_id") {
             block.insert("data_view_id".into(), view.clone());
         } else if let Some(index) = truthy(rule, "index") {
-            block.insert("index".into(), list(index));
+            block.insert("index".into(), string_list(index));
         }
     }
     let interval = rule
@@ -1177,7 +1175,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         if kind != "threshold"
             && let Some(group_by) = truthy(suppression, "group_by")
         {
-            out.insert("group_by".into(), list(group_by));
+            out.insert("group_by".into(), string_list(group_by));
         }
         match truthy(suppression, "duration") {
             Some(CJson::Object(duration)) => {
@@ -1213,7 +1211,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         .filter(|fields| fields.truthy())
         .and_then(|fields| truthy(fields, "field_names"))
     {
-        block.insert("highlighted_fields".into(), list(fields));
+        block.insert("highlighted_fields".into(), string_list(fields));
     }
     if let Some(CJson::Array(required)) = truthy(rule, "required_fields") {
         let mut fields = Vec::new();
@@ -1284,7 +1282,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         block.insert("guide".into(), CJson::Object(guide));
     }
     if let Some(positives) = truthy(rule, "false_positives") {
-        block.insert("false_positives".into(), list(positives));
+        block.insert("false_positives".into(), string_list(positives));
     }
     if let Some(CJson::Array(tags)) = truthy(rule, "tags") {
         block.insert(
@@ -1458,8 +1456,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
             _ => CJson::Null,
         };
         let field = match truthy(threshold, "field") {
-            Some(CJson::Str(text)) => CJson::Array(vec![CJson::Str(text.clone())]),
-            Some(other) => list(other),
+            Some(field) => string_list(field),
             None => CJson::Array(Vec::new()),
         };
         block.insert(
@@ -1484,7 +1481,8 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
             object(vec![
                 (
                     "fields",
-                    truthy(rule, "new_terms_fields").map_or_else(|| CJson::Array(Vec::new()), list),
+                    truthy(rule, "new_terms_fields")
+                        .map_or_else(|| CJson::Array(Vec::new()), string_list),
                 ),
                 (
                     "history_window_start",
@@ -1550,7 +1548,8 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
             object(vec![
                 (
                     "index",
-                    truthy(rule, "threat_index").map_or_else(|| CJson::Array(Vec::new()), list),
+                    truthy(rule, "threat_index")
+                        .map_or_else(|| CJson::Array(Vec::new()), string_list),
                 ),
                 (
                     "query",
@@ -1911,6 +1910,33 @@ mod elastic_tests {
         assert!(!python_uuid("rule-1"));
         assert_eq!(elastic_filename("a:  b"), "a b");
         assert_eq!(uuid5(&migration_namespace(), "x").get_version_num(), 5);
+    }
+
+    /// A field Kibana holds as one string where it usually holds a list is a
+    /// list of that one string: `index: "logs-*"` is `["logs-*"]`, not one
+    /// item per character (the Python importer's `list(str)`).
+    #[test]
+    fn a_single_string_is_a_one_item_list() {
+        let converted = kibana_to_opentide(
+            &rule(
+                r#"{"rule_id": "11111111-1111-4111-8111-111111111111", "name": "One",
+                    "description": "d", "severity": "low", "type": "query", "language": "kuery",
+                    "query": "x", "index": "logs-*", "false_positives": "Admins",
+                    "investigation_fields": {"field_names": "host.name"}}"#,
+            ),
+            true,
+        );
+        let text = rule_yaml(&converted).unwrap();
+        assert!(text.contains("\n    index:\n      - logs-*\n"), "{text}");
+        assert!(
+            text.contains("false_positives:\n") && text.contains("  - Admins\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("highlighted_fields:\n") && text.contains("  - host.name\n"),
+            "{text}"
+        );
+        assert!(!text.contains("- l\n"), "{text}");
     }
 
     /// serde-saphyr's YAML for an extracted rule (#834): keys in order, a
