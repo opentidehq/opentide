@@ -17,6 +17,10 @@ workspace = true
 # Elastic durations (`duration`): linear-time patterns, no look-around.
 regex.workspace = true
 serde.workspace = true
+# `json`: an ordered JSON value (objects in insertion order) written and read
+# by serde_json, without its `preserve_order` feature (see the module).
+serde_json.workspace = true
+indexmap = "2"
 toml.workspace = true
 thiserror.workspace = true
 strsim.workspace = true
