@@ -5,7 +5,7 @@ description: Repository root, data root, debug logging, quiet, colour, JSON outp
 
 # Global options
 
-Set on the root `opentide` callback. The boolean flags (`--json`, `--no-color`, `--debug`, `--quiet`, `--verbose`) are accepted anywhere before `--`, after the command too; options that take a value (`--repo`, `--data`, `--proxy`) go before the command.
+Set on the root `opentide` command. The boolean flags (`--json`, `--no-color`, `--debug`, `--quiet`, `--verbose`) are accepted anywhere before `--`, after the command too; options that take a value (`--repo`, `--data`, `--proxy`) go before the command.
 
 ```bash
 opentide --repo /path/to/repo --json validate --strict
@@ -13,7 +13,7 @@ opentide validate --strict --json
 opentide --debug --no-color generate
 ```
 
-A flag that is the value of the option before it stays that option's value: in `opentide setup skills discover --query --json`, `--json` is the search text. There are no short forms (`-q` belongs to `--query`).
+A word that starts with `-` is an option, never the value of the option before it: `opentide setup skills discover --query --json` is a usage error (exit `2`, `--query requires a value`). To give a value that starts with `-`, join it with `=`: `--query=--json` searches for `--json`. A negative number is a value (`--limit -1`). There are no short forms of the global flags (`-q` belongs to `--query`).
 
 ## Options
 

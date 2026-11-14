@@ -8,10 +8,9 @@
 //! message's words. Exit 2.
 
 use crate::envelope::{Failure, code};
-use crate::hoist;
 use crate::suggest::did_you_mean;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
-use clap::{Arg, Command};
+use clap::{Arg, ArgAction, Command};
 
 /// A usage error, ready to print.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,6 +81,36 @@ fn usage_of(command: &mut Command, path: &[String]) -> clap::builder::StyledStr 
     command.render_usage()
 }
 
+/// Whether `arg` reads a value after it.
+fn takes_value(arg: &Arg) -> bool {
+    !matches!(
+        arg.get_action(),
+        ArgAction::SetTrue
+            | ArgAction::SetFalse
+            | ArgAction::Count
+            | ArgAction::Help
+            | ArgAction::HelpShort
+            | ArgAction::HelpLong
+            | ArgAction::Version
+    )
+}
+
+/// The option `name` (`--strict`, `-C`) of `command`.
+fn find_option<'a>(command: &'a Command, name: &str) -> Option<&'a Arg> {
+    command.get_arguments().find(|arg| {
+        if let Some(long) = name.strip_prefix("--") {
+            arg.get_long_and_visible_aliases()
+                .is_some_and(|longs| longs.contains(&long))
+                || arg.get_all_aliases().is_some_and(|all| all.contains(&long))
+        } else if let Some(short) = name.strip_prefix('-') {
+            let mut chars = short.chars();
+            matches!((chars.next(), chars.next()), (Some(c), None) if arg.get_short() == Some(c))
+        } else {
+            false
+        }
+    })
+}
+
 fn context_string(error: &clap::Error, kind: ContextKind) -> Option<String> {
     match error.get(kind)? {
         ContextValue::String(text) => Some(text.clone()),
@@ -103,7 +132,7 @@ fn find_arg<'a>(root: &'a Command, path: &[String], shown: &str) -> Option<&'a A
 
 fn own_arg<'a>(command: &'a Command, word: &str) -> Option<&'a Arg> {
     if word.starts_with('-') {
-        return hoist::find_option(command, word);
+        return find_option(command, word);
     }
     let name = word.trim_start_matches('<').trim_end_matches(['>', '.']);
     command.get_arguments().find(|arg| {
@@ -163,8 +192,8 @@ pub fn describe(root: &Command, args: &[String], error: &clap::Error) -> UsageEr
         ErrorKind::InvalidSubcommand => context_string(error, ContextKind::InvalidSubcommand),
         _ => None,
     };
-    // The last occurrence: the hoisted flags sit in front, so an unknown
-    // `--json` typed after `--` must not be found among them.
+    // The last occurrence: an unknown `--json` typed after `--` is not the
+    // global flag before it.
     let before = offending
         .and_then(|word| {
             args.iter().rposition(|arg| {
@@ -172,14 +201,14 @@ pub fn describe(root: &Command, args: &[String], error: &clap::Error) -> UsageEr
             })
         })
         .unwrap_or(args.len());
-    let path = hoist::command_words(root, &args[..before]);
+    let path = crate::app::command_words(root, &args[..before]);
     let command = command_at(root, &path);
     let shown = context_string(error, ContextKind::InvalidArg).unwrap_or_default();
     let arg = find_arg(root, &path, &shown);
     let at_fault = arg.map_or_else(|| shown.clone(), label);
     let failure = match error.kind() {
         // `--json=1`: a flag given a value.
-        ErrorKind::TooManyValues if arg.is_some_and(|arg| !hoist::takes_value(arg)) => Failure {
+        ErrorKind::TooManyValues if arg.is_some_and(|arg| !takes_value(arg)) => Failure {
             argument: Some(at_fault.clone()),
             ..Failure::new(
                 code::USAGE_ERROR,
@@ -191,7 +220,7 @@ pub fn describe(root: &Command, args: &[String], error: &clap::Error) -> UsageEr
             // An option-shaped word where the group expects its command
             // (`validate -- --json`): an unknown option when the group has no
             // such option.
-            if name.starts_with('-') && hoist::find_option(command, &name).is_none() {
+            if name.starts_with('-') && find_option(command, &name).is_none() {
                 unknown_option(command, &name)
             } else {
                 unknown_command(command, &name)
@@ -406,7 +435,7 @@ mod tests {
         );
         let group = parse("rules");
         assert_eq!(group.failure.message, "Missing command.");
-        assert_eq!(group.notes[0].1, "opentide rules <COMMAND>");
+        assert_eq!(group.notes[0].1, "opentide rules [OPTIONS] <COMMAND>");
         let shown = parse("setup skills show");
         assert_eq!(shown.failure.message, "Missing argument name.");
         assert_eq!(
@@ -504,17 +533,15 @@ mod tests {
     }
 
     #[test]
-    fn framework_usage_an_option_value_may_start_with_a_dash() {
-        let query = matches("setup skills discover --query --json").unwrap();
+    fn framework_usage_an_option_value_starts_with_a_dash_only_after_an_equals_sign() {
+        let missing = parse("setup skills discover --query --json");
+        assert_eq!(missing.failure.message, "--query requires a value.");
+        let query = matches("setup skills discover --query=--json").unwrap();
         assert_eq!(
             value(&query, &["setup", "skills", "discover"], "query").map(String::as_str),
             Some("--json")
         );
-        let file = matches("query --platform sentinel --query-file --json").unwrap();
-        assert_eq!(
-            value(&file, &["query"], "query_file").map(String::as_str),
-            Some("--json")
-        );
+        // A negative number is a value.
         let limit = matches("query --platform sentinel --limit -1 x").unwrap();
         assert_eq!(
             limit
@@ -523,21 +550,13 @@ mod tests {
                 .get_one::<i64>("limit"),
             Some(&-1)
         );
-        // A choice's value is checked as a choice, dash or not.
-        let platform = parse("query --platform --json x");
-        assert_eq!(platform.failure.code, code::USAGE_INVALID_CHOICE);
-        assert!(
-            platform
-                .failure
-                .message
-                .starts_with("Invalid value \"--json\" for --platform: choose from sentinel")
-        );
-        // The value of `--file` is the next word, whatever it is.
-        let next = matches("validate --file --strict").unwrap();
-        assert_eq!(
-            value(&next, &["validate"], "file").map(String::as_str),
-            Some("--strict")
-        );
+        // A choice or a path is missing its value too.
+        for line in ["query --platform --json x", "validate --file --strict"] {
+            assert!(
+                parse(line).failure.message.ends_with("requires a value."),
+                "{line}"
+            );
+        }
     }
 
     #[test]
@@ -568,7 +587,8 @@ mod tests {
         assert_eq!(json.failure.message, "Unknown option \"--json\".");
         assert_eq!(json.failure.argument.as_deref(), Some("--json"));
         assert_eq!(json.command, "validate");
-        // Hoisted in front too: the `--json` after `--` is the one at fault.
+        // With the global `--json` before it: the `--json` after `--` is the
+        // one at fault.
         let root = root();
         let hoisted = args("--json validate -- --json");
         let error = root

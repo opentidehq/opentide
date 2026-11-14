@@ -1,0 +1,8 @@
+bin.name = "opentide"
+args = ["--json", "setup", "skills", "discover", "--query", "--json"]
+env.inherit = false
+status.code = 2
+stdout = '''
+{"error":"--query requires a value.","ok":false,"status":"failed","message":"--query requires a value.","schema_version":1,"command":"setup skills discover","duration_ms":[..],"exit_code":2,"summary":{},"next_actions":[],"failure":{"code":"usage_error","message":"--query requires a value.","argument":"--query","suggestion":null,"crash_log":null}}
+'''
+stderr = ""

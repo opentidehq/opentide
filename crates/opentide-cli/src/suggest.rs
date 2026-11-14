@@ -191,7 +191,6 @@ mod tests {
 
     #[test]
     fn framework_suggest_never_repeats_the_word_typed() {
-        // `opentide -- commands` was refused with "did you mean 'commands'?".
         assert_eq!(dym("commands", &["commands", "validate"]), None);
         assert_eq!(dym("query", &["query"]), None);
         // A different spelling of a valid word is still suggested.
