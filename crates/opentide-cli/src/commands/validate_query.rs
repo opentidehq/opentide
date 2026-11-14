@@ -868,6 +868,8 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             cannot_read.push(format!("{target}: {problem}"));
         }
     }
+    // The datasets in use before go back while the engines are still held.
+    drop(profiles);
     drop(engine);
     let base = || -> Vec<(String, Json)> {
         vec![

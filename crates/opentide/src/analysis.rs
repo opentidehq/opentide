@@ -37,8 +37,16 @@ pub const VERSION: &str = opentide_analysis::VERSION;
 /// let diagnostics = opentide::analysis::analyze_query(&request);
 /// assert!(diagnostics.iter().any(|d| d.code == "esql_unknown_command"));
 /// ```
+///
+/// It waits for a [`Workspace::validate`](crate::Workspace::validate) or
+/// [`Workspace::lint`](crate::Workspace::lint) running on another thread:
+/// those install the workspace's declared datasets in the engines for the
+/// run, and the query is checked without them.
 #[must_use]
 pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
+    let _engine = opentide_analysis::ENGINE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     opentide_analysis::analyze_query(request)
 }
 

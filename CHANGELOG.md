@@ -199,6 +199,9 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Fixed
 
+- **`opentide.analysis.check_query` no longer reports `kql_table_not_declared` after `Workspace.validate`.** A `validate` or `lint` run left its workspace's `visibility.toml` installed for the whole process, so a query checked on its own afterwards, in Python or Node.js, was checked against that workspace's datasets. The run now puts back what it found, and `check_query` waits for a run on another thread.
+- **`opentide migrate --apply` no longer leaves a half-written object file.** It writes each file beside the original and renames it into place, so an interrupted run leaves the file as it was, as `deploy` writes its state.
+
 - **Exabeam messages name a value as JSON.** A block status that is not a string, or a missing one, a recurrence day and a create that answers no id are named `true`, `false` or `null`, as the other platforms' messages name them, not Python's `True`, `False` or `None`.
 
 - **Falco receives a Sysdig list item or exception value as the file writes it** ([#841](https://github.com/opentidehq/opentide/issues/841)). A number or a boolean in `lists[].items` or `exceptions[].values` reached Falco in Python's spelling: `1.50` as `1.5`, `0x1F` as `31`, `True` as `true` in the condition, and an exception value as a JSON number. Falco reads every item as its text, so `deploy` now sends the scalar as written, an exception value as a string, and `validate` checks the block with the same text. A null exception value is refused (`exceptions.N.values.M: Value error, an exception value cannot be null`) where `None` was sent: quote it (`"null"`) to match that word.
