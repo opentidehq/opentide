@@ -1,0 +1,225 @@
+//! What SentinelOne's deploy and query calls report when the console refuses
+//! or half-answers them (`_http_errors`): the error kind, the console's own
+//! words, and never the API token. The console is a wiremock server.
+#![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
+
+use opentide_connectors::connector::{
+    DeployRequest, Deployer, Operation, QueryRequest, TenantContext, TimeWindow,
+};
+use opentide_connectors::credentials::Mode;
+use opentide_connectors::runtime::block_on;
+use opentide_connectors::sentinel_one::{
+    self, QUERY_PATH, QueryValidation, RULES_PATH, SentinelOne, SentinelOneError,
+};
+use opentide_connectors::{ConnectorError, Environment, HttpClient, Tenant};
+use serde_json::json;
+use tokio_util::sync::CancellationToken;
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
+
+/// *work* on a runtime of its own.
+fn wait<F: Future>(work: F) -> F::Output {
+    block_on(work).unwrap()
+}
+
+const TOKEN: &str = "s1-token-never-in-a-message";
+
+/// Runs `body` with a tenant whose console is `server`.
+fn with_tenant<T>(server: &MockServer, body: impl FnOnce(TenantContext<'_>) -> T) -> T {
+    let setup: toml::Table = toml::from_str(&format!(
+        "url = \"{}\"\napi_token = \"$S1_TOKEN\"\naccount_id = 4242\nsite_id = 0\n",
+        server.uri()
+    ))
+    .unwrap();
+    let env = Environment::from_pairs([("S1_TOKEN", TOKEN)]);
+    let settings = sentinel_one::http_settings();
+    let tenant = Tenant::from_setup(
+        sentinel_one::PLATFORM,
+        "s1",
+        &setup,
+        &env,
+        Mode::Required,
+        &settings,
+    )
+    .unwrap();
+    let http = HttpClient::new(&tenant.label, &settings, &env, None).unwrap();
+    let cancel = CancellationToken::new();
+    body(TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    })
+}
+
+/// A server that answers every `verb` to `route` with `reply`.
+fn server(verb: &str, route: &str, reply: ResponseTemplate) -> MockServer {
+    wait(async {
+        let server = MockServer::start().await;
+        Mock::given(method(verb))
+            .and(path(route))
+            .respond_with(reply)
+            .mount(&server)
+            .await;
+        server
+    })
+}
+
+fn deploy(
+    server: &MockServer,
+    operation: Operation,
+    rule_id: &str,
+    body: &[u8],
+) -> Result<Option<String>, ConnectorError> {
+    let request = DeployRequest {
+        rule_id: rule_id.to_owned(),
+        operation,
+        body: body.to_vec(),
+    };
+    with_tenant(server, |cx| wait(SentinelOne.deploy(cx, &request)))
+        .map(|outcome| outcome.remote_id)
+}
+
+fn reason(error: ConnectorError) -> String {
+    let ConnectorError::Answer {
+        reason, address, ..
+    } = &error
+    else {
+        panic!("{error:?}")
+    };
+    assert!(!address.is_empty());
+    assert!(!format!("{error} {error:?}").contains(TOKEN));
+    reason.clone()
+}
+
+#[test]
+fn the_deployer_reports_each_refusal_in_the_consoles_words() {
+    let rule = br#"{"data": {"name": "r"}}"#;
+    for (status, body, expected) in [
+        (
+            400,
+            json!({"errors": ["bad"]}),
+            "SentinelOne refused the rule (HTTP 400)",
+        ),
+        (
+            401,
+            json!({"errors": ["token"]}),
+            "SentinelOne refused the API token (HTTP 401)",
+        ),
+        (
+            500,
+            json!({"errors": [{"code": 5}]}),
+            "Unforeseen error with code [500]: {\"errors\":[{\"code\":5}]}",
+        ),
+        (
+            200,
+            json!({"data": {}}),
+            "SentinelOne answered without the rule's id",
+        ),
+    ] {
+        let server = server(
+            "POST",
+            RULES_PATH,
+            ResponseTemplate::new(status).set_body_json(body),
+        );
+        let error = deploy(&server, Operation::Create, "", rule).unwrap_err();
+        let reason = reason(error);
+        assert!(reason.starts_with(expected), "{status}: {reason}");
+    }
+    // A rule that is gone says how to clear its deployment state.
+    let server = server(
+        "PUT",
+        &format!("{RULES_PATH}/77"),
+        ResponseTemplate::new(404),
+    );
+    let error = deploy(&server, Operation::Update, "77", rule).unwrap_err();
+    assert!(reason(error).contains("remove its sentinel_one entry"));
+}
+
+#[test]
+fn the_deployer_creates_replaces_and_deletes_by_the_recorded_id() {
+    let created = ResponseTemplate::new(200).set_body_json(json!({"data": {"id": " 9001 "}}));
+    let server = server("POST", RULES_PATH, created);
+    assert_eq!(
+        deploy(&server, Operation::Create, "", b"{}")
+            .unwrap()
+            .as_deref(),
+        Some("9001")
+    );
+    let replaced = ResponseTemplate::new(200).set_body_json(json!({"data": {"id": 9001}}));
+    let server = self::server("PUT", &format!("{RULES_PATH}/9001"), replaced);
+    assert_eq!(
+        deploy(&server, Operation::Disable, "9001", b"{}")
+            .unwrap()
+            .as_deref(),
+        Some("9001")
+    );
+    let server = self::server("DELETE", RULES_PATH, ResponseTemplate::new(200));
+    assert_eq!(
+        deploy(&server, Operation::Delete, "9001", b"").unwrap(),
+        None
+    );
+    // Nothing is sent for an id that is not a number or a body that is not JSON.
+    let server = self::server("DELETE", RULES_PATH, ResponseTemplate::new(200));
+    let error = deploy(&server, Operation::Delete, "ru-1", b"").unwrap_err();
+    assert_eq!(reason(error), "deployment id \"ru-1\" is not a number");
+    let error = deploy(&server, Operation::Create, "", b"{not json").unwrap_err();
+    let ConnectorError::Setup { message, .. } = &error else {
+        panic!("{error:?}")
+    };
+    assert!(
+        message.starts_with("the compiled rule is not JSON"),
+        "{message}"
+    );
+    assert!(wait(server.received_requests()).unwrap().is_empty());
+}
+
+#[test]
+fn a_query_check_the_console_cannot_run_is_refused_or_unforeseen() {
+    let now = jiff::Timestamp::from_second(1_800_000_000).unwrap();
+    let refused = ResponseTemplate::new(400)
+        .set_body_json(json!({"errors": [{"detail": "unknown field src.x"}]}));
+    let server = server("POST", QUERY_PATH, refused);
+    let outcome = with_tenant(&server, |cx| {
+        wait(SentinelOne.validate_query(cx, "src.x = 1", now))
+    });
+    assert_eq!(
+        outcome.unwrap(),
+        QueryValidation::Refused("unknown field src.x".into())
+    );
+
+    let server = self::server(
+        "POST",
+        QUERY_PATH,
+        ResponseTemplate::new(500).set_body_string("down"),
+    );
+    let outcome = with_tenant(&server, |cx| {
+        wait(SentinelOne.validate_query(cx, "src.x = 1", now))
+    });
+    let Err(SentinelOneError::Unforeseen { status, context }) = outcome else {
+        panic!("{outcome:?}")
+    };
+    assert_eq!((status, context.as_str()), (500, "down"));
+}
+
+#[test]
+fn a_powerquery_answered_without_json_or_without_an_id_is_refused() {
+    let window = TimeWindow::check(jiff::Timestamp::from_second(1_800_000_000).unwrap());
+    let request = QueryRequest::new("src.x = 1", "powerquery", window);
+    for (reply, expected) in [
+        (
+            ResponseTemplate::new(200).set_body_string("<html><title>Gateway</title></html>"),
+            "SentinelOne did not answer the PowerQuery on s1 with JSON",
+        ),
+        (
+            ResponseTemplate::new(200).set_body_json(json!({"data": {"status": "RUNNING"}})),
+            "SentinelOne returned no query id on s1",
+        ),
+    ] {
+        let server = server("POST", QUERY_PATH, reply);
+        let error = with_tenant(&server, |cx| wait(SentinelOne.run(cx, &request))).unwrap_err();
+        let ConnectorError::Refused { message, .. } = &error else {
+            panic!("{error:?}")
+        };
+        assert_eq!(message, expected);
+    }
+}
