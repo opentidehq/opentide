@@ -190,58 +190,28 @@ pub fn checklist(steps: &[Step], width: usize, colour: Colour) -> String {
         })
         .collect();
     let mut out = String::new();
-    for line in columns(&rows, 2, 2, &[3]) {
-        let line = crop(&line, width);
+    for mut line in columns(&rows, 2, 2, &[3]) {
+        line.truncate_ellipsis(width);
         out.push_str(&line.render(colour, false));
         out.push('\n');
     }
     out
 }
 
-/// `rows` as aligned columns, one line each, trailing blanks trimmed; the
-/// columns in `right` right-aligned. A column empty on every row takes no room.
+/// `rows` as [`table::columns`](super::table::columns) lays them out, each
+/// line that holds something `indent` blanks in from the edge.
 pub fn columns(rows: &[Vec<Text>], gap: usize, indent: usize, right: &[usize]) -> Vec<Text> {
-    let count = rows.iter().map(Vec::len).max().unwrap_or(0);
-    let widths: Vec<usize> = (0..count)
-        .map(|index| {
-            rows.iter()
-                .filter_map(|row| row.get(index))
-                .map(Text::cell_len)
-                .max()
-                .unwrap_or(0)
-        })
-        .collect();
-    rows.iter()
-        .map(|row| {
-            let mut line = Text::plain(&" ".repeat(indent));
-            let mut pending = String::new();
-            for (index, cell) in row.iter().enumerate() {
-                let width = widths[index];
-                if width == 0 {
-                    continue;
-                }
-                line.push_str(&pending);
-                let pad = " ".repeat(width - cell.cell_len());
-                if right.contains(&index) {
-                    line.push_str(&pad);
-                    line.append_text(cell);
-                    pending = " ".repeat(gap);
-                } else {
-                    line.append_text(cell);
-                    pending = pad + &" ".repeat(gap);
-                }
+    super::table::columns(rows, gap, right)
+        .into_iter()
+        .map(|line| {
+            if line.is_empty() {
+                return line;
             }
-            line.rstrip();
-            line
+            let mut indented = Text::plain(&" ".repeat(indent));
+            indented.append_text(&line);
+            indented
         })
         .collect()
-}
-
-/// `line` in at most `width` cells, ending in `…` when cut.
-fn crop(line: &Text, width: usize) -> Text {
-    let mut line = line.clone();
-    line.truncate_ellipsis(width);
-    line
 }
 
 /// Receives each event instead of stderr (`opentide serve` forwards them to its client).

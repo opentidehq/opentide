@@ -255,22 +255,9 @@ pub fn clean(text: &str) -> String {
         .replace("\r\x1b[2K", "")
 }
 
-/// `text` without SGR runs.
+/// `text` without its escape sequences (anstream's stripper).
 pub fn strip_sgr(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '\x1b' && chars.peek() == Some(&'[') {
-            for next in chars.by_ref() {
-                if next.is_ascii_alphabetic() {
-                    break;
-                }
-            }
-            continue;
-        }
-        out.push(ch);
-    }
-    out
+    anstream::adapter::strip_str(text).to_string()
 }
 
 #[cfg(test)]
