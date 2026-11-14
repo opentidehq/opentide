@@ -375,8 +375,9 @@ mod loading {
             "[paths.objects]\nrule = 5\n",
         );
         let error = Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, options()).unwrap_err();
-        assert!(matches!(error, ConfigError::Paths(_)), "{error:?}");
-        assert_eq!(error.code(), None);
+        assert!(matches!(error, ConfigError::Paths { .. }), "{error:?}");
+        // The configuration check's code for a value of the wrong type.
+        assert_eq!(error.code(), Some("schema_validation"));
         fs.write("/ws/.opentide/configurations/paths.toml", "[paths\n");
         let error = Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, options()).unwrap_err();
         assert_eq!(error.code(), Some("config_parse"));
@@ -400,7 +401,8 @@ mod loading {
         );
         let roots = opentide_workspace::root::resolve(fs.as_ref(), &options().roots);
         let error = opentide_workspace::config::load(fs.as_ref(), &roots).unwrap_err();
-        assert!(matches!(error, ConfigError::Paths(_)), "{error:?}");
+        assert!(matches!(error, ConfigError::Paths { .. }), "{error:?}");
+        assert!(error.code().is_some(), "{error:?}");
         let resolved = opentide_workspace::config::resolve_only(fs.as_ref(), &roots).unwrap();
         let statuses = resolved
             .get("deployment")
@@ -463,6 +465,41 @@ mod loading {
         let workspace = Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, opts).unwrap();
         assert!(workspace.roots().tide_workspace);
         assert_eq!(workspace.index().rules().count(), 0);
+    }
+
+    /// With `OPENTIDE_TIDE_WORKSPACE` set, the configuration is the
+    /// workspace's own: the repository's
+    /// `tests/fixtures/generation/configurations` is not merged over it.
+    #[test]
+    fn a_tide_workspace_reads_no_configuration_from_the_repository() {
+        let fs = Arc::new(MemoryFs::new());
+        fs.write(
+            "/repo/tests/fixtures/generation/configurations/paths.toml",
+            "[paths.objects]\nrule = \"fixture-rules/\"\n",
+        );
+        fs.write("/repo/ws/fixture-rules/r.yaml", object("r-f"));
+        fs.write("/repo/ws/objects/rules/r.yaml", object("r-o"));
+        let options = Options {
+            roots: RootOptions {
+                repo: Some(PathBuf::from("/repo")),
+                tide_workspace_env: Some(PathBuf::from("/repo/ws")),
+                cwd: PathBuf::from("/repo"),
+                ..RootOptions::default()
+            },
+        };
+        let workspace = Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, options).unwrap();
+        assert!(workspace.roots().tide_workspace);
+        assert!(workspace.index().get("rule", "r-o").is_some());
+        assert!(workspace.index().get("rule", "r-f").is_none());
+        assert!(
+            !workspace
+                .configuration()
+                .folders
+                .iter()
+                .any(|folder| folder.starts_with("/repo/tests")),
+            "{:?}",
+            workspace.configuration().folders
+        );
     }
 
     /// An open workspace is a snapshot: its index, configuration and lookups

@@ -2711,7 +2711,6 @@ dependencies = [
  "shlex",
  "signal-hook",
  "soft-canonicalize",
- "strsim",
  "terminal_size",
  "textwrap",
  "tokio",
