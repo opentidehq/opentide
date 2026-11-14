@@ -1,7 +1,7 @@
 """Print each workspace's registry index as the oracle builds it.
 
 `cargo xtask registry diff --against python` runs it with the oracle's
-interpreter (opentide 0.23.0, beside the oracle executable):
+interpreter (tests/corpora/oracle.in, beside the oracle executable):
 
     <oracle python> -I xtask/oracle/registry_export.py WORKSPACE...
 

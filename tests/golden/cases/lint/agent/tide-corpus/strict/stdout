@@ -2,143 +2,47 @@ warning[filename_mismatch]: Filename 'objective-0001-credential-access.yaml' doe
   ╭─▶ objects/objectives/objective-0001-credential-access.yaml
   ╰─ help: rename it to objects/objectives/credential-access-objective.yaml
 
-note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/objectives/objective-0001-credential-access.yaml:3:1
-  │
-3 │ metadata:
-  │ ━━━━━━━━
-  │
-  ╰─ help: add the missing keys under metadata
-
 warning[filename_mismatch]: Filename 'rule-0001-sentinel-kql.yaml' does not match slugify(name)='sentinel-kql-rule'
   ╭─▶ objects/rules/rule-0001-sentinel-kql.yaml
   ╰─ help: rename it to objects/rules/sentinel-kql-rule.yaml
-
-note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/rules/rule-0001-sentinel-kql.yaml:3:1
-  │
-3 │ metadata:
-  │ ━━━━━━━━
-  │
-  ╰─ help: add the missing keys under metadata
 
 warning[filename_mismatch]: Filename 'rule-0002-defender-kql.yaml' does not match slugify(name)='defender-kql-rule'
   ╭─▶ objects/rules/rule-0002-defender-kql.yaml
   ╰─ help: rename it to objects/rules/defender-kql-rule.yaml
 
-note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/rules/rule-0002-defender-kql.yaml:3:1
-  │
-3 │ metadata:
-  │ ━━━━━━━━
-  │
-  ╰─ help: add the missing keys under metadata
-
 warning[filename_mismatch]: Filename 'rule-0003-splunk-spl.yaml' does not match slugify(name)='splunk-spl-rule'
   ╭─▶ objects/rules/rule-0003-splunk-spl.yaml
   ╰─ help: rename it to objects/rules/splunk-spl-rule.yaml
-
-note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/rules/rule-0003-splunk-spl.yaml:3:1
-  │
-3 │ metadata:
-  │ ━━━━━━━━
-  │
-  ╰─ help: add the missing keys under metadata
 
 warning[filename_mismatch]: Filename 'rule-0004-sentinel-one-s1ql.yaml' does not match slugify(name)='sentinelone-s1ql-rule'
   ╭─▶ objects/rules/rule-0004-sentinel-one-s1ql.yaml
   ╰─ help: rename it to objects/rules/sentinelone-s1ql-rule.yaml
 
-note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/rules/rule-0004-sentinel-one-s1ql.yaml:3:1
-  │
-3 │ metadata:
-  │ ━━━━━━━━
-  │
-  ╰─ help: add the missing keys under metadata
-
 warning[filename_mismatch]: Filename 'rule-0005-carbon-black-lucene.yaml' does not match slugify(name)='carbon-black-lucene-rule'
   ╭─▶ objects/rules/rule-0005-carbon-black-lucene.yaml
   ╰─ help: rename it to objects/rules/carbon-black-lucene-rule.yaml
-
-note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/rules/rule-0005-carbon-black-lucene.yaml:3:1
-  │
-3 │ metadata:
-  │ ━━━━━━━━
-  │
-  ╰─ help: add the missing keys under metadata
 
 warning[filename_mismatch]: Filename 'rule-0006-crowdstrike-deploy-only.yaml' does not match slugify(name)='crowdstrike-deploy-rule'
   ╭─▶ objects/rules/rule-0006-crowdstrike-deploy-only.yaml
   ╰─ help: rename it to objects/rules/crowdstrike-deploy-rule.yaml
 
-note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/rules/rule-0006-crowdstrike-deploy-only.yaml:3:1
-  │
-3 │ metadata:
-  │ ━━━━━━━━
-  │
-  ╰─ help: add the missing keys under metadata
-
 warning[filename_mismatch]: Filename 'rule-0007-harfanglab-deploy-only.yaml' does not match slugify(name)='harfanglab-deploy-rule'
   ╭─▶ objects/rules/rule-0007-harfanglab-deploy-only.yaml
   ╰─ help: rename it to objects/rules/harfanglab-deploy-rule.yaml
-
-note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/rules/rule-0007-harfanglab-deploy-only.yaml:3:1
-  │
-3 │ metadata:
-  │ ━━━━━━━━
-  │
-  ╰─ help: add the missing keys under metadata
 
 warning[filename_mismatch]: Filename 'rule-0008-staging-promote.yaml' does not match slugify(name)='staging-promote-rule'
   ╭─▶ objects/rules/rule-0008-staging-promote.yaml
   ╰─ help: rename it to objects/rules/staging-promote-rule.yaml
 
-note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/rules/rule-0008-staging-promote.yaml:3:1
-  │
-3 │ metadata:
-  │ ━━━━━━━━
-  │
-  ╰─ help: add the missing keys under metadata
-
 warning[filename_mismatch]: Filename 'rule-0009-elastic-kql.yaml' does not match slugify(name)='elastic-kql-rule'
   ╭─▶ objects/rules/rule-0009-elastic-kql.yaml
   ╰─ help: rename it to objects/rules/elastic-kql-rule.yaml
-
-note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/rules/rule-0009-elastic-kql.yaml:3:1
-  │
-3 │ metadata:
-  │ ━━━━━━━━
-  │
-  ╰─ help: add the missing keys under metadata
 
 warning[filename_mismatch]: Filename 'rule-0013-sysdig-falco.yaml' does not match slugify(name)='sysdig-falco-rule'
   ╭─▶ objects/rules/rule-0013-sysdig-falco.yaml
   ╰─ help: rename it to objects/rules/sysdig-falco-rule.yaml
 
-note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/rules/rule-0013-sysdig-falco.yaml:3:1
-  │
-3 │ metadata:
-  │ ━━━━━━━━
-  │
-  ╰─ help: add the missing keys under metadata
-
 warning[filename_mismatch]: Filename 'threat-0001-simulated-actor.yaml' does not match slugify(name)='simulated-actor'
   ╭─▶ objects/threats/threat-0001-simulated-actor.yaml
   ╰─ help: rename it to objects/threats/simulated-actor.yaml
-
-note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/threats/threat-0001-simulated-actor.yaml:4:1
-  │
-4 │ metadata:
-  │ ━━━━━━━━
-  │
-  ╰─ help: add the missing keys under metadata
 

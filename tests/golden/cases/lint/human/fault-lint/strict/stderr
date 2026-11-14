@@ -1,0 +1,20 @@
+[1;31merror: [0mMalformed object yaml · path: objects/threats/encoded-exfiltration-threat-0030.yaml · error: 
+expected a mapping at the top of the file, found an empty file
+[1;31merror: [0mMalformed object yaml · path: objects/rules/elevated-exfiltration-rule-0014.yaml · error: 
+'2026-02-30' is not a valid date (day is out of range for month) at line 9, column 13
+[1;31merror: [0mMissing identifier from model · file: 
+<WS>/objects/rules/hidden-implant-rule-0006.yaml
+[1;31merror: [0mMalformed object yaml · path: objects/rules/hidden-loader-rule-0024.yaml · error: found a tab
+character that violates indentation at line 69, column 1 (while scanning a plain scalar that starts 
+at line 68, column 18)
+[1;31merror: [0mMalformed object yaml · path: objects/rules/remote-implant-rule-0021.yaml · error: did not 
+find expected ',' or ']' at line 71, column 1 (while parsing a flow sequence that starts at line 70,
+column 9)
+[1;31merror: [0mMalformed object yaml · path: objects/rules/silent-exfiltration-rule-0033.yaml · error: did 
+not find expected ',' or ']' at line 71, column 1 (while parsing a flow sequence that starts at line
+70, column 9)
+[1;31merror: [0mEnvironment variable missing · detail: Unset configuration variables: $GRAYLOG_LAB_TOKEN · 
+advice: Set those environment variables before a live check.
+[1;31m✗[0m 86 findings in 80 files · 6 errors, 70 warnings, 10 notes
+[1;36m→[0m [1mopentide lint --fix[0m[2m · [0m[2mrename 2 files to match their names[0m
+[1;36m→[0m [1mopentide lint --strict --verbose[0m[2m · [0m[2mshow 10 notes, such as a missing optional field[0m

@@ -1,6 +1,6 @@
 {
   "program": "opentide",
-  "version": "0.23.0",
+  "version": "0.28.1",
   "global_options": [
     {
       "name": "repo",
@@ -67,6 +67,21 @@
       "is_flag": true,
       "envvars": [],
       "help": "Print only the outcome line and errors"
+    },
+    {
+      "name": "verbose",
+      "flags": [
+        "--verbose"
+      ],
+      "secondary_flags": [],
+      "type": "boolean",
+      "choices": null,
+      "default": false,
+      "required": false,
+      "multiple": false,
+      "is_flag": true,
+      "envvars": [],
+      "help": "Also print notes, such as a missing optional field. --json always includes them"
     },
     {
       "name": "no_color",
@@ -477,14 +492,18 @@
             "carbon_black_cloud",
             "harfanglab",
             "elastic",
-            "sysdig"
+            "sysdig",
+            "bitdefender",
+            "graylog",
+            "exabeam",
+            "google_secops"
           ],
           "default": null,
           "required": false,
           "multiple": false,
           "is_flag": false,
           "envvars": [],
-          "help": "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, sentinel_one, splunk"
+          "help": "Check this platform's queries. Offline, default every platform the engine parses: bitdefender, carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, harfanglab, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, sentinel, sentinel_one, splunk"
         },
         {
           "name": "strategy",
@@ -559,7 +578,7 @@
           "multiple": true,
           "is_flag": false,
           "envvars": [],
-          "help": "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco) offline (repeatable)"
+          "help": "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2) offline (repeatable)"
         },
         {
           "name": "uuid",
@@ -676,14 +695,18 @@
             "carbon_black_cloud",
             "harfanglab",
             "elastic",
-            "sysdig"
+            "sysdig",
+            "bitdefender",
+            "graylog",
+            "exabeam",
+            "google_secops"
           ],
           "default": null,
           "required": true,
           "multiple": false,
           "is_flag": false,
           "envvars": [],
-          "help": "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig"
+          "help": "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops"
         },
         {
           "name": "tenant",
@@ -833,7 +856,7 @@
           "multiple": true,
           "is_flag": false,
           "envvars": [],
-          "help": "Elastic index pattern or CrowdStrike repository (repeatable)"
+          "help": "Elastic index pattern, CrowdStrike repository or Graylog stream alias (repeatable)"
         },
         {
           "name": "timeout",
@@ -901,7 +924,7 @@
       "path": "lint",
       "name": "lint",
       "summary": "Check file names and recommended metadata",
-      "help": "Check file names and recommended metadata\n\nCatalogue hygiene: filename slugs and recommended metadata, not schema validation.",
+      "help": "Check file names and recommended metadata\n\nCatalogue hygiene: filename slugs and recommended metadata, not schema validation.\nA missing optional field is a note: it never fails --strict, and prints with --verbose.",
       "group": false,
       "runs_alone": true,
       "subcommands": [],
@@ -936,7 +959,7 @@
           "multiple": false,
           "is_flag": true,
           "envvars": [],
-          "help": "Exit non-zero when findings exist (CI gate)"
+          "help": "Exit non-zero when errors or warnings are left (CI gate). Notes never fail it"
         },
         {
           "name": "check",
@@ -948,6 +971,7 @@
           "choices": [
             "filenames",
             "metadata",
+            "recommended",
             "placeholders",
             "queries"
           ],
@@ -956,7 +980,7 @@
           "multiple": true,
           "is_flag": false,
           "envvars": [],
-          "help": "Limit to one check: filenames, metadata, placeholders or queries (repeatable). Runs it even when lint.toml disables it"
+          "help": "Limit to one check: filenames, metadata, recommended, placeholders or queries (repeatable). Runs it even when lint.toml disables it"
         },
         {
           "name": "changed",
@@ -1090,14 +1114,18 @@
             "carbon_black_cloud",
             "harfanglab",
             "elastic",
-            "sysdig"
+            "sysdig",
+            "bitdefender",
+            "graylog",
+            "exabeam",
+            "google_secops"
           ],
           "default": null,
           "required": false,
           "multiple": false,
           "is_flag": false,
           "envvars": [],
-          "help": "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig"
+          "help": "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops"
         },
         {
           "name": "technique",
@@ -1327,14 +1355,18 @@
             "carbon_black_cloud",
             "harfanglab",
             "elastic",
-            "sysdig"
+            "sysdig",
+            "bitdefender",
+            "graylog",
+            "exabeam",
+            "google_secops"
           ],
           "default": null,
           "required": false,
           "multiple": true,
           "is_flag": false,
           "envvars": [],
-          "help": "Add a configuration block for this platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig"
+          "help": "Add a configuration block for this platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops"
         },
         {
           "name": "objective",
@@ -2149,14 +2181,18 @@
             "carbon_black_cloud",
             "harfanglab",
             "elastic",
-            "sysdig"
+            "sysdig",
+            "bitdefender",
+            "graylog",
+            "exabeam",
+            "google_secops"
           ],
           "default": null,
           "required": false,
           "multiple": false,
           "is_flag": false,
           "envvars": [],
-          "help": "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig"
+          "help": "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops"
         },
         {
           "name": "strategy",
@@ -3109,14 +3145,18 @@
             "carbon_black_cloud",
             "harfanglab",
             "elastic",
-            "sysdig"
+            "sysdig",
+            "bitdefender",
+            "graylog",
+            "exabeam",
+            "google_secops"
           ],
           "default": [],
           "required": false,
           "multiple": true,
           "is_flag": false,
           "envvars": [],
-          "help": "Enable a detection platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig"
+          "help": "Enable a detection platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops"
         },
         {
           "name": "ci",
@@ -3517,14 +3557,18 @@
             "carbon_black_cloud",
             "harfanglab",
             "elastic",
-            "sysdig"
+            "sysdig",
+            "bitdefender",
+            "graylog",
+            "exabeam",
+            "google_secops"
           ],
           "default": [],
           "required": false,
           "multiple": true,
           "is_flag": false,
           "envvars": [],
-          "help": "Enable a detection platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig"
+          "help": "Enable a detection platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops"
         },
         {
           "name": "plan",
@@ -3731,6 +3775,66 @@
           "is_flag": true,
           "envvars": [],
           "help": "Enable Sysdig Secure (Falco)"
+        },
+        {
+          "name": "bitdefender",
+          "flags": [
+            "--bitdefender"
+          ],
+          "secondary_flags": [],
+          "type": "boolean",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "multiple": false,
+          "is_flag": true,
+          "envvars": [],
+          "help": "Enable Bitdefender GravityZone"
+        },
+        {
+          "name": "graylog",
+          "flags": [
+            "--graylog"
+          ],
+          "secondary_flags": [],
+          "type": "boolean",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "multiple": false,
+          "is_flag": true,
+          "envvars": [],
+          "help": "Enable Graylog"
+        },
+        {
+          "name": "exabeam",
+          "flags": [
+            "--exabeam"
+          ],
+          "secondary_flags": [],
+          "type": "boolean",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "multiple": false,
+          "is_flag": true,
+          "envvars": [],
+          "help": "Enable Exabeam New-Scale SIEM"
+        },
+        {
+          "name": "google_secops",
+          "flags": [
+            "--google-secops"
+          ],
+          "secondary_flags": [],
+          "type": "boolean",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "multiple": false,
+          "is_flag": true,
+          "envvars": [],
+          "help": "Enable Google Security Operations (YARA-L)"
         },
         {
           "name": "plan",
@@ -9860,7 +9964,10 @@
             "eql",
             "kuery",
             "lucene",
-            "falco"
+            "falco",
+            "yara",
+            "exabeam",
+            "yaral"
           ],
           "title": "Language",
           "type": "string"
@@ -10879,6 +10986,46 @@
           "default": null,
           "description": "The rule's file, absolute",
           "title": "File"
+        },
+        "tenant": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The tenant the request was resolved against (Bitdefender, Graylog, Exabeam)",
+          "title": "Tenant"
+        },
+        "unresolved": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the request leaves out because no tenant resolves it: its reason and the block's target aliases (Bitdefender), or stream and notification aliases (Graylog)",
+          "title": "Unresolved"
+        },
+        "server_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The server version the request is built for, assumed because a dry run asks no server (Graylog)",
+          "title": "Server Version"
         }
       },
       "required": [

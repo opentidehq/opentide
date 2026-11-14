@@ -69,9 +69,14 @@ pub const OBJECTS: &[(&str, &str)] = &[
 ];
 
 /// The platform fault kinds (UC-1.4): a rule's platform block that its model
-/// refuses. In the catalogue they are Sysdig's constraint codes, the named
-/// check `sysdig_rule_shape`, each reported as one `schema_validation` on
-/// `configurations.sysdig` naming its code.
+/// refuses. Sysdig's constraint codes, the named check `sysdig_rule_shape`,
+/// are each reported as one `schema_validation` on `configurations.sysdig`
+/// naming its code; Bitdefender's (bitdefender-1.0, the named check
+/// `bitdefender_rule_shape`) under their own code, at the path the
+/// specification fixes (`MODEL_CONSTRAINT_CODES`), as Graylog's are
+/// (graylog-1.0, `graylog_constraints`). Bitdefender's advisories and YARA
+/// codes, and Graylog's advisories and query codes, are validate's and the
+/// engine's, not the model's.
 pub const PLATFORMS: &[(&str, &str)] = &[
     ("sysdig-constraint-priority", "sysdig_priority"),
     ("sysdig-constraint-source", "sysdig_source"),
@@ -94,6 +99,46 @@ pub const PLATFORMS: &[(&str, &str)] = &[
         "sysdig_definition_order",
     ),
     ("sysdig-constraint-list-in-value", "sysdig_list_in_value"),
+    ("bitdefender-rule-kind-none", "bitdefender_rule_kind"),
+    ("bitdefender-target-exclusion-only", "bitdefender_target"),
+    (
+        "bitdefender-criterion-two-relations",
+        "bitdefender_criterion_shape",
+    ),
+    (
+        "bitdefender-criterion-field-other-target",
+        "bitdefender_criterion_field",
+    ),
+    (
+        "bitdefender-criterion-relation-enum-contains",
+        "bitdefender_criterion_relation",
+    ),
+    (
+        "bitdefender-criterion-value-enum",
+        "bitdefender_criterion_value",
+    ),
+    (
+        "bitdefender-criteria-edr-xdr-mixed",
+        "bitdefender_criteria_combination",
+    ),
+    (
+        "bitdefender-action-scope-registry-sandbox",
+        "bitdefender_action_scope",
+    ),
+    (
+        "bitdefender-targets-both-lists",
+        "bitdefender_targets_shape",
+    ),
+    ("bitdefender-severity-lowercase", "bitdefender_severity"),
+    ("graylog-aggregation", "graylog_aggregation"),
+    ("graylog-event-field", "graylog_event_field"),
+    ("graylog-event-key", "graylog_event_key"),
+    ("graylog-event-limit", "graylog_event_limit"),
+    ("graylog-field-name", "graylog_field_name"),
+    ("graylog-list-shape", "graylog_list_shape"),
+    ("graylog-priority", "graylog_priority"),
+    ("graylog-query-blank", "graylog_query_blank"),
+    ("graylog-schedule", "graylog_schedule"),
 ];
 
 /// The kinds `--only <group>` names: `structural` ([`STRUCTURAL`]),
@@ -255,8 +300,39 @@ pub fn check_object_as(family: &str, bytes: &[u8]) -> Vec<Json> {
         .collect()
 }
 
+/// The constraint codes a platform block's model reports under their own
+/// code (`ErrorKind::Constraint`, as 0.28.1 does), not as
+/// `schema_validation`: bitdefender-1.0's and graylog-1.0's.
+const MODEL_CONSTRAINT_CODES: &[&str] = {
+    use opentide_schema::objects::platform::bitdefender::checks as bitdefender;
+    &[
+        bitdefender::RULE_KIND,
+        bitdefender::TARGET,
+        bitdefender::CRITERION_SHAPE,
+        bitdefender::CRITERION_FIELD,
+        bitdefender::CRITERION_RELATION,
+        bitdefender::CRITERION_VALUE,
+        bitdefender::CRITERIA_COMBINATION,
+        bitdefender::ACTION_SCOPE,
+        bitdefender::TARGETS_SHAPE,
+        bitdefender::SEVERITY,
+        // graylog-1.0's block constraints (the named check
+        // `graylog_constraints`), each at the path the specification fixes.
+        "graylog_aggregation",
+        "graylog_event_field",
+        "graylog_event_key",
+        "graylog_event_limit",
+        "graylog_field_name",
+        "graylog_list_shape",
+        "graylog_priority",
+        "graylog_query_blank",
+        "graylog_schedule",
+    ]
+};
+
 /// The oracle's findings for `path` that the Rust conversion owns
-/// (`schema_validation` and `yaml_parse`), in
+/// (`schema_validation`, a platform model's constraint codes
+/// (`MODEL_CONSTRAINT_CODES`) and `yaml_parse`), in
 /// the fields [`check_object`] gives (a `yaml_parse` by its code alone: its message is the loader's,
 /// UC-2.x).
 pub fn oracle_findings(document: &Json, path: &str) -> Vec<Json> {
@@ -284,9 +360,9 @@ pub fn oracle_findings(document: &Json, path: &str) -> Vec<Json> {
         }
         match item.get("code").and_then(Json::as_str) {
             Some("yaml_parse") => out.push(json!({ "code": "yaml_parse" })),
-            Some("schema_validation") => {
+            Some(code) if code == "schema_validation" || MODEL_CONSTRAINT_CODES.contains(&code) => {
                 out.push(json!({
-                "code": "schema_validation",
+                "code": code,
                 "field_path": item["field_path"],
                 "message": item["message"],
                 "line": item["line"],
@@ -395,8 +471,17 @@ mod tests {
         .unwrap();
         for (id, code) in PLATFORMS {
             let kind = catalogue.kind(id).unwrap();
-            assert_eq!(kind.codes, ["schema_validation"], "{id}");
-            assert!(kind.covers.iter().any(|covered| covered == code), "{id}");
+            if MODEL_CONSTRAINT_CODES.contains(code) {
+                // Reported under its own code.
+                assert_eq!(kind.codes, [*code], "{id}");
+            } else {
+                assert_eq!(kind.codes, ["schema_validation"], "{id}");
+                assert!(kind.covers.iter().any(|covered| covered == code), "{id}");
+            }
+        }
+        // Every model constraint code has a platform kind.
+        for code in MODEL_CONSTRAINT_CODES {
+            assert!(PLATFORMS.iter().any(|(_, c)| c == code), "{code}");
         }
     }
 

@@ -216,7 +216,7 @@ fn bytes(case: &Case) -> Vec<u8> {
 #[test]
 fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
-    assert_eq!(table["oracle"], "0.23.0");
+    assert_eq!(table["oracle"], "0.28.1");
     let oracle: BTreeMap<&str, &Json> = table["cases"]
         .as_array()
         .unwrap()

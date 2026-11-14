@@ -651,14 +651,16 @@ pub fn block_codes(block: &Node) -> BTreeSet<&'static str> {
 }
 
 /// Each platform whose `yara.signature` is a YAML alias in `rule`, with the
-/// path its anchor's node first appears at (where the oracle's YAML reader
-/// places the finding's line)
-/// (`yara_signature_alias`, 0.28.0's `validation/yara_signature.py`): a
-/// platform block's `YaraSignature` must be written out in the block. An
+/// node it names: its anchor's, which starts where the oracle places the
+/// finding (`yara_signature_alias`, 0.28.0's `validation/yara_signature.py`).
+/// A platform block's `YaraSignature` must be written out in the block. An
 /// alias shares its anchor's node, so the signature is an alias when its
-/// node first appears, in document order, at another path. HarfangLab's
-/// block has its own check, so it is not one of them.
-pub fn signature_aliases(rule: &Node) -> Vec<(String, Vec<String>)> {
+/// node first appears, in document order, at another path: also when the
+/// whole `yara` block is the alias (`yara: *y`). HarfangLab's block has its
+/// own check ([`crate::objects::platform::harfanglab::yara::aliased_signature`]),
+/// so it is not one of them; [`crate::objects::platform::aliased_yara_signature`]
+/// answers for either.
+pub fn signature_aliases(rule: &Node) -> Vec<(&str, &Node)> {
     let Some(configurations) = get(rule, "configurations") else {
         return Vec::new();
     };
@@ -687,7 +689,7 @@ pub fn signature_aliases(rule: &Node) -> Vec<(String, Vec<String>)> {
             seen.iter()
                 .map(String::as_str)
                 .ne(path)
-                .then(|| (platform.to_owned(), seen.clone()))
+                .then_some((platform, node))
         })
         .collect()
 }

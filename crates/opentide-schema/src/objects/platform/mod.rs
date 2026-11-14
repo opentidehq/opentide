@@ -455,21 +455,44 @@ pub const NAMED_CHECKS: [NamedCheck; 5] = [
 /// Every block advisory a rule earns, each platform's in the platform
 /// table's order: a warning that never rejects the rule, which `validate`
 /// and `lint`'s `queries` check report at its field path. Bitdefender's
-/// ([`bitdefender::advisories::advisories`]), Exabeam's
-/// ([`exabeam::advisories`]), then Google SecOps'
-/// ([`google_secops::advisories::advisories`]).
-pub fn block_advisories(rule: &Node) -> Vec<Advisory> {
+/// ([`bitdefender::advisories::advisories`]), Graylog's
+/// ([`graylog::advisories`], which read the workspace's Graylog tenants:
+/// `graylog_tenants`), Exabeam's ([`exabeam::advisories`]), then Google
+/// SecOps' ([`google_secops::advisories::advisories`]), as lint orders them.
+pub fn block_advisories(rule: &Node, graylog_tenants: &[graylog::TenantView<'_>]) -> Vec<Advisory> {
+    let convert = |code, field_path, message| Advisory {
+        code,
+        field_path,
+        message,
+    };
     let mut found: Vec<Advisory> = bitdefender::advisories::advisories(rule)
         .into_iter()
-        .map(|advisory| Advisory {
-            code: advisory.code,
-            field_path: advisory.field_path,
-            message: advisory.message,
-        })
+        .map(|advisory| convert(advisory.code, advisory.field_path, advisory.message))
         .collect();
+    found.extend(
+        graylog::advisories(rule, graylog_tenants)
+            .into_iter()
+            .map(|advisory| convert(advisory.code, advisory.field_path, advisory.message)),
+    );
     found.extend(exabeam::advisories(rule));
     found.extend(google_secops::advisories::advisories(rule));
     found
+}
+
+/// The node a platform block's `yara.signature` names when it is written as
+/// a YAML alias (`yara_signature_alias`): its anchor's, which starts where
+/// the oracle places the finding. HarfangLab's own check
+/// ([`harfanglab::yara::aliased_signature`]), or the yara-1.0 one every other
+/// platform with a `YaraSignature` takes ([`bitdefender::checks::signature_aliases`]).
+#[must_use]
+pub fn aliased_yara_signature<'n>(rule: &'n Node, platform: &str) -> Option<&'n Node> {
+    if platform == "harfanglab" {
+        return harfanglab::yara::aliased_signature(rule);
+    }
+    bitdefender::checks::signature_aliases(rule)
+        .into_iter()
+        .find(|(aliased, _)| *aliased == platform)
+        .map(|(_, node)| node)
 }
 
 /// The named check called `name`.

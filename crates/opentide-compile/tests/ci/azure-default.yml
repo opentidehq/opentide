@@ -10,6 +10,11 @@
 #   CBC_URL
 #   ELASTIC_PROD_API_KEY
 #   ELASTIC_STAGING_API_KEY
+#   EXABEAM_CLIENT_ID
+#   EXABEAM_CLIENT_SECRET
+#   GOOGLE_SECOPS_CREDENTIALS
+#   GRAVITYZONE_API_KEY
+#   GRAYLOG_TOKEN
 #   HARFANGLAB_API_TOKEN
 #   MDE_CLIENT_ID
 #   MDE_CLIENT_SECRET
@@ -127,6 +132,63 @@ stages:
               if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
               git checkout FETCH_HEAD -- .opentide/configurations
               if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/elastic.toml; then opentide validate query --platform elastic --live --changed; else echo "The default branch has no elastic tenant yet, so no tenant is reviewed. Skipped elastic live query validation without using platform credentials."; fi
+      - job: validate_query_exabeam
+        displayName: Validate query (exabeam)
+        steps:
+          - checkout: self
+            persistCredentials: true
+            fetchDepth: 0
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.12'
+          - script: pip install "opentide==$OPENTIDE_VERSION"
+            displayName: Install opentide
+          - script: |
+              set -e
+              commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
+              rm -rf -- .opentide/configurations
+              if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
+              if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
+              git checkout FETCH_HEAD -- .opentide/configurations
+              if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/exabeam.toml; then opentide validate query --platform exabeam --live --changed; else echo "The default branch has no exabeam tenant yet, so no tenant is reviewed. Skipped exabeam live query validation without using platform credentials."; fi
+      - job: validate_query_google-secops
+        displayName: Validate query (google_secops)
+        steps:
+          - checkout: self
+            persistCredentials: true
+            fetchDepth: 0
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.12'
+          - script: pip install "opentide==$OPENTIDE_VERSION"
+            displayName: Install opentide
+          - script: |
+              set -e
+              commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
+              rm -rf -- .opentide/configurations
+              if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
+              if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
+              git checkout FETCH_HEAD -- .opentide/configurations
+              if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/google_secops.toml; then opentide validate query --platform google_secops --live --changed; else echo "The default branch has no google_secops tenant yet, so no tenant is reviewed. Skipped google_secops live query validation without using platform credentials."; fi
+      - job: validate_query_graylog
+        displayName: Validate query (graylog)
+        steps:
+          - checkout: self
+            persistCredentials: true
+            fetchDepth: 0
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.12'
+          - script: pip install "opentide==$OPENTIDE_VERSION"
+            displayName: Install opentide
+          - script: |
+              set -e
+              commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null | grep -qF '[skip deploy]'; then echo "[skip deploy] or the skip-deploy label: no live query check, deploy or share in this pipeline."; exit 0; fi
+              rm -rf -- .opentide/configurations
+              if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
+              if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
+              git checkout FETCH_HEAD -- .opentide/configurations
+              if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/graylog.toml; then opentide validate query --platform graylog --live --changed; else echo "The default branch has no graylog tenant yet, so no tenant is reviewed. Skipped graylog live query validation without using platform credentials."; fi
       - job: validate_query_sentinel
         displayName: Validate query (sentinel)
         steps:

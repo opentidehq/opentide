@@ -10,7 +10,8 @@
 [2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
 [2m│[0m [1;36m-[0m[1;36m-platform[0m         [1;33mPLATFORM[0m  Detection platform: sentinel, splunk, crowdstrike,                  [2m│[0m
 [2m│[0m                              defender_for_endpoint, sentinel_one, carbon_black_cloud,            [2m│[0m
-[2m│[0m                              harfanglab, elastic, sysdig                                         [2m│[0m
+[2m│[0m                              harfanglab, elastic, sysdig, bitdefender, graylog, exabeam,         [2m│[0m
+[2m│[0m                              google_secops                                                       [2m│[0m
 [2m│[0m [1;36m-[0m[1;36m-technique[0m        [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m[1;33m   [0m  ATT&CK technique ID for the coverage section (T1059)                [2m│[0m
 [2m│[0m [1;36m-[0m[1;36m-strict[0m           [1;33m        [0m  Exit non-zero when any object failed to load                        [2m│[0m
 [2m│[0m [1;36m-[0m[1;36m-help[0m             [1;33m        [0m  Show this message and exit.                                         [2m│[0m

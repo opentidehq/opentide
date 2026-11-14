@@ -17,22 +17,32 @@ fn small(seed: u64, layout: Layout) -> Options {
             rules: 50,
         },
         layout,
+        platforms: xtask::corpus::vocab::PLATFORMS,
     }
 }
 
 #[test]
 fn recorded_digests() {
     let cases = [
-        (small(1, Layout::Explicit), "20456a95c4e6a368"),
-        (small(1, Layout::Standard), "5341b30d4f6f1886"),
-        (Options::new(20_261_107), "5978a2ab7c093587"),
+        (small(1, Layout::Explicit), "b00e36255367af94"),
+        (small(1, Layout::Standard), "5e4a4003b4ceb472"),
+        (Options::new(20_261_107), "2548baff64b1685f"),
         (
             Options {
                 counts: Counts::scaled(0.1).unwrap(),
                 layout: Layout::Custom,
                 ..Options::new(20_261_107)
             },
-            "da09872fae5d96f4",
+            "69467fa3f9feee22",
+        ),
+        // The benchmarks' workspace: the platforms their 0.23.0 oracle knows,
+        // the corpus their baselines were measured on (tests/bench/budgets.toml).
+        (
+            Options {
+                platforms: xtask::bench::oracle::ORACLE_PLATFORMS,
+                ..Options::new(20_261_107)
+            },
+            "5978a2ab7c093587",
         ),
     ];
     for (options, digest) in cases {
@@ -59,15 +69,22 @@ fn counts_and_coverage_of_the_default_workspace() {
     assert_eq!(workspace.family(Family::Threat).count(), 300);
     assert_eq!(workspace.family(Family::Objective).count(), 300);
     assert_eq!(workspace.family(Family::Rule).count(), 500);
-    // Every platform the corpus generates (`SINCE_ORACLE` ones are left
-    // out until O2), both rule revisions and every feature the scope names.
+    // Every platform, both rule revisions and every feature the scope names.
+    // Each platform is the primary of one rule in each rotation of the list,
+    // so it holds at least its share of the rules, more with the second and
+    // third platforms some rules add.
     let rules: Vec<_> = workspace.family(Family::Rule).collect();
-    for platform in xtask::corpus::vocab::generated_platforms() {
+    let platforms = xtask::corpus::vocab::PLATFORMS;
+    let share = rules.len() / platforms.len();
+    for platform in platforms {
         let count = rules
             .iter()
             .filter(|r| r.platforms.iter().any(|p| p == platform))
             .count();
-        assert!(count >= 50, "{platform}: {count} rules");
+        assert!(
+            count > share,
+            "{platform}: {count} rules, its share is {share}"
+        );
     }
     for tag in [
         "rule::1.0",

@@ -18,8 +18,8 @@ path = "ws/.github/workflows/opentide.yml"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 16936
-blob = "fa78319bface6ef0bb507f6210b3e6f894e2bf763ec138f9d55688012a485cb4"
+size = 17986
+blob = "f6dd85e52140fd164cc870cd6e2950fd06835d95cce8f3902621659e3fa9ce99"
 
 [[files]]
 path = "ws/.opentide/configurations/deployment.toml"

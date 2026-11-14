@@ -606,6 +606,7 @@ fn generated_workspaces(scratch: &Path) -> Result<Vec<PathBuf>> {
         ("custom", Layout::Custom),
     ] {
         let options = Options {
+            platforms: crate::corpus::vocab::PLATFORMS,
             seed: 1,
             counts: Counts {
                 threats: 20,

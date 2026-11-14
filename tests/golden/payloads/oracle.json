@@ -387,7 +387,7 @@
    "file": "<WS>/objects/rules/harfanglab-removed.yaml",
    "platform": "harfanglab",
    "compile": {},
-   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000604\",\"name\":\"3 HarfangLab Removed\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"REMOVED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"maturity\":\"Experimental\",\"confidence\":\"Moderate\",\"action\":\"Alert\",\"tags\":null,\"sigma\":null,\"yara\":{\"meta\":{\"context\":[\"process\"],\"os\":\"Linux\",\"arch\":null,\"score\":null,\"classification\":null},\"strings\":\"$a = \\\"x\\\"\",\"condition\":\"$a\",\"imports\":null}}}",
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000604\",\"name\":\"3 HarfangLab Removed\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"REMOVED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"maturity\":\"Experimental\",\"confidence\":\"Moderate\",\"action\":\"Alert\",\"tags\":null,\"sigma\":null,\"yara\":{\"signature\":null,\"meta\":{\"context\":[\"process\"],\"os\":\"Linux\",\"arch\":null,\"score\":null,\"classification\":null},\"strings\":\"$a = \\\"x\\\"\",\"condition\":\"$a\",\"imports\":null}}}",
    "tenants": [
     {
      "tenant": "sigma",
@@ -459,7 +459,7 @@
    "file": "<WS>/objects/rules/harfanglab-yara.yaml",
    "platform": "harfanglab",
    "compile": {},
-   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000603\",\"name\":\"HarfangLab YARA Loader\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"maturity\":\"Experimental\",\"confidence\":\"Moderate\",\"action\":\"Alert\",\"tags\":[\"loader\"],\"sigma\":null,\"yara\":{\"meta\":{\"context\":[\"file\",\"memory\"],\"os\":\"Windows\",\"arch\":[\"x64\"],\"score\":\"Critical\",\"classification\":\"Loader \\\"family\\\"\"},\"strings\":\"$a = \\\"loader\\\" ascii\\n$b = { 4D 5A }\\n\",\"condition\":\"$a and $b\\n\",\"imports\":[\"pe\"]}}}",
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000603\",\"name\":\"HarfangLab YARA Loader\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"maturity\":\"Experimental\",\"confidence\":\"Moderate\",\"action\":\"Alert\",\"tags\":[\"loader\"],\"sigma\":null,\"yara\":{\"signature\":null,\"meta\":{\"context\":[\"file\",\"memory\"],\"os\":\"Windows\",\"arch\":[\"x64\"],\"score\":\"Critical\",\"classification\":\"Loader \\\"family\\\"\"},\"strings\":\"$a = \\\"loader\\\" ascii\\n$b = { 4D 5A }\\n\",\"condition\":\"$a and $b\\n\",\"imports\":[\"pe\"]}}}",
    "tenants": [
     {
      "tenant": "sigma",
@@ -777,7 +777,7 @@
    "file": "<WS>/objects/rules/splunk-cron.yaml",
    "platform": "splunk",
    "compile": {},
-   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000305\",\"name\":\"Splunk Cron\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main cron\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":null,\"cron\":\"*/5 * * * *\",\"custom_time\":null},\"timerange\":null},\"trigger\":null,\"actions\":{\"notable\":{\"event\":null,\"drilldown\":null,\"security_domain\":\"Identity\"},\"risk\":null,\"email\":null},\"correlation_search\":true}}",
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000305\",\"name\":\"Splunk Cron\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main cron\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":null,\"cron\":\"*/5 * * * *\",\"custom_time\":null},\"timerange\":null},\"trigger\":null,\"actions\":{\"notable\":{\"event\":null,\"drilldown\":null,\"security_domain\":\"Identity\"},\"risk\":null,\"email\":null},\"correlation_search\":true,\"advanced\":null}}",
    "tenants": [
     {
      "tenant": "es",
@@ -794,7 +794,7 @@
    "file": "<WS>/objects/rules/splunk-full.yaml",
    "platform": "splunk",
    "compile": {},
-   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000301\",\"name\":\"Splunk Full\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main sourcetype=WinEventLog EventCode=4688\\n| stats count by host\\n\",\"scheduling\":{\"type\":\"Scheduled\",\"expires\":\"24h\",\"schedule\":{\"frequency\":\"2h\",\"cron\":null,\"custom_time\":null},\"timerange\":{\"lookback\":\"1h\",\"earliest\":null,\"latest\":\"now\"}},\"trigger\":{\"condition\":\"number of events\",\"comparator\":\"greater than\",\"threshold\":0,\"severity\":4,\"custom_condition\":\"search count > 10\",\"type\":\"Once\",\"throttling\":{\"fields\":[\"host\",\"user\"],\"duration\":\"1h\",\"group_name\":\"hosts\"}},\"actions\":{\"notable\":{\"event\":{\"title\":\"Encoded command on $host$\",\"description\":\"A host ran an encoded command.\"},\"drilldown\":{\"name\":\"Host events\",\"search\":\"index=main host=$host$\"},\"security_domain\":\"Endpoint\"},\"risk\":{\"message\":\"Encoded command on $host$\",\"risk_objects\":[{\"field\":\"host\",\"type\":\"system\",\"score\":40}],\"threat_objects\":[{\"field\":\"process\",\"type\":\"process_name\"}]},\"email\":{\"to\":\"soc@example.org\",\"cc\":\"lead@example.org\",\"bcc\":\"audit@example.org\",\"priority\":\"2\",\"subject\":\"Alert $name$\",\"message\":\"See $results_link$\",\"content_type\":\"html\",\"send_csv\":true,\"send_pdf\":false,\"inline_results\":true,\"include\":{\"results_link\":true,\"search_string\":false,\"trigger_condition\":true,\"trigger_time\":false}}},\"correlation_search\":null}}",
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000301\",\"name\":\"Splunk Full\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main sourcetype=WinEventLog EventCode=4688\\n| stats count by host\\n\",\"scheduling\":{\"type\":\"Scheduled\",\"expires\":\"24h\",\"schedule\":{\"frequency\":\"2h\",\"cron\":null,\"custom_time\":null},\"timerange\":{\"lookback\":\"1h\",\"earliest\":null,\"latest\":\"now\"}},\"trigger\":{\"condition\":\"number of events\",\"comparator\":\"greater than\",\"threshold\":0,\"severity\":4,\"custom_condition\":\"search count > 10\",\"type\":\"Once\",\"throttling\":{\"fields\":[\"host\",\"user\"],\"duration\":\"1h\",\"group_name\":\"hosts\"}},\"actions\":{\"notable\":{\"event\":{\"title\":\"Encoded command on $host$\",\"description\":\"A host ran an encoded command.\"},\"drilldown\":{\"name\":\"Host events\",\"search\":\"index=main host=$host$\"},\"security_domain\":\"Endpoint\"},\"risk\":{\"message\":\"Encoded command on $host$\",\"risk_objects\":[{\"field\":\"host\",\"type\":\"system\",\"score\":40}],\"threat_objects\":[{\"field\":\"process\",\"type\":\"process_name\"}]},\"email\":{\"to\":\"soc@example.org\",\"cc\":\"lead@example.org\",\"bcc\":\"audit@example.org\",\"priority\":\"2\",\"subject\":\"Alert $name$\",\"message\":\"See $results_link$\",\"content_type\":\"html\",\"send_csv\":true,\"send_pdf\":false,\"inline_results\":true,\"include\":{\"results_link\":true,\"search_string\":false,\"trigger_condition\":true,\"trigger_time\":false}}},\"correlation_search\":null,\"advanced\":null}}",
    "tenants": [
     {
      "tenant": "es",
@@ -811,7 +811,7 @@
    "file": "<WS>/objects/rules/splunk-high.yaml",
    "platform": "splunk",
    "compile": {},
-   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000307\",\"name\":\"Splunk High\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main high\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":null,\"cron\":\"0 * * * *\",\"custom_time\":null},\"timerange\":null},\"trigger\":null,\"actions\":null,\"correlation_search\":null}}",
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000307\",\"name\":\"Splunk High\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main high\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":null,\"cron\":\"0 * * * *\",\"custom_time\":null},\"timerange\":null},\"trigger\":null,\"actions\":null,\"correlation_search\":null,\"advanced\":null}}",
    "tenants": [
     {
      "tenant": "es",
@@ -828,7 +828,7 @@
    "file": "<WS>/objects/rules/splunk-noisy.yaml",
    "platform": "splunk",
    "compile": {},
-   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000304\",\"name\":\"Splunk Noisy\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"PRODUCTION\",\"flags\":[\"noisy\"],\"tenants\":null,\"contributors\":null,\"query\":\"index=main noisy\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":\"15m\",\"cron\":null,\"custom_time\":null},\"timerange\":{\"lookback\":\"1d\",\"earliest\":null,\"latest\":null}},\"trigger\":{\"condition\":null,\"comparator\":null,\"threshold\":null,\"severity\":null,\"custom_condition\":null,\"type\":\"For each result\",\"throttling\":null},\"actions\":{\"notable\":{\"event\":null,\"drilldown\":null,\"security_domain\":\"Network\"},\"risk\":null,\"email\":null},\"correlation_search\":null}}",
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000304\",\"name\":\"Splunk Noisy\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"PRODUCTION\",\"flags\":[\"noisy\"],\"tenants\":null,\"contributors\":null,\"query\":\"index=main noisy\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":\"15m\",\"cron\":null,\"custom_time\":null},\"timerange\":{\"lookback\":\"1d\",\"earliest\":null,\"latest\":null}},\"trigger\":{\"condition\":null,\"comparator\":null,\"threshold\":null,\"severity\":null,\"custom_condition\":null,\"type\":\"For each result\",\"throttling\":null},\"actions\":{\"notable\":{\"event\":null,\"drilldown\":null,\"security_domain\":\"Network\"},\"risk\":null,\"email\":null},\"correlation_search\":null,\"advanced\":null}}",
    "tenants": [
     {
      "tenant": "es",
@@ -845,7 +845,7 @@
    "file": "<WS>/objects/rules/splunk-realtime.yaml",
    "platform": "splunk",
    "compile": {},
-   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000302\",\"name\":\"Splunk Real Time\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"DISABLED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main error\",\"scheduling\":{\"type\":\"Real Time\",\"expires\":null,\"schedule\":null,\"timerange\":null},\"trigger\":null,\"actions\":null,\"correlation_search\":false}}",
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000302\",\"name\":\"Splunk Real Time\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"DISABLED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main error\",\"scheduling\":{\"type\":\"Real Time\",\"expires\":null,\"schedule\":null,\"timerange\":null},\"trigger\":null,\"actions\":null,\"correlation_search\":false,\"advanced\":null}}",
    "tenants": [
     {
      "tenant": "es",
@@ -862,7 +862,7 @@
    "file": "<WS>/objects/rules/splunk-removed.yaml",
    "platform": "splunk",
    "compile": {},
-   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000303\",\"name\":\"Splunk Custom Time\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"REMOVED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main warn\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":\"1d\",\"cron\":null,\"custom_time\":\"06h30\"},\"timerange\":{\"lookback\":null,\"earliest\":\"-2d@d\",\"latest\":null}},\"trigger\":null,\"actions\":null,\"correlation_search\":null}}",
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000303\",\"name\":\"Splunk Custom Time\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"REMOVED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main warn\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":\"1d\",\"cron\":null,\"custom_time\":\"06h30\"},\"timerange\":{\"lookback\":null,\"earliest\":\"-2d@d\",\"latest\":null}},\"trigger\":null,\"actions\":null,\"correlation_search\":null,\"advanced\":null}}",
    "tenants": [
     {
      "tenant": "es",
@@ -879,7 +879,7 @@
    "file": "<WS>/objects/rules/splunk-risk.yaml",
    "platform": "splunk",
    "compile": {},
-   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000306\",\"name\":\"Splunk Risk\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"PRODUCTION\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main risk\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":\"1d\",\"cron\":null,\"custom_time\":\"06h30\"},\"timerange\":{\"lookback\":null,\"earliest\":\"-2d@d\",\"latest\":null}},\"trigger\":null,\"actions\":{\"notable\":null,\"risk\":{\"message\":\"Risk on $host$\",\"risk_objects\":[{\"field\":\"host\",\"type\":\"system\",\"score\":20}],\"threat_objects\":null},\"email\":null},\"correlation_search\":null}}",
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000306\",\"name\":\"Splunk Risk\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"PRODUCTION\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main risk\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":\"1d\",\"cron\":null,\"custom_time\":\"06h30\"},\"timerange\":{\"lookback\":null,\"earliest\":\"-2d@d\",\"latest\":null}},\"trigger\":null,\"actions\":{\"notable\":null,\"risk\":{\"message\":\"Risk on $host$\",\"risk_objects\":[{\"field\":\"host\",\"type\":\"system\",\"score\":20}],\"threat_objects\":null},\"email\":null},\"correlation_search\":null,\"advanced\":null}}",
    "tenants": [
     {
      "tenant": "es",
@@ -997,7 +997,7 @@
      "help": null
     }
    },
-   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000106\",\"name\":\"Sysdig Unknown Status\",\"status\":\"failed\",\"code\":\"compile_failed\",\"error\":\"Sentinel cannot compile this rule: \\\"Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.\\\"\",\"help\":null,\"file\":\"<WS>/objects/rules/sysdig-unknown-status.yaml\",\"api_request\":null}",
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000106\",\"name\":\"Sysdig Unknown Status\",\"status\":\"failed\",\"code\":\"compile_failed\",\"error\":\"Sysdig cannot compile this rule: \\\"Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.\\\"\",\"help\":null,\"file\":\"<WS>/objects/rules/sysdig-unknown-status.yaml\",\"api_request\":null}",
    "tenants": [
     {
      "tenant": "tagged",

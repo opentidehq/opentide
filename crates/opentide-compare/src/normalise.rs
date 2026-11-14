@@ -75,7 +75,9 @@ pub enum Rule {
     /// first render (`deploy`'s platform row, bare or already at `3 rules ·
     /// CrowdStrike create rule`). What was printed during the region, and
     /// everything outside it (the region's outcome line, the summary), is
-    /// still compared.
+    /// still compared, less the progress rows a loaded machine leaks into
+    /// what was printed: a frame drawn just before a printed line, with no
+    /// cursor move between them, runs into that line.
     LiveFrames,
 }
 
@@ -144,7 +146,13 @@ macro_rules! regex {
 
 regex!(position_cursor, r"\r\x1b\[2K((?:\x1b\[1A\x1b\[2K)*)");
 regex!(transient_erase, r"^\r((?:\x1b\[1A\x1b\[2K)+)");
-regex!(live_frame, r"(?s)<LIVE>.*?</LIVE>");
+regex!(live_frame, r"(?s)<LIVE>.*?</LIVE>(.*?)\x1b\[\?25h");
+// A progress row: the spinner, then segments in the row's own styles (bold
+// cyan, bold, dim), never a warning's or an error's.
+regex!(
+    progress_row,
+    r"  \x1b\[1;36m[\u{2800}-\u{28ff}]\x1b\[0m(?:\x1b\[(?:1;36|1|2|1;2)m[^\x1b\n]*\x1b\[0m| +)*"
+);
 regex!(
     log_clock,
     r"(?m)^((?:\x1b\[\?25l<LIVE>[^\n]*?</LIVE>)?(?:\x1b\[[0-9;]*m)*)(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)((?:\x1b\[[0-9;]*m)* (?:\x1b\[[0-9;]*m)*(?:debug|info|warning|error|critical)\b)"
@@ -262,7 +270,14 @@ impl Normaliser {
     pub fn text(&mut self, text: &str) -> String {
         let mut out = live_regions(text);
         if self.live_frames {
-            out = live_frame().replace_all(&out, "<LIVE></LIVE>").into_owned();
+            out = live_frame()
+                .replace_all(&out, |caps: &Captures<'_>| {
+                    format!(
+                        "<LIVE></LIVE>{}{SHOW_CURSOR}",
+                        without_leaked_rows(&caps[1])
+                    )
+                })
+                .into_owned();
         }
         for (literal, placeholder) in &self.literals {
             if out.contains(literal.as_str()) {
@@ -339,6 +354,23 @@ impl Normaliser {
         }
         out
     }
+}
+
+/// What a live region printed, without the progress rows that run into a
+/// printed line ([`Rule::LiveFrames`]): a row followed by a newline, or by
+/// nothing (a frame kept on screen), stays.
+fn without_leaked_rows(printed: &str) -> String {
+    let mut out = String::with_capacity(printed.len());
+    let mut last = 0;
+    for row in progress_row().find_iter(printed) {
+        if row.end() == printed.len() || printed[row.end()..].starts_with('\n') {
+            continue;
+        }
+        out.push_str(&printed[last..row.start()]);
+        last = row.end();
+    }
+    out.push_str(&printed[last..]);
+    out
 }
 
 /// Every ASCII digit of `text` as `0`: a clock value keeps its format
@@ -893,6 +925,27 @@ mod tests {
             format!("before\n{HIDE_CURSOR}<LIVE></LIVE>{SHOW_CURSOR}{erase}")
         );
         assert_ne!(live(&tall), live(&tall.replace("before", "after")));
+    }
+
+    #[test]
+    fn live_frames_drops_a_progress_row_that_runs_into_a_printed_line() {
+        // On a loaded machine Rich's refresh thread draws a row just before a
+        // warning is printed above the display, with no cursor move between.
+        let row = "  \x1b[1;36m⠙\x1b[0m  \x1b[1;36mcrowdstrike\x1b[0m\x1b[1m  \x1b[0m\x1b[2m3 rules\x1b[0m\x1b[2m \x1b[0m\x1b[2mCrowdStrike create rule\x1b[0m";
+        let warning = "\x1b[1;33mwarning: \x1b[0mRetrying\n";
+        let stream = |leak: &str| {
+            format!(
+                "{HIDE_CURSOR}{row}\r\x1b[2K{leak}{warning}{row}\r\x1b[2K{row}\n{SHOW_CURSOR}done\n"
+            )
+        };
+        let live = |text: &str| Normaliser::new(&volatile(), &[Rule::LiveFrames], []).text(text);
+        let clean = live(&stream(""));
+        assert_eq!(live(&stream(row)), clean);
+        assert!(clean.contains(warning), "{clean:?}");
+        // A frame kept on screen (a row then a newline) stays.
+        assert!(clean.contains(&format!("{row}\n")), "{clean:?}");
+        // Without the rule the leaked row is still a difference.
+        assert_ne!(norm(&stream(row)), norm(&stream("")));
     }
 
     #[test]
