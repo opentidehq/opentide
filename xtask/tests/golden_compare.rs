@@ -88,7 +88,7 @@ fn run_kept(
         &golden.join("cases"),
         &golden.join("blobs"),
         &[Ok(recording(candidate))],
-        true,
+        xtask::compare::StaleCheck::Fail,
         Some(&report),
         false,
         versions,
@@ -144,6 +144,44 @@ fn comparator_golden_applies_the_ledger_and_fails_a_stale_entry() {
     let (passed, report) = run(dir.path(), "{\"ok\":true,\"summary\":{\"rules\":3}}\n");
     assert!(!passed);
     assert_eq!(report["stale"][0]["entry"], 1);
+}
+
+/// One part of a partitioned run (`--partition K/N --unused FILE`): an entry
+/// that applied to none of the part's cases does not fail it, but is written
+/// to FILE, for the gather that finds it stale when every part lists it.
+#[test]
+fn comparator_golden_part_writes_its_unused_entries_instead_of_failing() {
+    let dir = tempfile::tempdir().unwrap();
+    repo(dir.path(), &entry("/summary/rules", "3", "4"));
+    let golden = dir.path().join("tests/golden");
+    let unused = dir.path().join("unused.json");
+    let part = |candidate: &str| {
+        xtask::compare::golden(
+            dir.path(),
+            &golden.join("cases"),
+            &golden.join("blobs"),
+            &[Ok(recording(candidate))],
+            xtask::compare::StaleCheck::Write(Some(&unused)),
+            None,
+            false,
+            ("0.23.0", "0.23.0"),
+            None,
+        )
+        .expect("the comparison runs")
+    };
+    // The entry applies: nothing is unused.
+    assert!(part("{\"ok\":true,\"summary\":{\"rules\":4}}\n"));
+    let listed: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&unused).unwrap()).unwrap();
+    assert_eq!(listed, serde_json::json!([]));
+    // It applies to no case of this part: listed, and the part still passes.
+    assert!(part("{\"ok\":true,\"summary\":{\"rules\":3}}\n"));
+    let listed: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&unused).unwrap()).unwrap();
+    assert_eq!(listed[0]["entry"], 1);
+    assert_eq!(listed[0]["case"], "info/json/*");
+    // A difference still fails the part.
+    assert!(!part("{\"ok\":true,\"summary\":{\"rules\":5}}\n"));
 }
 
 #[test]
@@ -204,7 +242,7 @@ fn comparator_golden_against_a_preview_reports_each_missing_case() {
             Ok(recording("{\"ok\":true,\"summary\":{\"rules\":4}}\n")),
             Ok(other),
         ],
-        false,
+        xtask::compare::StaleCheck::Skip,
         Some(&report),
         false,
         ("0.28.1", "0.28.1"),

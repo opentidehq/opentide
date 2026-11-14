@@ -21,7 +21,7 @@ use opentide_schema::from_node::{Context, FromNode};
 use opentide_schema::node::{Node, Value};
 use opentide_workspace::Index;
 
-use super::relations::py_str;
+use super::relations::node_text;
 use crate::json::{Json, Object};
 
 /// One dataset a rule's query reads.
@@ -157,7 +157,7 @@ fn as_list(node: Option<&Node>) -> Vec<&Node> {
 /// `str(x or "")`.
 fn or_empty(node: Option<&Node>) -> String {
     node.filter(|value| opentide_workspace::index::truthy(value))
-        .map(py_str)
+        .map(node_text)
         .unwrap_or_default()
 }
 

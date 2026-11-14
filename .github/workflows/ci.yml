@@ -10,14 +10,16 @@ run-name: >-
 # Two scopes (.github/AGENTS.md, "What runs where"; tests/test_ci/test_ci_scope.py):
 #
 # - A pull request runs the lean set, on Linux: lint (with actionlint), engine
-#   lint, the engine tests in two shards, Python 3.14, E2E, GitLab CI lint,
-#   golden compare and cargo deny, the core gates, whose jobs carry no `if`;
+#   lint, the engine tests in three shards, Python 3.14, E2E, GitLab CI lint,
+#   golden compare in three parts and cargo deny, the core gates, whose jobs
+#   carry no `if`;
 #   and the path-scoped jobs whose inputs it changes (the `changes` job): the
 #   corpora, the Node package, the facade crate, the release dry run and the
 #   grammar checks. The required checks keep their names: macOS's and
-#   Windows's engine tests are gathered from the Linux shards, the Python 3.10
-#   cell starts and skips its steps, and the corpus check passes when its parts
-#   were not needed.
+#   Windows's engine tests are gathered from the Linux shards, golden compare
+#   from its parts, the Python 3.10 cell starts and skips its steps, and the
+#   corpus check passes when its parts were not needed. The lint job builds
+#   the sdist on every pull request, and the wheel from it in the full set.
 # - The full set adds the rest: macOS and Windows engine tests, Python
 #   3.10-3.13, the engine release dry run, WebAssembly, crate packaging,
 #   grammars, the Elastic sweep, fuzz smoke, the Windows CLI smoke, the facade
@@ -196,13 +198,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-lint-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-lint-
+          key: sccache-lint-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-lint-${{ hashFiles('rust-toolchain.toml') }}-
 
       # The tools and the dependencies, not opentide itself: ruff and ty read
       # the sources, so the engine is compiled once, by `uv build` below.
@@ -240,7 +248,9 @@ jobs:
       # cache put the dependencies: the release profile's link-time
       # optimisation is the release's to prove (publish-dry-run.yml, the
       # engine release dry run), and it took minutes here (#841).
+      # The full set: a pull request builds the sdist above and checks it.
       - name: Build the wheel from the sdist
+        if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
         env:
           OPENTIDE_ENGINE_PROFILE: develop
           CARGO_TARGET_DIR: ${{ github.workspace }}/target
@@ -262,7 +272,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-lint-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          key: sccache-lint-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
       - name: Detect vocabulary bundle, pin, lockfile or model changes
         id: vocab_changes
@@ -339,31 +349,34 @@ jobs:
   # Compiler caches, one strategy for the whole file
   # (tests/test_ci/test_rust_caches.py, #841, #1047): sccache (RUSTC_WRAPPER)
   # in .sccache/, kept by actions/cache under
-  # `sccache-<family>-<hash of Cargo.lock and rust-toolchain.toml>`, restored
-  # with the family as restore-keys and saved by exactly one job, from a push,
-  # only when the key missed. The key does not hash the sources: sccache is
-  # content-addressed, so a copy made a few merges ago still serves every crate
-  # that did not change, and a push to a base branch saves nothing new until the
-  # lockfile or the toolchain does (a key per source tree saved ~4 GB a push and
-  # evicted what pull requests restore). No job with a compiler cache restores
-  # a rust-cache target tree as well.
+  # `sccache-<family>-<hash of rust-toolchain.toml>-<ISO week>` (the `week`
+  # step before each restore), restored with the family and toolchain as
+  # restore-keys and saved by exactly one job, from a push, only when the key
+  # missed: once a week. The key hashes neither the sources nor Cargo.lock:
+  # sccache is content-addressed, so a copy a few days old still serves every
+  # crate that did not change (a key per source tree saved ~4 GB a push, and
+  # one per Cargo.lock, which most merges change, still evicted what pull
+  # requests restore). No job with a compiler cache restores a rust-cache
+  # target tree as well; the target trees left save on the nightly and on
+  # pushes to development only.
   #
   #   lint                `lint`
   #   engine-check        `engine`: clippy, rustdoc and the invariants
-  #   engine-dev-<os>     `engine-test` per OS (its first shard); `clients` and
-  #                       `elastic-sweep` restore the Linux one
+  #   engine-dev-<os>-<n> `engine-test`, each shard (by package) per OS; `clients` and
+  #                       `elastic-sweep` restore Linux shard 2 (lsp, analysis)
   #   corpus              `corpus-part` (generator); the other parts and
   #                       `corpus-queries` restore it
   #   python-engine       the binding `uv sync` builds: `test` (3.14) saves it,
   #                       the other Linux Python jobs restore it
-  #   golden-compare      `golden-compare`
+  #   golden-compare      `golden-compare-part` (its first part); the others restore it
   #   full-set-<OS>       the full set's other Rust jobs (facade, node,
   #                       npm-install, engine-wasm, engine-package, bench,
   #                       cli-windows-smoke): `conformance` saves it on each OS
   #
   # The one rust-cache left: `fuzz` (fuzz-smoke, the fuzz/NIGHTLY nightly,
-  # fuzz/target and cargo-fuzz in ~/.cargo/bin). The release dry run
-  # (engine-release-build.yml) keeps its own per target.
+  # fuzz/target and cargo-fuzz in ~/.cargo/bin).
+  # The release dry run (engine-release-build.yml) keeps sccache families of
+  # its own, one per runner, and saves them from a push only.
   # ---------------------------------------------------------------------------
 
   # rustfmt, clippy, rustdoc, the crate layers and the engine's invariants.
@@ -403,13 +416,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-engine-check-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-engine-check-
+          key: sccache-engine-check-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-engine-check-${{ hashFiles('rust-toolchain.toml') }}-
 
       - name: rustfmt
         run: cargo fmt --all --check
@@ -417,16 +436,22 @@ jobs:
       - name: clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
+      # xtask and opentide-lsp in one cargo build, so that their shared crates
+      # compile once and in parallel; the steps below run the binaries it
+      # built (`cargo xtask` would only check them again).
+      - name: Build xtask and the language server
+        run: cargo build --locked --package xtask --package opentide-lsp
+
       # Every dependency between workspace crates points down the layer table
       # (xtask/layers.toml, plan §4).
       - name: crate layers
-        run: cargo xtask check-layers
+        run: target/debug/xtask check-layers
 
       # The deploy cassettes (tests/cassettes, #831): one per scenario of
       # scenarios.toml, each recorded from the oracle and redacted, none
       # edited by hand. It reads the files only.
       - name: deploy cassettes
-        run: cargo xtask cassettes check
+        run: target/debug/xtask cassettes check
 
       # The artifacts generated from the Rust model (opentide-schema's
       # `generate`): the committed platform templates are current, and the
@@ -435,7 +460,7 @@ jobs:
       # schemas, templates and snippets phases and exited 0 (runs missing one
       # of them, and failed runs, are not compared; UC-1.8, #814).
       - name: generated artifacts
-        run: cargo xtask codegen --check
+        run: target/debug/xtask codegen --check
 
       # Broken intra-doc links and the like fail the build.
       - name: rustdoc
@@ -448,7 +473,7 @@ jobs:
           bash scripts/engine/check-io-free.sh
           bash scripts/engine/check-names.sh
           bash scripts/engine/validate-skills.sh
-          cargo run --locked -p opentide-lsp -- generate-highlights --check
+          target/debug/opentide-lsp generate-highlights --check
 
       # The standard library only: no `uv sync`, which compiled the engine
       # for minutes to run them (#841).
@@ -464,17 +489,23 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-engine-check-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          key: sccache-engine-check-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
   # Every test of the workspace with nextest (.config/nextest.toml, profile
   # `ci`) on Linux, macOS and Windows; the doctests (which nextest does not
   # run) on Linux. The test that compares with Python's difflib runs the
   # interpreter setup-python installs (OPENTIDE_PYTHON): no `uv sync`, which
   # compiled the Python binding for minutes before the tests (#841).
-  # Linux in two shards (nextest --partition, #841): its tests alone took four
-  # minutes on one runner. macOS and Windows spend their time compiling, which a
-  # shard would repeat, so they run whole. `engine-test` below gathers the
-  # shards under each operating system's required check.
+  # Linux in three shards by package: a test harness is a binary, which
+  # sccache does not cache, so a shard of nextest's `--partition` compiled
+  # every test of the workspace again (about four of its six warm minutes,
+  # #841). Each shard builds and runs its packages' tests and doctests only,
+  # and keeps a compiler cache of its own; tests/test_ci/test_ci_scope.py
+  # holds them to every workspace member exactly once, and to an even share
+  # (cargo-metadata's lines of Rust and test binaries per package). macOS
+  # and Windows spend their time compiling, which a shard would repeat, so
+  # they run whole. `engine-test` below gathers the shards under each
+  # operating system's required check.
   engine-test-part:
     name: Engine tests (${{ matrix.os }}, ${{ matrix.shard }}/${{ matrix.shards }})
     runs-on: ${{ matrix.os }}
@@ -482,10 +513,10 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      # Linux in two shards on every pull request; macOS and Windows join in
+      # Linux in three shards on every pull request; macOS and Windows join in
       # the full set (the gathering job keeps their required checks' names).
       matrix:
-        include: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '[{"os":"ubuntu-latest","shard":1,"shards":2},{"os":"ubuntu-latest","shard":2,"shards":2},{"os":"macos-latest","shard":1,"shards":1},{"os":"windows-latest","shard":1,"shards":1}]' || '[{"os":"ubuntu-latest","shard":1,"shards":2},{"os":"ubuntu-latest","shard":2,"shards":2}]') }}
+        include: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '[{"os":"ubuntu-latest","shard":1,"shards":3,"packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"ubuntu-latest","shard":2,"shards":3,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight --features opentide-schema/python"},{"os":"ubuntu-latest","shard":3,"shards":3,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"},{"os":"macos-latest","shard":1,"shards":1,"packages":"--workspace"},{"os":"windows-latest","shard":1,"shards":1,"packages":"--workspace"}]' || '[{"os":"ubuntu-latest","shard":1,"shards":3,"packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"ubuntu-latest","shard":2,"shards":3,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight --features opentide-schema/python"},{"os":"ubuntu-latest","shard":3,"shards":3,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"}]') }}
     env:
       RUSTFLAGS: "-Dwarnings"
       # Line tables, not full debuginfo, for the workspace's ~90 test binaries:
@@ -503,6 +534,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The merge commit and its first parent: the step below reads what
+          # the pull request changed.
+          fetch-depth: 2
           persist-credentials: false
 
       # uv for the tests that provision a tool with it; nothing is synced.
@@ -522,13 +556,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-engine-dev-${{ matrix.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-engine-dev-${{ matrix.os }}-
+          key: sccache-engine-dev-${{ matrix.os }}-${{ matrix.shard }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-engine-dev-${{ matrix.os }}-${{ matrix.shard }}-${{ hashFiles('rust-toolchain.toml') }}-
 
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
@@ -540,16 +580,67 @@ jobs:
         shell: bash
         run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
 
+      # opentide-schema's compile-fail cases (trybuild, `opentide-schema::ui`)
+      # take a minute, the slowest test of its shard: they run in the full
+      # set and on a pull request that changes what they compile (the derive,
+      # the crate, the cases) or the toolchain whose messages they hold; a
+      # pull request whose merge commit cannot be read runs them.
+      - name: Whether to run opentide-schema's compile-fail cases
+        id: ui
+        shell: bash
+        env:
+          FULL_SET: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          UI_PATHS: |
+            crates/opentide-schema-derive/*
+            crates/opentide-schema/src/*
+            crates/opentide-schema/tests/ui*
+            crates/opentide-schema/Cargo.toml
+            Cargo.lock
+            rust-toolchain.toml
+            .github/workflows/ci.yml
+        run: |
+          set -euo pipefail
+          run=true
+          if [[ "${FULL_SET}" != true ]] && git rev-parse --verify --quiet HEAD^2 >/dev/null; then
+            run=false
+            while IFS= read -r file; do
+              [[ -n "${file}" ]] || continue
+              while IFS= read -r pattern; do
+                # Unquoted on the right: a pattern, not a string.
+                # shellcheck disable=SC2053
+                if [[ -n "${pattern}" && "${file}" == ${pattern} ]]; then
+                  echo "compile-fail input changed: ${file}"
+                  run=true
+                fi
+              done <<<"${UI_PATHS}"
+            done < <(git diff --no-renames --name-only HEAD^1 HEAD)
+          fi
+          echo "run=${run}" >> "$GITHUB_OUTPUT"
+
       - name: cargo nextest (profile ci)
+        shell: bash
         env:
           OPENTIDE_PYTHON: python
-        run: >-
-          cargo nextest run --workspace --locked --profile ci
-          --partition hash:${{ matrix.shard }}/${{ matrix.shards }}
+          PACKAGES: ${{ matrix.packages }}
+          UI: ${{ steps.ui.outputs.run }}
+        run: |
+          read -ra selected <<< "${PACKAGES}"
+          filter=()
+          # The shard that tests opentide-schema; a filter names a binary
+          # only where it is built.
+          if [[ "${UI}" != true && " ${PACKAGES} " == *" -p opentide-schema "* ]]; then
+            echo "opentide-schema::ui runs in the full set and when its inputs change"
+            filter=(-E 'not binary_id(opentide-schema::ui)')
+          fi
+          cargo nextest run --locked --profile ci "${selected[@]}" "${filter[@]}"
 
       - name: doctests
-        if: runner.os == 'Linux' && matrix.shard == 1
-        run: cargo test --workspace --locked --doc
+        if: runner.os == 'Linux'
+        env:
+          PACKAGES: ${{ matrix.packages }}
+        run: |
+          read -ra selected <<< "${PACKAGES}"
+          cargo test --locked --doc "${selected[@]}"
 
       - name: The tests left the checkout as they found it
         shell: bash
@@ -564,12 +655,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: sccache --show-stats
 
+      # Each shard compiles its own packages' dependencies: each saves a
+      # family of its own.
       - name: Save the compiler cache
-        if: github.event_name == 'push' && matrix.shard == 1 && steps.sccache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-engine-dev-${{ matrix.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          key: sccache-engine-dev-${{ matrix.os }}-${{ matrix.shard }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
       - name: Upload the JUnit report
         if: failure()
@@ -654,13 +747,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-full-set-${{ runner.os }}-
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
 
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
@@ -752,13 +851,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-full-set-${{ runner.os }}-
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -869,13 +974,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-full-set-${{ runner.os }}-
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -973,13 +1084,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-full-set-${{ runner.os }}-
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -1040,7 +1157,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
   # scripts/engine/build-wasm.sh builds both WebAssembly artifacts with the
   # wasi-sdk it pins and smoke-tests them; the npm packages build and pack only
@@ -1080,13 +1197,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-full-set-${{ runner.os }}-
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -1163,13 +1286,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-full-set-${{ runner.os }}-
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -1355,12 +1484,18 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-engine-dev-ubuntu-latest-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-engine-dev-ubuntu-latest-
+          key: sccache-engine-dev-ubuntu-latest-2-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-engine-dev-ubuntu-latest-2-${{ hashFiles('rust-toolchain.toml') }}-
       - name: detection-rules sweep
         env:
           OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules
@@ -1401,8 +1536,11 @@ jobs:
       # builds here: `key` names the nightly, so a new one saves a new tree.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          # Saved from pushes only: a pull request's cache serves no other (#841).
-          save-if: ${{ github.event_name == 'push' }}
+          # Saved by the nightly and pushes to development only (the default
+          # branch, whose caches every pull request reads): a target tree per
+          # integration merge, whose Cargo.lock nearly always changed, evicted
+          # the compiler caches pull requests restore (#841).
+          save-if: ${{ github.event_name == 'schedule' || github.ref == 'refs/heads/development' }}
           shared-key: fuzz
           key: ${{ steps.nightly.outputs.version }}
           workspaces: fuzz -> target
@@ -1516,12 +1654,18 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-engine-dev-ubuntu-latest-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-engine-dev-ubuntu-latest-
+          key: sccache-engine-dev-ubuntu-latest-2-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-engine-dev-ubuntu-latest-2-${{ hashFiles('rust-toolchain.toml') }}-
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -1565,13 +1709,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-full-set-${{ runner.os }}-
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
       - name: cargo bench (opentide-analysis)
         run: |
           cargo bench --locked -p opentide-analysis --bench analyze | tee bench.txt
@@ -1631,13 +1781,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-corpus-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-corpus-
+          key: sccache-corpus-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-corpus-${{ hashFiles('rust-toolchain.toml') }}-
       - name: Detect vocabulary resolution changes
         if: matrix.part == 'vocabulary'
         id: vocab_resolution
@@ -1821,7 +1977,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-corpus-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          key: sccache-corpus-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
 
   # The query fault kinds through the Rust validate and lint with the query
@@ -1853,13 +2009,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-corpus-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-corpus-
+          key: sccache-corpus-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-corpus-${{ hashFiles('rust-toolchain.toml') }}-
       - name: Install the oracle (tests/corpora/oracle.in, hash-pinned, own venv)
         run: |
           uv venv --python 3.12 "$RUNNER_TEMP/oracle"
@@ -1973,14 +2135,21 @@ jobs:
         if: env.RUNS == 'true'
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        if: env.RUNS == 'true'
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         if: env.RUNS == 'true'
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-python-engine-
+          key: sccache-python-engine-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-python-engine-${{ hashFiles('rust-toolchain.toml') }}-
 
       - name: Install dependencies
         if: env.RUNS == 'true'
@@ -1995,7 +2164,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          key: sccache-python-engine-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
       # What the Python package holds since UC-6.2 (#841): the SDK, the
       # models, the plugin API, the console script, the docs' snippets and
@@ -2107,13 +2276,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-python-engine-
+          key: sccache-python-engine-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-python-engine-${{ hashFiles('rust-toolchain.toml') }}-
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -2173,13 +2348,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-python-engine-
+          key: sccache-python-engine-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-python-engine-${{ hashFiles('rust-toolchain.toml') }}-
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -2252,13 +2433,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-python-engine-
+          key: sccache-python-engine-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-python-engine-${{ hashFiles('rust-toolchain.toml') }}-
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -2307,13 +2494,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-python-engine-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-python-engine-
+          key: sccache-python-engine-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-python-engine-${{ hashFiles('rust-toolchain.toml') }}-
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -2334,13 +2527,23 @@ jobs:
   # tests/golden/APPROVED_DIFFS.toml); a stale ledger entry fails it (UC-0.7,
   # #805; every case since UC-6.2, #841). Here, not in golden.yml, so that it
   # runs on every pull request: a change anywhere in crates/, bindings/python/
-  # or src/ can change what a command does.
-  golden-compare:
-    # The name is a required check's: it stays, though the run is now
-    # `golden check --engine rust`.
-    name: Golden compare
+  # or src/ can change what a command does. In three parts, by a hash of the
+  # case id (`--partition K/3`, about 580 cases each); `golden-compare`
+  # gathers them under the required check's name.
+  golden-compare-part:
+    name: Golden compare (part ${{ matrix.part }}/3)
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2, 3]
+    # Whether the checkout carries tests/golden/REPORT_ONLY (the catch-up
+    # train's marker): the gather then reports stale ledger entries rather
+    # than failing on them, as `golden check` itself does under the marker.
+    # Every part checks out the same commit, so each writes the same value.
+    outputs:
+      report_only: ${{ steps.marker.outputs.report_only }}
     env:
       RUSTFLAGS: -Dwarnings
       PYO3_PYTHON: /usr/bin/python3
@@ -2353,6 +2556,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Report-only marker
+        id: marker
+        run: |
+          if [[ -f tests/golden/REPORT_ONLY ]]; then
+            echo "report_only=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "report_only=false" >> "${GITHUB_OUTPUT}"
+          fi
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
@@ -2373,13 +2585,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-golden-compare-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-golden-compare-
+          key: sccache-golden-compare-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-golden-compare-${{ hashFiles('rust-toolchain.toml') }}-
 
       # The candidate is this repository's CLI, with the engine compiled in.
       # Its version is whatever this checkout builds: the comparison replaces
@@ -2387,27 +2605,45 @@ jobs:
       - name: Install this repository's CLI
         run: uv sync --group dev
 
+      # A ledger entry that applies to none of this part's cases does not
+      # fail it: it is listed in the unused file, and the gather fails on an
+      # entry every part lists (a stale one).
       - name: Compare every command with the recordings
-        run: cargo xtask golden check --engine rust --report golden-compare.json
+        env:
+          PART: ${{ matrix.part }}
+        run: >-
+          cargo xtask golden check --engine rust --partition "${PART}/3"
+          --report "golden-compare-${PART}.json" --unused "golden-unused-${PART}.json"
+
+      - name: Upload the unused ledger entries
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: golden-unused-${{ matrix.part }}
+          path: golden-unused-${{ matrix.part }}.json
+          if-no-files-found: error
 
       # The MCP server (UC-3.7, #829): the recorded sessions of the Python
-      # server replayed against the Rust server, and the MCP stdio tests.
+      # server replayed against the Rust server, and the MCP stdio tests,
+      # each in a part of its own.
       - name: Replay the recorded MCP sessions
+        if: matrix.part == 2
         run: cargo xtask mcp replay --engine rust tests/golden/mcp/*.jsonl
 
       - name: Run the MCP tests
+        if: matrix.part == 3
         run: uv run --no-sync pytest tests/test_mcp -q --no-cov -n auto
 
       - name: Compiler cache statistics
         if: ${{ !cancelled() }}
         run: sccache --show-stats
 
+      # The parts compile the same crates: one saves.
       - name: Save the compiler cache
-        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true' && matrix.part == 1
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-golden-compare-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          key: sccache-golden-compare-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
       - name: Upload the report
         if: always()
@@ -2416,9 +2652,59 @@ jobs:
         # service must not fail a job whose checks passed.
         continue-on-error: true
         with:
-          name: golden-compare
-          path: golden-compare.json
+          name: golden-compare-${{ matrix.part }}
+          path: golden-compare-${{ matrix.part }}.json
           if-no-files-found: ignore
+
+  # The required check `Golden compare`: every part passed, and every ledger
+  # entry applied to a case in one part at least. An entry each part lists as
+  # unused applied nowhere in the whole run: it is stale, and fails.
+  golden-compare:
+    name: Golden compare
+    needs: golden-compare-part
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Download the parts' unused ledger entries
+        if: needs.golden-compare-part.result == 'success'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: golden-unused-*
+          merge-multiple: true
+
+      - name: Every part passed, and no ledger entry is stale
+        env:
+          RESULT: ${{ needs.golden-compare-part.result }}
+          PARTS: "3"
+          REPORT_ONLY: ${{ needs.golden-compare-part.outputs.report_only }}
+        run: |
+          echo "golden compare parts: ${RESULT}"
+          test "${RESULT}" = success
+          files=()
+          for part in $(seq 1 "${PARTS}"); do
+            test -f "golden-unused-${part}.json"
+            files+=("golden-unused-${part}.json")
+          done
+          stale="$(jq -rs '
+            (map(map(.entry))) as $parts
+            | .[0][]
+            | select(.entry as $e | $parts | all(any(.[]; . == $e)))
+            | "error: tests/golden/APPROVED_DIFFS.toml entry \(.entry) (\(.command) \(.case) \(.target) \(.rule)) applied to no case: it is stale, remove it"
+          ' "${files[@]}")"
+          if [[ -n "${stale}" ]]; then
+            if [[ "${REPORT_ONLY:-false}" == true ]]; then
+              # The catch-up train: the ledger is being re-based on the next
+              # oracle (O2), so a stale entry is reported, not gated.
+              echo "${stale//error: /::warning::report only: }"
+              echo "tests/golden/REPORT_ONLY is present: stale entries reported, not gated"
+              exit 0
+            fi
+            echo "${stale}"
+            exit 1
+          fi
+          echo "every ledger entry applied in a part"
 
   cli-windows-smoke:
     name: CLI Windows smoke
@@ -2460,13 +2746,19 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: sccache-full-set-${{ runner.os }}-
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
 
       - name: Install dependencies
         run: uv sync --group dev

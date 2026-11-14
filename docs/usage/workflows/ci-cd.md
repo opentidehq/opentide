@@ -349,7 +349,7 @@ In a GitHub Actions, GitLab CI or Azure Pipelines job (`GITHUB_ACTIONS`, `GITLAB
 
 | Provider | Each finding of `validate` and `lint` | Job summary |
 |----------|----------------------------------------|-------------|
-| GitHub Actions | A workflow command on stdout, which GitHub shows on the line of the pull request's diff: `::error file=objects/rules/sentinel-kql-rule.yaml,line=8,endLine=8,col=8,endColumn=13,title=vocab_unknown::Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry%0Ahelp: did you mean 'clear'?` | Markdown appended to `$GITHUB_STEP_SUMMARY` |
+| GitHub Actions | A workflow command on stdout, which GitHub shows on the line of the pull request's diff: `::error file=objects/rules/sentinel-kql-rule.yaml,line=8,endLine=8,col=8,endColumn=13,title=vocab_unknown::Value "clearr" is not a valid "tlp::1.0" vocabulary entry%0Ahelp: did you mean "clear"?` | Markdown appended to `$GITHUB_STEP_SUMMARY` |
 | GitLab CI | None inline: GitLab shows the Code Quality report in the merge request widget on every tier, and on the lines of the diff on GitLab Ultimate | Markdown appended to `opentide-reports/summary.md` in the checkout, kept as an artifact |
 | Azure Pipelines | `##vso[task.logissue type=error;sourcepath=…;linenumber=8;columnnumber=8;code=vocab_unknown;]…` (notes have no Azure level and are not sent) | A Markdown file attached with `##vso[task.uploadsummary]` |
 

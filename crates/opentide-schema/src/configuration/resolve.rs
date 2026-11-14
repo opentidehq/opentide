@@ -161,6 +161,7 @@ fn key_node(key: &str) -> Arc<Node> {
         value: Value::Str(key.to_owned()),
         start: Mark::default(),
         end: Mark::default(),
+        text: None,
     })
 }
 
@@ -177,6 +178,7 @@ fn table(entries: Vec<(String, Node)>) -> Node {
         ),
         start: Mark::default(),
         end: Mark::default(),
+        text: None,
     }
 }
 

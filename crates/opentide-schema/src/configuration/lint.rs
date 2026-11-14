@@ -281,7 +281,7 @@ fn compile(raw: &str, place: &str) -> Result<Regex, LintConfigError> {
                 .trim()
                 .to_owned();
             LintConfigError(format!(
-                "{place}.pattern: invalid regular expression '{raw}': {reason}"
+                "{place}.pattern: invalid regular expression {raw:?}: {reason}"
             ))
         })
 }

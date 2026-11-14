@@ -1020,6 +1020,15 @@ fn configuration_check(
                 }
                 configuration::codes_only(&rust) == configuration::codes_only(&oracle)
             }
+            None if configuration::quoting_only(&oracle, &rust) => {
+                if !changelog.contains(configuration::QUOTING_CHANGELOG) {
+                    problems.push(format!(
+                        "CHANGELOG.md has no {:?}",
+                        configuration::QUOTING_CHANGELOG
+                    ));
+                }
+                true
+            }
             None => rust == oracle,
         };
         if !equal {

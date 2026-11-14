@@ -10,7 +10,7 @@ use std::sync::{Arc, OnceLock};
 use opentide_schema::node::{Document, Node, Value};
 use opentide_schema::objects::platform::deprecation::deprecated_fields;
 use opentide_schema::revisions::dispatch::{self, Rejection, Selection};
-use opentide_schema::vocab::{Selector, VocabRef, Vocabularies, Vocabulary, quote};
+use opentide_schema::vocab::{Resolved, Selector, VocabRef, Vocabularies, Vocabulary, quote};
 use opentide_schema::{ErrorKind, SchemaError, Surface};
 use serde_json::Value as Json;
 
@@ -56,6 +56,9 @@ pub struct Graph<'a> {
     pub platform_files: HashMap<String, String>,
     /// The configuration's Graylog tenants, which the Graylog advisories read.
     pub graylog_tenants: Vec<opentide_schema::objects::platform::graylog::ConfiguredTenant>,
+    /// What each vocabulary selector accepts, resolved once per run
+    /// ([`Graph::resolve`]): every object's fields ask the same few.
+    resolved: std::sync::Mutex<HashMap<Selector, std::sync::Arc<Resolved>>>,
 }
 
 fn object_name(object: &Object) -> String {
@@ -107,7 +110,30 @@ impl<'a> Graph<'a> {
             misspelled_enabled: HashMap::new(),
             platform_files: HashMap::new(),
             graylog_tenants: Vec::new(),
+            resolved: std::sync::Mutex::default(),
         }
+    }
+
+    /// The values `selector` accepts ([`Vocabularies::resolve`]), resolved
+    /// on the first ask and shared after it: resolving built a set of a
+    /// whole vocabulary for every field of every object, a fifth of
+    /// `validate` on the heavy workspace (#817).
+    pub fn resolve(&self, selector: &Selector) -> std::sync::Arc<Resolved> {
+        let cached = self
+            .resolved
+            .lock()
+            .ok()
+            .and_then(|cache| cache.get(selector).cloned());
+        if let Some(found) = cached {
+            return found;
+        }
+        let resolved = std::sync::Arc::new(self.vocabularies.resolve(selector));
+        if let Ok(mut cache) = self.resolved.lock() {
+            cache
+                .entry(selector.clone())
+                .or_insert_with(|| std::sync::Arc::clone(&resolved));
+        }
+        resolved
     }
 
     /// Whether `uuid` is an object of `family` (or a signal, for `signal`).
@@ -432,6 +458,23 @@ pub fn check_object(
                             .at(advisory.field_path)
                     }),
             );
+            if let Some(anchored) =
+                opentide_schema::objects::platform::harfanglab::yara::aliased_signature(root)
+            {
+                let path = opentide_schema::objects::platform::harfanglab::yara::SIGNATURE_PATH;
+                let mut issue = new(
+                    "yara_signature_alias",
+                    format!(
+                        "{} is a YAML alias; what the block deploys must be written in the \
+                             block",
+                        path.join(".")
+                    ),
+                )
+                .at(path.map(str::to_owned));
+                // Where the aliased text is written: the anchor's node.
+                issue.yaml_line = anchored.start.line.checked_sub(1);
+                issues.push(issue);
+            }
             for (platform, key) in states::legacy_external_id_keys(root) {
                 issues.push(
                     new(
@@ -777,7 +820,7 @@ fn vocab_values(
         .get("tide.vocab.scoped")
         .is_some_and(|scoped| scoped.as_bool().unwrap_or(!scoped.is_null()));
     let selector = Selector::new(reference).scoped(scoped).stages(stages);
-    let resolved = graph.vocabularies.resolve(&selector);
+    let resolved = graph.resolve(&selector);
     strings(value)
         .into_iter()
         .filter(|item| !resolved.is_valid(item))
@@ -925,7 +968,7 @@ fn platform_not_enabled(
                         });
                     (
                         format!(
-                            "this block will not deploy: {file} sets '{key}' in [platform], not \
+                            "this block will not deploy: {file} sets {key:?} in [platform], not \
                              'enabled', so {platform} is disabled; rename the key to 'enabled'"
                         ),
                         Some(key.clone()),
@@ -1170,7 +1213,7 @@ mod tests {
         let warning = &found[0];
         assert_eq!(warning.code, "deprecated_field");
         assert_eq!(warning.severity, Severity::Warning);
-        assert_eq!(warning.message, "Field 'old' is deprecated: use `new`");
+        assert_eq!(warning.message, "Field \"old\" is deprecated: use `new`");
         assert_eq!(warning.field_path, ["old"]);
         assert_eq!(
             (warning.object_uuid.as_str(), warning.object_type.as_str()),

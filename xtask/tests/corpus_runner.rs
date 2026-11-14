@@ -8,7 +8,6 @@
 #[cfg(test)]
 mod runner {
 
-    use std::os::unix::fs::PermissionsExt;
     use std::path::{Path, PathBuf};
     use xtask::corpus::cli::run;
     use xtask::corpus::faults::Catalogue;
@@ -45,8 +44,7 @@ layout = "explicit"
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
             let script = dir.join("opentide");
-            std::fs::write(&script, SCRIPT).unwrap();
-            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+            xtask::script::write_executable(&script, SCRIPT).unwrap();
             Self { dir }
         }
 

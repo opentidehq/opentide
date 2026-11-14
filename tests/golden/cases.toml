@@ -1856,27 +1856,25 @@ fixtures = ["tide-corpus"]
 [[case]]
 command = "deploy"
 variant = "elastic-tenant"
-# Its live progress row updates as it deploys (rule count, current rule):
-# which frame Rich draws first, if any, depends on the machine's load.
-normalise = ["live-progress"]
 args = ["deploy", "--strategy", "PREVIEW", "--platform", "elastic", "--all"]
 fixtures = ["tide-corpus"]
+normalise = ["live-frames"]
 
 # UC-4.6 (#979): a deploy that sends, on the connectors, on the
 # `deploy-tenants` fixture, each platform served from a cassette recorded
 # from the oracle (tests/cassettes/golden/, the `golden/deploy-*` scenarios):
 # creates whose ids are recorded in deployment state, updates, deletes whose
 # ids are forgotten, skips and refusals. In human mode the deploy's live
-# region is one `<LIVE>` block whatever its frames (UC-4.4, #834).
+# region is one `<LIVE>` block whatever its frames (UC-4.4, #834), and
+# `live-frames` empties the frame it keeps: the platform row is updated from
+# worker threads, so Live's first render can already show their progress.
 
 [[case]]
 command = "deploy"
 variant = "send-defender"
-# Its live progress row updates as it deploys (rule count, current rule):
-# which frame Rich draws first, if any, depends on the machine's load.
-normalise = ["live-progress"]
 args = ["deploy", "--platform", "defender_for_endpoint", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
 cassette = "golden/deploy-defender"
@@ -1884,11 +1882,9 @@ cassette = "golden/deploy-defender"
 [[case]]
 command = "deploy"
 variant = "send-sentinel-one"
-# Its live progress row updates as it deploys (rule count, current rule):
-# which frame Rich draws first, if any, depends on the machine's load.
-normalise = ["live-progress"]
 args = ["deploy", "--platform", "sentinel_one", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { S1_API_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-sentinel-one"
@@ -1896,11 +1892,9 @@ cassette = "golden/deploy-sentinel-one"
 [[case]]
 command = "deploy"
 variant = "send-crowdstrike"
-# Its live progress row updates as it deploys (rule count, current rule):
-# which frame Rich draws first, if any, depends on the machine's load.
-normalise = ["live-progress"]
 args = ["deploy", "--platform", "crowdstrike", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential" }
 cassette = "golden/deploy-crowdstrike"
@@ -1908,11 +1902,9 @@ cassette = "golden/deploy-crowdstrike"
 [[case]]
 command = "deploy"
 variant = "send-sysdig"
-# Its live progress row updates as it deploys (rule count, current rule):
-# which frame Rich draws first, if any, depends on the machine's load.
-normalise = ["live-progress"]
 args = ["deploy", "--platform", "sysdig", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-sysdig"
@@ -1920,11 +1912,9 @@ cassette = "golden/deploy-sysdig"
 [[case]]
 command = "deploy"
 variant = "send-elastic"
-# Its live progress row updates as it deploys (rule count, current rule):
-# which frame Rich draws first, if any, depends on the machine's load.
-normalise = ["live-progress"]
 args = ["deploy", "--platform", "elastic", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 cassette = "golden/deploy-elastic"
@@ -1932,11 +1922,9 @@ cassette = "golden/deploy-elastic"
 [[case]]
 command = "deploy"
 variant = "send-splunk"
-# Its live progress row updates as it deploys (rule count, current rule):
-# which frame Rich draws first, if any, depends on the machine's load.
-normalise = ["live-progress"]
 args = ["deploy", "--platform", "splunk", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-splunk"
@@ -1944,11 +1932,9 @@ cassette = "golden/deploy-splunk"
 [[case]]
 command = "deploy"
 variant = "send-carbon-black"
-# Its live progress row updates as it deploys (rule count, current rule):
-# which frame Rich draws first, if any, depends on the machine's load.
-normalise = ["live-progress"]
 args = ["deploy", "--platform", "carbon_black_cloud", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 modes = ["human", "plain", "json", "agent"]
 env = { CBC_TOKEN = "golden-stand-in-credential" }
 cassette = "golden/deploy-carbon-black"
@@ -2005,51 +1991,41 @@ cassette = "golden/deploy-sysdig"
 [[case]]
 command = "deploy"
 variant = "unreachable-defender-for-endpoint"
-# Its live progress row updates as it deploys (rule count, current rule):
-# which frame Rich draws first, if any, depends on the machine's load.
-normalise = ["live-progress"]
 args = ["deploy", "--platform", "defender_for_endpoint", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
 
 [[case]]
 command = "deploy"
 variant = "unreachable-sentinel-one"
-# Its live progress row updates as it deploys (rule count, current rule):
-# which frame Rich draws first, if any, depends on the machine's load.
-normalise = ["live-progress"]
 args = ["deploy", "--platform", "sentinel_one", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 env = { S1_API_TOKEN = "golden-stand-in-credential" }
 
 [[case]]
 command = "deploy"
 variant = "unreachable-crowdstrike"
-# Its live progress row updates as it deploys (rule count, current rule):
-# which frame Rich draws first, if any, depends on the machine's load.
-normalise = ["live-progress"]
 args = ["deploy", "--platform", "crowdstrike", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential" }
 
 [[case]]
 command = "deploy"
 variant = "unreachable-elastic"
-# Its live progress row updates as it deploys (rule count, current rule):
-# which frame Rich draws first, if any, depends on the machine's load.
-normalise = ["live-progress"]
 args = ["deploy", "--platform", "elastic", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
 
 [[case]]
 command = "deploy"
 variant = "unreachable-sysdig"
-# Its live progress row updates as it deploys (rule count, current rule):
-# which frame Rich draws first, if any, depends on the machine's load.
-normalise = ["live-progress"]
 args = ["deploy", "--platform", "sysdig", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
 env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
 
 [[case]]

@@ -53,15 +53,11 @@ stdout (progress goes to stderr); --out writes it to FILE as well.
   --engine python   the oracle: opentide 0.23.0 from its PyPI wheel
                     (tests/bench/oracle-requirements.txt, hashes verified),
                     installed with uv under the target directory (default)
-  --engine rust     the Rust implementations: the language server, `load`
-                    and `validate_*` (opentide-workspace's load and validate
-                    examples; validate without the queries check, UC-2.5)
-                    and the commands the Rust CLI runs (info, info catalog,
-                    rules unreviewed, generate exports navigator, generate
-                    docs, deploy --dry-run), built --release; startup
-                    (opentide --version) and explain through the console
-                    script, opentide._cli:main; every other command reports
-                    \"not measured\"
+  --engine rust     the Rust implementations, built --release: the Rust
+                    CLI's opentide binary for every command, the language
+                    server, and `load` (opentide-workspace's load example);
+                    startup (opentide --version) and explain through the
+                    console script, opentide._cli:main
   --scale 1|10      the heavy workspace's size (default 1)
   --only ID,...     run only these commands (ids as in the report)
   --workspace DIR   benchmark this workspace instead of generating one
@@ -554,6 +550,17 @@ pub fn main(args: &[String]) -> ExitCode {
             }
         };
     }
+    if let [flag, result, program, rest @ ..] = args
+        && flag == measure::INTERNAL_MEASURE
+    {
+        return match measure::measure_here(Path::new(result), program, rest) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("xtask bench {}: {err:#}", measure::INTERNAL_MEASURE);
+                ExitCode::from(2)
+            }
+        };
+    }
     let mode = match parse_args(args) {
         Ok(mode) => mode,
         Err(err) => {
@@ -644,12 +651,6 @@ fn cargo_paths() -> Result<(PathBuf, PathBuf)> {
     Ok((PathBuf::from(root), PathBuf::from(target)))
 }
 
-/// Whether the Rust engine runs a CLI scenario: `validate` (UC-2.2, #817),
-/// through opentide-workspace's validate example until the Rust CLI does.
-fn has_rust(scenario: &Scenario) -> bool {
-    scenario.kind == Kind::Cli && scenario.args.first() == Some(&"validate")
-}
-
 /// The engine's program and arguments for a scenario, or why it has none.
 enum Program {
     Run(PathBuf, Vec<OsString>),
@@ -658,23 +659,22 @@ enum Program {
     Missing(String),
 }
 
+/// The scenarios the oracle does not run: `startup` measures the console
+/// script of this repository, `opentide._cli:main`, not the oracle's start.
+pub const ORACLE_UNMEASURED: &[&str] = &["startup"];
+
 /// The scenarios `--engine rust` measures through the console script,
 /// `opentide._cli:main` (UC-3.8b, #960; UC-6.2, #841): the plan's startup budgets,
 /// `opentide --version` in 20 ms and `explain` in 30 ms (section 11; #830),
 /// are what `pip install opentide` gives a person, launcher included.
 const LAUNCHER: &[&str] = &["startup", "explain"];
 
-/// The commands the Rust CLI (opentide-cli) runs, by scenario id: `--engine
-/// rust` measures its `opentide` binary on them (UC-2.4, #819; `generate
-/// exports navigator`, UC-3.2, #824; `deploy --dry-run`, UC-3.1c, #896).
-const RUST_CLI: &[&str] = &[
-    "info",
-    "info_catalog",
-    "rules_unreviewed",
-    "generate_exports_navigator",
-    "generate_docs",
-    "deploy_dry_run",
-];
+/// Whether `--engine rust` measures a scenario on the Rust CLI's `opentide`
+/// binary (opentide-cli, built `--release`): every command-line scenario but
+/// the [`LAUNCHER`] ones. Since UC-6.2 (#841) the Rust CLI runs every command.
+fn rust_cli(scenario: &Scenario) -> bool {
+    scenario.kind == Kind::Cli && !LAUNCHER.contains(&scenario.id)
+}
 
 /// The programs a run has: what it built or installed, or was given.
 #[derive(Clone, Copy, Debug, Default)]
@@ -685,8 +685,6 @@ struct Programs<'a> {
     lsp: Option<&'a Path>,
     /// opentide-workspace's `load` example (`rust`).
     load: Option<&'a Path>,
-    /// opentide-workspace's `validate` example (`rust`).
-    validate: Option<&'a Path>,
     /// The console script, `opentide._cli:main` (`rust`, [`LAUNCHER`]).
     launcher: Option<&'a Path>,
 }
@@ -702,7 +700,6 @@ fn program(
         opentide,
         lsp,
         load: load_bin,
-        validate: validate_bin,
         launcher,
     } = *programs;
     let rule = ws.map(|ws| ws.rule.clone()).unwrap_or_default();
@@ -769,17 +766,9 @@ fn program(
             Some(bin) => Program::Run(bin.to_owned(), Vec::new()),
             None => Program::Missing("no load example".into()),
         },
-        (Engine::Rust, Kind::Cli) if has_rust(scenario) => match validate_bin {
-            // opentide-workspace's validate example takes validate's options.
-            Some(bin) => Program::Run(bin.to_owned(), args(&[]).into_iter().skip(1).collect()),
-            None => Program::Missing("no validate example".into()),
-        },
         (Engine::Rust, Kind::Cli) => match opentide {
-            Some(cli) if RUST_CLI.contains(&scenario.id) => {
-                Program::Run(cli.to_owned(), args(&["--json"]))
-            }
-            None if RUST_CLI.contains(&scenario.id) => Program::Missing("no Rust CLI built".into()),
-            _ => Program::Missing("not measured: no Rust CLI scenario names it (RUST_CLI)".into()),
+            Some(cli) => Program::Run(cli.to_owned(), args(&["--json"])),
+            None => Program::Missing("no Rust CLI built".into()),
         },
     }
 }
@@ -846,17 +835,7 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
                 .is_none_or(|only| only.iter().any(|id| id == s.id))
         })
         .collect();
-    let runnable = |s: &&&Scenario| {
-        options.engine == Engine::Python
-            || s.kind != Kind::Cli
-            || has_rust(s)
-            || RUST_CLI.contains(&s.id)
-            || LAUNCHER.contains(&s.id)
-    };
-    let needs_workspace = selected
-        .iter()
-        .filter(runnable)
-        .any(|s| s.input != Input::Empty);
+    let needs_workspace = selected.iter().any(|s| s.input != Input::Empty);
 
     let (opentide, oracle) = match (options.engine, &options.opentide) {
         (Engine::Python, Some(path)) => (Some(path.clone()), Some(path.display().to_string())),
@@ -864,7 +843,7 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
             let (path, version) = oracle::ensure_oracle(root, &base.join("oracle"))?;
             (Some(path), Some(version))
         }
-        (Engine::Rust, _) if selected.iter().any(|s| RUST_CLI.contains(&s.id)) => {
+        (Engine::Rust, _) if selected.iter().any(|s| rust_cli(s)) => {
             (Some(oracle::build_cli(root)?), None)
         }
         (Engine::Rust, _) => (None, None),
@@ -873,10 +852,6 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
         Engine::Rust if selected.iter().any(|s| s.kind == Kind::Load) => {
             Some(oracle::build_load(root)?)
         }
-        _ => None,
-    };
-    let validate_bin = match options.engine {
-        Engine::Rust if selected.iter().any(|s| has_rust(s)) => Some(oracle::build_validate(root)?),
         _ => None,
     };
     // The console script of this repository's environment (`uv sync`): its
@@ -908,10 +883,7 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
                 (work.join("generated"), Some(generated.blocks))
             }
         };
-        let with_warnings = selected
-            .iter()
-            .filter(runnable)
-            .any(|s| s.input == Input::Warnings);
+        let with_warnings = selected.iter().any(|s| s.input == Input::Warnings);
         let mut ws = workspace::prepare(&source, work, with_warnings)?;
         // Every platform block of a rule is one `platform_not_enabled`
         // warning once its platform is disabled: exactly as many as the
@@ -941,7 +913,6 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
             opentide: opentide.as_deref(),
             lsp: lsp.as_deref(),
             load: load_bin.as_deref(),
-            validate: validate_bin.as_deref(),
             launcher: launcher.as_deref(),
         };
         let result = match program(scenario, options.engine, &programs, workspaces.as_ref()) {
@@ -1131,7 +1102,7 @@ fn measure_scenario(
                 if launch == Launch::Launcher && !measured_run {
                     command.env_remove("PYTHONDONTWRITEBYTECODE");
                 }
-                let measured = measure::run(&mut command, sleep)?;
+                let measured = measure::run_isolated(&command, &run_dir, sleep)?;
                 if scenario.kind == Kind::Version {
                     verify_version(&run_dir, measured.exit_code)?;
                 } else {
@@ -1461,7 +1432,6 @@ mod tests {
             let programs = Programs {
                 lsp: Some(Path::new("lsp")),
                 load: Some(Path::new("load")),
-                validate: Some(Path::new("validate")),
                 ..Programs::default()
             };
             let program = program(scenario, Engine::Rust, &programs, None);
@@ -1469,24 +1439,15 @@ mod tests {
                 (_, Program::Missing(why)) if LAUNCHER.contains(&scenario.id) => {
                     assert!(why.starts_with("no launcher"), "{why}");
                 }
-                (Kind::Cli, Program::Run(bin, args)) if has_rust(scenario) => {
-                    assert_eq!(bin, Path::new("validate"));
-                    // `{rule}` is the workspace's rule file: none here.
-                    let expected: Vec<OsString> = scenario.args[1..]
-                        .iter()
-                        .map(|arg| OsString::from(if *arg == "{rule}" { "" } else { arg }))
-                        .collect();
-                    assert_eq!(args, expected, "{}", scenario.id);
-                }
                 (Kind::Lsp, Program::Run(_, args)) => assert_eq!(args, ["--stdio"]),
                 (Kind::Load, Program::Run(bin, args)) => {
                     assert_eq!(bin, Path::new("load"));
                     assert!(args.is_empty());
                 }
-                (Kind::Cli, Program::Missing(why)) if RUST_CLI.contains(&scenario.id) => {
+                (Kind::Cli, Program::Missing(why)) => {
+                    assert!(rust_cli(scenario), "{}", scenario.id);
                     assert_eq!(why, "no Rust CLI built");
                 }
-                (Kind::Cli, Program::Missing(why)) => assert!(why.starts_with("not measured")),
                 (kind, _) => panic!("{}: {kind:?}", scenario.id),
             }
         }

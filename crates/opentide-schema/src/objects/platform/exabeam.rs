@@ -1440,7 +1440,11 @@ pub fn advisories(rule: &Node) -> Vec<super::Advisory> {
         && window <= needed
     {
         let within = field(correlation, "within")
-            .map(|node| repr::node(node).trim_matches('\'').to_owned())
+            .map(|node| {
+                node.value
+                    .as_str()
+                    .map_or_else(|| repr::node(node), str::to_owned)
+            })
             .unwrap_or_default();
         found.push(super::Advisory {
             code: CORRELATION_WINDOW,

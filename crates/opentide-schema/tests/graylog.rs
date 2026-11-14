@@ -235,7 +235,7 @@ fn the_messages_are_the_oracles() {
     );
     assert_eq!(
         message("priority: high"),
-        ["'high' is not one of Informational, Low, Medium, High, Critical"]
+        ["\"high\" is not one of Informational, Low, Medium, High, Critical"]
     );
     assert_eq!(
         message("event_fields: {1: source}"),
@@ -259,7 +259,7 @@ fn the_messages_are_the_oracles() {
     );
     assert_eq!(
         message("aggregation: {condition: total() > 1}"),
-        ["'total' is not an aggregation function"]
+        ["\"total\" is not an aggregation function"]
     );
 }
 
@@ -332,7 +332,7 @@ fn a_bad_grace_period_fails() {
     assert!(value.is_none());
     assert_eq!(
         errors[0].message,
-        "Value error, Invalid duration format: 'soon'"
+        "Value error, Invalid duration format: \"soon\""
     );
     let (value, _) = convert(&block("grace_period: 0s"));
     assert_eq!(value.unwrap().grace_period.as_deref(), Some("0s"));
@@ -786,7 +786,7 @@ fn one_definition_title_per_enabled_block() {
     let (message, suggestion) = title_duplicate_message("Encoded PowerShell", &["b", "c"]);
     assert_eq!(
         message,
-        "Graylog event definition title 'Encoded PowerShell' is also the title of rule(s) b, c; \
+        "Graylog event definition title \"Encoded PowerShell\" is also the title of rule(s) b, c; \
          Graylog's alert list cannot tell them apart"
     );
     assert_eq!(

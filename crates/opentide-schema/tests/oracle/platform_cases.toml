@@ -8,6 +8,11 @@
 # differs names the `[[difference]]` that explains it.
 
 [[difference]]
+id = "messages-quote-values"
+reason = "Every message quotes a value with Rust's string formatting, in double quotes with Rust's escapes (`\"x\"`, `\"a\\u{a0}b\"`), and writes any other value as YAML and JSON write it (`null`, `true`, `1.5`), where the oracle used Python's `repr` (`'x'`, `'a\\xa0b'`, `None`, `True`). Codes, paths and the rest of each message are unchanged."
+changelog = "**Messages quote values the same way everywhere**"
+
+[[difference]]
 id = "yaml-1-2-booleans"
 reason = "As crates/opentide-schema/YAML.md `booleans`: YAML 1.2 has two booleans, `true` and `false`. `on`, `yes` and `no` are strings, so a block written `sentinel: on` is a string (the error's `input` is `on`, where PyYAML read `True`), and a boolean field written `no` or `yes` is `bool_type`, where PyYAML read a boolean."
 changelog = "**Tide objects are read as YAML 1.2**"
@@ -31,6 +36,11 @@ changelog = "**\"Did you mean\" suggests what a typo meant, not a word that shar
 id = "sentinel-durations"
 reason = "`scheduling.frequency`, `scheduling.lookback`, `grouping.alert.grouping_lookback` and a string `alert.suppression` must be what Sentinel's deploy converts to ISO 8601: ISO 8601 (`PT1H`, `P1D`, any case) or shorthand (`30m`, `1h10m`), around blanks; empty stays deploy's to judge. The oracle accepted `frequency: hourly` and failed at deploy; the Rust model refuses it as `value_error` on the field (UC-1.4 Known gap). A duration longer than deploy's `timedelta` holds (999999999 days, 23:59:59: `1000000000d`, `P99999999999D`, `P142857143W`) is refused the same way, where the oracle accepted it and deploy crashed with `OverflowError`. Digits are ASCII only."
 changelog = "**Sentinel durations are checked when the rule is validated**"
+
+[[difference]]
+id = "harfanglab-1-2"
+reason = "harfanglab-1.0 1.2 (#899, 0.25.0): a block is a Sigma rule or a YARA rule, not both, so `sigma` beside `yara` is `harfanglab_rule_kind` on the block, where the oracle (0.23.0) deployed the Sigma rule. A `yara` object is a whole `signature` or the decomposed `meta`, `strings` and `condition`; without a `signature` the three are required together, one `value_error` on the object naming the missing keys, where the oracle reported each as `missing`."
+changelog = "**A HarfangLab block is a Sigma rule or a YARA rule, not both**"
 
 [[case]]
 id = "platform-unknown-key"
@@ -240,6 +250,7 @@ configurations:
 
 [[case]]
 id = "platform-base-wrong-schema"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -300,6 +311,7 @@ configurations:
 
 [[case]]
 id = "platform-base-schema-quote"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -607,6 +619,7 @@ configurations:
 
 [[case]]
 id = "platform-sentinel-technique-unknown"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -880,6 +893,7 @@ configurations:
 
 [[case]]
 id = "platform-defender-schedule"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -902,6 +916,7 @@ configurations:
 
 [[case]]
 id = "platform-defender-schedule-int"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -1136,6 +1151,7 @@ configurations:
 
 [[case]]
 id = "platform-s1-type"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -1219,6 +1235,7 @@ configurations:
 [[case]]
 id = "platform-harfanglab-full"
 family = "rule"
+difference = ["harfanglab-1-2"]
 yaml = '''
 name: Rule
 metadata:
@@ -1320,6 +1337,7 @@ configurations:
 [[case]]
 id = "platform-harfanglab-yara-missing"
 family = "rule"
+difference = ["harfanglab-1-2"]
 yaml = '''
 name: Rule
 metadata:
@@ -1423,6 +1441,7 @@ configurations:
 
 [[case]]
 id = "platform-elastic-no-status"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule
@@ -2349,6 +2368,7 @@ configurations:
 
 [[case]]
 id = "platform-elastic-severity-mapping-fields"
+difference = ["messages-quote-values"]
 family = "rule"
 yaml = '''
 name: Rule

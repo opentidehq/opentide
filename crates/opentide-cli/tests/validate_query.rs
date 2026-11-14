@@ -466,6 +466,15 @@ fn google_secops_sections_and_yaral_files_are_checked_offline() {
     );
     assert_eq!(file.code, 0, "{}", file.stdout);
     assert_eq!(file.json()["queries"][0]["language"], "yaral");
+    // `.yl2` is YARA-L too, as 0.28.1 reads it.
+    std::fs::copy(ws.join("search.yaral"), ws.join("search.yl2")).unwrap();
+    let yl2 = opentide(
+        &ws,
+        &["--json", "validate", "query", "--file", "search.yl2"],
+        &[],
+    );
+    assert_eq!(yl2.code, 0, "{}", yl2.stdout);
+    assert_eq!(yl2.json()["queries"][0]["language"], "yaral");
 }
 
 #[test]
@@ -521,9 +530,18 @@ fn platforms_the_engine_cannot_parse_are_refused() {
     assert_eq!(tenant_only.code, 2);
     assert_eq!(failure_code(&document), "usage_missing_option");
     assert_eq!(document["failure"]["argument"], "--live");
+    // Every platform's queries are checked offline, on a tenant, or both
+    // (as in 0.28.1); `--live` on one checked offline only is unsupported.
     let neither = opentide(
         &ws,
-        &["--json", "validate", "query", "--platform", "harfanglab"],
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "harfanglab",
+            "--live",
+        ],
         &[],
     );
     let document = neither.json();

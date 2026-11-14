@@ -162,15 +162,12 @@ fn criteria_advisories(detection: &Node) -> Vec<Advisory> {
     found
 }
 
-/// Python's `str()` of a scalar, for `alert_severity`.
+/// `alert_severity` as text: a string as it is, any other value as YAML
+/// writes it (`true`, `1.5`, `null`), as every message writes a value.
 fn text(node: &Node) -> String {
     match &node.value {
         Value::Str(text) | Value::Datetime(text) => text.clone(),
-        Value::Bool(flag) => if *flag { "True" } else { "False" }.to_owned(),
-        Value::Int(integer) => integer.to_string(),
-        Value::Float(float) => crate::configuration::repr::float_text(*float),
-        Value::Null => "None".to_owned(),
-        Value::Seq(_) | Value::Map(_) => crate::configuration::repr::node(node),
+        _ => crate::configuration::repr::node(node),
     }
 }
 
@@ -354,7 +351,7 @@ mod tests {
         }}}});
         assert_eq!(
             found(&open)[0].message,
-            "the criteria catalogue lists no such field for target 'email'; GravityZone may \
+            "the criteria catalogue lists no such field for target \"email\"; GravityZone may \
              refuse it"
         );
     }

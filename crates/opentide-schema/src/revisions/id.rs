@@ -7,14 +7,14 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SchemaIdError {
     /// The text has no `::` between a family and a version.
-    #[error("invalid schema identifier: '{0}'")]
+    #[error("invalid schema identifier: {0:?}")]
     Invalid(String),
     /// The family is empty once trimmed.
     #[error("schema family must not be empty")]
     EmptyFamily,
     /// The major or minor version is not a number of ASCII digits that fits in
     /// 32 bits.
-    #[error("invalid schema version: '{0}'")]
+    #[error("invalid schema version: {0:?}")]
     Version(String),
 }
 

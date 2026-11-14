@@ -280,7 +280,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`graylog_version_unsupported`](#graylog_version_unsupported) | A Graylog tenant runs a version opentide does not deploy to. |
 | [`graylog_version_vulnerable`](#graylog_version_vulnerable) | A Graylog tenant runs a version affected by the access-token revocation flaw. |
 | [`harfanglab_rule_kind`](#harfanglab_rule_kind) | A HarfangLab block sets both sigma and yara; a block is one kind. |
-| [`harfanglab_yara_context`](#harfanglab_yara_context) | A HarfangLab YARA rule's meta context is not a comma-joined list, without blanks, of file, memory, file.pe, file.elf and file.macho. |
+| [`harfanglab_yara_context`](#harfanglab_yara_context) | A HarfangLab YARA rule's meta `context` is not a comma-joined list of the scan contexts HarfangLab uses. |
 | [`harfanglab_yara_form`](#harfanglab_yara_form) | A HarfangLab yara object sets signature together with decomposed keys (meta, strings, condition or imports). |
 | [`harfanglab_yara_import`](#harfanglab_yara_import) | A decomposed HarfangLab YARA imports entry is not a module the YARA language knows. |
 | [`harfanglab_yara_rule_name`](#harfanglab_yara_rule_name) | The YARA rule name deploy derives from the rule name is a YARA keyword or keeps a character other than an ASCII letter, digit or underscore. |
@@ -427,14 +427,14 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`yara_entrypoint_deprecated`](#yara_entrypoint_deprecated) | entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point. |
 | [`yara_hex_string`](#yara_hex_string) | A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives. |
 | [`yara_include`](#yara_include) | A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it. |
-| [`yara_meta_missing`](#yara_meta_missing) | A non-private YARA rule lacks a meta key the platform profile recommends. |
+| [`yara_meta_missing`](#yara_meta_missing) | A HarfangLab YARA rule has no meta `context`, which the HarfangLab profile recommends on every rule that is not private. |
 | [`yara_module_not_imported`](#yara_module_not_imported) | A YARA module field or function is used without importing its module. |
 | [`yara_module_unconfirmed`](#yara_module_unconfirmed) | The YARA module is known but not confirmed on the platform's agents. |
 | [`yara_number_out_of_range`](#yara_number_out_of_range) | A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts. |
 | [`yara_parse_error`](#yara_parse_error) | The YARA signature does not parse as libyara 4.5 reads it. |
 | [`yara_regexp`](#yara_regexp) | A YARA regular expression is invalid. |
 | [`yara_rule_identifier_conflict`](#yara_rule_identifier_conflict) | A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible. |
-| [`yara_signature_alias`](#yara_signature_alias) | A YARA signature is a YAML alias instead of text written out in its own block. |
+| [`yara_signature_alias`](#yara_signature_alias) | A `yara.signature` is a YAML alias of text anchored elsewhere in the file instead of YARA written in the block. |
 | [`yara_slow_pattern`](#yara_slow_pattern) | libyara warns that this YARA string or loop may slow scanning down. |
 | [`yara_string_modifier`](#yara_string_modifier) | libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range. |
 | [`yara_suspicious_expression`](#yara_suspicious_expression) | A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean. |
@@ -5091,19 +5091,35 @@ Change the file where the frame points, then run `opentide validate` again.
 
 ## harfanglab_yara_context
 
-A HarfangLab YARA rule's meta context is not a comma-joined list, without blanks, of file, memory, file.pe, file.elf and file.macho.
+A HarfangLab YARA rule's meta `context` is not a comma-joined list of the scan contexts HarfangLab uses.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by `opentide lint` (its `queries` check) on a HarfangLab rule (`harfanglab`). In the signature form, a rule that is not `private` sets meta `context` to something other than a comma-joined list, without blanks, of `file`, `memory`, `file.pe`, `file.elf`, and `file.macho` (`file,memory` and `file.pe,memory` are lists), or to a value that is not a string (`context = 1`). In the decomposed form, the `context` deploy writes from `meta.context` and `meta.os` is checked the same way. `opentide validate` does not fail on it. `file`, `memory`, and `file,memory` are the values HarfangLab's published rules use; `file.pe`, `file.elf`, and `file.macho` are what the decomposed form writes for `file`. No HarfangLab document defines the key, so another value may be accepted and never scanned.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  harfanglab:
+    yara:
+      signature: |
+        rule Cmd_String {
+          meta:
+            context = "disk"   # not a HarfangLab context
+          strings:
+            $a = "cmd.exe" ascii
+          condition:
+            $a
+        }
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Set `context` to where the agent should scan: `file`, `memory`, or both (`file,memory`), or a file type (`file.pe`, `file.elf`, `file.macho`), joined with commas and no spaces. In the decomposed form, list them under `meta.context`. Then run `opentide lint --check queries` again.
+
+```yaml
+          meta:
+            context = "file,memory"
+```
 
 ## harfanglab_yara_form
 
@@ -7563,19 +7579,39 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## yara_meta_missing
 
-A non-private YARA rule lacks a meta key the platform profile recommends.
+A HarfangLab YARA rule has no meta `context`, which the HarfangLab profile recommends on every rule that is not private.
 
-Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
+Severity: warning. Reported by `opentide lint` (its `queries` check) on a HarfangLab rule (`harfanglab`). In the signature form, a rule that is not `private` has no `meta:` section, or one without `context`. `opentide validate` does not fail on it. Deploy sends the signature verbatim and adds no meta, so the agent receives the rule without saying where to scan. In the decomposed form, an empty `meta.context: []` is the same finding: deploy then writes the rule with no `context` line.
 
 ### Example
 
-```text
-opentide lint --check queries
+```yaml
+configurations:
+  harfanglab:
+    yara:
+      signature: |
+        rule Cmd_String {
+          strings:
+            $a = "cmd.exe" ascii
+          condition:
+            $a
+        }
 ```
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Add a `meta:` section with `context` to the rule (`file`, `memory`, or `file,memory`), then run `opentide lint --check queries` again. A `private` helper rule needs none.
+
+```yaml
+        rule Cmd_String {
+          meta:
+            context = "file"
+          strings:
+            $a = "cmd.exe" ascii
+          condition:
+            $a
+        }
+```
 
 ## yara_module_not_imported
 
@@ -7675,19 +7711,37 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## yara_signature_alias
 
-A YARA signature is a YAML alias instead of text written out in its own block.
+A `yara.signature` is a YAML alias of text anchored elsewhere in the file instead of YARA written in the block.
 
-Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Severity: error. Reported by `opentide validate` (its `schema` check) on a rule whose `configurations.harfanglab.yara.signature` or `configurations.bitdefender.yara.signature` is `*name` (yara-1.0). What a block deploys must be readable in the block: an alias makes a change to the anchored text, under any other key, change the deployed rule too, and a signature in two platform blocks is checked once under each platform's profile. The YAML loader cannot tell an alias from text written in place, so `opentide validate` reads the file's node graph.
 
 ### Example
 
-```text
-opentide validate query
+```yaml
+configurations:
+  harfanglab:
+    yara:
+      signature: &shared_yara |
+        rule Cmd_String { condition: true }
+  bitdefender:
+    yara:
+      signature: *shared_yara
 ```
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Write the YARA text under each `signature` with a block scalar (`|`), then run `opentide validate` again.
+
+```yaml
+configurations:
+  bitdefender:
+    yara:
+      signature: |
+        rule Cmd_String {
+          condition:
+            true
+        }
+```
 
 ## yara_slow_pattern
 

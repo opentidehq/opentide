@@ -1087,8 +1087,12 @@ mod tests {
                 ("splunk", "tenant:es"),
                 ("splunk", "tenant:es"),
                 ("sysdig", "compile"),
+                ("sysdig", "compile"),
+                ("sysdig", "preview"),
                 ("sysdig", "preview"),
                 ("sysdig", "tenant:plain"),
+                ("sysdig", "tenant:plain"),
+                ("sysdig", "tenant:tagged"),
                 ("sysdig", "tenant:tagged")
             ]
         );

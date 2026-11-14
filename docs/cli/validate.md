@@ -49,14 +49,14 @@ opentide validate --check queries
 Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A note (a finding worth knowing that is not wrong) prints only with the global [`--verbose`](./global-options.md): without it the line still counts the notes and is followed by the same command with `--verbose`. `--json` and the reports always include notes, `validate query` prints them the same way, and `--watch` shows every finding. A typo in a vocabulary value:
 
 ```text illustrative
-error[vocab_unknown]: 'clearr' is not a TLP value
+error[vocab_unknown]: "clearr" is not a TLP value
   ╭─▶ objects/rules/sentinel-kql-rule.yaml:8:8
   │
 7 │   modified: 2026-01-02
 8 │   tlp: clearr
   │        ━━━━━━ not in tlp::1.0
   │
-  ╰─ help: did you mean 'clear'?
+  ╰─ help: did you mean "clear"?
 
 ✗ 1 error in 1 file · 3 objects checked · 0.9s
 → opentide explain vocab_unknown · how to fix it
@@ -88,7 +88,7 @@ Each entry of `report.issues` and `report.warnings` keeps its keys (`yaml_line` 
 | `line` | One-based line of what the frame points at. `null` when unknown. Not always `yaml_line + 1`: for a block value (a mapping or a list) it is the line of the key, where `yaml_line` is the block's first child; for a missing field it is the key of the mapping the field belongs in |
 | `column`, `end_column` | One-based columns of the value (of the key, for a block, a missing field or an unknown key); `end_column` is just past the last character, on `end_line`. Columns count Unicode code points (`🔥` is one column), not UTF-16 code units. Best effort, `null` when unknown |
 | `end_line` | One-based line of the span's last character: the span runs from (`line`, `column`) up to (`end_line`, `end_column`). Equal to `line` for a span on one line, which is every finding but a `queries` finding over several lines of a query (a block scalar). A span whose last character is a line break (a KQL bracket left open at the end of a line) ends on that line. `null` when `line` is |
-| `help` | What to do, in prose (`did you mean 'clear'?`), or `null` |
+| `help` | What to do, in prose (`did you mean "clear"?`), or `null` |
 | `fix` | `null`, or `{ "safe": bool, "edits": [{ "line", "column", "end_line", "end_column", "replacement" }] }`: replace the text from (`line`, `column`) up to (`end_line`, `end_column`). Every suggested value gets a fix. `safe` is `true` only when the two values spell the same word (they differ in case, spaces, `-` or `_`) and neither has a digit, so an ATT&CK id, a UUID or `clearr` → `clear` is left for a person or an agent to confirm. A reference fix is never safe |
 | `explain` | `opentide explain <code>` |
 
@@ -126,7 +126,7 @@ opentide validate --fix
 fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'Clear' → 'clear'
 fixed: objects/threats/simulated-actor.yaml:9:8 'Clear' → 'clear'
 
-error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'
+error[invalid_ref]: Unknown objective or signal reference "00000000-0000-4000-8002-DEADBEEF0000"
    ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18
    │
 16 │ techniques: [T1059]
@@ -379,7 +379,7 @@ opentide validate query --platform splunk --live --strategy RELEASE --wide
 | `--platform` | The platform whose queries to check. Offline, default: every platform the engine parses. Required with `--live` (exit `2`, `failure.argument` `--platform`, without it) |
 | `--live` | Check the queries on the platform's tenants (needs credentials) |
 | `--changed` | Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (see [Which rules are checked](#which-rules-are-checked)) |
-| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`) is one query in that language, checked offline. Repeatable |
+| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`, `.yar`, `.yara`) is one query in that language, checked offline. Repeatable |
 | `--uuid` | Check only the rule with this UUID. Repeatable |
 | `--queries` | Offline: how a rejected query is reported, `error` (the default) or `warn`, as in [`validate`](#queries). `off` exits `2`: it would check nothing. Refused with `--live` |
 | `--strict` | Offline: fail on warnings too (with `--queries warn`). Refused with `--live` |
@@ -407,7 +407,7 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 
 Google SecOps's YARA-L is checked offline by the analysis engine, the block's sections as the one rule deploy assembles (yara-l-1.0's `yaral_*` codes), and a `.yaral` or `.yl2` file with `--file`. `--live` sends each rule's assembled text to `verifyRuleText`, Google's compiler, which resolves the instance's reference lists and data tables and creates nothing. An `ERROR` diagnostic fails the rule as `google_secops_compile_error`, a `WARNING` is `google_secops_compile_warning`, each placed on the section key and line it falls in (`configurations.google_secops.events line 3, column 5`), and a block `run_frequency` Google does not allow for the rule is `google_secops_run_frequency_not_allowed`.
 
-SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. HarfangLab is never validated by `validate query`, and Sysdig, CrowdStrike and Bitdefender only offline: `--platform sysdig --live`, `--platform crowdstrike --live` and `--platform bitdefender --live` report `supported: false`, because Sysdig Secure has no rule preview, opentide calls no CrowdStrike query check and GravityZone has no rule check (see [Supported platforms](#supported-platforms)). The offline CQL check never reads the tenant: a field, saved search, lookup file or repository is never reported unknown.
+SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. Sysdig, CrowdStrike, HarfangLab and Bitdefender are validated only offline: `--platform sysdig --live`, `--platform crowdstrike --live`, `--platform harfanglab --live` and `--platform bitdefender --live` report `supported: false`, because Sysdig Secure has no rule preview, opentide calls no CrowdStrike query check, HarfangLab has no YARA dry run and GravityZone has no rule check (see [Supported platforms](#supported-platforms)). `--platform harfanglab` checks YARA as libyara 4.5 compiles it, under the HarfangLab profile: `yara.signature`, the rule the decomposed form assembles, and a `.yar` or `.yara` file. The offline CQL check never reads the tenant: a field, saved search, lookup file or repository is never reported unknown.
 
 ```bash
 opentide --json validate query --platform sentinel_one
@@ -595,7 +595,7 @@ Live query validation works on **eight platforms**; the offline engine on nine, 
 | `carbon_black_cloud` (Lucene) | ✅ | ✅ |
 | `sysdig` (Falco) | ❌ `supported: false` | ✅ |
 | `crowdstrike` (CQL) | ❌ `supported: false` | ✅ |
-| `harfanglab` | ❌ `supported: false` | ❌ |
+| `harfanglab` (YARA) | ❌ `supported: false` | ✅ |
 | `bitdefender` (YARA) | ❌ `supported: false` | ✅ YARA |
 | `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ❌ |
 | `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ✅ YARA-L |
@@ -635,16 +635,16 @@ The same Elasticsearch and Kibana checks run before every `opentide deploy` to E
 
 A rule that fails is not created or updated, and the command exits `1`. Later rules are still checked. An index pattern that matches nothing still deploys, with a warning.
 
-HarfangLab (Sigma or YARA) returns unsupported, and so does `--live` for CrowdStrike (CQL, checked offline only) and Sysdig (Falco, which has no rule preview) — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
+HarfangLab (YARA, checked offline only), Bitdefender (GravityZone has no dry run; its YARA is checked offline), CrowdStrike (CQL, checked offline only) and Sysdig (Falco, which has no rule preview) return unsupported for `--live` — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
 
 The result is a normal failure envelope, so `--json` shape does not change between
-supported and unsupported platforms:
+supported and unsupported platforms (an illustration: the docs check never runs `--live`):
 
 ```bash
-opentide --json validate query --platform harfanglab
+opentide --json validate query --platform harfanglab --live
 ```
 
-```json output-of="opentide --json validate query --platform harfanglab" exit=1
+```json illustrative
 {
   "platform": "harfanglab",
   "valid": null,

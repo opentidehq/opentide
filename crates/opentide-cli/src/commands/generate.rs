@@ -1426,7 +1426,7 @@ mod tests {
         assert_eq!(unknown.outcome.exit_code, 2);
         assert_eq!(
             unknown.outcome.message,
-            "Unknown TLP 'redd'. Pass one of: clear, green, amber, amber+strict, red."
+            "Unknown TLP \"redd\". Pass one of: clear, green, amber, amber+strict, red."
         );
         let failure = unknown.outcome.failure.unwrap();
         assert_eq!(failure.code, "usage_invalid_choice");
