@@ -150,7 +150,8 @@ jobs:
         run: python3 scripts/ci/changes.py
 
   # Each step when its inputs change: ruff, ty (on the checked-in stubs of
-  # `_native`: no Rust build), the sdist and twine when a Python file does;
+  # `_native`: no Rust build) when a Python file does (twine checks the sdist
+  # in the release tier);
   # actionlint and the CI contracts (tests/test_ci) when a workflow or they do;
   # the skills; the engine's invariant scripts when a crate does.
   lint:
@@ -185,12 +186,6 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev --no-install-project
 
-      # The sdist first: hatch-vcs writes src/opentide/_version.py, which ty
-      # resolves; the engine is compiled for a wheel only.
-      - name: Build the sdist
-        if: env.PYLINT == 'true'
-        run: uv build --sdist
-
       - name: Ruff check
         if: env.PYLINT == 'true'
         run: uv run --no-sync ruff check src/opentide tests scripts --output-format github
@@ -211,10 +206,6 @@ jobs:
         run: |
           GOBIN="${RUNNER_TEMP}/bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
           "${RUNNER_TEMP}/bin/actionlint" -color
-
-      - name: Twine check
-        if: env.PYLINT == 'true'
-        run: uvx twine check dist/*
 
       - name: Engine invariants (I/O-free crates, names)
         run: |
@@ -300,13 +291,15 @@ jobs:
           path: ${{ env.SCCACHE_DIR }}
           key: sccache-engine-check-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
-  # The `_native` extension, as hatch_build.py builds it, for the Python
-  # jobs: a job of its own, so they start after this short build instead of
-  # after the tests (a push's Python job waited 8.4 min for the build, its
-  # tests included). Its own compiler cache family: the extension's features
-  # and PYO3_BUILD_EXTENSION_MODULE are not the tests'.
+  # opentide's wheel, built by maturin as a release's is (#1157), for the
+  # Python jobs, which install it without compiling: a job of its own, so they
+  # start after this short build instead of after the tests (a push's Python
+  # job waited 8.4 min for the build, its tests included). Its own compiler
+  # cache family: maturin's environment and the extension's features are not
+  # the tests'. A `linux` tag (no manylinux audit): it is installed on this
+  # runner image only.
   native:
-    name: Build the _native extension
+    name: Build the opentide wheel
     needs: changes
     if: needs.changes.outputs.native == 'true' || needs.changes.outputs.mode == 'nightly'
     runs-on: ubuntu-latest
@@ -322,7 +315,6 @@ jobs:
       # One interpreter for PyO3's configuration: the binding is abi3, so the
       # extension serves every Python from 3.10.
       PYO3_PYTHON: /usr/bin/python3
-      PYO3_BUILD_EXTENSION_MODULE: "1"
       RUSTC_WRAPPER: sccache
       SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 2G
@@ -337,7 +329,8 @@ jobs:
 
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
-          tool: sccache@0.19.0
+          # maturin as a prebuilt binary: `pipx run` took 7 s to install it.
+          tool: sccache@0.19.0,maturin@1.16.0
 
       - name: Install mold
         run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
@@ -351,20 +344,22 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-native-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-native-${{ hashFiles('rust-toolchain.toml') }}-
+          key: sccache-native-v2-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-native-v2-${{ hashFiles('rust-toolchain.toml') }}-
 
-      - name: Build the _native extension
-        run: |
-          cargo build --locked -p opentide-native --lib
-          mkdir -p "${RUNNER_TEMP}/native"
-          cp target/debug/lib_native.so "${RUNNER_TEMP}/native/_native.abi3.so"
+      # `v2`: maturin's compiles (its environment is in their sccache keys)
+      # replaced cargo's; bump it with the build's settings, or the week's
+      # copy, already saved, keeps the old compiles and none is saved: #1157's
+      # wheel took 94 s to compile against the week's copy of cargo's.
+      - name: Build the opentide wheel
+        run: maturin build --locked --profile dev --compatibility linux --out "${RUNNER_TEMP}/native"
 
-      - name: Upload the _native extension
+      - name: Upload the opentide wheel
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native
-          path: ${{ runner.temp }}/native/_native.abi3.so
+          path: ${{ runner.temp }}/native/opentide-*.whl
+          if-no-files-found: error
           retention-days: 3
 
       - name: Compiler cache statistics
@@ -376,7 +371,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-native-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          key: sccache-native-v2-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
   # The gate's one build of the tests, and the Rust tests run where they were
   # built: the affected crates' tests, xtask and the language server with one
@@ -569,7 +564,9 @@ jobs:
       - name: cargo nextest (profile ci)
         env:
           OPENTIDE_PYTHON: python
-          # EXPERIMENT (#1141): are the tests wait-bound?
+          # Twice the runner's four cores: many tests wait on the processes and
+          # servers they start (#1141, a one-line opentide-yara change: 85 s at
+          # eight threads; 90-120 s at four, by the runner's CPU).
           NEXTEST_TEST_THREADS: "8"
         run: |
           read -ra pkg_args <<< "${PACKAGES}"
@@ -668,9 +665,9 @@ jobs:
   # The Python package as a package (Python is the packaging layer): its
   # surface (the SDK, the models, the plugin API, the console script) and the
   # console script end to end (CLI, MCP and LSP over stdio), on the build's
-  # `_native` extension, in ONE pytest run with the coverage gate. On a pull
+  # opentide wheel (abi3), in ONE pytest run with the coverage gate. On a pull
   # request only when the Python surface changes (src/opentide, the binding,
-  # the facade's API, pyproject, hatch_build, uv.lock, tests/ but test_ci and
+  # the facade's API, pyproject, uv.lock, tests/ but test_ci and
   # the wheel-less docs tests): a Rust-only change builds no wheel and runs no
   # pytest, the Rust tests cover it. Every push runs it; a release pull
   # request and the nightly add Python 3.10-3.13 and the `full_set` E2E tests.
@@ -685,7 +682,10 @@ jobs:
       checks: write
       code-quality: write
     env:
-      OPENTIDE_ENGINE_PREBUILT: ${{ github.workspace }}/.native/_native.abi3.so
+      # opentide is the build's wheel: `uv run` builds nothing, and the
+      # tests that install opentide's wheel take it.
+      UV_NO_SYNC: "1"
+      OPENTIDE_TEST_WHEELHOUSE: ${{ github.workspace }}/.native
     steps:
       # The pull request's head commit (not the merge commit), so coverage
       # line numbers map to the diff.
@@ -714,10 +714,15 @@ jobs:
           name: native
           path: .native
 
-      # hatch_build.py installs the prebuilt extension (OPENTIDE_ENGINE_PREBUILT):
-      # nothing compiles.
-      - name: Install dependencies
-        run: uv sync --group dev
+      # The dependencies, then opentide from the build's wheel: nothing
+      # compiles (UV_NO_SYNC keeps `uv run` from building the project).
+      - name: Install dependencies and the build's wheel
+        run: |
+          uv sync --group dev --no-install-project
+          uv pip install --no-deps .native/opentide-*.whl
+          # The tests import opentide from src/ (tests/conftest.py), as from an
+          # editable install: the wheel's module goes beside the sources.
+          unzip -j -o .native/opentide-*.whl 'opentide/_native.abi3.so' -d src/opentide
 
       # `-n 6` on the runner's four cores: the E2E tests wait on the
       # subprocesses they start (measured on one E2E shard: -n 4 62 s, -n 6
@@ -776,7 +781,10 @@ jobs:
     permissions:
       contents: read
     env:
-      OPENTIDE_ENGINE_PREBUILT: ${{ github.workspace }}/.native/_native.abi3.so
+      # opentide is the build's wheel: `uv run` builds nothing, and the
+      # tests that install opentide's wheel take it.
+      UV_NO_SYNC: "1"
+      OPENTIDE_TEST_WHEELHOUSE: ${{ github.workspace }}/.native
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -796,8 +804,13 @@ jobs:
           name: native
           path: .native
 
-      - name: Install dependencies
-        run: uv sync --group dev
+      - name: Install dependencies and the build's wheel
+        run: |
+          uv sync --group dev --no-install-project
+          uv pip install --no-deps .native/opentide-*.whl
+          # The tests import opentide from src/ (tests/conftest.py), as from an
+          # editable install: the wheel's module goes beside the sources.
+          unzip -j -o .native/opentide-*.whl 'opentide/_native.abi3.so' -d src/opentide
 
       - name: Install GitLab CI linters
         run: |
@@ -1194,7 +1207,8 @@ jobs:
   # target, then each installed on its OS as a user installs it.
   # ---------------------------------------------------------------------------
 
-  # The sdist, for its build smoke test (`lint` checks it with twine).
+  # The sdist (`maturin sdist`, as publish.yml builds it), for its build smoke
+  # test, and twine's check of its metadata.
   sdist:
     name: Sdist
     needs: changes
@@ -1206,13 +1220,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          enable-cache: false
       - name: Build sdist
-        run: uv build --sdist
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: v1.16.0
+          command: sdist
+          args: --out dist
+      - name: Twine check
+        run: pipx run twine check dist/*
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sdist
@@ -1254,8 +1270,8 @@ jobs:
   # which publish.yml calls too), at a development version of the
   # workspace's (PyPI X.Y.Z.devN, npm X.Y.Z-dev.N), kept 14 days as this run's
   # artifacts (docs/internal/publishing.md, "Testing a build without
-  # publishing"). Each wheel is installed and run on its platform as it is
-  # built ([tool.cibuildwheel]).
+  # publishing"). Each wheel is installed and run on its own platform
+  # (build-packages.yml's wheel-smoke).
   packages:
     name: Installable packages
     needs: changes
@@ -1494,7 +1510,7 @@ jobs:
           retention-days: 14
 
   # The other supported Pythons, the oldest (3.10) included, on the build's
-  # abi3 extension: `python`'s run without coverage.
+  # abi3 wheel: `python`'s run without coverage.
   test-full:
     name: Python (${{ matrix.python-version }})
     needs: [changes, native]
@@ -1508,7 +1524,10 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     env:
-      OPENTIDE_ENGINE_PREBUILT: ${{ github.workspace }}/.native/_native.abi3.so
+      # opentide is the build's wheel: `uv run` builds nothing, and the
+      # tests that install opentide's wheel take it.
+      UV_NO_SYNC: "1"
+      OPENTIDE_TEST_WHEELHOUSE: ${{ github.workspace }}/.native
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1528,8 +1547,13 @@ jobs:
         with:
           name: native
           path: .native
-      - name: Install dependencies
-        run: uv sync --group dev
+      - name: Install dependencies and the build's wheel
+        run: |
+          uv sync --group dev --no-install-project
+          uv pip install --no-deps .native/opentide-*.whl
+          # The tests import opentide from src/ (tests/conftest.py), as from an
+          # editable install: the wheel's module goes beside the sources.
+          unzip -j -o .native/opentide-*.whl 'opentide/_native.abi3.so' -d src/opentide
       - name: Pytest
         run: uv run pytest tests/ --ignore=tests/test_ci --no-cov -q -n 4 -m "not full_set and not gitlab_ci_lint"
 
@@ -1545,8 +1569,10 @@ jobs:
     permissions:
       contents: read
     env:
-      OPENTIDE_ENGINE_PREBUILT: ${{ github.workspace }}/.native/_native.abi3.so
-      PYO3_PYTHON: /usr/bin/python3
+      # opentide is the build's wheel: `uv run` builds nothing, and the
+      # tests that install opentide's wheel take it.
+      UV_NO_SYNC: "1"
+      OPENTIDE_TEST_WHEELHOUSE: ${{ github.workspace }}/.native
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1565,8 +1591,13 @@ jobs:
         with:
           name: native
           path: .native
-      - name: Install dependencies
-        run: uv sync --group dev
+      - name: Install dependencies and the build's wheel
+        run: |
+          uv sync --group dev --no-install-project
+          uv pip install --no-deps .native/opentide-*.whl
+          # The tests import opentide from src/ (tests/conftest.py), as from an
+          # editable install: the wheel's module goes beside the sources.
+          unzip -j -o .native/opentide-*.whl 'opentide/_native.abi3.so' -d src/opentide
       - name: E2E pytest (full set)
         run: uv run pytest tests/ -m full_set -q --no-cov
 
@@ -2259,7 +2290,7 @@ jobs:
         with:
           python-version: "3.14"
 
-      # `uv sync` compiles the analysis engine (bindings/python/, Rust) into opentide (hatch_build.py).
+      # `uv sync` compiles the analysis engine (bindings/python/, Rust) into opentide (maturin).
       # rustup installs the toolchain rust-toolchain.toml pins. No compiler cache:
       # macOS's and Windows's (a gigabyte each) crowded the Linux families every
       # pull request restores out of the 10 GB GitHub keeps (#841).

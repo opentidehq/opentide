@@ -59,23 +59,18 @@ pub struct HarfangLabSigmaLogSource {
 #[from_node(union)]
 pub enum SelectionValue {
     /// A string.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     Text(String),
     /// A Sigma list.
-    #[from_node(tag = "list[str]")]
     #[schemars(description = "")]
     List(Vec<String>),
     /// A boolean.
-    #[from_node(tag = "bool")]
     #[schemars(description = "")]
     Bool(bool),
     /// An integer.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Int(i64),
     /// A number.
-    #[from_node(tag = "float")]
     #[schemars(
         description = "",
         schema_with = "crate::objects::platform::number_schema"
@@ -288,10 +283,7 @@ fn garde_decomposed_form(value: &HarfangLabYara, _pins: &Pins) -> garde::Result 
     if missing.is_empty() {
         Ok(())
     } else {
-        Err(garde::Error::new(format!(
-            "Value error, {}",
-            decomposed_form_message(&missing)
-        )))
+        Err(garde::Error::new(decomposed_form_message(&missing)))
     }
 }
 
@@ -362,6 +354,6 @@ pub fn rule_name(name: &str, block: Option<&HarfangLabConfig>) -> Option<String>
     Some(format!(
         "DetectionRule validation failed with code(s): {} (rule {}: {problem})",
         yara::codes::RULE_NAME,
-        yara::python_repr(name)
+        crate::vocab::quote(name)
     ))
 }

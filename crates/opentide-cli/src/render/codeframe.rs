@@ -86,24 +86,6 @@ fn gutter_style() -> Style {
     Style::new("blue")
 }
 
-/// Whitespace as Python's `str.strip` sees it: Unicode's, plus the four
-/// separator controls U+001C to U+001F.
-fn is_space(ch: char) -> bool {
-    ch.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&ch)
-}
-
-fn rstrip(text: &str) -> &str {
-    text.trim_end_matches(is_space)
-}
-
-/// Characters `start..end` of `text`, clamped as a Python slice is.
-fn char_slice(text: &str, start: usize, end: usize) -> String {
-    if end <= start {
-        return String::new();
-    }
-    text.chars().skip(start).take(end - start).collect()
-}
-
 /// What a path keeps unencoded in a link or a SARIF URI: letters, digits,
 /// `_.-~` and the `/` separator, as `urllib.parse.quote(path)` keeps them.
 pub const PATH_SAFE: &AsciiSet = &NON_ALPHANUMERIC
@@ -592,7 +574,7 @@ impl Frames {
             };
             let highlighted = engine_reference(&diagnostic.code).is_some();
             let mut source_text = |text: &str, line_number: usize| -> Text {
-                let mut line = Text::plain(&format!(" {}", rstrip(text)));
+                let mut line = Text::plain(&format!(" {}", text.trim_end()));
                 if highlighted && let (Some(styles), Some(path)) = (styles.as_deref_mut(), &file) {
                     for (column, end_column, span_style) in
                         styles.styles(path, line_number, &mut *sources)
@@ -602,8 +584,7 @@ impl Frames {
                 }
                 line
             };
-            if let Some(previous) = previous.filter(|text| !text.trim_matches(is_space).is_empty())
-            {
+            if let Some(previous) = previous.filter(|text| !text.trim().is_empty()) {
                 let mut row = gutter(Some(number - 1));
                 row.append_text(&source_text(&previous, number - 1));
                 lines.push(row);
@@ -615,11 +596,16 @@ impl Frames {
                 let end = diagnostic
                     .single_line_end()
                     .unwrap_or(column.saturating_add(1));
-                let marked = char_slice(source, column.saturating_sub(1), end.saturating_sub(1));
+                let start = column.saturating_sub(1);
+                let marked: String = source
+                    .chars()
+                    .skip(start)
+                    .take(end.saturating_sub(1).saturating_sub(start))
+                    .collect();
                 // Measured as the terminal shows the row: the source starts one
                 // cell after the gutter, and a tab reaches the next stop of 8.
                 let from = gutter(None).cell_len() + 1;
-                let prefix = char_slice(source, 0, column.saturating_sub(1));
+                let prefix: String = source.chars().take(start).collect();
                 let span_start = expanded_end(&prefix, from);
                 let length = if marked.is_empty() {
                     end.saturating_sub(column)

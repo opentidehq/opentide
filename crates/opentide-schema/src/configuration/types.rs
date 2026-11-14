@@ -10,7 +10,7 @@ use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::Serialize;
 
 use crate::error::ErrorKind;
-use crate::from_node::{Context, FromNode};
+use crate::from_node::{Context, FromNode, Shape};
 use crate::node::{Node, Value};
 
 /// `string_type`, then `string_too_short` for an empty string.
@@ -30,6 +30,10 @@ impl FromNode for NonEmptyString {
             return None;
         }
         Some(Self(text))
+    }
+
+    fn shape() -> Shape {
+        Shape::String
     }
 }
 
@@ -65,6 +69,10 @@ impl<T: FromNode> FromNode for NonEmptyList<T> {
         }
         Some(Self(items))
     }
+
+    fn shape() -> Shape {
+        Vec::<T>::shape()
+    }
 }
 
 impl<T: JsonSchema> JsonSchema for NonEmptyList<T> {
@@ -99,6 +107,10 @@ impl FromNode for PositiveFloat {
             node,
         );
         None
+    }
+
+    fn shape() -> Shape {
+        Shape::Number
     }
 }
 
@@ -159,7 +171,7 @@ impl<P: Pattern> FromNode for Matching<P> {
         if !P::regex().is_match(&text) {
             cx.error_with(
                 ErrorKind::InvalidValue("string_pattern_mismatch"),
-                format!("String should match pattern '{}'", P::PATTERN),
+                format!("String should match pattern {:?}", P::PATTERN),
                 node,
                 &[("pattern", P::PATTERN.to_owned())],
             );
@@ -169,6 +181,10 @@ impl<P: Pattern> FromNode for Matching<P> {
             text,
             marker: std::marker::PhantomData,
         })
+    }
+
+    fn shape() -> Shape {
+        Shape::String
     }
 }
 
@@ -380,13 +396,14 @@ impl FromNode for StatusStrategyName {
         let allowed: Vec<&str> = StatusStrategy::ALL.iter().map(|m| m.name()).collect();
         cx.error(
             ErrorKind::InvalidValue("value_error"),
-            format!(
-                "Value error, strategy must be one of {}",
-                allowed.join(", ")
-            ),
+            format!("strategy must be one of {}", allowed.join(", ")),
             node,
         );
         None
+    }
+
+    fn shape() -> Shape {
+        Shape::String
     }
 }
 
@@ -420,12 +437,16 @@ impl FromNode for RunStrategyName {
             _ => {
                 cx.error(
                     ErrorKind::InvalidValue("value_error"),
-                    "Value error, a tenant strategy must be PREVIEW or RELEASE",
+                    "a tenant strategy must be PREVIEW or RELEASE",
                     node,
                 );
                 None
             }
         }
+    }
+
+    fn shape() -> Shape {
+        Shape::String
     }
 }
 
@@ -475,7 +496,7 @@ mod tests {
         assert_eq!(
             errors::<EnvPlaceholder>("\"x\""),
             [(
-                "String should match pattern '^\\$'".to_owned(),
+                "String should match pattern \"^\\\\$\"".to_owned(),
                 "string_pattern_mismatch"
             )]
         );
@@ -492,7 +513,7 @@ mod tests {
         assert!(errors::<StatusStrategyName>("\"PREVIEW\"").is_empty());
         assert_eq!(
             errors::<StatusStrategyName>("\"preview\"")[0].0,
-            "Value error, strategy must be one of INERT, RELEASE, PREVIEW, DISABLEMENT, \
+            "strategy must be one of INERT, RELEASE, PREVIEW, DISABLEMENT, \
              DELETION, UNIVERSAL"
         );
         assert_eq!(
@@ -505,7 +526,7 @@ mod tests {
         assert!(errors::<RunStrategyName>("\" release \"").is_empty());
         assert_eq!(
             errors::<RunStrategyName>("\"DELETION\"")[0].0,
-            "Value error, a tenant strategy must be PREVIEW or RELEASE"
+            "a tenant strategy must be PREVIEW or RELEASE"
         );
     }
 }

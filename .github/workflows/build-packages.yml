@@ -11,8 +11,9 @@
 #
 # Artifacts:
 #
-#   - wheels-<platform>: one cp310-abi3 wheel (linux-x64, linux-arm64,
-#     macos-x64, macos-arm64, windows-x64, windows-arm64);
+#   - wheels-<platform>: one cp310-abi3 wheel, built by maturin (linux-x64,
+#     linux-arm64, macos-x64, macos-arm64, windows-x64, windows-arm64), each
+#     installed and run on its own OS before the build passes (`wheel-smoke`);
 #   - npm-<platform>: @opentide/opentide's tarball and the native package of
 #     one platform (linux-x64-gnu, linux-arm64-gnu, darwin-x64, darwin-arm64,
 #     win32-x64-msvc, win32-arm64-msvc), for `npm install ./opentide-opentide-*.tgz`;
@@ -27,7 +28,9 @@
 # move or name code nobody checked, is refused.
 #
 # Nothing here publishes or holds a token: `contents: read`, no OIDC token, no
-# secret, and no cache restored (a release builds from nothing).
+# secret, and no compiler cache for a release (a release builds from
+# nothing): only a development build (ci.yml, no pypi-version) compiles
+# through sccache.
 name: Build packages
 
 on:
@@ -110,19 +113,118 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "### wheels ${pypi}, npm ${npm} (the crates: ${crates})" >> "$GITHUB_STEP_SUMMARY"
 
-  # One cp310-abi3 wheel per platform, built with cibuildwheel and hatchling
-  # (hatch_build.py compiles the engine), each installed and run before it is
-  # kept ([tool.cibuildwheel] in pyproject.toml). manylinux_2_28 only: no
-  # musllinux (the maintainer's decision; docs/internal/publishing.md).
+  # One cp310-abi3 wheel per platform, built by maturin (PyO3/maturin-action;
+  # pyproject.toml's [tool.maturin]) with cargo's release profile, at the
+  # build's version. Linux builds in the manylinux_2_28 images, aarch64
+  # cross-compiled (rust-cross's image: no QEMU); macOS and Windows build on
+  # the runner, x86_64-apple-darwin and aarch64-pc-windows-msvc
+  # cross-compiled. Each wheel is then installed and run on its own OS
+  # (`wheel-smoke`). manylinux_2_28 only: no musllinux (the maintainer's
+  # decision; docs/internal/publishing.md).
   wheels:
     name: Wheel (${{ matrix.platform }})
     needs: versions
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
+    timeout-minutes: 90
     strategy:
       fail-fast: true
       matrix:
-        # Native runners: the engine is compiled for the machine that builds it.
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+            target: x86_64-unknown-linux-gnu
+            tag: manylinux_2_28_x86_64
+          - os: ubuntu-latest
+            platform: linux-arm64
+            target: aarch64-unknown-linux-gnu
+            tag: manylinux_2_28_aarch64
+          # rustc's floor for x86_64-apple-darwin is 10.12, maturin's default.
+          - os: macos-latest
+            platform: macos-x64
+            target: x86_64-apple-darwin
+            tag: macosx_10_12_x86_64
+          - os: macos-latest
+            platform: macos-arm64
+            target: aarch64-apple-darwin
+            tag: macosx_11_0_arm64
+          - os: windows-latest
+            platform: windows-x64
+            target: x86_64-pc-windows-msvc
+            tag: win_amd64
+          - os: windows-latest
+            platform: windows-arm64
+            target: aarch64-pc-windows-msvc
+            tag: win_arm64
+    env:
+      PYPI_VERSION: ${{ needs.versions.outputs.pypi }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.revision }}
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      # maturin takes the wheel's version from bindings/python/'s crate: a
+      # candidate's (X.Y.ZrcN) or a development build's (X.Y.Z.devN) is
+      # written there and in the lock, in this checkout only
+      # (scripts/engine/release.py pypi-version).
+      - name: The wheel at the build's version
+        shell: bash
+        run: python scripts/engine/release.py pypi-version "${PYPI_VERSION}"
+
+      # rust-toolchain.toml's release, which maturin-action installs (in the
+      # manylinux container on Linux) and sets as the directory's override,
+      # so rustup installs nothing mid-build. The compiler cache only for a
+      # development build (ci.yml): a release (publish.yml) builds from
+      # nothing.
+      - name: Build the wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: v1.16.0
+          command: build
+          target: ${{ matrix.target }}
+          manylinux: "2_28"
+          sccache: ${{ inputs.pypi-version == '' }}
+          args: --locked --out wheelhouse
+
+      # One wheel, tagged cp310-abi3 for the platform, at the build's version.
+      - name: The wheel's name
+        shell: bash
+        env:
+          TAG: ${{ matrix.tag }}
+        run: |
+          set -euo pipefail
+          ls -l wheelhouse
+          expected="wheelhouse/opentide-${PYPI_VERSION}-cp310-abi3-${TAG}.whl"
+          found=(wheelhouse/*.whl)
+          if [[ "${#found[@]}" -ne 1 || "${found[0]}" != "${expected}" ]]; then
+            echo "::error::expected ${expected}, found ${found[*]}" >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheels-${{ matrix.platform }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+  # Each wheel installed the way a user installs it, on its own OS and
+  # architecture (the build cross-compiles three of them): the module's
+  # version, the engine (check_query), the package's smoke
+  # (scripts/build/smoke_package.py: `opentide --version`, its requirements,
+  # validate on the tide corpus, the SDK) and doctor.
+  wheel-smoke:
+    name: Wheel smoke (${{ matrix.platform }})
+    needs: [versions, wheels]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
         include:
           - os: ubuntu-latest
             platform: linux-x64
@@ -137,80 +239,36 @@ jobs:
           - os: windows-11-arm
             platform: windows-arm64
     env:
-      # The build's version; the Linux containers build from a copy of the checkout.
-      SETUPTOOLS_SCM_PRETEND_VERSION: ${{ needs.versions.outputs.pypi }}
+      PYPI_VERSION: ${{ needs.versions.outputs.pypi }}
     steps:
+      # scripts/build/smoke_package.py and the tide corpus, at the commit built.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ inputs.revision }}
-
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-
-      # The other images carry rustup; this one may not. The release itself
-      # comes from `Set up Rust` below.
-      - name: Rust on Windows on Arm
-        if: matrix.os == 'windows-11-arm'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $true
-          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
-            $installer = Join-Path $env:RUNNER_TEMP 'rustup-init.exe'
-            Invoke-WebRequest -Uri 'https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe' -OutFile $installer
-            & $installer -y --profile minimal --default-toolchain none
-            Join-Path $env:USERPROFILE '.cargo\bin' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-          }
-
-      # macOS and Windows build on the runner: rust-toolchain.toml's release,
-      # minimal, named in RUSTUP_TOOLCHAIN for cibuildwheel's build, so that
-      # rustup installs nothing mid-build (scripts/build/install-rust.sh).
-      # The Linux containers install it in [tool.cibuildwheel.linux] before-all.
-      - name: Set up Rust
-        if: runner.os != 'Linux'
-        shell: bash
-        run: scripts/build/install-rust.sh
-
-      - name: Build wheels
-        run: |
-          python -m pip install cibuildwheel==4.3.5
-          python -m cibuildwheel --output-dir wheelhouse
-
-      # cibuildwheel does not test the win_arm64 wheel ([tool.cibuildwheel]
-      # test-skip): install it the way a user does and check the engine, the
-      # package's smoke (scripts/build/smoke_package.py: the version, its
-      # requirements, validate on the tide corpus, the SDK) and doctor.
-      - name: Install the win_arm64 wheel and run doctor
-        if: matrix.os == 'windows-11-arm'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $true
-          $wheel = @(Get-ChildItem wheelhouse -Filter '*-cp310-abi3-win_arm64.whl')
-          if ($wheel.Count -ne 1) { throw "expected one win_arm64 wheel, found $($wheel.Count)" }
-          $venv = Join-Path $env:RUNNER_TEMP 'smoke'
-          python -m venv $venv
-          $python = Join-Path $venv 'Scripts\python.exe'
-          $opentide = Join-Path $venv 'Scripts\opentide.exe'
-          & $python -m pip install --quiet $wheel[0].FullName
-          & $opentide --version
-          & $python -c "from opentide.analysis import check_query; assert [f.code for f in check_query('SecurityEvent | wher x', language='kql')] == ['kql_unknown_operator']"
-          # The tide corpus (tests/fixtures/tide_corpus) validates, and Workspace.open reads it.
-          & $python -I scripts/build/smoke_package.py $env:SETUPTOOLS_SCM_PRETEND_VERSION
-          $workspace = Join-Path $env:RUNNER_TEMP 'smoke-workspace'
-          & $opentide --json setup --path $workspace --yes | Out-Null
-          Push-Location $workspace
-          & $opentide --json doctor --offline
-          Pop-Location
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: wheels-${{ matrix.platform }}
-          path: wheelhouse/*.whl
-          if-no-files-found: error
-          retention-days: ${{ inputs.retention-days }}
+          path: ${{ runner.temp }}/wheels
+      - name: pip install the wheel, then the engine, the package's smoke and doctor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "${RUNNER_TEMP}/venv"
+          if [[ -x "${RUNNER_TEMP}/venv/Scripts/python.exe" ]]; then bin="${RUNNER_TEMP}/venv/Scripts"; else bin="${RUNNER_TEMP}/venv/bin"; fi
+          "${bin}/python" -m pip install --quiet --find-links "${RUNNER_TEMP}/wheels" --only-binary opentide "opentide==${PYPI_VERSION}"
+          "${bin}/opentide" --version
+          "${bin}/python" -c "import sys, opentide._native as n; assert n.__version__ == sys.argv[1], n.__version__" "${PYPI_VERSION}"
+          "${bin}/python" -c "from opentide.analysis import check_query; assert [f.code for f in check_query('SecurityEvent | wher x', language='kql')] == ['kql_unknown_operator']"
+          # The tide corpus (tests/fixtures/tide_corpus) validates, and Workspace.open reads it.
+          "${bin}/python" -I scripts/build/smoke_package.py "${PYPI_VERSION}"
+          workspace="${RUNNER_TEMP}/smoke-workspace"
+          "${bin}/opentide" --json setup --path "${workspace}" --yes > /dev/null
+          cd "${workspace}"
+          "${bin}/opentide" --json doctor --offline
 
   # @opentide/opentide's native packages (napi-rs, UC-5.3): the facade with
   # `cli` for each target, as `opentide.<platform>.node`, built with the npm

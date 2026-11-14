@@ -15,8 +15,6 @@
 //! call := function "(" [arg ("," arg)*] ")"
 //! ```
 
-use opentide_core::falco::is_python_space;
-
 use crate::configuration::repr::quote;
 
 /// Graylog's 12 aggregation functions, the same on every supported version,
@@ -234,7 +232,7 @@ fn tokenize(text: &str) -> Result<Vec<Token<'_>>, ConditionError> {
         let Some(ch) = rest.chars().next() else {
             break;
         };
-        if is_python_space(ch) {
+        if ch.is_whitespace() {
             at += ch.len_utf8();
             continue;
         }
@@ -245,11 +243,7 @@ fn tokenize(text: &str) -> Result<Vec<Token<'_>>, ConditionError> {
         } else if field_char(ch) {
             rest.find(|ch: char| !field_char(ch)).unwrap_or(rest.len())
         } else {
-            let shown: String = text[at..]
-                .trim_matches(is_python_space)
-                .chars()
-                .take(12)
-                .collect();
+            let shown: String = text[at..].trim().chars().take(12).collect();
             return Err(ConditionError {
                 message: format!("unexpected {}", quote(&shown)),
                 start: at,
@@ -287,7 +281,7 @@ impl<'a> Parser<'a> {
         let (start, end) = match at {
             Some(token) => (token.start, token.end()),
             None => {
-                let end = self.text.trim_end_matches(is_python_space).len();
+                let end = self.text.trim_end().len();
                 let start = self.text[..end]
                     .char_indices()
                     .next_back()

@@ -30,11 +30,16 @@ scripts/ci-local.sh              # lint + pytest (no coverage gate)
 scripts/ci-local.sh --full       # lint + pytest + coverage gate — pre-push parity
 ```
 
-CI (`.github/workflows/ci.yml`) runs `uv sync --group dev` on every job.
+CI (`.github/workflows/ci.yml`) runs `uv sync --group dev` in its Python jobs (the gate's with `--no-install-project`, then the build's wheel: below).
 
 ## The engine workspace member
 
-opentide compiles its analysis engine (`bindings/python/`, PyO3 bindings of the engine crates in `crates/`, one Cargo workspace at the root) into the package: `hatch_build.py`, a hatchling build hook, runs cargo and adds `opentide/_native`. `uv sync` builds the editable install with the `develop` cargo profile and puts the module in `src/opentide/`, so rustup must be on `PATH` (cargo runs the release `rust-toolchain.toml` pins; the declared `rust-version`, 1.95, which `yara-x-parser` and `yara-x-fmt` need, is not checked by any job); the root `cache-keys` rebuild it when the workspace's manifests, lock, sources or embedded data (`data/catalogs/`, `grammars/`, `highlights/`) change. To force a rebuild: `uv sync --reinstall-package opentide`. `uv build` builds the sdist (with the workspace's build inputs, not its test data) and a `cp310-abi3-<platform>` wheel from it with the `release` profile (`OPENTIDE_ENGINE_PROFILE=develop` for a faster local one).
+opentide compiles its analysis engine (`bindings/python/`, PyO3 bindings of the engine crates in `crates/`, one Cargo workspace at the root) into the package: the build backend is maturin (`[build-system]` and `[tool.maturin]` in `pyproject.toml`, a mixed layout: `python-source = "src"`, the extension at `opentide/_native`). The package's version is the Cargo workspace's (`bindings/python/` takes it; `opentide.__version__` reads the installed metadata, `opentide._native.__version__` the compiled one); there is no `_version.py`.
+
+- `uv sync` builds the editable install with the `develop` cargo profile (`[tool.uv] config-settings-package`: `build-args = "--profile develop"`) and puts the module in `src/opentide/`, so rustup must be on `PATH` (cargo runs the release `rust-toolchain.toml` pins; the declared `rust-version`, 1.95, which `yara-x-parser` and `yara-x-fmt` need, is not checked by any job). The root `cache-keys` rebuild it when the workspace's manifests, lock, sources or embedded data (`data/catalogs/`, `grammars/`, `highlights/`) change. To force a rebuild: `uv sync --reinstall-package opentide`.
+- `maturin develop --uv --profile develop` (with `maturin` from `uvx maturin@1.16.0` or `pipx`) rebuilds the module in place, the same editable install, without a full `uv sync`.
+- `uv build` builds the sdist (`maturin sdist`: the workspace's build inputs, not its test data) and a `cp310-abi3-<platform>` wheel with the same `develop` profile. The published wheels are `release` builds by `.github/workflows/build-packages.yml` (PyO3/maturin-action); `uvx maturin@1.16.0 build --release --locked` builds one locally.
+- CI's gate builds the wheel once (`maturin build --profile dev` in `build`); the Python jobs run `uv sync --group dev --no-install-project`, `uv pip install` that wheel, copy its `_native` module into `src/opentide/` (the tests import from `src/`) and set `UV_NO_SYNC=1`, so `uv run` never builds the project again, and `OPENTIDE_TEST_WHEELHOUSE`, so the wheel E2E tests install that wheel instead of building one.
 
 ## Dependency groups
 

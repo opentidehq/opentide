@@ -8,7 +8,8 @@
 //! `<token>:token`. A 401 refuses the whole tenant; any other answer that is
 //! not 2xx is this rule's failure.
 //!
-//! No retry is mounted: a create that got no answer is never sent again,
+//! The connectors' retries are mounted ([`crate::retry::RetryPolicy`]), which
+//! never send a `POST` again: a create that got no answer is not repeated,
 //! because titles are not unique and a retry may create a second definition
 //! (`graylog_create_unconfirmed`).
 //!

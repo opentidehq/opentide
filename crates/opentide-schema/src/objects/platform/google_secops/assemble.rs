@@ -119,9 +119,7 @@ pub fn severity(facts: &RuleFacts, block: &Node) -> String {
     facts
         .alert_severity
         .as_deref()
-        .and_then(|severity| {
-            alert_severity(&crate::objects::platform::python_strip(severity).to_lowercase())
-        })
+        .and_then(|severity| alert_severity(&severity.trim().to_lowercase()))
         .unwrap_or(DEFAULT_SEVERITY)
         .to_owned()
 }
@@ -149,7 +147,11 @@ pub fn meta_entries(facts: &RuleFacts, block: &Node) -> Vec<(String, String)> {
         ("author".to_owned(), authors.join(", ")),
         (
             "description".to_owned(),
-            python_split(&facts.description).join(" "),
+            facts
+                .description
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" "),
         ),
         ("severity".to_owned(), level),
         ("priority".to_owned(), priority),
@@ -169,13 +171,6 @@ pub fn meta_entries(facts: &RuleFacts, block: &Node) -> Vec<(String, String)> {
         }
     }
     entries
-}
-
-/// Python's `str.split()`: words between runs of whitespace.
-fn python_split(text: &str) -> Vec<&str> {
-    text.split(crate::objects::platform::is_python_space)
-        .filter(|word| !word.is_empty())
-        .collect()
 }
 
 /// Where a section's content starts in the assembled text.
@@ -316,10 +311,7 @@ fn content_lines(block: &Node, key: &str) -> (Vec<String>, usize) {
 pub fn assemble(facts: &RuleFacts, block: &Node) -> Result<AssembledRule, AssembleError> {
     let missing: Vec<&'static str> = ["events", "condition"]
         .into_iter()
-        .filter(|key| {
-            block_str(block, key)
-                .is_none_or(|text| crate::objects::platform::python_strip(text).is_empty())
-        })
+        .filter(|key| block_str(block, key).is_none_or(|text| text.trim().is_empty()))
         .collect();
     if !missing.is_empty() {
         return Err(AssembleError {
@@ -357,7 +349,7 @@ pub fn assemble_present(facts: &RuleFacts, block: &Node) -> AssembledRule {
             dropped,
         });
         lines.extend(content.into_iter().map(|line| {
-            if crate::objects::platform::python_strip(&line).is_empty() {
+            if line.trim().is_empty() {
                 String::new()
             } else {
                 format!("{INDENT}{line}")

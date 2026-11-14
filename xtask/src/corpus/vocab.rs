@@ -4,10 +4,24 @@
 //! working tree cannot change a seed's output; the clean workspace
 //! validating with zero findings in the oracle proves every value valid.
 
-/// The platforms, in the order the generator assigns them (the platform
-/// table's connector order).
-pub const PLATFORMS: &[&str] =
-    &opentide_schema::platforms::ordered(opentide_schema::platforms::Order::Connector);
+/// The platforms, in the order the generator assigns them. Copied, as the
+/// values above are, so a seed's output does not move with the order of the
+/// platform table; a test checks it names every platform once.
+pub const PLATFORMS: &[&str] = &[
+    "sentinel",
+    "defender_for_endpoint",
+    "splunk",
+    "sentinel_one",
+    "carbon_black_cloud",
+    "crowdstrike",
+    "harfanglab",
+    "elastic",
+    "sysdig",
+    "bitdefender",
+    "graylog",
+    "exabeam",
+    "google_secops",
+];
 
 /// `tlp::1.0`.
 pub const TLP: &[&str] = &["clear", "green", "amber", "amber+strict", "red"];

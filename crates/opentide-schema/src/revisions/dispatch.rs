@@ -238,7 +238,7 @@ pub fn read(document: &Document, family: &str) -> Result<Read, Rejection> {
                     newest.identifier,
                     newest.id().family()
                 );
-                error.message = format!("Value error, {text}");
+                error.message.clone_from(&text);
                 error.context.insert("error".to_owned(), text);
             }
         }
