@@ -20,6 +20,8 @@ env:
 jobs:
   rust:
     name: ${{ matrix.variant }}
+    # Measured by the first run; this push re-measures D only.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -169,26 +171,31 @@ jobs:
           dir=${{ matrix.profile }}; [ "$dir" = dev ] && dir=debug
           ls -la target/$dir/lib_native.so
           echo "lib_native.so size: $(stat -c %s target/$dir/lib_native.so) bytes" >> "$S"
-          cp target/$dir/lib_native.so src/opentide/_native.abi3.so
+          # hatch_build.py copies the prebuilt library into src/opentide/ itself
+          # (an editable install): it must live elsewhere, or copy2 hits SameFileError.
+          cp target/$dir/lib_native.so "$RUNNER_TEMP/_native.abi3.so"
+          export OPENTIDE_ENGINE_PREBUILT="$RUNNER_TEMP/_native.abi3.so"
           t0=$(date +%s)
-          OPENTIDE_ENGINE_PREBUILT=$PWD/src/opentide/_native.abi3.so uv sync --group dev
+          uv sync --group dev
           rc=$?
           echo "uv sync with prebuilt: $(( $(date +%s)-t0 )) s (exit $rc)" >> "$S"
 
           t0=$(date +%s)
-          uv run pytest tests/ -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint" -n 4 --no-cov -q -p no:cacheprovider > unit.log 2>&1
+          uv run --no-sync pytest tests/ -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint" -n 4 --no-cov -q -p no:cacheprovider > unit.log 2>&1
           rc=$?
           t1=$(date +%s)
           echo "unit suite: $((t1-t0)) s (exit $rc)" >> "$S"
           tail -1 unit.log >> "$S"
+          grep -E '^FAILED' unit.log | sed -E 's/::.*//' | sort | uniq -c >> "$S"
           grep -E '^FAILED' unit.log | head -20 >> "$S"
 
           t0=$(date +%s)
-          uv run pytest tests/ -m "(cli_e2e or cli_smoke) and not full_set" -n 4 --no-cov -q -p no:cacheprovider > e2e.log 2>&1
+          uv run --no-sync pytest tests/ -m "(cli_e2e or cli_smoke) and not full_set" -n 4 --no-cov -q -p no:cacheprovider > e2e.log 2>&1
           rc=$?
           t1=$(date +%s)
           echo "e2e suite: $((t1-t0)) s (exit $rc)" >> "$S"
           tail -1 e2e.log >> "$S"
+          grep -E '^FAILED' e2e.log | sed -E 's/::.*//' | sort | uniq -c >> "$S"
           grep -E '^FAILED' e2e.log | head -20 >> "$S"
           echo '```' >> "$S"
           cat "$S"
