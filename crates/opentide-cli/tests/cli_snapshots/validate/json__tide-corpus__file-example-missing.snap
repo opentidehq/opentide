@@ -82,13 +82,13 @@ exit: 1
     ],
     "ok": false,
     "stats": {
-      "id_workers": 0,
-      "object_workers": 0,
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
       "objects_checked": 0,
-      "parallel": false,
+      "parallel": "<CORES>",
       "queries_checked": 0,
       "wall_ms": 0.0,
-      "workers": 0
+      "workers": "<CORES>"
     },
     "warnings": []
   },
