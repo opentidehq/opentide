@@ -2,7 +2,7 @@ The generator's digest for a tiny workspace (xtask/tests/corpus_generate.rs reco
 
 ```
 $ xtask corpus generate --seed 1 --threats 2 --objectives 2 --rules 3 --digest
-19948e2bb5465c08
+0902ea1d591eada7
 
 ```
 
