@@ -916,15 +916,24 @@ fn work_tree_changes_read(root: &Path) -> Vec<PathBuf> {
         .filter(|path| path.is_dir())
         .collect();
     folders.sort();
+    // gix gives the checkout's paths in its own canonical form, which need
+    // not be `root`'s (a `\\?\` or 8.3 name on Windows, a symlink): each is
+    // placed in the workspace with both sides canonical, then named from
+    // `root` as the caller gave it.
+    let canonical = |path: &Path| std::fs::canonicalize(path).ok();
+    let Some(canonical_root) = canonical(root) else {
+        return Vec::new();
+    };
     match git::changed_in_folders(root, &folders, &|_| true) {
         Ok(files) => files
             .into_iter()
-            .map(|file| file.absolute)
-            .filter(|path| {
-                path.is_file()
-                    && path
-                        .strip_prefix(root)
-                        .is_ok_and(|within| inflight::is_object_yaml(&within.to_string_lossy()))
+            .filter_map(|file| {
+                if !file.absolute.is_file() {
+                    return None;
+                }
+                let real = canonical(&file.absolute)?;
+                let within = real.strip_prefix(&canonical_root).ok()?;
+                inflight::is_object_yaml(&within.to_string_lossy()).then(|| root.join(within))
             })
             .collect(),
         Err(error) => {
@@ -1428,6 +1437,37 @@ mod tests {
             ]
         );
         assert_eq!(names(&read), names(&native));
+    }
+
+    /// The gix reader names the checkout's files from the root it is given,
+    /// even when that root is not in canonical form (a symlink here; a
+    /// `\\?\` or 8.3 name on Windows): it once dropped every file then.
+    #[cfg(unix)]
+    #[test]
+    fn the_work_tree_read_takes_a_root_in_any_form() {
+        let dir = tempfile::tempdir().unwrap();
+        let real = dir.path().join("real");
+        std::fs::create_dir_all(real.join("objects/rules")).unwrap();
+        let git = |args: &[&str]| {
+            let status = std::process::Command::new("git")
+                .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+                .args(args)
+                .current_dir(&real)
+                .status()
+                .unwrap();
+            assert!(status.success(), "git {args:?}");
+        };
+        git(&["init", "-q", "-b", "main"]);
+        std::fs::write(real.join("objects/rules/kept.yaml"), "a: 1\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "base"]);
+        std::fs::write(real.join("objects/rules/new.yaml"), "a: 1\n").unwrap();
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        assert_eq!(
+            work_tree_changes_read(&link),
+            [link.join("objects/rules/new.yaml")]
+        );
     }
 
     #[test]
