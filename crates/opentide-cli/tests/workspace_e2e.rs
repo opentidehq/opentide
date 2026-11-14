@@ -380,3 +380,230 @@ fn a_non_utf8_object_file_name_does_not_break_json_output() {
     assert_eq!(changed_paths(&docs), [tutorial::RULE_FILE], "{docs}");
     assert!(run.stderr.contains("git_path_not_utf8"), "{run:?}");
 }
+
+// Workspace discovery (#294): no `OPENTIDE_*`, so the cwd alone decides.
+
+/// The tutorial's objects, by family.
+fn tutorial_counts() -> Value {
+    serde_json::json!({"rules": 1, "threats": 1, "objectives": 1})
+}
+
+/// `(top, workspace)`: a scaffold of its own (`standalone`), or a
+/// workspace in `detections/` of a git checkout that has a `tools/` too.
+fn layout(root: &Path, kind: &str) -> (PathBuf, PathBuf) {
+    if kind == "standalone" {
+        let ws = root.join("scaffold");
+        scaffold(&ws);
+        return (ws.clone(), ws);
+    }
+    let checkout = root.join("monorepo");
+    let ws = checkout.join("detections");
+    scaffold(&ws);
+    std::fs::create_dir(checkout.join("tools")).unwrap();
+    git(&checkout, &["init", "-q", "-b", "main", "."]);
+    (checkout, ws)
+}
+
+fn listing(path: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(path)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+fn path_of<'a>(document: &'a Value, key: &str) -> &'a Path {
+    Path::new(
+        document[key]
+            .as_str()
+            .unwrap_or_else(|| panic!("{key}: {document}")),
+    )
+}
+
+#[test]
+fn first_commands_agree_on_the_workspace_wherever_they_start() {
+    for (kind, start) in [
+        ("standalone", "."),
+        ("standalone", "objects/rules"),
+        ("standalone", ".opentide/configurations/platforms"),
+        ("nested", "detections"),
+        ("nested", "detections/objects/rules"),
+    ] {
+        let (_dir, root) = scratch();
+        let (top, ws) = layout(&root, kind);
+        let cwd = top.join(start);
+        let mut bystanders = vec![(top.clone(), listing(&top))];
+        bystanders.push((cwd.clone(), listing(&cwd)));
+        bystanders.retain(|(path, _)| *path != ws);
+
+        let info = opentide(&cwd, &["info"], &[]).ok();
+        assert_eq!(path_of(&info, "repo"), ws, "{kind} {start}: {info}");
+        assert_eq!(info["counts"], tutorial_counts(), "{info}");
+        let enabled: Vec<&Value> = info["platforms"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|platform| platform["enabled"] == true)
+            .map(|platform| &platform["name"])
+            .collect();
+        assert_eq!(enabled, ["sentinel"], "{info}");
+
+        let validate = opentide(&cwd, &["validate", "--strict"], &[]).ok();
+        assert_eq!(path_of(&validate, "workspace"), ws, "{validate}");
+        assert_eq!(validate["message"], "Validation passed", "{validate}");
+        assert_eq!(validate["report"]["stats"]["objects_checked"], 3);
+
+        let lint = opentide(&cwd, &["lint", "--strict"], &[]).ok();
+        assert_eq!(path_of(&lint, "path"), ws, "{lint}");
+        assert_eq!(lint["count"], 0, "{lint}");
+
+        let docs = opentide(&cwd, &["generate", "docs"], &[]).ok();
+        assert_eq!(path_of(&docs, "output"), ws.join("docs"), "{docs}");
+        assert_eq!(docs["counts"], tutorial_counts(), "{docs}");
+
+        opentide(&cwd, &["generate"], &[]).ok();
+        let exported = ws.join(".opentide/exports/objects.export.json");
+        let exported: Value =
+            serde_json::from_str(&std::fs::read_to_string(exported).unwrap()).unwrap();
+        assert_eq!(exported.as_array().map(Vec::len), Some(3));
+        assert!(ws.join("docs/rules/sentinel-kql-rule.md").is_file());
+
+        for (path, before) in bystanders {
+            assert_eq!(
+                listing(&path),
+                before,
+                "output leaked into {}",
+                path.display()
+            );
+        }
+    }
+}
+
+/// Above the workspace nothing is marked: the checkout stays the root.
+#[test]
+fn a_checkout_without_markers_at_its_root_keeps_the_git_root() {
+    for (start, shown) in [(".", "./"), ("tools", "../")] {
+        let (_dir, root) = scratch();
+        let (checkout, _) = layout(&root, "nested");
+        let cwd = checkout.join(start);
+
+        let info = opentide(&cwd, &["info"], &[]).ok();
+        assert_eq!(path_of(&info, "repo"), checkout, "{info}");
+        let none = serde_json::json!({"rules": 0, "threats": 0, "objectives": 0});
+        assert_eq!(info["counts"], none, "{info}");
+
+        let validate = opentide(&cwd, &["validate", "--strict"], &[]).ok();
+        assert_eq!(validate["report"]["stats"]["objects_checked"], 0);
+        assert_eq!(path_of(&validate, "workspace"), checkout, "{validate}");
+        // Relative to where it ran.
+        let message =
+            format!("Validation passed, but no detection objects were found under {shown}");
+        assert_eq!(validate["message"], message, "{validate}");
+    }
+}
+
+#[test]
+fn an_explicit_workspace_beats_discovery() {
+    for how in ["--repo", "OPENTIDE_REPO_ROOT", "OPENTIDE_TIDE_WORKSPACE"] {
+        let (_dir, root) = scratch();
+        let (_, ws) = layout(&root, "nested");
+        // A workspace that holds a threat alone.
+        let other = root.join("other");
+        scaffold(&other);
+        for family in ["rules", "objectives"] {
+            for entry in std::fs::read_dir(other.join("objects").join(family)).unwrap() {
+                std::fs::remove_file(entry.unwrap().path()).unwrap();
+            }
+        }
+        let cwd = ws.join("objects/rules");
+        let run = |args: &[&str]| {
+            if how == "--repo" {
+                let repo = ["--repo", other.to_str().unwrap()];
+                opentide(&cwd, &[&repo[..], args].concat(), &[])
+            } else {
+                opentide(&cwd, args, &[(how, &other)])
+            }
+        };
+
+        let info = run(&["info"]).ok();
+        let threat = serde_json::json!({"rules": 0, "threats": 1, "objectives": 0});
+        assert_eq!(info["counts"], threat, "{how}: {info}");
+        let validate = run(&["validate", "--strict"]).ok();
+        assert_eq!(path_of(&validate, "workspace"), other, "{validate}");
+        assert_eq!(validate["report"]["stats"]["objects_checked"], 1);
+    }
+}
+
+/// The published first-user path, each step through the binary: setup,
+/// generate on the empty repository, the tutorial's objects, then generate,
+/// validate, lint and info, every one of them passing.
+#[test]
+fn the_first_user_workflow_passes_end_to_end() {
+    let (_dir, root) = scratch();
+    let parent = root.join("workspace");
+    std::fs::create_dir(&parent).unwrap();
+    let fresh = parent.join("tutorial-detections");
+    let (repo, path) = (parent.to_str().unwrap(), fresh.to_str().unwrap());
+    let env = [
+        ("OPENTIDE_REPO_ROOT", &*parent),
+        ("OPENTIDE_TIDE_WORKSPACE", &*parent),
+    ];
+    let args = [
+        "--repo",
+        repo,
+        "setup",
+        "--yes",
+        "--name",
+        "Tutorial Detections",
+    ];
+    let more = [
+        "--org",
+        "Example Corp",
+        "--platform",
+        "sentinel",
+        "--path",
+        path,
+    ];
+    opentide(&parent, &[&args[..], &more[..]].concat(), &env).ok();
+    assert!(fresh.join("objects/threats").is_dir());
+    let sentinel = fresh.join(".opentide/configurations/platforms/sentinel.toml");
+    assert!(
+        std::fs::read_to_string(sentinel)
+            .unwrap()
+            .contains("enabled = true")
+    );
+
+    in_workspace(&fresh, &["generate"]).ok();
+    assert!(
+        fresh
+            .join(".opentide/schemas/rule.1.0.schema.json")
+            .is_file()
+    );
+    let template = fresh.join(".opentide/templates/rule.1.0.template.yaml");
+    let template = std::fs::read_to_string(template).unwrap();
+    assert!(!template.contains("configurations: {}"), "{template}");
+    assert!(template.contains("#sentinel:"), "{template}");
+    assert!(!template.contains("null"), "{template}");
+
+    tutorial::write_objects(&fresh);
+    let threat = fresh.join("objects/threats/simulated-actor.yaml");
+    assert!(
+        std::fs::read_to_string(threat)
+            .unwrap()
+            .contains("name: att&ck::G0006")
+    );
+
+    in_workspace(&fresh, &["generate"]).ok();
+    let validate = in_workspace(&fresh, &["validate", "--strict"]).ok();
+    assert_eq!(validate["report"]["ok"], true, "{validate}");
+    let lint = in_workspace(&fresh, &["lint", "--strict"]).ok();
+    assert_eq!(lint["count"], 0, "{lint}");
+    let info = in_workspace(&fresh, &["info"]).ok();
+    assert_eq!(info["counts"], tutorial_counts(), "{info}");
+    let coverage = in_workspace(&fresh, &["info", "--technique", "T1059", "coverage"]).ok();
+    assert!(
+        coverage["coverage"]["count"].as_u64() >= Some(1),
+        "{coverage}"
+    );
+}
