@@ -22,7 +22,8 @@
 //!   sides too: the endpoint answers JSON whatever it says (RFC 6749 §5.1).
 //! - **Body**: a form body (the recorded request's `Content-Type` is
 //!   `application/x-www-form-urlencoded`) as its decoded fields
-//!   ([`same_form`]), as the query, but for [`IGNORED_FORM_FIELDS`]; a JSON
+//!   ([`same_form`]), as the query, but for [`IGNORED_FORM_FIELDS`] in a
+//!   request to Entra ID's token endpoint; a JSON
 //!   body as the same data
 //!   ([`same_body`]): key order, spacing and escapes are layout; any other
 //!   body byte for byte.
@@ -118,9 +119,7 @@ pub fn optional(interactions: &[Interaction], position: usize) -> bool {
         return false;
     }
     let request = &interactions[position % len].request;
-    if request.method == "GET"
-        && path_of(&request.url).ends_with("/.well-known/openid-configuration")
-    {
+    if request.method == "GET" && is_entra_discovery(&request.url) {
         return true;
     }
     if request.method != "POST" || !is_token_endpoint(&request.url) {
@@ -147,6 +146,22 @@ fn path_of(url: &str) -> String {
 fn is_token_endpoint(url: &str) -> bool {
     let path = path_of(url);
     path.ends_with("/oauth2/token") || path.ends_with("/oauth2/v2.0/token")
+}
+
+/// Entra ID's sign-in host, the only one whose OpenID discovery and MSAL
+/// form fields the matcher passes over.
+const ENTRA_HOST: &str = "login.microsoftonline.com";
+
+/// Whether *url* is on [`ENTRA_HOST`] over HTTPS.
+fn on_entra(url: &str) -> bool {
+    url::Url::parse(url)
+        .is_ok_and(|url| url.scheme() == "https" && url.host_str() == Some(ENTRA_HOST))
+}
+
+/// Whether *url* is Entra ID's OpenID Provider configuration
+/// (`https://login.microsoftonline.com/…/.well-known/openid-configuration`).
+fn is_entra_discovery(url: &str) -> bool {
+    on_entra(url) && path_of(url).ends_with("/.well-known/openid-configuration")
 }
 
 /// Serves each request the answer of the next interaction it matches,
@@ -344,8 +359,10 @@ fn differences(want: &cassette::Request, got: &cassette::Request) -> Option<Stri
         ));
     }
     let (want_body, got_body) = (want.body.bytes(), got.body.bytes());
-    let same = if is_form(&want.headers) {
+    let same = if is_form(&want.headers) && on_entra(&want.url) && is_token_endpoint(&want.url) {
         want_body == got_body || form_fields(&want_body) == form_fields(&got_body)
+    } else if is_form(&want.headers) {
+        same_form(&want_body, &got_body)
     } else {
         same_body(&want_body, &got_body)
     };
@@ -448,9 +465,10 @@ pub fn same_form(want: &[u8], got: &[u8]) -> bool {
 }
 
 /// Form body fields that only a client library sends and the server ignores,
-/// left out on both sides: `client_info`, which MSAL adds to ask for
-/// account information that Entra ID does not return for the
-/// client-credentials grant.
+/// left out on both sides of a `POST` to Entra ID's token endpoint (and
+/// nowhere else): `client_info`, which MSAL adds to ask for account
+/// information that Entra ID does not return for the client-credentials
+/// grant.
 pub const IGNORED_FORM_FIELDS: [&str; 1] = ["client_info"];
 
 /// A form body's decoded fields ([`fields`]) without

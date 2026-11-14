@@ -392,7 +392,7 @@ fn request(method: &str, url: &str, headers: &[(&str, &str)], body: &str) -> Req
 
 #[test]
 fn identity_headers_are_ignored_and_meaningful_ones_compared() {
-    const URL: &str = "https://login.invalid/tenant/oauth2/v2.0/token";
+    const URL: &str = "https://login.microsoftonline.com/tenant/oauth2/v2.0/token";
     const ACCEPT: (&str, &str) = ("accept", "application/json");
     const FORM: (&str, &str) = ("content-type", "application/x-www-form-urlencoded");
     const BODY: &str =
@@ -472,6 +472,27 @@ fn identity_headers_are_ignored_and_meaningful_ones_compared() {
         differs(&[ACCEPT, FORM], &format!("{BODY}&client_extra=1"))
             .is_some_and(|detail| detail.starts_with("bodies differ"))
     );
+    // Only at Entra ID's token endpoint: another host's token endpoint, or
+    // another Entra path, compares `client_info` like any field.
+    for elsewhere in [
+        "https://api.crowdstrike.invalid/oauth2/token",
+        "https://login.microsoftonline.com.evil.invalid/tenant/oauth2/v2.0/token",
+        "https://login.microsoftonline.com/tenant/oauth2/v2.0/authorize",
+    ] {
+        let want = request("POST", elsewhere, &[ACCEPT, FORM], BODY);
+        let got = request(
+            "POST",
+            elsewhere,
+            &[ACCEPT, FORM],
+            &format!("{BODY}&client_info=1"),
+        );
+        assert!(
+            compare(&[&want], &[got])
+                .first()
+                .is_some_and(|mismatch| mismatch.detail.starts_with("bodies differ")),
+            "{elsewhere}"
+        );
+    }
     assert!(header_mismatch(&[
         ACCEPT,
         ("content-type", "application/json")
@@ -609,8 +630,18 @@ fn only_a_repeated_token_request_may_be_left_out() {
 /// client-credentials client goes straight to the token endpoint.
 #[test]
 fn an_openid_discovery_get_may_be_left_out() {
-    const DISCOVERY: &str = "https://login.invalid/t/v2.0/.well-known/openid-configuration";
-    const TOKEN: &str = "https://login.invalid/t/oauth2/v2.0/token";
+    const DISCOVERY: &str =
+        "https://login.microsoftonline.com/t/v2.0/.well-known/openid-configuration";
+    const TOKEN: &str = "https://login.microsoftonline.com/t/oauth2/v2.0/token";
+    // A discovery on any other host is a request like any other.
+    for elsewhere in [
+        "https://login.invalid/t/v2.0/.well-known/openid-configuration",
+        "https://login.microsoftonline.com.evil.invalid/t/v2.0/.well-known/openid-configuration",
+        "http://login.microsoftonline.com/t/v2.0/.well-known/openid-configuration",
+    ] {
+        let interactions = vec![interaction("GET", elsewhere, "", 200, "{}")];
+        assert!(!optional(&interactions, 0), "{elsewhere}");
+    }
     let interactions = vec![
         interaction("GET", DISCOVERY, "", 200, "{}"),
         interaction("POST", TOKEN, "client_id=a", 200, "{}"),
