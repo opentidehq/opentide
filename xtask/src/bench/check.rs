@@ -604,7 +604,7 @@ fn last_result() -> String {
 }
 
 /// Checks `report` against `budgets` and, when given, the last result of the
-/// base branch ([`base_branch`]).
+/// base branch (bench.yml's `BASE_BRANCH`).
 pub fn check(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> Outcome {
     check_with(budgets, report, previous, false)
 }
