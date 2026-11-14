@@ -199,8 +199,12 @@ fn the_setup_wizard_scaffolds_what_was_answered() {
     answer(&mut session, "Repository name", &[ENTER]);
     answer(&mut session, "Organisation / team", &["SOC team", ENTER]);
     answer(&mut session, "Description (optional)", &[ENTER]);
-    // Splunk: the second platform.
-    answer(&mut session, "Detection platforms", &[DOWN, SPACE, ENTER]);
+    // Splunk: the third platform.
+    answer(
+        &mut session,
+        "Detection platforms",
+        &[DOWN, DOWN, SPACE, ENTER],
+    );
     answer(&mut session, "CI/CD platform", &[ENTER]);
     answer(&mut session, "Configure opentide MCP?", &["y", ENTER]);
     answer(&mut session, "MCP hosts", &[SPACE, ENTER]);

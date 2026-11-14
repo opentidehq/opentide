@@ -144,7 +144,7 @@ pub struct Elastic;
 /// Why `find_rules` stopped (UC-4.4b).
 #[derive(Debug, thiserror::Error)]
 pub enum FindError {
-    /// An error status, as `requests.HTTPError` words it.
+    /// An error status: `Elastic answered HTTP <status> <reason> for <url>`.
     #[error("{0}")]
     Status(String),
     /// A body that is not JSON.
@@ -1267,18 +1267,14 @@ impl Platform for Elastic {
     }
 }
 
-/// `str(requests.HTTPError)` of an answer `raise_for_status` refused.
+/// An error status of *answer* to *url*.
 fn http_error_text(answer: &Answer, url: &str) -> String {
-    let kind = if answer.status < 500 {
-        "Client"
-    } else {
-        "Server"
-    };
     let reason = crate::transport::StatusCode::from_u16(answer.status)
         .ok()
         .and_then(|status| status.canonical_reason())
+        .map(|reason| format!(" {reason}"))
         .unwrap_or_default();
-    format!("{} {kind} Error: {reason} for url: {url}", answer.status)
+    format!("Elastic answered HTTP {}{reason} for {url}", answer.status)
 }
 
 /// `_write_failed`: a 401 or 403 fails the tenant; any other error fails

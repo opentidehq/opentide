@@ -14,6 +14,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - If your client reads `capabilities.experimental.opentide.catalog`, accept `models`: the server generates its Tide field catalogs and no longer reports `workspace` or `bundled`.
 - If you called `opentide_lsp::server::install_workspace_catalog` or read `opentide_lsp::WORKSPACE_CATALOGS`, drop it: the server installs the catalogs it generates for each root.
 - If you pinned an `opentide-lsp-*-unknown-linux-musl` binary, build `opentide-lsp` with `cargo install opentide-lsp` instead: no musl binary ships.
+- If you called `opentide_connectors::defender::strip_kql_literals_and_comments` or `opentide_kql::defender_required_column_groups`, use `opentide_connectors::connector::kql_code` to mask a query and `opentide_connectors::defender::missing_required_column_groups` to check its columns.
 - If you pass or read the YAML values of `opentide-tide` (`IndexedObject::body`, `IndexedObject::from_body`, `index_value`, `object_refs`, `TideObject`), use `Arc<opentide_core::node::Node>` where you used `serde_yaml::Value`, and read a document with `opentide_core::node::load` (or `TideObject::parse`) where you called `serde_yaml::from_str`.
 
 - If you build the engine crates from source, use Rust 1.95 or later: `rust-version` is 1.95, which the YARA parser crates (`yara-x-parser`, `yara-x-fmt`) need.
@@ -29,6 +30,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **No musl `opentide-lsp` binary** ([opentide#840](https://github.com/opentidehq/opentide/issues/840)). The `x86_64` and `aarch64` `unknown-linux-musl` builds no longer ship; on Alpine and other musl distributions, build `opentide-lsp` with `cargo install`. glibc Linux, macOS and Windows keep their binaries.
 
 - **`opentide_analysis::QueryReport` has a public `placeholder` field** ([opentide#820](https://github.com/opentidehq/opentide/issues/820)). `analyze_queries` says which query is still the stand-in `opentide new` wrote, so a host need not read the file again to skip it. A struct literal of `QueryReport` without the field no longer compiles.
+
+- **Two copies of the Defender KQL masker are removed.** `opentide_connectors::defender::strip_kql_literals_and_comments` and `opentide_kql::defender_required_column_groups` (an unused copy of Defender's column check) are gone; both masked `//` before strings. Nothing in the workspace called them outside their own tests. Use `opentide_connectors::connector::kql_code` and `opentide_connectors::defender::missing_required_column_groups`.
 
 ### Added
 
@@ -89,6 +92,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **Releases come from opentidehq/opentide, at opentide's version** ([opentide#801](https://github.com/opentidehq/opentide/issues/801), [opentide#840](https://github.com/opentidehq/opentide/issues/840)). The engine moved there with its history, and releases with opentide: its assets keep their names (`highlights-vX.Y.Z.zip`, `opentide-wasm-web-vX.Y.Z.zip`, `opentide-lsp-vX.Y.Z-<target>`, the licences and `SHA256SUMS`) on opentide's GitHub Release, so an editor that pins them changes the URL to `https://github.com/opentidehq/opentide/releases/download/vX.Y.Z/<asset>`. Their build provenance is signed by `opentidehq/opentide/.github/workflows/publish.yml`: verify with `gh attestation verify <asset> --repo opentidehq/opentide` and the identity in `crates/opentide-lsp/README.md`. Releases up to 0.12.0 stay on opentidehq/language-server.
 
 ### Fixed
+
+- **Defender's custom-detection column check reads a string before a comment.** `opentide_connectors::defender::defender_xdr_tables_in_query` (and `required_column_groups`, `missing_required_column_groups`) masked `//` comments before strings, so `let u = "http://x"; DeviceNetworkEvents | …` named no table; they mask with `opentide_connectors::connector::kql_code` now, which now also reads a doubled quote inside a verbatim string (`@"a""b"`) as part of it and blanks multi-line strings (```` ```…``` ````, `~~~…~~~`). As Kusto has no `/* */` comments, a table named inside one is read as code and its columns are required. `kql_with_limit` and SentinelOne's stage check read these strings the same way.
 
 - **"Apply suggestion" keeps a pipe stage's arguments** ([opentide#887](https://github.com/opentidehq/opentide/issues/887)). `kql_unknown_operator` and `spl_unknown_command` cover the whole pipe stage, and the quick fix (and `source.fixAll.opentide`) replaced it all with the suggestion: `index=main | stast count by host` became `index=main | stats`. The edit now replaces only the word the stage starts with (`index=main | stats count by host`); the diagnostics' ranges do not change.
 

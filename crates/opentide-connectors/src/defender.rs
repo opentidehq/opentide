@@ -18,7 +18,7 @@ use opentide_compile::json::{Json, Object};
 use crate::answer::Answer;
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
-    Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
+    Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, kql_code,
     kql_with_limit, utc_z,
 };
 use crate::error::ConnectorError;
@@ -628,35 +628,17 @@ const IMPACTED_ASSET_IDENTIFIER_COLUMNS: [&str; 14] = [
     "InitiatingProcessAccountObjectId",
 ];
 
-/// *query* with its comments and string literals blanked
-/// (`strip_kql_literals_and_comments`).
-pub fn strip_kql_literals_and_comments(query: &str) -> String {
-    static PATTERNS: std::sync::OnceLock<Vec<regex::Regex>> = std::sync::OnceLock::new();
-    let patterns = PATTERNS.get_or_init(|| {
-        [
-            r"(?s)/\*.*?\*/",
-            r"//.*",
-            r"@?'(?:''|[^'])*'",
-            r#"@?"(?:""|[^"])*""#,
-        ]
-        .iter()
-        .filter_map(|pattern| regex::Regex::new(pattern).ok())
-        .collect()
-    });
-    let mut text = query.to_owned();
-    for pattern in patterns {
-        text = pattern.replace_all(&text, " ").into_owned();
-    }
-    text
-}
-
 fn is_word(character: char) -> bool {
     character.is_alphanumeric() || character == '_'
 }
 
 /// The Defender XDR tables *query* names (`defender_xdr_tables_in_query`).
+///
+/// Comments and string literals are blanked with [`kql_code`], which reads a
+/// string before a `//` inside it: `let u = "http://x"; DeviceEvents` names
+/// `DeviceEvents`.
 pub fn defender_xdr_tables_in_query(query: &str) -> Vec<String> {
-    let query = strip_kql_literals_and_comments(query);
+    let query = kql_code(query);
     let mut tables: Vec<String> = Vec::new();
     let preceded_ok = |at: usize| {
         query[..at]
@@ -849,6 +831,59 @@ impl Platform for Defender {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_double_slash_in_a_string_does_not_hide_the_table() {
+        // `validate query --live` passed this query: the URL's `//` blanked
+        // the rest of the query as a comment, so no table was found and the
+        // endpoint columns were not required.
+        let returned = ["Timestamp", "ReportId", "DeviceName"];
+        assert_eq!(
+            missing_required_column_groups(
+                "let u = \"http://x\"; DeviceNetworkEvents | where RemoteUrl == u \
+                 | project Timestamp, ReportId, DeviceName",
+                &returned
+            ),
+            ["DeviceId"]
+        );
+        // A verbatim string has no escapes, and doubles a quote inside it.
+        assert_eq!(
+            missing_required_column_groups(
+                r#"let u = @"\\host//share\"; DeviceFileEvents | project Timestamp, ReportId, DeviceName"#,
+                &returned
+            ),
+            ["DeviceId"]
+        );
+        assert_eq!(
+            defender_xdr_tables_in_query(
+                r#"let p = @'C:\'; let q = @"//a""\"; EmailEvents | where 'b//' != p"#
+            ),
+            ["EmailEvents"]
+        );
+        // An escaped quote does not end a string; a comment still hides a table.
+        assert_eq!(
+            defender_xdr_tables_in_query(r#"print "a\"// DeviceEvents" // AlertInfo"#),
+            Vec::<String>::new()
+        );
+        // A multi-line string has no escapes and ends at its own chord.
+        assert_eq!(
+            missing_required_column_groups(
+                "let s = ```http://x```; DeviceEvents | project Timestamp, ReportId, DeviceName",
+                &returned
+            ),
+            ["DeviceId"]
+        );
+        assert_eq!(
+            defender_xdr_tables_in_query("let s = ~~~a```//~~~; EmailEvents | take 1"),
+            ["EmailEvents"]
+        );
+        // Kusto has no block comments: a table inside `/* */` is read as
+        // code, so its columns are required (the check fails closed).
+        assert_eq!(
+            defender_xdr_tables_in_query("/* DeviceEvents */ print 1"),
+            ["DeviceEvents"]
+        );
+    }
 
     #[test]
     fn column_groups_follow_the_tables_the_query_names() {

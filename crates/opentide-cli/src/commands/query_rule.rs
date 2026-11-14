@@ -147,33 +147,25 @@ fn load_file(file: &str, repo: &Path, cwd: &Path) -> Result<Rule, Refusal> {
     let read = opentide_schema::revisions::read(&document, "rule")
         .map_err(|rejection| unreadable(rejection.to_string()))?;
     if let Err(errors) = read.result {
-        let title = match read.selection.revision().identifier {
-            "rule::1.1" => "DetectionRule_v1_1",
-            _ => "DetectionRule",
-        };
-        return Err(unreadable(validation_message(title, &errors)));
+        return Err(unreadable(validation_message(&errors)));
     }
     Ok(Rule::new(&root, Some(path.to_string_lossy().into_owned())))
 }
 
-/// A model's errors as Pydantic counts and lists them: the count and the
-/// class, then each error's location and message with its type.
-fn validation_message(title: &str, errors: &[opentide_schema::SchemaError]) -> String {
-    let count = errors.len();
-    let mut text = format!(
-        "{count} validation error{} for {title}",
-        if count == 1 { "" } else { "s" }
-    );
-    for error in errors {
-        let location = if error.path.is_empty() {
-            "<root>".to_owned()
-        } else {
-            error.field_path().join(".")
-        };
-        let kind = error.kind.pydantic_type().unwrap_or("value_error");
-        text.push_str(&format!("\n{location}\n  {} [type={kind}]", error.message));
-    }
-    text
+/// A rule's schema errors, one line each: the dotted location and the
+/// message (the message alone at the root).
+fn validation_message(errors: &[opentide_schema::SchemaError]) -> String {
+    errors
+        .iter()
+        .map(|error| {
+            if error.path.is_empty() {
+                error.message.clone()
+            } else {
+                format!("{}: {}", error.field_path().join("."), error.message)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// A block's value at `key`, unless absent or `null`.
@@ -629,7 +621,10 @@ mod tests {
             invalid.message
         );
         assert!(
-            invalid.message.contains("for DetectionRule"),
+            invalid
+                .message
+                .lines()
+                .any(|line| line == "metadata.version: Field required"),
             "{}",
             invalid.message
         );

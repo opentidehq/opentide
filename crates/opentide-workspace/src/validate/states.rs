@@ -231,16 +231,16 @@ fn walk(fs: &dyn FileSystem, dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// Python's `type(value).__name__` for a JSON value.
-fn type_name(value: &Json) -> &'static str {
+/// What a JSON value is, as a message names it: `null`, `a boolean`,
+/// `a number`, `a string`, `an array`, `an object`.
+fn json_kind(value: &Json) -> &'static str {
     match value {
-        Json::Null => "NoneType",
-        Json::Bool(_) => "bool",
-        Json::Number(number) if number.is_f64() => "float",
-        Json::Number(_) => "int",
-        Json::String(_) => "str",
-        Json::Array(_) => "list",
-        Json::Object(_) => "dict",
+        Json::Null => "null",
+        Json::Bool(_) => "a boolean",
+        Json::Number(_) => "a number",
+        Json::String(_) => "a string",
+        Json::Array(_) => "an array",
+        Json::Object(_) => "an object",
     }
 }
 
@@ -342,7 +342,7 @@ fn read_shard(fs: &dyn FileSystem, path: &Path, expected: Option<&str>) -> Resul
                     path,
                     &format!(
                         "platforms.{platform}.{tenant} is {}, not a string",
-                        type_name(external_id)
+                        json_kind(external_id)
                     ),
                 ));
             };
@@ -463,7 +463,7 @@ mod tests {
         assert!(
             scan(&fs, Path::new("/w"))[0]
                 .message
-                .contains("is int, not a string")
+                .contains("is a number, not a string")
         );
         let (fs, _) = shard(&format!(
             r#"{{"schema":"deployment.state::1.0","object_uuid":"{UUID}","platforms":{{"graylog":{{"t":"65F1"}}}}}}"#
@@ -534,7 +534,7 @@ mod tests {
         assert!(
             scan(&fs, Path::new("/w"))[0]
                 .message
-                .ends_with("platforms.patterned_test.lab is int, not a string")
+                .ends_with("platforms.patterned_test.lab is a number, not a string")
         );
     }
 
