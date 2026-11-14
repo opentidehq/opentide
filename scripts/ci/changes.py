@@ -180,6 +180,20 @@ FEATURES: Mapping[str, str] = {
     "opentide-schema": "opentide-schema/python",
 }
 
+#: Built with the affected crates on a pull request, never run unless
+#: affected: their dev-dependencies turn on third-party features (tokio's
+#: `test-util`; getrandom's `std` and `sys_rng`, through proptest) that the
+#: push's `--workspace` build, which saves the compiler cache, resolves with.
+#: Without them a leaf change resolved tokio and getrandom differently, and
+#: every crate above them (hyper, reqwest, rmcp, tempfile, uuid,
+#: opentide-schema...) hashed differently and missed the cache: measured on a
+#: one-line change in opentide-yara, 2026-11-14, 254 s of third-party compiles
+#: and opentide-schema's 65 s on the critical path. With them, every unit a
+#: pull request builds is one the push built: check with
+#: `cargo tree -e normal,build,dev -f '{p} {f}'` on `--workspace` and on a
+#: pull request's packages.
+ANCHORS = ("opentide-connectors", "opentide-workspace")
+
 
 @dataclass
 class Plan:
@@ -196,17 +210,24 @@ class Plan:
         members = sorted(workspace)
         crates = sorted(self.crates)
         everything = set(crates) == set(members)
+        built = sorted(set(crates) | (set(ANCHORS) & set(members))) if crates else []
         rust = "rust" in self.areas or bool(crates)
         python = "python" in self.areas
         out = {
             "mode": self.mode,
             "release": _bool(self.release),
             "crates": " ".join(crates),
-            "packages": "--workspace" if everything else " ".join(f"-p {c}" for c in crates),
-            "features": _features(crates),
+            # What the build compiles (the affected crates and the anchors)
+            # and the nextest filter of the tests it runs (the affected crates').
+            "packages": "--workspace" if everything else " ".join(f"-p {c}" for c in built),
+            "features": _features(members if everything else built),
+            "filter": "all()"
+            if everything
+            else " | ".join(f"package(={c})" for c in crates) or "none()",
             "rust": _bool(rust),
             "python": _bool(python),
-            "build": _bool(rust or python or "gitlab" in self.areas),
+            # The `_native` extension's build, for the Python jobs.
+            "native": _bool(python or "gitlab" in self.areas),
             # The lint job: its steps read pylint, ci, skills and rust.
             "lint": _bool(rust or bool(self.areas & {"pylint", "ci", "skills"})),
         }
