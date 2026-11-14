@@ -183,9 +183,8 @@ impl Elastic {
         if answer.status >= 400 {
             return Err(FindError::Status(http_error_text(&answer, &url)));
         }
-        answer
-            .json()
-            .ok_or_else(|| FindError::NotJson("Expecting value: line 1 column 1 (char 0)".into()))
+        serde_json::from_slice(&answer.body)
+            .map_err(|error| FindError::NotJson(format!("the response is not JSON: {error}")))
     }
 }
 
