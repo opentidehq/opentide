@@ -38,6 +38,31 @@ fn replay(scenario: &str) -> Replayed {
     )
 }
 
+/// `elastic/query` as the connector sends it: the Python client retried a
+/// search (a `POST`) its gateway answered with a 504 three times, and the
+/// recording holds those copies; the connector sends a `POST` once.
+fn replay_query() -> Replayed {
+    let mut cassette = support::cassette("elastic/query");
+    let recorded = cassette.interactions.len();
+    cassette.interactions.dedup_by(|retry, sent| {
+        retry.request.method == "POST"
+            && retry.request == sent.request
+            && retry.response.status == 504
+    });
+    assert_eq!(
+        cassette.interactions.len(),
+        recorded - 3,
+        "the three retries"
+    );
+    Replayed::start_with(
+        cassette,
+        elastic::PLATFORM,
+        SETUP,
+        "ELASTIC_API_KEY",
+        &elastic::http_settings(std::time::Duration::from_secs(30)),
+    )
+}
+
 fn rules(key: &str) -> Vec<ElasticRule> {
     let inputs = fixture("elastic");
     items(inputs.get(key).unwrap())
@@ -141,7 +166,7 @@ fn elastic_query_sends_what_the_python_runner_sent() {
     let inputs = fixture("elastic");
     let query = inputs.get("query").unwrap();
     let window = window(query.get("window").unwrap());
-    let tenant = replay("elastic/query");
+    let tenant = replay_query();
     let outcomes = block_on(async {
         let mut outcomes = Vec::new();
         for item in items(query.get("queries").unwrap()) {
@@ -284,7 +309,7 @@ fn elastic_query_runs_through_the_framework_traits_with_the_tenant_index() {
     let inputs = fixture("elastic");
     let query = inputs.get("query").unwrap();
     let window = window(query.get("window").unwrap());
-    let tenant = replay("elastic/query");
+    let tenant = replay_query();
     assert_eq!(tenant.tenant.list("index"), setup_index().as_slice());
     let runner = Elastic.query_runner().unwrap();
     assert!(Elastic.live_validator().is_some());

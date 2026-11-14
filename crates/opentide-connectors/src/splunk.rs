@@ -43,11 +43,12 @@ pub const PARSER_TIMEOUT_WARNING: &str =
 /// (`_apply_saved_search`'s second stage), in the order they are sent.
 pub const SECOND_STAGE: [&str; 4] = ["alert.suppress", "is_scheduled", "actions", "search"];
 
-/// The HTTP settings of a Splunk tenant: urllib's, *timeout* on connecting
-/// and on each read, no retries.
+/// The HTTP settings of a Splunk tenant: *timeout* on connecting and on
+/// each read, and the connectors' retries.
 pub fn http_settings(timeout: Duration) -> HttpSettings {
     HttpSettings {
         timeout,
+        retry: crate::retry::RetryPolicy::standard(),
         ..HttpSettings::default()
     }
 }
