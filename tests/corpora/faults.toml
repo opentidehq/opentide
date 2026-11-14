@@ -4565,6 +4565,535 @@ ops = [
 isolated = true
 note = "isolated so the combined workspace the goldens record stays as it was"
 
+# HarfangLab YARA and the YARA query language (harfanglab-1.0 1.2, E2-Y/H1):
+# the model's codes (one schema_validation, its message naming the code),
+# the engine's codes in the decomposed fields and in a signature, and lint's
+# advisories.
+
+[[kind]]
+id = "harfanglab-rule-kind"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.sigma", value = { logsource = { category = "process_creation", product = "windows" }, selections = [{ name = "selection", field = "Image", value = "\\cmd.exe", modifiers = ["endswith"] }], condition = "selection" } },
+]
+covers = ["harfanglab_rule_kind"]
+isolated = true
+note = "a Sigma rule beside the YARA rule; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "harfanglab-yara-form"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.signature", value = '''
+rule Fault_{n} {
+  meta:
+    context = "file"
+  strings:
+    $a = "faultmarker" ascii
+  condition:
+    $a
+}
+''' },
+]
+covers = ["harfanglab_yara_form"]
+isolated = true
+note = "a signature beside the decomposed form; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "harfanglab-yara-section-header"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.condition", value = '''
+condition:
+  $a
+''' },
+]
+covers = ["harfanglab_yara_section_header"]
+isolated = true
+note = "the decomposed condition repeats its section header; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "harfanglab-yara-import"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.imports", value = ["nosuchmodule"] },
+]
+covers = ["harfanglab_yara_import"]
+isolated = true
+note = "an import HarfangLab does not know; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "harfanglab-yara-rule-name"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "name", value = "Condition" },
+]
+covers = ["harfanglab_yara_rule_name"]
+isolated = true
+note = "the rule name derives a YARA keyword; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-include"
+codes = ["yara_include"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "delete", path = "configurations.harfanglab.yara.meta" },
+    { op = "delete", path = "configurations.harfanglab.yara.strings" },
+    { op = "delete", path = "configurations.harfanglab.yara.condition" },
+    { op = "set", path = "configurations.harfanglab.yara.signature", value = '''
+include "other.yar"
+
+rule Fault_{n} {
+  meta:
+    context = "file"
+  strings:
+    $a = "faultmarker" ascii
+  condition:
+    $a
+}
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-empty-signature"
+codes = ["yara_empty_signature"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "delete", path = "configurations.harfanglab.yara.meta" },
+    { op = "delete", path = "configurations.harfanglab.yara.strings" },
+    { op = "delete", path = "configurations.harfanglab.yara.condition" },
+    { op = "set", path = "configurations.harfanglab.yara.signature", value = '''
+private rule Fault_{n} {
+  condition:
+    true
+}
+''' },
+]
+isolated = true
+note = "only a private rule; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-duplicate-rule"
+codes = ["yara_duplicate_rule"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "delete", path = "configurations.harfanglab.yara.meta" },
+    { op = "delete", path = "configurations.harfanglab.yara.strings" },
+    { op = "delete", path = "configurations.harfanglab.yara.condition" },
+    { op = "set", path = "configurations.harfanglab.yara.signature", value = '''
+rule Fault_{n} {
+  meta:
+    context = "file"
+  strings:
+    $a = "faultmarker" ascii
+  condition:
+    $a
+}
+
+rule Fault_{n} {
+  meta:
+    context = "file"
+  strings:
+    $a = "faultmarker" ascii
+  condition:
+    $a
+}
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-duplicate-tag"
+codes = ["yara_duplicate_tag"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "delete", path = "configurations.harfanglab.yara.meta" },
+    { op = "delete", path = "configurations.harfanglab.yara.strings" },
+    { op = "delete", path = "configurations.harfanglab.yara.condition" },
+    { op = "set", path = "configurations.harfanglab.yara.signature", value = '''
+rule Fault_{n} : t t {
+  meta:
+    context = "file"
+  strings:
+    $a = "faultmarker" ascii
+  condition:
+    $a
+}
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-rule-identifier-conflict"
+codes = ["yara_rule_identifier_conflict"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "delete", path = "configurations.harfanglab.yara.meta" },
+    { op = "delete", path = "configurations.harfanglab.yara.strings" },
+    { op = "delete", path = "configurations.harfanglab.yara.condition" },
+    { op = "set", path = "configurations.harfanglab.yara.signature", value = '''
+rule uint8 {
+  meta:
+    context = "file"
+  strings:
+    $a = "faultmarker" ascii
+  condition:
+    $a
+}
+''' },
+]
+isolated = true
+note = "a rule named after a built-in function; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-unknown-module"
+codes = ["yara_unknown_module"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "delete", path = "configurations.harfanglab.yara.meta" },
+    { op = "delete", path = "configurations.harfanglab.yara.strings" },
+    { op = "delete", path = "configurations.harfanglab.yara.condition" },
+    { op = "set", path = "configurations.harfanglab.yara.signature", value = '''
+import "foo"
+
+rule Fault_{n} {
+  meta:
+    context = "file"
+  strings:
+    $a = "faultmarker" ascii
+  condition:
+    $a
+}
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-module-unconfirmed"
+codes = ["yara_module_unconfirmed"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "delete", path = "configurations.harfanglab.yara.meta" },
+    { op = "delete", path = "configurations.harfanglab.yara.strings" },
+    { op = "delete", path = "configurations.harfanglab.yara.condition" },
+    { op = "set", path = "configurations.harfanglab.yara.signature", value = '''
+import "dotnet"
+
+rule Fault_{n} {
+  meta:
+    context = "file"
+  strings:
+    $a = "faultmarker" ascii
+  condition:
+    $a
+}
+''' },
+]
+isolated = true
+note = "a module libyara has that HarfangLab is not confirmed to; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-x-incompatible"
+codes = ["yara_x_incompatible"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "delete", path = "configurations.harfanglab.yara.meta" },
+    { op = "delete", path = "configurations.harfanglab.yara.strings" },
+    { op = "delete", path = "configurations.harfanglab.yara.condition" },
+    { op = "set", path = "configurations.harfanglab.yara.signature", value = '''
+import "pe"
+
+rule Fault_{n} {
+  meta:
+    context = "file"
+  condition:
+    true
+}
+
+rule pe {
+  meta:
+    context = "file"
+  condition:
+    true
+}
+''' },
+]
+isolated = true
+note = "a rule named after an imported module; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-meta-missing"
+codes = ["yara_meta_missing"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "delete", path = "configurations.harfanglab.yara.meta" },
+    { op = "delete", path = "configurations.harfanglab.yara.strings" },
+    { op = "delete", path = "configurations.harfanglab.yara.condition" },
+    { op = "set", path = "configurations.harfanglab.yara.signature", value = '''
+rule Fault_{n} {
+  condition:
+    true
+}
+''' },
+]
+isolated = true
+note = "a signature rule without meta context; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "harfanglab-yara-context"
+codes = ["harfanglab_yara_context"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.meta.context", value = ["disk"] },
+]
+isolated = true
+note = "a meta.context HarfangLab does not scan; isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-duplicate-string"
+codes = ["yara_duplicate_string"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.strings", value = '''
+$a = "faultmarker" ascii
+$a = "otherfault" ascii
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-undefined-string"
+codes = ["yara_undefined_string"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.condition", value = '''
+$a and $b
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-unreferenced-string"
+codes = ["yara_unreferenced_string"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.strings", value = '''
+$a = "faultmarker" ascii
+$b = "otherfault" ascii
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-undefined-identifier"
+codes = ["yara_undefined_identifier"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.condition", value = '''
+$a and nosuchrule
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-module-not-imported"
+codes = ["yara_module_not_imported"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.condition", value = '''
+$a and pe.number_of_sections > 1
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-type"
+codes = ["yara_type"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.condition", value = '''
+$a and "a" + 1 > 2
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-regexp"
+codes = ["yara_regexp"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.strings", value = '''
+$a = /fault[marker/
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-hex-string"
+codes = ["yara_hex_string"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.strings", value = '''
+$a = { 4D 5A GG }
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-string-modifier"
+codes = ["yara_string_modifier"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.strings", value = '''
+$a = "faultmarker" ascii ascii
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-number-out-of-range"
+codes = ["yara_number_out_of_range"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.condition", value = '''
+$a and filesize == 99999999999999999999
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-parse-error"
+codes = ["yara_parse_error"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.condition", value = '''
+$a and
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-unknown-module-member"
+codes = ["yara_unknown_module_member"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.imports", value = ["pe"] },
+    { op = "set", path = "configurations.harfanglab.yara.condition", value = '''
+$a and pe.nonexistent == 1
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-slow-pattern"
+codes = ["yara_slow_pattern"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.strings", value = '''
+$a = "f" ascii
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-entrypoint-deprecated"
+codes = ["yara_entrypoint_deprecated"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.condition", value = '''
+$a and entrypoint == 0
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-suspicious-expression"
+codes = ["yara_suspicious_expression"]
+severity = "warning"
+command = ["lint"]
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "set", path = "configurations.harfanglab.yara.condition", value = '''
+2 of them
+''' },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
+[[kind]]
+id = "yara-signature-alias"
+codes = ["yara_signature_alias"]
+severity = "error"
+target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
+ops = [
+    { op = "delete", path = "configurations.harfanglab.yara.meta" },
+    { op = "delete", path = "configurations.harfanglab.yara.strings" },
+    { op = "delete", path = "configurations.harfanglab.yara.condition" },
+    { op = "set", path = "references.public.9", raw = '&fault_yara "rule Fault_{n} { meta: context = \"file\" strings: $a = \"faultmarker\" condition: $a }"' },
+    { op = "set", path = "configurations.harfanglab.yara.signature", raw = "*fault_yara" },
+]
+isolated = true
+note = "isolated so the combined workspace the goldens record stays as it was"
+
 # Codes in scope whose fault kind a unit of the 0.28 catch-up train still
 # owes (docs/internal/catchup-0.28-plan.md, O2): opentide 0.28.1 reports them
 # and no kind above produces them yet. Each names its owner. The list only
@@ -4572,128 +5101,4 @@ note = "isolated so the combined workspace the goldens record stays as it was"
 # a kind now produces, and on any code in scope that is neither covered nor
 # pending; it must be empty before the train merges into integration (xtask's
 # `nothing_is_pending_without_the_report_only_marker`).
-
-[[pending]]
-code = "harfanglab_rule_kind"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "harfanglab_yara_context"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "harfanglab_yara_form"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "harfanglab_yara_import"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "harfanglab_yara_rule_name"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "harfanglab_yara_section_header"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_duplicate_rule"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_duplicate_string"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_duplicate_tag"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_empty_signature"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_entrypoint_deprecated"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_hex_string"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_include"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_meta_missing"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_module_not_imported"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_module_unconfirmed"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_number_out_of_range"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_parse_error"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_regexp"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_rule_identifier_conflict"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_signature_alias"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_slow_pattern"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_string_modifier"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_suspicious_expression"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_type"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_undefined_identifier"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_undefined_string"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_unknown_module"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_unknown_module_member"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_unreferenced_string"
-owner = "E2-Y/H1"
-
-[[pending]]
-code = "yara_x_incompatible"
-owner = "E2-Y/H1"
 
