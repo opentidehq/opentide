@@ -60,8 +60,7 @@ fn none_is_not_a_provider() {
     assert_eq!(code, 2, "{stdout}{stderr}");
     assert!(
         stderr.contains(
-            "error: Invalid value for 'ci_platform': 'none' is not one of 'github', 'gitlab', \
-             'azure'."
+            "error: Invalid value \"none\" for ci_platform: choose from github, gitlab, azure."
         ),
         "{stderr}"
     );
@@ -75,9 +74,14 @@ fn a_misspelled_provider_suggests_the_closest() {
     let (code, stdout, stderr) = opentide(&ws, &["setup", "ci", "gitlb", "--yes"]);
     assert_eq!(code, 2, "{stdout}{stderr}");
     assert!(
-        stderr.contains("'gitlb' is not one of 'github', 'gitlab', 'azure'."),
+        stderr.contains(
+            "Invalid value \"gitlb\" for ci_platform: choose from github, gitlab, azure."
+        ),
         "{stderr}"
     );
-    assert!(stderr.contains("help: did you mean 'gitlab'?"), "{stderr}");
+    assert!(
+        stderr.contains("help: did you mean \"gitlab\"?"),
+        "{stderr}"
+    );
     assert!(!ws.join(".gitlab-ci.yml").exists());
 }

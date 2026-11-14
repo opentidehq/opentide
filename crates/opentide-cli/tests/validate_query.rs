@@ -672,7 +672,7 @@ fn options_typed_before_query_are_its_own_or_refused() {
     assert_eq!(failure_code(&document), "usage_invalid_value");
     assert_eq!(
         document["message"],
-        "Invalid value: --fix configures `opentide validate` itself and would be ignored by \
+        "--fix configures `opentide validate` itself and would be ignored by \
          `opentide validate query`."
     );
     let twice = opentide(
@@ -931,7 +931,7 @@ fn file_strict_and_queries_typed_before_query_are_handed_down() {
     assert_eq!(failure_code(&document), "usage_invalid_value");
     assert_eq!(
         document["message"],
-        "Invalid value: --type configures `opentide validate` itself and would be ignored by \
+        "--type configures `opentide validate` itself and would be ignored by \
          `opentide validate query`."
     );
 }
