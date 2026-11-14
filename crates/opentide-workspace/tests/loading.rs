@@ -208,6 +208,36 @@ mod loading {
         assert!(workspace.index().is_empty());
     }
 
+    /// A UUID names an object when it is text or a number: `true` is
+    /// refused like a list, `0` is a name like any other number, and a
+    /// `uuid: false` is left blank, so `metadata.uuid` names the object.
+    #[test]
+    fn a_boolean_uuid_names_nothing_and_a_number_does() {
+        let fs = Arc::new(MemoryFs::new());
+        fs.write("/ws/objects/rules/a-true.yaml", "uuid: true\n");
+        fs.write("/ws/objects/rules/b-zero.yaml", "uuid: 0\n");
+        fs.write(
+            "/ws/objects/rules/c-false.yaml",
+            "uuid: false\nmetadata:\n  uuid: m-1\n",
+        );
+        let workspace = open(&fs);
+        let index = workspace.index();
+        let refused: Vec<(&str, &str)> = index
+            .load_errors
+            .iter()
+            .map(|e| (e.path.file_name().unwrap().to_str().unwrap(), e.code))
+            .collect();
+        assert_eq!(refused, [("a-true.yaml", MISSING_UUID)]);
+        assert_eq!(
+            index.load_errors[0].error,
+            "object YAML uuid is a boolean, not text"
+        );
+        assert!(index.get("rule", "0").is_some());
+        assert!(index.get("rule", "m-1").is_some());
+        assert!(index.get("rule", "true").is_none());
+        assert_eq!(index.len(), 2);
+    }
+
     #[test]
     fn a_later_file_replaces_an_earlier_one_with_the_same_uuid() {
         let fs = Arc::new(MemoryFs::new());

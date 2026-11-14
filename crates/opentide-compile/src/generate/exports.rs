@@ -14,10 +14,10 @@ use opentide_schema::configuration::models::ObjectFamily;
 use opentide_schema::node::{Node, Value};
 use opentide_schema::vocab::{Entry, Vocabularies};
 use opentide_workspace::config::Configuration;
-use opentide_workspace::{Index, index::truthy};
+use opentide_workspace::{Index, index::holds_name};
 
 use super::json_text::{pretty, sorted};
-use super::relations::{Relations, node_text};
+use super::relations::{Relations, has_items, node_text};
 use super::{Cause, Output, PhaseError};
 use crate::json::{Json, Object};
 
@@ -166,7 +166,7 @@ fn techniques_of(
             let root = object.root()?;
             let name = root
                 .get("name")
-                .filter(|name| truthy(name))
+                .filter(|name| holds_name(name))
                 .map(|name| node_text(name))
                 .unwrap_or_default();
             Some((
@@ -312,7 +312,7 @@ fn actor_names(actors: &Node, vocabularies: &Vocabularies) -> Vec<String> {
             }
             let raw = actor
                 .get("name")
-                .filter(|name| truthy(name))
+                .filter(|name| holds_name(name))
                 .map(|name| node_text(name))
                 .unwrap_or_default();
             let token = raw.split(" #").next().unwrap_or_default().trim().to_owned();
@@ -396,10 +396,10 @@ fn row(
         "threat" => {
             description_text = description(root, Some("threat"));
             let threat = required(root, "threat")?;
-            if let Some(chains) = threat.get("chaining").filter(|chains| truthy(chains)) {
+            if let Some(chains) = threat.get("chaining").filter(|chains| has_items(chains)) {
                 chaining = chaining_text(chains)?;
             }
-            if let Some(list) = threat.get("actors").filter(|actors| truthy(actors)) {
+            if let Some(list) = threat.get("actors").filter(|actors| has_items(actors)) {
                 actors = actor_names(list, vocabularies).join(", ");
             }
             attack = joined(required(threat, "mitre_attack")?);
@@ -409,7 +409,7 @@ fn row(
             let objective = required(root, "objective")?;
             if let Some(techniques) = objective
                 .get("mitre_attack")
-                .filter(|techniques| truthy(techniques))
+                .filter(|techniques| has_items(techniques) || holds_name(techniques))
             {
                 attack = joined(techniques);
             }
@@ -481,7 +481,7 @@ fn revisions(index: &Index, settings: &Settings) -> Output {
             let metadata = root
                 .get("metadata")
                 .map(AsRef::as_ref)
-                .filter(|metadata| truthy(metadata));
+                .filter(|metadata| has_items(metadata));
             let field = |key: &str| metadata.and_then(|metadata| metadata.get(key));
             let version = field("version").map_or_else(String::new, |version| node_text(version));
             if version.is_empty() {

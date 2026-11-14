@@ -17,7 +17,7 @@ use serde_json::Value as Json;
 use super::states;
 use crate::diagnostic::Diagnostic;
 use crate::fs::FileSystem;
-use crate::index::{Index, Object, truthy};
+use crate::index::{Index, Object, holds_name};
 
 /// The platform blocks a rule may carry (`PLATFORM_CONFIG_MODELS`).
 pub const PLATFORMS: [&str; opentide_schema::platforms::COUNT] = opentide_schema::platforms::IDS;
@@ -189,7 +189,7 @@ fn responder_names(deployment: &Node) -> Vec<String> {
     responders
         .iter()
         .filter_map(|responder| responder.get("name"))
-        .filter(|name| truthy(name))
+        .filter(|name| holds_name(name))
         .map(|name| name.value.to_string())
         .collect()
 }
@@ -354,11 +354,14 @@ pub fn check_object(
             .file(subject.path)
     };
     if checks.uuid_format {
-        let raw = root.get("uuid").filter(|node| truthy(node)).or_else(|| {
-            root.get("metadata")
-                .filter(|m| matches!(m.value, Value::Map(_)))
-                .and_then(|m| m.get("uuid"))
-        });
+        let raw = root
+            .get("uuid")
+            .filter(|node| holds_name(node))
+            .or_else(|| {
+                root.get("metadata")
+                    .filter(|m| matches!(m.value, Value::Map(_)))
+                    .and_then(|m| m.get("uuid"))
+            });
         if !raw.is_some_and(|node| is_uuid_v4(node)) {
             let shown = raw.map_or_else(|| "null".to_owned(), |node| scalar_shown(node));
             let name = root
@@ -1017,8 +1020,8 @@ fn references(subject: &Subject<'_>, root: &Node, graph: &Graph<'_>) -> Vec<Diag
     match subject.family {
         "rule" => {
             if let Some(parent) = root.get("detection_model")
-                && truthy(parent)
-                && matches!(parent.value, Value::Str(_) | Value::Int(_) | Value::Bool(_))
+                && holds_name(parent)
+                && matches!(parent.value, Value::Str(_) | Value::Int(_))
             {
                 let parent = parent.value.to_string();
                 if !graph.has("objective", &parent) && !graph.has("signal", &parent) {
@@ -1063,7 +1066,7 @@ fn references(subject: &Subject<'_>, root: &Node, graph: &Graph<'_>) -> Vec<Diag
         }
         "threat" => {
             for (index, link) in chain_links(root) {
-                if let Some(vector) = link.get("vector").filter(|vector| truthy(vector)) {
+                if let Some(vector) = link.get("vector").filter(|vector| holds_name(vector)) {
                     let value = vector.value.to_string();
                     if !graph.has("threat", &value) {
                         out.push(new(
@@ -1114,7 +1117,9 @@ fn chaining(subject: &Subject<'_>, root: &Node, graph: &Graph<'_>) -> Vec<Diagno
     chain_links(root)
         .into_iter()
         .filter_map(|(index, link)| {
-            let relation = link.get("relation").filter(|relation| truthy(relation))?;
+            let relation = link
+                .get("relation")
+                .filter(|relation| holds_name(relation))?;
             let relation = relation.value.to_string();
             if resolved.is_valid(&relation) {
                 return None;
