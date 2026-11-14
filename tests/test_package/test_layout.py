@@ -182,10 +182,10 @@ def test_the_wheel_ships_every_licence_notice_cites() -> None:
 
 
 def _publish_dry_run_rules() -> ModuleType:
-    """The dry-run workflow's own tests parse publish commands (every spelling npm
-    accepts, options before the command, `npx npm@x publish`) and tell a dry run apart."""
+    """The publish commands (every spelling npm accepts, options before the
+    command, `npx npm@x publish`), and whether one is a dry run."""
     spec = importlib.util.spec_from_file_location(
-        "publish_dry_run_rules", ROOT / "tests" / "test_ci" / "test_publish_dry_run_workflow.py"
+        "publish_commands", ROOT / "tests" / "test_ci" / "publish_commands.py"
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -196,13 +196,12 @@ def _publish_dry_run_rules() -> ModuleType:
 def test_only_the_release_train_publishes() -> None:
     """The crates, the npm packages and the wheels publish from publish.yml, the
     release train (#840), which runs from Run workflow (and the resume
-    dispatch) only: no tag starts it (tests/test_ci/test_one_ci.py checks every
+    dispatch) only: no tag starts it (tests/test_ci/test_workflows.py checks every
     workflow's triggers). The engine's own engine-release.yml retired into it.
 
     Any other `cargo publish` or `npm publish` (in any spelling npm accepts) in an
     active workflow is a dry run: publish-dry-run.yml rehearses the publishes, and
-    its own tests (tests/test_ci/test_publish_dry_run_workflow.py) keep it unable to
-    publish."""
+    tests/test_ci/test_workflows.py keeps it unable to publish."""
     rules = _publish_dry_run_rules()
     seen = 0
     for workflow in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
@@ -211,9 +210,9 @@ def test_only_the_release_train_publishes() -> None:
         data = yaml.safe_load(workflow.read_text(encoding="utf-8")) or {}
         for job in (data.get("jobs") or {}).values():
             for step in job.get("steps") or []:
-                for command in rules._publishes(str(step.get("run", ""))):
+                for command in rules.publishes(str(step.get("run", ""))):
                     seen += 1
-                    assert rules._is_dry_run(command), (workflow.name, " ".join(command))
+                    assert rules.is_dry_run(command), (workflow.name, " ".join(command))
     assert seen, "the dry-run workflow's rehearsals are found, so the check reads the commands"
     assert not (ROOT / ".github" / "workflows" / "engine-release.yml").exists()
     release = (ROOT / ".github" / "workflows" / "publish.yml").read_text(encoding="utf-8")

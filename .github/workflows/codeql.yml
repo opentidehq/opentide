@@ -25,7 +25,7 @@ concurrency:
   # A pull request's new push cancels its stale run; every other run (a push
   # to development, integration/unified-core or main, the nightly, Run
   # workflow) has a group of its own, its run id, so none cancels another and
-  # each push to a base branch gets a complete run (tests/test_ci/test_concurrency.py).
+  # each push to a base branch gets a complete run (tests/test_ci/test_workflows.py).
   group: codeql-${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 

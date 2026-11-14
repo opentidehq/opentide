@@ -21,7 +21,7 @@ Each gate below runs in CI; the required ones are in `.github/AGENTS.md` ("Requi
 
 **Licences.** The allow-list is `about.toml`'s, which cargo-about uses to render
 `THIRD-PARTY-LICENSES.html` for each release: permissive licences and EUPL-1.2 itself,
-every one compatible with distributing the engine under EUPL-1.2. `tests/test_ci/test_supply_chain.py` keeps
+every one compatible with distributing the engine under EUPL-1.2. `tests/test_ci/test_workflows.py` keeps
 the two lists equal, and keeps both free of per-crate exceptions.
 
 *Policy (maintainer decision, #952).* A permissive open-source licence (MIT, MIT-0, Apache-2.0,

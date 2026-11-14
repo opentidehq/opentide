@@ -44,7 +44,7 @@ jobs:
     # nothing, and per engine, so that a run's two jobs never wait for each other.
     # A new push to a PR replaces its run; every other run (a push to
     # integration/unified-core, the nightly, Run workflow) has a group of its own,
-    # its run id, so each push keeps a complete result (tests/test_ci/test_concurrency.py).
+    # its run id, so each push keeps a complete result (tests/test_ci/test_workflows.py).
     concurrency:
       group: bench-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}-${{ matrix.engine }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -82,7 +82,7 @@ jobs:
         with:
           tool: sccache@0.19.0
       # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
+      # so a family is saved once a week (tests/test_ci/test_workflows.py).
       - name: Compiler cache week
         id: week
         shell: bash
