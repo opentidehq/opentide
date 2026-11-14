@@ -642,9 +642,14 @@ pub struct Sysdig;
 impl Deployer for Sysdig {
     /// One rule, from the compiled body alone: its name and whether it is a
     /// tuning are read from the body (`name`, `details.append`), a
-    /// [`Operation::Disable`] disables, and no runtime policy is joined or
-    /// left; [`deploy_rule`] takes the block's or the tenant's policies.
-    /// A rule's failure is an error here too.
+    /// [`Operation::Disable`] disables, and the rule joins (or, disabled,
+    /// leaves) the tenant's runtime policies (its setup's `policies`), as
+    /// `opentide deploy` does for a block that names none: a block's own
+    /// `policies` are not in the compiled body. A recorded rule the tenant
+    /// lost is created again and its new id returned, which the caller
+    /// keeps: the deployment-state refusals of `opentide deploy`
+    /// ([`RuleDeploy::recreate_refusal`]) are about the state it writes, and
+    /// this writes none. A rule's failure is an error here too.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
@@ -674,7 +679,7 @@ impl Deployer for Sysdig {
                 name,
                 tuning,
                 disable: request.operation == Operation::Disable,
-                policies: Vec::new(),
+                policies: cx.tenant.list("policies").to_vec(),
                 recreate_refusal: None,
             };
             let outcome = deploy_rule(cx, &rule).await?;

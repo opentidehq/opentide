@@ -1047,9 +1047,13 @@ pub struct Graylog;
 
 impl Deployer for Graylog {
     /// One rule, from the compiled create body alone: the definition is read
-    /// back from it, and the version it was built for is the body's shape
-    /// (6.3 is flat, 7.x wraps it in `entity`). [`deploy_rule`] takes the
-    /// compiled definition itself.
+    /// back from it (flat, or wrapped in `entity`), then the tenant's
+    /// version is read, as `opentide deploy` reads it before any write: a
+    /// version below 6.3, a refused token or an unreachable tenant stops the
+    /// deploy, and a create is sent in the shape that version takes (6.3
+    /// flat, 7.x wrapped in `entity`). The definition's fields stay the ones
+    /// it was compiled with. [`deploy_rule`] takes the compiled definition
+    /// itself.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
@@ -1062,7 +1066,6 @@ impl Deployer for Graylog {
                     tenant: cx.tenant.label.tenant.clone(),
                     message: format!("the compiled body is not JSON: {error}"),
                 })?;
-            let wrapped = body.get("entity").is_some();
             let definition = body.get("entity").unwrap_or(&body);
             let Json::Object(definition) = definition else {
                 return Err(ConnectorError::Setup {
@@ -1071,6 +1074,23 @@ impl Deployer for Graylog {
                     message: "the compiled body carries no event definition".to_owned(),
                 });
             };
+            // A 6.3 create body carries `share_request` beside the
+            // definition; `create_body` puts it back where the version wants.
+            let mut definition = definition.clone();
+            definition.shift_remove("share_request");
+            let version = Client::new(cx).version().await?.map_err(|error| {
+                let code = if error.forbidden() {
+                    "graylog_forbidden"
+                } else {
+                    "graylog_request_failed"
+                };
+                ConnectorError::Refused {
+                    platform: PLATFORM.to_owned(),
+                    tenant: cx.tenant.label.tenant.clone(),
+                    message: format!("{code}: {}", error.reason()),
+                    detail: Some(error.detail()),
+                }
+            })?;
             let compiled = CompiledDefinition {
                 uuid: request.rule_id.clone(),
                 title: definition
@@ -1078,12 +1098,8 @@ impl Deployer for Graylog {
                     .and_then(Json::as_str)
                     .unwrap_or_default()
                     .to_owned(),
-                version: if wrapped {
-                    graylog::PREVIEW_VERSION
-                } else {
-                    Version(6, 3, 0)
-                },
-                definition: definition.clone(),
+                version,
+                definition,
                 warnings: Vec::new(),
                 unresolved: Vec::new(),
             };

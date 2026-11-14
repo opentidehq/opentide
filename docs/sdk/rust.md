@@ -208,7 +208,7 @@ pub fn run(
 }
 ```
 
-A platform whose connector cannot do an operation answers `operation_unsupported`, never a faked result: CrowdStrike, HarfangLab and Sysdig cannot check a query live, Sysdig runs no queries, and Elastic and Sysdig rules deploy through `opentide deploy` only (`opentide::connectors::capabilities(platform)` says which). A `DeployRequest` carries one rule's compiled body for one tenant, as `deploy_plan`'s payloads hold it, sent as its bytes; a whole deploy run (the plan, the deployment state, the retirements) is the command line's `deploy` (`cli::run_json`).
+A platform whose connector cannot do an operation answers `operation_unsupported`, never a faked result: CrowdStrike, HarfangLab and Sysdig cannot check a query live, Sysdig runs no queries, and Elastic rules deploy through `opentide deploy` only (`opentide::connectors::capabilities(platform)` says which). A `DeployRequest` carries one rule's compiled body for one tenant, as `deploy_plan`'s payloads hold it, sent as its bytes. Sysdig adds a rule to the tenant's runtime `policies` (or, disabled, takes it out of them), as `opentide deploy` does for a block that names none: a block's own `policies` are not in the body. Graylog reads the tenant's version first, refuses one below 6.3 before any write, and sends a create in the shape that version takes. A whole deploy run (the plan, the deployment state, the retirements) is the command line's `deploy` (`cli::run_json`).
 
 Failures are `Error::Connector`, with the platform, the tenant and, when the tenant gave a reason, the vendor's words in `detail`. Messages name a tenant by its address (scheme, host and port), never a path, a query string or a credential, and no `Debug` prints a secret.
 

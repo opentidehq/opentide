@@ -202,6 +202,53 @@ fn sysdig_deploys_as_the_python_deployer_does() {
     assert_eq!(replay.proxy.verify(), Vec::new());
 }
 
+/// The platform's [`Deployer`] (what `opentide::Connection::deploy` runs)
+/// adds a created rule to the tenant's policies, as `opentide deploy` does
+/// for a block that names none: the cassette's first step, the create and
+/// the policy update, request for request.
+#[test]
+fn sysdig_the_generic_deployer_adds_a_created_rule_to_the_tenants_policies() {
+    let recorded = cassette_first_step();
+    let replay = cassette_support::replay_cassette(recorded, &[TOKEN]);
+    let setup = format!("{SETUP}policies = [\"{POLICY}\"]\n");
+    let (tenant, http) = tenant(
+        &replay,
+        "sysdig",
+        "staging",
+        &setup,
+        &sysdig::http_defaults(),
+    );
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let (_, body, _) = compiled("STAGING", None);
+    let request = opentide_connectors::connector::DeployRequest {
+        rule_id: UUID.to_owned(),
+        operation: opentide_connectors::connector::Operation::Create,
+        body,
+    };
+    let platform = sysdig::Sysdig;
+    let outcome = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await })
+        .unwrap()
+        .unwrap();
+    assert_eq!(outcome.remote_id.as_deref(), Some("42"));
+    assert_eq!(replay.proxy.verify(), Vec::new());
+}
+
+/// The cassette's first step: the create, the policies read, the policy
+/// that takes the rule.
+fn cassette_first_step() -> opentide_cassette::Cassette {
+    let full = cassette_support::cassette("sysdig/deploy");
+    opentide_cassette::Cassette::new(
+        &full.scenario,
+        full.recorded_from,
+        full.interactions[..3].to_vec(),
+    )
+}
+
 #[test]
 fn sysdig_has_a_deployer_only() {
     let platform = sysdig::Sysdig;
