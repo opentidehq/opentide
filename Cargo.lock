@@ -3223,6 +3223,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "ctrlc",
+ "dunce",
  "form_urlencoded",
  "humantime",
  "indexmap",
@@ -3272,6 +3273,7 @@ dependencies = [
  "url",
  "uuid",
  "vt100",
+ "walkdir",
  "which",
  "wiremock",
 ]
