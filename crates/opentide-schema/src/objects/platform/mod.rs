@@ -13,6 +13,7 @@
 //! | `QueryText` (`_query_not_blank`, after) | [`check_query_text`], [`query_text`] |
 //! | `ElasticConfig._validate_raw_elastic_block` (before) | [`elastic::block_codes`], the named check `elastic_rule_shape` |
 //! | `SysdigConfig._validate_raw_sysdig_block` (before) | [`sysdig::block_codes`], the named check `sysdig_rule_shape` |
+//! | `HarfangLabConfig._validate_raw_harfanglab_block` (before) | [`harfanglab::yara::block_codes`], the named check `harfanglab_rule_shape` |
 //! | `GraylogConfig._validate_raw_graylog_block` (before) | [`graylog::findings`], the named check `graylog_constraints`: one [`ErrorKind::Constraint`](crate::error::ErrorKind::Constraint) per finding |
 //! | `SentinelTechnique` (`check_sentinel_technique`, after) | [`sentinel::check_technique`], [`sentinel::check_duration`] |
 //! | `minimum_engine_version` (`ge=0`, strict) | [`sysdig::minimum_engine_version`] |
@@ -411,8 +412,10 @@ pub struct NamedCheck {
 /// constraint of `SysdigConfig`'s), and `bitdefender_rule_shape` (the
 /// bitdefender-1.0 constraint codes, which `BitdefenderConfig` reports one
 /// per finding at its path, [`bitdefender::block_findings`]), and
-/// `graylog_constraints` (every `graylog_*` constraint code, each at its key).
-pub const NAMED_CHECKS: [NamedCheck; 4] = [
+/// `graylog_constraints` (every `graylog_*` constraint code, each at its key), and
+/// `harfanglab_rule_shape` (harfanglab-1.0 1.2's one kind per block and the
+/// YARA forms' codes, [`harfanglab::yara::block_codes`]).
+pub const NAMED_CHECKS: [NamedCheck; 5] = [
     NamedCheck {
         name: "elastic_rule_shape",
         model: "ElasticConfig",
@@ -437,6 +440,12 @@ pub const NAMED_CHECKS: [NamedCheck; 4] = [
         run: bitdefender::block_codes,
         // Its model reports each finding at its path itself
         // (`bitdefender::block_findings`).
+        findings: None,
+    },
+    NamedCheck {
+        name: "harfanglab_rule_shape",
+        model: "HarfangLabConfig",
+        run: harfanglab::yara::block_codes,
         findings: None,
     },
 ];

@@ -137,31 +137,31 @@ fn decomposed_flow_imports_read_as_deploy_reads_them() {
         "        $a\n",
         "      imports: [ # lead\n          pe, # a comment\n          foo\n          bar, '']\n",
     );
-    assert_eq!(
-        yara(&source),
-        [
-            row(
-                "harfanglab_yara_import",
-                "configurations.harfanglab.yara.imports.1",
-                "foo"
-            ),
-            row(
-                "harfanglab_yara_import",
-                "configurations.harfanglab.yara.imports.2",
-                "'"
-            ),
-            row(
-                "yara_unknown_module",
-                "configurations.harfanglab.yara.imports.1",
-                "foo"
-            ),
-            // The empty module name lands on its item, not in generated text.
-            row(
-                "yara_unknown_module",
-                "configurations.harfanglab.yara.imports.2",
-                "'"
-            ),
-        ]
+    // The flow items as a YAML loader gives them to deploy: a comment is no
+    // item, `foo` and `bar` on two lines fold into one, `''` is empty.
+    let assembled = opentide_tide::extract_injections(&source)
+        .into_iter()
+        .find(|q| !q.parts.is_empty())
+        .expect("the decomposed rule");
+    assert!(
+        assembled
+            .inner
+            .starts_with("import \"pe\"\nimport \"foo bar\"\nimport \"\"\n"),
+        "{}",
+        assembled.inner
+    );
+    // The unknown modules are the model's `harfanglab_yara_import`, on the
+    // block; the engine's `yara_unknown_module` gives way to it.
+    assert_eq!(yara(&source), []);
+    let block = opentide_core::node::load(&source).unwrap();
+    let block = block
+        .root()
+        .and_then(|root| root.get("configurations"))
+        .and_then(|c| c.get("harfanglab"))
+        .unwrap();
+    assert!(
+        opentide_schema::objects::platform::harfanglab::yara::block_codes(block)
+            .contains("harfanglab_yara_import")
     );
 }
 
@@ -191,58 +191,51 @@ fn decomposed_contexts_are_checked_as_deploy_writes_them() {
 
 #[test]
 fn decomposed_imports_and_headers_and_rule_names() {
+    use opentide_schema::objects::platform::harfanglab::yara::{block_codes, rule_name_problem};
+    let codes = |source: &str| {
+        let document = opentide_core::node::load(source).unwrap();
+        let block = document
+            .root()
+            .and_then(|root| root.get("configurations"))
+            .and_then(|c| c.get("harfanglab"))
+            .cloned()
+            .unwrap();
+        block_codes(&block)
+    };
     let source = decomposed(
         "        $a = \"cmd.exe\" ascii\n",
         "        $a\n",
         "      imports:\n        - pe\n        - foo\n        - dotnet\n",
     );
+    // `foo` is the model's `harfanglab_yara_import`; the engine's
+    // `yara_unknown_module` gives way to it, and its advisory on `dotnet`
+    // stays.
     assert_eq!(
         yara(&source),
-        [
-            row(
-                "harfanglab_yara_import",
-                "configurations.harfanglab.yara.imports.1",
-                "foo"
-            ),
-            row(
-                "yara_module_unconfirmed",
-                "configurations.harfanglab.yara.imports.2",
-                "dotnet"
-            ),
-            // The engine's finding on the same import, which `validate` and
-            // the editor report (the block's code is `--blocks`' only).
-            row(
-                "yara_unknown_module",
-                "configurations.harfanglab.yara.imports.1",
-                "foo"
-            ),
-        ]
+        [row(
+            "yara_module_unconfirmed",
+            "configurations.harfanglab.yara.imports.2",
+            "dotnet"
+        )]
     );
+    assert!(codes(&source).contains("harfanglab_yara_import"));
+    // A body that writes a header deploy writes: the model's code, and no
+    // rule assembled for the engine.
     let header = decomposed(
         "        $a = \"cmd.exe\" ascii\n",
         "        condition:\n          $a\n",
         "",
     );
-    assert_eq!(
-        yara(&header),
-        [row(
-            "harfanglab_yara_section_header",
-            "configurations.harfanglab.yara.condition",
-            "condition:"
-        )]
-    );
-    let keyword = decomposed("        $a = \"cmd.exe\" ascii\n", "        $a\n", "")
-        .replace("name: Cmd String", "name: Condition");
-    assert_eq!(
-        yara(&keyword),
-        [row("harfanglab_yara_rule_name", "name", "Condition")]
-    );
-    let accent = decomposed("        $a = \"cmd.exe\" ascii\n", "        $a\n", "")
-        .replace("name: Cmd String", "name: Détection");
-    assert_eq!(
-        yara(&accent),
-        [row("harfanglab_yara_rule_name", "name", "Détection")]
-    );
+    assert_eq!(yara(&header), []);
+    assert!(codes(&header).contains("harfanglab_yara_section_header"));
+    // A rule name libyara refuses is the rule model's; the engine checks the
+    // bodies under a stand-in name.
+    for name in ["Condition", "Détection"] {
+        let source = decomposed("        $a = \"cmd.exe\" ascii\n", "        $a\n", "")
+            .replace("name: Cmd String", &format!("name: {name}"));
+        assert_eq!(yara(&source), [], "{name}");
+        assert!(rule_name_problem(name).is_some(), "{name}");
+    }
 }
 
 /// #165: the same bodies in a raw `.yar` file and in the decomposed block
@@ -491,10 +484,15 @@ fn decomposed_rule_names_libyara_and_yara_x_refuse() {
         &format!("name: {long}"),
         1,
     );
+    // `harfanglab_yara_rule_name` is the rule model's (`opentide validate`);
+    // the engine checks the bodies under a stand-in name.
     assert!(
-        yara(&source)
+        opentide_schema::objects::platform::harfanglab::yara::rule_name_problem(&long).is_some()
+    );
+    assert!(
+        !yara(&source)
             .iter()
-            .any(|(code, path, _)| code == "harfanglab_yara_rule_name" && path == "name")
+            .any(|(code, _, _)| code.starts_with("harfanglab_"))
     );
     let source = decomposed(
         "        $a = \"cmd.exe\"\n",

@@ -540,9 +540,9 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 
 /// What a rule's platform blocks say that no query of theirs carries: the
 /// Elastic block's advisories, the Sysdig block's tuning and list
-/// advisories, the HarfangLab `yara` block's constraints on what deploy
-/// assembles (`yara::constraint_diagnostics`), the Graylog filter whose runs
-/// overlap (`graylog_overlapping_window`, as the engine words it), and, when the block has no query to carry them (none, or a
+/// advisories, the Graylog filter whose runs overlap
+/// (`graylog_overlapping_window`, as the engine words it), and, when the
+/// block has no query to carry them (none, or a
 /// placeholder), its declared datasets, event source and exceptions.
 ///
 /// `opentide lint` reports these (the advisory codes it owns); `validate`
@@ -581,12 +581,6 @@ pub fn block_diagnostics(source: &str, workspace: &[IndexedObject]) -> Vec<Diagn
         if !carried {
             out.extend(falco::exception_diagnostics(source, block));
         }
-    }
-    if configurations.is_some_and(|c| c.get("harfanglab").is_some()) {
-        out.extend(yara::constraint_diagnostics(
-            source,
-            &yaml_scalar::mapping_keys(source),
-        ));
     }
     if let Some(block) = configurations.and_then(|c| c.get("graylog"))
         && let Some((window, every)) =

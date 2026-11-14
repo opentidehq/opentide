@@ -707,13 +707,13 @@ mod tests {
 
     /// The generic query page says a code fails `opentide validate`; the
     /// engine only ever warns on these (opentide-yara's `WARNING_CODES`), so
-    /// their pages say so (#1015). `harfanglab_yara_context`, the sixth, has
-    /// no query reference: its page is the block's.
+    /// their pages say so (#1015). `harfanglab_yara_context` and
+    /// `yara_meta_missing` have no query reference: their pages are the
+    /// HarfangLab block's (0.28.1's files).
     #[test]
     fn a_warning_only_yara_code_is_not_described_as_an_error() {
         for code in [
             "yara_entrypoint_deprecated",
-            "yara_meta_missing",
             "yara_module_unconfirmed",
             "yara_slow_pattern",
             "yara_suspicious_expression",

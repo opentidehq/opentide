@@ -145,9 +145,10 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 13] = [
 /// before, `graylog_analyzed_field` and `graylog_regex_operator` reached the
 /// editor alone.
 pub fn lint_owned(code: &str) -> bool {
-    ENGINE_REFERENCES
-        .iter()
-        .any(|(prefix, _, _)| code.starts_with(prefix))
+    opentide_schema::objects::platform::harfanglab::yara::ADVISORY_CODES.contains(&code)
+        || ENGINE_REFERENCES
+            .iter()
+            .any(|(prefix, _, _)| code.starts_with(prefix))
         || ELASTIC_ADVISORIES.contains(&code)
         || code == "sysdig_list_self_reference"
         || DECLARED_DATASET_CODES.contains(&code)
@@ -482,8 +483,13 @@ impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
             .map(|(number, _)| number + 1)
             .collect();
         let mut out = Vec::new();
+        let harfanglab = HarfangLabAdvisories::of(&text);
         for item in self.profiles.check_file(file, &text) {
             if item.severity == EngineSeverity::Error || in_placeholder(&item, &lines, &marked) {
+                continue;
+            }
+            // One finding per code, form and rule: opentide's, placed by key.
+            if harfanglab.reports(&item) {
                 continue;
             }
             if !lint_owned(&item.code) {
@@ -506,7 +512,174 @@ impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
             &text,
             &self.profiles.graylog_tenants,
         ));
+        out.extend(harfanglab.findings(file, relative, uuid));
         Ok(out)
+    }
+}
+
+use opentide_schema::objects::platform::harfanglab::yara::{
+    ADVISORY_CODES as HARFANGLAB_ADVISORIES, CONTEXT_PATH, SIGNATURE_PATH,
+};
+
+/// The HarfangLab profile's advisories on a rule file (`_harfanglab_yara_findings`):
+/// `yara_meta_missing` and `harfanglab_yara_context` are warnings, which
+/// HarfangLab takes, but may not scan where the author meant. opentide's own,
+/// on a `yara.signature` or the decomposed form's `meta.context`, placed in
+/// the file; the engine's finding with the same key gives way to it.
+struct HarfangLabAdvisories {
+    /// `(code, message, 0-based line, field path, rule)`.
+    found: Vec<(&'static str, String, usize, &'static [&'static str], String)>,
+    /// The signature's rules, each with the 0-based file line of its header;
+    /// `None` in the decomposed form.
+    rules: Option<Vec<(String, usize)>>,
+}
+
+impl HarfangLabAdvisories {
+    fn of(text: &str) -> Self {
+        let none = Self {
+            found: Vec::new(),
+            rules: None,
+        };
+        if !text.contains("harfanglab") {
+            return none;
+        }
+        let Ok(document) = opentide_schema::node::load(text) else {
+            return none;
+        };
+        let Some(root) = document.root() else {
+            return none;
+        };
+        let yara = SIGNATURE_PATH[..3]
+            .iter()
+            .try_fold(root.as_ref(), |node, key| node.get(key).map(AsRef::as_ref));
+        let Some(yara) = yara else {
+            return none;
+        };
+        if let Some(signature) = yara.get("signature") {
+            let Some(value) = signature.value.as_str() else {
+                return none;
+            };
+            let line_of = signature_lines(text, signature, value);
+            let found = opentide_schema::objects::platform::harfanglab::yara::advisories(value)
+                .into_iter()
+                .map(|advisory| {
+                    (
+                        advisory.code,
+                        advisory.message,
+                        line_of(advisory.offset),
+                        &SIGNATURE_PATH[..],
+                        advisory.rule,
+                    )
+                })
+                .collect();
+            let rules = opentide_schema::objects::platform::harfanglab::yara::rule_headers(value)
+                .into_iter()
+                .map(|header| (header.name, line_of(header.start)))
+                .collect();
+            return Self {
+                found,
+                rules: Some(rules),
+            };
+        }
+        let Some(entry) = yara.get("meta").and_then(|meta| meta.entry("context")) else {
+            return none;
+        };
+        let os = yara
+            .get("meta")
+            .and_then(|meta| meta.get("os"))
+            .and_then(|os| os.value.as_str());
+        let found = opentide_schema::objects::platform::harfanglab::yara::decomposed_advisory(
+            &entry.value,
+            os,
+        )
+        .map(|(code, message)| {
+            (
+                code,
+                message,
+                entry.key.start.line.saturating_sub(1),
+                &CONTEXT_PATH[..],
+                String::new(),
+            )
+        })
+        .into_iter()
+        .collect();
+        Self { found, rules: None }
+    }
+
+    /// Whether opentide's own check reports the engine `item`'s advisory:
+    /// the same code, form (signature or decomposed) and YARA rule.
+    fn reports(&self, item: &Finding) -> bool {
+        if !HARFANGLAB_ADVISORIES.contains(&item.code.as_str()) {
+            return false;
+        }
+        // In the signature form the rule is the one whose header is the last
+        // at or before the finding's line; before every header, the first.
+        let rule = self.rules.as_ref().map_or_else(String::new, |rules| {
+            let line = item.line.saturating_sub(1);
+            let mut rule = String::new();
+            for (name, header) in rules {
+                if *header > line && !rule.is_empty() {
+                    break;
+                }
+                rule.clone_from(name);
+            }
+            rule
+        });
+        self.found
+            .iter()
+            .any(|(code, _, _, _, own)| *code == item.code && *own == rule)
+    }
+
+    fn findings(
+        &self,
+        file: &Path,
+        relative: &str,
+        uuid: Option<&str>,
+    ) -> Vec<opentide_workspace::lint::LintFinding> {
+        self.found
+            .iter()
+            .map(|(code, message, line, path, _)| {
+                let mut diagnostic = Diagnostic::new(*code, Severity::Warning, message.clone())
+                    .file(file)
+                    .at(path.iter().map(|key| (*key).to_owned()).collect::<Vec<_>>());
+                diagnostic.yaml_line = Some(*line);
+                diagnostic.path = Some(relative.to_owned());
+                diagnostic.line = Some(line + 1);
+                opentide_workspace::lint::LintFinding::from_engine(relative, uuid, diagnostic)
+            })
+            .collect()
+    }
+}
+
+/// The 0-based file line of each byte offset into a signature's `value`
+/// (`SignatureSite.line_of`): a literal block maps the value's lines one to
+/// one onto the lines after its indicator; any other style places every
+/// offset on the scalar's first line.
+fn signature_lines<'v>(
+    text: &str,
+    node: &opentide_schema::node::Node,
+    value: &'v str,
+) -> impl Fn(usize) -> usize + 'v {
+    // A block scalar's node starts at its content; its indicator (`|`, `|-`,
+    // after any anchor or tag) ends the line before.
+    let before: String = text.chars().take(node.start.index).collect();
+    let header = before
+        .trim_end_matches([' ', '\t'])
+        .strip_suffix('\n')
+        .and_then(|head| head.rsplit('\n').next())
+        .unwrap_or_default();
+    let literal = header
+        .split('#')
+        .next()
+        .and_then(|head| head.split_whitespace().last())
+        .is_some_and(|token| token.starts_with('|'));
+    let first = node.start.line.saturating_sub(1);
+    move |offset: usize| {
+        if literal {
+            first + value[..offset.min(value.len())].matches('\n').count()
+        } else {
+            first
+        }
     }
 }
 

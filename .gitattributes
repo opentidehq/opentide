@@ -67,6 +67,7 @@ crates/testdata/conformance/yara/** -text
 crates/testdata/conformance/yara-x/** -text
 crates/testdata/conformance/google-yaral/** -text
 crates/testdata/conformance/specifications-google-secops/** -text
+crates/testdata/conformance/specifications-yara/** -text
 crates/testdata/conformance/external/exabeam/** -text
 crates/testdata/conformance/external/yara/** -text
 crates/testdata/conformance/external/yaral/** -text
@@ -74,3 +75,6 @@ crates/testdata/corpus/yara/** -text
 crates/testdata/corpus/yaral/** -text
 crates/testdata/corpus/exabeam/** -text
 crates/testdata/oracles/graylog/** -text
+# HarfangLab's YARA fixtures: their tests edit them by LF patterns and compare
+# findings by line, so a Windows checkout holds the committed LF bytes too.
+tests/fixtures/harfanglab/** -text

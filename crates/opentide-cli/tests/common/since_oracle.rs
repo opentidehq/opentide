@@ -8,6 +8,12 @@
 //!   0.28.1 does not. The `--platform` help names `crowdstrike` among the
 //!   platforms the engine parses, `--file` reads `.cql`, and
 //!   `QueryChecked.language` gains `cql`.
+//! - Not yet ported: `validate query` checking Exabeam's queries offline
+//!   and reading `.yl2` files, which 0.28.1 does. The `--platform` help
+//!   derives the offline list from the platform table (`offline_languages`),
+//!   and `--file` reads the suffixes the table lists, so today's help lacks
+//!   `exabeam` and `.yl2` until a row gains them; the pairs below name that,
+//!   and fail once a row changes.
 
 use opentide_cli::json::Json;
 
@@ -15,11 +21,11 @@ use opentide_cli::json::Json;
 const HELP: &[(&str, &str)] = &[
     (
         "Check this platform's queries. Offline, default every platform the engine parses: bitdefender, carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, harfanglab, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, sentinel, sentinel_one, splunk",
-        "Check this platform's queries. Offline, default every platform the engine parses: bitdefender, carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, exabeam, google_secops, graylog, harfanglab, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, sentinel, sentinel_one, splunk",
+        "Check this platform's queries. Offline, default every platform the engine parses: bitdefender, carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, google_secops, graylog, harfanglab, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, sentinel, sentinel_one, splunk",
     ),
     (
         "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2) offline (repeatable)",
-        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2, .cql) offline (repeatable)",
+        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .cql) offline (repeatable)",
     ),
 ];
 
