@@ -68,8 +68,8 @@ process and the filesystem, and hosts the language server (`lsp start`, UC-3.6b)
   oracle's inputs (`tests/render/*.input.json`) and compares with the oracle's output
   (`tests/render/snapshots/`) byte for byte. Both are written by
   `scripts/golden/render_oracle.py` run with the oracle's interpreter, never edited and never
-  updated from the Rust side (`cargo insta accept` would hide a regression): golden.yml checks
-  them against the oracle on every pull request into integration/unified-core.
+  updated from the Rust side (`cargo insta accept` would hide a regression): no workflow checks
+  them against the oracle any more: re-run `scripts/golden/render_oracle.py` by hand.
 
 ## Test
 
