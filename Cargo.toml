@@ -6,7 +6,7 @@
 # cargo-fuzz builds fuzz/ on nightly with its own workspace and lock file.
 [workspace]
 resolver = "2"
-exclude = ["fuzz"]
+exclude = ["fuzz", "vendor"]
 members = [
     "crates/opentide-core",
     "crates/opentide-highlight",
@@ -252,6 +252,14 @@ lto = true
 codegen-units = 1
 strip = "symbols"
 
+# The WASI build of the command line (`scripts/engine/build-wasm.sh cli`), the
+# one module the VS Code extension runs (ADR 0007's amendment): optimised for
+# size, as the `.vsix` is held to 15 MiB. Unwinding stays: the crash handler
+# catches a panic and reports it.
+[profile.wasi]
+inherits = "release"
+opt-level = "z"
+
 # What an editable install of opentide (`uv sync`) builds for development and CI
 # (hatch_build.py): optimised, so the engine runs at full speed in the Python test
 # suite, without the release profile's slow link-time optimisation.
@@ -270,3 +278,13 @@ strip = "none"
 [profile.dev.package."*"]
 opt-level = 1
 debug = "line-tables-only"
+
+# Two crates with a WASI backend (vendor/README.md). memmap2: gix reads git objects,
+# packs and the index through memmap2, which has no mmap on WASI preview 1,
+# so the WASI build of the command line (ADR 0007's amendment) reads them
+# into the heap there. Native builds are upstream's code, byte for byte.
+[patch.crates-io]
+memmap2 = { path = "vendor/memmap2" }
+# filetime with WASI's file times (vendor/README.md): gix-index reads the
+# index's modification time through it, whose wasm backend panics.
+filetime = { path = "vendor/filetime" }

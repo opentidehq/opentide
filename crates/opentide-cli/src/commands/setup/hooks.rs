@@ -661,6 +661,28 @@ fn install_git_hook(
     Ok(Some((shown, true)))
 }
 
+/// Whether this build can make a file executable: not under WASI, which has
+/// no file permissions.
+pub const EXECUTABLE_BIT_SET: bool = cfg!(not(target_os = "wasi"));
+
+/// What to do about hooks written without their executable bit (`paths`,
+/// relative to the workspace): `None` when there are none.
+pub fn executable_bit_warning(paths: &[&str]) -> Option<String> {
+    if paths.is_empty() {
+        return None;
+    }
+    let quoted: Vec<String> = paths
+        .iter()
+        .map(|path| {
+            shlex::try_quote(path).map_or_else(|_| (*path).to_owned(), |quoted| quoted.into_owned())
+        })
+        .collect();
+    Some(format!(
+        "This build of opentide cannot set file permissions (WASI), so the hook is not executable and git will skip it; make it executable: chmod +x {}",
+        quoted.join(" ")
+    ))
+}
+
 /// `setup hooks`: the pre-commit config, the versioned hook, and Git's hook.
 ///
 /// # Errors
@@ -717,6 +739,20 @@ pub fn hooks(
             installed = true;
         } else {
             skipped.push(path);
+        }
+    }
+    // WASI has no file permissions: the hooks are written, but not
+    // executable, and git skips a hook that is not; say how to fix it.
+    if !EXECUTABLE_BIT_SET {
+        let hooks: Vec<&str> = written
+            .iter()
+            .map(String::as_str)
+            .filter(|path| {
+                *path == VERSIONED_HOOK_PATH || (installed && path.ends_with("pre-commit"))
+            })
+            .collect();
+        if let Some(warning) = executable_bit_warning(&hooks) {
+            warnings.push(warning);
         }
     }
     let mut result = StepResult::new([
@@ -840,6 +876,24 @@ mod tests {
     fn mode(path: &Path) -> u32 {
         use std::os::unix::fs::PermissionsExt as _;
         std::fs::metadata(path).unwrap().permissions().mode()
+    }
+
+    #[test]
+    fn a_hook_without_its_executable_bit_names_the_chmod_line() {
+        assert_eq!(executable_bit_warning(&[]), None);
+        let warning =
+            executable_bit_warning(&[VERSIONED_HOOK_PATH, ".git/hooks/pre-commit"]).unwrap();
+        assert!(
+            warning.ends_with(&format!(
+                "chmod +x {VERSIONED_HOOK_PATH} .git/hooks/pre-commit"
+            )),
+            "{warning}"
+        );
+        assert!(
+            executable_bit_warning(&["a b/pre-commit"])
+                .unwrap()
+                .ends_with("chmod +x 'a b/pre-commit'")
+        );
     }
 
     #[cfg(unix)]

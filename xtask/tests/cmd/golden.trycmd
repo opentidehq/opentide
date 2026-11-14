@@ -42,7 +42,13 @@ commands:
                the PyPI console script of .venv; node, the npm package's `opentide`
                bin (bindings/node/cli.js, after `npm run build` there) under the
                `node` on PATH, which runs the same command line in-process
-               (UC-5.3). `--runner node` alone implies --engine rust
+               (UC-5.3); wasi, the WASI build of the command line
+               (target/wasm32-wasip1/wasi/opentide.wasm, `build-wasm.sh cli`) under
+               wasmtime, or $OPENTIDE_WASI_RUNTIME (`node`: Node's WASI), the case's
+               paths mapped where they are, its environment and working directory
+               passed in (ADR 0007's amendment); cases that need the network are
+               left out (tests/golden/WASI_EXCLUDED.toml). `--runner node` or
+               `--runner wasi` alone implies --engine rust
 --report FILE  with --engine rust: write the JSON report (opentide-compare's RunReport)
 --oracle FILE  another oracle file than tests/golden/ORACLE, in its format (a preview
                of the next oracle: tests/golden/ORACLE.next); `record` with it

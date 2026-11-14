@@ -2,6 +2,9 @@
 //! a person at a terminal opens it, driven by key presses through
 //! portable-pty, what it draws read back into a screen by vt100. Open, run
 //! validate, quit.
+
+// The terminal UI is the `terminal` feature (off in the WASI build).
+#![cfg(feature = "terminal")]
 #![cfg(unix)]
 #![expect(
     clippy::unwrap_used,

@@ -2014,6 +2014,26 @@ fixtures = ["deploy-push"]
 modes = ["plain", "json"]
 env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
 
+# Git without the network (ADR 0007's amendment): a git checkout read with
+# gix, which the WASI build must read as natively. The dry run plans the rule
+# the push changed (read from the push's commits) and sends nothing; `docs
+# --changed` resolves the default branch's baseline, against which nothing
+# changed.
+[[case]]
+command = "deploy"
+variant = "dry-run-push"
+args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW"]
+fixtures = ["deploy-push"]
+modes = ["plain", "json"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "generate docs"
+variant = "changed-push"
+args = ["generate", "docs", "--changed"]
+fixtures = ["deploy-push"]
+modes = ["plain", "json"]
+
 [[case]]
 command = "deploy"
 variant = "promote-gitlab-progress-json"

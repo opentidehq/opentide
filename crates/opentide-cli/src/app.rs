@@ -913,13 +913,23 @@ impl Run<'_> {
                 }
                 // A person at a terminal: the UI (UC-3.6d), which owns the
                 // terminal until it quits.
-                let launch = crate::tui::Launch {
-                    repo: self.globals.repo.clone(),
-                    env: self.env.clone(),
-                    cwd: self.host.cwd.clone().unwrap_or_default(),
-                    version: self.host.version.clone(),
-                };
-                crate::tui::open(&launch)
+                #[cfg(feature = "terminal")]
+                {
+                    let launch = crate::tui::Launch {
+                        repo: self.globals.repo.clone(),
+                        env: self.env.clone(),
+                        cwd: self.host.cwd.clone().unwrap_or_default(),
+                        version: self.host.version.clone(),
+                    };
+                    crate::tui::open(&launch)
+                }
+                // A build without the terminal UI (the WASI build) refuses
+                // it, as a run without a terminal is refused above.
+                #[cfg(not(feature = "terminal"))]
+                {
+                    let report = crate::commands::tui::unavailable();
+                    self.emit_report(&report, out, err)
+                }
             }
             "lsp start" => {
                 // The server blocks on stdin and polls no interrupt: Ctrl-C
@@ -2836,6 +2846,16 @@ fn is_broken_pipe(error: &(dyn std::error::Error + 'static)) -> bool {
 /// Ctrl-C: `interrupt` is set, and the run stops ([`Interrupt`]). The
 /// process ends with `error: interrupted` and 130 on a second Ctrl-C, or when
 /// the run has not stopped after [`INTERRUPT_GRACE`].
+#[cfg(target_os = "wasi")]
+pub fn install_interrupt_handler(interrupt: Interrupt) {
+    // WASI delivers no signals: the host ends the module instead.
+    let _ = interrupt;
+}
+
+/// Ctrl-C: `interrupt` is set, and the run stops ([`Interrupt`]). The
+/// process ends with `error: interrupted` and 130 on a second Ctrl-C, or when
+/// the run has not stopped after [`INTERRUPT_GRACE`].
+#[cfg(not(target_os = "wasi"))]
 pub fn install_interrupt_handler(interrupt: Interrupt) {
     // A second install (an embedding host calling `main` twice) keeps the first.
     let _ignored = ctrlc::set_handler(move || {
@@ -2873,6 +2893,41 @@ pub fn exit(argv: &[String], version: &str) -> ! {
     std::process::exit(main(argv, version))
 }
 
+/// The width of the terminal stderr (else stdout) is, when either is one.
+#[cfg(not(target_os = "wasi"))]
+fn terminal_width() -> Option<usize> {
+    terminal_size::terminal_size_of(std::io::stderr())
+        .or_else(|| terminal_size::terminal_size_of(std::io::stdout()))
+        .map(|(width, _)| usize::from(width.0))
+}
+
+/// The variable a WASI host sets to its terminal's width: WASI preview 1
+/// has no call that tells a terminal's size, which the host knows (VS Code's
+/// pseudoterminal; the golden harness's pty).
+pub const TERMINAL_WIDTH_VARIABLE: &str = "OPENTIDE_TERMINAL_WIDTH";
+
+/// WASI: the width the host names ([`TERMINAL_WIDTH_VARIABLE`]), as
+/// natively the terminal itself tells it. The host sets it only when it
+/// gives the module a terminal.
+#[cfg(target_os = "wasi")]
+fn terminal_width() -> Option<usize> {
+    std::env::var(TERMINAL_WIDTH_VARIABLE)
+        .ok()?
+        .parse::<usize>()
+        .ok()
+        .filter(|width| *width > 0)
+}
+
+/// WASI gives a module no working directory: the host names it in `PWD`
+/// (a folder it preopened), as a shell does, and relative paths resolve
+/// against it from here on. Elsewhere the process has its own.
+fn adopt_working_directory() {
+    #[cfg(target_os = "wasi")]
+    if let Some(pwd) = std::env::var_os("PWD").filter(|pwd| !pwd.is_empty()) {
+        let _ignored = std::env::set_current_dir(pwd);
+    }
+}
+
 /// Frees `value`, unless the process ends when this run returns ([`exit`]):
 /// freeing a large document tree (a workspace's index, `info catalog`'s
 /// document) takes longer than building it, and the exit reclaims it at no
@@ -2892,6 +2947,7 @@ fn release_when<T>(value: T, process_ends: bool) {
 /// `opentide` in this process: the process's environment and streams.
 pub fn main(argv: &[String], version: &str) -> i32 {
     use std::io::IsTerminal;
+    adopt_working_directory();
     let env = Env::from_process();
     let cwd = std::env::current_dir().ok();
     // A Tab press (`_OPENTIDE_COMPLETE`): its candidates, before anything
@@ -2909,9 +2965,7 @@ pub fn main(argv: &[String], version: &str) -> i32 {
         stderr_tty: std::io::stderr().is_terminal(),
         log_sink: stderr_sink,
         cwd,
-        width: terminal_size::terminal_size_of(std::io::stderr())
-            .or_else(|| terminal_size::terminal_size_of(std::io::stdout()))
-            .map(|(width, _)| usize::from(width.0)),
+        width: terminal_width(),
         interrupt,
     };
     let mut out = std::io::stdout().lock();

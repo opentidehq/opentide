@@ -1,0 +1,8 @@
+Deploy plan · strategy PREVIEW · 1 platform, 1 tenant · dry run, nothing is sent
+
+splunk · 1 tenant
+  lab
+    + create or update  Splunk create rule  …000000000041  status STAGING
+
+Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
+dry run, nothing sent

@@ -716,33 +716,29 @@ fn run_on_tenant(
     };
     let interrupted = cx.interrupted;
     let ran: std::thread::Result<Result<Result<QueryOutcome, ConnectorError>, String>> =
-        std::thread::scope(|scope| {
-            scope
-                .spawn(|| {
-                    opentide_connectors::runtime::block_on(async {
-                        let cancel = CancellationToken::new();
-                        let context = TenantContext {
-                            tenant: &tenant,
-                            http: &http,
-                            cancel: &cancel,
-                        };
-                        let work = runner.run(context, request);
-                        // Ctrl-C stops the search, which the runner stops on the
-                        // tenant where the API allows it.
-                        let watch = async {
-                            while !interrupted() {
-                                tokio::time::sleep(Duration::from_millis(50)).await;
-                            }
-                            cancel.cancel();
-                            std::future::pending::<()>().await;
-                        };
-                        tokio::select! {
-                            result = work => result,
-                            () = watch => Err(ConnectorError::Cancelled),
-                        }
-                    })
-                })
-                .join()
+        crate::threads::run_apart(|| {
+            opentide_connectors::runtime::block_on(async {
+                let cancel = CancellationToken::new();
+                let context = TenantContext {
+                    tenant: &tenant,
+                    http: &http,
+                    cancel: &cancel,
+                };
+                let work = runner.run(context, request);
+                // Ctrl-C stops the search, which the runner stops on the
+                // tenant where the API allows it.
+                let watch = async {
+                    while !interrupted() {
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                    }
+                    cancel.cancel();
+                    std::future::pending::<()>().await;
+                };
+                tokio::select! {
+                    result = work => result,
+                    () = watch => Err(ConnectorError::Cancelled),
+                }
+            })
         });
     let result = match ran {
         Ok(Ok(result)) => result,

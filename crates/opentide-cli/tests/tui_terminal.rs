@@ -4,6 +4,8 @@
 //! `plain` mode is named, with a `help:` that says how to open it anyway.
 //! The UI itself opening at a terminal (UC-3.6d, #951) is `tests/tui_pty.rs`.
 
+// The terminal UI is the `terminal` feature (off in the WASI build).
+#![cfg(feature = "terminal")]
 #![cfg(unix)]
 #![expect(
     clippy::unwrap_used,

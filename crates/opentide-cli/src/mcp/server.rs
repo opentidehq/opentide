@@ -99,15 +99,19 @@ impl Server {
         }
     }
 
-    /// Serves on stdin and `rpc` until the client closes stdin.
+    /// Serves on `input` (stdin) and `rpc` until the client closes `input`.
     ///
     /// # Errors
     ///
     /// The transport failed to start or the service stopped abnormally.
-    pub async fn run(self, rpc: tokio::fs::File) -> std::io::Result<()> {
+    pub async fn run<I, O>(self, input: I, rpc: O) -> std::io::Result<()>
+    where
+        I: tokio::io::AsyncRead + Send + Unpin + 'static,
+        O: tokio::io::AsyncWrite + Send + Unpin + 'static,
+    {
         // A last message without its newline is read at end of input, as the
         // Python server reads it: the transport only takes whole lines.
-        let stdin = tokio::io::AsyncReadExt::chain(tokio::io::stdin(), &b"\n"[..]);
+        let stdin = tokio::io::AsyncReadExt::chain(input, &b"\n"[..]);
         let service = match self.serve((stdin, rpc)).await {
             Ok(service) => service,
             Err(error) => {

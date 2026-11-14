@@ -540,10 +540,12 @@ pub fn welcome(console: Console, mode: Mode, version: &str) -> String {
 /// The questions at a terminal, on inquire: drawn on stderr, a question
 /// mark in the brand (`≋` on Reflex Blue), answers in bold, a refused
 /// answer's reason under the field (`PROMPT_STYLE`).
+#[cfg(feature = "terminal")]
 pub struct Inquire {
     config: inquire::ui::RenderConfig<'static>,
 }
 
+#[cfg(feature = "terminal")]
 impl Inquire {
     /// The prompts for a stream with `colour`.
     pub fn new(colour: Colour) -> Inquire {
@@ -570,6 +572,7 @@ impl Inquire {
 }
 
 /// inquire's answer as the wizard reads it: Ctrl-C and Escape stop the run.
+#[cfg(feature = "terminal")]
 fn answer<T>(result: inquire::error::InquireResult<T>) -> Answer<T> {
     use inquire::InquireError;
     result.map_err(|error| match error {
@@ -578,6 +581,7 @@ fn answer<T>(result: inquire::error::InquireResult<T>) -> Answer<T> {
     })
 }
 
+#[cfg(feature = "terminal")]
 impl Prompter for Inquire {
     fn text(&mut self, message: &str, default: &str, required: Option<&str>) -> Answer<String> {
         let mut prompt = inquire::Text::new(message)
@@ -638,6 +642,7 @@ impl Prompter for Inquire {
     }
 }
 
+#[cfg(feature = "terminal")]
 impl Inquire {
     /// A checkbox question, with `hint` as its help line when given.
     fn multi_select(
@@ -666,6 +671,44 @@ impl Inquire {
                 });
         }
         answer(prompt.raw_prompt()).map(|picked| picked.iter().map(|option| option.index).collect())
+    }
+}
+
+/// The questions of a build without the terminal prompts (the `terminal`
+/// feature off, as in the WASI build): each one stops the wizard and says
+/// why, so a wizard that reaches a question fails instead of hanging.
+#[cfg(not(feature = "terminal"))]
+pub struct Inquire;
+
+#[cfg(not(feature = "terminal"))]
+impl Inquire {
+    /// The prompts; `colour` is unused without a terminal to draw on.
+    pub fn new(_colour: Colour) -> Inquire {
+        Inquire
+    }
+}
+
+/// Why a build without the terminal prompts cannot ask.
+#[cfg(not(feature = "terminal"))]
+pub const NO_PROMPTS: &str = "this build of opentide cannot ask questions at a terminal (it has no \
+     terminal prompts); answer them with the command's flags, or run the opentide CLI";
+
+#[cfg(not(feature = "terminal"))]
+impl Prompter for Inquire {
+    fn text(&mut self, _: &str, _: &str, _: Option<&str>) -> Answer<String> {
+        Err(Stop::Failed(NO_PROMPTS.to_owned()))
+    }
+
+    fn confirm(&mut self, _: &str, _: bool) -> Answer<bool> {
+        Err(Stop::Failed(NO_PROMPTS.to_owned()))
+    }
+
+    fn select(&mut self, _: &str, _: &[&str], _: usize) -> Answer<usize> {
+        Err(Stop::Failed(NO_PROMPTS.to_owned()))
+    }
+
+    fn checkbox(&mut self, _: &str, _: &[&str], _: &[usize], _: bool) -> Answer<Vec<usize>> {
+        Err(Stop::Failed(NO_PROMPTS.to_owned()))
     }
 }
 

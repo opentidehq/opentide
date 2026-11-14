@@ -902,9 +902,57 @@ fn changed_object_files(root: &Path, cx: &Context<'_>) -> Vec<PathBuf> {
     }
 }
 
+/// [`work_tree_changes`] read with gix rather than the `git` program (the
+/// WASI build, which runs no program): the object files of each
+/// `objects/<family>/` folder that differ from the default branch's
+/// baseline, untracked ones included, sorted by path.
+fn work_tree_changes_read(root: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(root.join("objects")) else {
+        return Vec::new();
+    };
+    let mut folders: Vec<PathBuf> = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .collect();
+    folders.sort();
+    // gix gives the checkout's paths in its own canonical form, which need
+    // not be `root`'s (a `\\?\` or 8.3 name on Windows, a symlink): each is
+    // placed in the workspace with both sides canonical, then named from
+    // `root` as the caller gave it.
+    let canonical = |path: &Path| std::fs::canonicalize(path).ok();
+    let Some(canonical_root) = canonical(root) else {
+        return Vec::new();
+    };
+    match git::changed_in_folders(root, &folders, &|_| true) {
+        Ok(files) => files
+            .into_iter()
+            .filter_map(|file| {
+                if !file.absolute.is_file() {
+                    return None;
+                }
+                let real = canonical(&file.absolute)?;
+                let within = real.strip_prefix(&canonical_root).ok()?;
+                inflight::is_object_yaml(&within.to_string_lossy()).then(|| root.join(within))
+            })
+            .collect(),
+        Err(error) => {
+            tracing::warn!(
+                detail = error.message().as_str(),
+                "inflight_no_git_baseline"
+            );
+            Vec::new()
+        }
+    }
+}
+
 /// The object files changed in the work tree against the default branch,
 /// untracked ones included (`_local_git_changed_paths`).
 fn work_tree_changes(env: &Env, root: &Path) -> Vec<PathBuf> {
+    // WASI runs no program: the checkout is read with gix instead.
+    if cfg!(target_os = "wasi") {
+        return work_tree_changes_read(root);
+    }
     let baseline = match crate::git_baseline::resolve(env, root) {
         Ok(baseline) => baseline,
         Err(detail) => {
@@ -1325,6 +1373,102 @@ fn named_phases(names: &[String], cx: &Context<'_>, version: &str) -> Report {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The WASI build's reading of the work tree (gix) finds what the `git`
+    /// program finds: a changed, a new and an untracked object file on a
+    /// branch, not a deleted one or a file outside the object folders.
+    #[test]
+    fn the_work_tree_read_with_gix_matches_the_git_program() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(dir.path()).unwrap();
+        let git = |args: &[&str]| {
+            let status = std::process::Command::new("git")
+                .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+                .args(args)
+                .current_dir(&root)
+                .status()
+                .unwrap();
+            assert!(status.success(), "git {args:?}");
+        };
+        let write = |path: &str, text: &str| {
+            let path = root.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        };
+        git(&["init", "-q", "-b", "main"]);
+        write("objects/rules/kept.yaml", "a: 1\n");
+        write("objects/rules/changed.yaml", "a: 1\n");
+        write("objects/threats/gone.yaml", "a: 1\n");
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "base"]);
+        git(&["checkout", "-qb", "feature"]);
+        write("objects/rules/changed.yaml", "a: 2\n");
+        write("objects/objectives/committed.yaml", "a: 1\n");
+        std::fs::remove_file(root.join("objects/threats/gone.yaml")).unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "work"]);
+        write("objects/rules/untracked.yaml", "a: 1\n");
+        write("notes/outside.yaml", "a: 1\n");
+        let native = work_tree_changes(&Env::from_process(), &root);
+        let read = work_tree_changes_read(&root);
+        let names = |paths: &[PathBuf]| {
+            let mut names: Vec<String> = paths
+                .iter()
+                .map(|path| {
+                    // The program's paths are git's (`C:/...` on Windows),
+                    // the root is canonical (`\\?\C:\...`): compare both canonical.
+                    std::fs::canonicalize(path)
+                        .unwrap()
+                        .strip_prefix(&root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .replace('\\', "/")
+                })
+                .collect();
+            names.sort();
+            names
+        };
+        assert_eq!(
+            names(&native),
+            [
+                "objects/objectives/committed.yaml",
+                "objects/rules/changed.yaml",
+                "objects/rules/untracked.yaml"
+            ]
+        );
+        assert_eq!(names(&read), names(&native));
+    }
+
+    /// The gix reader names the checkout's files from the root it is given,
+    /// even when that root is not in canonical form (a symlink here; a
+    /// `\\?\` or 8.3 name on Windows): it once dropped every file then.
+    #[cfg(unix)]
+    #[test]
+    fn the_work_tree_read_takes_a_root_in_any_form() {
+        let dir = tempfile::tempdir().unwrap();
+        let real = dir.path().join("real");
+        std::fs::create_dir_all(real.join("objects/rules")).unwrap();
+        let git = |args: &[&str]| {
+            let status = std::process::Command::new("git")
+                .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+                .args(args)
+                .current_dir(&real)
+                .status()
+                .unwrap();
+            assert!(status.success(), "git {args:?}");
+        };
+        git(&["init", "-q", "-b", "main"]);
+        std::fs::write(real.join("objects/rules/kept.yaml"), "a: 1\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "base"]);
+        std::fs::write(real.join("objects/rules/new.yaml"), "a: 1\n").unwrap();
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        assert_eq!(
+            work_tree_changes_read(&link),
+            [link.join("objects/rules/new.yaml")]
+        );
+    }
 
     #[test]
     fn a_result_counts_its_steps() {

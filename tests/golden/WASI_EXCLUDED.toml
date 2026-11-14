@@ -1,0 +1,62 @@
+# The golden cases `cargo xtask golden check --runner wasi` leaves out, besides
+# those with a cassette (recorded HTTP), which it leaves out unlisted: the WASI
+# build of the command line has no network (wasm32-wasip1 has no sockets; ADR
+# 0007's amendment). Only a case that needs the network may be listed, which
+# xtask's tests hold the list to (xtask/src/golden/wasi.rs): its fixture
+# reaches tenants, a MISP instance or CVE lookups, or its command sends
+# requests. The one other reason is a capability WASI preview 1 lacks
+# (`limit`: `process` or `permissions`), which the entry names. Every other
+# case passes against the WASI build.
+#
+# [[case]]
+# id = "<command>/<mode>/<fixture>/<variant>"   # a glob, as --filter reads one
+# reason = "why it needs the network"
+
+[[case]]
+id = "validate.query/*/live-tenants/live-unreachable-*"
+reason = "a live query check: it sends each query to the tenant, which the harness refuses"
+
+[[case]]
+id = "query/*/tenants/unreachable-*"
+reason = "a query run on a tenant the harness refuses: under WASI no request can leave, so the failure is `network_unavailable` instead of the refused connection"
+
+[[case]]
+id = "deploy/*/deploy-tenants/unreachable-*"
+reason = "a deploy to a tenant the harness refuses"
+
+[[case]]
+id = "deploy/*/tide-corpus/elastic-tenant"
+reason = "a deploy to the corpus's Elastic tenant, which the harness refuses (its recording holds the refused connection)"
+
+[[case]]
+id = "deploy/*/deploy-push*/promote-*"
+reason = "a RELEASE deploy on a push: it promotes rules and deploys them to tenants. It also reads the last commit with gix, whose object store needs mmap, which WASI preview 1 does not have"
+
+[[case]]
+id = "generate.extract.*/*/tenants/unreachable"
+reason = "an import from a tenant the harness refuses"
+
+[[case]]
+id = "share.push/*/share-misp-push*/changed-*"
+reason = "`share push --changed` shares to a MISP instance; its preflight also reads the push's commits with gix, whose object store needs mmap, which WASI preview 1 does not have"
+
+[[case]]
+id = "doctor/*/*/default"
+reason = "`doctor` without --offline asks PyPI for the newest release (its recording holds the refused connection)"
+
+# ---- What WASI preview 1 cannot do at all (`limit`): not network cases ----
+
+[[case]]
+id = "doctor/*/*/offline"
+limit = "process"
+reason = "the git check runs `git --version`, and WASI runs no program: it reports \"git found; version not checked (no subprocesses under WASI)\" (the repository itself is read with gix, as git reads it)"
+
+[[case]]
+id = "setup.hooks/*/*/*"
+limit = "permissions"
+reason = "WASI has no file permissions: the hook is written without its executable bit, and the run says so with the exact `chmod +x` line"
+
+[[case]]
+id = "setup/*/*/plan"
+limit = "permissions"
+reason = "`setup`'s plan writes the pre-commit hook as `setup hooks` does: WASI has no file permissions, so it is written without its executable bit, and the run says so with the exact `chmod +x` line"
