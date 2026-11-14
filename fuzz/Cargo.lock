@@ -2957,6 +2957,7 @@ dependencies = [
  "opentide-spl",
  "opentide-tide",
  "opentide-workspace",
+ "percent-encoding",
  "rayon",
  "regex",
  "serde",
