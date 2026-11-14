@@ -35,6 +35,7 @@ pub mod rules;
 pub mod setup;
 pub mod share;
 pub mod skills;
+mod template;
 pub mod tui;
 pub mod validate;
 pub mod validate_live;

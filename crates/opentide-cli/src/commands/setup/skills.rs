@@ -680,16 +680,13 @@ impl Entrypoints {
     }
 }
 
-/// A template with the run's values (`render_agent_entrypoint`): each
-/// `{key}` replaced in turn, `deploy` first.
+/// A template with the run's values and `{deploy}` (`render_agent_entrypoint`),
+/// in one pass: a value that holds `{org}` is written as it is.
 fn render(template: &str, context: &[(&str, String)]) -> String {
-    let mut text = template.to_owned();
-    for (key, value) in std::iter::once(("deploy", DEPLOY.to_owned()))
-        .chain(context.iter().map(|(key, value)| (*key, value.clone())))
-    {
-        text = text.replace(&format!("{{{key}}}"), &value);
-    }
-    text
+    let values: Vec<(&str, &str)> = std::iter::once(("deploy", DEPLOY))
+        .chain(context.iter().map(|(key, value)| (*key, value.as_str())))
+        .collect();
+    crate::commands::template::fill(template, &values)
 }
 
 /// The plugin's settings, as the template merged into `.claude/settings.json`.
@@ -938,15 +935,21 @@ mod tests {
     }
 
     #[test]
-    fn templates_take_each_value_in_turn_deploy_first() {
+    fn templates_take_each_value_as_it_is() {
+        // A name or description that holds a placeholder is not filled in
+        // again: `{org}` stays `{org}`, `{deploy}` stays `{deploy}`.
         let context = [
             ("name", "{org}".to_owned()),
             ("org", "Acme".to_owned()),
-            ("description", String::new()),
+            ("description", "Run {deploy} {unknown}".to_owned()),
         ];
         assert_eq!(
-            render("# {name} / {description} / {deploy}", &context),
-            "# Acme /  / opentide deploy --dry-run --strategy PREVIEW --all"
+            render(
+                "# {name} / {org} / {description} / {deploy} / {other}",
+                &context
+            ),
+            "# {org} / Acme / Run {deploy} {unknown} / \
+             opentide deploy --dry-run --strategy PREVIEW --all / {other}"
         );
     }
 
