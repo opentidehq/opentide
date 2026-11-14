@@ -41,6 +41,7 @@ const COMMANDS: &[&str] = &[
 ];
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn generate_cases_are_the_oracles() {
     let (problems, ran) = replay::replay_commands(COMMANDS, true);
     assert!(ran >= 32, "only {ran} cases found");

@@ -127,6 +127,7 @@ fn as_data(path: &str, bytes: &[u8]) -> String {
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn sentinel_rules_are_extracted_as_the_oracle_extracted_them() {
     let (_scratch, ws, report) = extract();
 

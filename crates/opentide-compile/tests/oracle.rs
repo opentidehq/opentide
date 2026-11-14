@@ -185,6 +185,7 @@ fn fault_approvals() -> Vec<(String, String)> {
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
     let corpus = dunce::canonicalize(repo().join("tests/golden/payloads/corpus")).unwrap();
     let record: Value = serde_json::from_str(

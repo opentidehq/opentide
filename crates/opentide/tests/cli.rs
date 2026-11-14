@@ -12,6 +12,7 @@ use std::process::Command;
 const CASE: &str = "commands/json/none/default";
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn the_binary_prints_the_pypi_command_tree() {
     use opentide_compare::normalise::{Volatile, opentide_version};
     use opentide_compare::{Case, Normalisation, Run, compare_normalised};

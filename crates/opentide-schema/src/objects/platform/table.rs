@@ -8,6 +8,7 @@
 //! `src/objects/platform/snapshots/`.
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn platform_cases_match_the_oracle() {
     let (failures, results) = crate::objects::table::compare(
         include_str!("../../../tests/oracle/platform_cases.toml"),

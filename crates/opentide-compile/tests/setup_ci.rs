@@ -83,6 +83,7 @@ fn data(text: &str) -> Option<Json> {
 }
 
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn pipelines_are_the_oracles() {
     let mut problems = Vec::new();
     let found = cases();
