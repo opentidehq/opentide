@@ -199,6 +199,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Fixed
 
+- **`opentide tui` no longer shows a platform as enabled when `enabled` is the text `"false"`.** The Configuration tab counted any non-empty value as on, a truth test inherited from the Python CLI, while `deploy` only deploys a platform whose `enabled` is the boolean `true`. The tab now agrees with `deploy`. In the same way, MCP `deployment_status` reads a rule's legacy `platforms` blocks when its `configurations` is not a table, instead of reporting no platforms.
 - **Exabeam messages name a value as JSON.** A block status that is not a string, or a missing one, a recurrence day and a create that answers no id are named `true`, `false` or `null`, as the other platforms' messages name them, not Python's `True`, `False` or `None`.
 
 - **Falco receives a Sysdig list item or exception value as the file writes it** ([#841](https://github.com/opentidehq/opentide/issues/841)). A number or a boolean in `lists[].items` or `exceptions[].values` reached Falco in Python's spelling: `1.50` as `1.5`, `0x1F` as `31`, `True` as `true` in the condition, and an exception value as a JSON number. Falco reads every item as its text, so `deploy` now sends the scalar as written, an exception value as a string, and `validate` checks the block with the same text. A null exception value is refused (`exceptions.N.values.M: Value error, an exception value cannot be null`) where `None` was sent: quote it (`"null"`) to match that word.
