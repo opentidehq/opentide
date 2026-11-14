@@ -698,17 +698,9 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
                 );
                 continue;
             }
-            let mut stem = sanitize_filename(&display_name);
-            if written.contains(&stem.to_lowercase()) {
-                let id: String = rule
-                    .get("name")
-                    .map(json_text)
-                    .unwrap_or_default()
-                    .chars()
-                    .take(8)
-                    .collect();
-                stem = format!("{stem} {id}");
-            }
+            let field = |key: &str| rule.get(key).map(json_text).unwrap_or_default();
+            let stem = file_stem(&field("display_name"), &configured.name, &field("name"));
+            let stem = unique_stem(stem, &field("name"), &written);
             written.push(stem.to_lowercase());
             let destination = cx.cwd.join("Imported");
             std::fs::create_dir_all(&destination)
@@ -721,6 +713,48 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
         }
     }
     Ok(Vec::new())
+}
+
+/// The name of a rule's file, without `.yaml`: `<display name> - <tenant>`,
+/// the characters a file name cannot hold as spaces and no space at either
+/// end. A blank display name falls back to the rule's id, so a file is never
+/// named `.yaml` (hidden) or ` - soc.yaml`.
+fn file_stem(display_name: &str, tenant: &str, id: &str) -> String {
+    let blank = |text: &str| sanitize_filename(text).trim().is_empty();
+    let name = [display_name, id].into_iter().find(|text| !blank(text));
+    let parts: Vec<&str> = name
+        .into_iter()
+        .chain((!blank(tenant)).then_some(tenant))
+        .collect();
+    let stem = sanitize_filename(&parts.join(" - ")).trim().to_owned();
+    if stem.is_empty() {
+        "rule".to_owned()
+    } else {
+        stem
+    }
+}
+
+/// `stem`, or, when a file of this run already has that name (compared
+/// without case: display names are not unique in Sentinel), `stem` followed
+/// by the first eight characters of the rule's id, or by a counter when the
+/// id is blank or taken too. Never ends in a space.
+fn unique_stem(stem: String, id: &str, taken: &[String]) -> String {
+    let free = |candidate: &str| !taken.contains(&candidate.to_lowercase());
+    if free(&stem) {
+        return stem;
+    }
+    let short: String = id.chars().take(8).collect();
+    let short = sanitize_filename(&short).trim().to_owned();
+    if !short.is_empty() {
+        let candidate = format!("{stem} {short}");
+        if free(&candidate) {
+            return candidate;
+        }
+    }
+    (2_usize..)
+        .map(|n| format!("{stem} {n}"))
+        .find(|candidate| free(candidate))
+        .unwrap_or(stem)
 }
 
 /// A failure before ARM answered, as the importer's exception reads.
@@ -822,6 +856,51 @@ mod tests {
         // A Fusion rule is not imported.
         let fusion = RULE.replace("\"Scheduled\"", "\"Fusion\"");
         assert!(render(&object(&fusion), "soc").unwrap().is_none());
+    }
+
+    /// A blank display name is named after the rule's id, never `.yaml` or
+    /// ` - soc.yaml`; no name has a space at either end.
+    #[test]
+    fn a_file_name_is_never_blank_nor_padded() {
+        assert_eq!(file_stem("Rule", "soc", "id"), "Rule - soc");
+        assert_eq!(file_stem(" a:b? ", "soc", "id"), "a b   - soc");
+        assert_eq!(file_stem("", "soc", "0123"), "0123 - soc");
+        assert_eq!(file_stem("  ", "soc", "0123"), "0123 - soc");
+        assert_eq!(file_stem("", "", "0123"), "0123");
+        assert_eq!(file_stem("Rule", "", "0123"), "Rule");
+        assert_eq!(file_stem("", "", ""), "rule");
+        assert_eq!(file_stem("?", "*", "/"), "rule");
+    }
+
+    /// A second rule of the same name takes the id's first eight
+    /// characters; without an id, a counter, never a trailing space.
+    #[test]
+    fn a_repeated_file_name_takes_a_suffix_without_a_trailing_space() {
+        let taken = |names: &[&str]| names.iter().map(|n| n.to_lowercase()).collect::<Vec<_>>();
+        assert_eq!(
+            unique_stem("R - soc".into(), "0123456789", &taken(&[])),
+            "R - soc"
+        );
+        assert_eq!(
+            unique_stem("R - soc".into(), "0123456789", &taken(&["r - soc"])),
+            "R - soc 01234567"
+        );
+        assert_eq!(
+            unique_stem("R - soc".into(), "", &taken(&["r - soc"])),
+            "R - soc 2"
+        );
+        assert_eq!(
+            unique_stem("R - soc".into(), " ", &taken(&["r - soc"])),
+            "R - soc 2"
+        );
+        assert_eq!(
+            unique_stem(
+                "R - soc".into(),
+                "01234567",
+                &taken(&["r - soc", "r - soc 01234567", "r - soc 2"])
+            ),
+            "R - soc 3"
+        );
     }
 
     /// A single string where a list is expected is the one item it is: a
