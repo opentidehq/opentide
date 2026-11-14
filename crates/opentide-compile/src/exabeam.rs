@@ -119,7 +119,7 @@ pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, Compile
         .map_or_else(|| "null".to_owned(), scalar_text);
     cx.statuses
         .strategy(&status)
-        .map_err(|error| CompileError::failed(DISPLAY, &error.exception_text()))
+        .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))
 }
 
 /// The shared `name`, else the opentide rule `name` (`exabeam_name`).
