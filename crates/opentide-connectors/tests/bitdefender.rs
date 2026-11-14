@@ -17,10 +17,12 @@ use opentide_compile::bitdefender::{GravityZoneRule, compile_rule};
 use opentide_compile::strategy::StatusStrategy;
 use opentide_compile::{Json, Owned, Rule};
 use opentide_connectors::bitdefender::{
-    self, Action, Clock, Failure, Pacer, RuleDeploy, RuleOutcome, StateChange, deploy_rule_with,
+    self, Action, Failure, PACE_WINDOW, PACED_CALLS, RuleDeploy, RuleOutcome, StateChange,
+    deploy_rule_with,
 };
 use opentide_connectors::connector::{BoxFuture, TenantContext};
 use opentide_connectors::credentials::Mode;
+use opentide_connectors::pace::{Clock, Pacer};
 use opentide_connectors::runtime::block_on;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, HttpSettings, Tenant};
 use opentide_schema::vocab::Vocabularies;
@@ -160,7 +162,7 @@ struct Run {
     _runtime: tokio::runtime::Runtime,
     server: MockServer,
     fake: Fake,
-    clock: Recorded,
+    clock: Arc<Recorded>,
     pacer: Pacer,
 }
 
@@ -168,6 +170,7 @@ impl Run {
     fn new() -> Self {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let server = runtime.block_on(MockServer::start());
+        let clock = Arc::new(Recorded::default());
         let fake = Fake(Arc::new(Mutex::new(State {
             ids: VecDeque::from([FIRST_ID, NEXT_ID, "6372b7a3897aaa77ee021644"]),
             ..State::default()
@@ -181,8 +184,8 @@ impl Run {
             _runtime: runtime,
             server,
             fake,
-            clock: Recorded::default(),
-            pacer: Pacer::new(),
+            clock: Arc::clone(&clock),
+            pacer: Pacer::with_clock(PACED_CALLS, PACE_WINDOW, clock),
         }
     }
 
@@ -256,7 +259,7 @@ impl Run {
             http: &http,
             cancel: &cancel,
         };
-        block_on(deploy_rule_with(cx, rule, &self.pacer, &self.clock)).unwrap()
+        block_on(deploy_rule_with(cx, rule, &self.pacer)).unwrap()
     }
 
     fn deploy(&self, rule: &RuleDeploy) -> Result<RuleOutcome, ConnectorError> {
@@ -728,6 +731,29 @@ fn a_long_retry_after_is_waited_for_at_most_120_seconds() {
 }
 
 #[test]
+fn a_retry_after_date_is_honoured() {
+    // RFC 9110 lets Retry-After name a date: the wait is until then.
+    let when = jiff::Timestamp::now() + jiff::SignedDuration::from_secs(90);
+    let date = jiff::fmt::rfc2822::DateTimePrinter::new()
+        .timestamp_to_rfc9110_string(&when)
+        .unwrap();
+    let run = Run::new();
+    run.script(move |body| {
+        answer(200, &error(&body["id"], -32003, "Too many requests", None))
+            .insert_header("Retry-After", date.as_str())
+    });
+    let outcome = run.deploy(&create()).unwrap();
+    assert_eq!(run.methods(), ["createCustomRule", "createCustomRule"]);
+    let slept = run.slept();
+    assert_eq!(slept.len(), 1);
+    assert!(
+        (Duration::from_secs(80)..=Duration::from_secs(90)).contains(&slept[0]),
+        "{slept:?}"
+    );
+    assert_eq!(outcome.state, StateChange::Record(FIRST_ID.to_owned()));
+}
+
+#[test]
 fn a_rate_limit_that_never_clears_fails() {
     let run = Run::new();
     for _ in 0..11 {
@@ -742,7 +768,7 @@ fn a_rate_limit_that_never_clears_fails() {
         "updateCustomRule: error -32003: still rate limited after 10 waits"
     );
     assert_eq!(run.methods().len(), 11);
-    assert_eq!(run.slept(), vec![Duration::from_secs(60); 11]);
+    assert_eq!(run.slept(), vec![Duration::from_secs(60); 10]);
 }
 
 #[test]
@@ -864,7 +890,7 @@ fn an_unset_api_key_variable_is_refused_before_any_call() {
         http: &http,
         cancel: &cancel,
     };
-    let error = block_on(deploy_rule_with(cx, &create(), &run.pacer, &run.clock))
+    let error = block_on(deploy_rule_with(cx, &create(), &run.pacer))
         .unwrap()
         .unwrap_err();
     assert!(

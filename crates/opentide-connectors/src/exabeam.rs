@@ -11,11 +11,13 @@
 //! subscription") does (`exabeam_feature_unavailable`).
 //!
 //! Exabeam allows 100 requests a minute per source IP, so every request of
-//! every Exabeam session in the process goes through one [`Pacer`]: at most
-//! 100 in any rolling minute. A `429` waits out `Retry-After` (60 seconds
-//! when absent) and sends the same request again, because a rate-limited
-//! request was not executed. No transport-level retry is mounted: a create
-//! that got no answer is never sent again (`exabeam_create_unconfirmed`).
+//! every Exabeam session in the process goes through one [`Pacer`]
+//! ([`shared_pacer`]): at most 100 in any rolling minute. A `429` waits out
+//! `Retry-After` ([`RATE_LIMIT`]: at most 120 seconds, 60 when absent) and
+//! sends the same request again, because a rate-limited request was not
+//! executed: at most ten times. No transport-level retry is mounted: a
+//! create that got no answer is never sent again
+//! (`exabeam_create_unconfirmed`).
 //!
 //! Deploy plans every create, update, disable and delete from deployment
 //! state; the one listing call, the name check before a create, can only
@@ -25,7 +27,6 @@
 //!
 //! The bodies are `opentide-compile`'s (`exabeam::compile_rule`).
 
-use std::collections::VecDeque;
 use std::sync::{Arc, LazyLock, OnceLock};
 use std::time::Duration;
 
@@ -35,7 +36,6 @@ use opentide_compile::json::Object;
 use opentide_schema::objects::platform::python_strip;
 use regex::Regex;
 use tokio::sync::Mutex;
-use tokio::time::Instant;
 
 use crate::answer::Answer;
 use crate::connector::{
@@ -44,6 +44,8 @@ use crate::connector::{
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
+use crate::pace::Pacer;
+use crate::retry::{Attempt, RetryPolicy};
 use crate::{Secret, TenantLabel};
 
 /// The platform's identifier.
@@ -58,10 +60,12 @@ pub const PACE_WINDOW: Duration = Duration::from_secs(60);
 /// The wait when a `429` names no `Retry-After`.
 pub const DEFAULT_RETRY_AFTER: Duration = Duration::from_secs(60);
 /// Rate-limited resends of one request before it fails.
-pub const MAX_RATE_LIMITED: usize = 10;
-/// The longest `Retry-After` waited out; a longer one fails the request
-/// instead of stalling the run (a CI job has a timeout).
-pub const MAX_RETRY_AFTER: Duration = Duration::from_secs(300);
+pub const MAX_RATE_LIMITED: u32 = 10;
+/// How a `429` is waited out and the request sent again.
+pub const RATE_LIMIT: RetryPolicy =
+    RetryPolicy::rate_limited(MAX_RATE_LIMITED, DEFAULT_RETRY_AFTER);
+/// The pacer's one key: the limit is per source IP, not per tenant.
+const PACE_KEY: u64 = 0;
 /// The most rows one search returns (the API's default `limit`).
 pub const MAX_ROWS: usize = 3000;
 /// The most characters an Exabeam rule name has.
@@ -87,71 +91,11 @@ pub fn http_defaults() -> HttpSettings {
 // The pacer.
 // ---------------------------------------------------------------------------
 
-/// At most `calls` requests in any rolling `window` (`_Pacer`). Waits on
-/// tokio's clock, so a test pauses it (`tokio::time::pause`).
-#[derive(Debug)]
-pub struct Pacer {
-    calls: Mutex<VecDeque<Instant>>,
-    limit: usize,
-    window: Duration,
-}
-
-impl Default for Pacer {
-    fn default() -> Self {
-        Self::new(PACED_CALLS, PACE_WINDOW)
-    }
-}
-
-impl Pacer {
-    /// A pacer of `limit` requests per `window`.
-    pub fn new(limit: usize, window: Duration) -> Self {
-        Self {
-            calls: Mutex::new(VecDeque::new()),
-            limit: limit.max(1),
-            window,
-        }
-    }
-
-    fn prune(calls: &mut VecDeque<Instant>, now: Instant, window: Duration) {
-        while calls
-            .front()
-            .is_some_and(|first| now.saturating_duration_since(*first) >= window)
-        {
-            calls.pop_front();
-        }
-    }
-
-    /// Waits until one more request fits in the window, and counts it.
-    /// Requests wait their turn in order: the lock is held while waiting.
-    pub async fn wait(&self) {
-        let mut calls = self.calls.lock().await;
-        let mut now = Instant::now();
-        Self::prune(&mut calls, now, self.window);
-        if calls.len() >= self.limit
-            && let Some(first) = calls.front().copied()
-        {
-            let pause = self
-                .window
-                .saturating_sub(now.saturating_duration_since(first));
-            if !pause.is_zero() {
-                tokio::time::sleep(pause).await;
-            }
-            now = Instant::now();
-            Self::prune(&mut calls, now, self.window);
-        }
-        calls.push_back(now);
-    }
-
-    /// Forgets every request counted.
-    pub async fn reset(&self) {
-        self.calls.lock().await.clear();
-    }
-}
-
 /// The pacer every Exabeam session of the process shares: the limit is per
 /// source IP, so every tenant of a run shares it (`PACER`).
 pub fn shared_pacer() -> Arc<Pacer> {
-    static PACER: LazyLock<Arc<Pacer>> = LazyLock::new(|| Arc::new(Pacer::default()));
+    static PACER: LazyLock<Arc<Pacer>> =
+        LazyLock::new(|| Arc::new(Pacer::new(PACED_CALLS, PACE_WINDOW)));
     Arc::clone(&PACER)
 }
 
@@ -338,30 +282,6 @@ fn reason(status: u16) -> String {
         .to_owned()
 }
 
-/// Seconds a `429` asks to wait: `Retry-After` as seconds or an HTTP-date
-/// (RFC 9110), [`DEFAULT_RETRY_AFTER`] when absent or neither, zero for a
-/// date in the past (`_retry_after`).
-pub fn retry_after(value: Option<&str>, now: jiff::Timestamp) -> Duration {
-    let value = value.map(str::trim).unwrap_or_default();
-    if value.is_empty() {
-        return DEFAULT_RETRY_AFTER;
-    }
-    let seconds = match value.parse::<f64>() {
-        Ok(seconds) => seconds,
-        Err(_) => match jiff::fmt::rfc2822::parse(value) {
-            Ok(when) => {
-                let span = when.timestamp().duration_since(now);
-                span.as_secs_f64()
-            }
-            Err(_) => return DEFAULT_RETRY_AFTER,
-        },
-    };
-    if !seconds.is_finite() {
-        return DEFAULT_RETRY_AFTER;
-    }
-    Duration::try_from_secs_f64(seconds.max(0.0)).unwrap_or(DEFAULT_RETRY_AFTER)
-}
-
 #[expect(
     clippy::expect_used,
     reason = "a regex literal, exercised by every expired-token case"
@@ -511,55 +431,41 @@ impl<'a> Session<'a> {
                     tenant: self.tenant().to_owned(),
                     message: error.to_string(),
                 })?;
-        for _ in 0..=MAX_RATE_LIMITED {
-            tokio::select! {
-                () = self.cx.cancel.cancelled() => return Err(ConnectorError::Cancelled.into()),
-                () = self.pacer.wait() => {}
-            }
-            let mut builder = self
-                .cx
-                .http
-                .request(method.clone(), url.as_str())
-                .header("Accept", "application/json");
-            if let Some(bytes) = &bytes {
-                builder = builder
-                    .header("Content-Type", "application/json")
-                    .body(bytes.clone());
-            }
-            if let Some(token) = token {
-                builder = builder.header("Authorization", format!("Bearer {}", token.expose()));
-            }
-            if let Some(timeout) = timeout {
-                builder = builder.timeout(timeout);
-            }
-            let reply = self.fetch(builder).await?;
-            if reply.answer.status != 429 {
-                return Ok(reply);
-            }
-            let wait = retry_after(reply.retry_after.as_deref(), jiff::Timestamp::now());
-            if wait > MAX_RETRY_AFTER {
-                return Err(ApiError::new(
-                    action,
-                    429,
-                    format!(
-                        "rate limited, and Retry-After asks to wait {:.0}s, more than {:.0}s",
-                        wait.as_secs_f64(),
-                        MAX_RETRY_AFTER.as_secs_f64()
-                    ),
-                )
-                .into());
-            }
-            tokio::select! {
-                () = self.cx.cancel.cancelled() => return Err(ConnectorError::Cancelled.into()),
-                () = tokio::time::sleep(wait) => {}
-            }
-        }
-        Err(ApiError::new(
-            action,
-            429,
-            format!("still rate limited after {MAX_RATE_LIMITED} waits"),
-        )
-        .into())
+        let answered = RATE_LIMIT
+            .wait_out(self.pacer.clock(), self.cx.cancel, || async {
+                self.pacer.wait(PACE_KEY, self.cx.cancel).await?;
+                let mut builder = self
+                    .cx
+                    .http
+                    .request(method.clone(), url.as_str())
+                    .header("Accept", "application/json");
+                if let Some(bytes) = &bytes {
+                    builder = builder
+                        .header("Content-Type", "application/json")
+                        .body(bytes.clone());
+                }
+                if let Some(token) = token {
+                    builder = builder.header("Authorization", format!("Bearer {}", token.expose()));
+                }
+                if let Some(timeout) = timeout {
+                    builder = builder.timeout(timeout);
+                }
+                let reply = self.fetch(builder).await?;
+                Ok::<_, Failure>(if reply.answer.status == 429 {
+                    Attempt::RateLimited(reply.retry_after)
+                } else {
+                    Attempt::Done(reply)
+                })
+            })
+            .await?;
+        answered.ok_or_else(|| {
+            ApiError::new(
+                action,
+                429,
+                format!("still rate limited after {MAX_RATE_LIMITED} waits"),
+            )
+            .into()
+        })
     }
 
     async fn fetch(

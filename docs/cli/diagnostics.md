@@ -4148,7 +4148,7 @@ Give one of the blocks its own `configurations.google_secops.name`, or rename on
 
 A Chronicle API request for one Google SecOps rule failed.
 
-Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). Google answered an error other than the ones deploy handles itself, or stayed rate limited (`RESOURCE_EXHAUSTED` or HTTP 503) after three waits: `Retry-After` (at most 300 seconds), else the `RetryInfo` delay Google names, else 5, 15 and 60 seconds. The message carries Google's `error.status` and `error.message`. The other rules still deploy.
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). Google answered an error other than the ones deploy handles itself, or stayed rate limited (`RESOURCE_EXHAUSTED` or HTTP 503) after three waits: `Retry-After` (seconds or a date, at most 120 seconds), else the `RetryInfo` delay Google names (at most 120 seconds), else 5, 15 and 60 seconds. The message carries Google's `error.status` and `error.message`. The other rules still deploy.
 
 ### Example
 

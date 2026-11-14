@@ -21,6 +21,7 @@ use opentide_compile::google_secops::{self as compile, Request, RunState};
 use crate::answer::Answer;
 use crate::connector::TenantContext;
 use crate::error::ConnectorError;
+use crate::retry::{MAX_BACKOFF, parse_retry_after};
 
 use super::PLATFORM;
 use super::auth::{Authorizer, TENANT_UNAUTHORIZED};
@@ -35,9 +36,6 @@ pub const BACKOFF: [Duration; 3] = [
     Duration::from_secs(15),
     Duration::from_secs(60),
 ];
-
-/// The most one named wait (`Retry-After` or `RetryInfo`) is honoured for.
-pub const MAX_RETRY_AFTER: Duration = Duration::from_secs(300);
 
 /// `error.details` entry that names how long to wait.
 pub const RETRY_INFO: &str = "type.googleapis.com/google.rpc.RetryInfo";
@@ -106,14 +104,15 @@ fn duration(value: Option<&Json>) -> Option<f64> {
     compile::protobuf_seconds(value)
 }
 
-/// The wait an answer names: `Retry-After`, else `RetryInfo.retryDelay`;
-/// capped at [`MAX_RETRY_AFTER`].
-pub fn retry_after(header: Option<&str>, body: Option<&Json>) -> Option<Duration> {
-    let cap = MAX_RETRY_AFTER.as_secs_f64();
-    if let Some(seconds) = header.and_then(|value| value.trim().parse::<f64>().ok())
-        && seconds.is_finite()
-    {
-        return Some(Duration::from_secs_f64(seconds.clamp(0.0, cap)));
+/// The wait an answer names: `Retry-After` ([`parse_retry_after`]), else
+/// `RetryInfo.retryDelay`; at most [`MAX_BACKOFF`].
+pub fn retry_after(
+    header: Option<&str>,
+    body: Option<&Json>,
+    now: jiff::Timestamp,
+) -> Option<Duration> {
+    if let Some(wait) = header.and_then(|value| parse_retry_after(value, now)) {
+        return Some(wait);
     }
     let Some(Json::Array(details)) = body
         .and_then(|body| body.get("error"))
@@ -125,7 +124,7 @@ pub fn retry_after(header: Option<&str>, body: Option<&Json>) -> Option<Duration
         .iter()
         .filter(|detail| detail.get("@type").and_then(Json::as_str) == Some(RETRY_INFO))
         .find_map(|detail| duration(detail.get("retryDelay")))
-        .map(|seconds| Duration::from_secs_f64(seconds.min(cap)))
+        .map(|seconds| Duration::from_secs_f64(seconds.clamp(0.0, MAX_BACKOFF.as_secs_f64())))
 }
 
 /// Google's `error.status` and `error.message`, or a description of the
@@ -191,8 +190,12 @@ where
         }
         // Retry-After counts against the same budget: a tenant that keeps
         // naming a wait must not hold the run forever.
-        let wait = retry_after(reply.retry_after.as_deref(), reply.answer.json().as_ref())
-            .unwrap_or(BACKOFF[retries]);
+        let wait = retry_after(
+            reply.retry_after.as_deref(),
+            reply.answer.json().as_ref(),
+            jiff::Timestamp::now(),
+        )
+        .unwrap_or(BACKOFF[retries]);
         tokio::select! {
             () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
             () = tokio::time::sleep(wait) => {}
@@ -600,7 +603,7 @@ mod tests {
         .await;
         assert_eq!(outcome.unwrap().answer.status, 200);
         assert_eq!(sent, 4);
-        assert_eq!(waited, Duration::from_millis(7_000 + 2_500 + 300_000));
+        assert_eq!(waited, Duration::from_millis(7_000 + 2_500 + 120_000));
     }
 
     #[tokio::test(start_paused = true)]
@@ -628,16 +631,27 @@ mod tests {
 
     #[test]
     fn retry_after_values() {
+        let now: jiff::Timestamp = "2026-11-11T12:00:00Z".parse().unwrap_or_default();
         assert_eq!(
-            retry_after(Some(" 1.5 "), None),
-            Some(Duration::from_millis(1500))
+            retry_after(Some(" 7 "), None, now),
+            Some(Duration::from_secs(7))
         );
-        assert_eq!(retry_after(Some("-3"), None), Some(Duration::ZERO));
+        assert_eq!(retry_after(Some("3600"), None, now), Some(MAX_BACKOFF));
+        assert_eq!(retry_after(Some("-3"), None, now), None);
         assert_eq!(
-            retry_after(Some("Wed, 21 Oct 2015 07:28:00 GMT"), None),
-            None
+            retry_after(Some("Wed, 11 Nov 2026 12:00:30 GMT"), None, now),
+            Some(Duration::from_secs(30))
         );
-        assert_eq!(retry_after(None, Some(&Json::Null)), None);
+        assert_eq!(retry_after(None, Some(&Json::Null), now), None);
+        let body: Json = serde_json::from_str(
+            r#"{"error": {"details": [{"@type": "type.googleapis.com/google.rpc.RetryInfo",
+                "retryDelay": "900s"}]}}"#,
+        )
+        .unwrap_or(Json::Null);
+        assert_eq!(
+            retry_after(Some("soon"), Some(&body), now),
+            Some(MAX_BACKOFF)
+        );
     }
 
     #[test]
