@@ -4,14 +4,15 @@
 //! and `validator.py` (the columns a custom detection needs), request for
 //! request.
 //!
-//! The client signs in once per tenant with the app registration's client
-//! credentials (Entra ID's token endpoint), then sends every call to Graph's
+//! The client signs in to Entra ID with the tenant's app registration
+//! ([`crate::entra`]: `tenant_id`, `client_id`, `client_secret`, scope
+//! Graph's), keeps the token until it is due for renewal (a `401` gets one
+//! new token and one resend), and sends every call to Graph's
 //! beta security API with the bearer token and `Content-Type:
 //! application/json`. Bodies are the compiled rule (`opentide-compile`
 //! `defender::body`), sent as compact JSON.
 
-use std::collections::BTreeMap;
-use std::sync::{Mutex, PoisonError};
+use std::sync::Arc;
 
 use opentide_compile::json::{Json, Object};
 
@@ -21,16 +22,22 @@ use crate::connector::{
     Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, kql_code,
     kql_with_limit, utc_z,
 };
+use crate::entra::CredentialNames;
 use crate::error::ConnectorError;
 use crate::retry::RetryPolicy;
 use crate::text::json_text;
-use crate::{HttpSettings, Secret, TenantLabel};
+use crate::token::TokenCache;
+use crate::{HttpSettings, Secret};
 
 /// The platform's identifier.
 pub const PLATFORM: &str = "defender_for_endpoint";
 
-/// Entra ID's token endpoint; `{tenant_id}` is the directory.
-pub const TOKEN_ENDPOINT: &str = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token";
+/// The tenant setup's names for the app registration.
+pub const CREDENTIALS: CredentialNames = CredentialNames {
+    tenant_id: "tenant_id",
+    client_id: "client_id",
+    client_secret: "client_secret",
+};
 /// Graph's security API.
 pub const GRAPH_API_ENDPOINT: &str = "https://graph.microsoft.com/beta/security";
 /// The custom detection rules collection.
@@ -115,11 +122,27 @@ pub struct Created {
     pub partial: bool,
 }
 
-/// The Defender for Endpoint connector. One sign-in per tenant serves every
-/// call of the run, as one `DefenderForEndpointService` does.
+/// The Defender for Endpoint connector. A tenant's token serves every call
+/// until it is due for renewal.
 #[derive(Debug, Default)]
 pub struct Defender {
-    tokens: Mutex<BTreeMap<TenantLabel, Secret>>,
+    tokens: Arc<TokenCache>,
+}
+
+/// A sign-in Entra ID refused as [`DefenderError::Authentication`]; any
+/// other error as it is.
+fn authentication(error: ConnectorError) -> DefenderError {
+    match error {
+        ConnectorError::Authentication {
+            message, detail, ..
+        } => DefenderError::Authentication {
+            detail: match detail {
+                Some(said) => format!("{message}: {said}"),
+                None => message,
+            },
+        },
+        other => DefenderError::Connector(other),
+    }
 }
 
 impl Defender {
@@ -128,22 +151,19 @@ impl Defender {
         Self::default()
     }
 
-    /// The tenant's bearer token, signing in on first use.
+    /// A connector whose tokens are kept in *tokens*.
+    pub fn with_tokens(tokens: Arc<TokenCache>) -> Self {
+        Self { tokens }
+    }
+
+    /// The tenant's bearer token, signing in when none is kept.
     pub async fn token(&self, cx: TenantContext<'_>) -> Result<Secret, DefenderError> {
-        if let Some(token) = self
-            .tokens
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .get(&cx.tenant.label)
-        {
-            return Ok(token.clone());
-        }
-        let token = sign_in(cx).await?;
         self.tokens
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(cx.tenant.label.clone(), token.clone());
-        Ok(token)
+            .token(&cx.tenant.label, SCOPE, || {
+                crate::entra::sign_in(cx, CREDENTIALS, SCOPE)
+            })
+            .await
+            .map_err(authentication)
     }
 
     /// A call to Graph with the session's headers.
@@ -154,16 +174,27 @@ impl Defender {
         url: &str,
         body: Option<&Json>,
     ) -> Result<Answer, DefenderError> {
-        let token = self.token(cx).await?;
-        let mut builder = cx
-            .http
-            .request(method, url)
-            .header("Authorization", format!("Bearer {}", token.expose()))
-            .header("Content-Type", "application/json");
-        if let Some(body) = body {
-            builder = builder.body(json_body(cx, body)?);
-        }
-        Ok(crate::answer::exchange(cx, builder).await?)
+        let bytes = body.map(|body| json_body(cx, body)).transpose()?;
+        self.tokens
+            .send(
+                cx,
+                SCOPE,
+                || crate::entra::sign_in(cx, CREDENTIALS, SCOPE),
+                |token| {
+                    let builder = cx
+                        .http
+                        .request(method.clone(), url)
+                        .header("Authorization", format!("Bearer {}", token.expose()))
+                        .header("Content-Type", "application/json");
+                    match &bytes {
+                        Some(bytes) => builder.body(bytes.clone()),
+                        None => builder,
+                    }
+                },
+                cx.cancel,
+            )
+            .await
+            .map_err(authentication)
     }
 
     /// Creates a custom detection rule from its compiled *body*
@@ -429,47 +460,6 @@ impl Defender {
             errors,
             warnings: Vec::new(),
         })
-    }
-}
-
-/// Signs in with the tenant's client credentials (`_connect_to_tenant`).
-async fn sign_in(cx: TenantContext<'_>) -> Result<Secret, DefenderError> {
-    let tenant_id = cx.tenant.secret("tenant_id")?.expose().to_owned();
-    let client_id = cx.tenant.secret("client_id")?.expose().to_owned();
-    let client_secret = cx.tenant.secret("client_secret")?.expose().to_owned();
-    let form = url::form_urlencoded::Serializer::new(String::new())
-        .extend_pairs([
-            ("client_id", client_id.as_str()),
-            ("client_secret", client_secret.as_str()),
-            ("grant_type", "client_credentials"),
-            ("scope", SCOPE),
-        ])
-        .finish();
-    let url = TOKEN_ENDPOINT.replace("{tenant_id}", &tenant_id);
-    let builder = cx
-        .http
-        .request(crate::transport::Method::POST, &url)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(form);
-    let answer = crate::answer::exchange(cx, builder).await?;
-    let tenant = &cx.tenant.label.tenant;
-    if answer.status != 200 {
-        return Err(DefenderError::Authentication {
-            detail: format!(
-                "Cannot authenticate against {tenant} (HTTP {})",
-                answer.status
-            ),
-        });
-    }
-    match answer
-        .json()
-        .as_ref()
-        .and_then(|body| body.get("access_token"))
-    {
-        Some(Json::Str(token)) if !token.is_empty() => Ok(Secret::new(token.clone())),
-        _ => Err(DefenderError::Authentication {
-            detail: format!("Microsoft Graph authentication for {tenant} returned no access token"),
-        }),
     }
 }
 
