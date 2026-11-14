@@ -364,7 +364,7 @@ fn report_at(cx: &mut Context, path: &[usize], null: &Node) {
 }
 
 /// The finding of a null exception value.
-pub const NULL_VALUE: &str = "Value error, an exception value cannot be null: Falco reads each \
+pub const NULL_VALUE: &str = "an exception value cannot be null: Falco reads each \
                               value as text, so write the text it should match (quote it, \
                               \"null\", to match that word)";
 

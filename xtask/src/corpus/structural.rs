@@ -197,7 +197,7 @@ pub const APPROVED: &[Approved] = &[Approved {
 }];
 
 /// What the Rust model reports for `reviewed: 2026-02-30`, positions aside.
-const REVIEWED_IMPOSSIBLE_DATE: &str = r#"[{"code":"schema_validation","field_path":["metadata","reviewed"],"message":"Value error, metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`"}]"#;
+const REVIEWED_IMPOSSIBLE_DATE: &str = r#"[{"code":"schema_validation","field_path":["metadata","reviewed"],"message":"metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28`"}]"#;
 
 /// A finding without its position (`line`, `column`, `end_line`,
 /// `end_column`, `yaml_line`): an approved difference names what is found,
@@ -504,7 +504,7 @@ mod tests {
         );
         assert_eq!(
             findings[0]["message"],
-            "Value error, SysdigConfig validation failed with code(s): sysdig_priority"
+            "SysdigConfig validation failed with code(s): sysdig_priority"
         );
         let report = json!({"report": {"issues": [
             {"path": "objects/rules/r.yaml", "code": "schema_validation", "field_path": ["configurations", "sysdig"], "message": "m"},

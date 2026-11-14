@@ -171,7 +171,7 @@ impl<P: Pattern> FromNode for Matching<P> {
         if !P::regex().is_match(&text) {
             cx.error_with(
                 ErrorKind::InvalidValue("string_pattern_mismatch"),
-                format!("String should match pattern '{}'", P::PATTERN),
+                format!("String should match pattern {:?}", P::PATTERN),
                 node,
                 &[("pattern", P::PATTERN.to_owned())],
             );
@@ -396,10 +396,7 @@ impl FromNode for StatusStrategyName {
         let allowed: Vec<&str> = StatusStrategy::ALL.iter().map(|m| m.name()).collect();
         cx.error(
             ErrorKind::InvalidValue("value_error"),
-            format!(
-                "Value error, strategy must be one of {}",
-                allowed.join(", ")
-            ),
+            format!("strategy must be one of {}", allowed.join(", ")),
             node,
         );
         None
@@ -440,7 +437,7 @@ impl FromNode for RunStrategyName {
             _ => {
                 cx.error(
                     ErrorKind::InvalidValue("value_error"),
-                    "Value error, a tenant strategy must be PREVIEW or RELEASE",
+                    "a tenant strategy must be PREVIEW or RELEASE",
                     node,
                 );
                 None
@@ -499,7 +496,7 @@ mod tests {
         assert_eq!(
             errors::<EnvPlaceholder>("\"x\""),
             [(
-                "String should match pattern '^\\$'".to_owned(),
+                "String should match pattern \"^\\\\$\"".to_owned(),
                 "string_pattern_mismatch"
             )]
         );
@@ -516,7 +513,7 @@ mod tests {
         assert!(errors::<StatusStrategyName>("\"PREVIEW\"").is_empty());
         assert_eq!(
             errors::<StatusStrategyName>("\"preview\"")[0].0,
-            "Value error, strategy must be one of INERT, RELEASE, PREVIEW, DISABLEMENT, \
+            "strategy must be one of INERT, RELEASE, PREVIEW, DISABLEMENT, \
              DELETION, UNIVERSAL"
         );
         assert_eq!(
@@ -529,7 +526,7 @@ mod tests {
         assert!(errors::<RunStrategyName>("\" release \"").is_empty());
         assert_eq!(
             errors::<RunStrategyName>("\"DELETION\"")[0].0,
-            "Value error, a tenant strategy must be PREVIEW or RELEASE"
+            "a tenant strategy must be PREVIEW or RELEASE"
         );
     }
 }

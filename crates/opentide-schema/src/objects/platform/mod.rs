@@ -574,10 +574,7 @@ pub(crate) fn garde_named<T: serde::Serialize>(model: &'static str, block: &T) -
     if codes.is_empty() {
         Ok(())
     } else {
-        Err(garde::Error::new(format!(
-            "Value error, {}",
-            codes_message(model, &codes)
-        )))
+        Err(garde::Error::new(codes_message(model, &codes)))
     }
 }
 
