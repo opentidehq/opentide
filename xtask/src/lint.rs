@@ -476,7 +476,7 @@ fn run_case(recording: &Recording, ws: &Path) -> Result<Vec<Difference>> {
         .findings
         .iter()
         .map(|finding| {
-            let text = serde_json::to_string(&finding.json).unwrap_or_default();
+            let text = serde_json::to_string(&finding.entry).unwrap_or_default();
             let map: IndexMap<String, Json> =
                 serde_json::from_str(&crate::payloads::placeholder(&text, ws)).unwrap_or_default();
             map
