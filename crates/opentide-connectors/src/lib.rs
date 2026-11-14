@@ -93,12 +93,14 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
     }
 }
 
-/// The HTTP settings `opentide deploy` mounts for *platform*: a deploy takes
-/// no `--timeout`, so each client reads for the timeout its Python deployer
-/// builds it with: Sentinel's ARM session 60 s (`AlertRules`; a deploy sends
-/// no query, so azure-core's 300 s does not apply), Elastic's client 30 s,
-/// Google SecOps' 60 s, and the transport's 120 s for the clients that take
-/// the caller's. The others keep their own, as in [`http_settings`].
+/// The HTTP settings a deploy mounts for *platform* (`opentide deploy` and
+/// `opentide::Connection::deploy`). A deploy takes no `--timeout`, so each
+/// client reads for the timeout 0.28's deployer used: Sentinel's ARM session
+/// 60 s (a deploy sends no query, so azure-core's 300 s does not apply),
+/// Elastic 30 s, Google SecOps 60 s, and the transport's 120 s for the
+/// clients that take the caller's; the others keep their own, as in
+/// [`http_settings`]. Only the timeout follows 0.28: the retries are the
+/// connectors' own ([`retry::RetryPolicy`]).
 pub fn deploy_http_settings(platform: &str) -> HttpSettings {
     use std::time::Duration;
     match platform {
@@ -194,21 +196,21 @@ mod tests {
 
     #[test]
     fn a_deploy_reads_for_each_python_deployers_client_timeout() {
-        let timeout = |platform| super::deploy_http_settings(platform).timeout;
-        for (platform, seconds) in [
-            ("sentinel", 60),
-            ("elastic", 30),
-            ("google_secops", 60),
-            ("exabeam", 30),
-            ("sysdig", 30),
-            ("bitdefender", 30),
-            ("graylog", 30),
-            ("splunk", 120),
-            ("carbon_black_cloud", 120),
-            ("crowdstrike", 120),
-        ] {
+        // Every platform in the registry, so none goes unchecked.
+        for platform in opentide_schema::platforms::PLATFORMS.iter().map(|p| p.id) {
+            let seconds = match platform {
+                "sentinel" | "google_secops" => 60,
+                "elastic" | "exabeam" | "sysdig" | "bitdefender" | "graylog" => 30,
+                "defender_for_endpoint"
+                | "splunk"
+                | "sentinel_one"
+                | "carbon_black_cloud"
+                | "crowdstrike"
+                | "harfanglab" => 120,
+                other => panic!("{other}: no deploy timeout pinned"),
+            };
             assert_eq!(
-                timeout(platform),
+                super::deploy_http_settings(platform).timeout,
                 Duration::from_secs(seconds),
                 "{platform}"
             );

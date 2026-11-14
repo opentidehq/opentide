@@ -618,7 +618,8 @@ pub(crate) fn unset_credentials(platform: &str, tenant: &Configured, env: &Env) 
 
 /// The HTTP settings a tenant's client mounts for `query`, `validate query
 /// --live` and `generate extract`, at `--timeout`: the connectors' own
-/// ([`opentide_connectors::http_settings`]), the one table the SDK reads too.
+/// ([`opentide_connectors::http_settings`]), which `opentide::Connection`
+/// reads for its queries too.
 pub(crate) fn http_settings(platform: &str, timeout: Duration) -> HttpSettings {
     opentide_connectors::http_settings(platform, timeout)
 }
@@ -1600,6 +1601,22 @@ fn ratio_reduce(total: usize, widths: &[usize]) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_platform_mounts_the_connectors_http_settings() {
+        // A platform the command line listed apart drifted: Google SecOps
+        // left --timeout unread, Exabeam waited 120 s for 30 s.
+        for platform in opentide_schema::platforms::PLATFORMS.iter().map(|p| p.id) {
+            // The default --timeout, and one a user gives.
+            for timeout in [Duration::from_secs(120), Duration::from_secs(7)] {
+                assert_eq!(
+                    http_settings(platform, timeout),
+                    opentide_connectors::http_settings(platform, timeout),
+                    "{platform} at {timeout:?}"
+                );
+            }
+        }
+    }
 
     fn at(text: &str) -> jiff::Timestamp {
         text.parse().unwrap()

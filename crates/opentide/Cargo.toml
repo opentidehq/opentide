@@ -141,3 +141,5 @@ opentide-compare.workspace = true
 # tests await a connection's operations on.
 wiremock.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+# `connectors`: the platform registry a connection's settings are held to.
+opentide-schema.workspace = true
