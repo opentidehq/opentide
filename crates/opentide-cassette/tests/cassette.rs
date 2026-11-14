@@ -1,7 +1,7 @@
 //! Redaction, the cassette format and wiremock replay.
 
 use opentide_cassette::cassette::{Request, Response};
-use opentide_cassette::replay::{compare, same_body, same_form, same_url};
+use opentide_cassette::replay::{compare, optional, same_body, same_form, same_url, verify};
 use opentide_cassette::{Body, Cassette, Interaction, Redaction, Replay};
 
 #[test]
@@ -485,4 +485,100 @@ fn identity_headers_are_ignored_and_meaningful_ones_compared() {
         .detail
         .starts_with("method ")
     );
+}
+
+/// A repeated sign-in the recording client made and a client keeping its
+/// token leaves out; the first sign-in, and any other repeated request,
+/// are never optional.
+#[test]
+fn only_a_repeated_token_request_may_be_left_out() {
+    const TOKEN: &str = "https://api.t.invalid/oauth2/token";
+    const FORM: &str = "client_id=app&client_secret=REDACTED";
+    const JOB: &str = "{\"q\": 1}";
+    let interactions = vec![
+        interaction("POST", TOKEN, FORM, 201, "{}"),
+        interaction("POST", "https://api.t.invalid/jobs", JOB, 200, "{}"),
+        interaction("POST", TOKEN, FORM, 201, "{}"),
+        interaction("POST", "https://api.t.invalid/jobs", JOB, 200, "{}"),
+        interaction(
+            "POST",
+            TOKEN,
+            "client_id=other&client_secret=REDACTED",
+            201,
+            "{}",
+        ),
+    ];
+    let optional_at: Vec<bool> = (0..7).map(|at| optional(&interactions, at)).collect();
+    // Positions 5 and 6 begin the second pass: its first sign-in is not
+    // optional.
+    assert_eq!(
+        optional_at,
+        [false, false, true, false, false, false, false]
+    );
+    assert!(optional(&interactions, 7));
+    let sent = |indices: &[usize]| -> Vec<Request> {
+        indices
+            .iter()
+            .map(|&i| interactions[i].request.clone())
+            .collect()
+    };
+    // The token kept: the second sign-in left out.
+    assert_eq!(verify(&interactions, &sent(&[0, 1, 3, 4])), Vec::new());
+    // As recorded.
+    assert_eq!(verify(&interactions, &sent(&[0, 1, 2, 3, 4])), Vec::new());
+    // A second pass signs in again, then may keep that token.
+    assert_eq!(
+        verify(&interactions, &sent(&[0, 1, 2, 3, 4, 0, 1, 3, 4])),
+        Vec::new()
+    );
+    // A second pass with no sign-in of its own is a difference: each pass
+    // needs at least one.
+    let mismatches = verify(&interactions, &sent(&[0, 1, 2, 3, 4, 1, 3]));
+    assert_eq!(mismatches.first().map(|mismatch| mismatch.index), Some(5));
+    // The first sign-in, or another client's, is never left out.
+    let mismatches = verify(&interactions, &sent(&[1, 3, 4]));
+    assert_eq!(mismatches[0].index, 0);
+    let mismatches = verify(&interactions, &sent(&[0, 1, 3]));
+    assert_eq!(
+        mismatches.last().map(ToString::to_string),
+        Some(format!(
+            "request 4: POST {TOKEN} was recorded and never sent"
+        ))
+    );
+    // A repeated request that is not a sign-in is not optional either.
+    assert!(!verify(&interactions, &sent(&[0, 1, 4])).is_empty());
+
+    // Served: the left-out sign-in's answer is passed over.
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let replay = runtime.block_on(Replay::start(
+        Cassette::new("s", vec![], interactions.clone()),
+        Redaction::default(),
+        Some("https://api.t.invalid".to_owned()),
+    ));
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    let post = |path: &str, body: &str| {
+        runtime.block_on(async {
+            client
+                .post(format!("{}{path}", replay.uri()))
+                .header("content-type", "application/json")
+                .body(body.to_owned())
+                .send()
+                .await
+                .unwrap()
+                .status()
+                .as_u16()
+        })
+    };
+    assert_eq!(post("/oauth2/token", FORM), 201);
+    assert_eq!(post("/jobs", JOB), 200);
+    assert_eq!(post("/jobs", JOB), 200);
+    assert_eq!(
+        post("/oauth2/token", FORM),
+        599,
+        "not the other client's sign-in"
+    );
+    let mismatches = runtime.block_on(replay.verify());
+    assert_eq!(mismatches.len(), 1);
+    assert_eq!(mismatches[0].index, 3);
 }

@@ -23,15 +23,19 @@
 //!   ([`same_form`]), as the query; a JSON body as the same data
 //!   ([`same_body`]): key order, spacing and escapes are layout; any other
 //!   body byte for byte.
-//! - **Order**: the requests in the order recorded.
+//! - **Order**: the requests in the order recorded, but for the requests
+//!   a client may leave out ([`optional`]): a `POST` to an OAuth2 token
+//!   endpoint that repeats an earlier recorded one (the same URL and
+//!   body). The recording client signed in again where the replayed one
+//!   still holds a valid token. The first sign-in of every pass is never
+//!   optional.
 //!
 //! A cassette replays as many times as it is run through: after its last
 //! interaction the next request is compared with its first. Each pass must
 //! be whole: a test that runs a command twice must send the scenario's
-//! requests each time.
+//! requests each time (an optional one aside).
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use wiremock::{Mock, MockServer, Respond, ResponseTemplate};
 
@@ -95,37 +99,69 @@ pub fn received(
     }
 }
 
-/// Serves interaction *index* when it is the next one due and the request
-/// is the recorded one.
-struct InOrder {
-    index: usize,
-    len: usize,
-    expected: cassette::Request,
-    answer: cassette::Response,
-    next: Arc<AtomicUsize>,
+/// Whether the client may leave out the request at *position* of the
+/// cassette's cycle (interaction `position % len`): a `POST` to an OAuth2
+/// token endpoint (a path ending in `/oauth2/token` or
+/// `/oauth2/v2.0/token`) whose URL and body an earlier interaction of the
+/// same pass already holds. A client that keeps its token until it nearly
+/// expires does not sign in again where the recording client did; the
+/// first sign-in of each pass is never optional.
+pub fn optional(interactions: &[Interaction], position: usize) -> bool {
+    let len = interactions.len();
+    if len == 0 {
+        return false;
+    }
+    let request = &interactions[position % len].request;
+    let path = url::Url::parse(&request.url)
+        .map(|url| url.path().to_owned())
+        .unwrap_or_default();
+    if request.method != "POST"
+        || !(path.ends_with("/oauth2/token") || path.ends_with("/oauth2/v2.0/token"))
+    {
+        return false;
+    }
+    // Within its own pass only: each pass signs in at least once, as each
+    // run of a command starts with no token.
+    interactions[..position % len].iter().any(|earlier| {
+        earlier.request.method == request.method
+            && earlier.request.url == request.url
+            && earlier.request.body == request.body
+    })
+}
+
+/// Serves each request the answer of the next interaction it matches,
+/// passing over the optional ones it does not.
+struct Sequence {
+    interactions: Vec<Interaction>,
+    next: Arc<Mutex<usize>>,
     redaction: Redaction,
     origin: Option<String>,
 }
 
-impl wiremock::Match for InOrder {
-    fn matches(&self, request: &wiremock::Request) -> bool {
-        self.next.load(Ordering::SeqCst) % self.len == self.index
-            && differences(
-                &self.expected,
-                &received(request, self.origin.as_deref(), &self.redaction),
-            )
-            .is_none()
-    }
-}
-
-impl Respond for InOrder {
-    fn respond(&self, _request: &wiremock::Request) -> ResponseTemplate {
-        self.next.fetch_add(1, Ordering::SeqCst);
-        let mut template = ResponseTemplate::new(self.answer.status);
-        for (name, value) in &self.answer.headers {
-            template = template.append_header(name.as_str(), value.as_str());
+impl Respond for Sequence {
+    fn respond(&self, request: &wiremock::Request) -> ResponseTemplate {
+        let got = received(request, self.origin.as_deref(), &self.redaction);
+        let len = self.interactions.len();
+        let mut next = self.next.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut position = *next;
+        while len > 0 && position < *next + len {
+            let interaction = &self.interactions[position % len];
+            if differences(&interaction.request, &got).is_none() {
+                *next = position + 1;
+                let answer = &interaction.response;
+                let mut template = ResponseTemplate::new(answer.status);
+                for (name, value) in &answer.headers {
+                    template = template.append_header(name.as_str(), value.as_str());
+                }
+                return template.set_body_bytes(answer.body.bytes());
+            }
+            if !optional(&self.interactions, position) {
+                break;
+            }
+            position += 1;
         }
-        template.set_body_bytes(self.answer.body.bytes())
+        ResponseTemplate::new(MISMATCH_STATUS)
+            .set_body_string("not the request the cassette expects here")
     }
 }
 
@@ -150,41 +186,13 @@ impl Replay {
     /// replay proxy sits in front and names it.
     pub async fn start(cassette: Cassette, redaction: Redaction, origin: Option<String>) -> Self {
         let server = MockServer::builder().start().await;
-        let next = Arc::new(AtomicUsize::new(0));
-        let len = cassette.interactions.len().max(1);
-        for (index, Interaction { request, response }) in
-            cassette.interactions.iter().cloned().enumerate()
-        {
-            let rule = InOrder {
-                index,
-                len,
-                expected: request,
-                answer: response.clone(),
-                next: next.clone(),
-                redaction: redaction.clone(),
-                origin: origin.clone(),
-            };
-            let responder = InOrder {
-                index,
-                len,
-                expected: rule.expected.clone(),
-                answer: response,
-                next: next.clone(),
-                redaction: redaction.clone(),
-                origin: origin.clone(),
-            };
-            Mock::given(rule)
-                .respond_with(responder)
-                .with_priority(1)
-                .mount(&server)
-                .await;
-        }
         Mock::given(wiremock::matchers::any())
-            .respond_with(
-                ResponseTemplate::new(MISMATCH_STATUS)
-                    .set_body_string("not the request the cassette expects here"),
-            )
-            .with_priority(u8::MAX)
+            .respond_with(Sequence {
+                interactions: cassette.interactions.clone(),
+                next: Arc::new(Mutex::new(0)),
+                redaction: redaction.clone(),
+                origin: origin.clone(),
+            })
             .mount(&server)
             .await;
         Self {
@@ -212,21 +220,71 @@ impl Replay {
     }
 
     /// Every difference between the requests received and the cassette's,
-    /// played as many whole times as the requests need (at least once).
+    /// played as many whole times as the requests need (at least once),
+    /// the optional requests ([`optional`]) left out where the client did.
     pub async fn verify(&self) -> Vec<Mismatch> {
-        let received = self.requests().await;
-        let len = self.cassette.interactions.len().max(1);
-        let passes = received.len().div_ceil(len).max(1);
-        let expected: Vec<&cassette::Request> = self
-            .cassette
-            .interactions
-            .iter()
-            .map(|interaction| &interaction.request)
-            .cycle()
-            .take(self.cassette.interactions.len() * passes)
-            .collect();
-        compare(&expected, &received)
+        verify(&self.cassette.interactions, &self.requests().await)
     }
+}
+
+/// Every difference between *actual* and *interactions* played as many
+/// whole times as *actual* needs (at least once): each request is compared
+/// with the next recorded one, passing over optional ones it does not
+/// match ([`optional`]); a recorded request never sent is a difference
+/// unless it is optional.
+pub fn verify(interactions: &[Interaction], actual: &[cassette::Request]) -> Vec<Mismatch> {
+    let len = interactions.len();
+    let mut mismatches = Vec::new();
+    let mut position = 0;
+    for (index, got) in actual.iter().enumerate() {
+        if len == 0 {
+            mismatches.push(Mismatch {
+                index,
+                detail: format!(
+                    "{} {} was sent and is not in the cassette",
+                    got.method, got.url
+                ),
+            });
+            continue;
+        }
+        let mut at = position;
+        let matched = loop {
+            if differences(&interactions[at % len].request, got).is_none() {
+                break Some(at);
+            }
+            if !optional(interactions, at) || at + 1 >= position + len {
+                break None;
+            }
+            at += 1;
+        };
+        match matched {
+            Some(at) => position = at + 1,
+            None => {
+                let want = &interactions[position % len].request;
+                mismatches.push(Mismatch {
+                    index,
+                    detail: differences(want, got).unwrap_or_default(),
+                });
+                position += 1;
+            }
+        }
+    }
+    let end = if len == 0 {
+        0
+    } else {
+        position.div_ceil(len).max(1) * len
+    };
+    let sent = actual.len();
+    for at in position..end {
+        if !optional(interactions, at) {
+            let want = &interactions[at % len].request;
+            mismatches.push(Mismatch {
+                index: sent + (at - position),
+                detail: format!("{} {} was recorded and never sent", want.method, want.url),
+            });
+        }
+    }
+    mismatches
 }
 
 /// Every difference between *expected* and *actual*, in order.
