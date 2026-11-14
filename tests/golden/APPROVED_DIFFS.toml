@@ -51226,3 +51226,137 @@ candidate = "error: Malformed object yaml · path: objects/rules/hidden-loader-r
 reason = "The outcome line's counts follow the findings: YAML 1.2 reads elevated-exfiltration-rule-0014.yaml (one object more, one load error less) and every file with an invalid UUID is reported (**Every file with an invalid UUID is reported**); and a file that does not load is reported as a `yaml_parse` finding; the per-file error 0.28.1 also logs on stderr (lint's registry load, #1028) is not written, and a log line is in the Rust reader's words (**YAML, TOML and file errors are in the Rust readers' words**); and a message (and its help) quotes a value in double quotes with Rust's escapes, where 0.28.1 printed Python's repr in single quotes (a SARIF fingerprint, a hash of the message, follows it; a list sorted by message may order two entries otherwise) (**Messages quote values the same way everywhere**)."
 issue = "https://github.com/opentidehq/opentide/issues/816"
 changelog = "**Tide objects are read as YAML 1.2**"
+
+# The dry run of the deploy-push checkout (dabb7aa8): a model-dump preview
+# leaves unset fields out. Merge #1122 dropped these entries; restored.
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-push/dry-run-push"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/schema"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-push/dry-run-push"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/flags"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-push/dry-run-push"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/tenants"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-push/dry-run-push"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/contributors"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-push/dry-run-push"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/scheduling/type"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-push/dry-run-push"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/scheduling/expires"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-push/dry-run-push"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/scheduling/schedule/frequency"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-push/dry-run-push"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/scheduling/schedule/custom_time"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-push/dry-run-push"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/scheduling/timerange"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-push/dry-run-push"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/trigger"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-push/dry-run-push"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/actions"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"
+
+[[diff]]
+command = "deploy"
+case = "deploy/json/deploy-push/dry-run-push"
+target = "stdout"
+rule = "json:/payloads/splunk/0/api_request/correlation_search"
+oracle = "null"
+candidate = "(absent)"
+reason = "Pydantic's model_dump writes every field, an unset optional one as null; serde skips an unset optional field (skip_serializing_if = Option::is_none, the models' YAML writing relies on it). The dry run's preview of a block it builds no body for is display output: what it shows of the block is the same, without the nulls. The same difference as the model-dump previews' `nulls` class in tests/golden/payloads/APPROVED.toml (UC-3.1b, #895)."
+issue = "https://github.com/opentidehq/opentide/issues/823"
+changelog = "**A dry run's preview leaves out unset fields**"

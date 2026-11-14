@@ -450,4 +450,19 @@ mod tests {
             r#"{"enabled":false,"name":"","status":"STAGING","condition":{"type":"Single Event","single_event":{"query":"q"}},"response":{"treat_as_threat":false,"network_quarantine":true}}"#
         );
     }
+
+    /// A Splunk block's unset fields are left out of its dump, where the
+    /// oracle printed them `null`; a `null` the block writes in `advanced`
+    /// is kept, since a deploy sends it to Splunk as the empty value.
+    #[test]
+    fn a_splunk_dump_leaves_unset_fields_out_and_keeps_an_advanced_null() {
+        let block: Json = serde_json::from_str(
+            r#"{"status":"STAGING","query":"index=main","advanced":{"action.x.param.tags":null,"action.x.param.title":"t"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config_dump("splunk", &block).to_compact(),
+            r#"{"enabled":false,"name":"","status":"STAGING","query":"index=main","advanced":{"action.x.param.tags":null,"action.x.param.title":"t"}}"#
+        );
+    }
 }
