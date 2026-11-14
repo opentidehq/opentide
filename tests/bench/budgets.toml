@@ -27,12 +27,17 @@
 #                                 regression against the last result always does. The
 #                                 budget itself stays. Remove both when the summary says
 #                                 the command meets its budget
-#   accepted, accepted_unix       a change of the command's numbers made on purpose
-#                                 ("#123, why", refused without an issue) and when it
-#                                 merged (seconds since the Unix epoch): a last result of
-#                                 the base branch measured before then is not compared
-#                                 with for this command, so the first run after it records
-#                                 the new reference. Its absolute budget still holds
+#   accepted, accepted_engine,    a change of one engine's numbers made on purpose
+#   accepted_unix, accepted_s,    ("#123, why", refused without an issue), the engine
+#   accepted_rss_mib              (python or rust: the key applies to that engine's runs
+#                                 only), when it merged (seconds since the Unix epoch; not
+#                                 before 2020, and a run older than it fails) and the median
+#                                 and peak RSS it was measured at. A last result of the
+#                                 base branch measured before then is not compared with
+#                                 for this command: the run is held to accepted_s /
+#                                 accepted_rss_mib + policy.regression instead, and to its
+#                                 absolute budget. The first run after it records the new
+#                                 reference. All five go together
 #
 # Every run is also held to the last result of the base branch (--previous, BASE_BRANCH): more than
 # policy.regression above it fails. A difference within the noise floor never does.
@@ -122,12 +127,18 @@ baseline_rss_mib = 133.6
 # The 0.28 checks lint runs since #1122: each rule's platform-block advisories (a second
 # YAML parse of every object file in the queries check), the recommended-field notes (the
 # model schemas read once per revision) and the new platforms' engines (YARA). Callgrind
-# on the heavy workspace, one thread: 8.40 to 9.45 G instructions (+12.5%; the advisories'
-# parse +0.69 G, the engines +0.19 G, the recommended notes +0.12 G). Medians of three
-# back-to-back runs on one machine: 1.13-1.40 s to 1.21-1.62 s, peak RSS 148-150 to
-# 156-158 MiB. Accepted at #1173's merge, after the lost caches it restored.
+# on the heavy workspace, one thread, c915b8fd to c0dd0be2: 8.40 to 9.45 G instructions
+# (+12.5%; the advisories' parse +0.69 G, the engines +0.19 G, the recommended notes
+# +0.12 G). `cargo xtask bench`, three alternating rounds on one 4-vCPU machine (develop
+# profile, shared, load about 6): 1.13-1.40 s to 1.21-1.62 s, peak RSS 148-150 to
+# 156-158 MiB. accepted_s / accepted_rss_mib are the slowest of those medians: CI's CPUs
+# are faster, so they are a ceiling until the next run on the base branch records the
+# reference. Accepted at #1173's merge, after the lost caches it restored.
 accepted = "#1122, the 0.28 checks: platform advisories, recommended fields, YARA"
+accepted_engine = "rust"
 accepted_unix = 1794680173
+accepted_s = 1.615
+accepted_rss_mib = 157.5
 
 [commands.lint_file]
 label = "lint --file"
@@ -156,17 +167,22 @@ target_s = 0.3
 
 [commands.generate_docs]
 label = "generate docs"
-# The 0.28 pages since #1122: a coverage section and an ATT&CK table per object, the
-# platform sections with their settings, the techniques' detections and the Mermaid
-# diagrams. The docs grow from 9.7 MB to 12.7 MB (+31%) on the heavy workspace;
-# callgrind, one thread: 2.91 to 3.66 G instructions (+25.6%), all of it in the new
-# sections' rendering. Peak RSS 85 to 102 MiB.
-accepted = "#1122, the 0.28 pages: coverage, ATT&CK tables, settings, diagrams"
-accepted_unix = 1794680173
 plan_s = 11.61
 baseline_s = 12.304
 baseline_rss_mib = 131.9
 target_s = 1.5
+# The 0.28 pages since #1122: a coverage section and an ATT&CK table per object, the
+# platform sections with their settings, the techniques' detections and the Mermaid
+# diagrams. The docs grow from 9.7 MB to 12.7 MB (+31%) on the heavy workspace.
+# Callgrind, one thread, c915b8fd to c0dd0be2: 2.91 to 3.66 G instructions (+25.6%), all
+# of it in the new sections' rendering. `cargo xtask bench`, three alternating rounds as
+# for lint: 0.70-0.92 s to 0.73-0.86 s, peak RSS 85 to 102 MiB. accepted_s /
+# accepted_rss_mib are the slowest of those medians, as for lint.
+accepted = "#1122, the 0.28 pages: coverage, ATT&CK tables, settings, diagrams"
+accepted_engine = "rust"
+accepted_unix = 1794680173
+accepted_s = 0.860
+accepted_rss_mib = 102.2
 
 [commands.generate_exports_navigator]
 label = "generate exports navigator"
