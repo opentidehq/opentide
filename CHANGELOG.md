@@ -199,6 +199,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Fixed
 
+- **Deploying from VS Code's terminal no longer promotes every rule.** A `RELEASE` run on a push started in VS Code's integrated terminal (`TERM_PROGRAM=vscode`) promoted every rule file in the rules folder, not only the rules the push changed, a behaviour inherited from the Python CLI. Promotion of the whole folder now follows `--debug`, `OPENTIDE_DEBUG` or a boolean `DEBUG` only, as every other debug switch does, so `DEBUG=true` and `DEBUG=1` turn it on as `DEBUG=True` did.
 - **Exabeam messages name a value as JSON.** A block status that is not a string, or a missing one, a recurrence day and a create that answers no id are named `true`, `false` or `null`, as the other platforms' messages name them, not Python's `True`, `False` or `None`.
 
 - **Falco receives a Sysdig list item or exception value as the file writes it** ([#841](https://github.com/opentidehq/opentide/issues/841)). A number or a boolean in `lists[].items` or `exceptions[].values` reached Falco in Python's spelling: `1.50` as `1.5`, `0x1F` as `31`, `True` as `true` in the condition, and an exception value as a JSON number. Falco reads every item as its text, so `deploy` now sends the scalar as written, an exception value as a string, and `validate` checks the block with the same text. A null exception value is refused (`exceptions.N.values.M: Value error, an exception value cannot be null`) where `None` was sent: quote it (`"null"`) to match that word.

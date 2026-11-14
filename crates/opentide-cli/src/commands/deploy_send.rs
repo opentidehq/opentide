@@ -620,7 +620,7 @@ fn deploy(
     };
     if promotes(args, &runs, cx.env) {
         let settings = opentide_compile::promotion::Settings::new(&owned.config, &owned.statuses);
-        let debug = cx.debug || super::deploy_promote::is_debug(cx.env);
+        let debug = cx.debug || cx.env.debug_requested();
         let local = if debug {
             plan::local_scope(fs, &rules_dir, &folder).files
         } else {
