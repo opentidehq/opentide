@@ -66,7 +66,7 @@ The extension runs the WASI build of opentide, which cannot start another progra
 
 `opentide_latest` asks `https://pypi.org/pypi/opentide/json`, and `proxy` opens a TCP connection to the proxy, each with a 3-second timeout. Both go through `--proxy` and honour `NO_PROXY`. Offline, `opentide_latest` is a warning, not a failure; `--offline` skips both.
 
-A failed check names what went wrong as the Python exception it maps to (`ProxyError`, `ConnectionError`, `ConnectTimeout`, `HTTPError` for `opentide_latest`; `ConnectionRefusedError`, `TimeoutError`, `gaierror` for `proxy`), as opentide 0.28.1's Python command line named them. Versions are ordered as PEP 440 orders them.
+A failed check says what went wrong: for `opentide_latest`, the HTTP client's error (`Cannot reach pypi tenant 'pypi.org' at …: …`), PyPI's status (`PyPI answered HTTP 503`) or an answer without a version; for `proxy`, the operating system's error (`Connection refused (os error 111)`) or `cannot resolve <host>: …`. Versions are ordered as PEP 440 orders them.
 
 ## Exit codes
 

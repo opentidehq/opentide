@@ -222,15 +222,15 @@ fn latest_version(offline: bool, cx: &Context<'_>) -> Check {
 /// The `opentide_latest` check for what asking PyPI gave.
 fn latest_check(found: Result<String, network::Failed>, version: &str) -> Check {
     match found {
-        Err(network::Failed(network::NO_NETWORK)) => Check::new(
+        Err(network::Failed::NoNetwork) => Check::new(
             "opentide_latest",
             "skip",
             "Not checked: this build of opentide has no network",
         ),
-        Err(network::Failed(name)) => Check::new(
+        Err(network::Failed::Problem(problem)) => Check::new(
             "opentide_latest",
             "warn",
-            format!("Could not ask PyPI for the latest release ({name})"),
+            format!("Could not ask PyPI for the latest release ({problem})"),
         )
         .fix("check the network or --proxy, or pass --offline to skip network checks"),
         Ok(latest) if network::newer(&latest, version) => Check::new(
@@ -1523,19 +1523,21 @@ mod tests {
     #[test]
     fn a_build_without_a_network_skips_the_pypi_check() {
         // The WASI build outside a serve whose client makes its requests.
-        let check = latest_check(Err(network::Failed(network::NO_NETWORK)), "1.0.0");
+        let check = latest_check(Err(network::Failed::NoNetwork), "1.0.0");
         assert_eq!(
             (check.status, check.message.as_str()),
             ("skip", "Not checked: this build of opentide has no network")
         );
         assert!(check.fix.is_none());
         // Any other failure is still a warning that names it.
-        let check = latest_check(Err(network::Failed("ConnectionError")), "1.0.0");
+        let check = latest_check(
+            Err(network::Failed::Problem("PyPI answered HTTP 503".into())),
+            "1.0.0",
+        );
         assert_eq!(check.status, "warn");
-        assert!(
-            check.message.ends_with("(ConnectionError)"),
-            "{}",
-            check.message
+        assert_eq!(
+            check.message,
+            "Could not ask PyPI for the latest release (PyPI answered HTTP 503)"
         );
     }
 
@@ -1555,15 +1557,28 @@ mod tests {
             .find(|(code, ..)| code == "opentide_latest")
             .unwrap();
         assert_eq!(latest.1, "warn");
-        assert_eq!(
-            latest.2,
-            "Could not ask PyPI for the latest release (ProxyError)"
+        // The HTTP client's words: the tenant it could not reach, and why.
+        assert!(
+            latest
+                .2
+                .starts_with("Could not ask PyPI for the latest release (Cannot reach pypi"),
+            "{}",
+            latest.2
         );
         let checked = found.iter().find(|(code, ..)| code == "proxy").unwrap();
         assert_eq!(checked.1, "fail");
-        assert_eq!(
-            checked.2,
-            format!("Cannot connect to proxy {proxy} (ConnectionRefusedError)")
+        // The operating system's words for the refused connection.
+        assert!(
+            checked
+                .2
+                .starts_with(&format!("Cannot connect to proxy {proxy} (")),
+            "{}",
+            checked.2
+        );
+        assert!(
+            checked.2.to_lowercase().contains("refused"),
+            "{}",
+            checked.2
         );
     }
 

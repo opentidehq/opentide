@@ -577,7 +577,8 @@ fn online_cve(
     use opentide_cli::commands::cve::{OnlineCve, Settings};
     (args.check == Some(Check::Cve)).then(|| {
         let settings =
-            Settings::from_documentation(workspace.configuration().resolved.get("documentation"));
+            Settings::from_documentation(workspace.configuration().resolved.get("documentation"))
+                .unwrap_or_default();
         let env = opentide_cli::env::Env::from_pairs(
             case.env
                 .iter()

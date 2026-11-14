@@ -544,8 +544,8 @@ fn a_refused_credential_or_an_unreachable_tenant_stops_the_check() {
     assert_eq!(
         value(&live, "message"),
         &Json::str(
-            "Query validation for splunk failed: TenantConnectionError: Cannot authenticate with \
-             the tenant configuration"
+            "Query validation for splunk failed: splunk tenant 'lab': Cannot authenticate \
+             with the tenant configuration"
         )
     );
     assert_eq!(value(&live, "queries_validated"), &Json::Int(2));

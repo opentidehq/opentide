@@ -96,7 +96,7 @@ jobs:
         run: |
           eval "$(cargo llvm-cov show-env --sh)"
           cargo llvm-cov clean --workspace
-          OPENTIDE_ENGINE_PROFILE=dev uv sync --group dev --reinstall-package opentide
+          uv sync --group dev --reinstall-package opentide --config-settings-package "opentide:build-args=--profile dev"
           cargo nextest run --workspace --locked --profile ci
           uv run --no-sync pytest tests/ -q --no-cov -p no:cacheprovider -n 4 \
             -m "not gitlab_ci_lint"
