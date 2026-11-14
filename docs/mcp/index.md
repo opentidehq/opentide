@@ -26,6 +26,8 @@ opentide mcp start
 
 `opentide mcp` with no subcommand names `start` and exits `2` ([`opentide mcp`](../cli/mcp.md)). The process blocks until the host closes stdin. Stop is that close. Reload is the host spawning `opentide mcp start` again.
 
+Tool calls and resource reads run one at a time, in the order they arrive, but the server keeps reading while one runs: it answers `ping`, `tools/list` and the other lists at once. `notifications/cancelled` for a running call stops it as Ctrl-C stops a command: its tenant requests are dropped, the call sends no answer (as MCP has it), and the next call runs normally. A call that reaches no tenant (`validate_rule`, `validation_report`, `search`, a resource read, …) does not stop: it runs to its end and its answer is dropped, and the next call waits until it has finished. A call still running when the host closes stdin is stopped the same way.
+
 Transport: **stdio** (standard MCP over stdin/stdout).
 
 ## What agents can do
