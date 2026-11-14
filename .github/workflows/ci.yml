@@ -362,8 +362,8 @@ jobs:
   #
   #   lint                `lint`
   #   engine-check        `engine`: clippy, rustdoc and the invariants
-  #   engine-dev-<os>-<n> `engine-test`, each shard (by package) per OS; `clients` and
-  #                       `elastic-sweep` restore Linux shard 2 (lsp, analysis)
+  #   engine-dev-ubuntu-latest-<n>  `engine-test`, each Linux shard; `clients`
+  #                       and `elastic-sweep` restore shard 2 (lsp, analysis)
   #   corpus              `corpus-part` (generator); the other parts and
   #                       `corpus-queries` restore it
   #   python-engine       the binding `uv sync` builds: `test` (3.14) saves it,
@@ -371,16 +371,20 @@ jobs:
   #   golden-compare      `golden-compare-part` (its first part); the others restore it
   #   wasi                `wasi`: the WASI module (wasm32-wasip1, the `wasi`
   #                       profile) and xtask
-  #   full-set-<OS>       the full set's other Rust jobs (facade, node,
-  #                       npm-install, engine-wasm, engine-package, bench,
-  #                       cli-windows-smoke): `conformance` saves it on each OS,
-  #                       on development and by the nightly only
+  #   full-set-Linux      the full set's other Rust jobs (facade, node,
+  #                       npm-install, engine-wasm, engine-package, bench):
+  #                       `conformance` saves it, on development and by the
+  #                       nightly only
   #
-  # The families above full-set-<OS> are saved from a push to each base branch
-  # (a pull request reads its base branch's caches); full-set-<OS> and the
-  # release dry run's (engine-release-build.yml, one per runner) on development
-  # and by the nightly only, whose caches every branch reads: a copy per base
-  # branch did not fit beside the core families in 10 GB (#841).
+  # The families above full-set-Linux are saved from a push to each base branch
+  # (a pull request reads its base branch's caches); full-set-Linux and the
+  # release dry run's (engine-release-build.yml, one per Linux runner) on
+  # development and by the nightly only, whose caches every branch reads: a
+  # copy per base branch did not fit beside the core families in 10 GB (#841).
+  # Linux only: macOS and Windows (engine-test's full-set cells, conformance's,
+  # cli-windows-smoke, the release's) build without a compiler cache. Theirs,
+  # a gigabyte each and saved by every push's full set, crowded the families
+  # pull requests restore out of the 10 GB (#841, cache-report.yml).
   # The one rust-cache left: `fuzz` (fuzz-smoke, the fuzz/NIGHTLY nightly,
   # fuzz/target and cargo-fuzz in ~/.cargo/bin).
   # ---------------------------------------------------------------------------
@@ -568,10 +572,12 @@ jobs:
       # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
       - name: Compiler cache week
         id: week
+        if: runner.os == 'Linux'
         shell: bash
         run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
+        if: runner.os == 'Linux'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -690,7 +696,7 @@ jobs:
       # Each shard compiles its own packages' dependencies: each saves a
       # family of its own.
       - name: Save the compiler cache
-        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true' && runner.os == 'Linux'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -1120,10 +1126,12 @@ jobs:
       # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
       - name: Compiler cache week
         id: week
+        if: runner.os == 'Linux'
         shell: bash
         run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
+        if: runner.os == 'Linux'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -1188,7 +1196,7 @@ jobs:
       # A copy per base branch did not fit beside the core families in the
       # 10 GB GitHub keeps (#841).
       - name: Save the compiler cache
-        if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development') && steps.sccache.outputs.cache-hit != 'true'
+        if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development') && steps.sccache.outputs.cache-hit != 'true' && runner.os == 'Linux'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -2800,12 +2808,6 @@ jobs:
     # Also not gated on `test`: a 36 s job that waited ~5 min for a matrix it
     # shares nothing with. Left serial — two small test files, so workers would
     # only add startup cost.
-    env:
-      RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 2G
-      # The server stays up for the whole job: its statistics are the run's.
-      SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -2821,29 +2823,11 @@ jobs:
           python-version: "3.14"
 
       # `uv sync` compiles the analysis engine (bindings/python/, Rust) into opentide (hatch_build.py).
-      # rustup installs the toolchain rust-toolchain.toml pins; the cache keeps the
-      # compiled engine crates between runs.
+      # rustup installs the toolchain rust-toolchain.toml pins. No compiler cache:
+      # macOS's and Windows's (a gigabyte each) crowded the Linux families every
+      # pull request restores out of the 10 GB GitHub keeps (#841).
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
-
-      # The full set's compiler cache for this OS; `conformance` saves it.
-      # By content: a stale one still serves every crate that did not change.
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: sccache@0.19.0
-      # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
-        id: sccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
 
       - name: Install dependencies
         run: uv sync --group dev

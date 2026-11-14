@@ -272,7 +272,7 @@ def test_a_release_restores_no_other_cache() -> None:
 
 
 # The release dry run's compiler caches (#1047 follow-up): one sccache family
-# per runner (os and arch) for the binaries, one for the WebAssembly builds,
+# per Linux runner (arch) for the binaries, one for the WebAssembly builds,
 # each saved by one cell from a push when the key missed. Its ten target trees,
 # one per target and job, evicted the families pull requests restore.
 RELEASE_NATIVE = "sccache-release-${{ runner.os }}-${{ runner.arch }}-"
@@ -312,9 +312,11 @@ def test_one_release_cell_per_runner_saves_its_compiler_cache() -> None:
     assert str(save["if"]).endswith("&& matrix.saves")
     cells = native["strategy"]["matrix"]["include"]
     savers = [c["os"] for c in cells if c["saves"] is True]
-    # Every runner has its saver, and only one: the Intel macOS cross build
-    # restores Apple silicon's family.
+    # Every runner has one cell marked to save, and only one (the Intel macOS
+    # cross build shares Apple silicon's runner); the save itself runs on
+    # Linux only (test_only_linux_keeps_a_compiler_cache).
     assert sorted(savers) == sorted({c["os"] for c in cells})
+    assert LINUX_ONLY in str(save["if"])
     assert [c["target"] for c in cells if c["saves"] is False] == ["x86_64-apple-darwin"]
 
 
@@ -520,8 +522,12 @@ FULL_SET_JOBS = {
     "engine-wasm",
     "engine-package",
     "bench",
-    "cli-windows-smoke",
 }
+# macOS and Windows keep no compiler cache (#841): their families (a gigabyte
+# each, saved by every push's full set on each base branch) crowded the Linux
+# families every pull request restores out of the 10 GB a repository keeps.
+# They run in the full set only, which no pull request's gates wait on.
+LINUX_ONLY = "runner.os == 'Linux'"
 
 
 def _sccache_steps() -> list[tuple[str, dict[str, Any]]]:
@@ -617,14 +623,46 @@ def test_the_full_set_shares_one_compiler_cache_per_os() -> None:
     savers = {c.job for c in _compiler_caches() if c.saves == FULL_SET_FAMILY + STABLE_HASH}
     assert savers == {"conformance"}
     # Saved on development and by the nightly only: a pull request's full set
-    # restores development's (#841).
+    # restores development's (#841). Linux's only: conformance's macOS and
+    # Windows cells build without one.
     (saver,) = {c.save_condition for c in _compiler_caches() if c.job == "conformance"}
     assert str(saver).startswith(DEVELOPMENT_ONLY), saver
-    # One cell per OS, so each OS's family has its saver.
-    matrix = jobs["conformance"]["strategy"]["matrix"]["os"]
-    assert sorted(matrix) == ["macos-latest", "ubuntu-latest", "windows-latest"]
+    assert str(saver).endswith(LINUX_ONLY), saver
     used = {str(jobs[j]["runs-on"]) for j in FULL_SET_JOBS if j != "conformance"}
-    assert used <= set(matrix), used
+    assert used == {"ubuntu-latest"}, used
+
+
+def _runs_on_linux(job: dict[str, Any]) -> bool:
+    """Every cell of the job runs on Linux."""
+    return all(str(_resolve(job.get("runs-on"), cell)).startswith("ubuntu") for cell in _cells(job))
+
+
+@pytest.mark.parametrize("name", ["ci.yml", "engine-release-build.yml"])
+def test_only_linux_keeps_a_compiler_cache(name: str) -> None:
+    """A compiler cache is restored and saved on Linux only: in a job that
+    runs on Linux alone, or under `runner.os == 'Linux'` (with its week)."""
+    workflow = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
+    checked = 0
+    for job_id, job in workflow["jobs"].items():
+        steps = job.get("steps") or []
+        cached = [
+            s
+            for s in steps
+            if str(s.get("uses", "")).startswith((SCCACHE_RESTORE, SCCACHE_SAVE))
+            or s.get("id") == "week"
+        ]
+        if not cached or _runs_on_linux(job):
+            continue
+        for step in cached:
+            assert LINUX_ONLY in str(step.get("if", "")), (name, job_id, step.get("name"))
+            checked += 1
+    assert checked
+    # cli-windows-smoke, on Windows alone, has no compiler cache at all.
+    smoke = _ci()["jobs"]["cli-windows-smoke"]
+    assert not _wraps_with_sccache(smoke)
+    assert not any(
+        str(s.get("uses", "")).startswith((SCCACHE_RESTORE, SCCACHE_SAVE)) for s in smoke["steps"]
+    )
 
 
 def test_the_wasi_job_keeps_a_core_family_of_its_own() -> None:

@@ -135,12 +135,12 @@ branch's caches; the full set's and the release dry run's are saved on `developm
 nightly only (`github.event_name == 'schedule' || github.ref == 'refs/heads/development'`), whose
 caches every branch reads: with integration and a release train both active, a copy of those per
 base branch did not fit beside the core families and evicted them (#841). The families:
-`lint`, `engine-check` (`engine`), `engine-dev-<os>-<n>` (each `engine-test-part` shard per OS, the four Linux shards included;
+`lint`, `engine-check` (`engine`), `engine-dev-ubuntu-latest-<n>` (each Linux `engine-test-part` shard;
 `clients` and `elastic-sweep` restore Linux shard 2's, which tests `opentide-lsp` and `opentide-analysis`), `corpus` (`corpus-part`'s generator; the other
 parts and `corpus-queries` restore it), `python-engine` (`test`'s 3.14 cell; the other Linux
-Python jobs restore it), `golden-compare` (part 1; the other parts restore it), `wasi` (the `wasi` job: the WASI module's crates in the `wasi` profile and xtask's, which no other job builds), and `full-set-<OS>` (`conformance` on each OS, on `development` and by the
-nightly only; the full set's other Rust jobs restore their OS's, on any branch development's: `facade`, `node`, `npm-install`, `engine-wasm`,
-`engine-package`, `bench`, `cli-windows-smoke`). No job with a compiler cache restores a
+Python jobs restore it), `golden-compare` (part 1; the other parts restore it), `wasi` (the `wasi` job: the WASI module's crates in the `wasi` profile and xtask's, which no other job builds), and `full-set-Linux` (`conformance`'s Linux cell, on `development` and by the
+nightly only; the full set's other Rust jobs restore it, on any branch development's: `facade`, `node`, `npm-install`, `engine-wasm`,
+`engine-package`, `bench`). **Linux only:** macOS and Windows keep no compiler cache (engine-test's full-set cells, `conformance`'s, `cli-windows-smoke`, the release dry run's runners: the restores and saves run under `runner.os == 'Linux'`, `test_only_linux_keeps_a_compiler_cache`). Theirs, about a gigabyte a family and saved by every push's full set on each base branch, filled the 10 GB with integration's and the train's core families, so those were evicted between pushes (`cache-report.yml` on integration: 10,020 MB in use, #841); they run in the full set only, which no pull request's gates wait on. No job with a compiler cache restores a
 rust-cache target tree too: that tree (about 0.7 GB a family) is what sccache covers, and the
 two together, with a key per source tree, saved about 4 GB a push, more than GitHub's 10 GB per
 repository keeps once a few pushes land, so the caches pull requests read were evicted within
@@ -150,8 +150,8 @@ and oracle.yml's own; each saves on the nightly and on pushes to `development` o
 (`github.event_name == 'schedule' || github.ref == 'refs/heads/development'`), whose caches every
 pull request reads (golden-preview.yml, on the 0.28 train only, saves on that branch's pushes). The release dry run
 (`engine-release-build.yml`; a release restores none) keeps sccache families of its own,
-`release-<os>-<arch>` per runner for the binaries (one cell per runner saves; the Intel macOS
-cross build restores Apple silicon's) and `release-wasm`, saved on `development` and by the nightly
+`release-Linux-<arch>` per Linux runner for the binaries (one cell per runner saves; macOS and
+Windows build without one) and `release-wasm`, saved on `development` and by the nightly
 when the key missed;
 its highlights, licences and SBOM jobs build without one. `bench.yml` restores `full-set-Linux`
 (with `conformance`'s environment) and saves nothing: its two target trees evicted the pull
