@@ -434,7 +434,7 @@ impl<'a> Client<'a> {
         let retry_after = retry_after(
             response
                 .headers()
-                .get(reqwest::header::RETRY_AFTER)
+                .get(crate::transport::header::RETRY_AFTER)
                 .and_then(|value| value.to_str().ok()),
         );
         let bytes = self

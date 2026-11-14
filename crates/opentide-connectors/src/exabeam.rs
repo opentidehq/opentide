@@ -331,7 +331,7 @@ pub fn api_error(action: &str, reply: &Reply) -> ApiError {
 
 /// The status's reason phrase (`response.reason`).
 fn reason(status: u16) -> String {
-    reqwest::StatusCode::from_u16(status)
+    crate::transport::StatusCode::from_u16(status)
         .ok()
         .and_then(|status| status.canonical_reason())
         .unwrap_or_default()
@@ -485,7 +485,7 @@ impl<'a> Session<'a> {
     /// here (`_send`).
     async fn send(
         &self,
-        method: &reqwest::Method,
+        method: &crate::transport::Method,
         path: &str,
         query: &[(&str, &str)],
         body: Option<&Json>,
@@ -574,16 +574,16 @@ impl<'a> Session<'a> {
         let started = std::time::Instant::now();
         let response = self.cx.http.send(request, self.cx.cancel).await?;
         let elapsed = started.elapsed();
-        let header = |name: reqwest::header::HeaderName| {
+        let header = |name: crate::transport::HeaderName| {
             response
                 .headers()
                 .get(name)
                 .and_then(|value| value.to_str().ok())
                 .map(str::to_owned)
         };
-        let retry_after = header(reqwest::header::RETRY_AFTER);
-        let challenge = header(reqwest::header::WWW_AUTHENTICATE);
-        let content_type = header(reqwest::header::CONTENT_TYPE);
+        let retry_after = header(crate::transport::header::RETRY_AFTER);
+        let challenge = header(crate::transport::header::WWW_AUTHENTICATE);
+        let content_type = header(crate::transport::header::CONTENT_TYPE);
         let status = response.status().as_u16();
         let body = self.cx.http.bytes(response, self.cx.cancel).await?;
         Ok(Reply {
@@ -638,7 +638,7 @@ impl<'a> Session<'a> {
         body.insert("grant_type".into(), "client_credentials".into());
         let reply = self
             .send(
-                &reqwest::Method::POST,
+                &crate::transport::Method::POST,
                 TOKEN_PATH,
                 &[],
                 Some(&Json::Object(body)),
@@ -695,7 +695,7 @@ impl<'a> Session<'a> {
     /// `409` does; every other answer is the caller's to judge (`request`).
     pub async fn request(
         &self,
-        method: &reqwest::Method,
+        method: &crate::transport::Method,
         path: &str,
         query: &[(&str, &str)],
         body: Option<&Json>,
@@ -744,7 +744,7 @@ impl<'a> Session<'a> {
         let action = format!("GET {RULES_PATH}?nameContains");
         let reply = self
             .request(
-                &reqwest::Method::GET,
+                &crate::transport::Method::GET,
                 RULES_PATH,
                 &[("nameContains", name)],
                 None,
@@ -786,7 +786,7 @@ impl<'a> Session<'a> {
 
     async fn rule_call(
         &self,
-        method: &reqwest::Method,
+        method: &crate::transport::Method,
         path: &str,
         body: &Json,
     ) -> Result<Object, Failure> {
@@ -803,14 +803,14 @@ impl<'a> Session<'a> {
 
     /// `POST /correlation-rules/v2/rules`: the rule Exabeam created.
     pub async fn create_rule(&self, body: &Json) -> Result<Object, Failure> {
-        self.rule_call(&reqwest::Method::POST, RULES_PATH, body)
+        self.rule_call(&crate::transport::Method::POST, RULES_PATH, body)
             .await
     }
 
     /// `PUT /correlation-rules/v2/rules/{id}`: the rule as Exabeam stored it.
     pub async fn update_rule(&self, rule_id: &str, body: &Json) -> Result<Object, Failure> {
         self.rule_call(
-            &reqwest::Method::PUT,
+            &crate::transport::Method::PUT,
             &format!("{RULES_PATH}/{rule_id}"),
             body,
         )
@@ -822,7 +822,7 @@ impl<'a> Session<'a> {
     pub async fn delete_rule(&self, rule_id: &str) -> Result<(), Failure> {
         let path = format!("{RULES_PATH}/{rule_id}");
         let reply = self
-            .request(&reqwest::Method::DELETE, &path, &[], None, None)
+            .request(&crate::transport::Method::DELETE, &path, &[], None, None)
             .await?;
         if reply.answer.status >= 300 {
             return Err(api_error(&format!("DELETE {path}"), &reply).into());
@@ -833,7 +833,7 @@ impl<'a> Session<'a> {
     /// `POST /search/v2/events`; the answer whatever its status (`search`).
     pub async fn search(&self, body: &Json, timeout: Option<Duration>) -> Result<Reply, Failure> {
         self.request(
-            &reqwest::Method::POST,
+            &crate::transport::Method::POST,
             SEARCH_PATH,
             &[],
             Some(body),

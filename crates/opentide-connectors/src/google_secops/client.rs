@@ -278,8 +278,8 @@ impl<'a> Client<'a> {
             .cx
             .http
             .request(
-                reqwest::Method::from_bytes(request.method.as_bytes())
-                    .unwrap_or(reqwest::Method::GET),
+                crate::transport::Method::from_bytes(request.method.as_bytes())
+                    .unwrap_or(crate::transport::Method::GET),
                 &url,
             )
             .header("Accept", "application/json");
@@ -300,15 +300,15 @@ impl<'a> Client<'a> {
         let response = self.cx.http.send(built, self.cx.cancel).await?;
         let elapsed = started.elapsed();
         let status = response.status().as_u16();
-        let header = |name: reqwest::header::HeaderName| {
+        let header = |name: crate::transport::HeaderName| {
             response
                 .headers()
                 .get(name)
                 .and_then(|value| value.to_str().ok())
                 .map(str::to_owned)
         };
-        let content_type = header(reqwest::header::CONTENT_TYPE);
-        let retry_after = header(reqwest::header::RETRY_AFTER);
+        let content_type = header(crate::transport::header::CONTENT_TYPE);
+        let retry_after = header(crate::transport::header::RETRY_AFTER);
         let body = self.cx.http.bytes(response, self.cx.cancel).await?;
         Ok(Reply {
             answer: Answer {

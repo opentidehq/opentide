@@ -460,7 +460,7 @@ impl Authorizer {
                 )
                 .map_err(|error| credentials_missing(&tenant, &error))?;
                 cx.http
-                    .request(reqwest::Method::POST, token_uri)
+                    .request(crate::transport::Method::POST, token_uri)
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .body(urlencode([
                         ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
@@ -475,7 +475,7 @@ impl Authorizer {
                 ..
             } => cx
                 .http
-                .request(reqwest::Method::POST, token_uri)
+                .request(crate::transport::Method::POST, token_uri)
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .body(urlencode([
                     ("grant_type", "refresh_token"),
@@ -486,7 +486,7 @@ impl Authorizer {
             Credentials::Metadata { host, .. } => cx
                 .http
                 .request(
-                    reqwest::Method::GET,
+                    crate::transport::Method::GET,
                     &format!(
                         "http://{host}/computeMetadata/v1/instance/service-accounts/default/token?{}",
                         urlencode([("scopes", SCOPE)])

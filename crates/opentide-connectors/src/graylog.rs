@@ -387,7 +387,7 @@ impl<'a> Client<'a> {
     /// tenant, any other status is the rule's [`ApiError`] (`request`).
     async fn send(
         &self,
-        method: reqwest::Method,
+        method: crate::transport::Method,
         path: &str,
         body: Option<&Json>,
         timeout: Option<Duration>,
@@ -445,7 +445,11 @@ impl<'a> Client<'a> {
     }
 
     /// The answer's JSON, or the rule's failure (`_json`).
-    fn json(answer: &Answer, method: &reqwest::Method, path: &str) -> Result<Json, ApiError> {
+    fn json(
+        answer: &Answer,
+        method: &crate::transport::Method,
+        path: &str,
+    ) -> Result<Json, ApiError> {
         answer.json().ok_or_else(|| ApiError {
             method: method.as_str().to_owned(),
             path: path.to_owned(),
@@ -463,7 +467,7 @@ impl<'a> Client<'a> {
     /// A version below 6.3, or none, refuses the tenant
     /// (`graylog_version_unsupported`).
     pub async fn version(&self) -> Result<Result<Version, ApiError>, ConnectorError> {
-        let method = reqwest::Method::GET;
+        let method = crate::transport::Method::GET;
         let answer = match self.send(method.clone(), SYSTEM_PATH, None, None).await? {
             Ok(answer) => answer,
             Err(error) => return Ok(Err(error)),
@@ -510,7 +514,7 @@ impl<'a> Client<'a> {
         body: &Json,
         timeout: Option<Duration>,
     ) -> Result<Result<Json, ApiError>, ConnectorError> {
-        let method = reqwest::Method::POST;
+        let method = crate::transport::Method::POST;
         let answer = match self
             .send(method.clone(), VALIDATE_PATH, Some(body), timeout)
             .await?
@@ -538,7 +542,7 @@ impl<'a> Client<'a> {
         body: &Json,
         timeout: Option<Duration>,
     ) -> Result<Result<Json, ApiError>, ConnectorError> {
-        let method = reqwest::Method::POST;
+        let method = crate::transport::Method::POST;
         let answer = match self
             .send(method.clone(), MESSAGES_PATH, Some(body), timeout)
             .await?
@@ -561,7 +565,12 @@ impl<'a> Client<'a> {
         body: &Json,
     ) -> Result<Result<Option<Json>, ApiError>, ConnectorError> {
         let answer = match self
-            .send(reqwest::Method::POST, &create_path(), Some(body), None)
+            .send(
+                crate::transport::Method::POST,
+                &create_path(),
+                Some(body),
+                None,
+            )
             .await?
         {
             Ok(answer) => answer,
@@ -580,7 +589,7 @@ impl<'a> Client<'a> {
     ) -> Result<Result<(), ApiError>, ConnectorError> {
         let path = update_path(definition_id, enabled);
         Ok(self
-            .send(reqwest::Method::PUT, &path, Some(body), None)
+            .send(crate::transport::Method::PUT, &path, Some(body), None)
             .await?
             .map(|_| ()))
     }
@@ -593,7 +602,7 @@ impl<'a> Client<'a> {
     ) -> Result<Result<(), ApiError>, ConnectorError> {
         let path = delete_path(definition_id);
         Ok(self
-            .send(reqwest::Method::DELETE, &path, None, None)
+            .send(crate::transport::Method::DELETE, &path, None, None)
             .await?
             .map(|_| ()))
     }
