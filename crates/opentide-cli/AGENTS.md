@@ -11,8 +11,7 @@ it is opentide's only command line since UC-6.2 (#841) removed the Python implem
 | `tree_meta.rs` | What clap's model cannot say for the catalogue: the negative flag of a pair, a default that is not the flag's |
 | `catalog.rs` | `opentide commands` from the clap tree: the catalogue document and the plain tree |
 | `schemas.rs` | Each command's `output_schema` and `$defs`, generated into `data/output-schemas.json` from the oracle's catalogue until each command's typed result derives it with schemars |
-| `app.rs` | One run: hoisting, mode, logging, parse, usage errors, dispatch, the crash handler around it; Ctrl-C |
-| `hoist.rs` | `--json`, `--no-color`, `--debug`, `--quiet` typed after the command move in front |
+| `app.rs` | One run: globals, mode, logging, parse, usage errors, dispatch, the crash handler around it; Ctrl-C |
 | `mode.rs`, `env.rs` | The output mode's resolution order, `OPENTIDE_JSON_INDENT`, `DEBUG` only as a boolean |
 | `envelope.rs`, `json.rs` | The JSON envelope, its key order, exit codes, `failure.code`s; an order-keeping JSON tree |
 | `usage.rs`, `suggest.rs` | clap's errors as the contract's usage errors, in the CLI's wording; "did you mean" (the shared rule, `opentide_core::suggest`) |
@@ -55,9 +54,10 @@ process and the filesystem, and hosts the language server (`lsp start`, UC-3.6b)
 - Ctrl-C sets the run's `Interrupt`: a long job polls `Run::interrupted` and stops; the run then
   prints `error: interrupted` and exits 130 with no document. A second Ctrl-C, or a run still
   going after `INTERRUPT_GRACE`, ends the process.
-- Parsing is clap's, set in `catalog::parse_settings`: the last of a repeated option wins, and an
-  option's value may start with `-`. A `--` where a group expects its command is dropped
-  (`hoist::drop_group_separators`).
+- Parsing is clap's, set in `catalog::parse_settings`: the last of a repeated option wins, a
+  negative number is a value, and `--json`, `--no-color`, `--debug`, `--quiet` and `--verbose`
+  are `global = true` in `tree.rs`. The run reads them before it knows the line is valid from a
+  lenient parse (`app::lenient_matches`, clap's `ignore_errors`).
 - The tree is code: a port changes its struct. When an option's catalogue entry needs what clap
   cannot say, add a row to `tree_meta.rs`, never a special case in `catalog.rs`.
 - `data/output-schemas.json` is generated, never edited: `OPENTIDE_CLI_BLESS=1 cargo nextest run
