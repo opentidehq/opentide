@@ -70,6 +70,59 @@ pub type Clock = Arc<dyn Fn() -> Instant + Send + Sync>;
 /// A tenant and a scope.
 type Key = (TenantLabel, String);
 
+/// The sign-in gates of the keys calls are looking for a token for.
+type Signing = BTreeMap<Key, Arc<tokio::sync::Mutex<()>>>;
+
+/// A call's share of its key's sign-in gate. Every clone of a gate is made
+/// and dropped under the map's lock, so the turn that finds only itself and
+/// the map holding the gate is the last one, and removes it.
+struct Turn<'a> {
+    signing: &'a Mutex<Signing>,
+    key: Key,
+    /// `None` only once dropped.
+    gate: Option<Arc<tokio::sync::Mutex<()>>>,
+}
+
+impl<'a> Turn<'a> {
+    /// Takes a share of *key*'s gate, made when no call holds one.
+    fn take(signing: &'a Mutex<Signing>, key: &Key) -> Self {
+        let gate = Arc::clone(
+            signing
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .entry(key.clone())
+                .or_default(),
+        );
+        Self {
+            signing,
+            key: key.clone(),
+            gate: Some(gate),
+        }
+    }
+
+    /// Waits for the key's sign-in gate.
+    async fn wait(&self) -> Option<tokio::sync::MutexGuard<'_, ()>> {
+        Some(self.gate.as_ref()?.lock().await)
+    }
+}
+
+impl Drop for Turn<'_> {
+    fn drop(&mut self) {
+        let mut signing = self.signing.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(gate) = self.gate.take() {
+            let last = Arc::strong_count(&gate) == 2
+                && signing
+                    .get(&self.key)
+                    .is_some_and(|kept| Arc::ptr_eq(kept, &gate));
+            if last {
+                signing.remove(&self.key);
+            }
+            // Dropped under the lock, as it was cloned.
+            drop(gate);
+        }
+    }
+}
+
 /// A token kept, when it is asked for again, and which sign-in issued it.
 struct Kept {
     token: Secret,
@@ -86,8 +139,10 @@ struct Handed {
 /// The tokens of a platform's tenants, per tenant and scope.
 pub struct TokenCache {
     tokens: Mutex<BTreeMap<Key, Kept>>,
-    /// One sign-in at a time per key.
-    signing: Mutex<BTreeMap<Key, Arc<tokio::sync::Mutex<()>>>>,
+    /// One sign-in at a time per key. A key's gate is kept only while calls
+    /// for it look for a token ([`Turn`]): the last one out removes it, so
+    /// the map holds no more keys than calls in flight.
+    signing: Mutex<Signing>,
     /// Numbers each sign-in, so a `401` forgets only the token it got.
     issued: AtomicU64,
     now: Clock,
@@ -177,14 +232,10 @@ impl TokenCache {
         if let Some(handed) = self.kept(&key) {
             return Ok(handed);
         }
-        let gate = Arc::clone(
-            self.signing
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .entry(key.clone())
-                .or_default(),
-        );
-        let _signing = gate.lock().await;
+        // Declared before the guard, so dropped after it on every way out:
+        // a token, an error, or the call dropped while it waits.
+        let turn = Turn::take(&self.signing, &key);
+        let _signing = turn.wait().await;
         // Another call may have signed in while this one waited.
         if let Some(handed) = self.kept(&key) {
             return Ok(handed);
@@ -479,6 +530,55 @@ mod tests {
             .token(&label("b"), "s", || async { Ok(issue("u", Some(3600))) })
             .await;
         assert_eq!(other.ok().map(|t| t.expose().to_owned()), Some("u".into()));
+    }
+
+    #[tokio::test]
+    async fn a_sign_in_gate_is_dropped_once_no_call_waits_on_it() {
+        let gates = |cache: &TokenCache| {
+            cache
+                .signing
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .len()
+        };
+        let cache = TokenCache::new();
+        let labels = ["a", "b", "c", "d", "e", "f"].map(label);
+        let get = |at: usize| {
+            cache.token(&labels[at], "s", || async {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+                Ok(issue("t", None))
+            })
+        };
+        // Calls at once on one key, then on many keys.
+        let all = tokio::join!(get(0), get(0), get(0), get(1), get(2));
+        assert!(all.0.is_ok() && all.3.is_ok() && all.4.is_ok());
+        assert_eq!(gates(&cache), 0);
+        // A sign-in that fails.
+        let failed = cache
+            .token(&labels[3], "s", || async { Err(ConnectorError::Cancelled) })
+            .await;
+        assert!(failed.is_err());
+        assert_eq!(gates(&cache), 0);
+        // A call dropped while it signs in, and one dropped while it waits
+        // for the first.
+        let stuck = || {
+            cache.token(&labels[4], "s", || async {
+                std::future::pending::<Result<Issued, ConnectorError>>().await
+            })
+        };
+        let dropped = tokio::time::timeout(Duration::from_millis(20), async {
+            tokio::join!(stuck(), stuck())
+        })
+        .await;
+        assert!(dropped.is_err());
+        assert_eq!(gates(&cache), 0);
+        // While a call holds the gate, it is there.
+        let held = cache.token(&labels[5], "s", || async {
+            assert_eq!(gates(&cache), 1);
+            Ok(issue("t", None))
+        });
+        assert!(held.await.is_ok());
+        assert_eq!(gates(&cache), 0);
     }
 
     #[tokio::test]

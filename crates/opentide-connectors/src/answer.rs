@@ -114,7 +114,8 @@ pub async fn exchange(
 }
 
 /// Why an answer that is not the tenant's API is a gateway's, or `None`
-/// (`gateway_answer`).
+/// (`gateway_answer`). A `429` is the API's rate limit, however long it
+/// took: its `elapsed` counts the `Retry-After` waits before it.
 pub fn gateway_answer(status: u16, elapsed: Option<Duration>) -> Option<String> {
     let name = match status {
         502 => Some("Bad Gateway"),
@@ -130,7 +131,7 @@ pub fn gateway_answer(status: u16, elapsed: Option<Duration>) -> Option<String> 
         ));
     }
     elapsed
-        .filter(|elapsed| *elapsed >= SLOW_ANSWER)
+        .filter(|elapsed| status != 429 && *elapsed >= SLOW_ANSWER)
         .map(|elapsed| {
             format!(
                 "it came after {:.0}s, as from a gateway or proxy in front of the tenant that \
@@ -229,5 +230,18 @@ mod tests {
                 .ends_with("it came after 31s, as from a gateway or proxy in front of the tenant that stopped waiting for it")
         );
         assert_eq!(gateway_answer(500, Some(Duration::from_secs(29))), None);
+    }
+
+    #[test]
+    fn a_429_after_its_retry_after_waits_is_no_gateway_answer() {
+        // Two `Retry-After: 20` waits, then a third 429: 40 s, the API's.
+        let waited = Some(Duration::from_secs(40));
+        assert_eq!(gateway_answer(429, waited), None);
+        assert_eq!(
+            describe_answer(429, b"Too Many Requests", Some("text/plain"), waited),
+            "HTTP 429 with a body that is not JSON (\"Too Many Requests\")"
+        );
+        // Any other slow answer still reads as a gateway's.
+        assert!(gateway_answer(500, waited).is_some_and(|hint| hint.contains("after 40s")));
     }
 }

@@ -273,6 +273,87 @@ async fn calls_answered_401_at_once_sign_in_again_once() {
     assert_eq!(stand.count("/rules").await, 6);
 }
 
+/// [`post`], marked `X-Call: <call>` so the stand-in API can tell calls apart.
+async fn post_as(stand: &Stand, tokens: &TokenCache, call: &str) -> Result<u16, ConnectorError> {
+    let base = stand.server.uri();
+    let cx = stand.cx();
+    tokens
+        .send(
+            cx,
+            "api",
+            || sign_in(cx, &base),
+            |token| {
+                cx.http
+                    .request(Method::POST, &format!("{base}/rules"))
+                    .header("Authorization", format!("Bearer {}", token.expose()))
+                    .header("X-Call", call)
+                    .body(b"{\"rule\": 1}".to_vec())
+            },
+            &stand.cancel,
+        )
+        .await
+        .map(|answer| answer.status)
+}
+
+#[tokio::test]
+async fn a_late_401_on_the_old_token_keeps_the_token_signed_in_since() {
+    let stand = Stand::start("a", SECRET).await;
+    stand.issuing().await;
+    // Both calls start with t1. A's 401 comes at once: A signs in for t2
+    // and replays. B's 401 on t1 comes only after that.
+    Mock::given(method("POST"))
+        .and(path("/rules"))
+        .and(header("authorization", "Bearer t1"))
+        .and(header("x-call", "a"))
+        .respond_with(ResponseTemplate::new(401))
+        .mount(&stand.server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/rules"))
+        .and(header("authorization", "Bearer t1"))
+        .and(header("x-call", "b"))
+        .respond_with(ResponseTemplate::new(401).set_delay(Duration::from_millis(400)))
+        .mount(&stand.server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/rules"))
+        .and(header("authorization", "Bearer t2"))
+        .respond_with(ResponseTemplate::new(201))
+        .mount(&stand.server)
+        .await;
+    let tokens = TokenCache::new();
+    let (a, b) = tokio::join!(post_as(&stand, &tokens, "a"), post_as(&stand, &tokens, "b"));
+    assert_eq!((a.unwrap(), b.unwrap()), (201, 201));
+    // B's 401 forgot only t1, which A had already replaced: no third
+    // sign-in, and B replayed with A's t2.
+    assert_eq!(stand.count("/token").await, 2);
+    let sent: Vec<(String, String)> = stand
+        .server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .filter(|request| request.url.path() == "/rules")
+        .map(|request| {
+            let read = |name: &str| {
+                request
+                    .headers
+                    .get(name)
+                    .and_then(|value| value.to_str().ok())
+                    .unwrap_or_default()
+                    .to_owned()
+            };
+            (read("x-call"), read("authorization"))
+        })
+        .collect();
+    let of_b: Vec<&str> = sent
+        .iter()
+        .filter(|(call, _)| call == "b")
+        .map(|(_, bearer)| bearer.as_str())
+        .collect();
+    assert_eq!(of_b, ["Bearer t1", "Bearer t2"]);
+}
+
 #[tokio::test]
 async fn a_403_is_the_answer_and_no_new_sign_in() {
     let stand = Stand::start("a", SECRET).await;
