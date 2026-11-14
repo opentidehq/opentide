@@ -10,7 +10,7 @@ run-name: >-
 # Two scopes (.github/AGENTS.md, "What runs where"; tests/test_ci/test_ci_scope.py):
 #
 # - A pull request runs the lean set, on Linux: lint (with actionlint), engine
-#   lint, the engine tests in three shards, Python 3.14, E2E, GitLab CI lint,
+#   lint, the engine tests in four shards, Python 3.14, E2E, GitLab CI lint,
 #   golden compare in three parts and cargo deny, the core gates, whose jobs
 #   carry no `if`;
 #   and the path-scoped jobs whose inputs it changes (the `changes` job): the
@@ -369,6 +369,8 @@ jobs:
   #   python-engine       the binding `uv sync` builds: `test` (3.14) saves it,
   #                       the other Linux Python jobs restore it
   #   golden-compare      `golden-compare-part` (its first part); the others restore it
+  #   wasi                `wasi`: the WASI module (wasm32-wasip1, the `wasi`
+  #                       profile) and xtask
   #   full-set-<OS>       the full set's other Rust jobs (facade, node,
   #                       npm-install, engine-wasm, engine-package, bench,
   #                       cli-windows-smoke): `conformance` saves it on each OS,
@@ -500,13 +502,15 @@ jobs:
   # run) on Linux. The test that compares with Python's difflib runs the
   # interpreter setup-python installs (OPENTIDE_PYTHON): no `uv sync`, which
   # compiled the Python binding for minutes before the tests (#841).
-  # Linux in three shards by package: a test harness is a binary, which
+  # Linux in shards by package: a test harness is a binary, which
   # sccache does not cache, so a shard of nextest's `--partition` compiled
   # every test of the workspace again (about four of its six warm minutes,
   # #841). Each shard builds and runs its packages' tests and doctests only,
   # and keeps a compiler cache of its own; tests/test_ci/test_ci_scope.py
   # holds them to every workspace member exactly once, and to an even share
-  # (cargo-metadata's lines of Rust and test binaries per package). macOS
+  # (cargo-metadata's lines of Rust and test binaries per package). A fourth
+  # Linux shard runs command_goldens' slowest groups out of shard 1's
+  # (HEAVY_GOLDENS below): the same test set, split by a nextest filter. macOS
   # and Windows spend their time compiling, which a shard would repeat, so
   # they run whole. `engine-test` below gathers the shards under each
   # operating system's required check.
@@ -517,10 +521,10 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      # Linux in three shards on every pull request; macOS and Windows join in
+      # Linux in four shards on every pull request; macOS and Windows join in
       # the full set (the gathering job keeps their required checks' names).
       matrix:
-        include: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '[{"os":"ubuntu-latest","shard":1,"shards":3,"packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"ubuntu-latest","shard":2,"shards":3,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight --features opentide-schema/python"},{"os":"ubuntu-latest","shard":3,"shards":3,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"},{"os":"macos-latest","shard":1,"shards":1,"packages":"--workspace"},{"os":"windows-latest","shard":1,"shards":1,"packages":"--workspace"}]' || '[{"os":"ubuntu-latest","shard":1,"shards":3,"packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"ubuntu-latest","shard":2,"shards":3,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight --features opentide-schema/python"},{"os":"ubuntu-latest","shard":3,"shards":3,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"}]') }}
+        include: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '[{"os":"ubuntu-latest","shard":1,"shards":4,"goldens":"rest","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"ubuntu-latest","shard":2,"shards":4,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight --features opentide-schema/python"},{"os":"ubuntu-latest","shard":3,"shards":4,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"},{"os":"ubuntu-latest","shard":4,"shards":4,"goldens":"heavy","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"macos-latest","shard":1,"shards":1,"packages":"--workspace"},{"os":"windows-latest","shard":1,"shards":1,"packages":"--workspace"}]' || '[{"os":"ubuntu-latest","shard":1,"shards":4,"goldens":"rest","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"},{"os":"ubuntu-latest","shard":2,"shards":4,"packages":"-p opentide-analysis -p opentide-lsp -p opentide-schema -p opentide-schema-derive -p opentide-tide -p opentide-syntax -p opentide-highlight --features opentide-schema/python"},{"os":"ubuntu-latest","shard":3,"shards":4,"packages":"-p xtask -p opentide-workspace -p opentide-connectors -p opentide-lucene -p opentide-yara -p opentide-falco -p opentide-exabeam -p opentide-yaral -p opentide-core -p opentide-kuery -p opentide-cql -p opentide-ecs -p opentide-eql -p opentide-esql -p opentide-native -p opentide-node -p opentide-wasm"},{"os":"ubuntu-latest","shard":4,"shards":4,"goldens":"heavy","packages":"-p opentide-cli -p opentide-compile -p opentide -p opentide-kql -p opentide-spl -p opentide-cassette -p opentide-compare --features opentide/analysis,opentide/cli,opentide/connectors,opentide/lsp,opentide/plugins,opentide/python,opentide/queries"}]') }}
     env:
       RUSTFLAGS: "-Dwarnings"
       # Line tables, not full debuginfo, for the workspace's ~90 test binaries:
@@ -627,19 +631,43 @@ jobs:
           OPENTIDE_PYTHON: python
           PACKAGES: ${{ matrix.packages }}
           UI: ${{ steps.ui.outputs.run }}
+          GOLDENS: ${{ matrix.goldens }}
+          # command_goldens' slowest groups, a minute or more each (every case
+          # generates the schemas): the Linux shard 4 runs them, apart from the
+          # rest of opentide-cli's tests in shard 1, which would otherwise be
+          # the gate's time (#841). Both shards build the same packages with
+          # the same features; shard 4 builds command_goldens' binary alone.
+          HEAVY_GOLDENS: binary_id(opentide-cli::command_goldens) & test(/^(generate_phase|new_threat|new_objective|new_rule|setup)_cases_are_the_oracles$/)
         run: |
           read -ra selected <<< "${PACKAGES}"
-          filter=()
+          filters=()
           # The shard that tests opentide-schema; a filter names a binary
           # only where it is built.
           if [[ "${UI}" != true && " ${PACKAGES} " == *" -p opentide-schema "* ]]; then
             echo "opentide-schema::ui runs in the full set and when its inputs change"
-            filter=(-E 'not binary_id(opentide-schema::ui)')
+            filters+=('not binary_id(opentide-schema::ui)')
+          fi
+          case "${GOLDENS}" in
+            rest) filters+=("not (${HEAVY_GOLDENS})") ;;
+            heavy)
+              filters+=("${HEAVY_GOLDENS}")
+              selected+=(--test command_goldens)
+              ;;
+            "") ;;
+            *) echo "::error::unknown goldens split: ${GOLDENS}"; exit 1 ;;
+          esac
+          filter=()
+          if (( ${#filters[@]} )); then
+            joined="${filters[0]}"
+            for extra in "${filters[@]:1}"; do joined="${joined} & ${extra}"; done
+            filter=(-E "${joined}")
           fi
           cargo nextest run --locked --profile ci "${selected[@]}" "${filter[@]}"
 
+      # Shard 4 builds shard 1's packages for command_goldens alone: shard 1
+      # runs their doctests.
       - name: doctests
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.goldens != 'heavy'
         env:
           PACKAGES: ${{ matrix.packages }}
         run: |
@@ -1205,18 +1233,28 @@ jobs:
         id: week
         shell: bash
         run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+      # A family of its own (#841): the module's crates for wasm32-wasip1 in
+      # the `wasi` profile, and xtask's for the host, which no other job
+      # builds. A core family: saved from a push to the base branch.
       - name: Restore the compiler cache
+        id: sccache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+          key: sccache-wasi-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-wasi-${{ hashFiles('rust-toolchain.toml') }}-
 
       # Builds target/wasm32-wasip1/wasi/opentide.wasm and fails over the
       # budget; the sizes go to the step summary.
       - name: The WASI module and its size
         run: bash scripts/engine/build-wasm.sh cli
 
+      # A step of its own, so the log tells xtask's build from the compare.
+      - name: Build xtask
+        run: cargo build --locked --package xtask
+
+      # xtask precompiles the module with `wasmtime compile` first (its time
+      # in the log), then runs every case on the precompiled one.
       - name: Every golden case that needs no network, through the WASI module
         run: cargo xtask golden check --runner wasi --report golden-wasi.json
 
@@ -1234,6 +1272,17 @@ jobs:
         run: |
           (cd packages/wasi-host && npm ci)
           node --experimental-strip-types --test --test-name-pattern='^serve \(wasi\)' packages/wasi-host/src/index.test.ts
+
+      - name: Compiler cache statistics
+        if: ${{ !cancelled() }}
+        run: sccache --show-stats
+
+      - name: Save the compiler cache
+        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-wasi-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
       - name: Upload the report
         if: always()

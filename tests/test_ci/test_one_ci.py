@@ -317,9 +317,10 @@ def test_ci_runs_the_rust_gates(job: str, command: str) -> None:
     # Only the scope's condition: the core gates have none, the full set's
     # jobs exactly theirs (test_ci_scope.py).
     assert spec.get("if") == _scope().expected_condition(job), job
-    # The doctests run on Linux, each shard its packages'; nothing else is
-    # conditional.
-    allowed = {("engine-test-part", DOCTESTS): "runner.os == 'Linux'"}
+    # The doctests run on Linux, each shard its packages' (shard 4 builds
+    # shard 1's packages again, for command_goldens alone: shard 1 runs
+    # theirs); nothing else is conditional.
+    allowed = {("engine-test-part", DOCTESTS): "runner.os == 'Linux' && matrix.goldens != 'heavy'"}
     assert step.get("if") == allowed.get((job, command)), (job, command, step.get("if"))
     run = str(step["run"])
     assert not re.search(r"\|\|\s*(?:true|:)\b", run), (job, command)

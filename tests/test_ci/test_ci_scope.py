@@ -993,9 +993,12 @@ def _linux_shards() -> list[list[str]]:
 
     cells = ci_matrix.cells(_ci_jobs()["engine-test-part"], "pull")
     assert {cell["os"] for cell in cells} == {"ubuntu-latest"}
+    # The shard of command_goldens' slowest groups builds shard 1's packages
+    # again (test_the_slowest_goldens_run_apart_from_the_rest_of_their_shard).
     return [
         ci_matrix.selection(cell["packages"])[0]
         for cell in sorted(cells, key=lambda c: int(c["shard"]))
+        if cell.get("goldens") != "heavy"
     ]
 
 
@@ -1028,6 +1031,82 @@ def test_the_engine_test_shards_take_even_shares() -> None:
     weights = [sum(_weight(packages[name]) for name in shard) for shard in _linux_shards()]
     mean = sum(weights) / len(weights)
     assert max(weights) <= 1.25 * mean, [round(w / mean, 2) for w in weights]
+
+
+# command_goldens' slowest groups (a minute or more each) run in a Linux shard
+# of their own, out of shard 1's (#841): the same packages, features and tests,
+# split by a nextest filter and its complement.
+HEAVY_GOLDENS = (
+    "binary_id(opentide-cli::command_goldens) & "
+    "test(/^(generate_phase|new_threat|new_objective|new_rule|setup)_cases_are_the_oracles$/)"
+)
+
+
+def _nextest_step() -> dict[str, Any]:
+    (step,) = [
+        s
+        for s in _ci_jobs()["engine-test-part"]["steps"]
+        if s.get("name") == "cargo nextest (profile ci)"
+    ]
+    return step
+
+
+def test_the_slowest_goldens_run_apart_from_the_rest_of_their_shard() -> None:
+    from tests.test_ci import ci_matrix
+
+    cells = ci_matrix.cells(_ci_jobs()["engine-test-part"], "pull")
+    (rest,) = [c for c in cells if c.get("goldens") == "rest"]
+    (heavy,) = [c for c in cells if c.get("goldens") == "heavy"]
+    # The same build: packages and features, so the tests run as in shard 1.
+    assert heavy["packages"] == rest["packages"]
+    assert "opentide-cli" in ci_matrix.selection(rest["packages"])[0]
+    assert {c.get("goldens") for c in cells} == {"rest", "heavy", None}
+    step = _nextest_step()
+    assert step["env"]["HEAVY_GOLDENS"] == HEAVY_GOLDENS
+    run = step["run"]
+    # A filter and its complement: every test of shard 1 runs in exactly one.
+    assert 'rest) filters+=("not (${HEAVY_GOLDENS})")' in run
+    assert 'filters+=("${HEAVY_GOLDENS}")' in run
+    assert "selected+=(--test command_goldens)" in run
+    # Each named group is a test of command_goldens.
+    source = (ROOT / "crates/opentide-cli/tests/command_goldens.rs").read_text("utf-8")
+    group = re.search(r"\^\((.*)\)_cases_are_the_oracles\$", HEAVY_GOLDENS)
+    assert group
+    for name in group.group(1).split("|"):
+        assert f"fn {name}_cases_are_the_oracles()" in source, name
+    # Shard 1 runs the doctests of the packages both build.
+    (doctests,) = [
+        s for s in _ci_jobs()["engine-test-part"]["steps"] if s.get("name") == "doctests"
+    ]
+    assert "matrix.goldens != 'heavy'" in doctests["if"]
+
+
+@pytest.mark.parametrize(
+    ("goldens", "expected"),
+    [
+        ("rest", f"-E not ({HEAVY_GOLDENS})"),
+        ("heavy", f"--test command_goldens -E {HEAVY_GOLDENS}"),
+        ("", ""),
+    ],
+)
+def test_the_shard_filters_the_slowest_goldens(tmp_path: Path, goldens: str, expected: str) -> None:
+    """The step's own shell, with a `cargo` that prints its arguments."""
+    step = _nextest_step()
+    cargo = tmp_path / "cargo"
+    cargo.write_text('#!/bin/sh\nshift 5\necho "$@"\n', encoding="utf-8")
+    cargo.chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
+        "PACKAGES": "-p opentide-cli -p opentide-kql",
+        "UI": "true",
+        "GOLDENS": goldens,
+        "HEAVY_GOLDENS": step["env"]["HEAVY_GOLDENS"],
+    }
+    out = subprocess.run(
+        ["bash", "-e", "-c", step["run"]], env=env, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert out == f"-p opentide-cli -p opentide-kql {expected}".strip()
 
 
 def _features(arguments: list[str]) -> dict[str, set[str]]:
@@ -1180,7 +1259,7 @@ def test_the_compile_fail_filter_names_the_trybuild_binary() -> None:
     assert step["env"]["FULL_SET"] == "${{ " + FULL_SET + " }}"
     (nextest,) = [s for s in job["steps"] if "cargo nextest run" in str(s.get("run", ""))]
     assert nextest["env"]["UI"] == "${{ steps.ui.outputs.run }}"
-    assert "filter=(-E 'not binary_id(opentide-schema::ui)')" in nextest["run"]
+    assert "filters+=('not binary_id(opentide-schema::ui)')" in nextest["run"]
     condition = 'if [[ "${UI}" != true && " ${PACKAGES} " == *" -p opentide-schema "* ]]; then'
     assert condition in nextest["run"]
     owners = [
