@@ -7,6 +7,7 @@ fixture = "deploy-tenants"
 argv = ["opentide", "deploy", "--platform", "crowdstrike", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 cwd = "."
 timeout_secs = 180
+normalise = ["live-label"]
 
 [env]
 AI_AGENT = "golden"

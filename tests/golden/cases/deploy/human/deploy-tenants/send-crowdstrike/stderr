@@ -1,6 +1,6 @@
 [1mDeploy plan[0m[1;2m · strategy [0m[1mPREVIEW RELEASE[0m[1;2m · 1 platform, 1 tenant[0m
 [2mPlan: 1 to create, 1 to update, 0 to disable, 1 to delete[0m
-[?25l<LIVE>  [1;36m<SPIN>[0m  [1;36mcrowdstrike[0m[1m  [0m[2m [0m[2m<SECONDS>[0m[2m [0m</LIVE>[1;33mwarning: [0mExternal id recorded · uuid: 00000000-0000-4000-8047-000000000021 · platform: crowdstrike ·
+[?25l<LIVE>  [1;36m<SPIN>[0m  [1;36mcrowdstrike[0m<PROGRESS></LIVE>[1;33mwarning: [0mExternal id recorded · uuid: 00000000-0000-4000-8047-000000000021 · platform: crowdstrike ·
 tenant: lab · external_id: cs-rule-1
 
 [1mDeploying to [0m[1mcrowdstrike / lab[0m[1;2m · 3 rules[0m

@@ -66,6 +66,12 @@ pub enum Rule {
     /// `opentide doctor` reports. Not global: opentide's own help text
     /// carries a literal example (`✓ git 2.43.0 · git`) that must stay.
     HostGit,
+    /// A live region's first frame is kept up to its label (the first text
+    /// after the spinner), and the rest of the row becomes `<PROGRESS>`: for
+    /// a progress row the command updates as it works (deploy's rule count
+    /// and current rule), whose first drawn frame may already hold the first
+    /// update. Not global: every other live frame is compared whole.
+    LiveLabel,
 }
 
 /// Values that are only known once a case has run.
@@ -95,6 +101,7 @@ pub struct Normaliser {
     today: Option<Regex>,
     git: Option<String>,
     fresh_uuids: Option<FreshUuids>,
+    live_label: bool,
 }
 
 #[derive(Debug)]
@@ -202,6 +209,7 @@ impl Normaliser {
                 .clone()
                 .filter(|_| rules.contains(&Rule::HostGit)),
             fresh_uuids,
+            live_label: rules.contains(&Rule::LiveLabel),
         }
     }
 
@@ -247,6 +255,9 @@ impl Normaliser {
     /// Applies every rule to `text`.
     pub fn text(&mut self, text: &str) -> String {
         let mut out = live_regions(text);
+        if self.live_label {
+            out = live_labels(&out);
+        }
         for (literal, placeholder) in &self.literals {
             if out.contains(literal.as_str()) {
                 out = out.replace(literal.as_str(), placeholder);
@@ -403,6 +414,68 @@ fn printed_in_region(body: &str, transient: Option<usize>) -> (String, &str) {
     }
     (printed, first.unwrap_or(""))
 }
+
+/// [`Rule::LiveLabel`]: every `<LIVE>` frame of `text` (already through
+/// [`live_regions`]) kept up to its label, the first text after `<SPIN>`
+/// and the style escape that closes it; the rest of the row becomes
+/// `<PROGRESS>`. A frame with no spinner or no label is kept whole.
+///
+/// What the region printed loses the progress rows a loaded machine leaks
+/// into it: Rich's refresh thread can draw a frame just before a line is
+/// printed above the display, with no cursor move between them, so the row
+/// runs into the printed line. A row followed by a newline (a frame kept on
+/// screen) stays.
+pub fn live_labels(text: &str) -> String {
+    live_frame()
+        .replace_all(text, |caps: &Captures<'_>| {
+            let frame = &caps[1];
+            let printed = without_leaked_rows(&caps[2]);
+            let Some(spin) = frame.find("<SPIN>") else {
+                return format!("<LIVE>{frame}</LIVE>{printed}{SHOW_CURSOR}");
+            };
+            let after = spin + "<SPIN>".len();
+            let end = frame_label()
+                .find(&frame[after..])
+                .map(|label| after + label.end())
+                .filter(|end| *end < frame.len());
+            match end {
+                Some(end) => format!(
+                    "<LIVE>{}<PROGRESS></LIVE>{printed}{SHOW_CURSOR}",
+                    &frame[..end]
+                ),
+                None => format!("<LIVE>{frame}</LIVE>{printed}{SHOW_CURSOR}"),
+            }
+        })
+        .into_owned()
+}
+
+/// `printed` without the progress rows that run into a printed line (see
+/// [`live_labels`]).
+fn without_leaked_rows(printed: &str) -> String {
+    let mut out = String::with_capacity(printed.len());
+    let mut last = 0;
+    for row in progress_row().find_iter(printed) {
+        if printed[row.end()..].starts_with('\n') || row.end() == printed.len() {
+            continue;
+        }
+        out.push_str(&printed[last..row.start()]);
+        last = row.end();
+    }
+    out.push_str(&printed[last..]);
+    out
+}
+
+regex!(live_frame, r"(?s)<LIVE>(.*?)</LIVE>(.*?)\x1b\[\?25h");
+regex!(
+    frame_label,
+    r"^(?:\x1b\[[0-9;]*m| )*[^\x1b ]+(?:\x1b\[[0-9;]*m)?"
+);
+// A progress row: the spinner, then segments in the row's own styles (bold
+// cyan, bold, dim), never a warning's or an error's.
+regex!(
+    progress_row,
+    r"  \x1b\[1;36m[\u{2800}-\u{28ff}]\x1b\[0m(?:\x1b\[(?:1;36|1|2|1;2)m[^\x1b\n]*\x1b\[0m| +)*"
+);
 
 /// A frame with its spinner glyphs (the Braille block Rich's spinners draw
 /// from) as `<SPIN>`: which glyph shows first depends on the clock.
@@ -741,6 +814,67 @@ mod tests {
             norm("objects/1b710955f6665676aede66615e5c3e59"),
             "objects/1b710955f6665676aede66615e5c3e59"
         );
+    }
+
+    /// A deploy progress row as Rich draws it first: before the first
+    /// update, or (on a loaded machine) after it; the last frame, kept on
+    /// screen, is the same either way.
+    const BARE_ROW: &str = "  \x1b[1;36m⠋\x1b[0m  \x1b[1;36mcrowdstrike\x1b[0m\x1b[1m  \x1b[0m\x1b[2m \x1b[0m\x1b[2m0.1s\x1b[0m\x1b[2m \x1b[0m";
+    const UPDATED_ROW: &str = "  \x1b[1;36m⠙\x1b[0m  \x1b[1;36mcrowdstrike\x1b[0m\x1b[1m  \x1b[0m\x1b[2m3 rules\x1b[0m\x1b[2m \x1b[0m\x1b[2m0.2s\x1b[0m\x1b[2m \x1b[0m\x1b[2mCrowdStrike create rule\x1b[0m";
+
+    fn deploy_stream(first: &str) -> String {
+        format!(
+            "{HIDE_CURSOR}{first}\r\x1b[2K{UPDATED_ROW}\r\x1b[2K{UPDATED_ROW}\n{SHOW_CURSOR}warning: done\n"
+        )
+    }
+
+    #[test]
+    fn live_label_normalises_both_first_frames_the_same() {
+        let label = |text: &str| Normaliser::new(&volatile(), &[Rule::LiveLabel], []).text(text);
+        let bare = label(&deploy_stream(BARE_ROW));
+        let updated = label(&deploy_stream(UPDATED_ROW));
+        assert_eq!(bare, updated);
+        assert!(
+            bare.starts_with(
+                "\x1b[?25l<LIVE>  \x1b[1;36m<SPIN>\x1b[0m  \x1b[1;36mcrowdstrike\x1b[0m<PROGRESS></LIVE>"
+            ),
+            "{bare:?}"
+        );
+        // Another label is still a difference.
+        let other = label(&deploy_stream(
+            &BARE_ROW.replace("crowdstrike", "sentinel_one"),
+        ));
+        assert_ne!(bare, other);
+        // A frame with no spinner is kept whole.
+        assert_eq!(
+            live_labels("<LIVE>plain row</LIVE>"),
+            "<LIVE>plain row</LIVE>"
+        );
+    }
+
+    #[test]
+    fn live_label_drops_a_progress_row_that_runs_into_a_printed_line() {
+        let label = |text: &str| Normaliser::new(&volatile(), &[Rule::LiveLabel], []).text(text);
+        let warning = "\x1b[1;33mwarning: \x1b[0mRetrying\n";
+        let stream = |leak: &str| {
+            format!(
+                "{HIDE_CURSOR}{BARE_ROW}\r\x1b[2K{leak}{warning}{UPDATED_ROW}\r\x1b[2K{UPDATED_ROW}\n{SHOW_CURSOR}done\n"
+            )
+        };
+        let clean = label(&stream(""));
+        assert_eq!(label(&stream(UPDATED_ROW)), clean);
+        assert!(clean.contains(warning), "{clean:?}");
+        // Without the rule the leaked row is still a difference.
+        assert_ne!(norm(&stream(UPDATED_ROW)), norm(&stream("")));
+    }
+
+    #[test]
+    fn without_live_label_the_whole_first_frame_is_compared() {
+        let bare = norm(&deploy_stream(BARE_ROW));
+        let updated = norm(&deploy_stream(UPDATED_ROW));
+        assert_ne!(bare, updated);
+        assert!(bare.starts_with("\x1b[?25l<LIVE>  \x1b[1;36m<SPIN>\x1b[0m  \x1b[1;36mcrowdstrike\x1b[0m\x1b[1m  \x1b[0m\x1b[2m \x1b[0m"));
+        assert!(!bare.contains("<PROGRESS>"));
     }
 
     #[test]
