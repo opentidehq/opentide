@@ -14,9 +14,8 @@ use crate::rule::canonical_uuid;
 use crate::strategy::{RunStrategies, StatusError, StatusStrategy, Statuses, deploys};
 
 /// The platforms, in the order the plan visits a configuration's tables
-/// ([`opentide_schema::platforms::Order::Container`]).
-pub const PLATFORMS: [&str; opentide_schema::platforms::COUNT] =
-    opentide_schema::platforms::ordered(opentide_schema::platforms::Order::Container);
+/// ([`opentide_schema::platforms::IDS`]).
+pub const PLATFORMS: [&str; opentide_schema::platforms::COUNT] = opentide_schema::platforms::IDS;
 
 /// Where nested rule files are explained.
 pub const NESTED_RULES_ISSUE: &str = "https://github.com/opentidehq/opentide/issues/312";

@@ -69,7 +69,7 @@ pub trait Prompter {
 /// The detection platforms, as `--platform` names them and the wizard shows
 /// them (`DetectionPlatform`, `platform_label`), in their order.
 pub fn platforms() -> Vec<(&'static str, &'static str)> {
-    opentide_schema::platforms::select(opentide_schema::platforms::Order::Cli, |_| true)
+    opentide_schema::platforms::select(|_| true)
         .into_iter()
         .map(|platform| (platform.id, platform.label))
         .collect()
@@ -833,7 +833,7 @@ pub(crate) mod tests {
                 "text Repository name [detections] Some(\"a name\")",
                 "text Organisation / team for the README (optional) [] None",
                 "text Description (optional) [] None",
-                "checkbox Detection platforms [\"Microsoft Sentinel\", \"Splunk Enterprise Security\", \"CrowdStrike Falcon\", \"Microsoft Defender for Endpoint\", \"SentinelOne\", \"Carbon Black Cloud\", \"HarfangLab\", \"Elastic Security\", \"Sysdig Secure\", \"Bitdefender GravityZone\", \"Graylog\", \"Exabeam New-Scale SIEM\", \"Google Security Operations\"] [] required=true",
+                "checkbox Detection platforms [\"Microsoft Sentinel\", \"Microsoft Defender for Endpoint\", \"Splunk Enterprise Security\", \"SentinelOne\", \"CrowdStrike Falcon\", \"HarfangLab\", \"Carbon Black Cloud\", \"Elastic Security\", \"Sysdig Secure\", \"Bitdefender GravityZone\", \"Graylog\", \"Exabeam New-Scale SIEM\", \"Google Security Operations\"] [] required=true",
                 "select CI/CD platform [\"Configure later\", \"GitHub Actions\", \"GitLab CI\", \"Azure Pipelines\"] [0]",
                 "checkbox CI workflow features [\"Staging deployments on pull requests\", \"Inflight preview shards\", \"Automatic status promotion\", \"Sharing on the default branch\", \"Explorer pages\"] [0, 1] required=false",
                 "confirm Configure opentide MCP? [false]",
