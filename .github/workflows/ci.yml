@@ -585,6 +585,14 @@ jobs:
           name: nextest-archive
           path: ${{ runner.temp }}
 
+      # The tests were built in the build job's checkout, at this same path:
+      # env!("CARGO_BIN_EXE_*") names <checkout>/target/debug/<bin>, so the
+      # archive is extracted where the checkout's target/ (gitignored) points.
+      - name: Where the archive is extracted
+        run: |
+          mkdir -p "${RUNNER_TEMP}/nextest"
+          ln -s "${RUNNER_TEMP}/nextest/target" target
+
       # A test writes under a temporary folder, never in the checkout (#931).
       - name: Note the checkout's state
         run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
@@ -598,6 +606,7 @@ jobs:
           cargo nextest run --profile ci
           --archive-file "${RUNNER_TEMP}/tests.tar.zst"
           --workspace-remap "${GITHUB_WORKSPACE}"
+          --extract-to "${RUNNER_TEMP}/nextest"
           --partition "count:${PARTITION}/${TOTAL}"
           --no-tests=pass
           -E 'not binary_id(/^opentide-schema::ui$/)'
@@ -651,6 +660,12 @@ jobs:
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ env.COVERAGE_PYTHON }}
+
+      # cargo for the tests that read the workspace's metadata (nothing is
+      # compiled): the pinned toolchain, which rustup no longer installs on
+      # first use.
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
