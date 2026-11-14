@@ -146,11 +146,16 @@ uv sync --group dev                             # this worktree's .venv; _native
 | Lint and types | `scripts/ci-local.sh --quick` (ruff, ty, cargo fmt, clippy, layers, engine checks, `uv build`) |
 | Before a push | `scripts/ci-local.sh --full` (adds nextest `ci`, doctests, rustdoc, the crates' package and licence scan, pytest with the coverage gate, the E2E suite, GitLab CI lint; WebAssembly, grammars and fuzz smoke when their tools are installed) |
 
-CI runs the gate (lint, engine lint, the Linux engine tests in shards, Python 3.14, E2E, cargo
-deny, CodeQL) on every pull request and push, and the nightly set (macOS and Windows, the
-packages, the conformance suite, the release dry run, the WASI build, fuzz smoke, coverage,
-benchmarks and the rest) nightly and on Run workflow only, so it never blocks a merge. The
-comparisons with the frozen Python oracle run by hand only (`tests/golden/README.md`).
+CI (`ci.yml`, [`.github/AGENTS.md`](.github/AGENTS.md)) runs, on a pull request, only what the
+change affects, on Linux: the changed crates and their reverse dependencies built **once** (a
+nextest archive and the `_native` extension) and tested from that build, the Python suite and E2E
+when the command line or Python changed, each specialised job (Node, WASI, grammars, GitLab CI
+lint, the facade's semver checks, cargo deny, docs) when its paths changed; one required check,
+`PR gate`. A push to a base branch runs every job on Linux; a release pull request adds every
+package and its install on each OS; the nightly adds macOS and Windows, the other Pythons,
+coverage, benchmarks, fuzz smoke and the vendor-parser oracles, and never gates. Nothing compares
+with the frozen Python oracle: `cargo xtask golden`, `compare` and `corpus` run by hand
+(`tests/golden/README.md`).
 The test profiles are in [`.config/nextest.toml`](.config/nextest.toml); CI's jobs are in
 [`.github/AGENTS.md`](.github/AGENTS.md).
 

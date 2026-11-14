@@ -7,9 +7,18 @@ on:
   push:
     # integration/unified-core: the Unified Core PRs merge there before development.
     branches: [main, development, integration/unified-core]
+  # A pull request is analysed when it changes what CodeQL reads: Python
+  # sources and the workflows. Pushes and the nightly analyse everything. Not a
+  # required check (a path-filtered workflow does not report when it does not
+  # run): its alerts gate through code scanning (.github/AGENTS.md).
   pull_request:
+    branches: [integration/unified-core, development, "train/*"]
+    paths:
+      - "**/*.py"
+      - ".github/workflows/**"
+      - ".github/actions/**"
   schedule:
-    - cron: "30 5 * * 1"
+    - cron: "30 5 * * *"
 
 concurrency:
   # A pull request's new push cancels its stale run; every other run (a push

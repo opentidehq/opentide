@@ -24,8 +24,15 @@ golden determinism, the golden preview, the corpora, the MCP replay, the payload
 validate and lint diffs, `codegen --check --oracle`), and `APPROVED_DIFFS.toml` gates nothing.
 Every command here stays, run by hand when a change calls for it: a re-record, a new oracle, or a
 behaviour change you want measured against the oracle. The Rust crates' own tests that replay the
-recordings in-process (`crates/opentide-cli/tests/command_goldens.rs` and its siblings) still run
-with the engine tests.
+recordings in-process (`crates/opentide-cli/tests/command_goldens.rs`, `framework_goldens.rs`,
+`generate_goldens.rs` and every other test that diffs against recorded Python output) are
+`#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]`:
+no CI tier runs them. Run them by hand:
+
+```bash
+cargo nextest run -p opentide-cli --run-ignored only   # the oracle replays only
+cargo nextest run --workspace --run-ignored all        # everything, the replays included
+```
 
 ### A preview of the next oracle
 
