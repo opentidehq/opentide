@@ -1707,7 +1707,7 @@ pub struct QueryArgs {
         help = "Elastic only: esql (default), eql, lucene or kuery"
     )]
     pub language: Option<String>,
-    #[arg(long = "index", help = "Elastic index pattern or CrowdStrike repository (repeatable)", action = clap::ArgAction::Append)]
+    #[arg(long = "index", help = "Elastic index pattern, CrowdStrike repository or Graylog stream alias (repeatable)", action = clap::ArgAction::Append)]
     pub index: Vec<String>,
     #[arg(
         long = "timeout",

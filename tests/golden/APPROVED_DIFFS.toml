@@ -47730,3 +47730,26 @@ candidate = "3e51a86413751ccc8e58686dfc745ca05173e9dbefd8902ae697f4561ef84bb3"
 reason = "The JSON Schema is generated from the Rust models with schemars (UC-1.8b, #900): its text differs from 0.28.1's (key order, descriptions, `$defs` names), and `cargo xtask codegen --check` judges the two by verdict, accepting and refusing every corpus object, configuration file and fault alike (48956 verdicts against 0.28.1). The digests are both sides' after normalisation."
 issue = "https://github.com/opentidehq/opentide/issues/933"
 changelog = "**The editor schemas read differently, and accept the same files**"
+
+# O2 (0.28.1 oracle): the help entries of `query` and `validate query`, restored: their content now matches 0.28.1 but for the help-text entries below.
+[[diff]]
+command = "query"
+case = "query/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is laid out by clap**"
+
+[[diff]]
+command = "validate query"
+case = "validate.query/*/none/help"
+target = "stdout"
+rule = "help"
+oracle = "typer"
+candidate = "clap"
+reason = "The help is laid out by clap (an indented list, one option per paragraph), where the oracle's was drawn by Typer and Rich (boxed panels, two columns, wrapped at the terminal): the maintainer's decision D1 on #841, never a port of Typer's layout. The comparator holds both screens to the same content: the usage path, the about text, every section with its options, arguments and commands in order, each description, default and environment variable, and the examples (opentide_compare::help)."
+issue = "https://github.com/opentidehq/opentide/issues/841"
+changelog = "**`--help` is laid out by clap**"

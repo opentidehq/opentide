@@ -30,7 +30,7 @@ opentide --json query --platform defender_for_endpoint --file objects/rules/susp
 | `--from`, `--to` | An explicit window, ISO-8601. A time without an offset is UTC. `--since` and `--from` exclude each other |
 | `--limit` | Rows per tenant, 1–5000. Default `100` |
 | `--language` | Elastic only: `esql` (default), `eql`, `lucene` or `kuery` |
-| `--index` | Elastic index pattern, or CrowdStrike repository (repeatable) |
+| `--index` | Elastic index pattern, CrowdStrike repository or Graylog stream alias (repeatable) |
 | `--timeout` | Seconds to wait for an asynchronous search (SentinelOne, Carbon Black, CrowdStrike). Default `120` |
 | `--columns` | Comma-separated columns the table shows |
 | `--format` | `table` (default), `jsonl` or `csv`. `--json` prints the [envelope](./json-output.md) instead |
