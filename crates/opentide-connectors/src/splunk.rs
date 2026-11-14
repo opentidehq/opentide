@@ -6,7 +6,7 @@
 //! makes to choose between the v1 and v2 search endpoints.
 //!
 //! Every call carries `Authorization: Splunk <token>` (the token as is when
-//! it already starts with `Splunk `); a body is a form (`urlencode`), with
+//! it already starts with `Splunk `); a body is a form, with
 //! `Content-Type: application/x-www-form-urlencoded`. The tenant is
 //! `https://<url>:<port>`, and every path but `server/info` is under the
 //! app's namespace (`/servicesNS/nobody/<app>/`). An HTML page in place of
@@ -23,10 +23,12 @@ use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
     Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, columns_of,
 };
-use crate::encode::{quote, quote_plus, urlencode};
 use crate::error::ConnectorError;
 use crate::text::json_text;
 use crate::{HttpSettings, TenantLabel};
+use opentide_compile::deploy::PATH_SEGMENT;
+use percent_encoding::utf8_percent_encode;
+use url::form_urlencoded::byte_serialize;
 
 /// The platform's identifier.
 pub const PLATFORM: &str = "splunk";
@@ -221,17 +223,12 @@ fn alternate(entry: &str) -> Option<String> {
     })
 }
 
-/// `urllib.parse.unquote`: `%XX` escapes decoded as UTF-8.
-fn unquote(text: &str) -> String {
-    percent_encoding::percent_decode_str(text)
-        .decode_utf8_lossy()
-        .into_owned()
-}
-
 /// An entity's path without its namespace (`_entity_path`): the link's,
-/// unquoted, after `servicesNS/<owner>/<app>/` or `services/`.
+/// percent-decoded, after `servicesNS/<owner>/<app>/` or `services/`.
 fn entity_path(link: &str) -> String {
-    let raw = unquote(link);
+    let raw = percent_encoding::percent_decode_str(link)
+        .decode_utf8_lossy()
+        .into_owned();
     if let Some(at) = raw.find("servicesNS/") {
         let rest = &raw[at + "servicesNS/".len()..];
         let mut parts = rest.splitn(3, '/');
@@ -244,10 +241,17 @@ fn entity_path(link: &str) -> String {
     raw
 }
 
+/// A saved search's name as the last segment of its path. Splunk decodes
+/// the segment as a form value (`+` is a space), as its own clients write
+/// it.
+fn entity_name(name: &str) -> String {
+    byte_serialize(name.as_bytes()).collect()
+}
+
 /// A saved search the tenant holds (the Python Splunk client's `SavedSearch`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SavedSearch {
-    /// Its path under the namespace, unquoted (`saved/searches/<name>`).
+    /// Its path under the namespace, percent-decoded (`saved/searches/<name>`).
     pub path: String,
     /// Its search as the tenant answered it (`content.search`).
     pub search: Option<String>,
@@ -311,26 +315,23 @@ fn messages(body: &Object, kinds: &[&str]) -> String {
         .join("; ")
 }
 
-/// A form value as `urlencode` writes Python's value: `str(value)`.
-fn form_value(value: &Json) -> String {
-    json_text(value)
-}
-
-/// `_encode`: the pairs, a list as one pair per item.
+/// A form of *pairs*, a list as one field per item and any other value as
+/// its text ([`json_text`]).
 fn form(pairs: &[(String, Json)]) -> String {
-    let mut flat: Vec<(String, String)> = Vec::new();
+    let mut form = url::form_urlencoded::Serializer::new(String::new());
     for (key, value) in pairs {
         match value {
             Json::Array(items) => {
-                flat.extend(items.iter().map(|item| (key.clone(), form_value(item))));
+                for item in items {
+                    form.append_pair(key, &json_text(item));
+                }
             }
-            other => flat.push((key.clone(), form_value(other))),
+            other => {
+                form.append_pair(key, &json_text(other));
+            }
         }
     }
-    urlencode(
-        flat.iter()
-            .map(|(key, value)| (key.as_str(), value.as_str())),
-    )
+    form.finish()
 }
 
 /// The Splunk connector. A tenant's search endpoints (v1 or v2) are read
@@ -369,7 +370,10 @@ impl Splunk {
             Some(_) => cx.tenant.secret("app")?.expose().to_owned(),
             None => "search".to_owned(),
         };
-        Ok(format!("/servicesNS/nobody/{}/", quote_plus(&app)))
+        Ok(format!(
+            "/servicesNS/nobody/{}/",
+            utf8_percent_encode(&app, PATH_SEGMENT)
+        ))
     }
 
     /// One request through the urllib handler: the answer, or the error an
@@ -487,7 +491,7 @@ impl Splunk {
         let path = format!(
             "{}saved/searches/{}",
             Self::namespace(cx)?,
-            quote_plus(name)
+            entity_name(name)
         );
         let reply = Self::send(cx, crate::transport::Method::GET, &path, None).await?;
         reply.log_failure();
@@ -502,10 +506,7 @@ impl Splunk {
             return Err(ConnectorError::refused(
                 PLATFORM,
                 &cx.tenant.label.tenant,
-                format!(
-                    "Found multiple entities named '{}'; please specify a namespace.",
-                    quote_plus(name)
-                ),
+                format!("Found multiple entities named {name:?}; please specify a namespace."),
                 None,
             ));
         }
@@ -523,7 +524,9 @@ impl Splunk {
         search: &str,
     ) -> Result<SavedSearch, ConnectorError> {
         let path = format!("{}saved/searches/", Self::namespace(cx)?);
-        let body = urlencode([("name", name), ("search", search)]);
+        let body = url::form_urlencoded::Serializer::new(String::new())
+            .extend_pairs([("name", name), ("search", search)])
+            .finish();
         let reply = Self::send(cx, crate::transport::Method::POST, &path, Some(body)).await?;
         reply.log_failure();
         if reply.failed() {
@@ -566,7 +569,13 @@ impl Splunk {
                 .filter(|(key, _)| key.as_str() != "search")
                 .map(|(key, value)| (key.clone(), value.clone())),
         );
-        let path = format!("{}{}", Self::namespace(cx)?, quote(&saved.path, "/"));
+        let path = saved
+            .path
+            .split('/')
+            .map(|segment| utf8_percent_encode(segment, PATH_SEGMENT).to_string())
+            .collect::<Vec<_>>()
+            .join("/");
+        let path = format!("{}{path}", Self::namespace(cx)?);
         let reply = Self::send(
             cx,
             crate::transport::Method::POST,
@@ -590,7 +599,7 @@ impl Splunk {
         let path = format!(
             "{}saved/searches/{}",
             Self::namespace(cx)?,
-            quote_plus(name)
+            entity_name(name)
         );
         let reply = Self::send(cx, crate::transport::Method::DELETE, &path, None).await?;
         reply.log_failure();
@@ -660,15 +669,17 @@ impl Splunk {
         let earliest = epoch(request.window.start);
         let latest = epoch(request.window.end);
         let count = request.limit.saturating_add(1).to_string();
-        let body = urlencode([
-            ("search", sent.as_str()),
-            ("exec_mode", "oneshot"),
-            ("earliest_time", earliest.as_str()),
-            ("latest_time", latest.as_str()),
-            ("count", count.as_str()),
-            ("output_mode", "json"),
-            ("segmentation", "none"),
-        ]);
+        let body = url::form_urlencoded::Serializer::new(String::new())
+            .extend_pairs([
+                ("search", sent.as_str()),
+                ("exec_mode", "oneshot"),
+                ("earliest_time", earliest.as_str()),
+                ("latest_time", latest.as_str()),
+                ("count", count.as_str()),
+                ("output_mode", "json"),
+                ("segmentation", "none"),
+            ])
+            .finish();
         let reply = Self::send(cx, crate::transport::Method::POST, &path, Some(body)).await?;
         if reply.failed() {
             let found = messages(&parse(&reply.answer.body), &["ERROR", "FATAL"]);
@@ -748,12 +759,14 @@ impl Splunk {
         }
         let query = query.trim();
         let v2 = self.search_v2(cx, "parser").await?;
-        let form = urlencode([
-            ("q", query),
-            ("enable_lookups", "True"),
-            ("output_mode", "json"),
-            ("reload_macros", "True"),
-        ]);
+        let form = url::form_urlencoded::Serializer::new(String::new())
+            .extend_pairs([
+                ("q", query),
+                ("enable_lookups", "True"),
+                ("output_mode", "json"),
+                ("reload_macros", "True"),
+            ])
+            .finish();
         let namespace = Self::namespace(cx)?;
         let reply = if v2 {
             let path = format!("{namespace}search/v2/parser");
@@ -1001,6 +1014,24 @@ impl Platform for Splunk {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_name_is_one_form_encoded_segment() {
+        assert_eq!(entity_name("Splunk SPL Rule"), "Splunk+SPL+Rule");
+        assert_eq!(entity_name("a/b&c"), "a%2Fb%26c");
+    }
+
+    #[test]
+    fn a_list_is_one_field_per_item() {
+        let pairs = vec![
+            ("search".to_owned(), Json::Str("index=* a&b".to_owned())),
+            (
+                "action".to_owned(),
+                Json::Array(vec![Json::Str("x".to_owned()), Json::Bool(true)]),
+            ),
+        ];
+        assert_eq!(form(&pairs), "search=index%3D*+a%26b&action=x&action=true");
+    }
 
     #[test]
     fn queries_search_unless_they_start_with_a_command() {

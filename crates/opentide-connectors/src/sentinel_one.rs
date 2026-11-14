@@ -363,7 +363,9 @@ impl SentinelOne {
             delay = (delay * 2).min(MAX_POLL_DELAY);
             let url = format!(
                 "{ping}?{}",
-                crate::encode::urlencode([("queryId", id.as_str())])
+                url::form_urlencoded::Serializer::new(String::new())
+                    .extend_pairs([("queryId", id.as_str())])
+                    .finish()
             );
             let answer = Self::call(cx, &setup, crate::transport::Method::GET, &url, None).await?;
             data = self::data(&answer, &tenant)?;

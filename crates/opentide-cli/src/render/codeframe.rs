@@ -104,8 +104,10 @@ fn char_slice(text: &str, start: usize, end: usize) -> String {
     text.chars().skip(start).take(end - start).collect()
 }
 
-/// What a path keeps unencoded in a link or a SARIF URI: letters, digits,
-/// `_.-~` and the `/` separator, as `urllib.parse.quote(path)` keeps them.
+/// What a path keeps unencoded in a link or a SARIF URI: the RFC 3986
+/// unreserved characters (letters, digits, `_.-~`) and the `/` separator.
+/// SARIF readers compare these URIs as text, so the set is part of the
+/// report's contract.
 pub const PATH_SAFE: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'_')
     .remove(b'.')
@@ -115,11 +117,6 @@ pub const PATH_SAFE: &AsciiSet = &NON_ALPHANUMERIC
 
 /// [`PATH_SAFE`] and `:`, for an editor link's `path:line:column`.
 pub const EDITOR_SAFE: &AsciiSet = &PATH_SAFE.remove(b':');
-
-/// `text` percent-encoded as UTF-8, every byte outside `safe` as `%XX`.
-pub fn quote(text: &str, safe: &'static AsciiSet) -> String {
-    utf8_percent_encode(text, safe).to_string()
-}
 
 /// The OSC 8 target for a location: `file://` unless the editor can open a line.
 ///
@@ -159,9 +156,9 @@ pub fn link_url(
         } else {
             format!("/{posix}")
         };
-        return Some(format!("file://{}", quote(&posix, PATH_SAFE)));
+        return Some(format!("file://{}", utf8_percent_encode(&posix, PATH_SAFE)));
     }
-    let mut target = quote(&posix, EDITOR_SAFE);
+    let mut target = utf8_percent_encode(&posix, EDITOR_SAFE).to_string();
     if let Some(line) = line {
         target.push_str(&format!(":{line}"));
         if let Some(column) = column {
@@ -848,10 +845,10 @@ mod tests {
     #[test]
     fn quote_matches_python() {
         assert_eq!(
-            quote("/a b#c/名.yaml", PATH_SAFE),
+            utf8_percent_encode("/a b#c/名.yaml", PATH_SAFE).to_string(),
             "/a%20b%23c/%E5%90%8D.yaml"
         );
-        assert_eq!(quote("C:/x", EDITOR_SAFE), "C:/x");
+        assert_eq!(utf8_percent_encode("C:/x", EDITOR_SAFE).to_string(), "C:/x");
     }
 
     #[test]

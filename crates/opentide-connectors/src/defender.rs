@@ -437,12 +437,14 @@ async fn sign_in(cx: TenantContext<'_>) -> Result<Secret, DefenderError> {
     let tenant_id = cx.tenant.secret("tenant_id")?.expose().to_owned();
     let client_id = cx.tenant.secret("client_id")?.expose().to_owned();
     let client_secret = cx.tenant.secret("client_secret")?.expose().to_owned();
-    let form = crate::encode::urlencode([
-        ("client_id", client_id.as_str()),
-        ("client_secret", client_secret.as_str()),
-        ("grant_type", "client_credentials"),
-        ("scope", SCOPE),
-    ]);
+    let form = url::form_urlencoded::Serializer::new(String::new())
+        .extend_pairs([
+            ("client_id", client_id.as_str()),
+            ("client_secret", client_secret.as_str()),
+            ("grant_type", "client_credentials"),
+            ("scope", SCOPE),
+        ])
+        .finish();
     let url = TOKEN_ENDPOINT.replace("{tenant_id}", &tenant_id);
     let builder = cx
         .http
