@@ -138,8 +138,10 @@ jobs:
           rustup toolchain install --profile minimal --no-self-update
           rustup target add ${{ matrix.target }}
       # The dry run only (a release builds from nothing): sccache, by content,
-      # one family per runner, which the cell marked `saves` saves from a push;
-      # the Intel macOS cross build restores Apple silicon's (tests/test_ci/test_rust_caches.py).
+      # one family per Linux runner, which the cell marked `saves` saves on
+      # development and by the nightly. macOS and Windows keep none: their
+      # families crowded the ones pull requests restore out of the 10 GB
+      # GitHub keeps (#841, tests/test_ci/test_rust_caches.py).
       - name: Install sccache
         if: inputs.dry-run
         uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
@@ -159,12 +161,12 @@ jobs:
       # so a family is saved once a week (tests/test_ci/test_rust_caches.py).
       - name: Compiler cache week
         id: week
-        if: inputs.dry-run
+        if: inputs.dry-run && runner.os == 'Linux'
         shell: bash
         run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Restore the compiler cache
         id: sccache
-        if: inputs.dry-run
+        if: inputs.dry-run && runner.os == 'Linux'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .sccache
@@ -208,7 +210,7 @@ jobs:
           cp "target/${{ matrix.target }}/release/opentide-lsp${ext}" "dist/opentide-lsp-${VERSION}-${{ matrix.target }}${ext}"
           cp "target/${{ matrix.target }}/release/opentide${ext}" "product/opentide-${VERSION}-${{ matrix.target }}${ext}"
       - name: Save the compiler cache
-        if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development') && inputs.dry-run && steps.sccache.outputs.cache-hit != 'true' && matrix.saves
+        if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development') && inputs.dry-run && runner.os == 'Linux' && steps.sccache.outputs.cache-hit != 'true' && matrix.saves
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .sccache
