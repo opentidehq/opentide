@@ -42,7 +42,7 @@ fn timerange_mode(value: Option<&Json>) -> &str {
     }
 }
 
-/// Python's `int()` of a count.
+/// A whole count, surrounding spaces allowed.
 fn count(text: &str) -> Option<i64> {
     text.trim().parse().ok()
 }
@@ -62,8 +62,7 @@ pub fn cron_to_timeframe(
     let unit = chars.next_back();
     let count = count(chars.as_str()).ok_or_else(|| {
         invalid(&format!(
-            "invalid literal for int() with base 10: {:?}",
-            chars.as_str()
+            "frequency {frequency:?} must be a whole number followed by m, h or d"
         ))
     })?;
     let (minute, hour) = match mode {
@@ -103,8 +102,7 @@ pub fn splunk_timerange(time: &str, skew: f64, offset: i64) -> Result<String, Co
     let unit = chars.next_back();
     let count = count(chars.as_str()).ok_or_else(|| {
         invalid(&format!(
-            "invalid literal for int() with base 10: {:?}",
-            chars.as_str()
+            "lookback {time:?} must be a whole number followed by m, h or d"
         ))
     })?;
     let minutes = match unit {
@@ -151,8 +149,8 @@ fn settings(tenant: &Json) -> Result<Settings, CompileError> {
             .parse::<f64>()
             .map_err(|_| {
                 invalid(&format!(
-                    "could not convert string to float: {:?}",
-                    deploy::text(value).replace('%', "e-2")
+                    "allow_skew must be a number or a percentage, got {:?}",
+                    deploy::text(value)
                 ))
             })?,
         None => 0.0,
@@ -162,7 +160,7 @@ fn settings(tenant: &Json) -> Result<Settings, CompileError> {
         Some(Json::Int(offset)) => *offset,
         Some(value) => count(&deploy::text(value)).ok_or_else(|| {
             invalid(&format!(
-                "invalid literal for int() with base 10: {:?}",
+                "schedule_offset must be an integer, got {:?}",
                 deploy::text(value)
             ))
         })?,
@@ -734,6 +732,42 @@ mod tests {
         assert_eq!(splunk_timerange("5m", 0.5, 0).unwrap(), "-8m@m");
         assert_eq!(splunk_timerange("3m", 0.5, 0).unwrap(), "-4m@m");
         assert!(splunk_timerange("3s", 0.0, 0).is_err());
+    }
+
+    /// A count or a setting that does not read as a number names itself
+    /// and what it must be.
+    #[test]
+    fn unreadable_numbers_name_the_setting() {
+        let reason = |error: CompileError| error.reason;
+        assert_eq!(
+            reason(cron_to_timeframe("xh", "random", None, CLOCK).unwrap_err()),
+            "Splunk cannot compile this rule: frequency \"xh\" must be a whole number followed \
+             by m, h or d"
+        );
+        assert_eq!(
+            reason(splunk_timerange("1.5h", 0.0, 0).unwrap_err()),
+            "Splunk cannot compile this rule: lookback \"1.5h\" must be a whole number \
+             followed by m, h or d"
+        );
+        let tenant = |setup: &str| -> Json {
+            serde_json::from_str(&format!(r#"{{"setup":{{{setup}}}}}"#)).unwrap()
+        };
+        assert_eq!(
+            reason(
+                settings(&tenant(r#""schedule_offset":"soon""#))
+                    .err()
+                    .unwrap()
+            ),
+            "Splunk cannot compile this rule: schedule_offset must be an integer, got \"soon\""
+        );
+        assert_eq!(
+            reason(settings(&tenant(r#""allow_skew":"lots""#)).err().unwrap()),
+            "Splunk cannot compile this rule: allow_skew must be a number or a percentage, got \
+             \"lots\""
+        );
+        let read = settings(&tenant(r#""allow_skew":"10%","schedule_offset":" 2 ""#)).unwrap();
+        assert!((read.skew - 0.1).abs() < 1e-9);
+        assert_eq!(read.offset, 2);
     }
 
     #[test]

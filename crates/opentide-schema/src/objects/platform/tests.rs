@@ -128,7 +128,7 @@ fn every_query_text_refuses_a_blank_query() {
                    "scheduling": "NRT"}),
         ),
     ] {
-        for blank in ["", "   ", "\n\t", "\u{1c}", "\u{a0}"] {
+        for blank in ["", "   ", "\n\t", "\r\n", "\u{a0}"] {
             let found = errors(platform, &merged(&block, &json!({"query": blank})));
             assert_eq!(
                 found, "query: Value error, query must not be empty",
@@ -299,7 +299,8 @@ fn elastic_constraint_codes() {
 
 /// A boolean is no integer (Python's `bool` subclassed `int`): in
 /// `threshold.value`, `risk` or `risk.score` it is the field type's
-/// `int_type` on the value, never read as 0 or 1 by the block's constraints.
+/// `int_type` on the value (for the `int | ElasticRisk` union, one error naming
+/// an integer), never read as 0 or 1 by the block's constraints.
 #[test]
 fn elastic_booleans_are_not_integers() {
     for (overrides, path) in [
@@ -324,9 +325,8 @@ fn elastic_booleans_are_not_integers() {
         );
         let found = errors("elastic", &block);
         assert!(
-            found
-                .lines()
-                .any(|line| line.starts_with(path) && line.contains("valid integer")),
+            found.lines().any(|line| line.starts_with(path)
+                && (line.contains("valid integer") || line.contains("expected an integer"))),
             "{block}: {found}"
         );
     }

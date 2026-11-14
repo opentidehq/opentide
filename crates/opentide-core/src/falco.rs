@@ -80,22 +80,9 @@ pub const RESERVED_WORDS: [&str; 6] = ["and", "or", "not", "in", "exists", "val"
 /// the two line ends.
 pub const BLANKS: [char; 4] = [' ', '\t', '\n', '\r'];
 
-/// Python's `str.isspace()` for one character: Unicode's `White_Space`
-/// (Rust's `char::is_whitespace`) and the four separators U+001C to U+001F,
-/// which Python counts as whitespace too.
-pub fn is_python_space(ch: char) -> bool {
-    ch.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&ch)
-}
-
-/// Python's `text.strip()`.
-pub fn python_strip(text: &str) -> &str {
-    text.trim_matches(is_python_space)
-}
-
-/// A string with nothing but whitespace, by Python's `str.strip()` (the
-/// oracle's `_non_blank`, negated).
+/// A string with nothing but whitespace (the oracle's `_non_blank`, negated).
 pub fn is_blank(text: &str) -> bool {
-    python_strip(text).is_empty()
+    text.trim().is_empty()
 }
 
 /// Falco's `normalize_comp`: leading and trailing [`BLANKS`] stripped.
@@ -135,7 +122,7 @@ pub fn definition_name_ok(name: &str) -> bool {
 
 /// `sysdig_priority`: a Falco priority, any case, around whitespace.
 pub fn priority_ok(text: &str) -> bool {
-    PRIORITIES.contains(&python_strip(text).to_lowercase().as_str())
+    PRIORITIES.contains(&text.trim().to_lowercase().as_str())
 }
 
 /// `sysdig_source`: a Falco event source name, `[a-z][a-z0-9_]*`.
@@ -426,7 +413,8 @@ mod tests {
         for source in ["", "1abc", "Syscall", "aws-cloudtrail"] {
             assert!(!source_ok(source), "{source}");
         }
-        assert!(is_blank(" \u{1c}\u{2028}\t"));
+        assert!(is_blank(" \u{2028}\t\r\n"));
+        assert!(!is_blank("\u{1c}"));
         assert!(!is_blank(" x "));
     }
 }

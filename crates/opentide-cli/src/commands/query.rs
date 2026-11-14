@@ -263,7 +263,7 @@ fn query_text(args: &Args, cx: &Context<'_>) -> Result<Option<String>, Box<Repor
             }
             Err(error) => Err(Box::new(usage(
                 &args.platform,
-                &format!("cannot read --query-file {file}: {}", strerror(&error)),
+                &format!("cannot read --query-file {file}: {error}"),
                 "--query-file",
                 &[],
             ))),
@@ -273,15 +273,6 @@ fn query_text(args: &Args, cx: &Context<'_>) -> Result<Option<String>, Box<Repor
         return Ok(Some((cx.stdin)()));
     }
     Ok(args.query.clone())
-}
-
-/// An I/O error as Python's `strerror` names it (`No such file or directory`).
-fn strerror(error: &std::io::Error) -> String {
-    let text = error.to_string();
-    match text.rfind(" (os error ") {
-        Some(at) => text[..at].to_owned(),
-        None => text,
-    }
 }
 
 /// An ISO 8601 date or time as UTC; a time without an offset is UTC
@@ -624,17 +615,6 @@ pub(crate) fn http_settings(platform: &str, timeout: Duration) -> HttpSettings {
     opentide_connectors::http_settings(platform, timeout)
 }
 
-/// `{value:g}` of a number of seconds.
-pub(crate) fn seconds_g(value: f64) -> String {
-    // `{x:g}`: six significant digits, no trailing zeros.
-    let text = format!("{value}");
-    if value.fract() == 0.0 && value.abs() < 1e16 {
-        format!("{value:.0}")
-    } else {
-        text
-    }
-}
-
 /// One tenant's run of the query (`run_on_tenant`).
 fn run_on_tenant(
     platform: &str,
@@ -772,60 +752,22 @@ fn run_on_tenant(
             outcome.error = Some(format!(
                 "{platform} tenant {:?} did not answer the query within {}s: {message}",
                 configured.name,
-                seconds_g(request.timeout.as_secs_f64()),
+                request.timeout.as_secs_f64(),
             ));
             outcome.detail = Some("narrow the window or raise --timeout".into());
         }
-        Err(ConnectorError::Timeout { seconds, .. }) => {
-            let host = setup_host(platform, configured);
+        Err(ConnectorError::Timeout { address, .. }) => {
             outcome.error = Some(format!(
-                "{platform} tenant {:?} did not answer the query within {}s: \
-                 HTTPSConnectionPool(host='{host}', port=443): Read timed out. (read \
-                 timeout={seconds})",
+                "{platform} tenant {:?} did not answer the query within {}s (no answer from \
+                 {address})",
                 configured.name,
-                seconds_g(request.timeout.as_secs_f64()),
+                request.timeout.as_secs_f64(),
             ));
             outcome.detail = Some("narrow the window or raise --timeout".into());
         }
         Err(error) => outcome.error = Some(error.to_string()),
     }
     finish(outcome)
-}
-
-/// The host a tenant's failures name: its `url`, else the platform's.
-fn setup_host(platform: &str, configured: &Configured) -> String {
-    if platform == "google_secops" {
-        // The instance's endpoint, else its location's (`_tenant_host`).
-        let text = |key: &str| {
-            configured
-                .setup
-                .get(key)
-                .and_then(opentide_compile::Json::as_str)
-                .filter(|text| !text.is_empty())
-                .map(str::to_owned)
-        };
-        let endpoint = text("endpoint").or_else(|| {
-            text("location")
-                .map(|location| opentide_compile::google_secops::default_endpoint(&location))
-        });
-        return endpoint
-            .map(|endpoint| {
-                url::Url::parse(&endpoint)
-                    .ok()
-                    .and_then(|url| url.host_str().map(str::to_owned))
-                    .unwrap_or(endpoint)
-            })
-            .unwrap_or_default();
-    }
-    let url = configured
-        .setup
-        .get("url")
-        .and_then(opentide_compile::Json::as_str)
-        .unwrap_or_else(|| default_host(platform));
-    url::Url::parse(url)
-        .ok()
-        .and_then(|url| url.host_str().map(str::to_owned))
-        .unwrap_or_else(|| url.to_owned())
 }
 
 /// Runs `opentide query`.
@@ -1153,7 +1095,7 @@ fn payload(
             failed.len(),
             outcomes.len(),
             first.tenant,
-            first.error.as_deref().unwrap_or("None")
+            first.error.as_deref().unwrap_or("unknown error")
         );
         if let Some(detail) = first.detail.as_ref().filter(|detail| !detail.is_empty()) {
             data.push(("detail".into(), Json::str(detail)));
@@ -1226,30 +1168,11 @@ fn scalar_text(value: &Json) -> String {
     }
 }
 
-/// `json.dumps(value, ensure_ascii=False, separators=(",", ":"))`.
+/// *value* as compact JSON on one line, UTF-8 as is.
 fn compact(value: &Json) -> String {
     crate::json::document_text(value, false)
         .trim_end()
         .to_owned()
-}
-
-/// `json.dumps(value, ensure_ascii=False)`: `, ` and `: ` between members.
-fn spaced(value: &Json) -> String {
-    match value {
-        Json::Array(items) => format!(
-            "[{}]",
-            items.iter().map(spaced).collect::<Vec<_>>().join(", ")
-        ),
-        Json::Object(members) => format!(
-            "{{{}}}",
-            members
-                .iter()
-                .map(|(key, value)| format!("{}: {}", compact(&Json::str(key)), spaced(value)))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        other => compact(other),
-    }
 }
 
 /// A row with the tenant (and label) in front (`_labelled`).
@@ -1301,7 +1224,7 @@ fn body(
             for outcome in outcomes {
                 if let Some(result) = &outcome.result {
                     for row in rows(result) {
-                        text.push_str(&spaced(&Json::Object(labelled(outcome, &row))));
+                        text.push_str(&compact(&Json::Object(labelled(outcome, &row))));
                         text.push('\n');
                     }
                 }
@@ -1393,7 +1316,10 @@ fn tables(args: &Args, outcomes: &[TenantResult], terminal: &Terminal) -> Vec<Bl
             if outcomes.len() > 1 {
                 let mut line = Text::styled(&title, &bold);
                 line.append(
-                    &format!("  failed: {}", outcome.error.as_deref().unwrap_or("None")),
+                    &format!(
+                        "  failed: {}",
+                        outcome.error.as_deref().unwrap_or("unknown error")
+                    ),
                     &Style::new("red"),
                 );
                 blocks.push(Block::Stderr(terminal.stderr.line(&line)));
@@ -1425,8 +1351,7 @@ fn tables(args: &Args, outcomes: &[TenantResult], terminal: &Terminal) -> Vec<Bl
                 .iter()
                 .map(|row| shown.iter().map(|name| cell(row.get(name))).collect())
                 .collect();
-            let width = terminal.stdout.width.unwrap_or(80);
-            for line in rich_table(&shown, &cells, width) {
+            for line in table(&shown, &cells, terminal.stdout.width) {
                 out.push_str(&terminal.stdout.line(&line));
             }
         }
@@ -1454,148 +1379,45 @@ fn tables(args: &Args, outcomes: &[TenantResult], terminal: &Terminal) -> Vec<Bl
     blocks
 }
 
-/// A Rich `Table(show_edge=False, header_style="bold", pad_edge=False)` of
-/// columns that never wrap, `width` cells wide at most: the header in bold
-/// over a heavy rule, the cells one space from the light rules between them.
-/// A table wider than the stream loses width evenly across its columns
-/// (Rich's `ratio_reduce`; no column wraps), and each cell is cut with `…`.
-fn rich_table(headers: &[String], rows: &[Vec<String>], width: usize) -> Vec<Text> {
+/// The rows under their headers: each column as wide as its widest cell, at
+/// most [`CELL_WIDTH`] cells (a longer cell is cut with `…`), two spaces
+/// between columns, the header in bold over a rule. On a terminal (`width`),
+/// a line wider than it is cut at its edge with `…`.
+fn table(headers: &[String], rows: &[Vec<String>], width: Option<usize>) -> Vec<Text> {
     use crate::render::text::cell_len;
-    let count = headers.len();
-    let last = count.saturating_sub(1);
-    let pads: Vec<(usize, usize)> = (0..count)
-        .map(|at| (usize::from(at > 0), usize::from(at < last)))
-        .collect();
-    // The room for the columns: the stream less the rules between them.
-    let room = width.saturating_sub(last);
-    let measure = |at: usize, limit: usize| -> usize {
-        // `_measure_column`: the widest cell with its padding, at most `limit`
-        // and the column's `max_width` (CELL_WIDTH) with its padding.
-        if limit < 1 {
-            return 0;
-        }
-        let (left, right) = pads[at];
-        let padding = left + right;
-        let widest = rows
-            .iter()
-            .map(|row| cell_len(&row[at]))
-            .chain(std::iter::once(cell_len(&headers[at])))
-            .map(|cells| {
-                if limit < padding + 1 {
-                    limit
-                } else {
-                    (cells + padding).min(limit)
-                }
-            })
-            .max()
-            .unwrap_or(limit);
-        widest.min(limit).min(CELL_WIDTH + padding)
-    };
-    let mut widths: Vec<usize> = (0..count).map(|at| measure(at, room).max(1)).collect();
-    let total: usize = widths.iter().sum();
-    if total > room {
-        widths = ratio_reduce(total - room, &widths);
-        widths = (0..count).map(|at| measure(at, widths[at])).collect();
-    }
-    let bold = Style::new("bold");
-    let plain = Style::new("");
-    // One cell: its padding and its text cut to fit, the whole cropped to
-    // the column's width.
-    let cell = |line: &mut Text, at: usize, value: &str, style: &Style| {
-        let (left, right) = pads[at];
-        let room = widths[at];
-        let inner = room.saturating_sub(left + right);
-        let mut content = Text::plain(value);
-        content.truncate_ellipsis(inner);
-        let mut text = content.as_plain();
-        if inner == 0 {
-            text.clear();
-        }
-        text.push_str(&" ".repeat(inner.saturating_sub(cell_len(&text))));
-        let mut used = 0;
-        for piece in [" ".repeat(left), text, " ".repeat(right)] {
-            let take: String = piece
-                .chars()
-                .scan(used, |cells, ch| {
-                    *cells += crate::render::text::char_width(ch);
-                    (*cells <= room).then_some(ch)
-                })
-                .collect();
-            used += cell_len(&take);
-            if !take.is_empty() {
-                line.append(&take, style);
-            }
-        }
-    };
-    let mut lines: Vec<Text> = Vec::new();
-    let mut header = Text::plain("");
-    for (at, name) in headers.iter().enumerate() {
-        if at > 0 {
-            header.push_str("┃");
-        }
-        cell(&mut header, at, name, &bold);
-    }
-    lines.push(header);
-    let rule: Vec<String> = widths.iter().map(|width| "━".repeat(*width)).collect();
-    lines.push(Text::plain(&rule.join("╇")));
-    for row in rows {
-        let mut line = Text::plain("");
-        for (at, value) in row.iter().enumerate() {
-            if at > 0 {
-                line.push_str("│");
-            }
-            cell(&mut line, at, value, &plain);
-        }
-        lines.push(Text::plain(&line.as_plain()));
-    }
-    // A table still wider than the stream is cut at its edge, as the
-    // console crops each line it prints.
-    lines.iter().map(|line| crop_cells(line, width)).collect()
-}
-
-/// *line*'s first *width* cells.
-fn crop_cells(line: &Text, width: usize) -> Text {
-    let mut cells = 0;
-    let mut keep = 0;
-    for ch in line.as_plain().chars() {
-        cells += crate::render::text::char_width(ch);
-        if cells > width {
-            break;
-        }
-        keep += 1;
-    }
-    line.slice(0, keep)
-}
-
-/// Rich's `ratio_reduce(total, [1] * n, widths, widths)`: *total* cells
-/// taken from the columns in turn, each its share (Python's `round`, half
-/// to even), at most its whole width.
-fn ratio_reduce(total: usize, widths: &[usize]) -> Vec<usize> {
-    let mut ratio_left = widths.iter().filter(|width| **width > 0).count();
-    if ratio_left == 0 {
-        return widths.to_vec();
-    }
-    let mut remaining = total;
-    widths
+    let widths: Vec<usize> = headers
         .iter()
-        .map(|&width| {
-            if width == 0 || ratio_left == 0 {
-                return width;
-            }
-            // round(remaining / ratio_left), ties to even.
-            let quotient = remaining / ratio_left;
-            let rest = remaining % ratio_left;
-            let share = match (rest * 2).cmp(&ratio_left) {
-                std::cmp::Ordering::Greater => quotient + 1,
-                std::cmp::Ordering::Equal if quotient % 2 == 1 => quotient + 1,
-                _ => quotient,
-            };
-            let distributed = share.min(width);
-            remaining -= distributed.min(remaining);
-            ratio_left -= 1;
-            width - distributed
+        .enumerate()
+        .map(|(at, header)| {
+            rows.iter()
+                .map(|row| cell_len(&row[at]))
+                .fold(cell_len(header), usize::max)
+                .min(CELL_WIDTH)
         })
-        .collect()
+        .collect();
+    let line = |cells: &[String], style: &Style| -> Text {
+        let mut line = Text::plain("");
+        for (at, value) in cells.iter().enumerate() {
+            if at > 0 {
+                line.push_str("  ");
+            }
+            let mut cell = Text::styled(value, style);
+            cell.truncate_ellipsis(widths[at]);
+            let pad = widths[at].saturating_sub(cell.cell_len());
+            line.append_text(&cell);
+            line.push_str(&" ".repeat(pad));
+        }
+        line.rstrip();
+        if let Some(width) = width {
+            line.truncate_ellipsis(width);
+        }
+        line
+    };
+    let plain = Style::new("");
+    let rule: Vec<String> = widths.iter().map(|width| "-".repeat(*width)).collect();
+    let mut lines = vec![line(headers, &Style::new("bold")), line(&rule, &plain)];
+    lines.extend(rows.iter().map(|row| line(row, &plain)));
+    lines
 }
 
 #[cfg(test)]
@@ -1696,13 +1518,13 @@ mod tests {
         let row = Json::parse(r#"{"a": "x  y", "b": [1, "é"], "c": null, "d": 1.5}"#).unwrap();
         let mut lab = failed("lab", "e", None);
         assert_eq!(
-            spaced(&Json::Object(labelled(&lab, &row))),
-            r#"{"_tenant": "lab", "a": "x  y", "b": [1, "é"], "c": null, "d": 1.5}"#
+            compact(&Json::Object(labelled(&lab, &row))),
+            r#"{"_tenant":"lab","a":"x  y","b":[1,"é"],"c":null,"d":1.5}"#
         );
         lab.label = Some("sub-query 1".into());
         assert_eq!(
-            spaced(&Json::Object(labelled(&lab, &row)))[..44],
-            *r#"{"_tenant": "lab", "_label": "sub-query 1", "#
+            compact(&Json::Object(labelled(&lab, &row)))[..40],
+            *r#"{"_tenant":"lab","_label":"sub-query 1","#
         );
         assert_eq!(cell(row.get("a")), "x y");
         assert_eq!(cell(row.get("b")), r#"[1,"é"]"#);
@@ -1710,51 +1532,39 @@ mod tests {
         assert_eq!(cell(Some(&Json::str("z".repeat(70)))).chars().count(), 60);
         assert_eq!(csv_field("a,\"b\""), "\"a,\"\"b\"\"\"");
         assert_eq!(csv_value(Some(&Json::Bool(true))), "true");
-        let table = |headers: &[&str], row: &[&str], width: usize| -> Vec<String> {
+        let table = |headers: &[&str], row: &[&str], width: Option<usize>| -> Vec<String> {
             let headers: Vec<String> = headers.iter().map(|h| (*h).to_owned()).collect();
             let row: Vec<String> = row.iter().map(|c| (*c).to_owned()).collect();
-            rich_table(&headers, &[row], width)
+            table(&headers, &[row], width)
                 .iter()
                 .map(Text::as_plain)
                 .collect()
         };
+        // Each column as wide as its widest cell, two spaces between.
         assert_eq!(
-            table(&["A", "Bee"], &["long", "b"], 80),
-            ["A    ┃ Bee", "━━━━━╇━━━━", "long │ b  "]
+            table(&["A", "Bee"], &["long", "b"], None),
+            ["A     Bee", "----  ---", "long  b"]
         );
-        // Wider than the stream: Rich's own output for the same table.
+        // A cell is cut at CELL_WIDTH cells, a wide character counted twice.
+        let wide = "一".repeat(40);
+        let lines = table(&["x", "y"], &[&wide, "1"], None);
+        assert_eq!(lines[1], format!("{}  -", "-".repeat(CELL_WIDTH)));
+        assert_eq!(lines[2], format!("{}…  1", "一".repeat(29) + " "));
+        // On a terminal, a line wider than it is cut at its edge; no width
+        // (a pipe or a file) keeps the whole line.
+        let row = ["c:\\windows\\cmd.exe", "4001", "ws-1", "ORGKEY01-0001"];
+        let headers = ["process_name", "pid", "device", "guid"];
         assert_eq!(
-            table(
-                &["process_name", "pid", "device", "guid"],
-                &["c:\\windows\\cmd.exe", "4001", "ws-1", "ORGKEY01-0001"],
-                20
-            ),
+            table(&headers, &row, Some(20)),
             [
-                "process_… ┃┃┃ guid  ",
-                "━━━━━━━━━━╇╇╇━━━━━━━",
-                "c:\\windo… │││ ORGKE…"
+                "process_name       …",
+                "------------------ …",
+                "c:\\windows\\cmd.exe …"
             ]
         );
         assert_eq!(
-            table(
-                &["alpha", "beta", "gamma"],
-                &["一二三四", "x", "yyyyyyy"],
-                12
-            ),
-            ["alp… ┃  ┃ g…", "━━━━━╇━━╇━━━", "一 … │  │ y…"]
-        );
-        // Still wider after the even reduction: cut at the stream's edge.
-        assert_eq!(
-            table(
-                &["aaaaaaaaaa", "bbbbbbbbbbb", "ccc", "dddd"],
-                &[&"x".repeat(30), &"y".repeat(20), "z", &"w".repeat(9)],
-                20
-            ),
-            [
-                "aaaaaaa… ┃ bbbbbb… ┃",
-                "━━━━━━━━━╇━━━━━━━━━╇",
-                "xxxxxxx… │ yyyyyy… │"
-            ]
+            table(&headers, &row, None)[2],
+            "c:\\windows\\cmd.exe  4001  ws-1    ORGKEY01-0001"
         );
     }
 
@@ -2036,9 +1846,9 @@ mod tests {
         report.outcome.exit_code = 0;
         let blocks = body(&args, &outcomes, &terminal, &mut report);
         assert!(blocks.is_empty());
-        let expected = "{\"_tenant\": \"prod\", \"host\": \"pc-1\", \"note\": \"a, \\\"b\\\"\"}\n\
-                        {\"_tenant\": \"prod\", \"host\": \"pc-2\", \"note\": null}\n\
-                        {\"_tenant\": \"shadowed\", \"host\": \"pc-3\", \"count\": 4}\n";
+        let expected = "{\"_tenant\":\"prod\",\"host\":\"pc-1\",\"note\":\"a, \\\"b\\\"\"}\n\
+                        {\"_tenant\":\"prod\",\"host\":\"pc-2\",\"note\":null}\n\
+                        {\"_tenant\":\"shadowed\",\"host\":\"pc-3\",\"count\":4}\n";
         assert_eq!(report.whole_stdout.as_deref(), Some(expected));
         // A failed run prints the rows it has in the body, before the outcome.
         let mut report = Report::failed(COMMAND, 1, Failure::new("", ""));
@@ -2080,15 +1890,15 @@ mod tests {
         assert_eq!(
             out,
             "prod  2 rows\n\
-             host ┃ note  \n\
-             ━━━━━╇━━━━━━━\n\
-             pc-1 │ a, \"b\"\n\
-             pc-2 │       \n\
+             host  note\n\
+             ----  ------\n\
+             pc-1  a, \"b\"\n\
+             pc-2\n\
              \n\
              lab  1 row\n\
-             host ┃ count\n\
-             ━━━━━╇━━━━━━\n\
-             pc-3 │ 4    \n\
+             host  count\n\
+             ----  -----\n\
+             pc-3  4\n\
              \n"
         );
         assert_eq!(
@@ -2123,7 +1933,7 @@ mod tests {
         let (out, _) = text_of(&tables(&Args::default(), &outcomes, &terminal));
         let lines: Vec<&str> = out.lines().collect();
         assert_eq!(lines[0], "soc  1 row (more matched; raise --limit)");
-        assert_eq!(lines[1], "c0 ┃ c1 ┃ c2 ┃ c3 ┃ c4 ┃ c5 ┃ c6 ┃ c7");
+        assert_eq!(lines[1], "c0  c1  c2  c3  c4  c5  c6  c7");
         assert_eq!(
             lines[4],
             "2 more columns: name them with --columns, or use --format jsonl"
@@ -2138,9 +1948,9 @@ mod tests {
         assert_eq!(
             out,
             "soc  1 row (more matched; raise --limit)\n\
-             c9 ┃ c1\n\
-             ━━━╇━━━\n\
-             9  │ 1 \n\
+             c9  c1\n\
+             --  --\n\
+             9   1\n\
              \n"
         );
         // No rows: the heading alone.
@@ -2200,8 +2010,8 @@ mod tests {
             )
         };
         // The operating system's own words for a missing file (os error 2
-        // on Unix and on Windows), as Python's strerror gives them.
-        let not_found = strerror(&std::io::Error::from_raw_os_error(2));
+        // on Unix and on Windows).
+        let not_found = std::io::Error::from_raw_os_error(2);
         assert_eq!(
             refused(args(None, Some("nope.kql"))),
             (
@@ -2280,35 +2090,6 @@ mod tests {
             credential_keys("graylog"),
             ("Graylog", &["url", "token"][..])
         );
-        let tenant = |url: Option<&str>| Configured {
-            name: "lab".into(),
-            setup: url
-                .map(|url| {
-                    [("url".to_owned(), opentide_compile::Json::Str(url.into()))]
-                        .into_iter()
-                        .collect()
-                })
-                .unwrap_or_default(),
-        };
-        assert_eq!(
-            setup_host("sentinel_one", &tenant(Some("https://s1.invalid:8443/x"))),
-            "s1.invalid"
-        );
-        assert_eq!(
-            setup_host("crowdstrike", &tenant(None)),
-            "api.crowdstrike.com"
-        );
-        assert_eq!(
-            setup_host("defender_for_endpoint", &tenant(None)),
-            "graph.microsoft.com"
-        );
-        assert_eq!(
-            setup_host("harfanglab", &tenant(Some("not a url"))),
-            "not a url"
-        );
-        assert_eq!(setup_host("elastic", &tenant(None)), "");
-        assert_eq!(seconds_g(120.0), "120");
-        assert_eq!(seconds_g(0.25), "0.25");
         for platform in platforms() {
             let settings = http_settings(platform, Duration::from_secs(30));
             assert!(settings.timeout > Duration::ZERO, "{platform}");
@@ -2377,21 +2158,6 @@ mod tests {
             parse_instant("27/10/2026", "--to").unwrap_err(),
             "--to \"27/10/2026\" is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
         );
-        // strerror is the OS message without Rust's " (os error N)".
-        let missing = std::io::Error::from_raw_os_error(2);
-        let text = missing.to_string();
-        assert_eq!(
-            strerror(&missing),
-            text[..text.rfind(" (os error ").unwrap()]
-        );
-        #[cfg(unix)]
-        assert_eq!(strerror(&missing), "No such file or directory");
-        #[cfg(windows)]
-        assert_eq!(
-            strerror(&missing),
-            "The system cannot find the file specified."
-        );
-        assert_eq!(strerror(&std::io::Error::other("plain")), "plain");
     }
 
     #[test]

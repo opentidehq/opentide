@@ -155,9 +155,9 @@ pub fn normalise_newlines(text: &str) -> String {
     text.replace("\r\n", "\n").replace('\r', "\n")
 }
 
-/// Python's `str.strip()` emptiness: only whitespace, or nothing.
+/// Only whitespace, or nothing.
 fn blank(text: &str) -> bool {
-    crate::objects::platform::python_strip(text).is_empty()
+    text.trim().is_empty()
 }
 
 /// Whether a `/` after `buf` starts a regex literal rather than dividing.
@@ -304,7 +304,7 @@ pub fn section_header_line(text: &str) -> Option<usize> {
     code_lines(text, true)
         .iter()
         .position(|line| {
-            let stripped = crate::objects::platform::python_strip(line);
+            let stripped = line.trim();
             header.is_match(line) || label.is_match(line) || stripped == "{" || stripped == "}"
         })
         .map(|index| index + 1)

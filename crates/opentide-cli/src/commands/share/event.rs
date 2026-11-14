@@ -307,18 +307,13 @@ fn techniques(document: &TideDocument, family: &str) -> Vec<String> {
     let mut found: Vec<String> = Vec::new();
     for item in items {
         if let Json::Str(text) = item {
-            let trimmed = python_strip(text);
+            let trimmed = text.trim();
             if !trimmed.is_empty() && !found.iter().any(|seen| seen == trimmed) {
                 found.push(trimmed.to_owned());
             }
         }
     }
     found
-}
-
-/// `str.strip()`: Python's whitespace.
-fn python_strip(text: &str) -> &str {
-    text.trim_matches(|c: char| c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c))
 }
 
 /// The identifiers that need a galaxy lookup (`_cluster_sources`).
@@ -459,7 +454,7 @@ pub fn resolve_clusters(
 
 /// `_same`: equal once stripped and case-folded.
 fn same(left: &str, right: &str) -> bool {
-    python_strip(left).to_lowercase() == python_strip(right).to_lowercase()
+    left.trim().to_lowercase() == right.trim().to_lowercase()
 }
 
 fn tag(galaxy: &str, value: &str) -> String {

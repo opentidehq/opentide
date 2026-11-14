@@ -29,7 +29,7 @@ use crate::error::{ErrorKind, PathSegment};
 use crate::from_node::Context;
 use crate::node::{Node, Value};
 use crate::objects::checks::check_at_least_one;
-use crate::objects::platform::{literal_enum, platform_block, python_strip};
+use crate::objects::platform::{literal_enum, platform_block};
 use crate::pins::Pins;
 
 /// The schema identifier.
@@ -280,15 +280,12 @@ impl ExabeamEvery {
 #[from_node(union)]
 pub enum ExabeamValueItem {
     /// A string.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     Text(String),
     /// An integer.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Int(i64),
     /// A number.
-    #[from_node(tag = "float")]
     #[schemars(
         description = "",
         schema_with = "crate::objects::platform::number_schema"
@@ -303,18 +300,15 @@ pub enum ExabeamValueItem {
 #[from_node(union)]
 pub enum ExabeamValue {
     /// An integer.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Int(i64),
     /// A number.
-    #[from_node(tag = "float")]
     #[schemars(
         description = "",
         schema_with = "crate::objects::platform::number_schema"
     )]
     Float(f64),
     /// A list of strings or numbers.
-    #[from_node(tag = "list[union[str,int,float]]")]
     #[schemars(description = "")]
     List(Vec<ExabeamValueItem>),
 }
@@ -326,11 +320,9 @@ pub enum ExabeamValue {
 #[from_node(union)]
 pub enum ExabeamDays {
     /// Weekday names.
-    #[from_node(tag = "list[str]")]
     #[schemars(description = "")]
     Names(Vec<String>),
     /// Day numbers.
-    #[from_node(tag = "list[int]")]
     #[schemars(description = "")]
     Numbers(Vec<i64>),
 }
@@ -636,7 +628,7 @@ fn text(node: Option<&Node>) -> Option<&str> {
 
 /// A string with something besides whitespace.
 fn non_blank(node: Option<&Node>) -> bool {
-    text(node).is_some_and(|text| !python_strip(text).is_empty())
+    text(node).is_some_and(|text| !text.trim().is_empty())
 }
 
 /// `_number`: an integer or a float, not a boolean.
@@ -837,7 +829,7 @@ fn threshold_findings(threshold: &Node, at: &[PathSegment]) -> Vec<Finding> {
                 if !items.is_empty() && items.iter().all(|item| {
                     number(item)
                         || text(Some(item)).is_some_and(|text| {
-                            !python_strip(text).is_empty() && !text.contains(',')
+                            !text.trim().is_empty() && !text.contains(',')
                         })
                 }));
                 (

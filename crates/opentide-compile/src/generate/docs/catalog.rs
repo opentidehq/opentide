@@ -6,7 +6,7 @@
 use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
-use opentide_schema::error::{ErrorKind, PathSegment, SchemaError};
+use opentide_schema::error::SchemaError;
 use opentide_schema::from_node::{Invalid, validate};
 use opentide_schema::node::{Node, Value};
 use opentide_schema::objects::{
@@ -997,130 +997,53 @@ where
 fn describe_constraints(report: &garde::Report, root: Option<&Node>) -> String {
     let errors: Vec<_> = report.iter().collect();
     let Some((path, error)) = errors.first() else {
-        return "an object does not validate; opentide validate shows each finding".to_owned();
+        return NO_DETAIL.to_owned();
     };
-    let location = path.to_string();
-    let location = if location.is_empty() {
-        "the object".to_owned()
-    } else {
-        location
-    };
-    let mut message = error.message().to_owned();
-    if let Some(head) = message.chars().next() {
-        message = head.to_lowercase().collect::<String>() + &message[head.len_utf8()..];
-    }
-    let subject = root
-        .and_then(|root| root.get("name"))
-        .and_then(|name| name.value.as_str())
-        .filter(|name| !name.is_empty())
-        .map_or_else(
-            || "an object".to_owned(),
-            opentide_schema::configuration::repr::quote,
-        );
-    let more = if errors.len() > 1 {
-        format!(" (and {} more)", errors.len() - 1)
-    } else {
-        String::new()
-    };
-    format!(
-        "{subject} does not validate: {location}: {message}{more}; opentide validate shows each finding"
-    )
+    sentence(root, &path.to_string(), error.message(), errors.len())
 }
 
-/// One line for a model's errors, as the oracle words a `ValidationError`
-/// (`describe_validation_error`): the first error, where and what, the
-/// object's name when the input has one, and how many more. A rule's platform
-/// blocks and response are read on their own first, so their errors are
-/// placed in the block.
+/// One line for a model's errors: the first error, where and what, the
+/// object's name, and how many more.
 fn describe(errors: &[SchemaError], root: Option<&Node>) -> String {
-    let mut group: Vec<&SchemaError> = Vec::new();
-    let mut strip = 0;
-    if let Some(Value::Map(blocks)) = root
-        .and_then(|root| root.get("configurations"))
-        .map(|node| &node.value)
-    {
-        for block in blocks {
-            let Some(name) = block.key.value.as_str() else {
-                continue;
-            };
-            let prefix = [
-                PathSegment::Key("configurations".to_owned()),
-                PathSegment::Key(name.to_owned()),
-            ];
-            group = errors
-                .iter()
-                .filter(|error| error.path.starts_with(&prefix))
-                .collect();
-            if !group.is_empty() {
-                strip = 2;
-                break;
-            }
-        }
-    }
-    if group.is_empty() {
-        let prefix = [PathSegment::Key("response".to_owned())];
-        group = errors
-            .iter()
-            .filter(|error| error.path.starts_with(&prefix))
-            .collect();
-        strip = 1;
-    }
-    if group.is_empty() {
-        group = errors.iter().collect();
-        strip = 0;
-    }
-    let Some(first) = group.first() else {
-        return "an object does not validate; opentide validate shows each finding".to_owned();
+    let Some(first) = errors.first() else {
+        return NO_DETAIL.to_owned();
     };
-    let location = first.path[strip.min(first.path.len())..]
+    let location = first
+        .path
         .iter()
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join(".");
+    sentence(root, &location, &first.message, errors.len())
+}
+
+const NO_DETAIL: &str = "an object does not validate; opentide validate shows each finding";
+
+/// `<name> does not validate: <location>: <message> (and N more)`, the
+/// name the root's `name`.
+fn sentence(root: Option<&Node>, location: &str, message: &str, count: usize) -> String {
+    let subject = root
+        .and_then(|root| root.get("name"))
+        .and_then(|name| name.value.as_str())
+        .filter(|name| !name.is_empty())
+        .map_or_else(|| "an object".to_owned(), |name| format!("{name:?}"));
     let location = if location.is_empty() {
-        "the object".to_owned()
+        "the object"
     } else {
         location
     };
-    let mut message = first.message.clone();
+    let mut message = message.to_owned();
     if let Some(head) = message.chars().next() {
         message = head.to_lowercase().collect::<String>() + &message[head.len_utf8()..];
     }
-    // Pydantic's input: the mapping a missing field is missing from, else the value.
-    let input_path = if first.kind == ErrorKind::Missing && !first.path.is_empty() {
-        &first.path[..first.path.len() - 1]
-    } else {
-        &first.path[..]
-    };
-    let subject = root
-        .and_then(|root| at(root, input_path))
-        .and_then(|input| input.get("name"))
-        .and_then(|name| name.value.as_str())
-        .filter(|name| !name.is_empty())
-        .map_or_else(
-            || "an object".to_owned(),
-            opentide_schema::configuration::repr::quote,
-        );
-    let more = if group.len() > 1 {
-        format!(" (and {} more)", group.len() - 1)
+    let more = if count > 1 {
+        format!(" (and {} more)", count - 1)
     } else {
         String::new()
     };
     format!(
         "{subject} does not validate: {location}: {message}{more}; opentide validate shows each finding"
     )
-}
-
-fn at<'n>(node: &'n Node, path: &[PathSegment]) -> Option<&'n Node> {
-    let mut current = node;
-    for segment in path {
-        current = match (segment, &current.value) {
-            (PathSegment::Key(key), Value::Map(_)) => current.get(key)?,
-            (PathSegment::Index(position), Value::Seq(items)) => items.get(*position)?,
-            _ => return None,
-        };
-    }
-    Some(current)
 }
 
 #[cfg(test)]
@@ -1167,17 +1090,17 @@ mod tests {
     }
 
     #[test]
-    fn a_platform_block_error_is_placed_in_the_block() {
+    fn a_model_error_names_the_rule_its_first_error_and_how_many_more() {
         let document = opentide_schema::node::load(
             "name: R\nmetadata:\n  uuid: u\n  schema: rule::1.1\n  version: 1\n  created: x\n  modified: x\n  tlp: clear\nconfigurations:\n  sentinel:\n    query: q\n",
         )
         .unwrap();
         let error = typed::<RuleV1_1>(&document).unwrap_err().detail;
-        assert!(
-            error.starts_with("an object does not validate: status: field required"),
-            "{error}"
+        assert_eq!(
+            error,
+            "\"R\" does not validate: description: field required (and 3 more); opentide \
+             validate shows each finding"
         );
-        assert!(error.ends_with("; opentide validate shows each finding"));
         let document = opentide_schema::node::load(
             "name: R\nmetadata:\n  uuid: u\n  schema: rule::1.1\n  version: 1\n  created: x\n  modified: x\n  tlp: clear\n",
         )
@@ -1190,7 +1113,7 @@ mod tests {
     }
 
     /// A document that reads into its model but breaks one of the model's
-    /// constraints fails the catalogue, as the oracle's pydantic model does.
+    /// constraints fails the catalogue, naming the rule and the full path.
     #[test]
     fn a_failed_constraint_fails_the_catalogue() {
         let rule = |version: &str| {
@@ -1200,12 +1123,11 @@ mod tests {
             .unwrap()
         };
         assert!(typed::<RuleV1_0>(&rule("1")).is_ok());
-        // The conversion places the constraint in the block.
         let error = typed::<RuleV1_0>(&rule("-1")).unwrap_err().detail;
         assert_eq!(
             error,
-            "an object does not validate: minimum_engine_version: input should be greater than \
-             or equal to 0; opentide validate shows each finding"
+            "\"Sysdig rule\" does not validate: configurations.sysdig.minimum_engine_version: \
+             input should be greater than or equal to 0; opentide validate shows each finding"
         );
     }
 

@@ -8,8 +8,8 @@
 //! through the node tree, never by line, so comments, quoting, key order and
 //! line endings survive. The result is read back and must differ from the
 //! original by exactly those values. A status written as an anchor, an alias
-//! or under a merge key is not rewritten ([`Error::Refused`]); a rewrite the
-//! oracle's promotion raises on ([`Error::Unreadable`], [`Error::KeyError`])
+//! or under a merge key is not rewritten ([`Error::Refused`]); a rewrite
+//! that cannot be checked ([`Error::Unreadable`], [`Error::NonStringKey`])
 //! fails the run.
 //!
 //! This module reads no file: the host reads the rule files, logs, and
@@ -97,41 +97,45 @@ pub enum Error {
     /// The promotion cannot rewrite it without changing what else it says
     /// (`PromotionRefused`): the file is left as it is, with a warning.
     Refused(String),
-    /// The target, or the promoted text, does not read as YAML: the oracle
-    /// raises `ValueError("<file>: cannot promote its statuses: <the
-    /// parser's words>")` and the run fails. This holds the words, this
-    /// loader's rather than PyYAML's.
+    /// The target, or the promoted text, does not read as YAML: the run
+    /// fails, with the loader's words and where.
     Unreadable(String),
-    /// A promoted platform block's key is not a string (`1:`, `null:`): the
-    /// oracle's `expected["configurations"][platform]` looks it up by the
-    /// text it was written as and raises `KeyError`, which fails the run.
-    /// This holds that text; the run's message is its `repr`.
-    KeyError(String),
+    /// A promoted platform block's key is not a string (`1:`, `null:`, or a
+    /// plain `yes:` YAML 1.1 reads as a boolean): the promotion cannot check
+    /// the block it rewrote, and the run fails. This holds the key as written.
+    NonStringKey(String),
 }
 
-/// What `data["name"]` gives for a rule file read as `root`: `Ok` when the
-/// file is a mapping with a `name`, else the oracle's exception text
-/// (`'name'`, `'NoneType' object is not subscriptable`, `'int' object is not
-/// subscriptable`, ...), for the type this loader reads the root as. The
-/// oracle reads YAML 1.1, this loader YAML 1.2: a plain scalar the two read
-/// as different types (`yes`, `2026-01-01`) is named by its YAML 1.2 type
-/// (UC-6.0d, #841).
-pub fn name_error(root: Option<&Node>) -> Result<(), String> {
-    let not_subscriptable = |name: &str| format!("'{name}' object is not subscriptable");
-    let Some(root) = root else {
-        return Err(not_subscriptable("NoneType"));
-    };
-    match &root.value {
-        Value::Map(_) if root.get("name").is_some() => Ok(()),
-        Value::Map(_) => Err(format!("{:?}", "name")),
-        Value::Null => Err(not_subscriptable("NoneType")),
-        Value::Seq(_) => Err("list indices must be integers or slices, not str".to_owned()),
-        Value::Str(_) | Value::Datetime(_) => {
-            Err("string indices must be integers, not 'str'".to_owned())
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Refused(detail) | Self::Unreadable(detail) => f.write_str(detail),
+            Self::NonStringKey(key) => write!(
+                f,
+                "configurations.{key} is not a string key (quote the platform name)"
+            ),
         }
-        Value::Bool(_) => Err(not_subscriptable("bool")),
-        Value::Int(_) => Err(not_subscriptable("int")),
-        Value::Float(_) => Err(not_subscriptable("float")),
+    }
+}
+
+/// Whether a rule file read as `root` is a mapping with a `name`, the error
+/// saying what it is instead.
+pub fn name_error(root: Option<&Node>) -> Result<(), String> {
+    match root.map(|root| (root, &root.value)) {
+        None => Err("rule file is empty, not a mapping with a name".to_owned()),
+        Some((root, Value::Map(_))) if root.get("name").is_some() => Ok(()),
+        Some((_, Value::Map(_))) => Err("rule has no name".to_owned()),
+        Some((_, other)) => {
+            let kind = other.type_name();
+            let article = if kind.starts_with(['a', 'e', 'i', 'o', 'u']) {
+                "an"
+            } else {
+                "a"
+            };
+            Err(format!(
+                "rule file holds {article} {kind}, not a mapping with a name"
+            ))
+        }
     }
 }
 
@@ -161,20 +165,6 @@ fn key_text(key: &Node) -> String {
         Value::Str(text) => text.clone(),
         other => other.to_string(),
     }
-}
-
-/// The text a scalar `node` is written as, without a tag before it: the
-/// value of PyYAML's `ScalarNode` for a plain scalar.
-fn written(source: &str, offsets: &[usize], node: &Node) -> String {
-    let text = span(source, offsets, node).trim();
-    let text = match text.strip_prefix('!') {
-        Some(rest) => rest
-            .split_once([' ', '\t'])
-            .map_or("", |(_, value)| value)
-            .trim_start(),
-        None => text,
-    };
-    text.to_owned()
 }
 
 /// Whether `key` is YAML 1.1's merge key: `<<`, written plain.
@@ -258,9 +248,9 @@ fn scalar_end(source: &str, start: usize, end: usize) -> usize {
 ///
 /// [`Error::Refused`] when a status is an anchor or an alias, a merge key
 /// reaches a platform block, or the rewrite would change anything else;
-/// [`Error::Unreadable`] and [`Error::KeyError`] where the oracle raises, in
-/// the order it would: the target, a promoted block's key, the promoted
-/// text.
+/// [`Error::Unreadable`] for a target or a promoted text that does not
+/// read as YAML, and [`Error::NonStringKey`] for a promoted block whose key
+/// is not a string: the target first, then the keys, then the promoted text.
 pub fn promote_block_statuses(
     document: &Document,
     statuses: &[String],
@@ -296,7 +286,10 @@ pub fn promote_block_statuses(
                     .starts_with(['"', '\'', '!']);
                 let (name, string_key) = match &platform.key.value {
                     Value::Str(name) if !(plain && yaml11_non_string(name)) => (name.clone(), true),
-                    _ => (written(source, &offsets, &platform.key), false),
+                    _ => (
+                        span(source, &offsets, &platform.key).trim().to_owned(),
+                        false,
+                    ),
                 };
                 if fields
                     .iter()
@@ -349,7 +342,7 @@ pub fn promote_block_statuses(
         .map_or(serde_json::Value::Null, |root| to_json(root));
     for (_, _, platform, string_key) in &spans {
         if !string_key {
-            return Err(Error::KeyError(platform.clone()));
+            return Err(Error::NonStringKey(platform.clone()));
         }
         if let Some(block) = expected
             .get_mut("configurations")
@@ -362,7 +355,7 @@ pub fn promote_block_statuses(
             );
         }
     }
-    let after = node::load(&promoted).map_err(|error| Error::Unreadable(words(&error)))?;
+    let after = node::load(&promoted).map_err(|error| Error::Unreadable(placed(&error)))?;
     let actual = after
         .root()
         .map_or(serde_json::Value::Null, |root| to_json(root));
@@ -382,7 +375,7 @@ pub fn promote_block_statuses(
 ///
 /// [`Error::Unreadable`] for a target that does not read as YAML.
 pub fn replacement(target: &str) -> Result<String, Error> {
-    let document = node::load(target).map_err(|error| Error::Unreadable(words(&error)))?;
+    let document = node::load(target).map_err(|error| Error::Unreadable(placed(&error)))?;
     let plain = document.root().is_some_and(|root| match &root.value {
         Value::Seq(_) | Value::Map(_) => false,
         Value::Str(text) => text == target,
@@ -396,15 +389,11 @@ pub fn replacement(target: &str) -> Result<String, Error> {
     })
 }
 
-/// A load error as PyYAML's message places it: the problem, then where, in
-/// the text it read (`in "<unicode string>", line 13, column 27`).
-fn words(error: &node::LoadError) -> String {
+/// A load error and where it is (`… (line 3, column 27)`).
+pub fn placed(error: &node::LoadError) -> String {
     match &error.mark {
-        Some(mark) => format!(
-            "{}\n  in \"<unicode string>\", line {}, column {}",
-            error.problem, mark.line, mark.column
-        ),
-        None => error.problem.clone(),
+        Some(mark) => format!("{error} (line {}, column {})", mark.line, mark.column),
+        None => error.to_string(),
     }
 }
 
@@ -553,10 +542,10 @@ mod tests {
         );
     }
 
-    /// A promoted block whose key is no string fails as the oracle's
-    /// `KeyError` does, named as written; one left as it is does not.
+    /// A promoted block whose key is no string fails, named as written; one
+    /// left as it is does not.
     #[test]
-    fn a_promoted_block_whose_key_is_no_string_is_a_key_error() {
+    fn a_promoted_block_whose_key_is_no_string_fails() {
         for (key, written) in [
             ("1", "1"),
             ("01", "01"),
@@ -564,7 +553,7 @@ mod tests {
             ("null", "null"),
             ("true", "true"),
             ("1.5", "1.5"),
-            ("!!int 2", "2"),
+            ("!!int 2", "!!int 2"),
             ("yes", "yes"),
             ("On", "On"),
         ] {
@@ -573,7 +562,7 @@ mod tests {
             );
             assert_eq!(
                 promote(&text, &["STAGING"], "PRODUCTION"),
-                Err(Error::KeyError(written.to_owned())),
+                Err(Error::NonStringKey(written.to_owned())),
                 "{key}"
             );
             // Not promoted: nothing looks it up.
@@ -608,18 +597,14 @@ mod tests {
     }
 
     /// Promoted text that does not read back fails the run with the
-    /// loader's words, placed as PyYAML places its own (a target that
-    /// closes a flow mapping).
+    /// loader's words and where (a target that closes a flow mapping).
     #[test]
     fn promoted_text_that_does_not_read_back_is_unreadable() {
         let flow = "name: R\nconfigurations:\n  splunk: {status: STAGING, query: x}\n";
         let Err(Error::Unreadable(words)) = promote(flow, &["STAGING"], "LIVE}") else {
             panic!("read back");
         };
-        assert!(
-            words.contains("\n  in \"<unicode string>\", line 3, column "),
-            "{words}"
-        );
+        assert!(words.contains(" (line 3, column "), "{words}");
         // The same target in a block mapping reads back.
         assert!(promote(RULE, &["STAGING"], "LIVE}").unwrap().is_some());
     }
@@ -675,28 +660,27 @@ mod tests {
         assert_eq!(name_error(Some(root)), Ok(()));
         assert_eq!(
             name_error(None),
-            Err("'NoneType' object is not subscriptable".into())
+            Err("rule file is empty, not a mapping with a name".into())
         );
         let nameless = node::load("a: 1\n").unwrap();
         assert_eq!(
             name_error(nameless.root().map(AsRef::as_ref)),
-            Err("\"name\"".into())
+            Err("rule has no name".into())
         );
-        // A root that is no mapping: `data["name"]`'s TypeError, as Python
-        // words it for the type YAML 1.2 reads.
-        for (text, error) in [
-            ("- a\n", "list indices must be integers or slices, not str"),
-            ("x\n", "string indices must be integers, not 'str'"),
-            ("'1'\n", "string indices must be integers, not 'str'"),
-            ("1\n", "'int' object is not subscriptable"),
-            ("1.5\n", "'float' object is not subscriptable"),
-            ("true\n", "'bool' object is not subscriptable"),
-            ("~\n", "'NoneType' object is not subscriptable"),
+        // A root that is no mapping: what it holds instead.
+        for (text, kind) in [
+            ("- a\n", "a sequence"),
+            ("x\n", "a string"),
+            ("'1'\n", "a string"),
+            ("1\n", "an integer"),
+            ("1.5\n", "a float"),
+            ("true\n", "a boolean"),
+            ("~\n", "a null"),
         ] {
             let document = node::load(text).unwrap();
             assert_eq!(
                 name_error(document.root().map(AsRef::as_ref)),
-                Err(error.to_owned()),
+                Err(format!("rule file holds {kind}, not a mapping with a name")),
                 "{text:?}"
             );
         }

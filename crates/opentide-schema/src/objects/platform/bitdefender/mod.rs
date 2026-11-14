@@ -36,11 +36,9 @@ pub use checks::{Finding, block_codes, block_findings};
 #[from_node(union)]
 pub enum CriterionValue {
     /// A string.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     Text(String),
     /// An integer.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Int(i64),
 }
@@ -647,9 +645,7 @@ pub fn normalise(text: &str) -> String {
                 .map_or(character, |(_, after)| *after)
         })
         .collect();
-    replaced
-        .trim_start_matches(crate::objects::platform::is_python_space)
-        .to_owned()
+    replaced.trim_start().to_owned()
 }
 
 /// The first `limit` characters of `text` (Python's `text[:limit]`).

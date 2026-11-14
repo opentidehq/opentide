@@ -22,7 +22,7 @@ use crate::FromNode;
 use crate::error::ErrorKind;
 use crate::from_node::Context;
 use crate::node::{Node, Value};
-use crate::objects::platform::{get, is_map, platform_block, present, python_strip};
+use crate::objects::platform::{get, is_map, platform_block, present};
 use crate::pins::Pins;
 
 use super::falco_text::join_lines;
@@ -33,11 +33,9 @@ use super::falco_text::join_lines;
 #[from_node(union)]
 pub enum OneOrMany {
     /// One.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     One(String),
     /// Several.
-    #[from_node(tag = "list[str]")]
     #[schemars(description = "")]
     Many(Vec<String>),
 }
@@ -49,15 +47,12 @@ pub enum OneOrMany {
 #[from_node(union)]
 pub enum ListItem {
     /// A string.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     Text(String),
     /// An integer.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Int(i64),
     /// A number.
-    #[from_node(tag = "float")]
     #[schemars(
         description = "",
         schema_with = "crate::objects::platform::number_schema"
@@ -419,7 +414,7 @@ pub fn exception_shape_ok(entry: &Node) -> bool {
         Some(_) => return false,
     };
     if let Some(field) = fields.and_then(|node| node.value.as_str()) {
-        if python_strip(field).is_empty() {
+        if field.trim().is_empty() {
             return false;
         }
         if let Some(comps) = comps {
