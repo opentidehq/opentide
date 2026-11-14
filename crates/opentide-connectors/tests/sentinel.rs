@@ -2,14 +2,13 @@
 //! requests, azure-identity's `ClientSecretCredential` through MSAL, and
 //! azure-monitor-query; `tests/cassettes/sentinel/`, `cargo xtask cassettes
 //! record sentinel/<scenario>`): every request the connector sends must be
-//! the Python client's, in order (a JSON body as the same data) (the request ids from the
-//! same sequence `client.py` gave the SDKs, `x-client-os` as recorded), and
-//! the answers must read as Python read them.
+//! the Python client's, in order, by the matcher's rules: MSAL's discovery
+//! `GET`, its identity headers and its `client_info` field are not sent
+//! (opentide-cassette's `replay`), and the answers must read as Python read
+//! them.
 
 mod support;
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use opentide_compile::json::Json;
@@ -40,16 +39,8 @@ fn replay(scenario: &str) -> Replayed {
     )
 }
 
-/// `client.py`'s `request_id`: the n-th id of a run, from 1.
 fn connector() -> Sentinel {
-    let next = Arc::new(AtomicU64::new(0));
-    Sentinel::with_identity(
-        Arc::new(move || {
-            let number = next.fetch_add(1, Ordering::SeqCst) + 1;
-            format!("00000000-0000-4000-8000-{number:012x}")
-        }),
-        "linux",
-    )
+    Sentinel::new()
 }
 
 #[test]
@@ -106,28 +97,14 @@ fn sentinel_deploy_sends_what_the_python_client_sent() {
 
 #[test]
 fn sentinel_a_single_field_off_fails() {
-    let connector = |os: &str| {
-        let next = Arc::new(AtomicU64::new(0));
-        Sentinel::with_identity(
-            Arc::new(move || {
-                let number = next.fetch_add(1, Ordering::SeqCst) + 1;
-                format!("00000000-0000-4000-8000-{number:012x}")
-            }),
-            os,
-        )
-    };
-    // The sign-in naming another operating system: MSAL's identity headers
-    // say nothing to the tenant, the requests are the recorded ones.
+    // The sign-in alone (no discovery, no MSAL headers, no client_info):
+    // it matches, and the ARM call recorded next was never sent.
     let tenant = replay("sentinel/deploy");
-    let _ = block_on(async {
-        connector("darwin")
-            .token(tenant.cx(), sentinel::ARM_SCOPE)
-            .await
-    });
+    let _ = block_on(async { connector().token(tenant.cx(), sentinel::ARM_SCOPE).await });
     let mismatches = tenant.verify();
     assert_eq!(
         mismatches.first().map(|m| m.index),
-        Some(2),
+        Some(1),
         "{mismatches:?}"
     );
     assert!(
@@ -138,15 +115,11 @@ fn sentinel_a_single_field_off_fails() {
     );
     // A token for another scope: the token request's form differs.
     let tenant = replay("sentinel/deploy");
-    let _ = block_on(async {
-        connector("linux")
-            .token(tenant.cx(), sentinel::LOGS_SCOPE)
-            .await
-    });
+    let _ = block_on(async { connector().token(tenant.cx(), sentinel::LOGS_SCOPE).await });
     let mismatches = tenant.verify();
     assert_eq!(
         mismatches.first().map(|m| m.index),
-        Some(1),
+        Some(0),
         "{mismatches:?}"
     );
     assert!(

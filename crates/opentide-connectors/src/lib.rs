@@ -36,6 +36,7 @@ pub mod crowdstrike;
 pub mod defender;
 pub mod elastic;
 pub mod encode;
+pub mod entra;
 pub mod env;
 pub mod error;
 pub mod exabeam;

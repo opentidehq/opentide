@@ -15,7 +15,6 @@
 
 use std::io::Write as _;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use opentide_cassette::{Cassette, Mode, Proxy, Redaction};
@@ -205,16 +204,9 @@ const SENTINEL_BLOCK: &str = "  sentinel:\n    status: REMOVED\n    query: Secur
      scheduling:\n      frequency: PT1H\n      lookback: PT1H\n    grouping:\n      event: \
      SingleAlert\n      alert:\n        enabled: false\n";
 
-/// Sentinel with the request ids `client.py` fixed (`request_id(n)`, from 1).
+/// The Sentinel connector, registered.
 fn sentinel_registry() -> Registry {
-    let next = Arc::new(AtomicU64::new(0));
-    let sentinel = opentide_connectors::sentinel::Sentinel::with_identity(
-        Arc::new(move || {
-            let number = next.fetch_add(1, Ordering::SeqCst) + 1;
-            format!("00000000-0000-4000-8000-{number:012x}")
-        }),
-        "linux",
-    );
+    let sentinel = opentide_connectors::sentinel::Sentinel::new();
     let mut registry = Registry::new();
     registry.register(Box::new(sentinel)).unwrap();
     registry
