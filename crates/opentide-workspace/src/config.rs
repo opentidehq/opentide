@@ -214,22 +214,11 @@ struct Merged {
 fn read(fs: &dyn FileSystem, roots: &Roots) -> Result<Merged, ConfigError> {
     let mut files_read = 0;
     let own_dir = roots.workspace.join(OPENTIDE_DIR).join("configurations");
-    let overlay_dir = roots
-        .repo
-        .join("tests")
-        .join("fixtures")
-        .join("generation")
-        .join("configurations");
     let parent_dir = roots
         .workspace
         .parent()
         .map(|parent| parent.join(OPENTIDE_DIR).join("configurations"));
     let own = read_folder(fs, &own_dir, &mut files_read)?;
-    let overlay = if roots.tide_workspace {
-        read_folder(fs, &overlay_dir, &mut files_read)?
-    } else {
-        None
-    };
     // `parent_dir` is never `own_dir`: a folder's parent is not the folder.
     let parent = match &parent_dir {
         Some(dir) if !roots.tide_workspace => read_folder(fs, dir, &mut files_read)?,
@@ -237,15 +226,12 @@ fn read(fs: &dyn FileSystem, roots: &Roots) -> Result<Merged, ConfigError> {
     };
     let resolved = resolve(&Instance {
         workspace: own.as_ref(),
-        overlay: overlay.as_ref(),
         parent: parent.as_ref(),
         skip_parent: roots.tide_workspace,
     })
     .map_err(ConfigError::Resolve)?;
     let mut folders = vec![own_dir];
-    if roots.tide_workspace {
-        folders.push(overlay_dir);
-    } else if let Some(dir) = parent_dir {
+    if let Some(dir) = parent_dir.filter(|_| !roots.tide_workspace) {
         folders.push(dir);
     }
     Ok(Merged {
