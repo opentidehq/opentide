@@ -895,6 +895,7 @@ fn the_platform_deploys_from_create_params() {
         rule_id: String::new(),
         operation: Operation::Create,
         body: serde_json::to_vec(&body).unwrap(),
+        policies: None,
     };
     let outcome = block_on(deployer.deploy(cx, &request)).unwrap().unwrap();
     assert_eq!(outcome.remote_id.as_deref(), Some(FIRST_ID));
