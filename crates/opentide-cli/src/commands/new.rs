@@ -247,17 +247,10 @@ fn missing(artifacts: &Artifacts) -> Vec<String> {
     phases
 }
 
-/// Whether `path` holds `.opentide/` or an `objects/` catalogue
-/// (`is_workspace_root`).
+/// Whether `path` holds one of opentide's markers, on disk
+/// ([`opentide_workspace::root::is_workspace_root`]).
 fn is_workspace_root(path: &Path) -> bool {
-    if path.components().any(|part| part.as_os_str() == ".git") {
-        return false;
-    }
-    if path.join(".opentide").is_dir() {
-        return true;
-    }
-    let objects = path.join("objects");
-    objects.is_dir() && !objects.join("__init__.py").is_file()
+    opentide_workspace::root::is_workspace_root(&opentide_workspace::OsFs, path)
 }
 
 /// The `.yaml` and `.yml` files under `root`, in path order.
@@ -658,7 +651,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
             return with_steps(
                 new_error(
                     &command,
-                    format!("{argument} takes a UUID, got '{value}'"),
+                    format!("{argument} takes a UUID, got {value:?}"),
                     code::USAGE_INVALID_VALUE,
                     USAGE_EXIT_CODE,
                     Some(argument),
@@ -707,7 +700,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         return with_steps(
             Report::error(
                 &command,
-                format!("unknown schema identifier: '{schema_id}'"),
+                format!("unknown schema identifier: {schema_id:?}"),
             ),
             &steps,
         );

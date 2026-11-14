@@ -186,6 +186,15 @@ impl Proxy {
             .clone()
     }
 
+    /// In replay, the requests received so far, normalised; empty when
+    /// recording.
+    pub fn requests(&self) -> Vec<crate::cassette::Request> {
+        match (&self.shared.replay, &self.runtime) {
+            (Some(replay), Some(runtime)) => runtime.block_on(replay.requests()),
+            _ => Vec::new(),
+        }
+    }
+
     /// In replay, every difference between what was sent and the cassette.
     pub fn verify(&self) -> Vec<Mismatch> {
         match (&self.shared.replay, &self.runtime) {

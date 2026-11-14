@@ -102,8 +102,8 @@ pub struct Report {
     /// mode: no document, no outcome line (the oracle's `sys.exit` in the
     /// middle of a run, `deploy`'s invalid promotion target).
     pub bare_exit: bool,
-    /// A usage error the command found once it ran (Click's `BadParameter`
-    /// raised in a callback): the text modes print the command's `usage:`
+    /// A usage error the command found once it ran (a value refused
+    /// after parsing): the text modes print the command's `usage:`
     /// and `help:` notes under it, as for a parse error.
     pub usage_notes: bool,
 }
