@@ -129,16 +129,6 @@ pub const APPROVED: &[Approved] = &[
         applies: crowdstrike_cql,
     },
     Approved {
-        id: "harfanglab-yara",
-        reason: "a HarfangLab `yara` block is checked as the YARA rule deploy assembles \
-                 (E2-Y, #790): each block counts in `queries_checked` (with any CrowdStrike \
-                 queries, `crowdstrike-cql`), and the YARA engine's finding on it is a \
-                 `yara_*` code the oracle, which never checked YARA, does not report",
-        changelog: "**The editor and `opentide explain` know YARA, YARA-L, the Exabeam Query \
-                    Language and Graylog's Lucene**",
-        applies: harfanglab_yara,
-    },
-    Approved {
         id: "messages-quote-values",
         reason: "a message and its help quote a value in double quotes with Rust's escapes, \
                  where the oracle used Python's repr ('x', None, True): the finding is the \
@@ -232,8 +222,9 @@ pub(crate) fn crowdstrike_cql(oracle: Option<&Json>, rust: Option<&Json>, _: &[J
                 && rust.pointer("/context/source") == Some(&json!("engine"))
                 && rust.pointer("/context/platform") == Some(&json!("crowdstrike"))
         }
-        // The count: the oracle's, and the CrowdStrike queries. With YARA
-        // rules too, `harfanglab-yara` explains it.
+        // The count: the oracle's, and the CrowdStrike queries (0.28.1
+        // checks HarfangLab's YARA as Rust does, so YARA rules are on both
+        // sides).
         (Some(oracle), Some(rust)) => {
             let (Some(before), Some(after), Some(added), Some(read)) = (
                 oracle["queries_checked"].as_u64(),
@@ -243,33 +234,7 @@ pub(crate) fn crowdstrike_cql(oracle: Option<&Json>, rust: Option<&Json>, _: &[J
             ) else {
                 return false;
             };
-            let yara = rust["yara"].as_u64().unwrap_or(0);
-            added > 0 && yara == 0 && before + added + read == after
-        }
-        _ => false,
-    }
-}
-
-pub(crate) fn harfanglab_yara(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
-    match (oracle, rust) {
-        // A HarfangLab YARA rule's finding, which the oracle did not check.
-        (None, Some(rust)) => {
-            code(rust).starts_with("yara_")
-                && rust.pointer("/context/source") == Some(&json!("engine"))
-                && rust.pointer("/context/platform") == Some(&json!("harfanglab"))
-        }
-        // The count: the oracle's, the YARA rules, and any CrowdStrike queries.
-        (Some(oracle), Some(rust)) => {
-            let (Some(before), Some(after), Some(yara), Some(read)) = (
-                oracle["queries_checked"].as_u64(),
-                rust["queries_checked"].as_u64(),
-                rust["yara"].as_u64(),
-                rust["yaml_1_2"].as_u64(),
-            ) else {
-                return false;
-            };
-            let crowdstrike = rust["crowdstrike"].as_u64().unwrap_or(0);
-            yara > 0 && before + crowdstrike + yara + read == after
+            added > 0 && before + added + read == after
         }
         _ => false,
     }
@@ -1130,26 +1095,20 @@ mod tests {
         assert_eq!(out[0].what, "issues (order)");
     }
 
-    /// A count with HarfangLab YARA rules is `harfanglab-yara`'s, with or
-    /// without CrowdStrike queries beside them; one without is
-    /// `crowdstrike-cql`'s; a count neither adds up to is no one's.
+    /// A count the CrowdStrike queries (and the files the oracle could not
+    /// read) explain is `crowdstrike-cql`'s, YARA rules or not (0.28.1 counts
+    /// them too); a count they do not add up to is no one's.
     #[test]
-    fn the_query_count_is_explained_by_the_languages_the_oracle_never_checked() {
-        let (oracle, both) = queries_checked(&json!(1531), &json!(1679), 75, 69, 4);
-        assert!(harfanglab_yara(Some(&oracle), Some(&both), &[]));
-        assert!(!crowdstrike_cql(Some(&oracle), Some(&both), &[]));
+    fn the_query_count_is_explained_by_the_crowdstrike_queries() {
+        let (oracle, with_yara) = queries_checked(&json!(1531), &json!(1610), 75, 69, 4);
+        assert!(crowdstrike_cql(Some(&oracle), Some(&with_yara), &[]));
         let (oracle, crowdstrike) = queries_checked(&json!(1531), &json!(1610), 75, 0, 4);
         assert!(crowdstrike_cql(Some(&oracle), Some(&crowdstrike), &[]));
-        assert!(!harfanglab_yara(Some(&oracle), Some(&crowdstrike), &[]));
-        let (oracle, short) = queries_checked(&json!(1531), &json!(1680), 75, 69, 4);
-        assert!(!harfanglab_yara(Some(&oracle), Some(&short), &[]));
-        assert!(!crowdstrike_cql(Some(&oracle), Some(&short), &[]));
-        let finding = json!({
-            "code": "yara_undefined_string",
-            "context": {"source": "engine", "platform": "harfanglab"},
-        });
-        assert!(harfanglab_yara(None, Some(&finding), &[]));
-        assert!(!harfanglab_yara(Some(&finding), Some(&finding), &[]));
+        // YARA rules no longer explain a count: the oracle checks them too.
+        let (oracle, yara) = queries_checked(&json!(1531), &json!(1679), 75, 69, 4);
+        assert!(!crowdstrike_cql(Some(&oracle), Some(&yara), &[]));
+        let (oracle, none) = queries_checked(&json!(1531), &json!(1535), 0, 0, 4);
+        assert!(!crowdstrike_cql(Some(&oracle), Some(&none), &[]));
     }
 
     fn uuid_finding(file: &str, value: &str) -> Json {
