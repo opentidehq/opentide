@@ -802,6 +802,8 @@ fn check_files(
     let _engine = crate::queries::ENGINE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    // The declared datasets in use before the catalog's go back at the end.
+    let _restore = opentide_analysis::save_visibility();
     // opentide's own catalog for the workspace, as the Python host installs
     // it; when it cannot be installed, the engine's bundled one stays.
     let _ = opentide_analysis::install_catalog(catalog);

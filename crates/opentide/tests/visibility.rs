@@ -42,9 +42,16 @@ fn a_validate_or_lint_run_leaves_the_declared_datasets_as_it_found_them() {
         "{before:?}"
     );
 
+    // What the process has installed, which a host's own checks read.
+    let installed =
+        || opentide_analysis::declared_datasets().status("sentinel", "DeviceProcessEvents");
+    let installed_before = installed();
+
     let _ = ws.validate(&ValidateOptions::default());
+    assert_eq!(installed(), installed_before, "after validate");
     assert_eq!(codes(), before, "after validate");
 
     let _ = ws.lint(&LintOptions::default());
+    assert_eq!(installed(), installed_before, "after lint");
     assert_eq!(codes(), before, "after lint");
 }

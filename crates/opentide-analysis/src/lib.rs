@@ -440,16 +440,10 @@ pub fn install_visibility(text: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
-/// Held while a host installs a workspace's datasets in the engines and checks
-/// queries with them, and while it checks a query on its own: the
-/// installation is process-wide, so a check that does not hold it can see
-/// another run's datasets half-way.
-pub static ENGINE: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
 /// The workspace's declared datasets as they were when [`save_visibility`]
 /// made it: dropping it installs them again, so a run that installs its own
 /// leaves the process as it found it, on an early return or a panic too.
-/// Drop it while [`ENGINE`] is still held.
+/// Drop it while the host still holds the lock it installs datasets under.
 #[must_use = "dropping it at once restores the datasets at once"]
 pub struct RestoreVisibility {
     previous: Option<DeclaredDatasets>,
@@ -482,6 +476,28 @@ fn set_dataset_layer(workspace: bool, datasets: Option<DeclaredDatasets>) {
         layers.default = datasets;
     }
     opentide_core::datasets::install(layers.workspace.clone().or(layers.default.clone()));
+}
+
+/// The declared datasets a query checked on its own uses on this thread
+/// until it is dropped: the host's ([`set_default_catalog`]), never a
+/// workspace's that a run on another thread, or one this thread is in the
+/// middle of, installed. It takes no lock.
+#[must_use = "dropping it at once ends the scope at once"]
+pub struct StandaloneDatasets {
+    _scope: opentide_core::datasets::ThreadScope,
+}
+
+/// Checks on this thread ignore a workspace's declared datasets until the
+/// returned scope drops; see [`StandaloneDatasets`].
+pub fn standalone_datasets() -> StandaloneDatasets {
+    let default = dataset_layers()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .default
+        .clone();
+    StandaloneDatasets {
+        _scope: opentide_core::datasets::scope_thread(default),
+    }
 }
 
 /// Install workspace catalogs for the whole process. A `None` part goes back

@@ -27,7 +27,7 @@
 
 use std::borrow::Cow;
 use std::path::Path;
-use std::sync::PoisonError;
+use std::sync::{Mutex, PoisonError};
 
 use indexmap::IndexMap;
 use opentide_analysis::{LineStarts, MemoryWorkspace, Severity as EngineSeverity};
@@ -168,9 +168,8 @@ const MESSAGE_CORRECTIONS: [(&str, &str, &str); 1] = [(
 )];
 
 /// Held while a workspace's datasets are installed in the engines and its
-/// queries checked: the installation is process-wide. The engines' own lock,
-/// which the facade's `analysis::analyze_query` takes too.
-pub use opentide_analysis::ENGINE;
+/// queries checked: the installation is process-wide.
+pub static ENGINE: Mutex<()> = Mutex::new(());
 
 /// One engine finding, in the CLI's coordinates (1-based, code points,
 /// `end_column` exclusive and on `end_line`).

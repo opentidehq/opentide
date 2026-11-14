@@ -785,6 +785,11 @@ impl Session {
 
     /// Install `root`'s catalogs and declared datasets in the engine, unless
     /// they are installed already. With one root this happens once.
+    ///
+    /// The installation is process-wide and takes no lock (opentide-cli's
+    /// `queries::ENGINE`): a `validate` or `lint` run in the same process
+    /// restores the datasets it found when it ends, over any installed here
+    /// meanwhile.
     fn activate(&self, root: Option<usize>) {
         if self.active.get() == Some(root) {
             return;

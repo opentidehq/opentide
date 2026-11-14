@@ -38,15 +38,14 @@ pub const VERSION: &str = opentide_analysis::VERSION;
 /// assert!(diagnostics.iter().any(|d| d.code == "esql_unknown_command"));
 /// ```
 ///
-/// It waits for a [`Workspace::validate`](crate::Workspace::validate) or
-/// [`Workspace::lint`](crate::Workspace::lint) running on another thread:
-/// those install the workspace's declared datasets in the engines for the
-/// run, and the query is checked without them.
+/// The query is checked without a workspace: the datasets a
+/// [`Workspace::validate`](crate::Workspace::validate) or
+/// [`Workspace::lint`](crate::Workspace::lint) installs for its run, on this
+/// thread or another, do not apply. It takes no lock, so it never waits for
+/// such a run.
 #[must_use]
 pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
-    let _engine = opentide_analysis::ENGINE
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _standalone = opentide_analysis::standalone_datasets();
     opentide_analysis::analyze_query(request)
 }
 
@@ -63,4 +62,45 @@ pub fn highlight(language: LanguageId, text: &str) -> HighlightResult {
 #[must_use]
 pub fn legend() -> Vec<String> {
     opentide_analysis::legend()
+}
+
+#[cfg(all(test, feature = "queries"))]
+mod tests {
+    use super::*;
+
+    /// A query checked on its own on a thread that holds the engines' lock
+    /// with a workspace's datasets installed, as a rayon worker of
+    /// `validate` that steals a job does: it neither waits for the lock nor
+    /// sees those datasets.
+    #[test]
+    fn a_query_on_its_own_never_waits_for_or_sees_a_workspace_run() {
+        let (done, finished) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _engine = opentide_cli::queries::ENGINE
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let _restore = opentide_analysis::save_visibility();
+            opentide_analysis::install_visibility(Some(
+                "[[logsources]]\nname = \"SecurityEvent\"\ndescription = \"x\"\nsystem = \"sentinel\"\n",
+            ))
+            .unwrap();
+            let codes: Vec<String> = analyze_query(&QueryRequest {
+                language: LanguageId::Kql,
+                platform: None,
+                stack: None,
+                text: "DeviceProcessEvents | take 1".to_owned(),
+            })
+            .into_iter()
+            .map(|diagnostic| diagnostic.code)
+            .collect();
+            let _ = done.send(codes);
+        });
+        let codes = finished
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .expect("analyze_query waited for the lock its own thread holds");
+        assert!(
+            !codes.iter().any(|code| code == "kql_table_not_declared"),
+            "{codes:?}"
+        );
+    }
 }
