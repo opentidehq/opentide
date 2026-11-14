@@ -118,13 +118,13 @@ pub struct Context<'a> {
     pub proxy: Option<&'a str>,
 }
 
-/// An app-level usage error, as Click words a `BadParameter`.
+/// A usage error found after parsing: `message`, after the options at
+/// fault (`hint`) when there are any (`--promotion-target: …`).
 pub(crate) fn bad_parameter(message: &str, hint: &[&str], argument: Option<&str>) -> Box<Report> {
     let shown = if hint.is_empty() {
-        format!("Invalid value: {message}")
+        message.to_owned()
     } else {
-        let names: Vec<String> = hint.iter().map(|name| format!("'{name}'")).collect();
-        format!("Invalid value for {}: {message}", names.join(" / "))
+        format!("{}: {message}", hint.join(", "))
     };
     let mut failure = Failure::new(USAGE_INVALID_VALUE, shown);
     failure.argument = argument.map(str::to_owned);
@@ -303,7 +303,6 @@ pub(crate) struct PromotionOverride {
 }
 
 /// The flags' names, as the refusals name them.
-const PROMOTION_FLAG: &str = "--promotion/--no-promotion";
 const PROMOTION_TARGET_FLAG: &str = "--promotion-target";
 
 /// What `.opentide/configurations/deployment.toml` needs so `deploy`
@@ -319,7 +318,11 @@ pub(crate) fn promotion_override(
     let mut hint = Vec::new();
     if let Some(enabled) = promotion {
         requested.insert("enabled".into(), toml::Value::Boolean(enabled));
-        hint.push(PROMOTION_FLAG);
+        hint.push(if enabled {
+            "--promotion"
+        } else {
+            "--no-promotion"
+        });
     }
     if let Some(status) = promotion_target {
         requested.insert(
@@ -1035,12 +1038,12 @@ mod tests {
         let refused = po(root, &args(Some(true), None), statuses).unwrap_err();
         assert_eq!(
             refused.outcome.message,
-            "Invalid value for '--promotion/--no-promotion': .opentide/configurations/deployment.toml already has a [promotion] table, which setup does not rewrite. Set enabled = true in it, or delete it and re-run setup."
+            "--promotion: .opentide/configurations/deployment.toml already has a [promotion] table, which setup does not rewrite. Set enabled = true in it, or delete it and re-run setup."
         );
         let unknown = po(root, &args(None, Some("NOPE")), statuses).unwrap_err();
         assert_eq!(
             unknown.outcome.message,
-            "Invalid value for '--promotion-target': \"NOPE\" is not a status in this repository's deployment.toml; use one of: STAGING, PRODUCTION"
+            "--promotion-target: \"NOPE\" is not a status in this repository's deployment.toml; use one of: STAGING, PRODUCTION"
         );
         assert_eq!(unknown.outcome.exit_code, 2);
     }
@@ -1077,7 +1080,7 @@ mod tests {
         assert_eq!(refused.outcome.exit_code, 2);
         assert!(
             refused.outcome.message.starts_with(
-                "Invalid value for '--promotion/--no-promotion': .opentide/configurations/deployment.toml cannot be read ("
+                "--no-promotion: .opentide/configurations/deployment.toml cannot be read ("
             ),
             "{}",
             refused.outcome.message
