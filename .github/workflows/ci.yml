@@ -335,17 +335,8 @@ jobs:
           key: sccache-build-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
           restore-keys: sccache-build-${{ hashFiles('rust-toolchain.toml') }}-
 
-      # The affected crates' test binaries, with the binaries their tests run
-      # (CARGO_BIN_EXE_*) and their build scripts' output.
-      - name: Build the Rust tests (nextest archive)
-        if: env.RUST == 'true'
-        run: |
-          read -ra pkg_args <<< "${PACKAGES}"
-          read -ra feature_args <<< "${FEATURES}"
-          cargo nextest archive --locked "${pkg_args[@]}" "${feature_args[@]}" --archive-file "${RUNNER_TEMP}/tests.tar.zst"
-
-      # As hatch_build.py builds it, in the profile the tests were built in:
-      # their dependencies are already compiled.
+      # As hatch_build.py builds it, in the profile the tests are built in, first:
+      # the Python jobs start while the tests build, on the same dependencies.
       - name: Build the _native extension
         if: env.PYTHON == 'true'
         env:
@@ -355,6 +346,23 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/native"
           cp target/debug/lib_native.so "${RUNNER_TEMP}/native/_native.abi3.so"
 
+      - name: Upload the _native extension
+        if: env.PYTHON == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native
+          path: ${{ runner.temp }}/native/_native.abi3.so
+          retention-days: 3
+
+      # The affected crates' test binaries, with the binaries their tests run
+      # (CARGO_BIN_EXE_*) and their build scripts' output.
+      - name: Build the Rust tests (nextest archive)
+        if: env.RUST == 'true'
+        run: |
+          read -ra pkg_args <<< "${PACKAGES}"
+          read -ra feature_args <<< "${FEATURES}"
+          cargo nextest archive --locked "${pkg_args[@]}" "${feature_args[@]}" --archive-file "${RUNNER_TEMP}/tests.tar.zst"
+
       - name: Upload the test archive
         if: env.RUST == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -363,14 +371,6 @@ jobs:
           path: ${{ runner.temp }}/tests.tar.zst
           retention-days: 3
           compression-level: 0
-
-      - name: Upload the _native extension
-        if: env.PYTHON == 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: native
-          path: ${{ runner.temp }}/native/_native.abi3.so
-          retention-days: 3
 
       # --- With the test jobs running: what needs this target directory. ---
 
