@@ -1,19 +1,19 @@
-[1;31merror[deployment_state_uuid_mismatch][0m[1m:[0m
-  [1m<WS>/.opentide/states/deployment/b6e65347-2847-4338-973d-d4eff6aee4cc.json[0m
-  [1mrecords object_uuid '00000000-0000-4000-8000-000000000001', but its file name is[0m
-  [1m'b6e65347-2847-4338-973d-d4eff6aee4cc'[0m
-  [34m╰─▶[0m ]8;id=<ID>;file://<WS>/.opentide/states/deployment/b6e65347-2847-4338-973d-d4eff6aee4cc.json\.opentide/states/deployment/b6e65347-2847-4338-973d-d4eff6aee4cc.json]8;;\
-
 [1;31merror[deployment_state_shape][0m[1m:[0m
   [1m<WS>/.opentide/states/deployment/e2cb0ccd-ebb4-4031-996c-2055d3d4de9e.json has no[0m
   [1mplatforms object[0m
   [34m╰─▶[0m ]8;id=<ID>;file://<WS>/.opentide/states/deployment/e2cb0ccd-ebb4-4031-996c-2055d3d4de9e.json\.opentide/states/deployment/e2cb0ccd-ebb4-4031-996c-2055d3d4de9e.json]8;;\
 
 [1;31merror[deployment_state_platform][0m[1m:[0m
-  [1m<WS>/.opentide/states/deployment/ee6e8458-40e5-40fc-9d2d-f61ad10681e2.json names[0m
+  [1m<WS>/.opentide/states/deployment/f9b687ac-3536-4bb1-a283-2b278f3f0780.json names[0m
   [1mplatform 'splunk'; only bitdefender, crowdstrike, defender_for_endpoint, graylog, exabeam,[0m
   [1mgoogle_secops, sentinel_one, sysdig store external ids[0m
-  [34m╰─▶[0m ]8;id=<ID>;file://<WS>/.opentide/states/deployment/ee6e8458-40e5-40fc-9d2d-f61ad10681e2.json\.opentide/states/deployment/ee6e8458-40e5-40fc-9d2d-f61ad10681e2.json]8;;\
+  [34m╰─▶[0m ]8;id=<ID>;file://<WS>/.opentide/states/deployment/f9b687ac-3536-4bb1-a283-2b278f3f0780.json\.opentide/states/deployment/f9b687ac-3536-4bb1-a283-2b278f3f0780.json]8;;\
+
+[1;31merror[deployment_state_uuid_mismatch][0m[1m:[0m
+  [1m<WS>/.opentide/states/deployment/ffa05d91-6966-4583-ac48-7f849cd08261.json[0m
+  [1mrecords object_uuid '00000000-0000-4000-8000-000000000001', but its file name is[0m
+  [1m'ffa05d91-6966-4583-ac48-7f849cd08261'[0m
+  [34m╰─▶[0m ]8;id=<ID>;file://<WS>/.opentide/states/deployment/ffa05d91-6966-4583-ac48-7f849cd08261.json\.opentide/states/deployment/ffa05d91-6966-4583-ac48-7f849cd08261.json]8;;\
 
 [1;31merror[invalid_ref][0m[1m: [0m[1mUnknown threat reference '00000000-0000-4000-8000-00000000beef'[0m
    [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/objectives/elevated-exfiltration-objective-0002.yaml\objects/objectives/elevated-exfiltration-objective-0002.yaml:54:7]8;;\
@@ -51,16 +51,23 @@
 [34m   [0m[34m│[0m
    [34m╰─[0m [1;36mhelp:[0m opentide info objectives lists the ones that exist
 
-[1;31merror[external_id_in_rule][0m[1m: [0m[1mVendor rule id key 'rule_id' is not allowed on the sentinel block;[0m
-  [1mexternal ids live in .opentide/states/deployment/<uuid>.json[0m
-   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-tunnel-rule-0027.yaml\objects/rules/covert-tunnel-rule-0027.yaml:58:14]8;;\
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_definition_order[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-dropper-rule-0064.yaml\objects/rules/covert-dropper-rule-0064.yaml:41:3]8;;\
 [34m   [0m[34m│[0m
-[34m57 [0m[34m│[0m         enabled: false
-[34m58 [0m[34m│[0m     rule_id: abc-1
-[34m   [0m[34m│[0m              [1;31m━━━━━[0m
+[34m40 [0m[34m│[0m     severity: high
+[34m41 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
 [34m   [0m[34m│[0m
-   [34m╰─[0m [1;36mhelp:[0m Run 'opentide deploy migrate-state' and commit the rule together with
-   [34m [0m        .opentide/states/deployment/
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'name'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-injection-rule-0032.yaml\objects/rules/covert-injection-rule-0032.yaml:1:1]8;;\
+[34m  [0m[34m│[0m
+[34m1 [0m[34m│[0m metadata:
+[34m  [0m[34m│[0m [1;31m━━━━━━━━[0m[1;31m add 'name' at the top level[0m
+[34m  [0m[34m│[0m
+  [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 
 [1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: '2026-02-30' is not a valid date (day is out of[0m
   [1mrange for month)[0m
@@ -81,25 +88,11 @@
 [34m   [0m[34m│[0m
    [34m╰─[0m [1mexpected:[0m one of SOC Tier 1, SOC Tier 2, Incident Response
 
-[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
-  [1mcode(s): sysdig_definition_order[0m
-   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-tunnel-rule-0074.yaml\objects/rules/elevated-tunnel-rule-0074.yaml:33:3]8;;\
-[34m   [0m[34m│[0m
-[34m32 [0m[34m│[0m configurations:
-[34m33 [0m[34m│[0m   sysdig:
-[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
-[34m   [0m[34m│[0m
-   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
-
-[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
-  [1mcode(s): sysdig_source[0m
-   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-implant-rule-0025.yaml\objects/rules/encoded-implant-rule-0025.yaml:72:3]8;;\
-[34m   [0m[34m│[0m
-[34m71 [0m[34m│[0m     severity: low
-[34m72 [0m[34m│[0m   sysdig:
-[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
-[34m   [0m[34m│[0m
-   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+[1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: did not find expected ',' or ']'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-beacon-rule-0034.yaml\objects/rules/encoded-beacon-rule-0034.yaml:83:1]8;;\
+  [34m├─[0m [1;34mnote:[0m while parsing a flow sequence that starts at line 82, column 9
+  [34m╰─[0m [1;36mhelp:[0m look at the indentation, a missing ':' or an unclosed quote at or just before this
+  [34m [0m        position
 
 [1;31merror[vocab_unknown][0m[1m: [0m[1m'ambr' is not a TLP value[0m
   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-implant-rule-0042.yaml\objects/rules/encoded-implant-rule-0042.yaml:9:8]8;;\
@@ -121,7 +114,7 @@
    [34m [0m            REMOVED
 
 [1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
-  [1mcode(s): sysdig_rule_shape[0m
+  [1mcode(s): sysdig_tuning_keys[0m
    [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-loader-rule-0035.yaml\objects/rules/encoded-loader-rule-0035.yaml:42:3]8;;\
 [34m   [0m[34m│[0m
 [34m41 [0m[34m│[0m configurations:
@@ -150,21 +143,21 @@
   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 
 [1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: found a tab character that violates indentation[0m
-   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-loader-rule-0024.yaml\objects/rules/hidden-loader-rule-0024.yaml:69:1]8;;\
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-loader-rule-0024.yaml\objects/rules/hidden-loader-rule-0024.yaml:45:1]8;;\
 [34m   [0m[34m│[0m
-[34m68 [0m[34m│[0m       condition: count() >= 3
-[34m69 [0m[34m│[0m    indent: tab
+[34m44 [0m[34m│[0m       condition: count() >= 3
+[34m45 [0m[34m│[0m    indent: tab
 [34m   [0m[34m│[0m [1;31m━[0m
 [34m   [0m[34m│[0m
-   [34m├─[0m [1;34mnote:[0m while scanning a plain scalar that starts at line 68, column 18
+   [34m├─[0m [1;34mnote:[0m while scanning a plain scalar that starts at line 44, column 18
    [34m╰─[0m [1;36mhelp:[0m look at the indentation, a missing ':' or an unclosed quote at or just before this
    [34m [0m        position
 
-[1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'name'[0m
-  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-dropper-rule-0031.yaml\objects/rules/lateral-dropper-rule-0031.yaml:1:1]8;;\
+[1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'description'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-dropper-rule-0026.yaml\objects/rules/lateral-dropper-rule-0026.yaml:1:1]8;;\
 [34m  [0m[34m│[0m
-[34m1 [0m[34m│[0m metadata:
-[34m  [0m[34m│[0m [1;31m━━━━━━━━[0m[1;31m add 'name' at the top level[0m
+[34m1 [0m[34m│[0m name: Lateral Dropper Rule 0026
+[34m  [0m[34m│[0m [1;31m━━━━[0m[1;31m add 'description' at the top level[0m
 [34m  [0m[34m│[0m
   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 
@@ -173,24 +166,6 @@
   [1mdeployed (opentide reads only files directly in objects/rules; see[0m
   [1mhttps://github.com/opentidehq/opentide/issues/584)[0m
   [34m╰─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/nested/encoded-spray-rule-0017.yaml\objects/rules/nested/encoded-spray-rule-0017.yaml]8;;\
-
-[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
-  [1mcode(s): sysdig_tuning_keys[0m
-   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/persistent-harvest-rule-0256.yaml\objects/rules/persistent-harvest-rule-0256.yaml:30:3]8;;\
-[34m   [0m[34m│[0m
-[34m29 [0m[34m│[0m configurations:
-[34m30 [0m[34m│[0m   sysdig:
-[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
-[34m   [0m[34m│[0m
-   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
-
-[1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'description'[0m
-  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/persistent-implant-rule-0026.yaml\objects/rules/persistent-implant-rule-0026.yaml:1:1]8;;\
-[34m  [0m[34m│[0m
-[34m1 [0m[34m│[0m name: Persistent Implant Rule 0026
-[34m  [0m[34m│[0m [1;31m━━━━[0m[1;31m add 'description' at the top level[0m
-[34m  [0m[34m│[0m
-  [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 
 [1;31merror[schema_validation][0m[1m: [0m[1mmetadata.reviewed: Value error, metadata.reviewed must be an ISO 8601 date[0m
   [1m(YYYY-MM-DD) or datetime[0m
@@ -228,7 +203,17 @@
 [34m  [0m[34m│[0m [1;31m━━━━━━━━[0m
 
 [1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
-  [1mcode(s): sysdig_exception_shape[0m
+  [1mcode(s): sysdig_definition_duplicate[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-beacon-rule-0061.yaml\objects/rules/remote-beacon-rule-0061.yaml:46:3]8;;\
+[34m   [0m[34m│[0m
+[34m45 [0m[34m│[0m configurations:
+[34m46 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_definition_name[0m
    [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-dropper-rule-0048.yaml\objects/rules/remote-dropper-rule-0048.yaml:36:3]8;;\
 [34m   [0m[34m│[0m
 [34m35 [0m[34m│[0m configurations:
@@ -237,31 +222,26 @@
 [34m   [0m[34m│[0m
    [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 
-[1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: did not find expected ',' or ']'[0m
-  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-implant-rule-0021.yaml\objects/rules/remote-implant-rule-0021.yaml:71:1]8;;\
-  [34m├─[0m [1;34mnote:[0m while parsing a flow sequence that starts at line 70, column 9
-  [34m╰─[0m [1;36mhelp:[0m look at the indentation, a missing ':' or an unclosed quote at or just before this
-  [34m [0m        position
-
-[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
-  [1mcode(s): sysdig_definition_name[0m
-   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-implant-rule-0061.yaml\objects/rules/remote-implant-rule-0061.yaml:54:3]8;;\
-[34m   [0m[34m│[0m
-[34m53 [0m[34m│[0m configurations:
-[34m54 [0m[34m│[0m   sysdig:
-[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
-[34m   [0m[34m│[0m
-   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
-
 [1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
   [1mcode(s): sysdig_list_in_value[0m
-   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-loader-rule-0077.yaml\objects/rules/rogue-loader-rule-0077.yaml:80:3]8;;\
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-dropper-rule-0074.yaml\objects/rules/remote-dropper-rule-0074.yaml:48:3]8;;\
 [34m   [0m[34m│[0m
-[34m79 [0m[34m│[0m     severity: low
-[34m80 [0m[34m│[0m   sysdig:
+[34m47 [0m[34m│[0m configurations:
+[34m48 [0m[34m│[0m   sysdig:
 [34m   [0m[34m│[0m   [1;31m━━━━━━[0m
 [34m   [0m[34m│[0m
    [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[external_id_in_rule][0m[1m: [0m[1mVendor rule id key 'rule_id' is not allowed on the sentinel block;[0m
+  [1mexternal ids live in .opentide/states/deployment/<uuid>.json[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-harvest-rule-0027.yaml\objects/rules/rogue-harvest-rule-0027.yaml:55:14]8;;\
+[34m   [0m[34m│[0m
+[34m54 [0m[34m│[0m         enabled: false
+[34m55 [0m[34m│[0m     rule_id: abc-1
+[34m   [0m[34m│[0m              [1;31m━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m Run 'opentide deploy migrate-state' and commit the rule together with
+   [34m [0m        .opentide/states/deployment/
 
 [1;31merror[vocab_unknown][0m[1m: [0m[1m'clearr' is not a TLP value[0m
   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-relay-rule-0011.yaml\objects/rules/rogue-relay-rule-0011.yaml:9:8]8;;\
@@ -273,20 +253,34 @@
   [34m╰─[0m [1;36mhelp:[0m did you mean 'clear'?
 
 [1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
-  [1mcode(s): sysdig_definition_duplicate[0m
-   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-pivot-rule-0064.yaml\objects/rules/scheduled-pivot-rule-0064.yaml:47:3]8;;\
+  [1mcode(s): sysdig_exception_shape[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-exfiltration-rule-0038.yaml\objects/rules/scheduled-exfiltration-rule-0038.yaml:61:3]8;;\
 [34m   [0m[34m│[0m
-[34m46 [0m[34m│[0m     severity: high
-[34m47 [0m[34m│[0m   sysdig:
+[34m60 [0m[34m│[0m     severity: medium
+[34m61 [0m[34m│[0m   sysdig:
 [34m   [0m[34m│[0m   [1;31m━━━━━━[0m
 [34m   [0m[34m│[0m
    [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 
-[1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: did not find expected ',' or ']'[0m
-  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-exfiltration-rule-0033.yaml\objects/rules/silent-exfiltration-rule-0033.yaml:71:1]8;;\
-  [34m├─[0m [1;34mnote:[0m while parsing a flow sequence that starts at line 70, column 9
-  [34m╰─[0m [1;36mhelp:[0m look at the indentation, a missing ':' or an unclosed quote at or just before this
-  [34m [0m        position
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_rule_shape[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-loader-rule-0030.yaml\objects/rules/scheduled-loader-rule-0030.yaml:65:3]8;;\
+[34m   [0m[34m│[0m
+[34m64 [0m[34m│[0m       severity: Low
+[34m65 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_tuning_keys[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-relay-rule-0243.yaml\objects/rules/scheduled-relay-rule-0243.yaml:38:3]8;;\
+[34m   [0m[34m│[0m
+[34m37 [0m[34m│[0m configurations:
+[34m38 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 
 [1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
   [1mcode(s): sysdig_priority[0m
@@ -298,22 +292,28 @@
 [34m   [0m[34m│[0m
    [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_source[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-pivot-rule-0025.yaml\objects/rules/silent-pivot-rule-0025.yaml:68:3]8;;\
+[34m   [0m[34m│[0m
+[34m67 [0m[34m│[0m     severity: medium
+[34m68 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: did not find expected ',' or ']'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-exfiltration-rule-0021.yaml\objects/rules/staged-exfiltration-rule-0021.yaml:72:1]8;;\
+  [34m├─[0m [1;34mnote:[0m while parsing a flow sequence that starts at line 71, column 9
+  [34m╰─[0m [1;36mhelp:[0m look at the indentation, a missing ':' or an unclosed quote at or just before this
+  [34m [0m        position
+
 [1;31merror[schema_validation][0m[1m: [0m[1mmetadata.reviewed: Extra inputs are not permitted[0m
    [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-pivot-rule-0009.yaml\objects/rules/staged-pivot-rule-0009.yaml:14:3]8;;\
 [34m   [0m[34m│[0m
 [34m13 [0m[34m│[0m     name: Example Detection Team
 [34m14 [0m[34m│[0m   reviewed: 2026-03-01
 [34m   [0m[34m│[0m   [1;31m━━━━━━━━[0m
-[34m   [0m[34m│[0m
-   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
-
-[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
-  [1mcode(s): sysdig_tuning_keys[0m
-   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-spray-rule-0038.yaml\objects/rules/staged-spray-rule-0038.yaml:59:3]8;;\
-[34m   [0m[34m│[0m
-[34m58 [0m[34m│[0m     severity: medium
-[34m59 [0m[34m│[0m   sysdig:
-[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
 [34m   [0m[34m│[0m
    [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 

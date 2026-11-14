@@ -137,7 +137,6 @@ pub const TENANTS: &[(&str, &[&str])] = &[
     ("elastic", &["elastic-staging", "elastic-production"]),
     ("sysdig", &["sysdig-production"]),
     ("exabeam", &["exabeam-production"]),
-    ("graylog", &["graylog-lab"]),
 ];
 
 fn tenants_of(platform: &str) -> &'static [&'static str] {
@@ -1492,10 +1491,6 @@ fn tenant_setup(platform: &str, tenant: &str) -> String {
         "exabeam" => format!(
             "ssl = true\nregion = \"us-east\"\n\
              client_id = \"${var}_CLIENT_ID\"\nclient_secret = \"${var}_CLIENT_SECRET\"\n"
-        ),
-        "graylog" => format!(
-            "ssl = true\nurl = \"https://{tenant}.graylog.example\"\n\
-             token = \"${var}_TOKEN\"\n"
         ),
         _ => String::new(),
     }

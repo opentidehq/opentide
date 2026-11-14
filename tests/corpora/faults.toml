@@ -3383,6 +3383,10 @@ codes = ["graylog_all_streams"]
 severity = "warning"
 target = { family = "rule" }
 ops = [
+    # 0.28.1 resolves a Graylog tenant's `$VARIABLE` credentials when it loads
+    # the configuration: the base workspace has no Graylog tenant, so no
+    # other kind (and no golden fixture) reports the unset token.
+    { op = "add_file", path = ".opentide/configurations/platforms/graylog.toml", text = "[platform]\nenabled = true\nname = \"Graylog\"\n\n[[tenants]]\nname = \"graylog-lab\"\n\n[tenants.setup]\nurl = \"https://graylog.example\"\ntoken = \"$GRAYLOG_LAB_TOKEN\"\n", replace = true },
     { op = "append_text", text = '''
   graylog:
     enabled: true
@@ -5088,7 +5092,9 @@ ops = [
     { op = "delete", path = "configurations.harfanglab.yara.meta" },
     { op = "delete", path = "configurations.harfanglab.yara.strings" },
     { op = "delete", path = "configurations.harfanglab.yara.condition" },
-    { op = "set", path = "references.public.9", raw = '&fault_yara "rule Fault_{n} { meta: context = \"file\" strings: $a = \"faultmarker\" condition: $a }"' },
+    # The anchor is on `description`, which every generated rule writes before
+    # `configurations`: YAML reads an alias only after its anchor.
+    { op = "set", path = "description", raw = '&fault_yara "rule Fault_{n} { meta: context = \"file\" strings: $a = \"faultmarker\" condition: $a }"' },
     { op = "set", path = "configurations.harfanglab.yara.signature", raw = "*fault_yara" },
 ]
 isolated = true

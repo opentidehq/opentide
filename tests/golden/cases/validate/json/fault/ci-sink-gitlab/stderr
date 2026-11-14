@@ -1,2 +1,1 @@
-{"detail":"Unset configuration variables: $GRAYLOG_LAB_TOKEN","advice":"Set those environment variables before a live check.","event":"environment_variable_missing","logger":"opentide.core.environment","level":"critical","timestamp":"0000-00-00 00:00:00"}
 {"vocab":"reviewed","event":"vocabulary_not_found","logger":"opentide.validation.vocab_resolver","level":"warning","timestamp":"0000-00-00 00:00:00"}

@@ -52,8 +52,8 @@
   → set SYSDIG_PRODUCTION_API_TOKEN in the environment (or a .env file you load)
 ○ bitdefender: no tenant configured · credentials
   → add a [[tenants]] entry in .opentide/configurations/platforms/bitdefender.toml
-! graylog/graylog-lab: 1 of 1 variables unset: GRAYLOG_LAB_TOKEN · credentials
-  → set GRAYLOG_LAB_TOKEN in the environment (or a .env file you load)
+○ graylog: no tenant configured · credentials
+  → add a [[tenants]] entry in .opentide/configurations/platforms/graylog.toml
 ! exabeam/exabeam-production: 2 of 2 variables unset: EXABEAM_PRODUCTION_CLIENT_ID, EXABEAM_PRODUCTION_CLIENT_SECRET · credentials
   → set EXABEAM_PRODUCTION_CLIENT_ID, EXABEAM_PRODUCTION_CLIENT_SECRET in the environment (or a .env file you load)
 ○ google_secops: no tenant configured · credentials

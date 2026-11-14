@@ -1,2 +1,0 @@
-[1;31merror: [0mEnvironment variable missing · detail: Unset configuration variables: $GRAYLOG_LAB_TOKEN · 
-advice: Set those environment variables before a live check.
