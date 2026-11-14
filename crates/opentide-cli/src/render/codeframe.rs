@@ -27,7 +27,7 @@
 
 use super::diagnostic::{Diagnostic, Severity, Sources, relative_path, sort_diagnostics};
 use super::glyphs;
-use super::text::{Colour, Style, Text, cell_len, char_width};
+use super::text::{Color, Colour, Style, Text, cell_len, char_width};
 use crate::env::Env;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use std::collections::HashMap;
@@ -67,23 +67,23 @@ pub fn engine_reference(code: &str) -> Option<(&'static str, &'static str)> {
 
 /// The style of a severity's header and underline.
 fn severity_style(severity: Severity) -> Style {
-    Style::new(match severity {
-        Severity::Error => "bold red",
-        Severity::Warning => "bold yellow",
-        Severity::Note => "bold blue",
-    })
+    match severity {
+        Severity::Error => Style::fg(Color::Red).bold(),
+        Severity::Warning => Style::fg(Color::Yellow).bold(),
+        Severity::Note => Style::fg(Color::Blue).bold(),
+    }
 }
 
 fn note_style(label: &str) -> Style {
-    Style::new(match label {
-        "help" | "fix" => "bold cyan",
-        "note" => "bold blue",
-        _ => "bold",
-    })
+    match label {
+        "help" | "fix" => Style::fg(Color::Cyan).bold(),
+        "note" => Style::fg(Color::Blue).bold(),
+        _ => Style::BOLD,
+    }
 }
 
 fn gutter_style() -> Style {
-    Style::new("blue")
+    Style::fg(Color::Blue)
 }
 
 /// What a path keeps unencoded in a link or a SARIF URI: letters, digits,
@@ -384,16 +384,16 @@ pub trait LineStyles {
 /// HighlightSpec capture → terminal style, for the query lines of a frame.
 /// Captures not listed (variables, properties, punctuation, Tide keys) keep the
 /// terminal's colour.
-pub fn query_style(capture: &str) -> Option<&'static str> {
+pub fn query_style(capture: &str) -> Option<Style> {
     Some(match capture {
-        "keyword" | "operator.pipe" => "bold magenta",
-        "operator" => "magenta",
-        "function" | "function.builtin" | "macro" => "cyan",
-        "type" => "bright_cyan",
-        "string" => "green",
-        "number" | "boolean" | "constant" => "yellow",
-        "comment" => "dim",
-        "error" => "red",
+        "keyword" | "operator.pipe" => Style::fg(Color::Magenta).bold(),
+        "operator" => Style::fg(Color::Magenta),
+        "function" | "function.builtin" | "macro" => Style::fg(Color::Cyan),
+        "type" => Style::fg(Color::BrightCyan),
+        "string" => Style::fg(Color::Green),
+        "number" | "boolean" | "constant" => Style::fg(Color::Yellow),
+        "comment" => Style::DIM,
+        "error" => Style::fg(Color::Red),
         _ => return None,
     })
 }
@@ -434,7 +434,7 @@ impl QueryHighlighter {
             by_line
                 .entry(line)
                 .or_default()
-                .push((column, end_column, Style::new(style)));
+                .push((column, end_column, style));
         }
         by_line
     }
@@ -487,7 +487,7 @@ impl Frames {
         mut styles: Option<&mut dyn LineStyles>,
     ) -> Vec<Text> {
         let style = severity_style(diagnostic.severity);
-        let bold = Style::new("bold");
+        let bold = Style::BOLD;
         let mut header = Text::default();
         header.append(
             &format!("{}[{}]", diagnostic.severity.as_str(), diagnostic.code),
@@ -763,16 +763,17 @@ pub fn render_diff(diff: &str, colour: Colour) -> String {
     }
     let mut out = String::new();
     for raw in diff.lines() {
-        let style = [
-            ("+++", "bold"),
-            ("---", "bold"),
-            ("@@", "cyan"),
-            ("+", "green"),
-            ("-", "red"),
-        ]
-        .iter()
-        .find(|(prefix, _)| raw.starts_with(prefix))
-        .map_or_else(Style::default, |(_, style)| Style::new(style));
+        let style = if raw.starts_with("+++") || raw.starts_with("---") {
+            Style::BOLD
+        } else if raw.starts_with("@@") {
+            Style::fg(Color::Cyan)
+        } else if raw.starts_with('+') {
+            Style::fg(Color::Green)
+        } else if raw.starts_with('-') {
+            Style::fg(Color::Red)
+        } else {
+            Style::PLAIN
+        };
         let mut line = Text::styled(raw, &style);
         line.expand_tabs();
         out.push_str(&line.render(colour, false));
@@ -811,7 +812,7 @@ pub fn render_fixed(changes: &[FixedValue], cwd: &Path, colour: Colour) -> Strin
             shown.clone_from(&change.path);
         }
         let mut line = Text::default();
-        line.append("fixed:", &Style::new("bold green"));
+        line.append("fixed:", &Style::fg(Color::Green).bold());
         line.push_str(&format!(
             " {shown}:{}:{} {} ",
             change.line,
@@ -1111,13 +1112,13 @@ mod tests {
         let styles = styled_line("q.kql", text, 1);
         let string = styles
             .iter()
-            .find(|(_, _, style)| *style == Style::new("green"))
+            .find(|(_, _, style)| *style == Style::fg(Color::Green))
             .map(|(column, end, _)| (*column, *end));
         // `"é名"` runs from column 19 up to 23 (exclusive).
         assert_eq!(string, Some((19, 23)), "{styles:?}");
         let number = styles
             .iter()
-            .find(|(_, _, style)| *style == Style::new("yellow"))
+            .find(|(_, _, style)| *style == Style::fg(Color::Yellow))
             .map(|(column, end, _)| (*column, *end));
         assert_eq!(number, Some((36, 37)), "{styles:?}");
         // A token over two lines is left without colour on both.
@@ -1127,7 +1128,7 @@ mod tests {
             assert!(
                 styles
                     .iter()
-                    .all(|(_, _, style)| *style != Style::new("green")),
+                    .all(|(_, _, style)| *style != Style::fg(Color::Green)),
                 "line {line}: {styles:?}"
             );
         }
