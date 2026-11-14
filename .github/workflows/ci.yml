@@ -291,9 +291,12 @@ jobs:
     env:
       # mold links the test binaries, the build's longest step warm.
       RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
-      # Line tables, not full debuginfo: backtraces keep file:line, and the
-      # archive stays small.
-      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      # No debuginfo, stripped at link: the archive every test job downloads
+      # was 4.5 GB with line tables (about 90 statically linked test
+      # binaries). A panic still names its file:line; a backtrace names
+      # functions only (rerun locally for lines).
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_STRIP: debuginfo
       CARGO_INCREMENTAL: "0"
       CARGO_TERM_COLOR: always
       INSTA_UPDATE: "no"
