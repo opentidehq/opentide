@@ -225,7 +225,7 @@ struct Cases {
 #[test]
 fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
-    assert_eq!(table["oracle"], "0.23.0");
+    assert_eq!(table["oracle"], "0.28.1");
     let notes: Cases = toml::from_str(include_str!("oracle/from_node_cases.toml")).unwrap();
     let differences: BTreeMap<&str, &Difference> = notes
         .difference

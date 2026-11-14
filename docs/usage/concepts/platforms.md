@@ -1,6 +1,6 @@
 ---
 title: Platforms
-description: Thirteen deployment platforms, nine query validators on a tenant and ten offline, eleven query runners, and where each platform block schema is specified.
+description: Thirteen deployment platforms, nine query validators on a tenant and twelve offline, eleven query runners, and where each platform block schema is specified.
 ---
 
 # Platforms
@@ -21,8 +21,8 @@ opentide integrates with **thirteen detection platforms** through connectors bui
 | HarfangLab | `harfanglab` | yes | no | YARA | telemetry filters | Sigma or YARA |
 | Sysdig Secure (Falco) | `sysdig` | yes | no | yes | no | Falco condition |
 | Bitdefender GravityZone | `bitdefender` | yes | no | YARA | no | Basic criteria or YARA |
-| Graylog | `graylog` | yes | yes | no | yes | Lucene (Graylog dialect) |
-| Exabeam New-Scale SIEM | `exabeam` | yes | yes (the filter) | no | yes | Exabeam Query Language |
+| Graylog | `graylog` | yes | yes | yes | yes | Lucene (Graylog dialect) |
+| Exabeam New-Scale SIEM | `exabeam` | yes | yes (the filter) | yes | yes | Exabeam Query Language |
 | Google Security Operations | `google_secops` | yes | yes (`verifyRuleText`) | yes (YARA-L) | yes (`udmSearch`) | YARA-L 2.0 |
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.

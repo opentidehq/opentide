@@ -1,7 +1,7 @@
 //! The command tree of `opentide`, in clap derive (plan §3 invariant 1).
 //!
 //! Every path, option, type, choice, default and environment variable of the
-//! Python CLI (opentide 0.23.0, the oracle) is here, hidden ones included, so
+//! Python CLI (opentide 0.28.1, the oracle; written from 0.23.0's) is here, hidden ones included, so
 //! that every command line the oracle parses parses the same way. It was
 //! written from the oracle's Click tree once; it is code now, and a command's
 //! port (UC-3.5, UC-3.6) changes its struct here. `opentide --json commands`
@@ -1707,7 +1707,7 @@ pub struct QueryArgs {
         help = "Elastic only: esql (default), eql, lucene or kuery"
     )]
     pub language: Option<String>,
-    #[arg(long = "index", help = "Elastic index pattern or CrowdStrike repository (repeatable)", action = clap::ArgAction::Append)]
+    #[arg(long = "index", help = "Elastic index pattern, CrowdStrike repository or Graylog stream alias (repeatable)", action = clap::ArgAction::Append)]
     pub index: Vec<String>,
     #[arg(
         long = "timeout",

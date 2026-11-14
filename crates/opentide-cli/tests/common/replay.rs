@@ -7,7 +7,7 @@
 //!
 //! The fixtures laid out here are the static ones of `tests/golden/cases.toml`
 //! (`none`, `empty`, `tide-corpus`, `tide-corpus-typo`, `vscode`, `tenants`); the
-//! generated ones (`fault`, `heavy-small`) are `cargo xtask golden check
+//! generated ones (`fault`, `fault-lint`, `heavy-small`) are `cargo xtask golden check
 //! --engine compare`'s.
 
 #![allow(dead_code, reason = "each test binary uses part of the helpers")]
@@ -38,7 +38,9 @@ pub fn host_errno(case: &str) -> bool {
 
 /// A generated fixture laid out already (`cargo xtask corpus faults --out
 /// DIR`, `cargo xtask corpus generate --seed 1 ... --out DIR`), named in
-/// `OPENTIDE_REPLAY_FIXTURES` as `fault=DIR,heavy-small=DIR`.
+/// `OPENTIDE_REPLAY_FIXTURES` as `fault=DIR,heavy-small=DIR` (`fault-lint`
+/// is `fault` with lint's recommended check off, as `tests/golden/cases.toml`
+/// lays it out).
 pub fn generated(name: &str) -> Option<PathBuf> {
     let listed = std::env::var("OPENTIDE_REPLAY_FIXTURES").ok()?;
     listed.split(',').find_map(|pair| {
@@ -125,31 +127,6 @@ pub const FIXTURES: &[&str] = &[
 
 pub fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-/// The catch-up train's report-only marker (`xtask`'s
-/// `golden::report_only`): while `tests/golden/REPORT_ONLY` is committed,
-/// the golden-diff tests print their differences and pass, because every
-/// platform ported onto the train before the oracle moves (O2) adds explain
-/// pages and codes the 0.23.0 recordings do not have. The unit, fixture and
-/// cassette tests and the ledger's own check still gate.
-pub fn report_only() -> bool {
-    repo().join("tests/golden/REPORT_ONLY").is_file()
-}
-
-/// `problems`, unless the repository is report-only ([`report_only`]): then
-/// they are printed and the test passes. `ran` is unaffected.
-pub fn gate(problems: Vec<String>) -> Vec<String> {
-    if report_only() && !problems.is_empty() {
-        eprintln!(
-            "tests/golden/REPORT_ONLY is present: {} golden difference(s) reported, not failed \
-             (the catch-up train; O2 re-records from the 0.28.x oracle):\n\n{}",
-            problems.len(),
-            problems.join("\n\n")
-        );
-        return Vec::new();
-    }
-    problems
 }
 
 #[derive(Clone, Default)]
@@ -668,7 +645,7 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
         Some(sub) => ws.join(sub),
     };
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: terminal,
         stderr_tty: terminal,
         log_sink: sink,
@@ -862,7 +839,7 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
     let filter = std::env::var("OPENTIDE_REPLAY_FILTER").unwrap_or_default();
     for command in commands {
         for mode in ["human", "plain", "json", "agent"] {
-            let extra: Vec<&str> = ["fault", "heavy-small"]
+            let extra: Vec<&str> = ["fault", "fault-lint", "heavy-small"]
                 .into_iter()
                 .filter(|name| generated(name).is_some())
                 .collect();
@@ -890,7 +867,7 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
     }
     if complete && filter.is_empty() {
         for (index, entry) in ledger.entries.iter().enumerate() {
-            let elsewhere = ["fault", "heavy-small"].iter().any(|fixture| {
+            let elsewhere = ["fault", "fault-lint", "heavy-small"].iter().any(|fixture| {
                 entry.case.contains(&format!("/{fixture}/")) && generated(fixture).is_none()
             })
                 // A cassette test's (`tests/extract_sentinel.rs`), not a golden case's.
@@ -912,7 +889,7 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
             }
         }
     }
-    (gate(problems), ran)
+    (problems, ran)
 }
 
 /// Replays the `variant` case (`help`) of every command path in every mode
@@ -956,5 +933,5 @@ pub fn replay_variant(variant: &str) -> (Vec<String>, usize) {
             ));
         }
     }
-    (gate(problems), ran)
+    (problems, ran)
 }

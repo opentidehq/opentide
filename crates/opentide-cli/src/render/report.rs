@@ -181,7 +181,12 @@ pub fn sarif_rule(page: &RulePage) -> Json {
                 ("markdown", Json::str(markdown)),
             ]),
         ));
-        if let Some(found) = PAGE_SEVERITY.captures(markdown) {
+        // A retired code's page names the severity it had while it was
+        // reported; nothing reports it now, so it has no level to configure
+        // (0.28.1 writes none for these codes).
+        if !page.retired
+            && let Some(found) = PAGE_SEVERITY.captures(markdown)
+        {
             rule.push((
                 "defaultConfiguration",
                 Json::object([("level", Json::str(&found[1]))]),
@@ -518,6 +523,22 @@ mod tests {
         let rule = crate::json::document_text(&sarif_rule(&retired), false);
         assert!(
             rule.contains("\"properties\":{\"tags\":[\"retired\"]}"),
+            "{rule}"
+        );
+        // A retired code's page names its old severity; its rule has no level.
+        let page = |retired: bool| RulePage {
+            code: "old_code".into(),
+            retired,
+            summary: Some("Retired.".into()),
+            markdown: Some(
+                "# old_code\n\nRetired.\n\nSeverity: warning, while it was reported.\n".into(),
+            ),
+        };
+        let rule = crate::json::document_text(&sarif_rule(&page(true)), false);
+        assert!(!rule.contains("defaultConfiguration"), "{rule}");
+        let rule = crate::json::document_text(&sarif_rule(&page(false)), false);
+        assert!(
+            rule.contains("\"defaultConfiguration\":{\"level\":\"warning\"}"),
             "{rule}"
         );
     }

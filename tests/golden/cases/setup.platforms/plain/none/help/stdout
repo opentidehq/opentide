@@ -16,6 +16,11 @@
 │ --harfanglab                            Enable HarfangLab                    │
 │ --elastic                               Enable Elastic Security              │
 │ --sysdig                                Enable Sysdig Secure (Falco)         │
+│ --bitdefender                           Enable Bitdefender GravityZone       │
+│ --graylog                               Enable Graylog                       │
+│ --exabeam                               Enable Exabeam New-Scale SIEM        │
+│ --google-secops                         Enable Google Security Operations    │
+│                                         (YARA-L)                             │
 │ --plan                                  List the files each step would       │
 │                                         write, and write nothing             │
 │ --yes                    -y             Write without asking for             │

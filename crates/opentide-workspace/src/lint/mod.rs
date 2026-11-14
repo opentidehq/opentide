@@ -228,7 +228,12 @@ pub struct LintFinding {
 impl LintFinding {
     /// A finding of the queries check, from the engine's diagnostic: the host
     /// builds it (UC-2.5); `severity` is lint's (`warning` or `info`).
-    pub fn from_engine(relative: &str, uuid: Option<&str>, diagnostic: Diagnostic) -> Self {
+    pub fn from_engine(relative: &str, uuid: Option<&str>, mut diagnostic: Diagnostic) -> Self {
+        if diagnostic.object_uuid.is_empty()
+            && let Some(uuid) = uuid
+        {
+            uuid.clone_into(&mut diagnostic.object_uuid);
+        }
         let mut json = IndexMap::new();
         json.insert("check".to_owned(), json!("queries"));
         json.insert("severity".to_owned(), json!(diagnostic.severity.as_str()));

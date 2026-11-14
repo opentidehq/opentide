@@ -12,5 +12,5 @@ path = "ws/opentide-reports/validate.sarif"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 476126
-blob = "4e7ea765fd457018bdf27e7b71be83436941e5c0316d59e6274a3cd439790f02"
+size = 988416
+blob = "8f51254338770f7c7cb88f0695bc0cf2725b4dc22e684a8f56570d68be889951"

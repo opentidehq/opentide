@@ -21,7 +21,7 @@ use std::process::{Command, ExitCode};
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result, bail, ensure};
-use opentide_compile::json::Json;
+use opentide_compile::json::{Json, Object};
 use opentide_compile::preview::{self, Inputs, PROBE_CLOCK, PROBE_TIMESTAMP};
 use opentide_compile::{CompileError, Owned, Rule};
 use opentide_schema::vocab::Vocabularies;
@@ -293,18 +293,36 @@ pub fn fault_approval(approvals: &[FaultApproval], fault: &Fault) -> Option<usiz
         .position(|entry| entry.platform == fault.platform && entry.error == fault.error)
 }
 
-/// `value` without its `null` members, at every depth, keys in order.
-fn without_null_members(value: Json) -> Json {
-    match value {
-        Json::Object(object) => Json::Object(
-            object
-                .into_iter()
-                .filter(|(_, value)| !value.is_null())
-                .map(|(key, value)| (key, without_null_members(value)))
-                .collect(),
-        ),
-        Json::Array(items) => Json::Array(items.into_iter().map(without_null_members).collect()),
-        other => other,
+/// `oracle` without the `null` members `candidate` leaves out, at every
+/// depth, keys in the oracle's order; `None` when the candidate leaves out a
+/// member that is not `null`, holds one the oracle does not, or an array of
+/// another length. A `null` the candidate also writes (a value in a map the
+/// user wrote, such as Splunk's `advanced`) stays.
+fn without_null_members(oracle: Json, candidate: &Json) -> Option<Json> {
+    match (oracle, candidate) {
+        (Json::Object(object), Json::Object(theirs)) => {
+            if theirs.keys().any(|key| !object.contains_key(key)) {
+                return None;
+            }
+            let mut kept = Object::new();
+            for (key, value) in object {
+                match theirs.get(&key) {
+                    Some(their) => {
+                        kept.insert(key, without_null_members(value, their)?);
+                    }
+                    None if value.is_null() => {}
+                    None => return None,
+                }
+            }
+            Some(Json::Object(kept))
+        }
+        (Json::Array(items), Json::Array(theirs)) if items.len() == theirs.len() => items
+            .into_iter()
+            .zip(theirs)
+            .map(|(item, their)| without_null_members(item, their))
+            .collect::<Option<Vec<_>>>()
+            .map(Json::Array),
+        (other, _) => Some(other),
     }
 }
 
@@ -325,7 +343,8 @@ pub fn dump_approval(
     if oracle_json.get("status").is_some() || oracle_json.get("api_request").is_none() {
         return None;
     }
-    let trimmed = without_null_members(oracle_json).to_compact();
+    let candidate_json: Json = serde_json::from_str(candidate).ok()?;
+    let trimmed = without_null_members(oracle_json, &candidate_json)?.to_compact();
     let rule = if trimmed == candidate {
         "nulls"
     } else {
@@ -1145,6 +1164,13 @@ mod tests {
         assert_eq!(dump_approval(&order, "splunk", oracle, candidate), None);
         let failed = r#"{"uuid":"u","status":"failed","api_request":null}"#;
         assert_eq!(dump_approval(&dumps, "splunk", failed, failed), None);
+        // A null both sides write (a value of a map the user wrote) stays: only
+        // the null members the candidate leaves out are approved.
+        let user_null = r#"{"uuid":"u","name":"n","api_request":{"a":1,"b":null,"m":{"t":null}}}"#;
+        let kept = r#"{"uuid":"u","name":"n","api_request":{"a":1,"m":{"t":null}}}"#;
+        assert_eq!(dump_approval(&dumps, "splunk", user_null, kept), Some(0));
+        let added = r#"{"uuid":"u","name":"n","api_request":{"a":1,"m":{"t":null},"z":null}}"#;
+        assert_eq!(dump_approval(&dumps, "splunk", user_null, added), None);
     }
 
     #[test]

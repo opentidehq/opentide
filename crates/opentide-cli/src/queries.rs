@@ -31,11 +31,18 @@ use std::sync::{Mutex, PoisonError};
 
 use indexmap::IndexMap;
 use opentide_analysis::{LineStarts, MemoryWorkspace, Severity as EngineSeverity};
+use opentide_schema::objects::platform::graylog::{self, ConfiguredTenant};
 use opentide_workspace::diagnostic::ContextValue;
 use opentide_workspace::validate::annotate::relative_path;
 use opentide_workspace::validate::{QueryCheck, QueryFindings, QueryObject};
 use opentide_workspace::{Diagnostic, FileSystem, Severity, Workspace};
 use rayon::prelude::*;
+
+/// Graylog's `configurations` key, and the platform of its queries.
+const GRAYLOG: &str = "graylog";
+
+/// The engine's code for a leading `*` or `?` in a Graylog query.
+const LEADING_WILDCARD: &str = "graylog_leading_wildcard";
 
 /// `context.source` of the findings of the queries check.
 pub const ENGINE_SOURCE: &str = "engine";
@@ -54,6 +61,10 @@ pub const VISIBILITY_CONFIGURATION: &str = ".opentide/configurations/visibility.
 /// Where the Elastic tenants' stack versions are read from; the engine
 /// matches this path's ending, so it is passed as written here.
 pub const ELASTIC_CONFIGURATION: &str = ".opentide/configurations/platforms/elastic.toml";
+
+/// Where the Graylog tenants are read from: their `allow_leading_wildcard`
+/// and `streams` decide `graylog_leading_wildcard` and `graylog_all_streams`.
+pub const GRAYLOG_CONFIGURATION: &str = ".opentide/configurations/platforms/graylog.toml";
 
 /// The engine's warnings about a dataset `visibility.toml` does not declare:
 /// their help is their `opentide explain` page, not a language reference.
@@ -120,7 +131,7 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 13] = [
     (
         "exabeam_",
         "Exabeam Query Language",
-        "https://docs.exabeam.com/en/search/all/search-guide/",
+        "https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html",
     ),
     (
         "yaral_",
@@ -226,6 +237,9 @@ pub struct Profiles {
     host: MemoryWorkspace,
     /// Why the declared datasets could not be read, when they could not.
     pub visibility_problem: Option<String>,
+    /// The workspace's Graylog tenants ([`GRAYLOG_CONFIGURATION`]); none when
+    /// the file is missing or is not TOML (the configuration check reports it).
+    pub graylog_tenants: Vec<ConfiguredTenant>,
 }
 
 impl Profiles {
@@ -262,9 +276,16 @@ impl Profiles {
             Ok(Some(text)) => vec![(ELASTIC_CONFIGURATION.to_owned(), text)],
             _ => Vec::new(),
         };
+        let graylog_tenants = match read(GRAYLOG_CONFIGURATION) {
+            Ok(Some(text)) => opentide_schema::configuration::toml::parse(&text)
+                .map(|config| graylog::tenants_of(Some(&config)))
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
         Self {
             host: MemoryWorkspace { files },
             visibility_problem,
+            graylog_tenants,
         }
     }
 
@@ -273,7 +294,7 @@ impl Profiles {
     pub fn check_object(&self, text: &str) -> Vec<CheckedQuery> {
         let text = universal_newlines(text);
         let lines = LineStarts::new(&text);
-        opentide_analysis::analyze_queries(&self.host, &text)
+        let mut checked: Vec<CheckedQuery> = opentide_analysis::analyze_queries(&self.host, &text)
             .into_iter()
             .map(|report| {
                 let (line, column, _, _) = lines.convert(&text, report.range);
@@ -291,7 +312,44 @@ impl Profiles {
                         .collect(),
                 }
             })
-            .collect()
+            .collect();
+        self.allow_leading_wildcards(&text, &mut checked);
+        one_secops_rule(checked)
+    }
+
+    /// The Graylog queries of `text` without `graylog_leading_wildcard` when
+    /// every tenant the rule's Graylog block reaches sets
+    /// `allow_leading_wildcard = true` (`_graylog_findings`): those servers take
+    /// a leading `*` or `?`. With no tenant the code stays an error.
+    fn allow_leading_wildcards(&self, text: &str, checked: &mut [CheckedQuery]) {
+        let wildcard = |finding: &Finding| finding.code == LEADING_WILDCARD;
+        if !checked
+            .iter()
+            .any(|query| query.platform == GRAYLOG && query.findings.iter().any(wildcard))
+        {
+            return;
+        }
+        let Ok(document) = opentide_schema::node::load(text) else {
+            return; // an unparsable file keeps every finding
+        };
+        let Some(block) = document
+            .root()
+            .and_then(|root| root.get("configurations"))
+            .and_then(|configurations| configurations.get("graylog"))
+        else {
+            return;
+        };
+        let tenants: Vec<_> = self
+            .graylog_tenants
+            .iter()
+            .map(ConfiguredTenant::view)
+            .collect();
+        if !graylog::leading_wildcard_allowed(block, &tenants) {
+            return;
+        }
+        for query in checked.iter_mut().filter(|query| query.platform == GRAYLOG) {
+            query.findings.retain(|finding| !wildcard(finding));
+        }
     }
 }
 
@@ -448,7 +506,13 @@ impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
                 relative, uuid, diagnostic,
             ));
         }
-        out.extend(block_advisories(file, relative, uuid, &text));
+        out.extend(block_advisories(
+            file,
+            relative,
+            uuid,
+            &text,
+            &self.profiles.graylog_tenants,
+        ));
         out.extend(harfanglab.findings(file, relative, uuid));
         Ok(out)
     }
@@ -629,6 +693,7 @@ fn block_advisories(
     relative: &str,
     uuid: Option<&str>,
     text: &str,
+    graylog_tenants: &[ConfiguredTenant],
 ) -> Vec<opentide_workspace::lint::LintFinding> {
     let Ok(document) = opentide_schema::node::load(text) else {
         return Vec::new();
@@ -637,7 +702,8 @@ fn block_advisories(
         return Vec::new();
     };
     let locator = document.locator();
-    opentide_schema::objects::platform::block_advisories(root)
+    let tenants: Vec<_> = graylog_tenants.iter().map(ConfiguredTenant::view).collect();
+    opentide_schema::objects::platform::block_advisories(root, &tenants)
         .into_iter()
         .map(|advisory| {
             let mut diagnostic =
@@ -797,18 +863,52 @@ fn number(value: usize) -> ContextValue {
     ContextValue::Number(serde_json::Number::from(value))
 }
 
-/// Whether `query` counts as one of `validate`'s queries checked: a Google
-/// SecOps block's sections are one rule, the one deploy assembles, counted
-/// at its `events` (a block without `events` is not checked).
-fn counts(query: &CheckedQuery) -> bool {
-    match query.field_path.as_slice() {
-        [configurations, platform, section]
-            if configurations == "configurations" && platform == "google_secops" =>
-        {
-            section == "events"
+/// Whether `query` is a text section of a Google SecOps block
+/// (`configurations.google_secops.<section>`).
+fn is_secops_section(query: &CheckedQuery) -> bool {
+    matches!(
+        query.field_path.as_slice(),
+        [configurations, platform, _]
+            if configurations == "configurations" && platform == "google_secops"
+    )
+}
+
+/// `checked` with a Google SecOps block's sections as the one query they
+/// are, the rule deploy assembles (0.28.0: "checks a google_secops block's
+/// sections as the one rule deploy assembles"): at the block's field path,
+/// where its first section's text starts, with every section's findings in
+/// source order. Each finding keeps its own section's field path and place.
+fn one_secops_rule(checked: Vec<CheckedQuery>) -> Vec<CheckedQuery> {
+    let mut out: Vec<CheckedQuery> = Vec::with_capacity(checked.len());
+    let mut rule: Option<usize> = None;
+    for query in checked {
+        if !is_secops_section(&query) {
+            out.push(query);
+            continue;
         }
-        _ => true,
+        match rule {
+            Some(index) => {
+                let merged = &mut out[index];
+                if (query.line, query.column) < (merged.line, merged.column) {
+                    (merged.line, merged.column) = (query.line, query.column);
+                }
+                merged.placeholder &= query.placeholder;
+                merged.findings.extend(query.findings);
+            }
+            None => {
+                let mut query = query;
+                query.field_path.truncate(2);
+                rule = Some(out.len());
+                out.push(query);
+            }
+        }
     }
+    if let Some(index) = rule {
+        out[index]
+            .findings
+            .sort_by_key(|finding| (finding.line, finding.column));
+    }
+    out
 }
 
 /// The queries check of `validate` on the query engines.
@@ -845,9 +945,7 @@ impl QueryCheck for EngineQueries {
                 if query.placeholder {
                     continue;
                 }
-                if counts(&query) {
-                    found.queries += 1;
-                }
+                found.queries += 1;
                 for item in &query.findings {
                     if item.severity != EngineSeverity::Error {
                         // Style: lint's queries check.
@@ -892,7 +990,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_google_secops_block_is_one_query_counted_at_its_events() {
+    fn a_google_secops_block_is_one_query_at_the_block() {
         let text = "name: A\nconfigurations:\n  google_secops:\n    events: |\n      \
                     $e.metadata.event_type = \"USER_LOGIN\"\n    outcome: |\n      \
                     $risk_score = 10\n    condition: |\n      $e\n  sentinel:\n    query: |\n      \
@@ -900,10 +998,24 @@ mod tests {
         let profiles = Profiles {
             host: MemoryWorkspace { files: Vec::new() },
             visibility_problem: None,
+            graylog_tenants: Vec::new(),
         };
         let queries = profiles.check_object(text);
-        assert_eq!(queries.len(), 4, "{queries:?}");
-        assert_eq!(queries.iter().filter(|query| counts(query)).count(), 2);
+        assert_eq!(queries.len(), 2, "{queries:?}");
+        let rule = &queries[0];
+        assert_eq!(rule.field_path, ["configurations", "google_secops"]);
+        assert_eq!(rule.language, "yaral");
+        // Where the first section's text starts, as 0.28.1 reports it.
+        assert_eq!((rule.line, rule.column), (5, 7));
+        // A finding keeps its own section's field path.
+        let broken = text.replace("$risk_score = 10", "$risk_score = $nowhere");
+        let queries = profiles.check_object(&broken);
+        let rule = &queries[0];
+        assert_eq!(rule.errors(), 1, "{:?}", rule.findings);
+        assert_eq!(
+            rule.findings[0].field_path,
+            ["configurations", "google_secops", "outcome"]
+        );
         // A block with a section label in a text is not checked: no queries.
         let header = text.replace("$risk_score = 10", "condition:");
         let queries = profiles.check_object(&header);

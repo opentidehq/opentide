@@ -1,2 +1,3 @@
 ✗ 24 findings in 12 files · 12 warnings, 12 notes
 → opentide lint --fix · rename 12 files to match their names
+→ opentide lint --strict --verbose · show 12 notes, such as a missing optional field

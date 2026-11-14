@@ -77,7 +77,7 @@ A read-only Rust run keeps its workspace loaded for the next one, per workspace 
 
 ### The Rust host
 
-The server is Rust: the protocol, the order, cancel and the signals are as described here, and so is every answer. Where it differs from opentide 0.23.0's Python host: a message that Python's `json` reads but JSON does not allow (`NaN`, a lone surrogate, nesting deeper than 128 levels) is a parse error; request ids are compared as written (`1.0` is not `1`); and a SIGTERM or SIGHUP the server was started ignoring stops it. `opentide serve` runs the host in its own process, so a SIGTERM sent to it reaches the host.
+The server is Rust: the protocol, the order, cancel and the signals are as described here, and so is every answer. Where it differs from opentide 0.28.1's Python host: a message that Python's `json` reads but JSON does not allow (`NaN`, a lone surrogate, nesting deeper than 128 levels) is a parse error; request ids are compared as written (`1.0` is not `1`); and a SIGTERM or SIGHUP the server was started ignoring stops it. `opentide serve` runs the host in its own process, so a SIGTERM sent to it reaches the host.
 
 ### Cancel
 

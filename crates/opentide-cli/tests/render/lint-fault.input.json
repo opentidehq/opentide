@@ -1,6 +1,6 @@
 {
  "command": "lint",
- "version": "0.23.0",
+ "version": "0.28.1",
  "diagnostics": [
   {
    "code": "metadata_recommended",

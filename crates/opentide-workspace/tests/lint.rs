@@ -929,4 +929,21 @@ mod lint {
             refused.message
         );
     }
+
+    /// A queries finding names its rule: the SARIF result's
+    /// `logicalLocations` (and every other report) read the diagnostic's
+    /// `object_uuid`, as 0.28.1's does.
+    #[test]
+    fn an_engine_finding_carries_its_rules_uuid() {
+        let engine = opentide_workspace::Diagnostic::new(
+            "kql_unknown_table",
+            Severity::Warning,
+            "unknown table",
+        );
+        let finding = LintFinding::from_engine("objects/rules/r.yaml", Some(U1), engine.clone());
+        assert_eq!(finding.diagnostic.object_uuid, U1);
+        assert_eq!(finding.json["uuid"], serde_json::json!(U1));
+        let without = LintFinding::from_engine("objects/rules/r.yaml", None, engine);
+        assert_eq!(without.diagnostic.object_uuid, "");
+    }
 }

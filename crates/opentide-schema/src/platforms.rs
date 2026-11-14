@@ -371,11 +371,10 @@ pub const PLATFORMS: &[Platform] = &[
         live_check: true,
         query_runner: true,
         runner_languages: &["lucene"],
-        // The Graylog dialect of Lucene comes with the engine import (E1):
-        // until then no query is parsed offline, rather than parsed as
-        // Elastic's Lucene.
-        offline_languages: &[],
-        query_file_suffixes: &[],
+        // Lucene in the engine's Graylog dialect (graylog-1.0, "Query
+        // dialect"): Elastic's checks and Graylog's own.
+        offline_languages: &["lucene"],
+        query_file_suffixes: &["lucene"],
         cli_rank: 10,
         connector_rank: 10,
         configuration_rank: 10,
@@ -397,10 +396,10 @@ pub const PLATFORMS: &[Platform] = &[
         live_check: true,
         query_runner: true,
         runner_languages: &["exabeam"],
-        // The Exabeam Query Language comes with the engine import (E1):
-        // until then the engine parses none of these queries offline.
-        offline_languages: &[],
-        query_file_suffixes: &[],
+        // The sequence filters, profile `rule`, and a `.exabeam` file or an
+        // `system: exabeam` hunt, profile `search` (exabeam-1.0).
+        offline_languages: &["exabeam"],
+        query_file_suffixes: &["exabeam"],
         cli_rank: 11,
         connector_rank: 11,
         configuration_rank: 11,
@@ -434,26 +433,6 @@ pub const PLATFORMS: &[Platform] = &[
 
 /// How many platforms are built in.
 pub const COUNT: usize = PLATFORMS.len();
-
-/// Platforms the recorded golden oracle (opentide 0.23.0) lacks: those the
-/// catch-up train ports onto it after it was recorded (the plan's §4). The
-/// oracle-comparing tests leave these out before comparing, so a new
-/// platform's row does not break a comparison with a recording that predates
-/// it; the live-table tests (orders, capabilities, the router) still hold the
-/// whole table. O2 re-records from 0.28.x and empties this list.
-///
-/// Every id is listed up front, before its row lands, which is harmless: an id
-/// with no row filters nothing. The guard test
-/// (`tests/since_oracle.rs`) keeps the list empty wherever the report-only
-/// marker (`tests/golden/REPORT_ONLY`) is absent, so it cannot reach
-/// integration with the oracle still 0.23.0.
-pub const SINCE_ORACLE: &[&str] = &["bitdefender", "exabeam", "google_secops", "graylog"];
-
-/// Whether `id` names a platform the recorded oracle lacks ([`SINCE_ORACLE`]).
-#[must_use]
-pub fn after_oracle(id: &str) -> bool {
-    SINCE_ORACLE.contains(&id)
-}
 
 impl Platform {
     /// Its rank in `order` (its index in the table for [`Order::Container`];
@@ -555,9 +534,25 @@ pub fn ids(order: Order) -> Vec<&'static str> {
 }
 
 /// The platforms whose deployer addresses the remote rule by a vendor id kept
-/// in the deployment state (`STATE_PLATFORMS`), by name.
+/// in the deployment state, in the order the oracle lists them
+/// (`states/deployment.py`'s `STATE_PLATFORMS`, which a
+/// `deployment_state_platform` message quotes): by name, but Graylog before
+/// Exabeam.
+const STATE_PLATFORMS: [&str; 8] = [
+    "bitdefender",
+    "crowdstrike",
+    "defender_for_endpoint",
+    "graylog",
+    "exabeam",
+    "google_secops",
+    "sentinel_one",
+    "sysdig",
+];
+
+/// The platforms whose deployer addresses the remote rule by a vendor id kept
+/// in the deployment state, in the order of `STATE_PLATFORMS` above (0.28.1's).
 pub fn state_platforms() -> Vec<&'static str> {
-    ids_where(Order::Name, |platform| platform.external_id.is_stored())
+    STATE_PLATFORMS.to_vec()
 }
 
 /// Whether `id`'s external id is a canonical decimal integer.
@@ -704,18 +699,26 @@ mod tests {
 
     #[test]
     fn the_capability_lists_are_the_oracles() {
+        // 0.28.1's STATE_PLATFORMS, in its order (a message quotes it).
         assert_eq!(
             state_platforms(),
             [
                 "bitdefender",
                 "crowdstrike",
                 "defender_for_endpoint",
+                "graylog",
                 "exabeam",
                 "google_secops",
-                "graylog",
                 "sentinel_one",
                 "sysdig"
             ]
+        );
+        // Exactly the platforms whose external ids the state stores.
+        let mut sorted = state_platforms();
+        sorted.sort_unstable();
+        assert_eq!(
+            sorted,
+            ids_where(Order::Name, |p| p.external_id.is_stored())
         );
         assert_eq!(
             ids_where(Order::Name, |p| p.external_id == ExternalId::Int),
@@ -755,7 +758,7 @@ mod tests {
             query_file_suffixes(),
             [
                 "kql", "spl", "cql", "yar", "yara", "lucene", "esql", "eql", "kuery", "falco",
-                "yaral", "yl2"
+                "exabeam", "yaral", "yl2"
             ]
         );
     }

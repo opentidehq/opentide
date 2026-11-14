@@ -366,6 +366,8 @@ brings exactly the 116 new commits. Expect conflicts in `Cargo.toml`, `Cargo.loc
 
 ### 4.1 Order
 
+O2 is done: the oracle is 0.28.1 (§5.2, O2's status).
+
 1. **Before any port: O1, preview tooling** (on integration). `cargo xtask golden record` gets
    `--oracle FILE` (an alternative `ORACLE`, e.g. `tests/golden/ORACLE.next` naming 0.28.0) and
    `--out DIR` (recordings outside `tests/golden/cases`, sharing the content-addressed `blobs/`
@@ -764,6 +766,23 @@ Every brief uses the same base:
 - **Tests.** Every tool carries a title and hints (unit test). The `ui://` resource contains no remote loads and no `innerHTML`, and the escaped ATT&CK JSON cannot close `<script>`. Over stdio, `resources/read` returns `text/html;profile=mcp-app`.
 
 #### O2: oracle move and train merge (train)
+
+> **Status (2026-11-14): done** (PR #1080, `feat/o2-oracle-0.28`). The oracle is opentide 0.28.1
+> (`v0.28.1`, `164450afc`, wheel SHA-256 `1f145603…b3a9`), as the maintainer decided (§6, 3),
+> not 0.28.0: every golden case, cassette, MCP session and oracle table is recorded from it.
+> `tests/golden/REPORT_ONLY` is gone with everything that read it, so `Golden compare` and
+> `mcp replay` gate again, stale ledger entries included. The `Report-only goldens guard` check
+> keeps its name and fails if the marker comes back. `ORACLE.next`, its requirements and
+> `golden-preview.yml` are gone. The ledger is re-based on 0.28.1: the entries 0.23.0 needed are
+> removed, and each difference left is approved under its changelog lead or fixed in Rust.
+> `golden check --engine rust`: 1809 cases, 0 different, 0 stale; `mcp replay`: 152 answers,
+> 0 different. The bench oracle stays at 0.23.0 (§6, 5). `docs/internal/catchup-0.28.md` stays:
+> its 272 deferred paths are real, so this brief's "deleted" does not hold yet.
+>
+> **What remains:** the merge of `train/catchup-0.28` into `integration/unified-core`, then the
+> WASI re-run on the merged tree, then the release candidates (`1.0.0-rc.N`, which also bring
+> the engine's lockstep version: `validate query`'s and `doctor`'s engine version, 0.12.0
+> today, is approved as the product's).
 
 - **Goal.** The goldens are 0.28.0's, every case passes or is approved, and the train merges into integration.
 - **Do.** §4.2 in full. Swap `ORACLE.next` into `ORACLE`. Run the manifest check (§3.1). Update the docs and skills that name the oracle. Merge `integration/unified-core` into the train one last time, then merge the train into integration.

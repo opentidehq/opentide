@@ -7,7 +7,7 @@ fixture = "skills-merge"
 argv = ["opentide", "setup", "skills", "--cursor", "--claude-code", "--generic", "--github-copilot", "--yes"]
 cwd = "."
 timeout_secs = 180
-cassette = "skills/manifest"
+cassette = "skills/catalogue-first"
 
 [env]
 AI_AGENT = "golden"

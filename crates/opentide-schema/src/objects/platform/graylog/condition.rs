@@ -314,7 +314,7 @@ impl<'a> Parser<'a> {
                 format!(
                     "expected {}, got {}",
                     expected.unwrap_or("more"),
-                    found.map_or_else(|| "None".to_owned(), |token| quote(token.text))
+                    found.map_or_else(|| "end of input".to_owned(), |token| quote(token.text))
                 ),
                 found,
             )),
@@ -564,7 +564,7 @@ mod tests {
             "\"total\" is not an aggregation function"
         );
         assert_eq!(error("count > 1"), "expected (, got \">\"");
-        assert_eq!(error("count() > "), "expected more, got None");
+        assert_eq!(error("count() > "), "expected more, got end of input");
         assert_eq!(error("count() ~ 1"), "unexpected \"~ 1\"");
         assert_eq!(error("count() AND 1"), "\"AND\" is not a comparison");
         assert_eq!(error("count() > x"), "\"x\" is not a number");
@@ -585,7 +585,7 @@ mod tests {
         assert_eq!(error("avg(a, 1) > 1"), "avg takes one field");
         assert_eq!(error("avg(() > 1"), "\"(\" is not a field name");
         assert_eq!(error("count() > 1 count() > 2"), "unexpected \"count\"");
-        assert_eq!(error("(count() > 1"), "expected ), got None");
+        assert_eq!(error("(count() > 1"), "expected ), got end of input");
         assert_eq!(error("count() > 1 and count() > 2"), "unexpected \"and\"");
     }
 

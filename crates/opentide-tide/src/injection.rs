@@ -14,10 +14,12 @@
 //! | `configurations.sysdig.output` | Falco output template (`%field` checks) | `sysdig` |
 //! | `configurations.{harfanglab,bitdefender}.yara.signature` | YARA, under the platform's profile | the block's key |
 //! | `configurations.harfanglab.yara.{strings,condition,imports}` | YARA: the one rule deploy assembles ([`crate::yara`]) | `harfanglab` |
+//! | `configurations.exabeam.sequences.<n>.query` | the Exabeam Query Language, profile `rule` | `exabeam` |
 //!
 //! A hunt's `system` is free text in opentide. It names a language only when
 //! it is a platform identifier, spelled as a `configurations` key
-//! (`sentinel`, `defender_for_endpoint`, `splunk`, `carbon_black_cloud`, or
+//! (`sentinel`, `defender_for_endpoint`, `splunk`, `carbon_black_cloud`,
+//! `graylog`, `google_secops`, `exabeam`, or
 //! `elastic` with the entry's `language`). Any other `system` (`Sentinel`,
 //! `Splunk ES`, `MDE`) is not analysed: the language is never guessed
 //! (specifications#58).
@@ -64,6 +66,11 @@ pub fn hunt_query_language(system: &str, language: Option<&str>) -> Option<Langu
     if system == "google_secops" {
         return Some(LanguageId::Yaral);
     }
+    // Exabeam searches are the Exabeam Query Language, profile `search` (a
+    // block's queries are its sequences' filters).
+    if system == "exabeam" {
+        return Some(LanguageId::Exabeam);
+    }
     language_for_field_path(&["configurations", system, "query"])
 }
 
@@ -105,6 +112,9 @@ fn query_language(source: &str, keys: &[YamlKey], key: &YamlKey) -> Option<(Lang
         ] => Some((LanguageId::Yara, (*platform).to_string())),
         ["configurations", "google_secops", _] => {
             language_for_field_path(&path).map(|language| (language, "google_secops".into()))
+        }
+        ["configurations", "exabeam", "sequences", item, "query"] if is_index(item) => {
+            Some((LanguageId::Exabeam, "exabeam".into()))
         }
         ["configurations", platform, "query" | "search"] => {
             language_for_field_path(&path).map(|l| (l, (*platform).to_string()))
@@ -371,6 +381,44 @@ configurations:
                 "#event_simpleName=DnsRequest"
             )]
         );
+    }
+
+    #[test]
+    fn a_graylog_query_and_hunt_are_lucene_in_graylog_s_dialect() {
+        let source = format!(
+            "{HEAD}configurations:
+  graylog:
+    query: 'image_lc:/(?i)mshta/'
+response:
+  procedure:
+    searches:
+      - system: graylog
+        query: 'source:host'
+"
+        );
+        assert_eq!(
+            queries(&source),
+            vec![
+                row(
+                    "configurations.graylog.query",
+                    LanguageId::Lucene,
+                    "graylog",
+                    "image_lc:/(?i)mshta/"
+                ),
+                row(
+                    "response.procedure.searches.0.query",
+                    LanguageId::Lucene,
+                    "graylog",
+                    "source:host"
+                ),
+            ]
+        );
+        // The block's query is checked in Graylog's dialect, not Elastic's.
+        let codes: Vec<String> = diagnostics(&source)
+            .into_iter()
+            .map(|d| d.code.clone())
+            .collect();
+        assert_eq!(codes, ["graylog_regex_unsupported"]);
     }
 
     #[test]

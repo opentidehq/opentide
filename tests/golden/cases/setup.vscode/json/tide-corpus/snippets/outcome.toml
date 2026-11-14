@@ -47,7 +47,7 @@ path = "ws/.opentide/templates/platforms/harfanglab.template.yaml"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 626
+size = 655
 
 [[files]]
 path = "ws/.opentide/templates/platforms/sentinel.template.yaml"
@@ -82,14 +82,14 @@ path = "ws/.opentide/templates/rule.1.0.template.yaml"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 9214
+size = 12295
 
 [[files]]
 path = "ws/.opentide/templates/rule.1.1.template.yaml"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 9238
+size = 12319
 
 [[files]]
 path = "ws/.opentide/templates/threat.1.0.template.yaml"
@@ -109,5 +109,5 @@ path = "ws/.vscode/model-templates.code-snippets"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 39275
-blob = "71f0a174b38fbed6270c47a1aa21c5e8fa861f0391d01b6b42da9833c0825bec"
+size = 45100
+blob = "37dfabeb59d686e61395804bd8d27139a21d9e7bed0e9e9e5b6c63b7c74a76f1"

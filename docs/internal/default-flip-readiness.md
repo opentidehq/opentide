@@ -64,7 +64,7 @@ cargo xtask conformance --runners rust,python,node
 uv build && <fresh venv> pip install dist/*.whl  # --version, validate on the tide corpus, the SDK
 ```
 
-The goldens stay as the specification of the Rust command line; the oracle stays opentide 0.23.0
+The goldens stay as the specification of the Rust command line; the oracle is opentide 0.28.1 (0.23.0 until O2 of the 0.28 catch-up)
 from its PyPI wheel (`tests/golden/ORACLE`), which `record` runs. The recorded MCP sessions are the
 Python server's, frozen.
 

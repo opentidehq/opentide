@@ -25,4 +25,4 @@ opentide --json lint --strict
 
 Apply each finding's `fix.edits`, run `opentide explain <code>` for a finding without one, and repeat until the exit code is `0`.
 
-For turning intelligence into threats and chaining them, install the full authoring skill: `opentide setup skills --install opentide-threat`.
+For turning intelligence into threats and chaining them, install the full authoring skill: `opentide setup skills --install opentide-threat --generic --yes`.

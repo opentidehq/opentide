@@ -72,6 +72,7 @@ fn expected(doc: &Node, source: &str) -> BTreeSet<Query> {
         ("splunk", &["query", "search"][..], LanguageId::Spl),
         ("carbon_black_cloud", &["query"][..], LanguageId::Lucene),
         ("crowdstrike", &["query"][..], LanguageId::Cql),
+        ("graylog", &["query"][..], LanguageId::Lucene),
     ] {
         let block = configurations.and_then(|c| c.get(platform));
         for field in fields {
@@ -181,6 +182,19 @@ fn expected(doc: &Node, source: &str) -> BTreeSet<Query> {
                     value,
                 );
             }
+        }
+    }
+    // An Exabeam block's sequence filters, each its own injection.
+    let exabeam = configurations.and_then(|c| c.get("exabeam"));
+    let exabeam_sequences = sequence(exabeam.and_then(|b| b.get("sequences")));
+    for (n, item) in exabeam_sequences.into_iter().flatten().enumerate() {
+        if let Some(value) = text(item.get("query")) {
+            add(
+                format!("configurations.exabeam.sequences.{n}.query"),
+                LanguageId::Exabeam,
+                "exabeam",
+                value,
+            );
         }
     }
     let searches = sequence(

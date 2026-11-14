@@ -49,6 +49,10 @@ MODELS = {
     "CarbonBlackConfig": "opentide.models.platform",
     "ElasticConfig": "opentide.models.platform",
     "SysdigConfig": "opentide.models.platform",
+    "BitdefenderConfig": "opentide.models.platform",
+    "GraylogConfig": "opentide.models.platform",
+    "ExabeamConfig": "opentide.models.platform",
+    "GoogleSecopsConfig": "opentide.models.platform",
     "DetectionRule": "opentide.models.rule",
     "DetectionRule_v1_1": "opentide.models.rule",
 }

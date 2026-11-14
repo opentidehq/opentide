@@ -729,6 +729,33 @@ fn leading_wildcard_allowed_on_every_targeted_tenant() {
 }
 
 #[test]
+fn the_configured_tenants_are_read_from_the_platforms_table() {
+    use opentide_schema::objects::platform::graylog::{ConfiguredTenant, configured_tenants};
+    let platforms = yaml(
+        "graylog:\n  tenants:\n    - name: prod\n      setup: {streams: [sysmon], allow_leading_wildcard: true}\n    - name: lab\n      setup: {streams: []}\n    - setup: {}\n",
+    );
+    let tenants = configured_tenants(Some(&platforms));
+    assert_eq!(
+        tenants,
+        [
+            ConfiguredTenant {
+                name: "prod".into(),
+                has_streams: true,
+                allow_leading_wildcard: true,
+            },
+            ConfiguredTenant {
+                name: "lab".into(),
+                has_streams: false,
+                allow_leading_wildcard: false,
+            },
+        ]
+    );
+    assert_eq!(tenants[1].view(), tenant("lab", false, false));
+    assert!(configured_tenants(None).is_empty());
+    assert!(configured_tenants(Some(&yaml("splunk: {}"))).is_empty());
+}
+
+#[test]
 fn one_definition_title_per_enabled_block() {
     use opentide_schema::objects::platform::graylog::{
         definition_title, title_duplicate_message, title_duplicates,

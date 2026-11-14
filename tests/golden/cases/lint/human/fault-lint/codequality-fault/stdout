@@ -1,0 +1,733 @@
+[1;33mwarning[falco_exception][0m[1m: [0m[1mMultiple definitions of exception 'e' in the same rule[0m
+    [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-downgrade-rule-0237.yaml\objects/rules/covert-downgrade-rule-0237.yaml:100:9]8;;\
+[34m    [0m[34m│[0m
+[34m 99 [0m[34m│[0m           - [32mproc.pname[0m
+[34m100 [0m[34m│[0m         name: [32me[0m
+[34m    [0m[34m│[0m         [1;33m━━━━[0m
+[34m    [0m[34m│[0m
+    [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;33mwarning[kql_wildcard_table][0m[1m: [0m[1mwildcard table `*` scans every table; name the table instead[0m
+  [1m(https://learn.microsoft.com/en-us/kusto/query/best-practices)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-exfiltration-rule-0157.yaml\objects/rules/covert-exfiltration-rule-0157.yaml:45:33]8;;\
+[34m   [0m[34m│[0m
+[34m44 [0m[34m│[0m     query: |
+[34m45 [0m[34m│[0m       search [35min[0m (SecurityEvent, [35m*[0m) [32m"error"[0m
+[34m   [0m[34m│[0m                                 [1;33m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[name_missing][0m[1m: [0m[1mObject has no name; cannot check filename slug[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-injection-rule-0032.yaml\objects/rules/covert-injection-rule-0032.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m add a name: the file name is derived from it
+
+[1;33mwarning[esql_group_by_column][0m[1m: [0m[1msuppression.group_by `user.name` is not an output column of the ES|QL[0m
+  [1mquery (c, host.name); deploy rejects it[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-relay-rule-0307.yaml\objects/rules/covert-relay-rule-0307.yaml:51:7]8;;\
+[34m   [0m[34m│[0m
+[34m50 [0m[34m│[0m     suppression:
+[34m51 [0m[34m│[0m       group_by:
+[34m   [0m[34m│[0m       [1;33m━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
+
+[1;33mwarning[kql_unscoped_union][0m[1m: [0m[1munscoped `union` uses wildcard table `*` and reads every table; name[0m
+  [1mthe tables instead (https://learn.microsoft.com/en-us/kusto/query/best-practices)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-tunnel-rule-0170.yaml\objects/rules/covert-tunnel-rule-0170.yaml:49:13]8;;\
+[34m   [0m[34m│[0m
+[34m48 [0m[34m│[0m     query: |
+[34m49 [0m[34m│[0m       union [35m*[0m [1;35m|[0m take [33m1[0m
+[34m   [0m[34m│[0m             [1;33m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;33mwarning[eql_expression_depth][0m[1m: [0m[1mexpression nesting exceeds 250 levels (parentheses plus chained[0m
+  [1m`not`/`-`/`+`): Elasticsearch 8.19.17+, 9.3.5+, 9.4.3+, and 9.5 reject this query; earlier patches[0m
+  [1mand 9.0 to 9.2 accept it[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-tunnel-rule-0392.yaml\objects/rules/covert-tunnel-rule-0392.yaml:76:271]8;;\
+[34m   [0m[34m│[0m
+[34m75 [0m[34m│[0m     query: |
+[34m76 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m (((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((([33mtrue[0m))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+[34m   [0m[34m│[0m                                                                                                                                                                                                                                                                               [1;33m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;33mwarning[falco_unknown_source][0m[1m: [0m[1m`my_plugin` is not an event source the engine knows (`syscall`,[0m
+  [1m`k8s_audit`, `aws_cloudtrail`, `okta`, `github`, `gcp_auditlog`); its fields are not checked[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-beacon-rule-0256.yaml\objects/rules/elevated-beacon-rule-0256.yaml:68:5]8;;\
+[34m   [0m[34m│[0m
+[34m67 [0m[34m│[0m           container.id [35m!=[0m [32mhost[0m
+[34m68 [0m[34m│[0m     source: [32mmy_plugin[0m
+[34m   [0m[34m│[0m     [1;33m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: '2026-02-30' is not a valid date (day is out of[0m
+  [1mrange for month)[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-exfiltration-rule-0014.yaml\objects/rules/elevated-exfiltration-rule-0014.yaml:9:13]8;;\
+[34m  [0m[34m│[0m
+[34m8 [0m[34m│[0m   modified: 2026-03-12
+[34m9 [0m[34m│[0m   reviewed: 2026-02-30
+[34m  [0m[34m│[0m             [1;31m━━━━━━━━━━[0m
+
+[1;33mwarning[falco_unsafe_na_check][0m[1m: [0m[1mcomparing a `ka.` or `jevt.` field with `<NA>`: such a field may[0m
+  [1mhold the string `<NA>`, so the check does not tell a missing value apart[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-harvest-rule-0259.yaml\objects/rules/elevated-harvest-rule-0259.yaml:83:22]8;;\
+[34m   [0m[34m│[0m
+[34m82 [0m[34m│[0m     condition: |
+[34m83 [0m[34m│[0m       ka.user.name [35m=[0m [32m<NA>[0m
+[34m   [0m[34m│[0m                      [1;33m━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;33mwarning[spl_unknown_command][0m[1m: [0m[1m'frobnicate' is not a command opentide knows; an app on the search[0m
+  [1mhead may provide it (opentide cannot declare app commands yet)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-relay-rule-0107.yaml\objects/rules/elevated-relay-rule-0107.yaml:58:20]8;;\
+[34m   [0m[34m│[0m
+[34m57 [0m[34m│[0m     query: |
+[34m58 [0m[34m│[0m       index[35m=[0mmain [1;35m|[0m [31mfrobnicate[0m
+[34m   [0m[34m│[0m                    [1;33m━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+[1;33mwarning[esql_expression_depth][0m[1m: [0m[1mexpressions nest 310 deep; Elasticsearch 8.19.17+, 9.3.5+, 9.4.3+,[0m
+  [1mand 9.5 reject more than 300 (earlier releases allow 400)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-relay-rule-0242.yaml\objects/rules/elevated-relay-rule-0242.yaml:53:349]8;;\
+[34m   [0m[34m│[0m
+[34m52 [0m[34m│[0m     query: |
+[34m53 [0m[34m│[0m       [1;35mFROM[0m [96mlogs-*[0m [1;35mMETADATA[0m [33m_id[0m [1;35m|[0m [1;35mWHERE[0m (((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((([33mtrue[0m))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+[34m   [0m[34m│[0m                                                                                                                                                                                                                                                                                                                                                             [1;33m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
+
+[1;33mwarning[kql_deprecated_function][0m[1m: [0m[1m'any' is deprecated; use take_any()[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-tunnel-rule-0101.yaml\objects/rules/elevated-tunnel-rule-0101.yaml:53:19]8;;\
+[34m   [0m[34m│[0m
+[34m52 [0m[34m│[0m       [96mSecurityEvent[0m
+[34m53 [0m[34m│[0m       [1;35m|[0m [1;35msummarize[0m [36many[0m(Computer)
+[34m   [0m[34m│[0m                   [1;33m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'take_any'?
+
+[1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: did not find expected ',' or ']'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-beacon-rule-0034.yaml\objects/rules/encoded-beacon-rule-0034.yaml:83:1]8;;\
+  [34m╰─[0m [1;34mnote:[0m while parsing a flow sequence that starts at line 82, column 9
+
+[1;33mwarning[falco_field_as_value][0m[1m: [0m[1m'proc.pname' may be a valid field misused as a const string value:[0m
+  [1mcompare with val(proc.pname)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-downgrade-rule-0181.yaml\objects/rules/encoded-downgrade-rule-0181.yaml:83:39]8;;\
+[34m   [0m[34m│[0m
+[34m82 [0m[34m│[0m     condition: |
+[34m83 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.name [35m=[0m [32mproc.pname[0m
+[34m   [0m[34m│[0m                                       [1;33m━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;33mwarning[lucene_lowercase_operator][0m[1m: [0m[1m`and` is a search term in Lucene, not an operator; operators are[0m
+  [1mupper case (`AND`)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-dropper-rule-0294.yaml\objects/rules/encoded-dropper-rule-0294.yaml:44:28]8;;\
+[34m   [0m[34m│[0m
+[34m43 [0m[34m│[0m     query: |
+[34m44 [0m[34m│[0m       process.name[35m:[0m[32mcmd.exe[0m [32mand[0m user.name[35m:[0m[32mroot[0m
+[34m   [0m[34m│[0m                            [1;33m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: AND
+
+[1;33mwarning[falco_no_evttype][0m[1m: [0m[1mthe rule matches 454 event types: narrow it with `evt.type` (a macro such[0m
+  [1mas `spawned_process` or `open_write`). Falco and Sysdig warn: this has a significant performance[0m
+  [1mpenalty[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-injection-rule-0204.yaml\objects/rules/encoded-injection-rule-0204.yaml:57:7]8;;\
+[34m   [0m[34m│[0m
+[34m56 [0m[34m│[0m     condition: |
+[34m57 [0m[34m│[0m       proc.name [35m=[0m [32mbash[0m
+[34m   [0m[34m│[0m       [1;33m━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;33mwarning[lucene_range_operator][0m[1m: [0m[1m`event.code:>` needs its value without a space (`event.code:>10`);[0m
+  [1mas written, Elasticsearch searches `event.code` for the text `>` and the next word in every field[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-spray-rule-0359.yaml\objects/rules/encoded-spray-rule-0359.yaml:53:18]8;;\
+[34m   [0m[34m│[0m
+[34m52 [0m[34m│[0m     query: |
+[34m53 [0m[34m│[0m       event.code[35m:[0m[32m>[0m [32m10[0m
+[34m   [0m[34m│[0m                  [1;33m━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: >10
+
+[1;33mwarning[technique_not_enterprise][0m[1m: [0m[1mT1626 (Mobile : Abuse Elevation Control Mechanism) is not[0m
+  [1mEnterprise ATT&CK; Elastic deploy skips it from the rule's threat mapping[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-tunnel-rule-0047.yaml\objects/rules/encoded-tunnel-rule-0047.yaml:20:1]8;;\
+[34m   [0m[34m│[0m
+[34m19 [0m[34m│[0m severity: Low
+[34m20 [0m[34m│[0m techniques:
+[34m   [0m[34m│[0m [1;33m━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m opentide explain technique_not_enterprise describes it
+
+[1;33mwarning[lucene_escape][0m[1m: [0m[1mLucene drops a single backslash: `\W` searches `W`. Write `\\` for a literal[0m
+  [1mbackslash[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-tunnel-rule-0164.yaml\objects/rules/encoded-tunnel-rule-0164.yaml:42:31]8;;\
+[34m   [0m[34m│[0m
+[34m41 [0m[34m│[0m     query: |
+[34m42 [0m[34m│[0m       process.command_line[35m:[0m[32m"C:\Windows"[0m
+[34m   [0m[34m│[0m                               [1;33m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: \\W
+
+[1;33mwarning[falco_deprecated_field][0m[1m: [0m[1m`evt.dir` is deprecated: due to the drop of enter events, 'evt.dir[0m
+  [1m= <' always evaluates to true, and 'evt.dir = >' always evaluates to false. The rule expression[0m
+  [1mcan be simplified by removing the condition on 'evt.dir'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-tunnel-rule-0178.yaml\objects/rules/encoded-tunnel-rule-0178.yaml:37:27]8;;\
+[34m   [0m[34m│[0m
+[34m36 [0m[34m│[0m     condition: |
+[34m37 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m evt.dir [35m=[0m [32m<[0m
+[34m   [0m[34m│[0m                           [1;33m━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;33mwarning[lucene_kuery_syntax][0m[1m: [0m[1m`process.pid >=` is KQL; Lucene searches `>=` as a term. Write[0m
+  [1m`process.pid:>=value`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-downgrade-rule-0229.yaml\objects/rules/hidden-downgrade-rule-0229.yaml:55:19]8;;\
+[34m   [0m[34m│[0m
+[34m54 [0m[34m│[0m     query: |
+[34m55 [0m[34m│[0m       [32mprocess.pid[0m [32m>=[0m [32m10[0m
+[34m   [0m[34m│[0m                   [1;33m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Lucene query string reference:
+   [34m [0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
+   [34m [0m        query-dsl-query-string-query
+
+[1;33mwarning[lucene_unescaped_slash][0m[1m: [0m[1m`/var/` is read as a regular expression because `/` is unescaped,[0m
+  [1mso the value splits into separate clauses; escape the slashes (`\/`) or quote the value[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-exfiltration-rule-0470.yaml\objects/rules/hidden-exfiltration-rule-0470.yaml:55:17]8;;\
+[34m   [0m[34m│[0m
+[34m54 [0m[34m│[0m     query: |
+[34m55 [0m[34m│[0m       file.path[35m:[0m[32m/var/[0m[32mlog[0m [1;35mAND[0m process.pid[35m:[0m[32m1[0m
+[34m   [0m[34m│[0m                 [1;33m━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Lucene query string reference:
+   [34m [0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
+   [34m [0m        query-dsl-query-string-query
+
+[1;33mwarning[threshold_lookback][0m[1m: [0m[1mthreshold rule's lookback exceeds its interval (5m): threshold counts[0m
+  [1mare not de-duplicated across overlapping runs[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-harvest-rule-0060.yaml\objects/rules/hidden-harvest-rule-0060.yaml:62:7]8;;\
+[34m   [0m[34m│[0m
+[34m61 [0m[34m│[0m       interval: "5m"
+[34m62 [0m[34m│[0m       lookback: "10m"
+[34m   [0m[34m│[0m       [1;33m━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m opentide explain threshold_lookback describes it
+
+[1;33mwarning[falco_regex_simple][0m[1m: [0m[1mregex check with 'bash' may be optimized with simpler operators such as[0m
+  [1m'=', 'contains', 'startswith', 'endswith'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-harvest-rule-0217.yaml\objects/rules/hidden-harvest-rule-0217.yaml:57:43]8;;\
+[34m   [0m[34m│[0m
+[34m56 [0m[34m│[0m     condition: |
+[34m57 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.name [35mregex[0m [32mbash[0m
+[34m   [0m[34m│[0m                                           [1;33m━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;33mwarning[kuery_lucene_syntax][0m[1m: [0m[1m`[a TO b]` is a Lucene range; KQL searches it as text. Use `field >= a[0m
+  [1mand field <= b`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-injection-rule-0268.yaml\objects/rules/hidden-injection-rule-0268.yaml:57:13]8;;\
+[34m   [0m[34m│[0m
+[34m56 [0m[34m│[0m     query: |
+[34m57 [0m[34m│[0m       bytes[35m:[0m[32m[100[0m [32mTO[0m [32m200][0m
+[34m   [0m[34m│[0m             [1;33m━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql
+
+[1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: found a tab character that violates indentation[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-loader-rule-0024.yaml\objects/rules/hidden-loader-rule-0024.yaml:45:1]8;;\
+[34m   [0m[34m│[0m
+[34m44 [0m[34m│[0m       condition: count() >= 3
+[34m45 [0m[34m│[0m    indent: tab
+[34m   [0m[34m│[0m [1;31m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;34mnote:[0m while scanning a plain scalar that starts at line 44, column 18
+
+[1;33mwarning[risk_band][0m[1m: [0m[1mrisk score 90 is outside Kibana's low band (0–21) for alert severity low[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-tunnel-rule-0528.yaml\objects/rules/hidden-tunnel-rule-0528.yaml:67:5]8;;\
+[34m   [0m[34m│[0m
+[34m66 [0m[34m│[0m           severity: high
+[34m67 [0m[34m│[0m     risk: 90
+[34m   [0m[34m│[0m     [1;33m━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m opentide explain risk_band describes it
+
+[1;33mwarning[lucene_mixed_operators][0m[1m: [0m[1mLucene has no AND/OR precedence (`a OR b AND c` means `a +b +c`);[0m
+  [1madd parentheses[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-downgrade-rule-0340.yaml\objects/rules/lateral-downgrade-rule-0340.yaml:79:22]8;;\
+[34m   [0m[34m│[0m
+[34m78 [0m[34m│[0m     query: |
+[34m79 [0m[34m│[0m       process.name[35m:[0m[32ma[0m [1;35mOR[0m process.name[35m:[0m[32mb[0m [1;35mAND[0m user.name[35m:[0m[32mc[0m
+[34m   [0m[34m│[0m                      [1;33m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Lucene query string reference:
+   [34m [0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
+   [34m [0m        query-dsl-query-string-query
+
+[1;33mwarning[kql_where_not_first][0m[1m: [0m[1m`where` is not the first operator after the table reference; filter[0m
+  [1mbefore later operators (https://learn.microsoft.com/en-us/kusto/query/best-practices)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-dropper-rule-0144.yaml\objects/rules/lateral-dropper-rule-0144.yaml:52:9]8;;\
+[34m   [0m[34m│[0m
+[34m51 [0m[34m│[0m       [1;35m|[0m [1;35mextend[0m Computer [35m=[0m [36mtolower[0m(Computer)
+[34m52 [0m[34m│[0m       [1;35m|[0m [1;35mwhere[0m EventID [35m==[0m [33m4688[0m
+[34m   [0m[34m│[0m         [1;33m━━━━━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;33mwarning[eql_regex][0m[1m: [0m[1mEQL regex (Lucene syntax) has no inline flags or `(?...)` groups: `(?i)` matches[0m
+  [1mthe text `?i`. Use `regex~` for a case-insensitive match[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-exfiltration-rule-0606.yaml\objects/rules/lateral-exfiltration-rule-0606.yaml:49:40]8;;\
+[34m   [0m[34m│[0m
+[34m48 [0m[34m│[0m     query: |
+[34m49 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m process.name [35mregex[0m [32m"(?i)cmd"[0m
+[34m   [0m[34m│[0m                                        [1;33m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;33mwarning[eql_nested_comment][0m[1m: [0m[1mElasticsearch nests block comments, so this comment runs past its first[0m
+  [1m`*/`; other EQL tools end it there. Avoid `/*` inside a comment[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-pivot-rule-0587.yaml\objects/rules/lateral-pivot-rule-0587.yaml:57:21]8;;\
+[34m   [0m[34m│[0m
+[34m56 [0m[34m│[0m     query: |
+[34m57 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m [2m/* outer /* inner */ still comment */[0m [33mtrue[0m
+[34m   [0m[34m│[0m                     [1;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;33mwarning[eql_runs_ignored][0m[1m: [0m[1mElasticsearch ignores a decimal `runs` value: [2.5] runs the query once;[0m
+  [1muse an integer from 1 to 100[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-spray-rule-0652.yaml\objects/rules/lateral-spray-rule-0652.yaml:67:53]8;;\
+[34m   [0m[34m│[0m
+[34m66 [0m[34m│[0m     query: |
+[34m67 [0m[34m│[0m       [1;35msequence[0m [1;35mwith[0m [1;35mmaxspan[0m[35m=[0m[33m1[0m[33mm[0m [[96mprocess[0m [1;35mwhere[0m [33mtrue[0m] [1;35mwith[0m [1;35mruns[0m[35m=[0m[33m2.5[0m [[96mfile[0m [1;35mwhere[0m [33mtrue[0m]
+[34m   [0m[34m│[0m                                                     [1;33m━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;33mwarning[nested_object_file][0m[1m: [0m[1mobjects/rules/nested/encoded-spray-rule-0017.yaml is in a subfolder of[0m
+  [1mobjects/rules and is not an object instance: it is not indexed, validated, shared, documented or[0m
+  [1mdeployed (opentide reads only files directly in objects/rules; see[0m
+  [1mhttps://github.com/opentidehq/opentide/issues/584)[0m
+  [34m╰─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/nested/encoded-spray-rule-0017.yaml\objects/rules/nested/encoded-spray-rule-0017.yaml]8;;\
+
+[1;33mwarning[spl_dataset_not_declared][0m[1m: [0m[1msourcetype `linux_secure` is not declared: no Splunk log source[0m
+  [1min visibility.toml names it[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/persistent-beacon-rule-0121.yaml\objects/rules/persistent-beacon-rule-0121.yaml:59:18]8;;\
+[34m   [0m[34m│[0m
+[34m58 [0m[34m│[0m     query: |
+[34m59 [0m[34m│[0m       sourcetype[35m=[0mlinux_secure [1;35m|[0m [1;35mhead[0m [33m1[0m
+[34m   [0m[34m│[0m                  [1;33m━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m opentide explain spl_dataset_not_declared describes it
+
+[1;33mwarning[falco_unknown_macro][0m[1m: [0m[1m`my_private_macro` is not a macro of this block or of the Falco[0m
+  [1mdefault rules; the tenant must define it[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/persistent-beacon-rule-0233.yaml\objects/rules/persistent-beacon-rule-0233.yaml:87:27]8;;\
+[34m   [0m[34m│[0m
+[34m86 [0m[34m│[0m     condition: |
+[34m87 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m [36mmy_private_macro[0m
+[34m   [0m[34m│[0m                           [1;33m━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;33mwarning[falco_newer_syntax][0m[1m: [0m[1mthe `anyof` operator modifier needs libsinsp 0.25.0 or later: an older[0m
+  [1mFalco or Sysdig agent refuses the rule[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/persistent-loader-rule-0191.yaml\objects/rules/persistent-loader-rule-0191.yaml:46:37]8;;\
+[34m   [0m[34m│[0m
+[34m45 [0m[34m│[0m     condition: |
+[34m46 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.name [35m=[0m [1;35manyof[0m ([32mbash[0m, [32msh[0m)
+[34m   [0m[34m│[0m                                     [1;33m━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;33mwarning[lookback_zero][0m[1m: [0m[1mscheduling.lookback is zero: the next run starts as this window ends, so[0m
+  [1mlate events are missed; Elastic recommends at least 1m[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-beacon-rule-0509.yaml\objects/rules/rapid-beacon-rule-0509.yaml:67:7]8;;\
+[34m   [0m[34m│[0m
+[34m66 [0m[34m│[0m       interval: "5m"
+[34m67 [0m[34m│[0m       lookback: "0m"
+[34m   [0m[34m│[0m       [1;33m━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m opentide explain lookback_zero describes it
+
+[1;33mwarning[spl_empty_stage][0m[1m: [0m[1mempty pipeline stage: Splunk ignores a trailing `|`; remove it or add the[0m
+  [1mcommand[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rapid-implant-rule-0083.yaml\objects/rules/rapid-implant-rule-0083.yaml:70:27]8;;\
+[34m   [0m[34m│[0m
+[34m69 [0m[34m│[0m     query: |
+[34m70 [0m[34m│[0m       index[35m=[0mmain [1;35m|[0m [1;35mhead[0m [33m1[0m [1;35m|[0m
+[34m   [0m[34m│[0m                           [1;33m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+[1;33mwarning[esql_metadata_id][0m[1m: [0m[1mnon-aggregating ES|QL query lacks `METADATA _id`; before 9.4 Elastic[0m
+  [1mSecurity cannot de-duplicate its alerts (9.4 and later add it)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-downgrade-rule-0353.yaml\objects/rules/remote-downgrade-rule-0353.yaml:75:7]8;;\
+[34m   [0m[34m│[0m
+[34m74 [0m[34m│[0m     query: |
+[34m75 [0m[34m│[0m       [1;35mFROM[0m [96mlogs-*[0m [1;35m|[0m [1;35mWHERE[0m process.name [35m==[0m [32m"x"[0m
+[34m   [0m[34m│[0m       [1;33m━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: METADATA _id, _version, _index
+
+[1;33mwarning[kql_unscoped_union][0m[1m: [0m[1munscoped `union` uses wildcard table `*` and reads every table; name[0m
+  [1mthe tables instead (https://learn.microsoft.com/en-us/kusto/query/best-practices)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-dropper-rule-0140.yaml\objects/rules/remote-dropper-rule-0140.yaml:75:13]8;;\
+[34m   [0m[34m│[0m
+[34m74 [0m[34m│[0m     query: |
+[34m75 [0m[34m│[0m       union [35m*[0m [1;35m|[0m take [33m1[0m
+[34m   [0m[34m│[0m             [1;33m━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;33mwarning[falco_transformer_as_value][0m[1m: [0m[1m'tolower(x)' may be a valid field transformer misused as a[0m
+  [1mconst string value[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-injection-rule-0220.yaml\objects/rules/remote-injection-rule-0220.yaml:51:39]8;;\
+[34m   [0m[34m│[0m
+[34m50 [0m[34m│[0m     condition: |
+[34m51 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.name [35m=[0m [32m"tolower(x)"[0m
+[34m   [0m[34m│[0m                                       [1;33m━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;33mwarning[ecs_unknown_field][0m[1m: [0m[1m`process.nmae` is not an ECS v9.5.0 field; did you mean `process.name`?[0m
+  [1m(ECS allows custom fields, so this is a warning)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-loader-rule-0398.yaml\objects/rules/remote-loader-rule-0398.yaml:61:7]8;;\
+[34m   [0m[34m│[0m
+[34m60 [0m[34m│[0m     query: |
+[34m61 [0m[34m│[0m       process.nmae[35m:[0m [32mx[0m
+[34m   [0m[34m│[0m       [1;33m━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: process.name
+
+[1;33mwarning[kql_deprecated_operator][0m[1m: [0m[1m'containscs' is a legacy spelling; use contains_cs[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-pivot-rule-0105.yaml\objects/rules/remote-pivot-rule-0105.yaml:44:24]8;;\
+[34m   [0m[34m│[0m
+[34m43 [0m[34m│[0m       [96mSecurityEvent[0m
+[34m44 [0m[34m│[0m       [1;35m|[0m [1;35mwhere[0m Computer [35mcontainscs[0m [32m'a'[0m
+[34m   [0m[34m│[0m                        [1;33m━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: contains_cs
+
+[1;33mwarning[eql_maxspan_window][0m[1m: [0m[1mEQL maxspan exceeds the rule window, interval + lookback (10m + 1m);[0m
+  [1mthe sequence cannot fit one run[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-tunnel-rule-0541.yaml\objects/rules/remote-tunnel-rule-0541.yaml:51:29]8;;\
+[34m   [0m[34m│[0m
+[34m50 [0m[34m│[0m     query: |
+[34m51 [0m[34m│[0m       [1;35msequence[0m [1;35mwith[0m [1;35mmaxspan[0m[35m=[0m[33m1[0m[33mh[0m [[96mprocess[0m [1;35mwhere[0m [33mtrue[0m] [[96mfile[0m [1;35mwhere[0m [33mtrue[0m]
+[34m   [0m[34m│[0m                             [1;33m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'renamed-1.yaml' does not match[0m
+  [1mslugify(name)='covert-implant-rule-0028'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/renamed-1.yaml\objects/rules/renamed-1.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/rules/covert-implant-rule-0028.yaml
+
+[1;33mwarning[falco_unknown_list][0m[1m: [0m[1m`nope_list` is not a list of this block or of the Falco default rules:[0m
+  [1mit is compared as the single value 'nope_list'[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-beacon-rule-0230.yaml\objects/rules/rogue-beacon-rule-0230.yaml:46:40]8;;\
+[34m   [0m[34m│[0m
+[34m45 [0m[34m│[0m     condition: |
+[34m46 [0m[34m│[0m       [36mspawned_process[0m [1;35mand[0m proc.name [1;35min[0m nope_list
+[34m   [0m[34m│[0m                                        [1;33m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;33mwarning[elastic_dataset_not_declared][0m[1m: [0m[1mindex pattern `winlogbeat-*` is not declared: no elastic log[0m
+  [1msource in visibility.toml names it or a pattern that covers it[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-beacon-rule-0574.yaml\objects/rules/rogue-beacon-rule-0574.yaml:77:9]8;;\
+[34m   [0m[34m│[0m
+[34m76 [0m[34m│[0m     index:
+[34m77 [0m[34m│[0m       - winlogbeat-*
+[34m   [0m[34m│[0m         [1;33m━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m opentide explain elastic_dataset_not_declared describes it
+
+[1;33mwarning[lucene_regexp][0m[1m: [0m[1mLucene regular expressions have no `(?…)` groups or flags: `(?:` matches the[0m
+  [1mtext `?:` and `(?i)` the text `?i`; drop the `?…` part[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-downgrade-rule-0424.yaml\objects/rules/rogue-downgrade-rule-0424.yaml:58:21]8;;\
+[34m   [0m[34m│[0m
+[34m57 [0m[34m│[0m     query: |
+[34m58 [0m[34m│[0m       process.name[35m:[0m[32m/(?i)cmd.*/[0m
+[34m   [0m[34m│[0m                     [1;33m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Lucene query string reference:
+   [34m [0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
+   [34m [0m        query-dsl-query-string-query
+
+[1;33mwarning[spl_subsearch_truncation][0m[1m: [0m[1m`join` silently truncates at 50,000 events or 60 seconds without[0m
+  [1man error (https://docs.splunk.com/Documentation/Splunk/latest/Search/Aboutsubsearches)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-dropper-rule-0095.yaml\objects/rules/rogue-dropper-rule-0095.yaml:73:20]8;;\
+[34m   [0m[34m│[0m
+[34m72 [0m[34m│[0m     query: |
+[34m73 [0m[34m│[0m       index[35m=[0mmain [1;35m|[0m [1;35mjoin[0m host [[1;35msearch[0m index[35m=[0mother]
+[34m   [0m[34m│[0m                    [1;33m━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+[1;33mwarning[kql_join_summarize_before_project][0m[1m: [0m[1m`join` runs before `project` narrows columns; project[0m
+  [1mthe needed columns first (https://learn.microsoft.com/en-us/kusto/query/best-practices)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-dropper-rule-0118.yaml\objects/rules/rogue-dropper-rule-0118.yaml:45:9]8;;\
+[34m   [0m[34m│[0m
+[34m44 [0m[34m│[0m       [96mSecurityEvent[0m
+[34m45 [0m[34m│[0m       [1;35m|[0m [1;35mjoin[0m [1;35mkind[0m[35m=[0m[1;35minner[0m ([96mSigninLogs[0m) [1;35mon[0m $left.Account [35m==[0m $right.UserPrincipalName
+[34m   [0m[34m│[0m         [1;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;33mwarning[eql_until_term][0m[1m: [0m[1ma missing event (`![`) as the `until` term parses, but Elasticsearch[0m
+  [1mdocuments no behaviour for it; use `[`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-injection-rule-0671.yaml\objects/rules/rogue-injection-rule-0671.yaml:60:77]8;;\
+[34m   [0m[34m│[0m
+[34m59 [0m[34m│[0m     query: |
+[34m60 [0m[34m│[0m       [1;35msequence[0m [1;35mwith[0m [1;35mmaxspan[0m[35m=[0m[33m1[0m[33mm[0m [[96mprocess[0m [1;35mwhere[0m [33mtrue[0m] [[96mfile[0m [1;35mwhere[0m [33mtrue[0m] [1;35muntil[0m [35m![[0m[96mnetwork[0m [1;35mwhere[0m [33mtrue[0m]
+[34m   [0m[34m│[0m                                                                             [1;33m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;33mwarning[eql_maxspan_lookback][0m[1m: [0m[1mEQL maxspan exceeds scheduling.lookback (1m); a sequence that[0m
+  [1mstraddles two runs is missed[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-pivot-rule-0457.yaml\objects/rules/rogue-pivot-rule-0457.yaml:68:29]8;;\
+[34m   [0m[34m│[0m
+[34m67 [0m[34m│[0m     query: |
+[34m68 [0m[34m│[0m       [1;35msequence[0m [1;35mwith[0m [1;35mmaxspan[0m[35m=[0m[33m3[0m[33mm[0m [[96mprocess[0m [1;35mwhere[0m [33mtrue[0m] [[96mfile[0m [1;35mwhere[0m [33mtrue[0m]
+[34m   [0m[34m│[0m                             [1;33m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+[1;33mwarning[lookback_long][0m[1m: [0m[1mscheduling.lookback exceeds 1h: in Elastic it is overlap added to interval,[0m
+  [1mnot the whole query window as in Sentinel[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-pivot-rule-0463.yaml\objects/rules/rogue-pivot-rule-0463.yaml:60:7]8;;\
+[34m   [0m[34m│[0m
+[34m59 [0m[34m│[0m       interval: "5m"
+[34m60 [0m[34m│[0m       lookback: "2h"
+[34m   [0m[34m│[0m       [1;33m━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m opentide explain lookback_long describes it
+
+[1;33mwarning[eql_literal_wildcard][0m[1m: [0m[1m`==` matches `*` literally; use `like` for a wildcard[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-spray-rule-0411.yaml\objects/rules/rogue-spray-rule-0411.yaml:53:37]8;;\
+[34m   [0m[34m│[0m
+[34m52 [0m[34m│[0m     query: |
+[34m53 [0m[34m│[0m       [96mprocess[0m [1;35mwhere[0m process.name [35m==[0m [32m"*.exe"[0m
+[34m   [0m[34m│[0m                                     [1;33m━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: like
+
+[1;33mwarning[spl_wildcard][0m[1m: [0m[1mleading wildcard `*fail` cannot use the term index; a trailing `fail*` is[0m
+  [1mfine (https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-tunnel-rule-0120.yaml\objects/rules/rogue-tunnel-rule-0120.yaml:64:7]8;;\
+[34m   [0m[34m│[0m
+[34m63 [0m[34m│[0m     query: |
+[34m64 [0m[34m│[0m       *fail
+[34m   [0m[34m│[0m       [1;33m━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+[1;33mwarning[kql_table_not_declared][0m[1m: [0m[1m'AuditLogs' is not a table the workspace declares for sentinel in[0m
+  [1mvisibility.toml[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-tunnel-rule-0166.yaml\objects/rules/rogue-tunnel-rule-0166.yaml:61:7]8;;\
+[34m   [0m[34m│[0m
+[34m60 [0m[34m│[0m     query: |
+[34m61 [0m[34m│[0m       [96mAuditLogs[0m
+[34m   [0m[34m│[0m       [1;33m━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m opentide explain kql_table_not_declared describes it
+
+[1;33mwarning[eql_case_sensitive][0m[1m: [0m[1mevent category `PROCESS` is compared case-sensitively; ECS categories[0m
+  [1mare lower case[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/rogue-tunnel-rule-0346.yaml\objects/rules/rogue-tunnel-rule-0346.yaml:49:7]8;;\
+[34m   [0m[34m│[0m
+[34m48 [0m[34m│[0m     query: |
+[34m49 [0m[34m│[0m       [96mPROCESS[0m [1;35mwhere[0m [33mtrue[0m
+[34m   [0m[34m│[0m       [1;33m━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: process
+
+[1;33mwarning[kql_render_not_valid][0m[1m: [0m[1m`render` is not valid in detection queries[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-beacon-rule-0127.yaml\objects/rules/scheduled-beacon-rule-0127.yaml:65:9]8;;\
+[34m   [0m[34m│[0m
+[34m64 [0m[34m│[0m       [96mSecurityEvent[0m
+[34m65 [0m[34m│[0m       [1;35m|[0m [1;35mrender[0m [36mtable[0m
+[34m   [0m[34m│[0m         [1;33m━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;33mwarning[kuery_escape][0m[1m: [0m[1mKibana turns `\t` inside quotes into a control character; write `\\t` for a[0m
+  [1mbackslash[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-dropper-rule-0138.yaml\objects/rules/scheduled-dropper-rule-0138.yaml:56:31]8;;\
+[34m   [0m[34m│[0m
+[34m55 [0m[34m│[0m     query: |
+[34m56 [0m[34m│[0m       process.command_line[35m:[0m[32m"C:\temp\x"[0m
+[34m   [0m[34m│[0m                               [1;33m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: \\t
+
+[1;33mwarning[kuery_lucene_syntax][0m[1m: [0m[1m`_exists_:field` is Lucene; in KQL write `field:*`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-dropper-rule-0203.yaml\objects/rules/scheduled-dropper-rule-0203.yaml:48:7]8;;\
+[34m   [0m[34m│[0m
+[34m47 [0m[34m│[0m     query: |
+[34m48 [0m[34m│[0m       _exists_[35m:[0m[32mhost.name[0m [1;35mAND[0m bytes[35m:[0m[32m[100[0m [32mTO[0m [32m200][0m
+[34m   [0m[34m│[0m       [1;33m━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql
+
+[1;33mwarning[kuery_looks_like_lucene][0m[1m: [0m[1mthis query reads like Lucene (`_exists_`, ranges); if it is an[0m
+  [1mElastic rule, set `language: lucene`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-dropper-rule-0203.yaml\objects/rules/scheduled-dropper-rule-0203.yaml:48:7]8;;\
+[34m   [0m[34m│[0m
+[34m47 [0m[34m│[0m     query: |
+[34m48 [0m[34m│[0m       _exists_[35m:[0m[32mhost.name[0m [1;35mAND[0m bytes[35m:[0m[32m[100[0m [32mTO[0m [32m200][0m
+[34m   [0m[34m│[0m       [1;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql
+
+[1;33mwarning[kuery_lucene_syntax][0m[1m: [0m[1m`[a TO b]` is a Lucene range; KQL searches it as text. Use `field >= a[0m
+  [1mand field <= b`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-dropper-rule-0203.yaml\objects/rules/scheduled-dropper-rule-0203.yaml:48:36]8;;\
+[34m   [0m[34m│[0m
+[34m47 [0m[34m│[0m     query: |
+[34m48 [0m[34m│[0m       _exists_[35m:[0m[32mhost.name[0m [1;35mAND[0m bytes[35m:[0m[32m[100[0m [32mTO[0m [32m200][0m
+[34m   [0m[34m│[0m                                    [1;33m━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql
+
+[1;33mwarning[falco_unknown_rule][0m[1m: [0m[1m`No such rule` is not a rule of the Falco default rules: Falco refuses[0m
+  [1mto append to it, and on Sysdig it must be a rule the tenant has[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-relay-rule-0243.yaml\objects/rules/scheduled-relay-rule-0243.yaml:52:5]8;;\
+[34m   [0m[34m│[0m
+[34m51 [0m[34m│[0m     priority: [32mERROR[0m
+[34m52 [0m[34m│[0m     append_to_rule: [32mNo such rule[0m
+[34m   [0m[34m│[0m     [1;33m━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;33mwarning[lucene_elasticsearch_only][0m[1m: [0m[1m`_exists_:field` is Elasticsearch syntax; Carbon Black searches[0m
+  [1ma field named `_exists_`. Use `field:*`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-spray-rule-0037.yaml\objects/rules/scheduled-spray-rule-0037.yaml:57:7]8;;\
+[34m   [0m[34m│[0m
+[34m56 [0m[34m│[0m     query: |
+[34m57 [0m[34m│[0m       _exists_[35m:[0m[32mprocess_name[0m
+[34m   [0m[34m│[0m       [1;33m━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Lucene query string reference:
+   [34m [0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
+   [34m [0m        query-dsl-query-string-query
+
+[1;33mwarning[sysdig_list_self_reference][0m[1m: [0m[1mlist `corpus_shells_35` names itself: Falco keeps[0m
+  [1m`corpus_shells_35` as a literal item, which on Sysdig resolves against a tenant list of that name,[0m
+  [1mnot this one[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-tunnel-rule-0269.yaml\objects/rules/scheduled-tunnel-rule-0269.yaml:63:9]8;;\
+[34m   [0m[34m│[0m
+[34m62 [0m[34m│[0m       - name: corpus_shells_35
+[34m63 [0m[34m│[0m         items:
+[34m   [0m[34m│[0m         [1;33m━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m opentide explain sysdig_list_self_reference describes it
+
+[1;33mwarning[placeholder][0m[1m: [0m[1mauthor holds a placeholder value written by opentide new[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-exfiltration-rule-0033.yaml\objects/rules/silent-exfiltration-rule-0033.yaml:10:11]8;;\
+[34m   [0m[34m│[0m
+[34m 9 [0m[34m│[0m   tlp: red
+[34m10 [0m[34m│[0m   author: Corpus Generator  # opentide:placeholder
+[34m   [0m[34m│[0m           [1;33m━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m replace the value, then delete the '# opentide:placeholder' comment
+
+[1;33mwarning[falco_output_syntax][0m[1m: [0m[1munknown filter: `%proc.name)` is not a field or a transformer[0m
+  [1m(libsinsp)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-pivot-rule-0025.yaml\objects/rules/silent-pivot-rule-0025.yaml:83:53]8;;\
+[34m   [0m[34m│[0m
+[34m82 [0m[34m│[0m           - [32mksh[0m
+[34m83 [0m[34m│[0m     output: Shell spawned in a container (proc.name=%proc.name)
+[34m   [0m[34m│[0m                                                     [1;33m━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;33mwarning[falco_unknown_source][0m[1m: [0m[1m`not a source!` is not an event source the engine knows (`syscall`,[0m
+  [1m`k8s_audit`, `aws_cloudtrail`, `okta`, `github`, `gcp_auditlog`); its fields are not checked[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-pivot-rule-0025.yaml\objects/rules/silent-pivot-rule-0025.yaml:88:5]8;;\
+[34m   [0m[34m│[0m
+[34m87 [0m[34m│[0m       - [32mshell[0m
+[34m88 [0m[34m│[0m     source: [32mnot a source![0m
+[34m   [0m[34m│[0m     [1;33m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+[1;33mwarning[lucene_looks_like_kuery][0m[1m: [0m[1mthis query reads like Kibana KQL (lower-case `and`/`or`/`not`[0m
+  [1moperators, `field >= value` ranges); if it is an Elastic rule, set `language: kuery`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-tunnel-rule-0275.yaml\objects/rules/silent-tunnel-rule-0275.yaml:59:7]8;;\
+[34m   [0m[34m│[0m
+[34m58 [0m[34m│[0m     query: |
+[34m59 [0m[34m│[0m       process.name[35m:[0m[32mcmd.exe[0m [32mand[0m [32mevent.code[0m [32m>=[0m [32m4624[0m
+[34m   [0m[34m│[0m       [1;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Lucene query string reference:
+   [34m [0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
+   [34m [0m        query-dsl-query-string-query
+
+[1;33mwarning[lucene_lowercase_operator][0m[1m: [0m[1m`and` is a search term in Lucene, not an operator; operators are[0m
+  [1mupper case (`AND`)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-tunnel-rule-0275.yaml\objects/rules/silent-tunnel-rule-0275.yaml:59:28]8;;\
+[34m   [0m[34m│[0m
+[34m58 [0m[34m│[0m     query: |
+[34m59 [0m[34m│[0m       process.name[35m:[0m[32mcmd.exe[0m [32mand[0m [32mevent.code[0m [32m>=[0m [32m4624[0m
+[34m   [0m[34m│[0m                            [1;33m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m try: AND
+
+[1;33mwarning[lucene_kuery_syntax][0m[1m: [0m[1m`event.code >=` is KQL; Lucene searches `>=` as a term. Write[0m
+  [1m`event.code:>=value`[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-tunnel-rule-0275.yaml\objects/rules/silent-tunnel-rule-0275.yaml:59:43]8;;\
+[34m   [0m[34m│[0m
+[34m58 [0m[34m│[0m     query: |
+[34m59 [0m[34m│[0m       process.name[35m:[0m[32mcmd.exe[0m [32mand[0m [32mevent.code[0m [32m>=[0m [32m4624[0m
+[34m   [0m[34m│[0m                                           [1;33m━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the Lucene query string reference:
+   [34m [0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
+   [34m [0m        query-dsl-query-string-query
+
+[1;33mwarning[spl_leading_not][0m[1m: [0m[1mleading `NOT` used as the search filter scans events before excluding them[0m
+  [1m(https://docs.splunk.com/Documentation/Splunk/latest/Search/Booleanexpressions)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-beacon-rule-0094.yaml\objects/rules/staged-beacon-rule-0094.yaml:40:7]8;;\
+[34m   [0m[34m│[0m
+[34m39 [0m[34m│[0m     query: |
+[34m40 [0m[34m│[0m       [35mNOT[0m host[35m=[0ma index[35m=[0mmain
+[34m   [0m[34m│[0m       [1;33m━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+[1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: did not find expected ',' or ']'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-exfiltration-rule-0021.yaml\objects/rules/staged-exfiltration-rule-0021.yaml:72:1]8;;\
+  [34m╰─[0m [1;34mnote:[0m while parsing a flow sequence that starts at line 71, column 9
+
+[1;33mwarning[kql_unscoped_search][0m[1m: [0m[1munscoped `search` reads every table; scope it with `in (Table, ...)`[0m
+  [1mor start from a table (https://learn.microsoft.com/en-us/kusto/query/best-practices)[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-pivot-rule-0131.yaml\objects/rules/staged-pivot-rule-0131.yaml:36:7]8;;\
+[34m   [0m[34m│[0m
+[34m35 [0m[34m│[0m     query: |
+[34m36 [0m[34m│[0m       search [32m"error"[0m
+[34m   [0m[34m│[0m       [1;33m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
+
+[1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: expected a mapping at the top of the file, found an[0m
+  [1mempty file[0m
+  [34m╰─▶[0m ]8;id=<ID>;file://<WS>/objects/threats/encoded-exfiltration-threat-0030.yaml\objects/threats/encoded-exfiltration-threat-0030.yaml]8;;\
+
+[1;33mwarning[filename_mismatch][0m[1m: [0m[1mFilename 'hidden-downgrade-threat-0005-v2.yaml' does not match[0m
+  [1mslugify(name)='hidden-downgrade-threat-0005'[0m
+  [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/threats/hidden-downgrade-threat-0005-v2.yaml\objects/threats/hidden-downgrade-threat-0005-v2.yaml]8;;\
+  [34m╰─[0m [1;36mhelp:[0m rename it to objects/threats/hidden-downgrade-threat-0005.yaml
+
+[1;33m![0m 86 findings in 80 files · 6 errors, 70 warnings, 10 notes
+[1;36m→[0m [1mopentide lint --fix[0m[2m · [0m[2mrename 2 files to match their names[0m
+[1;36m→[0m [1mopentide lint --format codequality --output opentide-reports/lint.codequality.json --verbose[0m[2m ·[0m
+  [2mshow 10 notes, such as a missing optional field[0m

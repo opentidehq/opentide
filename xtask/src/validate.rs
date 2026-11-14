@@ -86,8 +86,9 @@ pub const APPROVED: &[Approved] = &[
         id: "yaml-error-text",
         reason: "a file that is not YAML is reported in the words of the YAML 1.2 parser \
                  (saphyr), at the line and column the oracle names (one column later where \
-                 saphyr names the tab it refuses); the code, the file and the help are the \
-                 same (as in `cargo xtask registry diff`)",
+                 saphyr names the tab it refuses, or at the plain scalar a tab interrupts, \
+                 where the oracle named the tab's line); the code, the file and the help are \
+                 the same (as in `cargo xtask registry diff`)",
         changelog: "**Tide objects are read as YAML 1.2**",
         applies: yaml_error_text,
     },
@@ -129,38 +130,12 @@ pub const APPROVED: &[Approved] = &[
         applies: crowdstrike_cql,
     },
     Approved {
-        id: "harfanglab-yara",
-        reason: "a HarfangLab `yara` block is checked as the YARA rule deploy assembles \
-                 (E2-Y, #790): each block counts in `queries_checked` (with any CrowdStrike \
-                 queries, `crowdstrike-cql`), and the YARA engine's finding on it is a \
-                 `yara_*` code the oracle, which never checked YARA, does not report",
-        changelog: "**The editor and `opentide explain` know YARA, YARA-L, the Exabeam Query \
-                    Language and Graylog's Lucene**",
-        applies: harfanglab_yara,
-    },
-    Approved {
         id: "messages-quote-values",
         reason: "a message and its help quote a value in double quotes with Rust's escapes, \
                  where the oracle used Python's repr ('x', None, True): the finding is the \
                  same but for the quote characters around its values",
         changelog: "**Messages quote values the same way everywhere**",
         applies: crate::lint::quoting_only,
-    },
-    Approved {
-        id: "splunk-advanced",
-        reason: "a Splunk block's `advanced` table is a field of the platform::splunk::1.0 \
-                 layout again (0.24.0, #878), the only place a rule sets savedsearches.conf \
-                 keys no other field sets; the oracle (0.23.0) refused it as an unknown key",
-        changelog: "**A Splunk block's `advanced` table validates and deploys again**",
-        applies: splunk_advanced,
-    },
-    Approved {
-        id: "legacy-text-id-crash",
-        reason: "a legacy `rule_id::<tenant>` key whose id is text is `external_id_in_rule` \
-                 (0.26.0, #913); the oracle (0.23.0) read the tenant as a schema version and \
-                 crashed before it wrote a report",
-        changelog: "**`validate` no longer crashes on a legacy external-id key with a text value**",
-        applies: legacy_text_id_crash,
     },
     Approved {
         id: "sentinel-durations",
@@ -190,30 +165,6 @@ pub const APPROVED: &[Approved] = &[
         applies: compile_empty_key_frame,
     },
 ];
-
-/// The oracle's `schema_validation` of a Splunk block's `advanced` table,
-/// which the Rust run accepts.
-fn splunk_advanced(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
-    let (Some(oracle), None) = (oracle, rust) else {
-        return false;
-    };
-    code(oracle) == "schema_validation"
-        && oracle["field_path"] == json!(["configurations", "splunk", "advanced"])
-        && oracle["message"] == json!("Extra inputs are not permitted")
-}
-
-/// A case the oracle crashed on with #913's error (its `failure`, no
-/// report), which the Rust run validates.
-fn legacy_text_id_crash(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
-    let (Some(oracle), Some(rust)) = (oracle, rust) else {
-        return false;
-    };
-    rust == &json!("a report")
-        && oracle["code"] == json!("internal")
-        && oracle["message"].as_str().is_some_and(|message| {
-            message.starts_with("ValueError: invalid literal for int() with base 10: ")
-        })
-}
 
 /// The parts of a `--fix` case no approved finding explains.
 const FIX_PARTS: [&str; 7] = [
@@ -272,8 +223,9 @@ pub(crate) fn crowdstrike_cql(oracle: Option<&Json>, rust: Option<&Json>, _: &[J
                 && rust.pointer("/context/source") == Some(&json!("engine"))
                 && rust.pointer("/context/platform") == Some(&json!("crowdstrike"))
         }
-        // The count: the oracle's, and the CrowdStrike queries. With YARA
-        // rules too, `harfanglab-yara` explains it.
+        // The count: the oracle's, and the CrowdStrike queries (0.28.1
+        // checks HarfangLab's YARA as Rust does, so YARA rules are on both
+        // sides).
         (Some(oracle), Some(rust)) => {
             let (Some(before), Some(after), Some(added), Some(read)) = (
                 oracle["queries_checked"].as_u64(),
@@ -283,33 +235,7 @@ pub(crate) fn crowdstrike_cql(oracle: Option<&Json>, rust: Option<&Json>, _: &[J
             ) else {
                 return false;
             };
-            let yara = rust["yara"].as_u64().unwrap_or(0);
-            added > 0 && yara == 0 && before + added + read == after
-        }
-        _ => false,
-    }
-}
-
-pub(crate) fn harfanglab_yara(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
-    match (oracle, rust) {
-        // A HarfangLab YARA rule's finding, which the oracle did not check.
-        (None, Some(rust)) => {
-            code(rust).starts_with("yara_")
-                && rust.pointer("/context/source") == Some(&json!("engine"))
-                && rust.pointer("/context/platform") == Some(&json!("harfanglab"))
-        }
-        // The count: the oracle's, the YARA rules, and any CrowdStrike queries.
-        (Some(oracle), Some(rust)) => {
-            let (Some(before), Some(after), Some(yara), Some(read)) = (
-                oracle["queries_checked"].as_u64(),
-                rust["queries_checked"].as_u64(),
-                rust["yara"].as_u64(),
-                rust["yaml_1_2"].as_u64(),
-            ) else {
-                return false;
-            };
-            let crowdstrike = rust["crowdstrike"].as_u64().unwrap_or(0);
-            yara > 0 && before + crowdstrike + yara + read == after
+            added > 0 && before + added + read == after
         }
         _ => false,
     }
@@ -369,12 +295,16 @@ fn yaml_error_text(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bo
         (Some(1), Some(1)) => message.contains("tab"),
         _ => false,
     };
+    let place = ["message", "column", "end_column"];
+    // A tab inside a multi-line plain scalar: the oracle places the error at
+    // the tab, saphyr at the scalar it interrupts (`crate::lint`'s rule).
+    let scalar = ["message", "line", "column", "end_line", "end_column"];
     code(oracle) == "yaml_parse"
         && code(rust) == "yaml_parse"
         && message.starts_with("Could not parse object YAML: ")
-        && columns
-        && without(oracle, &["message", "column", "end_column"])
-            == without(rust, &["message", "column", "end_column"])
+        && ((columns && without(oracle, &place) == without(rust, &place))
+            || (crate::lint::tab_in_scalar(oracle, rust)
+                && without(oracle, &scalar) == without(rust, &scalar)))
 }
 
 fn yaml_1_2_dates(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
@@ -417,36 +347,6 @@ fn invalid_uuid_every_file(
                 && reported["field_path"] == rust["field_path"]
                 && reported["file_path"] != rust["file_path"]
         })
-}
-
-/// Every finding's `message` without the platforms the recorded oracle
-/// lacks (`opentide_schema::platforms::SINCE_ORACLE`) in the lists of
-/// platforms it names (`deployment_state_platform`'s "only crowdstrike,
-/// defender_for_endpoint, google_secops, … store external ids"): the 0.23.0
-/// oracle's lists predate them. O2 empties `SINCE_ORACLE`, and this with it.
-fn without_since_oracle_names(report: &mut Json) {
-    for key in ["issues", "warnings"] {
-        let Some(findings) = report.get_mut(key).and_then(Json::as_array_mut) else {
-            continue;
-        };
-        for finding in findings {
-            if let Some(Json::String(message)) = finding.get_mut("message") {
-                *message = without_since_oracle_items(message);
-            }
-        }
-    }
-}
-
-/// `text` without each `SINCE_ORACLE` id that stands as an item of a
-/// comma-separated list (`a, google_secops, b`, `a, google_secops`).
-fn without_since_oracle_items(text: &str) -> String {
-    let mut out = text.to_owned();
-    for id in opentide_schema::platforms::SINCE_ORACLE {
-        out = out
-            .replace(&format!("{id}, "), "")
-            .replace(&format!(", {id}"), "");
-    }
-    out
 }
 
 /// KG-01: the oracle's `compile_invalid_rule` on a Sentinel block for a
@@ -763,8 +663,7 @@ fn run_case(
     };
     let root = ws.to_string_lossy().into_owned();
     let text = crate::payloads::placeholder(&serde_json::to_string(&validation.report)?, ws);
-    let mut rust: Json = serde_json::from_str(&text)?;
-    without_since_oracle_names(&mut rust);
+    let rust: Json = serde_json::from_str(&text)?;
     let list = |report: &Json, key: &str| -> Vec<Json> {
         report[key].as_array().cloned().unwrap_or_default()
     };
@@ -1153,43 +1052,7 @@ pub fn run(args: &[String]) -> Result<u8> {
 #[cfg(test)]
 mod tests {
 
-    #[test]
-    fn platform_lists_leave_out_the_platforms_the_oracle_lacks() {
-        let id = opentide_schema::platforms::SINCE_ORACLE[0];
-        assert_eq!(
-            super::without_since_oracle_items(&format!(
-                "only crowdstrike, {id}, sysdig store external ids"
-            )),
-            "only crowdstrike, sysdig store external ids"
-        );
-        assert_eq!(
-            super::without_since_oracle_items(&format!("only crowdstrike, {id}")),
-            "only crowdstrike"
-        );
-        let mut report = json!({"issues": [{"message": format!("a, {id}")}], "warnings": []});
-        super::without_since_oracle_names(&mut report);
-        assert_eq!(report["issues"][0]["message"], "a");
-    }
     use super::*;
-
-    #[test]
-    fn the_catchup_rules_name_one_finding_and_one_crash() {
-        let refused = json!({"code": "schema_validation", "message": "Extra inputs are not permitted",
-            "field_path": ["configurations", "splunk", "advanced"]});
-        assert!(splunk_advanced(Some(&refused), None, &[]));
-        assert!(!splunk_advanced(Some(&refused), Some(&refused), &[]));
-        let other = json!({"code": "schema_validation", "message": "Extra inputs are not permitted",
-            "field_path": ["configurations", "splunk", "search"]});
-        assert!(!splunk_advanced(Some(&other), None, &[]));
-
-        let crash = json!({"code": "internal",
-            "message": "ValueError: invalid literal for int() with base 10: 'prod'"});
-        let report = json!("a report");
-        assert!(legacy_text_id_crash(Some(&crash), Some(&report), &[]));
-        let other = json!({"code": "internal", "message": "KeyError: 'x'"});
-        assert!(!legacy_text_id_crash(Some(&other), Some(&report), &[]));
-        assert!(!legacy_text_id_crash(None, Some(&report), &[]));
-    }
 
     fn argv(args: &[&str]) -> Vec<String> {
         ["opentide", "--json", "validate"]
@@ -1237,26 +1100,20 @@ mod tests {
         assert_eq!(out[0].what, "issues (order)");
     }
 
-    /// A count with HarfangLab YARA rules is `harfanglab-yara`'s, with or
-    /// without CrowdStrike queries beside them; one without is
-    /// `crowdstrike-cql`'s; a count neither adds up to is no one's.
+    /// A count the CrowdStrike queries (and the files the oracle could not
+    /// read) explain is `crowdstrike-cql`'s, YARA rules or not (0.28.1 counts
+    /// them too); a count they do not add up to is no one's.
     #[test]
-    fn the_query_count_is_explained_by_the_languages_the_oracle_never_checked() {
-        let (oracle, both) = queries_checked(&json!(1531), &json!(1679), 75, 69, 4);
-        assert!(harfanglab_yara(Some(&oracle), Some(&both), &[]));
-        assert!(!crowdstrike_cql(Some(&oracle), Some(&both), &[]));
+    fn the_query_count_is_explained_by_the_crowdstrike_queries() {
+        let (oracle, with_yara) = queries_checked(&json!(1531), &json!(1610), 75, 69, 4);
+        assert!(crowdstrike_cql(Some(&oracle), Some(&with_yara), &[]));
         let (oracle, crowdstrike) = queries_checked(&json!(1531), &json!(1610), 75, 0, 4);
         assert!(crowdstrike_cql(Some(&oracle), Some(&crowdstrike), &[]));
-        assert!(!harfanglab_yara(Some(&oracle), Some(&crowdstrike), &[]));
-        let (oracle, short) = queries_checked(&json!(1531), &json!(1680), 75, 69, 4);
-        assert!(!harfanglab_yara(Some(&oracle), Some(&short), &[]));
-        assert!(!crowdstrike_cql(Some(&oracle), Some(&short), &[]));
-        let finding = json!({
-            "code": "yara_undefined_string",
-            "context": {"source": "engine", "platform": "harfanglab"},
-        });
-        assert!(harfanglab_yara(None, Some(&finding), &[]));
-        assert!(!harfanglab_yara(Some(&finding), Some(&finding), &[]));
+        // YARA rules no longer explain a count: the oracle checks them too.
+        let (oracle, yara) = queries_checked(&json!(1531), &json!(1679), 75, 69, 4);
+        assert!(!crowdstrike_cql(Some(&oracle), Some(&yara), &[]));
+        let (oracle, none) = queries_checked(&json!(1531), &json!(1535), 0, 0, 4);
+        assert!(!crowdstrike_cql(Some(&oracle), Some(&none), &[]));
     }
 
     fn uuid_finding(file: &str, value: &str) -> Json {
@@ -1373,6 +1230,39 @@ mod tests {
             Some(&earlier),
             &[]
         ));
+    }
+
+    /// A tab inside a multi-line plain scalar: the oracle names the tab's
+    /// line, saphyr the scalar it interrupts (0.28.1's fault workspace).
+    #[test]
+    fn a_tab_in_a_plain_scalar_is_placed_at_the_scalar() {
+        let oracle = json!({
+            "code": "yaml_parse",
+            "file_path": "a.yaml",
+            "line": 45,
+            "end_line": 45,
+            "column": 1,
+            "end_column": 2,
+            "message": "Could not parse object YAML: found a tab character that violates \
+                        indentation at line 45, column 1 (while scanning a plain scalar that \
+                        starts at line 44, column 18)",
+        });
+        let mut rust = oracle.clone();
+        rust["line"] = json!(44);
+        rust["end_line"] = json!(44);
+        rust["column"] = json!(18);
+        rust["end_column"] = json!(19);
+        rust["message"] = json!(
+            "Could not parse object YAML: while scanning a plain scalar, found a tab at line 44, column 18"
+        );
+        assert!(yaml_error_text(Some(&oracle), Some(&rust), &[]));
+        // Anywhere but the scalar the oracle names: no.
+        let mut elsewhere = rust.clone();
+        elsewhere["column"] = json!(17);
+        assert!(!yaml_error_text(Some(&oracle), Some(&elsewhere), &[]));
+        let mut other_file = rust;
+        other_file["file_path"] = json!("b.yaml");
+        assert!(!yaml_error_text(Some(&oracle), Some(&other_file), &[]));
     }
 
     /// `id`'s recorded case and a fresh copy of its fixture, as `run` lays a
