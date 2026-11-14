@@ -13,12 +13,11 @@
 //!   to their own scalar, so a finding lands where it is written; the text
 //!   deploy generates is marked synthetic.
 //!
-//! The block's constraint codes that fit the decomposed form are here too
-//! ([`constraint_diagnostics`]), reported as opentide reports them:
-//! `{code, field_path, severity}` with a range. The `signature` form's codes
-//! (`yara_signature_alias`, `yara_empty_signature`, `harfanglab_yara_form`)
-//! and `harfanglab_rule_kind` come with the HarfangLab and Bitdefender
-//! platform rows that model a `signature`.
+//! The block's constraint codes (`harfanglab_rule_kind`, `_yara_form`,
+//! `_yara_section_header`, `_yara_import`, `_yara_rule_name`) are the
+//! model's (`opentide_schema::objects::platform::harfanglab::yara`), which
+//! `opentide validate` and the editor report on the block; the engine's
+//! finding for the same fault gives way ([`on_assembled`]).
 //!
 //! What a YAML loader gives deploy is read with the workspace's one YAML
 //! reader ([`crate::yaml`]).
@@ -30,10 +29,9 @@ use crate::yaml_scalar::{Scalar, YamlKey, scalar_at};
 use crate::{InjectedQuery, InjectionPart};
 use opentide_core::node::{Node, Value};
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, codes};
-use opentide_yara::catalog::Catalog;
-
-/// The longest identifier libyara 4.5 accepts.
-const MAX_IDENTIFIER: usize = 128;
+use opentide_schema::objects::platform::harfanglab::yara::{
+    OS_FILE_CONTEXT, derived_rule_name, rule_name_problem,
+};
 
 /// harfanglab-1.0 `SCORE_OVERRIDE_MAP`.
 const SCORES: &[(&str, &str)] = &[
@@ -43,62 +41,6 @@ const SCORES: &[(&str, &str)] = &[
     ("High", "70"),
     ("Critical", "90"),
 ];
-
-/// harfanglab-1.0: the `file` context deploy rewrites by `os`.
-const OS_TO_FILE_CONTEXT: &[(&str, &str)] = &[
-    ("Windows", "file.pe"),
-    ("MacOS", "file.macho"),
-    ("Linux", "file.elf"),
-];
-
-/// The YARA rule name deploy derives from the Tide rule `name`: lowercased,
-/// spaces and `-` as `_`, any other character that is not alphanumeric as
-/// `_`, and `rule_` before a leading digit. Python's `str.isalnum` keeps
-/// non-ASCII letters, which libyara refuses (`harfanglab_yara_rule_name`).
-pub fn derived_rule_name(name: &str) -> String {
-    let lowered: String = name.to_lowercase().replace([' ', '-'], "_");
-    let mut out: String = lowered
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    if out.chars().next().is_some_and(char::is_numeric) {
-        out.insert_str(0, "rule_");
-    }
-    out
-}
-
-/// Why libyara refuses a derived rule name, if it does.
-fn rule_name_problem(name: &str) -> Option<String> {
-    if name.is_empty() {
-        return Some("the rule `name` derives an empty YARA rule name".into());
-    }
-    if let Some(c) = name
-        .chars()
-        .find(|c| !(c.is_ascii_alphanumeric() || *c == '_'))
-    {
-        return Some(format!(
-            "deploy derives the YARA rule name `{name}`, which keeps `{c}`: libyara takes only ASCII letters, digits and `_`"
-        ));
-    }
-    if Catalog::cached().keywords.contains(name) {
-        return Some(format!(
-            "deploy derives the YARA rule name `{name}`, a YARA keyword"
-        ));
-    }
-    if name.len() > MAX_IDENTIFIER {
-        return Some(format!(
-            "deploy derives a YARA rule name of {} characters from the rule `name`: libyara refuses an identifier longer than {MAX_IDENTIFIER}",
-            name.len()
-        ));
-    }
-    None
-}
 
 fn escape(s: &str) -> String {
     s.replace('\\', "\\\\")
@@ -233,16 +175,6 @@ pub(crate) struct Item {
     pub(crate) path: Vec<String>,
     /// Where the item starts in the source.
     pub(crate) start: usize,
-}
-
-impl Item {
-    /// The item's span in the source; one byte at its start when empty.
-    pub(crate) fn span(&self) -> ByteSpan {
-        match (self.map.first(), self.map.last()) {
-            (Some(first), Some(last)) if last >= first => ByteSpan::new(*first, *last + 1),
-            _ => ByteSpan::new(self.start, self.start + 1),
-        }
-    }
 }
 
 /// The document as deploy's YAML loader reads it, when it is valid YAML.
@@ -659,7 +591,7 @@ pub(crate) fn decomposed_injection(source: &str, keys: &[YamlKey]) -> Option<Inj
 
     let name = text_of(source, keys, &["name"]).unwrap_or_default();
     let mut rule_name = derived_rule_name(&name);
-    if rule_name_problem(&rule_name).is_some() {
+    if rule_name_problem(&name).is_some() {
         // `harfanglab_yara_rule_name` reports it; the bodies are still checked.
         rule_name = "opentide_rule".into();
     }
@@ -786,7 +718,7 @@ pub(crate) fn decomposed_injection(source: &str, keys: &[YamlKey]) -> Option<Inj
     let contexts: Vec<Item> = items(keys, source, doc.as_ref(), &strs(&context_path))
         .into_iter()
         .map(|item| {
-            match OS_TO_FILE_CONTEXT.iter().find(|(o, _)| *o == os_text) {
+            match OS_FILE_CONTEXT.iter().find(|(o, _)| *o == os_text) {
                 // Deploy writes `file` as the os's file context.
                 Some((_, file)) if item.text == "file" => Item {
                     text: file.to_string(),
@@ -905,11 +837,12 @@ pub(crate) fn on_assembled(
     if inj.parts.is_empty() {
         return Some(d);
     }
-    // An unknown module stays the engine's `yara_unknown_module`, on the
-    // import: `harfanglab_yara_import` is the block's (`block_diagnostics`,
-    // which `validate` and the editor do not report), so dropping it here
-    // would leave them silent on the import.
-    if d.code == codes::YARA_EMPTY_SIGNATURE {
+    // `harfanglab_yara_import` (the model's, which `validate` and the editor
+    // report) and the block's own checks report these.
+    if matches!(
+        d.code.as_str(),
+        codes::YARA_UNKNOWN_MODULE | codes::YARA_EMPTY_SIGNATURE
+    ) {
         return None;
     }
     let len = inj.inner.len();
@@ -948,88 +881,6 @@ pub(crate) fn on_assembled(
     Some(d)
 }
 
-pub(crate) fn diag(
-    source: &str,
-    code: &'static str,
-    message: String,
-    field: &[&str],
-) -> Diagnostic {
-    Diagnostic::error(code, message, crate::elastic::path_range(source, field))
-        .with_field_path(field.iter().map(|p| p.to_string()).collect())
-}
-
-/// The constraint codes of HarfangLab's decomposed `yara` block:
-/// `harfanglab_yara_section_header` (a body holds the header deploy writes),
-/// `harfanglab_yara_import` (a module the language does not know) and
-/// `harfanglab_yara_rule_name` (the rule name deploy derives from `name` is
-/// one libyara refuses).
-pub(crate) fn constraint_diagnostics(source: &str, keys: &[YamlKey]) -> Vec<Diagnostic> {
-    let mut out = Vec::new();
-    if find(keys, &["configurations", "harfanglab", "yara"]).is_none() {
-        return out;
-    }
-    for name in ["strings", "condition"] {
-        let field = ["configurations", "harfanglab", "yara", name];
-        let Some(key) = find(keys, &field) else {
-            continue;
-        };
-        let Some(s) = key.scalar.and_then(|at| scalar_at(source, at, key.column)) else {
-            continue;
-        };
-        if let Some((start, end, header)) = section_header(&s.text) {
-            let span = ByteSpan::new(s.map[start], s.map[end.max(start + 1) - 1] + 1);
-            out.push(
-                Diagnostic::error(
-                    codes::HARFANGLAB_YARA_SECTION_HEADER,
-                    format!("`{name}` holds a `{header}` header: deploy writes the headers, so write only the section's body"),
-                    opentide_core::span_to_range(source, span),
-                )
-                .with_field_path(path(&field)),
-            );
-        }
-    }
-    let known = &Catalog::cached().known_modules;
-    let doc = document(source);
-    for item in items(
-        keys,
-        source,
-        doc.as_ref(),
-        &["configurations", "harfanglab", "yara", "imports"],
-    ) {
-        if !known.contains(item.text.as_str()) {
-            let module = &item.text;
-            out.push(
-                Diagnostic::error(
-                    codes::HARFANGLAB_YARA_IMPORT,
-                    format!("`{module}` is not a YARA module the language knows"),
-                    opentide_core::span_to_range(source, item.span()),
-                )
-                .with_field_path(item.path.clone()),
-            );
-        }
-    }
-    let name = text_of(source, keys, &["name"]).unwrap_or_default();
-    if let Some(problem) = rule_name_problem(&derived_rule_name(&name)) {
-        let value = find(keys, &["name"])
-            .and_then(|k| scalar_at(source, k.scalar?, k.column))
-            .filter(|s| !s.map.is_empty());
-        let d = match value {
-            Some(s) => Diagnostic::error(
-                codes::HARFANGLAB_YARA_RULE_NAME,
-                problem,
-                opentide_core::span_to_range(
-                    source,
-                    ByteSpan::new(s.map[0], s.map[s.map.len() - 1] + 1),
-                ),
-            )
-            .with_field_path(path(&["name"])),
-            None => diag(source, codes::HARFANGLAB_YARA_RULE_NAME, problem, &["name"]),
-        };
-        out.push(d);
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1040,11 +891,30 @@ mod tests {
         assert_eq!(derived_rule_name("2024 Loader"), "rule_2024_loader");
         assert_eq!(derived_rule_name("a/b"), "a_b");
         assert_eq!(derived_rule_name("Détection"), "détection");
-        assert!(rule_name_problem("détection").is_some());
-        assert!(rule_name_problem("condition").is_some());
-        assert!(rule_name_problem("cmd_string").is_none());
+        assert!(rule_name_problem("Détection").is_some());
+        assert!(rule_name_problem("Condition").is_some());
+        assert!(rule_name_problem("Cmd String").is_none());
         assert!(rule_name_problem(&"a".repeat(128)).is_none());
         assert!(rule_name_problem(&"a".repeat(129)).is_some());
+    }
+
+    /// The model's YARA lists (0.28.1's, copied so `opentide-schema` needs no
+    /// YARA engine) are the language catalog's.
+    #[test]
+    fn the_model_knows_the_catalog_s_modules_and_keywords() {
+        use opentide_schema::objects::platform::harfanglab::yara::{YARA_KEYWORDS, YARA_MODULES};
+        use opentide_yara::catalog::Catalog;
+        let catalog = Catalog::cached();
+        let modules: std::collections::BTreeSet<String> =
+            YARA_MODULES.iter().map(|m| (*m).to_owned()).collect();
+        assert_eq!(modules, catalog.known_modules);
+        let keywords: std::collections::BTreeSet<String> =
+            YARA_KEYWORDS.iter().map(|k| (*k).to_owned()).collect();
+        let missing: Vec<&String> = keywords.difference(&catalog.keywords).collect();
+        assert!(
+            missing.is_empty(),
+            "keywords the catalog lacks: {missing:?}"
+        );
     }
 
     #[test]

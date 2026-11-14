@@ -566,9 +566,18 @@ fn platforms_the_engine_cannot_parse_are_refused() {
     assert_eq!(tenant_only.code, 2);
     assert_eq!(failure_code(&document), "usage_missing_option");
     assert_eq!(document["failure"]["argument"], "--live");
+    // Every platform's queries are checked offline, on a tenant, or both
+    // (as in 0.28.1); `--live` on one checked offline only is unsupported.
     let neither = opentide(
         &ws,
-        &["--json", "validate", "query", "--platform", "harfanglab"],
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "harfanglab",
+            "--live",
+        ],
         &[],
     );
     let document = neither.json();

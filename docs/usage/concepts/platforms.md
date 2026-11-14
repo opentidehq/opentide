@@ -18,7 +18,7 @@ opentide integrates with **nine detection platforms** through connectors built i
 | SentinelOne | `sentinel_one` | yes | yes | no | yes | S1QL |
 | Carbon Black Cloud | `carbon_black_cloud` | yes | yes | yes | yes | Lucene |
 | CrowdStrike Falcon | `crowdstrike` | yes | no | yes | yes | correlation rule (CQL) |
-| HarfangLab | `harfanglab` | yes | no | no | telemetry filters | Sigma or YARA |
+| HarfangLab | `harfanglab` | yes | no | YARA | telemetry filters | Sigma or YARA |
 | Sysdig Secure (Falco) | `sysdig` | yes | no | yes | no | Falco condition |
 | Exabeam New-Scale SIEM | `exabeam` | yes | yes (the filter) | yes | yes | Exabeam Query Language |
 | Google Security Operations | `google_secops` | yes | yes (`verifyRuleText`) | yes (YARA-L) | yes (`udmSearch`) | YARA-L 2.0 |
@@ -27,7 +27,30 @@ The offline check is the analysis engine that ships with `pip install opentide` 
 
 CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers; every platform ships with `pip install opentide`.
 
-CrowdStrike stores a Next-Gen SIEM correlation rule, whose `query` is CrowdStrike Query Language (CQL, Falcon LogScale's language). The analysis engine checks it offline; opentide calls no CrowdStrike query check, so `validate query --platform crowdstrike --live` reports `supported: false`. HarfangLab stores a Sigma rule or a YARA rule, which is not syntax-checked: `opentide validate query --platform harfanglab` reports `supported: false`.
+CrowdStrike stores a Next-Gen SIEM correlation rule, whose `query` is CrowdStrike Query Language (CQL, Falcon LogScale's language). The analysis engine checks it offline; opentide calls no CrowdStrike query check, so `validate query --platform crowdstrike --live` reports `supported: false`. HarfangLab stores a Sigma rule or a YARA rule. Its YARA is checked offline, as libyara 4.5 compiles it, and Sigma is not; `--live` reports `supported: false`.
+
+A HarfangLab block is one kind: `sigma` or `yara`, never both (`harfanglab_rule_kind`). A `yara` block is either `signature`, a whole YARA text deploy sends verbatim, or the decomposed `meta`, `strings`, `condition` and `imports` deploy assembles into one rule, never both (`harfanglab_yara_form`):
+
+```yaml
+configurations:
+  harfanglab:
+    schema: platform::harfanglab::1.0
+    status: STAGING
+    yara:
+      signature: |
+        import "pe"
+
+        rule Loader_Stage1 {
+          meta:
+            context = "file,memory"
+          strings:
+            $cfg = { 43 46 47 21 [4-16] 00 01 }
+          condition:
+            pe.number_of_sections > 3 and $cfg
+        }
+```
+
+`opentide validate` checks `signature`, and the rule the decomposed form assembles, against the YARA language (its `queries` check, the `yara_*` codes): a YARA error fails the rule. Its `schema` check fails an `include` (`yara_include`), a signature with no rule that is neither private nor global (`yara_empty_signature`), a rule name used twice (`yara_duplicate_rule`), a signature written as a YAML alias (`yara_signature_alias`), and, in the decomposed form, a section or rule header in `strings` or `condition`, an unknown module in `imports`, and a rule `name` that derives a YARA keyword, a non-ASCII rule name or one over 128 characters. `opentide lint` reports YARA warnings, and warns when a rule in a signature has no meta `context` (`yara_meta_missing`), or when a rule's `context`, written in a signature or deployed by the decomposed form, is not a comma-joined list of `file`, `memory`, `file.pe`, `file.elf` and `file.macho` (`harfanglab_yara_context`). An empty `meta.context: []` in the decomposed form deploys the rule with no `context` and is `yara_meta_missing`. A `.yar` or `.yara` file is checked with `opentide validate query --file`.
 
 ### CrowdStrike: the offline CQL checks
 

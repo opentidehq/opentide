@@ -201,9 +201,10 @@ revisions! {
 
     /// Code-first detection rule with registry-backed delegation helpers.
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
-    #[from_node(model = "DetectionRule")]
+    #[from_node(model = "DetectionRule", after = "harfanglab_yara_rule_name")]
     #[serde(deny_unknown_fields)]
     #[garde(context(Pins))]
+    #[garde(custom(garde_harfanglab_yara_rule_name))]
     #[schemars(rename = "DetectionRule")]
     #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "DetectionRule", module = "opentide._native.models"))]
     #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
@@ -218,9 +219,10 @@ revisions! {
 
     /// Detection rule schema ``rule::1.1`` with optional ``metadata.reviewed``.
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
-    #[from_node(model = "DetectionRule_v1_1")]
+    #[from_node(model = "DetectionRule_v1_1", after = "harfanglab_yara_rule_name")]
     #[serde(deny_unknown_fields)]
     #[garde(context(Pins))]
+    #[garde(custom(garde_harfanglab_yara_rule_name))]
     #[schemars(rename = "DetectionRule_v1_1")]
     #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "DetectionRule_v1_1", module = "opentide._native.models"))]
     #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
@@ -232,6 +234,55 @@ revisions! {
         #[garde(dive)]
         pub metadata: RuleMetadata,
         @1,
+    }
+}
+
+/// The rule fields `DetectionRule._harfanglab_yara_rule_name` reads.
+trait NamedRule {
+    fn name(&self) -> &str;
+    fn harfanglab(&self) -> Option<&HarfangLabConfig>;
+}
+
+impl NamedRule for RuleV1_0 {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn harfanglab(&self) -> Option<&HarfangLabConfig> {
+        self.configurations.as_ref()?.harfanglab.as_ref()
+    }
+}
+
+impl NamedRule for RuleV1_1 {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn harfanglab(&self) -> Option<&HarfangLabConfig> {
+        self.configurations.as_ref()?.harfanglab.as_ref()
+    }
+}
+
+/// `DetectionRule._harfanglab_yara_rule_name` (after): the decomposed
+/// HarfangLab YARA form's rule name must be one libyara takes
+/// ([`crate::objects::platform::harfanglab::rule_name`]).
+fn harfanglab_yara_rule_name<R: NamedRule>(
+    rule: &R,
+    node: &crate::node::Node,
+    cx: &mut crate::from_node::Context,
+) -> bool {
+    match crate::objects::platform::harfanglab::rule_name(rule.name(), rule.harfanglab()) {
+        Some(message) => {
+            crate::objects::checks::Violation::value_error(message).report(node, cx);
+            false
+        }
+        None => true,
+    }
+}
+
+/// garde: `DetectionRule._harfanglab_yara_rule_name` on a rule built in memory.
+fn garde_harfanglab_yara_rule_name<R: NamedRule>(rule: &R, _pins: &Pins) -> garde::Result {
+    match crate::objects::platform::harfanglab::rule_name(rule.name(), rule.harfanglab()) {
+        Some(message) => Err(crate::objects::checks::Violation::value_error(message).into_garde()),
+        None => Ok(()),
     }
 }
 

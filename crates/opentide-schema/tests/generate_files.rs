@@ -45,6 +45,32 @@ fn without_since_oracle_blocks(text: &str) -> String {
     out
 }
 
+/// `template` without the HarfangLab `yara.signature` key (harfanglab-1.0
+/// 1.2, #899), which postdates the recorded oracle (0.23.0): its two lines,
+/// `#signature: |` and the `#...` under it. O2 re-records the goldens on
+/// 0.28.x, which has it.
+fn without_harfanglab_signature(template: &str) -> String {
+    let mut out = String::with_capacity(template.len());
+    let mut in_harfanglab = false;
+    let mut skip_next = false;
+    for line in template.split_inclusive('\n') {
+        let trimmed = line.trim_start().trim_start_matches('#');
+        if line.starts_with("  ") && !line.starts_with("   ") {
+            in_harfanglab = trimmed.starts_with("harfanglab:");
+        }
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+        if in_harfanglab && trimmed.trim_end() == "signature: |" {
+            skip_next = true;
+            continue;
+        }
+        out.push_str(line);
+    }
+    out
+}
+
 #[test]
 fn every_platform_template_is_the_committed_one() {
     let dir = repo().join("src/opentide/schemas/data/platform_templates");
@@ -72,6 +98,7 @@ fn every_object_template_is_the_oracles_on_the_tide_corpus() {
         // comparing. On this oracle no such block exists, so this is a no-op
         // until a row lands.
         let rendered = without_since_oracle_blocks(&rendered);
+        let rendered = without_harfanglab_signature(&rendered);
         assert_eq!(rendered, expected, "{identifier}");
     }
     assert_eq!(

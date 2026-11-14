@@ -379,7 +379,7 @@ opentide validate query --platform splunk --live --strategy RELEASE --wide
 | `--platform` | The platform whose queries to check. Offline, default: every platform the engine parses. Required with `--live` (exit `2`, `failure.argument` `--platform`, without it) |
 | `--live` | Check the queries on the platform's tenants (needs credentials) |
 | `--changed` | Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (see [Which rules are checked](#which-rules-are-checked)) |
-| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`, `.exabeam`) is one query in that language, checked offline. Repeatable |
+| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`, `.yar`, `.yara`, `.exabeam`) is one query in that language, checked offline. Repeatable |
 | `--uuid` | Check only the rule with this UUID. Repeatable |
 | `--queries` | Offline: how a rejected query is reported, `error` (the default) or `warn`, as in [`validate`](#queries). `off` exits `2`: it would check nothing. Refused with `--live` |
 | `--strict` | Offline: fail on warnings too (with `--queries warn`). Refused with `--live` |
@@ -408,7 +408,7 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 
 Google SecOps's YARA-L is checked offline by the analysis engine, the block's sections as the one rule deploy assembles (yara-l-1.0's `yaral_*` codes), and a `.yaral` or `.yl2` file with `--file`. `--live` sends each rule's assembled text to `verifyRuleText`, Google's compiler, which resolves the instance's reference lists and data tables and creates nothing. An `ERROR` diagnostic fails the rule as `google_secops_compile_error`, a `WARNING` is `google_secops_compile_warning`, each placed on the section key and line it falls in (`configurations.google_secops.events line 3, column 5`), and a block `run_frequency` Google does not allow for the rule is `google_secops_run_frequency_not_allowed`.
 
-SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. HarfangLab is never validated by `validate query`, and Sysdig, CrowdStrike and Bitdefender only offline: `--platform sysdig --live`, `--platform crowdstrike --live` and `--platform bitdefender --live` report `supported: false`, because Sysdig Secure has no rule preview, opentide calls no CrowdStrike query check and GravityZone has no rule check (see [Supported platforms](#supported-platforms)). The offline CQL check never reads the tenant: a field, saved search, lookup file or repository is never reported unknown.
+SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. Sysdig, CrowdStrike, HarfangLab and Bitdefender are validated only offline: `--platform sysdig --live`, `--platform crowdstrike --live`, `--platform harfanglab --live` and `--platform bitdefender --live` report `supported: false`, because Sysdig Secure has no rule preview, opentide calls no CrowdStrike query check, HarfangLab has no YARA dry run and GravityZone has no rule check (see [Supported platforms](#supported-platforms)). `--platform harfanglab` checks YARA as libyara 4.5 compiles it, under the HarfangLab profile: `yara.signature`, the rule the decomposed form assembles, and a `.yar` or `.yara` file. The offline CQL check never reads the tenant: a field, saved search, lookup file or repository is never reported unknown.
 
 ```bash
 opentide --json validate query --platform sentinel_one
@@ -596,7 +596,7 @@ Live query validation works on **eight platforms**; the offline engine on ten, s
 | `carbon_black_cloud` (Lucene) | ✅ | ✅ |
 | `sysdig` (Falco) | ❌ `supported: false` | ✅ |
 | `crowdstrike` (CQL) | ❌ `supported: false` | ✅ |
-| `harfanglab` | ❌ `supported: false` | ❌ |
+| `harfanglab` (YARA) | ❌ `supported: false` | ✅ |
 | `bitdefender` (YARA) | ❌ `supported: false` | ✅ YARA |
 | `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ✅ |
 | `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ✅ YARA-L |
@@ -636,16 +636,16 @@ The same Elasticsearch and Kibana checks run before every `opentide deploy` to E
 
 A rule that fails is not created or updated, and the command exits `1`. Later rules are still checked. An index pattern that matches nothing still deploys, with a warning.
 
-HarfangLab (Sigma or YARA) returns unsupported, and so does `--live` for CrowdStrike (CQL, checked offline only) and Sysdig (Falco, which has no rule preview) — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
+HarfangLab (YARA, checked offline only), Bitdefender (GravityZone has no dry run; its YARA is checked offline), CrowdStrike (CQL, checked offline only) and Sysdig (Falco, which has no rule preview) return unsupported for `--live` — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
 
 The result is a normal failure envelope, so `--json` shape does not change between
-supported and unsupported platforms:
+supported and unsupported platforms (an illustration: the docs check never runs `--live`):
 
 ```bash
-opentide --json validate query --platform harfanglab
+opentide --json validate query --platform harfanglab --live
 ```
 
-```json output-of="opentide --json validate query --platform harfanglab" exit=1
+```json illustrative
 {
   "platform": "harfanglab",
   "valid": null,
