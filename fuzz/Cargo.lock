@@ -2775,6 +2775,7 @@ name = "opentide-connectors"
 version = "0.12.0"
 dependencies = [
  "backon",
+ "base64 0.22.1",
  "http",
  "jiff",
  "jsonwebtoken",
