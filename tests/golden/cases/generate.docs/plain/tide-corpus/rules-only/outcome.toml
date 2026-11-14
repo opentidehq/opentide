@@ -18,67 +18,67 @@ path = "ws/docs/rules/carbon-black-lucene-rule.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 4907
+size = 4330
 
 [[files]]
 path = "ws/docs/rules/crowdstrike-deploy-rule.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 4895
+size = 4585
 
 [[files]]
 path = "ws/docs/rules/defender-kql-rule.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 4911
+size = 4592
 
 [[files]]
 path = "ws/docs/rules/elastic-kql-rule.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 4883
+size = 5103
 
 [[files]]
 path = "ws/docs/rules/harfanglab-deploy-rule.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 4868
+size = 4827
 
 [[files]]
 path = "ws/docs/rules/sentinel-kql-rule.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 4940
+size = 4972
 
 [[files]]
 path = "ws/docs/rules/sentinelone-s1ql-rule.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 4899
+size = 4989
 
 [[files]]
 path = "ws/docs/rules/splunk-spl-rule.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 4867
+size = 4370
 
 [[files]]
 path = "ws/docs/rules/staging-promote-rule.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 4946
+size = 4987
 
 [[files]]
 path = "ws/docs/rules/sysdig-falco-rule.md"
 change = "created"
 kind = "file"
 mode = "0644"
-size = 4632
+size = 4819

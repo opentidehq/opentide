@@ -185,6 +185,9 @@ pub struct Baseline {
     /// The heavy workspace's digest the baselines were measured on: a report
     /// of another generator output is not held to them.
     pub digest: String,
+    /// The platforms the heavy workspace holds, the oracle's
+    /// ([`super::oracle::ORACLE_PLATFORMS`]).
+    pub platforms: Vec<String>,
     /// The runner class: `ubuntu-24.04, 4 vCPU`.
     pub runner: String,
     /// The CPU the commands' `baseline_s` were measured on (`model name`);
@@ -1025,6 +1028,7 @@ seed = 20261107
 runs = 5
 warmup = 1
 digest = "5978a2ab7c093587"
+platforms = ["sentinel", "defender_for_endpoint", "splunk", "sentinel_one", "carbon_black_cloud", "crowdstrike", "harfanglab", "elastic", "sysdig"]
 runner = "ubuntu-24.04, 4 vCPU"
 cpu_model = "AMD EPYC 9V45 96-Core Processor"
 rust_cpu_model = "AMD EPYC 9V45 96-Core Processor"

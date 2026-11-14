@@ -4,13 +4,15 @@
  Check file names and recommended metadata                                                          
                                                                                                     
  [2mCatalogue hygiene: filename slugs and recommended metadata, not schema validation.[0m                 
+ [2mA missing optional field is a note: it never fails [0m[1;2;36m-[0m[1;2;36m-strict[0m[2m, and prints with [0m[1;2;36m-[0m[1;2;36m-verbose[0m[2m.[0m            
                                                                                                     
 [2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
 [2m│[0m [1;36m-[0m[1;36m-fix[0m            [1;33m                        [0m  Apply safe filename renames                           [2m│[0m
-[2m│[0m [1;36m-[0m[1;36m-strict[0m         [1;33m                        [0m  Exit non-zero when findings exist (CI gate)           [2m│[0m
-[2m│[0m [1;36m-[0m[1;36m-check[0m          [1;33mCHECK                   [0m  Limit to one check: filenames, metadata, placeholders [2m│[0m
-[2m│[0m                                            or queries (repeatable). Runs it even when lint.toml  [2m│[0m
-[2m│[0m                                            disables it                                           [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-strict[0m         [1;33m                        [0m  Exit non-zero when errors or warnings are left (CI    [2m│[0m
+[2m│[0m                                            gate). Notes never fail it                            [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-check[0m          [1;33mCHECK                   [0m  Limit to one check: filenames, metadata, recommended, [2m│[0m
+[2m│[0m                                            placeholders or queries (repeatable). Runs it even    [2m│[0m
+[2m│[0m                                            when lint.toml disables it                            [2m│[0m
 [2m│[0m [1;36m-[0m[1;36m-changed[0m        [1;33m                        [0m  Lint only the object files this run changed: the pull [2m│[0m
 [2m│[0m                                            or merge request, the push, or outside CI the last    [2m│[0m
 [2m│[0m                                            commit (the diff deploy reads)                        [2m│[0m

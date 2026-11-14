@@ -9,18 +9,18 @@
 [[plan]]
 case = "deploy/json/fault/dry-run"
 key = "warnings"
-oracle = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/hidden-harvest-rule-0020.yaml","6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-relay-rule-0014.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where"]'''
-candidate = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/hidden-harvest-rule-0020.yaml","5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where"]'''
-reason = "objects/rules/encoded-relay-rule-0014.yaml writes `reviewed: 2026-02-30` unquoted. PyYAML (YAML 1.1) parses it as a timestamp and refuses the file as unreadable; YAML 1.2 reads the text 2026-02-30, so the file loads and the date field's own check reports it. One unread file fewer."
+oracle = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/encoded-spray-rule-0017.yaml","6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/elevated-exfiltration-rule-0014.yaml, objects/rules/hidden-implant-rule-0006.yaml, objects/rules/hidden-loader-rule-0024.yaml, objects/rules/remote-implant-rule-0021.yaml, objects/rules/silent-exfiltration-rule-0033.yaml; opentide validate shows where"]'''
+candidate = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/encoded-spray-rule-0017.yaml","5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/hidden-implant-rule-0006.yaml, objects/rules/hidden-loader-rule-0024.yaml, objects/rules/remote-implant-rule-0021.yaml, objects/rules/silent-exfiltration-rule-0033.yaml; opentide validate shows where"]'''
+reason = "objects/rules/elevated-exfiltration-rule-0014.yaml writes `reviewed: 2026-02-30` unquoted. PyYAML (YAML 1.1) parses it as a timestamp and refuses the file as unreadable; YAML 1.2 reads the text 2026-02-30, so the file loads and the date field's own check reports it. One unread file fewer."
 issue = "https://github.com/opentidehq/opentide/issues/808"
 changelog = "**Tide objects are read as YAML 1.2**"
 
 [[plan]]
 case = "deploy/json/fault/progress-json"
 key = "warnings"
-oracle = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/hidden-harvest-rule-0020.yaml","6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-relay-rule-0014.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where"]'''
-candidate = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/hidden-harvest-rule-0020.yaml","5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where"]'''
-reason = "objects/rules/encoded-relay-rule-0014.yaml writes `reviewed: 2026-02-30` unquoted. PyYAML (YAML 1.1) parses it as a timestamp and refuses the file as unreadable; YAML 1.2 reads the text 2026-02-30, so the file loads and the date field's own check reports it. One unread file fewer."
+oracle = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/encoded-spray-rule-0017.yaml","6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/elevated-exfiltration-rule-0014.yaml, objects/rules/hidden-implant-rule-0006.yaml, objects/rules/hidden-loader-rule-0024.yaml, objects/rules/remote-implant-rule-0021.yaml, objects/rules/silent-exfiltration-rule-0033.yaml; opentide validate shows where"]'''
+candidate = '''["1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/encoded-spray-rule-0017.yaml","5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/hidden-implant-rule-0006.yaml, objects/rules/hidden-loader-rule-0024.yaml, objects/rules/remote-implant-rule-0021.yaml, objects/rules/silent-exfiltration-rule-0033.yaml; opentide validate shows where"]'''
+reason = "objects/rules/elevated-exfiltration-rule-0014.yaml writes `reviewed: 2026-02-30` unquoted. PyYAML (YAML 1.1) parses it as a timestamp and refuses the file as unreadable; YAML 1.2 reads the text 2026-02-30, so the file loads and the date field's own check reports it. One unread file fewer."
 issue = "https://github.com/opentidehq/opentide/issues/808"
 changelog = "**Tide objects are read as YAML 1.2**"
 
@@ -50,123 +50,6 @@ candidate = "\"\\\"Suspicious LSASS Access\\\" (ff8bf67e-64dc-460d-b5df-48db643f
 reason = "The plan's message quotes the strategy or the rule name in double quotes with Rust's escapes, where the oracle printed Python's repr in single quotes; a missing status is no longer wrapped in the quotes of Python's KeyError. The message is otherwise the same."
 issue = "https://github.com/opentidehq/opentide/issues/841"
 changelog = "**Messages quote values the same way everywhere**"
-
-[[plan]]
-case = "deploy/json/tide-corpus-splunk-advanced/splunk-advanced"
-key = "exit code"
-oracle = '''1'''
-candidate = '''0'''
-reason = "0.24.0 (#878): a Splunk block's advanced table is part of the platform::splunk::1.0 layout again, so the dry run plans the rule; the oracle (0.23.0) refused the table and its deploy crashed loading the block"
-issue = "https://github.com/opentidehq/opentide/issues/878"
-changelog = "**A Splunk block's `advanced` table validates and deploys again**"
-
-[[plan]]
-case = "deploy/json/tide-corpus-splunk-advanced/splunk-advanced"
-key = "message"
-oracle = '''"ValidationError: 1 validation error for SplunkConfig"'''
-candidate = '''"Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete"'''
-reason = "0.24.0 (#878): a Splunk block's advanced table is part of the platform::splunk::1.0 layout again, so the dry run plans the rule; the oracle (0.23.0) refused the table and its deploy crashed loading the block"
-issue = "https://github.com/opentidehq/opentide/issues/878"
-changelog = "**A Splunk block's `advanced` table validates and deploys again**"
-
-[[plan]]
-case = "deploy/json/tide-corpus-splunk-advanced/splunk-advanced"
-key = "status"
-oracle = '''"failed"'''
-candidate = '''"completed"'''
-reason = "0.24.0 (#878): a Splunk block's advanced table is part of the platform::splunk::1.0 layout again, so the dry run plans the rule; the oracle (0.23.0) refused the table and its deploy crashed loading the block"
-issue = "https://github.com/opentidehq/opentide/issues/878"
-changelog = "**A Splunk block's `advanced` table validates and deploys again**"
-
-[[plan]]
-case = "deploy/json/tide-corpus-splunk-advanced/splunk-advanced"
-key = "deployed"
-oracle = '''absent'''
-candidate = '''[]'''
-reason = "0.24.0 (#878): a Splunk block's advanced table is part of the platform::splunk::1.0 layout again, so the dry run plans the rule; the oracle (0.23.0) refused the table and its deploy crashed loading the block"
-issue = "https://github.com/opentidehq/opentide/issues/878"
-changelog = "**A Splunk block's `advanced` table validates and deploys again**"
-
-[[plan]]
-case = "deploy/json/tide-corpus-splunk-advanced/splunk-advanced"
-key = "dry_run"
-oracle = '''absent'''
-candidate = '''true'''
-reason = "0.24.0 (#878): a Splunk block's advanced table is part of the platform::splunk::1.0 layout again, so the dry run plans the rule; the oracle (0.23.0) refused the table and its deploy crashed loading the block"
-issue = "https://github.com/opentidehq/opentide/issues/878"
-changelog = "**A Splunk block's `advanced` table validates and deploys again**"
-
-[[plan]]
-case = "deploy/json/tide-corpus-splunk-advanced/splunk-advanced"
-key = "plan"
-oracle = '''absent'''
-candidate = '''{"splunk":["00000000-0000-4000-8003-000000000003"]}'''
-reason = "0.24.0 (#878): a Splunk block's advanced table is part of the platform::splunk::1.0 layout again, so the dry run plans the rule; the oracle (0.23.0) refused the table and its deploy crashed loading the block"
-issue = "https://github.com/opentidehq/opentide/issues/878"
-changelog = "**A Splunk block's `advanced` table validates and deploys again**"
-
-[[plan]]
-case = "deploy/json/tide-corpus-splunk-advanced/splunk-advanced"
-key = "changes"
-oracle = '''absent'''
-candidate = '''[{"action":"upsert","name":"Splunk SPL Rule","platform":"splunk","status":"STAGING","tenant":null,"uuid":"00000000-0000-4000-8003-000000000003"}]'''
-reason = "0.24.0 (#878): a Splunk block's advanced table is part of the platform::splunk::1.0 layout again, so the dry run plans the rule; the oracle (0.23.0) refused the table and its deploy crashed loading the block"
-issue = "https://github.com/opentidehq/opentide/issues/878"
-changelog = "**A Splunk block's `advanced` table validates and deploys again**"
-
-[[plan]]
-case = "deploy/json/tide-corpus-splunk-advanced/splunk-advanced"
-key = "strategies"
-oracle = '''absent'''
-candidate = '''["PREVIEW"]'''
-reason = "0.24.0 (#878): a Splunk block's advanced table is part of the platform::splunk::1.0 layout again, so the dry run plans the rule; the oracle (0.23.0) refused the table and its deploy crashed loading the block"
-issue = "https://github.com/opentidehq/opentide/issues/878"
-changelog = "**A Splunk block's `advanced` table validates and deploys again**"
-
-[[plan]]
-case = "deploy/json/tide-corpus-splunk-advanced/splunk-advanced"
-key = "tenants"
-oracle = '''absent'''
-candidate = '''{}'''
-reason = "0.24.0 (#878): a Splunk block's advanced table is part of the platform::splunk::1.0 layout again, so the dry run plans the rule; the oracle (0.23.0) refused the table and its deploy crashed loading the block"
-issue = "https://github.com/opentidehq/opentide/issues/878"
-changelog = "**A Splunk block's `advanced` table validates and deploys again**"
-
-[[plan]]
-case = "deploy/json/tide-corpus-splunk-advanced/splunk-advanced"
-key = "missing_tenants"
-oracle = '''absent'''
-candidate = '''{"splunk":".opentide/configurations/platforms/splunk.toml"}'''
-reason = "0.24.0 (#878): a Splunk block's advanced table is part of the platform::splunk::1.0 layout again, so the dry run plans the rule; the oracle (0.23.0) refused the table and its deploy crashed loading the block"
-issue = "https://github.com/opentidehq/opentide/issues/878"
-changelog = "**A Splunk block's `advanced` table validates and deploys again**"
-
-[[plan]]
-case = "deploy/json/tide-corpus-splunk-advanced/splunk-advanced"
-key = "advice"
-oracle = '''absent'''
-candidate = '''"add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/splunk.toml"'''
-reason = "0.24.0 (#878): a Splunk block's advanced table is part of the platform::splunk::1.0 layout again, so the dry run plans the rule; the oracle (0.23.0) refused the table and its deploy crashed loading the block"
-issue = "https://github.com/opentidehq/opentide/issues/878"
-changelog = "**A Splunk block's `advanced` table validates and deploys again**"
-
-[[plan]]
-case = "deploy/json/tide-corpus-splunk-advanced/splunk-advanced"
-key = "warnings"
-oracle = '''absent'''
-candidate = '''["splunk has no tenants configured in .opentide/configurations/platforms/splunk.toml, so a real deploy would stop"]'''
-reason = "0.24.0 (#878): a Splunk block's advanced table is part of the platform::splunk::1.0 layout again, so the dry run plans the rule; the oracle (0.23.0) refused the table and its deploy crashed loading the block"
-issue = "https://github.com/opentidehq/opentide/issues/878"
-changelog = "**A Splunk block's `advanced` table validates and deploys again**"
-
-[[plan]]
-case = "deploy/json/tide-corpus-splunk-advanced/splunk-advanced"
-key = "summary"
-oracle = '''None'''
-candidate = '''Some(Object {"create": Number(0), "delete": Number(0), "disable": Number(0), "platforms": Number(1), "tenants": Number(0), "update": Number(0), "upsert": Number(1)})'''
-reason = "0.24.0 (#878): a Splunk block's advanced table is part of the platform::splunk::1.0 layout again, so the dry run plans the rule; the oracle (0.23.0) refused the table and its deploy crashed loading the block"
-issue = "https://github.com/opentidehq/opentide/issues/878"
-changelog = "**A Splunk block's `advanced` table validates and deploys again**"
 
 [[diff]]
 corpus = "payloads"

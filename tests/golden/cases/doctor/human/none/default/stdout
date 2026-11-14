@@ -1,5 +1,5 @@
 [1;32m✓[0m Python 3.13.14[2m · python_version[0m
-[1;32m✓[0m opentide 0.23.0[2m · opentide_version[0m
+[1;32m✓[0m opentide 0.28.1[2m · opentide_version[0m
 [1;33m![0m Could not ask PyPI for the latest release (ProxyError)[2m · opentide_latest[0m
   [1;36m→ [0mcheck the network or --proxy, or pass --offline to skip network checks
 [1;31m✗[0m No workspace at ./: no .opentide/ or objects/ there or above it[2m · workspace[0m
@@ -18,7 +18,7 @@
 [1;2m○[0m Not checked: no workspace[2m · lsp_catalog[0m
 [1;33m![0m No platform is enabled; rules validate but nothing deploys[2m · platforms_enabled[0m
   [1;36m→ [0mopentide setup platforms --sentinel (or another platform)
-[1;32m✓[0m The analysis engine (language server 0.11.0) loads[2m · analysis_engine[0m
+[1;32m✓[0m The analysis engine (language server 0.16.1) loads[2m · analysis_engine[0m
 [1;31m✗[0m Cannot connect to proxy http://127.0.0.1:9 (ConnectionRefusedError)[2m · proxy[0m
   [1;36m→ [0mcheck --proxy, OPENTIDE_PROXY or HTTPS_PROXY, and that the proxy is up
 [1;2m○[0m No .vscode/extensions.json: VS Code does not suggest opentidehq.opentide[2m · vscode_settings[0m

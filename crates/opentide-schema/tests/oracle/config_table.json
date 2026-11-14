@@ -4,10 +4,14 @@
   "documentation.toml",
   "lint.toml",
   "paths.toml",
+  "platforms/bitdefender.toml",
   "platforms/carbon_black_cloud.toml",
   "platforms/crowdstrike.toml",
   "platforms/defender_for_endpoint.toml",
   "platforms/elastic.toml",
+  "platforms/exabeam.toml",
+  "platforms/google_secops.toml",
+  "platforms/graylog.toml",
   "platforms/harfanglab.toml",
   "platforms/sentinel.toml",
   "platforms/sentinel_one.toml",
@@ -18,6 +22,30 @@
   "visibility.toml"
  ],
  "cases": {
+  "bitdefender-enabled-type": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "enabled"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/bitdefender.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/bitdefender.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   }
+  ],
   "carbon-black": [
    {
     "code": "schema_validation",
@@ -679,6 +707,30 @@
    }
   ],
   "elastic-valid-version": [],
+  "exabeam-enabled-type": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "enabled"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/exabeam.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/exabeam.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   }
+  ],
   "generic-platform": [
    {
     "code": "schema_validation",
@@ -731,6 +783,54 @@
     "severity": "error"
    }
   ],
+  "google-secops-enabled-type": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "enabled"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/google_secops.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/google_secops.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   }
+  ],
+  "graylog-enabled-type": [
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "enabled"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/graylog.toml",
+    "message": "Input should be a valid boolean",
+    "severity": "error"
+   },
+   {
+    "code": "schema_validation",
+    "context": {},
+    "field_path": [
+     "platform",
+     "name"
+    ],
+    "file_path": "/w/.opentide/configurations/platforms/graylog.toml",
+    "message": "Input should be a valid string",
+    "severity": "error"
+   }
+  ],
   "lint-bundled": {
    "checks": {
     "filenames": {
@@ -746,6 +846,10 @@
      "severity": null
     },
     "queries": {
+     "enabled": true,
+     "severity": null
+    },
+    "recommended": {
      "enabled": true,
      "severity": null
     }
@@ -794,6 +898,10 @@
      "severity": null
     },
     "queries": {
+     "enabled": true,
+     "severity": null
+    },
+    "recommended": {
      "enabled": true,
      "severity": null
     }
@@ -848,6 +956,10 @@
     "queries": {
      "enabled": true,
      "severity": null
+    },
+    "recommended": {
+     "enabled": true,
+     "severity": null
     }
    },
    "filenames": {
@@ -879,6 +991,10 @@
      "severity": null
     },
     "queries": {
+     "enabled": true,
+     "severity": null
+    },
+    "recommended": {
      "enabled": true,
      "severity": null
     }
@@ -914,6 +1030,10 @@
     "queries": {
      "enabled": true,
      "severity": null
+    },
+    "recommended": {
+     "enabled": true,
+     "severity": null
     }
    },
    "filenames": {
@@ -940,7 +1060,7 @@
    "error": "lint.toml [filenames].style must be one of slug, name, none, got 'camel'"
   },
   "lint-unknown-check": {
-   "error": "lint.toml: unknown check(s) 'alpha', 'zeta'. Known checks: filenames, metadata, placeholders, queries"
+   "error": "lint.toml: unknown check(s) 'alpha', 'zeta'. Known checks: filenames, metadata, recommended, placeholders, queries"
   },
   "lint-unknown-key": {
    "error": "lint.toml [queries]: unknown key(s) 'colour', 'shade'. Known keys: enabled, severity"
@@ -3034,6 +3154,9 @@
      },
      "queries": {
       "enabled": true
+     },
+     "recommended": {
+      "enabled": true
      }
     },
     "paths": {
@@ -3090,6 +3213,13 @@
      }
     },
     "platforms": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -3116,6 +3246,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -3162,6 +3313,13 @@
      }
     },
     "systems": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -3188,6 +3346,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -3403,6 +3582,9 @@
      },
      "queries": {
       "enabled": true
+     },
+     "recommended": {
+      "enabled": true
      }
     },
     "paths": {
@@ -3459,6 +3641,13 @@
      }
     },
     "platforms": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -3485,6 +3674,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -3531,6 +3741,13 @@
      }
     },
     "systems": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -3557,6 +3774,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -3743,6 +3981,9 @@
      },
      "queries": {
       "enabled": true
+     },
+     "recommended": {
+      "enabled": true
      }
     },
     "paths": {
@@ -3799,6 +4040,13 @@
      }
     },
     "platforms": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -3825,6 +4073,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -3871,6 +4140,13 @@
      }
     },
     "systems": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -3897,6 +4173,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -4073,6 +4370,9 @@
      },
      "queries": {
       "enabled": true
+     },
+     "recommended": {
+      "enabled": true
      }
     },
     "paths": {
@@ -4129,6 +4429,13 @@
      }
     },
     "platforms": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -4155,6 +4462,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -4197,6 +4525,13 @@
      }
     },
     "systems": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -4223,6 +4558,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -4395,6 +4751,9 @@
      },
      "queries": {
       "enabled": true
+     },
+     "recommended": {
+      "enabled": true
      }
     },
     "paths": {
@@ -4451,6 +4810,13 @@
      }
     },
     "platforms": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -4477,6 +4843,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -4524,6 +4911,13 @@
      }
     },
     "systems": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -4550,6 +4944,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -4782,6 +5197,9 @@
      },
      "queries": {
       "enabled": true
+     },
+     "recommended": {
+      "enabled": true
      }
     },
     "paths": {
@@ -4836,6 +5254,13 @@
      }
     },
     "platforms": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -4864,8 +5289,29 @@
        "name": "Elastic Security"
       }
      },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
      "foo": {
       "x": 1
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
+      }
      },
      "harfanglab": {
       "platform": {
@@ -4912,6 +5358,13 @@
      }
     },
     "systems": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -4940,8 +5393,29 @@
        "name": "Elastic Security"
       }
      },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
      "foo": {
       "x": 1
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
+      }
      },
      "harfanglab": {
       "platform": {
@@ -5125,6 +5599,9 @@
      },
      "queries": {
       "enabled": true
+     },
+     "recommended": {
+      "enabled": true
      }
     },
     "paths": {
@@ -5181,6 +5658,13 @@
      }
     },
     "platforms": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -5207,6 +5691,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -5253,6 +5758,13 @@
      }
     },
     "systems": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -5279,6 +5791,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -5445,6 +5978,9 @@
      },
      "queries": {
       "enabled": true
+     },
+     "recommended": {
+      "enabled": true
      }
     },
     "paths": {
@@ -5501,6 +6037,13 @@
      }
     },
     "platforms": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -5527,6 +6070,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -5573,6 +6137,13 @@
      }
     },
     "systems": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -5599,6 +6170,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -5766,6 +6358,9 @@
      },
      "queries": {
       "enabled": true
+     },
+     "recommended": {
+      "enabled": true
      }
     },
     "paths": {
@@ -5822,6 +6417,13 @@
      }
     },
     "platforms": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -5848,6 +6450,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -5894,6 +6517,13 @@
      }
     },
     "systems": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -5920,6 +6550,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -6100,6 +6751,9 @@
      },
      "queries": {
       "enabled": true
+     },
+     "recommended": {
+      "enabled": true
      }
     },
     "paths": {
@@ -6156,6 +6810,13 @@
      }
     },
     "platforms": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -6182,6 +6843,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": true,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -6239,6 +6921,13 @@
      }
     },
     "systems": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -6265,6 +6954,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": true,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -6514,6 +7224,9 @@
      },
      "queries": {
       "enabled": true
+     },
+     "recommended": {
+      "enabled": true
      }
     },
     "paths": {
@@ -6570,6 +7283,13 @@
      }
     },
     "platforms": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -6596,6 +7316,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -6642,6 +7383,13 @@
      }
     },
     "systems": {
+     "bitdefender": {
+      "platform": {
+       "description": "Custom detection and YARA detection rules for GravityZone EDR/XDR.",
+       "enabled": false,
+       "name": "Bitdefender GravityZone"
+      }
+     },
      "carbon_black_cloud": {
       "platform": {
        "description": "VMware Carbon Black Enterprise EDR is an advanced threat hunting\nand incident response solution delivering continuous visibility for top security\noperations centres (SOCs) and incident response (IR) teams.",
@@ -6668,6 +7416,27 @@
        "description": "Elastic Security detection rules via the Kibana detection engine API.",
        "enabled": false,
        "name": "Elastic Security"
+      }
+     },
+     "exabeam": {
+      "platform": {
+       "description": "Correlation rules for Exabeam New-Scale Security Operations Platform.",
+       "enabled": false,
+       "name": "Exabeam New-Scale SIEM"
+      }
+     },
+     "google_secops": {
+      "platform": {
+       "description": "YARA-L 2.0 detection rules for Google SecOps SIEM.",
+       "enabled": false,
+       "name": "Google Security Operations"
+      }
+     },
+     "graylog": {
+      "platform": {
+       "description": "Graylog event definitions (Filter & Aggregation).",
+       "enabled": false,
+       "name": "Graylog"
       }
      },
      "harfanglab": {
@@ -6724,5 +7493,5 @@
   "organisation",
   "reviewed"
  ],
- "oracle": "0.23.0"
+ "oracle": "0.28.1"
 }

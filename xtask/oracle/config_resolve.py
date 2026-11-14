@@ -1,7 +1,7 @@
 """Print each workspace's resolved configuration as the oracle resolves it.
 
 `cargo xtask config diff --against python` runs it with the oracle's
-interpreter (opentide 0.23.0, beside the oracle executable):
+interpreter (tests/corpora/oracle.in, beside the oracle executable):
 
     <oracle python> -I xtask/oracle/config_resolve.py WORKSPACE...
 

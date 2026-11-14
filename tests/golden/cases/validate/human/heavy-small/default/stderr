@@ -1,1 +1,3 @@
-[?25l<LIVE>[1;36m<SPIN>[0m Validating objects</LIVE>[?25h[1A[2K
+[?25l<LIVE>[1;36m<SPIN>[0m Validating objects</LIVE>[1;31merror: [0mEnvironment variable missing · detail: Unset configuration variables: $GRAYLOG_LAB_TOKEN · 
+advice: Set those environment variables before a live check.
+[?25h[1A[2K

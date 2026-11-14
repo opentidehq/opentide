@@ -11,6 +11,7 @@ cargo xtask golden record                       # run every case through the ora
 cargo xtask golden record --check-determinism   # the same, each case twice: both runs must agree
 cargo xtask golden check --engine python        # a fresh run against the recordings
 cargo xtask golden diff --filter 'validate/*'   # check, printing every difference in full
+cargo xtask golden check --engine rust --keep DIR  # also write each differing case's candidate run to DIR
 cargo xtask golden lock                         # rewrite oracle-requirements.txt from ORACLE
 ```
 
@@ -100,7 +101,7 @@ report only.
 
 ## The oracle
 
-[`ORACLE`](ORACLE) names the release (`v0.23.0`, commit `f41fe5e5`), its manylinux x86-64
+[`ORACLE`](ORACLE) names the release (`v0.28.1`, commit `164450af`; 0.23.0 until O2 of the 0.28 catch-up train), its manylinux x86-64
 wheel and the wheel's SHA-256, the CPython it runs on (uv-managed, so every machine runs the same
 build) and the platform. [`oracle-requirements.txt`](oracle-requirements.txt) pins every package
 with its hashes; the opentide line carries the ORACLE wheel's hash alone, so the install fails
@@ -177,6 +178,7 @@ the same with `--json` or `AI_AGENT` set; a terminal adds nothing but the echo o
 | `vscode-ambiguous` | `vscode` with one declared edit: `Account`, defined under two stages, which `migrate vocab-scope` leaves for a person (exit 2), beside `Process`, which it rewrites |
 | `heavy-small` | UC-0.6's generator, seed 1: 30 threats, 30 objectives, 50 rules (`cargo xtask corpus generate`), generated once per run and copied per case, never committed |
 | `fault` | UC-0.6's fault workspace (`cargo xtask corpus faults`), likewise generated; its outputs are recorded as they are, not asserted against the fault manifest |
+| `fault-lint` | `fault` with one declared edit: a `lint.toml` that turns lint's `recommended` check off. opentide 0.28.1's recommended check crashes on the fault workspace's invalid configuration files ([#1081](https://github.com/opentidehq/opentide/issues/1081)), so the `lint` cases run here and compare; `lint/json/fault/recommended-crash` records the crash |
 | `setup-merge` | [`fixtures/setup-merge/`](fixtures/setup-merge/): the files `setup` merges into, a `.vscode/mcp.json` with a byte-order mark, comments and a trailing comma, and a `sentinel.toml` with `enabled = false` |
 | `live-tenants` | [`fixtures/live-tenants/`](fixtures/live-tenants/): the platforms' stand-in tenants of `tests/cassettes/<platform>/tenant.py` (credentials as `$NAME`s the cases set) and a rule or more for each platform whose tenants check queries, for `validate query --live` (UC-4.6) |
 | `deploy-tenants` | [`fixtures/deploy-tenants/`](fixtures/deploy-tenants/): the `tenants` workspace with Sysdig's stand-in tenant, tenants that take `PREVIEW` and `RELEASE` runs, rules to create, update, retire and refuse on each platform, and the deployment state of the rules already deployed, for a deploy that sends (UC-4.6); a cassette's client copies it before the deploy writes state |

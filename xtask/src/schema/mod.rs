@@ -183,26 +183,8 @@ pub fn rust_schemas() -> Vec<(&'static str, Value)> {
     ]
 }
 
-/// The model-name prefixes of the platforms the recorded oracle lacks
-/// (`opentide_schema::platforms::SINCE_ORACLE`): each such platform's config
-/// class without its `Config` suffix (`ExabeamConfig` -> `Exabeam`), which its
-/// nested models also share. A platform with no row yet contributes none.
-fn since_oracle_model_prefixes() -> Vec<String> {
-    platform::PLATFORM_CONFIG_MODELS
-        .iter()
-        .filter(|entry| opentide_schema::platforms::after_oracle(entry.key))
-        .map(|entry| {
-            entry
-                .model
-                .strip_suffix("Config")
-                .unwrap_or(entry.model)
-                .to_owned()
-        })
-        .collect()
-}
-
-/// A property the models have and the oracle's do not: a field development
-/// added after the oracle's release (0.23.0), ported on purpose.
+/// A property the models have and the oracle's do not, ported or written on
+/// purpose.
 #[derive(Debug, Clone, Copy)]
 pub struct ApprovedProperty {
     /// The models that hold it, by Pydantic class name.
@@ -226,14 +208,15 @@ pub const APPROVED_PROPERTIES: &[ApprovedProperty] = &[ApprovedProperty {
         "DetectionRule_v1_1",
     ],
     paths: &[
-        "/properties/advanced",
-        "/properties/splunk/properties/advanced",
-        "/properties/configurations/properties/splunk/properties/advanced",
+        "/properties/advanced/additionalProperties/description",
+        "/properties/splunk/properties/advanced/additionalProperties/description",
+        "/properties/configurations/properties/splunk/properties/advanced/additionalProperties/description",
     ],
-    reason: "0.24.0 (#878): a Splunk block's `advanced` table is a field of the \
-             platform::splunk::1.0 layout again; the oracle (0.23.0) refused it as a \
-             splunk::2.x key",
-    changelog: "**A Splunk block's `advanced` table validates and deploys again**",
+    reason: "the Rust model's value type of a Splunk block's `advanced` table documents \
+             what a value may be (a scalar or null), the hover text an editor shows; the \
+             oracle's schema describes the table alone. The values it accepts are the \
+             same (schema-descriptions, #900)",
+    changelog: "**The editor schemas read differently, and accept the same files**",
 }];
 
 /// A model revision development made after the oracle's release (0.23.0),
@@ -336,23 +319,11 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
             )],
         ));
     }
-    let after_oracle = since_oracle_model_prefixes();
     for (name, rust) in rust_schemas() {
-        // The recorded probe (0.23.0) lacks the models of the platforms the
-        // train ports onto it; skip those, keyed by their config class's
-        // prefix. On this oracle no such prefix exists, so this is a no-op.
-        if after_oracle
-            .iter()
-            .any(|prefix| name.starts_with(prefix.as_str()))
-        {
-            continue;
-        }
         let pydantic = oracle["schemas"]
             .get(name)
             .with_context(|| format!("the probe wrote no schema for {name}"))?;
         let a = normalise(pydantic, Side::Pydantic, &[]);
-        let mut rust = rust;
-        drop_since_oracle_properties(&mut rust);
         let b = normalise(&rust, Side::Schemars, &[]);
         let mut found = differences(&a, &b);
         found.retain(|difference| {
@@ -393,22 +364,6 @@ pub fn compare_schemas(oracle: &Value) -> Result<Vec<(String, Vec<String>)>> {
         .collect();
     out.push(("(approvals)".to_owned(), stale));
     Ok(out)
-}
-
-/// Removes, at any depth, each `properties` member named after a platform
-/// the recorded oracle lacks (`SINCE_ORACLE`): `RuleConfigurations` and the
-/// rule models carry their blocks, which the 0.23.0 probe's schemas cannot.
-fn drop_since_oracle_properties(schema: &mut Value) {
-    match schema {
-        Value::Object(members) => {
-            if let Some(Value::Object(properties)) = members.get_mut("properties") {
-                properties.retain(|key, _| !opentide_schema::platforms::after_oracle(key));
-            }
-            members.values_mut().for_each(drop_since_oracle_properties);
-        }
-        Value::Array(items) => items.iter_mut().for_each(drop_since_oracle_properties),
-        _ => {}
-    }
 }
 
 fn python(options: &Options, repo: &Path, target: &Path) -> Result<PathBuf> {
@@ -640,42 +595,30 @@ mod tests {
     }
 
     #[test]
-    fn properties_of_platforms_the_oracle_lacks_are_dropped() {
-        let mut schema = serde_json::json!({"properties": {
-            "configurations": {"properties": {"google_secops": {}, "sentinel": {}}},
-            "google_secops": {"type": "object"}
-        }});
-        drop_since_oracle_properties(&mut schema);
-        assert_eq!(
-            schema,
-            serde_json::json!({"properties": {"configurations": {"properties": {"sentinel": {}}}}})
-        );
-    }
-
-    #[test]
     fn an_approved_property_is_one_the_oracle_lacks_at_its_path() {
-        let added = "/properties/advanced: pydantic (absent), rust {\"type\":\"object\"}";
-        assert_eq!(approved_property("SplunkConfig", added), Some(0));
+        let path = "/properties/advanced/additionalProperties/description";
+        let added = format!("{path}: pydantic (absent), rust \"A value\"");
+        assert_eq!(approved_property("SplunkConfig", &added), Some(0));
         // Another model, another path, or a property both have.
-        assert_eq!(approved_property("SentinelConfig", added), None);
+        assert_eq!(approved_property("SentinelConfig", &added), None);
         assert_eq!(
             approved_property(
                 "SplunkConfig",
-                "/properties/advancedx: pydantic (absent), rust {}"
+                "/properties/advanced: pydantic (absent), rust {}"
             ),
             None
         );
         assert_eq!(
             approved_property(
                 "SplunkConfig",
-                "/properties/advanced/type: pydantic \"object\", rust \"array\""
+                &format!("{path}: pydantic \"Other\", rust \"A value\"")
             ),
             None
         );
         assert_eq!(
             approved_property(
                 "SplunkConfig",
-                "/properties/advanced: pydantic {}, rust (absent)"
+                &format!("{path}: pydantic \"A value\", rust (absent)")
             ),
             None
         );
@@ -688,12 +631,13 @@ mod tests {
     /// reported stale.
     #[test]
     fn approved_properties_pass_and_go_stale() {
+        const VALUE: &str = "A `savedsearches.conf` value";
         let mut schemas = serde_json::Map::new();
         for (name, schema) in rust_schemas() {
             let mut schema = schema;
             for entry in APPROVED_PROPERTIES {
                 if entry.models.contains(&name) {
-                    remove_property(&mut schema, "advanced");
+                    remove_description(&mut schema, VALUE);
                 }
             }
             schemas.insert(name.to_owned(), schema);
@@ -719,7 +663,7 @@ mod tests {
             stale.iter().all(|line| line.contains(" under ")),
             "{stale:?}"
         );
-        // The oracle with the property too: the approval is stale.
+        // The oracle with the description too: the approval is stale.
         let mut full = serde_json::Map::new();
         for (name, schema) in rust_schemas() {
             full.insert(name.to_owned(), schema);
@@ -769,21 +713,25 @@ mod tests {
         );
     }
 
-    /// Removes every property named `name` from `schema`, its definitions
-    /// included.
-    fn remove_property(schema: &mut Value, name: &str) {
+    /// Removes every `description` that starts with `prefix` from `schema`,
+    /// its definitions included.
+    fn remove_description(schema: &mut Value, prefix: &str) {
         match schema {
             Value::Object(map) => {
-                if let Some(Value::Object(properties)) = map.get_mut("properties") {
-                    properties.remove(name);
+                if map
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .is_some_and(|text| text.starts_with(prefix))
+                {
+                    map.remove("description");
                 }
                 for value in map.values_mut() {
-                    remove_property(value, name);
+                    remove_description(value, prefix);
                 }
             }
             Value::Array(items) => items
                 .iter_mut()
-                .for_each(|item| remove_property(item, name)),
+                .for_each(|item| remove_description(item, prefix)),
             _ => {}
         }
     }

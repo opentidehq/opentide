@@ -206,6 +206,26 @@ def sources_of(diagnostics: Sequence[Any], root: Path) -> dict[str, str]:
 # -- suites ------------------------------------------------------------------
 
 
+#: lint's ``recommended`` check off, as the golden fixture ``fault-lint`` has it:
+#: opentide 0.28.1's check crashes on the fault workspace's invalid configuration
+#: files (#1081), so lint would report nothing to render.
+LINT_TOML = "[recommended]\nenabled = false\n"
+
+
+def captured_fault(command: str, root: Path) -> list[Any]:
+    """*command*'s diagnostics on the fault workspace; lint's with its recommended check off."""
+    if command != "lint":
+        return captured([command], root)
+    lint_toml = root / ".opentide" / "configurations" / "lint.toml"
+    if lint_toml.exists():
+        raise SystemExit(f"{lint_toml} exists: the fault workspace has no lint.toml")
+    lint_toml.write_text(LINT_TOML, encoding="utf-8")
+    try:
+        return captured([command], root)
+    finally:
+        lint_toml.unlink()
+
+
 def fault_suite(root: Path, command: str) -> dict[str, str]:
     """``validate`` or ``lint`` of the fault workspace: frames, reports and CI sinks."""
     from opentide import __version__
@@ -213,7 +233,7 @@ def fault_suite(root: Path, command: str) -> dict[str, str]:
     from opentide.cli.ui.reports import codequality_report, sarif_report
     from opentide.core.io import dump_json_text
 
-    raw = captured([command], root)
+    raw = captured_fault(command, root)
     shown = [masked_diagnostic(item, root) for item in raw]
     out: dict[str, str] = {}
     data = {

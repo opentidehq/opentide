@@ -138,22 +138,6 @@ pub const APPROVED: &[Approved] = &[
         applies: harfanglab_yara,
     },
     Approved {
-        id: "splunk-advanced",
-        reason: "a Splunk block's `advanced` table is a field of the platform::splunk::1.0 \
-                 layout again (0.24.0, #878), the only place a rule sets savedsearches.conf \
-                 keys no other field sets; the oracle (0.23.0) refused it as an unknown key",
-        changelog: "**A Splunk block's `advanced` table validates and deploys again**",
-        applies: splunk_advanced,
-    },
-    Approved {
-        id: "legacy-text-id-crash",
-        reason: "a legacy `rule_id::<tenant>` key whose id is text is `external_id_in_rule` \
-                 (0.26.0, #913); the oracle (0.23.0) read the tenant as a schema version and \
-                 crashed before it wrote a report",
-        changelog: "**`validate` no longer crashes on a legacy external-id key with a text value**",
-        applies: legacy_text_id_crash,
-    },
-    Approved {
         id: "sentinel-durations",
         reason: "KG-01 (#810): a Sentinel duration deploy cannot read (`frequency: hourly`) is \
                  the model's `schema_validation` on the field, from every run, where the oracle \
@@ -181,30 +165,6 @@ pub const APPROVED: &[Approved] = &[
         applies: compile_empty_key_frame,
     },
 ];
-
-/// The oracle's `schema_validation` of a Splunk block's `advanced` table,
-/// which the Rust run accepts.
-fn splunk_advanced(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
-    let (Some(oracle), None) = (oracle, rust) else {
-        return false;
-    };
-    code(oracle) == "schema_validation"
-        && oracle["field_path"] == json!(["configurations", "splunk", "advanced"])
-        && oracle["message"] == json!("Extra inputs are not permitted")
-}
-
-/// A case the oracle crashed on with #913's error (its `failure`, no
-/// report), which the Rust run validates.
-fn legacy_text_id_crash(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
-    let (Some(oracle), Some(rust)) = (oracle, rust) else {
-        return false;
-    };
-    rust == &json!("a report")
-        && oracle["code"] == json!("internal")
-        && oracle["message"].as_str().is_some_and(|message| {
-            message.starts_with("ValueError: invalid literal for int() with base 10: ")
-        })
-}
 
 /// The parts of a `--fix` case no approved finding explains.
 const FIX_PARTS: [&str; 7] = [
@@ -406,36 +366,6 @@ fn invalid_uuid_every_file(
                 && reported["field_path"] == rust["field_path"]
                 && reported["file_path"] != rust["file_path"]
         })
-}
-
-/// Every finding's `message` without the platforms the recorded oracle
-/// lacks (`opentide_schema::platforms::SINCE_ORACLE`) in the lists of
-/// platforms it names (`deployment_state_platform`'s "only crowdstrike,
-/// defender_for_endpoint, google_secops, … store external ids"): the 0.23.0
-/// oracle's lists predate them. O2 empties `SINCE_ORACLE`, and this with it.
-fn without_since_oracle_names(report: &mut Json) {
-    for key in ["issues", "warnings"] {
-        let Some(findings) = report.get_mut(key).and_then(Json::as_array_mut) else {
-            continue;
-        };
-        for finding in findings {
-            if let Some(Json::String(message)) = finding.get_mut("message") {
-                *message = without_since_oracle_items(message);
-            }
-        }
-    }
-}
-
-/// `text` without each `SINCE_ORACLE` id that stands as an item of a
-/// comma-separated list (`a, google_secops, b`, `a, google_secops`).
-fn without_since_oracle_items(text: &str) -> String {
-    let mut out = text.to_owned();
-    for id in opentide_schema::platforms::SINCE_ORACLE {
-        out = out
-            .replace(&format!("{id}, "), "")
-            .replace(&format!(", {id}"), "");
-    }
-    out
 }
 
 /// KG-01: the oracle's `compile_invalid_rule` on a Sentinel block for a
@@ -752,8 +682,7 @@ fn run_case(
     };
     let root = ws.to_string_lossy().into_owned();
     let text = crate::payloads::placeholder(&serde_json::to_string(&validation.report)?, ws);
-    let mut rust: Json = serde_json::from_str(&text)?;
-    without_since_oracle_names(&mut rust);
+    let rust: Json = serde_json::from_str(&text)?;
     let list = |report: &Json, key: &str| -> Vec<Json> {
         report[key].as_array().cloned().unwrap_or_default()
     };
@@ -1142,43 +1071,7 @@ pub fn run(args: &[String]) -> Result<u8> {
 #[cfg(test)]
 mod tests {
 
-    #[test]
-    fn platform_lists_leave_out_the_platforms_the_oracle_lacks() {
-        let id = opentide_schema::platforms::SINCE_ORACLE[0];
-        assert_eq!(
-            super::without_since_oracle_items(&format!(
-                "only crowdstrike, {id}, sysdig store external ids"
-            )),
-            "only crowdstrike, sysdig store external ids"
-        );
-        assert_eq!(
-            super::without_since_oracle_items(&format!("only crowdstrike, {id}")),
-            "only crowdstrike"
-        );
-        let mut report = json!({"issues": [{"message": format!("a, {id}")}], "warnings": []});
-        super::without_since_oracle_names(&mut report);
-        assert_eq!(report["issues"][0]["message"], "a");
-    }
     use super::*;
-
-    #[test]
-    fn the_catchup_rules_name_one_finding_and_one_crash() {
-        let refused = json!({"code": "schema_validation", "message": "Extra inputs are not permitted",
-            "field_path": ["configurations", "splunk", "advanced"]});
-        assert!(splunk_advanced(Some(&refused), None, &[]));
-        assert!(!splunk_advanced(Some(&refused), Some(&refused), &[]));
-        let other = json!({"code": "schema_validation", "message": "Extra inputs are not permitted",
-            "field_path": ["configurations", "splunk", "search"]});
-        assert!(!splunk_advanced(Some(&other), None, &[]));
-
-        let crash = json!({"code": "internal",
-            "message": "ValueError: invalid literal for int() with base 10: 'prod'"});
-        let report = json!("a report");
-        assert!(legacy_text_id_crash(Some(&crash), Some(&report), &[]));
-        let other = json!({"code": "internal", "message": "KeyError: 'x'"});
-        assert!(!legacy_text_id_crash(Some(&other), Some(&report), &[]));
-        assert!(!legacy_text_id_crash(None, Some(&report), &[]));
-    }
 
     fn argv(args: &[&str]) -> Vec<String> {
         ["opentide", "--json", "validate"]

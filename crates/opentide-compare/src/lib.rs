@@ -154,6 +154,19 @@ pub struct Approval {
     pub issue: String,
 }
 
+/// The digests of a file whose bytes differ and no `sha256` entry
+/// approves: what a `sha256` entry pinning the two files would name, so an
+/// oracle move can re-pin one without running the case again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FileDigests {
+    /// `file:<path>`.
+    pub target: String,
+    /// The SHA-256 of the oracle's normalised bytes.
+    pub oracle: String,
+    /// The SHA-256 of the candidate's normalised bytes.
+    pub candidate: String,
+}
+
 /// The comparison of one case.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CaseReport {
@@ -169,6 +182,9 @@ pub struct CaseReport {
     pub omitted: usize,
     /// What differs and is approved.
     pub approved: Vec<Approval>,
+    /// The digests of each file whose bytes differ unapproved.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub digests: Vec<FileDigests>,
 }
 
 impl CaseReport {
@@ -195,6 +211,7 @@ pub fn compare(
         differences: Vec::new(),
         omitted: 0,
         approved: Vec::new(),
+        digests: Vec::new(),
     };
     report.exit_code(oracle.exit_code, candidate.exit_code);
     report.content(&Target::Stdout, &oracle.stdout, &candidate.stdout);
@@ -207,6 +224,7 @@ pub fn compare(
         differences: report.differences,
         omitted: report.omitted,
         approved: report.approved,
+        digests: report.digests,
     }
 }
 
@@ -245,6 +263,7 @@ struct Comparison<'a> {
     differences: Vec<Difference>,
     omitted: usize,
     approved: Vec<Approval>,
+    digests: Vec<FileDigests>,
 }
 
 impl Comparison<'_> {
@@ -307,16 +326,21 @@ impl Comparison<'_> {
                 _ => None,
             })
             .collect();
-        if !digests.is_empty() {
-            let (found_oracle, found_candidate) =
-                (ledger::sha256_hex(oracle), ledger::sha256_hex(candidate));
-            if let Some((index, ..)) = digests
-                .iter()
-                .find(|(_, o, c)| *o == found_oracle && *c == found_candidate)
-            {
-                self.approve(target, *index);
-                return;
-            }
+        let (found_oracle, found_candidate) =
+            (ledger::sha256_hex(oracle), ledger::sha256_hex(candidate));
+        if let Some((index, ..)) = digests
+            .iter()
+            .find(|(_, o, c)| *o == found_oracle && *c == found_candidate)
+        {
+            self.approve(target, *index);
+            return;
+        }
+        if matches!(target, Target::File(_)) {
+            self.digests.push(FileDigests {
+                target: target.to_string(),
+                oracle: found_oracle,
+                candidate: found_candidate,
+            });
         }
         if self.help_content(target, oracle, candidate) {
             return;
@@ -1176,6 +1200,52 @@ changelog = "**x**"
             id: "generate/json/vscode/schemas",
         };
         assert!(!compare(vscode, &oracle, &approved, &ledger, &mut Usage::default()).equal);
+    }
+
+    /// A file whose bytes differ unapproved is reported with both digests, as
+    /// a `sha256` entry would pin it; an approved file and a stream are not.
+    #[test]
+    fn a_differing_file_reports_its_two_digests() {
+        let run = |path: &str, bytes: &[u8]| Run {
+            stdout: bytes.to_vec(),
+            files: BTreeMap::from([(
+                path.to_owned(),
+                FileState::Written {
+                    mode: 0o644,
+                    bytes: bytes.to_vec(),
+                },
+            )]),
+            ..Run::default()
+        };
+        let case = Case {
+            command: "generate",
+            id: "generate/json/tide-corpus/schemas",
+        };
+        let report = compare(
+            case,
+            &run("ws/s.json", b"{\"a\": 1}"),
+            &run("ws/s.json", b"{\"b\": 2}"),
+            &Ledger::default(),
+            &mut Usage::default(),
+        );
+        assert!(!report.equal);
+        assert_eq!(
+            report.digests,
+            vec![FileDigests {
+                target: "file:ws/s.json".to_owned(),
+                oracle: ledger::sha256_hex(b"{\"a\": 1}"),
+                candidate: ledger::sha256_hex(b"{\"b\": 2}"),
+            }]
+        );
+        // Equal bytes report nothing.
+        let same = compare(
+            case,
+            &run("ws/s.json", b"{}"),
+            &run("ws/s.json", b"{}"),
+            &Ledger::default(),
+            &mut Usage::default(),
+        );
+        assert!(same.digests.is_empty());
     }
 
     /// A `json-sha256:` entry approves one value by its digest, absent on the
