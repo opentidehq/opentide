@@ -202,9 +202,9 @@ impl Table {
             .unwrap_or(0);
         let mut out = Vec::new();
         if let Some(title) = &self.title {
-            out.push(centred(title, table_width, &Style::new("italic")));
+            out.push(centred(title, table_width, &Style::ITALIC));
         }
-        let bold = Style::new("bold");
+        let bold = Style::BOLD;
         for (at, line) in lines.iter().enumerate() {
             if at > 0 && at < header_end {
                 out.push(header_line(line, &bold));
@@ -213,7 +213,7 @@ impl Table {
             }
         }
         if let Some(caption) = &self.caption {
-            out.push(centred(caption, table_width, &Style::new("italic dim")));
+            out.push(centred(caption, table_width, &Style::ITALIC.dim()));
         }
         out
     }

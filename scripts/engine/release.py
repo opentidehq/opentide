@@ -13,6 +13,8 @@
     release.py assets TAG           print the name of every asset the tag's release carries
     release.py check-assets DIR TAG DIR holds exactly the tag's assets
     release.py bump X.Y.Z[-rc.N]    set the workspace version and the internal pins
+    release.py pypi-version VERSION write VERSION (PEP 440: X.Y.Z, X.Y.ZrcN, or a CI
+                                    build's X.Y.Z.devN) into the Python package's crate
     release.py vendor [--clean]     copy each crate's shared assets into crates/*/assets
     release.py publish              publish every crate to crates.io, dependencies first
     release.py trust WORKFLOW       register WORKFLOW as each crate's trusted publisher
@@ -38,8 +40,13 @@ npm package of the release (`@opentide/opentide`, its native packages, the
 included. The tree keeps the npm packages at a placeholder version,
 `npm-version` writes the release's into them in the workflow, and
 `lockstep --npm` checks the result. The Python
-package's version is the tag's (hatch-vcs), which `scripts/build/release.py`
-checks against CHANGELOG.md.
+package's version is the workspace's too: maturin reads it from its crate,
+`bindings/python/` (`version.workspace = true`). A candidate's wheel
+(X.Y.ZrcN) or a CI build's (X.Y.Z.devN) carries another, which `pypi-version`
+writes into that crate alone, in Cargo's spelling (X.Y.Z-rc.N, X.Y.Z-dev.N),
+in the workflow's checkout: maturin writes it back as PEP 440, and the module
+reports the same (`opentide._native.__version__`). `scripts/build/release.py`
+checks the release's version against CHANGELOG.md.
 
 Crates embed catalogs, grammars, and highlight queries from the repository root.
 Cargo packages only what sits inside a crate, so `vendor` copies the files each
@@ -106,6 +113,9 @@ except ModuleNotFoundError:  # Python 3.10, which opentide's tests also run on
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKSPACE = ROOT / "Cargo.toml"
+#: The crate maturin compiles into the Python package, whose version the wheel takes.
+PYTHON_BINDING = ROOT / "bindings" / "python" / "Cargo.toml"
+LOCK = ROOT / "Cargo.lock"
 ASSET_INCLUDE = re.compile(r'env!\("OPENTIDE_ASSETS"\),\s*"/([^"]+)"')
 # Shipped in every crate: the licence the manifests name, and the third-party notices.
 LEGAL = ["LICENSE", "NOTICE"]
@@ -337,6 +347,47 @@ def bump(version: str) -> None:
     )
     WORKSPACE.write_text(text)
     subprocess.run(["cargo", "update", "--workspace"], cwd=ROOT, check=True)
+
+
+def cargo_version(pypi_version: str) -> str:
+    """The Cargo spelling of a wheel's version: X.Y.Z, X.Y.ZrcN as X.Y.Z-rc.N,
+    a CI build's X.Y.Z.devN as X.Y.Z-dev.N; anything else is an error."""
+    match = re.fullmatch(r"(\d+\.\d+\.\d+)(?:rc([1-9]\d*)|\.dev([1-9]\d*))?", pypi_version)
+    if not match:
+        raise ValueError(f"not a wheel version (X.Y.Z, X.Y.ZrcN, X.Y.Z.devN): {pypi_version}")
+    release, rc, dev = match.groups()
+    if rc:
+        return f"{release}-rc.{rc}"
+    if dev:
+        return f"{release}-dev.{dev}"
+    return release
+
+
+def set_pypi_version(pypi_version: str) -> None:
+    """Write the wheel's version into the Python package's crate (maturin reads
+    it there) and its entry in the lock, so that `--locked` builds: in a
+    workflow's checkout, never committed. The lock is edited as text, not by
+    `cargo update`, which would need the registry's index (and, in a
+    checkout, installs rust-toolchain.toml's release) before the build does."""
+    version = cargo_version(pypi_version)
+    edits = [
+        (PYTHON_BINDING, r'^version(?:\.workspace = true| = "[^"]*")$', f'version = "{version}"'),
+        (
+            LOCK,
+            r'^(name = "opentide-native"\n)version = "[^"]*"$',
+            rf'\g<1>version = "{version}"',
+        ),
+    ]
+    texts = []
+    for path, pattern, replacement in edits:
+        text, count = re.subn(
+            pattern, replacement, path.read_text(encoding="utf-8"), count=1, flags=re.MULTILINE
+        )
+        if count != 1:
+            raise ValueError(f"{path} has no version line for opentide-native")
+        texts.append((path, text))
+    for path, text in texts:
+        path.write_text(text, encoding="utf-8")
 
 
 def publishable_crates() -> list[dict]:
@@ -693,6 +744,12 @@ def main(argv: list[str]) -> None:
         case ["npm-version", version]:
             set_npm_version(version)
             print(f"the npm packages are at {version}")
+        case ["pypi-version", version]:
+            try:
+                set_pypi_version(version)
+            except ValueError as error:
+                sys.exit(f"pypi-version: {error}")
+            print(f"the Python package is at {version}")
         case ["prerelease", tag]:
             try:
                 print("false" if parse_tag(tag)[1] is None else "true")

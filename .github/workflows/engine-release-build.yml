@@ -31,7 +31,7 @@ on:
         type: string
         default: ""
       wheel-version:
-        description: "The PyPI wheel's version, for its SBOM (0.24.0, 0.24.0rc1); empty: hatch-vcs's"
+        description: "The PyPI wheel's version, for its SBOM (0.24.0, 0.24.0rc1); empty: the workspace's"
         type: string
         default: ""
       dry-run:
@@ -390,8 +390,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # The tags, for the wheel's version (hatch-vcs).
-          fetch-depth: 0
       # The release rust-toolchain.toml pins (`rustup toolchain install` with no
       # name), with the browser build's target cargo-cyclonedx resolves for.
       - name: Set up Rust
@@ -418,15 +416,12 @@ jobs:
           SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
           export SOURCE_DATE_EPOCH
           # The version the wheel carries: the release's, or for the dry run
-          # the one hatch-vcs gives this commit. hatch-vcs reads any tag ending
-          # in a version, the old `engine-v*` too: drop those from this job's
-          # own clone so only opentide's `v*` tags count.
+          # the workspace's, which maturin builds a wheel at (pyproject.toml).
           # WHEEL_VERSION is the step's env (the release's version, or empty).
           # shellcheck disable=SC2153
           wheel_version="${WHEEL_VERSION}"
           if [ -z "${wheel_version}" ]; then
-            git tag --list 'engine-v*' | xargs -r git tag -d >/dev/null
-            wheel_version="$(uvx --quiet --from hatch==1.18.2 --with hatch-vcs==0.5.0 hatch version)"
+            wheel_version="$(python3 scripts/engine/release.py version)"
           fi
           python3 scripts/engine/sbom.py generate dist --wheel-version "${wheel_version}" --npm-version "${NPM_VERSION}"
           python3 scripts/engine/sbom.py validate dist/*.cdx.json

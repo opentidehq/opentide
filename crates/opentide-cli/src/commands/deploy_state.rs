@@ -586,25 +586,12 @@ pub fn write_durable(path: &Path, text: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-/// An `OSError` as Python's `str()` writes it: `[Errno 13] Permission
-/// denied: '<path>'` (`[WinError 5] ...` on Windows).
-pub fn os_error_text(error: &std::io::Error, path: &Path) -> String {
-    let text = error.to_string();
-    let Some(code) = error.raw_os_error() else {
-        return text;
-    };
-    let reason = text
-        .strip_suffix(&format!(" (os error {code})"))
-        .unwrap_or(&text);
-    let tag = if cfg!(windows) { "WinError" } else { "Errno" };
-    format!("[{tag} {code}] {reason}: {:?}", path.display().to_string())
-}
-
-/// Why a state write failed: an `OSError` or a shard that cannot be used.
+/// Why a state write failed: the file and the system's error, or a shard
+/// that cannot be used.
 fn write_error_text(error: &WriteError) -> String {
     match error {
         WriteError::State(error) => error.to_string(),
-        WriteError::Io { error, path } => os_error_text(error, path),
+        WriteError::Io { error, path } => format!("{}: {error}", path.display()),
     }
 }
 
@@ -1020,17 +1007,15 @@ mod tests {
     }
 
     #[test]
-    fn an_os_error_names_its_errno_and_path() {
-        let error = std::io::Error::from_raw_os_error(13);
-        let text = os_error_text(&error, Path::new("/x/y.json"));
-        assert!(
-            text.starts_with('[') && text.ends_with(": \"/x/y.json\""),
-            "{text}"
-        );
-        assert_eq!(
-            os_error_text(&std::io::Error::other("boom"), Path::new("/x")),
-            "boom"
-        );
+    fn a_write_error_names_the_file_and_the_systems_error() {
+        let error = WriteError::Io {
+            error: std::io::Error::from_raw_os_error(13),
+            path: PathBuf::from("/x/y.json"),
+        };
+        let text = write_error_text(&error);
+        assert!(text.starts_with("/x/y.json: "), "{text}");
+        assert!(text.ends_with(" (os error 13)"), "{text}");
+        assert!(!text.contains("Errno"), "{text}");
     }
 
     #[test]

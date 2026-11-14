@@ -270,12 +270,16 @@ impl<'a> Client<'a> {
         let mut url = format!("{}{}", self.endpoint.trim_end_matches('/'), request.path);
         if !request.query.is_empty() {
             url.push('?');
-            url.push_str(&crate::encode::urlencode(
-                request
-                    .query
-                    .iter()
-                    .map(|(key, value)| (*key, value.as_str())),
-            ));
+            url.push_str(
+                &url::form_urlencoded::Serializer::new(String::new())
+                    .extend_pairs(
+                        request
+                            .query
+                            .iter()
+                            .map(|(key, value)| (*key, value.as_str())),
+                    )
+                    .finish(),
+            );
         }
         let mut builder = self
             .cx

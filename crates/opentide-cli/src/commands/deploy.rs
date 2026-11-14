@@ -497,23 +497,21 @@ fn plan_view(result: &Json, summary: &[(String, Json)]) -> Vec<(Text, Option<usi
     };
     let separator = format!(" {} ", glyphs::SEPARATOR);
     let (bold, dim) = (Style::new("bold"), Style::new("dim"));
-    let mut header = Text::plain("Deploy plan");
+    // The header is bold throughout, its labels bold and dim.
+    let bold_dim = bold.combine(&dim);
+    let mut header = Text::styled("Deploy plan", &bold);
     let strategies: Vec<String> = match result.get("strategies") {
         Some(Json::Array(items)) => items.iter().map(|item| json_text(Some(item))).collect(),
         _ => Vec::new(),
     };
     if !strategies.is_empty() {
-        header.append(&format!("{separator}strategy "), &dim);
-        header.push_str(&strategies.join(" "));
+        header.append(&format!("{separator}strategy "), &bold_dim);
+        header.append(&strategies.join(" "), &bold);
     }
     if let Some(scope) = scope {
-        header.append(&format!("{separator}{scope}"), &dim);
+        header.append(&format!("{separator}{scope}"), &bold_dim);
     }
-    header.append(&format!("{separator}dry run, nothing is sent"), &dim);
-    // The header's own style is bold, under the dim parts too (a Rich
-    // `Text` with a base style).
-    let length = header.len();
-    header.stylize(&bold, 0, length);
+    header.append(&format!("{separator}dry run, nothing is sent"), &bold_dim);
     let mut lines: Vec<(Text, Option<usize>)> = vec![(header, Some(4))];
     let mut platforms: Vec<(String, Vec<&Json>)> = Vec::new();
     for change in changes {
@@ -567,18 +565,18 @@ fn plan_view(result: &Json, summary: &[(String, Json)]) -> Vec<(Text, Option<usi
                 .map(|row| {
                     let (mut glyph, mut label, mut style) =
                         row_style(&json_text(row.get("action")));
-                    if row.get("fails").is_some_and(truthy) {
+                    if row.get("fails") == Some(&Json::Bool(true)) {
                         // Its frame prints below; the row must not promise a create.
                         (glyph, label, style) = (glyphs::FAILED, "would fail", "bold red");
                     }
                     let uuid = json_text(row.get("uuid"));
                     let name = match row.get("name") {
-                        Some(value) if truthy(value) => json_text(Some(value)),
+                        Some(Json::Str(name)) if !name.is_empty() => name.clone(),
                         _ => uuid.clone(),
                     };
                     let status = match row.get("status") {
-                        Some(value) if truthy(value) => {
-                            format!("status {}", json_text(Some(value)))
+                        Some(Json::Str(status)) if !status.is_empty() => {
+                            format!("status {status}")
                         }
                         _ => String::new(),
                     };
@@ -598,20 +596,6 @@ fn plan_view(result: &Json, summary: &[(String, Json)]) -> Vec<(Text, Option<usi
     }
     lines.push((Text::default(), Some(4)));
     lines
-}
-
-/// Python's truthiness of a JSON value.
-fn truthy(value: &Json) -> bool {
-    match value {
-        Json::Null => false,
-        Json::Bool(flag) => *flag,
-        Json::Int(number) => *number != 0,
-        Json::UInt(number) => *number != 0,
-        Json::Float(number) => *number != 0.0,
-        Json::Str(text) => !text.is_empty(),
-        Json::Array(items) => !items.is_empty(),
-        Json::Object(members) => !members.is_empty(),
-    }
 }
 
 #[cfg(test)]

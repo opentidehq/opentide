@@ -521,9 +521,9 @@ fn doctors_network_checks_through_a_proxy_that_never_answers_time_out() {
         &Interrupt::default(),
     );
     // PyPI is asked through the proxy, which takes the CONNECT and never
-    // answers: after `NETWORK_TIMEOUT` the check is a warning named as
-    // requests names a proxied request that failed, and the proxy check
-    // still passes (its TCP connection opens).
+    // answers: after `NETWORK_TIMEOUT` the check is a warning that names
+    // the HTTP client's error, and the proxy check still passes (its TCP
+    // connection opens).
     assert_eq!(ran.code, 0, "{ran:?}");
     let document = ran.document();
     let checks = document["checks"].as_array().unwrap();
@@ -536,10 +536,12 @@ fn doctors_network_checks_through_a_proxy_that_never_answers_time_out() {
     };
     let latest = check("opentide_latest");
     assert_eq!(latest["status"], "warn", "{latest}");
-    assert_eq!(
-        latest["message"], "Could not ask PyPI for the latest release (ProxyError)",
+    let message = latest["message"].as_str().unwrap();
+    assert!(
+        message.starts_with("Could not ask PyPI for the latest release (") && message.len() > 50,
         "{latest}"
     );
+    assert!(!message.contains("ProxyError"), "{latest}");
     assert_eq!(check("proxy")["status"], "pass");
     let timeout = opentide_cli::commands::doctor_network::NETWORK_TIMEOUT;
     assert!(ran.took >= timeout, "{:?}", ran.took);
