@@ -438,7 +438,7 @@ jobs:
         id: week
         shell: bash
         run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      # `v4`: the build's settings (RUSTFLAGS, the profile's debuginfo and
+      # `v5`: the build's settings (RUSTFLAGS, the profile's debuginfo and
       # strip, the wrapper) are in every compile's sccache key: bump it with them, or the
       # week's copy, already saved, keeps the old compiles and none is saved.
       - name: Restore the compiler cache
@@ -446,8 +446,8 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-build-v4-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-build-v4-${{ hashFiles('rust-toolchain.toml') }}-
+          key: sccache-build-v5-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-build-v5-${{ hashFiles('rust-toolchain.toml') }}-
 
       # The affected crates' test binaries, with the binaries their tests run
       # (CARGO_BIN_EXE_*). `--timings`: the report is uploaded below.
@@ -660,7 +660,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
-          key: sccache-build-v4-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          key: sccache-build-v5-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
   # The Python package as a package (Python is the packaging layer): its
   # surface (the SDK, the models, the plugin API, the console script) and the
