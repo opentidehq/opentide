@@ -588,13 +588,16 @@ jobs:
           name: nextest-archive
           path: ${{ runner.temp }}
 
-      # The tests were built in the build job's checkout, at this same path:
-      # env!("CARGO_BIN_EXE_*") names <checkout>/target/debug/<bin>, so the
-      # archive is extracted where the checkout's target/ (gitignored) points.
-      - name: Where the archive is extracted
+      # The tests were built in the build job's checkout, at this same path,
+      # and name it at compile time (env!("CARGO_BIN_EXE_*"),
+      # CARGO_TARGET_TMPDIR): the archive's target/ becomes this checkout's
+      # target/ (gitignored), not a link to it, whose resolved path a test
+      # would print.
+      - name: Extract the archive into target/
         run: |
-          mkdir -p "${RUNNER_TEMP}/nextest"
-          ln -s "${RUNNER_TEMP}/nextest/target" target
+          cargo nextest list --archive-file "${RUNNER_TEMP}/tests.tar.zst" \
+            --workspace-remap "${GITHUB_WORKSPACE}" --extract-to "${RUNNER_TEMP}/nextest" >/dev/null
+          mv "${RUNNER_TEMP}/nextest/target" target
 
       # A test writes under a temporary folder, never in the checkout (#931).
       - name: Note the checkout's state
@@ -607,9 +610,10 @@ jobs:
           TOTAL: ${{ strategy.job-total }}
         run: >-
           cargo nextest run --profile ci
-          --archive-file "${RUNNER_TEMP}/tests.tar.zst"
+          --binaries-metadata target/nextest/binaries-metadata.json
+          --cargo-metadata target/nextest/cargo-metadata.json
+          --target-dir-remap "${GITHUB_WORKSPACE}/target"
           --workspace-remap "${GITHUB_WORKSPACE}"
-          --extract-to "${RUNNER_TEMP}/nextest"
           --partition "count:${PARTITION}/${TOTAL}"
           --no-tests=pass
           -E 'not binary_id(/^opentide-schema::ui$/)'

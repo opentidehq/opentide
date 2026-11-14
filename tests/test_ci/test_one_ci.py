@@ -344,7 +344,7 @@ def test_ci_fails_when_the_builds_tests_leave_a_file_in_the_checkout() -> None:
 
 
 # A cargo command that compiles nothing: the archive's tests, rustfmt, the version.
-NO_BUILD = re.compile(r"\bcargo (?:fmt|--version)\b|--archive-file")
+NO_BUILD = re.compile(r"\bcargo (?:fmt|--version)\b|--archive-file|--binaries-metadata")
 # Jobs that install a package as a user would, with the user's flags.
 AS_A_USER = {"smoke-sdist", "smoke-cargo"}
 

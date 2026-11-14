@@ -409,8 +409,10 @@ def test_only_the_build_compiles_the_gates_rust(job_id: str) -> None:
         for line in run.splitlines():
             found = COMPILES.search(line)
             if found and job_id not in COMPILES_ITS_OWN:
-                # The archive's tests run without compiling.
-                assert "nextest run" in found.group(0) and "--archive-file" in run, (
+                # The archive's tests run without compiling: from the archive,
+                # or from its extracted metadata (nextest's reuse-build options).
+                reused = "--archive-file" in run or "--binaries-metadata" in run
+                assert "nextest run" in found.group(0) and reused, (
                     job_id,
                     line,
                 )
@@ -541,7 +543,14 @@ def test_the_rust_tests_run_the_archive_in_partitions() -> None:
     nextest = step("rust-tests", name="cargo nextest (profile ci)")
     command = " ".join(nextest["run"].split())
     assert command.startswith("cargo nextest run --profile ci")
-    assert '--archive-file "${RUNNER_TEMP}/tests.tar.zst"' in command
+    # The archive's target/ is this checkout's target/: the binaries' compile-time
+    # paths (CARGO_BIN_EXE_*, CARGO_TARGET_TMPDIR) name it.
+    extract = " ".join(step("rust-tests", name="Extract the archive into target/")["run"].split())
+    assert 'cargo nextest list --archive-file "${RUNNER_TEMP}/tests.tar.zst"' in extract
+    assert 'mv "${RUNNER_TEMP}/nextest/target" target' in extract
+    assert "--binaries-metadata target/nextest/binaries-metadata.json" in command
+    assert "--cargo-metadata target/nextest/cargo-metadata.json" in command
+    assert '--target-dir-remap "${GITHUB_WORKSPACE}/target"' in command
     assert '--workspace-remap "${GITHUB_WORKSPACE}"' in command
     assert '--partition "count:${PARTITION}/${TOTAL}"' in command
     assert nextest["env"] == {
