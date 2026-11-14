@@ -49,6 +49,12 @@ PUSH_ONLY = "github.event_name == 'push'"
 # The nightly and pushes to development, the default branch whose caches every
 # branch reads: the families no pull request needs a copy of on its own base.
 DEVELOPMENT_ONLY = "(github.event_name == 'schedule' || github.ref == 'refs/heads/development')"
+# full-set-Linux is saved on integration/unified-core too: development's ci.yml
+# predates the family and saves none, so integration's full set built cold.
+FULL_SET_SAVE = (
+    "(github.event_name == 'schedule' || github.ref == 'refs/heads/development'"
+    " || github.ref == 'refs/heads/integration/unified-core')"
+)
 
 # The engine's debug tree: engine-test's Linux cell saves it, the Linux jobs
 # that build a subset of it read it.
@@ -487,7 +493,7 @@ def test_no_cache_is_saved_from_a_pull_request() -> None:
                     checked += 1
                 elif uses.startswith(SCCACHE_SAVE):
                     condition = str(step.get("if", ""))
-                    assert condition.startswith((PUSH_ONLY, DEVELOPMENT_ONLY)), where
+                    assert condition.startswith((PUSH_ONLY, DEVELOPMENT_ONLY, FULL_SET_SAVE)), where
                     checked += 1
                 elif uses.startswith("actions/cache@"):
                     raise AssertionError(f"{where}: actions/cache saves on every event")
@@ -627,7 +633,8 @@ def test_the_full_set_shares_one_compiler_cache_per_os() -> None:
     # restores development's (#841). Linux's only: conformance's macOS and
     # Windows cells build without one.
     (saver,) = {c.save_condition for c in _compiler_caches() if c.job == "conformance"}
-    assert str(saver).startswith(DEVELOPMENT_ONLY), saver
+    assert str(saver).startswith(FULL_SET_SAVE), saver
+    assert "train/" not in str(saver), saver
     assert str(saver).endswith(LINUX_ONLY), saver
     used = {str(jobs[j]["runs-on"]) for j in FULL_SET_JOBS if j != "conformance"}
     assert used == {"ubuntu-latest"}, used
@@ -701,7 +708,10 @@ def test_only_the_core_families_are_saved_per_base_branch() -> None:
         if cache.saves is None:
             continue
         condition = str(cache.save_condition)
-        if cache.saves.startswith(("sccache-full-set-", "sccache-release-")):
+        if cache.saves.startswith("sccache-full-set-"):
+            assert condition.startswith(FULL_SET_SAVE), (cache.job, condition)
+            full_set_and_release += 1
+        elif cache.saves.startswith("sccache-release-"):
             assert condition.startswith(DEVELOPMENT_ONLY), (cache.job, condition)
             full_set_and_release += 1
         else:

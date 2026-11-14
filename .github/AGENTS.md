@@ -137,8 +137,9 @@ base branch did not fit beside the core families and evicted them (#841). The fa
 `lint`, `engine-check` (`engine`), `engine-dev-ubuntu-latest-<n>` (each Linux `engine-test-part` shard;
 `clients` and `elastic-sweep` restore Linux shard 2's, which tests `opentide-lsp` and `opentide-analysis`), `corpus` (`corpus-part`'s generator; the other
 parts and `corpus-queries` restore it), `python-engine` (`test`'s 3.14 cell; the other Linux
-Python jobs restore it), `golden-compare` (part 1; the other parts restore it), `wasi` (the `wasi` job: the WASI module's crates in the `wasi` profile and xtask's, which no other job builds), and `full-set-Linux` (`conformance`'s Linux cell, on `development` and by the
-nightly only; the full set's other Rust jobs restore it, on any branch development's: `facade`, `node`, `npm-install`, `engine-wasm`,
+Python jobs restore it), `golden-compare` (part 1; the other parts restore it), `wasi` (the `wasi` job: the WASI module's crates in the `wasi` profile and xtask's, which no other job builds), and `full-set-Linux` (`conformance`'s Linux cell, on `development`, on `integration/unified-core`
+(whose full set runs while development's ci.yml predates the family, so none was saved and every
+full-set job built cold there) and by the nightly; not per release train; the full set's other Rust jobs restore it, on any branch development's: `facade`, `node`, `npm-install`, `engine-wasm`,
 `engine-package`, `bench`). **Linux only:** macOS and Windows keep no compiler cache (engine-test's full-set cells, `conformance`'s, `cli-windows-smoke`, the release dry run's runners: the restores and saves run under `runner.os == 'Linux'`, `test_only_linux_keeps_a_compiler_cache`). Theirs, about a gigabyte a family and saved by every push's full set on each base branch, filled the 10 GB with integration's and the train's core families, so those were evicted between pushes (`cache-report.yml` on integration: 10,020 MB in use, #841); they run in the full set only, which no pull request's gates wait on. No job with a compiler cache restores a
 rust-cache target tree too: that tree (about 0.7 GB a family) is what sccache covers, and the
 two together, with a key per source tree, saved about 4 GB a push, more than GitHub's 10 GB per

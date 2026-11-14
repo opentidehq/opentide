@@ -373,14 +373,16 @@ jobs:
   #                       profile) and xtask
   #   full-set-Linux      the full set's other Rust jobs (facade, node,
   #                       npm-install, engine-wasm, engine-package, bench):
-  #                       `conformance` saves it, on development and by the
-  #                       nightly only
+  #                       `conformance` saves it, on development and
+  #                       integration/unified-core and by the nightly
   #
   # The families above full-set-Linux are saved from a push to each base branch
-  # (a pull request reads its base branch's caches); full-set-Linux and the
-  # release dry run's (engine-release-build.yml, one per Linux runner) on
-  # development and by the nightly only, whose caches every branch reads: a
-  # copy per base branch did not fit beside the core families in 10 GB (#841).
+  # (a pull request reads its base branch's caches); full-set-Linux on
+  # development, integration/unified-core (whose full set runs while
+  # development's ci.yml predates the family) and by the nightly; the release
+  # dry run's (engine-release-build.yml, one per Linux runner) on development
+  # and by the nightly only. Not per release train: a copy per base branch did
+  # not fit beside the core families in 10 GB (#841).
   # Linux only: macOS and Windows (engine-test's full-set cells, conformance's,
   # cli-windows-smoke, the release's) build without a compiler cache. Theirs,
   # a gigabyte each and saved by every push's full set, crowded the families
@@ -1190,13 +1192,16 @@ jobs:
         if: ${{ !cancelled() }}
         run: sccache --show-stats
 
-      # The full set's compiler cache for this OS, which the other full-set
-      # jobs restore: saved by the nightly and pushes to development only
-      # (the default branch, whose caches every branch reads), once a week.
-      # A copy per base branch did not fit beside the core families in the
-      # 10 GB GitHub keeps (#841).
+      # The full set's Linux compiler cache, which the other full-set jobs
+      # restore: saved by the nightly and pushes to development (the default
+      # branch, whose caches every branch reads), and by pushes to
+      # integration/unified-core, whose full set is the one that runs while
+      # development's ci.yml predates this family (it saves none, so every
+      # full-set job built cold there, #841). Once a week. Not on a release
+      # train: a copy per base branch did not fit beside the core families
+      # in the 10 GB GitHub keeps.
       - name: Save the compiler cache
-        if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development') && steps.sccache.outputs.cache-hit != 'true' && runner.os == 'Linux'
+        if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development' || github.ref == 'refs/heads/integration/unified-core') && steps.sccache.outputs.cache-hit != 'true' && runner.os == 'Linux'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
