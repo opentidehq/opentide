@@ -109,7 +109,7 @@ pub fn root() -> Command {
 }
 
 /// What `--help` says of itself, on every command.
-pub const HELP_FLAG_HELP: &str = "Show this message and exit.";
+pub const HELP_FLAG_HELP: &str = "Print help";
 
 /// clap's settings for how `command` and everything under it parse:
 ///

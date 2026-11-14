@@ -37,7 +37,7 @@ test('the bin exits with the command line\'s code', () => {
 
   const typo = run(['valdiate'], { env: { ...process.env, OPENTIDE_OUTPUT: 'plain' } })
   assert.equal(typo.status, 2)
-  assert.ok(typo.stderr.startsWith("error: No such command 'valdiate'."), typo.stderr)
+  assert.ok(typo.stderr.startsWith('error: Unknown command "valdiate".'), typo.stderr)
 
   const ws = tideCorpus()
   const validate = run(['--json', 'validate'], { cwd: ws })
