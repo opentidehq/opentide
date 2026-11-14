@@ -275,6 +275,7 @@ pub fn convert(value: &opentide_compile::Json) -> Json {
         From::Null => Json::Null,
         From::Bool(flag) => Json::Bool(*flag),
         From::Int(integer) => Json::Int(*integer),
+        From::UInt(integer) => Json::UInt(*integer),
         From::Float(float) => Json::Float(*float),
         From::Str(text) => Json::Str(text.clone()),
         From::Array(items) => Json::Array(items.iter().map(convert).collect()),

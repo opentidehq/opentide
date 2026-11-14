@@ -33,6 +33,12 @@ pub fn node_of(value: &Json) -> Node {
         Json::Null => Value::Null,
         Json::Bool(flag) => Value::Bool(*flag),
         Json::Int(integer) => Value::Int(*integer),
+        // The node has no integer beyond i64: the nearest float, as before.
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "only an integer beyond i64 is approximated"
+        )]
+        Json::UInt(integer) => Value::Float(*integer as f64),
         Json::Float(float) => Value::Float(*float),
         Json::Str(text) => Value::Str(text.clone()),
         Json::Array(items) => Value::Seq(items.iter().map(|item| node_of(item).into()).collect()),
