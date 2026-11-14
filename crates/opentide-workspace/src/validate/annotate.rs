@@ -217,25 +217,13 @@ impl<'a> Sources<'a> {
 
     /// Where a `yara_signature_alias` on `field_path` is written, as the
     /// oracle's YAML reader places it: the aliased text, from its anchor to
-    /// the end of that line (a block scalar's `&name |`), found at the path
-    /// the anchor's node first appears at (`checks::signature_aliases`).
+    /// the end of that line (a block scalar's `&name |`), on the node the
+    /// alias names (`aliased_yara_signature`).
     fn alias_anchor(&mut self, path: &Path, field_path: &[String]) -> Option<Span> {
         let document = self.document(path)?;
         let platform = field_path.get(1)?;
-        let node = if platform == "harfanglab" {
-            // HarfangLab's own check (harfanglab-1.0 1.2): the anchor's node.
-            opentide_schema::objects::platform::harfanglab::yara::aliased_signature(
-                document.root()?,
-            )?
-        } else {
-            let (_, anchor) =
-                opentide_schema::objects::platform::bitdefender::checks::signature_aliases(
-                    document.root()?,
-                )
-                .into_iter()
-                .find(|(aliased, _)| aliased == platform)?;
-            walk(&document, &anchor)?
-        };
+        let node =
+            opentide_schema::objects::platform::aliased_yara_signature(document.root()?, platform)?;
         let start = node.start;
         let line = document.source().lines().nth(start.line.checked_sub(1)?)?;
         let chars: Vec<char> = line.chars().collect();

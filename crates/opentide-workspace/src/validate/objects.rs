@@ -463,8 +463,7 @@ pub fn check_object(
                     new(error.code, error.message).with("shard", shard.display().to_string()),
                 );
             }
-            let locator = subject.document.locator();
-            for (platform, anchor) in
+            for (platform, anchored) in
                 opentide_schema::objects::platform::bitdefender::checks::signature_aliases(root)
             {
                 let mut issue = new(
@@ -476,15 +475,16 @@ pub fn check_object(
                 )
                 .at([
                     "configurations".to_owned(),
-                    platform,
+                    platform.to_owned(),
                     "yara".to_owned(),
                     "signature".to_owned(),
                 ])
                 .suggest(Some(
                     "Replace the alias (*name) with the signature text".to_owned(),
                 ));
-                // The oracle's YAML reader places an alias at its anchor.
-                issue.yaml_line = locator.yaml_line(&anchor);
+                // Where the aliased text is written: the anchor's node, as
+                // HarfangLab's above.
+                issue.yaml_line = anchored.start.line.checked_sub(1);
                 issues.push(issue);
             }
         }
