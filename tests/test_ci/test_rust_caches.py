@@ -46,6 +46,9 @@ SAVE_IF_CELL = re.compile(
 # request's cache serves that pull request alone, and its gigabytes evicted
 # the base branches' caches every other pull request reads.
 PUSH_ONLY = "github.event_name == 'push'"
+# The nightly and pushes to development, the default branch whose caches every
+# branch reads: the families no pull request needs a copy of on its own base.
+DEVELOPMENT_ONLY = "(github.event_name == 'schedule' || github.ref == 'refs/heads/development')"
 
 # The engine's debug tree: engine-test's Linux cell saves it, the Linux jobs
 # that build a subset of it read it.
@@ -290,7 +293,7 @@ def test_the_release_dry_run_keeps_one_compiler_cache_per_runner(job_id: str, fa
     assert restore["with"]["restore-keys"] == family + STABLE_HASH.removesuffix(WEEK)
     assert restore["with"]["path"] == save["with"]["path"] == ".sccache"
     condition = str(save["if"])
-    assert condition.startswith(PUSH_ONLY), condition
+    assert condition.startswith(DEVELOPMENT_ONLY), condition
     assert "inputs.dry-run" in condition
     assert "steps.sccache.outputs.cache-hit != 'true'" in condition
     # The wrapper is set, and sccache installed, before the first cargo command.
@@ -481,7 +484,8 @@ def test_no_cache_is_saved_from_a_pull_request() -> None:
                     )
                     checked += 1
                 elif uses.startswith(SCCACHE_SAVE):
-                    assert str(step.get("if", "")).startswith(PUSH_ONLY), where
+                    condition = str(step.get("if", ""))
+                    assert condition.startswith((PUSH_ONLY, DEVELOPMENT_ONLY)), where
                     checked += 1
                 elif uses.startswith("actions/cache@"):
                     raise AssertionError(f"{where}: actions/cache saves on every event")
@@ -612,6 +616,10 @@ def test_the_full_set_shares_one_compiler_cache_per_os() -> None:
         assert cache.restores == FULL_SET_FAMILY + STABLE_HASH, job_id
     savers = {c.job for c in _compiler_caches() if c.saves == FULL_SET_FAMILY + STABLE_HASH}
     assert savers == {"conformance"}
+    # Saved on development and by the nightly only: a pull request's full set
+    # restores development's (#841).
+    (saver,) = {c.save_condition for c in _compiler_caches() if c.job == "conformance"}
+    assert str(saver).startswith(DEVELOPMENT_ONLY), saver
     # One cell per OS, so each OS's family has its saver.
     matrix = jobs["conformance"]["strategy"]["matrix"]["os"]
     assert sorted(matrix) == ["macos-latest", "ubuntu-latest", "windows-latest"]
@@ -623,3 +631,28 @@ def test_only_the_fuzz_jobs_keep_a_target_tree_in_ci() -> None:
     """fuzz-smoke builds with the nightly in fuzz/target and caches its
     cargo-fuzz binary in ~/.cargo/bin: the one rust-cache left in ci.yml."""
     assert {c.job for c in _in("ci.yml")} == {"fuzz-smoke"}
+
+
+# The core families (every pull request's jobs) are saved per base branch, from
+# a push to it: a pull request reads its base branch's caches. The full set's
+# and the release dry run's are saved on development and by the nightly only,
+# whose caches every branch reads: a copy of those per base branch (with
+# integration and a release train both active) did not fit beside the core
+# families in the 10 GB a repository keeps, and evicted them (#841).
+def test_only_the_core_families_are_saved_per_base_branch() -> None:
+    full_set_and_release = 0
+    for cache in _compiler_caches():
+        if cache.saves is None:
+            continue
+        condition = str(cache.save_condition)
+        if cache.saves.startswith(("sccache-full-set-", "sccache-release-")):
+            assert condition.startswith(DEVELOPMENT_ONLY), (cache.job, condition)
+            full_set_and_release += 1
+        else:
+            assert condition.startswith(PUSH_ONLY), (cache.job, condition)
+    assert full_set_and_release
+    for job_id in ("native", "wasm"):
+        (save,) = [
+            s for s in _release_steps(job_id) if str(s.get("uses", "")).startswith(SCCACHE_SAVE)
+        ]
+        assert str(save["if"]).startswith(DEVELOPMENT_ONLY), (job_id, save["if"])

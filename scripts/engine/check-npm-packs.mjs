@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const allowed = /^(package\.json|LICENSE|NOTICE|README\.md|dist\/.+\.(js|d\.ts))$/;
-for (const name of ['lsp-client', 'lsp-worker']) {
+for (const name of ['lsp-client', 'lsp-worker', 'wasi-host']) {
   const cwd = join(root, 'packages', name);
   const out = execFileSync('npm', ['pack', '--dry-run', '--json'], { cwd, encoding: 'utf8' });
   const files = JSON.parse(out)[0].files.map((f) => f.path);
