@@ -147,19 +147,17 @@ def test_the_pr_gates_jobs_run_on_linux() -> None:
 
 
 def test_only_the_build_compiles_the_gates_workspace() -> None:
-    """One build: the Rust tests run its archive, the Python jobs install its wheel."""
+    """`build` builds and runs the Rust tests; `native` builds the wheel the Python jobs install."""
     compiles = re.compile(
         r"\bcargo (?:build|test|nextest run)\b|\bmaturin\b|\buv (?:sync|build)\b(?!.*--no-install)"
     )
-    for job_id in ("rust-tests", "python", "gitlab-ci-lint", "lint"):
+    for job_id in ("python", "gitlab-ci-lint", "lint"):
         job = ci_jobs()[job_id]
         env = job.get("env") or {}
         for step in job["steps"]:
             run = str(step.get("run", ""))
             for line in run.replace("\\\n", " ").splitlines():
-                if compiles.search(line):
-                    reuses = "--binaries-metadata" in run or "--archive-file" in line
-                    assert reuses, (job_id, line)
+                assert not compiles.search(line), (job_id, line)
         runs = "\n".join(str(step.get("run", "")) for step in job["steps"])
         if job_id in ("python", "gitlab-ci-lint"):
             # The build's wheel, and `uv run` never builds the project again.
@@ -167,8 +165,8 @@ def test_only_the_build_compiles_the_gates_workspace() -> None:
             assert env.get("UV_NO_SYNC") == "1", job_id
             # The wheel E2E tests install that wheel instead of building one.
             assert env.get("OPENTIDE_TEST_WHEELHOUSE") == "${{ github.workspace }}/.native"
-    build = "\n".join(str(step.get("run", "")) for step in ci_jobs()["build"]["steps"])
-    assert "maturin build --locked --profile dev" in build
+    native = "\n".join(str(step.get("run", "")) for step in ci_jobs()["native"]["steps"])
+    assert "maturin build --locked --profile dev" in native
 
 
 # --- What no workflow does ---------------------------------------------------

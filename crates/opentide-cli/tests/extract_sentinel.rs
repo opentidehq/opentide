@@ -75,9 +75,23 @@ fn files(root: &Path, under: &str) -> BTreeMap<String, Vec<u8>> {
 
 /// The workspace after the Rust run, and the run's report.
 fn extract() -> (tempfile::TempDir, PathBuf, opentide_cli::commands::Report) {
+    extract_edited(|_| {})
+}
+
+/// [`extract`] with the answers the cassette replays changed by `edit`
+/// (never the requests the run must send).
+fn extract_edited(
+    mut edit: impl FnMut(&mut String),
+) -> (tempfile::TempDir, PathBuf, opentide_cli::commands::Report) {
     let text =
         std::fs::read_to_string(repo().join("tests/cassettes/sentinel/extract.json")).unwrap();
-    let cassette = Cassette::parse(&text).unwrap();
+    let mut cassette = Cassette::parse(&text).unwrap();
+    for interaction in &mut cassette.interactions {
+        if let opentide_cassette::Body::Text(body) = &mut interaction.response.body {
+            edit(body);
+        }
+    }
+    cassette.digest = cassette.compute_digest();
     let proxy = Proxy::start(
         Mode::Replay { cassette },
         Redaction::new([SECRET.to_owned()]),
@@ -265,4 +279,43 @@ fn sentinel_rules_are_extracted_as_the_oracle_extracted_them() {
             );
         }
     }
+}
+
+/// A rule whose field is of the wrong type is skipped and listed with the
+/// rule's id and the field; the other rules are still imported (one such
+/// rule used to fail the whole import with a Python exception).
+#[test]
+fn a_rule_with_a_mistyped_field_is_skipped_and_the_others_imported() {
+    let typed = r#""queryPeriod": "PT2H""#;
+    let mut edited = 0;
+    let (_scratch, ws, report) = extract_edited(|body| {
+        edited += body.matches(typed).count();
+        *body = body.replace(typed, r#""queryPeriod": 3"#);
+    });
+    assert_eq!(edited, 1, "the cassette changed");
+    assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome.failure);
+    let skipped = report
+        .outcome
+        .data
+        .iter()
+        .find(|(key, _)| key == "skipped")
+        .map(|(_, value)| value.clone());
+    let Some(Json::Array(skipped)) = skipped else {
+        panic!("no skipped list: {:?}", report.outcome.data);
+    };
+    assert_eq!(skipped.len(), 1, "{skipped:?}");
+    let name = skipped[0].get("name").and_then(Json::as_str).unwrap();
+    let reason = skipped[0].get("reason").and_then(Json::as_str).unwrap();
+    assert!(name.starts_with("Encoded PowerShell"), "{name}");
+    assert!(reason.starts_with("rule "), "{reason}");
+    assert!(
+        reason.ends_with(": field `query_period` is not a string"),
+        "{reason}"
+    );
+    assert!(
+        report.outcome.message.ends_with(" · 1 skipped"),
+        "{}",
+        report.outcome.message
+    );
+    assert!(!files(&ws, "Imported").is_empty(), "nothing imported");
 }

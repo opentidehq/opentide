@@ -123,8 +123,8 @@ opentide validate --fix
 `--fix` writes the safe fixes, validates again and prints a `fixed:` line per value, then the findings that are left. Only the replaced value changes in each file: comments, quoting, key order, indentation and line endings stay as they were. Each edit is checked against the file as it is now, not as validation read it. The text it replaces must still be one the fix is safe for, so a value you saved over the typo in the meantime is kept. The file must still parse and differ in that value alone. Otherwise the edit is left out and its finding stays. Each file is written to a temporary file beside it and moved into place, so a write that fails (a full disk, a quota) leaves the original whole. A file that changed between the check and the write is left alone, with a warning. A second run has nothing to apply. The outcome line says what it fixed and what is left:
 
 ```text illustrative
-fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'Clear' → 'clear'
-fixed: objects/threats/simulated-actor.yaml:9:8 'Clear' → 'clear'
+fixed: objects/rules/sentinel-kql-rule.yaml:8:8 "Clear" → "clear"
+fixed: objects/threats/simulated-actor.yaml:9:8 "Clear" → "clear"
 
 error[invalid_ref]: Unknown objective or signal reference "00000000-0000-4000-8002-DEADBEEF0000"
    ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18
@@ -529,7 +529,7 @@ A query that gets no answer in that time fails its own check, and the other rule
 }
 ```
 
-A tenant that answers none of three queries in a row is reported unreachable, and the run stops there as for any unreachable tenant (above): `message` says `3 queries in a row got no answer within the 120s check timeout`, and `advice` names `--check-timeout` first, in case the tenant is up and only slow. A connect timeout, a DNS, TLS or proxy failure is reported unreachable at once. A tenant reached through `requests` (every platform but Splunk) that answered none of its requests is reported unreachable after its last rule even with fewer than three timeouts, because urllib3 reports a TLS handshake that never completes as a read timeout. Through 0.20.1 one read timeout reported the tenant unreachable (`Cannot reach splunk tenant … The read operation timed out`) and left every later rule unchecked.
+A tenant that answers none of three queries in a row is reported unreachable, and the run stops there as for any unreachable tenant (above): `message` says `3 queries in a row got no answer within the 120s check timeout`, and `advice` names `--check-timeout` first, in case the tenant is up and only slow. A connect timeout, a DNS, TLS or proxy failure is reported unreachable at once. A tenant that answered none of its requests, every one timing out, is reported unreachable after its last rule even with fewer than three timeouts: a connection that opens but never completes its TLS handshake, behind a proxy or a load balancer, looks like a read timeout. Through 0.20.1 one read timeout reported the tenant unreachable (`Cannot reach splunk tenant … The read operation timed out`) and left every later rule unchecked.
 
 Splunk's gateway page names its status: `Splunk at https://splunk.example.com:443 answered with an HTML page (HTTP 504), not its REST API (page title: '504 Gateway Time-out'). HTTP 504 Gateway Timeout is what a gateway or proxy in front of the tenant answers when the tenant does not answer it in time, …`. Only an HTML page answered with another status, quickly, still points at the tenant's `url` and `port`. Every platform reports the status and the page title of an answer that is not JSON, instead of a JSON parse error.
 

@@ -11,12 +11,13 @@
 //! - `-32001`, HTTP 401 and HTTP 403 refuse the whole tenant
 //!   (`bitdefender_tenant_unauthorized`), and `-32601` says it has no
 //!   Incidents API (`bitdefender_incidents_api_unavailable`, an on-premises
-//!   console). `-32003` and HTTP 429 are waited out (`Retry-After`, else
-//!   60 s) and the same request is sent again, because a rate-limited request
-//!   was not executed: at most ten times.
+//!   console). `-32003` and HTTP 429 are waited out ([`RATE_LIMIT`]:
+//!   `Retry-After`, at most 120 s, else 60 s) and the same request is sent
+//!   again, because a rate-limited request was not executed: at most ten
+//!   times.
 //! - `createCustomRule` and `deleteCustomRule` are paced at most five per
 //!   rolling minute per API key, across every tenant of the run that shares
-//!   the key ([`Pacer`]). The pacer holds a per-process salted digest of the
+//!   the key ([`pacer`]). The pacer holds a per-process salted digest of the
 //!   key ([`pace_key`]), never the key.
 //! - No transport-level retry: a create that got no answer may have
 //!   happened, so it is sent again once, never more, and a name conflict on
@@ -32,10 +33,9 @@
 //! `update_params`, `delete_params`). GravityZone has no live validation and
 //! no query runner here (`supported: False`).
 
-use std::collections::{HashMap, VecDeque};
 use std::hash::BuildHasher as _;
-use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::sync::OnceLock;
+use std::time::Duration;
 
 use opentide_compile::Json;
 use opentide_compile::bitdefender::{
@@ -48,7 +48,8 @@ use crate::connector::{
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
-use crate::retry::{MAX_BACKOFF, RetryPolicy};
+use crate::pace::Pacer;
+use crate::retry::{Attempt, RetryPolicy};
 
 /// The platform's identifier.
 pub const PLATFORM: &str = "bitdefender";
@@ -74,7 +75,10 @@ pub const PACED_METHODS: [&str; 2] = [CREATE, DELETE];
 /// The wait when a rate limit names no `Retry-After`.
 pub const DEFAULT_RETRY_AFTER: Duration = Duration::from_secs(60);
 /// Rate-limited resends of one request before it fails.
-pub const MAX_RATE_LIMITED: usize = 10;
+pub const MAX_RATE_LIMITED: u32 = 10;
+/// How a rate-limited request is waited out and sent again.
+pub const RATE_LIMIT: RetryPolicy =
+    RetryPolicy::rate_limited(MAX_RATE_LIMITED, DEFAULT_RETRY_AFTER);
 
 /// `bitdefender_tenant_unauthorized`.
 pub const TENANT_UNAUTHORIZED: &str = "bitdefender_tenant_unauthorized";
@@ -218,98 +222,6 @@ pub fn returned_rule_id(result: &Json) -> Option<String> {
     (id.len() == 24 && id.bytes().all(|byte| byte.is_ascii_hexdigit())).then_some(id)
 }
 
-/// What sleeps and tells the time: the real clock in a run, a recorded one
-/// in tests.
-pub trait Clock: Send + Sync {
-    /// Now, from the clock's own start.
-    fn now(&self) -> Duration;
-
-    /// Waits `duration`, or returns [`ConnectorError::Cancelled`] when the
-    /// run is cancelled first.
-    fn sleep<'a>(
-        &'a self,
-        duration: Duration,
-        cancel: &'a tokio_util::sync::CancellationToken,
-    ) -> BoxFuture<'a, Result<(), ConnectorError>>;
-}
-
-/// The process's clock.
-#[derive(Debug, Default)]
-pub struct SystemClock;
-
-impl Clock for SystemClock {
-    fn now(&self) -> Duration {
-        static START: OnceLock<Instant> = OnceLock::new();
-        START.get_or_init(Instant::now).elapsed()
-    }
-
-    fn sleep<'a>(
-        &'a self,
-        duration: Duration,
-        cancel: &'a tokio_util::sync::CancellationToken,
-    ) -> BoxFuture<'a, Result<(), ConnectorError>> {
-        Box::pin(async move {
-            tokio::select! {
-                () = tokio::time::sleep(duration) => Ok(()),
-                () = cancel.cancelled() => Err(ConnectorError::Cancelled),
-            }
-        })
-    }
-}
-
-/// At most [`PACED_CALLS`] paced calls per rolling [`PACE_WINDOW`] per API
-/// key (`_Pacer`). One pacer serves the whole process ([`pacer`]), so
-/// tenants that share a key share its budget.
-#[derive(Debug, Default)]
-pub struct Pacer {
-    calls: Mutex<HashMap<u64, VecDeque<Duration>>>,
-}
-
-impl Pacer {
-    /// A pacer with no call made.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// How long to wait before a call on `key` at `now`, or `None` (and the
-    /// call counted) when it may go now.
-    fn reserve(&self, key: u64, now: Duration) -> Option<Duration> {
-        let mut calls = match self.calls.lock() {
-            Ok(calls) => calls,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        let made = calls.entry(key).or_default();
-        while made
-            .front()
-            .is_some_and(|first| now.saturating_sub(*first) >= PACE_WINDOW)
-        {
-            made.pop_front();
-        }
-        if made.len() < PACED_CALLS {
-            made.push_back(now);
-            return None;
-        }
-        let first = made.front().copied().unwrap_or(now);
-        Some(PACE_WINDOW.saturating_sub(now.saturating_sub(first)))
-    }
-
-    /// Waits until a call on `key` fits in the window, and counts it.
-    pub async fn wait(
-        &self,
-        key: u64,
-        clock: &dyn Clock,
-        cancel: &tokio_util::sync::CancellationToken,
-    ) -> Result<(), ConnectorError> {
-        loop {
-            match self.reserve(key, clock.now()) {
-                None => return Ok(()),
-                Some(pause) if pause.is_zero() => {}
-                Some(pause) => clock.sleep(pause, cancel).await?,
-            }
-        }
-    }
-}
-
 /// The pacer's key for `api_key`: a digest salted per process, so the
 /// pacer never holds the key and its keys mean nothing outside the process
 /// (`pace_key`).
@@ -319,10 +231,12 @@ pub fn pace_key(api_key: &str) -> u64 {
         .hash_one(api_key)
 }
 
-/// The process's pacer.
+/// The process's pacer: at most [`PACED_CALLS`] paced calls per rolling
+/// [`PACE_WINDOW`] per API key, so tenants that share a key share its
+/// budget.
 pub fn pacer() -> &'static Pacer {
     static PACER: OnceLock<Pacer> = OnceLock::new();
-    PACER.get_or_init(Pacer::new)
+    PACER.get_or_init(|| Pacer::new(PACED_CALLS, PACE_WINDOW))
 }
 
 /// How a call failed.
@@ -338,6 +252,13 @@ pub enum CallError {
     Tenant(ConnectorError),
 }
 
+impl From<ConnectorError> for CallError {
+    /// A wait the run cancelled.
+    fn from(error: ConnectorError) -> Self {
+        Self::Tenant(error)
+    }
+}
+
 impl From<ApiError> for CallError {
     fn from(error: ApiError) -> Self {
         Self::Api(error)
@@ -348,7 +269,6 @@ impl From<ApiError> for CallError {
 pub struct Client<'a> {
     cx: TenantContext<'a>,
     pacer: &'a Pacer,
-    clock: &'a dyn Clock,
 }
 
 impl std::fmt::Debug for Client<'_> {
@@ -360,9 +280,10 @@ impl std::fmt::Debug for Client<'_> {
 }
 
 impl<'a> Client<'a> {
-    /// The tenant's client, paced by `pacer` on `clock`.
-    pub fn new(cx: TenantContext<'a>, pacer: &'a Pacer, clock: &'a dyn Clock) -> Self {
-        Self { cx, pacer, clock }
+    /// The tenant's client, paced by `pacer`; rate limits are waited out
+    /// on the pacer's clock.
+    pub fn new(cx: TenantContext<'a>, pacer: &'a Pacer) -> Self {
+        Self { cx, pacer }
     }
 
     fn tenant(&self) -> &str {
@@ -418,7 +339,7 @@ impl<'a> Client<'a> {
         })
     }
 
-    async fn post(&self, body: &Json) -> Result<(u16, Duration, Vec<u8>), CallError> {
+    async fn post(&self, body: &Json) -> Result<(u16, Option<String>, Vec<u8>), CallError> {
         let request = self.build(body)?;
         let classify = |error: ConnectorError| match error {
             ConnectorError::Cancelled => CallError::Tenant(error),
@@ -431,12 +352,11 @@ impl<'a> Client<'a> {
             .await
             .map_err(classify)?;
         let status = response.status().as_u16();
-        let retry_after = retry_after(
-            response
-                .headers()
-                .get(crate::transport::header::RETRY_AFTER)
-                .and_then(|value| value.to_str().ok()),
-        );
+        let retry_after = response
+            .headers()
+            .get(crate::transport::header::RETRY_AFTER)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
         let bytes = self
             .cx
             .http
@@ -464,109 +384,94 @@ impl<'a> Client<'a> {
                 .map_err(CallError::Tenant)?
                 .expose(),
         );
-        for _ in 0..=MAX_RATE_LIMITED {
-            if PACED_METHODS.contains(&method) {
-                self.pacer
-                    .wait(key, self.clock, self.cx.cancel)
-                    .await
-                    .map_err(CallError::Tenant)?;
-            }
-            let (status, wait, bytes) = self.post(&body).await?;
-            if matches!(status, 401 | 403) {
-                return Err(self.refused(
+        let answered = RATE_LIMIT
+            .wait_out(self.pacer.clock(), self.cx.cancel, || {
+                self.attempt(method, &body, key)
+            })
+            .await?;
+        answered.ok_or_else(|| {
+            ApiError::new(
+                method,
+                Some(TOO_MANY_REQUESTS),
+                format!("still rate limited after {MAX_RATE_LIMITED} waits"),
+            )
+            .into()
+        })
+    }
+
+    /// Sends *body* once, paced: its `result`, or the rate limit that
+    /// refused it.
+    async fn attempt(
+        &self,
+        method: &str,
+        body: &Json,
+        key: u64,
+    ) -> Result<Attempt<Json>, CallError> {
+        if PACED_METHODS.contains(&method) {
+            self.pacer.wait(key, self.cx.cancel).await?;
+        }
+        let (status, retry_after, bytes) = self.post(body).await?;
+        if matches!(status, 401 | 403) {
+            return Err(self.refused(
+                TENANT_UNAUTHORIZED,
+                format!(
+                    "tenant {} refused the API key: HTTP {status}",
+                    self.tenant()
+                ),
+            ));
+        }
+        if status == 429 {
+            return Ok(Attempt::RateLimited(retry_after));
+        }
+        let Ok(payload) = serde_json::from_slice::<Json>(&bytes) else {
+            return Err(ApiError::new(
+                method,
+                None,
+                format!("HTTP {status}: the answer is not JSON"),
+            )
+            .into());
+        };
+        if let Some(Json::Object(error)) = payload.get("error") {
+            let code = match error.get("code") {
+                Some(Json::Int(code)) => Some(*code),
+                _ => None,
+            };
+            let message = error
+                .get("message")
+                .filter(|message| message.truthy())
+                .map(crate::text::json_text)
+                .unwrap_or_default();
+            return match code {
+                Some(TOO_MANY_REQUESTS) => Ok(Attempt::RateLimited(retry_after)),
+                Some(UNAUTHORIZED) => Err(self.refused(
                     TENANT_UNAUTHORIZED,
+                    format!("tenant {} refused the API key: {message}", self.tenant()),
+                )),
+                Some(METHOD_NOT_FOUND) => Err(self.refused(
+                    INCIDENTS_API_UNAVAILABLE,
                     format!(
-                        "tenant {} refused the API key: HTTP {status}",
+                        "tenant {} has no {method} (on-premises GravityZone has no \
+                         Incidents API)",
                         self.tenant()
                     ),
-                ));
-            }
-            if status == 429 {
-                self.clock
-                    .sleep(wait, self.cx.cancel)
-                    .await
-                    .map_err(CallError::Tenant)?;
-                continue;
-            }
-            let Ok(payload) = serde_json::from_slice::<Json>(&bytes) else {
-                return Err(ApiError::new(
-                    method,
-                    None,
-                    format!("HTTP {status}: the answer is not JSON"),
-                )
-                .into());
-            };
-            if let Some(Json::Object(error)) = payload.get("error") {
-                let code = match error.get("code") {
-                    Some(Json::Int(code)) => Some(*code),
-                    _ => None,
-                };
-                let message = error
-                    .get("message")
-                    .filter(|message| message.truthy())
-                    .map(crate::text::json_text)
-                    .unwrap_or_default();
-                match code {
-                    Some(TOO_MANY_REQUESTS) => {
-                        self.clock
-                            .sleep(wait, self.cx.cancel)
-                            .await
-                            .map_err(CallError::Tenant)?;
-                        continue;
-                    }
-                    Some(UNAUTHORIZED) => {
-                        return Err(self.refused(
-                            TENANT_UNAUTHORIZED,
-                            format!("tenant {} refused the API key: {message}", self.tenant()),
-                        ));
-                    }
-                    Some(METHOD_NOT_FOUND) => {
-                        return Err(self.refused(
-                            INCIDENTS_API_UNAVAILABLE,
-                            format!(
-                                "tenant {} has no {method} (on-premises GravityZone has no \
-                                 Incidents API)",
-                                self.tenant()
-                            ),
-                        ));
-                    }
-                    _ => {
-                        let mut failure = ApiError::new(method, code, message);
-                        failure.details = details(error.get("data"));
-                        return Err(failure.into());
-                    }
+                )),
+                _ => {
+                    let mut failure = ApiError::new(method, code, message);
+                    failure.details = details(error.get("data"));
+                    Err(failure.into())
                 }
-            }
-            if status >= 300 {
-                return Err(ApiError::new(method, None, format!("HTTP {status}")).into());
-            }
-            return match payload {
-                Json::Object(mut object) if object.contains_key("result") => {
-                    Ok(object.shift_remove("result").unwrap_or(Json::Null))
-                }
-                _ => Err(ApiError::new(method, None, "the answer has no result").into()),
             };
         }
-        Err(ApiError::new(
-            method,
-            Some(TOO_MANY_REQUESTS),
-            format!("still rate limited after {MAX_RATE_LIMITED} waits"),
-        )
-        .into())
+        if status >= 300 {
+            return Err(ApiError::new(method, None, format!("HTTP {status}")).into());
+        }
+        match payload {
+            Json::Object(mut object) if object.contains_key("result") => Ok(Attempt::Done(
+                object.shift_remove("result").unwrap_or(Json::Null),
+            )),
+            _ => Err(ApiError::new(method, None, "the answer has no result").into()),
+        }
     }
-}
-
-/// `Retry-After` in seconds, else [`DEFAULT_RETRY_AFTER`]; at most
-/// [`MAX_BACKOFF`], as every connector waits out a `Retry-After`, so one
-/// tenant cannot hold a run for an unbounded time.
-fn retry_after(value: Option<&str>) -> Duration {
-    let Some(seconds) = value.and_then(|value| value.trim().parse::<f64>().ok()) else {
-        return DEFAULT_RETRY_AFTER;
-    };
-    if !seconds.is_finite() {
-        return DEFAULT_RETRY_AFTER;
-    }
-    Duration::from_secs_f64(seconds.clamp(0.0, MAX_BACKOFF.as_secs_f64()))
 }
 
 /// `error.data.details`, or `error.data` when it is a string (`_details`).
@@ -697,24 +602,23 @@ fn tenant_error(error: CallError, tenant: &str) -> ConnectorError {
 }
 
 /// Deploys one rule (`BitdefenderDeploy.deploy_rule`) with the process's
-/// pacer and clock. A rule's failure is in the outcome; an `Err` is the
+/// pacer. A rule's failure is in the outcome; an `Err` is the
 /// tenant's (a refused key, no Incidents API, an unreachable tenant), which
 /// stops the tenant.
 pub async fn deploy_rule(
     cx: TenantContext<'_>,
     rule: &RuleDeploy,
 ) -> Result<RuleOutcome, ConnectorError> {
-    deploy_rule_with(cx, rule, pacer(), &SystemClock).await
+    deploy_rule_with(cx, rule, pacer()).await
 }
 
-/// [`deploy_rule`] paced by `pacer` on `clock`.
+/// [`deploy_rule`] paced by `pacer`, on its clock.
 pub async fn deploy_rule_with(
     cx: TenantContext<'_>,
     rule: &RuleDeploy,
     pacer: &Pacer,
-    clock: &dyn Clock,
 ) -> Result<RuleOutcome, ConnectorError> {
-    let client = Client::new(cx, pacer, clock);
+    let client = Client::new(cx, pacer);
     let mut outcome = RuleOutcome {
         state: StateChange::Keep,
         warnings: Vec::new(),
@@ -1064,37 +968,10 @@ mod tests {
     }
 
     #[test]
-    fn retry_after_is_seconds_else_a_minute() {
-        assert_eq!(retry_after(Some("2")), Duration::from_secs(2));
-        assert_eq!(retry_after(Some("0.5")), Duration::from_millis(500));
-        assert_eq!(retry_after(Some("-3")), Duration::ZERO);
-        assert_eq!(
-            retry_after(Some("Wed, 21 Oct 2015 07:28:00 GMT")),
-            DEFAULT_RETRY_AFTER
-        );
-        assert_eq!(retry_after(None), DEFAULT_RETRY_AFTER);
-        assert_eq!(retry_after(Some("3600")), MAX_BACKOFF);
-    }
-
-    #[test]
-    fn the_pacer_allows_five_calls_per_rolling_minute_per_key() {
-        let pacer = Pacer::new();
-        let at = Duration::from_secs;
-        let (key, other) = (pace_key("k"), pace_key("other"));
-        for second in 0..5 {
-            assert_eq!(pacer.reserve(key, at(second)), None);
-        }
-        assert_eq!(pacer.reserve(key, at(10)), Some(at(50)));
-        assert_eq!(pacer.reserve(other, at(10)), None);
-        assert_eq!(pacer.reserve(key, at(60)), None);
-        assert_eq!(pacer.reserve(key, at(60)), Some(at(1)));
-    }
-
-    #[test]
     fn the_pacer_never_holds_the_key() {
         assert_eq!(pace_key("secret"), pace_key("secret"));
         assert_ne!(pace_key("secret"), pace_key("other"));
-        let pacer = Pacer::new();
+        let pacer = Pacer::new(PACED_CALLS, PACE_WINDOW);
         let _ = pacer.reserve(pace_key("secret"), Duration::ZERO);
         assert!(!format!("{pacer:?}").contains("secret"));
     }

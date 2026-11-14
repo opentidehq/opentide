@@ -23,7 +23,7 @@
 //!
 //! A query saves nothing on the tenant. A platform that cannot do an
 //! operation (CrowdStrike, HarfangLab and Sysdig cannot check a query live;
-//! Elastic and Sysdig deploy through `opentide deploy` only) answers it
+//! Elastic deploys through `opentide deploy` only) answers it
 //! with [`Error::Connector`] and the code `operation_unsupported`, never with
 //! a faked result. A whole deploy run (the plan, the deployment state, the
 //! retirements) is the command line's `deploy` (`cli::run_json`); a

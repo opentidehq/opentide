@@ -1,13 +1,14 @@
 //! The proxy a request goes through, from `--proxy` / `OPENTIDE_PROXY` and
-//! the standard variables.
+//! the standard variables (documented in docs/usage/configuration.md).
 //!
-//! As Python reads them (`urllib.request.getproxies_environment`, which
-//! `requests` uses): the lower-case spelling wins over the upper-case one,
-//! `https_proxy` serves `https://` URLs and `http_proxy` `http://` ones,
-//! `all_proxy` serves both when neither is set, and `no_proxy` lists the
-//! hosts that go direct. `--proxy` (or `OPENTIDE_PROXY`) replaces both
-//! `http_proxy` and `https_proxy`, as the Python CLI's `apply_environment`
-//! exports it to all four spellings.
+//! The precedence, for each scheme: `--proxy`, then `OPENTIDE_PROXY`, then
+//! the scheme's variable (`https_proxy` for `https://` URLs, `http_proxy`
+//! for `http://` ones), then `all_proxy`; of each variable the lower-case
+//! spelling is read first, then the upper-case one, as curl reads them.
+//! `no_proxy` (else `NO_PROXY`) lists the hosts that go direct, whatever
+//! the proxy came from. The variables are read from the run's
+//! [`Environment`], not the process's, so each tenant's client is built from
+//! what the command was given.
 
 use crate::Environment;
 
@@ -46,8 +47,8 @@ impl ProxySettings {
 
     /// The proxy *url* goes through, as `scheme://host[:port]` without
     /// credentials; `None` when it goes direct: no proxy for its scheme, or
-    /// its host in `no_proxy` (`urllib.request.proxy_bypass_environment`:
-    /// `*`, a host, a domain suffix, an optional `:port`).
+    /// its host in `no_proxy` (`*`, a host or an IP address, a domain and its
+    /// subdomains), as the transport reads the list.
     pub fn route(&self, url: &url::Url) -> Option<String> {
         let proxy = match url.scheme() {
             "https" => self.https.as_deref(),
@@ -85,15 +86,19 @@ impl ProxySettings {
         })
     }
 
-    /// Whether `no_proxy` sends *url* direct.
+    /// Whether `no_proxy` sends *url* direct: an entry that is `*`, the host,
+    /// or a domain the host is in. An entry with a port matches no host, as
+    /// reqwest reads the list.
     fn bypassed(&self, url: &url::Url) -> bool {
         let Some(list) = self.no_proxy.as_deref() else {
             return false;
         };
-        let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
-        let with_port = url
-            .port()
-            .map_or_else(|| host.clone(), |port| format!("{host}:{port}"));
+        let host = url
+            .host_str()
+            .unwrap_or_default()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .to_ascii_lowercase();
         list.split(',')
             .map(|entry| entry.trim().to_ascii_lowercase())
             .filter(|entry| !entry.is_empty())
@@ -102,9 +107,7 @@ impl ProxySettings {
                     return true;
                 }
                 let entry = entry.trim_start_matches('.');
-                [host.as_str(), with_port.as_str()].iter().any(|candidate| {
-                    *candidate == entry || candidate.ends_with(&format!(".{entry}"))
-                })
+                host == entry || host.ends_with(&format!(".{entry}"))
             })
     }
 
@@ -195,17 +198,19 @@ mod tests {
     }
 
     #[test]
-    fn no_proxy_sends_a_host_its_domain_or_its_port_direct() {
+    fn no_proxy_sends_a_host_or_its_domain_direct() {
         let proxies = settings(
             Some("http://proxy.corp:3128"),
             None,
-            Some(" .Example.com , other.org:8089,, "),
+            Some(" .Example.com , other.org:8089,, 10.0.0.7"),
         );
         let direct = |url: &str| route(&proxies, url).is_none();
         assert!(direct("https://splunk.example.com:8089/x"));
         assert!(direct("https://example.com/x"));
-        assert!(direct("https://other.org:8089/x"));
-        // The same host on another port, a lookalike domain: through the proxy.
+        assert!(direct("https://10.0.0.7:8089/x"));
+        // An entry with a port matches no host (the transport reads the list
+        // so); a lookalike domain: through the proxy.
+        assert!(!direct("https://other.org:8089/x"));
         assert!(!direct("https://other.org/x"));
         assert!(!direct("https://notexample.com/x"));
         assert!(!direct("https://example.com.evil.net/x"));
