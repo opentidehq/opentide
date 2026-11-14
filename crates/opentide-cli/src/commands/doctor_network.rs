@@ -7,6 +7,7 @@
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
+use opentide_connectors::proxy::ProxySettings;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, HttpSettings, TenantLabel};
 use tokio_util::sync::CancellationToken;
 
@@ -139,64 +140,26 @@ pub fn connect(host: &str, port: u16, timeout: Duration) -> Result<(), String> {
     Err(last)
 }
 
-/// The scheme, host and port of a proxy URL (`proxy_endpoint`), the
-/// credentials cut off at the last `@`; `None` when it cannot be parsed.
-pub fn proxy_endpoint(url: &str) -> Option<(String, String, Option<u16>)> {
+/// A proxy URL as the connectors read it: one written without a scheme
+/// (`proxy.internal:8080`) is an HTTP proxy.
+///
+/// # Errors
+///
+/// The text is not a URL: the parser's reason.
+pub fn parse_proxy(url: &str) -> Result<url::Url, url::ParseError> {
     let url = url.trim();
-    let (scheme, rest) = match url.split_once("://") {
-        Some((scheme, rest)) => (scheme, rest),
-        None => ("http", url),
-    };
-    if scheme.is_empty() || !scheme.chars().all(char::is_alphanumeric) {
-        return None;
-    }
-    let host_port = rest.rsplit_once('@').map_or(rest, |(_, after)| after);
-    let host_port = host_port.split(['/', '?', '#']).next().unwrap_or_default();
-    let (host, port) = split_host_port(host_port)?;
-    Some((scheme.to_owned(), host, port))
-}
-
-/// `urlsplit`'s `hostname` (lowercase, IPv6 without brackets) and `port`.
-fn split_host_port(text: &str) -> Option<(String, Option<u16>)> {
-    let (host, port) = if let Some(rest) = text.strip_prefix('[') {
-        let (host, after) = rest.split_once(']')?;
-        let port = match after.strip_prefix(':') {
-            Some(port) => Some(port),
-            None if after.is_empty() => None,
-            None => return None,
-        };
-        (host.to_owned(), port)
+    if url.contains("://") {
+        url::Url::parse(url)
     } else {
-        match text.rsplit_once(':') {
-            Some((host, port)) => (host.to_owned(), Some(port)),
-            None => (text.to_owned(), None),
-        }
-    };
-    let port = match port {
-        None | Some("") => None,
-        Some(port) => {
-            if !port.chars().all(|c| c.is_ascii_digit()) {
-                return None;
-            }
-            Some(port.parse::<u16>().ok()?)
-        }
-    };
-    Some((host.to_lowercase(), port))
+        url::Url::parse(&format!("http://{url}"))
+    }
 }
 
-/// Whether `NO_PROXY` sends requests to `host` direct (`_bypasses_proxy`).
-pub fn bypasses_proxy(host: &str, no_proxy: &str) -> bool {
-    no_proxy
-        .split(',')
-        .map(|entry| entry.trim().to_lowercase())
-        .filter(|entry| !entry.is_empty())
-        .any(|entry| {
-            if entry == "*" {
-                return true;
-            }
-            let entry = entry.trim_start_matches('.');
-            host == entry || host.ends_with(&format!(".{entry}"))
-        })
+/// Whether a request to *url* goes direct by `no_proxy` (else `NO_PROXY`),
+/// asked of the connectors' own proxy settings, so the route `doctor`
+/// reports is the one its requests take.
+pub fn bypasses_proxy(env: &Environment, proxy: Option<&str>, url: &str) -> bool {
+    url::Url::parse(url).is_ok_and(|url| ProxySettings::from_env(env, proxy).bypassed(&url))
 }
 
 #[cfg(test)]
@@ -258,41 +221,62 @@ mod tests {
         );
     }
 
-    #[test]
-    fn proxy_urls_split_as_urlsplit_does() {
-        assert_eq!(
-            proxy_endpoint("http://user:p/a#ss@Proxy.Example:8080/x"),
-            Some(("http".into(), "proxy.example".into(), Some(8080)))
-        );
-        assert_eq!(
-            proxy_endpoint("proxy:3128"),
-            Some(("http".into(), "proxy".into(), Some(3128)))
-        );
-        assert_eq!(
-            proxy_endpoint("https://[::1]:443"),
-            Some(("https".into(), "::1".into(), Some(443)))
-        );
-        assert_eq!(
-            proxy_endpoint("https://[::1]"),
-            Some(("https".into(), "::1".into(), None))
-        );
-        assert_eq!(proxy_endpoint("http://host:99999"), None);
-        assert_eq!(proxy_endpoint("http://host:8x"), None);
-        assert_eq!(proxy_endpoint("http://[::1"), None);
-        assert_eq!(proxy_endpoint("http://[::1]x"), None);
-        assert_eq!(proxy_endpoint("ht tp://host"), None);
-        assert_eq!(
-            proxy_endpoint("http://"),
-            Some(("http".into(), String::new(), None))
-        );
+    /// The scheme, host and port the proxy check connects to.
+    fn endpoint(url: &str) -> Option<(String, String, Option<u16>)> {
+        let parsed = parse_proxy(url).ok()?;
+        Some((
+            parsed.scheme().to_owned(),
+            parsed.host_str()?.to_owned(),
+            parsed.port_or_known_default(),
+        ))
     }
 
     #[test]
-    fn no_proxy_entries_match_hosts_and_their_subdomains() {
-        assert!(bypasses_proxy("pypi.org", "localhost, .pypi.org"));
-        assert!(bypasses_proxy("files.pypi.org", "pypi.org"));
-        assert!(bypasses_proxy("pypi.org", "*"));
-        assert!(!bypasses_proxy("pypi.org", "example.org,,"));
-        assert!(!bypasses_proxy("notpypi.org", "pypi.org"));
+    fn proxy_urls_parse_as_the_connectors_read_them() {
+        assert_eq!(
+            endpoint("http://user:p%2Fa%23ss@Proxy.Example:8080/x"),
+            Some(("http".into(), "proxy.example".into(), Some(8080)))
+        );
+        assert_eq!(
+            endpoint("proxy:3128"),
+            Some(("http".into(), "proxy".into(), Some(3128)))
+        );
+        assert_eq!(
+            endpoint("https://[::1]:8443"),
+            Some(("https".into(), "[::1]".into(), Some(8443)))
+        );
+        assert_eq!(
+            endpoint("https://[::1]"),
+            Some(("https".into(), "[::1]".into(), Some(443)))
+        );
+        for unparsed in [
+            "http://host:99999",
+            "http://host:8x",
+            "http://[::1",
+            "http://[::1]x",
+            "ht tp://host",
+            "http://",
+        ] {
+            assert!(parse_proxy(unparsed).is_err(), "{unparsed}");
+        }
+    }
+
+    #[test]
+    fn no_proxy_entries_match_hosts_their_subdomains_and_address_ranges() {
+        let direct = |no_proxy: &str, url: &str| {
+            let env = Environment::from_pairs([("NO_PROXY", no_proxy)]);
+            bypasses_proxy(&env, Some("http://proxy:3128"), url)
+        };
+        assert!(direct("localhost, .pypi.org", PYPI_URL));
+        assert!(direct("pypi.org", "https://files.pypi.org/x"));
+        assert!(direct("*", PYPI_URL));
+        assert!(!direct("example.org,,", PYPI_URL));
+        assert!(!direct("pypi.org", "https://notpypi.org/x"));
+        // A CIDR entry covers the addresses in its range, as reqwest reads it.
+        assert!(direct("10.0.0.0/8", "https://10.1.2.3:8089/x"));
+        assert!(!direct("10.0.0.0/8", "https://11.1.2.3:8089/x"));
+        // The lower-case spelling wins, as the connectors read it.
+        let env = Environment::from_pairs([("no_proxy", "example.org"), ("NO_PROXY", "pypi.org")]);
+        assert!(!bypasses_proxy(&env, None, PYPI_URL));
     }
 }

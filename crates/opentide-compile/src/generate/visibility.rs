@@ -154,9 +154,9 @@ fn as_list(node: Option<&Node>) -> Vec<&Node> {
     }
 }
 
-/// `str(x or "")`.
+/// The text of a name, or nothing.
 fn or_empty(node: Option<&Node>) -> String {
-    node.filter(|value| opentide_workspace::index::truthy(value))
+    node.filter(|value| opentide_workspace::index::holds_name(value))
         .map(node_text)
         .unwrap_or_default()
 }
