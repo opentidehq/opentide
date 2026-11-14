@@ -29,6 +29,7 @@ use crate::connector::{
 use crate::encode;
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
+use crate::retry::RetryPolicy;
 
 /// The platform's identifier.
 pub const PLATFORM: &str = "harfanglab";
@@ -69,10 +70,13 @@ const RESERVED: [&str; 5] = [
     "ordering",
 ];
 
-/// How a HarfangLab tenant is reached when nothing else says: `requests`'
-/// 120 s and no retries.
+/// How a HarfangLab tenant is reached when nothing else says: 120 s and
+/// the connectors' retries.
 pub fn http_defaults() -> HttpSettings {
-    HttpSettings::default()
+    HttpSettings {
+        retry: RetryPolicy::standard(),
+        ..HttpSettings::default()
+    }
 }
 
 /// The kind of rule a tenant takes (its `type`).

@@ -22,6 +22,7 @@ use crate::connector::{
     kql_with_limit, utc_z,
 };
 use crate::error::ConnectorError;
+use crate::retry::RetryPolicy;
 use crate::text::json_text;
 use crate::{HttpSettings, Secret, TenantLabel};
 
@@ -52,9 +53,13 @@ pub const RISKY_RESPONSE_ACTIONS: [&str; 3] = [
     "#microsoft.graph.security.forceUserPasswordResetResponseAction",
 ];
 
-/// The HTTP settings of a Defender tenant: `TenantSession`'s, no retries.
+/// The HTTP settings of a Defender tenant: 120 s and the connectors'
+/// retries.
 pub fn http_settings() -> HttpSettings {
-    HttpSettings::default()
+    HttpSettings {
+        retry: RetryPolicy::standard(),
+        ..HttpSettings::default()
+    }
 }
 
 /// Why a Graph call failed.
