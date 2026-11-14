@@ -64,7 +64,7 @@ fn from_value<T: DeserializeOwned>(value: Value) -> Result<T, serde_json::Error>
 /// The MCP server.
 ///
 /// Each tool call and resource read runs apart from the runtime's thread
-/// ([`Server::apart`]), so the server keeps reading the client meanwhile: a
+/// (`Server::apart`), so the server keeps reading the client meanwhile: a
 /// `ping` or a list is answered, and `notifications/cancelled` stops the
 /// call. They run one at a time, in the order they came, as they ran when
 /// the server waited for each.
