@@ -1,6 +1,6 @@
 [1mDeploy plan[0m[1;2m · strategy [0m[1mPREVIEW RELEASE[0m[1;2m · 1 platform, 1 tenant[0m
 [2mPlan: 1 to create, 1 to update, 0 to disable, 1 to delete[0m
-[?25l<LIVE><PROGRESS></LIVE>[1;33mwarning: [0mExternal id recorded · uuid: 00000000-0000-4000-8047-000000000001 · platform: 
+[?25l<LIVE></LIVE>[1;33mwarning: [0mExternal id recorded · uuid: 00000000-0000-4000-8047-000000000001 · platform: 
 defender_for_endpoint · tenant: lab · external_id: 42
 
 [1mDeploying to [0m[1mdefender_for_endpoint / lab[0m[1;2m · 3 rules[0m
