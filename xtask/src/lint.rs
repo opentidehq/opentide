@@ -87,7 +87,22 @@ pub const APPROVED: &[Approved] = &[
         changelog: "**Messages quote values the same way everywhere**",
         applies: quoting_only,
     },
+    Approved {
+        id: "finding-field-order",
+        reason: "a finding writes its fields in one order, its struct's (`LintEntry`), where \
+                 the oracle's dict put a placeholder finding's `help`, `line`, `column` and \
+                 `end_column` before `message`: the fields and their values are the same",
+        changelog: "**`lint --json` lists a finding's fields in one order**",
+        applies: field_order_only,
+    },
 ];
+
+/// The same finding, its fields written in another order: a finding is
+/// compared by its text, so two equal values that differ there differ in
+/// the order of their fields.
+pub fn field_order_only(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) -> bool {
+    matches!((oracle, rust), (Some(oracle), Some(rust)) if oracle == rust)
+}
 
 /// `text` without quote characters and backslashes.
 fn unquoted(text: &str) -> String {
@@ -804,6 +819,52 @@ mod tests {
         assert!(parse_args(&argv(&["--format", "sarif"])).is_none());
         assert!(parse_args(&argv(&["--check", "filenamez"])).is_none());
         assert!(parse_args(&argv(&["--help"])).is_none());
+    }
+
+    /// A finding whose fields only come in another order is one difference,
+    /// approved as `finding-field-order`; a changed value is not.
+    #[test]
+    fn a_finding_in_another_field_order_is_approved_and_a_changed_value_is_not() {
+        let item = |pairs: &[(&str, Json)]| {
+            Item::new(
+                &pairs
+                    .iter()
+                    .map(|(key, value)| ((*key).to_owned(), value.clone()))
+                    .collect(),
+            )
+        };
+        let oracle = item(&[
+            ("code", json!("placeholder")),
+            ("path", json!("a.yaml")),
+            ("line", json!(10)),
+            ("message", json!("m")),
+        ]);
+        let reordered = item(&[
+            ("code", json!("placeholder")),
+            ("path", json!("a.yaml")),
+            ("message", json!("m")),
+            ("line", json!(10)),
+        ]);
+        let mut out = Vec::new();
+        list_differences("c", std::slice::from_ref(&oracle), &[reordered], &mut out);
+        assert_eq!(out.len(), 1, "the text differs");
+        let rule = APPROVED
+            .iter()
+            .find(|rule| (rule.applies)(out[0].oracle.as_ref(), out[0].rust.as_ref(), &[]))
+            .map(|rule| rule.id);
+        assert_eq!(rule, Some("finding-field-order"));
+
+        let moved = item(&[
+            ("code", json!("placeholder")),
+            ("path", json!("a.yaml")),
+            ("message", json!("m")),
+            ("line", json!(11)),
+        ]);
+        assert!(!field_order_only(
+            Some(&oracle.value),
+            Some(&moved.value),
+            &[]
+        ));
     }
 
     #[test]
