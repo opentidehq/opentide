@@ -137,13 +137,12 @@ jobs:
             echo "::endgroup::"
           done
 
-  # The artifacts publish.yml uploads to PyPI, built the same way: cibuildwheel
-  # (hatchling and hatch_build.py, which compiles bindings/python/) at the version the
-  # release guard reads from CHANGELOG.md, and `uv build --sdist`. One runner:
-  # the Linux x86_64 wheel (manylinux_2_28; no musllinux, the maintainer's
-  # decision) and the sdist. The release builds the other platforms itself and
-  # refuses to publish when one is missing. The release train kept this build
-  # (cibuildwheel and hatch_build.py) rather than move to maturin
+  # The artifacts publish.yml uploads to PyPI, built the same way: maturin
+  # (PyO3/maturin-action, which compiles bindings/python/ into the wheel) at
+  # the version the release guard reads from CHANGELOG.md, and `maturin
+  # sdist`. One runner: the Linux x86_64 wheel (manylinux_2_28; no musllinux,
+  # the maintainer's decision) and the sdist. The release builds the other
+  # platforms itself and refuses to publish when one is missing
   # (docs/internal/publishing.md, "The release train").
   pypi:
     name: PyPI (wheels and sdist)
@@ -166,22 +165,29 @@ jobs:
           echo "Building ${version}, the newest dated version in CHANGELOG.md"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
-      # The Linux containers build from a copy of the checkout, hence the version.
-      - name: Build wheels
+      # maturin takes the version from bindings/python/'s crate, as
+      # build-packages.yml writes it (scripts/engine/release.py pypi-version).
+      - name: The packages at that version
         env:
-          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          python -m pip install cibuildwheel==4.3.5
-          python -m cibuildwheel --output-dir dist
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python scripts/engine/release.py pypi-version "${VERSION}"
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          enable-cache: true
-
+      # The sdist first, on the runner; then the wheel, in the manylinux container.
       - name: Build sdist
-        env:
-          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ steps.version.outputs.version }}
-        run: uv build --sdist
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: v1.16.0
+          command: sdist
+          args: --out dist
+
+      - name: Build the wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: v1.16.0
+          command: build
+          target: x86_64-unknown-linux-gnu
+          manylinux: "2_28"
+          args: --locked --out dist
 
       - name: Twine check
         run: |

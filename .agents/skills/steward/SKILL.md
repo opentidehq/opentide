@@ -48,7 +48,7 @@ runner lost) and treat a second failure as real.
 - Skip, `xfail`, quarantine or loosen a test to get green.
 - `git push --no-verify`, empty commits or close/reopen to re-trigger CI.
 - Force-push, rebase or amend a branch someone else is working on; merge the base in instead.
-- Hand-edit `uv.lock`, `src/opentide/_version.py`, generated schemas or bundled vocabulary.
+- Hand-edit `uv.lock`, generated schemas or bundled vocabulary.
 - Bump the package version — releases are tags ([`release-management`](../release-management/SKILL.md)).
 
 ## Every push

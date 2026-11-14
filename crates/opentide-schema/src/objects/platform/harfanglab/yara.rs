@@ -20,6 +20,7 @@ use std::sync::OnceLock;
 use regex::Regex;
 
 use crate::node::{Node, Value};
+use crate::vocab::quote;
 
 /// The modules the YARA language knows (yara-1.0, Modules).
 pub const YARA_MODULES: &[&str] = &[
@@ -337,7 +338,7 @@ pub fn rule_name_problem(name: &str) -> Option<String> {
     if YARA_KEYWORDS.contains(&derived.as_str()) {
         return Some(format!(
             "the YARA rule name {} derived from it is a YARA keyword",
-            python_repr(&derived)
+            quote(&derived)
         ));
     }
     let ascii = |c: char| c.is_ascii_alphanumeric() || c == '_';
@@ -348,14 +349,14 @@ pub fn rule_name_problem(name: &str) -> Option<String> {
         } else {
             others
                 .iter()
-                .map(|c| python_repr(&c.to_string()))
+                .map(|c| quote(&c.to_string()))
                 .collect::<Vec<_>>()
                 .join(", ")
         };
         return Some(format!(
             "the YARA rule name {} derived from it keeps {shown}; libyara takes only ASCII \
              letters, digits and _",
-            python_repr(&derived)
+            quote(&derived)
         ));
     }
     let length = derived.chars().count();
@@ -366,34 +367,6 @@ pub fn rule_name_problem(name: &str) -> Option<String> {
         ));
     }
     None
-}
-
-/// A string as Python's `repr` writes it: in single quotes, unless it holds
-/// one and no double quote.
-#[must_use]
-pub fn python_repr(text: &str) -> String {
-    let quote = if text.contains('\'') && !text.contains('"') {
-        '"'
-    } else {
-        '\''
-    };
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push(quote);
-    for c in text.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if c == quote => {
-                out.push('\\');
-                out.push(c);
-            }
-            c => out.push(c),
-        }
-    }
-    out.push(quote);
-    out
 }
 
 /// Whether `value` is a comma-joined list, without blanks, of HarfangLab scan
@@ -589,7 +562,7 @@ pub fn advisories(signature: &str) -> Vec<YaraAdvisory> {
             (end, after.map_or(header.end, |(start, _)| start))
         });
         let found = span.and_then(|(from, to)| find_word(context_pattern(), &code, from, to));
-        let name = python_repr(&header.name);
+        let name = quote(&header.name);
         let Some((key, start)) = found else {
             out.push(YaraAdvisory {
                 code: "yara_meta_missing",
@@ -610,7 +583,7 @@ pub fn advisories(signature: &str) -> Vec<YaraAdvisory> {
             (!context_accepted(value)).then(|| {
                 format!(
                     "YARA rule {name} sets meta context {}; HarfangLab expects {}",
-                    python_repr(value),
+                    quote(value),
                     contexts_text()
                 )
             })
@@ -663,7 +636,7 @@ pub fn decomposed_advisory(contexts: &Node, os: Option<&str>) -> Option<(&'stati
         "harfanglab_yara_context",
         format!(
             "meta.context deploys as context {}; HarfangLab expects {}",
-            python_repr(&written),
+            quote(&written),
             contexts_text()
         ),
     ))
@@ -741,9 +714,9 @@ mod tests {
         assert!(
             rule_name_problem("Condition")
                 .unwrap()
-                .contains("'condition'")
+                .contains("\"condition\"")
         );
-        assert!(rule_name_problem("Détection").unwrap().contains("'é'"));
+        assert!(rule_name_problem("Détection").unwrap().contains("\"é\""));
         assert!(rule_name_problem(&"a".repeat(128)).is_none());
         assert!(rule_name_problem(&"a".repeat(129)).unwrap().contains("129"));
         assert_eq!(deployed_signature("a\r\nb\rc"), "a\nb\nc\n");

@@ -38,11 +38,20 @@ usage).
    `cargo xtask golden record`, and review every difference.
 2. **Recordings are generated, never hand-edited**: not `cases/`, not `blobs/`, not
    `COVERAGE.md`. A change is a re-record plus a reviewed diff.
-3. **Anything that differs from the oracle is a bug**, unless the difference is recorded in
-   `tests/golden/APPROVED_DIFFS.toml` with its reason, its issue and its changelog entry.
+3. **In a comparison with the oracle, anything that differs is a bug**, unless the difference is
+   recorded in `tests/golden/APPROVED_DIFFS.toml` with its reason, its issue and its changelog
+   entry. No CI tier runs that comparison and the ledger gates nothing (since 2026-11-14): a
+   behaviour change is still deliberate, with its `CHANGELOG.md` entry, and a by-hand run that
+   finds an unrecorded difference is fixed or recorded.
 4. **Never loosen the comparison** to get green: no widened normalisation rule, no broader ledger
    entry, no skipped case, no deleted recording. Normalisation hides only what differs between two
-   runs of the same case; each rule is code in `xtask/src/golden/normalise.rs` with a unit test.
+   runs of the same case; each rule is code in `crates/opentide-compare/src/normalise.rs` (which
+   `xtask::golden::normalise` re-exports) with a unit test. The crates' tests that replay the
+   oracle's recordings byte for byte (`command_goldens.rs`, `framework_goldens.rs`,
+   `generate_goldens.rs` and the others #1121 marked) carry
+   `#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]`
+   by the maintainer's decision; run them with `cargo nextest run --run-ignored only`. Any other
+   new `#[ignore]` is a loosened comparison.
 5. **The plan's invariants (§3) do not move.** If a port seems to need a change to the CLI
    contract, the command tree, a diagnostic code, a cross-repository contract, MCP, a workspace
    format, an SDK import path, the supported platforms or the security posture, stop and raise it
@@ -64,7 +73,7 @@ usage).
 case) and `--jobs N`; `check` and `diff` take
 `--engine python|rust`: `python` runs the oracle, `rust` this repository's CLI.
 
-**Preview of the next oracle** (`tests/golden/ORACLE.next`, 0.28.1 during the catch-up): judge a
+**Preview of the next oracle** (`tests/golden/ORACLE.next`, none committed now; 0.28.1 during the catch-up, #1122): judge a
 port against it without committing recordings, `cargo xtask golden record --oracle
 tests/golden/ORACLE.next --out target/golden-next --filter '<area>/*'`, then `cargo xtask golden
 check --engine rust --recordings target/golden-next --filter '<area>/*'`, and post its summary in

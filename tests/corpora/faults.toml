@@ -5101,7 +5101,7 @@ isolated = true
 note = "isolated so the combined workspace the goldens record stays as it was"
 
 # Codes in scope whose fault kind a unit of the 0.28 catch-up train still
-# owes (docs/internal/catchup-0.28-plan.md, O2): opentide 0.28.1 reports them
+# owes (the 0.28 catch-up train, #1122): opentide 0.28.1 reports them
 # and no kind above produces them yet. Each names its owner. The list only
 # shrinks: `cargo xtask corpus coverage --check` fails on a pending code that
 # a kind now produces, and on any code in scope that is neither covered nor

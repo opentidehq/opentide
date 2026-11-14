@@ -29,7 +29,7 @@ use crate::error::{ErrorKind, PathSegment};
 use crate::from_node::Context;
 use crate::node::{Node, Value};
 use crate::objects::checks::check_at_least_one;
-use crate::objects::platform::{literal_enum, platform_block, python_strip};
+use crate::objects::platform::{literal_enum, platform_block};
 use crate::pins::Pins;
 
 /// The schema identifier.
@@ -280,15 +280,12 @@ impl ExabeamEvery {
 #[from_node(union)]
 pub enum ExabeamValueItem {
     /// A string.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     Text(String),
     /// An integer.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Int(i64),
     /// A number.
-    #[from_node(tag = "float")]
     #[schemars(
         description = "",
         schema_with = "crate::objects::platform::number_schema"
@@ -303,18 +300,15 @@ pub enum ExabeamValueItem {
 #[from_node(union)]
 pub enum ExabeamValue {
     /// An integer.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Int(i64),
     /// A number.
-    #[from_node(tag = "float")]
     #[schemars(
         description = "",
         schema_with = "crate::objects::platform::number_schema"
     )]
     Float(f64),
     /// A list of strings or numbers.
-    #[from_node(tag = "list[union[str,int,float]]")]
     #[schemars(description = "")]
     List(Vec<ExabeamValueItem>),
 }
@@ -326,11 +320,9 @@ pub enum ExabeamValue {
 #[from_node(union)]
 pub enum ExabeamDays {
     /// Weekday names.
-    #[from_node(tag = "list[str]")]
     #[schemars(description = "")]
     Names(Vec<String>),
     /// Day numbers.
-    #[from_node(tag = "list[int]")]
     #[schemars(description = "")]
     Numbers(Vec<i64>),
 }
@@ -636,17 +628,12 @@ fn text(node: Option<&Node>) -> Option<&str> {
 
 /// A string with something besides whitespace.
 fn non_blank(node: Option<&Node>) -> bool {
-    text(node).is_some_and(|text| !python_strip(text).is_empty())
+    text(node).is_some_and(|text| !text.trim().is_empty())
 }
 
 /// `_number`: an integer or a float, not a boolean.
 fn number(node: &Node) -> bool {
     matches!(node.value, Value::Int(_) | Value::Float(_))
-}
-
-/// Python's `repr` of a value, `None` when absent.
-fn py_repr(node: Option<&Node>) -> String {
-    node.map_or_else(|| "None".to_owned(), repr::node)
 }
 
 /// Whether `value` is one of `allowed` (Python's `value in allowed`).
@@ -781,12 +768,17 @@ fn threshold_findings(threshold: &Node, at: &[PathSegment]) -> Vec<Finding> {
     }
     let function_node = field(threshold, "function");
     let Some(function) = text(function_node).filter(|name| FUNCTIONS.contains(name)) else {
+        let functions = FUNCTIONS.join(", ");
         return vec![found(
             "exabeam_threshold_function",
-            format!(
-                "{} is not an Exabeam function: {}",
-                py_repr(function_node),
-                FUNCTIONS.join(", ")
+            function_node.map_or_else(
+                || format!("function is missing: set an Exabeam function: {functions}"),
+                |node| {
+                    format!(
+                        "{} is not an Exabeam function: {functions}",
+                        repr::node(node)
+                    )
+                },
             ),
         )];
     };
@@ -812,9 +804,12 @@ fn threshold_findings(threshold: &Node, at: &[PathSegment]) -> Vec<Finding> {
         None => findings.push(found(
             "exabeam_threshold_operator",
             format!(
-                "{function} takes the operator {}, not {}",
+                "{function} takes the operator {}{}",
                 allowed.join(" or "),
-                py_repr(operator_node)
+                operator_node.map_or_else(
+                    || ": set operator".to_owned(),
+                    |node| format!(", not {}", repr::node(node))
+                )
             ),
         )),
         Some(operator) => {
@@ -837,7 +832,7 @@ fn threshold_findings(threshold: &Node, at: &[PathSegment]) -> Vec<Finding> {
                 if !items.is_empty() && items.iter().all(|item| {
                     number(item)
                         || text(Some(item)).is_some_and(|text| {
-                            !python_strip(text).is_empty() && !text.contains(',')
+                            !text.trim().is_empty() && !text.contains(',')
                         })
                 }));
                 (
@@ -1022,10 +1017,12 @@ fn suppression_findings(suppression: &Node) -> Vec<Finding> {
     findings
 }
 
-/// `_distinct`: no two items with the same `repr`.
+/// No two items hold the same value.
 fn distinct(items: &[std::sync::Arc<Node>]) -> bool {
-    let seen: BTreeSet<String> = items.iter().map(|item| repr::node(item)).collect();
-    seen.len() == items.len()
+    items
+        .iter()
+        .enumerate()
+        .all(|(index, item)| items[..index].iter().all(|seen| seen.value != item.value))
 }
 
 /// Why `recurrence` is not a valid `schedule[]` entry (`_recurrence_problem`).
@@ -1165,24 +1162,26 @@ pub fn block_findings(block: &Node) -> Vec<Finding> {
         _ => 0,
     };
     findings.extend(correlation_findings(field(block, "correlation"), count));
-    let severity = field(block, "severity");
-    if severity.is_some() && !one_of(severity, &SEVERITIES) {
+    if let Some(severity) = field(block, "severity")
+        && !one_of(Some(severity), &SEVERITIES)
+    {
         findings.push(Finding::new(
             "exabeam_severity",
             vec![key("severity")],
             format!(
                 "{} is not an Exabeam severity: {} (lower case)",
-                py_repr(severity),
+                repr::node(severity),
                 SEVERITIES.join(", ")
             ),
         ));
     }
-    let outcome = field(block, "outcome");
-    if outcome.is_some() && !one_of(outcome, &OUTCOMES) {
+    if let Some(outcome) = field(block, "outcome")
+        && !one_of(Some(outcome), &OUTCOMES)
+    {
         findings.push(Finding::new(
             "exabeam_outcome",
             vec![key("outcome")],
-            format!("{} is not alert, case or none", py_repr(outcome)),
+            format!("{} is not alert, case or none", repr::node(outcome)),
         ));
     }
     if let Some(email) = field(block, "email")
@@ -1290,7 +1289,7 @@ pub fn name_findings<'r>(
         std::collections::BTreeMap::new();
     for (uuid, rule) in rules {
         if let Some(name) = rule_exabeam_name(rule, true) {
-            by_name.entry(casefold(&name)).or_default().push(uuid);
+            by_name.entry(name.to_lowercase()).or_default().push(uuid);
         }
     }
     let mut findings = Vec::new();
@@ -1318,7 +1317,7 @@ pub fn name_findings<'r>(
             continue;
         };
         let mut others: Vec<&str> = by_name
-            .get(&casefold(&name))
+            .get(&name.to_lowercase())
             .map(|uuids| {
                 uuids
                     .iter()
@@ -1345,14 +1344,6 @@ pub fn name_findings<'r>(
         });
     }
     findings
-}
-
-/// `str.casefold()` for the names Exabeam compares.
-fn casefold(text: &str) -> String {
-    text.chars()
-        .flat_map(char::to_lowercase)
-        .collect::<String>()
-        .replace('ß', "ss")
 }
 
 // ---------------------------------------------------------------------------

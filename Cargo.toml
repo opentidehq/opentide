@@ -1,6 +1,6 @@
 # One workspace: the engine crates (crates/, imported from opentidehq/language-server
 # with their history, docs/engine/IMPORT.md), the PyO3 binding the opentide
-# package compiles in (bindings/python/, built by hatch_build.py) and the repository's
+# package compiles in (bindings/python/, built by maturin) and the repository's
 # Rust tooling (xtask/, `cargo xtask`). Members are listed, not globbed; each one
 # has a place in the layer table, xtask/layers.toml (`cargo xtask check-layers`).
 # cargo-fuzz builds fuzz/ on nightly with its own workspace and lock file.
@@ -89,6 +89,9 @@ anyhow = "1"
 lsp-server = "0.10"
 lsp-types = "0.97"
 url = "2.5"
+# Percent-decoding a URL path segment (opentide-cassette's matcher). The
+# version `url` already locks.
+percent-encoding = "2.3"
 regex = "1"
 # Look-around and back-references, which `regex` has not: the oracle's
 # Markdown-to-text patterns of the generated schemas (opentide-schema, UC-1.8).
@@ -259,8 +262,8 @@ strip = "symbols"
 inherits = "release"
 opt-level = "z"
 
-# What an editable install of opentide (`uv sync`) builds for development and CI
-# (hatch_build.py): optimised, so the engine runs at full speed in the Python test
+# What an editable install of opentide (`uv sync`, `maturin develop --profile
+# develop`) builds for development: optimised, so the engine runs at full speed in the Python test
 # suite, without the release profile's slow link-time optimisation.
 [profile.develop]
 inherits = "release"

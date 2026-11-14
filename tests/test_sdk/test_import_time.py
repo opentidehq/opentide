@@ -16,7 +16,10 @@ BUDGET_US = 30_000
 _LOADED = """
 import sys
 import opentide
-heavy = ("opentide.sdk", "opentide._native", "opentide.analysis", "opentide.models", "json")
+heavy = (
+    "opentide.sdk", "opentide._native", "opentide.analysis", "opentide.models", "json",
+    "importlib.metadata",
+)
 print(",".join(name for name in heavy if name in sys.modules))
 """
 

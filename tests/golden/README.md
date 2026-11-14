@@ -36,10 +36,10 @@ cargo nextest run --workspace --run-ignored all        # everything, the replays
 
 ### A preview of the next oracle
 
-`ORACLE.next` names the next oracle (opentide 0.28.1, while its features are ported; O1 of
-`docs/internal/catchup-0.28-plan.md`), in `ORACLE`'s format, with its own requirements,
-`oracle-requirements.next.txt`. Nothing committed is recorded from it: a port compares its work
-with it in a directory of its own.
+`ORACLE.next` names the next oracle, in `ORACLE`'s format, with its own requirements,
+`oracle-requirements.next.txt`. None is committed now: the 0.28 catch-up train (#1122) used one
+for 0.28.1 while its features were ported, then made 0.28.1 the oracle. Nothing committed is
+recorded from it: a port compares its work with it in a directory of its own.
 
 ```bash
 cargo xtask golden lock --oracle tests/golden/ORACLE.next          # its requirements, beside it

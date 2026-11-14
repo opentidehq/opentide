@@ -69,6 +69,16 @@ impl Scalar {
         }
     }
 
+    /// A decoded escape `len` bytes long at `at`: each byte of `c` maps onto
+    /// the escape, the bytes past its end onto its last byte (`\L` decodes
+    /// to three bytes from two), so no byte maps onto the next character.
+    fn push_escape(&mut self, c: char, at: usize, len: usize) {
+        self.text.push(c);
+        for k in 0..c.len_utf8() {
+            self.map.push(at + k.min(len.saturating_sub(1)));
+        }
+    }
+
     fn push_str(&mut self, s: &str, at: usize) {
         self.text.push_str(s);
         self.map.extend(at..at + s.len());
@@ -506,8 +516,14 @@ fn quoted_scalar(source: &str, at: usize, quote: char) -> Option<Scalar> {
                     'U' => hex_escape(&mut chars, 8)?,
                     _ => return None,
                 };
-                // An escape maps onto its backslash.
-                scalar.push(decoded, i);
+                // An escape maps onto its own text, from its backslash.
+                let len = match e {
+                    'x' => 4,
+                    'u' => 6,
+                    'U' => 10,
+                    _ => 2,
+                };
+                scalar.push_escape(decoded, i, len);
                 blanks_from = None;
             }
             ' ' | '\t' => {
@@ -622,6 +638,7 @@ mod tests {
         ),
         ("q: \"a  \n    b\n\n    c\"\n", "q", "a b\nc"),
         ("q: \"a \\\n    b\"\n", "q", "a b"),
+        ("q: \"a\\Lb\\P\"\n", "q", "a\u{2028}b\u{2029}"),
         ("q:\n  \"a\n  b\"\n", "q", "a b"),
         ("q: !!str |\n  a\n", "q", "a\n"),
         ("q: |\r\n  a\r\n  b\r\n", "q", "a\nb\n"),
@@ -647,8 +664,11 @@ mod tests {
                 "{source:?}"
             );
             assert_eq!(scalar.map.len(), scalar.text.len(), "{source:?}");
+            // The map runs forward; only the bytes of one character longer
+            // than its escape (`\L`) share a source byte.
             assert!(
-                scalar.map.windows(2).all(|w| w[0] < w[1]),
+                (1..scalar.map.len()).all(|i| scalar.map[i - 1] < scalar.map[i]
+                    || (scalar.map[i - 1] == scalar.map[i] && !scalar.text.is_char_boundary(i))),
                 "the map runs forward: {source:?} {:?}",
                 scalar.map
             );

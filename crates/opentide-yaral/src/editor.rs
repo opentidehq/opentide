@@ -100,6 +100,10 @@ fn field_markdown(udm: &Udm, path: &str, field: &Field) -> String {
 
 /// Hover at byte `offset`.
 pub fn hover(source: &str, offset: usize) -> Option<String> {
+    // An offset inside a character (a decoded escape) has nothing to show.
+    if !source.is_char_boundary(offset.min(source.len())) {
+        return None;
+    }
     let tree = opentide_syntax::parse(LanguageId::Yaral, source)?;
     let node = tree
         .root_node()
@@ -254,7 +258,10 @@ fn field_item(udm: &Udm, field: &Field) -> CompletionItem {
 /// Completion at byte `offset`.
 pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
     let offset = offset.min(source.len());
-    let before = &source[..offset];
+    // An offset inside a character (a decoded escape) completes nothing.
+    let Some(before) = source.get(..offset) else {
+        return Vec::new();
+    };
     let line = before.rsplit('\n').next().unwrap_or(before);
     let udm = Udm::cached();
     let functions = Functions::cached();
@@ -378,6 +385,10 @@ fn enum_values(line: &str) -> Option<Vec<CompletionItem>> {
 )]
 pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
     let offset = offset.min(source.len());
+    // An offset inside a character (a decoded escape) has nothing to show.
+    if !source.is_char_boundary(offset) {
+        return None;
+    }
     let bytes = source.as_bytes();
     let mut depth = 0usize;
     let mut commas = 0u32;
@@ -507,5 +518,16 @@ mod tests {
         let help = signature_help(source, source.len()).expect("help");
         assert!(help.signatures[0].label.starts_with("re.regex("));
         assert_eq!(help.active_parameter, 1);
+    }
+
+    #[test]
+    fn an_offset_inside_a_character_is_answered_empty() {
+        // A cursor inside a decoded escape (`\u00e9` in a double-quoted Tide
+        // query) can reach the engine as the second byte of `\u{e9}`.
+        let src = "rule r {\n  events:\n    re.regex($e.principal.hostname,\n\u{e9})\n  condition:\n    $e\n}";
+        let inside = src.find('\u{e9}').unwrap() + 1;
+        assert!(completions(src, inside).is_empty());
+        assert_eq!(hover(src, inside), None);
+        assert!(signature_help(src, inside).is_none());
     }
 }

@@ -147,15 +147,26 @@ def test_the_pr_gates_jobs_run_on_linux() -> None:
 
 
 def test_only_the_build_compiles_the_gates_workspace() -> None:
-    """`build` builds and runs the Rust tests; `native` builds the Python jobs' extension."""
-    compiles = re.compile(r"\bcargo (?:build|test|nextest run)\b|\buv sync\b(?!.*--no-install)")
+    """`build` builds and runs the Rust tests; `native` builds the wheel the Python jobs install."""
+    compiles = re.compile(
+        r"\bcargo (?:build|test|nextest run)\b|\bmaturin\b|\buv (?:sync|build)\b(?!.*--no-install)"
+    )
     for job_id in ("python", "gitlab-ci-lint", "lint"):
         job = ci_jobs()[job_id]
-        prebuilt = "OPENTIDE_ENGINE_PREBUILT" in (job.get("env") or {})
+        env = job.get("env") or {}
         for step in job["steps"]:
-            for line in str(step.get("run", "")).replace("\\\n", " ").splitlines():
-                if compiles.search(line):
-                    assert prebuilt and "uv sync" in line, (job_id, line)
+            run = str(step.get("run", ""))
+            for line in run.replace("\\\n", " ").splitlines():
+                assert not compiles.search(line), (job_id, line)
+        runs = "\n".join(str(step.get("run", "")) for step in job["steps"])
+        if job_id in ("python", "gitlab-ci-lint"):
+            # The build's wheel, and `uv run` never builds the project again.
+            assert "uv pip install --no-deps .native/opentide-*.whl" in runs, job_id
+            assert env.get("UV_NO_SYNC") == "1", job_id
+            # The wheel E2E tests install that wheel instead of building one.
+            assert env.get("OPENTIDE_TEST_WHEELHOUSE") == "${{ github.workspace }}/.native"
+    native = "\n".join(str(step.get("run", "")) for step in ci_jobs()["native"]["steps"])
+    assert "maturin build --locked --profile dev" in native
 
 
 # --- What no workflow does ---------------------------------------------------

@@ -253,6 +253,69 @@ fn a_5xx_create_is_never_resent() {
 }
 
 #[test]
+fn a_create_that_names_no_rule_id_says_what_it_answered() {
+    let runtime = runtime();
+    runtime.block_on(async {
+        for (answered, shown) in [
+            (serde_json::json!({}), "no name"),
+            (serde_json::json!({"name": null}), "no name"),
+            (serde_json::json!({"name": "rules/x"}), "name \"rules/x\""),
+            (serde_json::json!({"name": 7}), "name 7"),
+        ] {
+            let server = MockServer::start().await;
+            mount_token(&server).await;
+            let instance = resource();
+            Mock::given(method("POST"))
+                .and(path(format!("/v1/{instance}:verifyRuleText")))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_json(serde_json::json!({"success": true})),
+                )
+                .mount(&server)
+                .await;
+            Mock::given(method("POST"))
+                .and(path(format!("/v1/{instance}/rules")))
+                .respond_with(ResponseTemplate::new(200).set_body_json(answered))
+                .mount(&server)
+                .await;
+            let (tenant, http, env, _dir) = tenant(&server);
+            let authorizer = Authorizer::new(
+                load(tenant.setup.get("credentials"), &env).unwrap(),
+                fixed_clock(),
+            );
+            let cancel = CancellationToken::new();
+            let cx = TenantContext {
+                tenant: &tenant,
+                http: &http,
+                cancel: &cancel,
+            };
+            let rule = RuleDeploy {
+                action: Action::Create,
+                assembled: assembled("process"),
+                run_state: opentide_compile::google_secops::RunState::disabled(),
+                run_frequency: None,
+                disabling: false,
+                retiring: false,
+                scope: None,
+                delete: false,
+                recreate_refusal: None,
+            };
+            let outcome = deploy_rule(cx, &authorizer, &server.uri(), &instance, &rule)
+                .await
+                .unwrap();
+            assert_eq!(outcome.state, StateChange::Keep);
+            assert_eq!(outcome.failures[0].code, "google_secops_create_no_id");
+            assert!(
+                outcome.failures[0]
+                    .message
+                    .contains(&format!("answered {shown}, which names no rule id")),
+                "{}",
+                outcome.failures[0].message
+            );
+        }
+    });
+}
+
+#[test]
 fn deletion_archives_the_rule() {
     let runtime = runtime();
     runtime.block_on(async {

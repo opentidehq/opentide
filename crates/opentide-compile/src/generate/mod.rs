@@ -12,8 +12,8 @@
 //!   (`indexing/inflight.py`).
 //! - [`json_text`]: JSON files as serde_json lays them out (pretty at an
 //!   indent, or one line), UTF-8.
-//! - [`files`]: writing [`Output`]s in parallel (rayon), and [`files::Snapshot`],
-//!   the files a phase wrote found by modification time and size.
+//! - [`files`]: writing [`Output`]s in parallel (rayon), and [`files::Changes`],
+//!   the files a phase wrote and removed, recorded as it does.
 //!
 //! Rendering is pure: a phase returns its [`Output`]s or a [`PhaseError`];
 //! only [`files`] touches the disk, and [`inflight`], which reads the shards
@@ -50,8 +50,7 @@ impl Output {
 }
 
 /// Why a phase stopped: the message after the phase's name
-/// (`KeyError: 'objective' while rendering <uuid>`), as the oracle's
-/// `GenerationPhaseError` words it (`generation/errors.py`).
+/// (``missing key `objective` while rendering <uuid>``).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{detail}")]
 pub struct PhaseError {
@@ -73,9 +72,9 @@ impl PhaseError {
     }
 }
 
-/// What an object's rendering stopped on, named as the oracle names the
-/// exception it raised: a missing key (`KeyError: 'tlp'`) or a broken
-/// reference (`Exception: detection_model … does not exist in the catalogue`).
+/// What an object's rendering stopped on: a missing key (``missing key
+/// `tlp` ``) or another problem, such as a broken reference
+/// (`detection_model … does not exist in the catalogue`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Cause {
     /// A key the object must have.
@@ -87,12 +86,8 @@ pub enum Cause {
 impl std::fmt::Display for Cause {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::MissingKey(key) => write!(
-                f,
-                "KeyError: {}",
-                opentide_schema::configuration::repr::quote(key)
-            ),
-            Self::Other(message) => write!(f, "Exception: {message}"),
+            Self::MissingKey(key) => write!(f, "missing key `{key}`"),
+            Self::Other(message) => f.write_str(message),
         }
     }
 }

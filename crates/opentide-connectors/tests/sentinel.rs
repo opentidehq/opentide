@@ -105,18 +105,44 @@ fn sentinel_deploy_sends_what_the_python_client_sent() {
 }
 
 #[test]
-fn sentinel_a_single_byte_off_fails() {
-    // The sign-in naming another operating system: the token request differs.
+fn sentinel_a_single_field_off_fails() {
+    let connector = |os: &str| {
+        let next = Arc::new(AtomicU64::new(0));
+        Sentinel::with_identity(
+            Arc::new(move || {
+                let number = next.fetch_add(1, Ordering::SeqCst) + 1;
+                format!("00000000-0000-4000-8000-{number:012x}")
+            }),
+            os,
+        )
+    };
+    // The sign-in naming another operating system: MSAL's identity headers
+    // say nothing to the tenant, the requests are the recorded ones.
     let tenant = replay("sentinel/deploy");
-    let next = Arc::new(AtomicU64::new(0));
-    let connector = Sentinel::with_identity(
-        Arc::new(move || {
-            let number = next.fetch_add(1, Ordering::SeqCst) + 1;
-            format!("00000000-0000-4000-8000-{number:012x}")
-        }),
-        "darwin",
+    let _ = block_on(async {
+        connector("darwin")
+            .token(tenant.cx(), sentinel::ARM_SCOPE)
+            .await
+    });
+    let mismatches = tenant.verify();
+    assert_eq!(
+        mismatches.first().map(|m| m.index),
+        Some(2),
+        "{mismatches:?}"
     );
-    let _ = block_on(async { connector.token(tenant.cx(), sentinel::ARM_SCOPE).await });
+    assert!(
+        mismatches[0]
+            .detail
+            .ends_with("was recorded and never sent"),
+        "{mismatches:?}"
+    );
+    // A token for another scope: the token request's form differs.
+    let tenant = replay("sentinel/deploy");
+    let _ = block_on(async {
+        connector("linux")
+            .token(tenant.cx(), sentinel::LOGS_SCOPE)
+            .await
+    });
     let mismatches = tenant.verify();
     assert_eq!(
         mismatches.first().map(|m| m.index),
@@ -124,7 +150,7 @@ fn sentinel_a_single_byte_off_fails() {
         "{mismatches:?}"
     );
     assert!(
-        mismatches[0].detail.starts_with("headers "),
+        mismatches[0].detail.starts_with("bodies differ"),
         "{mismatches:?}"
     );
 }
@@ -216,9 +242,8 @@ fn sentinel_query_sends_what_the_python_runner_sent() {
         [
             "Log Analytics refused the query on replayed: Query could not be parsed at 'whre' on \
              line [1,22]",
-            "Log Analytics refused the query on replayed: (REDACTED) The provided credentials \
-             have insufficient access to perform the requested operation\nCode: REDACTED\nMessage: \
-             The provided credentials have insufficient access to perform the requested operation",
+            "Log Analytics refused the query on replayed: REDACTED: The provided credentials \
+             have insufficient access to perform the requested operation",
         ]
     );
 }
