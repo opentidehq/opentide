@@ -41,9 +41,11 @@ ROOT = Path(__file__).resolve().parents[2]
 
 #: The areas a change can touch, each a job (or a set of jobs) of ci.yml.
 AREAS = (
-    "lint",  # ruff, ty, actionlint, the sdist, the skills
+    "pylint",  # ruff, ty, the sdist: a Python file changed
+    "ci",  # actionlint and tests/test_ci: a workflow or the CI contracts changed
+    "skills",  # the agent skills' validation
     "rust",  # the build, the Rust tests, engine lint
-    "python",  # Python 3.14 with coverage, E2E
+    "python",  # the wheel and the Python job: the Python surface changed
     "docs",  # docs validation
     "node",  # the Node package
     "wasi",  # the WASI command line
@@ -76,44 +78,49 @@ EVERYTHING = (
 #: crate of the workspace.
 ALL = ("*",)
 RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
-    # Documentation: validated alone (a docs-only pull request runs nothing
-    # else; the push to the base branch runs everything).
+    # Documentation: validated, with the docs tests that need no wheel; a
+    # docs-only pull request runs nothing else (the push runs everything).
     ("docs/*", ("docs",), ()),
     ("README.md", ("docs",), ()),
     ("CONTRIBUTING.md", ("docs",), ()),
     ("AGENTS.md", ("docs",), ()),
     ("CLAUDE.md", ("docs",), ()),
-    # The changelog is checked by the Python suite (tests/test_docs).
-    ("CHANGELOG.md", ("python",), ()),
-    # Agent skills: scripts/engine/validate-skills.sh, in lint.
-    (".agents/*", ("lint",), ()),
-    (".claude/*", ("lint",), ()),
+    ("CHANGELOG.md", ("docs",), ()),
+    # Agent skills: scripts/engine/validate-skills.sh.
+    (".agents/*", ("skills",), ()),
+    (".claude/*", ("skills",), ()),
     # GitLab CI lint's own inputs (with opentide-cli's renderer, below).
     ("scripts/install-gitlab-ci-linters.sh", ("gitlab",), ()),
-    ("tests/test_ci/test_gitlab_pipeline_lint.py", ("gitlab", "python", "lint"), ()),
-    # The Python package and its tests.
+    ("tests/test_ci/test_gitlab_pipeline_lint.py", ("gitlab", "pylint"), ()),
+    # The CI contracts and the docs tests run without a wheel; the two docs
+    # tests that run the command line and the SDK need it.
+    ("tests/test_ci/*", ("ci", "pylint"), ()),
+    ("tests/test_docs/test_docs_commands_golden.py", ("python", "docs", "pylint"), ()),
+    ("tests/test_docs/test_sdk_snippets.py", ("python", "docs", "pylint"), ()),
+    ("tests/test_docs/*", ("docs", "pylint"), ()),
+    # The Python surface: the package, its tests, its build.
     ("src/opentide/data/*", ("python",), ALL),
     ("src/opentide/schemas/*", ("python",), ALL),
-    ("src/opentide/_native/*", ("python", "lint"), ALL),
-    ("src/opentide/*.py", ("python", "lint"), ()),
-    ("src/opentide/*", ("python", "lint"), ()),
-    ("tests/*.py", ("python", "lint"), ()),
+    ("src/opentide/_native/*", ("python", "pylint"), ALL),
+    ("src/opentide/*", ("python", "pylint"), ()),
+    ("tests/*.py", ("python", "pylint"), ()),
     # Test data outside a crate: fixtures, corpora, cassettes, goldens, which
     # the crates' tests read as well.
     ("tests/*", ("python",), ALL),
-    ("pyproject.toml", ("python", "lint"), ()),
-    ("uv.lock", ("python", "lint"), ()),
-    ("hatch_build.py", ("python", "lint"), ()),
-    (".pre-commit-config.yaml", ("lint",), ()),
+    ("pyproject.toml", ("python", "pylint"), ()),
+    ("uv.lock", ("python", "pylint"), ()),
+    ("hatch_build.py", ("python", "pylint"), ()),
+    (".pre-commit-config.yaml", ("pylint",), ()),
     # The scripts a gate job runs: the docs job's and the grammars job's.
-    ("scripts/validate-docs.sh", ("docs", "lint"), ()),
-    ("scripts/engine/check-grammars.sh", ("grammars", "lint"), ()),
+    ("scripts/validate-docs.sh", ("docs",), ()),
+    ("scripts/engine/check-grammars.sh", ("grammars",), ()),
     # The engine's scripts (the invariants, the WASI build, the release).
-    ("scripts/engine/build-wasm.sh", ("wasi", "lint"), ()),
-    ("scripts/engine/*", ("lint", "python"), ALL),
-    ("scripts/build/*", ("python", "lint"), ()),
-    ("scripts/*.py", ("python", "lint"), ()),
-    ("scripts/*.sh", ("lint",), ()),
+    ("scripts/engine/build-wasm.sh", ("wasi",), ()),
+    ("scripts/engine/*.py", ("pylint",), ALL),
+    ("scripts/engine/*", (), ALL),
+    ("scripts/build/*", ("python", "pylint"), ()),
+    ("scripts/*.py", ("python", "pylint"), ()),
+    ("scripts/*.sh", ("ci",), ()),
     # What the engine compiles in, and its hosts.
     ("grammars/*", ("grammars",), ("opentide-syntax",)),
     ("highlights/test/*", ("textmate",), ()),
@@ -135,7 +142,8 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("NOTICE", (), ()),
     (".gitignore", (), ()),
     (".gitattributes", (), ()),
-    (".github/*", ("python",), ()),
+    # .github/AGENTS.md and the rest: the CI contracts read them.
+    (".github/*", ("ci",), ()),
 )
 
 #: Paths inside crates that run a specialised job. Only the paths a job is
@@ -143,6 +151,13 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
 #: dependencies' tests, not every job that builds it): the push to the base
 #: branch runs every job.
 CRATE_PATHS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    # The Python surface in Rust: the binding, and the facade's public API it
+    # re-exports. Any other crate's change is the Rust tests' (the maintainer:
+    # no wheel, no pytest for a Rust-only change on a pull request).
+    ("bindings/python/*", ("python",)),
+    ("crates/opentide/src/*", ("python",)),
+    # A Python file inside a crate.
+    ("*.py", ("pylint",)),
     # The facade's public API: every feature, rustdoc, cargo semver-checks.
     ("crates/opentide/*", ("facade",)),
     # The Node package.
@@ -156,10 +171,6 @@ CRATE_PATHS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("bindings/*/Cargo.toml", ("deny",)),
     ("xtask/Cargo.toml", ("deny",)),
 )
-
-#: The crate whose tests the Python jobs exercise: the binding, which holds
-#: the command line and everything below it.
-PYTHON_CRATE = "opentide-native"
 
 #: The facade's features and opentide-schema's `python`, which the tests build
 #: with (the facade crate's job builds every feature).
@@ -201,6 +212,8 @@ class Plan:
             "rust": _bool(rust),
             "python": _bool(python),
             "build": _bool(rust or python or "gitlab" in self.areas or "node" in self.areas),
+            # The lint job: its steps read pylint, ci, skills and rust.
+            "lint": _bool(rust or bool(self.areas & {"pylint", "ci", "skills"})),
         }
         for area in AREAS:
             if area not in {"rust", "python"}:
@@ -292,7 +305,7 @@ def plan_for_paths(
         crate = owning_crate(path, dirs)
         if crate is not None:
             changed.add(crate)
-            plan.areas.update(("rust", "lint"))
+            plan.areas.add("rust")
             for pattern, areas in CRATE_PATHS:
                 if _matches(path, pattern):
                     plan.areas.update(areas)
@@ -311,11 +324,7 @@ def plan_for_paths(
             return everything(plan, members, f"{path}: no rule, everything runs")
     plan.crates = reverse_closure(changed, rdeps)
     if plan.crates:
-        plan.areas.update(("rust", "lint"))
-    if PYTHON_CRATE in plan.crates:
-        plan.areas.add("python")
-    if "python" in plan.areas:
-        plan.areas.add("lint")
+        plan.areas.add("rust")
     return plan
 
 

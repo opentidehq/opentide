@@ -21,7 +21,7 @@ The generic patterns below are reference material. This repository's workflows f
 - **uv everywhere:** `astral-sh/setup-uv` with cache, then `uv sync --group dev`; run tools
   with `uv run`.
 - **Shard counts are tested:** the E2E matrix length must equal `--splits`
-  (`tests/test_ci/test_own_ci_workflow.py`).
+  (`tests/test_ci/test_workflows.py`).
 - **CodeQL action stays on v4** (see [`codeql`](../codeql/SKILL.md)).
 - Workflows opentide *generates* for client repos live in `src/opentide/ci/` and are tested
   in `tests/test_ci/`; change them there, not by hand in a client repo.
