@@ -310,28 +310,6 @@ pub fn section_header_line(text: &str) -> Option<usize> {
         .map(|index| index + 1)
 }
 
-/// Python's `type(value).__name__` of a YAML value.
-pub(crate) fn python_type(node: &Node) -> &'static str {
-    match &node.value {
-        Value::Null => "NoneType",
-        Value::Bool(_) => "bool",
-        Value::Int(_) => "int",
-        Value::Float(_) => "float",
-        Value::Str(_) => "str",
-        Value::Datetime(_) => "datetime",
-        Value::Seq(_) => "list",
-        Value::Map(_) => "dict",
-    }
-}
-
-fn yaml_kind(node: &Node) -> &'static str {
-    match &node.value {
-        Value::Map(_) => "mapping",
-        Value::Seq(_) => "list",
-        _ => python_type(node),
-    }
-}
-
 /// A mapping's entries whose key is a string, with their key.
 fn string_entries(node: &Node) -> Vec<(String, &Node)> {
     match &node.value {
@@ -406,7 +384,7 @@ pub fn section_findings(block: &Node) -> Vec<Finding> {
                 &[key],
                 format!(
                     "{key} is YARA-L text, not a YAML {}: write it as a block scalar (|)",
-                    yaml_kind(text)
+                    text.value.type_name()
                 ),
             )),
         }
@@ -569,11 +547,19 @@ pub fn match_findings(node: &Node) -> Vec<Finding> {
             }
         }
         _ => {
-            let shown = window.map_or_else(|| "None".to_owned(), repr::node);
+            let message = window.map_or_else(
+                || "window is missing: write a duration in m, h or d (10m, 1h, 2d)".to_owned(),
+                |node| {
+                    format!(
+                        "window {} is not a duration in m, h or d (10m, 1h, 2d)",
+                        repr::node(node)
+                    )
+                },
+            );
             found.push(Finding::new(
                 "yaral_match_window",
                 &["match", "window"],
-                format!("window {shown} is not a duration in m, h or d (10m, 1h, 2d)"),
+                message,
             ));
         }
     }
@@ -780,7 +766,7 @@ mod tests {
         );
         assert_eq!(
             findings[3].message,
-            "outcome is YARA-L text, not a YAML list: write it as a block scalar (|)"
+            "outcome is YARA-L text, not a YAML sequence: write it as a block scalar (|)"
         );
         assert!(findings[2].message.contains("(line 1)"));
     }
@@ -845,7 +831,7 @@ mod tests {
         let no_window = yaml("group_by: [$u]\n");
         assert_eq!(
             match_findings(&no_window)[0].message,
-            "window None is not a duration in m, h or d (10m, 1h, 2d)"
+            "window is missing: write a duration in m, h or d (10m, 1h, 2d)"
         );
         assert_eq!(render_match(&no_window), None);
     }

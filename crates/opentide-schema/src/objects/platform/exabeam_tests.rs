@@ -427,7 +427,7 @@ fn the_messages_name_the_values() {
     }))));
     assert_eq!(
         findings[0].message,
-        "value takes the operator in or not_in, not None"
+        "value takes the operator in or not_in: set operator"
     );
     let findings = block_findings(&json_node(&block(&json!({
         "sequences": threshold(&json!({"function": "max", "field": "f", "value": "x"})),

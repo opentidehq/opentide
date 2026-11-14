@@ -49,8 +49,7 @@ const COMMAND: &str = "doctor";
 pub const CHECKS_FAILED: &str = "doctor_checks_failed";
 
 /// The platforms, in the order the checklist names them (`SYSTEM_KEYS`).
-const SYSTEM_KEYS: [&str; opentide_schema::platforms::COUNT] =
-    opentide_schema::platforms::ordered(opentide_schema::platforms::Order::Container);
+const SYSTEM_KEYS: [&str; opentide_schema::platforms::COUNT] = opentide_schema::platforms::IDS;
 
 /// The files `opentide setup mcp` writes, with the host each is for.
 const MCP_OUTPUT_PATHS: [(&str, &str); 4] = [

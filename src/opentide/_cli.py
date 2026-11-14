@@ -1,10 +1,11 @@
 """The ``opentide`` console script and ``python -m opentide``: the command line, in this process.
 
 The command line is Rust, compiled into this package as ``opentide._native``
-(``bindings/python/``, built by ``hatch_build.py``). :func:`main` hands it the
-arguments and returns its exit code: there is no other implementation to fall
-back on, and nothing in between, so Ctrl-C (``error: interrupted``, exit 130)
-and SIGTERM reach the command itself (``opentide serve`` exits 143).
+(``bindings/python/``, built by maturin). :func:`main` hands it the
+arguments and the package's version and returns its exit code: there is no
+other implementation to fall back on, and nothing in between, so Ctrl-C
+(``error: interrupted``, exit 130) and SIGTERM reach the command itself
+(``opentide serve`` exits 143).
 
 When the engine does not load (a damaged install, a platform whose wheel's
 module fails to load), :func:`main` says so on stderr and exits 1, as any
@@ -33,8 +34,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run ``opentide`` with *argv* (``sys.argv[1:]`` when ``None``); the exit code."""
     import importlib
 
-    from opentide import __version__
-
     args = list(sys.argv[1:] if argv is None else argv)
     try:
         # Through the import system, not the package attribute, as
@@ -53,4 +52,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         if stream is not None:
             stream.flush()
-    return int(native.cli_main(args, __version__))
+    # The package's version as the engine knows it (the one its metadata
+    # carries): reading the metadata would cost the start more than the rest.
+    return int(native.cli_main(args, native.__version__))

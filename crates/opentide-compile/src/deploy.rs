@@ -8,6 +8,24 @@ use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
 
+/// The WHATWG URL path-segment percent-encode set, the one
+/// `url::Url::path_segments_mut().push` applies: controls, space,
+/// `"#<>?`{}`, `/` and `%` are escaped, every other ASCII character is kept
+/// (non-ASCII is always escaped as UTF-8). Encode a value that becomes one
+/// segment of a request's path with it.
+pub const PATH_SEGMENT: &percent_encoding::AsciiSet = &percent_encoding::CONTROLS
+    .add(b' ')
+    .add(b'"')
+    .add(b'#')
+    .add(b'<')
+    .add(b'>')
+    .add(b'?')
+    .add(b'`')
+    .add(b'{')
+    .add(b'}')
+    .add(b'/')
+    .add(b'%');
+
 /// One request a deploy sends: its method, its URL (or, for an SDK that
 /// builds the URL itself, the REST path), and its body (`null` for none).
 #[derive(Debug, Clone, PartialEq)]
@@ -66,7 +84,7 @@ pub fn strategy(
 ) -> Result<StatusStrategy, CompileError> {
     cx.statuses
         .strategy(status)
-        .map_err(|error| CompileError::failed(display, &error.exception_text()))
+        .map_err(|error| CompileError::failed(display, &error.to_string()))
 }
 
 /// The action for a rule with `status` whose recorded id on the tenant is
@@ -176,6 +194,15 @@ pub fn inherited_techniques(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_path_segment_escapes_separators_and_keeps_index_patterns() {
+        let encoded =
+            |value: &str| percent_encoding::utf8_percent_encode(value, PATH_SEGMENT).to_string();
+        assert_eq!(encoded("logs-*,x_y.z~"), "logs-*,x_y.z~");
+        assert_eq!(encoded("a b/c?d#e%"), "a%20b%2Fc%3Fd%23e%25");
+        assert_eq!(encoded("é"), "%C3%A9");
+    }
 
     #[test]
     fn values_are_written_as_text_and_json() {

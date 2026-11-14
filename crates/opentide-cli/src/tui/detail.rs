@@ -75,8 +75,8 @@ fn bold() -> Style {
 
 /// The style of a highlight capture, as the editor colours it.
 pub fn capture_style(capture: &str) -> Option<Style> {
-    if let Some(name) = crate::render::codeframe::query_style(capture) {
-        return Some(named_style(name));
+    if let Some(style) = crate::render::codeframe::query_style(capture) {
+        return Some(ratatui_style(&style));
     }
     Some(match capture {
         "tide.keyword" => bold().fg(Color::Magenta),
@@ -94,21 +94,27 @@ pub fn capture_style(capture: &str) -> Option<Style> {
     })
 }
 
-/// A style the renderers name (`bold magenta`), as ratatui's.
-fn named_style(name: &str) -> Style {
+/// A query highlight's style ([`query_style`](crate::render::codeframe::query_style)), as ratatui's.
+fn ratatui_style(query: &crate::render::text::Style) -> Style {
+    use crate::render::text::Color as Query;
     let mut style = Style::new();
-    for word in name.split_whitespace() {
-        style = match word {
-            "bold" => style.add_modifier(Modifier::BOLD),
-            "dim" => style.add_modifier(Modifier::DIM),
-            "magenta" => style.fg(Color::Magenta),
-            "cyan" => style.fg(Color::Cyan),
-            "bright_cyan" => style.fg(Color::LightCyan),
-            "green" => style.fg(Color::Green),
-            "yellow" => style.fg(Color::Yellow),
-            "red" => style.fg(Color::Red),
-            _ => style,
-        };
+    if query.is_bold() {
+        style = style.add_modifier(Modifier::BOLD);
+    }
+    if query.is_dim() {
+        style = style.add_modifier(Modifier::DIM);
+    }
+    if let Some(colour) = query.foreground() {
+        style = style.fg(match colour {
+            Query::Red => Color::Red,
+            Query::Green => Color::Green,
+            Query::Yellow => Color::Yellow,
+            Query::Blue => Color::Blue,
+            Query::Magenta => Color::Magenta,
+            Query::Cyan => Color::Cyan,
+            Query::BrightCyan => Color::LightCyan,
+            Query::Indexed(index) => Color::Indexed(index),
+        });
     }
     style
 }

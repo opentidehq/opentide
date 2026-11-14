@@ -73,7 +73,7 @@ fn a_block_names_its_own_schema_or_none() {
     let wrong = merged(&block, &json!({"schema": "splunk::2.1"}));
     assert_eq!(
         errors("splunk", &wrong),
-        "schema: Value error, unknown platform schema \"splunk::2.1\": this block's schema is \
+        "schema: unknown platform schema \"splunk::2.1\": this block's schema is \
          \"platform::splunk::1.0\""
     );
     let other = merged(&block, &json!({"schema": "platform::sentinel::1.0"}));
@@ -130,10 +130,7 @@ fn every_query_text_refuses_a_blank_query() {
     ] {
         for blank in ["", "   ", "\n\t", "\r\n", "\u{a0}"] {
             let found = errors(platform, &merged(&block, &json!({"query": blank})));
-            assert_eq!(
-                found, "query: Value error, query must not be empty",
-                "{platform}"
-            );
+            assert_eq!(found, "query: query must not be empty", "{platform}");
         }
         assert_eq!(
             errors(platform, &merged(&block, &json!({"query": "x"}))),
@@ -217,7 +214,7 @@ fn elastic_invalid_rfc_block_reports_all_three_codes() {
     );
     assert_eq!(
         found,
-        ": Value error, ElasticConfig validation failed with code(s): esql_source, language, \
+        ": ElasticConfig validation failed with code(s): esql_source, language, \
          suppression_shape"
     );
 }
@@ -905,7 +902,7 @@ fn sentinel_frequency_must_be_a_duration_deploy_converts() {
     );
     assert_eq!(
         found,
-        "scheduling.frequency: Value error, Duration \"hourly\" is not an ISO 8601 duration \
+        "scheduling.frequency: Duration \"hourly\" is not an ISO 8601 duration \
          (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)"
     );
     assert!(
@@ -913,7 +910,7 @@ fn sentinel_frequency_must_be_a_duration_deploy_converts() {
             "sentinel",
             &sentinel_with(&json!({"suppression": "soon"}), &json!({}))
         )
-        .starts_with("alert.suppression: Value error, Duration \"soon\"")
+        .starts_with("alert.suppression: Duration \"soon\"")
     );
     valid(
         "sentinel",
@@ -1135,7 +1132,7 @@ fn splunk_advanced_refuses_what_savedsearches_conf_cannot_hold() {
         ),
         (
             json!({" ": "value"}),
-            "advanced. .[key]: Value error, a savedsearches.conf key must not be empty",
+            "advanced. .[key]: a savedsearches.conf key must not be empty",
         ),
     ] {
         let block = merged(&splunk_block(), &json!({"advanced": advanced}));

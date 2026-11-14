@@ -16,7 +16,7 @@ use crate::logging::{self, LogLayer, Sink};
 use crate::mode::{self, Inputs, Mode};
 use crate::redact::{Redactor, url_secrets, workspace_redactor};
 use crate::render::outcome::{Console, OutcomeKind};
-use crate::render::text::{Colour, Style, Text};
+use crate::render::text::{Color, Colour, Style, Text};
 use crate::usage;
 use clap::parser::ValueSource;
 use std::cell::RefCell;
@@ -231,7 +231,7 @@ impl Run<'_> {
             Mode::Mcp => {}
             _ => {
                 let console = self.console(self.host.stdout_tty);
-                let bold = Style::new("bold");
+                let bold = Style::BOLD;
                 for line in lines {
                     out.write_all(console.line(&Text::styled(line, &bold)).as_bytes())?;
                 }
@@ -652,7 +652,7 @@ impl Run<'_> {
                         .get_one::<crate::tree::ReportFormat>("report_format")
                         .is_none_or(|format| *format == crate::tree::ReportFormat::Text);
                 if status {
-                    let mut line = Text::styled("⠋", &Style::new("bold cyan"));
+                    let mut line = Text::styled("⠋", &Style::fg(Color::Cyan).bold());
                     line.push_str(" Validating objects");
                     err.write_all(b"\x1b[?25l")?;
                     err.write_all(line.render(Colour::Full, false).as_bytes())?;
@@ -1230,7 +1230,7 @@ impl Run<'_> {
                 install: !flag("no_install"),
             },
             "platforms" => Step::Platforms(
-                opentide_schema::platforms::ordered(opentide_schema::platforms::Order::Cli)
+                opentide_schema::platforms::IDS
                     .into_iter()
                     .filter(|id| flag(id))
                     .map(str::to_owned)
@@ -2005,7 +2005,7 @@ impl Run<'_> {
         }
         err.write_all(result_err.as_bytes())?;
         if !run.refused && !self.globals.quiet && text_out {
-            let note = Text::styled(crate::commands::deploy::DRY_RUN_NOTE, &Style::new("dim"));
+            let note = Text::styled(crate::commands::deploy::DRY_RUN_NOTE, &Style::DIM);
             out.write_all(stdout.line(&note).as_bytes())?;
         }
         out.flush()?;

@@ -84,8 +84,8 @@ pub enum SentinelOneError {
         /// What it answered.
         detail: String,
     },
-    /// A deployment-state id that is not a number (`int(external_id)`).
-    #[error("invalid literal for int() with base 10: {0:?}")]
+    /// A deployment-state id that is not a number.
+    #[error("deployment id {0:?} is not a number")]
     BadId(String),
     /// The tenant could not be reached, or the run was cancelled.
     #[error(transparent)]
@@ -363,7 +363,9 @@ impl SentinelOne {
             delay = (delay * 2).min(MAX_POLL_DELAY);
             let url = format!(
                 "{ping}?{}",
-                crate::encode::urlencode([("queryId", id.as_str())])
+                url::form_urlencoded::Serializer::new(String::new())
+                    .extend_pairs([("queryId", id.as_str())])
+                    .finish()
             );
             let answer = Self::call(cx, &setup, crate::transport::Method::GET, &url, None).await?;
             data = self::data(&answer, &tenant)?;
