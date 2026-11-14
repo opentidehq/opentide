@@ -330,7 +330,8 @@ fn a_block_that_cannot_compile_is_a_diagnostic_of_the_plan() {
     assert_eq!(
         text(&outcome, "diagnostics").replace("\\\\", "/"),
         "[{\"code\":\"compile_failed\",\"severity\":\"error\",\"message\":\"Sysdig cannot \
-         compile this rule: \\\"URGENT\\\"\",\"help\":null,\"path\":\"objects/rules/bad.yaml\",\
+         compile this rule: unknown priority \\\"URGENT\\\" (expected EMERGENCY, ALERT, \
+         CRITICAL, ERROR, WARNING, NOTICE, INFORMATIONAL or DEBUG)\",\"help\":null,\"path\":\"objects/rules/bad.yaml\",\
          \"file_path\":\"/ws/objects/rules/bad.yaml\",\
          \"platform\":\"sysdig\",\"uuid\":\"00000000-0000-4000-8000-0000000000b1\",\
          \"name\":\"Rule 00000000-0000-4000-8000-0000000000b1\"}]"

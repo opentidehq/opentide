@@ -337,9 +337,15 @@ pub fn select(
         let name = match data.get("name") {
             Some(Json::Str(name)) => name.clone(),
             Some(other) => other.to_compact(),
-            None => return Err(PlanError::Failed("'name'".to_owned())),
+            None => {
+                return Err(PlanError::Failed(format!(
+                    "{}: rule has no name",
+                    path.display()
+                )));
+            }
         };
-        let uuid = object_uuid(&data).ok_or_else(|| PlanError::Failed("'uuid'".to_owned()))?;
+        let uuid = object_uuid(&data)
+            .ok_or_else(|| PlanError::Failed(format!("{}: rule has no uuid", path.display())))?;
         let mut chosen: Vec<String> = Vec::new();
         if let Some(Json::Object(configurations)) = data.get("configurations") {
             for (platform, block) in configurations {
@@ -863,6 +869,42 @@ mod tests {
         Json::from_node(opentide_schema::node::load(yaml).unwrap().root().unwrap())
     }
 
+    /// A rule file without a name or a uuid fails the plan, naming the file
+    /// and what it lacks.
+    #[test]
+    fn a_rule_without_a_name_or_uuid_names_its_file() {
+        let fail = |yaml: &'static str| {
+            let read = move |_: &Path| -> Result<Node, String> {
+                let document = opentide_schema::node::load(yaml).unwrap();
+                Ok(document.root().unwrap().as_ref().clone())
+            };
+            let scope = Scope {
+                files: vec![PathBuf::from("rules/r.yaml")],
+                nested: Vec::new(),
+            };
+            let options = SelectOptions {
+                runs: &[Preview],
+                wide: false,
+                keep_deprecated: false,
+                enabled: &[],
+                folder: "rules",
+                log: false,
+            };
+            match select(&Statuses(Vec::new(), None), &scope, &read, &options) {
+                Err(PlanError::Failed(message)) => message,
+                other => panic!("{other:?}"),
+            }
+        };
+        assert_eq!(
+            fail("metadata: {uuid: u}\n").replace('\\', "/"),
+            "rules/r.yaml: rule has no name"
+        );
+        assert_eq!(
+            fail("name: R\n").replace('\\', "/"),
+            "rules/r.yaml: rule has no uuid"
+        );
+    }
+
     #[test]
     fn tenants_are_skipped_as_the_oracle_skips_them() {
         let listed = ["a".to_owned()];
@@ -913,7 +955,7 @@ mod tests {
     }
 
     #[test]
-    fn messages_are_the_oracles() {
+    fn plan_messages_count_each_action() {
         let change = |action: &'static str, fails: bool| Change {
             platform: "sentinel".into(),
             tenant: None,
