@@ -237,7 +237,7 @@ def _ci_jobs() -> dict[str, Any]:
 def test_ci_runs_on_every_pull_request_and_on_development() -> None:
     triggers = _triggers(_load(CI))
     pull = triggers["pull_request"]
-    assert {"development", "integration/unified-core"} <= set(pull["branches"])
+    assert "branches" not in pull
     assert "paths" not in pull, "no path filter: `changes` scopes the jobs, the gate reports"
     assert "development" in triggers["push"]["branches"]
     # The nightly.

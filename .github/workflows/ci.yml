@@ -45,8 +45,9 @@ on:
     # the caches those pull requests restore (a pull request reads only its base
     # branch's caches and the default branch's).
     branches: [main, development, integration/unified-core, "train/*"]
+  # Every base: integration/unified-core, development, a train/*, or the
+  # branch below a stacked pull request.
   pull_request:
-    branches: [integration/unified-core, development, "train/*"]
     # `labeled`: labelling a pull request `release` runs the release tier.
     types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
@@ -78,9 +79,11 @@ env:
 # Compiler caches (tests/test_ci/test_rust_caches.py): sccache (RUSTC_WRAPPER)
 # in .sccache/, kept by actions/cache under
 # `sccache-<family>-<hash of rust-toolchain.toml>-<ISO week>`, restored with the
-# family and toolchain as restore-keys and saved by exactly one job, from a
-# push (or the nightly, for the nightly's families), only when the key missed:
-# once a week. sccache is content-addressed, so a copy a few days old still
+# family and toolchain as restore-keys and saved by exactly one job when the
+# key missed (once a week): from a push or Run workflow (the nightly, for the
+# nightly's families), and from a pull request only when it found no copy of
+# the family at all (its base branch has none yet: a new family or
+# toolchain), so that its next push is warm. sccache is content-addressed, so a copy a few days old still
 # serves every crate that did not change. Linux only.
 #
 #   build           `build`: the test archive, xtask, the language server and
@@ -266,7 +269,7 @@ jobs:
         run: sccache --show-stats
 
       - name: Save the compiler cache
-        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true'
+        if: steps.sccache.outputs.cache-hit != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.sccache.outputs.cache-matched-key == '')
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -374,10 +377,6 @@ jobs:
 
       # --- With the test jobs running: what needs this target directory. ---
 
-      # A check or test writes under a temporary folder, never in the checkout (#931).
-      - name: Note the checkout's state
-        if: env.RUST == 'true'
-        run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
 
       # The archive's build left the binaries its tests run in target/debug,
       # with the tests' features: xtask and the language server when they are
@@ -467,6 +466,12 @@ jobs:
           OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
         run: target/debug/xtask spec-fields
 
+      # The doctests and the compile-fail cases write under a temporary folder,
+      # never in the checkout (#931); noted after the specifications' checkout.
+      - name: Note the checkout's state
+        if: env.RUST == 'true'
+        run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
+
       # nextest runs no doctests.
       - name: Doctests
         if: env.RUST == 'true'
@@ -528,7 +533,7 @@ jobs:
         run: sccache --show-stats
 
       - name: Save the compiler cache
-        if: github.event_name == 'push' && steps.sccache.outputs.cache-hit != 'true'
+        if: steps.sccache.outputs.cache-hit != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.sccache.outputs.cache-matched-key == '')
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.SCCACHE_DIR }}
@@ -812,15 +817,13 @@ jobs:
         run: scripts/validate-docs.sh
 
 
-  # The opentide facade crate (UC-5.1, #836) with every feature: its tests and
-  # doctests (the `opentide` binary's `--json commands` against the PyPI CLI's
-  # recording, `cli::run_json`, the language server), its docs as docs.rs
-  # builds them, and its API against the branch it merges into
-  # (cargo-semver-checks). engine-test runs its default features on every
-  # pull request; this job builds opentide-cli and opentide-lsp a second time
-  # with the facade's features, so it is in the full set.
+  # The opentide facade crate (UC-5.1, #836), when its public API changes
+  # (crates/opentide/): its docs with every feature, as docs.rs builds them,
+  # and its API against the branch it merges into (cargo-semver-checks). Its
+  # tests and doctests run in `build` and `rust-tests` with the tests'
+  # features (every feature but `stubs`, which schema.yml builds).
   facade:
-    name: Facade crate (every feature, docs, semver checks)
+    name: Facade crate (every feature's docs, semver checks)
     needs: changes
     if: needs.changes.outputs.facade == 'true'
     runs-on: ubuntu-latest
@@ -868,9 +871,6 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: cargo-semver-checks@0.51.0
-
-      - name: Tests and doctests, every feature
-        run: cargo test -p opentide --all-features --locked
 
       # docs.rs builds every feature (`[package.metadata.docs.rs]`).
       - name: rustdoc, every feature

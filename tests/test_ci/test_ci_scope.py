@@ -254,7 +254,8 @@ def test_ci_runs_on_pull_requests_pushes_nightly_and_on_demand() -> None:
     assert set(on) == {"push", "pull_request", "workflow_dispatch", "schedule"}
     assert {"development", INTEGRATION, "train/*"} <= set(on["push"]["branches"])
     pull = on["pull_request"]
-    assert pull["branches"] == [INTEGRATION, "development", "train/*"]
+    # Every base: the base branches and the branch below a stacked pull request.
+    assert "branches" not in pull
     # `labeled`: the `release` label runs the release tier; no path filter.
     assert set(pull["types"]) == {"opened", "synchronize", "reopened", "labeled"}
     assert "paths" not in pull and "paths-ignore" not in pull
@@ -656,7 +657,7 @@ def test_codeql_starts_on_a_pull_request_that_changes_what_it_reads() -> None:
     scope, so a language the change does not touch is not analysed."""
     workflow = load(WORKFLOWS / "codeql.yml")
     pull = triggers(workflow)["pull_request"]
-    assert pull["branches"] == triggers(load(CI))["pull_request"]["branches"]
+    assert "branches" not in pull
     assert set(pull["paths"]) == {
         "**/*.py",
         "pyproject.toml",

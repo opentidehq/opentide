@@ -46,6 +46,15 @@ SAVE_IF_CELL = re.compile(
 # request's cache serves that pull request alone, and its gigabytes evicted
 # the base branches' caches every other pull request reads.
 PUSH_ONLY = "github.event_name == 'push'"
+# The gate's families: from a push or Run workflow, and from a pull request
+# only when it restored no copy of the family at all (its base has none yet:
+# a new family or toolchain), so its next push is warm. Always after the key
+# missed.
+GATE_SAVE = (
+    "steps.sccache.outputs.cache-hit != 'true' && (github.event_name == 'push'"
+    " || github.event_name == 'workflow_dispatch'"
+    " || steps.sccache.outputs.cache-matched-key == '')"
+)
 # The nightly and pushes to development, the default branch whose caches every
 # branch reads: the families no pull request needs a copy of on its own base.
 DEVELOPMENT_ONLY = "(github.event_name == 'schedule' || github.ref == 'refs/heads/development')"
@@ -195,7 +204,7 @@ def test_each_gate_family_is_its_jobs_alone(job_id: str, family: str) -> None:
     none compiles it again; engine-lint's check builds share nothing with it."""
     cache = _compiler_cache(job_id)
     assert cache.restores == cache.saves == family + STABLE_HASH, job_id
-    assert str(cache.save_condition).startswith(PUSH_ONLY), cache.save_condition
+    assert str(cache.save_condition) == GATE_SAVE, cache.save_condition
     assert {c.job for c in _compiler_caches() if (c.restores or "").startswith(family)} == {job_id}
 
 
@@ -481,7 +490,10 @@ def test_no_cache_is_saved_from_a_pull_request() -> None:
                     checked += 1
                 elif uses.startswith(SCCACHE_SAVE):
                     condition = str(step.get("if", ""))
-                    assert condition.startswith((PUSH_ONLY, DEVELOPMENT_ONLY, FULL_SET_SAVE)), where
+                    assert (
+                        condition.startswith((PUSH_ONLY, DEVELOPMENT_ONLY, FULL_SET_SAVE))
+                        or condition == GATE_SAVE
+                    ), where
                     checked += 1
                 elif uses.startswith("actions/cache@"):
                     raise AssertionError(f"{where}: actions/cache saves on every event")
@@ -702,7 +714,7 @@ def test_only_the_core_families_are_saved_per_base_branch() -> None:
             assert condition.startswith(DEVELOPMENT_ONLY), (cache.job, condition)
             full_set_and_release += 1
         else:
-            assert condition.startswith(PUSH_ONLY), (cache.job, condition)
+            assert condition == GATE_SAVE, (cache.job, condition)
     assert full_set_and_release
     for job_id in ("native", "wasm"):
         (save,) = [

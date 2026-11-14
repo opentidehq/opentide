@@ -37,7 +37,7 @@ so a failure on a base branch names the pull request that brought it.
 
 | Tier | Trigger | What runs |
 |------|---------|-----------|
-| **PR gate** | `pull_request` into `integration/unified-core`, `development` or `train/*` | Linux only; only the jobs the change needs (below). Target: 5 min warm, 8 cold |
+| **PR gate** | `pull_request` into `integration/unified-core`, `development`, `train/*`, or the branch below a stacked pull request | Linux only; only the jobs the change needs (below). Target: 5 min warm, 8 cold |
 | **Full** | `push` to `main`, `development`, `integration/unified-core`, `train/*`; Run workflow `scope: full` | The gate's jobs with every path filter on, Linux only. Target: 10 min |
 | **Release** | A pull request into `development` from `integration/unified-core` or `release/*`, or labelled `release`; Run workflow `scope: release` | Everything, plus every package on every target, an install smoke test of each on its OS, the publish dry run and the docs. The only pull requests that run macOS and Windows |
 | **Nightly** | `schedule` (on `development`'s copy); Run workflow `scope: nightly` | Everything, plus the nightly set (below). Never gates; a failure opens or updates one issue labelled `nightly-failure` |
@@ -142,12 +142,14 @@ toolchain as `restore-keys`, saved by exactly one job when the key missed: once 
 content-addressed, so a copy a few days old still serves every crate that did not change; a key
 on the sources or `Cargo.lock` saved every family on each merge and evicted what pull requests
 restore. The families: `build` (the gate's one build) and `engine-check` (`engine-lint`), saved
-from a push to each base branch (a pull request reads its base branch's caches and
-`development`'s); `wasi`; `full-set-Linux` (`conformance` saves it, by the nightly; `node`,
+from a push to each base branch and from Run workflow (a pull request reads its base branch's
+caches and `development`'s), and from a pull request only when it restored no copy of the family
+at all (`cache-matched-key` empty: its base has none yet, after a new family or a toolchain bump),
+so its next push is warm; `wasi`; `full-set-Linux` (`conformance` saves it, by the nightly; `node`,
 `facade` and the nightly's Linux Rust jobs restore it); the release dry run's own
 (`release-Linux-<arch>`, `release-wasm`). **Linux only**: macOS and Windows build cold (their
-caches crowded the Linux families out of the 10 GB GitHub keeps). **No cache is saved from a pull
-request.** The one rust-cache left: `fuzz` (`fuzz-smoke`), plus coverage.yml's, schema.yml's and
+caches crowded the Linux families out of the 10 GB GitHub keeps). **A pull request saves no
+cache** but that bootstrap copy. The one rust-cache left: `fuzz` (`fuzz-smoke`), plus coverage.yml's, schema.yml's and
 oracle.yml's own. uv's cache (setup-uv) is keyed on `uv.lock`.
 
 **Coverage:** gate on Python **3.14** only (`COVERAGE_PYTHON`); the Code Quality upload is
