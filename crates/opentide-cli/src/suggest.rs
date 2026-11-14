@@ -4,23 +4,14 @@
 //! `rule`, `attack_pattern` -> `attack-pattern`), then a name people know a
 //! choice by (`--format gitlab` -> `codequality`), then the one choice the
 //! value starts (`--platform defender` -> `defender_for_endpoint`). Otherwise
-//! the most similar choice by the Jaro similarity of the lower-cased spellings,
-//! the measure and the 0.7 cut-off clap's own suggestions use (strsim), so the
-//! CLI suggests what clap would.
+//! the shared rule every other suggestion follows ([`opentide_core::suggest`]:
+//! the fewest edits, at most a third of the length), so the command line, the
+//! editor and `validate` suggest the same word for the same typo.
 
-/// Below this similarity nothing is suggested (clap's threshold).
-const THRESHOLD: f64 = 0.7;
+use opentide_core::suggest::{self, fold};
 
 /// Folded spellings that name a choice by what it is for.
 const ALIASES: &[(&str, &str)] = &[("gitlab", "codequality"), ("codeclimate", "codequality")];
-
-/// `text` without case or separators (space, `-`, `_`).
-fn fold(text: &str) -> String {
-    text.chars()
-        .filter(|c| !(c.is_whitespace() || *c == '-' || *c == '_'))
-        .flat_map(char::to_lowercase)
-        .collect()
-}
 
 /// The valid choice closest to `value`, or `None` when nothing is close, or
 /// when the closest is `value` itself (a valid word reported for another
@@ -62,15 +53,7 @@ where
             return Some((**only).to_owned());
         }
     }
-    let lowered = value.to_lowercase();
-    let mut best: Option<(f64, &str)> = None;
-    for choice in &options {
-        let score = strsim::jaro(&lowered, &choice.to_lowercase());
-        if score > THRESHOLD && best.is_none_or(|(top, _)| score > top) {
-            best = Some((score, choice));
-        }
-    }
-    best.map(|(_, choice)| choice.to_owned())
+    suggest::closest(value, options).map(str::to_owned)
 }
 
 #[cfg(test)]
@@ -134,46 +117,37 @@ mod tests {
     }
 
     #[test]
-    fn framework_suggest_the_threshold_is_strictly_above_jaro_0_7() {
-        // Just above the cut-off: suggested.
-        assert!(strsim::jaro("exprt", "extract") > THRESHOLD);
-        assert_eq!(dym("exprt", &["extract"]).as_deref(), Some("extract"));
-        // Just below: nothing.
-        let below = strsim::jaro("ebcdeee", "ced");
-        assert!(below < THRESHOLD && below > 0.69, "{below}");
-        assert_eq!(dym("ebcdeee", &["ced"]), None);
-        // At it exactly (7/10 in exact arithmetic): nothing, as clap.
-        let at = strsim::jaro("aaaede", "acabe");
-        assert!((at - THRESHOLD).abs() < 1e-9, "{at}");
-        assert_eq!(dym("aaaede", &["acabe"]).is_some(), at > THRESHOLD);
+    fn framework_suggest_at_most_a_third_of_the_length_in_edits() {
+        // Five letters: one edit is close enough.
+        assert_eq!(dym("exprt", &["export"]).as_deref(), Some("export"));
+        // Three edits are not.
+        assert_eq!(dym("exprt", &["extract"]), None);
+        // Nine letters: three edits.
+        assert_eq!(dym("valdiatex", &["validate"]).as_deref(), Some("validate"));
+        assert_eq!(dym("vaxxxxate", &["validate"]), None);
     }
 
     #[test]
-    fn framework_suggest_ties_go_to_the_first_choice() {
-        assert_eq!(
-            strsim::jaro("xab", "xac").to_bits(),
-            strsim::jaro("xab", "xad").to_bits()
-        );
+    fn framework_suggest_ties_never_depend_on_the_order() {
+        // Equally close: the one that sorts first, whatever the order given.
         assert_eq!(dym("xab", &["xac", "xad"]).as_deref(), Some("xac"));
-        assert_eq!(dym("xab", &["xad", "xac"]).as_deref(), Some("xad"));
+        assert_eq!(dym("xab", &["xad", "xac"]).as_deref(), Some("xac"));
     }
 
     #[test]
     fn framework_suggest_a_prefix_needs_three_letters() {
         let long = "abcdefghijklmnopqrstuvwxyz0123";
-        // Two letters are no prefix match, and too far by Jaro.
-        assert!(strsim::jaro("ab", long) < THRESHOLD);
+        // Two letters are no prefix match, and too many edits away.
         assert_eq!(dym("ab", &[long]), None);
         // Three are, when one choice starts with them.
         assert_eq!(dym("abc", &[long]).as_deref(), Some(long));
-        // Two start with them: no prefix match, and Jaro picks the nearer.
+        // Two start with them: no prefix match, and the fewest edits win.
         assert_eq!(dym("abc", &[long, "abcz"]).as_deref(), Some("abcz"));
     }
 
     #[test]
     fn framework_suggest_compares_lower_cased_spellings() {
         let commands = ["validate", "query", "lint"];
-        assert_eq!(strsim::jaro("VALDIATE", "validate"), 0.0);
         assert_eq!(dym("VALDIATE", &commands).as_deref(), Some("validate"));
         assert_eq!(
             dym("--JSN", &["--json", "--repo"]).as_deref(),
@@ -182,16 +156,20 @@ mod tests {
     }
 
     #[test]
-    fn framework_suggest_ranks_by_jaro_not_jaro_winkler() {
-        // Jaro prefers `cabab`; Jaro-Winkler's prefix bonus would pick `dadcb`.
-        assert!(strsim::jaro("dabba", "cabab") > strsim::jaro("dabba", "dadcb"));
-        assert!(strsim::jaro_winkler("dabba", "dadcb") > strsim::jaro_winkler("dabba", "cabab"));
-        assert_eq!(dym("dabba", &["dadcb", "cabab"]).as_deref(), Some("cabab"));
+    fn framework_suggest_ranks_by_fewest_edits() {
+        // A swapped pair is one edit; two letters cut are two.
+        assert_eq!(
+            dym("valdiate", &["validates", "validate"]).as_deref(),
+            Some("validate")
+        );
+        assert_eq!(
+            dym("sentinal", &["sentinel_one", "sentinel"]).as_deref(),
+            Some("sentinel")
+        );
     }
 
     #[test]
     fn framework_suggest_never_repeats_the_word_typed() {
-        // `opentide -- commands` was refused with "did you mean 'commands'?".
         assert_eq!(dym("commands", &["commands", "validate"]), None);
         assert_eq!(dym("query", &["query"]), None);
         // A different spelling of a valid word is still suggested.

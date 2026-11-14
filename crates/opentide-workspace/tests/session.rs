@@ -2,7 +2,11 @@
 //! reused while nothing changed, re-reads only what changed (announced or
 //! not), and always equals a fresh load.
 
+#[path = "support/export.rs"]
+mod export;
+
 mod session {
+    use crate::export::index_json;
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -38,13 +42,13 @@ mod session {
     #[expect(clippy::unwrap_used, reason = "a test helper: the sample resolves")]
     fn fresh(fs: &Arc<MemoryFs>) -> serde_json::Value {
         let workspace = Workspace::open(dyn_fs(fs), options("/ws")).unwrap();
-        workspace.index().to_json(workspace.root())
+        index_json(workspace.index(), workspace.root())
     }
 
     #[expect(clippy::unwrap_used, reason = "a test helper: the sample resolves")]
     fn open(session: &mut Session, fs: &Arc<MemoryFs>) -> serde_json::Value {
         let workspace = session.open(dyn_fs(fs), options("/ws")).unwrap();
-        workspace.index().to_json(workspace.root())
+        index_json(workspace.index(), workspace.root())
     }
 
     #[test]

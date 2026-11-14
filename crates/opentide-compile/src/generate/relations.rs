@@ -175,13 +175,13 @@ impl<'i> Relations<'i> {
     pub fn kind(&self, uuid: &str) -> Result<String, Cause> {
         let body = self
             .body(uuid)
-            .filter(|body| opentide_workspace::index::truthy(body.node))
+            .filter(|body| has_items(body.node))
             .ok_or_else(|| Cause::Other(format!("UUID {uuid} does not exist in the catalogue")))?;
         let schema = body
             .get("metadata")
             .and_then(|metadata| metadata.get("schema"))
             .map(AsRef::as_ref)
-            .filter(|schema| opentide_workspace::index::truthy(schema));
+            .filter(|schema| opentide_workspace::index::holds_name(schema));
         if let Some(schema) = schema {
             let text = node_text(schema);
             return Ok(text.split("::").next().unwrap_or_default().to_owned());
@@ -189,10 +189,7 @@ impl<'i> Relations<'i> {
         if self.index.signals.contains_key(uuid) {
             return Ok("signal".to_owned());
         }
-        if body
-            .get("configurations")
-            .is_some_and(opentide_workspace::index::truthy)
-        {
+        if body.get("configurations").is_some_and(has_items) {
             return Ok("rule".to_owned());
         }
         let name = body
@@ -238,13 +235,13 @@ impl<'i> Relations<'i> {
                 let threats = objective
                     .get("threats")
                     .map(AsRef::as_ref)
-                    .filter(|node| opentide_workspace::index::truthy(node));
+                    .filter(|node| has_items(node) || opentide_workspace::index::holds_name(node));
                 listed(threats)
             }
             "signal" => body.owner.map(str::to_owned).into_iter().collect(),
             "rule" => listed(
                 body.get("detection_model")
-                    .filter(|node| opentide_workspace::index::truthy(node)),
+                    .filter(|node| has_items(node) || opentide_workspace::index::holds_name(node)),
             ),
             _ => return Ok(Vec::new()),
         };
@@ -262,6 +259,15 @@ impl<'i> Relations<'i> {
             }
         }
         Ok(parents)
+    }
+}
+
+/// Whether `node` is a sequence or a mapping with at least one item.
+pub(super) fn has_items(node: &Node) -> bool {
+    match &node.value {
+        Value::Seq(items) => !items.is_empty(),
+        Value::Map(entries) => !entries.is_empty(),
+        _ => false,
     }
 }
 

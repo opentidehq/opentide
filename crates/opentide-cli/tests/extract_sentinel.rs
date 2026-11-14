@@ -18,8 +18,6 @@
 use std::collections::BTreeMap;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use opentide_cassette::{Cassette, Mode, Proxy, Redaction};
 use opentide_cli::commands::extract::{Context, sentinel_with};
@@ -110,15 +108,7 @@ fn extract_edited(
     let scratch = tempfile::tempdir().unwrap();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
     copy_tree(&here().join("workspace"), &ws);
-    // `client.py`'s ids: request_id(n), from 1.
-    let next = Arc::new(AtomicU64::new(0));
-    let connector = opentide_connectors::sentinel::Sentinel::with_identity(
-        Arc::new(move || {
-            let n = next.fetch_add(1, Ordering::SeqCst) + 1;
-            format!("00000000-0000-4000-8000-{n:012x}")
-        }),
-        "linux",
-    );
+    let connector = opentide_connectors::sentinel::Sentinel::new();
     let report = sentinel_with(
         &Context {
             repo: Some(ws.to_str().unwrap()),
