@@ -25,6 +25,9 @@ opentide-core.workspace = true
 opentide-schema.workspace = true
 # The request and answer types under the transport (src/transport.rs): reqwest's own.
 http = "1"
+# `no_proxy` read by the proxy matcher reqwest's own transport uses, so the
+# route a run reports (and hands `opentide serve`'s client) is the one taken.
+hyper-util = { workspace = true, features = ["client-proxy"] }
 tokio = { workspace = true, features = ["rt", "time", "sync", "macros"] }
 tokio-util = { workspace = true, features = ["rt"] }
 serde.workspace = true
