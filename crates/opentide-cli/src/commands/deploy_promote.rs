@@ -24,7 +24,6 @@ use opentide_compile::promotion::{self, Error, LOGGER, NOT_PROMOTED_ADVICE, Sett
 use opentide_schema::node;
 
 use super::deploy_send::Lines;
-use crate::env::Env;
 use crate::json::Json;
 use crate::render::progress::{Step, StepStatus};
 
@@ -33,17 +32,6 @@ pub const STEP: &str = "status promotion";
 /// The result key of a run the oracle ends with `sys.exit`: no document, no
 /// outcome line, only its exit code.
 pub const BARE_EXIT: &str = "_bare_exit";
-
-/// Whether promotion runs in debug mode (`is_debug`): `OPENTIDE_DEBUG` when it
-/// is a boolean, else `DEBUG=True`; VS Code's terminal (`TERM_PROGRAM=vscode`)
-/// either way. Debug promotes every rule file directly in the rules folder.
-pub fn is_debug(env: &Env) -> bool {
-    let vscode = env.get("TERM_PROGRAM") == Some("vscode");
-    match env.boolean("OPENTIDE_DEBUG") {
-        Some(own) => own || vscode,
-        None => env.get("DEBUG") == Some("True") || vscode,
-    }
-}
 
 /// What the promotion needs from the run.
 #[derive(Debug)]
@@ -55,7 +43,8 @@ pub struct Promotion<'a> {
     /// Every rule file directly in the rules folder (`local_rule_files`),
     /// promoted instead in debug mode.
     pub local: &'a [PathBuf],
-    /// Debug mode ([`is_debug`], or `--debug`).
+    /// Debug mode: `--debug`, or the environment asking for it
+    /// ([`crate::env::Env::debug_requested`]); never the terminal the run starts in.
     pub debug: bool,
 }
 
@@ -690,23 +679,5 @@ mod tests {
         );
         assert_eq!(outcome, Ok(()));
         assert_eq!(after[0], anchored.as_bytes());
-    }
-
-    #[test]
-    fn debug_reads_opentide_debug_then_debug_true_and_vscode() {
-        let env = |pairs: &[(&str, &str)]| Env::from_pairs(pairs.iter().copied());
-        assert!(is_debug(&env(&[("OPENTIDE_DEBUG", "1")])));
-        assert!(!is_debug(&env(&[
-            ("OPENTIDE_DEBUG", "0"),
-            ("DEBUG", "True")
-        ])));
-        assert!(is_debug(&env(&[
-            ("OPENTIDE_DEBUG", "0"),
-            ("TERM_PROGRAM", "vscode")
-        ])));
-        assert!(is_debug(&env(&[("DEBUG", "True")])));
-        assert!(!is_debug(&env(&[("DEBUG", "true")])));
-        assert!(is_debug(&env(&[("TERM_PROGRAM", "vscode")])));
-        assert!(!is_debug(&env(&[])));
     }
 }
