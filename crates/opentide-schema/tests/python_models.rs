@@ -191,7 +191,8 @@ except m.ValidationError as error:
     # A fresh list each time: changing one changes nothing.
     errors.clear()
     assert error.errors()
-    assert str(error).startswith(f"{error.error_count()} validation errors for DetectionRule\n")
+    assert len(str(error).splitlines()) == error.error_count(), str(error)
+    assert "name: Input should be a valid string" in str(error).splitlines(), str(error)
 else:
     raise AssertionError("an invalid rule was accepted")
 "#);
@@ -244,7 +245,7 @@ assert [(e["type"], e["loc"]) for e in error.errors()] == [
 ], error.errors()
 error = fails(m.DetectionRule, object())
 assert [(e["type"], e["loc"], e["msg"]) for e in error.errors()] == [("is_instance_of", (), TYPE + "object")]
-assert str(error) == "1 validation error for DetectionRule\n<root>\n  " + TYPE + "object [type=is_instance_of]"
+assert str(error) == TYPE + "object", str(error)
 # A str with a lone surrogate is not text.
 error = fails(m.DetectionRule_v1_1, dict(RULE, name="\ud800"))
 assert errors_at(error, ("name",)) == [("string_unicode", "Input should be a valid string, unable to parse raw data as a unicode string")]
@@ -277,7 +278,7 @@ error = fails(m.DetectionRule_v1_1, dict(RULE, metadata=metadata))
 assert error.errors() == [{
     "type": "value_error",
     "loc": ("metadata", "reviewed"),
-    "msg": "Value error, " + REVIEWED,
+    "msg": REVIEWED,
     "input": "yesterday",
     "ctx": {"error": REVIEWED},
 }], error.errors()
@@ -295,19 +296,20 @@ assert model == {
 }
 
 #[test]
-fn the_message_counts_the_errors_and_names_each_location() {
+fn the_message_names_each_error_on_its_own_line() {
     run(&format!(
         "{RULE}{FAILS}{}",
         r#"
 error = fails(m.DetectionRule_v1_1, dict(RULE, name=3))
 assert error.error_count() == 1
-assert str(error) == "1 validation error for DetectionRule_v1_1\nname\n  Input should be a valid string [type=string_type]", str(error)
+assert str(error) == "name: Input should be a valid string", str(error)
 error = fails(m.DetectionRule_v1_1, dict(RULE, name=3, configurations={"sentinel": {"status": 1}}))
 lines = str(error).splitlines()
-assert lines[0] == f"{error.error_count()} validation errors for DetectionRule_v1_1", lines
-assert "configurations.sentinel.status" in lines, lines
+assert len(lines) == error.error_count(), lines
+assert "name: Input should be a valid string" in lines, lines
+assert any(line.startswith("configurations.sentinel.status: ") for line in lines), lines
 error = fails(m.DetectionRule, 42)
-assert str(error).splitlines()[:2] == ["1 validation error for DetectionRule", "<root>"], str(error)
+assert error.title == "DetectionRule" and str(error) == error.errors()[0]["msg"], str(error)
 "#
     ));
 }

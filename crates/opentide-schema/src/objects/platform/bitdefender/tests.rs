@@ -802,6 +802,14 @@ fn literal_true_actions_refuse_false() {
         found,
         [("literal_error".to_owned(), path(&["actions", "isolate"]))]
     );
+    let (_, refused) = read(&block(
+        &json!({"detection": process(), "actions": {"isolate": false}}),
+    ));
+    assert_eq!(refused[0].message, "Input should be true");
+    assert_eq!(
+        refused[0].context.get("expected").map(String::as_str),
+        Some("true")
+    );
     let found = errors(&block(&json!({
         "detection": detection("file", &json!([{"field": "File.Name", "is": "a"}])),
         "actions": {"quarantine": "yes"}
