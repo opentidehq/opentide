@@ -836,9 +836,10 @@ fn a_carbon_black_tenant_that_refuses_the_token_fails_authentication() {
     let (error, detail) = tenant_failure(&ran);
     assert_eq!(
         error,
-        "cannot authenticate to carbon_black_cloud tenant \"lab\": Unauthorized (Check API \
-         creds): attempted to POST \
-         https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation"
+        "cannot authenticate to carbon_black_cloud tenant \"lab\": Carbon Black Cloud answered \
+         HTTP 401 Unauthorized to POST \
+         https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation \
+         (check the API ID and key)"
     );
     assert_eq!(detail, None);
 }

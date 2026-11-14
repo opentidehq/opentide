@@ -1625,13 +1625,13 @@ impl Raised {
     }
 }
 
-/// The HTTP status an SDK exception carries: Splunk's `HTTP 400 Bad
-/// Request -- ...`, Sentinel's `... failed with HTTP 400 ...`.
+/// The HTTP status a connector's error carries: `HTTP 400 ...`, Splunk's
+/// `Splunk answered HTTP 400 ...`, Sentinel's `... failed with HTTP 400 ...`.
 fn http_status(detail: &str) -> Option<u16> {
     let rest = detail.strip_prefix("HTTP ").or_else(|| {
-        detail
-            .split_once(" failed with HTTP ")
-            .map(|(_, rest)| rest)
+        [" answered HTTP ", " failed with HTTP "]
+            .iter()
+            .find_map(|marker| detail.split_once(marker).map(|(_, rest)| rest))
     })?;
     rest.split(' ').next()?.parse().ok()
 }
@@ -2604,11 +2604,8 @@ impl Sender<'_, '_> {
                         SentinelOneError::Connector(error) => {
                             return raised(error, "ConnectionError");
                         }
-                        SentinelOneError::BadId(text) => {
-                            return Raised::new(
-                                "ValueError",
-                                format!("invalid literal for int() with base 10: {text:?}"),
-                            );
+                        error @ SentinelOneError::BadId(_) => {
+                            return Raised::new("ValueError", error.to_string());
                         }
                         SentinelOneError::Unreadable { detail } => {
                             return Raised::new("KeyError", detail.clone());
@@ -3994,9 +3991,15 @@ mod tests {
 
     #[test]
     fn a_raised_error_reads_as_describe_error() {
-        let splunk = Raised::new("HTTPError", "HTTP 400 Bad Request -- bad");
-        assert_eq!(splunk.describe(), "HTTP 400: HTTP 400 Bad Request -- bad");
-        assert_eq!(splunk.error(), "HTTPError: HTTP 400 Bad Request -- bad");
+        let splunk = Raised::new("HTTPError", "Splunk answered HTTP 400 Bad Request: bad");
+        assert_eq!(
+            splunk.describe(),
+            "HTTP 400: Splunk answered HTTP 400 Bad Request: bad"
+        );
+        assert_eq!(
+            splunk.error(),
+            "HTTPError: Splunk answered HTTP 400 Bad Request: bad"
+        );
         let bare = Raised::new("DetectionRuleCreationFailed", "");
         assert_eq!(bare.describe(), "DetectionRuleCreationFailed");
         assert_eq!(bare.error(), "DetectionRuleCreationFailed");
