@@ -898,10 +898,14 @@ fn a_signature_that_is_a_yaml_alias_is_found_with_its_anchor() {
         "description: &sig |\n  rule A { condition: true }\nconfigurations:\n  bitdefender:\n    \
          yara:\n      signature: *sig\n",
     );
-    assert_eq!(
-        checks::signature_aliases(&aliased),
-        [("bitdefender".to_owned(), vec!["description".to_owned()])]
-    );
+    let lines = |rule: &crate::node::Node| -> Vec<(String, usize)> {
+        checks::signature_aliases(rule)
+            .into_iter()
+            .map(|(platform, node)| (platform.to_owned(), node.start.line))
+            .collect()
+    };
+    // The anchor's node, on the `description` line.
+    assert_eq!(lines(&aliased), [("bitdefender".to_owned(), 1)]);
     // The anchor on the signature itself, aliased after it, is the block's own text.
     let anchored = rule(
         "configurations:\n  bitdefender:\n    yara:\n      signature: &sig |\n        rule A { \
@@ -913,13 +917,9 @@ fn a_signature_that_is_a_yaml_alias_is_found_with_its_anchor() {
         "x: &y\n  signature: 'rule A { condition: true }'\nconfigurations:\n  bitdefender:\n    \
          yara: *y\n",
     );
-    assert_eq!(
-        checks::signature_aliases(&block),
-        [(
-            "bitdefender".to_owned(),
-            vec!["x".to_owned(), "signature".to_owned()]
-        )]
-    );
+    assert_eq!(lines(&block), [("bitdefender".to_owned(), 2)]);
+    // HarfangLab's own check does not see this one; the shared lookup does.
+    assert!(crate::objects::platform::aliased_yara_signature(&block, "bitdefender").is_some());
     // HarfangLab's block has its own check.
     let harfanglab = rule(
         "description: &sig 'rule A { condition: true }'\nconfigurations:\n  harfanglab:\n    \
