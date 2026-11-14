@@ -508,9 +508,9 @@ fn by_file(
             // The rename quick fix's suggestion: the file name the object
             // should have, beside the file.
             diagnostic.suggestion = finding
-                .json
-                .get("expected")
-                .and_then(serde_json::Value::as_str)
+                .entry
+                .expected
+                .as_deref()
                 .and_then(|expected| Path::new(expected).file_name())
                 .map(|name| name.to_string_lossy().into_owned());
         }
