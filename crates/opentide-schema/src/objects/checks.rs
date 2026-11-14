@@ -47,13 +47,13 @@ pub struct Violation {
 }
 
 impl Violation {
-    /// A `ValueError` raised in a validator: Pydantic prefixes "Value error, "
+    /// A `ValueError` raised in a validator: Pydantic prefixes ""
     /// and keeps the text as `ctx.error`.
     pub(crate) fn value_error(text: impl Into<String>) -> Self {
         let text = text.into();
         Self {
             kind: "value_error",
-            message: format!("Value error, {text}"),
+            message: text.clone(),
             context: vec![("error", text)],
         }
     }
@@ -461,11 +461,7 @@ mod tests {
         ] {
             let violation = check_reviewed(text).unwrap_err();
             assert_eq!(violation.kind, "value_error");
-            assert_eq!(
-                violation.message,
-                format!("Value error, {REVIEWED_SHAPE}"),
-                "{text}"
-            );
+            assert_eq!(violation.message, REVIEWED_SHAPE, "{text}");
         }
     }
 
@@ -485,11 +481,7 @@ mod tests {
         ] {
             let violation = check_reviewed(text).unwrap_err();
             assert_eq!(violation.kind, "value_error");
-            assert_eq!(
-                violation.message,
-                format!("Value error, {REVIEWED_SHAPE}"),
-                "{text:?}"
-            );
+            assert_eq!(violation.message, REVIEWED_SHAPE, "{text:?}");
         }
     }
 
@@ -522,7 +514,7 @@ mod tests {
             assert_eq!(violation.kind, "value_error", "{text}");
             assert_eq!(
                 violation.message,
-                format!("Value error, metadata.reviewed is not a valid date or time: {why}"),
+                format!("metadata.reviewed is not a valid date or time: {why}"),
                 "{text}"
             );
         }
@@ -551,7 +543,7 @@ mod tests {
             assert!(
                 violation
                     .message
-                    .starts_with("Value error, metadata.reviewed is not a valid date or time: "),
+                    .starts_with("metadata.reviewed is not a valid date or time: "),
                 "{text}: {}",
                 violation.message
             );
@@ -580,10 +572,7 @@ mod tests {
     fn schema_identifiers() {
         assert_eq!(check_schema_identifier("rule::1.1"), Ok(()));
         let unknown = check_schema_identifier("rule:1.0").unwrap_err();
-        assert_eq!(
-            unknown.message,
-            "Value error, unknown schema identifier: \"rule:1.0\""
-        );
+        assert_eq!(unknown.message, "unknown schema identifier: \"rule:1.0\"");
         assert_eq!(
             unknown.context,
             [(

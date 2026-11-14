@@ -169,7 +169,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
     let strategy = cx
         .statuses
         .strategy(status)
-        .map_err(|error| CompileError::failed(DISPLAY, &error.exception_text()))?;
+        .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))?;
     if strategy == StatusStrategy::Disablement {
         properties.insert("enabled".into(), Json::Bool(false));
     }

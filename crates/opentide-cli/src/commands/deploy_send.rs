@@ -1886,7 +1886,7 @@ impl Sender<'_, '_> {
         self.compile
             .statuses
             .strategy(&status)
-            .map_err(|error| Raised::new("ValueError", error.exception_text()))
+            .map_err(|error| Raised::new("ValueError", error.to_string()))
     }
 
     fn deployer(
@@ -2749,9 +2749,9 @@ impl Sender<'_, '_> {
                 let strategy = match self.compile.statuses.strategy(&status) {
                     Ok(strategy) => strategy,
                     Err(error) => {
-                        result.fail(&format!("ValueError: {}", error.exception_text()));
+                        result.fail(&format!("ValueError: {error}"));
                         log.finished(result);
-                        stopped = Some(error.exception_text());
+                        stopped = Some(error.to_string());
                         break;
                     }
                 };

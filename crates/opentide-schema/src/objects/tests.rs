@@ -156,7 +156,7 @@ fn an_unknown_schema_identifier_is_rejected() {
         [(
             "metadata.schema".to_owned(),
             Some("value_error"),
-            "Value error, unknown schema identifier: \"rule:1.0\"".to_owned()
+            "unknown schema identifier: \"rule:1.0\"".to_owned()
         )]
     );
 }
@@ -381,8 +381,7 @@ fn rule_1_1_rejects_a_bad_review_date() {
         [(
             "metadata.reviewed".to_owned(),
             Some("value_error"),
-            "Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime"
-                .to_owned()
+            "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime".to_owned()
         )]
     );
     let errors = read::<RuleV1_1>(&with_reviewed("2026-02-30")).unwrap_err();
@@ -391,7 +390,7 @@ fn rule_1_1_rejects_a_bad_review_date() {
         [(
             "metadata.reviewed".to_owned(),
             Some("value_error"),
-            "Value error, metadata.reviewed is not a valid date or time: parameter 'day' for \
+            "metadata.reviewed is not a valid date or time: parameter 'day' for \
              `2026-02` is invalid, must be in range `1..=28`"
                 .to_owned()
         )]
