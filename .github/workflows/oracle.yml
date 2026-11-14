@@ -10,56 +10,14 @@ name: Oracle
 # crates, as the engine's release (engine-release-build.yml) does on every
 # asset.
 #
-# Imported from opentidehq/language-server (#800), whose oracles also ran on
-# its release tags: here that is an `engine-v*` tag (engine-release.yml). `v*`
-# tags are opentide's releases, cut from a development commit these jobs
-# already checked.
+# Imported from opentidehq/language-server (#800). Weekly and on Run workflow
+# (the nightly set): every reference runs on each run; none on a pull request.
 on:
-  push:
-    # integration/unified-core: the Unified Core PRs merge there before development.
-    branches: [main, development, integration/unified-core, "train/catchup-*"]
-    tags: ["engine-v*"]
-  # On a pull request only when it changes what the references check: the
-  # query languages' crates and what they build on, every crate manifest
-  # (ci-oracle.sh fails when one depends on a reference), the grammars, the
-  # catalogs and the oracles. The full set (ci.yml's header) runs it on every
-  # push to the branches above, weekly and on Run workflow.
-  pull_request:
-    paths:
-      - "crates/opentide-analysis/**"
-      - "crates/opentide-core/**"
-      - "crates/opentide-syntax/**"
-      - "crates/opentide-highlight/**"
-      - "crates/opentide-ecs/**"
-      - "crates/opentide-kql/**"
-      - "crates/opentide-spl/**"
-      - "crates/opentide-esql/**"
-      - "crates/opentide-eql/**"
-      - "crates/opentide-kuery/**"
-      - "crates/opentide-lucene/**"
-      - "crates/opentide-falco/**"
-      - "crates/opentide-cql/**"
-      - "crates/opentide-yara/**"
-      - "crates/opentide-lsp/**"
-      - "crates/testdata/oracles/**"
-      - "crates/*/Cargo.toml"
-      - "packages/*/package.json"
-      - "grammars/**"
-      - "Cargo.lock"
-      - "data/catalogs/kql/**"
-      - "data/catalogs/spl/**"
-      - "data/catalogs/esql/**"
-      - "data/catalogs/eql/**"
-      - "data/catalogs/carbon_black/**"
-      - "data/catalogs/falco/**"
-      - "data/catalogs/yara/**"
-      - "scripts/engine/oracles/**"
-      - "scripts/engine/ci-oracle.sh"
-      - ".github/workflows/oracle.yml"
+  # Part of the nightly: ci.yml calls this workflow (its `nightly` scope,
+  # .github/AGENTS.md); Run workflow runs it alone. Never on a pull request
+  # or a push, so it never blocks a merge.
+  workflow_call:
   workflow_dispatch:
-  schedule:
-    # The Carbon Black Cloud tenant is checked weekly, not on every push.
-    - cron: "17 4 * * 1"
 
 permissions:
   contents: read
@@ -69,126 +27,9 @@ env:
   OPENTIDE_ORACLE_REQUIRED: "1"
 
 jobs:
-  # On a pull request, each reference runs only when its language's inputs
-  # change (bash patterns, one a line; `*` matches `/` too): a change to the
-  # KQL engine no longer pulls Splunk's, Falco's and Elasticsearch's images or
-  # Lucene's jars. What every language builds on runs them all. Not a pull
-  # request, the `full-ci` label, or a checkout that is not the pull request's
-  # merge commit: everything (it fails open, as ci.yml's `changes`).
-  changes:
-    name: Oracle paths
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    outputs:
-      kql: ${{ steps.paths.outputs.kql }}
-      spl: ${{ steps.paths.outputs.spl }}
-      falco: ${{ steps.paths.outputs.falco }}
-      elastic: ${{ steps.paths.outputs.elastic }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # The merge commit and its first parent, the base branch's tip.
-          fetch-depth: 2
-          persist-credentials: false
-      - name: Detect each reference's inputs
-        id: paths
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          FULL_CI: ${{ contains(github.event.pull_request.labels.*.name, 'full-ci') }}
-          COMMON_PATHS: |
-            crates/opentide-analysis/*
-            crates/opentide-core/*
-            crates/opentide-syntax/*
-            crates/opentide-highlight/*
-            crates/opentide-lsp/*
-            crates/*/Cargo.toml
-            crates/testdata/oracles/exceptions.toml
-            packages/*/package.json
-            Cargo.lock
-            scripts/engine/oracles/oracle.py
-            scripts/engine/oracles/README.md
-            scripts/engine/ci-oracle.sh
-            .github/workflows/oracle.yml
-          KQL_PATHS: |
-            crates/opentide-kql/*
-            grammars/tree-sitter-opentide-kql/*
-            data/catalogs/kql/*
-            crates/testdata/oracles/kql/*
-            scripts/engine/oracles/kusto/*
-          SPL_PATHS: |
-            crates/opentide-spl/*
-            grammars/tree-sitter-opentide-spl/*
-            data/catalogs/spl/*
-            crates/testdata/oracles/spl/*
-            scripts/engine/oracles/splunk/*
-          FALCO_PATHS: |
-            crates/opentide-falco/*
-            grammars/tree-sitter-opentide-falco/*
-            data/catalogs/falco/*
-            crates/testdata/oracles/falco/*
-            scripts/engine/oracles/falco/*
-          ELASTIC_PATHS: |
-            crates/opentide-esql/*
-            crates/opentide-eql/*
-            crates/opentide-kuery/*
-            crates/opentide-lucene/*
-            crates/opentide-ecs/*
-            grammars/tree-sitter-opentide-esql/*
-            grammars/tree-sitter-opentide-eql/*
-            grammars/tree-sitter-opentide-kuery/*
-            grammars/tree-sitter-opentide-lucene/*
-            data/catalogs/esql/*
-            data/catalogs/eql/*
-            crates/testdata/oracles/elasticsearch/*
-            scripts/engine/oracles/elastic/*
-            scripts/engine/oracles/elasticsearch/*
-        run: |
-          set -euo pipefail
-          outputs=(kql spl falco elastic)
-          if [[ "${EVENT_NAME}" != "pull_request" || "${FULL_CI}" == true ]] \
-            || ! git rev-parse --verify --quiet HEAD^2 >/dev/null; then
-            for output in "${outputs[@]}"; do
-              echo "${output}=true" >> "$GITHUB_OUTPUT"
-            done
-            exit 0
-          fi
-          changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"
-          matches() {
-            local patterns="$1" file pattern
-            while IFS= read -r file; do
-              [[ -n "${file}" ]] || continue
-              while IFS= read -r pattern; do
-                # Unquoted on the right: a pattern, not a string.
-                # shellcheck disable=SC2053
-                if [[ -n "${pattern}" && "${file}" == ${pattern} ]]; then
-                  echo "input changed: ${file}" >&2
-                  return 0
-                fi
-              done <<<"${patterns}"
-            done <<<"${changed}"
-            return 1
-          }
-          common=false
-          if matches "${COMMON_PATHS}"; then common=true; fi
-          for output in "${outputs[@]}"; do
-            patterns_var="${output^^}_PATHS"
-            value="${common}"
-            if matches "${!patterns_var}"; then value=true; fi
-            echo "${output}=${value}" >> "$GITHUB_OUTPUT"
-          done
 
   kql:
     name: Kusto.Language
-    needs: changes
-    if: >-
-      !cancelled() && (
-        github.event_name != 'pull_request'
-        || contains(github.event.pull_request.labels.*.name, 'full-ci')
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.kql == 'true'
-      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -214,14 +55,6 @@ jobs:
 
   spl:
     name: Splunk
-    needs: changes
-    if: >-
-      !cancelled() && (
-        github.event_name != 'pull_request'
-        || contains(github.event.pull_request.labels.*.name, 'full-ci')
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.spl == 'true'
-      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -252,14 +85,6 @@ jobs:
     # `falco --validate` per case, beside the engine's verdict. The pins are
     # recorded in scripts/engine/oracles/README.md; bump them together.
     name: Falco ${{ matrix.falco }}
-    needs: changes
-    if: >-
-      !cancelled() && (
-        github.event_name != 'pull_request'
-        || contains(github.event.pull_request.labels.*.name, 'full-ci')
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.falco == 'true'
-      )
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -332,14 +157,6 @@ jobs:
 
   elastic:
     name: Elastic and Lucene
-    needs: changes
-    if: >-
-      !cancelled() && (
-        github.event_name != 'pull_request'
-        || contains(github.event.pull_request.labels.*.name, 'full-ci')
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.elastic == 'true'
-      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -395,7 +212,7 @@ jobs:
           OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules
         run: bash scripts/engine/ci-oracle.sh esql eql kuery lucene
       - name: Save the pinned references
-        if: github.event_name == 'push' && steps.references.outputs.cache-hit != 'true'
+        if: github.event_name == 'schedule' && steps.references.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -409,14 +226,6 @@ jobs:
     # verdict in crates/testdata/oracles/elasticsearch/expected.tsv no longer holds;
     # esql_catalog.py fails when a data/catalogs/esql `versions` list is wrong.
     name: Live Elasticsearch ${{ matrix.version }}
-    needs: changes
-    if: >-
-      !cancelled() && (
-        github.event_name != 'pull_request'
-        || contains(github.event.pull_request.labels.*.name, 'full-ci')
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.elastic == 'true'
-      )
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

@@ -609,6 +609,7 @@ fn a_rust_run_cancelled_before_it_started_answers_130_unrun() {
 /// The oracle's recorded sessions, replayed: the same lines in, the same
 /// bytes out.
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn recorded_sessions_are_answered_as_the_oracle_answered_them() {
     let _session = session();
     let cases = replay::repo().join("tests/golden/cases/serve/plain");

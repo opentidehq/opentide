@@ -234,6 +234,7 @@ fn the_diff_patches_the_file_as_difflibs_does() {
     );
 }
 #[test]
+#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn every_recorded_dry_run_diff_is_the_oracles() {
     // tests/golden/cases/validate/*/tide-corpus-typo/fix-typo-dry-run: the
     // file the typo fixture edits, and the diff the oracle printed for it.

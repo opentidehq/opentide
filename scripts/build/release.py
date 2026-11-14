@@ -11,6 +11,7 @@ git tag's (hatch-vcs), so before the tag exists the newest dated
     uv run python scripts/build/release.py check v0.24.0            # the notes PR merged
     uv run python scripts/build/release.py check-candidate v0.25.0-rc.1
     uv run python scripts/build/release.py notes v0.24.0            # the Release body
+    uv run python scripts/build/release.py notes --internal v1.0.0-rc.1
 
 ``check`` refuses a release whose Step 1 (the release-management skill) is
 missing: the changelog section and its links, the GitHub Release notes file,
@@ -24,6 +25,10 @@ that is not newer than the last release. Candidates are for the Rust-core
 transition (they may be retired after): pre-releases on GitHub, PyPI and
 crates.io, nothing on npm. A candidate needs no notes PR: its GitHub
 pre-release says what ``## [Unreleased]`` holds (``notes``).
+
+An internal candidate (``publish.yml``'s ``internal_candidate``) is the same
+tag on a draft GitHub pre-release only, with every package attached and nothing
+on a registry: ``notes --internal`` says so.
 """
 
 from __future__ import annotations
@@ -142,18 +147,31 @@ def candidate_problems(root: Path, tag: str) -> list[str]:
     return found
 
 
-def notes(root: Path, tag: str) -> str:
+def notes(root: Path, tag: str, *, internal: bool = False) -> str:
     """The GitHub Release body of ``tag``: a release's is the file its notes PR
-    wrote; a candidate's says what it is, then quotes ``## [Unreleased]``."""
-    if match := _CANDIDATE.fullmatch(tag):
+    wrote; a candidate's says what it is, then quotes ``## [Unreleased]``. An
+    internal candidate's (``internal``) says that no registry has it."""
+    match = _CANDIDATE.fullmatch(tag)
+    if internal and match is None:
+        raise ReleaseError(f"{tag!r} is not a release candidate tag (vX.Y.Z-rc.N)")
+    if match:
         changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
         unreleased = _section(changelog, "Unreleased") or "Nothing is listed under [Unreleased]."
-        return (
-            f"Release candidate {match.group(2)} of {match.group(1)}, for testing: "
-            "a pre-release on PyPI (`pip install --pre opentide`) and on crates.io, "
-            "not on npm. "
-            f"What it holds so far, from CHANGELOG.md's [Unreleased]:\n\n{unreleased}\n"
-        )
+        if internal:
+            where = (
+                f"Internal release candidate {match.group(2)} of {match.group(1)}, for testing "
+                "before anything reaches a package manager: a draft GitHub pre-release only, "
+                "nothing on PyPI, crates.io or npm. Its assets are the binaries and the "
+                "release assets (SHA256SUMS lists them), and every wheel, the sdist, the "
+                "crate packages and the npm tarballs (PACKAGES-SHA256SUMS lists those). "
+            )
+        else:
+            where = (
+                f"Release candidate {match.group(2)} of {match.group(1)}, for testing: "
+                "a pre-release on PyPI (`pip install --pre opentide`) and on crates.io, "
+                "not on npm. "
+            )
+        return f"{where}What it holds so far, from CHANGELOG.md's [Unreleased]:\n\n{unreleased}\n"
     if _TAG.fullmatch(tag) is None:
         raise ReleaseError(f"{tag!r} is not a release tag (vX.Y.Z or vX.Y.Z-rc.N)")
     path = root / ".github" / "release-notes" / f"{tag}.md"
@@ -172,13 +190,18 @@ def main(argv: list[str] | None = None) -> int:
     candidate.add_argument("tag", help="vX.Y.Z-rc.N")
     body = commands.add_parser("notes", help="print the GitHub Release body of TAG")
     body.add_argument("tag", help="vX.Y.Z or vX.Y.Z-rc.N")
+    body.add_argument(
+        "--internal",
+        action="store_true",
+        help="an internal candidate's: a draft pre-release, on no registry",
+    )
     args = parser.parse_args(argv)
     try:
         if args.command == "version":
             print(version(ROOT))
             return 0
         if args.command == "notes":
-            sys.stdout.write(notes(ROOT, args.tag))
+            sys.stdout.write(notes(ROOT, args.tag, internal=args.internal))
             return 0
         if args.command == "check-candidate":
             found = candidate_problems(ROOT, args.tag)

@@ -6,7 +6,7 @@ name: Engine fuzz
 # fuzz/regressions/<target>/ (fuzz/README.md), where the normal test run
 # replays it. The corpus each target learns is kept in the Actions cache from
 # night to night. Pull requests run every target for 60 s (ci.yml,
-# `fuzz-smoke`); tests/test_ci/test_supply_chain.py keeps both matrices
+# `fuzz-smoke`); tests/test_ci/test_workflows.py keeps both matrices
 # complete.
 on:
   schedule:
