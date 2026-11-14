@@ -9,7 +9,7 @@ use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::catalogue::{self, EDGE_KINDS};
 use opentide_workspace::coverage::{match_technique, rule_technique_index};
 use opentide_workspace::fields::{get, platforms as object_platforms};
-use opentide_workspace::index::truthy;
+use opentide_workspace::index::holds_name;
 use opentide_workspace::info::{self as data, PlatformInfo};
 use opentide_workspace::{Index, Workspace};
 
@@ -395,7 +395,7 @@ fn objects_table(index: &Index, section: &str, uuids: &[String]) -> Table {
                 .and_then(opentide_workspace::Object::root);
             let name = root
                 .and_then(|root| get(root, "name"))
-                .filter(|node| truthy(node))
+                .filter(|node| holds_name(node))
                 .map(|node| node.value.to_string())
                 .unwrap_or_default();
             let mut row = vec![uuid.clone(), name];

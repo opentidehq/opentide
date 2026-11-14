@@ -1,7 +1,8 @@
 //! `cargo xtask registry diff --against python` (UC-2.1, #816): every
 //! corpus loaded by `opentide-workspace` and its index, exported as JSON
-//! (`Index::to_json`), against the Python registry's
-//! (`xtask/oracle/registry_export.py`, run with the oracle's interpreter):
+//! (`export::index_json`, opentide-workspace's test support), against the
+//! Python registry's (`xtask/oracle/registry_export.py`, run with the
+//! oracle's interpreter):
 //! objects, UUIDs, types, paths, bodies, signals, load errors, duplicates,
 //! nested files, references and chaining.
 //!
@@ -31,6 +32,10 @@ use crate::corpus::cli::{
 use crate::corpus::faults;
 use crate::corpus::generate::{self, Counts, Layout, Options};
 use opentide_workspace::{OsFs, RootOptions, Workspace};
+
+/// The index as JSON, shared with opentide-workspace's loading tests.
+#[path = "../../crates/opentide-workspace/tests/support/export.rs"]
+mod export;
 
 /// The usage of `cargo xtask registry`.
 pub const USAGE: &str = "\
@@ -464,7 +469,7 @@ pub fn rust_result(workspace: &Path) -> Json {
         },
     };
     match Workspace::open(Arc::new(OsFs), options) {
-        Ok(loaded) => loaded.index().to_json(loaded.root()),
+        Ok(loaded) => export::index_json(loaded.index(), loaded.root()),
         Err(error) => json!({"error": {"code": error.code()}}),
     }
 }
