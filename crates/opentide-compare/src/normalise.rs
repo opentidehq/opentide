@@ -272,7 +272,10 @@ impl Normaliser {
         if self.live_frames {
             out = live_frame()
                 .replace_all(&out, |caps: &Captures<'_>| {
-                    format!("<LIVE></LIVE>{}{SHOW_CURSOR}", without_leaked_rows(&caps[1]))
+                    format!(
+                        "<LIVE></LIVE>{}{SHOW_CURSOR}",
+                        without_leaked_rows(&caps[1])
+                    )
                 })
                 .into_owned();
         }
@@ -931,7 +934,9 @@ mod tests {
         let row = "  \x1b[1;36m⠙\x1b[0m  \x1b[1;36mcrowdstrike\x1b[0m\x1b[1m  \x1b[0m\x1b[2m3 rules\x1b[0m\x1b[2m \x1b[0m\x1b[2mCrowdStrike create rule\x1b[0m";
         let warning = "\x1b[1;33mwarning: \x1b[0mRetrying\n";
         let stream = |leak: &str| {
-            format!("{HIDE_CURSOR}{row}\r\x1b[2K{leak}{warning}{row}\r\x1b[2K{row}\n{SHOW_CURSOR}done\n")
+            format!(
+                "{HIDE_CURSOR}{row}\r\x1b[2K{leak}{warning}{row}\r\x1b[2K{row}\n{SHOW_CURSOR}done\n"
+            )
         };
         let live = |text: &str| Normaliser::new(&volatile(), &[Rule::LiveFrames], []).text(text);
         let clean = live(&stream(""));
