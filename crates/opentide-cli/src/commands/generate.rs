@@ -1406,7 +1406,11 @@ mod tests {
             let mut names: Vec<String> = paths
                 .iter()
                 .map(|path| {
-                    path.strip_prefix(&root)
+                    // The program's paths are git's (`C:/...` on Windows),
+                    // the root is canonical (`\\?\C:\...`): compare both canonical.
+                    std::fs::canonicalize(path)
+                        .unwrap()
+                        .strip_prefix(&root)
                         .unwrap()
                         .to_string_lossy()
                         .replace('\\', "/")
