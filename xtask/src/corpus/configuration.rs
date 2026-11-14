@@ -150,7 +150,6 @@ pub fn rust_findings(
 ) -> Vec<Json> {
     let resolved = match resolve(&Instance {
         workspace,
-        overlay: None,
         parent,
         // The oracle runs without OPENTIDE_TIDE_WORKSPACE.
         skip_parent: false,

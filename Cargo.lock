@@ -3260,7 +3260,6 @@ dependencies = [
  "shlex 2.0.1",
  "signal-hook",
  "soft-canonicalize",
- "strsim",
  "tempfile",
  "terminal_size",
  "textwrap",
@@ -3343,6 +3342,7 @@ version = "0.12.0"
 dependencies = [
  "base64 0.22.1",
  "http",
+ "hyper-util",
  "jiff",
  "jsonwebtoken",
  "opentide-cassette",
@@ -3366,6 +3366,7 @@ dependencies = [
  "tokio-util",
  "toml 0.8.23",
  "tracing",
+ "tracing-subscriber",
  "url",
  "uuid",
  "wiremock",

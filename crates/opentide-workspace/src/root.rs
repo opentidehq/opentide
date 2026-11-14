@@ -1,4 +1,4 @@
-//! Where the workspace is (`core/root.py`, `registry/discovery.py`).
+//! Where the workspace is.
 //!
 //! The order: `--repo`, else `OPENTIDE_REPO_ROOT`, else the nearest
 //! ancestor of the working directory holding `.opentide/` or an `objects/`
@@ -39,8 +39,9 @@ fn env_path(name: &str) -> Option<PathBuf> {
 
 impl RootOptions {
     /// The options of this process: `repo` (a `--repo` flag), its
-    /// `OPENTIDE_REPO_ROOT` and `OPENTIDE_TIDE_WORKSPACE` (empty counts as
-    /// unset, as in Python) and its working directory.
+    /// `OPENTIDE_REPO_ROOT` and `OPENTIDE_TIDE_WORKSPACE` (a variable set to
+    /// the empty string counts as unset: it names no folder) and its working
+    /// directory.
     ///
     /// # Errors
     ///
@@ -88,9 +89,9 @@ pub fn git_root(fs: &dyn FileSystem, path: &Path) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-/// Whether `path` holds `.opentide/` or an `objects/` catalogue. `.git/objects`
-/// is git's object store and an `objects/` holding `__init__.py` is Python
-/// source: neither is a catalogue.
+/// Whether `path` holds one of opentide's markers: a `.opentide/` or an
+/// `objects/` folder. Nothing inside `.git` counts: `.git/objects` is git's
+/// object store.
 pub fn is_workspace_root(fs: &dyn FileSystem, path: &Path) -> bool {
     if path
         .components()
@@ -98,11 +99,7 @@ pub fn is_workspace_root(fs: &dyn FileSystem, path: &Path) -> bool {
     {
         return false;
     }
-    if fs.is_dir(&path.join(OPENTIDE_DIR)) {
-        return true;
-    }
-    let objects = path.join("objects");
-    fs.is_dir(&objects) && !fs.is_file(&objects.join("__init__.py"))
+    fs.is_dir(&path.join(OPENTIDE_DIR)) || fs.is_dir(&path.join("objects"))
 }
 
 /// The nearest ancestor of `start` that is a workspace root, not looking above
@@ -186,15 +183,22 @@ mod tests {
         );
     }
 
+    /// Only opentide's markers count, whatever else a folder holds: an
+    /// `objects/` with an `__init__.py` in it is still a catalogue.
     #[test]
-    fn git_objects_and_python_packages_are_not_catalogues() {
+    fn git_objects_are_not_a_catalogue_and_any_objects_folder_is() {
         let fs = MemoryFs::new();
         fs.create_dir("/r/.git/objects");
         fs.write("/py/objects/__init__.py", "");
         fs.create_dir("/cat/objects");
         assert!(!is_workspace_root(&fs, Path::new("/r/.git")));
-        assert!(!is_workspace_root(&fs, Path::new("/py")));
+        assert!(is_workspace_root(&fs, Path::new("/py")));
         assert!(is_workspace_root(&fs, Path::new("/cat")));
+        fs.create_dir("/py/objects/rules");
+        assert_eq!(
+            find_workspace_root(&fs, Path::new("/py/objects/rules")),
+            PathBuf::from("/py")
+        );
         fs.write("/wt/.git", "gitdir: elsewhere\n");
         assert_eq!(
             git_root(&fs, Path::new("/wt/a/b")),
@@ -224,7 +228,7 @@ mod tests {
     /// The workspace is the repository root, whatever it holds: a repository
     /// with `tests/fixtures/generation/tide_workspace` (opentide's own
     /// checkout, or any that happens to have that path) does not make the
-    /// fixture its workspace, as Python did.
+    /// fixture its workspace.
     #[test]
     fn a_generation_fixture_in_the_repo_is_not_the_workspace() {
         let fs = MemoryFs::new();

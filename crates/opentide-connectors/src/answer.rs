@@ -16,8 +16,9 @@ use crate::http::HttpClient;
 /// (`SLOW_ANSWER_SECONDS`).
 pub const SLOW_ANSWER: Duration = Duration::from_secs(30);
 
-/// One answer.
-#[derive(Clone, Debug)]
+/// One answer. Its `Debug` leaves the body out: a token endpoint's answer
+/// carries a bearer token.
+#[derive(Clone)]
 pub struct Answer {
     /// The HTTP status.
     pub status: u16,
@@ -27,6 +28,17 @@ pub struct Answer {
     pub body: Vec<u8>,
     /// From sending the request to its headers (`requests`' `elapsed`).
     pub elapsed: Duration,
+}
+
+impl std::fmt::Debug for Answer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Answer")
+            .field("status", &self.status)
+            .field("content_type", &self.content_type)
+            .field("body_bytes", &self.body.len())
+            .field("elapsed", &self.elapsed)
+            .finish()
+    }
 }
 
 impl Answer {
@@ -102,7 +114,8 @@ pub async fn exchange(
 }
 
 /// Why an answer that is not the tenant's API is a gateway's, or `None`
-/// (`gateway_answer`).
+/// (`gateway_answer`). A `429` is the API's rate limit, however long it
+/// took: its `elapsed` counts the `Retry-After` waits before it.
 pub fn gateway_answer(status: u16, elapsed: Option<Duration>) -> Option<String> {
     let name = match status {
         502 => Some("Bad Gateway"),
@@ -118,7 +131,7 @@ pub fn gateway_answer(status: u16, elapsed: Option<Duration>) -> Option<String> 
         ));
     }
     elapsed
-        .filter(|elapsed| *elapsed >= SLOW_ANSWER)
+        .filter(|elapsed| status != 429 && *elapsed >= SLOW_ANSWER)
         .map(|elapsed| {
             format!(
                 "it came after {:.0}s, as from a gateway or proxy in front of the tenant that \
@@ -182,6 +195,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn debug_leaves_the_body_out() {
+        let answer = Answer {
+            status: 200,
+            content_type: Some("application/json".into()),
+            body: br#"{"access_token":"eyJ.secret.token","expires_in":3599}"#.to_vec(),
+            elapsed: Duration::from_millis(5),
+        };
+        let shown = format!("{answer:?}");
+        assert!(!shown.contains("eyJ.secret.token"), "{shown}");
+        assert!(
+            shown.contains("status: 200") && shown.contains("body_bytes: 53"),
+            "{shown}"
+        );
+    }
+
+    #[test]
     fn a_gateway_page_is_named_by_its_title() {
         let page = b"<html><head><title>502  Bad\nGateway</title></head></html>";
         let line = describe_answer(502, page, Some("text/html; charset=utf-8"), None);
@@ -201,5 +230,18 @@ mod tests {
                 .ends_with("it came after 31s, as from a gateway or proxy in front of the tenant that stopped waiting for it")
         );
         assert_eq!(gateway_answer(500, Some(Duration::from_secs(29))), None);
+    }
+
+    #[test]
+    fn a_429_after_its_retry_after_waits_is_no_gateway_answer() {
+        // Two `Retry-After: 20` waits, then a third 429: 40 s, the API's.
+        let waited = Some(Duration::from_secs(40));
+        assert_eq!(gateway_answer(429, waited), None);
+        assert_eq!(
+            describe_answer(429, b"Too Many Requests", Some("text/plain"), waited),
+            "HTTP 429 with a body that is not JSON (\"Too Many Requests\")"
+        );
+        // Any other slow answer still reads as a gateway's.
+        assert!(gateway_answer(500, waited).is_some_and(|hint| hint.contains("after 40s")));
     }
 }
