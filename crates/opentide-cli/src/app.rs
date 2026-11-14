@@ -1230,7 +1230,7 @@ impl Run<'_> {
                 install: !flag("no_install"),
             },
             "platforms" => Step::Platforms(
-                opentide_schema::platforms::ordered(opentide_schema::platforms::Order::Cli)
+                opentide_schema::platforms::IDS
                     .into_iter()
                     .filter(|id| flag(id))
                     .map(str::to_owned)

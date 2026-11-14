@@ -12,8 +12,8 @@
 //!   (`indexing/inflight.py`).
 //! - [`json_text`]: JSON files as serde_json lays them out (pretty at an
 //!   indent, or one line), UTF-8.
-//! - [`files`]: writing [`Output`]s in parallel (rayon), and [`files::Snapshot`],
-//!   the files a phase wrote found by modification time and size.
+//! - [`files`]: writing [`Output`]s in parallel (rayon), and [`files::Changes`],
+//!   the files a phase wrote and removed, recorded as it does.
 //!
 //! Rendering is pure: a phase returns its [`Output`]s or a [`PhaseError`];
 //! only [`files`] touches the disk, and [`inflight`], which reads the shards

@@ -4,10 +4,9 @@
 //! A row says what a platform is (its identifier, label and model), how a
 //! deployment state addresses its rules, what opentide does with it (deploy,
 //! check a query on a tenant, run a query) and which query languages and
-//! query-file suffixes it brings. The lists the command line prints are in
-//! several orders, each of them behaviour (help text, JSON arrays, the order
-//! a checklist names the platforms in): [`Order`] names them, and a row
-//! carries its rank in each.
+//! query-file suffixes it brings. Every list of platforms opentide prints or
+//! walks (`--platform`'s choices, `setup`, `info`, the checklists, the
+//! deploy plan, messages) is in the table's order.
 //!
 //! Adding a platform is one row here plus its modules (the model in
 //! `objects::platform`, its compiler, its connector). The dispatch that names
@@ -44,7 +43,7 @@ pub struct IdPattern {
 
 impl ExternalId {
     /// Whether the deployer addresses rules by a vendor id the deployment
-    /// state keeps (`STATE_PLATFORMS`).
+    /// state keeps ([`state_platforms`]).
     pub const fn is_stored(self) -> bool {
         !matches!(self, Self::None)
     }
@@ -112,25 +111,6 @@ fn anchored(pattern: &str) -> Option<regex::Regex> {
     regex::Regex::new(&format!("^(?:{pattern})$")).ok()
 }
 
-/// The orders platform lists are printed in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Order {
-    /// The rule's `configurations` container (`PLATFORM_CONFIG_MODELS`): the
-    /// table's own order. The deploy plan, `doctor`'s checklist and the
-    /// workspace checks walk it.
-    Container,
-    /// The command line's (`DetectionPlatform`): `--platform`'s choices,
-    /// `setup`'s flags and the wizard.
-    Cli,
-    /// The connectors' registry (`opentide.platforms`' entry points), and the
-    /// pipelines' live query checks.
-    Connector,
-    /// The bundled configuration's platform models (`configuration` tables).
-    Configuration,
-    /// By identifier.
-    Name,
-}
-
 /// One built-in platform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[expect(
@@ -166,15 +146,9 @@ pub struct Platform {
     pub offline_languages: &'static [&'static str],
     /// The extensions of a query file in its languages.
     pub query_file_suffixes: &'static [&'static str],
-    /// Its place in [`Order::Cli`].
-    pub cli_rank: u8,
-    /// Its place in [`Order::Connector`].
-    pub connector_rank: u8,
-    /// Its place in [`Order::Configuration`].
-    pub configuration_rank: u8,
 }
 
-/// Every built-in platform, in [`Order::Container`].
+/// Every built-in platform, in the one order every list of them takes.
 pub const PLATFORMS: &[Platform] = &[
     Platform {
         id: "sentinel",
@@ -189,9 +163,6 @@ pub const PLATFORMS: &[Platform] = &[
         runner_languages: &["kql"],
         offline_languages: &["kql"],
         query_file_suffixes: &["kql"],
-        cli_rank: 0,
-        connector_rank: 0,
-        configuration_rank: 0,
     },
     Platform {
         id: "defender_for_endpoint",
@@ -206,9 +177,6 @@ pub const PLATFORMS: &[Platform] = &[
         runner_languages: &["kql"],
         offline_languages: &["kql"],
         query_file_suffixes: &["kql"],
-        cli_rank: 3,
-        connector_rank: 1,
-        configuration_rank: 4,
     },
     Platform {
         id: "splunk",
@@ -223,9 +191,6 @@ pub const PLATFORMS: &[Platform] = &[
         runner_languages: &["spl"],
         offline_languages: &["spl"],
         query_file_suffixes: &["spl"],
-        cli_rank: 1,
-        connector_rank: 2,
-        configuration_rank: 1,
     },
     Platform {
         id: "sentinel_one",
@@ -240,9 +205,6 @@ pub const PLATFORMS: &[Platform] = &[
         runner_languages: &["powerquery"],
         offline_languages: &[],
         query_file_suffixes: &[],
-        cli_rank: 4,
-        connector_rank: 3,
-        configuration_rank: 3,
     },
     Platform {
         id: "crowdstrike",
@@ -257,9 +219,6 @@ pub const PLATFORMS: &[Platform] = &[
         runner_languages: &["cql"],
         offline_languages: &["cql"],
         query_file_suffixes: &["cql"],
-        cli_rank: 2,
-        connector_rank: 5,
-        configuration_rank: 5,
     },
     Platform {
         id: "harfanglab",
@@ -276,9 +235,6 @@ pub const PLATFORMS: &[Platform] = &[
         // and `.yara` files, checked offline as libyara 4.5 compiles them.
         offline_languages: &["yara"],
         query_file_suffixes: &["yar", "yara"],
-        cli_rank: 6,
-        connector_rank: 6,
-        configuration_rank: 6,
     },
     Platform {
         id: "carbon_black_cloud",
@@ -293,9 +249,6 @@ pub const PLATFORMS: &[Platform] = &[
         runner_languages: &["lucene"],
         offline_languages: &["lucene"],
         query_file_suffixes: &["lucene"],
-        cli_rank: 5,
-        connector_rank: 4,
-        configuration_rank: 2,
     },
     Platform {
         id: "elastic",
@@ -310,9 +263,6 @@ pub const PLATFORMS: &[Platform] = &[
         runner_languages: &["esql", "eql", "lucene", "kuery"],
         offline_languages: &["esql", "eql", "kuery", "lucene"],
         query_file_suffixes: &["esql", "eql", "kuery", "lucene"],
-        cli_rank: 7,
-        connector_rank: 7,
-        configuration_rank: 7,
     },
     Platform {
         id: "sysdig",
@@ -327,9 +277,6 @@ pub const PLATFORMS: &[Platform] = &[
         runner_languages: &[],
         offline_languages: &["falco"],
         query_file_suffixes: &["falco"],
-        cli_rank: 8,
-        connector_rank: 8,
-        configuration_rank: 8,
     },
     Platform {
         id: "bitdefender",
@@ -351,9 +298,6 @@ pub const PLATFORMS: &[Platform] = &[
         // A YARA signature, under the Bitdefender profile.
         offline_languages: &["yara"],
         query_file_suffixes: &["yar", "yara"],
-        cli_rank: 9,
-        connector_rank: 9,
-        configuration_rank: 9,
     },
     Platform {
         id: "graylog",
@@ -375,9 +319,6 @@ pub const PLATFORMS: &[Platform] = &[
         // dialect"): Elastic's checks and Graylog's own.
         offline_languages: &["lucene"],
         query_file_suffixes: &["lucene"],
-        cli_rank: 10,
-        connector_rank: 10,
-        configuration_rank: 10,
     },
     Platform {
         id: "exabeam",
@@ -400,9 +341,6 @@ pub const PLATFORMS: &[Platform] = &[
         // `system: exabeam` hunt, profile `search` (exabeam-1.0).
         offline_languages: &["exabeam"],
         query_file_suffixes: &["exabeam"],
-        cli_rank: 11,
-        connector_rank: 11,
-        configuration_rank: 11,
     },
     Platform {
         id: "google_secops",
@@ -425,9 +363,6 @@ pub const PLATFORMS: &[Platform] = &[
         // The offline YARA-L check arrives with the engine import (E1).
         offline_languages: &["yaral"],
         query_file_suffixes: &["yaral", "yl2"],
-        cli_rank: 12,
-        connector_rank: 12,
-        configuration_rank: 12,
     },
 ];
 
@@ -435,17 +370,6 @@ pub const PLATFORMS: &[Platform] = &[
 pub const COUNT: usize = PLATFORMS.len();
 
 impl Platform {
-    /// Its rank in `order` (its index in the table for [`Order::Container`];
-    /// none for [`Order::Name`], which sorts).
-    const fn rank(&self, order: Order, index: usize) -> usize {
-        match order {
-            Order::Cli => self.cli_rank as usize,
-            Order::Connector => self.connector_rank as usize,
-            Order::Configuration => self.configuration_rank as usize,
-            Order::Container | Order::Name => index,
-        }
-    }
-
     /// The languages the engine parses for it offline; `None` when it parses
     /// none of its queries.
     pub fn offline(&self) -> Option<&'static [&'static str]> {
@@ -453,53 +377,16 @@ impl Platform {
     }
 }
 
-/// Whether `a` sorts before `b`, byte by byte.
-const fn str_lt(a: &str, b: &str) -> bool {
-    let (a, b) = (a.as_bytes(), b.as_bytes());
-    let mut index = 0;
-    while index < a.len() && index < b.len() {
-        if a[index] != b[index] {
-            return a[index] < b[index];
-        }
-        index += 1;
-    }
-    a.len() < b.len()
-}
-
-/// Every identifier, in `order`, as a constant.
-///
-/// # Panics
-///
-/// At compile time, when two rows share a rank in `order`, or a rank is out
-/// of range (the tests check every order).
-pub const fn ordered(order: Order) -> [&'static str; COUNT] {
+/// Every identifier, in the table's order.
+pub const IDS: [&str; COUNT] = {
     let mut out = [""; COUNT];
     let mut index = 0;
     while index < COUNT {
-        let rank = PLATFORMS[index].rank(order, index);
-        assert!(
-            rank < COUNT && out[rank].is_empty(),
-            "a rank is out of range or taken twice"
-        );
-        out[rank] = PLATFORMS[index].id;
+        out[index] = PLATFORMS[index].id;
         index += 1;
     }
-    if let Order::Name = order {
-        // Insertion sort: nine to a few dozen rows.
-        let mut end = 1;
-        while end < COUNT {
-            let mut at = end;
-            while at > 0 && str_lt(out[at], out[at - 1]) {
-                let swap = out[at];
-                out[at] = out[at - 1];
-                out[at - 1] = swap;
-                at -= 1;
-            }
-            end += 1;
-        }
-    }
     out
-}
+};
 
 /// The platform `id` names, if it is built in.
 pub fn get(id: &str) -> Option<&'static Platform> {
@@ -511,48 +398,28 @@ pub fn is_builtin(id: &str) -> bool {
     get(id).is_some()
 }
 
-/// The platforms `keep` selects, in `order`.
-pub fn select(order: Order, keep: impl Fn(&Platform) -> bool) -> Vec<&'static Platform> {
-    ordered(order)
-        .into_iter()
-        .filter_map(get)
-        .filter(|platform| keep(platform))
-        .collect()
+/// The platforms `keep` selects, in the table's order.
+pub fn select(keep: impl Fn(&Platform) -> bool) -> Vec<&'static Platform> {
+    PLATFORMS.iter().filter(|platform| keep(platform)).collect()
 }
 
-/// The identifiers of the platforms `keep` selects, in `order`.
-pub fn ids_where(order: Order, keep: impl Fn(&Platform) -> bool) -> Vec<&'static str> {
-    select(order, keep)
+/// The identifiers of the platforms `keep` selects, in the table's order.
+pub fn ids_where(keep: impl Fn(&Platform) -> bool) -> Vec<&'static str> {
+    select(keep)
         .into_iter()
         .map(|platform| platform.id)
         .collect()
 }
 
-/// Every identifier, in `order`.
-pub fn ids(order: Order) -> Vec<&'static str> {
-    ordered(order).to_vec()
+/// Every identifier, in the table's order.
+pub fn ids() -> Vec<&'static str> {
+    IDS.to_vec()
 }
 
 /// The platforms whose deployer addresses the remote rule by a vendor id kept
-/// in the deployment state, in the order the oracle lists them
-/// (`states/deployment.py`'s `STATE_PLATFORMS`, which a
-/// `deployment_state_platform` message quotes): by name, but Graylog before
-/// Exabeam.
-const STATE_PLATFORMS: [&str; 8] = [
-    "bitdefender",
-    "crowdstrike",
-    "defender_for_endpoint",
-    "graylog",
-    "exabeam",
-    "google_secops",
-    "sentinel_one",
-    "sysdig",
-];
-
-/// The platforms whose deployer addresses the remote rule by a vendor id kept
-/// in the deployment state, in the order of `STATE_PLATFORMS` above (0.28.1's).
+/// in the deployment state, in the table's order.
 pub fn state_platforms() -> Vec<&'static str> {
-    STATE_PLATFORMS.to_vec()
+    ids_where(|platform| platform.external_id.is_stored())
 }
 
 /// Whether `id`'s external id is a canonical decimal integer.
@@ -593,38 +460,22 @@ pub fn query_file_suffixes() -> Vec<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        COUNT, ExternalId, Order, PLATFORMS, ids, ids_where, ordered, query_file_suffixes,
-        state_platforms,
+        COUNT, ExternalId, IDS, PLATFORMS, ids, ids_where, query_file_suffixes, state_platforms,
     };
 
-    const ORDERS: [Order; 5] = [
-        Order::Container,
-        Order::Cli,
-        Order::Connector,
-        Order::Configuration,
-        Order::Name,
-    ];
-
     #[test]
-    fn each_order_lists_every_platform_once() {
-        let mut expected = ids(Order::Container);
-        expected.sort_unstable();
-        expected.dedup();
-        assert_eq!(expected.len(), COUNT, "identifiers are distinct");
-        for order in ORDERS {
-            let mut listed = ordered(order).to_vec();
-            listed.sort_unstable();
-            assert_eq!(listed, expected, "{order:?}");
-        }
-        let mut by_name = ids(Order::Container);
-        by_name.sort_unstable();
-        assert_eq!(ids(Order::Name), by_name);
+    fn every_platform_is_listed_once_in_the_tables_order() {
+        let mut distinct = ids();
+        distinct.sort_unstable();
+        distinct.dedup();
+        assert_eq!(distinct.len(), COUNT, "identifiers are distinct");
+        assert_eq!(IDS.to_vec(), ids());
     }
 
     #[test]
-    fn the_orders_are_the_oracles() {
+    fn the_one_order_is_the_tables() {
         assert_eq!(
-            ids(Order::Container),
+            ids(),
             [
                 "sentinel",
                 "defender_for_endpoint",
@@ -633,60 +484,6 @@ mod tests {
                 "crowdstrike",
                 "harfanglab",
                 "carbon_black_cloud",
-                "elastic",
-                "sysdig",
-                "bitdefender",
-                "graylog",
-                "exabeam",
-                "google_secops"
-            ]
-        );
-        assert_eq!(
-            ids(Order::Cli),
-            [
-                "sentinel",
-                "splunk",
-                "crowdstrike",
-                "defender_for_endpoint",
-                "sentinel_one",
-                "carbon_black_cloud",
-                "harfanglab",
-                "elastic",
-                "sysdig",
-                "bitdefender",
-                "graylog",
-                "exabeam",
-                "google_secops"
-            ]
-        );
-        assert_eq!(
-            ids(Order::Connector),
-            [
-                "sentinel",
-                "defender_for_endpoint",
-                "splunk",
-                "sentinel_one",
-                "carbon_black_cloud",
-                "crowdstrike",
-                "harfanglab",
-                "elastic",
-                "sysdig",
-                "bitdefender",
-                "graylog",
-                "exabeam",
-                "google_secops"
-            ]
-        );
-        assert_eq!(
-            ids(Order::Configuration),
-            [
-                "sentinel",
-                "splunk",
-                "carbon_black_cloud",
-                "sentinel_one",
-                "defender_for_endpoint",
-                "crowdstrike",
-                "harfanglab",
                 "elastic",
                 "sysdig",
                 "bitdefender",
@@ -698,52 +495,42 @@ mod tests {
     }
 
     #[test]
-    fn the_capability_lists_are_the_oracles() {
-        // 0.28.1's STATE_PLATFORMS, in its order (a message quotes it).
+    fn the_capability_lists_are_in_the_tables_order() {
+        // The platforms whose external ids the state stores (a message quotes them).
         assert_eq!(
             state_platforms(),
             [
-                "bitdefender",
-                "crowdstrike",
                 "defender_for_endpoint",
+                "sentinel_one",
+                "crowdstrike",
+                "sysdig",
+                "bitdefender",
                 "graylog",
                 "exabeam",
-                "google_secops",
-                "sentinel_one",
-                "sysdig"
+                "google_secops"
             ]
         );
-        // Exactly the platforms whose external ids the state stores.
-        let mut sorted = state_platforms();
-        sorted.sort_unstable();
         assert_eq!(
-            sorted,
-            ids_where(Order::Name, |p| p.external_id.is_stored())
-        );
-        assert_eq!(
-            ids_where(Order::Name, |p| p.external_id == ExternalId::Int),
+            ids_where(|p| p.external_id == ExternalId::Int),
             ["defender_for_endpoint", "sentinel_one", "sysdig"]
         );
         assert_eq!(
-            ids_where(Order::Name, |p| p.live_check),
+            ids_where(|p| p.live_check),
             [
-                "carbon_black_cloud",
-                "defender_for_endpoint",
-                "elastic",
-                "exabeam",
-                "google_secops",
-                "graylog",
                 "sentinel",
+                "defender_for_endpoint",
+                "splunk",
                 "sentinel_one",
-                "splunk"
+                "carbon_black_cloud",
+                "elastic",
+                "graylog",
+                "exabeam",
+                "google_secops"
             ]
         );
+        assert_eq!(ids_where(|p| p.query_runner).len(), PLATFORMS.len() - 2);
         assert_eq!(
-            ids_where(Order::Name, |p| p.query_runner).len(),
-            PLATFORMS.len() - 2
-        );
-        assert_eq!(
-            ids_where(Order::Container, |p| p.compiles_offline),
+            ids_where(|p| p.compiles_offline),
             [
                 "sentinel",
                 "elastic",

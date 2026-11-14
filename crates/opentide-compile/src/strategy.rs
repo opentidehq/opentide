@@ -3,7 +3,7 @@
 //! (`deployment.toml` `[[statuses]]`), and which runs act on which rules.
 
 use opentide_schema::FromNode;
-use opentide_schema::configuration::errors::model_errors;
+use opentide_schema::configuration::errors::{describe_error, model_errors};
 use opentide_schema::configuration::models::DeploymentConfiguration;
 use opentide_schema::configuration::resolve::Resolved;
 pub use opentide_schema::configuration::types::StatusStrategy;
@@ -75,8 +75,8 @@ fn not_a_run_strategy(name: &str) -> Option<&'static str> {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Statuses(pub Vec<(String, StatusStrategy)>, pub Option<String>);
 
-/// Why `deployment.toml` does not match its model, as the oracle says it
-/// (`ConfigurationError`): every failing key, never a value.
+/// Why `deployment.toml` does not match its model: every failing key, in
+/// the words a configuration check uses ([`describe_error`]), never a value.
 pub fn deployment_error(deployment: &Node) -> Option<String> {
     let mut cx = opentide_schema::from_node::Context::new();
     let _ = DeploymentConfiguration::from_node(deployment, &mut cx);
@@ -87,12 +87,7 @@ pub fn deployment_error(deployment: &Node) -> Option<String> {
     let lines: Vec<String> = model_errors(&errors)
         .into_iter()
         .map(|error| {
-            let message = match error.kind {
-                "extra_forbidden" => "unknown key".to_owned(),
-                "missing" => "required key is missing".to_owned(),
-                _ if error.message.is_empty() => "invalid value".to_owned(),
-                _ => error.message,
-            };
+            let message = describe_error(error.kind, &error.message);
             let place = if error.path.is_empty() {
                 "(document)".to_owned()
             } else {
@@ -164,20 +159,21 @@ impl Statuses {
 /// Why a status has no strategy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StatusError {
-    /// `deployment.toml` does not match its model (`ConfigurationError`).
+    /// `deployment.toml` does not match its model.
     Invalid(String),
-    /// The status is not configured (the oracle's `KeyError`).
+    /// The status is not configured.
     Unknown(String),
 }
 
-impl StatusError {
-    /// The message.
-    pub fn exception_text(&self) -> String {
+impl std::fmt::Display for StatusError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Invalid(message) | Self::Unknown(message) => message.clone(),
+            Self::Invalid(message) | Self::Unknown(message) => f.write_str(message),
         }
     }
 }
+
+impl std::error::Error for StatusError {}
 
 /// Reads `--strategy` values (`parse_strategies`): `PREVIEW` and `RELEASE`, in
 /// any case, comma-separated or repeated; anything else is refused with what to
@@ -332,13 +328,13 @@ mod tests {
             statuses()
                 .strategy("NOPE")
                 .unwrap_err()
-                .exception_text()
+                .to_string()
                 .starts_with("Status \"NOPE\" is not defined")
         );
         let mut invalid = statuses();
         invalid.1 = Some("deployment.toml is invalid: x: unknown key".into());
         assert_eq!(
-            invalid.strategy("PRODUCTION").unwrap_err().exception_text(),
+            invalid.strategy("PRODUCTION").unwrap_err().to_string(),
             "deployment.toml is invalid: x: unknown key"
         );
         assert_eq!(
@@ -415,6 +411,6 @@ mod tests {
             invalid.strategy("A"),
             Err(StatusError::Invalid(error.clone()))
         );
-        assert_eq!(StatusError::Invalid(error.clone()).exception_text(), error);
+        assert_eq!(StatusError::Invalid(error.clone()).to_string(), error);
     }
 }

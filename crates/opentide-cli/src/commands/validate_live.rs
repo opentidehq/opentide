@@ -820,7 +820,7 @@ pub(crate) fn block_strategy(
         .unwrap_or_default();
     let strategy = cx.statuses.strategy(&status).map_err(|error| match error {
         strategy::StatusError::Invalid(message) => message,
-        other @ strategy::StatusError::Unknown(_) => other.exception_text(),
+        other @ strategy::StatusError::Unknown(_) => other.to_string(),
     })?;
     Ok((block, strategy))
 }
