@@ -262,7 +262,7 @@ A report with errors points at `explain` for the first error code, then at `vali
 
 ### The implementation
 
-`opentide mcp start` is the Rust server ([opentide mcp start](../cli/mcp.md#mcp-start)): every tool, schema, resource and answer is the one opentide 0.23.0's Python server gave, and every tool and resource runs in Rust. A few answers are worded by opentide rather than by the Python libraries the Python server used:
+`opentide mcp start` is the Rust server ([opentide mcp start](../cli/mcp.md#mcp-start)): every tool, schema, resource and answer is the one opentide 0.28.1's Python server gave, and every tool and resource runs in Rust. A few answers are worded by opentide rather than by the Python libraries the Python server used:
 
 - An argument that is missing or of the wrong type is refused in opentide's words (`Error executing tool search: argument query is required`, `argument code must be a string, not a number`, `argument live must be a boolean (true or false), not 'sometimes'`, `argument limit must be an integer, not 'many'`), where the Python server quoted Pydantic's validation error.
 - `opentide://index` holds the paths, configuration, vocabularies, generated schemas, templates, objects and files of the workspace; it leaves out the Python registry's internal schema sources (`metaschemas`, `definitions`, `subschemas`) and the Python package's data folders under `paths`. The editor schemas are at `opentide://schemas/{object_type}` once `opentide generate schemas` has written them.

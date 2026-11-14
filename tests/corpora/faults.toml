@@ -5106,5 +5106,5 @@ note = "isolated so the combined workspace the goldens record stays as it was"
 # shrinks: `cargo xtask corpus coverage --check` fails on a pending code that
 # a kind now produces, and on any code in scope that is neither covered nor
 # pending; it must be empty before the train merges into integration (xtask's
-# `nothing_is_pending_without_the_report_only_marker`).
+# `nothing_is_pending`).
 

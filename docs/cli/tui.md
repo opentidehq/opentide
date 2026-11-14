@@ -157,4 +157,4 @@ error: opentide tui runs only in the human output mode; this run is in plain mod
 
 ## Source
 
-`opentide tui` is the command line's UI, on ratatui (`crates/opentide-cli/src/tui/`); the Configuration tab is `crates/opentide-cli/src/tui/configuration.rs`, which redacts every credential and proves the raw view redacted. The Textual UI of opentide 0.23.0 is gone with the Python implementation.
+`opentide tui` is the command line's UI, on ratatui (`crates/opentide-cli/src/tui/`); the Configuration tab is `crates/opentide-cli/src/tui/configuration.rs`, which redacts every credential and proves the raw view redacted. The Textual UI of opentide's Python releases is gone with the Python implementation.

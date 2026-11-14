@@ -129,31 +129,6 @@ pub fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// The catch-up train's report-only marker (`xtask`'s
-/// `golden::report_only`): while `tests/golden/REPORT_ONLY` is committed,
-/// the golden-diff tests print their differences and pass, because every
-/// platform ported onto the train before the oracle moves (O2) adds explain
-/// pages and codes the 0.23.0 recordings do not have. The unit, fixture and
-/// cassette tests and the ledger's own check still gate.
-pub fn report_only() -> bool {
-    repo().join("tests/golden/REPORT_ONLY").is_file()
-}
-
-/// `problems`, unless the repository is report-only ([`report_only`]): then
-/// they are printed and the test passes. `ran` is unaffected.
-pub fn gate(problems: Vec<String>) -> Vec<String> {
-    if report_only() && !problems.is_empty() {
-        eprintln!(
-            "tests/golden/REPORT_ONLY is present: {} golden difference(s) reported, not failed \
-             (the catch-up train; O2 re-records from the 0.28.x oracle):\n\n{}",
-            problems.len(),
-            problems.join("\n\n")
-        );
-        return Vec::new();
-    }
-    problems
-}
-
 #[derive(Clone, Default)]
 pub struct Buffer(pub Arc<Mutex<Vec<u8>>>);
 
@@ -914,7 +889,7 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
             }
         }
     }
-    (gate(problems), ran)
+    (problems, ran)
 }
 
 /// Replays the `variant` case (`help`) of every command path in every mode
@@ -958,5 +933,5 @@ pub fn replay_variant(variant: &str) -> (Vec<String>, usize) {
             ));
         }
     }
-    (gate(problems), ran)
+    (problems, ran)
 }

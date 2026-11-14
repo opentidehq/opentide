@@ -21,10 +21,10 @@ leading parts (`validate/*` is every `validate` case; `*` never crosses a `/`). 
 
 ### A preview of the next oracle
 
-`ORACLE.next` names the next oracle (opentide 0.28.1, while its features are ported; O1 of
-`docs/internal/catchup-0.28-plan.md`), in `ORACLE`'s format, with its own requirements,
-`oracle-requirements.next.txt`. Nothing committed is recorded from it: a port compares its work
-with it in a directory of its own.
+A file in `ORACLE`'s format that names another release, with its own requirements beside it
+(say `ORACLE.next` and `oracle-requirements.next.txt`), is a preview of the next oracle. Nothing
+committed is recorded from it: a change compares its work with it in a directory of its own,
+before the oracle moves.
 
 ```bash
 cargo xtask golden lock --oracle tests/golden/ORACLE.next          # its requirements, beside it
@@ -39,9 +39,7 @@ refused, and so is `record --oracle` without `--out`. `check --recordings DIR` a
 --recordings DIR` compare with those recordings and DIR's oracle, without the `COVERAGE.md`
 check, and with `--engine rust` without the stale-ledger check (the ledger approves differences
 from the committed oracle). `cargo xtask cassettes record --oracle FILE` and `cargo xtask mcp
-record --oracle FILE` take the same file. CI's `Golden preview` job
-(`.github/workflows/golden-preview.yml`) runs the record and the check on `train/catchup-0.28`,
-report only.
+record --oracle FILE` take the same file.
 
 ## Review rules
 
