@@ -56,6 +56,39 @@ impl Json {
         }
     }
 
+    /// The value of a boolean.
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Json::Bool(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    /// A whole number that is not negative.
+    pub fn as_u64(&self) -> Option<u64> {
+        match self {
+            Json::Int(value) => u64::try_from(*value).ok(),
+            Json::UInt(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    /// The items of an array.
+    pub fn as_array(&self) -> Option<&[Json]> {
+        match self {
+            Json::Array(items) => Some(items),
+            _ => None,
+        }
+    }
+
+    /// The members of an object, in order.
+    pub fn as_object(&self) -> Option<&[(String, Json)]> {
+        match self {
+            Json::Object(members) => Some(members),
+            _ => None,
+        }
+    }
+
     /// The value of `key` in an object.
     pub fn get(&self, key: &str) -> Option<&Json> {
         match self {

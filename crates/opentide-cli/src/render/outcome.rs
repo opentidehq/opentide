@@ -9,7 +9,6 @@
 //! whole; at a terminal narrower than a line it is broken between words, never
 //! inside one, and continued under its text.
 
-use super::codeframe::quoted;
 use super::text::{Color, Colour, Style, Text, cell_len, char_width};
 use super::{brand, glyphs};
 use crate::envelope::NextAction;
@@ -438,12 +437,12 @@ pub fn render_result(
     } else if kind == OutcomeKind::Failed {
         if let Some((_, Some(suggestion))) = &result.failure
             && !suggestion.is_empty()
-            && !result.message.contains(&quoted(suggestion))
+            // Unless the message already offers it, as a quoted choice.
+            && ![format!("'{suggestion}'"), format!("{suggestion:?}")]
+                .iter()
+                .any(|offered| result.message.contains(offered.as_str()))
         {
-            notes.push((
-                "help".to_owned(),
-                format!("did you mean {}?", quoted(suggestion)),
-            ));
+            notes.push(("help".to_owned(), format!("did you mean {suggestion:?}?")));
         }
         err.push_str(&stderr.error(&result.message, &notes, mode, false));
         if !quiet {
@@ -590,8 +589,21 @@ mod tests {
         let (_, err) = render_result(&result, PIPE, PIPE, Mode::Plain, false);
         assert_eq!(
             err,
-            "warning: w\nerror: No such type\n  help: look\n  help: did you mean 'rule'?\n→ opentide x · why\n"
+            "warning: w\nerror: No such type\n  help: look\n  help: did you mean \"rule\"?\n→ opentide x · why\n"
         );
+        // A message that already offers the suggestion as a quoted choice is not repeated.
+        for message in [
+            "'rul' is not one of 'rule', 'threat'.",
+            "No such type \"rul\"; \"rule\" is",
+        ] {
+            result.message = message.into();
+            let (_, err) = render_result(&result, PIPE, PIPE, Mode::Plain, false);
+            assert!(!err.contains("did you mean"), "{err}");
+        }
+        // A bare word in the message is not an offer.
+        result.message = "Unknown section: rulez. Choose rule, threat.".into();
+        let (_, err) = render_result(&result, PIPE, PIPE, Mode::Plain, false);
+        assert!(err.contains("help: did you mean \"rule\"?"), "{err}");
         let numbered = ResultView {
             message: "Created X here".into(),
             status: "completed".into(),
