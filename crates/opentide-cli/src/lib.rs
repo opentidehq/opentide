@@ -1,3 +1,4 @@
+// [throwaway] PR gate measurement (#1141): do not merge.
 //! The opentide command line (plan D-3, ADR 0003): one `main(argv)` for the
 //! standalone binary and the Python and npm launchers.
 //!
