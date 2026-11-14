@@ -11,7 +11,7 @@
 //! code scanning and Code Quality both need a file; the job log and the
 //! summary still carry it.
 
-use super::codeframe::{PATH_SAFE, quote, quoted};
+use super::codeframe::PATH_SAFE;
 use super::diagnostic::{Diagnostic, Severity};
 use super::summary::{DIAGNOSTICS_DOCS_URL, explain_url};
 use crate::envelope::{Failure, code};
@@ -204,7 +204,10 @@ fn int(value: usize) -> Json {
 /// so a space, `#` or `%` is percent-encoded and `/` stays a separator.
 pub fn artifact_location(path: &str) -> Json {
     Json::object([
-        ("uri", Json::str(quote(path, PATH_SAFE))),
+        (
+            "uri",
+            Json::str(percent_encoding::utf8_percent_encode(path, PATH_SAFE).to_string()),
+        ),
         ("uriBaseId", Json::str(SRCROOT)),
     ])
 }
@@ -279,7 +282,7 @@ fn sarif_fixes(diagnostic: &Diagnostic, path: &str) -> Option<Json> {
     let values: Vec<String> = fix
         .edits
         .iter()
-        .map(|edit| quoted(&edit.replacement))
+        .map(|edit| format!("{:?}", edit.replacement))
         .collect();
     let mut description = format!("Replace with {}", values.join(", "));
     if fix.safe {

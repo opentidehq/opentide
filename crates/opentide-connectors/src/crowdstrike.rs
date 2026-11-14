@@ -17,6 +17,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use opentide_compile::Json;
+use opentide_compile::deploy::PATH_SEGMENT;
+use percent_encoding::utf8_percent_encode;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
@@ -28,7 +30,7 @@ use crate::connector::{
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
 use crate::retry::RetryPolicy;
-use crate::{Secret, TenantLabel, encode};
+use crate::{Secret, TenantLabel};
 
 /// The platform's identifier.
 pub const PLATFORM: &str = "crowdstrike";
@@ -104,10 +106,12 @@ impl<'a> Session<'a> {
         let base = base_api(cx)?;
         let client_id = cx.tenant.secret("client_id")?;
         let client_secret = cx.tenant.secret("client_secret")?;
-        let form = encode::urlencode([
-            ("client_id", client_id.expose()),
-            ("client_secret", client_secret.expose()),
-        ]);
+        let form = url::form_urlencoded::Serializer::new(String::new())
+            .extend_pairs([
+                ("client_id", client_id.expose()),
+                ("client_secret", client_secret.expose()),
+            ])
+            .finish();
         let request = build(
             cx.http
                 .request(
@@ -257,7 +261,9 @@ impl<'a> Session<'a> {
         let url = format!(
             "{}{RULES}?{}",
             self.base,
-            encode::urlencode([("ids", rule_id)])
+            url::form_urlencoded::Serializer::new(String::new())
+                .extend_pairs([("ids", rule_id)])
+                .finish()
         );
         let answer = self
             .send(
@@ -294,7 +300,7 @@ impl<'a> Session<'a> {
         let jobs = format!(
             "{}/humio/api/v1/repositories/{}/queryjobs",
             self.base,
-            encode::segment(repository)
+            utf8_percent_encode(repository, PATH_SEGMENT)
         );
         let sent = cql_with_limit(&request.text, request.limit);
         let start = JobStart {
@@ -326,7 +332,7 @@ impl<'a> Session<'a> {
                 None,
             ));
         }
-        let status_url = format!("{jobs}/{}", encode::segment(&job_id));
+        let status_url = format!("{jobs}/{}", utf8_percent_encode(&job_id, PATH_SEGMENT));
         let status = match self.wait(&status_url, request).await {
             Ok(status) => status,
             Err(error) => {

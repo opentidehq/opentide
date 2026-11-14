@@ -27,7 +27,7 @@
 
 use super::diagnostic::{Diagnostic, Severity, Sources, relative_path, sort_diagnostics};
 use super::glyphs;
-use super::text::{Colour, Style, Text, cell_len, char_width};
+use super::text::{Color, Colour, Style, Text, cell_len, char_width};
 use crate::env::Env;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use std::collections::HashMap;
@@ -67,27 +67,29 @@ pub fn engine_reference(code: &str) -> Option<(&'static str, &'static str)> {
 
 /// The style of a severity's header and underline.
 fn severity_style(severity: Severity) -> Style {
-    Style::new(match severity {
-        Severity::Error => "bold red",
-        Severity::Warning => "bold yellow",
-        Severity::Note => "bold blue",
-    })
+    match severity {
+        Severity::Error => Style::fg(Color::Red).bold(),
+        Severity::Warning => Style::fg(Color::Yellow).bold(),
+        Severity::Note => Style::fg(Color::Blue).bold(),
+    }
 }
 
 fn note_style(label: &str) -> Style {
-    Style::new(match label {
-        "help" | "fix" => "bold cyan",
-        "note" => "bold blue",
-        _ => "bold",
-    })
+    match label {
+        "help" | "fix" => Style::fg(Color::Cyan).bold(),
+        "note" => Style::fg(Color::Blue).bold(),
+        _ => Style::BOLD,
+    }
 }
 
 fn gutter_style() -> Style {
-    Style::new("blue")
+    Style::fg(Color::Blue)
 }
 
-/// What a path keeps unencoded in a link or a SARIF URI: letters, digits,
-/// `_.-~` and the `/` separator, as `urllib.parse.quote(path)` keeps them.
+/// What a path keeps unencoded in a link or a SARIF URI: the RFC 3986
+/// unreserved characters (letters, digits, `_.-~`) and the `/` separator.
+/// SARIF readers compare these URIs as text, so the set is part of the
+/// report's contract.
 pub const PATH_SAFE: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'_')
     .remove(b'.')
@@ -97,11 +99,6 @@ pub const PATH_SAFE: &AsciiSet = &NON_ALPHANUMERIC
 
 /// [`PATH_SAFE`] and `:`, for an editor link's `path:line:column`.
 pub const EDITOR_SAFE: &AsciiSet = &PATH_SAFE.remove(b':');
-
-/// `text` percent-encoded as UTF-8, every byte outside `safe` as `%XX`.
-pub fn quote(text: &str, safe: &'static AsciiSet) -> String {
-    utf8_percent_encode(text, safe).to_string()
-}
 
 /// The OSC 8 target for a location: `file://` unless the editor can open a line.
 ///
@@ -141,9 +138,9 @@ pub fn link_url(
         } else {
             format!("/{posix}")
         };
-        return Some(format!("file://{}", quote(&posix, PATH_SAFE)));
+        return Some(format!("file://{}", utf8_percent_encode(&posix, PATH_SAFE)));
     }
-    let mut target = quote(&posix, EDITOR_SAFE);
+    let mut target = utf8_percent_encode(&posix, EDITOR_SAFE).to_string();
     if let Some(line) = line {
         target.push_str(&format!(":{line}"));
         if let Some(column) = column {
@@ -209,12 +206,12 @@ fn location(diagnostic: &Diagnostic, cwd: &Path) -> Option<String> {
     Some(shown)
 }
 
-/// A quoted value, as the fix note, `fixed:` and "did you mean" show it.
-///
-/// Quoted as Python's `repr` quotes (`'clear'`, `"it's"`), with what is inside
+/// A value quoted as Python's `repr` quotes (`'clear'`, `"it's"`), with what is inside
 /// escaped by [`str::escape_debug`]: a character that is not printable reads
 /// `\u{a0}` or `\u{1b}` (Python wrote `\xa0`), and only the quote that
-/// delimits the value is escaped.
+/// delimits the value is escaped. Kept only for `explain`'s unknown-code
+/// message (`commands/explain.rs`) until it quotes with `{:?}` as every other
+/// message does; then this goes.
 pub fn quoted(text: &str) -> String {
     let (quote, other) = if text.contains('\'') && !text.contains('"') {
         ('"', '\'')
@@ -251,7 +248,7 @@ fn notes(diagnostic: &Diagnostic) -> Vec<(String, String)> {
         let values: Vec<String> = fix
             .edits
             .iter()
-            .map(|edit| quoted(&edit.replacement))
+            .map(|edit| format!("{:?}", edit.replacement))
             .collect();
         notes.push((
             "fix".to_owned(),
@@ -384,16 +381,16 @@ pub trait LineStyles {
 /// HighlightSpec capture → terminal style, for the query lines of a frame.
 /// Captures not listed (variables, properties, punctuation, Tide keys) keep the
 /// terminal's colour.
-pub fn query_style(capture: &str) -> Option<&'static str> {
+pub fn query_style(capture: &str) -> Option<Style> {
     Some(match capture {
-        "keyword" | "operator.pipe" => "bold magenta",
-        "operator" => "magenta",
-        "function" | "function.builtin" | "macro" => "cyan",
-        "type" => "bright_cyan",
-        "string" => "green",
-        "number" | "boolean" | "constant" => "yellow",
-        "comment" => "dim",
-        "error" => "red",
+        "keyword" | "operator.pipe" => Style::fg(Color::Magenta).bold(),
+        "operator" => Style::fg(Color::Magenta),
+        "function" | "function.builtin" | "macro" => Style::fg(Color::Cyan),
+        "type" => Style::fg(Color::BrightCyan),
+        "string" => Style::fg(Color::Green),
+        "number" | "boolean" | "constant" => Style::fg(Color::Yellow),
+        "comment" => Style::DIM,
+        "error" => Style::fg(Color::Red),
         _ => return None,
     })
 }
@@ -434,7 +431,7 @@ impl QueryHighlighter {
             by_line
                 .entry(line)
                 .or_default()
-                .push((column, end_column, Style::new(style)));
+                .push((column, end_column, style));
         }
         by_line
     }
@@ -487,7 +484,7 @@ impl Frames {
         mut styles: Option<&mut dyn LineStyles>,
     ) -> Vec<Text> {
         let style = severity_style(diagnostic.severity);
-        let bold = Style::new("bold");
+        let bold = Style::BOLD;
         let mut header = Text::default();
         header.append(
             &format!("{}[{}]", diagnostic.severity.as_str(), diagnostic.code),
@@ -763,16 +760,17 @@ pub fn render_diff(diff: &str, colour: Colour) -> String {
     }
     let mut out = String::new();
     for raw in diff.lines() {
-        let style = [
-            ("+++", "bold"),
-            ("---", "bold"),
-            ("@@", "cyan"),
-            ("+", "green"),
-            ("-", "red"),
-        ]
-        .iter()
-        .find(|(prefix, _)| raw.starts_with(prefix))
-        .map_or_else(Style::default, |(_, style)| Style::new(style));
+        let style = if raw.starts_with("+++") || raw.starts_with("---") {
+            Style::BOLD
+        } else if raw.starts_with("@@") {
+            Style::fg(Color::Cyan)
+        } else if raw.starts_with('+') {
+            Style::fg(Color::Green)
+        } else if raw.starts_with('-') {
+            Style::fg(Color::Red)
+        } else {
+            Style::PLAIN
+        };
         let mut line = Text::styled(raw, &style);
         line.expand_tabs();
         out.push_str(&line.render(colour, false));
@@ -799,7 +797,7 @@ pub struct FixedValue {
     pub after: String,
 }
 
-/// `fixed: objects/rules/x.yaml:8:8 'clearr' → 'clear'`, one line per value replaced.
+/// `fixed: objects/rules/x.yaml:8:8 "clearr" → "clear"`, one line per value replaced.
 pub fn render_fixed(changes: &[FixedValue], cwd: &Path, colour: Colour) -> String {
     if changes.is_empty() {
         return String::new();
@@ -811,15 +809,13 @@ pub fn render_fixed(changes: &[FixedValue], cwd: &Path, colour: Colour) -> Strin
             shown.clone_from(&change.path);
         }
         let mut line = Text::default();
-        line.append("fixed:", &Style::new("bold green"));
+        line.append("fixed:", &Style::fg(Color::Green).bold());
         line.push_str(&format!(
-            " {shown}:{}:{} {} ",
-            change.line,
-            change.column,
-            quoted(&change.before)
+            " {shown}:{}:{} {:?} ",
+            change.line, change.column, change.before
         ));
         line.push_str(glyphs::NEXT);
-        line.push_str(&format!(" {}", quoted(&change.after)));
+        line.push_str(&format!(" {:?}", change.after));
         out.push_str(&line.render(colour, false));
         out.push('\n');
     }
@@ -834,10 +830,10 @@ mod tests {
     #[test]
     fn quote_matches_python() {
         assert_eq!(
-            quote("/a b#c/名.yaml", PATH_SAFE),
+            utf8_percent_encode("/a b#c/名.yaml", PATH_SAFE).to_string(),
             "/a%20b%23c/%E5%90%8D.yaml"
         );
-        assert_eq!(quote("C:/x", EDITOR_SAFE), "C:/x");
+        assert_eq!(utf8_percent_encode("C:/x", EDITOR_SAFE).to_string(), "C:/x");
     }
 
     #[test]
@@ -1111,13 +1107,13 @@ mod tests {
         let styles = styled_line("q.kql", text, 1);
         let string = styles
             .iter()
-            .find(|(_, _, style)| *style == Style::new("green"))
+            .find(|(_, _, style)| *style == Style::fg(Color::Green))
             .map(|(column, end, _)| (*column, *end));
         // `"é名"` runs from column 19 up to 23 (exclusive).
         assert_eq!(string, Some((19, 23)), "{styles:?}");
         let number = styles
             .iter()
-            .find(|(_, _, style)| *style == Style::new("yellow"))
+            .find(|(_, _, style)| *style == Style::fg(Color::Yellow))
             .map(|(column, end, _)| (*column, *end));
         assert_eq!(number, Some((36, 37)), "{styles:?}");
         // A token over two lines is left without colour on both.
@@ -1127,7 +1123,7 @@ mod tests {
             assert!(
                 styles
                     .iter()
-                    .all(|(_, _, style)| *style != Style::new("green")),
+                    .all(|(_, _, style)| *style != Style::fg(Color::Green)),
                 "line {line}: {styles:?}"
             );
         }
@@ -1158,12 +1154,12 @@ mod tests {
                 &base.join("ws"),
                 Colour::None
             ),
-            "fixed: objects/x.yaml:8:8 'clearr' → 'clear'\n\n"
+            "fixed: objects/x.yaml:8:8 \"clearr\" → \"clear\"\n\n"
         );
         // Outside the current directory: the workspace path.
         assert_eq!(
             render_fixed(&[change], &base.join("elsewhere"), Colour::None),
-            "fixed: objects/x.yaml:8:8 'clearr' → 'clear'\n\n"
+            "fixed: objects/x.yaml:8:8 \"clearr\" → \"clear\"\n\n"
         );
         assert_eq!(render_fixed(&[], Path::new("/"), Colour::None), "");
     }

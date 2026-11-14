@@ -216,7 +216,7 @@ mod tests {
     fn help_is_the_only_help_option_and_no_subcommand() {
         let text = help("validate");
         assert!(
-            text.contains("      --help\n          Show this message and exit.\n"),
+            text.contains("      --help\n          Print help\n"),
             "{text}"
         );
         assert!(!text.contains("-h,"), "{text}");

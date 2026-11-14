@@ -177,64 +177,40 @@ pub fn diagnostics_summary(
     lines.join("\n") + "\n"
 }
 
-/// Python's truth value of a JSON value.
-fn truthy(value: Option<&Json>) -> bool {
-    match value {
-        None | Some(Json::Null) => false,
-        Some(Json::Bool(value)) => *value,
-        Some(Json::Int(value)) => *value != 0,
-        Some(Json::UInt(value)) => *value != 0,
-        Some(Json::Float(value)) => *value != 0.0,
-        Some(Json::Str(value)) => !value.is_empty(),
-        Some(Json::Array(items)) => !items.is_empty(),
-        Some(Json::Object(members)) => !members.is_empty(),
-    }
+/// The string at `key` of an object, or `""`.
+fn text<'a>(value: &'a Json, key: &str) -> &'a str {
+    value.get(key).and_then(Json::as_str).unwrap_or_default()
 }
 
-/// A JSON value as text: a string as it is, anything else as its JSON.
-fn value_text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => crate::json::document_text(other, false)
-            .trim_end()
-            .to_owned(),
-    }
+/// The items of the array at `key` of an object; none when it is not an array.
+fn array<'a>(value: &'a Json, key: &str) -> &'a [Json] {
+    value.get(key).and_then(Json::as_array).unwrap_or_default()
 }
 
-/// Python's `len()` of a JSON value.
-fn py_len(value: &Json) -> usize {
-    match value {
-        Json::Str(text) => text.chars().count(),
-        Json::Array(items) => items.len(),
-        Json::Object(members) => members.len(),
-        _ => 0,
-    }
+/// The members of the object at `key` of an object; none when it is not an object.
+fn members<'a>(value: &'a Json, key: &str) -> &'a [(String, Json)] {
+    value.get(key).and_then(Json::as_object).unwrap_or_default()
 }
 
-fn members(value: Option<&Json>) -> &[(String, Json)] {
-    match value {
-        Some(Json::Object(members)) => members,
-        _ => &[],
-    }
+/// The strings of an array, skipping anything else.
+fn strings(items: &[Json]) -> impl Iterator<Item = &str> {
+    items.iter().filter_map(Json::as_str)
 }
 
-fn items(value: Option<&Json>) -> Vec<&Json> {
-    match value {
-        Some(Json::Array(items)) => items.iter().collect(),
-        Some(Json::Object(members)) => members.iter().map(|(_, value)| value).collect(),
-        _ => Vec::new(),
-    }
+/// The number of items of an array, `0` for anything else.
+fn len(value: &Json) -> usize {
+    value.as_array().map_or(0, <[Json]>::len)
 }
 
 fn status_kind(result: &Json) -> &'static str {
-    let status = result.get("status").map(value_text).unwrap_or_default();
-    if status == "failed" || result.get("ok") == Some(&Json::Bool(false)) {
+    let status = text(result, "status");
+    if status == "failed" || result.get("ok").and_then(Json::as_bool) == Some(false) {
         return "failed";
     }
     if status == "skipped" {
         return "skipped";
     }
-    if truthy(result.get("warnings")) {
+    if !array(result, "warnings").is_empty() {
         return "warning";
     }
     "ok"
@@ -279,11 +255,9 @@ pub fn fit(markdown: &str, limit: usize) -> String {
 }
 
 fn strategies_line(result: &Json, lines: &mut Vec<String>) {
-    if truthy(result.get("strategies")) {
-        let named: Vec<String> = items(result.get("strategies"))
-            .into_iter()
-            .map(|item| code(&value_text(item)))
-            .collect();
+    let strategies = array(result, "strategies");
+    if !strategies.is_empty() {
+        let named: Vec<String> = strings(strategies).map(code).collect();
         lines.push(String::new());
         lines.push(format!("Strategies: {}", named.join(", ")));
     }
@@ -292,26 +266,20 @@ fn strategies_line(result: &Json, lines: &mut Vec<String>) {
 fn message_line(result: &Json, message: Option<&str>) -> String {
     match message.filter(|message| !message.is_empty()) {
         Some(message) => cell(message),
-        None => cell(&result.get("message").map(value_text).unwrap_or_default()),
+        None => cell(text(result, "message")),
     }
 }
 
 fn rule_line(uuid: &str, entry: Option<&Json>) -> String {
-    let Some(entry) = entry.filter(|entry| truthy(entry.get("name"))) else {
+    let Some(entry) = entry.filter(|entry| !text(entry, "name").is_empty()) else {
         return format!("- {}", code(uuid));
     };
-    let mut line = format!(
-        "- {} ({})",
-        cell(&entry.get("name").map(value_text).unwrap_or_default()),
-        code(uuid)
-    );
-    if entry.get("status").map(value_text).as_deref() == Some("failed")
-        && truthy(entry.get("error"))
-    {
-        let error = entry.get("error").map(value_text).unwrap_or_default();
+    let mut line = format!("- {} ({})", cell(text(entry, "name")), code(uuid));
+    let error = text(entry, "error");
+    if text(entry, "status") == "failed" && !error.is_empty() {
         line.push_str(&format!(
             " — would fail: {}",
-            cell(&shorten(&error, MAX_ERROR_LINES, MAX_ERROR_CHARS))
+            cell(&shorten(error, MAX_ERROR_LINES, MAX_ERROR_CHARS))
         ));
     }
     line
@@ -321,7 +289,8 @@ fn rule_line(uuid: &str, entry: Option<&Json>) -> String {
 /// `dry_run` is the command's flag; a payload from a deploy that failed early
 /// may not carry it.
 pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool>) -> String {
-    let dry_run = dry_run.unwrap_or_else(|| truthy(result.get("dry_run")));
+    let dry_run =
+        dry_run.unwrap_or_else(|| result.get("dry_run").and_then(Json::as_bool) == Some(true));
     let title = if dry_run {
         "opentide deploy --dry-run"
     } else {
@@ -333,38 +302,32 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
         message_line(result, message),
     ];
     strategies_line(result, &mut lines);
-    let plan = members(result.get("plan"));
+    let plan = members(result, "plan");
     if plan.is_empty() {
         return lines.join("\n") + "\n";
     }
-    let tenants = members(result.get("tenants"));
-    let deployed: Vec<String> = items(result.get("deployed"))
-        .into_iter()
-        .map(value_text)
-        .collect();
+    let tenants = members(result, "tenants");
+    let deployed: Vec<&str> = strings(array(result, "deployed")).collect();
     let mut rows: Vec<Vec<String>> = Vec::new();
     for (platform, uuids) in plan {
         let reach = tenants
             .iter()
             .find(|(name, _)| name == platform)
-            .map(|(_, value)| value);
+            .and_then(|(_, value)| value.as_object())
+            .unwrap_or_default();
         match reach {
-            Some(Json::Object(reach)) if !reach.is_empty() => {
+            reach if !reach.is_empty() => {
                 for (tenant, rules) in reach {
-                    rows.push(vec![
-                        code(platform),
-                        cell(tenant),
-                        py_len(rules).to_string(),
-                    ]);
+                    rows.push(vec![code(platform), cell(tenant), len(rules).to_string()]);
                 }
             }
             _ if dry_run => rows.push(vec![
                 code(platform),
                 "none".to_owned(),
-                py_len(uuids).to_string(),
+                len(uuids).to_string(),
             ]),
             _ => {
-                let done = if deployed.contains(platform) {
+                let done = if deployed.contains(&platform.as_str()) {
                     "deployed"
                 } else {
                     "not deployed"
@@ -372,7 +335,7 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
                 rows.push(vec![
                     code(platform),
                     done.to_owned(),
-                    py_len(uuids).to_string(),
+                    len(uuids).to_string(),
                 ]);
             }
         }
@@ -385,24 +348,21 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
     };
     let shown: Vec<Vec<String>> = rows.iter().take(MAX_ROWS).cloned().collect();
     lines.extend(table(&header, &shown, rows.len()));
-    let payloads = members(result.get("payloads"));
+    let payloads = members(result, "payloads");
     for (platform, uuids) in plan {
-        let entries: Vec<&Json> = payloads
+        let entries: &[Json] = payloads
             .iter()
             .find(|(name, _)| name == platform)
-            .map(|(_, value)| items(Some(value)))
+            .and_then(|(_, value)| value.as_array())
             .unwrap_or_default();
         let named = |uuid: &str| -> Option<&Json> {
             entries
                 .iter()
                 .rev()
-                .find(|entry| {
-                    matches!(entry, Json::Object(_))
-                        && entry.get("uuid").map(value_text).as_deref() == Some(uuid)
-                })
-                .copied()
+                .find(|entry| entry.get("uuid").and_then(Json::as_str) == Some(uuid))
         };
-        let count = py_len(uuids);
+        let uuids = uuids.as_array().unwrap_or_default();
+        let count = uuids.len();
         let noun = if count == 1 { "rule" } else { "rules" };
         // An HTML block: Markdown escapes would show, so HTML escaping only.
         lines.push(String::new());
@@ -411,9 +371,8 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
             html_escape(platform, true)
         ));
         lines.push(String::new());
-        for uuid in items(Some(uuids)).into_iter().take(MAX_ROWS) {
-            let uuid = value_text(uuid);
-            lines.push(rule_line(&uuid, named(&uuid)));
+        for uuid in strings(uuids).take(MAX_ROWS) {
+            lines.push(rule_line(uuid, named(uuid)));
         }
         if count > MAX_ROWS {
             lines.push(format!("- … and {} more", count - MAX_ROWS));
@@ -426,7 +385,7 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
 
 /// Live query validation: queries sent per tenant, and the verdict.
 pub fn query_summary(result: &Json, message: Option<&str>) -> String {
-    let platform = result.get("platform").map(value_text).unwrap_or_default();
+    let platform = text(result, "platform");
     let title = format!("opentide validate query --platform {platform}")
         .trim_end()
         .to_owned();
@@ -436,11 +395,16 @@ pub fn query_summary(result: &Json, message: Option<&str>) -> String {
         message_line(result, message),
     ];
     strategies_line(result, &mut lines);
-    let reach = members(result.get("queries_per_tenant"));
+    let reach = members(result, "queries_per_tenant");
     if !reach.is_empty() {
         let rows: Vec<Vec<String>> = reach
             .iter()
-            .map(|(tenant, count)| vec![cell(tenant), value_text(count)])
+            .map(|(tenant, count)| {
+                let count = count
+                    .as_u64()
+                    .map_or_else(String::new, |count| count.to_string());
+                vec![cell(tenant), count]
+            })
             .collect();
         lines.push(String::new());
         let shown: Vec<Vec<String>> = rows.iter().take(MAX_ROWS).cloned().collect();
@@ -473,6 +437,59 @@ mod tests {
         assert_eq!(code("a`"), "`` a` ``");
         assert_eq!(code("`a"), "`` `a ``");
         assert_eq!(code("a"), "`a`");
+    }
+
+    #[test]
+    fn a_dry_run_summary_reads_the_plan_tenants_and_payloads() {
+        let result = Json::parse(
+            r#"{
+              "dry_run": true, "status": "failed", "ok": false,
+              "message": "Plan: 1 to create", "strategies": ["PREVIEW", 7],
+              "plan": {"sentinel": ["u1", "u2"], "splunk": ["u3"]},
+              "tenants": {"sentinel": {"prod": ["u1", "u2"], "dev": ["u1"]}},
+              "payloads": {"sentinel": [
+                {"uuid": "u1", "name": "Rule <one>", "status": "failed", "error": "bad\nduration"},
+                {"uuid": "u2", "name": ""}
+              ]}
+            }"#,
+        )
+        .unwrap();
+        let summary = deploy_summary(&result, None, None);
+        assert_eq!(
+            summary,
+            "### ✗ opentide deploy --dry-run\n\nPlan: 1 to create\n\nStrategies: `PREVIEW`\n\n\
+             | Platform | Tenant | Rules |\n|---|---|---|\n\
+             | `sentinel` | prod | 2 |\n| `sentinel` | dev | 1 |\n| `splunk` | none | 1 |\n\n\
+             <details><summary>sentinel: 2 rules</summary>\n\n\
+             - Rule &lt;one&gt; (`u1`) — would fail: bad<br>duration\n- `u2`\n\n</details>\n\n\
+             <details><summary>splunk: 1 rule</summary>\n\n- `u3`\n\n</details>\n"
+        );
+        // A real run says which platforms were deployed; `dry_run` false.
+        let real = Json::parse(
+            r#"{"dry_run": false, "status": "completed", "warnings": ["w"],
+                "plan": {"sentinel": ["u1"], "splunk": ["u2"]}, "deployed": ["sentinel"]}"#,
+        )
+        .unwrap();
+        let summary = deploy_summary(&real, Some("done"), None);
+        assert!(
+            summary.starts_with("### ! opentide deploy\n\ndone\n"),
+            "{summary}"
+        );
+        assert!(summary.contains("| `sentinel` | deployed | 1 |\n| `splunk` | not deployed | 1 |"));
+    }
+
+    #[test]
+    fn a_query_summary_counts_queries_per_tenant() {
+        let result = Json::parse(
+            r#"{"platform": "splunk", "status": "completed", "ok": true,
+                "queries_per_tenant": {"prod": 2, "<dev>": 1}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            query_summary(&result, None),
+            "### ✓ opentide validate query --platform splunk\n\n \n\n\
+             | Tenant | Queries |\n|---|---|\n| prod | 2 |\n| &lt;dev&gt; | 1 |\n"
+        );
     }
 
     #[test]

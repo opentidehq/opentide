@@ -5,7 +5,8 @@
 //! Two implementations:
 //!
 //! - `ReqwestTransport` (every target but WASI, the default): reqwest on rustls, with the
-//!   tenant's TLS, CA bundles, proxies, connect and read timeouts, HTTP/1.1.
+//!   tenant's TLS, CA bundles, proxies, connect and read timeouts; HTTP/2
+//!   when the tenant offers it (ALPN), else HTTP/1.1.
 //!   It is the client opentide always had, moved under the trait: what it
 //!   sends and how it fails are unchanged, so the cassettes and goldens are.
 //! - a transport the run installs ([`install`]): `opentide serve` installs
@@ -604,18 +605,20 @@ impl ReqwestTransport {
     /// A CA bundle that does not read, or a proxy that does not parse.
     pub fn new(spec: &TransportSpec<'_>) -> Result<Self, String> {
         let settings = spec.settings;
-        let tls = crate::tls::client_config(&settings.tls, spec.env)?;
+        let mut tls = crate::tls::client_config(&settings.tls, spec.env)?;
+        // A preconfigured TLS backend offers only the protocols it names:
+        // HTTP/2 when the tenant (or its gateway) speaks it, else HTTP/1.1.
+        tls.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        let connect_timeout = settings.timeout;
         let mut builder = reqwest::Client::builder()
             .tls_backend_preconfigured(tls)
-            .http1_only()
-            .connect_timeout(settings.timeout)
-            // reqwest's read timeout runs from the start of the request, the
-            // connection included, so at `timeout` it would race the connect
-            // timeout and report a tenant that cannot be reached as a slow
-            // one. `requests` gives the answer `timeout` once connected (at
-            // most twice `timeout` from the start); the body's reads are held
-            // to `timeout` each below.
-            .read_timeout(settings.timeout.saturating_mul(2))
+            .connect_timeout(connect_timeout)
+            // reqwest starts its read timer with the request, the connection
+            // included: the answer's head gets `timeout` once the connect
+            // timeout has run, so a tenant that cannot be reached is reported
+            // as one (a connect failure), never as a slow answer. The body's
+            // reads are held to `timeout` each below.
+            .read_timeout(connect_timeout.saturating_add(settings.timeout))
             .no_proxy();
         for proxy in spec.proxies.proxies()? {
             builder = builder.proxy(proxy);

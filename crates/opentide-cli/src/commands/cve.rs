@@ -18,9 +18,8 @@ use crate::env::Env;
 /// The Python module whose events this port logs.
 const LOGGER: &str = "opentide.validation.cve_check";
 
-/// The `[cve]` settings (`load_cve_settings`): read leniently, each value
-/// that is missing or of the wrong type taking its default, as the oracle's
-/// `dict.get` reads them.
+/// The `[cve]` settings of `documentation.toml`: each one that is missing
+/// takes its default, and one of the wrong type is refused.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Settings {
     /// The instance asked, without a trailing `/`.
@@ -41,71 +40,52 @@ impl Default for Settings {
     }
 }
 
-/// Python's `str` of a TOML value.
-fn text(node: &Node) -> String {
-    match &node.value {
-        Value::Null => "None".to_owned(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
-        other => other.to_string(),
-    }
-}
-
-/// An integer number of seconds as Python's `float()` reads it.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a timeout of more than 2^52 seconds rounds, as Python's float() rounds it"
-)]
-fn int_seconds(integer: i64) -> f64 {
-    integer as f64
-}
-
-/// Python's truth value of a TOML value.
-fn truthy(node: &Node) -> bool {
-    match &node.value {
-        Value::Null => false,
-        Value::Bool(flag) => *flag,
-        Value::Int(integer) => *integer != 0,
-        Value::Float(float) => *float != 0.0,
-        Value::Str(text) | Value::Datetime(text) => !text.is_empty(),
-        Value::Seq(items) => !items.is_empty(),
-        Value::Map(entries) => !entries.is_empty(),
+/// The string `[cve] key` holds, none when it is missing.
+fn string<'n>(cve: &'n Node, key: &str) -> Result<Option<&'n str>, String> {
+    match cve.get(key).map(|value| &value.value) {
+        None => Ok(None),
+        Some(Value::Str(text)) => Ok(Some(text)),
+        Some(_) => Err(format!("documentation.toml: [cve] {key} must be a string")),
     }
 }
 
 impl Settings {
     /// From the merged configuration's `documentation` tree, `[cve]`.
-    pub fn from_documentation(documentation: Option<&Node>) -> Self {
-        let cve = documentation
-            .and_then(|docs| docs.get("cve"))
-            .filter(|cve| matches!(cve.value, Value::Map(_)));
-        let Some(cve) = cve else {
-            return Self::default();
+    ///
+    /// # Errors
+    ///
+    /// `[cve]` is not a table, or one of its settings is of the wrong type
+    /// (`base_url = true`), or `timeout` is not a positive number of seconds.
+    pub fn from_documentation(documentation: Option<&Node>) -> Result<Self, String> {
+        let Some(cve) = documentation.and_then(|docs| docs.get("cve")) else {
+            return Ok(Self::default());
         };
-        let base_url = cve
-            .get("base_url")
-            .filter(|value| truthy(value))
-            .map_or_else(|| DEFAULT_BASE_URL.to_owned(), |value| text(value));
-        let default_db_link = cve
-            .get("default_db_link")
-            .filter(|value| truthy(value))
-            .map(|value| text(value).trim().to_owned())
+        if !matches!(cve.value, Value::Map(_)) {
+            return Err("documentation.toml: [cve] must be a table".to_owned());
+        }
+        let base_url = string(cve, "base_url")?
+            .filter(|url| !url.is_empty())
+            .unwrap_or(DEFAULT_BASE_URL);
+        let default_db_link = string(cve, "default_db_link")?
+            .map(str::trim)
             .unwrap_or_default();
-        let seconds = match cve.get("timeout").map(|value| &value.value) {
-            None => Some(DEFAULT_TIMEOUT.as_secs_f64()),
-            Some(Value::Int(integer)) => Some(int_seconds(*integer)),
-            Some(Value::Float(float)) => Some(*float),
-            Some(Value::Bool(flag)) => Some(f64::from(u8::from(*flag))),
-            Some(Value::Str(text)) => text.trim().parse::<f64>().ok(),
+        let timeout = match cve.get("timeout").map(|value| &value.value) {
+            None => Some(DEFAULT_TIMEOUT),
+            Some(Value::Int(seconds)) => u64::try_from(*seconds)
+                .ok()
+                .filter(|seconds| *seconds > 0)
+                .map(Duration::from_secs),
+            Some(Value::Float(seconds)) => Duration::try_from_secs_f64(*seconds)
+                .ok()
+                .filter(|timeout| !timeout.is_zero()),
             Some(_) => None,
         }
-        .filter(|seconds| seconds.is_finite() && *seconds > 0.0)
-        .unwrap_or(DEFAULT_TIMEOUT.as_secs_f64());
-        Self {
+        .ok_or("documentation.toml: [cve] timeout must be a positive number of seconds")?;
+        Ok(Self {
             base_url: base_url.trim_end_matches('/').to_owned(),
-            default_db_link,
-            timeout: Duration::try_from_secs_f64(seconds).unwrap_or(DEFAULT_TIMEOUT),
-        }
+            default_db_link: default_db_link.to_owned(),
+            timeout,
+        })
     }
 
     /// Where a record's page is (`page_url_for`).
@@ -191,12 +171,17 @@ mod tests {
     }
 
     #[test]
-    fn settings_read_leniently() {
-        assert_eq!(Settings::from_documentation(None), Settings::default());
+    fn settings_take_their_defaults_when_missing() {
+        assert_eq!(Settings::from_documentation(None), Ok(Settings::default()));
+        let docs = documentation("[cve]\n");
+        assert_eq!(
+            Settings::from_documentation(Some(&docs)),
+            Ok(Settings::default())
+        );
         let docs = documentation(
             "[cve]\nbase_url = \"https://vl.example/\"\ndefault_db_link = \" https://x/?id= \"\ntimeout = 2\n",
         );
-        let settings = Settings::from_documentation(Some(&docs));
+        let settings = Settings::from_documentation(Some(&docs)).unwrap();
         assert_eq!(settings.base_url, "https://vl.example");
         assert_eq!(settings.default_db_link, "https://x/?id=");
         assert_eq!(settings.timeout, Duration::from_secs(2));
@@ -204,31 +189,40 @@ mod tests {
             settings.links().page_url("cve-2024-1"),
             "https://x/?id=CVE-2024-1"
         );
-        for timeout in ["-1", "\"soon\"", "0", "[1]"] {
-            let docs = documentation(&format!("[cve]\nbase_url = \"\"\ntimeout = {timeout}\n"));
-            let settings = Settings::from_documentation(Some(&docs));
-            assert_eq!(settings.timeout, DEFAULT_TIMEOUT, "{timeout}");
-            assert_eq!(settings.base_url, DEFAULT_BASE_URL);
-        }
-        let docs = documentation("[cve]\ntimeout = \"2.5\"\n");
-        assert_eq!(
-            Settings::from_documentation(Some(&docs)).timeout,
-            Duration::from_millis(2500)
-        );
-        let docs = documentation("cve = 1\n");
-        assert_eq!(
-            Settings::from_documentation(Some(&docs)),
-            Settings::default()
-        );
+        let docs = documentation("[cve]\nbase_url = \"\"\ntimeout = 2.5\n");
+        let settings = Settings::from_documentation(Some(&docs)).unwrap();
+        assert_eq!(settings.base_url, DEFAULT_BASE_URL);
+        assert_eq!(settings.timeout, Duration::from_millis(2500));
     }
 
+    /// A setting of the wrong type is refused, naming it, where it was read
+    /// as Python's `str()` of the value (`base_url = true` asked `True`).
     #[test]
-    fn values_print_as_python_strs() {
-        let docs = documentation("a = true\nb = false\nc = 1.5\n");
-        assert_eq!(text(docs.get("a").unwrap()), "True");
-        assert_eq!(text(docs.get("b").unwrap()), "False");
-        assert_eq!(text(docs.get("c").unwrap()), "1.5");
-        assert!(!truthy(docs.get("b").unwrap()));
-        assert!(truthy(docs.get("c").unwrap()));
+    fn a_wrong_typed_setting_is_refused() {
+        let refused = |toml: &str| Settings::from_documentation(Some(&documentation(toml)));
+        assert_eq!(
+            refused("[cve]\nbase_url = true\n"),
+            Err("documentation.toml: [cve] base_url must be a string".to_owned())
+        );
+        assert_eq!(
+            refused("[cve]\ndefault_db_link = 1\n"),
+            Err("documentation.toml: [cve] default_db_link must be a string".to_owned())
+        );
+        for timeout in [
+            "-1", "\"soon\"", "\"2.5\"", "0", "[1]", "true", "nan", "inf",
+        ] {
+            assert_eq!(
+                refused(&format!("[cve]\ntimeout = {timeout}\n")),
+                Err(
+                    "documentation.toml: [cve] timeout must be a positive number of seconds"
+                        .to_owned()
+                ),
+                "{timeout}"
+            );
+        }
+        assert_eq!(
+            refused("cve = 1\n"),
+            Err("documentation.toml: [cve] must be a table".to_owned())
+        );
     }
 }

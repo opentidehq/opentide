@@ -16,7 +16,7 @@ use crate::logging::{self, LogLayer, Sink};
 use crate::mode::{self, Inputs, Mode};
 use crate::redact::{Redactor, url_secrets, workspace_redactor};
 use crate::render::outcome::{Console, OutcomeKind};
-use crate::render::text::{Colour, Style, Text};
+use crate::render::text::{Color, Colour, Style, Text};
 use crate::usage;
 use clap::parser::ValueSource;
 use std::cell::RefCell;
@@ -231,7 +231,7 @@ impl Run<'_> {
             Mode::Mcp => {}
             _ => {
                 let console = self.console(self.host.stdout_tty);
-                let bold = Style::new("bold");
+                let bold = Style::BOLD;
                 for line in lines {
                     out.write_all(console.line(&Text::styled(line, &bold)).as_bytes())?;
                 }
@@ -652,7 +652,7 @@ impl Run<'_> {
                         .get_one::<crate::tree::ReportFormat>("report_format")
                         .is_none_or(|format| *format == crate::tree::ReportFormat::Text);
                 if status {
-                    let mut line = Text::styled("⠋", &Style::new("bold cyan"));
+                    let mut line = Text::styled("⠋", &Style::fg(Color::Cyan).bold());
                     line.push_str(" Validating objects");
                     err.write_all(b"\x1b[?25l")?;
                     err.write_all(line.render(Colour::Full, false).as_bytes())?;
@@ -1566,10 +1566,7 @@ impl Run<'_> {
                 ))
             };
             if let Some(problem) = problem {
-                let failure = Failure::new(
-                    code::USAGE_INVALID_VALUE,
-                    format!("Invalid value: {problem}"),
-                );
+                let failure = Failure::new(code::USAGE_INVALID_VALUE, problem);
                 return crate::commands::Report::failed(COMMAND, USAGE_EXIT_CODE, failure);
             }
         }
@@ -2005,7 +2002,7 @@ impl Run<'_> {
         }
         err.write_all(result_err.as_bytes())?;
         if !run.refused && !self.globals.quiet && text_out {
-            let note = Text::styled(crate::commands::deploy::DRY_RUN_NOTE, &Style::new("dim"));
+            let note = Text::styled(crate::commands::deploy::DRY_RUN_NOTE, &Style::DIM);
             out.write_all(stdout.line(&note).as_bytes())?;
         }
         out.flush()?;
@@ -2196,7 +2193,7 @@ impl Run<'_> {
                         }
                     }
                     Block::Table(table) => {
-                        for line in table.render(width) {
+                        for line in table.render(stdout.width) {
                             out.write_all(stdout.line(&line).as_bytes())?;
                         }
                     }
@@ -2293,15 +2290,15 @@ impl Run<'_> {
             matches.try_contains_id(id).unwrap_or(false)
                 && matches.value_source(id) == Some(ValueSource::CommandLine)
         };
-        // The group's options, in its order, with the flags the oracle names.
+        // The group's options, in its order, with their flags.
         const GROUP: [(&str, &str); 10] = [
             ("target", "--target"),
             ("uuid", "--uuid"),
             ("object_type", "--type"),
             ("file", "--file"),
             ("dry_run", "--dry-run"),
-            ("publish", "--publish/--no-publish"),
-            ("no_publish", "--publish/--no-publish"),
+            ("publish", "--publish"),
+            ("no_publish", "--no-publish"),
             ("workers", "--workers"),
             ("changed", "--changed"),
             ("since", "--since"),
@@ -2363,11 +2360,8 @@ impl Run<'_> {
                 None
             };
             if let Some(problem) = problem {
-                // A `BadParameter`: Click's usage line and help under it.
-                let failure = Failure::new(
-                    code::USAGE_INVALID_VALUE,
-                    format!("Invalid value: {problem}"),
-                );
+                // A usage error: the usage line and help under it.
+                let failure = Failure::new(code::USAGE_INVALID_VALUE, problem);
                 let words: Vec<String> = path.split(' ').map(str::to_owned).collect();
                 let notes = vec![
                     ("usage".to_owned(), usage::usage_line(&self.root, &words)),
@@ -2499,10 +2493,7 @@ impl Run<'_> {
         }
         let leaf = leaf(matches);
         let usage = |message: String| {
-            let mut failure = crate::envelope::Failure::new(
-                code::USAGE_INVALID_VALUE,
-                format!("Invalid value: {message}"),
-            );
+            let mut failure = crate::envelope::Failure::new(code::USAGE_INVALID_VALUE, message);
             failure.argument = None;
             crate::commands::Report::failed(path, USAGE_EXIT_CODE, failure)
         };
@@ -3206,7 +3197,7 @@ mod tests {
             assert_eq!(result.code, USAGE_EXIT_CODE, "{mode}");
             // A word is never split: the option stays whole on its row.
             assert!(result.stderr.contains(word), "{mode}: {}", result.stderr);
-            let message = format!("No such option: {word}");
+            let message = format!("Unknown option {word:?}.");
             let console = Console {
                 colour,
                 width: Some(30),
@@ -3214,7 +3205,7 @@ mod tests {
             let notes = [
                 (
                     "usage".to_owned(),
-                    "opentide validate [OPTIONS] COMMAND [ARGS]...".to_owned(),
+                    "opentide validate [OPTIONS] [COMMAND]".to_owned(),
                 ),
                 (
                     "help".to_owned(),
@@ -3837,7 +3828,38 @@ mod tests {
         assert!(
             option
                 .stdout
-                .contains("\"message\":\"No such option: --json\"")
+                .contains(r#""message":"Unknown option \"--json\".""#)
+        );
+    }
+
+    #[test]
+    fn framework_a_share_option_its_subcommand_ignores_is_refused_by_its_flag() {
+        for flag in ["--publish", "--no-publish"] {
+            let refused = dispatched(&format!("--json share {flag} targets"), &[], false);
+            assert_eq!(refused.code, USAGE_EXIT_CODE, "{}", refused.stdout);
+            assert!(
+                refused.stdout.contains("\"code\":\"usage_invalid_value\""),
+                "{}",
+                refused.stdout
+            );
+            let message = format!(
+                "\"message\":\"{flag} configures `opentide share` itself and would be ignored \
+                 by `opentide share targets`.\""
+            );
+            assert!(refused.stdout.contains(&message), "{}", refused.stdout);
+        }
+        // The text modes put the usage notes under it.
+        let plain = dispatched(
+            "share --publish status",
+            &[("OPENTIDE_OUTPUT", "plain")],
+            false,
+        );
+        assert!(
+            plain
+                .stderr
+                .contains("\n  usage: opentide share status [OPTIONS]"),
+            "{}",
+            plain.stderr
         );
     }
 
@@ -4100,20 +4122,21 @@ mod tests {
             "{}",
             short.stdout
         );
-        // A flag given a value is the parser's error, as the oracle's.
+        // A flag given a value: the usual usage error, with its notes.
         let valued = dispatched("--json=1 explain x", &[], false);
         assert_eq!(valued.code, 2);
         assert!(
             valued
                 .stderr
-                .starts_with("error: Option '--json' does not take a value.\n"),
+                .starts_with("error: --json does not take a value.\n  usage: "),
             "{}",
             valued.stderr
         );
-        assert!(!valued.stderr.contains("usage:"), "{}", valued.stderr);
         let missing = dispatched("--json info --platform", &[], false);
         assert!(
-            missing.stdout.contains("\"command\":\"\",\"duration_ms\""),
+            missing
+                .stdout
+                .contains("\"command\":\"info\",\"duration_ms\""),
             "{}",
             missing.stdout
         );
@@ -4137,7 +4160,7 @@ mod tests {
         assert_eq!(bad.code, 2);
         assert!(
             bad.stdout.contains(
-                "Invalid value for '--show-completion': 'bash zsh' is not a supported shell. \
+                "--show-completion: \\\"bash zsh\\\" is not a supported shell. \
                  Use: opentide --show-completion [bash|zsh|fish|powershell|pwsh]"
             ),
             "{}",

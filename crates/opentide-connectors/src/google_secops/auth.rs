@@ -33,7 +33,6 @@ use opentide_compile::Json;
 use crate::Environment;
 use crate::connector::TenantContext;
 use crate::credentials::{Credential, Secret};
-use crate::encode::urlencode;
 use crate::error::ConnectorError;
 
 use super::PLATFORM;
@@ -462,10 +461,12 @@ impl Authorizer {
                 cx.http
                     .request(crate::transport::Method::POST, token_uri)
                     .header("Content-Type", "application/x-www-form-urlencoded")
-                    .body(urlencode([
+                    .body(url::form_urlencoded::Serializer::new(String::new())
+.extend_pairs([
                         ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
                         ("assertion", jwt.as_str()),
-                    ]))
+                    ])
+.finish())
             }
             Credentials::AuthorizedUser {
                 client_id,
@@ -477,19 +478,23 @@ impl Authorizer {
                 .http
                 .request(crate::transport::Method::POST, token_uri)
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                .body(urlencode([
+                .body(url::form_urlencoded::Serializer::new(String::new())
+.extend_pairs([
                     ("grant_type", "refresh_token"),
                     ("client_id", client_id.as_str()),
                     ("client_secret", client_secret.expose()),
                     ("refresh_token", refresh_token.expose()),
-                ])),
+                ])
+.finish()),
             Credentials::Metadata { host, .. } => cx
                 .http
                 .request(
                     crate::transport::Method::GET,
                     &format!(
                         "http://{host}/computeMetadata/v1/instance/service-accounts/default/token?{}",
-                        urlencode([("scopes", SCOPE)])
+                        url::form_urlencoded::Serializer::new(String::new())
+.extend_pairs([("scopes", SCOPE)])
+.finish()
                     ),
                 )
                 .header("Metadata-Flavor", "Google"),
