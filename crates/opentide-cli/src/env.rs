@@ -60,6 +60,14 @@ impl Env {
             .or_else(|| self.boolean("DEBUG"))
             .unwrap_or(false)
     }
+
+    /// Whether `OPENTIDE_DEBUG` is the boolean true. A switch that rewrites
+    /// files, such as deploy's promotion of every rule file, reads this
+    /// and never `DEBUG`: CI systems and tools set `DEBUG` for their own
+    /// logging.
+    pub fn opentide_debug(&self) -> bool {
+        self.boolean("OPENTIDE_DEBUG").unwrap_or(false)
+    }
 }
 
 #[cfg(test)]
@@ -75,6 +83,9 @@ mod tests {
         assert!(!env(&[("DEBUG", "*")]).debug_requested());
         assert!(env(&[("DEBUG", " TRUE ")]).debug_requested());
         assert!(!env(&[]).debug_requested());
+        assert!(env(&[("OPENTIDE_DEBUG", "yes")]).opentide_debug());
+        assert!(!env(&[("DEBUG", "1")]).opentide_debug());
+        assert!(!env(&[("OPENTIDE_DEBUG", "0"), ("DEBUG", "1")]).opentide_debug());
         assert_eq!(env(&[("X", "")]).boolean("X"), Some(false));
         assert!(Env::from_process().iter().count() < usize::MAX);
     }

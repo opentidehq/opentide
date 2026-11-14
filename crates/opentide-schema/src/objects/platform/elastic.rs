@@ -2,7 +2,10 @@
 //! `ElasticConfig` and its nested models), with the named check
 //! `elastic_rule_shape` ([`block_codes`]): the constraint codes of the
 //! oracle's `_validate_raw_elastic_block`, judged on the raw block before its
-//! fields, in the oracle's terms (Python's truthiness and `isinstance`).
+//! fields. A key is set when its value is not null (`present`), or, where a
+//! check needs a value, when it is not null, `false`, zero or empty
+//! (`truthy`); a value's type is its YAML node's kind (a mapping, a sequence,
+//! an integer; a boolean is never an integer).
 
 use std::collections::BTreeSet;
 use std::ops::RangeInclusive;

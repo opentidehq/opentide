@@ -1260,6 +1260,7 @@ fn platform_cards(resolved: &Node, rules: &[(String, &Node)], env: &Env) -> Vec<
     };
     let mut sorted: Vec<&opentide_schema::node::Entry> = platforms.iter().collect();
     sorted.sort_by_key(|entry| scalar_text(&entry.key.value));
+    let config = opentide_compile::json::Json::from_node(resolved);
     let mut cards = Vec::new();
     for entry in sorted {
         let platform = scalar_text(&entry.key.value);
@@ -1267,16 +1268,10 @@ fn platform_cards(resolved: &Node, rules: &[(String, &Node)], env: &Env) -> Vec<
         if !matches!(document.value, Value::Map(_)) {
             continue;
         }
-        // On only when `enabled` is the boolean `true`, as `deploy` reads it
-        // (`plan::enabled_with`): the string "false" is not on.
-        let section = document
-            .get("platform")
-            .filter(|section| matches!(section.value, Value::Map(_)))
-            .unwrap_or(document);
-        let enabled = matches!(
-            section.get("enabled").map(|node| &node.value),
-            Some(Value::Bool(true))
-        );
+        // On exactly when `deploy` deploys it: `[platform] enabled` is the
+        // boolean `true`; the string "false", or an `enabled` outside the
+        // `[platform]` table, is not on.
+        let enabled = opentide_compile::plan::platform_enabled(&config, &platform);
         let with_block: Vec<(&str, &Node)> = rules
             .iter()
             .filter_map(|(uuid, rule)| {

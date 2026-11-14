@@ -113,21 +113,27 @@ pub fn nested_warning(nested: &[String], folder: &str) -> String {
     )
 }
 
+/// Whether the configuration enables *platform*: its
+/// `platforms.<platform>.platform.enabled` is the boolean `true`. An
+/// `enabled` anywhere else, such as directly under `platforms.<platform>`,
+/// does not count.
+pub fn platform_enabled(config: &Json, platform: &str) -> bool {
+    matches!(
+        config
+            .get("platforms")
+            .and_then(|platforms| platforms.get(platform))
+            .and_then(|table| table.get("platform"))
+            .and_then(|block| block.get("enabled")),
+        Some(Json::Bool(true))
+    )
+}
+
 /// The platforms the configuration enables, in [`PLATFORMS`] order
 /// (`enabled_systems`).
 pub fn enabled(config: &Json) -> Vec<String> {
     PLATFORMS
         .iter()
-        .filter(|platform| {
-            matches!(
-                config
-                    .get("platforms")
-                    .and_then(|platforms| platforms.get(platform))
-                    .and_then(|table| table.get("platform"))
-                    .and_then(|block| block.get("enabled")),
-                Some(Json::Bool(true))
-            )
-        })
+        .filter(|platform| platform_enabled(config, platform))
         .map(|platform| (*platform).to_owned())
         .collect()
 }
@@ -141,16 +147,7 @@ pub fn enabled_with(config: &Json, plugins: &[String]) -> Vec<String> {
         plugins
             .iter()
             .filter(|plugin| !PLATFORMS.contains(&plugin.as_str()))
-            .filter(|plugin| {
-                matches!(
-                    config
-                        .get("platforms")
-                        .and_then(|platforms| platforms.get(plugin))
-                        .and_then(|table| table.get("platform"))
-                        .and_then(|block| block.get("enabled")),
-                    Some(Json::Bool(true))
-                )
-            })
+            .filter(|plugin| platform_enabled(config, plugin))
             .cloned(),
     );
     platforms
