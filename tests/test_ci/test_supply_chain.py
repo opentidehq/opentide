@@ -132,8 +132,11 @@ def test_cargo_deny_gates_every_pull_request_at_a_pinned_version() -> None:
     job = ci["jobs"]["deny"]
     assert job["permissions"] == {"contents": "read"}
     assert "continue-on-error" not in job
-    # A core gate: no `if`, so it runs on every pull request, not only in the full set.
-    assert "if" not in job
+    # A gate job: it runs whenever a pull request changes what it checks (a
+    # manifest, deny.toml, the vendored shims, the lock: test_changes.py), and
+    # on every push and nightly.
+    assert job["if"] == "needs.changes.outputs.deny == 'true'"
+    assert job["needs"] == "changes"
     steps = job["steps"]
     assert not [s for s in steps if "continue-on-error" in s]
     installs = [s for s in steps if "taiki-e/install-action" in s.get("uses", "")]
@@ -177,7 +180,22 @@ def test_only_the_scheduled_audit_and_mutants_may_write_issues() -> None:
         writes_issues = any(
             s == "write-all" or (isinstance(s, dict) and s.get("issues") == "write") for s in scopes
         )
-        if path.name == "rust-audit.yml":
+        if path.name == "ci.yml":
+            # The nightly's one issue (nightly-failure): one job holds the
+            # token, runs nightly only, and checks out and builds nothing.
+            assert writes_issues
+            assert workflow["permissions"] == {"contents": "read"}
+            writers = [
+                name
+                for name, job in workflow["jobs"].items()
+                if (job.get("permissions") or {}).get("issues") == "write"
+            ]
+            assert writers == ["nightly-report"]
+            report = workflow["jobs"]["nightly-report"]
+            assert "needs.changes.outputs.mode == 'nightly'" in report["if"]
+            assert not [s for s in report["steps"] if "uses" in s]
+            assert not [s for s in report["steps"] if "cargo " in s.get("run", "")]
+        elif path.name == "rust-audit.yml":
             assert writes_issues
             assert _triggers(workflow) == {"schedule", "workflow_dispatch"}
             assert workflow["permissions"] == {"contents": "read"}

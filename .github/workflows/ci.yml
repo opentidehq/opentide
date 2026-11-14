@@ -374,20 +374,41 @@ jobs:
 
       # --- With the test jobs running: what needs this target directory. ---
 
-      - name: Build xtask and the language server
+      # A check or test writes under a temporary folder, never in the checkout (#931).
+      - name: Note the checkout's state
         if: env.RUST == 'true'
-        run: cargo build --locked -p xtask -p opentide-lsp
+        run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
+
+      # The archive's build left the binaries its tests run in target/debug,
+      # with the tests' features: xtask and the language server when they are
+      # affected (a change that reaches neither changes nothing they check).
+      # Building them again without those features recompiled for minutes.
+      - name: Which checks the build can run
+        id: bins
+        if: env.RUST == 'true'
+        env:
+          CRATES: ${{ needs.changes.outputs.crates }}
+        run: |
+          for bin in xtask opentide-lsp; do
+            if [[ -x "target/debug/${bin}" ]]; then found=true; else found=false; fi
+            # An affected crate's binary is always built: never skip its checks.
+            if [[ "${found}" == false && " ${CRATES} " == *" ${bin} "* ]]; then
+              echo "::error::${bin} is affected but the archive's build left no target/debug/${bin}."
+              exit 1
+            fi
+            echo "${bin}=${found}" >> "$GITHUB_OUTPUT"
+          done
 
       # Every dependency between workspace crates points down the layer table
       # (xtask/layers.toml).
       - name: Crate layers
-        if: env.RUST == 'true'
+        if: steps.bins.outputs.xtask == 'true'
         run: target/debug/xtask check-layers
 
       # The deploy cassettes (tests/cassettes): one per scenario of
       # scenarios.toml, none edited by hand. It reads the files only.
       - name: Deploy cassettes
-        if: env.RUST == 'true'
+        if: steps.bins.outputs.xtask == 'true'
         run: target/debug/xtask cassettes check
 
       # The artifacts generated from the Rust model are the committed ones:
@@ -395,11 +416,11 @@ jobs:
       # server's catalogs and the diagnostics reference. `--oracle` (the
       # comparisons with the oracle's recordings) runs by hand only.
       - name: Generated artifacts
-        if: env.RUST == 'true'
+        if: steps.bins.outputs.xtask == 'true'
         run: target/debug/xtask codegen --check
 
       - name: Generated highlights
-        if: env.RUST == 'true'
+        if: steps.bins.outputs.opentide-lsp == 'true'
         run: target/debug/opentide-lsp generate-highlights --check
 
       # The vocabulary bundle and pins against the specifications repository,
@@ -407,7 +428,7 @@ jobs:
       # their inputs change, and on every push and nightly.
       - name: Whether the specifications are read
         id: specs
-        if: env.RUST == 'true'
+        if: steps.bins.outputs.xtask == 'true'
         env:
           MODE: ${{ needs.changes.outputs.mode }}
         run: |
@@ -415,8 +436,8 @@ jobs:
           vocab=true; fields=true
           if [[ "${MODE}" == pr ]] && git rev-parse --verify --quiet HEAD^2 >/dev/null; then
             changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"
-            grep -qE '^(src/opentide/data/vocabulary/.*\.vocab\.toml|src/opentide/data/pins/.*\.toml|data/specifications\.lock\.json|xtask/src/vocab/sync\.rs)$' <<<"${changed}" || vocab=false
-            grep -qE '^(crates/opentide-schema/src/objects/.*|xtask/src/spec_fields\.rs)$' <<<"${changed}" || fields=false
+            grep -qE '^(src/opentide/data/vocabulary/.*\.vocab\.toml|src/opentide/data/pins/.*\.toml|data/specifications\.lock\.json|xtask/src/vocab/sync\.rs|\.github/workflows/ci\.yml)$' <<<"${changed}" || vocab=false
+            grep -qE '^(crates/opentide-schema/src/objects/.*|xtask/src/spec_fields\.rs|\.github/workflows/ci\.yml)$' <<<"${changed}" || fields=false
           fi
           echo "vocab=${vocab}" >> "$GITHUB_OUTPUT"
           echo "fields=${fields}" >> "$GITHUB_OUTPUT"
@@ -492,6 +513,15 @@ jobs:
       - name: opentide-schema's compile-fail cases
         if: steps.ui.outputs.run == 'true'
         run: cargo nextest run --locked --profile ci -p opentide-schema --features opentide-schema/python -E 'binary_id(opentide-schema::ui)'
+
+      - name: The checks and tests left the checkout as they found it
+        if: env.RUST == 'true'
+        run: |
+          git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-after"
+          if ! diff -u "$RUNNER_TEMP/tree-before" "$RUNNER_TEMP/tree-after"; then
+            echo "::error::A check or test wrote into the checkout (lines starting with +): write under a temporary folder instead."
+            exit 1
+          fi
 
       - name: Compiler cache statistics
         if: ${{ !cancelled() }}

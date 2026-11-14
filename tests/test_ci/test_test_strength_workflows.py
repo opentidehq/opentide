@@ -110,8 +110,8 @@ def test_a_failing_gate_turns_the_job_red() -> None:
     with tee's status, and `|| true` or continue-on-error would hide it."""
     workflow = _load("coverage.yml")
     triggers = _triggers(workflow)
-    # The nightly set: nightly and on Run workflow (test_ci_scope.py).
-    assert set(triggers) == {"schedule", "workflow_dispatch"}, triggers
+    # Called by ci.yml's nightly, and Run workflow (test_ci_scope.py).
+    assert set(triggers) == {"workflow_call", "workflow_dispatch"}, triggers
     job = workflow["jobs"]["rust"]
     assert "continue-on-error" not in job
     for step in job["steps"]:

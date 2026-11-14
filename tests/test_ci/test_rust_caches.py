@@ -56,18 +56,12 @@ FULL_SET_SAVE = (
     " || github.ref == 'refs/heads/integration/unified-core')"
 )
 
-# The engine's debug tree: engine-test's Linux cell saves it, the Linux jobs
-# that build a subset of it read it.
-ENGINE_DEBUG_PRODUCER = ("ci.yml", "engine-test-part", "ubuntu-latest")
-ENGINE_DEBUG_READERS = (("ci.yml", "clients"), ("ci.yml", "elastic-sweep"))
-# The Python jobs' `uv sync` build of the binding: test's 3.14 cell saves it.
-PYTHON_PRODUCER = ("ci.yml", "test")
-PYTHON_READERS = (
-    ("ci.yml", "lint"),
-    ("ci.yml", "test-full"),
-    ("ci.yml", "cli-e2e"),
-    ("ci.yml", "gitlab-ci-lint"),
-)
+# The PR gate's compiler caches: `build` (the gate's one build: the test
+# archive, xtask, the language server, the `_native` extension) and
+# `engine-lint` (clippy and rustdoc), each restored and saved by its job alone.
+GATE_FAMILIES = {"build": "sccache-build-", "engine-lint": "sccache-engine-check-"}
+# The jobs that run from the build: they compile nothing, and keep no cache.
+FROM_THE_BUILD = ("rust-tests", "python", "e2e", "gitlab-ci-lint", "test-full", "e2e-full")
 
 
 class RustCache(NamedTuple):
@@ -87,8 +81,8 @@ def _env(block: dict[str, Any]) -> dict[str, str]:
 
 
 def _cells(job: dict[str, Any]) -> list[dict[str, str]]:
-    """The job's matrix cells in the full set (a superset of a pull request's)."""
-    return ci_matrix.cells(job, "full")
+    """The job's matrix cells."""
+    return ci_matrix.cells(job)
 
 
 def _resolve(value: Any, cell: dict[str, str]) -> str | None:
@@ -195,41 +189,34 @@ def _compiler_cache(job: str, runs_on: str | None = None) -> CompilerCache:
     return next(c for c in _compiler_caches() if c.job == job and runs_on in (None, c.runs_on))
 
 
-def test_the_engine_debug_tree_is_cached_once() -> None:
-    """engine-test's Linux compiler cache serves the Linux jobs that build a
-    subset of its debug tree; they never save a copy."""
-    _, job, runs_on = ENGINE_DEBUG_PRODUCER
-    # The Linux shard that tests opentide-lsp (clients) and opentide-analysis
-    # (elastic-sweep): each shard saves the crates its packages build.
-    (cell,) = [
-        cell
-        for cell in _cells(_ci()["jobs"][job])
-        if cell["os"] == runs_on
-        and {"opentide-lsp", "opentide-analysis"} <= set(ci_matrix.selection(cell["packages"])[0])
-    ]
-    family = f"sccache-engine-dev-ubuntu-latest-{cell['shard']}-"
-    savers = [c for c in _compiler_caches() if c.job == job and (c.saves or "").startswith(family)]
-    assert len(savers) == 1, family
-    producer = savers[0]
-    assert producer.saves is not None
-    for _, reader_job in ENGINE_DEBUG_READERS:
-        reader = _compiler_cache(reader_job)
-        assert reader.restores == producer.saves
-        assert reader.saves is None, f"{reader_job} must not save a copy of engine-test's cache"
+@pytest.mark.parametrize(("job_id", "family"), sorted(GATE_FAMILIES.items()))
+def test_each_gate_family_is_its_jobs_alone(job_id: str, family: str) -> None:
+    """The build's tree is the gate's one build: no other job restores it, so
+    none compiles it again; engine-lint's check builds share nothing with it."""
+    cache = _compiler_cache(job_id)
+    assert cache.restores == cache.saves == family + STABLE_HASH, job_id
+    assert str(cache.save_condition).startswith(PUSH_ONLY), cache.save_condition
+    assert {c.job for c in _compiler_caches() if (c.restores or "").startswith(family)} == {job_id}
 
 
-def test_the_python_jobs_build_the_binding_once() -> None:
-    """test's coverage cell (3.14) saves the compiler cache of the binding `uv
-    sync` builds; the other Python jobs on Linux restore it."""
-    _, producer_job = PYTHON_PRODUCER
-    producer = _compiler_cache(producer_job)
-    assert producer.saves is not None and producer.saves.startswith("sccache-python-engine-")
-    assert "matrix.python-version == env.COVERAGE_PYTHON" in str(producer.save_condition)
-    # lint saves a compiler cache of its own (sccache-lint-).
-    for _, job in (r for r in PYTHON_READERS if r[1] != "lint"):
-        reader = _compiler_cache(job)
-        assert reader.restores == producer.saves, job
-        assert reader.saves is None, job
+@pytest.mark.parametrize("job_id", FROM_THE_BUILD)
+def test_the_jobs_that_run_from_the_build_keep_no_compiler_cache(job_id: str) -> None:
+    job = _ci()["jobs"][job_id]
+    assert not _wraps_with_sccache(job), job_id
+    uses = [str(s.get("uses", "")) for s in job["steps"]]
+    assert not any(u.startswith((SCCACHE_RESTORE, SCCACHE_SAVE, RUST_CACHE)) for u in uses), job_id
+
+
+def test_the_build_configures_pyo3_once() -> None:
+    """PyO3's build script reruns when PYO3_PYTHON changes, and cargo rebuilds
+    every engine crate above it: the build names one interpreter for the test
+    archive and the extension alike (abi3: it serves every Python from 3.10)."""
+    job = _ci()["jobs"]["build"]
+    assert job["env"]["PYO3_PYTHON"] == "/usr/bin/python3"
+    for spec in job["steps"]:
+        assert "PYO3_PYTHON" not in (spec.get("env") or {}), spec.get("name")
+    abi3 = (ROOT / "bindings" / "python" / "Cargo.toml").read_text(encoding="utf-8")
+    assert "abi3-py310" in abi3
 
 
 def test_a_release_restores_no_cache() -> None:
@@ -394,7 +381,7 @@ def test_a_job_that_wraps_rustc_in_sccache_installs_it_first() -> None:
     """RUSTC_WRAPPER=sccache without the binary fails every cargo command."""
     jobs = _ci()["jobs"]
     wrapped = [job_id for job_id, job in jobs.items() if _wraps_with_sccache(job)]
-    expected = {"engine-test-part", "test", "cli-e2e", "wasi"}
+    expected = {"build", "engine-lint", "wasi"}
     assert expected <= set(wrapped)
     for job_id in wrapped:
         steps = jobs[job_id]["steps"]
@@ -407,7 +394,8 @@ def test_a_job_that_wraps_rustc_in_sccache_installs_it_first() -> None:
         cargo = [
             n
             for n, s in enumerate(steps)
-            if re.search(r"\b(cargo|uv sync|uv build|uv run)\b", str(s.get("run", "")))
+            # rustfmt calls no rustc: engine-lint runs it before the cache.
+            if re.search(r"\b(cargo (?!fmt\b)|uv sync|uv build|uv run)", str(s.get("run", "")))
         ]
         # npm-install builds through node only: no cargo line, but the wrapper still applies.
         assert not cargo or installs[0] < min(cargo), f"{job_id}: install sccache before cargo"
@@ -446,23 +434,23 @@ def test_every_compiler_cache_has_one_saver_and_its_readers_restore_its_name() -
             )
 
 
-def test_the_python_jobs_share_one_pyo3_configuration() -> None:
-    """PyO3's build script reruns when PYO3_PYTHON changes, and cargo rebuilds
-    every engine crate above it: each Python job names the same interpreter, so
-    the binding in the cache is the one it builds (#841)."""
-    jobs = _ci()["jobs"]
-    python_jobs = [job for workflow, job in (PYTHON_PRODUCER, *PYTHON_READERS)]
-    python_jobs += ["cli-e2e-full"]
-    seen = {(jobs[job].get("env") or {}).get("PYO3_PYTHON") for job in python_jobs}
-    assert seen == {"/usr/bin/python3"}, seen
+# ci.yml's jobs that run nightly only: the workflows they call run on no pull request.
+NIGHTLY_ONLY = "needs.changes.outputs.mode == 'nightly'"
 
 
 def _pull_request_workflows() -> list[Path]:
+    """The workflows a pull request runs: those it triggers, and those ci.yml
+    calls from a job that is not the nightly's (the release tier's)."""
+    called = {
+        job["uses"].removeprefix("./.github/workflows/")
+        for job in _ci()["jobs"].values()
+        if "uses" in job and job.get("if") != NIGHTLY_ONLY
+    }
     found = []
     for path in sorted(WORKFLOWS.glob("*.yml")):
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
         triggers = workflow.get("on", workflow.get(True)) or {}
-        if "pull_request" in triggers or "workflow_call" in triggers:
+        if "pull_request" in triggers or path.name in called:
             found.append(path)
     return found
 
@@ -497,10 +485,10 @@ def test_no_cache_is_saved_from_a_pull_request() -> None:
                     checked += 1
                 elif uses.startswith("actions/cache@"):
                     raise AssertionError(f"{where}: actions/cache saves on every event")
-    # The jobs that saved rust-cache trees now save one stable compiler cache
-    # per family (#1047); the oracle's jobs left CI and the nightly set's
-    # workflows run on no pull request: fewer saves, each checked.
-    assert checked >= 9
+    # build, engine-lint, wasi and conformance's Linux cell (sccache),
+    # fuzz-smoke (rust-cache), and the release dry run's native and WebAssembly
+    # families: each checked. The nightly's workflows run on no pull request.
+    assert checked >= 7
 
 
 # The compiler cache's key: one per family (and OS), stable for a week of one
@@ -529,6 +517,8 @@ FULL_SET_JOBS = {
     "engine-wasm",
     "engine-package",
     "bench",
+    "elastic-sweep",
+    "clients",
 }
 # macOS and Windows keep no compiler cache (#841): their families (a gigabyte
 # each, saved by every push's full set on each base branch) crowded the Linux
@@ -675,9 +665,10 @@ def test_only_linux_keeps_a_compiler_cache(name: str) -> None:
 
 def test_the_wasi_job_keeps_a_family_of_its_own() -> None:
     """The WASI command line's job builds what no other job does (the module
-    for wasm32-wasip1 in the `wasi` profile). It is in the nightly set: its
-    family is saved by the nightly and on development, whose caches every
-    branch reads."""
+    for wasm32-wasip1 in the `wasi` profile). It runs on a pull request that
+    changes the WASI crates; its family is saved by the nightly and on
+    development, whose caches every branch reads (a copy per base branch is
+    not worth its gigabyte)."""
     cache = _compiler_cache("wasi")
     family = "sccache-wasi-" + STABLE_HASH
     assert cache.restores == cache.saves == family

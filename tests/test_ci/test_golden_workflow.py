@@ -32,6 +32,9 @@ ORACLE_COMMANDS = [
     r"\bxtask payloads git\b",
     r"\bxtask (validate|lint) diff\b",
     r"\bxtask mcp replay\b",
+    r"\bxtask compare\b",
+    r"\bxtask golden\b",
+    r"--oracle\b",
     r"\bxtask lsp parity\b",
     r"--against python",
     r"--engine python",
@@ -68,10 +71,15 @@ def test_the_golden_workflows_are_gone() -> None:
     assert "required-checks-integration" not in text
 
 
-def test_engine_lint_checks_the_generated_artifacts_without_the_oracle() -> None:
+def test_the_build_checks_the_generated_artifacts_without_the_oracle() -> None:
     ci = yaml.safe_load((WORKFLOWS / "ci.yml").read_text(encoding="utf-8"))
-    runs = [str(step.get("run", "")) for step in ci["jobs"]["engine"]["steps"]]
+    runs = [str(step.get("run", "")) for step in ci["jobs"]["build"]["steps"]]
     assert "target/debug/xtask codegen --check" in runs
+    assert not any("--oracle" in run for job in ci["jobs"].values() for run in _runs(job))
+
+
+def _runs(job: dict[str, Any]) -> list[str]:
+    return [str(step.get("run", "")) for step in job.get("steps") or []]
 
 
 def test_the_guides_say_the_commands_run_by_hand() -> None:

@@ -105,6 +105,9 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("uv.lock", ("python", "lint"), ()),
     ("hatch_build.py", ("python", "lint"), ()),
     (".pre-commit-config.yaml", ("lint",), ()),
+    # The scripts a gate job runs: the docs job's and the grammars job's.
+    ("scripts/validate-docs.sh", ("docs", "lint"), ()),
+    ("scripts/engine/check-grammars.sh", ("grammars", "lint"), ()),
     # The engine's scripts (the invariants, the WASI build, the release).
     ("scripts/engine/build-wasm.sh", ("wasi", "lint"), ()),
     ("scripts/engine/*", ("lint", "python"), ALL),
@@ -360,7 +363,8 @@ def plan_run(env: Mapping[str, str], metadata: Mapping[str, Any]) -> Plan:
     event = env.get("EVENT", "")
     scope = env.get("SCOPE", "") or "full"
     if event == "pull_request":
-        labels = json.loads(env.get("LABELS", "[]") or "[]")
+        # toJSON of a missing list is `null`.
+        labels = json.loads(env.get("LABELS", "[]") or "[]") or []
         release = is_release_pr(env.get("BASE_REF", ""), env.get("HEAD_REF", ""), labels)
         paths = changed_paths(env.get("BASE_SHA", ""), env.get("HEAD_SHA", ""))
         if paths is None:

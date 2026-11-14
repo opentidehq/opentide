@@ -3,10 +3,10 @@
 ``ci.yml`` checks the whole repository: the Python jobs, and the Cargo
 workspace's (rustfmt, clippy, nextest on three operating systems, rustdoc,
 WebAssembly, grammars, npm packs, the licence scan, a fuzz smoke run of every
-target, and a dry run of the engine release). A pull request runs the core
-gates; the rest is the full set (``tests/test_ci/test_ci_scope.py``). The
-checks branch protection requires are the core gates that run on every pull
-request, the list ``.github/AGENTS.md`` gives.
+target, and a dry run of the engine release). A pull request runs the PR gate
+where it changed; the release tier and the nightly run the rest
+(``tests/test_ci/test_ci_scope.py``). Branch protection requires one check,
+``PR gate``, the list ``.github/AGENTS.md`` gives.
 
 Releases: the release train (publish.yml, #840) publishes everything from Run
 workflow on development and creates its ``v*`` tag itself; the engine's own
@@ -25,6 +25,7 @@ from typing import Any
 import pytest
 import yaml
 from tests.test_ci import ci_matrix
+from tests.test_ci.ci_steps import NIGHTLY, expected_condition
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
@@ -225,17 +226,6 @@ def test_checkouts_keep_no_credentials(name: str) -> None:
                 )
 
 
-def _scope() -> Any:
-    """test_ci_scope.py: which ci.yml jobs run on every pull request."""
-    spec = importlib.util.spec_from_file_location(
-        "ci_scope_rules", ROOT / "tests" / "test_ci" / "test_ci_scope.py"
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def _step_runs(job: dict[str, Any]) -> str:
     return "\n".join(str(step.get("run", "")) for step in job.get("steps") or [])
 
@@ -246,9 +236,11 @@ def _ci_jobs() -> dict[str, Any]:
 
 def test_ci_runs_on_every_pull_request_and_on_development() -> None:
     triggers = _triggers(_load(CI))
-    assert triggers["pull_request"] is None, "every base branch, no path filter"
+    pull = triggers["pull_request"]
+    assert {"development", "integration/unified-core"} <= set(pull["branches"])
+    assert "paths" not in pull, "no path filter: `changes` scopes the jobs, the gate reports"
     assert "development" in triggers["push"]["branches"]
-    # The full set, nightly.
+    # The nightly.
     assert "schedule" in triggers
 
 
@@ -259,34 +251,37 @@ def test_the_integration_branch_gets_ci_after_each_merge(name: str) -> None:
     assert {"development", "integration/unified-core"} <= set(branches), name
 
 
-# The engine-test job notes the checkout before the tests and after them (#931).
+# rust-tests notes the checkout before the tests and after them (#931).
 TREE_BEFORE = 'git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"'
 TREE_AFTER = 'git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-after"'
-
-
-# A shard names its packages (matrix.packages, read into an array).
-NEXTEST = 'cargo nextest run --locked --profile ci "${selected[@]}" "${filter[@]}"'
-DOCTESTS = 'cargo test --locked --doc "${selected[@]}"'
+# The archive's tests (a folded scalar: one line).
+NEXTEST = "cargo nextest run --profile ci"
 
 
 def _runs_command(line: str, command: str) -> bool:
-    """The line is the command, or the command and its options (a shard's)."""
-    line = line.strip()
-    return line == command
+    """The line is the command."""
+    return line.strip() == command
+
+
+# Steps that run only when their input changed: the build's checks need a
+# Rust change (a Python-only change builds the extension alone).
+CONDITIONAL_STEPS = {
+    ("build", "target/debug/xtask check-layers"): "steps.bins.outputs.xtask == 'true'",
+    ("build", "target/debug/xtask codegen --check"): "steps.bins.outputs.xtask == 'true'",
+}
 
 
 @pytest.mark.parametrize(
     ("job", "command"),
     [
-        ("engine", "cargo fmt --all --check"),
-        ("engine", "cargo clippy --workspace --all-targets --locked -- -D warnings"),
-        ("engine", "target/debug/xtask check-layers"),
-        ("engine", "cargo doc --no-deps --workspace --locked"),
-        ("engine-test-part", NEXTEST),
-        ("engine-test-part", DOCTESTS),
+        ("engine-lint", "cargo fmt --all --check"),
+        ("engine-lint", "cargo clippy --workspace --all-targets --locked -- -D warnings"),
+        ("engine-lint", "cargo doc --no-deps --workspace --locked"),
+        ("build", "target/debug/xtask check-layers"),
+        ("build", "target/debug/xtask codegen --check"),
         # The tests leave the checkout as they found it (#931).
-        ("engine-test-part", TREE_BEFORE),
-        ("engine-test-part", TREE_AFTER),
+        ("rust-tests", TREE_BEFORE),
+        ("rust-tests", TREE_AFTER),
         ("engine-wasm", "bash scripts/engine/build-wasm.sh"),
         ("engine-wasm", "node scripts/engine/check-npm-packs.mjs"),
         (
@@ -314,68 +309,81 @@ def test_ci_runs_the_rust_gates(job: str, command: str) -> None:
     step = steps[0]
     assert "continue-on-error" not in step, (job, command)
     assert "continue-on-error" not in spec, job
-    # Only the scope's condition: the core gates have none, the full set's
-    # jobs exactly theirs (test_ci_scope.py).
-    assert spec.get("if") == _scope().expected_condition(job), job
-    # The doctests run on Linux, each shard its packages' (shard 4 builds
-    # shard 1's packages again, for command_goldens alone: shard 1 runs
-    # theirs); nothing else is conditional.
-    allowed = {("engine-test-part", DOCTESTS): "runner.os == 'Linux' && matrix.goldens != 'heavy'"}
-    assert step.get("if") == allowed.get((job, command)), (job, command, step.get("if"))
+    # Only its tier's condition (test_ci_scope.py).
+    assert spec.get("if") == expected_condition(job), job
+    assert step.get("if") == CONDITIONAL_STEPS.get((job, command)), (job, command, step.get("if"))
     run = str(step["run"])
     assert not re.search(r"\|\|\s*(?:true|:)\b", run), (job, command)
+
+
+def _index(job: str, matches: Any) -> int:
+    runs = [str(step.get("run", "")) for step in _ci_jobs()[job].get("steps") or []]
+    found = [i for i, run in enumerate(runs) if matches(run)]
+    assert len(found) == 1, (job, found)
+    return found[0]
 
 
 def test_ci_fails_when_the_rust_tests_leave_a_file_in_the_checkout() -> None:
     """The checkout is noted before the tests and compared after them; a
     difference fails the job (#931)."""
-    jobs = _ci_jobs()
-    steps = [str(step.get("run", "")) for step in jobs["engine-test-part"].get("steps") or []]
-
-    def index(command: str) -> int:
-        found = [
-            i
-            for i, run in enumerate(steps)
-            if any(_runs_command(line, command) for line in run.splitlines())
-        ]
-        assert len(found) == 1, command
-        return found[0]
-
-    before = index(TREE_BEFORE)
-    nextest = index(NEXTEST)
-    doctests = index(DOCTESTS)
-    guard = index(TREE_AFTER)
-    assert before < nextest < doctests < guard
+    steps = [str(step.get("run", "")) for step in _ci_jobs()["rust-tests"]["steps"]]
+    before = _index("rust-tests", lambda run: TREE_BEFORE in run.splitlines())
+    nextest = _index("rust-tests", lambda run: run.startswith(NEXTEST))
+    guard = _index("rust-tests", lambda run: TREE_AFTER in run.splitlines())
+    assert before < nextest < guard
     lines = [line.strip() for line in steps[guard].splitlines()]
     assert 'if ! diff -u "$RUNNER_TEMP/tree-before" "$RUNNER_TEMP/tree-after"; then' in lines
     assert "exit 1" in lines
 
 
+def test_ci_fails_when_the_builds_tests_leave_a_file_in_the_checkout() -> None:
+    before = _index("build", lambda run: TREE_BEFORE in run.splitlines())
+    doctests = _index("build", lambda run: "cargo test --locked --doc" in run)
+    guard = _index("build", lambda run: TREE_AFTER in run.splitlines())
+    assert before < doctests < guard
+
+
+# A cargo command that compiles nothing: the archive's tests, rustfmt, the version.
+NO_BUILD = re.compile(r"\bcargo (?:fmt|--version)\b|--archive-file")
+# Jobs that install a package as a user would, with the user's flags.
+AS_A_USER = {"smoke-sdist", "smoke-cargo"}
+
+
 def test_every_cargo_job_denies_warnings() -> None:
     """A compiler warning fails every ci.yml step that builds with cargo, as in
     language-server's CI (engine-ci.yml set it workflow-wide): the workflow's,
-    job's or step's environment sets ``RUSTFLAGS=-Dwarnings``. A step may set it
-    alone where the job's environment is a Rust cache's key (``lint`` reads the
-    binding's cache, built without it). The nightly fuzz build is left out: its
-    lints are a nightly's, not the pinned release's."""
+    job's or step's ``RUSTFLAGS`` holds ``-Dwarnings`` (the build adds mold's
+    link argument). The nightly fuzz build is left out: its lints are a
+    nightly's, not the pinned release's; and the smoke tests install as a user
+    does."""
     workflow = _load(CI)
     checked = []
     for job_id, job in workflow["jobs"].items():
-        if "uses" in job or job_id == "fuzz-smoke":
+        if "uses" in job or job_id == "fuzz-smoke" or job_id in AS_A_USER:
             continue
         for step in job.get("steps") or []:
-            if not re.search(r"\bcargo (?!\+)", str(step.get("run", ""))):
+            run = str(step.get("run", ""))
+            if not re.search(r"\bcargo (?!\+)", run) or all(
+                NO_BUILD.search(line) for line in run.splitlines() if "cargo " in line
+            ):
                 continue
             env = {
                 **(workflow.get("env") or {}),
                 **(job.get("env") or {}),
                 **(step.get("env") or {}),
             }
-            assert env.get("RUSTFLAGS") == "-Dwarnings", (job_id, step.get("name"))
+            assert "-Dwarnings" in str(env.get("RUSTFLAGS", "")).split(), (job_id, step.get("name"))
             checked.append(job_id)
-    assert {"engine", "engine-test-part", "engine-package", "bench", "clients", "lint"} <= set(
-        checked
-    )
+    assert {
+        "engine-lint",
+        "build",
+        "facade",
+        "deny",
+        "engine-test-os",
+        "engine-package",
+        "bench",
+        "clients",
+    } <= set(checked)
 
 
 def test_the_oracles_are_required() -> None:
@@ -385,42 +393,26 @@ def test_the_oracles_are_required() -> None:
 
 
 def test_rustdoc_denies_warnings() -> None:
-    steps = _ci_jobs()["engine"]["steps"]
+    steps = _ci_jobs()["engine-lint"]["steps"]
     doc = next(step for step in steps if "cargo doc" in str(step.get("run", "")))
     assert doc["env"]["RUSTDOCFLAGS"] == "-D warnings"
 
 
 def test_nextest_runs_on_three_operating_systems() -> None:
+    """Linux on every pull request (the archive of the affected crates), macOS
+    and Windows nightly: the whole workspace, built there, with the features
+    the archive is built with."""
     jobs = _ci_jobs()
-    for scope, systems in (
-        # The nightly set: three operating systems.
-        ("full", ["ubuntu-latest", "macos-latest", "windows-latest"]),
-        # A pull request: Linux, in the same shards.
-        ("pull", ["ubuntu-latest"]),
-    ):
-        gathered = [cell["os"] for cell in ci_matrix.cells(jobs["engine-test"], scope)]
-        assert gathered == systems, scope
-        shards: dict[str, list[tuple[int, int]]] = {}
-        for cell in ci_matrix.cells(jobs["engine-test-part"], scope):
-            shards.setdefault(cell["os"], []).append((int(cell["shard"]), int(cell["shards"])))
-        assert list(shards) == systems, scope
-        for os_name, cells in shards.items():
-            # Every partition of each OS runs, once: a missing shard would skip its tests.
-            count = cells[0][1]
-            assert sorted(cells) == [(n, count) for n in range(1, count + 1)], os_name
-    full = ci_matrix.cells(jobs["engine-test-part"], "full")
-    pull = ci_matrix.cells(jobs["engine-test-part"], "pull")
-    assert [c for c in full if c["os"] == "ubuntu-latest"] == pull
-    # By package on every OS (test_ci_scope.py holds the packages to the
-    # workspace's members, once each): no shard runs the whole workspace.
-    for cell in full:
-        assert cell["packages"] != "--workspace", cell
-    for step in jobs["engine-test-part"]["steps"]:
-        run = str(step.get("run", ""))
-        if NEXTEST in run or DOCTESTS in run:
-            assert step["env"]["PACKAGES"] == "${{ matrix.packages }}"
-            assert 'read -ra selected <<< "${PACKAGES}"' in run
-            assert "--partition" not in run
+    assert jobs["rust-tests"]["runs-on"] == "ubuntu-latest"
+    other = jobs["engine-test-os"]
+    assert other["strategy"]["matrix"]["os"] == ["macos-latest", "windows-latest"]
+    assert other["if"] == NIGHTLY
+    assert other["env"]["FEATURES"] == jobs["build"]["env"]["FEATURES"]
+    runs = [str(step.get("run", "")) for step in other["steps"]]
+    (run,) = [run for run in runs if "cargo nextest run" in run]
+    assert 'read -ra feature_args <<< "${FEATURES}"' in run
+    assert 'cargo nextest run --locked --profile ci --workspace "${feature_args[@]}"' in run
+    assert "--partition" not in run
 
 
 def test_the_fuzz_smoke_covers_every_target() -> None:
@@ -460,13 +452,11 @@ def _check_names_of(workflow: dict[str, Any]) -> list[tuple[str, bool]]:
     ]
 
 
-def _expand(name: str, job: dict[str, Any], scope: str = "full") -> list[str]:
-    """The check names of a job's cells in *scope* (the nightly set's, ``full``,
-    is a superset of a pull request's, ``pull``)."""
+def _expand(name: str, job: dict[str, Any]) -> list[str]:
+    """The check names of a job's cells."""
     pattern = re.compile(r"\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}")
     return [
-        pattern.sub(lambda m, cell=cell: cell[m.group(1)], name)
-        for cell in ci_matrix.cells(job, scope)
+        pattern.sub(lambda m, cell=cell: cell[m.group(1)], name) for cell in ci_matrix.cells(job)
     ]
 
 
@@ -477,59 +467,43 @@ def _documented_checks() -> list[str]:
     return block.group(1).splitlines()
 
 
-def _every_pull_request(jobs: dict[str, Any], job_id: str) -> bool:
-    """Whether the job runs on every pull request: no `if`, and every job it
-    needs runs on every pull request too (a skipped one skips it)."""
-    job = jobs[job_id]
-    needs = job.get("needs") or []
-    needs = [needs] if isinstance(needs, str) else needs
-    if job.get("if") == _scope().GATHER:
-        # It runs whatever its parts did, skipped ones included, and decides
-        # (test_ci_scope.py, CI_GATHER): its check starts on every pull request.
-        return True
-    return "if" not in job and all(_every_pull_request(jobs, need) for need in needs)
-
-
-def _gathered(jobs: dict[str, Any]) -> set[str]:
-    """The jobs a gathering job stands for: its check is the required one."""
-    gather = _scope().GATHER
-    found: set[str] = set()
-    for job in jobs.values():
-        if job.get("if") == gather:
-            needs = job.get("needs") or []
-            found |= {needs} if isinstance(needs, str) else set(needs)
-    # A path-scoped gathering job also needs `changes`, which is no part of it.
-    return found - {"changes"}
-
-
-def _required_names(path: Path) -> list[str]:
-    """The gating checks of the jobs that run on every pull request."""
+def _every_pull_request(path: Path) -> set[str]:
+    """The jobs of the workflow whose check starts on every pull request: the
+    trigger has no path filter, and the job has no `if` (nor a job it needs),
+    or runs whatever happened (`always()`)."""
     workflow = _load(path)
+    pull = _triggers(workflow).get("pull_request", False)
+    if pull is False or "paths" in (pull or {}) or "paths-ignore" in (pull or {}):
+        return set()
     jobs = workflow["jobs"]
-    names: list[str] = []
-    gathered = _gathered(jobs)
-    for job_id, job in jobs.items():
-        if not _every_pull_request(jobs, job_id) or job.get("continue-on-error") is True:
-            continue
-        if job_id in gathered:
-            continue
-        # A pull request's cells: the nightly set's macOS and Windows engine
-        # tests are not required (they never start on a pull request).
-        names += _expand(str(job.get("name", job_id)), job, "pull")
-    return names
+
+    def starts(job_id: str) -> bool:
+        job = jobs[job_id]
+        if job.get("if") == "always()":
+            return True
+        needs = job.get("needs") or []
+        needs = [needs] if isinstance(needs, str) else needs
+        return "if" not in job and all(starts(need) for need in needs)
+
+    return {job_id for job_id in jobs if starts(job_id)}
 
 
-def test_the_required_checks_are_the_gates_of_every_pull_request() -> None:
+def test_the_required_check_is_the_pr_gate() -> None:
     """A required check must start on every pull request (one that never
-    starts blocks the merge), so the full set's jobs are not required."""
-    expected = [name for path in (CI, WORKFLOWS / "codeql.yml") for name in _required_names(path)]
-    assert len(expected) == len(set(expected)), "check names are unique"
-    assert sorted(_documented_checks()) == sorted(expected)
+    starts blocks the merge), and a skipped one passes: the one required check
+    is `PR gate`, which starts on every pull request and fails unless every
+    job it needs passed or was skipped (test_ci_scope.py)."""
+    jobs = _ci_jobs()
+    assert _documented_checks() == [jobs["gate"]["name"]] == ["PR gate"]
+    # `changes` starts on every pull request too; the gate fails without it.
+    assert _every_pull_request(CI) == {"changes", "gate"}
+    assert "changes" in jobs["gate"]["needs"]
+    # CodeQL starts only when a pull request changes what it reads: never required.
+    assert _every_pull_request(WORKFLOWS / "codeql.yml") == set()
     gating = {name for name, gating in _check_names(CI) if gating}
-    assert set(_required_names(CI)) <= gating
-    # The full set's jobs do run as checks, just not on every pull request.
-    assert {"Test (3.11)", "Fuzz smoke (cli)", "Engine release (dry run) / SBOMs"} <= gating
-    assert not {"Test (3.11)", "Fuzz smoke (cli)"} & set(_documented_checks())
+    # The other jobs do run as checks, just not as required ones.
+    assert {"Python (3.11)", "Fuzz smoke (cli)", "Engine release (dry run) / SBOMs"} <= gating
+    assert not {"Python (3.11)", "Fuzz smoke (cli)"} & set(_documented_checks())
 
 
 def test_the_informational_jobs_are_not_required() -> None:
@@ -543,19 +517,34 @@ def test_only_report_uploads_may_fail_without_failing_their_job() -> None:
     """A report upload is for reading, not a gate.
 
     When GitHub's artifact service is down, ``actions/upload-artifact`` fails
-    after its retries, and that must not fail a job whose checks passed. No
-    other step in ci.yml may set continue-on-error.
+    after its retries, and that must not fail a job whose checks passed. An
+    artifact another job downloads (the test archive, the extension, the sdist,
+    the crates) is no report: its upload failing must fail its job. No other
+    step in ci.yml may set continue-on-error.
     """
-    uploads = 0
-    for job_id, spec in _ci_jobs().items():
+    jobs = _ci_jobs()
+    downloaded = {
+        str((step.get("with") or {}).get("name"))
+        for job in jobs.values()
+        for step in job.get("steps") or []
+        if str(step.get("uses", "")).startswith("actions/download-artifact@")
+    }
+    reports = handoffs = 0
+    for job_id, spec in jobs.items():
         for step in spec.get("steps") or []:
             if str(step.get("uses", "")).startswith("actions/upload-artifact@"):
-                uploads += 1
-                assert step.get("continue-on-error") is True, (job_id, step.get("name"))
+                if step["with"]["name"] in downloaded:
+                    handoffs += 1
+                    assert "continue-on-error" not in step, (job_id, step.get("name"))
+                else:
+                    reports += 1
+                    assert step.get("continue-on-error") is True, (job_id, step.get("name"))
             else:
                 label = step.get("name") or step.get("run")
                 assert "continue-on-error" not in step, (job_id, label)
-    assert uploads >= 4
+    assert reports >= 4
+    assert handoffs >= 4
+    assert {"nextest-archive", "native", "sdist", "crates"} <= downloaded
 
 
 def test_the_facade_semver_check_names_the_crate_and_isolates_the_baseline() -> None:

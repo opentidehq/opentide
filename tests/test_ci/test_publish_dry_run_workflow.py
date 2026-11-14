@@ -57,9 +57,9 @@ FORBIDDEN = (
     "action-gh-release",
 )
 #: The workflow's whole trigger set: no `pull_request_target` or `workflow_run`,
-#: which run with the base repository's token and secrets.
-#: The nightly set (test_ci_scope.py): nightly and on Run workflow only.
-TRIGGERS = {"schedule", "workflow_dispatch"}
+#: which run with the base repository's token and secrets. ci.yml calls it in
+#: the release tier and the nightly (test_ci_scope.py); Run workflow by hand.
+TRIGGERS = {"workflow_call", "workflow_dispatch"}
 #: Where a shell command ends: `;`, `&&`, `||`, `&`, a pipe, a subshell or a
 #: command substitution, a backtick, or the end of the line.
 _COMMAND_END = re.compile(r"&&|\|\||[;&|()`\n]")
@@ -288,14 +288,23 @@ def test_no_expression_is_interpolated_into_a_script(workflow: dict[Any, Any]) -
     assert [run for run in _runs(workflow) if "${{" in run] == []
 
 
-def test_runs_nightly_and_on_demand(workflow: dict[Any, Any]) -> None:
-    """Nightly and on Run workflow, every job: never on a pull request or a
-    push (the nightly set), so a release's rehearsal never blocks a merge."""
+def test_runs_on_a_release_nightly_and_on_demand(workflow: dict[Any, Any]) -> None:
+    """Called by ci.yml on a release pull request, Run workflow (scope
+    release) and the nightly, and by hand: never on every pull request or
+    push, so a release's rehearsal never blocks an ordinary merge. ci.yml
+    passes it no secret and a read-only token."""
     triggers = _triggers(workflow)
-    assert len(triggers["schedule"]) == 1
-    assert "workflow_dispatch" in triggers
+    assert "schedule" not in triggers and "push" not in triggers
+    assert "pull_request" not in triggers
     for name, job in workflow["jobs"].items():
         assert "if" not in job, name
+    caller = _load(ROOT / ".github" / "workflows" / "ci.yml")["jobs"]["publish-dry-run"]
+    assert caller["uses"] == "./.github/workflows/publish-dry-run.yml"
+    assert caller["if"] == (
+        "needs.changes.outputs.release == 'true' || needs.changes.outputs.mode == 'nightly'"
+    )
+    assert caller["permissions"] == {"contents": "read"}
+    assert "secrets" not in caller and "with" not in caller
 
 
 def test_runs_on_no_trigger_that_carries_the_base_repository_secrets(

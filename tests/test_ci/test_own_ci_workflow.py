@@ -7,21 +7,20 @@ actually run. If the matrix list and ``--splits`` ever disagree, the tests in
 the groups above the matrix length are skipped with no failure and no warning,
 which is the one way this speed-up could silently cost coverage.
 
-Also pins the concurrency of the long jobs. ``cli-e2e`` used to declare
-``needs: [test]``, which put the slowest unit cell (~344 s) in front of the
-longest job in the workflow (~980 s) for a ~22 min wall clock. They share no
-artifact, so the dependency bought nothing; restoring it would quietly undo
-most of the win.
+Also pins the concurrency of the long jobs: the test jobs wait for the build
+they run (its archive, its extension) and for nothing else. ``cli-e2e`` once
+declared ``needs: [test]``, which put the slowest unit cell in front of the
+longest job for a ~22 min wall clock; they shared no artifact.
 
-Also covers the vocabulary drift gate's path filter. It used ``rg``, which
-GitHub-hosted runners do not ship; inside ``if`` the missing command read as
-"no match", so the drift check never ran. The check is
-``cargo xtask vocab sync --check`` (``xtask/src/vocab/sync.rs``). When the gate fires,
+Also covers the vocabulary drift gate's path filter, in ``build``. It once
+used ``rg``, which GitHub-hosted runners do not ship; inside ``if`` the missing
+command read as "no match", so the drift check never ran. The check is
+``xtask vocab sync --check`` (``xtask/src/vocab/sync.rs``). When the gate fires,
 ``--check`` must see a specifications checkout: without one it only compares the
 lockfile with the bundle, and hand-edited pins pass once relocked.
 
 The same checkout feeds the model field description check
-(``cargo xtask spec-fields``, ``xtask/src/spec_fields.rs``), which fails rather
+(``xtask spec-fields``, ``xtask/src/spec_fields.rs``), which fails rather
 than skips when the checkout is missing.
 
 Also holds the engine crates' licence scan to what the package step leaves
@@ -39,6 +38,7 @@ from typing import Any
 
 import pytest
 import yaml
+from tests.test_ci.ci_steps import merged_checkout, run_step, step
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -47,10 +47,10 @@ else:
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
-SHARDED_JOB = "cli-e2e"
-# Jobs that must not be gated on the unit matrix: they consume nothing it
-# produces, and waiting for it is pure wall clock.
-CONCURRENT_JOBS = ("cli-e2e", "cli-windows-smoke", "gitlab-ci-lint")
+SHARDED_JOB = "e2e"
+# The jobs that run from the build: they wait for it and for nothing else
+# (the Python job's coverage run is the longest; E2E shares no artifact with it).
+CONCURRENT_JOBS = ("rust-tests", "python", "e2e", "gitlab-ci-lint", "node", "test-full", "e2e-full")
 
 
 @pytest.fixture(scope="module")
@@ -109,14 +109,13 @@ def test_durations_file_is_present(workflow: dict[str, Any]) -> None:
 
 
 @pytest.mark.parametrize("job", CONCURRENT_JOBS)
-def test_long_jobs_do_not_wait_for_the_unit_matrix(workflow: dict[str, Any], job: str) -> None:
-    """These jobs must stay off the unit matrix's critical path."""
+def test_long_jobs_wait_for_the_build_only(workflow: dict[str, Any], job: str) -> None:
+    """These jobs must stay off each other's critical path."""
     needs = workflow["jobs"][job].get("needs") or []
     needs = [needs] if isinstance(needs, str) else list(needs)
-    assert "test" not in needs, (
-        f"{job} declares needs: [test], which serialises it behind the slowest "
-        f"unit cell (~344 s) for no shared artifact. That dependency is what made "
-        f"the workflow ~22 min; the jobs are independent and must run concurrently."
+    assert needs == ["changes", "build"], (
+        f"{job} needs {needs}: a test job that waits for another serialises the "
+        f"gate behind it for no shared artifact; it needs the build it runs only."
     )
 
 
@@ -128,7 +127,7 @@ def test_sysmon_coverage_cell_is_new_enough(workflow: dict[str, Any]) -> None:
     lowering COVERAGE_PYTHON would silently fall back to the slow tracer -- or
     error -- with nothing in the workflow to say why.
     """
-    steps = workflow["jobs"]["test"]["steps"]
+    steps = workflow["jobs"]["python"]["steps"]
     sysmon = [s for s in steps if (s.get("env") or {}).get("COVERAGE_CORE") == "sysmon"]
     if not sysmon:
         pytest.skip("no step requests the sys.monitoring coverage backend")
@@ -142,15 +141,13 @@ def test_sysmon_coverage_cell_is_new_enough(workflow: dict[str, Any]) -> None:
     )
 
 
-def _vocab_gate_pattern(workflow: dict[str, Any]) -> str:
-    """The ERE the ``vocab_changes`` step greps changed paths with."""
-    steps = workflow["jobs"]["lint"]["steps"]
-    runs = [str(step.get("run", "")) for step in steps if step.get("id") == "vocab_changes"]
-    assert len(runs) == 1, "expected exactly one vocab_changes step in the lint job"
-    match = re.search(r'grep -qE "([^"]+)"', runs[0])
-    assert match is not None, "vocab_changes must filter paths with grep -qE (rg is not installed)"
-    # Bash double quotes turn the workflow's ``\\.`` into ``\.``.
-    return match.group(1).replace("\\\\", "\\")
+def _specs(
+    tmp_path: Path, changed: list[str], mode: str = "pr", merge: bool = True
+) -> dict[str, str]:
+    """The build's `specs` step, its own shell, in a checkout whose HEAD
+    merges a change of *changed* (as a pull request's is)."""
+    repo = merged_checkout(tmp_path / "repo", changed, merge=merge)
+    return run_step(step("build", step_id="specs"), repo, {"MODE": mode})
 
 
 @pytest.mark.parametrize(
@@ -161,50 +158,13 @@ def _vocab_gate_pattern(workflow: dict[str, Any]) -> str:
         ("data/specifications.lock.json", True),
         ("xtask/src/vocab/sync.rs", True),
         ("src/opentide/_models/vocab_pins.py", False),
+        ("xtask/src/vocab/syncXrs", False),
     ],
 )
 def test_vocab_drift_gate_watches_bundle_pins_and_lockfile(
-    workflow: dict[str, Any], path: str, gated: bool
+    tmp_path: Path, path: str, gated: bool
 ) -> None:
-    assert bool(re.search(_vocab_gate_pattern(workflow), path)) is gated
-
-
-def test_vocab_drift_check_compares_against_a_specifications_checkout(
-    workflow: dict[str, Any],
-) -> None:
-    steps = workflow["jobs"]["lint"]["steps"]
-    checks = [
-        step for step in steps if "cargo xtask vocab sync --check" in str(step.get("run", ""))
-    ]
-    assert len(checks) == 1, "expected exactly one `cargo xtask vocab sync --check` step in lint"
-    root = checks[0].get("env", {}).get("OPENTIDE_SPECIFICATIONS_ROOT", "")
-    assert root == "${{ github.workspace }}/specifications"
-
-    checkouts = [
-        step
-        for step in steps[: steps.index(checks[0])]
-        if step.get("with", {}).get("repository") == "opentidehq/specifications"
-    ]
-    assert len(checkouts) == 1, "the drift check needs a specifications checkout before it"
-    assert checkouts[0]["with"]["path"] == "specifications"
-    assert checkouts[0]["with"].get("ref") == "main"
-    # Gated on (at least) the check's condition, so the check never runs
-    # without the clone.
-    assert checks[0].get("if") in _conditions(checkouts[0])
-
-
-def _conditions(step: dict[str, Any]) -> list[str]:
-    """The ``||`` alternatives of a step's ``if``."""
-    return [part.strip() for part in str(step.get("if", "")).split("||")]
-
-
-def _field_gate_pattern(workflow: dict[str, Any]) -> str:
-    """The ERE that sets ``fields=true`` in the ``vocab_changes`` step."""
-    steps = workflow["jobs"]["lint"]["steps"]
-    run = next(str(step["run"]) for step in steps if step.get("id") == "vocab_changes")
-    match = re.search(r'grep -qE "([^"]+)"[^\n]*\n\s*echo "fields=true"', run)
-    assert match is not None, "vocab_changes must set fields=true from a grep -qE path filter"
-    return match.group(1).replace("\\\\", "\\")
+    assert _specs(tmp_path, [path, "docs/index.md"])["vocab"] == str(gated).lower()
 
 
 @pytest.mark.parametrize(
@@ -213,34 +173,82 @@ def _field_gate_pattern(workflow: dict[str, Any]) -> str:
         ("crates/opentide-schema/src/objects/platform/sentinel.rs", True),
         ("crates/opentide-schema/src/objects/rule.rs", True),
         ("xtask/src/spec_fields.rs", True),
-        (".github/workflows/ci.yml", True),
         ("crates/opentide-schema/src/generate/schema.rs", False),
         ("xtask/src/spec_fieldsXrs", False),
         ("tests/test_ci/test_own_ci_workflow.py", False),
     ],
 )
 def test_field_description_gate_watches_the_models_and_the_check(
-    workflow: dict[str, Any], path: str, gated: bool
+    tmp_path: Path, path: str, gated: bool
 ) -> None:
-    assert bool(re.search(_field_gate_pattern(workflow), path)) is gated
+    assert _specs(tmp_path, [path, "docs/index.md"])["fields"] == str(gated).lower()
+
+
+def test_a_change_to_ci_runs_the_specification_checks(tmp_path: Path) -> None:
+    outputs = _specs(tmp_path, [".github/workflows/ci.yml"])
+    assert outputs == {"vocab": "true", "fields": "true"}
+
+
+@pytest.mark.parametrize("mode", ["full", "nightly"])
+def test_every_push_and_nightly_read_the_specifications(tmp_path: Path, mode: str) -> None:
+    assert _specs(tmp_path, ["docs/index.md"], mode) == {"vocab": "true", "fields": "true"}
+
+
+def test_the_specifications_are_read_when_the_merge_cannot_be(tmp_path: Path) -> None:
+    """No second parent: fail open."""
+    assert _specs(tmp_path, ["docs/index.md"], merge=False) == {"vocab": "true", "fields": "true"}
+
+
+def test_the_specification_gates_need_a_rust_build() -> None:
+    """The checks run the build's xtask: the step runs when it is built."""
+    decision = step("build", step_id="specs")
+    assert decision["if"] == "steps.bins.outputs.xtask == 'true'"
+    assert decision["env"]["MODE"] == "${{ needs.changes.outputs.mode }}"
+
+
+def _checkout_before(steps: list[dict[str, Any]], check: dict[str, Any]) -> dict[str, Any]:
+    checkouts = [
+        s
+        for s in steps[: steps.index(check)]
+        if (s.get("with") or {}).get("repository") == "opentidehq/specifications"
+    ]
+    assert len(checkouts) == 1, "the check needs a specifications checkout before it"
+    return checkouts[0]
+
+
+def test_vocab_drift_check_compares_against_a_specifications_checkout(
+    workflow: dict[str, Any],
+) -> None:
+    steps = workflow["jobs"]["build"]["steps"]
+    checks = [s for s in steps if "xtask vocab sync --check" in str(s.get("run", ""))]
+    assert len(checks) == 1, "expected exactly one `xtask vocab sync --check` step in build"
+    assert checks[0]["run"] == "target/debug/xtask vocab sync --check"
+    root = checks[0].get("env", {}).get("OPENTIDE_SPECIFICATIONS_ROOT", "")
+    assert root == "${{ github.workspace }}/specifications"
+    checkout = _checkout_before(steps, checks[0])
+    assert checkout["with"]["path"] == "specifications"
+    assert checkout["with"].get("ref") == "main"
+    assert checks[0]["if"] == "steps.specs.outputs.vocab == 'true'"
+    # Gated on (at least) the check's condition, so the check never runs without the clone.
+    assert checks[0]["if"] in _conditions(checkout)
+
+
+def _conditions(spec: dict[str, Any]) -> list[str]:
+    """The ``||`` alternatives of a step's ``if``."""
+    return [part.strip() for part in str(spec.get("if", "")).split("||")]
 
 
 def test_field_description_check_requires_a_specifications_checkout(
     workflow: dict[str, Any],
 ) -> None:
-    steps = workflow["jobs"]["lint"]["steps"]
-    checks = [step for step in steps if "cargo xtask spec-fields" in str(step.get("run", ""))]
-    assert len(checks) == 1, "expected exactly one spec field description step in lint"
+    steps = workflow["jobs"]["build"]["steps"]
+    checks = [s for s in steps if "xtask spec-fields" in str(s.get("run", ""))]
+    assert len(checks) == 1, "expected exactly one spec field description step in build"
     env = checks[0].get("env", {})
     # The command exits 2 without a checkout, so the guard cannot pass by not running.
     assert env.get("OPENTIDE_SPECIFICATIONS_ROOT") == "${{ github.workspace }}/specifications"
-    checkouts = [
-        step
-        for step in steps[: steps.index(checks[0])]
-        if step.get("with", {}).get("repository") == "opentidehq/specifications"
-    ]
-    assert len(checkouts) == 1
-    assert checks[0].get("if") in _conditions(checkouts[0])
+    assert checks[0]["if"] == "steps.specs.outputs.fields == 'true'"
+    assert checks[0]["if"] in _conditions(_checkout_before(steps, checks[0]))
 
 
 LOCAL_CI = ROOT / "scripts" / "ci-local.sh"
@@ -425,44 +433,29 @@ def _runs(job: dict[str, Any]) -> str:
     return "\n".join(str(step.get("run", "")) for step in job.get("steps") or [])
 
 
-@pytest.mark.parametrize("job", ["engine", "engine-test-part"])
+@pytest.mark.parametrize("job", ["engine-lint", "rust-tests", "lint"])
 def test_the_engine_jobs_compile_no_python_binding(workflow: dict[str, Any], job: str) -> None:
     """`uv sync` compiled the binding for minutes before the engine's own work
-    (#841): the engine jobs run Python from setup-python, with nothing synced."""
-    assert "uv sync" not in _runs(workflow["jobs"][job]), job
-    assert "uv run" not in _runs(workflow["jobs"][job]), job
+    (#841): the engine jobs run Python from setup-python, with nothing synced,
+    and lint installs the dependencies without the project."""
+    runs = _runs(workflow["jobs"][job])
+    for line in runs.splitlines():
+        if "uv sync" in line:
+            assert "--no-install-project" in line, (job, line)
+        if "uv run" in line:
+            assert "uv run --no-sync" in line, (job, line)
 
 
 def test_the_difflib_comparison_reads_setup_pythons_interpreter(workflow: dict[str, Any]) -> None:
     """crates/opentide-workspace/tests/external_difflib.rs needs a Python: with
-    no .venv, OPENTIDE_PYTHON names it, or the test fails."""
-    steps = workflow["jobs"]["engine-test-part"]["steps"]
-    (nextest,) = [s for s in steps if "cargo nextest run" in str(s.get("run", ""))]
-    assert (nextest.get("env") or {}).get("OPENTIDE_PYTHON") == "python"
-    assert any(str(s.get("uses", "")).startswith("actions/setup-python@") for s in steps)
-
-
-def test_lint_compiles_the_engine_once(workflow: dict[str, Any]) -> None:
-    """ruff and ty read the sources: the dependencies are installed without the
-    project, and nothing syncs it back before `uv build`, which compiles the
-    engine from the sdist into the cached target directory (#841)."""
-    steps = workflow["jobs"]["lint"]["steps"]
-    runs = [str(s.get("run", "")) for s in steps]
-    assert "uv sync --group dev --no-install-project" in runs
-    for run in runs:
-        if run.startswith("uv run"):
-            assert run.startswith("uv run --no-sync"), run
-    sdist = runs.index("uv build --sdist")
-    # ty resolves opentide._version, which building the sdist writes.
-    assert sdist < next(n for n, run in enumerate(runs) if "ty check" in run)
-    (build,) = [s for s in steps if "uv build --wheel" in str(s.get("run", ""))]
-    run = str(build["run"])
-    # From the sdist alone, unpacked where the last run unpacked it.
-    assert 'tar -xzf dist/*.tar.gz -C "${RUNNER_TEMP}/sdist" --strip-components=1' in run
-    assert 'uv build --wheel --out-dir dist "${RUNNER_TEMP}/sdist"' in run
-    env = build.get("env") or {}
-    assert env.get("OPENTIDE_ENGINE_PROFILE") == "develop"
-    assert env.get("CARGO_TARGET_DIR") == "${{ github.workspace }}/target"
+    no .venv, OPENTIDE_PYTHON names it, or the test fails (the archive's tests
+    on Linux, the workspace's on macOS and Windows)."""
+    for job_id in ("rust-tests", "engine-test-os"):
+        job = workflow["jobs"][job_id]
+        assert (job.get("env") or {}).get("OPENTIDE_PYTHON") == "python", job_id
+        assert any(
+            str(s.get("uses", "")).startswith("actions/setup-python@") for s in job["steps"]
+        ), job_id
 
 
 def test_codeql_installs_the_dependencies_not_the_engine() -> None:
