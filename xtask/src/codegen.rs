@@ -74,7 +74,6 @@ use serde_json::Value;
 use crate::corpus::cli::{read_folder, repo_root};
 use crate::golden::case::Spec;
 use crate::golden::recording::{Recording, recorded_ids};
-use crate::golden::report_only;
 use crate::golden::snapshot::{ChangeKind, Kind};
 use crate::verdict::{self, Instances};
 
@@ -187,13 +186,9 @@ pub fn run(args: &[String]) -> Result<u8> {
         problems.extend(drift);
         oracle.extend(catalogs);
     }
-    let reported = gate(&mut problems, oracle, report_only::enabled(&root));
-    for problem in &reported {
-        println!("report: {problem}");
-    }
-    if !reported.is_empty() {
-        println!("{}", report_only::verdict(reported.len(), None));
-    }
+    // The differences from the oracle's recordings gate with the committed
+    // artifacts' drift from the generator.
+    problems.extend(oracle);
     for problem in &problems {
         eprintln!("error: {problem}");
     }
@@ -213,21 +208,6 @@ pub fn run(args: &[String]) -> Result<u8> {
             problems.len()
         );
         Ok(1)
-    }
-}
-
-/// Splits the differences from the oracle's recordings off the gating ones:
-/// while the catch-up train's report-only marker is committed
-/// ([`report_only::MARKER`]), they are returned to be printed as a report;
-/// otherwise they join `problems` and fail the run. The committed
-/// artifacts' drift from the generator is never in `oracle`, so it always
-/// gates.
-fn gate(problems: &mut Vec<String>, oracle: Vec<String>, report_only: bool) -> Vec<String> {
-    if report_only {
-        oracle
-    } else {
-        problems.extend(oracle);
-        Vec::new()
     }
 }
 
@@ -1257,23 +1237,6 @@ fn compare(
 
 #[cfg(test)]
 mod tests {
-
-    #[test]
-    fn the_oracles_differences_gate_unless_the_train_is_report_only() {
-        let oracle = vec!["generate/x: rule.1.0 differs from the oracle's".to_owned()];
-        let drift = "data/catalogs/tide/generated/fields.json: missing".to_owned();
-        // Gated: they fail the run with the committed drift.
-        let mut problems = vec![drift.clone()];
-        let reported = gate(&mut problems, oracle.clone(), false);
-        assert!(reported.is_empty());
-        assert_eq!(problems, vec![drift.clone(), oracle[0].clone()]);
-        // Report-only: they are reported, and the drift still fails.
-        let mut problems = vec![drift.clone()];
-        let reported = gate(&mut problems, oracle.clone(), true);
-        assert_eq!(reported, oracle);
-        assert_eq!(problems, vec![drift]);
-    }
-
     use super::*;
 
     #[test]

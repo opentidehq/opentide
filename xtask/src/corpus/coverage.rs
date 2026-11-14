@@ -439,21 +439,17 @@ reason = "the engine is compiled in"
         assert!(rendered.contains("## Missing\n\n- `yaml_parse`"));
     }
 
-    /// `[[pending]]` belongs to the catch-up train alone: wherever the
-    /// report-only marker (`tests/golden/REPORT_ONLY`) is absent, the goldens
-    /// gate and every code in scope must have its fault kind, so the list is
-    /// empty. O2's last commit proves it.
+    /// `[[pending]]` belonged to the catch-up train alone: since O2 the
+    /// goldens gate, and every code in scope has its fault kind, so the list
+    /// is empty.
     #[test]
-    fn nothing_is_pending_without_the_report_only_marker() {
+    fn nothing_is_pending() {
         let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-        if crate::golden::report_only::enabled(&repo) {
-            return;
-        }
         let catalogue =
             crate::corpus::cli::load_catalogue(&repo.join("tests/corpora/faults.toml")).unwrap();
         assert!(
             catalogue.pending.is_empty(),
-            "tests/golden/REPORT_ONLY is gone, so the goldens gate: every code in scope needs \
+            "the goldens gate: every code in scope needs \
              its fault kind, and [[pending]] in tests/corpora/faults.toml must be empty. It \
              still lists {:?}",
             catalogue
