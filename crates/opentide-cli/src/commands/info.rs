@@ -49,6 +49,18 @@ pub struct Args {
     pub strict: bool,
 }
 
+impl From<&crate::tree::InfoArgs> for Args {
+    fn from(args: &crate::tree::InfoArgs) -> Self {
+        Self {
+            platform: args.platform.as_ref().map(crate::tree::spelled),
+            section: args.section.clone(),
+            name: args.name.clone(),
+            technique: args.technique.clone(),
+            strict: args.strict,
+        }
+    }
+}
+
 /// What the run knows about where it is.
 pub struct Context<'a> {
     /// `--repo`, as typed.

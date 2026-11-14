@@ -17,7 +17,10 @@ use crate::redact::{Redactor, url_secrets, workspace_redactor};
 use crate::render::outcome::{Console, OutcomeKind};
 use crate::render::text::{Color, Colour, Style, Text};
 use crate::usage;
+use clap::FromArgMatches;
 use clap::parser::ValueSource;
+
+use crate::tree::RootCommand;
 use std::cell::RefCell;
 use std::io::Write;
 use std::path::PathBuf;
@@ -188,9 +191,6 @@ pub fn globals(args: &[String], matches: &clap::ArgMatches, env: &Env) -> Global
     }
 }
 
-/// A usage error a command found itself, with the notes under it.
-type Refusal = (Outcome, Vec<(String, String)>);
-
 /// What a run resolved before it started the command.
 struct Run<'a> {
     args: Vec<String>,
@@ -219,7 +219,6 @@ impl Run<'_> {
     fn emit(
         &self,
         outcome: &Outcome,
-        notes: &[(String, String)],
         lines: &[String],
         out: &mut dyn Write,
         err: &mut dyn Write,
@@ -238,7 +237,7 @@ impl Run<'_> {
                     .as_ref()
                     .map_or(outcome.message.as_str(), |failure| failure.message.as_str());
                 let console = self.console(self.host.stderr_tty);
-                let mut text = console.error(message, notes, self.mode, false);
+                let mut text = console.error(message, &[], self.mode, false);
                 text.push_str(&console.next_actions(&outcome.next_actions));
                 text.push_str(&console.agent_tip(self.mode));
                 err.write_all(text.as_bytes())?;
@@ -263,6 +262,31 @@ impl Run<'_> {
         Ok(outcome.exit_code)
     }
 
+    /// A usage error a command found itself once the line parsed: exit 2,
+    /// the envelope under `--json`, else clap's error layout for the command
+    /// at `path` (its `Usage:` line and `--help` hint).
+    fn refuse(
+        &self,
+        path: &[String],
+        failure: Failure,
+        out: &mut dyn Write,
+        err: &mut dyn Write,
+    ) -> std::io::Result<i32> {
+        let mut root = self.root.clone();
+        // Built, every command knows its parents' names (`opentide setup`).
+        root.build();
+        let rendered = usage::command_at(&root, path)
+            .clone()
+            .error(clap::error::ErrorKind::ValueValidation, &failure.message)
+            .render();
+        let problem = usage::UsageError {
+            command: path.join(" "),
+            failure,
+            rendered,
+        };
+        self.emit_usage(problem, out, err)
+    }
+
     /// A clap parse error: the envelope under `--json`, else clap's own
     /// rendered error on stderr. Exit 2.
     fn emit_usage(
@@ -273,7 +297,7 @@ impl Run<'_> {
     ) -> std::io::Result<i32> {
         if self.mode == Mode::Json {
             let outcome = Outcome::failed(&problem.command, USAGE_EXIT_CODE, problem.failure);
-            return self.emit(&outcome, &[], &[], out, err);
+            return self.emit(&outcome, &[], out, err);
         }
         let console = self.console(self.host.stderr_tty);
         let text = if console.colour == Colour::Full {
@@ -370,17 +394,6 @@ impl Run<'_> {
             .filter(|word| !word.starts_with('-'))
             .cloned()
             .collect();
-        let refuse = |failure: Failure| {
-            let outcome = Outcome::failed("", USAGE_EXIT_CODE, failure);
-            let notes = vec![
-                ("usage".to_owned(), usage::usage_line(&self.root, &[])),
-                (
-                    "help".to_owned(),
-                    format!("run '{} --help'", catalog::PROGRAM),
-                ),
-            ];
-            (outcome, notes)
-        };
         let shell = match completion::named_shell(&words, option) {
             Ok(Some(shell)) => shell,
             Ok(None) => {
@@ -391,15 +404,13 @@ impl Run<'_> {
                         "Could not tell which shell this is. Name it: {}",
                         completion::form(option)
                     );
-                    let (outcome, notes) = refuse(Failure::new(code::USAGE_ERROR, message));
-                    return self.emit(&outcome, &notes, &[], out, err);
+                    return self.refuse(&[], Failure::new(code::USAGE_ERROR, message), out, err);
                 }
             }
             Err(message) => {
                 let mut failure = Failure::new(code::USAGE_INVALID_VALUE, message);
                 failure.argument = Some(option.to_owned());
-                let (outcome, notes) = refuse(failure);
-                return self.emit(&outcome, &notes, &[], out, err);
+                return self.refuse(&[], failure, out, err);
             }
         };
         let script = completion::script(shell);
@@ -460,7 +471,7 @@ impl Run<'_> {
                 ),
             ),
         };
-        self.emit(&outcome, &[], &[], out, err)
+        self.emit(&outcome, &[], out, err)
     }
 
     fn dispatch(&self, out: &mut dyn Write, err: &mut dyn Write) -> std::io::Result<i32> {
@@ -483,8 +494,9 @@ impl Run<'_> {
         if self.args.is_empty() && !self.mode.is_machine() {
             return self.help(&[], 0, out);
         }
-        let argv = std::iter::once(catalog::PROGRAM.to_owned()).chain(self.args.iter().cloned());
-        let matches = match self.root.clone().try_get_matches_from(argv) {
+        let typed_line =
+            std::iter::once(catalog::PROGRAM.to_owned()).chain(self.args.iter().cloned());
+        let matches = match self.root.clone().try_get_matches_from(typed_line) {
             Ok(matches) => matches,
             Err(error) => {
                 let path = command_words(&self.root, &self.args);
@@ -568,7 +580,7 @@ impl Run<'_> {
                 "opentide --help",
                 "--repo takes the folder with .opentide/ in it",
             )];
-            return self.emit(&outcome, &[], &[], out, err);
+            return self.emit(&outcome, &[], out, err);
         }
         if self.globals.quiet && self.globals.verbose {
             let mut failure = Failure::new(
@@ -577,7 +589,46 @@ impl Run<'_> {
             );
             failure.argument = Some("--verbose".into());
             let outcome = Outcome::failed("", USAGE_EXIT_CODE, failure);
-            return self.emit(&outcome, &[], &[], out, err);
+            return self.emit(&outcome, &[], out, err);
+        }
+        // The commands dispatched by their clap derive structs (`tree.rs`).
+        let typed = match crate::tree::Cli::from_arg_matches(&matches) {
+            Ok(cli) => cli,
+            Err(error) => {
+                let problem = usage::describe(&self.root, &self.args, error);
+                return self.emit_usage(problem, out, err);
+            }
+        };
+        match &typed.command {
+            Some(RootCommand::Info(args)) => {
+                let report = self.info(args);
+                let code = self.emit_report(&report, out, err);
+                // `info catalog`'s document is large (see `release`).
+                release(report);
+                return code;
+            }
+            Some(RootCommand::Validate(args)) if args.command.is_none() => {
+                return self.run_validate(args, out, err);
+            }
+            Some(RootCommand::Lint(args)) => {
+                let report = self.lint(args);
+                return self.emit_report(&report, out, err);
+            }
+            Some(RootCommand::New(crate::tree::NewArgs {
+                command: Some(command),
+            })) => {
+                let report = self.new_object(command);
+                return self.emit_report(&report, out, err);
+            }
+            Some(RootCommand::Query(args)) => {
+                let report = self.query(args);
+                return self.emit_report(&report, out, err);
+            }
+            Some(RootCommand::Explain(args)) => {
+                let report = crate::commands::explain::run(args.code.as_deref(), &self.terminal());
+                return self.emit_report(&report, out, err);
+            }
+            _ => {}
         }
         let path = words.join(" ");
         match path.as_str() {
@@ -599,14 +650,7 @@ impl Run<'_> {
                 } else {
                     catalog::tree_lines()
                 };
-                self.emit(&outcome, &[], &lines, out, err)
-            }
-            "info" => {
-                let report = self.info(&matches);
-                let code = self.emit_report(&report, out, err);
-                // `info catalog`'s document is large (see `release`).
-                release(report);
-                code
+                self.emit(&outcome, &lines, out, err)
             }
             "generate exports"
             | "generate exports navigator"
@@ -647,10 +691,6 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
-            "new threat" | "new objective" | "new rule" => {
-                let report = self.new_object(&matches, &words[1]);
-                self.emit_report(&report, out, err)
-            }
             "generate explorer" => {
                 let parsed = leaf(&matches);
                 let options = crate::commands::generate::ExplorerOptions {
@@ -673,86 +713,8 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
-            "validate" => {
-                // A person at a terminal sees what runs until the result
-                // replaces it.
-                let status = self.mode == Mode::Human
-                    && self.host.stderr_tty
-                    && !self.globals.quiet
-                    && self.console(true).colour != Colour::None;
-                // Log lines follow under `--debug`, and from the CVE check's
-                // lookups (warnings when they fail): the line stays above them.
-                let logging = self.globals.debug
-                    || self.env.debug_requested()
-                    || leaf(&matches)
-                        .try_get_one::<crate::tree::Check>("check")
-                        .ok()
-                        .flatten()
-                        .is_some_and(|check| *check == crate::tree::Check::Cve);
-                // A report on stdout is whole: no status line then either.
-                let status = status
-                    && !leaf(&matches).get_flag("watch")
-                    && leaf(&matches)
-                        .get_one::<crate::tree::ReportFormat>("report_format")
-                        .is_none_or(|format| *format == crate::tree::ReportFormat::Text);
-                if status {
-                    let mut line = Text::styled("⠋", &Style::fg(Color::Cyan).bold());
-                    line.push_str(" Validating objects");
-                    err.write_all(b"\x1b[?25l")?;
-                    err.write_all(line.render(Colour::Full, false).as_bytes())?;
-                    if logging {
-                        err.write_all(b"\n")?;
-                    }
-                    err.flush()?;
-                }
-                let (parsed, report) = self.validate(&matches);
-                if status {
-                    err.write_all(if logging {
-                        b"\x1b[?25h".as_slice()
-                    } else {
-                        b"\r\x1b[2K\x1b[?25h".as_slice()
-                    })?;
-                    err.flush()?;
-                }
-                if let Some(report) = report {
-                    return self.emit_report(&report, out, err);
-                }
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let terminal = self.terminal();
-                let interrupt = self.host.interrupt.clone();
-                let code = crate::commands::watch::run(
-                    &parsed,
-                    &crate::commands::validate::Context {
-                        repo: self.globals.repo.as_deref(),
-                        env: self.env,
-                        cwd: &cwd,
-                        version: &self.host.version,
-                        terminal: &terminal,
-                        proxy: self.globals.proxy.as_deref(),
-                    },
-                    out,
-                    err,
-                    &|| interrupt.requested(),
-                )?;
-                // Ctrl-C is how a watch stops.
-                self.host.interrupt.consume();
-                Ok(code)
-            }
             "validate query" => {
                 let report = self.validate_query(&matches);
-                self.emit_report(&report, out, err)
-            }
-            "query" => {
-                let report = self.query(&matches);
-                self.emit_report(&report, out, err)
-            }
-            "lint" => {
-                let report = self.lint(&matches);
-                self.emit_report(&report, out, err)
-            }
-            "explain" => {
-                let code = leaf(&matches).get_one::<String>("code").cloned();
-                let report = crate::commands::explain::run(code.as_deref(), &self.terminal());
                 self.emit_report(&report, out, err)
             }
             "generate docs"
@@ -840,7 +802,11 @@ impl Run<'_> {
             "share" | "share push" | "share preview" | "share status" | "share retract"
             | "share targets" => match self.share(&matches, &path) {
                 Ok(report) => self.emit_report(&report, out, err),
-                Err(refused) => self.emit(&refused.0, &refused.1, &[], out, err),
+                Err(refused) => {
+                    let words: Vec<String> =
+                        refused.0.split_whitespace().map(str::to_owned).collect();
+                    self.refuse(&words, refused.1, out, err)
+                }
             },
             "doctor" => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
@@ -880,7 +846,6 @@ impl Run<'_> {
                 );
                 self.emit(
                     &Outcome::failed(&path, USAGE_EXIT_CODE, failure),
-                    &[],
                     &[],
                     out,
                     err,
@@ -1061,43 +1026,78 @@ impl Run<'_> {
                 }
                 self.emit_report(&report, out, err)
             }
-            _ => self.emit(&unhandled(&path), &[], &[], out, err),
+            _ => self.emit(&unhandled(&path), &[], out, err),
         }
     }
 
+    /// `opentide validate`: its report, or a `--watch` until Ctrl-C.
+    fn run_validate(
+        &self,
+        args: &crate::tree::ValidateArgs,
+        out: &mut dyn Write,
+        err: &mut dyn Write,
+    ) -> std::io::Result<i32> {
+        // A person at a terminal sees what runs until the result
+        // replaces it.
+        let status = self.mode == Mode::Human
+            && self.host.stderr_tty
+            && !self.globals.quiet
+            && self.console(true).colour != Colour::None;
+        // Log lines follow under `--debug`, and from the CVE check's
+        // lookups (warnings when they fail): the line stays above them.
+        let logging = self.globals.debug
+            || self.env.debug_requested()
+            || args.check == Some(crate::tree::Check::Cve);
+        // A report on stdout is whole: no status line then either.
+        let status = status && !args.watch && args.report_format == crate::tree::ReportFormat::Text;
+        if status {
+            let mut line = Text::styled("⠋", &Style::fg(Color::Cyan).bold());
+            line.push_str(" Validating objects");
+            err.write_all(b"\x1b[?25l")?;
+            err.write_all(line.render(Colour::Full, false).as_bytes())?;
+            if logging {
+                err.write_all(b"\n")?;
+            }
+            err.flush()?;
+        }
+        let (parsed, report) = self.validate(args);
+        if status {
+            err.write_all(if logging {
+                b"\x1b[?25h".as_slice()
+            } else {
+                b"\r\x1b[2K\x1b[?25h".as_slice()
+            })?;
+            err.flush()?;
+        }
+        if let Some(report) = report {
+            return self.emit_report(&report, out, err);
+        }
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        let terminal = self.terminal();
+        let interrupt = self.host.interrupt.clone();
+        let code = crate::commands::watch::run(
+            &parsed,
+            &crate::commands::validate::Context {
+                repo: self.globals.repo.as_deref(),
+                env: self.env,
+                cwd: &cwd,
+                version: &self.host.version,
+                terminal: &terminal,
+                proxy: self.globals.proxy.as_deref(),
+            },
+            out,
+            err,
+            &|| interrupt.requested(),
+        )?;
+        // Ctrl-C is how a watch stops.
+        self.host.interrupt.consume();
+        Ok(code)
+    }
+
     /// `opentide new <family>`, from its parsed arguments.
-    fn new_object(&self, matches: &clap::ArgMatches, family: &str) -> crate::commands::Report {
+    fn new_object(&self, command: &crate::tree::NewCommand) -> crate::commands::Report {
         use crate::commands::new::{Context, NewArgs, run, stdin_is_terminal};
-        let args = leaf(matches);
-        let text = |id: &str| args.try_get_one::<String>(id).ok().flatten().cloned();
-        let many = |id: &str| -> Vec<String> {
-            args.try_get_many::<String>(id)
-                .ok()
-                .flatten()
-                .map(|values| values.cloned().collect())
-                .unwrap_or_default()
-        };
-        let platforms: Vec<String> = args
-            .try_get_many::<crate::tree::Platform>("platform")
-            .ok()
-            .flatten()
-            .map(|values| {
-                values
-                    .filter_map(|platform| {
-                        clap::ValueEnum::to_possible_value(platform)
-                            .map(|value| value.get_name().to_owned())
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        let parsed = NewArgs {
-            family: family.to_owned(),
-            name: text("name"),
-            path: text("path"),
-            platforms,
-            objective: text("objective"),
-            threats: many("threat"),
-        };
+        let parsed = NewArgs::from(command);
         let cwd = self.host.cwd.clone().unwrap_or_default();
         let can_prompt = self.mode == Mode::Human && stdin_is_terminal();
         // The questions are the setup wizards': drawn on stderr.
@@ -1455,20 +1455,9 @@ impl Run<'_> {
     }
 
     /// `opentide info`, from its parsed arguments.
-    fn info(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
-        use clap::ValueEnum;
-        let args = leaf(matches);
+    fn info(&self, args: &crate::tree::InfoArgs) -> crate::commands::Report {
         let cwd = self.host.cwd.clone().unwrap_or_default();
-        let parsed = crate::commands::info::Args {
-            platform: args
-                .get_one::<crate::tree::Platform>("platform")
-                .and_then(|platform| platform.to_possible_value())
-                .map(|value| value.get_name().to_owned()),
-            section: args.get_one::<String>("section").cloned(),
-            name: args.get_one::<String>("name").cloned(),
-            technique: args.get_one::<String>("technique").cloned(),
-            strict: args.get_flag("strict"),
-        };
+        let parsed = crate::commands::info::Args::from(args);
         crate::commands::info::run(
             &parsed,
             &crate::commands::info::Context {
@@ -1485,51 +1474,13 @@ impl Run<'_> {
     /// for a `--watch` the options allow, which runs until Ctrl-C.
     fn validate(
         &self,
-        matches: &clap::ArgMatches,
+        args: &crate::tree::ValidateArgs,
     ) -> (
         crate::commands::validate::Args,
         Option<crate::commands::Report>,
     ) {
         use crate::commands::validate::{Args, Context, run};
-        use clap::ValueEnum;
-        let args = leaf(matches);
-        let strings = |id: &str| -> Vec<String> {
-            args.get_many::<String>(id)
-                .map(|values| values.cloned().collect())
-                .unwrap_or_default()
-        };
-        let parsed = Args {
-            check: args
-                .get_one::<crate::tree::Check>("check")
-                .and_then(|check| check.to_possible_value())
-                .and_then(|value| opentide_workspace::validate::Check::parse(value.get_name())),
-            selection: opentide_workspace::validate::Selection {
-                files: strings("file"),
-                uuids: strings("uuid"),
-                types: strings("object_type"),
-            },
-            strict: args.get_flag("strict"),
-            queries: args
-                .get_one::<crate::tree::Queries>("queries")
-                .map(|queries| match queries {
-                    crate::tree::Queries::Error => opentide_workspace::validate::QueriesMode::Error,
-                    crate::tree::Queries::Warn => opentide_workspace::validate::QueriesMode::Warn,
-                    crate::tree::Queries::Off => opentide_workspace::validate::QueriesMode::Off,
-                }),
-            fix: args.get_flag("fix"),
-            dry_run: args.get_flag("dry_run"),
-            watch: args.get_flag("watch"),
-            format: args
-                .get_one::<crate::tree::ReportFormat>("report_format")
-                .map(|format| match format {
-                    crate::tree::ReportFormat::Text => crate::render::report::ReportFormat::Text,
-                    crate::tree::ReportFormat::Sarif => crate::render::report::ReportFormat::Sarif,
-                    crate::tree::ReportFormat::Codequality => {
-                        crate::render::report::ReportFormat::Codequality
-                    }
-                }),
-            output: args.get_one::<PathBuf>("output").cloned(),
-        };
+        let parsed = Args::from(args);
         if parsed.watch && crate::commands::validate::refuse(&parsed, self.mode).is_none() {
             return (parsed, None);
         }
@@ -1723,29 +1674,8 @@ impl Run<'_> {
     }
 
     /// `opentide lint`, from its parsed arguments.
-    fn lint(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
-        use clap::ValueEnum;
-        let args = leaf(matches);
-        let parsed = crate::commands::lint::Args {
-            fix: args.get_flag("fix"),
-            strict: args.get_flag("strict"),
-            checks: args
-                .get_many::<crate::tree::Check2>("check")
-                .into_iter()
-                .flatten()
-                .filter_map(|check| check.to_possible_value())
-                .filter_map(|value| opentide_workspace::lint::LintCheck::parse(value.get_name()))
-                .collect(),
-            changed: args.get_flag("changed"),
-            files: args
-                .get_many::<String>("file")
-                .map(|values| values.cloned().collect())
-                .unwrap_or_default(),
-            format: args
-                .get_one::<crate::tree::ReportFormat>("report_format")
-                .map(|format| report_format(*format)),
-            output: args.get_one::<PathBuf>("output").cloned(),
-        };
+    fn lint(&self, args: &crate::tree::LintArgs) -> crate::commands::Report {
+        let parsed = crate::commands::lint::Args::from(args);
         let cwd = self.host.cwd.clone().unwrap_or_default();
         let terminal = self.terminal();
         crate::commands::lint::run(
@@ -1775,39 +1705,9 @@ impl Run<'_> {
     }
 
     /// `opentide query`, from its parsed arguments (UC-4.2c).
-    fn query(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
-        use crate::commands::query::{Args, Context, RowFormat, run};
-        let args = leaf(matches);
-        let text = |id: &str| args.get_one::<String>(id).cloned();
-        let strings = |id: &str| -> Vec<String> {
-            args.get_many::<String>(id)
-                .map(|values| values.cloned().collect())
-                .unwrap_or_default()
-        };
-        let parsed = Args {
-            query: text("query"),
-            platform: args
-                .get_one::<crate::tree::PlatformValue>("platform")
-                .map(|platform| platform.0.clone())
-                .unwrap_or_default(),
-            tenants: strings("tenant"),
-            rule: text("rule"),
-            file: text("file"),
-            query_file: text("query_file"),
-            since: text("since"),
-            start: text("start"),
-            end: text("end"),
-            limit: args.get_one::<i64>("limit").copied().unwrap_or(100),
-            language: text("language"),
-            index: strings("index"),
-            timeout: args.get_one::<f64>("timeout").copied().unwrap_or(120.0),
-            columns: text("columns"),
-            format: match args.get_one::<crate::tree::RowFormat>("row_format") {
-                Some(crate::tree::RowFormat::Jsonl) => RowFormat::Jsonl,
-                Some(crate::tree::RowFormat::Csv) => RowFormat::Csv,
-                _ => RowFormat::Table,
-            },
-        };
+    fn query(&self, args: &crate::tree::QueryArgs) -> crate::commands::Report {
+        use crate::commands::query::{Args, Context, run};
+        let parsed = Args::from(args);
         let cwd = self.host.cwd.clone().unwrap_or_default();
         let terminal = self.terminal();
         let interrupt = &self.host.interrupt;
@@ -2094,24 +1994,15 @@ impl Run<'_> {
             err.flush()?;
             return Ok(outcome.exit_code);
         }
-        if report.usage_notes && self.mode != Mode::Json {
+        if report.usage_notes
+            && let Some(failure) = &outcome.failure
+        {
             let words: Vec<String> = outcome
                 .command
                 .split_whitespace()
                 .map(str::to_owned)
                 .collect();
-            let notes = vec![
-                ("usage".to_owned(), usage::usage_line(&self.root, &words)),
-                (
-                    "help".to_owned(),
-                    format!(
-                        "run '{} {} --help'",
-                        crate::catalog::PROGRAM,
-                        words.join(" ")
-                    ),
-                ),
-            ];
-            return self.emit(outcome, &notes, &[], out, err);
+            return self.refuse(&words, failure.clone(), out, err);
         }
         if !report.stderr_first.is_empty() {
             err.write_all(report.stderr_first.as_bytes())?;
@@ -2325,7 +2216,7 @@ impl Run<'_> {
         &self,
         matches: &clap::ArgMatches,
         path: &str,
-    ) -> Result<crate::commands::Report, Box<Refusal>> {
+    ) -> Result<crate::commands::Report, Box<(String, Failure)>> {
         use crate::commands::share::{Args, Context, Mode, run};
         let Some(("share", group)) = matches.subcommand() else {
             return Ok(crate::commands::Report::error(path, "share was not parsed"));
@@ -2404,20 +2295,9 @@ impl Run<'_> {
                 None
             };
             if let Some(problem) = problem {
-                // A usage error: the usage line and help under it.
+                // A usage error, in clap's layout.
                 let failure = Failure::new(code::USAGE_INVALID_VALUE, problem);
-                let words: Vec<String> = path.split(' ').map(str::to_owned).collect();
-                let notes = vec![
-                    ("usage".to_owned(), usage::usage_line(&self.root, &words)),
-                    (
-                        "help".to_owned(),
-                        format!("run '{} {path} --help'", catalog::PROGRAM),
-                    ),
-                ];
-                return Err(Box::new((
-                    Outcome::failed(path, USAGE_EXIT_CODE, failure),
-                    notes,
-                )));
+                return Err(Box::new((path.to_owned(), failure)));
             }
         }
         // An option typed on `share` alone is the subcommand's.
@@ -2632,15 +2512,6 @@ impl Run<'_> {
         };
         report.warnings.splice(0..0, warnings);
         report
-    }
-}
-
-/// `--format`'s value as the renderers name it.
-fn report_format(format: crate::tree::ReportFormat) -> crate::render::report::ReportFormat {
-    match format {
-        crate::tree::ReportFormat::Text => crate::render::report::ReportFormat::Text,
-        crate::tree::ReportFormat::Sarif => crate::render::report::ReportFormat::Sarif,
-        crate::tree::ReportFormat::Codequality => crate::render::report::ReportFormat::Codequality,
     }
 }
 
@@ -3604,7 +3475,7 @@ mod tests {
     /// dispatcher): an internal error.
     fn unhandled_run(line: &str) -> Ran {
         ran(line, &[], false, |run, out, err| {
-            Ok(run.emit(&unhandled("query"), &[], &[], out, err)?)
+            Ok(run.emit(&unhandled("query"), &[], out, err)?)
         })
     }
 
@@ -3885,16 +3756,18 @@ mod tests {
             );
             assert!(refused.stdout.contains(&message), "{}", refused.stdout);
         }
-        // The text modes put the usage notes under it.
+        // The text modes print it in clap's layout, with the command's usage.
         let plain = dispatched(
             "share --publish status",
             &[("OPENTIDE_OUTPUT", "plain")],
             false,
         );
         assert!(
-            plain
-                .stderr
-                .contains("\n  usage: opentide share status [OPTIONS]"),
+            plain.stderr.starts_with("error: --publish configures")
+                && plain
+                    .stderr
+                    .contains("\nUsage: opentide share status [OPTIONS]")
+                && plain.stderr.contains("For more information, try '--help'."),
             "{}",
             plain.stderr
         );
@@ -4120,7 +3993,7 @@ mod tests {
                 next_actions: Vec::new(),
                 failure: None,
             };
-            Ok(run.emit(&outcome, &[], &["a line".into()], out, err)?)
+            Ok(run.emit(&outcome, &["a line".into()], out, err)?)
         });
         assert_eq!((success.code, success.stdout.as_str()), (0, ""));
         let failed = unhandled_run("--json query --platform x q");
