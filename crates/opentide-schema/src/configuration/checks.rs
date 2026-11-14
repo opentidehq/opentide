@@ -355,7 +355,7 @@ fn convert<T: FromNode>(merged: &Node) -> (Vec<super::errors::ModelError>, Optio
     if errors.is_empty() {
         (Vec::new(), model)
     } else {
-        (model_errors(&errors, merged), None)
+        (model_errors(&errors), None)
     }
 }
 

@@ -55,11 +55,9 @@ pub struct ThreatActor {
 #[from_node(union)]
 pub enum Killchain {
     /// One stage.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     One(String),
     /// Several stages.
-    #[from_node(tag = "list[str]")]
     #[schemars(description = "")]
     Many(Vec<String>),
 }

@@ -10,7 +10,7 @@ use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::Serialize;
 
 use crate::error::ErrorKind;
-use crate::from_node::{Context, FromNode};
+use crate::from_node::{Context, FromNode, Shape};
 use crate::node::{Node, Value};
 
 /// `string_type`, then `string_too_short` for an empty string.
@@ -30,6 +30,10 @@ impl FromNode for NonEmptyString {
             return None;
         }
         Some(Self(text))
+    }
+
+    fn shape() -> Shape {
+        Shape::String
     }
 }
 
@@ -65,6 +69,10 @@ impl<T: FromNode> FromNode for NonEmptyList<T> {
         }
         Some(Self(items))
     }
+
+    fn shape() -> Shape {
+        Vec::<T>::shape()
+    }
 }
 
 impl<T: JsonSchema> JsonSchema for NonEmptyList<T> {
@@ -99,6 +107,10 @@ impl FromNode for PositiveFloat {
             node,
         );
         None
+    }
+
+    fn shape() -> Shape {
+        Shape::Number
     }
 }
 
@@ -169,6 +181,10 @@ impl<P: Pattern> FromNode for Matching<P> {
             text,
             marker: std::marker::PhantomData,
         })
+    }
+
+    fn shape() -> Shape {
+        Shape::String
     }
 }
 
@@ -388,6 +404,10 @@ impl FromNode for StatusStrategyName {
         );
         None
     }
+
+    fn shape() -> Shape {
+        Shape::String
+    }
 }
 
 impl JsonSchema for StatusStrategyName {
@@ -426,6 +446,10 @@ impl FromNode for RunStrategyName {
                 None
             }
         }
+    }
+
+    fn shape() -> Shape {
+        Shape::String
     }
 }
 
