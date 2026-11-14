@@ -110,9 +110,9 @@ pub struct Args {
     pub persist_state_externally: bool,
 }
 
-/// Where the run's lines go while it runs: the checklist's lines and steps
-/// (`Checklist.line`, `_finished`) and the progress events, on the stream
-/// log lines go to, so they keep their order.
+/// Where the run's lines go while it runs: its lines, each step as it
+/// finishes and the progress events, on the stream log lines go to, so they
+/// keep their order.
 #[derive(Clone)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -131,9 +131,6 @@ pub struct Lines {
     pub progress: bool,
     /// Whether stderr is a terminal: a failed rule's error wraps under itself.
     pub terminal: bool,
-    /// `human` mode at a terminal: the finished steps print as the checklist's
-    /// rows once the run ends, as the live display leaves them.
-    pub live: Option<usize>,
 }
 
 impl std::fmt::Debug for Lines {
@@ -171,25 +168,10 @@ impl Lines {
                 &crate::render::progress::progress_event(&step.name, completed, Some(total)),
             ));
         }
-        if self.silent || self.quiet || self.live.is_some() {
+        if self.silent || self.quiet {
             return;
         }
         self.write(&self.console.line(&crate::render::progress::step_line(step)));
-    }
-
-    /// The finished steps as the live display leaves them (`_final`).
-    pub(crate) fn checklist(&self, steps: &[Step]) {
-        let Some(width) = self.live else {
-            return;
-        };
-        if self.silent || self.quiet || steps.is_empty() {
-            return;
-        }
-        self.write(&crate::render::progress::checklist(
-            steps,
-            width,
-            self.console.colour,
-        ));
     }
 }
 
@@ -909,7 +891,6 @@ fn deploy(
             steps.push(step);
         }
     }
-    cx.lines.checklist(&steps);
     let seconds = started.elapsed().as_secs_f64();
     let results = log.results.clone();
     let platforms = deployment.len();

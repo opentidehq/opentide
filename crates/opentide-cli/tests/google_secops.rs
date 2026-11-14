@@ -153,7 +153,6 @@ fn deploy(ws: &Path, env: &Env) -> (Sent, String) {
                 quiet: false,
                 progress: false,
                 terminal: false,
-                live: None,
             },
             json: false,
             debug: false,

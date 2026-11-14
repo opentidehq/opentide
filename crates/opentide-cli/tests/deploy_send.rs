@@ -118,7 +118,6 @@ fn deploy_with(ws: &Path, args: &Args, env: &Env, registry: &Registry, now: i64)
         quiet: false,
         progress: false,
         terminal: false,
-        live: None,
     };
     let never = || false;
     let sent = run(

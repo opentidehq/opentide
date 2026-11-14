@@ -1881,8 +1881,6 @@ impl Run<'_> {
             quiet: self.globals.quiet,
             progress: crate::render::progress::Progress::from_env(self.env).enabled(),
             terminal: self.mode == Mode::Human && self.host.stderr_tty,
-            live: (self.mode == Mode::Human && self.host.stderr_tty)
-                .then(|| self.host.width.unwrap_or(80)),
         };
         let sent = run(
             &send_args,

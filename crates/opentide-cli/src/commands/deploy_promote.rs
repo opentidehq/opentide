@@ -167,7 +167,6 @@ pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> Result<(), Stop> {
     };
     step.seconds = started.elapsed().as_secs_f64();
     lines.step(&step, 1, 1);
-    lines.checklist(std::slice::from_ref(&step));
     ended.map_or(Ok(()), Err)
 }
 
@@ -371,7 +370,6 @@ mod tests {
             quiet: false,
             progress,
             terminal: false,
-            live: None,
         }
     }
 
