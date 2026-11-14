@@ -7,7 +7,7 @@
 //!
 //! The fixtures laid out here are the static ones of `tests/golden/cases.toml`
 //! (`none`, `empty`, `tide-corpus`, `tide-corpus-typo`, `vscode`, `tenants`); the
-//! generated ones (`fault`, `heavy-small`) are `cargo xtask golden check
+//! generated ones (`fault`, `fault-lint`, `heavy-small`) are `cargo xtask golden check
 //! --engine compare`'s.
 
 #![allow(dead_code, reason = "each test binary uses part of the helpers")]
@@ -38,7 +38,9 @@ pub fn host_errno(case: &str) -> bool {
 
 /// A generated fixture laid out already (`cargo xtask corpus faults --out
 /// DIR`, `cargo xtask corpus generate --seed 1 ... --out DIR`), named in
-/// `OPENTIDE_REPLAY_FIXTURES` as `fault=DIR,heavy-small=DIR`.
+/// `OPENTIDE_REPLAY_FIXTURES` as `fault=DIR,heavy-small=DIR` (`fault-lint`
+/// is `fault` with lint's recommended check off, as `tests/golden/cases.toml`
+/// lays it out).
 pub fn generated(name: &str) -> Option<PathBuf> {
     let listed = std::env::var("OPENTIDE_REPLAY_FIXTURES").ok()?;
     listed.split(',').find_map(|pair| {
@@ -862,7 +864,7 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
     let filter = std::env::var("OPENTIDE_REPLAY_FILTER").unwrap_or_default();
     for command in commands {
         for mode in ["human", "plain", "json", "agent"] {
-            let extra: Vec<&str> = ["fault", "heavy-small"]
+            let extra: Vec<&str> = ["fault", "fault-lint", "heavy-small"]
                 .into_iter()
                 .filter(|name| generated(name).is_some())
                 .collect();
@@ -890,7 +892,7 @@ pub fn replay_commands(commands: &[&str], complete: bool) -> (Vec<String>, usize
     }
     if complete && filter.is_empty() {
         for (index, entry) in ledger.entries.iter().enumerate() {
-            let elsewhere = ["fault", "heavy-small"].iter().any(|fixture| {
+            let elsewhere = ["fault", "fault-lint", "heavy-small"].iter().any(|fixture| {
                 entry.case.contains(&format!("/{fixture}/")) && generated(fixture).is_none()
             })
                 // A cassette test's (`tests/extract_sentinel.rs`), not a golden case's.
