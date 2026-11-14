@@ -1046,38 +1046,47 @@ fn refused(cx: TenantContext<'_>, error: &ApiError) -> ConnectorError {
 pub struct Graylog;
 
 impl Deployer for Graylog {
-    /// One rule, from the compiled create body alone: the definition is read
-    /// back from it (flat, or wrapped in `entity`), then the tenant's
-    /// version is read, as `opentide deploy` reads it before any write: a
-    /// version below 6.3, a refused token or an unreachable tenant stops the
-    /// deploy, and a create is sent in the shape that version takes (6.3
-    /// flat, 7.x wrapped in `entity`). The definition's fields stay the ones
-    /// it was compiled with. [`deploy_rule`] takes the compiled definition
-    /// itself.
+    /// One rule, from the compiled create body alone (a delete needs none):
+    /// the definition is read back from it (flat, or wrapped in `entity`),
+    /// then the tenant's version is read, as `opentide deploy` reads it
+    /// before any write: a version below 6.3, a refused token or an
+    /// unreachable tenant stops the deploy. A body that carries fields the
+    /// version does not take ([`graylog::unsupported_fields`]: `deploy_plan`
+    /// compiles for 7.2) is refused before any write
+    /// (`graylog_field_unsupported_version`), since Graylog would drop them;
+    /// one that fits is sent in the shape the version takes (6.3 flat, 7.x
+    /// wrapped in `entity`). `opentide deploy`'s warning about a version
+    /// that does not revoke tokens has no channel here. [`deploy_rule`]
+    /// takes the compiled definition itself.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, ConnectorError>> {
         Box::pin(async move {
-            let body: Json =
-                serde_json::from_slice(&request.body).map_err(|error| ConnectorError::Setup {
-                    platform: PLATFORM.to_owned(),
-                    tenant: cx.tenant.label.tenant.clone(),
-                    message: format!("the compiled body is not JSON: {error}"),
-                })?;
-            let definition = body.get("entity").unwrap_or(&body);
-            let Json::Object(definition) = definition else {
-                return Err(ConnectorError::Setup {
-                    platform: PLATFORM.to_owned(),
-                    tenant: cx.tenant.label.tenant.clone(),
-                    message: "the compiled body carries no event definition".to_owned(),
-                });
+            let setup = |message: String| ConnectorError::Setup {
+                platform: PLATFORM.to_owned(),
+                tenant: cx.tenant.label.tenant.clone(),
+                message,
             };
-            // A 6.3 create body carries `share_request` beside the
-            // definition; `create_body` puts it back where the version wants.
-            let mut definition = definition.clone();
-            definition.shift_remove("share_request");
+            // A delete reads nothing from the body, as `opentide deploy`'s.
+            let definition = if request.operation == Operation::Delete {
+                opentide_compile::json::Object::new()
+            } else {
+                let body: Json = serde_json::from_slice(&request.body)
+                    .map_err(|error| setup(format!("the compiled body is not JSON: {error}")))?;
+                let Some(Json::Object(definition)) = body.get("entity").or(Some(&body)) else {
+                    return Err(setup(
+                        "the compiled body carries no event definition".to_owned(),
+                    ));
+                };
+                // A 6.3 create body carries `share_request` beside the
+                // definition; `create_body` puts it back where the version
+                // wants it.
+                let mut definition = definition.clone();
+                definition.shift_remove("share_request");
+                definition
+            };
             let version = Client::new(cx).version().await?.map_err(|error| {
                 let code = if error.forbidden() {
                     "graylog_forbidden"
@@ -1091,6 +1100,21 @@ impl Deployer for Graylog {
                     detail: Some(error.detail()),
                 }
             })?;
+            let unsupported = graylog::unsupported_fields(&definition, version);
+            if !unsupported.is_empty() {
+                return Err(ConnectorError::Refused {
+                    platform: PLATFORM.to_owned(),
+                    tenant: cx.tenant.label.tenant.clone(),
+                    message: format!(
+                        "graylog_field_unsupported_version: tenant {} runs Graylog {version}, \
+                         which does not take {} of the body, so nothing is sent; compile the \
+                         rule for Graylog {version} (`opentide deploy` does)",
+                        cx.tenant.label.tenant,
+                        unsupported.join(", ")
+                    ),
+                    detail: None,
+                });
+            }
             let compiled = CompiledDefinition {
                 uuid: request.rule_id.clone(),
                 title: definition

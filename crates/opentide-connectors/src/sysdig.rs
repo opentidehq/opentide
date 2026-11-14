@@ -649,25 +649,37 @@ impl Deployer for Sysdig {
     /// lost is created again and its new id returned, which the caller
     /// keeps: the deployment-state refusals of `opentide deploy`
     /// ([`RuleDeploy::recreate_refusal`]) are about the state it writes, and
-    /// this writes none. A rule's failure is an error here too.
+    /// this writes none. A delete sent without a body reads the rule's name
+    /// from the tenant, to take it out of the policies. A rule's failure is
+    /// an error here too.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, ConnectorError>> {
         Box::pin(async move {
-            let body: Option<Json> = serde_json::from_slice(&request.body).ok();
-            let name = body
-                .as_ref()
-                .and_then(|body| body.get("name"))
-                .and_then(Json::as_str)
-                .unwrap_or_default()
-                .to_owned();
-            let tuning = body
-                .as_ref()
-                .and_then(|body| body.get("details"))
-                .and_then(|details| details.get("append"))
-                .is_some_and(Json::truthy);
+            let refused = |message: String| ConnectorError::Refused {
+                platform: PLATFORM.to_owned(),
+                tenant: cx.tenant.label.tenant.clone(),
+                message,
+                detail: None,
+            };
+            let mut policies = cx.tenant.list("policies").to_vec();
+            let mut body: Option<Json> = serde_json::from_slice(&request.body).ok();
+            if request.operation == Operation::Delete
+                && !policies.is_empty()
+                && identity(body.as_ref()).0.is_empty()
+            {
+                body = Client::new(cx)
+                    .get_rule(&request.rule_id)
+                    .await?
+                    .map_err(|error| refused(error.message))?;
+            }
+            let (name, tuning) = identity(body.as_ref());
+            if name.is_empty() {
+                // No name to find in a policy: the rule is in none of them.
+                policies.clear();
+            }
             let action = match request.operation {
                 Operation::Create => Action::Create,
                 Operation::Update | Operation::Disable => Action::Update(request.rule_id.clone()),
@@ -679,17 +691,12 @@ impl Deployer for Sysdig {
                 name,
                 tuning,
                 disable: request.operation == Operation::Disable,
-                policies: cx.tenant.list("policies").to_vec(),
+                policies,
                 recreate_refusal: None,
             };
             let outcome = deploy_rule(cx, &rule).await?;
             if let Some(failure) = outcome.failure {
-                return Err(ConnectorError::Refused {
-                    platform: PLATFORM.to_owned(),
-                    tenant: cx.tenant.label.tenant.clone(),
-                    message: failure.message,
-                    detail: None,
-                });
+                return Err(refused(failure.message));
             }
             Ok(DeployOutcome {
                 remote_id: match outcome.state {
@@ -701,6 +708,21 @@ impl Deployer for Sysdig {
             })
         })
     }
+}
+
+/// A rule's name and whether it is a tuning, from its compiled body or the
+/// tenant's copy (`name`, `details.append`): no name without one.
+fn identity(rule: Option<&Json>) -> (String, bool) {
+    let name = rule
+        .and_then(|rule| rule.get("name"))
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let tuning = rule
+        .and_then(|rule| rule.get("details"))
+        .and_then(|details| details.get("append"))
+        .is_some_and(Json::truthy);
+    (name, tuning)
 }
 
 impl Platform for Sysdig {

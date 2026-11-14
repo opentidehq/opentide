@@ -262,9 +262,17 @@ fn sysdig_has_a_deployer_only() {
 fn local(
     server: &wiremock::MockServer,
 ) -> (opentide_connectors::Tenant, opentide_connectors::HttpClient) {
+    local_with(server, "")
+}
+
+/// [`local`], its setup ending with *extra*.
+fn local_with(
+    server: &wiremock::MockServer,
+    extra: &str,
+) -> (opentide_connectors::Tenant, opentide_connectors::HttpClient) {
     let env = opentide_connectors::Environment::from_pairs([(TOKEN.0, TOKEN.1)]);
     let setup: toml::Table = toml::from_str(&format!(
-        "url = \"{}\"\napi_token = \"$SYSDIG_SECURE_API_TOKEN\"",
+        "url = \"{}\"\napi_token = \"$SYSDIG_SECURE_API_TOKEN\"\n{extra}",
         server.uri()
     ))
     .unwrap();
@@ -409,4 +417,104 @@ fn sysdig_the_generic_deployer_disables_with_the_held_version_and_no_policy() {
     let mut expected = body[..body.len() - 1].to_vec();
     expected.extend_from_slice(b",\"id\":42,\"version\":7}");
     assert_eq!(received[1].body, expected);
+}
+
+/// Runs *operation* on rule 42 with *body* through the platform's
+/// [`Deployer`] on a tenant whose policy `POLICY` (id 7) holds *held*:
+/// the outcome and the requests sent. The tenant still has rule 42, named
+/// `Sysdig Falco Rule`.
+fn deploy_with_policy(
+    operation: opentide_connectors::connector::Operation,
+    body: Vec<u8>,
+    held: &[&str],
+) -> (
+    Result<opentide_connectors::connector::DeployOutcome, ConnectorError>,
+    Vec<wiremock::Request>,
+) {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, ResponseTemplate};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let policies = serde_json::json!([{"id": 7, "name": POLICY, "ruleNames": held}]);
+    rt.block_on(async {
+        Mock::given(method("GET"))
+            .and(path("/api/secure/rules/42"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                serde_json::json!({"id": 42, "version": 7, "name": "Sysdig Falco Rule"}),
+            ))
+            .mount(&server)
+            .await;
+        for verb in ["PUT", "DELETE"] {
+            Mock::given(method(verb))
+                .and(path("/api/secure/rules/42"))
+                .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+                .mount(&server)
+                .await;
+        }
+        Mock::given(method("GET"))
+            .and(path("/api/v2/policies"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(policies))
+            .mount(&server)
+            .await;
+        Mock::given(method("PUT"))
+            .and(path("/api/v2/policies/7"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("{}"))
+            .mount(&server)
+            .await;
+    });
+    let (tenant, http) = local_with(&server, &format!("policies = [\"{POLICY}\"]"));
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let request = opentide_connectors::connector::DeployRequest {
+        rule_id: "42".to_owned(),
+        operation,
+        body,
+    };
+    let platform = sysdig::Sysdig;
+    let outcome =
+        block_on(async { platform.deployer().unwrap().deploy(cx, &request).await }).unwrap();
+    (outcome, rt.block_on(server.received_requests()).unwrap())
+}
+
+/// The rule names the policy was saved with.
+fn saved_policy(requests: &[wiremock::Request]) -> serde_json::Value {
+    let put = requests
+        .iter()
+        .find(|request| request.url.path() == "/api/v2/policies/7")
+        .unwrap();
+    put.body_json::<serde_json::Value>().unwrap()["ruleNames"].clone()
+}
+
+/// A delete sent without a body (as the SDKs send one) reads the rule's
+/// name from the tenant and takes it out of the tenant's policies first.
+#[test]
+fn sysdig_the_generic_deployer_deletes_without_a_body_out_of_the_policies() {
+    let (outcome, requests) = deploy_with_policy(
+        opentide_connectors::connector::Operation::Delete,
+        Vec::new(),
+        &["Other rule", "Sysdig Falco Rule"],
+    );
+    assert_eq!(outcome.unwrap().remote_id, None);
+    assert_eq!(saved_policy(&requests), serde_json::json!(["Other rule"]));
+    let last = requests.last().unwrap();
+    assert_eq!(last.method.as_str(), "DELETE");
+    assert_eq!(last.url.path(), "/api/secure/rules/42");
+}
+
+/// A disable through the platform's [`Deployer`] takes the rule out of the
+/// tenant's policies, as `opentide deploy` does.
+#[test]
+fn sysdig_the_generic_deployer_disables_out_of_the_tenants_policies() {
+    let (_, body, _) = compiled("DISABLED", None);
+    let (outcome, requests) = deploy_with_policy(
+        opentide_connectors::connector::Operation::Disable,
+        body,
+        &["Sysdig Falco Rule", "Other rule"],
+    );
+    assert_eq!(outcome.unwrap().remote_id.as_deref(), Some("42"));
+    assert_eq!(saved_policy(&requests), serde_json::json!(["Other rule"]));
 }

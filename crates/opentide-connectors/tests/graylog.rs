@@ -856,17 +856,23 @@ fn the_live_check_fails_on_an_error_verdict() {
     assert!(matches!(error, ConnectorError::Refused { .. }), "{error:?}");
 }
 
-/// Creates, through the platform's [`Deployer`], the body compiled for
-/// `compiled_for` on a tenant that runs `server_version`: the requests sent.
-fn deploy_body_on(compiled_for: Version, server_version: &str) -> Vec<wiremock::Request> {
+/// Sends `body` through the platform's [`Deployer`] (`operation`, the id
+/// `rule_id`) to a tenant whose `GET /api/system` answers `system`: the
+/// outcome and the requests sent.
+fn deploy_through_platform(
+    system: ResponseTemplate,
+    operation: Operation,
+    rule_id: &str,
+    body: Vec<u8>,
+) -> (
+    Result<opentide_connectors::connector::DeployOutcome, ConnectorError>,
+    Vec<wiremock::Request>,
+) {
     let (runtime, server) = server();
     runtime.block_on(async {
         Mock::given(method("GET"))
             .and(path("/api/system"))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(serde_json::json!({"version": server_version})),
-            )
+            .respond_with(system)
             .mount(&server)
             .await;
         mount_validate(&server, ok_verdict()).await;
@@ -877,64 +883,9 @@ fn deploy_body_on(compiled_for: Version, server_version: &str) -> Vec<wiremock::
             )
             .mount(&server)
             .await;
-    });
-    let (tenant, http) = tenant(&server.uri());
-    let cancel = CancellationToken::new();
-    let cx = TenantContext {
-        tenant: &tenant,
-        http: &http,
-        cancel: &cancel,
-    };
-    let compiled = definition(compiled_for);
-    let request = DeployRequest {
-        rule_id: compiled.uuid.clone(),
-        operation: Operation::Create,
-        body: serde_json::to_vec(&compile::create_body(&compiled)).unwrap(),
-    };
-    let outcome = runtime.block_on(Graylog.deploy(cx, &request)).unwrap();
-    assert_eq!(outcome.remote_id.as_deref(), Some(DEFINITION_ID));
-    assert_eq!(outcome.operation, Operation::Create);
-    runtime.block_on(server.received_requests()).unwrap()
-}
-
-#[test]
-fn the_platform_deploys_from_a_compiled_body() {
-    let requests = deploy_body_on(Version(7, 2, 0), "7.2.1+abc");
-    // The version is read before any write, as `opentide deploy` reads it.
-    assert_eq!(requests[0].url.path(), "/api/system");
-    let sent: serde_json::Value = requests[2].body_json().unwrap();
-    let title = definition(Version(7, 2, 0)).title;
-    assert_eq!(sent["entity"]["title"], serde_json::json!(title));
-    assert!(sent["entity"].get("share_request").is_none(), "{sent}");
-}
-
-/// The create takes the shape of the version the tenant runs, not of the
-/// version the body was compiled for: 6.3 takes the definition flat.
-#[test]
-fn the_platform_creates_in_the_shape_of_the_tenants_version() {
-    let requests = deploy_body_on(Version(7, 2, 0), "6.3.12");
-    let sent: serde_json::Value = requests[2].body_json().unwrap();
-    assert!(sent.get("entity").is_none(), "{sent}");
-    let title = definition(Version(7, 2, 0)).title;
-    assert_eq!(sent["title"], serde_json::json!(title));
-    assert_eq!(sent["share_request"], serde_json::Value::Null);
-    // And a body compiled flat for 6.3 is wrapped for 7.x.
-    let requests = deploy_body_on(Version(6, 3, 0), "7.1.0");
-    let sent: serde_json::Value = requests[2].body_json().unwrap();
-    assert_eq!(sent["entity"]["title"], serde_json::json!(title));
-    assert!(sent["entity"].get("share_request").is_none(), "{sent}");
-}
-
-/// A version opentide cannot deploy to stops the deploy before any write.
-#[test]
-fn the_platform_refuses_a_version_below_6_3_before_any_write() {
-    let (runtime, server) = server();
-    runtime.block_on(async {
-        Mock::given(method("GET"))
-            .and(path("/api/system"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(serde_json::json!({"version": "6.2.0"})),
-            )
+        Mock::given(method("DELETE"))
+            .and(path(format!("/api/events/definitions/{DEFINITION_ID}")))
+            .respond_with(ResponseTemplate::new(204))
             .mount(&server)
             .await;
     });
@@ -945,19 +896,124 @@ fn the_platform_refuses_a_version_below_6_3_before_any_write() {
         http: &http,
         cancel: &cancel,
     };
-    let compiled = definition(Version(7, 2, 0));
     let request = DeployRequest {
-        rule_id: compiled.uuid.clone(),
-        operation: Operation::Create,
-        body: serde_json::to_vec(&compile::create_body(&compiled)).unwrap(),
+        rule_id: rule_id.to_owned(),
+        operation,
+        body,
     };
-    let error = runtime.block_on(Graylog.deploy(cx, &request)).unwrap_err();
-    assert!(
-        error.text().contains("graylog_version_unsupported"),
-        "{error:?}"
+    let outcome = runtime.block_on(Graylog.deploy(cx, &request));
+    (
+        outcome,
+        runtime.block_on(server.received_requests()).unwrap(),
+    )
+}
+
+fn version(text: &str) -> ResponseTemplate {
+    ResponseTemplate::new(200).set_body_json(serde_json::json!({"version": text}))
+}
+
+/// Creates, through the platform's [`Deployer`], `compiled`'s create body on
+/// a tenant that runs `server_version`.
+fn create_on(
+    compiled: &CompiledDefinition,
+    server_version: &str,
+) -> (
+    Result<opentide_connectors::connector::DeployOutcome, ConnectorError>,
+    Vec<wiremock::Request>,
+) {
+    deploy_through_platform(
+        version(server_version),
+        Operation::Create,
+        &compiled.uuid,
+        serde_json::to_vec(&compile::create_body(compiled)).unwrap(),
+    )
+}
+
+#[test]
+fn the_platform_deploys_from_a_compiled_body() {
+    let compiled = definition(Version(7, 2, 0));
+    let (outcome, requests) = create_on(&compiled, "7.2.1+abc");
+    let outcome = outcome.unwrap();
+    assert_eq!(outcome.remote_id.as_deref(), Some(DEFINITION_ID));
+    assert_eq!(outcome.operation, Operation::Create);
+    // The version is read before any write, as `opentide deploy` reads it.
+    assert_eq!(requests[0].url.path(), "/api/system");
+    let sent: serde_json::Value = requests[2].body_json().unwrap();
+    assert_eq!(sent["entity"]["title"], serde_json::json!(compiled.title));
+    assert!(sent["entity"].get("share_request").is_none(), "{sent}");
+}
+
+/// A body that fits the tenant's version goes in that version's shape: 6.3
+/// takes the definition flat, 7.x wrapped.
+#[test]
+fn the_platform_creates_in_the_shape_of_the_tenants_version() {
+    let compiled = definition(Version(6, 3, 0));
+    let (outcome, requests) = create_on(&compiled, "6.3.12");
+    assert_eq!(outcome.unwrap().remote_id.as_deref(), Some(DEFINITION_ID));
+    let sent: serde_json::Value = requests[2].body_json().unwrap();
+    assert!(sent.get("entity").is_none(), "{sent}");
+    assert_eq!(sent["title"], serde_json::json!(compiled.title));
+    assert_eq!(sent["share_request"], serde_json::Value::Null);
+    let (outcome, requests) = create_on(&compiled, "7.1.0");
+    assert_eq!(outcome.unwrap().remote_id.as_deref(), Some(DEFINITION_ID));
+    let sent: serde_json::Value = requests[2].body_json().unwrap();
+    assert_eq!(sent["entity"]["title"], serde_json::json!(compiled.title));
+    assert!(sent["entity"].get("share_request").is_none(), "{sent}");
+}
+
+/// A body compiled for 7.2 whose tags 6.3 would drop is refused before any
+/// write, naming the fields.
+#[test]
+fn the_platform_refuses_fields_the_tenants_version_does_not_take() {
+    let mut compiled = definition(Version(7, 2, 0));
+    compiled.definition.insert(
+        "tags".into(),
+        Json::Array(vec!["managed-by-opentide".into()]),
     );
-    let requests = runtime.block_on(server.received_requests()).unwrap();
+    let (outcome, requests) = create_on(&compiled, "6.3.12");
+    let text = outcome.unwrap_err().text();
+    assert!(text.contains("graylog_field_unsupported_version"), "{text}");
+    assert!(text.contains("tags"), "{text}");
     assert_eq!(requests.len(), 1, "only the version is read");
+}
+
+/// A version opentide cannot deploy to stops the deploy before any write.
+#[test]
+fn the_platform_refuses_a_version_below_6_3_before_any_write() {
+    let compiled = definition(Version(7, 2, 0));
+    let (outcome, requests) = create_on(&compiled, "6.2.0");
+    let text = outcome.unwrap_err().text();
+    assert!(text.contains("graylog_version_unsupported"), "{text}");
+    assert_eq!(requests.len(), 1, "only the version is read");
+}
+
+/// A token Graylog refuses on the version read stops the deploy.
+#[test]
+fn the_platform_stops_on_a_forbidden_token() {
+    let compiled = definition(Version(7, 2, 0));
+    let (outcome, requests) = deploy_through_platform(
+        ResponseTemplate::new(403).set_body_json(serde_json::json!({"message": "forbidden"})),
+        Operation::Create,
+        &compiled.uuid,
+        serde_json::to_vec(&compile::create_body(&compiled)).unwrap(),
+    );
+    let text = outcome.unwrap_err().text();
+    assert!(text.contains("graylog_forbidden"), "{text}");
+    assert_eq!(requests.len(), 1, "only the version is read");
+}
+
+/// A delete is sent with no body: `opentide deploy`'s needs none either.
+#[test]
+fn the_platform_deletes_without_a_body() {
+    let (outcome, requests) = deploy_through_platform(
+        version("7.2.0"),
+        Operation::Delete,
+        DEFINITION_ID,
+        Vec::new(),
+    );
+    assert_eq!(outcome.unwrap().remote_id, None);
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[1].method.as_str(), "DELETE");
 }
 
 /// `text` in base64, as HTTP Basic sends it.
