@@ -131,7 +131,7 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 13] = [
     (
         "exabeam_",
         "Exabeam Query Language",
-        "https://docs.exabeam.com/en/search/all/search-guide/",
+        "https://docs.exabeam.com/en/exa-search/all/search-guide/performing-searches/advanced-search/query-syntax.html",
     ),
     (
         "yaral_",
