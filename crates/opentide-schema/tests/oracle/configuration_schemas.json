@@ -1,5 +1,5 @@
 {
-  "oracle": "0.23.0",
+  "oracle": "0.28.1",
   "documents": {
     "paths.schema.json": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -4464,6 +4464,1497 @@
       "title": "platforms/sysdig.toml",
       "type": "object"
     },
+    "platforms.bitdefender.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$defs": {
+        "BitdefenderEndpointTag": {
+          "additionalProperties": false,
+          "description": "An `endpoint_tags` entry: the GravityZone tag and the company that owns it.",
+          "properties": {
+            "tag_id": {
+              "description": "GravityZone tag id, 24 hex.",
+              "pattern": "^[0-9a-f]{24}$",
+              "title": "Tag Id",
+              "type": "string"
+            },
+            "company_id": {
+              "description": "Company id of the tag, 24 hex.",
+              "pattern": "^[0-9a-f]{24}$",
+              "title": "Company Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "tag_id",
+            "company_id"
+          ],
+          "title": "BitdefenderEndpointTag",
+          "type": "object"
+        },
+        "BitdefenderSetup": {
+          "additionalProperties": false,
+          "description": "`[tenants.setup]` for Bitdefender GravityZone.",
+          "properties": {
+            "ssl": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "description": "Environment variable placeholder ($NAME), resolved when the tenant loads.",
+                  "pattern": "^\\$",
+                  "type": "string"
+                },
+                {
+                  "description": "A boolean written as a word: true/false, yes/no, on/off, 1/0.",
+                  "pattern": "^\\s*([tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|1|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF]|0)\\s*$",
+                  "type": "string"
+                }
+              ],
+              "default": true,
+              "description": "Verify the tenant's TLS certificate: a boolean, true/false, yes/no, on/off, 1/0, or a $NAME placeholder.",
+              "title": "Ssl"
+            },
+            "url": {
+              "description": "Control Center API Access URL, ending in /api. Calls go to <url>/v1.0/jsonrpc/incidents.",
+              "title": "Url",
+              "type": "string"
+            },
+            "api_key": {
+              "description": "GravityZone API key with the Incidents API. Must be a $NAME placeholder.",
+              "pattern": "^\\$",
+              "title": "Api Key",
+              "type": "string"
+            },
+            "key_type": {
+              "default": "personal",
+              "description": "personal: HTTP Basic with the key as user name; service: X-API-Key header.",
+              "enum": [
+                "personal",
+                "service"
+              ],
+              "title": "Key Type",
+              "type": "string"
+            },
+            "company_id": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{24}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Partner tenants: the company that owns created rules.",
+              "title": "Company Id"
+            },
+            "automatic_actions": {
+              "default": true,
+              "description": "false for subscriptions without automatic actions.",
+              "title": "Automatic Actions",
+              "type": "boolean"
+            },
+            "targets": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BitdefenderTenantTargets"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Default targets for blocks that set none."
+            },
+            "endpoint_tags": {
+              "additionalProperties": {
+                "$ref": "#/$defs/BitdefenderEndpointTag"
+              },
+              "description": "Alias to {tag_id, company_id}.",
+              "title": "Endpoint Tags",
+              "type": "object"
+            },
+            "companies": {
+              "additionalProperties": {
+                "pattern": "^[0-9a-f]{24}$",
+                "type": "string"
+              },
+              "description": "Alias to company id.",
+              "title": "Companies",
+              "type": "object"
+            },
+            "tags": {
+              "description": "Tags added to every rule.",
+              "items": {
+                "type": "string"
+              },
+              "title": "Tags",
+              "type": "array"
+            }
+          },
+          "required": [
+            "url",
+            "api_key"
+          ],
+          "title": "BitdefenderSetup",
+          "type": "object"
+        },
+        "BitdefenderTenant": {
+          "additionalProperties": false,
+          "description": "`[[tenants]]` for Bitdefender GravityZone.",
+          "properties": {
+            "name": {
+              "description": "Tenant name a rule's platform block may list.",
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "description": {
+              "default": "",
+              "description": "What the tenant is.",
+              "title": "Description",
+              "type": "string"
+            },
+            "strategies": {
+              "anyOf": [
+                {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "PREVIEW",
+                          "RELEASE"
+                        ]
+                      },
+                      {
+                        "pattern": "^\\s*([pP][rR][eE][vV][iI][eE][wW]|[rR][eE][lL][eE][aA][sS][eE])\\s*$"
+                      }
+                    ],
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "PREVIEW",
+                        "RELEASE"
+                      ]
+                    },
+                    {
+                      "pattern": "^\\s*([pP][rR][eE][vV][iI][eE][wW]|[rR][eE][lL][eE][aA][sS][eE])\\s*$"
+                    }
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Status strategies the tenant accepts (PREVIEW, RELEASE). Omit for both.",
+              "title": "Strategies"
+            },
+            "manual": {
+              "default": false,
+              "description": "Only rules whose platform block lists this tenant reach it.",
+              "title": "Manual",
+              "type": "boolean"
+            },
+            "setup": {
+              "$ref": "#/$defs/BitdefenderSetup",
+              "description": "Connection settings."
+            }
+          },
+          "required": [
+            "name",
+            "setup"
+          ],
+          "title": "BitdefenderTenant",
+          "type": "object"
+        },
+        "BitdefenderTenantTargets": {
+          "additionalProperties": false,
+          "description": "`[tenants.setup.targets]`: default targets for blocks that set none.\n\nThe same shape as a block's `targets` (`bitdefender_targets_shape`): exactly\none of the two lists, non-empty. A default never means \"no targets\": a tenant\nthat applies rules to the whole company leaves `targets` out.",
+          "properties": {
+            "endpoint_tags": {
+              "anyOf": [
+                {
+                  "items": {
+                    "pattern": "\\S",
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Aliases from the tenant's endpoint_tags table.",
+              "title": "Endpoint Tags"
+            },
+            "companies": {
+              "anyOf": [
+                {
+                  "items": {
+                    "pattern": "\\S",
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Aliases from the tenant's companies table.",
+              "title": "Companies"
+            }
+          },
+          "title": "BitdefenderTenantTargets",
+          "type": "object"
+        },
+        "Modifier": {
+          "additionalProperties": false,
+          "description": "`[[modifiers]]`: rule values rewritten at deploy time when the conditions match.",
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Modifier name.",
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "What the modifier is for.",
+              "title": "Description"
+            },
+            "conditions": {
+              "$ref": "#/$defs/ModifierConditions",
+              "description": "When the modifier applies."
+            },
+            "modifications": {
+              "additionalProperties": true,
+              "description": "Rule values to set, keyed by dotted platform field path.",
+              "title": "Modifications",
+              "type": "object"
+            }
+          },
+          "required": [
+            "conditions",
+            "modifications"
+          ],
+          "title": "Modifier",
+          "type": "object"
+        },
+        "ModifierConditions": {
+          "additionalProperties": false,
+          "description": "`[modifiers.conditions]`: which rules a modifier applies to.",
+          "properties": {
+            "status": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply to rules in one of these deployment statuses.",
+              "title": "Status"
+            },
+            "flags": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply to rules carrying one of these flags.",
+              "title": "Flags"
+            },
+            "tenants": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply when deploying to one of these tenants.",
+              "title": "Tenants"
+            },
+            "default": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply to every rule, as platform defaults.",
+              "title": "Default"
+            }
+          },
+          "title": "ModifierConditions",
+          "type": "object"
+        },
+        "PlatformIdentity": {
+          "additionalProperties": false,
+          "description": "`[platform]`: whether the platform is enabled, and how it is named.\n\nThe file name stem (`platforms/splunk.toml`) identifies the platform.",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "description": "Load and deploy to this platform.",
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Display name of the platform.",
+              "title": "Name"
+            },
+            "description": {
+              "default": "",
+              "description": "What the platform is.",
+              "title": "Description",
+              "type": "string"
+            }
+          },
+          "title": "PlatformIdentity",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Merged `platforms/bitdefender.toml`.",
+      "properties": {
+        "platform": {
+          "$ref": "#/$defs/PlatformIdentity",
+          "description": "Platform identity."
+        },
+        "modifiers": {
+          "description": "Deploy-time rule modifiers.",
+          "items": {
+            "$ref": "#/$defs/Modifier"
+          },
+          "title": "Modifiers",
+          "type": "array"
+        },
+        "tenants": {
+          "description": "GravityZone tenants.",
+          "items": {
+            "$ref": "#/$defs/BitdefenderTenant"
+          },
+          "title": "Tenants",
+          "type": "array"
+        }
+      },
+      "title": "platforms/bitdefender.toml",
+      "type": "object"
+    },
+    "platforms.graylog.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$defs": {
+        "GraylogSetup": {
+          "additionalProperties": false,
+          "description": "`[tenants.setup]` for Graylog.",
+          "properties": {
+            "ssl": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "description": "Environment variable placeholder ($NAME), resolved when the tenant loads.",
+                  "pattern": "^\\$",
+                  "type": "string"
+                },
+                {
+                  "description": "A boolean written as a word: true/false, yes/no, on/off, 1/0.",
+                  "pattern": "^\\s*([tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|1|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF]|0)\\s*$",
+                  "type": "string"
+                }
+              ],
+              "default": true,
+              "description": "Verify the tenant's TLS certificate: a boolean, true/false, yes/no, on/off, 1/0, or a $NAME placeholder.",
+              "title": "Ssl"
+            },
+            "url": {
+              "description": "The Graylog web interface's base URL. Calls go to <url>/api/....",
+              "title": "Url",
+              "type": "string"
+            },
+            "token": {
+              "description": "A Graylog access token, sent as HTTP Basic <token>:token. Must be a $NAME placeholder.",
+              "pattern": "^\\$",
+              "title": "Token",
+              "type": "string"
+            },
+            "allow_leading_wildcard": {
+              "default": false,
+              "description": "Mirrors the server's allow_leading_wildcard_searches.",
+              "title": "Allow Leading Wildcard",
+              "type": "boolean"
+            },
+            "streams": {
+              "anyOf": [
+                {
+                  "pattern": "\\S",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "pattern": "\\S",
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ],
+              "description": "Default stream aliases for blocks that set no streams.",
+              "title": "Streams"
+            },
+            "stream_ids": {
+              "additionalProperties": {
+                "pattern": "^[0-9a-f]{24}$",
+                "type": "string"
+              },
+              "description": "Alias to stream id, 24 hex.",
+              "title": "Stream Ids",
+              "type": "object"
+            },
+            "notification_ids": {
+              "additionalProperties": {
+                "pattern": "^[0-9a-f]{24}$",
+                "type": "string"
+              },
+              "description": "Alias to notification id, 24 hex.",
+              "title": "Notification Ids",
+              "type": "object"
+            },
+            "tags": {
+              "anyOf": [
+                {
+                  "pattern": "\\S",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "pattern": "\\S",
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ],
+              "description": "Tags added to every definition on this tenant (7.2+).",
+              "title": "Tags"
+            }
+          },
+          "required": [
+            "url",
+            "token"
+          ],
+          "title": "GraylogSetup",
+          "type": "object"
+        },
+        "GraylogTenant": {
+          "additionalProperties": false,
+          "description": "`[[tenants]]` for Graylog.",
+          "properties": {
+            "name": {
+              "description": "Tenant name a rule's platform block may list.",
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "description": {
+              "default": "",
+              "description": "What the tenant is.",
+              "title": "Description",
+              "type": "string"
+            },
+            "strategies": {
+              "anyOf": [
+                {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "PREVIEW",
+                          "RELEASE"
+                        ]
+                      },
+                      {
+                        "pattern": "^\\s*([pP][rR][eE][vV][iI][eE][wW]|[rR][eE][lL][eE][aA][sS][eE])\\s*$"
+                      }
+                    ],
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "PREVIEW",
+                        "RELEASE"
+                      ]
+                    },
+                    {
+                      "pattern": "^\\s*([pP][rR][eE][vV][iI][eE][wW]|[rR][eE][lL][eE][aA][sS][eE])\\s*$"
+                    }
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Status strategies the tenant accepts (PREVIEW, RELEASE). Omit for both.",
+              "title": "Strategies"
+            },
+            "manual": {
+              "default": false,
+              "description": "Only rules whose platform block lists this tenant reach it.",
+              "title": "Manual",
+              "type": "boolean"
+            },
+            "setup": {
+              "$ref": "#/$defs/GraylogSetup",
+              "description": "Connection settings."
+            }
+          },
+          "required": [
+            "name",
+            "setup"
+          ],
+          "title": "GraylogTenant",
+          "type": "object"
+        },
+        "Modifier": {
+          "additionalProperties": false,
+          "description": "`[[modifiers]]`: rule values rewritten at deploy time when the conditions match.",
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Modifier name.",
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "What the modifier is for.",
+              "title": "Description"
+            },
+            "conditions": {
+              "$ref": "#/$defs/ModifierConditions",
+              "description": "When the modifier applies."
+            },
+            "modifications": {
+              "additionalProperties": true,
+              "description": "Rule values to set, keyed by dotted platform field path.",
+              "title": "Modifications",
+              "type": "object"
+            }
+          },
+          "required": [
+            "conditions",
+            "modifications"
+          ],
+          "title": "Modifier",
+          "type": "object"
+        },
+        "ModifierConditions": {
+          "additionalProperties": false,
+          "description": "`[modifiers.conditions]`: which rules a modifier applies to.",
+          "properties": {
+            "status": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply to rules in one of these deployment statuses.",
+              "title": "Status"
+            },
+            "flags": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply to rules carrying one of these flags.",
+              "title": "Flags"
+            },
+            "tenants": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply when deploying to one of these tenants.",
+              "title": "Tenants"
+            },
+            "default": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply to every rule, as platform defaults.",
+              "title": "Default"
+            }
+          },
+          "title": "ModifierConditions",
+          "type": "object"
+        },
+        "PlatformIdentity": {
+          "additionalProperties": false,
+          "description": "`[platform]`: whether the platform is enabled, and how it is named.\n\nThe file name stem (`platforms/splunk.toml`) identifies the platform.",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "description": "Load and deploy to this platform.",
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Display name of the platform.",
+              "title": "Name"
+            },
+            "description": {
+              "default": "",
+              "description": "What the platform is.",
+              "title": "Description",
+              "type": "string"
+            }
+          },
+          "title": "PlatformIdentity",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Merged `platforms/graylog.toml`.",
+      "properties": {
+        "platform": {
+          "$ref": "#/$defs/PlatformIdentity",
+          "description": "Platform identity."
+        },
+        "modifiers": {
+          "description": "Deploy-time rule modifiers.",
+          "items": {
+            "$ref": "#/$defs/Modifier"
+          },
+          "title": "Modifiers",
+          "type": "array"
+        },
+        "tenants": {
+          "description": "Graylog tenants.",
+          "items": {
+            "$ref": "#/$defs/GraylogTenant"
+          },
+          "title": "Tenants",
+          "type": "array"
+        }
+      },
+      "title": "platforms/graylog.toml",
+      "type": "object"
+    },
+    "platforms.exabeam.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$defs": {
+        "ExabeamSetup": {
+          "additionalProperties": false,
+          "description": "`[tenants.setup]` for Exabeam New-Scale SIEM.",
+          "properties": {
+            "ssl": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "description": "Environment variable placeholder ($NAME), resolved when the tenant loads.",
+                  "pattern": "^\\$",
+                  "type": "string"
+                },
+                {
+                  "description": "A boolean written as a word: true/false, yes/no, on/off, 1/0.",
+                  "pattern": "^\\s*([tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|1|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF]|0)\\s*$",
+                  "type": "string"
+                }
+              ],
+              "default": true,
+              "description": "Verify the tenant's TLS certificate: a boolean, true/false, yes/no, on/off, 1/0, or a $NAME placeholder.",
+              "title": "Ssl"
+            },
+            "region": {
+              "description": "Exabeam API region. Calls go to https://api.<region>.exabeam.cloud; it is not derived from the console URL (use1 is us-east, euw6 is ch).",
+              "enum": [
+                "us-west",
+                "us-east",
+                "ca",
+                "eu",
+                "sa",
+                "sg",
+                "ch",
+                "jp",
+                "au",
+                "uk"
+              ],
+              "title": "Region",
+              "type": "string"
+            },
+            "client_id": {
+              "description": "API key with Correlation Rules at Read Write Delete. Must be a $NAME placeholder.",
+              "pattern": "^\\$",
+              "title": "Client Id",
+              "type": "string"
+            },
+            "client_secret": {
+              "description": "API key secret. Must be a $NAME placeholder.",
+              "pattern": "^\\$",
+              "title": "Client Secret",
+              "type": "string"
+            },
+            "api_url": {
+              "anyOf": [
+                {
+                  "pattern": "^https://",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "An HTTPS base URL that replaces the region's.",
+              "title": "Api Url"
+            },
+            "test_mode": {
+              "default": false,
+              "description": "Default test_mode for blocks that do not set it.",
+              "title": "Test Mode",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "region",
+            "client_id",
+            "client_secret"
+          ],
+          "title": "ExabeamSetup",
+          "type": "object"
+        },
+        "ExabeamTenant": {
+          "additionalProperties": false,
+          "description": "`[[tenants]]` for Exabeam New-Scale SIEM.",
+          "properties": {
+            "name": {
+              "description": "Tenant name a rule's platform block may list.",
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "description": {
+              "default": "",
+              "description": "What the tenant is.",
+              "title": "Description",
+              "type": "string"
+            },
+            "strategies": {
+              "anyOf": [
+                {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "PREVIEW",
+                          "RELEASE"
+                        ]
+                      },
+                      {
+                        "pattern": "^\\s*([pP][rR][eE][vV][iI][eE][wW]|[rR][eE][lL][eE][aA][sS][eE])\\s*$"
+                      }
+                    ],
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "PREVIEW",
+                        "RELEASE"
+                      ]
+                    },
+                    {
+                      "pattern": "^\\s*([pP][rR][eE][vV][iI][eE][wW]|[rR][eE][lL][eE][aA][sS][eE])\\s*$"
+                    }
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Status strategies the tenant accepts (PREVIEW, RELEASE). Omit for both.",
+              "title": "Strategies"
+            },
+            "manual": {
+              "default": false,
+              "description": "Only rules whose platform block lists this tenant reach it.",
+              "title": "Manual",
+              "type": "boolean"
+            },
+            "setup": {
+              "$ref": "#/$defs/ExabeamSetup",
+              "description": "Connection settings."
+            }
+          },
+          "required": [
+            "name",
+            "setup"
+          ],
+          "title": "ExabeamTenant",
+          "type": "object"
+        },
+        "Modifier": {
+          "additionalProperties": false,
+          "description": "`[[modifiers]]`: rule values rewritten at deploy time when the conditions match.",
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Modifier name.",
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "What the modifier is for.",
+              "title": "Description"
+            },
+            "conditions": {
+              "$ref": "#/$defs/ModifierConditions",
+              "description": "When the modifier applies."
+            },
+            "modifications": {
+              "additionalProperties": true,
+              "description": "Rule values to set, keyed by dotted platform field path.",
+              "title": "Modifications",
+              "type": "object"
+            }
+          },
+          "required": [
+            "conditions",
+            "modifications"
+          ],
+          "title": "Modifier",
+          "type": "object"
+        },
+        "ModifierConditions": {
+          "additionalProperties": false,
+          "description": "`[modifiers.conditions]`: which rules a modifier applies to.",
+          "properties": {
+            "status": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply to rules in one of these deployment statuses.",
+              "title": "Status"
+            },
+            "flags": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply to rules carrying one of these flags.",
+              "title": "Flags"
+            },
+            "tenants": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply when deploying to one of these tenants.",
+              "title": "Tenants"
+            },
+            "default": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply to every rule, as platform defaults.",
+              "title": "Default"
+            }
+          },
+          "title": "ModifierConditions",
+          "type": "object"
+        },
+        "PlatformIdentity": {
+          "additionalProperties": false,
+          "description": "`[platform]`: whether the platform is enabled, and how it is named.\n\nThe file name stem (`platforms/splunk.toml`) identifies the platform.",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "description": "Load and deploy to this platform.",
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Display name of the platform.",
+              "title": "Name"
+            },
+            "description": {
+              "default": "",
+              "description": "What the platform is.",
+              "title": "Description",
+              "type": "string"
+            }
+          },
+          "title": "PlatformIdentity",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Merged `platforms/exabeam.toml`.",
+      "properties": {
+        "platform": {
+          "$ref": "#/$defs/PlatformIdentity",
+          "description": "Platform identity."
+        },
+        "modifiers": {
+          "description": "Deploy-time rule modifiers.",
+          "items": {
+            "$ref": "#/$defs/Modifier"
+          },
+          "title": "Modifiers",
+          "type": "array"
+        },
+        "tenants": {
+          "description": "Exabeam tenants.",
+          "items": {
+            "$ref": "#/$defs/ExabeamTenant"
+          },
+          "title": "Tenants",
+          "type": "array"
+        }
+      },
+      "title": "platforms/exabeam.toml",
+      "type": "object"
+    },
+    "platforms.google_secops.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$defs": {
+        "GoogleSecopsSetup": {
+          "additionalProperties": false,
+          "description": "`[tenants.setup]` for Google Security Operations.",
+          "properties": {
+            "ssl": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "description": "Environment variable placeholder ($NAME), resolved when the tenant loads.",
+                  "pattern": "^\\$",
+                  "type": "string"
+                },
+                {
+                  "description": "A boolean written as a word: true/false, yes/no, on/off, 1/0.",
+                  "pattern": "^\\s*([tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|1|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF]|0)\\s*$",
+                  "type": "string"
+                }
+              ],
+              "default": true,
+              "description": "Verify the tenant's TLS certificate: a boolean, true/false, yes/no, on/off, 1/0, or a $NAME placeholder.",
+              "title": "Ssl"
+            },
+            "project": {
+              "description": "The Google Cloud project bound to the SecOps instance, id or number.",
+              "minLength": 1,
+              "title": "Project",
+              "type": "string"
+            },
+            "location": {
+              "description": "The instance's region: us, eu, europe, or a Google Cloud region such as europe-west2.",
+              "minLength": 1,
+              "title": "Location",
+              "type": "string"
+            },
+            "instance": {
+              "description": "The SecOps customer id (a UUID).",
+              "minLength": 1,
+              "title": "Instance",
+              "type": "string"
+            },
+            "endpoint": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The regional service endpoint. Default: https://<location>-chronicle.googleapis.com.",
+              "title": "Endpoint"
+            },
+            "credentials": {
+              "anyOf": [
+                {
+                  "description": "Environment variable placeholder ($NAME), resolved when the tenant loads.",
+                  "pattern": "^\\$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "A $NAME placeholder for a service-account key, as a JSON document or a path to one. Without it, Application Default Credentials (workload identity, gcloud auth).",
+              "title": "Credentials"
+            },
+            "data_access_scope": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "A data access scope id, sent as scope on create and update.",
+              "title": "Data Access Scope"
+            },
+            "deletion": {
+              "default": "archive",
+              "description": "DELETION: archive the rule (keeps its detections and the binding), or delete it without force.",
+              "enum": [
+                "archive",
+                "delete"
+              ],
+              "title": "Deletion",
+              "type": "string"
+            }
+          },
+          "required": [
+            "project",
+            "location",
+            "instance"
+          ],
+          "title": "GoogleSecopsSetup",
+          "type": "object"
+        },
+        "GoogleSecopsTenant": {
+          "additionalProperties": false,
+          "description": "`[[tenants]]` for Google Security Operations.",
+          "properties": {
+            "name": {
+              "description": "Tenant name a rule's platform block may list.",
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "description": {
+              "default": "",
+              "description": "What the tenant is.",
+              "title": "Description",
+              "type": "string"
+            },
+            "strategies": {
+              "anyOf": [
+                {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "PREVIEW",
+                          "RELEASE"
+                        ]
+                      },
+                      {
+                        "pattern": "^\\s*([pP][rR][eE][vV][iI][eE][wW]|[rR][eE][lL][eE][aA][sS][eE])\\s*$"
+                      }
+                    ],
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "PREVIEW",
+                        "RELEASE"
+                      ]
+                    },
+                    {
+                      "pattern": "^\\s*([pP][rR][eE][vV][iI][eE][wW]|[rR][eE][lL][eE][aA][sS][eE])\\s*$"
+                    }
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Status strategies the tenant accepts (PREVIEW, RELEASE). Omit for both.",
+              "title": "Strategies"
+            },
+            "manual": {
+              "default": false,
+              "description": "Only rules whose platform block lists this tenant reach it.",
+              "title": "Manual",
+              "type": "boolean"
+            },
+            "setup": {
+              "$ref": "#/$defs/GoogleSecopsSetup",
+              "description": "Connection settings."
+            }
+          },
+          "required": [
+            "name",
+            "setup"
+          ],
+          "title": "GoogleSecopsTenant",
+          "type": "object"
+        },
+        "Modifier": {
+          "additionalProperties": false,
+          "description": "`[[modifiers]]`: rule values rewritten at deploy time when the conditions match.",
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Modifier name.",
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "What the modifier is for.",
+              "title": "Description"
+            },
+            "conditions": {
+              "$ref": "#/$defs/ModifierConditions",
+              "description": "When the modifier applies."
+            },
+            "modifications": {
+              "additionalProperties": true,
+              "description": "Rule values to set, keyed by dotted platform field path.",
+              "title": "Modifications",
+              "type": "object"
+            }
+          },
+          "required": [
+            "conditions",
+            "modifications"
+          ],
+          "title": "Modifier",
+          "type": "object"
+        },
+        "ModifierConditions": {
+          "additionalProperties": false,
+          "description": "`[modifiers.conditions]`: which rules a modifier applies to.",
+          "properties": {
+            "status": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply to rules in one of these deployment statuses.",
+              "title": "Status"
+            },
+            "flags": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply to rules carrying one of these flags.",
+              "title": "Flags"
+            },
+            "tenants": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply when deploying to one of these tenants.",
+              "title": "Tenants"
+            },
+            "default": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Apply to every rule, as platform defaults.",
+              "title": "Default"
+            }
+          },
+          "title": "ModifierConditions",
+          "type": "object"
+        },
+        "PlatformIdentity": {
+          "additionalProperties": false,
+          "description": "`[platform]`: whether the platform is enabled, and how it is named.\n\nThe file name stem (`platforms/splunk.toml`) identifies the platform.",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "description": "Load and deploy to this platform.",
+              "title": "Enabled",
+              "type": "boolean"
+            },
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Display name of the platform.",
+              "title": "Name"
+            },
+            "description": {
+              "default": "",
+              "description": "What the platform is.",
+              "title": "Description",
+              "type": "string"
+            }
+          },
+          "title": "PlatformIdentity",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Merged `platforms/google_secops.toml`.",
+      "properties": {
+        "platform": {
+          "$ref": "#/$defs/PlatformIdentity",
+          "description": "Platform identity."
+        },
+        "modifiers": {
+          "description": "Deploy-time rule modifiers.",
+          "items": {
+            "$ref": "#/$defs/Modifier"
+          },
+          "title": "Modifiers",
+          "type": "array"
+        },
+        "tenants": {
+          "description": "Google SecOps instances.",
+          "items": {
+            "$ref": "#/$defs/GoogleSecopsTenant"
+          },
+          "title": "Tenants",
+          "type": "array"
+        }
+      },
+      "title": "platforms/google_secops.toml",
+      "type": "object"
+    },
     "platforms.schema.json": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "$defs": {
@@ -4824,6 +6315,22 @@
         },
         "platforms/sysdig.toml": {
           "schema": "platforms.sysdig.schema.json",
+          "merge": "deep"
+        },
+        "platforms/bitdefender.toml": {
+          "schema": "platforms.bitdefender.schema.json",
+          "merge": "deep"
+        },
+        "platforms/graylog.toml": {
+          "schema": "platforms.graylog.schema.json",
+          "merge": "deep"
+        },
+        "platforms/exabeam.toml": {
+          "schema": "platforms.exabeam.schema.json",
+          "merge": "deep"
+        },
+        "platforms/google_secops.toml": {
+          "schema": "platforms.google_secops.schema.json",
           "merge": "deep"
         },
         "platforms/*.toml": {

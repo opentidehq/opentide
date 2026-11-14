@@ -240,6 +240,28 @@ impl RequestBuilder {
         Self { inner }
     }
 
+    /// Sets `Authorization: Basic` for *username* and *password* (an absent
+    /// password is empty), as reqwest's `basic_auth` does: the value is
+    /// marked sensitive.
+    #[must_use]
+    pub fn basic_auth(self, username: &str, password: Option<&str>) -> Self {
+        let inner = match self.inner {
+            #[cfg(not(target_os = "wasi"))]
+            Inner::Reqwest(builder) => Inner::Reqwest(builder.basic_auth(username, password)),
+            Inner::Plain(request) => Inner::Plain(request.and_then(|mut request| {
+                use base64::Engine as _;
+                let pair = format!("{username}:{}", password.unwrap_or(""));
+                let encoded = base64::engine::general_purpose::STANDARD.encode(pair);
+                let mut value = HeaderValue::try_from(format!("Basic {encoded}"))
+                    .map_err(|error| format!("builder error: {error}"))?;
+                value.set_sensitive(true);
+                request.headers.insert(header::AUTHORIZATION, value);
+                Ok(request)
+            })),
+        };
+        Self { inner }
+    }
+
     /// Sets the body.
     #[must_use]
     pub fn body(self, body: impl Into<Vec<u8>>) -> Self {

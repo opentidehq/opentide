@@ -1,0 +1,15 @@
+[1;31merror: [0mMalformed object yaml · path: objects/threats/encoded-exfiltration-threat-0030.yaml · error: 
+expected a mapping at the top of the file, found an empty file
+[1;31merror: [0mMalformed object yaml · path: objects/rules/elevated-exfiltration-rule-0014.yaml · error: 
+'2026-02-30' is not a valid date (day is out of range for month) at line 9, column 13
+[1;31merror: [0mMalformed object yaml · path: objects/rules/encoded-beacon-rule-0034.yaml · error: did not 
+find expected ',' or ']' at line 83, column 1 (while parsing a flow sequence that starts at line 82,
+column 9)
+[1;31merror: [0mMissing identifier from model · file: 
+<WS>/objects/rules/hidden-implant-rule-0006.yaml
+[1;31merror: [0mMalformed object yaml · path: objects/rules/hidden-loader-rule-0024.yaml · error: found a tab
+character that violates indentation at line 45, column 1 (while scanning a plain scalar that starts 
+at line 44, column 18)
+[1;31merror: [0mMalformed object yaml · path: objects/rules/staged-exfiltration-rule-0021.yaml · error: did 
+not find expected ',' or ']' at line 72, column 1 (while parsing a flow sequence that starts at line
+71, column 9)

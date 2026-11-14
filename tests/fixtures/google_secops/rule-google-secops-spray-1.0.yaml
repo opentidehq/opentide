@@ -1,0 +1,71 @@
+name: Password spraying followed by a successful login
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000062
+  schema: rule::1.1
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Ten or more blocked logins for one user from one address, then an
+  allowed login for that user from that address, within 30 minutes.
+techniques:
+- T1110.003
+- T1078
+response:
+  alert_severity: Critical
+  procedure:
+    analysis: |
+      Confirm the successful login with the user, then review what the session did.
+    searches:
+      - system: google_secops
+        purpose: Blocked logins per user and source address, last day
+        query: |
+          metadata.event_type = "USER_LOGIN"
+          security_result.action = "BLOCK"
+          $user = target.user.userid
+          $ip = principal.ip
+          match:
+            $user, $ip
+          outcome:
+            $attempts = count(metadata.id)
+          order:
+            $attempts desc
+          limit:
+            50
+configurations:
+  google_secops:
+    enabled: true
+    schema: platform::google_secops::1.0
+    status: PRODUCTION
+    name: password_spray_then_success
+    severity: High
+    run_frequency: LIVE_CUSTOMIZABLE
+    schedule:
+      ensure_enrichment_completeness: true
+      late_arriving_data_adjustment: 30m
+    events: |
+      $fail.metadata.event_type = "USER_LOGIN"
+      $fail.security_result.action = "BLOCK"
+      $fail.principal.ip = $ip
+      $fail.target.user.userid = $user
+
+      $success.metadata.event_type = "USER_LOGIN"
+      $success.security_result.action = "ALLOW"
+      $success.principal.ip = $ip
+      $success.target.user.userid = $user
+
+      $fail.metadata.event_timestamp.seconds < $success.metadata.event_timestamp.seconds
+    match:
+      group_by: [$user, $ip]
+      window: 30m
+    outcome: |
+      $risk_score = max(80)
+      $risk_entity_to_score = $user
+      $failed_attempts = count_distinct($fail.metadata.id)
+      $target_hosts = array_distinct($success.target.hostname)
+    condition: |
+      #fail >= 10 and $success
+    options:
+      suppression_window: 1h

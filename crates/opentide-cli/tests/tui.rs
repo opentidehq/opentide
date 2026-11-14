@@ -33,7 +33,7 @@ fn launch(repo: &Path, cwd: &Path) -> Launch {
         repo: Some(repo.display().to_string()),
         env: opentide_cli::env::Env::from_pairs([("HOME", cwd.display().to_string())]),
         cwd: cwd.to_path_buf(),
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
     }
 }
 
@@ -1123,4 +1123,112 @@ fn chains_draw_the_attack_flow_around_the_selected_threat() {
     key(&mut app, KeyCode::Enter);
     assert_eq!(app.tab, 0);
     assert_eq!(app.selected, Node::Object(THREAT.into()));
+}
+
+// -- CrowdStrike's CQL ------------------------------------------------------
+
+const CQL_RULE: &str = "00000000-0000-4000-8003-000000000002";
+const CQL_RULE_FILE: &str = "objects/rules/crowdstrike-cql-rule.yaml";
+
+/// The tutorial with a second rule: the tutorial rule's metadata, and a
+/// CrowdStrike block whose query calls `groupBi` (line 26), one edit from
+/// CQL's `groupBy`.
+fn with_a_crowdstrike_rule() -> (tempfile::TempDir, std::path::PathBuf) {
+    let (base, repo) = tutorial();
+    let text = std::fs::read_to_string(repo.join(RULE_FILE))
+        .unwrap()
+        .replace("\r\n", "\n");
+    let head = &text[..text.find("configurations:\n").unwrap()];
+    let rule = head
+        .replace(RULE, CQL_RULE)
+        .replace("name: Sentinel KQL Rule", "name: CrowdStrike CQL Rule")
+        + "configurations:
+  crowdstrike:
+    status: STAGING
+    query: |
+      #event_simpleName=ProcessRollup2
+      | groupBi([aid], function=count())
+";
+    std::fs::write(repo.join(CQL_RULE_FILE), rule).unwrap();
+    (base, repo)
+}
+
+/// 0.24.0's CQL in `opentide tui`: the language server's CQL finding on
+/// the CrowdStrike query is counted before any validate run, `n` reaches it,
+/// the page names the query's language `cql`, and the source view colours
+/// the query and underlines the finding (C1, #790).
+#[test]
+fn a_crowdstrike_query_is_checked_coloured_and_named_cql() {
+    use ratatui::style::Modifier;
+    let (_base, repo) = with_a_crowdstrike_rule();
+    let mut app = open(&repo);
+    let rows = tree(&app, 80);
+    assert!(
+        rows[2].starts_with("    ├── CrowdStrike CQL Rule  ✗ "),
+        "{rows:#?}"
+    );
+    let catalogue = app.catalogue.as_ref().unwrap();
+    let entry = catalogue.entries[CQL_RULE].clone();
+    let (live, _) = app.findings_of(&entry);
+    let on_query: Vec<_> = live
+        .iter()
+        .filter(|item| item.field_path == ["configurations", "crowdstrike", "query"])
+        .collect();
+    assert_eq!(on_query.len(), 1, "{live:#?}");
+    let unknown = on_query[0];
+    assert_eq!(
+        (unknown.code.as_str(), unknown.line, unknown.column),
+        ("cql_unknown_function", Some(25), Some(9))
+    );
+    assert_eq!(unknown.help.as_deref(), Some("did you mean \"groupBy\"?"));
+    assert!(
+        live.iter()
+            .all(|item| item.code != "crowdstrike_unsupported"),
+        "retired: {live:#?}"
+    );
+    let found = live.len();
+
+    key(&mut app, KeyCode::Down);
+    key(&mut app, KeyCode::Down);
+    assert_eq!(app.selected, Node::Object(CQL_RULE.into()));
+    let page = detail(&app);
+    assert!(page.contains("crowdstrike  cql"), "{page}");
+
+    // `n` walks the findings in line order; the CQL one is on the last line.
+    for _ in 0..found {
+        press(&mut app, "n");
+    }
+    assert!(
+        app.status
+            .starts_with(&format!("{found}/{found} error[cql_unknown_function]:")),
+        "{}",
+        app.status
+    );
+    let source = detail(&app);
+    assert!(source.contains("▶ error[cql_unknown_function]"), "{source}");
+
+    let (lines, _) = app.detail_lines(100);
+    let call = lines
+        .iter()
+        .find(|line| plain(line).contains("| groupBi("))
+        .unwrap();
+    let underlined: String = call
+        .spans
+        .iter()
+        .filter(|span| span.style.add_modifier.contains(Modifier::UNDERLINED))
+        .map(|span| span.content.as_ref())
+        .collect();
+    assert_eq!(underlined, "groupBi");
+    // The engine colours the query: the event filter is not one plain span.
+    let filter = lines
+        .iter()
+        .find(|line| plain(line).contains("#event_simpleName=ProcessRollup2"))
+        .unwrap();
+    assert!(
+        filter
+            .spans
+            .iter()
+            .any(|span| span.content.contains("ProcessRollup2") && span.style.fg.is_some()),
+        "{filter:?}"
+    );
 }

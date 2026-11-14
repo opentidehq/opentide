@@ -51,6 +51,9 @@ pub struct Tenant {
     /// The setup's lists of strings (Elastic's `index`, Sysdig's
     /// `policies`), as written: they name no credential.
     pub lists: BTreeMap<String, Vec<String>>,
+    /// The setup's tables of strings (Graylog's `stream_ids`), as written,
+    /// in file order: they name no credential.
+    pub tables: BTreeMap<String, Vec<(String, String)>>,
 }
 
 impl Tenant {
@@ -82,6 +85,7 @@ impl Tenant {
         let mut values = BTreeMap::new();
         let mut legacy_variables = Vec::new();
         let mut lists = BTreeMap::new();
+        let mut tables = BTreeMap::new();
         for (key, value) in setup {
             if key == "ssl" {
                 continue;
@@ -95,11 +99,21 @@ impl Tenant {
                     lists.insert(key.clone(), texts);
                     continue;
                 }
+                toml::Value::Table(entries) => {
+                    let texts: Vec<(String, String)> = entries
+                        .iter()
+                        .filter_map(|(name, item)| {
+                            item.as_str().map(|text| (name.clone(), text.to_owned()))
+                        })
+                        .collect();
+                    tables.insert(key.clone(), texts);
+                    continue;
+                }
                 toml::Value::String(text) => text.clone(),
                 toml::Value::Integer(_) | toml::Value::Float(_) | toml::Value::Boolean(_) => {
                     value.to_string()
                 }
-                _ => continue,
+                toml::Value::Datetime(_) => continue,
             };
             let resolved = credentials::resolve(
                 &text,
@@ -122,6 +136,7 @@ impl Tenant {
             setup: values,
             legacy_variables,
             lists,
+            tables,
         })
     }
 
@@ -149,6 +164,11 @@ impl Tenant {
         self.lists.get(key).map_or(&[], Vec::as_slice)
     }
 
+    /// The setup's table *key* (`stream_ids`), empty when it has none.
+    pub fn table(&self, key: &str) -> &[(String, String)] {
+        self.tables.get(key).map_or(&[], Vec::as_slice)
+    }
+
     /// Every resolved secret of this tenant, for a redactor.
     pub fn secrets(&self) -> impl Iterator<Item = &Secret> {
         self.setup.values().filter_map(Credential::secret)
@@ -158,8 +178,8 @@ impl Tenant {
 /// The tenants *config* (a workspace's resolved configuration, as
 /// `opentide_compile::Json`) lists for *platform*, in file order: each one's
 /// `name` and its `setup` table, ready for [`Tenant::from_setup`]. A setup
-/// value with no TOML form (a null, a table) is left out, as the loader
-/// leaves it out of the strings it resolves.
+/// value with no TOML form (a null) is left out, as the loader leaves it out
+/// of the strings it resolves; a table is kept for [`Tenant::tables`].
 pub fn configured(config: &opentide_compile::Json, platform: &str) -> Vec<(String, toml::Table)> {
     opentide_compile::plan::tenants(config, platform)
         .into_iter()
@@ -193,7 +213,13 @@ fn toml_value(value: &opentide_compile::Json) -> Option<toml::Value> {
         J::Float(number) => toml::Value::Float(*number),
         J::Bool(flag) => toml::Value::Boolean(*flag),
         J::Array(items) => toml::Value::Array(items.iter().filter_map(toml_value).collect()),
-        J::Null | J::Object(_) => return None,
+        J::Object(entries) => toml::Value::Table(
+            entries
+                .iter()
+                .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
+                .collect(),
+        ),
+        J::Null => return None,
     })
 }
 

@@ -38,12 +38,12 @@ expression: validate_fault_codequality
   {
     "type": "issue",
     "check_name": "deployment_state_platform",
-    "description": "<WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only crowdstrike, defender_for_endpoint, sentinel_one, sysdig store external ids",
+    "description": "<WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only bitdefender, crowdstrike, defender_for_endpoint, graylog, exabeam, google_secops, sentinel_one, sysdig store external ids",
     "categories": [
       "Bug Risk"
     ],
     "severity": "major",
-    "fingerprint": "b8e87ca2df01b75068eaa894c325226087061df25b8182b2cefae8462e783dd3",
+    "fingerprint": "871038283c9f1c9c8ed6089fe2034b6eb7586ee2e2bdac0d3382d13bfcccd040",
     "location": {
       "path": ".opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json",
       "lines": {

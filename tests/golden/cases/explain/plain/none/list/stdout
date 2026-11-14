@@ -1,228 +1,466 @@
-analysis_engine                    The analysis engine loads: the Rust module compiled into opentide (`opentide._native`) behind the `queries` checks of `opentide validate` and `opentide lint`, `opentide validate query` and `opentide lsp`.
-api_key_literal                    A `sharing.toml` block holds its API key as a literal.
-api_key_unset                      An enabled sharing target has no API key.
-asset_unknown                      A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare.
-cbc_unknown_field                  A field in a Carbon Black Cloud query is one or two letters away from a Carbon Black process search field, and is not that field.
-chaining_relation_unknown          A threat's chaining relation is not a known relation.
-changed_diff                       `share push --changed` could not calculate which objects changed.
-changed_on_pull_request            `share push --changed` does not run on a pull request.
-changed_outside_ci                 `share push --changed` runs only in CI, where the diff it shares is known.
-command_failed                     The command failed for a reason no more specific code covers.
-compile_empty_block                A block the rule needs is present but empty, so the platform cannot read a value from it.
-compile_failed                     The platform's compiler rejected the rule for a reason opentide cannot name more precisely.
-compile_invalid_rule               The rule does not load as a detection rule the platform can compile.
-compile_invalid_value              A setting in the rule's platform block holds a value the platform cannot use.
-compile_missing_field              A rule's Sentinel block lacks a setting Sentinel needs to build the alert rule.
-config_check_failed                opentide could not check this configuration file in the editor; the message says why. Its other findings are missing.
-config_enum_unknown                A value is not one of those your deployment configuration declares.
-config_parse                       A configuration file could not be read as TOML.
-configuration                      The workspace configuration files under `.opentide/configurations/` load.
-credentials                        Per configured tenant, whether every `$VARIABLE` its setup names is set.
-crowdstrike_unsupported            CrowdStrike queries are not validated; the engine never fakes it.
-cve_lookup_unavailable             A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them.
-defender_output_columns            A Defender custom detection must return the columns Defender requires.
-deployment_state_platform          A deployment state shard names a platform that stores no external ids.
-deployment_state_shape             A deployment state shard is not the JSON shape opentide writes.
-deployment_state_uuid_mismatch     A deployment state shard's file name and contents name different rules.
-deprecated_field                   An object uses a field its schema marks as deprecated.
-doctor_checks_failed               At least one `opentide doctor` check failed.
-duplicate_id                       Two object files carry the same UUID.
-duplicate_name                     Two `sharing.toml` blocks share a name.
-ecs_type_mismatch                  The operation cannot apply to the field's type, from ECS or from the columns visibility.toml declares for the index.
-ecs_unknown_field                  The field is not in the Elastic Common Schema, on indices that use it, nor declared for the index in visibility.toml; ECS allows custom fields.
-elastic_dataset_not_declared       The index pattern is not one the workspace declares in visibility.toml.
-engine_unavailable                 The analysis engine (the Rust module compiled into opentide) does not load, so the command cannot check queries or serve the language server.
-eql_argument_type                  A literal has a type the EQL verifier rejects in this position.
-eql_case_sensitive                 The comparison is case-sensitive; the case-insensitive form may be meant.
-eql_expression_depth               The expression nests deeper than Elasticsearch accepts.
-eql_field_comparison               Both sides of a comparison read fields, which EQL does not support.
-eql_function_arity                 An EQL function is called with the wrong number of arguments.
-eql_literal_wildcard               A wildcard character is compared literally; use : or like for a pattern.
-eql_maxspan_lookback               A sequence maxspan is longer than the rule's lookback.
-eql_maxspan_missing                A sequence has no maxspan, so partial sequences are held until they expire.
-eql_maxspan_unit                   A sequence maxspan uses a unit Elasticsearch does not accept.
-eql_maxspan_window                 A sequence maxspan is longer than the rule's interval plus lookback, so the rule cannot see whole sequences.
-eql_nested_comment                 Elasticsearch nests /* */ comments; the comment ends later than it looks.
-eql_not_boolean                    A string or number literal is used as a condition.
-eql_parse_error                    The EQL query does not parse.
-eql_regex                          The regular expression trips a Lucene RegExp pitfall.
-eql_runs_ignored                   A decimal runs count is truncated by Elasticsearch.
-eql_unknown_function               The EQL function is not in the Elasticsearch function catalog.
-eql_unsupported                    Elasticsearch EQL does not support this construct (pipes, relationships, ...).
-eql_until_term                     runs or a missing-event term ![ ] is not allowed on until.
-esql_expression_depth              The expression nests deeper than Elasticsearch accepts.
-esql_group_by_column               A suppression group_by field is not a column the ES|QL query returns.
-esql_metadata_id                   A non-aggregating ES|QL rule query has no METADATA _id, so alerts cannot be deduplicated.
-esql_parse_error                   The ES|QL query does not parse.
-esql_pattern                       A LIKE or RLIKE pattern escapes or matches differently than it reads.
-esql_unavailable                   The command, function or form is missing or in preview on a targeted stack version.
-esql_unknown_command               The ES|QL command is not one Elasticsearch knows.
-esql_unknown_function              The ES|QL function is not in the Elasticsearch function catalog.
-esql_unknown_type                  The ::type cast names a type no Elasticsearch release can cast to.
-external_id_in_rule                A rule still carries a vendor rule id key, which belongs in deployment state.
-external_id_shape                  A vendor rule id in deployment state has the wrong form.
-falco_append_condition             A tuning's condition is appended to the tuned rule's condition and must start with `and` or `or`; a new rule's condition must not.
-falco_deprecated_field             A field Falco deprecates (`evt.dir`, `evt.latency`): it no longer carries the value it used to.
-falco_exception                    A rule exception Falco refuses: comparison operators, field and value counts, or a value the field's type cannot hold.
-falco_field_argument               A known Falco field is used with an argument it refuses, or without one it requires (libsinsp's field rules: `proc.aname[N]` takes an index, `evt.arg.NAME` an event argument).
-falco_field_as_value               A constant value that is a field name: compare with `val(field)` to read the field.
-falco_invalid_regex                The `regex` pattern does not compile.
-falco_misplaced_list               A list is used where its expansion breaks the condition: as a macro, or as a single value; a list belongs inside a value list, `in (name)`.
-falco_newer_syntax                 Syntax that only recent libsinsp releases parse (operator modifiers, `join`, `concat`, `getopt`, transformer arguments); an older Falco or Sysdig agent refuses the rule.
-falco_no_evttype                   The rule cannot be narrowed to a few event types (`evt.type`), so it runs on every event; Falco and Sysdig warn about the performance penalty.
-falco_operator_type                The operator does not apply to the field's type (libsinsp `flt_is_comparable`); Falco refuses to load the rule.
-falco_output_syntax                The output template does not format: a `%` at the end, a length with no field, or a token that is no field or transformer.
-falco_parse_error                  The Falco condition does not parse.
-falco_regex_simple                 A `regex` check a plain operator (`=`, `contains`, `startswith`, `endswith`) could make, which libsinsp warns about: regex is the slowest check.
-falco_rhs_field                    A field cannot be compared with another field here (`val(...)` or a transformer on the right): not with `pmatch` or `regex`, not on networks, not on fields that refuse it, and only between fields of the same type.
-falco_transformer                  A field transformer cannot apply here: the field's type, a field that refuses transformers, or the arguments of `join`, `concat`, or `getopt`.
-falco_transformer_as_value         A constant value that looks like a transformer call, compared as text.
-falco_unknown_event                The event type is not in the driver's event table nor a syscall name; libsinsp refuses it.
-falco_unknown_field                The field is not one Falco or its plugins define for the rule's event source; a plugin the engine does not know may add it.
-falco_unknown_list                 The name after a list operator, without parentheses, is not a list of the block or of the Falco default rules, so it is compared as a single value.
-falco_unknown_macro                The name is not a macro of the block or of the Falco default rules; the tenant may define it, as Sysdig does for its managed macros.
-falco_unknown_rule                 A tuning (`append_to_rule`) names a rule the Falco default rules do not define: Falco refuses the append, and on Sysdig the tenant must have that rule.
-falco_unknown_source               The event source is not one Falco or its published plugins define, so its fields are not checked.
-falco_unsafe_na_check              A `ka.` or `jevt.` field compared with `<NA>`, which Falco warns about: the field may hold that text.
-falco_value_type                   The value cannot be parsed as the field's type (a number, `true` or `false`, an IP address or network, a hex string for `bcontains`); Falco refuses to load the rule.
-filename_mismatch                  An object file's name is not the stem `lint.toml` `[filenames].style` (or its kind's `[filenames.<kind>].style`) asks for: `slugify(name)` by default.
-filename_pattern                   An object file's name does not match the regular expression `lint.toml` sets for it.
-filename_slug                      The file name is not the one lint.toml's [filenames] style derives from the object's name.
-git                                git is on `PATH`.
-git_repository                     The workspace is in a git repository, and its default branch (`origin/HEAD`).
-internal                           opentide stopped on an exception it did not handle: a bug in opentide, not in your input.
-interrupted                        The command was stopped before it finished: an `opentide serve` client cancelled the run.
-invalid_cve                        A threat lists CVE identifiers Vulnerability-Lookup does not know.
-invalid_ref                        A reference names an object that does not exist.
-invalid_uuid                       An object's `metadata.uuid` is not a UUID v4.
-invalid_value                      A `sharing.toml` value has the wrong type.
-issues_found                       The command ran and failed on what it found.
-kql_control_command_unsupported    A KQL control command (.show, .create, ...) is not a detection query; rules cannot run it.
-kql_deprecated_function            The KQL function is a deprecated alias; Microsoft Learn names its replacement.
-kql_deprecated_operator            The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs).
-kql_join_summarize_before_project  join or summarize runs before project, so it carries every column.
-kql_parse_error                    The KQL query does not parse.
-kql_render_not_valid               render draws a chart; it has no effect in a detection rule.
-kql_table_not_declared             The table is one the engine knows for the platform, but no log source of the workspace declares it in visibility.toml.
-kql_type_mismatch                  The operator cannot apply to the column's documented or declared type.
-kql_unknown_column                 The column is not in the documented schema of the table or ASIM parser it comes from, or in the columns visibility.toml declares for the table.
-kql_unknown_function               The KQL function is not in the Kusto function catalog.
-kql_unknown_operator               The KQL tabular operator is not one Kusto knows.
-kql_unknown_table                  The table is neither one the engine knows for the platform nor one the workspace declares in visibility.toml: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema. Declaring it in visibility.toml makes it known.
-kql_unscoped_search                search without a table scans every table in the workspace.
-kql_unscoped_union                 union * or an unscoped union reads every table.
-kql_where_not_first                A filter comes after a more expensive operator; filtering first scans fewer rows.
-kql_wildcard_table                 A wildcard table name reads every matching table.
-kuery_escape                       A character needs escaping in Kibana KQL (kuery).
-kuery_free_text                    A value with no field searches every field.
-kuery_looks_like_lucene            The query reads like Lucene; language: lucene may be meant.
-kuery_lucene_syntax                Lucene syntax inside a Kibana KQL (kuery) query.
-kuery_parse_error                  The Kibana KQL (kuery) query does not parse.
-kuery_question_mark                ? is a literal in Kibana KQL (kuery), not a single-character wildcard.
-kuery_quoted_wildcard              A wildcard inside quotes is a literal * in Kibana KQL (kuery).
-kuery_range_type                   A range compares a value of the wrong type.
-lookback_long                      The Elastic rule's lookback exceeds an hour; it is added to the interval, not the whole window.
-lookback_zero                      The Elastic rule's lookback is zero, so events that arrive late are missed.
-lsp_catalog                        opentide can generate the language server's catalog for this workspace, and a committed copy is current.
-lucene_bare_term                   A term with no field searches every field.
-lucene_elasticsearch_only          The syntax works in Elasticsearch but not in Carbon Black Cloud.
-lucene_escape                      A character needs escaping in Lucene.
-lucene_fuzzy                       Elasticsearch accepts only 0, 1, 2 or AUTO as a fuzziness.
-lucene_kuery_syntax                Kibana KQL (kuery) syntax inside a Lucene query.
-lucene_looks_like_kuery            The query reads like Kibana KQL (kuery); language: kuery may be meant.
-lucene_lowercase_operator          Lucene operators are upper case; lowercase and/or/not are search terms.
-lucene_mixed_operators             AND and OR mixed without parentheses do not bind as they read.
-lucene_parse_error                 The Lucene query does not parse.
-lucene_range_operator              f:> 10 searches f for the text >; the value must follow the operator.
-lucene_regexp                      The /regexp/ body is rejected by, or too costly for, Lucene's RegExp.
-lucene_unescaped_slash             An unescaped / starts a regular expression.
-max_tlp_unknown                    A `sharing.toml` block's `max_tlp` is not a TLP value.
-mcp_config                         An MCP configuration from `opentide setup mcp` runs `opentide mcp start`.
-metadata_recommended               An object has no `metadata.author` or `metadata.organisation`.
-missing_author                     The recommended metadata.author field is missing.
-missing_field                      A configuration file is missing a required key, once it is merged with the bundled file and the parent instance.
-missing_organisation               The recommended metadata.organisation field is missing.
-missing_uuid                       An object file has no UUID, so it cannot be indexed.
-name_invalid                       A `sharing.toml` block name is not 1-64 lowercase letters, digits, `-` or `_`.
-name_missing                       An object has no `name`, so lint cannot derive its file name.
-needs_human_decision               `migrate vocab-scope` left values that only a person can place.
-nested_object_file                 A YAML file sits in a subfolder of an object folder, so it is not an object and no command reads it.
-no_tenant_reached                  `validate query --live` sent no query, because no configured tenant takes the rules.
-not_a_configuration_file           The file is not one opentide reads as configuration, or it has no configuration model to check it against.
-not_implemented                    The command is reserved and does nothing yet.
-not_run                            The command was skipped, and says why in its message.
-object_type_unknown                A `sharing.toml` block lists an object type opentide cannot share.
-opentide_latest                    Whether PyPI has a newer opentide release than the one installed.
-opentide_version                   The installed opentide version.
-organisation_uuid_invalid          A `sharing.toml` block's `organisation_uuid` is not a UUID.
-organisation_uuid_mismatch         The organisation configured for a sharing target is not the one its API key belongs to.
-path_exists                        `opentide new` would write a file that already exists, and it never overwrites one.
-path_not_writable                  `opentide new` could not create the folder or the file it scaffolds, because the operating system refused the write: a read-only checkout, a folder another user owns, or a full disk.
-placeholder                        A value still holds the stand-in `opentide new` wrote for a required field nobody chose yet.
-platform_not_enabled               A rule has a block for a platform this workspace has not enabled, so it will not deploy there.
-platform_sdk                       Each enabled platform's SDK imports.
-platforms_enabled                  Which platforms the workspace enables.
-promotion_target_unknown           `deployment.toml` `[promotion] promotion_target` is not the name of a `[[statuses]]` entry.
-proxy                              The proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts a connection.
-python_version                     The Python interpreter running opentide.
-query_check_timeout                `validate query --live` failed because a tenant did not answer a query's check within the check timeout.
-recommended_field_missing          A field the templates ask for is missing; opentide validate accepts the object without it.
-reference_not_found                `--objective` or `--threat` names a UUID that no object in the catalogue carries.
-retired_configuration_file         A file or folder under `.opentide/configurations/` that opentide does not read.
-retract_unconfirmed                `share retract` would delete a remote event, and was not confirmed.
-risk_band                          The risk score is outside the band of the rule's severity.
-rule_status_unknown                A `sharing.toml` block lists a rule status your configuration does not declare.
-schema_missing                     An object has no `metadata.schema`, so no schema can check it.
-schema_validation                  An object does not match the schema its `metadata.schema` names.
-schemas_fresh                      Every JSON schema this opentide version generates exists.
-scope_no_match                     A `--file`, `--uuid` or `--type` selection matched no object, so nothing was validated.
-share_failed                       `share` reached the destination, and every object failed.
-share_partial                      `share` shared some objects, and others failed.
-share_unreachable                  `share` could not authenticate to, or reach, any destination.
-sharing_config                     `sharing.toml` failed validation, so `share` did not run.
-sharing_directory                  A `sharing/` configuration directory exists; sharing is configured in one `sharing.toml` file.
-spl_command_without_pipe           The query starts with a command name but no |, so Splunk searches for the word instead of running the command.
-spl_dataset_not_declared           The sourcetype is not one the workspace declares in visibility.toml.
-spl_empty_command                  A command with no arguments: Splunk runs it, but it does nothing, returns no results, or fails at run time.
-spl_empty_stage                    A trailing | with no command; Splunk ignores it.
-spl_leading_not                    A base search that starts with NOT scans every event before excluding any.
-spl_parse_error                    The SPL search does not parse.
-spl_search_operator                A search clause compares with an operator search does not have (`==`, `<>`, `=>`, `=<`, `!~`): Splunk accepts it but the comparison never matches, or `=~`, which compares with a value that starts with `~`.
-spl_subsearch_truncation           A subsearch is silently truncated at its result or time limit.
-spl_unknown_command                The SPL command is not in the Splunk Search Reference or a catalogued app such as MLTK: a warning, since an app on the search head can add commands, or an error when the name is one edit from a known command.
-spl_unknown_datamodel              The CIM data model or dataset is not one Splunk CIM defines.
-spl_unknown_datamodel_field        The field is not in the CIM data model the search reads.
-spl_wildcard                       A leading or mid-token wildcard in a base search that nothing else narrows (no index, sourcetype, source, host, TERM() or macro) cannot use the index and scans every event.
-sysdig_definition_duplicate        A name is defined more than once across the block's macros and lists.
-sysdig_definition_name             A block macro or list name is not `[A-Za-z_][A-Za-z0-9_]*`, or is a Falco operator or keyword.
-sysdig_definition_order            A block macro uses itself or a macro defined after it: Falco gives a macro no view of itself or later macros, and refuses it as an undefined macro.
-sysdig_exception_shape             An exception's fields, comps, and values do not have a shape Falco's rule loader accepts (`validate_exception_info`).
-sysdig_list_in_value               A block list name appears in an exception value where Falco's expansion would not produce a value list.
-sysdig_list_self_reference         A block list names itself as one of its items, so its own name stays in the expanded condition.
-sysdig_priority                    `priority` is not one of Falco's eight priorities (or `INFO`), compared case-insensitively.
-sysdig_rule_shape                  A Sysdig block is a new rule with a non-blank `condition`, or a tuning (`append_to_rule`) that appends a condition, exceptions, or both.
-sysdig_source                      `source` is not an event source name (`[a-z][a-z0-9_]*`).
-sysdig_tuning_keys                 A tuning (`append_to_rule`) inherits `output`, `priority`, `policies`, `source`, and `name` from the rule it tunes, so it must not set them.
-technique_not_enterprise           The ATT&CK technique is not in the Enterprise matrix that Elastic maps.
-template_missing                   `opentide new` found no generated template or schema for the object type it was asked for.
-templates_fresh                    Every template this opentide version generates exists and matches what it would write.
-threshold_lookback                 A threshold rule's lookback exceeds its interval, so windows overlap and alerts repeat.
-unknown_connector                  `sharing.toml` has a top-level array that names a sharing connector opentide does not have; it was skipped.
-unknown_key                        A configuration file has a key opentide does not read, usually a misspelling.
-url_invalid                        A `sharing.toml` block's `url` is not an http(s) URL.
-usage_error                        The command line cannot be used as written, for a reason no other usage code covers.
-usage_invalid_choice               An option or argument has a value outside the ones it accepts.
-usage_invalid_value                An option has a value that cannot be used, although it is spelled correctly.
-usage_missing_option               A required option or argument is missing.
-usage_needs_input                  The command would ask a question, but nobody can answer it.
-usage_tui_needs_tty                `opentide tui` ran where it cannot draw: it needs a person at a terminal.
-usage_unknown_command              The command line names a command that does not exist.
-usage_unknown_option               The command line passes an option the command does not take.
-usage_watch_needs_tty              `validate --watch` ran where nobody can watch it.
-vocab_unknown                      A value is not in the vocabulary its field uses.
-vscode_settings                    The workspace recommends the opentide VS Code extension (`opentidehq.opentide`) in `.vscode/extensions.json`, and `.vscode/settings.json` maps no object files to opentide's JSON schemas in `yaml.schemas`.
-vscode_snippets                    The editor snippet file `opentide generate snippets` writes exists.
-workspace                          Where the workspace is, and how it was found.
-workspace_not_found                `opentide new` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server was started in an Agent Plugin's directory, which is not a workspace, and nothing named one.
-yaml_parse                         An object file is not valid YAML, or not one mapping, so it could not be loaded.
-✓ 227 diagnostic codes
+analysis_engine                           The analysis engine loads: the Rust module compiled into opentide (`opentide._native`) behind the `queries` checks of `opentide validate` and `opentide lint`, `opentide validate query` and `opentide lsp`.
+api_key_literal                           A `sharing.toml` block holds its API key as a literal.
+api_key_unset                             An enabled sharing target has no API key.
+asset_unknown                             A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare.
+bitdefender_action_scope                  An automatic action is not allowed for the rule's kind or target.
+bitdefender_actions_unsupported           The block sets `actions`, and the tenant's subscription has no automatic actions.
+bitdefender_contains_no_wildcard          A `contains` criterion has neither `*` nor `?`, so GravityZone matches the value as written.
+bitdefender_create_no_id                  A GravityZone create answered something other than a 24-hex rule id.
+bitdefender_create_unconfirmed            A GravityZone create got no answer, and its retry found the name already taken.
+bitdefender_criteria_combination          The criteria combine fields or values GravityZone does not allow together.
+bitdefender_criterion_field               A criterion's `field` does not belong to the block's `target`.
+bitdefender_criterion_relation            A criterion uses a relation its field does not take.
+bitdefender_criterion_shape               A criterion does not have `field` and exactly one of `is`, `contains` and `any`.
+bitdefender_criterion_value               A criterion's value is not one its field accepts.
+bitdefender_incidents_api_unavailable     The tenant has no Incidents API, so it cannot take custom rules.
+bitdefender_kind_changed                  An update was refused because the block's kind differs from the GravityZone rule's.
+bitdefender_name_conflict                 GravityZone refused a create because a rule with the same name exists in the company.
+bitdefender_name_duplicate                Two enabled Bitdefender blocks resolve to the same GravityZone rule name.
+bitdefender_registry_full_hive            A `Registry.Key` criterion starts with a full hive name, which GravityZone accepts and never matches.
+bitdefender_request_failed                GravityZone refused a call for this rule with a JSON-RPC error.
+bitdefender_rule_kind                     A Bitdefender block sets both `detection` and `yara`, or neither.
+bitdefender_rule_missing                  A rule to disable is gone from GravityZone, so its recorded id was removed.
+bitdefender_rule_recreated                The recorded GravityZone rule was gone, so deploy created it again.
+bitdefender_severity                      The block `severity` is not `Low`, `Medium` or `High`.
+bitdefender_severity_collapsed            `response.alert_severity` is `Critical` or `Informational`, which GravityZone sends as `High` or `Low`.
+bitdefender_target                        The `detection.target` is not a GravityZone detection target.
+bitdefender_target_unknown                A `targets` alias is not in the tenant's `endpoint_tags` or `companies` table.
+bitdefender_targets_shape                 `targets` sets both `endpoint_tags` and `companies`, or an empty list.
+bitdefender_tenant_unauthorized           GravityZone refused the tenant's API key, so no rule deploys to it.
+bitdefender_tenant_unreachable            A call to the GravityZone tenant got no answer, so no further rule deploys to it.
+bitdefender_yara_ascii                    A Bitdefender YARA signature holds a character that is not ASCII.
+bitdefender_yara_size                     A Bitdefender YARA signature is longer than 30,000 characters.
+cbc_unknown_field                         A field in a Carbon Black Cloud query is one or two letters away from a Carbon Black process search field, and is not that field.
+chaining_relation_unknown                 A threat's chaining relation is not a known relation.
+changed_diff                              `share push --changed` could not calculate which objects changed.
+changed_on_pull_request                   `share push --changed` does not run on a pull request.
+changed_outside_ci                        `share push --changed` runs only in CI, where the diff it shares is known.
+command_failed                            The command failed for a reason no more specific code covers.
+compile_empty_block                       A block the rule needs is present but empty, so the platform cannot read a value from it.
+compile_failed                            The platform's compiler rejected the rule for a reason opentide cannot name more precisely.
+compile_invalid_rule                      The rule does not load as a detection rule the platform can compile.
+compile_invalid_value                     A setting in the rule's platform block holds a value the platform cannot use.
+compile_missing_field                     A rule's Sentinel block lacks a setting Sentinel needs to build the alert rule.
+config_check_failed                       opentide could not check this configuration file in the editor; the message says why. Its other findings are missing.
+config_enum_unknown                       A value is not one of those your deployment configuration declares.
+config_parse                              A configuration file could not be read as TOML.
+configuration                             The workspace configuration files under `.opentide/configurations/` load.
+cql_assignment_as                         A CQL assignment names the output field and the function's as= parameter names it again.
+cql_correlate_aggregate                   A Next-Gen SIEM correlation rule combines correlate() with another aggregate function, which CrowdStrike does not allow.
+cql_correlate_placement                   CQL correlate() stands where its reference forbids: after an aggregate or a source function, inside another function's arguments, or with an aggregate in its queries.
+cql_deprecated_function                   CrowdStrike's reference marks the CQL function deprecated.
+cql_duplicate_parameter                   A CQL function parameter is given more than once.
+cql_event_function_after_aggregate        A CQL eventSize(), eventInternals() or eventFieldCount() call comes after the first aggregate function, which LogScale refuses since 1.190.
+cql_free_text_after_aggregate             A CQL free-text filter comes after the first aggregate function, which LogScale refuses since 1.190.
+cql_link_outside_correlate                The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields.
+cql_match_guard                           A CQL match guard is an aggregate function; a guard must be a filter.
+cql_missing_parameter                     A CQL function call leaves out a required parameter.
+cql_parameter_value                       A literal CQL argument is not one of the parameter's allowed values, or is outside its bounds.
+cql_parse_error                           The CrowdStrike Query Language (CQL) query does not parse.
+cql_regex_flag                            A CQL regex literal has a flag other than d, g, i, m or F.
+cql_regex_group_under_or                  A CQL regex with named groups is an operand of or, where LogScale extracts none of its fields.
+cql_removed_function                      The CQL function was removed from LogScale and Next-Gen SIEM no longer runs it.
+cql_string_escape                         A CQL string has an escape LogScale does not translate; it keeps the backslash and the character.
+cql_unknown_event                         The #event_simpleName value is not a Falcon sensor event the engine knows.
+cql_unknown_function                      No CQL function has this name; function names are matched without regard to case.
+cql_unknown_parameter                     The CQL function has no parameter with this name.
+cql_unnamed_argument                      A CQL function gets an argument without a name that it cannot take: a second one, or one when every parameter needs its name.
+credentials                               Per configured tenant, whether every `$VARIABLE` its setup names is set.
+cve_lookup_unavailable                    A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them.
+defender_output_columns                   A Defender custom detection must return the columns Defender requires.
+deployment_state_platform                 A deployment state shard names a platform that stores no external ids.
+deployment_state_shape                    A deployment state shard is not the JSON shape opentide writes.
+deployment_state_uuid_mismatch            A deployment state shard's file name and contents name different rules.
+deprecated_field                          An object uses a field its schema marks as deprecated.
+doctor_checks_failed                      At least one `opentide doctor` check failed.
+duplicate_id                              Two object files carry the same UUID.
+duplicate_name                            Two `sharing.toml` blocks share a name.
+ecs_type_mismatch                         The operation cannot apply to the field's type, from ECS or from the columns visibility.toml declares for the index.
+ecs_unknown_field                         The field is not in the Elastic Common Schema, on indices that use it, nor declared for the index in visibility.toml; ECS allows custom fields.
+elastic_dataset_not_declared              The index pattern is not one the workspace declares in visibility.toml.
+engine_unavailable                        The analysis engine (the Rust module compiled into opentide) does not load, so the command cannot check queries or serve the language server.
+eql_argument_type                         A literal has a type the EQL verifier rejects in this position.
+eql_case_sensitive                        The comparison is case-sensitive; the case-insensitive form may be meant.
+eql_expression_depth                      The expression nests deeper than Elasticsearch accepts.
+eql_field_comparison                      Both sides of a comparison read fields, which EQL does not support.
+eql_function_arity                        An EQL function is called with the wrong number of arguments.
+eql_literal_wildcard                      A wildcard character is compared literally; use : or like for a pattern.
+eql_maxspan_lookback                      A sequence maxspan is longer than the rule's lookback.
+eql_maxspan_missing                       A sequence has no maxspan, so partial sequences are held until they expire.
+eql_maxspan_unit                          A sequence maxspan uses a unit Elasticsearch does not accept.
+eql_maxspan_window                        A sequence maxspan is longer than the rule's interval plus lookback, so the rule cannot see whole sequences.
+eql_nested_comment                        Elasticsearch nests /* */ comments; the comment ends later than it looks.
+eql_not_boolean                           A string or number literal is used as a condition.
+eql_parse_error                           The EQL query does not parse.
+eql_regex                                 The regular expression trips a Lucene RegExp pitfall.
+eql_runs_ignored                          A decimal runs count is truncated by Elasticsearch.
+eql_unknown_function                      The EQL function is not in the Elasticsearch function catalog.
+eql_unsupported                           Elasticsearch EQL does not support this construct (pipes, relationships, ...).
+eql_until_term                            runs or a missing-event term ![ ] is not allowed on until.
+esql_expression_depth                     The expression nests deeper than Elasticsearch accepts.
+esql_group_by_column                      A suppression group_by field is not a column the ES|QL query returns.
+esql_metadata_id                          A non-aggregating ES|QL rule query has no METADATA _id, so alerts cannot be deduplicated.
+esql_parse_error                          The ES|QL query does not parse.
+esql_pattern                              A LIKE or RLIKE pattern escapes or matches differently than it reads.
+esql_unavailable                          The command, function or form is missing or in preview on a targeted stack version.
+esql_unknown_command                      The ES|QL command is not one Elasticsearch knows.
+esql_unknown_function                     The ES|QL function is not in the Elasticsearch function catalog.
+esql_unknown_type                         The ::type cast names a type no Elasticsearch release can cast to.
+exabeam_advanced_in_rule                  A correlation rule sequence query uses Exabeam's advanced operators (SELECT, WHERE, pipes and the rest), which are Search only.
+exabeam_bare_wildcard                     A * alone is not an Exabeam query term.
+exabeam_clause_order                      Exabeam clauses are out of order, or one appears twice in a statement: SELECT, FROM, WHERE, AS, GROUP-BY, ORDER-BY, LIMIT.
+exabeam_context_table_limit               An Exabeam query has more than two context table lookups.
+exabeam_context_table_or                  An Exabeam context table lookup is under OR; lookups combine with AND or AND NOT only.
+exabeam_context_table_trigger             A sequence whose query looks a value up in a context table has a threshold.
+exabeam_correlation                       An Exabeam block with two or more sequences has no `correlation`, or one with a single sequence has one.
+exabeam_correlation_window                `correlation.within` is not more than the time the ordered sequences need.
+exabeam_create_no_id                      Exabeam answered a create without a rule UUID.
+exabeam_create_unconfirmed                An Exabeam create got no answer, or a server error, so it may or may not have happened.
+exabeam_duration                          A duration is not a whole number and a unit its field takes, or `delay` is outside 7 to 180 minutes.
+exabeam_email                             The block `email` has no recipients, a recipient that is not an address, a repeated recipient, or a blank subject.
+exabeam_feature_unavailable               The Exabeam tenant's subscription does not include the feature, so no rule deploys to it.
+exabeam_foreach_clause                    An Exabeam FOREACH sub-query has GROUP-BY or ORDER-BY.
+exabeam_foreach_position                  An Exabeam FOREACH is the first statement; it runs on the result of a preceding query.
+exabeam_foreach_reference                 An Exabeam @field reference is outside a FOREACH sub-query.
+exabeam_free_text_special                 Unquoted Exabeam free text holds a character other than letters, digits, _, * and ?; put it in double quotes.
+exabeam_function_arity                    An Exabeam function gets the wrong arguments: a filter function takes one string, an aggregation one field (* for COUNT only), RGX_EXTRACT an optional field and a pattern.
+exabeam_group_by                          A `group_by` is not a list of one to three distinct field names.
+exabeam_group_by_column                   An Exabeam selected column is neither in GROUP-BY nor aggregated.
+exabeam_group_by_select_star              An Exabeam GROUP-BY is combined with SELECT *.
+exabeam_implicit_and                      Two Exabeam terms, not both free text, stand side by side and are read as AND; write AND.
+exabeam_implicit_operator                 An Exabeam NOT stands between two terms with no AND or OR before it, which Exabeam calls invalid; write AND NOT or OR NOT.
+exabeam_ipv6_range                        An Exabeam range or CIDR block holds an IPv6 address; Exabeam ranges are IPv4 only.
+exabeam_keyword_case                      An Exabeam clause keyword, aggregation or RGX_EXTRACT is in mixed case; write it all upper or all lower case.
+exabeam_leading_slash                     An Exabeam query cannot start with /.
+exabeam_legacy_regex                      An Exabeam value between slashes may be read as a regular expression; write RGX("...") for a pattern, or drop the slashes for a path.
+exabeam_mixed_boolean                     Exabeam AND and OR are mixed at one level without parentheses; Exabeam does not document their precedence.
+exabeam_name_conflict                     An Exabeam rule with the block's name already exists, so deploy did not create a second one.
+exabeam_name_duplicate                    Two enabled Exabeam blocks resolve to the same Exabeam rule name.
+exabeam_name_length                       The Exabeam rule name is longer than 128 characters.
+exabeam_not_equal                         Exabeam filters have no != operator; write NOT field:value.
+exabeam_outcome                           The block `outcome` is not `alert`, `case` or `none`.
+exabeam_outcome_silent                    An Exabeam block has `outcome: none` and no `email`, so nobody is told when it triggers.
+exabeam_parse_error                       The Exabeam query does not parse: an unterminated string, an unbalanced bracket, a missing operand, an empty sequence query, or a comparison with a non-number.
+exabeam_pipe_limit                        An Exabeam query has more than five pipes.
+exabeam_pipe_misuse                       An Exabeam statement after a pipe follows no SELECT or uses none of its columns; write one query with AND or WHERE.
+exabeam_range                             The Exabeam range or CIDR block is invalid: a bound that is not a number, IPv4 address, datetime or *, mixed kinds, low above high, two open bounds, mismatched brackets, or a bad network.
+exabeam_regex                             The Exabeam regular expression is not valid RE2: a syntax error, a back-reference, look-around, an atomic group or a possessive quantifier.
+exabeam_request_failed                    An Exabeam call for one rule failed.
+exabeam_request_rejected                  Exabeam refused the rule with HTTP 400.
+exabeam_reserved_alias                    An Exabeam AS name is one of the Search guide's reserved words.
+exabeam_rgx_extract_limit                 An Exabeam query has more than three RGX_EXTRACT calls.
+exabeam_rule_auto_disabled                Exabeam has stopped the rule on its own.
+exabeam_rule_missing                      A rule to disable was already gone from Exabeam, so its id was removed.
+exabeam_rule_recreated                    The recorded Exabeam rule was gone, so deploy created it again.
+exabeam_schedule                          A `schedule` recurrence is not one Exabeam takes.
+exabeam_schedule_retained                 The Exabeam rule keeps a schedule the block no longer sets.
+exabeam_sequences                         An Exabeam block has no sequences, or a sequence has no query.
+exabeam_severity                          The block `severity` is not `none`, `low`, `medium`, `high` or `critical`.
+exabeam_single_group                      Parentheses hold a single Exabeam expression, which the Search guide calls an error; drop them.
+exabeam_string_field_number               An unquoted number is matched against a field the Exabeam Common Information Model types as a string; Exabeam requires the number in double quotes.
+exabeam_tenant_unauthorized               Exabeam refused the tenant's API key, so nothing more is sent to it.
+exabeam_tenant_unreachable                An Exabeam tenant did not answer, so no rule deploys to it.
+exabeam_threshold_function                A threshold's `function` is not an Exabeam function, or its `field` is missing or blank.
+exabeam_threshold_operator                A threshold's `operator` is not one its function takes.
+exabeam_threshold_value                   A threshold's `value` does not have the shape its operator takes.
+exabeam_time_exact                        An Exabeam time field (time, approxLogTime, ingest_time, raw_log_time) is matched with an exact value; Search matches time with a range only.
+exabeam_unknown_field                     The field is not in Exabeam's Common Information Model, a platform field, a c_ or m_ field, or an AS name defined earlier in the query; a tenant's parsers may still define it.
+exabeam_unknown_function                  The call is not an Exabeam function: RGX, RGXi, WLD and WLDi in a filter, an aggregation or RGX_EXTRACT in SELECT.
+exabeam_unknown_value                     An Exabeam `activity_type`, `subject` or `outcome` value is not one the Common Information Model lists.
+exabeam_unquoted_value                    An Exabeam field value is a bare word that is not a number, boolean, null, IP address or @field; Exabeam documents string values in double quotes.
+exabeam_wildcard_in_phrase                A quoted Exabeam value with a space holds * or ?, which Exabeam does not expand inside a phrase.
+external_id_in_rule                       A rule still carries a vendor rule id key, which belongs in deployment state.
+external_id_shape                         A vendor rule id in deployment state has the wrong form.
+falco_append_condition                    A tuning's condition is appended to the tuned rule's condition and must start with `and` or `or`; a new rule's condition must not.
+falco_deprecated_field                    A field Falco deprecates (`evt.dir`, `evt.latency`): it no longer carries the value it used to.
+falco_exception                           A rule exception Falco refuses: comparison operators, field and value counts, or a value the field's type cannot hold.
+falco_field_argument                      A known Falco field is used with an argument it refuses, or without one it requires (libsinsp's field rules: `proc.aname[N]` takes an index, `evt.arg.NAME` an event argument).
+falco_field_as_value                      A constant value that is a field name: compare with `val(field)` to read the field.
+falco_invalid_regex                       The `regex` pattern does not compile.
+falco_misplaced_list                      A list is used where its expansion breaks the condition: as a macro, or as a single value; a list belongs inside a value list, `in (name)`.
+falco_newer_syntax                        Syntax that only recent libsinsp releases parse (operator modifiers, `join`, `concat`, `getopt`, transformer arguments); an older Falco or Sysdig agent refuses the rule.
+falco_no_evttype                          The rule cannot be narrowed to a few event types (`evt.type`), so it runs on every event; Falco and Sysdig warn about the performance penalty.
+falco_operator_type                       The operator does not apply to the field's type (libsinsp `flt_is_comparable`); Falco refuses to load the rule.
+falco_output_syntax                       The output template does not format: a `%` at the end, a length with no field, or a token that is no field or transformer.
+falco_parse_error                         The Falco condition does not parse.
+falco_regex_simple                        A `regex` check a plain operator (`=`, `contains`, `startswith`, `endswith`) could make, which libsinsp warns about: regex is the slowest check.
+falco_rhs_field                           A field cannot be compared with another field here (`val(...)` or a transformer on the right): not with `pmatch` or `regex`, not on networks, not on fields that refuse it, and only between fields of the same type.
+falco_transformer                         A field transformer cannot apply here: the field's type, a field that refuses transformers, or the arguments of `join`, `concat`, or `getopt`.
+falco_transformer_as_value                A constant value that looks like a transformer call, compared as text.
+falco_unknown_event                       The event type is not in the driver's event table nor a syscall name; libsinsp refuses it.
+falco_unknown_field                       The field is not one Falco or its plugins define for the rule's event source; a plugin the engine does not know may add it.
+falco_unknown_list                        The name after a list operator, without parentheses, is not a list of the block or of the Falco default rules, so it is compared as a single value.
+falco_unknown_macro                       The name is not a macro of the block or of the Falco default rules; the tenant may define it, as Sysdig does for its managed macros.
+falco_unknown_rule                        A tuning (`append_to_rule`) names a rule the Falco default rules do not define: Falco refuses the append, and on Sysdig the tenant must have that rule.
+falco_unknown_source                      The event source is not one Falco or its published plugins define, so its fields are not checked.
+falco_unsafe_na_check                     A `ka.` or `jevt.` field compared with `<NA>`, which Falco warns about: the field may hold that text.
+falco_value_type                          The value cannot be parsed as the field's type (a number, `true` or `false`, an IP address or network, a hex string for `bcontains`); Falco refuses to load the rule.
+filename_mismatch                         An object file's name is not the stem `lint.toml` `[filenames].style` (or its kind's `[filenames.<kind>].style`) asks for: `slugify(name)` by default.
+filename_pattern                          An object file's name does not match the regular expression `lint.toml` sets for it.
+filename_slug                             The file name is not the one lint.toml's [filenames] style derives from the object's name.
+git                                       git is on `PATH`.
+git_repository                            The workspace is in a git repository, and its default branch (`origin/HEAD`).
+google_secops_compile_error               Google SecOps's compiler refuses a rule in a live query check.
+google_secops_compile_warning             Google SecOps's compiler accepts a rule with a warning in a live query check.
+google_secops_create_no_id                A Google SecOps create answered without a rule id.
+google_secops_create_unconfirmed          A Google SecOps create got no answer or a server error, so the rule may exist without a binding.
+google_secops_credentials_missing         opentide has no usable Google credentials for a Google SecOps tenant.
+google_secops_delete_refused              Google SecOps refused to delete a rule, so deploy archived it.
+google_secops_deployment_failed           A Google SecOps rule exists, but its run state could not be set.
+google_secops_live_frequency_unavailable  A Google SecOps rule with two or more event variables asks for `run_frequency: LIVE`.
+google_secops_meta_key                    A Google SecOps block's `meta` holds a key deploy cannot write.
+google_secops_name_duplicate              Two enabled Google SecOps blocks resolve to one YARA-L rule name.
+google_secops_request_failed              A Chronicle API request for one Google SecOps rule failed.
+google_secops_risk_score_missing          A Google SecOps rule's `outcome` assigns no `$risk_score`.
+google_secops_rule_compilation_failed     Google reports that a deployed Google SecOps rule no longer compiles.
+google_secops_rule_conflict               A Google SecOps rule changed between deploy's read and its update.
+google_secops_rule_execution_limited      Google reports that it limits or pauses a Google SecOps rule's runs.
+google_secops_rule_id_literal             A Google SecOps rule matches a producer rule by a literal `ru_…` id.
+google_secops_rule_missing                The Google SecOps rule a binding names no longer exists, and the rule is being retired.
+google_secops_rule_name                   A Google SecOps block's `name` is not a YARA-L rule name.
+google_secops_rule_recreated              The Google SecOps rule a binding names no longer exists, so deploy created it again.
+google_secops_run_frequency               A Google SecOps block's `run_frequency` is not one opentide deploys.
+google_secops_run_frequency_not_allowed   A Google SecOps block's `run_frequency` is not one Google allows for the rule.
+google_secops_schedule                    A Google SecOps block's `schedule` cannot be sent with its run frequency, or holds a duration that is not one.
+google_secops_severity                    A Google SecOps block's `severity` or `priority` is not one of Google's values.
+google_secops_tenant_unauthorized         A Google SecOps instance refused opentide's credentials.
+google_secops_tenant_unreachable          A Google SecOps instance did not answer, so no rule was deployed to it.
+google_secops_verify_failed               Google SecOps does not compile a rule, so deploy neither creates nor updates it.
+graylog_aggregation                       A Graylog aggregation condition does not parse, or a call has the wrong arguments.
+graylog_alias_unknown                     A Graylog block names a stream or notification alias the tenant does not define.
+graylog_all_streams                       A Graylog definition names no stream, so it searches every stream.
+graylog_analyzed_field                    A regex, wildcard or range applies to Graylog's analysed message field.
+graylog_create_unconfirmed                A Graylog create got no answer, so the definition may exist without a binding.
+graylog_definition_immutable              Graylog refuses to change or delete an event definition outside the default scope.
+graylog_definition_in_use                 Graylog refuses to delete an event definition another one depends on.
+graylog_definition_invalid                Graylog refused an event definition, naming the fields at fault.
+graylog_definition_missing                The recorded Graylog event definition was gone when deploy came to disable it.
+graylog_definition_recreated              The recorded Graylog event definition was gone, so deploy created it again.
+graylog_double_backslash                  A Graylog query holds four backslashes in a row.
+graylog_event_field                       A Graylog event field has an invalid name or value.
+graylog_event_key                         A Graylog event_key item is not an event field of the block.
+graylog_event_limit                       A Graylog block's event_limit is out of range, or set on an aggregation.
+graylog_field_name                        A Graylog aggregation groups by a name that is not a field name.
+graylog_field_unsupported_version         A Graylog block sets a field the tenant's version cannot take.
+graylog_forbidden                         Graylog refused a request for want of a permission.
+graylog_leading_wildcard                  A Graylog query term starts with `*` or `?`.
+graylog_list_shape                        A Graylog list field is not a string or a list of distinct, non-blank strings.
+graylog_open_range                        A Graylog range has an open end, which Graylog's validator refuses.
+graylog_overlapping_window                A Graylog filter searches a window longer than its interval.
+graylog_priority                          A Graylog block's priority is not one of Graylog's priorities.
+graylog_priority_collapsed                Graylog before 7.1 has no Informational priority: the definition is sent as Low.
+graylog_query_blank                       A Graylog block has no query, or an empty one.
+graylog_query_invalid                     Graylog refused a query, so deploy saved nothing.
+graylog_query_warning                     Graylog has a reservation about a query.
+graylog_regex_operator                    A Graylog regex holds a character Lucene reads as a regex operator.
+graylog_regex_quote                       A Graylog regex holds an unescaped double quote.
+graylog_regex_unsupported                 A Graylog regex uses syntax Lucene's regex engine does not have.
+graylog_request_failed                    A Graylog request failed for a reason the failure table does not name.
+graylog_schedule                          A Graylog block's schedule is invalid.
+graylog_tenant_unauthorized               A Graylog tenant refused the access token.
+graylog_tenant_unreachable                A Graylog tenant did not answer.
+graylog_title_duplicate                   Two enabled Graylog blocks resolve to one event definition title.
+graylog_unknown_field                     Graylog does not know a field the query names, on the streams it searches.
+graylog_value_type                        A query compares a Graylog field with a value of the wrong type.
+graylog_version_unsupported               A Graylog tenant runs a version opentide does not deploy to.
+graylog_version_vulnerable                A Graylog tenant runs a version affected by the access-token revocation flaw.
+harfanglab_rule_kind                      A HarfangLab block sets both sigma and yara; a block is one kind.
+harfanglab_yara_context                   A HarfangLab YARA rule's meta `context` is not a comma-joined list of the scan contexts HarfangLab uses.
+harfanglab_yara_form                      A HarfangLab yara object sets signature together with decomposed keys (meta, strings, condition or imports).
+harfanglab_yara_import                    A decomposed HarfangLab YARA imports entry is not a module the YARA language knows.
+harfanglab_yara_rule_name                 The YARA rule name deploy derives from the rule name is a YARA keyword or keeps a character other than an ASCII letter, digit or underscore.
+harfanglab_yara_section_header            A decomposed HarfangLab YARA fragment contains a strings:, condition: or rule header, which deploy writes itself.
+internal                                  opentide stopped on an exception it did not handle: a bug in opentide, not in your input.
+interrupted                               The command was stopped before it finished: an `opentide serve` client cancelled the run.
+invalid_cve                               A threat lists CVE identifiers Vulnerability-Lookup does not know.
+invalid_ref                               A reference names an object that does not exist.
+invalid_uuid                              An object's `metadata.uuid` is not a UUID v4.
+invalid_value                             A `sharing.toml` value has the wrong type.
+issues_found                              The command ran and failed on what it found.
+kql_control_command_unsupported           A KQL control command (.show, .create, ...) is not a detection query; rules cannot run it.
+kql_deprecated_function                   The KQL function is a deprecated alias; Microsoft Learn names its replacement.
+kql_deprecated_operator                   The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs).
+kql_join_summarize_before_project         join or summarize runs before project, so it carries every column.
+kql_parse_error                           The KQL query does not parse.
+kql_render_not_valid                      render draws a chart; it has no effect in a detection rule.
+kql_table_not_declared                    The table is one the engine knows for the platform, but no log source of the workspace declares it in visibility.toml.
+kql_type_mismatch                         The operator cannot apply to the column's documented or declared type.
+kql_unknown_column                        The column is not in the documented schema of the table or ASIM parser it comes from, or in the columns visibility.toml declares for the table.
+kql_unknown_function                      The KQL function is not in the Kusto function catalog.
+kql_unknown_operator                      The KQL tabular operator is not one Kusto knows.
+kql_unknown_table                         The table is neither one the engine knows for the platform nor one the workspace declares in visibility.toml: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema. Declaring it in visibility.toml makes it known.
+kql_unscoped_search                       search without a table scans every table in the workspace.
+kql_unscoped_union                        union * or an unscoped union reads every table.
+kql_where_not_first                       A filter comes after a more expensive operator; filtering first scans fewer rows.
+kql_wildcard_table                        A wildcard table name reads every matching table.
+kuery_escape                              A character needs escaping in Kibana KQL (kuery).
+kuery_free_text                           A value with no field searches every field.
+kuery_looks_like_lucene                   The query reads like Lucene; language: lucene may be meant.
+kuery_lucene_syntax                       Lucene syntax inside a Kibana KQL (kuery) query.
+kuery_parse_error                         The Kibana KQL (kuery) query does not parse.
+kuery_question_mark                       ? is a literal in Kibana KQL (kuery), not a single-character wildcard.
+kuery_quoted_wildcard                     A wildcard inside quotes is a literal * in Kibana KQL (kuery).
+kuery_range_type                          A range compares a value of the wrong type.
+lookback_long                             The Elastic rule's lookback exceeds an hour; it is added to the interval, not the whole window.
+lookback_zero                             The Elastic rule's lookback is zero, so events that arrive late are missed.
+lsp_catalog                               opentide can generate the language server's catalog for this workspace, and a committed copy is current.
+lucene_bare_term                          A term with no field searches every field.
+lucene_elasticsearch_only                 The syntax works in Elasticsearch but not in Carbon Black Cloud.
+lucene_escape                             A character needs escaping in Lucene.
+lucene_fuzzy                              Elasticsearch accepts only 0, 1, 2 or AUTO as a fuzziness.
+lucene_kuery_syntax                       Kibana KQL (kuery) syntax inside a Lucene query.
+lucene_looks_like_kuery                   The query reads like Kibana KQL (kuery); language: kuery may be meant.
+lucene_lowercase_operator                 Lucene operators are upper case; lowercase and/or/not are search terms.
+lucene_mixed_operators                    AND and OR mixed without parentheses do not bind as they read.
+lucene_parse_error                        The Lucene query does not parse.
+lucene_range_operator                     f:> 10 searches f for the text >; the value must follow the operator.
+lucene_regexp                             The /regexp/ body is rejected by, or too costly for, Lucene's RegExp.
+lucene_unescaped_slash                    An unescaped / starts a regular expression.
+max_tlp_unknown                           A `sharing.toml` block's `max_tlp` is not a TLP value.
+mcp_config                                An MCP configuration from `opentide setup mcp` runs `opentide mcp start`.
+metadata_recommended                      An object has no `metadata.author` or `metadata.organisation`.
+missing_author                            The optional metadata.author field is missing. Information, unless lint.toml's [metadata] severity raises it.
+missing_field                             A configuration file is missing a required key, once it is merged with the bundled file and the parent instance.
+missing_organisation                      The optional metadata.organisation field is missing. Information, unless lint.toml's [metadata] severity raises it.
+missing_uuid                              An object file has no UUID, so it cannot be indexed.
+name_invalid                              A `sharing.toml` block name is not 1-64 lowercase letters, digits, `-` or `_`.
+name_missing                              An object has no `name`, so lint cannot derive its file name.
+needs_human_decision                      `migrate vocab-scope` left values that only a person can place.
+nested_object_file                        A YAML file sits in a subfolder of an object folder, so it is not an object and no command reads it.
+no_tenant_reached                         `validate query --live` sent no query, because no configured tenant takes the rules.
+not_a_configuration_file                  The file is not one opentide reads as configuration, or it has no configuration model to check it against.
+not_implemented                           The command is reserved and does nothing yet.
+not_run                                   The command was skipped, and says why in its message.
+object_type_unknown                       A `sharing.toml` block lists an object type opentide cannot share.
+opentide_latest                           Whether PyPI has a newer opentide release than the one installed.
+opentide_version                          The installed opentide version.
+organisation_uuid_invalid                 A `sharing.toml` block's `organisation_uuid` is not a UUID.
+organisation_uuid_mismatch                The organisation configured for a sharing target is not the one its API key belongs to.
+path_exists                               `opentide new` would write a file that already exists, and it never overwrites one.
+path_not_writable                         `opentide new` could not create the folder or the file it scaffolds, because the operating system refused the write: a read-only checkout, a folder another user owns, or a full disk.
+placeholder                               A value still holds the stand-in `opentide new` wrote for a required field nobody chose yet.
+platform_not_enabled                      A rule has a block for a platform this workspace has not enabled, so it will not deploy there.
+platform_sdk                              Each enabled platform's SDK imports.
+platforms_enabled                         Which platforms the workspace enables.
+promotion_target_unknown                  `deployment.toml` `[promotion] promotion_target` is not the name of a `[[statuses]]` entry.
+proxy                                     The proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts a connection.
+python_version                            The Python interpreter running opentide.
+query_check_timeout                       `validate query --live` failed because a tenant did not answer a query's check within the check timeout.
+recommended_field_missing                 A field the templates ask for is missing; `opentide validate` accepts the object without it.
+reference_not_found                       `--objective` or `--threat` names a UUID that no object in the catalogue carries.
+retired_configuration_file                A file or folder under `.opentide/configurations/` that opentide does not read.
+retract_unconfirmed                       `share retract` would delete a remote event, and was not confirmed.
+risk_band                                 The risk score is outside the band of the rule's severity.
+rule_status_unknown                       A `sharing.toml` block lists a rule status your configuration does not declare.
+schema_missing                            An object has no `metadata.schema`, so no schema can check it.
+schema_validation                         An object does not match the schema its `metadata.schema` names.
+schemas_fresh                             Every JSON schema this opentide version generates exists.
+scope_no_match                            A `--file`, `--uuid` or `--type` selection matched no object, so nothing was validated.
+share_failed                              `share` reached the destination, and every object failed.
+share_partial                             `share` shared some objects, and others failed.
+share_unreachable                         `share` could not authenticate to, or reach, any destination.
+sharing_config                            `sharing.toml` failed validation, so `share` did not run.
+sharing_directory                         A `sharing/` configuration directory exists; sharing is configured in one `sharing.toml` file.
+spl_command_without_pipe                  The query starts with a command name but no |, so Splunk searches for the word instead of running the command.
+spl_dataset_not_declared                  The sourcetype is not one the workspace declares in visibility.toml.
+spl_empty_command                         A command with no arguments: Splunk runs it, but it does nothing, returns no results, or fails at run time.
+spl_empty_stage                           A trailing | with no command; Splunk ignores it.
+spl_leading_not                           A base search that starts with NOT scans every event before excluding any.
+spl_parse_error                           The SPL search does not parse.
+spl_search_operator                       A search clause compares with an operator search does not have (`==`, `<>`, `=>`, `=<`, `!~`): Splunk accepts it but the comparison never matches, or `=~`, which compares with a value that starts with `~`.
+spl_subsearch_truncation                  A subsearch is silently truncated at its result or time limit.
+spl_unknown_command                       The SPL command is not in the Splunk Search Reference or a catalogued app such as MLTK: a warning, since an app on the search head can add commands, or an error when the name is one edit from a known command.
+spl_unknown_datamodel                     The CIM data model or dataset is not one Splunk CIM defines.
+spl_unknown_datamodel_field               The field is not in the CIM data model the search reads.
+spl_wildcard                              A leading or mid-token wildcard in a base search that nothing else narrows (no index, sourcetype, source, host, TERM() or macro) cannot use the index and scans every event.
+sysdig_definition_duplicate               A name is defined more than once across the block's macros and lists.
+sysdig_definition_name                    A block macro or list name is not `[A-Za-z_][A-Za-z0-9_]*`, or is a Falco operator or keyword.
+sysdig_definition_order                   A block macro uses itself or a macro defined after it: Falco gives a macro no view of itself or later macros, and refuses it as an undefined macro.
+sysdig_exception_shape                    An exception's fields, comps, and values do not have a shape Falco's rule loader accepts (`validate_exception_info`).
+sysdig_list_in_value                      A block list name appears in an exception value where Falco's expansion would not produce a value list.
+sysdig_list_self_reference                A block list names itself as one of its items, so its own name stays in the expanded condition.
+sysdig_priority                           `priority` is not one of Falco's eight priorities (or `INFO`), compared case-insensitively.
+sysdig_rule_shape                         A Sysdig block is a new rule with a non-blank `condition`, or a tuning (`append_to_rule`) that appends a condition, exceptions, or both.
+sysdig_source                             `source` is not an event source name (`[a-z][a-z0-9_]*`).
+sysdig_tuning_keys                        A tuning (`append_to_rule`) inherits `output`, `priority`, `policies`, `source`, and `name` from the rule it tunes, so it must not set them.
+technique_not_enterprise                  The ATT&CK technique is not in the Enterprise matrix that Elastic maps.
+template_missing                          `opentide new` found no generated template or schema for the object type it was asked for.
+templates_fresh                           Every template this opentide version generates exists and matches what it would write.
+threshold_lookback                        A threshold rule's lookback exceeds its interval, so windows overlap and alerts repeat.
+unknown_connector                         `sharing.toml` has a top-level array that names a sharing connector opentide does not have; it was skipped.
+unknown_key                               A configuration file has a key opentide does not read, usually a misspelling.
+url_invalid                               A `sharing.toml` block's `url` is not an http(s) URL.
+usage_error                               The command line cannot be used as written, for a reason no other usage code covers.
+usage_invalid_choice                      An option or argument has a value outside the ones it accepts.
+usage_invalid_value                       An option has a value that cannot be used, although it is spelled correctly.
+usage_missing_option                      A required option or argument is missing.
+usage_needs_input                         The command would ask a question, but nobody can answer it.
+usage_tui_needs_tty                       `opentide tui` ran where it cannot draw: it needs a person at a terminal.
+usage_unknown_command                     The command line names a command that does not exist.
+usage_unknown_option                      The command line passes an option the command does not take.
+usage_watch_needs_tty                     `validate --watch` ran where nobody can watch it.
+vocab_unknown                             A value is not in the vocabulary its field uses.
+vscode_settings                           The workspace recommends the opentide VS Code extension (`opentidehq.opentide`) in `.vscode/extensions.json`, and `.vscode/settings.json` maps no object files to opentide's JSON schemas in `yaml.schemas`.
+vscode_snippets                           The editor snippet file `opentide generate snippets` writes exists.
+workspace                                 Where the workspace is, and how it was found.
+workspace_not_found                       `opentide new` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server was started in an Agent Plugin's directory, which is not a workspace, and nothing named one.
+yaml_parse                                An object file is not valid YAML, or not one mapping, so it could not be loaded.
+yara_duplicate_rule                       Two YARA rules in one signature have the same name.
+yara_duplicate_string                     Two strings of one YARA rule have the same identifier.
+yara_duplicate_tag                        A YARA rule repeats a tag.
+yara_empty_signature                      The YARA signature has no rule, or only private or global rules.
+yara_entrypoint_deprecated                entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point.
+yara_hex_string                           A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives.
+yara_include                              A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it.
+yara_meta_missing                         A HarfangLab YARA rule has no meta `context`, which the HarfangLab profile recommends on every rule that is not private.
+yara_module_not_imported                  A YARA module field or function is used without importing its module.
+yara_module_unconfirmed                   The YARA module is known but not confirmed on the platform's agents.
+yara_number_out_of_range                  A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts.
+yara_parse_error                          The YARA signature does not parse as libyara 4.5 reads it.
+yara_regexp                               A YARA regular expression is invalid.
+yara_rule_identifier_conflict             A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible.
+yara_signature_alias                      A `yara.signature` is a YAML alias of text anchored elsewhere in the file instead of YARA written in the block.
+yara_slow_pattern                         libyara warns that this YARA string or loop may slow scanning down.
+yara_string_modifier                      libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range.
+yara_suspicious_expression                A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean.
+yara_type                                 A YARA operator or function is applied to a value of the wrong type.
+yara_undefined_identifier                 A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds.
+yara_undefined_string                     A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define.
+yara_unknown_module                       A YARA import names a module libyara does not ship.
+yara_unknown_module_member                The YARA module has no such field or function, or the function takes other arguments.
+yara_unreferenced_string                  A YARA string is never used in the condition, which libyara refuses unless the condition uses them.
+yara_x_incompatible                       libyara 4.5 compiles this YARA but YARA-X 1.x refuses it.
+yaral_condition_shape                     The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event.
+yaral_deprecated_field                    The UDM field is deprecated.
+yaral_enum_value                          The value is not one of the enumerated UDM field's values.
+yaral_export_value                        An `export` `write_row` value is not an outcome variable: Google exports outcome variables only.
+yaral_function_unavailable                The function exists, but not in this profile (rules or search).
+yaral_leading_wildcard_regex              The regular expression starts with `.*` without an anchor: RE2 matches anywhere already, and the prefix only costs time.
+yaral_match_shape                         A YARA-L `match` is not a `YaraLMatch` object.
+yaral_match_variable                      A `match` name is not a placeholder bound in `events`.
+yaral_match_window                        A YARA-L `match` window is not a duration in `m`, `h` or `d`, or is longer than its kind allows.
+yaral_meta_duplicate                      A meta key appears twice, or a meta value is not a double-quoted string.
+yaral_multi_event_match                   A rule with two or more event variables has no `match` section.
+yaral_nocase_on_enum                      `nocase` is applied to a comparison with an enumerated UDM field.
+yaral_option                              A YARA-L `options` key is unknown, or its value is of the wrong kind.
+yaral_outcome_aggregation                 With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable.
+yaral_outcome_limit                       A rule or search assigns more than 20 outcome variables.
+yaral_parse_error                         The YARA-L text does not parse, or a text holds a second rule.
+yaral_reference_list_deprecated           Reference lists are deprecated from May 2027 and migrate to data tables by July 2027: use a data table (`%table.column`).
+yaral_reference_list_limit                More `in` statements than the profile allows (rules: 10, 5 with regex, 5 with cidr; search: 7, 4, 2).
+yaral_regex                               The regular expression is not valid RE2.
+yaral_reserved_identifier                 A YARA-L keyword is used as a rule name, meta key or variable, or a variable is named `$window_start` or `$window_end`.
+yaral_section_alias                       A YARA-L section key is a YAML alias instead of its own text.
+yaral_section_empty                       A YARA-L section key is present with no text.
+yaral_section_header                      A YARA-L section text holds a section label, a `rule` header or a rule's braces.
+yaral_section_missing                     A YARA-L rule has no `events` or no `condition` section.
+yaral_section_order                       A YARA-L section is repeated or out of order (meta, setup, events, match, outcome, condition, options, export).
+yaral_section_unavailable                 The section is not part of this profile: `dedup`, `order`, `limit`, `select` and `unselect` are search sections; `meta`, `setup` and `options` are rule sections.
+yaral_string_escape                       A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles.
+yaral_type                                An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number.
+yaral_undefined_variable                  A variable in `match`, `outcome` or `condition` is not defined by `events` or `outcome`, or an event variable of `events` is absent from `condition`.
+yaral_unfiltered_event                    An event variable has no equality on `metadata.event_type`, `metadata.log_type` or `metadata.product_name`, so the rule scans every event.
+yaral_unknown_function                    The function is not in Google's YARA-L function list, or it takes a different number of arguments.
+yaral_unknown_udm_field                   The field path is not in the Unified Data Model.
+yaral_window_bound                        `window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window.
+✓ 465 diagnostic codes

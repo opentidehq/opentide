@@ -783,6 +783,30 @@ fn yara_editor_features_over_stdio() {
     assert!(l.contains(&"imphash".to_string()), "{l:?}");
 }
 
+/// A rename in HarfangLab's decomposed form edits `strings` and `condition`.
+#[test]
+fn yara_rename_across_decomposed_fragments_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    let uri = "file:///w/objects/rules/cmd-string.yaml";
+    let text = "name: Cmd String\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\nconfigurations:\n  harfanglab:\n    yara:\n      meta:\n        context:\n          - file\n        os: Windows\n      strings: |\n        $cmd = \"cmd.exe\" ascii\n      condition: |\n        $cmd and #cmd > 1\n";
+    published_codes(&mut lsp, uri, "opentide-yaml", text);
+    let renamed = lsp.request(
+        "textDocument/rename",
+        json!({ "textDocument": { "uri": uri }, "position": { "line": 14, "character": 17 }, "newName": "shell" }),
+    );
+    let edits = renamed["result"]["changes"][uri]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let lines: Vec<u64> = edits
+        .iter()
+        .filter_map(|e| e["range"]["start"]["line"].as_u64())
+        .collect();
+    assert_eq!(lines, [12, 14, 14], "{renamed}");
+}
+
 #[test]
 fn cql_over_stdio() {
     let mut lsp = Lsp::spawn();
@@ -2498,4 +2522,157 @@ fn analyze_blocks_adds_the_platform_block_findings() {
         blocks.iter().any(|c| c == "sysdig_list_self_reference"),
         "{blocks:?}"
     );
+}
+
+/// `(line, start, length, token type)` of each semantic token in `result`,
+/// the delta encoding undone, the type named from the server's legend.
+fn decoded_tokens(init: &Value, tokens: &Value) -> Vec<(u64, u64, u64, String)> {
+    let legend = &init["result"]["capabilities"]["semanticTokensProvider"]["legend"]["tokenTypes"];
+    let data: Vec<u64> = tokens["result"]["data"]
+        .as_array()
+        .map(|a| a.iter().filter_map(Value::as_u64).collect())
+        .unwrap_or_default();
+    let (mut line, mut start) = (0, 0);
+    data.as_chunks::<5>()
+        .0
+        .iter()
+        .map(|t| {
+            if t[0] > 0 {
+                start = 0;
+            }
+            line += t[0];
+            start += t[1];
+            let kind = legend[usize::try_from(t[3]).unwrap()]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned();
+            (line, start, t[2], kind)
+        })
+        .collect()
+}
+
+#[test]
+fn cql_in_a_crowdstrike_block_and_hunt_over_stdio() {
+    // 0.24.0's "CQL in the editor": the CrowdStrike block's query and a
+    // `system: crowdstrike` hunt get CQL's hover, completion, highlighting
+    // and diagnostics, as a `.cql` file does (C1, #790).
+    let mut lsp = Lsp::spawn();
+    let init = lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    let uri = "file:///tmp/objects/rules/crowdstrike-hover.yaml";
+    let rule = "\
+name: CrowdStrike whoami
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000082
+  schema: rule::1.0
+configurations:
+  crowdstrike:
+    status: STAGING
+    query: |
+      #event_simpleName=ProcessRollup2
+      | groupBy([aid, ComputerName], function=count())
+";
+    let codes = published_codes(&mut lsp, uri, "yaml", rule);
+    assert!(
+        !codes.iter().any(|c| c.starts_with("cql_")),
+        "a clean CQL query: {codes:?}"
+    );
+    let at = |line: u32, character: usize| {
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        })
+    };
+    // Hover on `groupBy` (line 9, after `      | `).
+    let hover = lsp.request("textDocument/hover", at(9, 10));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(
+        value.contains("groupBy(field, [function], [limit])"),
+        "hover on the block's groupBy: {hover}"
+    );
+    // Highlighting: the query lines carry CQL tokens, `groupBy` a function.
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    let decoded = decoded_tokens(&init, &tokens);
+    assert!(
+        decoded.iter().any(|(line, start, len, kind)| *line == 9
+            && *start == 8
+            && *len == 7
+            && kind == "function"),
+        "`groupBy` is a function token: {decoded:?}"
+    );
+    assert!(
+        decoded.iter().any(|(line, ..)| *line == 8),
+        "the event filter is highlighted: {decoded:?}"
+    );
+
+    // Completion of a Falcon event inside the block.
+    let uri = "file:///tmp/objects/rules/crowdstrike-complete.yaml";
+    let rule = "\
+name: CrowdStrike complete
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000083
+  schema: rule::1.0
+configurations:
+  crowdstrike:
+    status: STAGING
+    query: |
+      #event_simpleName=Process
+";
+    published_codes(&mut lsp, uri, "yaml", rule);
+    let items = lsp.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 8, "character": "      #event_simpleName=Process".len() }
+        }),
+    );
+    let l = labels(items["result"].as_array().map_or(&[][..], |a| a.as_slice()));
+    assert!(
+        l.contains(&"ProcessRollup2".to_string()),
+        "Falcon events in the block: {l:?}"
+    );
+
+    // A hunt with `system: crowdstrike` is CQL too.
+    let uri = "file:///tmp/objects/rules/crowdstrike-hunt.yaml";
+    let rule = "\
+name: CrowdStrike hunt
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000084
+  schema: rule::1.0
+response:
+  procedure:
+    searches:
+      - system: crowdstrike
+        query: '#event_simpleName=DnsRequest | groupBi([aid])'
+";
+    let codes = published_codes(&mut lsp, uri, "yaml", rule);
+    assert!(
+        codes.iter().any(|c| c == "cql_unknown_function"),
+        "the hunt's query is analysed: {codes:?}"
+    );
+    assert!(
+        !codes.iter().any(|c| c == "crowdstrike_unsupported"),
+        "retired: {codes:?}"
+    );
+    // Hover on `DnsRequest`, the Falcon event the hunt filters on.
+    let hover = lsp.request("textDocument/hover", at_uri(uri, 8, 38));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(
+        value.starts_with("`DnsRequest`: Falcon sensor event"),
+        "hover on the hunt's event: {hover}"
+    );
+}
+
+fn at_uri(uri: &str, line: u32, character: usize) -> Value {
+    json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": line, "character": character }
+    })
 }

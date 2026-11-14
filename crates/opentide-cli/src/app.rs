@@ -112,6 +112,8 @@ pub struct Globals {
     pub debug: bool,
     /// `--quiet`.
     pub quiet: bool,
+    /// `--verbose`: print notes too.
+    pub verbose: bool,
     /// `--version` or `-V`.
     pub version: bool,
     /// `--help` among the root's own options.
@@ -154,6 +156,7 @@ pub fn globals(root: &clap::Command, args: &[String], env: &Env) -> Globals {
             "--no-color" if flag => globals.no_color = true,
             "--debug" if flag => globals.debug = true,
             "--quiet" if flag => globals.quiet = true,
+            "--verbose" if flag => globals.verbose = true,
             "--version" | "-V" if flag => globals.version = true,
             "--help" if flag => globals.help = true,
             "--install-completion" if flag => globals.install_completion = true,
@@ -523,6 +526,15 @@ impl Run<'_> {
             )];
             return self.emit(&outcome, &[], &[], out, err);
         }
+        if self.globals.quiet && self.globals.verbose {
+            let mut failure = Failure::new(
+                code::USAGE_ERROR,
+                "--quiet and --verbose cannot be used together",
+            );
+            failure.argument = Some("--verbose".into());
+            let outcome = Outcome::failed("", USAGE_EXIT_CODE, failure);
+            return self.emit(&outcome, &[], &[], out, err);
+        }
         let path = words.join(" ");
         match path.as_str() {
             "commands" => {
@@ -875,6 +887,12 @@ impl Run<'_> {
                 self.emit_report(&report, out, err)
             }
             "mcp start" => {
+                // The server never polls the interrupt and serves stdio until
+                // its client closes stdin: after a Ctrl-C it does not start
+                // ([`run`] reports the interrupt).
+                if self.interrupted() {
+                    return Ok(INTERRUPTED_EXIT_CODE);
+                }
                 // stdout is JSON-RPC's: nothing is emitted around the server.
                 let resolved =
                     |path: Option<&str>| path.map(|path| self.resolve(path).display().to_string());
@@ -888,6 +906,12 @@ impl Run<'_> {
                 crate::mcp::serve(&launch, &self.host.version)
             }
             "serve" => {
+                // The server never polls the interrupt and serves stdio until
+                // its client closes stdin: after a Ctrl-C it does not start
+                // ([`run`] reports the interrupt).
+                if self.interrupted() {
+                    return Ok(INTERRUPTED_EXIT_CODE);
+                }
                 // stdout is JSON-RPC's: nothing is emitted around the server.
                 let resolved =
                     |path: Option<&str>| path.map(|path| self.resolve(path).display().to_string());
@@ -1702,6 +1726,8 @@ impl Run<'_> {
             stdout: self.console(self.host.stdout_tty),
             stderr: self.console(self.host.stderr_tty),
             quiet: self.globals.quiet,
+            verbose: self.globals.verbose,
+            typed: self.args.clone(),
             stdout_tty: self.host.stdout_tty,
             width: self.host.width,
         }
@@ -3400,9 +3426,40 @@ mod tests {
         assert_eq!(err, b"error: interrupted\n");
     }
 
+    /// Runs `test` on a thread of its own and fails if it has not finished
+    /// within `limit`: a test that would hang (a server reading the test
+    /// process's own stdin, which `cargo test` leaves open) fails fast
+    /// instead of holding the run.
+    fn within(limit: std::time::Duration, test: impl FnOnce() + Send + 'static) {
+        let (done, finished) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            test();
+            let _ignored = done.send(());
+        });
+        match finished.recv_timeout(limit) {
+            Ok(()) => thread.join().unwrap(),
+            // The test panicked: its panic is the failure.
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                std::panic::resume_unwind(thread.join().unwrap_err());
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                panic!("the test did not finish within {limit:?}");
+            }
+        }
+    }
+
     #[test]
     fn framework_interrupt_lets_a_polling_job_clean_up_and_prints_no_document() {
-        for line in ["--json commands", "commands", "mcp start"] {
+        within(
+            Duration::from_secs(60),
+            framework_interrupt_lets_a_polling_job_clean_up,
+        );
+    }
+
+    fn framework_interrupt_lets_a_polling_job_clean_up() {
+        // `mcp start` and `serve` serve stdio until the client closes stdin:
+        // dispatched after the Ctrl-C, they do not start.
+        for line in ["--json commands", "commands", "mcp start", "serve"] {
             let cleaned = std::cell::Cell::new(false);
             let result = ran(line, &[], false, |run, out, err| {
                 // Ctrl-C while the job runs: it polls, stops and cleans up.
@@ -4139,6 +4196,43 @@ mod tests {
         let help = dispatched("", &[], false);
         assert_eq!(help.code, 0);
         assert!(help.stdout.contains("Usage: opentide"), "{}", help.stdout);
+    }
+
+    /// `--verbose` is a root flag, hoisted from after the command like
+    /// `--quiet`; with `--quiet` it is a usage error (opentide 0.28.1).
+    #[test]
+    fn verbose_is_a_root_flag_that_quiet_refuses() {
+        let root = catalog::root();
+        assert!(globals_of(&root, "--verbose lint", &Env::default()).verbose);
+        assert!(!globals_of(&root, "lint", &Env::default()).verbose);
+        assert!(crate::hoist::HOISTED_FLAGS.contains(&"--verbose"));
+        let hoisted = crate::hoist::hoist(&root, &["lint".to_owned(), "--verbose".to_owned()]);
+        assert_eq!(hoisted, ["--verbose", "lint"]);
+        for line in [
+            "--quiet --verbose --json commands",
+            "--json commands --verbose --quiet",
+        ] {
+            let both = dispatched(line, &[], false);
+            assert_eq!(both.code, USAGE_EXIT_CODE, "{line}: {}", both.stdout);
+            assert!(
+                both.stdout
+                    .contains("--quiet and --verbose cannot be used together"),
+                "{}",
+                both.stdout
+            );
+            assert!(
+                both.stdout.contains("\"code\":\"usage_error\""),
+                "{}",
+                both.stdout
+            );
+            assert!(
+                both.stdout.contains("\"argument\":\"--verbose\""),
+                "{}",
+                both.stdout
+            );
+        }
+        let verbose = dispatched("--verbose --json commands", &[], false);
+        assert_eq!(verbose.code, 0, "{}", verbose.stdout);
     }
 
     fn globals_of(root: &clap::Command, text: &str, env: &Env) -> Globals {

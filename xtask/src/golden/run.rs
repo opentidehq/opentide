@@ -99,14 +99,8 @@ pub fn run_case(case: &Case, ctx: &RunContext) -> Result<Recording> {
         .with_context(|| format!("run case {}", case.id))?;
     if let (Some(proxy), Some(name)) = (&proxy, &case.cassette) {
         let mismatches = proxy.verify();
-        if !mismatches.is_empty() {
-            let listed: Vec<String> = mismatches.iter().map(ToString::to_string).collect();
-            bail!(
-                "case {}: the requests are not cassette {name}'s (record it again, or fix the client):\n{}",
-                case.id,
-                listed.join("\n")
-            );
-        }
+        let listed: Vec<String> = mismatches.iter().map(ToString::to_string).collect();
+        cassette_mismatch(&case.id, name, &listed)?;
     }
     let finished = SystemTime::now();
     let after = Snapshot::take(&root_path)?;
@@ -467,9 +461,42 @@ pub fn git_version() -> Option<String> {
     text.split_whitespace().nth(2).map(str::to_owned)
 }
 
+/// What a case whose requests are not its cassette's (`listed`, one line
+/// each) does to the run: with none, nothing; otherwise the run stops.
+///
+/// # Errors
+///
+/// `listed` is not empty.
+fn cassette_mismatch(case: &str, cassette: &str, listed: &[String]) -> Result<()> {
+    if listed.is_empty() {
+        return Ok(());
+    }
+    bail!(
+        "case {case}: the requests are not cassette {cassette}'s (record it again, or fix the client):\n{}",
+        listed.join("\n")
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A case whose requests are not its cassette's stops the run.
+    #[test]
+    fn a_cassette_request_mismatch_fails_the_run() {
+        let listed = vec!["request 2: URL a was recorded, b sent".to_owned()];
+        assert!(cassette_mismatch("setup/json/none/skills", "skills/manifest", &[]).is_ok());
+        let error = cassette_mismatch("setup/json/none/skills", "skills/manifest", &listed)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.starts_with(
+                "case setup/json/none/skills: the requests are not cassette skills/manifest's"
+            ),
+            "{error}"
+        );
+        assert!(error.ends_with("URL a was recorded, b sent"), "{error}");
+    }
 
     #[test]
     fn kernel_release_only_in_its_context() {

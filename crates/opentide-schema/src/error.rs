@@ -73,6 +73,12 @@ pub enum ErrorKind {
     /// rejects, with Pydantic's exact type: `value_error`, `literal_error`,
     /// `greater_than_equal`, …
     InvalidValue(&'static str),
+    /// A platform block's constraint, reported by its own code at the path
+    /// the platform's specification fixes for it (exabeam-1.0, graylog-1.0,
+    /// bitdefender-1.0): the oracle raises a `PydanticCustomError` whose
+    /// type is the code, and `validation/errors.py` reports that type as the
+    /// finding's code.
+    Constraint(&'static str),
     /// The conversion stopped: the document produced more work than
     /// [`crate::from_node::BUDGET`] allows (a tree of aliases nested to
     /// billions of nodes). Not a Pydantic error; the oracle would keep going.
@@ -89,7 +95,9 @@ impl ErrorKind {
             Self::Syntax | Self::Limit => None,
             Self::Missing => Some("missing"),
             Self::UnknownKey => Some("extra_forbidden"),
-            Self::InvalidType(pydantic) | Self::InvalidValue(pydantic) => Some(pydantic),
+            Self::InvalidType(pydantic)
+            | Self::InvalidValue(pydantic)
+            | Self::Constraint(pydantic) => Some(pydantic),
         }
     }
 }
@@ -153,7 +161,8 @@ impl SchemaError {
 
     /// The diagnostic code the CLI prints for this error on `surface`: one of
     /// `yaml_parse`, `config_parse`, `schema_validation`, `missing_field` and
-    /// `unknown_key`, as `loading/`, `validation/errors.py` and
+    /// `unknown_key`, or a platform constraint's own code ([`ErrorKind::Constraint`]),
+    /// as `loading/`, `validation/errors.py` and
     /// `validation/configuration.py` choose them.
     pub const fn code(&self, surface: Surface) -> &'static str {
         match (self.kind, surface) {
@@ -161,6 +170,7 @@ impl SchemaError {
             (ErrorKind::Syntax, Surface::Configuration) => codes::CONFIG_PARSE,
             (ErrorKind::Missing, Surface::Configuration) => codes::MISSING_FIELD,
             (ErrorKind::UnknownKey, Surface::Configuration) => codes::UNKNOWN_KEY,
+            (ErrorKind::Constraint(code), _) => code,
             _ => codes::SCHEMA_VALIDATION,
         }
     }
@@ -207,6 +217,17 @@ mod tests {
     }
 
     #[test]
+    fn a_constraint_is_reported_under_its_code() {
+        let error = at(ErrorKind::Constraint("graylog_schedule"));
+        assert_eq!(error.code(Surface::Object), "graylog_schedule");
+        assert_eq!(error.code(Surface::Configuration), "graylog_schedule");
+        assert_eq!(
+            ErrorKind::Constraint("graylog_schedule").pydantic_type(),
+            Some("graylog_schedule")
+        );
+    }
+
+    #[test]
     fn configuration_errors_follow_configuration_py() {
         let codes = [
             (ErrorKind::Syntax, "config_parse"),
@@ -240,6 +261,13 @@ mod tests {
             ErrorKind::InvalidValue("value_error").pydantic_type(),
             Some("value_error")
         );
+    }
+
+    #[test]
+    fn a_platform_constraint_is_reported_as_its_code() {
+        let error = at(ErrorKind::Constraint("bitdefender_target"));
+        assert_eq!(error.code(Surface::Object), "bitdefender_target");
+        assert_eq!(error.kind.pydantic_type(), Some("bitdefender_target"));
     }
 
     #[test]

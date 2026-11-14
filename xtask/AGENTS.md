@@ -59,7 +59,7 @@ since the workspace forbids `unsafe`); a report holds the medians and every samp
 only when the command ended as it should (exit code, one JSON document, what the scenario expects
 of it): a command that failed early would measure nothing, so the bench stops with status 2.
 
-- `--engine python` runs the oracle, opentide 0.23.0 from its PyPI wheel, installed with uv into
+- `--engine python` runs the bench oracle, opentide 0.23.0 from its PyPI wheel (the correctness comparisons moved to 0.28.1; the bench keeps the release its baselines were measured on), installed with uv into
   `<target>/xtask-bench/oracle` from [`tests/bench/oracle-requirements.txt`](../tests/bench/oracle-requirements.txt)
   (every file's SHA-256 pinned) on a uv-managed CPython (`ORACLE_PYTHON`), bytecode compiled at
   install. `--engine rust` builds the `opentide` binary (`-p opentide --features cli

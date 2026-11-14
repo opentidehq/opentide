@@ -593,6 +593,7 @@ pub fn golden(
     report_path: Option<&Path>,
     full: bool,
     (oracle_version, candidate_version): (&str, &str),
+    keep: Option<&Path>,
 ) -> Result<bool> {
     use opentide_compare::ledger::Usage;
     use opentide_compare::normalise::opentide_version_in_run;
@@ -640,6 +641,14 @@ pub fn golden(
             &ledger,
             &mut usage,
         );
+        if let Some(keep) = keep.filter(|_| !report.equal) {
+            actual
+                .write(
+                    &keep.join("cases").join(&actual.case.id),
+                    &keep.join("blobs"),
+                )
+                .with_context(|| format!("{}: keep the candidate's run", actual.case.id))?;
+        }
         Ok::<_, anyhow::Error>(Ok((report, usage)))
     });
     let mut usage = Usage::default();

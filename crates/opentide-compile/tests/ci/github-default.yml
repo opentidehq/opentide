@@ -10,6 +10,11 @@
 #   CBC_URL
 #   ELASTIC_PROD_API_KEY
 #   ELASTIC_STAGING_API_KEY
+#   EXABEAM_CLIENT_ID
+#   EXABEAM_CLIENT_SECRET
+#   GOOGLE_SECOPS_CREDENTIALS
+#   GRAVITYZONE_API_KEY
+#   GRAYLOG_TOKEN
 #   HARFANGLAB_API_TOKEN
 #   MDE_CLIENT_ID
 #   MDE_CLIENT_SECRET
@@ -47,6 +52,11 @@ jobs:
       CBC_URL: ${{ secrets.CBC_URL }}
       ELASTIC_PROD_API_KEY: ${{ secrets.ELASTIC_PROD_API_KEY }}
       ELASTIC_STAGING_API_KEY: ${{ secrets.ELASTIC_STAGING_API_KEY }}
+      EXABEAM_CLIENT_ID: ${{ secrets.EXABEAM_CLIENT_ID }}
+      EXABEAM_CLIENT_SECRET: ${{ secrets.EXABEAM_CLIENT_SECRET }}
+      GOOGLE_SECOPS_CREDENTIALS: ${{ secrets.GOOGLE_SECOPS_CREDENTIALS }}
+      GRAVITYZONE_API_KEY: ${{ secrets.GRAVITYZONE_API_KEY }}
+      GRAYLOG_TOKEN: ${{ secrets.GRAYLOG_TOKEN }}
       HARFANGLAB_API_TOKEN: ${{ secrets.HARFANGLAB_API_TOKEN }}
       MDE_CLIENT_ID: ${{ secrets.MDE_CLIENT_ID }}
       MDE_CLIENT_SECRET: ${{ secrets.MDE_CLIENT_SECRET }}
@@ -77,6 +87,9 @@ jobs:
           if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/carbon_black_cloud.toml; then opentide validate query --platform carbon_black_cloud --live --changed; else echo "The default branch has no carbon_black_cloud tenant yet, so no tenant is reviewed. Skipped carbon_black_cloud live query validation without using platform credentials."; fi
           if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/defender_for_endpoint.toml; then opentide validate query --platform defender_for_endpoint --live --changed; else echo "The default branch has no defender_for_endpoint tenant yet, so no tenant is reviewed. Skipped defender_for_endpoint live query validation without using platform credentials."; fi
           if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/elastic.toml; then opentide validate query --platform elastic --live --changed; else echo "The default branch has no elastic tenant yet, so no tenant is reviewed. Skipped elastic live query validation without using platform credentials."; fi
+          if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/exabeam.toml; then opentide validate query --platform exabeam --live --changed; else echo "The default branch has no exabeam tenant yet, so no tenant is reviewed. Skipped exabeam live query validation without using platform credentials."; fi
+          if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/google_secops.toml; then opentide validate query --platform google_secops --live --changed; else echo "The default branch has no google_secops tenant yet, so no tenant is reviewed. Skipped google_secops live query validation without using platform credentials."; fi
+          if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/graylog.toml; then opentide validate query --platform graylog --live --changed; else echo "The default branch has no graylog tenant yet, so no tenant is reviewed. Skipped graylog live query validation without using platform credentials."; fi
           if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/sentinel.toml; then opentide validate query --platform sentinel --live --changed; else echo "The default branch has no sentinel tenant yet, so no tenant is reviewed. Skipped sentinel live query validation without using platform credentials."; fi
           if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/sentinel_one.toml; then opentide validate query --platform sentinel_one --live --changed; else echo "The default branch has no sentinel_one tenant yet, so no tenant is reviewed. Skipped sentinel_one live query validation without using platform credentials."; fi
           if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/splunk.toml; then opentide validate query --platform splunk --live --changed; else echo "The default branch has no splunk tenant yet, so no tenant is reviewed. Skipped splunk live query validation without using platform credentials."; fi
@@ -140,6 +153,11 @@ jobs:
       CBC_URL: ${{ secrets.CBC_URL }}
       ELASTIC_PROD_API_KEY: ${{ secrets.ELASTIC_PROD_API_KEY }}
       ELASTIC_STAGING_API_KEY: ${{ secrets.ELASTIC_STAGING_API_KEY }}
+      EXABEAM_CLIENT_ID: ${{ secrets.EXABEAM_CLIENT_ID }}
+      EXABEAM_CLIENT_SECRET: ${{ secrets.EXABEAM_CLIENT_SECRET }}
+      GOOGLE_SECOPS_CREDENTIALS: ${{ secrets.GOOGLE_SECOPS_CREDENTIALS }}
+      GRAVITYZONE_API_KEY: ${{ secrets.GRAVITYZONE_API_KEY }}
+      GRAYLOG_TOKEN: ${{ secrets.GRAYLOG_TOKEN }}
       HARFANGLAB_API_TOKEN: ${{ secrets.HARFANGLAB_API_TOKEN }}
       MDE_CLIENT_ID: ${{ secrets.MDE_CLIENT_ID }}
       MDE_CLIENT_SECRET: ${{ secrets.MDE_CLIENT_SECRET }}
@@ -280,6 +298,11 @@ jobs:
       CBC_URL: ${{ secrets.CBC_URL }}
       ELASTIC_PROD_API_KEY: ${{ secrets.ELASTIC_PROD_API_KEY }}
       ELASTIC_STAGING_API_KEY: ${{ secrets.ELASTIC_STAGING_API_KEY }}
+      EXABEAM_CLIENT_ID: ${{ secrets.EXABEAM_CLIENT_ID }}
+      EXABEAM_CLIENT_SECRET: ${{ secrets.EXABEAM_CLIENT_SECRET }}
+      GOOGLE_SECOPS_CREDENTIALS: ${{ secrets.GOOGLE_SECOPS_CREDENTIALS }}
+      GRAVITYZONE_API_KEY: ${{ secrets.GRAVITYZONE_API_KEY }}
+      GRAYLOG_TOKEN: ${{ secrets.GRAYLOG_TOKEN }}
       HARFANGLAB_API_TOKEN: ${{ secrets.HARFANGLAB_API_TOKEN }}
       MDE_CLIENT_ID: ${{ secrets.MDE_CLIENT_ID }}
       MDE_CLIENT_SECRET: ${{ secrets.MDE_CLIENT_SECRET }}

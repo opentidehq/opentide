@@ -12,7 +12,8 @@
 │                                  sentinel, splunk, crowdstrike,              │
 │                                  defender_for_endpoint, sentinel_one,        │
 │                                  carbon_black_cloud, harfanglab, elastic,    │
-│                                  sysdig                                      │
+│                                  sysdig, bitdefender, graylog, exabeam,      │
+│                                  google_secops                               │
 │ --plan                           List the files each step would write, and   │
 │                                  write nothing                               │
 │ --yes          -y                Write without asking for confirmation       │

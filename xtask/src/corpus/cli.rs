@@ -163,6 +163,7 @@ pub fn parse_options(args: &[String]) -> Result<(Options, Option<String>, bool)>
     };
     Ok((
         Options {
+            platforms: crate::corpus::vocab::PLATFORMS,
             seed,
             counts,
             layout,
@@ -754,16 +755,16 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
             .or_insert_with(|| scratch.join("_state").to_string_lossy().into_owned());
         let document = run_oracle(&bin, &dir, &kind.command, &env)?;
         let lint = queries::is_lint_kind(kind);
-        let (oracle, oracle_count, rust, rust_count, crowdstrike) = if lint {
+        let (oracle, oracle_count, rust, rust_count, crowdstrike, yara) = if lint {
             // lint counts no queries: its findings are compared, every key.
             let oracle = queries::lint_findings(&document);
             let rust = queries::rust_lint(&dir, &kind.command)?;
-            (oracle, json!(null), rust, json!(null), 0)
+            (oracle, json!(null), rust, json!(null), 0, 0)
         } else {
             let (oracle, oracle_count) = queries::engine_findings(&document["report"]);
-            let (rust_report, crowdstrike) = queries::rust_report(&dir, &kind.command)?;
+            let (rust_report, crowdstrike, yara) = queries::rust_report(&dir, &kind.command)?;
             let (rust, rust_count) = queries::engine_findings(&rust_report);
-            (oracle, oracle_count, rust, rust_count, crowdstrike)
+            (oracle, oracle_count, rust, rust_count, crowdstrike, yara)
         };
         let mut problems = Vec::new();
         let mut approved = 0usize;
@@ -784,21 +785,20 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
             ));
         }
         if oracle_count != rust_count {
-            let counted = crate::validate::crowdstrike_cql(
-                Some(&json!({"queries_checked": oracle_count})),
-                Some(&json!({
-                    "queries_checked": rust_count,
-                    "crowdstrike": crowdstrike,
-                    "yaml_1_2": 0,
-                })),
-                &[],
-            );
+            let oracle = json!({"queries_checked": oracle_count});
+            let rust = json!({
+                "queries_checked": rust_count,
+                "crowdstrike": crowdstrike,
+                "yara": yara,
+                "yaml_1_2": 0,
+            });
+            let counted = crate::validate::crowdstrike_cql(Some(&oracle), Some(&rust), &[]);
             if counted {
                 approved += 1;
             } else {
                 problems.push(format!(
                     "queries checked: oracle {oracle_count}, rust {rust_count} \
-                     ({crowdstrike} CrowdStrike)"
+                     ({crowdstrike} CrowdStrike, {yara} YARA)"
                 ));
             }
         }
@@ -1157,6 +1157,7 @@ fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
         let mut compared = 0usize;
         let approved = structural::approved(id);
         let mut applied = 0usize;
+        let mut quoted = 0usize;
         for file in &workspace.files {
             let Some(rust) = structural::check_object(&file.path, file.render().as_bytes()) else {
                 continue;
@@ -1169,6 +1170,12 @@ fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
                 && approved.applies(&oracle, &rust)
             {
                 applied += 1;
+                continue;
+            }
+            // `messages-quote-values`: Rust quotes a value as `"x"`, where
+            // the oracle printed Python's repr, `'x'`; nothing else differs.
+            if configuration::quoting_only(&oracle, &rust) {
+                quoted += 1;
                 continue;
             }
             if rust != oracle {
@@ -1191,6 +1198,12 @@ fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
                 problems.push(format!("CHANGELOG.md has no {:?}", approved.changelog));
             }
         }
+        if quoted > 0 && !changelog.contains(configuration::QUOTING_CHANGELOG) {
+            problems.push(format!(
+                "CHANGELOG.md has no {:?}",
+                configuration::QUOTING_CHANGELOG
+            ));
+        }
         // Not vacuous: each target carries a finding the two agree on, or the
         // approved difference; a kind the oracle reports nothing for
         // (`codes = []`) is checked on targets the model read.
@@ -1210,10 +1223,15 @@ fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
         }
         let status = if problems.is_empty() { "ok  " } else { "FAIL" };
         println!(
-            "{status} {id:<48} {} target(s), {compared} finding(s) compared{}",
+            "{status} {id:<48} {} target(s), {compared} finding(s) compared{}{}",
             target_paths.len(),
             if applied > 0 {
                 format!(", {applied} file(s) differ as approved")
+            } else {
+                String::new()
+            },
+            if quoted > 0 {
+                format!(", {quoted} file(s) differ only in quoting")
             } else {
                 String::new()
             }

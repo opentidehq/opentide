@@ -160,6 +160,12 @@ pub fn run(args: &[String]) -> Result<u8> {
     problems.extend(engine_catalog(&root, check)?);
     let mut compared = 0;
     let mut judged = 0;
+    let mut differences = Vec::new();
+    if check && !oracle {
+        // `--check` alone: the committed language-server catalogs' drift
+        // from the generator, no recordings of the oracle read.
+        problems.extend(catalog_drift(&root)?.1);
+    }
     if oracle {
         let ledger_path = root.join("tests/golden/APPROVED_DIFFS.toml");
         let ledger = opentide_compare::ledger::Ledger::parse(
@@ -177,23 +183,27 @@ pub fn run(args: &[String]) -> Result<u8> {
                 let mut usage = opentide_compare::ledger::Usage::default();
                 catalog_parity(&root, &ledger, &mut usage)
             });
-            let join = |handle: std::thread::ScopedJoinHandle<'_, _>| {
+            fn join<T>(handle: std::thread::ScopedJoinHandle<'_, T>) -> T {
                 handle
                     .join()
                     .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
-            };
+            }
             (join(golden), join(verdicts), join(catalogs))
         });
         let (count, golden) = golden?;
         compared = count;
-        problems.extend(golden);
+        differences.extend(golden);
         let (count, verdicts) = verdicts?;
         judged = count;
-        problems.extend(verdicts);
-        let (count, catalogs) = catalogs?;
+        differences.extend(verdicts);
+        let (count, drift, catalogs) = catalogs?;
         compared += count;
-        problems.extend(catalogs);
+        problems.extend(drift);
+        differences.extend(catalogs);
     }
+    // Under `--oracle`, the differences from the oracle's recordings gate
+    // with the committed artifacts' drift from the generator.
+    problems.extend(differences);
     for problem in &problems {
         eprintln!("error: {problem}");
     }
@@ -795,21 +805,20 @@ fn unlabelled(path: &str, text: &str) -> Result<Value> {
 /// `generator` labels aside (`catalog_differences`); and each golden
 /// recording of an `opentide generate` that wrote them must hold, byte for
 /// byte, what the generator writes for the fixture with the oracle's version
-/// as the label. Returns the number of files compared and the differences.
+/// as the label. Returns the number of files compared, the committed copy's
+/// drift and the differences from the oracle's recordings.
 /// A file a run left written, world-readable (the mode does not matter here:
 /// only the bytes are compared).
 fn written(bytes: Vec<u8>) -> opentide_compare::FileState {
     opentide_compare::FileState::Written { mode: 0o644, bytes }
 }
 
-fn catalog_parity(
-    root: &Path,
-    ledger: &opentide_compare::ledger::Ledger,
-    usage: &mut opentide_compare::ledger::Usage,
-) -> Result<(usize, Vec<String>)> {
-    use opentide_compare::Run;
-    use opentide_schema::generate::catalog::{CATALOG_DIR, catalog_texts};
-    let mut problems = Vec::new();
+/// The committed language-server catalogs' drift from what the Rust
+/// generator writes for the bundled configuration, labels aside: the files
+/// that match and the problems.
+fn catalog_drift(root: &Path) -> Result<(usize, Vec<String>)> {
+    use opentide_schema::generate::catalog::catalog_texts;
+    let mut drift = Vec::new();
     let mut compared = 0;
     let sources = bundled_sources()?;
     for (name, text) in catalog_texts("", &sources) {
@@ -818,10 +827,22 @@ fn catalog_parity(
             Ok(current) if unlabelled(&path, &current)? == unlabelled(&path, &text)? => {
                 compared += 1;
             }
-            Ok(_) => problems.push(format!("{path}: differs from what the model generates")),
-            Err(_) => problems.push(format!("{path}: missing")),
+            Ok(_) => drift.push(format!("{path}: differs from what the model generates")),
+            Err(_) => drift.push(format!("{path}: missing")),
         }
     }
+    Ok((compared, drift))
+}
+
+fn catalog_parity(
+    root: &Path,
+    ledger: &opentide_compare::ledger::Ledger,
+    usage: &mut opentide_compare::ledger::Usage,
+) -> Result<(usize, Vec<String>, Vec<String>)> {
+    use opentide_compare::Run;
+    use opentide_schema::generate::catalog::{CATALOG_DIR, catalog_texts};
+    let mut problems = Vec::new();
+    let (mut compared, drift) = catalog_drift(root)?;
 
     let golden = root.join("tests/golden");
     let oracle =
@@ -926,7 +947,7 @@ fn catalog_parity(
     if generated.is_empty() {
         problems.push("no golden recording of `opentide generate` wrote the catalogs".to_owned());
     }
-    Ok((compared, problems))
+    Ok((compared, drift, problems))
 }
 
 /// The fixtures whose object and configuration files are validated against

@@ -46,7 +46,7 @@ opentide validate --check queries
 
 `sharing-config` is off unless you pass `--check sharing-config`. It checks the merged `sharing.toml`: required MISP fields, block names, unknown keys, `max_tlp`, organisation UUIDs, object types, and a `sharing/` configuration directory. `opentide share push` runs the same check. A literal API key is a warning and is never printed.
 
-Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A typo in a vocabulary value:
+Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A note (a finding worth knowing that is not wrong) prints only with the global [`--verbose`](./global-options.md): without it the line still counts the notes and is followed by the same command with `--verbose`. `--json` and the reports always include notes, `validate query` prints them the same way, and `--watch` shows every finding. A typo in a vocabulary value:
 
 ```text illustrative
 error[vocab_unknown]: "clearr" is not a TLP value
@@ -379,7 +379,7 @@ opentide validate query --platform splunk --live --strategy RELEASE --wide
 | `--platform` | The platform whose queries to check. Offline, default: every platform the engine parses. Required with `--live` (exit `2`, `failure.argument` `--platform`, without it) |
 | `--live` | Check the queries on the platform's tenants (needs credentials) |
 | `--changed` | Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (see [Which rules are checked](#which-rules-are-checked)) |
-| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`) is one query in that language, checked offline. Repeatable |
+| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`, `.yar`, `.yara`, `.exabeam`) is one query in that language, checked offline. Repeatable |
 | `--uuid` | Check only the rule with this UUID. Repeatable |
 | `--queries` | Offline: how a rejected query is reported, `error` (the default) or `warn`, as in [`validate`](#queries). `off` exits `2`: it would check nothing. Refused with `--live` |
 | `--strict` | Offline: fail on warnings too (with `--queries warn`). Refused with `--live` |
@@ -402,8 +402,13 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | `carbon_black_cloud` | Lucene, Carbon Black dialect |
 | `sysdig` | Falco: the block's `condition`, its `exceptions`, and the macros and lists of the block (and of the Falco default rules) it names |
 | `crowdstrike` | CQL, with the Next-Gen SIEM correlation-rule checks (`cql_correlate_aggregate`): the block's `query` |
+| `bitdefender` | YARA, Bitdefender profile: the block's `yara.signature`, and `.yar` and `.yara` files |
+| `exabeam` | The Exabeam Query Language: each sequence's filter under the `rule` profile, where Search's advanced operators (SELECT, GROUP-BY, pipes) are refused (`exabeam_advanced_in_rule`); a `system: exabeam` hunt and a `.exabeam` file under the `search` profile |
+| `google_secops` | YARA-L 2.0: the block's sections as the one rule deploy assembles, and `.yaral` and `.yl2` files |
 
-SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. HarfangLab is never validated by `validate query`, and Sysdig and CrowdStrike only offline: `--platform sysdig --live` and `--platform crowdstrike --live` report `supported: false`, because Sysdig Secure has no rule preview and opentide calls no CrowdStrike query check (see [Supported platforms](#supported-platforms)). The offline CQL check never reads the tenant: a field, saved search, lookup file or repository is never reported unknown.
+Google SecOps's YARA-L is checked offline by the analysis engine, the block's sections as the one rule deploy assembles (yara-l-1.0's `yaral_*` codes), and a `.yaral` or `.yl2` file with `--file`. `--live` sends each rule's assembled text to `verifyRuleText`, Google's compiler, which resolves the instance's reference lists and data tables and creates nothing. An `ERROR` diagnostic fails the rule as `google_secops_compile_error`, a `WARNING` is `google_secops_compile_warning`, each placed on the section key and line it falls in (`configurations.google_secops.events line 3, column 5`), and a block `run_frequency` Google does not allow for the rule is `google_secops_run_frequency_not_allowed`.
+
+SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. Sysdig, CrowdStrike, HarfangLab and Bitdefender are validated only offline: `--platform sysdig --live`, `--platform crowdstrike --live`, `--platform harfanglab --live` and `--platform bitdefender --live` report `supported: false`, because Sysdig Secure has no rule preview, opentide calls no CrowdStrike query check, HarfangLab has no YARA dry run and GravityZone has no rule check (see [Supported platforms](#supported-platforms)). `--platform harfanglab` checks YARA as libyara 4.5 compiles it, under the HarfangLab profile: `yara.signature`, the rule the decomposed form assembles, and a `.yar` or `.yara` file. The offline CQL check never reads the tenant: a field, saved search, lookup file or repository is never reported unknown.
 
 ```bash
 opentide --json validate query --platform sentinel_one
@@ -579,7 +584,7 @@ there is nothing to check.
 
 ### Supported platforms
 
-Live query validation works on **six platforms**; the offline engine on seven, five of them the same:
+Live query validation works on **nine platforms**; the offline engine on twelve, eight of them the same:
 
 | Platform | `--live` | Offline |
 |----------|:--------:|:-------:|
@@ -591,7 +596,15 @@ Live query validation works on **six platforms**; the offline engine on seven, f
 | `carbon_black_cloud` (Lucene) | ✅ | ✅ |
 | `sysdig` (Falco) | ❌ `supported: false` | ✅ |
 | `crowdstrike` (CQL) | ❌ `supported: false` | ✅ |
-| `harfanglab` | ❌ `supported: false` | ❌ |
+| `harfanglab` (YARA) | ❌ `supported: false` | ✅ |
+| `bitdefender` (YARA) | ❌ `supported: false` | ✅ YARA |
+| `graylog` (Lucene, Graylog dialect) | ✅ | ✅ |
+| `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ✅ |
+| `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ✅ YARA-L |
+
+### Exabeam live validation
+
+`opentide validate query --platform exabeam --live` sends each sequence query of each rule, on each tenant deploy would send it to, as the `filter` of `POST /search/v2/events`, with `fields: ["*"]`, `limit: 1` and the last 15 minutes, the window the console's "Test Last 15 mins" uses. A `200` passes, the row count information only; a `400` fails the sequence with Exabeam's message; any other answer fails it too, never a pass. Each sequence is its own check, labelled `sequence 1`, `sequence 2`… when the rule has several. The condition, windows, grouping and outcomes are not checked on the tenant: no Exabeam API previews a rule. The API key needs **Search, Analyze and Export**.
 
 ### Elastic live validation and deploy
 
@@ -612,7 +625,7 @@ Live query validation works on **six platforms**; the offline engine on seven, f
 
   The three look-back codes are independent, so a threshold rule with a look-back over `1h` raises `lookback_long` and `threshold_lookback`. Each log record also carries `legacy_event`, the event name the code replaced (`elastic_lookback_zero_warning`, `elastic_lookback_long_warning`, `elastic_esql_metadata_id_warning`, `elastic_risk_score_band_warning`, `elastic_eql_maxspan_window_warning`, `skipping_non_enterprise_technique`). It is removed in the release after next. The tenant `setup.suppression = false` with a rule that configures `suppression` is a separate warning, `suppression_omitted_basic_license`.
 - It runs the Elasticsearch and Kibana checks below.
-- It posts the compiled rule to Kibana `rules/preview` with `invocationCount: 1` and a UTC `timeframeEnd`. Entries in `logs[].errors` fail the rule. `logs[].warnings`, including a missing index, are warnings. HTTP 400 is a schema error, and any other non-200 response fails that rule. HTTP 401 or 403, or a missing preview-index privilege, fails that tenant and the remaining rules on it are skipped.
+- It posts the compiled rule to Kibana `rules/preview` with `invocationCount: 1` and a UTC `timeframeEnd`. The preview creates no rule, but it writes any alerts it raises to `.preview.alerts-security.alerts-<space>`, as a preview in Kibana does; Kibana cleans that index up itself. Entries in `logs[].errors` fail the rule. `logs[].warnings`, including a missing index, are warnings. HTTP 400 is a schema error, and any other non-200 response fails that rule. HTTP 401 or 403, or a missing preview-index privilege, fails that tenant and the remaining rules on it are skipped.
 
 The same Elasticsearch and Kibana checks run before every `opentide deploy` to Elastic, against `elasticsearch_url` and Kibana with the tenant API key:
 
@@ -624,16 +637,16 @@ The same Elasticsearch and Kibana checks run before every `opentide deploy` to E
 
 A rule that fails is not created or updated, and the command exits `1`. Later rules are still checked. An index pattern that matches nothing still deploys, with a warning.
 
-HarfangLab (Sigma or YARA) returns unsupported, and so does `--live` for CrowdStrike (CQL, checked offline only) and Sysdig (Falco, which has no rule preview) — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
+HarfangLab (YARA, checked offline only), Bitdefender (GravityZone has no dry run; its YARA is checked offline), CrowdStrike (CQL, checked offline only) and Sysdig (Falco, which has no rule preview) return unsupported for `--live` — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
 
 The result is a normal failure envelope, so `--json` shape does not change between
-supported and unsupported platforms:
+supported and unsupported platforms (an illustration: the docs check never runs `--live`):
 
 ```bash
-opentide --json validate query --platform harfanglab
+opentide --json validate query --platform harfanglab --live
 ```
 
-```json output-of="opentide --json validate query --platform harfanglab" exit=1
+```json illustrative
 {
   "platform": "harfanglab",
   "valid": null,

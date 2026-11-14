@@ -93,11 +93,11 @@ opentide setup skills discover
 opentide setup skills --generic --yes
 ```
 
-Use `--path` / `-C` for the repository root. Catalogue discovery reads the live [opentidehq/skills](https://github.com/opentidehq/skills) `manifest.json`. The four authoring skills are then copied from the package; other skills need the GitHub tree.
+Use `--path` / `-C` for the repository root. Catalogue discovery reads the live [opentidehq/skills](https://github.com/opentidehq/skills) `manifest.json`. Three authoring skills are then copied from the package; `detection-engineering` installs from the catalogue, and from the package only when its files cannot be downloaded (the catalogue itself must load) and nothing is installed yet, keeping an installed copy otherwise; the result warns in both cases. Other skills need the GitHub tree.
 
 ### `setup skills` warns that the remote catalogue is unavailable
 
-`opentide setup skills` fetches `manifest.json` from GitHub. The four authoring skills are copied from the package. Other skills are the full tree under `skills/<slug>/`. `AGENTS.md` is rendered from the package template. If you see `Could not fetch skills catalogue from opentidehq/skills@main`, check network access and that [opentidehq/skills](https://github.com/opentidehq/skills) is publicly reachable, then retry:
+`opentide setup skills` fetches `manifest.json` from GitHub. Three authoring skills are copied from the package, and `detection-engineering` installs from the catalogue (from the package only when its files cannot be downloaded (the catalogue itself must load) and nothing is installed yet, keeping an installed copy otherwise; the result warns in both cases). Other skills are the full tree under `skills/<slug>/`. `AGENTS.md` is rendered from the package template. If you see `Could not fetch skills catalogue from opentidehq/skills@main`, check network access and that [opentidehq/skills](https://github.com/opentidehq/skills) is publicly reachable, then retry:
 
 ```bash
 opentide setup skills discover --refresh
@@ -458,7 +458,7 @@ opentide validate
 
 ### `supported: false` for a platform
 
-HarfangLab is **deploy-only**: opentide cannot check its Sigma or YARA rules, and reports this honestly rather than faking a pass. CrowdStrike and Sysdig have no tenant check, so `--live` reports `supported: false` for them; drop `--live` to check their CQL and Falco offline. This is expected behaviour, not an error. See [Platforms](./concepts/platforms.md#query-validation-policy).
+CrowdStrike, HarfangLab, Sysdig and Bitdefender have no tenant check, so `--live` reports `supported: false` for them rather than faking a pass; drop `--live` to check their CQL, YARA and Falco offline. This is expected behaviour, not an error. See [Platforms](./concepts/platforms.md#query-validation-policy).
 
 ### MCP `validate_query` refuses
 

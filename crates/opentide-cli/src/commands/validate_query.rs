@@ -1060,11 +1060,13 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         return report;
     }
     let frames = terminal.frames(cx.cwd, cx.env);
-    let mut body = vec![Block::Raw(frames.render(
+    let (text, hidden) = frames.render_notes(
         &diagnostics,
         &mut SourceFiles::default(),
         terminal.quiet,
-    ))];
+        terminal.verbose,
+    );
+    let mut body = vec![Block::Raw(text)];
     let kind = match outcome_kind {
         Some(OutcomeKind::Warning) => "warning",
         _ => findings::kind_name(&report.outcome.status, !failed),
@@ -1082,6 +1084,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         body.push(Block::Raw(published));
     }
     report.body = body;
+    terminal.hidden_notes_step(&mut report.outcome.next_actions, hidden);
     report
 }
 

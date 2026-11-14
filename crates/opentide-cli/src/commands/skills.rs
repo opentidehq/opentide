@@ -101,6 +101,9 @@ pub struct Manifest {
     pub git_ref: String,
     /// The remote entries, then the bundled ones it does not list.
     pub entries: Vec<Entry>,
+    /// The slugs the remote catalogue itself lists (`catalogue_slugs`):
+    /// `entries` adds the bundled ones it omits.
+    pub catalogue_slugs: Vec<String>,
     /// `--refresh` was given.
     pub refreshed: bool,
 }
@@ -229,6 +232,7 @@ pub fn parse_manifest(
             description,
         });
     }
+    let catalogue_slugs = entries.iter().map(|entry| entry.slug.clone()).collect();
     for entry in bundled() {
         if !entries.iter().any(|known| known.slug == entry.slug) {
             entries.push(entry);
@@ -238,6 +242,7 @@ pub fn parse_manifest(
         source: DEFAULT_SOURCE.to_owned(),
         git_ref,
         entries,
+        catalogue_slugs,
         refreshed,
     }
 }

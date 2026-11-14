@@ -1,7 +1,7 @@
 //! The command tree of `opentide`, in clap derive (plan §3 invariant 1).
 //!
 //! Every path, option, type, choice, default and environment variable of the
-//! Python CLI (opentide 0.23.0, the oracle) is here, hidden ones included, so
+//! Python CLI (opentide 0.28.1, the oracle; written from 0.23.0's) is here, hidden ones included, so
 //! that every command line the oracle parses parses the same way. It was
 //! written from the oracle's Click tree once; it is code now, and a command's
 //! port (UC-3.5, UC-3.6) changes its struct here. `opentide --json commands`
@@ -163,6 +163,14 @@ pub enum Platform {
     Elastic,
     #[value(name = "sysdig")]
     Sysdig,
+    #[value(name = "bitdefender")]
+    Bitdefender,
+    #[value(name = "graylog")]
+    Graylog,
+    #[value(name = "exabeam")]
+    Exabeam,
+    #[value(name = "google_secops")]
+    GoogleSecops,
 }
 
 /// The values of `RowFormat`, as the command line spells them.
@@ -183,6 +191,8 @@ pub enum Check2 {
     Filenames,
     #[value(name = "metadata")]
     Metadata,
+    #[value(name = "recommended")]
+    Recommended,
     #[value(name = "placeholders")]
     Placeholders,
     #[value(name = "queries")]
@@ -258,6 +268,11 @@ pub struct Cli {
     pub debug: bool,
     #[arg(long = "quiet", help = "Print only the outcome line and errors")]
     pub quiet: bool,
+    #[arg(
+        long = "verbose",
+        help = "Also print notes, such as a missing optional field. --json always includes them"
+    )]
+    pub verbose: bool,
     #[arg(long = "no-color", help = "Disable colour")]
     pub no_color: bool,
     #[arg(
@@ -469,7 +484,7 @@ pub struct SetupArgs {
         help = "One-line description, used in the README"
     )]
     pub description: Option<String>,
-    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig", action = clap::ArgAction::Append, value_name = "PLATFORM")]
+    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
     #[arg(
         long = "ci",
@@ -1018,6 +1033,17 @@ pub struct SetupPlatformsArgs {
     pub elastic: bool,
     #[arg(long = "sysdig", help = "Enable Sysdig Secure (Falco)")]
     pub sysdig: bool,
+    #[arg(long = "bitdefender", help = "Enable Bitdefender GravityZone")]
+    pub bitdefender: bool,
+    #[arg(long = "graylog", help = "Enable Graylog")]
+    pub graylog: bool,
+    #[arg(long = "exabeam", help = "Enable Exabeam New-Scale SIEM")]
+    pub exabeam: bool,
+    #[arg(
+        long = "google-secops",
+        help = "Enable Google Security Operations (YARA-L)"
+    )]
+    pub google_secops: bool,
     #[arg(
         long = "plan",
         help = "List the files each step would write, and write nothing"
@@ -1057,7 +1083,7 @@ pub struct SetupRepoArgs {
         help = "One-line description, used in the README"
     )]
     pub description: Option<String>,
-    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig", action = clap::ArgAction::Append, value_name = "PLATFORM")]
+    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
     #[arg(
         long = "plan",
@@ -1235,7 +1261,7 @@ pub struct SharePushArgs {
 pub struct DeployArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig",
+        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
         value_name = "PLATFORM",
         value_parser = PlatformName
     )]
@@ -1299,7 +1325,7 @@ pub struct DeployArgs {
 pub struct DeployMetadataArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig",
+        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
         value_name = "PLATFORM"
     )]
     pub platform: Platform,
@@ -1533,7 +1559,7 @@ pub struct NewArgs {
 pub struct NewRuleArgs {
     #[arg(long = "name", help = "Object name; the filename is its slug")]
     pub name: Option<String>,
-    #[arg(long = "platform", help = "Add a configuration block for this platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig", action = clap::ArgAction::Append, value_name = "PLATFORM")]
+    #[arg(long = "platform", help = "Add a configuration block for this platform (repeatable): sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
     #[arg(
         long = "objective",
@@ -1578,7 +1604,7 @@ pub struct NewThreatArgs {
 pub struct InfoArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig",
+        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
         value_name = "PLATFORM"
     )]
     pub platform: Option<Platform>,
@@ -1605,9 +1631,12 @@ pub struct InfoArgs {
 pub struct LintArgs {
     #[arg(long = "fix", help = "Apply safe filename renames")]
     pub fix: bool,
-    #[arg(long = "strict", help = "Exit non-zero when findings exist (CI gate)")]
+    #[arg(
+        long = "strict",
+        help = "Exit non-zero when errors or warnings are left (CI gate). Notes never fail it"
+    )]
     pub strict: bool,
-    #[arg(long = "check", help = "Limit to one check: filenames, metadata, placeholders or queries (repeatable). Runs it even when lint.toml disables it", action = clap::ArgAction::Append, value_name = "CHECK")]
+    #[arg(long = "check", help = "Limit to one check: filenames, metadata, recommended, placeholders or queries (repeatable). Runs it even when lint.toml disables it", action = clap::ArgAction::Append, value_name = "CHECK")]
     pub check: Vec<Check2>,
     #[arg(
         long = "changed",
@@ -1639,7 +1668,7 @@ pub struct QueryArgs {
     pub query: Option<String>,
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig",
+        help = "Detection platform: sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
         value_name = "PLATFORM",
         value_parser = PlatformName
     )]
@@ -1678,7 +1707,7 @@ pub struct QueryArgs {
         help = "Elastic only: esql (default), eql, lucene or kuery"
     )]
     pub language: Option<String>,
-    #[arg(long = "index", help = "Elastic index pattern or CrowdStrike repository (repeatable)", action = clap::ArgAction::Append)]
+    #[arg(long = "index", help = "Elastic index pattern, CrowdStrike repository or Graylog stream alias (repeatable)", action = clap::ArgAction::Append)]
     pub index: Vec<String>,
     #[arg(
         long = "timeout",
@@ -1749,12 +1778,51 @@ pub struct ValidateArgs {
     pub command: Option<ValidateCommand>,
 }
 
+/// `validate query --platform`'s help, from the platform table
+/// (`opentide_schema::platforms`): the platforms the engine parses offline
+/// and those `--live` checks on a tenant, each list by name. A platform row
+/// changes both.
+#[must_use]
+pub fn validate_query_platform_help() -> String {
+    use opentide_schema::platforms::{Order, ids_where};
+    format!(
+        "Check this platform's queries. Offline, default every platform the engine parses: \
+         {}. --live needs one of: {}",
+        ids_where(Order::Name, |platform| platform.offline().is_some()).join(", "),
+        ids_where(Order::Name, |platform| platform.live_check).join(", ")
+    )
+}
+
+/// The query file suffixes in the order `validate query --file`'s help
+/// names them (0.28.1's, then the ones it lacks).
+const SUFFIX_ORDER: [&str; 12] = [
+    "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "yar", "yara", "yaral", "yl2", "cql",
+];
+
+/// `validate query --file`'s help, with every query file suffix of the
+/// platform table (`query_file_suffixes`).
+#[must_use]
+pub fn validate_query_file_help() -> String {
+    let mut suffixes = opentide_schema::platforms::query_file_suffixes();
+    suffixes.sort_by_key(|suffix| {
+        SUFFIX_ORDER
+            .iter()
+            .position(|known| known == suffix)
+            .unwrap_or(SUFFIX_ORDER.len())
+    });
+    let listed: Vec<String> = suffixes.iter().map(|suffix| format!(".{suffix}")).collect();
+    format!(
+        "Check only this rule file, or this query file ({}) offline (repeatable)",
+        listed.join(", ")
+    )
+}
+
 /// `opentide validate query`.
 #[derive(Debug, Args)]
 pub struct ValidateQueryArgs {
     #[arg(
         long = "platform",
-        help = "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, sentinel, sentinel_one, splunk",
+        help = validate_query_platform_help(),
         value_name = "PLATFORM",
         value_parser = PlatformName
     )]
@@ -1778,7 +1846,7 @@ pub struct ValidateQueryArgs {
         help = "Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (the files deploy reads)"
     )]
     pub changed: bool,
-    #[arg(long = "file", help = "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .cql) offline (repeatable)", action = clap::ArgAction::Append)]
+    #[arg(long = "file", help = validate_query_file_help(), action = clap::ArgAction::Append)]
     pub file: Vec<String>,
     #[arg(long = "uuid", help = "Check only the rule with this UUID (repeatable)", action = clap::ArgAction::Append)]
     pub uuid: Vec<String>,
@@ -1818,7 +1886,7 @@ pub enum RootCommand {
     #[command(
         name = "lint",
         about = "Check file names and recommended metadata",
-        long_about = "Check file names and recommended metadata\n\nCatalogue hygiene: filename slugs and recommended metadata, not schema validation.",
+        long_about = "Check file names and recommended metadata\n\nCatalogue hygiene: filename slugs and recommended metadata, not schema validation.\nA missing optional field is a note: it never fails --strict, and prints with --verbose.",
         after_help = "Examples:\n  $ opentide lint\n  $ opentide lint --fix"
     )]
     Lint(LintArgs),

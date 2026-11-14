@@ -16,7 +16,8 @@
 #   for a workspace holding `files`.
 #
 # A case whose Rust result differs names the `difference` that explains it
-# (its reason and the bold lead of its CHANGELOG.md entry). A difference's
+# (its reason and the bold lead of its CHANGELOG.md entry), or a list of
+# them whose fields it may change together. A difference's
 # `fields` are the members it may change, at any depth of the result; every
 # other member (code, severity, field path, file, line, column, context) is
 # still compared with the oracle's. The test fails when such a case no longer
@@ -381,6 +382,30 @@ id = "sysdig-setup"
 kind = "text"
 path = "/w/.opentide/configurations/platforms/sysdig.toml"
 text = "[[tenants]]\nname = \"t\"\n[tenants.setup]\nurl = \"u\"\napi_token = \"literal\"\npolicies = \"p\"\n"
+
+[[case]]
+id = "bitdefender-enabled-type"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/bitdefender.toml"
+text = "[platform]\nenabled = \"yes\"\nname = 5\n"
+
+[[case]]
+id = "exabeam-enabled-type"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/exabeam.toml"
+text = "[platform]\nenabled = \"yes\"\nname = 5\n"
+
+[[case]]
+id = "google-secops-enabled-type"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/google_secops.toml"
+text = "[platform]\nenabled = \"yes\"\nname = 5\n"
+
+[[case]]
+id = "graylog-enabled-type"
+kind = "text"
+path = "/w/.opentide/configurations/platforms/graylog.toml"
+text = "[platform]\nenabled = \"yes\"\nname = 5\n"
 
 [[case]]
 id = "modifiers"

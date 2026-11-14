@@ -1,9 +1,9 @@
 error: Malformed object yaml · path: objects/threats/encoded-exfiltration-threat-0030.yaml · error: expected a mapping at the top of the file, found an empty file
-error: Malformed object yaml · path: objects/rules/encoded-relay-rule-0014.yaml · error: '2026-02-30' is not a valid date (day is out of range for month) at line 9, column 13
-error: Malformed object yaml · path: objects/rules/encoded-spray-rule-0023.yaml · error: did not find expected ',' or ']' at line 53, column 1 (while parsing a flow sequence that starts at line 52, column 9)
-error: Malformed object yaml · path: objects/rules/lateral-injection-rule-0024.yaml · error: found character that cannot start any token at line 68, column 1 (while scanning for the next token)
-error: Malformed object yaml · path: objects/rules/rogue-relay-rule-0035.yaml · error: did not find expected ',' or ']' at line 59, column 1 (while parsing a flow sequence that starts at line 58, column 9)
-error: Missing identifier from model · file: <WS>/objects/rules/staged-implant-rule-0006.yaml
-✗ 47 errors in 47 files · 819 queries checked
-→ opentide explain ecs_type_mismatch · how to fix it
+error: Malformed object yaml · path: objects/rules/elevated-exfiltration-rule-0014.yaml · error: '2026-02-30' is not a valid date (day is out of range for month) at line 9, column 13
+error: Malformed object yaml · path: objects/rules/encoded-beacon-rule-0034.yaml · error: did not find expected ',' or ']' at line 83, column 1 (while parsing a flow sequence that starts at line 82, column 9)
+error: Missing identifier from model · file: <WS>/objects/rules/hidden-implant-rule-0006.yaml
+error: Malformed object yaml · path: objects/rules/hidden-loader-rule-0024.yaml · error: found a tab character that violates indentation at line 45, column 1 (while scanning a plain scalar that starts at line 44, column 18)
+error: Malformed object yaml · path: objects/rules/staged-exfiltration-rule-0021.yaml · error: did not find expected ',' or ']' at line 72, column 1 (while parsing a flow sequence that starts at line 71, column 9)
+✗ 47 errors in 47 files · 1064 queries checked
+→ opentide explain kql_parse_error · how to fix it
 → opentide validate query · check again

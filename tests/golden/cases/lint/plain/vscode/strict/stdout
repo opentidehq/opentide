@@ -1,18 +1,2 @@
-note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/objectives/detect-lsass-access.yaml:2:1
-  │
-1 │ name: Detect LSASS access
-2 │ metadata:
-  │ ━━━━━━━━
-  │
-  ╰─ help: add the missing keys under metadata
-
-note[metadata_recommended]: Recommended metadata missing: author, organisation
-  ╭─▶ objects/rules/suspicious-lsass-access.yaml:2:1
-  │
-1 │ name: Suspicious LSASS Access
-2 │ metadata:
-  │ ━━━━━━━━
-  │
-  ╰─ help: add the missing keys under metadata
-
+✓ 3 notes in 2 files
+→ opentide lint --strict --verbose · show 3 notes, such as a missing optional field

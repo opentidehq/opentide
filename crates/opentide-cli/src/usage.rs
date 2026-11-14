@@ -430,7 +430,7 @@ mod tests {
         assert_eq!(choice.failure.code, code::USAGE_INVALID_CHOICE);
         assert_eq!(
             choice.failure.message,
-            "Invalid value for '--check': 'filenamez' is not one of 'filenames', 'metadata', 'placeholders', 'queries'."
+            "Invalid value for '--check': 'filenamez' is not one of 'filenames', 'metadata', 'recommended', 'placeholders', 'queries'."
         );
         assert_eq!(choice.failure.suggestion.as_deref(), Some("filenames"));
         assert_eq!(choice.notes[1].1, "opentide lint [OPTIONS]");
@@ -446,7 +446,7 @@ mod tests {
         assert_eq!(missing.failure.code, code::USAGE_MISSING_OPTION);
         assert_eq!(
             missing.failure.message,
-            "Missing option '--platform': choose from sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig."
+            "Missing option '--platform': choose from sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops."
         );
         assert_eq!(missing.notes[0].1, "opentide query [OPTIONS] [query]");
         let argument = parse("setup ci --yes");

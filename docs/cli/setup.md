@@ -158,6 +158,8 @@ opentide setup platforms --sentinel --defender-for-endpoint --yes
 | `--harfanglab` | HarfangLab |
 | `--elastic` | Elastic Security |
 | `--sysdig` | Sysdig Secure (Falco) |
+| `--exabeam` | Exabeam New-Scale SIEM |
+| `--google-secops` | Google Security Operations (YARA-L) |
 
 ### setup ci
 
@@ -333,7 +335,7 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 
 `--cursor` and `--claude-code` never write through a link: a link in a skill's folder at a path the skill ships is replaced by the skill's file, and a skill folder that links out of the repository is left as it is. Each is reported in `warnings`.
 
-Catalogue discovery fetches `manifest.json` from [opentidehq/skills](https://github.com/opentidehq/skills) on `main`. `AGENTS.md` is rendered from the package template and is not copied from that repository. `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package. Other slugs, including those selected with `--install` or `--all`, are the full GitHub tree under `skills/<slug>/`. A truncated or unreadable tree fails that skill instead of installing a partial copy.
+Catalogue discovery fetches `manifest.json` from [opentidehq/skills](https://github.com/opentidehq/skills) on `main`. `AGENTS.md` is rendered from the package template and is not copied from that repository. `opentide-detection-rule`, `opentide-detection-objective` and `opentide-threat-vector` are installed from the package. `detection-engineering`, which the catalogue also lists, installs the catalogue's copy (the one `discover` and `show` describe), and the package's short copy only when its files cannot be downloaded (the catalogue itself must load) and nothing is installed yet, keeping an installed copy otherwise; the result warns in both cases. Other slugs, including those selected with `--install` or `--all`, are the full GitHub tree under `skills/<slug>/`. A truncated or unreadable tree fails that skill instead of installing a partial copy.
 
 #### The Agent Plugin
 

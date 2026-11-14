@@ -1,6 +1,6 @@
 # opentide — Agent Guide
 
-**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across nine security platforms, with a Rust engine (query languages, Tide YAML, the language server) compiled in.
+**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across thirteen security platforms, with a Rust engine (query languages, Tide YAML, the language server) compiled in.
 
 **Entry point:** this file is the map; people start at [`CONTRIBUTING.md`](CONTRIBUTING.md). Read the guide of the area you change (below), then the skill that matches the task.
 
@@ -43,7 +43,7 @@
 | MCP server tools, resources, stdio | [`.agents/skills/mcp-server/SKILL.md`](.agents/skills/mcp-server/SKILL.md) |
 | Documentation pages, Fumadocs structure, doc/code sync | [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md) |
 | Changelog entries and release notes: summary, Upgrade, Breaking, categories | [`.agents/skills/release-notes/SKILL.md`](.agents/skills/release-notes/SKILL.md) |
-| Releases (the release train, `publish.yml`: PyPI, crates.io, npm, binaries), release candidates, `v*` tag, install pins | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
+| Releases (the release train, `publish.yml`: PyPI, crates.io, npm, binaries), release candidates, `v*` tag, install pins, post-release skills review | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
 | Building, linting, testing any Rust crate: toolchain, clippy, nextest, insta, trycmd, xtask, worktrees and target pools | [`.agents/skills/rust/SKILL.md`](.agents/skills/rust/SKILL.md) |
 | Holding the command line to the Python oracle: goldens, `golden check --engine rust`, the approved-diffs ledger | [`.agents/skills/golden/SKILL.md`](.agents/skills/golden/SKILL.md) |
 | The engine's Rust crates, `Cargo.toml`, `Cargo.lock` | [`.agents/skills/rust-engine/SKILL.md`](.agents/skills/rust-engine/SKILL.md) |
@@ -176,6 +176,36 @@ Configuration: `pyproject.toml` → `[tool.ruff]`, `[tool.ty]`; `Cargo.toml`, `c
 [python-typing](.agents/skills/python-typing/SKILL.md),
 [rust-engine](.agents/skills/rust-engine/SKILL.md).
 
+## Platforms
+
+Thirteen built-in platforms. The one source of truth is the registry,
+[`crates/opentide-schema/src/platforms.rs`](crates/opentide-schema/src/platforms.rs) (`PLATFORMS`):
+`--platform`'s choices, `setup`, `info`, `doctor`, the connectors and the MCP capabilities read it, and
+`opentide info --json` (`platforms[].can_deploy`, `can_validate`, `can_query`) prints it. Change a
+capability there, not in a list of names.
+
+| `--platform` | Product | Deploy | Compiled without a tenant (`validate`'s compile check, the dry run's payload) | Tenant check (`validate query --live`) | Offline engine (`validate`'s `queries` check, `validate query`) | `opentide query` |
+|---|---|:-:|:-:|:-:|---|---|
+| `sentinel` | Microsoft Sentinel | ✅ | ✅ | ✅ | KQL | KQL |
+| `defender_for_endpoint` | Microsoft Defender for Endpoint | ✅ | — | ✅ | KQL | KQL |
+| `splunk` | Splunk Enterprise Security | ✅ | — | ✅ | SPL | SPL |
+| `sentinel_one` | SentinelOne | ✅ | — | ✅ | — (`--live` required) | PowerQuery |
+| `crowdstrike` | CrowdStrike Falcon | ✅ | — | `supported: false` | CQL | CQL |
+| `harfanglab` | HarfangLab | ✅ | — | `supported: false` | YARA (HarfangLab profile; `.yar`, `.yara`) | telemetry search |
+| `carbon_black_cloud` | Carbon Black Cloud | ✅ | — | ✅ | Lucene (Carbon Black dialect) | Lucene |
+| `elastic` | Elastic Security | ✅ | ✅ | ✅ | ES\|QL, EQL, Kibana KQL, Lucene | the same four |
+| `sysdig` | Sysdig Secure | ✅ | ✅ | `supported: false` | Falco | — |
+| `bitdefender` | Bitdefender GravityZone | ✅ | ✅ | `supported: false` | YARA (Bitdefender profile; `.yar`, `.yara`) | — |
+| `graylog` | Graylog | ✅ | ✅ | ✅ | — (`--live` required) | Lucene |
+| `exabeam` | Exabeam New-Scale SIEM | ✅ | ✅ | ✅ | — (`--live` required) | Exabeam Query Language |
+| `google_secops` | Google Security Operations | ✅ | ✅ | ✅ | YARA-L 2.0 (`.yaral`, `.yl2`) | YARA-L 2.0 |
+
+All 13 deploy; 9 have a tenant check, 10 an offline engine, 11 `opentide query`. A check a platform
+does not have is `supported: false` (or, offline, a usage error naming `--live`), never a fake pass.
+Every platform's block is also checked by its model (`opentide validate`'s `schema` check) and, in the
+editor, by the language server. A change to this table is a change to the registry, the user docs
+(`docs/cli/validate.md`, `docs/usage/concepts/platforms.md`) and opentidehq/skills (item 5 below).
+
 ## Definition of done
 
 1. Each fix has a regression test that fails without it; each feature has tests at the
@@ -186,6 +216,10 @@ Configuration: `pyproject.toml` → `[tool.ruff]`, `[tool.ty]`; `Cargo.toml`, `c
    `docs/` ([docs-maintenance](.agents/skills/docs-maintenance/SKILL.md)).
 4. Mechanical refactors are proven behaviour-preserving with
    `uv run python scripts/ast_equivalence.py <base-rev>`.
+5. A platform added or removed, a platform's capabilities (deploy, `--live`, `opentide query`),
+   rule types or query languages changed, or a CLI/MCP name that skills use renamed → a
+   companion PR on [opentidehq/skills](https://github.com/opentidehq/skills) (platform skill,
+   `coverage.json`), linked from this one ([review-checklist](.agents/skills/review-checklist/SKILL.md) item 7).
 
 ## Docs
 

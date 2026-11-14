@@ -1,0 +1,133 @@
+{
+  "method": "POST",
+  "path": "/api/events/definitions?schedule=true",
+  "body": {
+    "entity": {
+      "_scope": "DEFAULT",
+      "title": "Office application spawns obfuscated PowerShell",
+      "description": "An Office application started PowerShell with an encoded or downloaded command, outside the Contoso admin tooling.\n\nATT&CK: T1059.001, T1566.001, TA0001, TA0002",
+      "priority": 3,
+      "alert": true,
+      "remediation_steps": "Isolate the host and collect the process tree.",
+      "config": {
+        "type": "aggregation-v1",
+        "query": "EventID:1 AND parent_image_lc:/.*\\\\(winword|excel|powerpnt|outlook)\\.exe/ AND image_lc:/.*\\\\(powershell|pwsh)\\.exe/ AND command_line_lc:/.*( -enc | -encodedcommand |frombase64string|iex\\().*/ AND NOT command_line_lc:/.*\\\\program files\\\\contoso\\\\admintools\\\\.*/",
+        "query_parameters": [],
+        "filters": [],
+        "streams": [
+          "65f0c0ffee0123456789abcd"
+        ],
+        "stream_categories": [],
+        "group_by": [
+          "source"
+        ],
+        "series": [
+          {
+            "id": "count-",
+            "type": "count"
+          },
+          {
+            "id": "card-parent_image_lc",
+            "type": "card",
+            "field": "parent_image_lc"
+          }
+        ],
+        "conditions": {
+          "expression": {
+            "expr": "||",
+            "left": {
+              "expr": ">=",
+              "left": {
+                "expr": "number-ref",
+                "ref": "count-"
+              },
+              "right": {
+                "expr": "number",
+                "value": 3
+              }
+            },
+            "right": {
+              "expr": ">=",
+              "left": {
+                "expr": "number-ref",
+                "ref": "card-parent_image_lc"
+              },
+              "right": {
+                "expr": "number",
+                "value": 2
+              }
+            }
+          }
+        },
+        "search_within_ms": 900000,
+        "execute_every_ms": 300000,
+        "use_cron_scheduling": false
+      },
+      "field_spec": {
+        "host": {
+          "data_type": "string",
+          "providers": [
+            {
+              "type": "template-v1",
+              "template": "${source.source}",
+              "require_values": false
+            }
+          ]
+        },
+        "user": {
+          "data_type": "string",
+          "providers": [
+            {
+              "type": "template-v1",
+              "template": "${source.User}",
+              "require_values": false
+            }
+          ]
+        },
+        "account": {
+          "data_type": "string",
+          "providers": [
+            {
+              "type": "template-v1",
+              "template": "${source.User}@${source.Domain}",
+              "require_values": false
+            }
+          ]
+        },
+        "owner": {
+          "data_type": "string",
+          "providers": [
+            {
+              "type": "lookup-v1",
+              "table_name": "asset-owners",
+              "key_field": "source"
+            }
+          ]
+        },
+        "attack_techniques": {
+          "data_type": "string",
+          "providers": [
+            {
+              "type": "template-v1",
+              "template": "T1059.001,T1566.001,TA0001,TA0002",
+              "require_values": false
+            }
+          ]
+        }
+      },
+      "key_spec": [
+        "host"
+      ],
+      "notification_settings": {
+        "grace_period_ms": 1800000,
+        "backlog_size": 0
+      },
+      "notifications": [
+        {
+          "notification_id": "65f0c0ffee0123456789abcf"
+        }
+      ]
+    },
+    "share_request": null
+  }
+}

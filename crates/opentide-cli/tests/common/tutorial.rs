@@ -68,7 +68,7 @@ pub fn tutorial() -> (tempfile::TempDir, PathBuf) {
     .collect();
     let err = Buffer::default();
     let host = opentide_cli::Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: Arc::new(Mutex::new(err.clone())),

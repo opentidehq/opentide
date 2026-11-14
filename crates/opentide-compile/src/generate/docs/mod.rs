@@ -5,11 +5,19 @@
 //! - [`catalog`]: the objects read into their models, sorted by name, each with
 //!   a unique page slug; the relations the pages show (the flat relation walk,
 //!   active rules, coverage and chaining graphs).
-//! - [`render`]: each section's data, written by the minijinja templates of
-//!   `templates/`.
+//! - [`render`]: each page's sections, from the models; [`page`]: the one
+//!   layout every page shares (breadcrumb, title, subtitle, overview,
+//!   contents line, sections, Metadata last) and its Markdown primitives;
+//!   [`text`]: cells, code spans, first sentences.
+//! - [`facts`]: where a rule deploys (statuses, runs, tenants, remote ids),
+//!   by deploy's own rules; [`settings`]: every setting of a platform block
+//!   by YAML path, described from the block models' schema; [`platforms`]:
+//!   platform labels and the languages of their code settings.
 //! - [`flavor`]: what GitHub, GitLab, Azure DevOps and plain Markdown change.
-//! - [`mermaid`]: diagrams as nodes and edges; [`vocab`]: vocabulary labels;
-//!   [`cve`]: CVE links.
+//! - [`diagrams`]: the diagrams pages show (coverage, deployment map,
+//!   chaining, kill-chain maps, the threat landscape), built as a model that
+//!   [`mermaid`] writes within each flavour's Mermaid; [`vocab`]: vocabulary
+//!   labels; [`cve`]: CVE links and details (CVSS, EPSS, KEV, CWE).
 //! - [`inflight`]: the open pull requests' objects, overlaid on the index for
 //!   the run (the inflight preview).
 //! - [`changed`]: `--changed`, the objects git reports as changed against the
@@ -22,10 +30,16 @@
 pub mod catalog;
 pub mod changed;
 pub mod cve;
+pub mod diagrams;
+pub mod facts;
 pub mod flavor;
 pub mod inflight;
 pub mod mermaid;
+pub mod page;
+pub mod platforms;
 pub mod render;
+pub mod settings;
+pub mod text;
 pub mod vocab;
 
 use std::collections::HashSet;
@@ -42,7 +56,7 @@ use rayon::prelude::*;
 use self::catalog::{Direction, Model, Record, Scope};
 use self::cve::CveLinks;
 use self::flavor::Flavor;
-use self::render::{Pages, SECTIONS};
+use self::render::{FOLDER_TITLES, Pages};
 use super::{Cause, Output, PhaseError};
 
 /// What a run reads from `documentation.toml`, the command line and the
@@ -370,7 +384,7 @@ pub fn index_pages(pages: &Pages<'_, '_>) -> Result<Vec<Output>, PhaseError> {
         return Ok(Vec::new());
     }
     let mut outputs = Vec::new();
-    for (scope, title) in SECTIONS {
+    for (scope, title) in FOLDER_TITLES {
         let text = pages.folder_index(scope, title).map_err(|(uuid, error)| {
             if uuid.is_empty() {
                 PhaseError::new(error)

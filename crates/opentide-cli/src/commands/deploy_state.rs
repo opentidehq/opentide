@@ -807,6 +807,75 @@ mod tests {
         );
         assert!(normalise_external_id("crowdstrike", &ExternalId::Text(" ".into())).is_err());
         assert!(normalise_external_id("sysdig", &ExternalId::Int(-1)).is_err());
+        // Google SecOps' row pins its ids to `ru_<uuid>` (#1064).
+        let rule_id = "ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1";
+        assert_eq!(
+            normalise_external_id("google_secops", &ExternalId::Text(rule_id.into())).unwrap(),
+            rule_id
+        );
+        let refused =
+            normalise_external_id("google_secops", &ExternalId::Text("rule-1".into())).unwrap_err();
+        assert_eq!(refused.code, "external_id_shape");
+        assert_eq!(
+            refused.message,
+            "google_secops external id \"rule-1\" is not ru_ and a lower-case UUID \
+             (ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1)"
+        );
+    }
+
+    #[test]
+    fn a_graylog_id_is_24_lower_case_hex_digits() {
+        assert_eq!(
+            normalise_external_id(
+                "graylog",
+                &ExternalId::Text("65f1c0ffee0123456789abcd".into())
+            )
+            .unwrap(),
+            "65f1c0ffee0123456789abcd"
+        );
+        assert_eq!(
+            normalise_external_id("graylog", &ExternalId::Text("65F1".into()))
+                .unwrap_err()
+                .message,
+            "graylog external id \"65F1\" is not 24 lower-case hex digits"
+        );
+    }
+
+    #[test]
+    fn an_exabeam_id_is_a_lower_case_rule_uuid() {
+        let id = "0f8fad5b-d9cb-469f-a165-70867728950e";
+        assert_eq!(
+            normalise_external_id("exabeam", &ExternalId::Text(id.into())).unwrap(),
+            id
+        );
+        let shape = "a canonical lower-case UUID (8-4-4-4-12 hex digits)";
+        for bad in [id.to_uppercase(), format!("{id}x"), "rule-1".to_owned()] {
+            assert_eq!(
+                normalise_external_id("exabeam", &ExternalId::Text(bad.clone()))
+                    .unwrap_err()
+                    .message,
+                format!("exabeam external id {bad:?} is not {shape}"),
+            );
+        }
+        // record_created refuses it, naming the shape, and writes no shard.
+        let dir = tempfile::tempdir().unwrap();
+        let refused = record_created(
+            dir.path(),
+            UUID,
+            "exabeam",
+            "eu",
+            &ExternalId::Text("RULE".into()),
+        )
+        .unwrap_err();
+        assert_eq!(refused.code, "deployment_state_write_failed");
+        assert!(
+            refused
+                .message
+                .contains(&format!("exabeam external id \"RULE\" is not {shape}")),
+            "{}",
+            refused.message
+        );
+        assert!(!state_dir(dir.path()).join(format!("{UUID}.json")).exists());
     }
 
     #[test]

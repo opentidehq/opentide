@@ -1,3 +1,4 @@
-error: Invalid value for 'ci_platform': Choose github, gitlab, or azure
+error: Invalid value for 'ci_platform': 'githb' is not one of 'github', 'gitlab', 'azure'.
+  help: did you mean 'github'?
   usage: opentide setup ci [OPTIONS] {ci_platform}:<github|gitlab|azure>
   help: run 'opentide setup ci --help'

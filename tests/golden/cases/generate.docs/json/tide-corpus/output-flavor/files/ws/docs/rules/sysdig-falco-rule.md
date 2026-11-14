@@ -1,6 +1,142 @@
+[Catalogue](../README.md) / [Detection rules](README.md)
+
 # Sysdig Falco Rule
 
+*Detection rule · `rule::1.0` · version 1 · modified 2026-01-02 · TLP:CLEAR*
+
+Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in
+a container.
+
+| Property | Value |
+| --- | --- |
+| Severity | Medium |
+| Detection model | [Credential Access Objective](../objectives/credential-access-objective.md) |
+| ATT&CK | [`T1059.004`](https://attack.mitre.org/techniques/T1059/004) Command and Scripting Interpreter: Unix Shell |
+| Platforms | Sysdig Secure: `STAGING` (PREVIEW runs) |
+
+**On this page:** [Deployment](#deployment) · [Platform configuration](#platform-configuration) · [Response](#response) · [ATT&CK techniques](#attck-techniques) · [Detection coverage](#detection-coverage) · [Metadata](#metadata)
+
+## Deployment
+
+What `opentide deploy` does with this rule: each platform block's status, the runs that act on it, and the tenants they reach.
+
+| Platform | Status | Deployed by | Tenants | Block enabled |
+| --- | --- | --- | --- | --- |
+| Sysdig Secure | `STAGING` | PREVIEW runs | `staging` | yes |
+
+- `STAGING` (strategy `PREVIEW`): Deployed in staging environment for operational testing
+
+```mermaid
+flowchart LR
+    accTitle: Deployment map of Sysdig Falco Rule
+    accDescr: The platforms the rule deploys to, at their status, and the tenants each run reaches.
+    subgraph lane1["Detection rule"]
+        rul1["Sysdig Falco Rule"]
+    end
+    subgraph lane2["Platforms"]
+        plt1[("Sysdig Secure<br>STAGING")]
+    end
+    subgraph lane3["Tenants"]
+        ten1[["staging"]]
+    end
+    rul1 --> plt1
+    plt1 -->|"PREVIEW"| ten1
+    classDef rule fill:#e9f7ef,stroke:#067647,color:#053321
+    classDef platform fill:#f2f4f7,stroke:#475467,color:#101828
+    classDef tenant fill:#f4f3ff,stroke:#5925dc,color:#21125a
+    classDef focus stroke-width:3px
+    class rul1 rule
+    class plt1 platform
+    class ten1 tenant
+    class rul1 focus
+    style lane1 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+    style lane2 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+    style lane3 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+```
+
+*Shapes:* rectangle = detection rule; cylinder = platform; subroutine box = tenant; bold outline = this page. *Lines:* solid line = deployed, by the runs named on the line.
+
+### Tenant targeting
+
+| Platform | Tenant | Reached by | Remote ID |
+| --- | --- | --- | --- |
+| Sysdig Secure | `staging` | PREVIEW runs | - |
+
+## Platform configuration
+
+### Sysdig Secure
+
+Status `STAGING` · deployed by PREVIEW runs · tenants: `staging` · schema `platform::sysdig::1.0`
+
+**`condition`** (Falco condition)
+
+```text
+spawned_process and container and proc.name in (corpus_shells)
+```
+
+| Setting | Value | Description |
+| --- | --- | --- |
+| `tags` | `container`, `shell` | Extra Falco tags. |
+
+**`lists`**: Lists only this rule uses, expanded into the condition at deploy.
+
+| `name` | `items` |
+| --- | --- |
+| `corpus_shells` | `bash`, `sh`, `zsh` |
+
+## Response
+
+| Property | Value |
+| --- | --- |
+| Alert severity | Medium |
+
+## ATT&CK techniques
+
+| Technique | Name | Tactics | Summary |
+| --- | --- | --- | --- |
+| [`T1059.004`](https://attack.mitre.org/techniques/T1059/004) | Command and Scripting Interpreter: Unix Shell | Execution | Adversaries may abuse Unix shell commands and scripts for execution. |
+
+## Detection coverage
+
+```mermaid
+flowchart LR
+    accTitle: Detection coverage of Sysdig Falco Rule
+    accDescr: Threat vectors on the left are detected by the objectives, signals and rules to their right.
+    subgraph lane1["Threat vectors"]
+        thr1{{"Simulated Actor"}}
+    end
+    subgraph lane2["Detection objectives"]
+        obj1(["Credential Access<br>Objective"])
+    end
+    subgraph lane3["Detection rules"]
+        rul1["Sysdig Falco Rule"]
+    end
+    thr1 --> obj1
+    obj1 --> rul1
+    classDef threat fill:#fdecea,stroke:#b42318,color:#3d0c09
+    classDef objective fill:#fff4e5,stroke:#b54708,color:#3d1d02
+    classDef rule fill:#e9f7ef,stroke:#067647,color:#053321
+    classDef focus stroke-width:3px
+    class thr1 threat
+    class obj1 objective
+    class rul1 rule
+    class rul1 focus
+    style lane1 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+    style lane2 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+    style lane3 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+```
+
+*Shapes:* hexagon = threat vector; stadium = detection objective; rectangle = detection rule; bold outline = this page.
+
+### Related objects
+
+| Type | Object | Direction |
+| --- | --- | --- |
+| Threat | [Simulated Actor](../threats/simulated-actor.md) | Upstream |
+| Objective | [Credential Access Objective](../objectives/credential-access-objective.md) | Upstream |
+
 ## Metadata
+
 | Field | Value |
 | --- | --- |
 | UUID | `00000000-0000-4000-8003-0000005d1a90` |
@@ -10,76 +146,4 @@
 | Modified | `2026-01-02` |
 | TLP | clear (`TLP:CLEAR`) |
 
-## Description
-Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in
-a container.
-
-## Status
-| Field | Value |
-| --- | --- |
-| Status (sysdig) | `STAGING` |
-| Severity | `Medium` |
-
-## ATT&CK Techniques
-| Technique | Name | Description |
-| --- | --- | --- |
-| `T1059.004` | [Command and Scripting Interpreter: Unix Shell](https://attack.mitre.org/techniques/T1059/004) | Adversaries may abuse Unix shell commands and scripts for execution. Unix shells are the primary command prompt on Linux, macOS, and ESXi systems, though many variations of the Unix shell exist (e.g. sh, ash, bash, zsh, etc.) depending on the specific OS or distribution.(Citation: DieNet Bash)(Citation: Apple ZShell) Unix shells can control every aspect of a system, with certain commands requiring elevated privileges.  Unix shells also support scripts that enable sequential execution of commands as well as other typical programming operations such as conditionals and loops. Common uses of shell scripts include long or repetitive tasks, or the need to run the same set of commands on multiple systems.  Adversaries may abuse Unix shells to execute various commands or payloads. Interactive shells may be accessed through command and control channels or during lateral movement such as with [SSH](https://attack.mitre.org/techniques/T1021/004). Adversaries may also leverage shell scripts to deliver and execute multiple commands on victims or as part of payloads used for persistence.  Some systems, such as embedded devices, lightweight Linux distributions, and ESXi servers, may leverage stripped-down Unix shells via Busybox, a small executable that contains a variety of tools, including a simple shell. |
-
-## Detection model
-- **Objective**: [Credential Access Objective](../objectives/credential-access-objective.md) (`00000000-0000-4000-8002-000000000001`)
-
-## Response
-
-- **Alert severity**: Medium
-
-## Platform configurations
-<details><summary>sysdig</summary>
-
-- **Enabled**: `True`
-- **Status**: `STAGING`
-
-
-</details>
-
-## Coverage
-```mermaid
-flowchart TB
-subgraph "Objectives"
-00000000_0000_4000_8002_000000000001(["Credential Access<br>Objective"])
-end
-subgraph "Threats"
-00000000_0000_4000_8001_000000000001{{"Simulated Actor"}}
-end
-subgraph "Signals"
-00000000_0000_4000_8099_000000000001(("Suspicious logon signal"))
-end
-subgraph "Rules"
-00000000_0000_4000_8003_000000000005["Carbon Black Lucene Rule"]
-00000000_0000_4000_8003_000000000006["CrowdStrike Deploy Rule"]
-00000000_0000_4000_8003_000000000002["Defender KQL Rule"]
-00000000_0000_4000_8003_000000000009["Elastic KQL Rule"]
-00000000_0000_4000_8003_000000000007["HarfangLab Deploy Rule"]
-00000000_0000_4000_8003_000000000001["Sentinel KQL Rule"]
-00000000_0000_4000_8003_000000000004["SentinelOne S1QL Rule"]
-00000000_0000_4000_8003_000000000003["Splunk SPL Rule"]
-00000000_0000_4000_8003_000000000008["Staging Promote Rule"]
-end
-00000000_0000_4000_8003_0000005d1a90["Sysdig Falco Rule"]
-00000000_0000_4000_8001_000000000001 -->|covers| 00000000_0000_4000_8002_000000000001
-00000000_0000_4000_8002_000000000001 --> 00000000_0000_4000_8099_000000000001
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000005
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000006
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000002
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000009
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000007
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000001
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000004
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000003
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000008
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_0000005d1a90
-```
-## Related objects
-| Type | Name | Direction | Relation |
-| --- | --- | --- | --- |
-| Objective | [Credential Access Objective](../objectives/credential-access-objective.md) (`00000000-0000-4000-8002-000000000001`) | Upstream | objective |
-| Threat | [Simulated Actor](../threats/simulated-actor.md) (`00000000-0000-4000-8001-000000000001`) | Upstream | threat |
+<!-- Generated by opentide (opentide generate docs). Edit the object's YAML instead: this page is rewritten on every run. -->

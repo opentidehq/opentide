@@ -234,10 +234,17 @@ pub fn rule_queries(rule: &Rule, platform: &str) -> Result<Vec<RuleQuery>, Strin
         }
         "sentinel_one" => sentinel_one(block, rule),
         "elastic" => elastic(block, rule).map(|query| vec![query]),
+        "exabeam" => exabeam(block, rule),
         "harfanglab" => Err(format!(
             "rule {name} is a HarfangLab Sigma or YARA rule, which the agents evaluate: it holds \
              no query to search telemetry with. Pass a telemetry query instead, such as \
              'processes process_name=cmd.exe'"
+        )),
+        "google_secops" => Err(format!(
+            "rule {name}: --rule is not supported for google_secops. A YARA-L rule runs in the \
+             detection engine, whose results differ from a search's, and a retrohunt writes \
+             detections; write the search as a hunt (response.procedure.searches) and pass it as \
+             QUERY"
         )),
         _ => Err(format!("{platform} rules cannot be queried")),
     }
@@ -283,6 +290,36 @@ fn sentinel_one(block: &CJson, rule: &Rule) -> Result<Vec<RuleQuery>, String> {
             .collect();
     }
     Err(format!("rule {name} has no SentinelOne query"))
+}
+
+/// An Exabeam rule's queries: one per sequence, its filter as deploy sends
+/// it (exabeam-1.0), with a note when the sequence also has a threshold or a
+/// grouping the search leaves out.
+fn exabeam(block: &CJson, rule: &Rule) -> Result<Vec<RuleQuery>, String> {
+    let sequences = match field(block, "sequences") {
+        Some(CJson::Array(items)) if !items.is_empty() => items,
+        _ => return Err(format!("rule {:?} has no Exabeam sequences", rule.name)),
+    };
+    let several = sequences.len() > 1;
+    sequences
+        .iter()
+        .enumerate()
+        .map(|(at, sequence)| {
+            let filtered =
+                field(sequence, "threshold").is_some() || truthy(field(sequence, "group_by"));
+            Ok(RuleQuery {
+                text: required(sequence.get("query"), rule, "exabeam")?,
+                language: Some("exabeam".into()),
+                label: several.then(|| format!("sequence {}", at + 1)),
+                note: filtered.then(|| {
+                    "the sequence's filter only: its condition, window and grouping are not \
+                     applied"
+                        .into()
+                }),
+                ..RuleQuery::default()
+            })
+        })
+        .collect()
 }
 
 /// An Elastic rule's event query, with its language, indices or data view,
@@ -396,6 +433,14 @@ mod tests {
             rule_queries(&sysdig, "sysdig").unwrap_err(),
             "sysdig rules cannot be queried"
         );
+        let secops = rule(&format!(
+            "{HEAD}configurations:\n  google_secops:\n    condition: $e\n"
+        ));
+        assert!(
+            rule_queries(&secops, "google_secops")
+                .unwrap_err()
+                .starts_with("rule \"R\": --rule is not supported for google_secops.")
+        );
     }
 
     #[test]
@@ -428,6 +473,53 @@ mod tests {
         let splunk = texts(&both, "splunk");
         assert!(splunk[0].starts_with("index=main\n| eval MDR_UUID="));
         assert!(splunk[0].contains("00000000-0000-4000-8000-0000000000aa"));
+    }
+
+    #[test]
+    fn exabeam_runs_each_sequence_filter_and_says_what_it_leaves_out() {
+        let two = rule(&format!(
+            "{HEAD}configurations:\n  exabeam:\n    sequences:\n      - query: ' a = 1 '\n        threshold: {{function: count, operator: more_than, value: 3}}\n      - query: b = 2\n"
+        ));
+        let queries = rule_queries(&two, "exabeam").unwrap();
+        let note = "the sequence's filter only: its condition, window and grouping are not applied";
+        let shown: Vec<String> = queries
+            .iter()
+            .map(|query| {
+                format!(
+                    "{}|{}|{}|{}",
+                    query.text,
+                    query.language.as_deref().unwrap_or(""),
+                    query.label.as_deref().unwrap_or(""),
+                    query.note.as_deref().unwrap_or(""),
+                )
+            })
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                format!("a = 1|exabeam|sequence 1|{note}"),
+                "b = 2|exabeam|sequence 2|".to_owned(),
+            ]
+        );
+        let one = rule(&format!(
+            "{HEAD}configurations:\n  exabeam:\n    sequences:\n      - query: c\n        group_by: [user]\n"
+        ));
+        let query = rule_queries(&one, "exabeam").unwrap().remove(0);
+        assert_eq!((query.label, query.note.as_deref()), (None, Some(note)));
+        let no_sequences = rule(&format!(
+            "{HEAD}configurations:\n  exabeam:\n    sequences: []\n"
+        ));
+        assert_eq!(
+            rule_queries(&no_sequences, "exabeam").unwrap_err(),
+            "rule \"R\" has no Exabeam sequences"
+        );
+        let empty = rule(&format!(
+            "{HEAD}configurations:\n  exabeam:\n    sequences:\n      - query: ''\n"
+        ));
+        assert_eq!(
+            rule_queries(&empty, "exabeam").unwrap_err(),
+            "rule \"R\" has an empty exabeam query"
+        );
     }
 
     #[test]

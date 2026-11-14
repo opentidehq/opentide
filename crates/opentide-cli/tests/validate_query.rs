@@ -50,7 +50,7 @@ fn opentide(cwd: &Path, words: &[&str], extra: &[(&str, &str)]) -> Ran {
     let log = replay::Buffer::default();
     let sink: Sink = Arc::new(Mutex::new(log.clone()));
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: sink,
@@ -426,6 +426,144 @@ fn an_unreadable_rule_file_is_a_yaml_parse_finding_and_a_log_line() {
 }
 
 #[test]
+fn google_secops_sections_and_yaral_files_are_checked_offline() {
+    let (_scratch, ws) = corpus();
+    let rules = ws.join("objects/rules");
+    std::fs::write(
+        rules.join("secops.yaml"),
+        "name: Secops rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-0000000005ec\n  schema: \
+         rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: \
+         clear\ndescription: d\nconfigurations:\n  google_secops:\n    status: STAGING\n    \
+         events: |\n      $a.metadata.event_type = \"USER_LOGIN\"\n      $b.metadata.event_type \
+         = \"USER_LOGIN\"\n    outcome: |\n      $risk_score = 40\n    condition: |\n      $a \
+         and $b\n",
+    )
+    .unwrap();
+    let ran = opentide(
+        &ws,
+        &["--json", "validate", "query", "--platform", "google_secops"],
+        &[],
+    );
+    let document = ran.json();
+    assert_eq!(ran.code, 1, "{}", ran.stdout);
+    let codes: Vec<&str> = document["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["code"].as_str())
+        .collect();
+    // Two event variables need a `match`: the assembled rule says so.
+    assert!(codes.contains(&"yaral_multi_event_match"), "{codes:?}");
+    std::fs::write(
+        ws.join("search.yaral"),
+        "metadata.event_type = \"USER_LOGIN\"\n",
+    )
+    .unwrap();
+    let file = opentide(
+        &ws,
+        &["--json", "validate", "query", "--file", "search.yaral"],
+        &[],
+    );
+    assert_eq!(file.code, 0, "{}", file.stdout);
+    assert_eq!(file.json()["queries"][0]["language"], "yaral");
+    // `.yl2` is YARA-L too, as 0.28.1 reads it.
+    std::fs::copy(ws.join("search.yaral"), ws.join("search.yl2")).unwrap();
+    let yl2 = opentide(
+        &ws,
+        &["--json", "validate", "query", "--file", "search.yl2"],
+        &[],
+    );
+    assert_eq!(yl2.code, 0, "{}", yl2.stdout);
+    assert_eq!(yl2.json()["queries"][0]["language"], "yaral");
+}
+
+#[test]
+fn exabeam_sequences_and_exabeam_files_are_checked_offline() {
+    let (_scratch, ws) = corpus();
+    let rules = ws.join("objects/rules");
+    std::fs::write(
+        rules.join("exabeam.yaml"),
+        "name: Exabeam rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-0000000005eb\n  schema: \
+         rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: \
+         clear\ndescription: d\nconfigurations:\n  exabeam:\n    status: STAGING\n    \
+         sequences:\n      - query: SELECT user WHERE activity_type:\"app-login\" GROUP-BY \
+         user\n",
+    )
+    .unwrap();
+    let ran = opentide(
+        &ws,
+        &["--json", "validate", "query", "--platform", "exabeam"],
+        &[],
+    );
+    let document = ran.json();
+    assert_eq!(ran.code, 1, "{}", ran.stdout);
+    assert_eq!(document["mode"], "offline", "{}", ran.stdout);
+    let codes: Vec<&str> = document["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["code"].as_str())
+        .collect();
+    // A sequence filter is a correlation-rule query: Search's SELECT and
+    // GROUP-BY are refused there.
+    assert_eq!(codes, ["exabeam_advanced_in_rule"], "{}", ran.stdout);
+    // A `.exabeam` file is a search, where they are not.
+    std::fs::write(
+        ws.join("logins.exabeam"),
+        "SELECT user, COUNT(*) AS logins WHERE activity_type:\"app-login\" GROUP-BY user\n",
+    )
+    .unwrap();
+    let file = opentide(
+        &ws,
+        &["--json", "validate", "query", "--file", "logins.exabeam"],
+        &[],
+    );
+    assert_eq!(file.code, 0, "{}", file.stdout);
+    assert_eq!(file.json()["queries"][0]["language"], "exabeam");
+}
+
+#[test]
+fn bitdefender_signatures_and_yar_files_are_checked_offline_as_yara() {
+    let (_scratch, ws) = corpus();
+    std::fs::write(ws.join("broken.yar"), "rule A { condition: \n").unwrap();
+    let broken = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "bitdefender",
+            "--file",
+            "broken.yar",
+        ],
+        &[],
+    );
+    let document = broken.json();
+    assert_eq!(broken.code, 1, "{}", broken.stdout);
+    assert_eq!(document["supported"], true);
+    assert_eq!(document["mode"], "offline");
+    assert_eq!(document["queries"][0]["language"], "yara");
+    assert_eq!(document["diagnostics"][0]["code"], "yara_parse_error");
+    std::fs::write(ws.join("ok.yara"), "rule A { condition: true }\n").unwrap();
+    let valid = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "bitdefender",
+            "--file",
+            "ok.yara",
+        ],
+        &[],
+    );
+    assert_eq!(valid.code, 0, "{}", valid.stdout);
+    assert_eq!(valid.json()["queries_validated"], 1);
+}
+
+#[test]
 fn platforms_the_engine_cannot_parse_are_refused() {
     let (_scratch, ws) = corpus();
     let tenant_only = opentide(
@@ -437,9 +575,18 @@ fn platforms_the_engine_cannot_parse_are_refused() {
     assert_eq!(tenant_only.code, 2);
     assert_eq!(failure_code(&document), "usage_missing_option");
     assert_eq!(document["failure"]["argument"], "--live");
+    // Every platform's queries are checked offline, on a tenant, or both
+    // (as in 0.28.1); `--live` on one checked offline only is unsupported.
     let neither = opentide(
         &ws,
-        &["--json", "validate", "query", "--platform", "harfanglab"],
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "harfanglab",
+            "--live",
+        ],
         &[],
     );
     let document = neither.json();

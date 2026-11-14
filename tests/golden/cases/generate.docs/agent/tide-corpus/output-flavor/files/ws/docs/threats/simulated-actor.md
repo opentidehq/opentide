@@ -1,6 +1,129 @@
+[Catalogue](../README.md) / [Threat vectors](README.md)
+
 # Simulated Actor
 
+*Threat vector · `threat::1.0` · version 1 · modified 2026-01-02 · TLP:CLEAR*
+
+Simulated threat actor for CLI E2E corpus
+
+| Property | Value |
+| --- | --- |
+| Criticality | High |
+| Severity | Substantial incident |
+| Surface | Windows::Desktop |
+| Actors | [Enterprise] APT1 |
+| ATT&CK | [`T1059`](https://attack.mitre.org/techniques/T1059) Command and Scripting Interpreter |
+| Detection coverage | 1 objective, 10 rules |
+
+**On this page:** [Assessment](#assessment) · [Surface](#surface) · [Actors](#actors) · [ATT&CK techniques](#attck-techniques) · [Detection coverage](#detection-coverage) · [Metadata](#metadata)
+
+## Assessment
+
+**Criticality: High**. A High priority incident is likely to result in a demonstrable impact to public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence.
+
+**Terrain:** Endpoint workstations and user devices.
+
+| Dimension | Assessment | Description |
+| --- | --- | --- |
+| Severity | Substantial incident | A cyber attack which has a serious impact on a medium-sized organisation, or which poses a considerable risk to a large organisation or wider / local government. |
+| Impact | Data Breach<br>Identity Theft | Non-public information has been accessed from the outside, and successfully extracted.<br>Acquisition of sufficient information and privileges to profess as a given individual, for the purpose of abusing and deceiving human trust relationships. |
+| Leverage | Information Gathering<br>Elevation of privilege | Gathering information about the target system, network, or environment to inform subsequent attack phases.<br>Capacity to augment leverage over the target system by upgrading the compromised access rights |
+| Viability | Likely | Probable (probably) - 55-80% |
+
+## Surface
+
+| Surface | Description |
+| --- | --- |
+| Windows::Desktop | Microsoft Windows desktop editions |
+
+## Actors
+
+| Actor | ID | Source | Description |
+| --- | --- | --- | --- |
+| [[Enterprise] APT1](https://attack.mitre.org/groups/G0006)<br>*also Comment Crew, Comment Group, Comment Panda* | `att&ck::G0006` | att&ck | [APT1](https://attack.mitre.org/groups/G0006) is a Chinese threat group that has been attributed to the 2nd Bureau of the People’s Liberation Army (PLA) General Staff Department’s (GSD) 3rd Department, commonly known by its Military Unit… |
+
+## ATT&CK techniques
+
+| Technique | Name | Tactics | Detected by | Summary |
+| --- | --- | --- | --- | --- |
+| [`T1059`](https://attack.mitre.org/techniques/T1059) | Command and Scripting Interpreter | Execution | [Carbon Black Lucene Rule](../rules/carbon-black-lucene-rule.md)<br>[CrowdStrike Deploy Rule](../rules/crowdstrike-deploy-rule.md)<br>[Defender KQL Rule](../rules/defender-kql-rule.md)<br>[Elastic KQL Rule](../rules/elastic-kql-rule.md)<br>[HarfangLab Deploy Rule](../rules/harfanglab-deploy-rule.md)<br>[Sentinel KQL Rule](../rules/sentinel-kql-rule.md)<br>[SentinelOne S1QL Rule](../rules/sentinelone-s1ql-rule.md)<br>[Splunk SPL Rule](../rules/splunk-spl-rule.md)<br>[Staging Promote Rule](../rules/staging-promote-rule.md)<br>[Sysdig Falco Rule](../rules/sysdig-falco-rule.md) | Adversaries may abuse command and script interpreters to execute commands, scripts, or binaries. |
+
+## Detection coverage
+
+```mermaid
+flowchart LR
+    accTitle: Detection coverage of Simulated Actor
+    accDescr: Threat vectors on the left are detected by the objectives, signals and rules to their right.
+    subgraph lane1["Threat vectors"]
+        thr1{{"Simulated Actor"}}
+    end
+    subgraph lane2["Detection objectives"]
+        obj1(["Credential Access<br>Objective"])
+    end
+    subgraph lane3["Signals"]
+        sig1(("Suspicious logon signal"))
+    end
+    subgraph lane4["Detection rules"]
+        rul1["Carbon Black Lucene Rule"]
+        rul2["CrowdStrike Deploy Rule"]
+        rul3["Defender KQL Rule"]
+        rul4["Elastic KQL Rule"]
+        rul5["HarfangLab Deploy Rule"]
+        rul6["Sentinel KQL Rule"]
+        rul7["SentinelOne S1QL Rule"]
+        rul8["Splunk SPL Rule"]
+        rul9["Staging Promote Rule"]
+        rul10["Sysdig Falco Rule"]
+    end
+    thr1 --> obj1
+    obj1 --> sig1
+    obj1 --> rul1
+    obj1 --> rul2
+    obj1 --> rul3
+    obj1 --> rul4
+    obj1 --> rul5
+    obj1 --> rul6
+    obj1 --> rul7
+    obj1 --> rul8
+    obj1 --> rul9
+    obj1 --> rul10
+    classDef threat fill:#fdecea,stroke:#b42318,color:#3d0c09
+    classDef objective fill:#fff4e5,stroke:#b54708,color:#3d1d02
+    classDef signal fill:#eaf2fd,stroke:#1d4ed8,color:#0b1f4d
+    classDef rule fill:#e9f7ef,stroke:#067647,color:#053321
+    classDef focus stroke-width:3px
+    class thr1 threat
+    class obj1 objective
+    class sig1 signal
+    class rul1,rul2,rul3,rul4,rul5,rul6,rul7,rul8,rul9,rul10 rule
+    class thr1 focus
+    style lane1 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+    style lane2 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+    style lane3 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+    style lane4 fill:transparent,stroke:#98a2b3,stroke-dasharray:4 4
+```
+
+*Shapes:* hexagon = threat vector; stadium = detection objective; circle = detection signal; rectangle = detection rule; bold outline = this page.
+
+### Related objects
+
+| Type | Object | Direction |
+| --- | --- | --- |
+| Objective | [Credential Access Objective](../objectives/credential-access-objective.md) | Downstream |
+| Signal | [Suspicious logon signal](../objectives/credential-access-objective.md#suspicious-logon-signal) | Downstream |
+| Rule | [Carbon Black Lucene Rule](../rules/carbon-black-lucene-rule.md) | Downstream |
+| Rule | [CrowdStrike Deploy Rule](../rules/crowdstrike-deploy-rule.md) | Downstream |
+| Rule | [Defender KQL Rule](../rules/defender-kql-rule.md) | Downstream |
+| Rule | [Elastic KQL Rule](../rules/elastic-kql-rule.md) | Downstream |
+| Rule | [HarfangLab Deploy Rule](../rules/harfanglab-deploy-rule.md) | Downstream |
+| Rule | [Sentinel KQL Rule](../rules/sentinel-kql-rule.md) | Downstream |
+| Rule | [SentinelOne S1QL Rule](../rules/sentinelone-s1ql-rule.md) | Downstream |
+| Rule | [Splunk SPL Rule](../rules/splunk-spl-rule.md) | Downstream |
+| Rule | [Staging Promote Rule](../rules/staging-promote-rule.md) | Downstream |
+| Rule | [Sysdig Falco Rule](../rules/sysdig-falco-rule.md) | Downstream |
+
 ## Metadata
+
 | Field | Value |
 | --- | --- |
 | UUID | `00000000-0000-4000-8001-000000000001` |
@@ -10,84 +133,4 @@
 | Modified | `2026-01-02` |
 | TLP | clear (`TLP:CLEAR`) |
 
-## Description
-Simulated threat actor for CLI E2E corpus
-
-## Criticality
-**High** - A High priority incident is likely to result in a demonstrable impact to public health or safety, national security, economic security, foreign relations, civil liberties, or public confidence.
-
-## Terrain
-Endpoint workstations and user devices.
-
-## Surface
-> **Windows::Desktop**
-> Microsoft Windows desktop editions
-
-## Threat Assessment
-| Dimension | Assessment | Description |
-| --- | --- | --- |
-| Severity | Substantial incident | A cyber attack which has a serious impact on a medium-sized organisation, or which poses a considerable risk to a large organisation or wider / local government. |
-| Impact | Data Breach<br>Identity Theft | Non-public information has been accessed from the outside, and successfully extracted.<br>Acquisition of sufficient information and privileges to profess as a given individual, for the purpose of abusing and deceiving human trust relationships. |
-| Leverage | Information Gathering<br>Elevation of privilege | Gathering information about the target system, network, or environment to inform subsequent attack phases.<br>Capacity to augment leverage over the target system by upgrading the compromised access rights |
-| Viability | Likely | Probable (probably) - 55-80% |
-
-## Actors
-| Actor | ID | Source | Description |
-| --- | --- | --- | --- |
-| [[Enterprise] APT1](https://attack.mitre.org/groups/G0006) | `att&ck::G0006` | att&ck | [APT1](https://attack.mitre.org/groups/G0006) is a Chinese threat group that has been attributed to the 2nd Bureau of the People’s Liberation Army (PLA) General Staff Department’s (GSD) 3rd Department, commonly known by its Military Unit Cover Designator (MUCD) as Unit 61398. (Citation: Mandiant APT1) |
-
-## ATT&CK Techniques
-| Technique | Name | Description |
-| --- | --- | --- |
-| `T1059` | [Command and Scripting Interpreter](https://attack.mitre.org/techniques/T1059) | Adversaries may abuse command and script interpreters to execute commands, scripts, or binaries. These interfaces and languages provide ways of interacting with computer systems and are a common feature across many different platforms. Most systems come with some built-in command-line interface and scripting capabilities, for example, macOS and Linux distributions include some flavor of [Unix Shell](https://attack.mitre.org/techniques/T1059/004) while Windows installations include the [Windows Command Shell](https://attack.mitre.org/techniques/T1059/003) and [PowerShell](https://attack.mitre.org/techniques/T1059/001).  There are also cross-platform interpreters such as [Python](https://attack.mitre.org/techniques/T1059/006), as well as those commonly associated with client applications such as [JavaScript](https://attack.mitre.org/techniques/T1059/007) and [Visual Basic](https://attack.mitre.org/techniques/T1059/005).  Adversaries may abuse these technologies in various ways as a means of executing arbitrary commands. Commands and scripts can be embedded in [Initial Access](https://attack.mitre.org/tactics/TA0001) payloads delivered to victims as lure documents or as secondary payloads downloaded from an existing C2. Adversaries may also execute commands through interactive terminals/shells, as well as utilize various [Remote Services](https://attack.mitre.org/techniques/T1021) in order to achieve remote Execution.(Citation: Powershell Remote Commands)(Citation: Cisco IOS Software Integrity Assurance - Command History)(Citation: Remote Shell Execution in Python) |
-
-## Coverage
-```mermaid
-flowchart TB
-subgraph "Objectives"
-00000000_0000_4000_8002_000000000001(["Credential Access<br>Objective"])
-end
-subgraph "Signals"
-00000000_0000_4000_8099_000000000001(("Suspicious logon signal"))
-end
-subgraph "Rules"
-00000000_0000_4000_8003_000000000005["Carbon Black Lucene Rule"]
-00000000_0000_4000_8003_000000000006["CrowdStrike Deploy Rule"]
-00000000_0000_4000_8003_000000000002["Defender KQL Rule"]
-00000000_0000_4000_8003_000000000009["Elastic KQL Rule"]
-00000000_0000_4000_8003_000000000007["HarfangLab Deploy Rule"]
-00000000_0000_4000_8003_000000000001["Sentinel KQL Rule"]
-00000000_0000_4000_8003_000000000004["SentinelOne S1QL Rule"]
-00000000_0000_4000_8003_000000000003["Splunk SPL Rule"]
-00000000_0000_4000_8003_000000000008["Staging Promote Rule"]
-00000000_0000_4000_8003_0000005d1a90["Sysdig Falco Rule"]
-end
-00000000_0000_4000_8001_000000000001{{"Simulated Actor"}}
-00000000_0000_4000_8001_000000000001 -->|covers| 00000000_0000_4000_8002_000000000001
-00000000_0000_4000_8002_000000000001 --> 00000000_0000_4000_8099_000000000001
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000005
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000006
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000002
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000009
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000007
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000001
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000004
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000003
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_000000000008
-00000000_0000_4000_8002_000000000001 -->|implements| 00000000_0000_4000_8003_0000005d1a90
-```
-## Related objects
-| Type | Name | Direction | Relation |
-| --- | --- | --- | --- |
-| Objective | [Credential Access Objective](../objectives/credential-access-objective.md) (`00000000-0000-4000-8002-000000000001`) | Downstream | objective |
-| Signal | [Suspicious logon signal](../objectives/credential-access-objective.md#suspicious-logon-signal) (`00000000-0000-4000-8099-000000000001`) | Downstream | signal |
-| Rule | [Sentinel KQL Rule](../rules/sentinel-kql-rule.md) (`00000000-0000-4000-8003-000000000001`) | Downstream | rule |
-| Rule | [Defender KQL Rule](../rules/defender-kql-rule.md) (`00000000-0000-4000-8003-000000000002`) | Downstream | rule |
-| Rule | [Splunk SPL Rule](../rules/splunk-spl-rule.md) (`00000000-0000-4000-8003-000000000003`) | Downstream | rule |
-| Rule | [SentinelOne S1QL Rule](../rules/sentinelone-s1ql-rule.md) (`00000000-0000-4000-8003-000000000004`) | Downstream | rule |
-| Rule | [Carbon Black Lucene Rule](../rules/carbon-black-lucene-rule.md) (`00000000-0000-4000-8003-000000000005`) | Downstream | rule |
-| Rule | [CrowdStrike Deploy Rule](../rules/crowdstrike-deploy-rule.md) (`00000000-0000-4000-8003-000000000006`) | Downstream | rule |
-| Rule | [HarfangLab Deploy Rule](../rules/harfanglab-deploy-rule.md) (`00000000-0000-4000-8003-000000000007`) | Downstream | rule |
-| Rule | [Staging Promote Rule](../rules/staging-promote-rule.md) (`00000000-0000-4000-8003-000000000008`) | Downstream | rule |
-| Rule | [Elastic KQL Rule](../rules/elastic-kql-rule.md) (`00000000-0000-4000-8003-000000000009`) | Downstream | rule |
-| Rule | [Sysdig Falco Rule](../rules/sysdig-falco-rule.md) (`00000000-0000-4000-8003-0000005d1a90`) | Downstream | rule |
+<!-- Generated by opentide (opentide generate docs). Edit the object's YAML instead: this page is rewritten on every run. -->

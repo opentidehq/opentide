@@ -1032,6 +1032,7 @@ fn generate_here(scale: u32, dir: Option<&Path>) -> Result<Generated> {
         .with_context(|| format!("scale {scale}"))?;
     let options = crate::corpus::generate::Options {
         counts,
+        platforms: oracle::ORACLE_PLATFORMS,
         ..crate::corpus::generate::Options::new(workspace::SEED)
     };
     let generated = crate::corpus::generate::generate(&options);
@@ -1479,11 +1480,24 @@ mod tests {
             (defaults.runs, defaults.warmup, defaults.scale)
         );
         // The digest of the workspace a default run generates.
-        let options = crate::corpus::generate::Options::new(workspace::SEED);
+        let options = crate::corpus::generate::Options {
+            platforms: oracle::ORACLE_PLATFORMS,
+            ..crate::corpus::generate::Options::new(workspace::SEED)
+        };
         assert_eq!(
             budgets.baseline.digest,
             crate::corpus::generate::generate(&options).digest()
         );
+        // Its platforms are budgets.toml's, the oracle's, each one the
+        // registry's, in the registry's connector order.
+        assert_eq!(budgets.baseline.platforms, oracle::ORACLE_PLATFORMS);
+        let mut registry = crate::corpus::vocab::PLATFORMS.iter();
+        for id in oracle::ORACLE_PLATFORMS {
+            assert!(
+                registry.any(|known| known == id),
+                "{id} is not a platform of the registry, or out of its connector order"
+            );
+        }
     }
 
     #[test]

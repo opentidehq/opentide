@@ -30,4 +30,4 @@ With `--json`, stdout is one JSON document. Each finding has `code`, `path`, `li
 
 `validate` checks schema, UUID, and references. `lint` checks filenames and recommended metadata. Query validation checks the tenant (`--live`) for the platforms that support it; `--file` limits it to the rule you are writing. A bare command refuses.
 
-For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule`, and `opentide setup skills discover --query <platform>`.
+For descriptions, response procedures, exclusions and the platform skill to pair with each `configurations.<platform>`, install the full authoring skill and the platform's: `opentide setup skills --install opentide-rule --generic --yes`, and `opentide setup skills discover --query <platform>`.

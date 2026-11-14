@@ -537,3 +537,100 @@ fn ctrl_c_stops_the_server_at_once_with_130() {
     drop(server);
     drop(dir);
 }
+
+const CROWDSTRIKE_RULE: &str = "\
+name: CrowdStrike whoami
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000081
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+configurations:
+  crowdstrike:
+    status: STAGING
+    query: |
+      #event_simpleName=ProcessRollup2
+      | groupBi([aid], function=count())
+";
+
+/// 0.24.0's CQL in the editor, through `opentide lsp start`: the
+/// CrowdStrike block's query is checked as CQL with opentide's own catalog
+/// (no `crowdstrike_unsupported`, which is retired), and hover and
+/// completion answer inside it.
+#[test]
+fn a_crowdstrike_query_is_cql_in_an_editor_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    let rule = root.join("objects/rules/crowdstrike-whoami.yaml");
+    std::fs::create_dir_all(rule.parent().unwrap()).unwrap();
+    std::fs::write(&rule, CROWDSTRIKE_RULE).unwrap();
+    let mut server = Server::start(&root, &[]);
+    server.initialize(&root);
+    server.send(&json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}));
+    server.send(
+        &json!({"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {
+            "textDocument": {"uri": uri(&rule), "languageId": "opentide-yaml",
+                             "version": 1, "text": CROWDSTRIKE_RULE}}}),
+    );
+    let diagnostics = server.until_diagnostics(&uri(&rule));
+    let codes: Vec<&str> = diagnostics
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["code"].as_str())
+        .collect();
+    // The rule is short of fields opentide's models require (`details`,
+    // `schedule`, ...); what concerns CQL is one finding on the query.
+    let on_query: Vec<&Value> = diagnostics
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|item| {
+            item["data"]["field_path"] == json!(["configurations", "crowdstrike", "query"])
+        })
+        .collect();
+    assert_eq!(on_query.len(), 1, "{diagnostics}");
+    assert!(!codes.contains(&"crowdstrike_unsupported"), "{codes:?}");
+    let unknown = on_query[0];
+    assert_eq!(unknown["code"], "cql_unknown_function", "{unknown}");
+    assert_eq!(unknown["data"]["suggestion"], "groupBy", "{unknown}");
+    assert_eq!(unknown["range"]["start"]["line"], 13, "{unknown}");
+
+    let at = |line: u32, character: u32| {
+        json!({"textDocument": {"uri": uri(&rule)},
+               "position": {"line": line, "character": character}})
+    };
+    // Hover on `ProcessRollup2` (line 12, after `      #event_simpleName=`).
+    server.send(
+        &json!({"jsonrpc": "2.0", "id": 2, "method": "textDocument/hover",
+                        "params": at(12, 28)}),
+    );
+    let hover = server.until_reply(2);
+    assert!(
+        hover["result"]["contents"]["value"]
+            .as_str()
+            .unwrap_or_default()
+            .starts_with("`ProcessRollup2`: Falcon sensor event"),
+        "{hover}"
+    );
+    // Completion at the start of the pipe's function name offers the CQL
+    // functions.
+    server.send(
+        &json!({"jsonrpc": "2.0", "id": 3, "method": "textDocument/completion",
+                        "params": at(13, 8)}),
+    );
+    let completion = server.until_reply(3);
+    let items = completion["result"]
+        .as_array()
+        .or_else(|| completion["result"]["items"].as_array())
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        items.iter().any(|item| item["label"] == "groupBy"),
+        "CQL functions in the block: {completion}"
+    );
+    assert_eq!(server.shut_down(), Some(0));
+    drop(dir);
+}

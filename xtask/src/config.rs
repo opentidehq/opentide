@@ -145,11 +145,13 @@ pub fn run(args: &[String]) -> Result<u8> {
     Ok(u8::from(failed > 0))
 }
 
-/// `config_parse`'s message is the TOML crate's (an approved difference,
-/// `config_cases.toml` `toml-parse-message`): only its code is compared.
-/// A finding's message that differs from the oracle's only in the quote
-/// characters around its values (`messages-quote-values`) compares as the
-/// oracle's.
+/// The approved differences:
+///
+/// - `config_parse`'s message is the TOML crate's (`config_cases.toml`
+///   `toml-parse-message`): only its code is compared.
+/// - A finding's message that differs from the oracle's only in the quote
+///   characters around its values (`messages-quote-values`) compares as the
+///   oracle's.
 fn comparable(oracle: &Json, rust: &Json) -> (Json, Json) {
     let parse = |value: &Json| value.pointer("/error/code") == Some(&json!("config_parse"));
     if parse(oracle) && parse(rust) {
@@ -320,6 +322,7 @@ fn generated_workspaces(
         ("custom", Layout::Custom),
     ] {
         let options = Options {
+            platforms: crate::corpus::vocab::PLATFORMS,
             seed: 1,
             counts: Counts {
                 threats: 3,

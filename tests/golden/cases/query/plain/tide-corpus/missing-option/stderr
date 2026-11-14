@@ -1,3 +1,3 @@
-error: Missing option '--platform': choose from sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig.
+error: Missing option '--platform': choose from sentinel, splunk, crowdstrike, defender_for_endpoint, sentinel_one, carbon_black_cloud, harfanglab, elastic, sysdig, bitdefender, graylog, exabeam, google_secops.
   usage: opentide query [OPTIONS] [query]
   help: run 'opentide query --help'

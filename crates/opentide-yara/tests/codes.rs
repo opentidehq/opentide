@@ -8,7 +8,7 @@
 )]
 
 use opentide_core::Severity;
-use opentide_yara::{Context, Dialect, Profile, analyze_with};
+use opentide_yara::{Context, Dialect, Profile, WARNING_CODES, always_warning, analyze_with};
 
 fn codes(source: &str, ctx: &Context) -> Vec<(String, Severity)> {
     let mut out: Vec<_> = analyze_with(source, ctx)
@@ -791,6 +791,54 @@ fn yara_x_dialect_accepts_its_syntax_and_refuses_libyara_only() {
         ),
         []
     );
+}
+
+/// `WARNING_CODES` is the engine's severity, the one `opentide explain` reads:
+/// each of its codes is a warning in every dialect and profile, and every
+/// other code the table expects is an error somewhere.
+#[test]
+fn warning_codes_are_warnings_in_every_context() {
+    let contexts = [
+        raw(),
+        Context {
+            dialect: Dialect::YaraX,
+            profile: None,
+        },
+        Context::for_profile(Profile::Harfanglab),
+        Context::for_profile(Profile::Bitdefender),
+    ];
+    let mut sources: Vec<&str> = RAW.iter().map(|(source, _)| *source).collect();
+    // The profile-only warnings.
+    sources.extend([
+        "rule a { condition: true }",
+        "rule a { meta: context = \"disk\" condition: true }",
+        "import \"dotnet\" rule a { meta: context = \"file\" condition: true }",
+    ]);
+    let mut seen = std::collections::BTreeSet::new();
+    for source in &sources {
+        for ctx in &contexts {
+            for (code, severity) in codes(source, ctx) {
+                if always_warning(&code) {
+                    assert_eq!(severity, W, "{code} in {source:?} under {ctx:?}");
+                    seen.insert(code);
+                }
+            }
+        }
+    }
+    let all: std::collections::BTreeSet<String> = WARNING_CODES
+        .iter()
+        .map(|code| (*code).to_owned())
+        .collect();
+    assert_eq!(seen, all, "a warning-only code no case reports");
+    for (_, expected) in RAW {
+        for (code, severity) in *expected {
+            if *severity == E {
+                assert!(!always_warning(code), "{code} is an error");
+            }
+        }
+    }
+    assert!(!always_warning("yara_x_incompatible"));
+    assert!(!always_warning("yara_unknown_module"));
 }
 
 /// yara-1.0's example, and the fixtures the spec ships for it.
