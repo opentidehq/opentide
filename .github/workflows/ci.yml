@@ -566,7 +566,7 @@ jobs:
           OPENTIDE_PYTHON: python
           # Twice the runner's four cores: many tests wait on the processes and
           # servers they start (#1141, a one-line opentide-yara change: 85 s at
-          # eight threads, 120 s at four, on the same tests).
+          # eight threads; 90-120 s at four, by the runner's CPU).
           NEXTEST_TEST_THREADS: "8"
         run: |
           read -ra pkg_args <<< "${PACKAGES}"
