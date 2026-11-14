@@ -14,10 +14,9 @@ run-name: >-
 # - The PR gate, on a pull request into integration/unified-core,
 #   development or train/*: Linux only, and only what the change affects.
 #   The changed workspace crates and their reverse dependencies are built
-#   ONCE (`build`: a nextest archive of their tests and the `_native`
-#   extension), and every other job runs from that build: the Rust tests in
-#   partitions of the archive, the Python suite and E2E on the prebuilt
-#   extension. Each specialised job (Node, WASI, grammars, TextMate, GitLab CI
+#   ONCE (`build`: their tests, which it runs, and the `_native`
+#   extension), and every other job runs from that build: the Python suite
+#   and E2E on the prebuilt extension. Each specialised job (Node, WASI, grammars, TextMate, GitLab CI
 #   lint, the facade's semver checks, cargo deny, docs) runs only when its
 #   paths change. One required check, `PR gate`, passes when every job that
 #   was needed passed and every other was skipped.
@@ -86,7 +85,7 @@ env:
 # toolchain), so that its next push is warm. sccache is content-addressed, so a copy a few days old still
 # serves every crate that did not change. Linux only.
 #
-#   build           `build`: the test archive, xtask, the language server and
+#   build           `build`: the tests, xtask, the language server and
 #                   the `_native` extension (the gate's one build)
 #   engine-check    `engine-lint`: clippy and rustdoc
 #   wasi            `wasi`: the WASI module
@@ -114,7 +113,6 @@ jobs:
       crates: ${{ steps.plan.outputs.crates }}
       packages: ${{ steps.plan.outputs.packages }}
       features: ${{ steps.plan.outputs.features }}
-      partitions: ${{ steps.plan.outputs.partitions }}
       build: ${{ steps.plan.outputs.build }}
       rust: ${{ steps.plan.outputs.rust }}
       python: ${{ steps.plan.outputs.python }}
@@ -302,11 +300,15 @@ jobs:
           path: ${{ env.SCCACHE_DIR }}
           key: sccache-engine-check-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
 
-  # The gate's one build. The affected crates' tests as a nextest archive,
-  # xtask and the language server, and the `_native` extension, with one
-  # compiler cache; uploaded first, so the test jobs start while this job
-  # goes on to what needs its target directory: the generated-artifact and
-  # layer checks, the doctests, and opentide-schema's compile-fail cases.
+  # The gate's one build, and the Rust tests run where they were built. The
+  # `_native` extension first (uploaded, for the Python jobs), then the
+  # affected crates' tests, xtask and the language server with one compiler
+  # cache; the generated-artifact and layer checks; the tests
+  # (`cargo nextest run`), the doctests and opentide-schema's compile-fail
+  # cases. No test archive: moving one to test jobs cost more than the
+  # partitions saved (measured on a leaf change, 2026-11-14: a 1.5 GB archive,
+  # 18 s to pack, 15-33 s to download and 41 s to extract per partition,
+  # against 42-48 s of tests each).
   build:
     name: Build
     needs: changes
@@ -318,10 +320,9 @@ jobs:
     env:
       # mold links the test binaries, the build's longest step warm.
       RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
-      # No debuginfo, stripped at link: the archive every test job downloads
-      # was 4.5 GB with line tables (about 90 statically linked test
-      # binaries). A panic still names its file:line; a backtrace names
-      # functions only (rerun locally for lines).
+      # No debuginfo, stripped at link: about 130 statically linked test
+      # binaries link and write faster without it. A panic still names its
+      # file:line; a backtrace names functions only (rerun locally for lines).
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_PROFILE_DEV_STRIP: debuginfo
       CARGO_INCREMENTAL: "0"
@@ -391,27 +392,15 @@ jobs:
           retention-days: 3
 
       # The affected crates' test binaries, with the binaries their tests run
-      # (CARGO_BIN_EXE_*) and their build scripts' output.
-      - name: Build the Rust tests (nextest archive)
+      # (CARGO_BIN_EXE_*). `--timings`: the report is uploaded below.
+      - name: Build the Rust tests
         if: env.RUST == 'true'
         run: |
           read -ra pkg_args <<< "${PACKAGES}"
           read -ra feature_args <<< "${FEATURES}"
-          cargo nextest archive --locked "${pkg_args[@]}" "${feature_args[@]}" --archive-file "${RUNNER_TEMP}/tests.tar.zst"
+          cargo nextest run --no-run --locked "${pkg_args[@]}" "${feature_args[@]}" --timings
 
-      - name: Upload the test archive
-        if: env.RUST == 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: nextest-archive
-          path: ${{ runner.temp }}/tests.tar.zst
-          retention-days: 3
-          compression-level: 0
-
-      # --- With the test jobs running: what needs this target directory. ---
-
-
-      # The archive's build left the binaries its tests run in target/debug,
+      # The tests' build left the binaries its tests run in target/debug,
       # with the tests' features: xtask and the language server when they are
       # affected (a change that reaches neither changes nothing they check).
       # Building them again without those features recompiled for minutes.
@@ -425,7 +414,7 @@ jobs:
             if [[ -x "target/debug/${bin}" ]]; then found=true; else found=false; fi
             # An affected crate's binary is always built: never skip its checks.
             if [[ "${found}" == false && " ${CRATES} " == *" ${bin} "* ]]; then
-              echo "::error::${bin} is affected but the archive's build left no target/debug/${bin}."
+              echo "::error::${bin} is affected but the tests' build left no target/debug/${bin}."
               exit 1
             fi
             echo "${bin}=${found}" >> "$GITHUB_OUTPUT"
@@ -499,11 +488,35 @@ jobs:
           OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
         run: target/debug/xtask spec-fields
 
-      # The doctests and the compile-fail cases write under a temporary folder,
-      # never in the checkout (#931); noted after the specifications' checkout.
+      # uv for the tests that provision a tool with it (nothing is synced),
+      # and the Python the test that compares with difflib runs
+      # (OPENTIDE_PYTHON): after the build, which reads PYO3_PYTHON only.
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        if: env.RUST == 'true'
+
+      - name: Set up Python
+        if: env.RUST == 'true'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      # The tests, the doctests and the compile-fail cases write under a
+      # temporary folder, never in the checkout (#931); noted after the
+      # specifications' checkout.
       - name: Note the checkout's state
         if: env.RUST == 'true'
         run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
+
+      # The compile-fail cases run below, when their inputs change.
+      - name: cargo nextest (profile ci)
+        if: env.RUST == 'true'
+        env:
+          OPENTIDE_PYTHON: python
+        run: |
+          read -ra pkg_args <<< "${PACKAGES}"
+          read -ra feature_args <<< "${FEATURES}"
+          cargo nextest run --locked --profile ci "${pkg_args[@]}" "${feature_args[@]}" \
+            --no-tests=pass -E 'not binary_id(/^opentide-schema::ui$/)'
 
       # nextest runs no doctests.
       - name: Doctests
@@ -557,9 +570,28 @@ jobs:
         run: |
           git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-after"
           if ! diff -u "$RUNNER_TEMP/tree-before" "$RUNNER_TEMP/tree-after"; then
-            echo "::error::A check or test wrote into the checkout (lines starting with +): write under a temporary folder instead."
+            echo "::error::A check or test wrote into the checkout (lines starting with +): write under a temporary folder (tempfile::tempdir) instead."
             exit 1
           fi
+
+      - name: Upload the JUnit report
+        if: failure() && env.RUST == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate.
+        continue-on-error: true
+        with:
+          name: nextest-junit
+          path: target/nextest/ci/junit.xml
+          retention-days: 14
+
+      - name: Upload the build's timings
+        if: ${{ !cancelled() && env.RUST == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        continue-on-error: true
+        with:
+          name: cargo-timings
+          path: target/cargo-timings/cargo-timing.html
+          retention-days: 7
 
       - name: Compiler cache statistics
         if: ${{ !cancelled() }}
@@ -571,92 +603,6 @@ jobs:
         with:
           path: ${{ env.SCCACHE_DIR }}
           key: sccache-build-v2-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-
-  # The affected crates' tests, from the build's archive, in partitions
-  # (`changes` picks two when the heavy crates are affected, else one). No
-  # compilation: nextest runs the archived binaries against this checkout.
-  rust-tests:
-    name: Rust tests (${{ matrix.partition }}/${{ strategy.job-total }})
-    needs: [changes, build]
-    if: needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        partition: ${{ fromJSON(needs.changes.outputs.partitions) }}
-    env:
-      CARGO_TERM_COLOR: always
-      INSTA_UPDATE: "no"
-      # The test that compares with Python's difflib runs this interpreter.
-      OPENTIDE_PYTHON: python
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      # uv for the tests that provision a tool with it; nothing is synced.
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-
-      # cargo and rustc for the tests that run them (xtask's).
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: cargo-nextest@0.9.148
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: nextest-archive
-          path: ${{ runner.temp }}
-
-      # A test writes under a temporary folder, never in the checkout (#931).
-      - name: Note the checkout's state
-        run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
-
-      # The compile-fail cases run in `build`, which has their dependencies.
-      # The archive (target/ alone) is extracted into this checkout: the
-      # tests were built in the build job's checkout, at this same path, and
-      # name its target/ at compile time (env!("CARGO_BIN_EXE_*"),
-      # CARGO_TARGET_TMPDIR). target/ is gitignored.
-      - name: cargo nextest (profile ci)
-        env:
-          PARTITION: ${{ matrix.partition }}
-          TOTAL: ${{ strategy.job-total }}
-        run: >-
-          cargo nextest run --profile ci
-          --archive-file "${RUNNER_TEMP}/tests.tar.zst"
-          --extract-to "${GITHUB_WORKSPACE}" --extract-overwrite
-          --workspace-remap "${GITHUB_WORKSPACE}"
-          --partition "count:${PARTITION}/${TOTAL}"
-          --no-tests=pass
-          -E 'not binary_id(/^opentide-schema::ui$/)'
-
-      - name: The tests left the checkout as they found it
-        run: |
-          git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-after"
-          if ! diff -u "$RUNNER_TEMP/tree-before" "$RUNNER_TEMP/tree-after"; then
-            echo "::error::A test wrote into the checkout (lines starting with +): write under a temporary folder (tempfile::tempdir) instead."
-            exit 1
-          fi
-
-      - name: Upload the JUnit report
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        # A report for reading, not a gate.
-        continue-on-error: true
-        with:
-          name: nextest-junit-${{ matrix.partition }}
-          path: target/nextest/ci/junit.xml
-          retention-days: 14
 
   # The Python package as a package (Python is the packaging layer): its
   # surface (the SDK, the models, the plugin API, the console script) and the
@@ -843,7 +789,7 @@ jobs:
   # The opentide facade crate (UC-5.1, #836), when its public API changes
   # (crates/opentide/): its docs with every feature, as docs.rs builds them,
   # and its API against the branch it merges into (cargo-semver-checks). Its
-  # tests and doctests run in `build` and `rust-tests` with the tests'
+  # tests and doctests run in `build` with the tests'
   # features (every feature but `stubs`, which schema.yml builds).
   facade:
     name: Facade crate (every feature's docs, semver checks)
@@ -2323,7 +2269,6 @@ jobs:
       - lint
       - engine-lint
       - build
-      - rust-tests
       - python
       - gitlab-ci-lint
       - docs

@@ -147,16 +147,15 @@ def test_the_pr_gates_jobs_run_on_linux() -> None:
 
 
 def test_only_the_build_compiles_the_gates_workspace() -> None:
-    """One build: the Rust tests run its archive, the Python jobs its extension."""
+    """One build, which runs the Rust tests: the Python jobs use its extension."""
     compiles = re.compile(r"\bcargo (?:build|test|nextest run)\b|\buv sync\b(?!.*--no-install)")
-    for job_id in ("rust-tests", "python", "gitlab-ci-lint", "lint"):
+    for job_id in ("python", "gitlab-ci-lint", "lint"):
         job = ci_jobs()[job_id]
         prebuilt = "OPENTIDE_ENGINE_PREBUILT" in (job.get("env") or {})
         for step in job["steps"]:
             for line in str(step.get("run", "")).replace("\\\n", " ").splitlines():
                 if compiles.search(line):
-                    reuses = "--binaries-metadata" in step["run"] or "--archive-file" in line
-                    assert reuses or (prebuilt and "uv sync" in line), (job_id, line)
+                    assert prebuilt and "uv sync" in line, (job_id, line)
 
 
 # --- What no workflow does ---------------------------------------------------

@@ -137,12 +137,6 @@ def test_the_tests_that_need_no_wheel_run_without_the_python_job() -> None:
     assert plan("tests/test_docs/test_sdk_snippets.py")["python"] == "true"
 
 
-def test_a_crate_below_no_heavy_crate_runs_one_partition() -> None:
-    outputs = plan("crates/opentide-compare/src/lib.rs")
-    assert outputs["crates"] == "opentide-compare"
-    assert outputs["partitions"] == "[1]"
-
-
 def test_a_test_only_dependency_counts() -> None:
     assert "xtask" in plan("crates/opentide-schema/src/lib.rs")["crates"].split()
 
