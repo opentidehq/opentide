@@ -11,7 +11,9 @@ Rust core, run in process (:mod:`opentide._cli`).
 
 from __future__ import annotations
 
-from opentide._version import __version__
+#: The package's version, from its installed metadata (the Cargo workspace's
+#: version, which maturin writes into the wheel), read on first use.
+__version__: str
 
 #: ``typing.TYPE_CHECKING`` without importing typing, which the console
 #: script's start would pay for (UC-3.8b, #960); type checkers read it as True.
@@ -72,15 +74,19 @@ _SDK = frozenset(
 
 
 def __getattr__(name: str) -> object:
-    """Resolve the SDK on first use.
+    """Resolve the SDK and ``__version__`` on first use.
 
     Lazy so that ``import opentide`` (which every ``opentide.*`` import runs)
-    does not load the engine.
+    loads neither the engine nor ``importlib.metadata``.
     """
     if name in _SDK:
         from opentide import sdk
 
         return getattr(sdk, name)
+    if name == "__version__":
+        from importlib.metadata import version
+
+        return version(__name__)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

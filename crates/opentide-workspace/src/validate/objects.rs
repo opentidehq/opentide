@@ -20,8 +20,7 @@ use crate::fs::FileSystem;
 use crate::index::{Index, Object, truthy};
 
 /// The platform blocks a rule may carry (`PLATFORM_CONFIG_MODELS`).
-pub const PLATFORMS: [&str; opentide_schema::platforms::COUNT] =
-    opentide_schema::platforms::ordered(opentide_schema::platforms::Order::Container);
+pub const PLATFORMS: [&str; opentide_schema::platforms::COUNT] = opentide_schema::platforms::IDS;
 
 /// Leaf names of the fields that hold another object's UUID, and the family
 /// they name (`_REF_LEAF_TO_TYPE`).

@@ -341,19 +341,28 @@ jobs:
     needs: [guard, checks]
     runs-on: ubuntu-latest
     env:
-      SETUPTOOLS_SCM_PRETEND_VERSION: ${{ needs.guard.outputs.pypi_version }}
+      PYPI_VERSION: ${{ needs.guard.outputs.pypi_version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ needs.guard.outputs.revision }}
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          enable-cache: false
+          python-version: "3.12"
+
+      # As build-packages.yml's wheels: maturin takes the version from
+      # bindings/python/'s crate, where a candidate's is written.
+      - name: The sdist at the release's version
+        run: python scripts/engine/release.py pypi-version "${PYPI_VERSION}"
 
       - name: Build sdist
-        run: uv build --sdist
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: v1.16.0
+          command: sdist
+          args: --out dist
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

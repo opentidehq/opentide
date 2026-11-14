@@ -934,6 +934,10 @@ const OPERATORS: &[(&str, &str)] = &[
 /// UTF-16 position once, with `opentide_core::position_to_offset`).
 pub fn hover(source: &str, offset: usize) -> Option<String> {
     let offset = offset.min(source.len());
+    // An offset inside a character (a decoded escape) has nothing to show.
+    if !source.is_char_boundary(offset) {
+        return None;
+    }
     let tree = ts_parse(LanguageId::Lucene, source)?;
     let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
     let word = text(node, source);
@@ -957,6 +961,10 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
 /// Graylog's built-in message fields, then the operators every dialect
 /// shares.
 pub fn hover_dialect(source: &str, offset: usize, dialect: Dialect) -> Option<String> {
+    // An offset inside a character (a decoded escape) has nothing to show.
+    if !source.is_char_boundary(offset.min(source.len())) {
+        return None;
+    }
     if dialect == Dialect::Graylog {
         let offset = offset.min(source.len());
         if let Some(tree) = ts_parse(LanguageId::Lucene, source) {
@@ -995,6 +1003,10 @@ pub fn hover_dialect(source: &str, offset: usize, dialect: Dialect) -> Option<St
 /// search fields (or a field's values), never ECS fields; a Graylog query
 /// the fields it names and Graylog's built-in message fields.
 pub fn completions_dialect(source: &str, offset: usize, dialect: Dialect) -> Vec<CompletionItem> {
+    // An offset inside a character (a decoded escape) completes nothing.
+    let Some(before) = source.get(..offset.min(source.len())) else {
+        return Vec::new();
+    };
     match dialect {
         Dialect::Elastic => completions(source, offset),
         Dialect::Graylog => {
@@ -1007,7 +1019,6 @@ pub fn completions_dialect(source: &str, offset: usize, dialect: Dialect) -> Vec
             items
         }
         Dialect::CarbonBlack => {
-            let before = &source[..offset.min(source.len())];
             let mut items = Vec::new();
             if before.ends_with(char::is_whitespace) && !before.trim().is_empty() {
                 for kw in ["AND", "OR", "NOT"] {
@@ -1021,7 +1032,10 @@ pub fn completions_dialect(source: &str, offset: usize, dialect: Dialect) -> Vec
 }
 
 pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
-    let before = &source[..offset.min(source.len())];
+    // An offset inside a character (a decoded escape) completes nothing.
+    let Some(before) = source.get(..offset.min(source.len())) else {
+        return Vec::new();
+    };
     let mut items = Vec::new();
     if before.ends_with(char::is_whitespace) && !before.trim().is_empty() {
         for kw in ["AND", "OR", "NOT"] {
@@ -1553,5 +1567,19 @@ mod tests {
         let h = hover("a:1 AND b:2", 5).expect("hover");
         assert!(h.contains("AND"));
         assert!(completions("a:1 ", 4).iter().any(|i| i.label == "AND"));
+    }
+
+    #[test]
+    fn an_offset_inside_a_character_is_answered_empty() {
+        // A cursor inside a decoded escape (`\u00e9` in a double-quoted Tide
+        // query) can reach the engine as the second byte of `\u{e9}`.
+        let src = "user.name:\u{e9} AND host.name:x";
+        let inside = src.find('\u{e9}').unwrap() + 1;
+        assert!(completions(src, inside).is_empty());
+        assert_eq!(hover(src, inside), None);
+        for dialect in [Dialect::Elastic, Dialect::Graylog, Dialect::CarbonBlack] {
+            assert!(completions_dialect(src, inside, dialect).is_empty());
+            assert_eq!(hover_dialect(src, inside, dialect), None);
+        }
     }
 }

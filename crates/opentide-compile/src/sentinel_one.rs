@@ -247,12 +247,12 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
     Ok(without_nulls(Json::Object(body)))
 }
 
-/// The id the deployment state records, as the deployer reads it (`int()`).
+/// The id the deployment state records, which must be an integer.
 fn numeric(id: &str) -> Result<i64, CompileError> {
     id.trim().parse::<i64>().map_err(|_| {
         CompileError::failed(
             DISPLAY,
-            &format!("invalid literal for int() with base 10: {id:?}"),
+            &format!("the recorded rule id must be an integer, got {id:?}"),
         )
     })
 }

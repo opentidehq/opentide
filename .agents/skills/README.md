@@ -13,6 +13,5 @@ The engine's skills came from opentidehq/language-server with its history (#800)
 | `catalogs` | Compiled catalogs, HighlightSpec, or conformance corpora |
 | `add-language` | Adding S1QL, Lucene, Sigma, or YARA |
 | `engine-release-notes` | Writing a `crates/CHANGELOG.md` entry or an engine release's notes |
-| `engine-release` | Releasing the engine crates |
 
-`engine-release-notes` and `engine-release` were language-server's `release-notes` and `release`: opentide's own `release-notes` and `release-management` keep those names.
+`engine-release-notes` was language-server's `release-notes`: opentide's own `release-notes` keeps that name. Its `release` skill, imported as `engine-release`, was retired with the engine's own `engine-v*` releases: every release, the engine crates' included, is the release train's ([`release-management`](release-management/SKILL.md)).

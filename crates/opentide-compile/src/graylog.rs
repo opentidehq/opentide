@@ -15,7 +15,6 @@
 
 use std::fmt;
 
-use opentide_core::falco::{is_python_space, python_strip};
 use opentide_schema::objects::platform::durations::duration_seconds;
 use opentide_schema::objects::platform::graylog::PRIORITIES;
 use opentide_schema::objects::platform::graylog::condition::compile_condition;
@@ -81,7 +80,7 @@ pub const VALIDATE_PATH: &str = "/api/search/validate";
 /// leading blanks, then `major.minor[.patch]`; `None` when it is not one
 /// (`parse_version`).
 pub fn parse_version(text: &str) -> Option<Version> {
-    let text = text.trim_start_matches(is_python_space);
+    let text = text.trim_start();
     let mut parts = [0_u64; 3];
     let mut rest = text;
     for (index, part) in parts.iter_mut().enumerate() {
@@ -239,8 +238,7 @@ pub fn derive_title(rule: &Rule, block: &Json) -> String {
 pub fn derive_description(rule: &Rule, ids: &[String], version: Version) -> String {
     let mut text = rule
         .description()
-        .split(is_python_space)
-        .filter(|word| !word.is_empty())
+        .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");
     if version < V7_2 && !ids.is_empty() {
@@ -267,7 +265,7 @@ pub fn priority_label(rule: &Rule, block: &Json) -> Option<String> {
 /// Graylog's priority for `label`; `Informational` is 1 before 7.1
 /// (`derive_priority`).
 pub fn derive_priority(label: Option<&str>, version: Version) -> i64 {
-    let wanted = python_strip(label.unwrap_or_default()).to_lowercase();
+    let wanted = label.unwrap_or_default().trim().to_lowercase();
     let value = PRIORITIES
         .iter()
         .zip(0_i64..)
@@ -579,7 +577,7 @@ pub fn compile_definition(
     let priority = derive_priority(label.as_deref(), version);
     if label
         .as_deref()
-        .is_some_and(|label| python_strip(label).to_lowercase() == "informational")
+        .is_some_and(|label| label.trim().to_lowercase() == "informational")
         && priority != 0
     {
         warnings.push((

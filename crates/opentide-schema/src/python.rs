@@ -67,24 +67,21 @@ fn error_dict<'py>(py: Python<'py>, error: &SchemaError) -> PyResult<Bound<'py, 
     Ok(dict)
 }
 
-/// Pydantic's message: the count and the class, then each error's location
-/// and message with its type.
-fn message(title: &str, errors: &[SchemaError]) -> String {
-    let count = errors.len();
-    let mut text = format!(
-        "{count} validation error{} for {title}",
-        if count == 1 { "" } else { "s" }
-    );
-    for error in errors {
-        let location = if error.path.is_empty() {
-            "<root>".to_owned()
-        } else {
-            error.field_path().join(".")
-        };
-        let kind = error.kind.pydantic_type().unwrap_or("value_error");
-        text.push_str(&format!("\n{location}\n  {} [type={kind}]", error.message));
-    }
-    text
+/// The exception's text: one line per error, its dotted location and its
+/// message (the message alone at the root). `errors()` holds each error's
+/// type, location and context.
+fn message(errors: &[SchemaError]) -> String {
+    errors
+        .iter()
+        .map(|error| {
+            if error.path.is_empty() {
+                error.message.clone()
+            } else {
+                format!("{}: {}", error.field_path().join("."), error.message)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// The [`ValidationError`] for `errors`, with `errors()`, `error_count()`
@@ -96,7 +93,7 @@ fn raise(py: Python<'_>, title: &str, errors: &[SchemaError]) -> PyErr {
         for error in errors {
             list.append(error_dict(py, error)?)?;
         }
-        let error = ValidationError::new_err(message(title, errors));
+        let error = ValidationError::new_err(message(errors));
         let value = error.value(py);
         let functools = py.import("functools")?;
         let deepcopy = py.import("copy")?.getattr("deepcopy")?;

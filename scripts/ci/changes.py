@@ -109,7 +109,6 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("tests/*", ("python",), ALL),
     ("pyproject.toml", ("python", "pylint"), ()),
     ("uv.lock", ("python", "pylint"), ()),
-    ("hatch_build.py", ("python", "pylint"), ()),
     (".pre-commit-config.yaml", ("pylint",), ()),
     # The scripts a gate job runs: the docs job's and the grammars job's.
     ("scripts/validate-docs.sh", ("docs",), ()),

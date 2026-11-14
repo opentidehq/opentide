@@ -161,6 +161,36 @@ fn elastic_a_single_byte_off_fails() {
     assert!(mismatches[0].detail.starts_with("bodies differ at byte "));
 }
 
+/// A `_find` page that is not JSON stops the listing with serde_json's
+/// reason and where it found the fault.
+#[test]
+fn elastic_find_rules_names_a_body_that_is_not_json() {
+    let mut cassette = support::cassette("elastic/deploy");
+    let mut lookup = cassette.interactions.remove(0);
+    lookup.request.url =
+        "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules/_find?page=1&per_page=100"
+            .into();
+    lookup.response.status = 200;
+    lookup.response.body = opentide_cassette::Body::Text("<html>".into());
+    cassette.interactions = vec![lookup];
+    let tenant = Replayed::start_with(
+        cassette,
+        elastic::PLATFORM,
+        SETUP,
+        "ELASTIC_API_KEY",
+        &elastic::http_settings(std::time::Duration::from_secs(30)),
+    );
+    let error = block_on(async { Elastic.find_rules(tenant.cx(), 1, 100).await })
+        .unwrap()
+        .unwrap_err();
+    assert!(tenant.verify().is_empty(), "{:?}", tenant.verify());
+    assert!(matches!(error, elastic::FindError::NotJson(_)), "{error:?}");
+    assert_eq!(
+        error.to_string(),
+        "the response is not JSON: expected value at line 1 column 1"
+    );
+}
+
 #[test]
 fn elastic_query_sends_what_the_python_runner_sent() {
     let inputs = fixture("elastic");

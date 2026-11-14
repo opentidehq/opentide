@@ -3,9 +3,9 @@
 //! (`cli/commands/generate.py`, `cli/services/export.py`,
 //! `cli/services/generation.py`) on `opentide-compile`'s `generate` module.
 //!
-//! A phase runs as a checklist step that counts the files it wrote, compared
-//! by modification time and size before and after ([`Snapshot`]); the result
-//! is `Generated 3 files in 0.1s · exports`, with the steps behind it.
+//! A phase runs as a checklist step that counts the files it wrote and
+//! removed, as it records them ([`Changes`]); the result is
+//! `Generated 3 files in 0.1s · exports`, with the steps behind it.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -20,7 +20,7 @@ use opentide_compile::generate::docs::{
     pages, stale_pages,
 };
 use opentide_compile::generate::exports::{Settings, Target, export};
-use opentide_compile::generate::files::{Snapshot, common_dir, remove_all, write_all};
+use opentide_compile::generate::files::{Changes, common_dir};
 use opentide_compile::generate::visibility::{self, DatasetRead, Inputs};
 use opentide_compile::generate::{Output, PhaseError, explorer, inflight};
 use opentide_compile::git;
@@ -51,28 +51,28 @@ pub struct Context<'a> {
 /// `failure.code` of a phase that failed (`default_failure_code("failed")`).
 const COMMAND_FAILED: &str = super::COMMAND_FAILED;
 
-/// A phase run as one step: the files it wrote, found on disk.
+/// A phase run as one step: the files it wrote and removed.
 struct Phase {
     step: Step,
     error: Option<String>,
 }
 
-/// Runs `work` as the step `name`, watching `roots` for the files it writes.
+/// Runs `work` as the step `name`, counting the files it records in its
+/// [`Changes`].
 fn run_phase(
     name: &str,
-    roots: &[PathBuf],
     cwd: &Path,
     workspace: &Path,
-    work: impl FnOnce() -> Result<(), String>,
+    work: impl FnOnce(&mut Changes) -> Result<(), String>,
 ) -> Phase {
-    let snapshot = Snapshot::take(roots);
+    let mut changes = Changes::default();
     let started = Instant::now();
-    let result = work();
+    let result = work(&mut changes);
     let mut step = Step::new(name);
     step.seconds = started.elapsed().as_secs_f64();
     match result {
         Ok(()) => {
-            let (written, removed) = snapshot.changes();
+            let (written, removed) = (changes.written(), changes.removed());
             step.status = StepStatus::Ok;
             if !removed.is_empty() && written.is_empty() {
                 step.count = Some(removed.len());
@@ -211,15 +211,17 @@ fn workspace_in_step(
 ) -> Result<Workspace, Box<Report>> {
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
     open(options).map_err(|detail| {
-        let ran = run_phase(step, &[], cx.cwd, cx.cwd, || Err(detail));
+        let ran = run_phase(step, cx.cwd, cx.cwd, |_| Err(detail));
         let detail = ran.error.clone().unwrap_or_default();
         Box::new(phase_failed(command, phase, &detail, extra, vec![ran.step]))
     })
 }
 
 /// Writes `outputs`, as one phase's work.
-fn write(outputs: &[Output]) -> Result<(), String> {
-    write_all(outputs).map_err(|(path, error)| format!("{}: {error}", path.display()))
+fn write(changes: &mut Changes, outputs: &[Output]) -> Result<(), String> {
+    changes
+        .write_all(outputs)
+        .map_err(|(path, error)| format!("{}: {error}", path.display()))
 }
 
 /// `opentide generate exports`, or one export when `target` names it.
@@ -248,7 +250,7 @@ pub fn exports(target: Option<Target>, cx: &Context<'_>) -> Report {
     let settings = Settings::new(workspace.configuration(), &root);
     let vocabularies = Vocabularies::bundled();
     let targets: Vec<Target> = target.map_or_else(|| Target::ALL.to_vec(), |one| vec![one]);
-    let phase = run_phase(&name, std::slice::from_ref(&root), cx.cwd, &root, || {
+    let phase = run_phase(&name, cx.cwd, &root, |changes| {
         let mut outputs = Vec::new();
         for target in &targets {
             match export(*target, workspace.index(), &settings, &vocabularies) {
@@ -256,12 +258,12 @@ pub fn exports(target: Option<Target>, cx: &Context<'_>) -> Report {
                 Err(PhaseError { detail }) => {
                     // The oracle writes the exports one after another: the
                     // ones before a failure are on disk.
-                    write(&outputs)?;
+                    write(changes, &outputs)?;
                     return Err(detail);
                 }
             }
         }
-        write(&outputs)
+        write(changes, &outputs)
     });
     match phase.error {
         Some(detail) => phase_failed(
@@ -382,9 +384,11 @@ fn strings_json<'s>(items: impl IntoIterator<Item = &'s String>) -> Json {
 }
 
 /// Writes `outputs` and removes `stale`.
-fn publish(outputs: &[Output], stale: &[PathBuf]) -> Result<(), String> {
-    write(outputs)?;
-    remove_all(stale).map_err(|(path, error)| format!("{}: {error}", path.display()))
+fn publish(changes: &mut Changes, outputs: &[Output], stale: &[PathBuf]) -> Result<(), String> {
+    write(changes, outputs)?;
+    changes
+        .remove_all(stale)
+        .map_err(|(path, error)| format!("{}: {error}", path.display()))
 }
 
 /// The nested-file warning (`with_nested_object_warning`): files in
@@ -431,19 +435,9 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
         Err(report) => return *report,
     };
     let root = workspace.root().to_path_buf();
-    let base = output_base(&workspace);
-    let mut roots = vec![root.clone(), base.clone()];
-    if let Some(output) = args.output.as_deref().filter(|output| !output.is_empty()) {
-        let path = PathBuf::from(output);
-        roots.push(if path.is_absolute() {
-            path
-        } else {
-            base.join(path)
-        });
-    }
     let mut run = DocsRun::default();
-    let phase = run_phase("docs", &roots, cx.cwd, &root, || {
-        docs_phase(args, &workspace, cx, &mut run)
+    let phase = run_phase("docs", cx.cwd, &root, |changes| {
+        docs_phase(args, &workspace, cx, &mut run, changes)
     });
     let warnings: Vec<String> = nested_warning(&workspace).into_iter().collect();
     if let Some(detail) = phase.error {
@@ -484,6 +478,7 @@ fn docs_phase(
     workspace: &Workspace,
     cx: &Context<'_>,
     run: &mut DocsRun,
+    changes: &mut Changes,
 ) -> Result<(), String> {
     let resolved = &workspace.configuration().resolved;
     let root = workspace.root();
@@ -539,11 +534,15 @@ fn docs_phase(
         .scope
         .or_else(|| flagged.first().map(|scope| DocsScope::Objects(*scope)));
     if args.changed {
-        return changed_phase(workspace, &pages_of, output_text, run);
+        return changed_phase(workspace, &pages_of, output_text, run, changes);
     }
     match scope {
         Some(DocsScope::Index) => {
-            publish(&index_pages(&pages_of).map_err(|error| error.detail)?, &[])?;
+            publish(
+                changes,
+                &index_pages(&pages_of).map_err(|error| error.detail)?,
+                &[],
+            )?;
             run.data = vec![("output".into(), output_text)];
             run.message = Some("Index pages written".into());
         }
@@ -552,7 +551,7 @@ fn docs_phase(
             for scope in &flagged {
                 let (outputs, scoped) =
                     pages(&pages_of, &[*scope], None).map_err(|error| error.detail)?;
-                publish(&outputs, &stale_pages(&pages_of, &[*scope]))?;
+                publish(changes, &outputs, &stale_pages(&pages_of, &[*scope]))?;
                 counts.rules += scoped.rules;
                 counts.objectives += scoped.objectives;
                 counts.threats += scoped.threats;
@@ -574,7 +573,7 @@ fn docs_phase(
             let (outputs, counts) =
                 pages(&pages_of, &[scope], None).map_err(|error| error.detail)?;
             let stale = stale_pages(&pages_of, &[scope]);
-            publish(&outputs, &stale)?;
+            publish(changes, &outputs, &stale)?;
             run.message = Some(format!("Documentation scope {} completed", scope.folder()));
             run.data = vec![
                 ("counts".into(), counts_json(counts)),
@@ -585,8 +584,12 @@ fn docs_phase(
             let (outputs, counts) =
                 pages(&pages_of, &Scope::ALL, None).map_err(|error| error.detail)?;
             let stale = stale_pages(&pages_of, &Scope::ALL);
-            publish(&outputs, &stale)?;
-            publish(&index_pages(&pages_of).map_err(|error| error.detail)?, &[])?;
+            publish(changes, &outputs, &stale)?;
+            publish(
+                changes,
+                &index_pages(&pages_of).map_err(|error| error.detail)?,
+                &[],
+            )?;
             run.message = Some("Full documentation pipeline completed".into());
             run.data = vec![
                 ("counts".into(), counts_json(counts)),
@@ -605,6 +608,7 @@ fn changed_phase(
     pages_of: &Pages<'_, '_>,
     output_text: Json,
     run: &mut DocsRun,
+    record: &mut Changes,
 ) -> Result<(), String> {
     let folders = changed::folders(workspace.configuration());
     let files = match opentide_compile::git::changed_in_folders(
@@ -640,8 +644,12 @@ fn changed_phase(
     let (outputs, counts) =
         pages(pages_of, &Scope::ALL, Some(&changes.targets)).map_err(|error| error.detail)?;
     let stale = stale_pages(pages_of, &Scope::ALL);
-    publish(&outputs, &stale)?;
-    publish(&index_pages(pages_of).map_err(|error| error.detail)?, &[])?;
+    publish(record, &outputs, &stale)?;
+    publish(
+        record,
+        &index_pages(pages_of).map_err(|error| error.detail)?,
+        &[],
+    )?;
     let mut scopes: Vec<String> = changes
         .targets
         .iter()
@@ -831,33 +839,31 @@ pub fn explorer(options: &ExplorerOptions, cx: &Context<'_>) -> Report {
     };
     let root = workspace.root().to_path_buf();
     let dir = Settings::new(workspace.configuration(), &root).dir;
-    let phase = run_phase(
-        "explorer",
-        std::slice::from_ref(&root),
-        cx.cwd,
-        &root,
-        || {
-            std::fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;
-            // Open pull requests' objects, previewed (`inflight_preview`).
-            let shards = inflight::load(&root.join(".opentide").join("inflight"));
-            let index = inflight::overlay(workspace.index(), &shards);
-            let generated_at = now_iso();
-            let outputs = explorer::outputs(&index, &dir, &generated_at)
-                .map_err(|PhaseError { detail }| detail)?;
-            write(&outputs)?;
-            let visibility_path = dir.join(explorer::VISIBILITY);
-            if options.include_visibility {
-                let report = visibility_report(&workspace, &index, &root);
-                let document = explorer::visibility(report, &generated_at, &tlp);
-                write(&[Output::text(visibility_path, document.to_compact())])?;
-            } else if visibility_path.is_file() {
-                // Opt-in per run: an inventory an earlier run wrote is not published again.
-                std::fs::remove_file(&visibility_path)
-                    .map_err(|error| format!("{}: {error}", visibility_path.display()))?;
-            }
-            Ok(())
-        },
-    );
+    let phase = run_phase("explorer", cx.cwd, &root, |changes| {
+        std::fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;
+        // Open pull requests' objects, previewed (`inflight_preview`).
+        let shards = inflight::load(&root.join(".opentide").join("inflight"));
+        let index = inflight::overlay(workspace.index(), &shards);
+        let generated_at = now_iso();
+        let outputs = explorer::outputs(&index, &dir, &generated_at)
+            .map_err(|PhaseError { detail }| detail)?;
+        write(changes, &outputs)?;
+        let visibility_path = dir.join(explorer::VISIBILITY);
+        if options.include_visibility {
+            let report = visibility_report(&workspace, &index, &root);
+            let document = explorer::visibility(report, &generated_at, &tlp);
+            write(
+                changes,
+                &[Output::text(visibility_path, document.to_compact())],
+            )?;
+        } else if visibility_path.is_file() {
+            // Opt-in per run: an inventory an earlier run wrote is not published again.
+            changes
+                .remove(&visibility_path)
+                .map_err(|(path, error)| format!("{}: {error}", path.display()))?;
+        }
+        Ok(())
+    });
     match phase.error {
         Some(detail) => phase_failed(COMMAND, "explorer", &detail, Vec::new(), vec![phase.step]),
         None => generated(
@@ -1009,55 +1015,49 @@ pub fn inflight_shards(cx: &Context<'_>) -> Report {
     };
     let root = workspace.root().to_path_buf();
     let dir = root.join(".opentide").join("inflight");
-    let phase = run_phase(
-        "inflight",
-        std::slice::from_ref(&root),
-        cx.cwd,
-        &root,
-        || {
-            std::fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;
-            let env = |name: &str| cx.env.get(name).map(str::to_owned);
-            let ci = git::ci(&env);
-            let event = cx
-                .env
-                .get("GITHUB_EVENT_PATH")
-                .filter(|path| !path.is_empty())
-                .and_then(|path| std::fs::read_to_string(path).ok());
-            let mut shards: indexmap::IndexMap<PathBuf, Output> = indexmap::IndexMap::new();
-            for path in changed_object_files(&root, cx) {
-                let text = std::fs::read(&path)
-                    .map_err(|error| format!("{}: {error}", path.display()))
-                    .and_then(|bytes| crate::queries::decode(&bytes))?;
-                let document = opentide_schema::node::load(&text)
-                    .map_err(|error| format!("{}: {error}", path.display()))?;
-                let Some(body) = document
-                    .root()
-                    .filter(|root| matches!(root.value, opentide_schema::node::Value::Map(_)))
-                else {
-                    tracing::warn!(path = %path.display(), "inflight_skip_non_mapping");
-                    continue;
-                };
-                let Some(uuid) = inflight::object_uuid(body) else {
-                    tracing::warn!(path = %path.display(), "inflight_skip_missing_uuid");
-                    continue;
-                };
-                let now = now_iso();
-                let change =
-                    inflight::change(&env, ci, &source_path(&root, &path), event.as_deref(), &now);
-                let shard = inflight::shard(body, &now, change);
-                let target = dir.join(format!("{uuid}.json"));
-                tracing::info!(uuid = uuid.as_str(), path = %target.display(), "inflight_shard_written");
-                shards.insert(
-                    target.clone(),
-                    Output::text(
-                        target,
-                        opentide_compile::generate::json_text::pretty(&shard, 2),
-                    ),
-                );
-            }
-            write(&shards.into_values().collect::<Vec<_>>())
-        },
-    );
+    let phase = run_phase("inflight", cx.cwd, &root, |changes| {
+        std::fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;
+        let env = |name: &str| cx.env.get(name).map(str::to_owned);
+        let ci = git::ci(&env);
+        let event = cx
+            .env
+            .get("GITHUB_EVENT_PATH")
+            .filter(|path| !path.is_empty())
+            .and_then(|path| std::fs::read_to_string(path).ok());
+        let mut shards: indexmap::IndexMap<PathBuf, Output> = indexmap::IndexMap::new();
+        for path in changed_object_files(&root, cx) {
+            let text = std::fs::read(&path)
+                .map_err(|error| format!("{}: {error}", path.display()))
+                .and_then(|bytes| crate::queries::decode(&bytes))?;
+            let document = opentide_schema::node::load(&text)
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            let Some(body) = document
+                .root()
+                .filter(|root| matches!(root.value, opentide_schema::node::Value::Map(_)))
+            else {
+                tracing::warn!(path = %path.display(), "inflight_skip_non_mapping");
+                continue;
+            };
+            let Some(uuid) = inflight::object_uuid(body) else {
+                tracing::warn!(path = %path.display(), "inflight_skip_missing_uuid");
+                continue;
+            };
+            let now = now_iso();
+            let change =
+                inflight::change(&env, ci, &source_path(&root, &path), event.as_deref(), &now);
+            let shard = inflight::shard(body, &now, change);
+            let target = dir.join(format!("{uuid}.json"));
+            tracing::info!(uuid = uuid.as_str(), path = %target.display(), "inflight_shard_written");
+            shards.insert(
+                target.clone(),
+                Output::text(
+                    target,
+                    opentide_compile::generate::json_text::pretty(&shard, 2),
+                ),
+            );
+        }
+        write(changes, &shards.into_values().collect::<Vec<_>>())
+    });
     match phase.error {
         Some(detail) => phase_failed(COMMAND, "inflight", &detail, Vec::new(), vec![phase.step]),
         None => generated(
@@ -1079,23 +1079,15 @@ pub fn inflight_prune(cx: &Context<'_>) -> Report {
         };
     let root = workspace.root().to_path_buf();
     let dir = root.join(".opentide").join("inflight");
-    let phase = run_phase(
-        "inflight prune",
-        std::slice::from_ref(&root),
-        cx.cwd,
-        &root,
-        || {
-            for (uuid, path) in inflight::superseded(&dir, workspace.index()) {
-                match std::fs::remove_file(&path) {
-                    Ok(()) => {}
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(error) => return Err(format!("{}: {error}", path.display())),
-                }
-                tracing::info!(uuid = uuid.as_str(), path = %path.display(), "inflight_shard_pruned");
-            }
-            Ok(())
-        },
-    );
+    let phase = run_phase("inflight prune", cx.cwd, &root, |changes| {
+        for (uuid, path) in inflight::superseded(&dir, workspace.index()) {
+            changes
+                .remove(&path)
+                .map_err(|(path, error)| format!("{}: {error}", path.display()))?;
+            tracing::info!(uuid = uuid.as_str(), path = %path.display(), "inflight_shard_pruned");
+        }
+        Ok(())
+    });
     match phase.error {
         Some(detail) => phase_failed(
             COMMAND,
@@ -1210,8 +1202,8 @@ pub fn run_phases(
         } else {
             phase.as_str()
         };
-        let ran = run_phase(name, std::slice::from_ref(&root), cwd, &root, || {
-            write(&phase_outputs(phase, workspace, &root, version)?)
+        let ran = run_phase(name, cwd, &root, |changes| {
+            write(changes, &phase_outputs(phase, workspace, &root, version)?)
         });
         steps.push(ran.step);
         if let Some(detail) = ran.error {
@@ -1258,38 +1250,28 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
     let root = workspace.root().to_path_buf();
     let mut steps = Vec::new();
     let mut run = DocsRun::default();
-    let docs = run_phase(
-        "docs",
-        &[root.clone(), output_base(&workspace)],
-        cx.cwd,
-        &root,
-        || docs_phase(&DocsArgs::default(), &workspace, cx, &mut run),
-    );
+    let docs = run_phase("docs", cx.cwd, &root, |changes| {
+        docs_phase(&DocsArgs::default(), &workspace, cx, &mut run, changes)
+    });
     steps.push(docs.step);
     if let Some(detail) = docs.error {
         return phase_failed(command, "docs", &detail, Vec::new(), steps);
     }
     let settings = Settings::new(workspace.configuration(), &root);
     let vocabularies = Vocabularies::bundled();
-    let exports = run_phase(
-        "exports",
-        std::slice::from_ref(&root),
-        cx.cwd,
-        &root,
-        || {
-            let mut outputs = Vec::new();
-            for target in Target::ALL {
-                match export(target, workspace.index(), &settings, &vocabularies) {
-                    Ok(output) => outputs.push(output),
-                    Err(PhaseError { detail }) => {
-                        write(&outputs)?;
-                        return Err(detail);
-                    }
+    let exports = run_phase("exports", cx.cwd, &root, |changes| {
+        let mut outputs = Vec::new();
+        for target in Target::ALL {
+            match export(target, workspace.index(), &settings, &vocabularies) {
+                Ok(output) => outputs.push(output),
+                Err(PhaseError { detail }) => {
+                    write(changes, &outputs)?;
+                    return Err(detail);
                 }
             }
-            write(&outputs)
-        },
-    );
+        }
+        write(changes, &outputs)
+    });
     steps.push(exports.step);
     if let Some(detail) = exports.error {
         return phase_failed(command, "exports", &detail, Vec::new(), steps);
@@ -1510,9 +1492,10 @@ mod tests {
         for name in ["a.md", "b.md"] {
             std::fs::write(folder.join(name), "x").unwrap();
         }
-        let phase = run_phase("docs", std::slice::from_ref(&root), &root, &root, || {
-            std::fs::remove_file(folder.join("a.md")).map_err(|error| error.to_string())?;
-            std::fs::remove_file(folder.join("b.md")).map_err(|error| error.to_string())
+        let phase = run_phase("docs", &root, &root, |changes| {
+            changes
+                .remove_all(&[folder.join("a.md"), folder.join("b.md")])
+                .map_err(|(_, error)| error.to_string())
         });
         assert_eq!(phase.error, None);
         assert_eq!(phase.step.status, StepStatus::Ok);
@@ -1524,12 +1507,48 @@ mod tests {
         assert!(report.outcome.message.starts_with("Removed 2 files in "));
 
         std::fs::write(folder.join("c.md"), "x").unwrap();
-        let phase = run_phase("docs", std::slice::from_ref(&root), &root, &root, || {
-            std::fs::write(folder.join("d.md"), "y").map_err(|error| error.to_string())?;
-            std::fs::remove_file(folder.join("c.md")).map_err(|error| error.to_string())
+        let phase = run_phase("docs", &root, &root, |changes| {
+            write(changes, &[Output::text(folder.join("d.md"), "y".into())])?;
+            changes
+                .remove(&folder.join("c.md"))
+                .map_err(|(_, error)| error.to_string())
         });
         assert_eq!(phase.step.count, Some(1));
         assert_eq!(phase.step.unit, "file");
+    }
+
+    /// A phase counts the files it wrote, whatever else changes in the
+    /// workspace while it runs; a file written with its own content again
+    /// counts as written.
+    #[test]
+    fn a_phase_counts_what_it_wrote_not_what_changed_beside_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(dir.path()).unwrap();
+        let out = root.join("exports");
+        std::fs::create_dir_all(&out).unwrap();
+        std::fs::write(out.join("same.json"), "{}\n").unwrap();
+        std::fs::write(root.join("rule.yaml"), "name: a\n").unwrap();
+        let phase = run_phase("exports", &root, &root, |changes| {
+            write(
+                changes,
+                &[
+                    Output::text(out.join("same.json"), "{}\n".into()),
+                    Output::text(out.join("new.json"), "[]\n".into()),
+                    Output::text(out.join("third.json"), "[]\n".into()),
+                ],
+            )?;
+            // An editor saves a rule, another tool drops a file, while the phase runs.
+            std::fs::write(root.join("rule.yaml"), "name: changed\n").unwrap();
+            std::fs::write(root.join("notes.txt"), "x").unwrap();
+            std::fs::write(out.join("other.json"), "x").unwrap();
+            Ok(())
+        });
+        assert_eq!(phase.error, None);
+        assert_eq!(phase.step.count, Some(3));
+        assert_eq!(phase.step.unit, "file");
+        assert_eq!(phase.step.place.as_deref(), Some("exports/"));
+        let report = generated("generate exports", vec![], vec![phase.step]);
+        assert!(report.outcome.message.starts_with("Generated 3 files in "));
     }
 
     #[test]
@@ -1576,14 +1595,14 @@ mod tests {
         let report = phase_failed(
             "generate exports objects",
             "exports",
-            "KeyError: 'version' while rendering x",
+            "missing key `version` while rendering x",
             vec![("target".into(), Json::str("objects"))],
             vec![],
         );
         assert_eq!(report.outcome.exit_code, 1);
         assert_eq!(
             report.outcome.message,
-            "exports: KeyError: 'version' while rendering x"
+            "exports: missing key `version` while rendering x"
         );
         assert_eq!(report.outcome.data[0].0, "phase");
         assert_eq!(report.outcome.data[1].0, "target");

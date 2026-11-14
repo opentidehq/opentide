@@ -973,55 +973,65 @@ fn clock_start() -> Option<Instant> {
     None
 }
 
-/// A YAML scalar as Python's `str` writes the value PyYAML built.
-fn python_text(node: &Node) -> String {
-    match &node.value {
-        Value::Null => "None".to_owned(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
-        other => other.to_string(),
+/// The entries of a `cve` field: the field's items, or the field itself
+/// when it is one value; none when it is absent or null.
+fn cve_entries(field: Option<&Node>) -> Vec<&Node> {
+    match field.map(|field| (field, &field.value)) {
+        None | Some((_, Value::Null)) => Vec::new(),
+        Some((_, Value::Seq(items))) => items.iter().map(AsRef::as_ref).collect(),
+        Some((field, _)) => vec![field],
     }
 }
 
 /// The identifiers of a `cve` field, canonical, each once
-/// (`normalize_identifiers`).
+/// (`normalize_identifiers`). An entry that is not a string is no
+/// identifier: [`cve_non_strings`] names it.
 pub fn cve_identifiers(field: Option<&Node>, canonical: &dyn Fn(&str) -> String) -> Vec<String> {
-    let Some(field) = field else {
-        return Vec::new();
-    };
-    match &field.value {
-        Value::Null => Vec::new(),
-        Value::Seq(items) => {
-            let mut ids: Vec<String> = Vec::new();
-            for item in items {
-                let id = canonical(&python_text(item));
-                if !id.is_empty() && !ids.contains(&id) {
-                    ids.push(id);
-                }
-            }
-            ids
-        }
-        _ => {
-            let id = canonical(&python_text(field));
-            if id.is_empty() { Vec::new() } else { vec![id] }
+    let mut ids: Vec<String> = Vec::new();
+    for entry in cve_entries(field) {
+        let Value::Str(text) = &entry.value else {
+            continue;
+        };
+        let id = canonical(text);
+        if !id.is_empty() && !ids.contains(&id) {
+            ids.push(id);
         }
     }
+    ids
+}
+
+/// The entries of a `cve` field that are not strings, each as YAML writes
+/// it and with its type (`5 (integer, not a string)`), each once.
+pub fn cve_non_strings(field: Option<&Node>) -> Vec<String> {
+    let mut found: Vec<String> = Vec::new();
+    for entry in cve_entries(field) {
+        if matches!(entry.value, Value::Str(_)) {
+            continue;
+        }
+        let shown = format!(
+            "{} ({}, not a string)",
+            entry.value,
+            entry.value.type_name()
+        );
+        if !found.contains(&shown) {
+            found.push(shown);
+        }
+    }
+    found
 }
 
 /// The findings of one threat's CVE references (`check_cve_issues`): an
 /// error naming those Vulnerability-Lookup does not know, a warning naming
 /// those it could not be asked about.
 fn cve_findings(threat: &crate::index::Object, lookup: &dyn CveCheck) -> Vec<Diagnostic> {
-    let ids = cve_identifiers(
-        threat
-            .root()
-            .and_then(|root| root.get("threat"))
-            .filter(|block| matches!(block.value, Value::Map(_)))
-            .and_then(|block| block.get("cve"))
-            .map(AsRef::as_ref),
-        &|text| lookup.canonical(text),
-    );
-    let mut broken: Vec<String> = Vec::new();
+    let field = threat
+        .root()
+        .and_then(|root| root.get("threat"))
+        .filter(|block| matches!(block.value, Value::Map(_)))
+        .and_then(|block| block.get("cve"))
+        .map(AsRef::as_ref);
+    let ids = cve_identifiers(field, &|text| lookup.canonical(text));
+    let mut broken: Vec<String> = cve_non_strings(field);
     let mut unchecked: Vec<String> = Vec::new();
     let mut error = String::new();
     for id in ids {

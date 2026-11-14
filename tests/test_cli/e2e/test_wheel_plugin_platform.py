@@ -1,8 +1,8 @@
 """A platform plugin on opentide installed from its wheel (UC-4.5b, #835).
 
 The editable dev install runs the package from ``src/``; a user's runs from a
-wheel, with the engine compiled in by ``hatch_build.py``. This builds that
-wheel (``uv build``, as CI's packaging does, the engine on the ``develop``
+wheel, with the engine compiled in by maturin. This builds that
+wheel (``uv build``, the engine on the ``develop``
 profile ``uv sync`` already compiled), installs it into a fresh virtual
 environment, and beside it the sample plugin ``tests/fixtures/plugin_platform``
 as an installer lays it out: its package and a ``.dist-info`` with its

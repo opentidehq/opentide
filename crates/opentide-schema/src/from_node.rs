@@ -20,8 +20,11 @@
 //! - **Names.** The serialised name is looked up first, then each serde
 //!   `alias`; a second one present is an unknown key.
 //! - **Unions** (`#[from_node(union)]`): the first member that takes the
-//!   value, else every member's errors, each under the member's tag
-//!   (`either.str`, `either.int`).
+//!   value. When none does, the errors of the member whose [`Shape`] fits
+//!   the value (a list for a list member, a mapping for a model), at their
+//!   own paths; when no member's shape fits, one error at the value's path
+//!   naming what the union accepts ("expected a string or a list of
+//!   strings").
 //! - **Paths**: keys, list indexes, `[key]` for a mapping key of the wrong
 //!   type; a key that is not a string is written as YAML writes it (`true`,
 //!   `12`).
@@ -209,6 +212,12 @@ pub trait FromNode: Sized {
     /// The value `node` holds, or `None` after reporting, in `cx`, every
     /// error that stops it.
     fn from_node(node: &Node, cx: &mut Context) -> Option<Self>;
+
+    /// The kind of value the type reads, which a union uses to tell which
+    /// member a value was meant for. [`Shape::Any`] unless the type says.
+    fn shape() -> Shape {
+        Shape::Any
+    }
 }
 
 /// A model's class name and fields, written by `#[derive(FromNode)]` on a
@@ -469,28 +478,113 @@ pub fn require_vocab_list(node: &Node, cx: &mut Context) -> bool {
     false
 }
 
-/// One member of a union: its tag (`str`, `int`, `list[str]`) and its
-/// conversion.
-pub struct Member<'a, T> {
-    /// The tag added to the path of the member's errors.
-    pub tag: &'a str,
+/// The kind of YAML value a type reads, whatever the content: what a union
+/// uses to tell which member a value was meant for, and to name what it
+/// accepts when no member fits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Shape {
+    /// Any value.
+    Any,
+    /// A string.
+    String,
+    /// An integer.
+    Integer,
+    /// A number: an integer or a float.
+    Number,
+    /// `true` or `false`.
+    Boolean,
+    /// A list of the inner shape.
+    List(Box<Shape>),
+    /// A mapping (a model, or a `dict`).
+    Mapping,
+    /// One of several shapes (a union).
+    OneOf(Vec<Shape>),
+}
+
+impl Shape {
+    /// Whether `value` has this shape.
+    pub fn fits(&self, value: &Value) -> bool {
+        match self {
+            Self::Any => true,
+            Self::String => matches!(value, Value::Str(_)),
+            Self::Integer => matches!(value, Value::Int(_)),
+            Self::Number => matches!(value, Value::Int(_) | Value::Float(_)),
+            Self::Boolean => matches!(value, Value::Bool(_)),
+            Self::List(_) => matches!(value, Value::Seq(_)),
+            Self::Mapping => matches!(value, Value::Map(_)),
+            Self::OneOf(shapes) => shapes.iter().any(|shape| shape.fits(value)),
+        }
+    }
+
+    /// The shape as a noun phrase, without an article: `string`,
+    /// `list of strings`, `integers`.
+    fn noun(&self, plural: bool) -> String {
+        let (one, many) = match self {
+            Self::Any => ("value", "values"),
+            Self::String => ("string", "strings"),
+            Self::Integer => ("integer", "integers"),
+            Self::Number => ("number", "numbers"),
+            Self::Boolean => ("boolean", "booleans"),
+            Self::Mapping => ("mapping", "mappings"),
+            Self::List(inner) => {
+                let list = if plural { "lists" } else { "list" };
+                return format!("{list} of {}", inner.noun(true));
+            }
+            Self::OneOf(shapes) => {
+                let nouns: Vec<String> = shapes.iter().map(|shape| shape.noun(plural)).collect();
+                return nouns.join(" or ");
+            }
+        };
+        if plural { many } else { one }.to_owned()
+    }
+
+    /// The shapes, each with its article, as a sentence lists them:
+    /// `a string, an integer or a number`. A shape named twice is named once.
+    pub fn describe(shapes: &[Self]) -> String {
+        let mut names: Vec<String> = Vec::new();
+        for shape in shapes {
+            let noun = shape.noun(false);
+            let article = if noun.starts_with(['a', 'e', 'i', 'o', 'u']) {
+                "an"
+            } else {
+                "a"
+            };
+            let name = format!("{article} {noun}");
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+        match names.split_last() {
+            None => String::new(),
+            Some((last, [])) => last.clone(),
+            Some((last, rest)) => format!("{} or {last}", rest.join(", ")),
+        }
+    }
+}
+
+/// One member of a union: its shape and its conversion.
+pub struct Member<T> {
+    /// The kind of value the member reads ([`FromNode::shape`]).
+    pub shape: fn() -> Shape,
     /// The conversion.
     pub convert: fn(&Node, &mut Context) -> Option<T>,
 }
 
-/// A union: the first member that takes the value, else the errors of every
-/// member, each under its tag.
-pub fn union_value<T>(node: &Node, cx: &mut Context, members: &[Member<'_, T>]) -> Option<T> {
-    let mut failures = Vec::new();
+/// A union: the first member that takes the value. When none does, the
+/// errors of the member whose shape fits the value (of several, the one with
+/// the fewest errors, then the first), at their own paths; when no member's
+/// shape fits, one error at the value's own path, of the first member's type
+/// (`string_type`, `model_type`, ...), naming what the union accepts.
+pub fn union_value<T>(node: &Node, cx: &mut Context, members: &[Member<T>]) -> Option<T> {
+    let mut fitting: Option<Vec<SchemaError>> = None;
+    let mut first_kind = None;
     for member in members {
         let mut trial = cx.trial();
-        trial.path.push(PathSegment::Key(member.tag.to_owned()));
         let value = (member.convert)(node, &mut trial);
         if trial.stopped && !cx.stopped {
             // The budget ran out in this member: the conversion stops here,
-            // with the errors so far and one `Limit`, the caller's, last.
+            // with this member's errors and one `Limit`, the caller's, last.
             trial.errors.retain(|error| error.kind != ErrorKind::Limit);
-            cx.errors.extend(failures);
             cx.errors.append(&mut trial.errors);
             cx.absorb_budget(&trial);
             return None;
@@ -501,9 +595,29 @@ pub fn union_value<T>(node: &Node, cx: &mut Context, members: &[Member<'_, T>]) 
         {
             return Some(value);
         }
-        failures.extend(trial.errors);
+        if first_kind.is_none() {
+            first_kind = trial.errors.first().map(|error| error.kind);
+        }
+        if (member.shape)().fits(&node.value)
+            && fitting
+                .as_ref()
+                .is_none_or(|errors| trial.errors.len() < errors.len())
+        {
+            fitting = Some(trial.errors);
+        }
     }
-    cx.errors.extend(failures);
+    if let Some(errors) = fitting {
+        cx.errors.extend(errors);
+    } else {
+        let shapes: Vec<Shape> = members.iter().map(|member| (member.shape)()).collect();
+        let expected = Shape::describe(&shapes);
+        cx.error_with(
+            first_kind.unwrap_or(ErrorKind::InvalidType("union_type")),
+            format!("expected {expected}"),
+            node,
+            &[("expected", expected.clone())],
+        );
+    }
     None
 }
 
@@ -523,6 +637,10 @@ impl FromNode for String {
         );
         None
     }
+
+    fn shape() -> Shape {
+        Shape::String
+    }
 }
 
 impl FromNode for i64 {
@@ -532,6 +650,10 @@ impl FromNode for i64 {
         }
         cx.error(ErrorKind::InvalidType("int_type"), messages::INT_TYPE, node);
         None
+    }
+
+    fn shape() -> Shape {
+        Shape::Integer
     }
 }
 
@@ -554,6 +676,10 @@ impl FromNode for f64 {
             }
         }
     }
+
+    fn shape() -> Shape {
+        Shape::Number
+    }
 }
 
 impl FromNode for bool {
@@ -568,6 +694,10 @@ impl FromNode for bool {
         );
         None
     }
+
+    fn shape() -> Shape {
+        Shape::Boolean
+    }
 }
 
 impl<T: FromNode> FromNode for Option<T> {
@@ -577,11 +707,19 @@ impl<T: FromNode> FromNode for Option<T> {
         }
         T::from_node(node, cx).map(Some)
     }
+
+    fn shape() -> Shape {
+        T::shape()
+    }
 }
 
 impl<T: FromNode> FromNode for Box<T> {
     fn from_node(node: &Node, cx: &mut Context) -> Option<Self> {
         T::from_node(node, cx).map(Box::new)
+    }
+
+    fn shape() -> Shape {
+        T::shape()
     }
 }
 
@@ -607,6 +745,10 @@ impl<T: FromNode> FromNode for Vec<T> {
             }
         }
         ok.then_some(values)
+    }
+
+    fn shape() -> Shape {
+        Shape::List(Box::new(T::shape()))
     }
 }
 
@@ -652,6 +794,10 @@ impl<V: FromNode> FromNode for BTreeMap<String, V> {
             map.insert(key, value);
         })
     }
+
+    fn shape() -> Shape {
+        Shape::Mapping
+    }
 }
 
 impl<V: FromNode> FromNode for indexmap::IndexMap<String, V> {
@@ -659,6 +805,10 @@ impl<V: FromNode> FromNode for indexmap::IndexMap<String, V> {
         string_map(node, cx, |map: &mut Self, key, value| {
             map.insert(key, value);
         })
+    }
+
+    fn shape() -> Shape {
+        Shape::Mapping
     }
 }
 
@@ -697,11 +847,11 @@ mod tests {
         cx.remaining = 100;
         let members = [
             Member {
-                tag: "list[str]",
+                shape: Vec::<String>::shape,
                 convert: texts,
             },
             Member {
-                tag: "list[int]",
+                shape: Vec::<i64>::shape,
                 convert: ints,
             },
         ];
@@ -722,11 +872,11 @@ mod tests {
         cx.remaining = 4;
         let members = [
             Member {
-                tag: "list[str]",
+                shape: Vec::<String>::shape,
                 convert: texts,
             },
             Member {
-                tag: "list[int]",
+                shape: Vec::<i64>::shape,
                 convert: ints,
             },
         ];
@@ -739,5 +889,78 @@ mod tests {
             .filter(|error| error.kind == ErrorKind::Limit)
             .count();
         assert_eq!(limits, 1, "{errors:#?}");
+    }
+
+    fn lists() -> [Member<Either>; 2] {
+        [
+            Member {
+                shape: Vec::<String>::shape,
+                convert: texts,
+            },
+            Member {
+                shape: Vec::<i64>::shape,
+                convert: ints,
+            },
+        ]
+    }
+
+    fn union_errors(source: &str) -> Vec<SchemaError> {
+        let document = load(source).unwrap();
+        let mut cx = Context::new();
+        assert_eq!(
+            union_value(document.root().unwrap(), &mut cx, &lists()),
+            None
+        );
+        cx.into_errors()
+    }
+
+    #[test]
+    fn a_value_no_member_fits_is_one_error_at_its_own_path() {
+        let errors = union_errors("{a: 1}\n");
+        assert_eq!(errors.len(), 1, "{errors:#?}");
+        let error = &errors[0];
+        assert!(error.path.is_empty(), "{error:#?}");
+        assert_eq!(error.kind, ErrorKind::InvalidType("list_type"));
+        assert_eq!(
+            error.message,
+            "expected a list of strings or a list of integers"
+        );
+        assert_eq!(
+            error.context.get("expected").map(String::as_str),
+            Some("a list of strings or a list of integers")
+        );
+    }
+
+    #[test]
+    fn a_value_a_member_fits_gets_that_members_errors_at_their_paths() {
+        // Both members fit a list: each has one error, so the first's is kept.
+        let errors = union_errors("[1, x]\n");
+        assert_eq!(errors.len(), 1, "{errors:#?}");
+        assert_eq!(errors[0].path, vec![PathSegment::Index(0)]);
+        assert_eq!(errors[0].kind, ErrorKind::InvalidType("string_type"));
+        // The member with the fewest errors is kept.
+        let errors = union_errors("[1, 2, x]\n");
+        assert_eq!(errors.len(), 1, "{errors:#?}");
+        assert_eq!(errors[0].path, vec![PathSegment::Index(2)]);
+        assert_eq!(errors[0].kind, ErrorKind::InvalidType("int_type"));
+    }
+
+    #[test]
+    fn shapes_are_named_as_a_sentence_lists_them() {
+        assert_eq!(
+            Shape::describe(&[Shape::String, Shape::Integer, Shape::Number]),
+            "a string, an integer or a number"
+        );
+        assert_eq!(
+            Shape::describe(&[Shape::String, Vec::<String>::shape()]),
+            "a string or a list of strings"
+        );
+        assert_eq!(
+            Shape::describe(&[Shape::Mapping, Shape::String, Shape::Mapping]),
+            "a mapping or a string"
+        );
+        assert!(Shape::Number.fits(&Value::Int(1)));
+        assert!(!Shape::String.fits(&Value::Int(1)));
+        assert!(Shape::OneOf(vec![Shape::Boolean, Shape::Mapping]).fits(&Value::Bool(true)));
     }
 }

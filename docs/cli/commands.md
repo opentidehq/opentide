@@ -46,7 +46,7 @@ opentide --json commands
           "name": "platform",
           "flags": ["--platform"],
           "type": "choice",
-          "choices": ["sentinel", "splunk", "crowdstrike", "…"],
+          "choices": ["sentinel", "defender_for_endpoint", "splunk", "…"],
           "required": true,
           "…": "…"
         }

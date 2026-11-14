@@ -31,12 +31,6 @@
       "skillPath": ".agents/skills/docs-maintenance/SKILL.md",
       "computedHash": "project-local"
     },
-    "engine-release": {
-      "source": "opentidehq/opentide",
-      "sourceType": "project",
-      "skillPath": ".agents/skills/engine-release/SKILL.md",
-      "computedHash": "project-local"
-    },
     "engine-release-notes": {
       "source": "opentidehq/opentide",
       "sourceType": "project",

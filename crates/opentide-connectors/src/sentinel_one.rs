@@ -84,8 +84,8 @@ pub enum SentinelOneError {
         /// What it answered.
         detail: String,
     },
-    /// A deployment-state id that is not a number (`int(external_id)`).
-    #[error("invalid literal for int() with base 10: {0:?}")]
+    /// A deployment-state id that is not a number.
+    #[error("deployment id {0:?} is not a number")]
     BadId(String),
     /// The tenant could not be reached, or the run was cancelled.
     #[error(transparent)]
