@@ -255,7 +255,8 @@ pub fn columns_of(rows: &[Row]) -> Vec<QueryColumn> {
 }
 
 /// *query* with its `//` comments and string literals blanked, positions
-/// (characters) kept (`query.runner.kql_code`).
+/// (characters) kept (`query.runner.kql_code`). Kusto has no `/* */`
+/// comments, so those stay code.
 pub fn kql_code(query: &str) -> String {
     let chars: Vec<char> = query.chars().collect();
     let length = chars.len();
@@ -268,6 +269,20 @@ pub fn kql_code(query: &str) -> String {
                 .iter()
                 .position(|&c| c == '\n')
                 .map_or(length, |offset| index + offset);
+            out.extend(std::iter::repeat_n(' ', end - index));
+            index = end;
+            continue;
+        }
+        // A multi-line string (```…``` or ~~~…~~~) has no escapes and ends at
+        // the next chord of the same kind (Kusto.Language's `KqlTokens.g4`).
+        if (character == '`' || character == '~')
+            && chars.get(index + 1) == Some(&character)
+            && chars.get(index + 2) == Some(&character)
+        {
+            let end = chars[index + 3..]
+                .windows(3)
+                .position(|chord| chord.iter().all(|&c| c == character))
+                .map_or(length, |offset| index + 3 + offset + 3);
             out.extend(std::iter::repeat_n(' ', end - index));
             index = end;
             continue;
@@ -490,5 +505,45 @@ impl Registry {
             .iter()
             .map(|platform| platform.id())
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{kql_code, kql_with_limit};
+
+    #[test]
+    fn a_doubled_quote_stays_inside_a_verbatim_string() {
+        assert_eq!(
+            kql_code(r#"x @"a""b\" y"#),
+            format!("x @{} y", " ".repeat(7))
+        );
+        assert_eq!(
+            kql_with_limit(r#"T | where x == @"a""b\" | take 3"#, 10),
+            r#"T | where x == @"a""b\" | take 3"#
+        );
+    }
+
+    #[test]
+    fn multi_line_strings_are_blanked_up_to_the_same_chord() {
+        assert_eq!(
+            kql_code("a ```b//\n~~~c``` d"),
+            format!("a {} d", " ".repeat(14))
+        );
+        assert_eq!(
+            kql_code("a ~~~b```c~~~ d"),
+            format!("a {} d", " ".repeat(11))
+        );
+        assert_eq!(kql_code("a ```b"), format!("a {}", " ".repeat(4)));
+        assert_eq!(
+            kql_with_limit("T | where x == ```| take 3```", 10),
+            "T | where x == ```| take 3```\n| take 11"
+        );
+    }
+
+    #[test]
+    fn a_block_comment_is_code() {
+        // Kusto's comments are `//` only (Kusto.Language's `KqlTokens.g4`).
+        assert_eq!(kql_code("/* T */ U"), "/* T */ U");
     }
 }

@@ -840,7 +840,7 @@ mod tests {
         let returned = ["Timestamp", "ReportId", "DeviceName"];
         assert_eq!(
             missing_required_column_groups(
-                "let u = \"http://x\";\nDeviceNetworkEvents | where RemoteUrl == u\n\
+                "let u = \"http://x\"; DeviceNetworkEvents | where RemoteUrl == u \
                  | project Timestamp, ReportId, DeviceName",
                 &returned
             ),
@@ -864,6 +864,24 @@ mod tests {
         assert_eq!(
             defender_xdr_tables_in_query(r#"print "a\"// DeviceEvents" // AlertInfo"#),
             Vec::<String>::new()
+        );
+        // A multi-line string has no escapes and ends at its own chord.
+        assert_eq!(
+            missing_required_column_groups(
+                "let s = ```http://x```; DeviceEvents | project Timestamp, ReportId, DeviceName",
+                &returned
+            ),
+            ["DeviceId"]
+        );
+        assert_eq!(
+            defender_xdr_tables_in_query("let s = ~~~a```//~~~; EmailEvents | take 1"),
+            ["EmailEvents"]
+        );
+        // Kusto has no block comments: a table inside `/* */` is read as
+        // code, so its columns are required (the check fails closed).
+        assert_eq!(
+            defender_xdr_tables_in_query("/* DeviceEvents */ print 1"),
+            ["DeviceEvents"]
         );
     }
 
