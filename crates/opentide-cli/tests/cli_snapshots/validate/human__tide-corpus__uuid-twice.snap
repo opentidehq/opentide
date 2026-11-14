@@ -8,6 +8,4 @@ exit: 0
 ━━━ stdout
 ␛[1m␛[32m✓␛[0m 2 objects valid · 1 query · <SECONDS>
 
-━━━ stderr
-␛[?25l<LIVE>␛[1m␛[36m<SPIN>␛[0m Validating objects</LIVE>␛[?25h
-⏎ no final newline
+━━━ stderr · empty

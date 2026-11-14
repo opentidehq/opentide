@@ -10,9 +10,7 @@ exit: 0
 
 ␛[1m␛[32m✓␛[0m Fixed 1 value in 1 file · 12 objects valid · 8 queries · <SECONDS>
 
-━━━ stderr
-␛[?25l<LIVE>␛[1m␛[36m<SPIN>␛[0m Validating objects</LIVE>␛[?25h
-⏎ no final newline
+━━━ stderr · empty
 
 ━━━ ws/Objects/Detection Rules/rule-0001-sentinel-kql.yaml · modified 0644
 name: Sentinel KQL Rule
