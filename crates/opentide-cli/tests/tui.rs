@@ -30,7 +30,7 @@ fn launch(repo: &Path, cwd: &Path) -> Launch {
         repo: Some(repo.display().to_string()),
         env: opentide_cli::env::Env::from_pairs([("HOME", cwd.display().to_string())]),
         cwd: cwd.to_path_buf(),
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
     }
 }
 

@@ -765,7 +765,7 @@ fn lint_run(text: &str, words: &[&str]) -> Value {
     let home = scratch.path().join("home");
     std::fs::create_dir_all(&home).unwrap();
     let host = opentide_cli::Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: Arc::new(Mutex::new(Sink::default())),

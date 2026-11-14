@@ -668,7 +668,7 @@ pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<S
         Some(sub) => ws.join(sub),
     };
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: terminal,
         stderr_tty: terminal,
         log_sink: sink,

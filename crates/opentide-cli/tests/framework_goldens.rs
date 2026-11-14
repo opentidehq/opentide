@@ -148,7 +148,7 @@ fn replay(dir: &Path, scratch: &Path) -> Outcome {
     let stderr = Buffer::default();
     let sink: Sink = Arc::new(Mutex::new(stderr.clone()));
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: terminal,
         stderr_tty: terminal,
         log_sink: sink,

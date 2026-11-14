@@ -50,7 +50,7 @@ fn opentide(cwd: &Path, words: &[&str], extra: &[(&str, &str)]) -> Ran {
     let log = replay::Buffer::default();
     let sink: Sink = Arc::new(Mutex::new(log.clone()));
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: sink,

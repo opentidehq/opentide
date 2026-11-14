@@ -130,7 +130,7 @@ fn shard(ws: &Path, uuid: &str) -> PathBuf {
 /// `opentide --json <words>` from *cwd*: the exit code and the document.
 fn opentide(cwd: &Path, words: &[&str]) -> (i32, Value) {
     let host = Host {
-        version: "0.23.0".into(),
+        version: "0.28.1".into(),
         stdout_tty: false,
         stderr_tty: false,
         log_sink: Arc::new(Mutex::new(replay::Buffer::default())) as Sink,
