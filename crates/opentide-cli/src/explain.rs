@@ -629,6 +629,34 @@ mod tests {
         }
     }
 
+    /// The YARA-L codes a Google SecOps block's own checks report have
+    /// opentide 0.28.1's pages, with their severity: without one, `explain`
+    /// falls back to the engine's page and the SARIF rule has no level.
+    #[test]
+    fn the_google_secops_block_codes_have_pages_with_a_severity() {
+        for code in [
+            "yaral_match_shape",
+            "yaral_match_window",
+            "yaral_option",
+            "yaral_section_alias",
+            "yaral_section_empty",
+            "yaral_section_header",
+            "yaral_section_missing",
+        ] {
+            assert!(
+                pages::PAGES.iter().any(|(page, _)| *page == code),
+                "{code}: no page of its own"
+            );
+            let page = page(code).unwrap_or_else(|| panic!("{code}: no page"));
+            assert!(
+                page.markdown
+                    .contains("\nSeverity: error. Reported by `opentide validate`"),
+                "{code}: {}",
+                page.markdown
+            );
+        }
+    }
+
     /// `build.rs` compiles in every page of the package's folder.
     #[test]
     fn every_page_of_the_package_is_compiled_in() {

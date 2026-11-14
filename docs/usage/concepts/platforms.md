@@ -20,7 +20,7 @@ opentide integrates with **nine detection platforms** through connectors built i
 | CrowdStrike Falcon | `crowdstrike` | yes | no | yes | yes | correlation rule (CQL) |
 | HarfangLab | `harfanglab` | yes | no | YARA | telemetry filters | Sigma or YARA |
 | Sysdig Secure (Falco) | `sysdig` | yes | no | yes | no | Falco condition |
-| Exabeam New-Scale SIEM | `exabeam` | yes | yes (the filter) | no | yes | Exabeam Query Language |
+| Exabeam New-Scale SIEM | `exabeam` | yes | yes (the filter) | yes | yes | Exabeam Query Language |
 | Google Security Operations | `google_secops` | yes | yes (`verifyRuleText`) | yes (YARA-L) | yes (`udmSearch`) | YARA-L 2.0 |
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.

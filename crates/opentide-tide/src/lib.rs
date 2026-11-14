@@ -101,6 +101,12 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
             "google_secops",
             "setup" | "events" | "outcome" | "condition" | "export",
         ] => Some(LanguageId::Yaral),
+        // An Exabeam correlation rule's sequence filters (exabeam-1.0).
+        ["configurations", "exabeam", "sequences", item, "query"]
+            if !item.is_empty() && item.bytes().all(|b| b.is_ascii_digit()) =>
+        {
+            Some(LanguageId::Exabeam)
+        }
         _ => None,
     }
 }
@@ -837,9 +843,18 @@ fn analyze_injections(
                 let r = opentide_yaral::analyze_with(&inj.inner, &opentide_yaral::Context::SEARCH);
                 (r.diagnostics, r.tokens)
             }
-            // No Tide field injects the Exabeam Query Language yet: the
-            // Exabeam block port brings its injection and its analysis.
-            LanguageId::Exabeam => (Vec::new(), Vec::new()),
+            // A sequence filter of the Exabeam block is a correlation-rule
+            // query (profile `rule`); a hunt with `system: exabeam` is a
+            // search (profile `search`), as a `.exabeam` file is.
+            LanguageId::Exabeam => {
+                let ctx = if inj.field_path.first().map(String::as_str) == Some("configurations") {
+                    opentide_exabeam::Context::RULE
+                } else {
+                    opentide_exabeam::Context::SEARCH
+                };
+                let r = opentide_exabeam::analyze_with(&inj.inner, &ctx);
+                (r.diagnostics, r.tokens)
+            }
             LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
         };
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,

@@ -8,11 +8,11 @@
 //!   0.28.1 does not. The `--platform` help names `crowdstrike` among the
 //!   platforms the engine parses, `--file` reads `.cql`, and
 //!   `QueryChecked.language` gains `cql`.
-//! - Not yet ported: `validate query` checking Exabeam's queries offline,
-//!   which 0.28.1 does. The `--platform` help derives the offline list from
-//!   the platform table (`offline_languages`), so today's help lacks
-//!   `exabeam` until its row gains it; the pair below names that, and fails
-//!   once the row changes.
+//! - P-EX: `validate query` checks Exabeam's queries offline, as 0.28.1
+//!   does, so the `--platform` help names `exabeam` as the oracle's does.
+//!   `--file` reads `.exabeam`, as 0.28.1 does too, and the help derived
+//!   from the platform table names it, where 0.28.1's hand-written help
+//!   leaves it out.
 
 use opentide_cli::json::Json;
 
@@ -20,11 +20,11 @@ use opentide_cli::json::Json;
 const HELP: &[(&str, &str)] = &[
     (
         "Check this platform's queries. Offline, default every platform the engine parses: bitdefender, carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, harfanglab, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, sentinel, sentinel_one, splunk",
-        "Check this platform's queries. Offline, default every platform the engine parses: bitdefender, carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, google_secops, graylog, harfanglab, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, sentinel, sentinel_one, splunk",
+        "Check this platform's queries. Offline, default every platform the engine parses: bitdefender, carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, exabeam, google_secops, graylog, harfanglab, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, exabeam, google_secops, graylog, sentinel, sentinel_one, splunk",
     ),
     (
         "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2) offline (repeatable)",
-        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2, .cql) offline (repeatable)",
+        "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2, .cql, .exabeam) offline (repeatable)",
     ),
 ];
 
