@@ -76,7 +76,7 @@ fn bold() -> Style {
 /// The style of a highlight capture, as the editor colours it.
 pub fn capture_style(capture: &str) -> Option<Style> {
     if let Some(style) = crate::render::codeframe::query_style(capture) {
-        return Some(ratatui_style(&style));
+        return Some(style.into());
     }
     Some(match capture {
         "tide.keyword" => bold().fg(Color::Magenta),
@@ -92,31 +92,6 @@ pub fn capture_style(capture: &str) -> Option<Style> {
         "markdown.quote" => dim().add_modifier(Modifier::ITALIC),
         _ => return None,
     })
-}
-
-/// A query highlight's style ([`query_style`](crate::render::codeframe::query_style)), as ratatui's.
-fn ratatui_style(query: &crate::render::text::Style) -> Style {
-    use crate::render::text::Color as Query;
-    let mut style = Style::new();
-    if query.is_bold() {
-        style = style.add_modifier(Modifier::BOLD);
-    }
-    if query.is_dim() {
-        style = style.add_modifier(Modifier::DIM);
-    }
-    if let Some(colour) = query.foreground() {
-        style = style.fg(match colour {
-            Query::Red => Color::Red,
-            Query::Green => Color::Green,
-            Query::Yellow => Color::Yellow,
-            Query::Blue => Color::Blue,
-            Query::Magenta => Color::Magenta,
-            Query::Cyan => Color::Cyan,
-            Query::BrightCyan => Color::LightCyan,
-            Query::Indexed(index) => Color::Indexed(index),
-        });
-    }
-    style
 }
 
 /// `text`, each character styled by the engine's tokens for `language`.

@@ -584,6 +584,15 @@ pub fn tenant_tags(tenant: &Json) -> Vec<String> {
     strings(tenant.get("setup").and_then(|setup| setup.get("tags")))
 }
 
+/// The runtime policies the rule's block names (`policies`), which a deploy
+/// takes before the tenant's; `None` when it names none.
+pub fn block_policies(rule: &Rule) -> Option<Vec<String>> {
+    match rule.block("sysdig")?.get("policies")? {
+        Json::Array(items) => Some(items.iter().map(crate::deploy::text).collect()),
+        _ => None,
+    }
+}
+
 /// The body `rule` deploys on `tenant` (none for a dry run), under its
 /// block's status (`api_body(SysdigDeploy().compile_deployment(rule, tenant))`).
 pub fn compile_body(

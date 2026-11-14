@@ -644,10 +644,21 @@ class Connection:
             warnings=data["warnings"],
         )
 
-    async def deploy(self, rule_id: str, operation: OperationName, body: bytes) -> DeployOutcome:
+    async def deploy(
+        self,
+        rule_id: str,
+        operation: OperationName,
+        body: bytes,
+        *,
+        policies: Sequence[str] | None = None,
+    ) -> DeployOutcome:
         """Applies *operation* to the rule *rule_id* on the tenant, sending
         *body* (a deploy plan's payload for this tenant) as its bytes. Returns
         the platform's identifier of the rule.
+
+        *policies* are a Sysdig rule's runtime policies (the plan entry's
+        ``policies``, which a block that names its own carries); ``None``
+        takes the tenant's, as ``opentide deploy`` does.
 
         A whole deploy run (the plan, the deployment state, the retirements) is
         ``Workspace.run_json(["deploy", ...])``; this deploys one compiled rule.
@@ -656,7 +667,13 @@ class Connection:
         :meth:`query`, and ``operation_unsupported`` on a platform whose rules
         deploy only through ``opentide deploy`` (Elastic).
         """
-        data = await _document(self._inner.deploy, rule_id, operation, bytes(body))
+        data = await _document(
+            self._inner.deploy,
+            rule_id,
+            operation,
+            bytes(body),
+            policies=None if policies is None else list(policies),
+        )
         return DeployOutcome(**data)
 
     def __repr__(self) -> str:

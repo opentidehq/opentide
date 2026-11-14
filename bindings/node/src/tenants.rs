@@ -171,13 +171,17 @@ pub struct QueryOptions<'a> {
     pub signal: Option<Object<'a>>,
 }
 
-/// `deploy`'s options: the signal that aborts it.
+/// `deploy`'s options: the signal that aborts it, and a Sysdig rule's
+/// runtime policies.
 #[napi(object, object_to_js = false)]
 pub struct DeployOptions<'a> {
     /// Aborts this deploy alone, as `QueryOptions.signal` does a query. A
     /// deploy aborted after the tenant received it may have been applied.
     #[napi(ts_type = "AbortSignal")]
     pub signal: Option<Object<'a>>,
+    /// A Sysdig rule's runtime policies (a plan entry's `policies`); unset,
+    /// the tenant's, as `opentide deploy` takes them.
+    pub policies: Option<Vec<String>>,
 }
 
 /// `QueryOptions` read on Node's thread: what the request is built from.
@@ -326,9 +330,18 @@ impl Connection {
             Either::A(text) => text.into_bytes(),
             Either::B(bytes) => bytes.to_vec(),
         };
-        let abort = listen(*env, options.and_then(|options| options.signal));
-        let work = deploy_request(rule_id, &operation, body)
-            .map(|request| run_deploy(Arc::clone(&self.inner), request));
+        let (signal, policies) =
+            options.map_or((None, None), |options| (options.signal, options.policies));
+        let abort = listen(*env, signal);
+        let work = deploy_request(rule_id, &operation, body).map(|request| {
+            run_deploy(
+                Arc::clone(&self.inner),
+                DeployRequest {
+                    policies,
+                    ..request
+                },
+            )
+        });
         promise(env, work, abort)
     }
 }
@@ -843,6 +856,7 @@ fn deploy_request(
         rule_id,
         operation,
         body,
+        policies: None,
     })
 }
 

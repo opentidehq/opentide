@@ -422,12 +422,12 @@ pub fn compile_rule(
     let block = block_of(rule)?;
     let automatic = tenant
         .and_then(|tenant| setup(tenant, "automatic_actions"))
-        .is_none_or(Json::truthy);
+        .is_none_or(Json::is_true);
     let mut targets = None;
     let mut tenant_tags = Vec::new();
     let mut company_id = None;
     if let Some(tenant) = tenant {
-        let authored = block_targets(&block).filter(Json::truthy);
+        let authored = block_targets(&block).filter(Json::is_filled);
         let chosen = authored.as_ref().or_else(|| setup(tenant, "targets"));
         targets = resolve_targets(
             chosen,
@@ -471,7 +471,11 @@ pub fn create_params(compiled: &GravityZoneRule) -> Json {
     params.insert("description".into(), compiled.description.clone().into());
     params.insert("tags".into(), compiled.tags.clone().into());
     params.insert("settings".into(), Json::Object(compiled.settings.clone()));
-    if let Some(targets) = compiled.targets.as_ref().filter(|targets| targets.truthy()) {
+    if let Some(targets) = compiled
+        .targets
+        .as_ref()
+        .filter(|targets| targets.is_filled())
+    {
         params.insert("targets".into(), targets.clone());
     }
     if let Some(company) = compiled.company_id.as_deref().filter(|id| !id.is_empty()) {
@@ -515,7 +519,7 @@ pub fn update_params(compiled: &GravityZoneRule, rule_id: &str) -> Json {
         compiled
             .targets
             .clone()
-            .filter(Json::truthy)
+            .filter(Json::is_filled)
             .unwrap_or_else(|| Json::Object(Object::new())),
     );
     Json::Object(params)

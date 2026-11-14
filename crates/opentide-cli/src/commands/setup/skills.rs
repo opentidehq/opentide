@@ -518,38 +518,24 @@ fn replace_tree(stage: &mut Stage, dest: &Path, files: &[(String, Vec<u8>)]) -> 
 
 /// Every folder under `dir` on disk, links to folders not followed.
 fn folders_below(dir: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let mut pending = vec![dir.to_path_buf()];
-    while let Some(folder) = pending.pop() {
-        let Ok(entries) = std::fs::read_dir(&folder) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() && !path.is_symlink() {
-                out.push(path.clone());
-                pending.push(path);
-            }
-        }
-    }
-    out
+    walkdir::WalkDir::new(dir)
+        .min_depth(1)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_dir())
+        .map(walkdir::DirEntry::into_path)
+        .collect()
 }
 
 /// Removes every link under `dir`, links to folders included, unfollowed.
 fn unlink_below(stage: &mut Stage, dir: &Path) {
-    let mut pending = vec![dir.to_path_buf()];
-    while let Some(folder) = pending.pop() {
-        let Ok(entries) = std::fs::read_dir(&folder) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_symlink() {
-                stage.unlink(&path);
-            } else if path.is_dir() {
-                pending.push(path);
-            }
-        }
+    for entry in walkdir::WalkDir::new(dir)
+        .min_depth(1)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(walkdir::DirEntry::path_is_symlink)
+    {
+        stage.unlink(entry.path());
     }
 }
 

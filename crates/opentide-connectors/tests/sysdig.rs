@@ -229,6 +229,7 @@ fn sysdig_the_generic_deployer_adds_a_created_rule_to_the_tenants_policies() {
         rule_id: UUID.to_owned(),
         operation: opentide_connectors::connector::Operation::Create,
         body,
+        policies: None,
     };
     let platform = sysdig::Sysdig;
     let outcome = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await })
@@ -362,6 +363,7 @@ fn sysdig_a_versioned_update_is_not_sent_again_after_a_503() {
         rule_id: "42".to_owned(),
         operation: opentide_connectors::connector::Operation::Disable,
         body,
+        policies: None,
     };
     let platform = sysdig::Sysdig;
     let _outcome = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await });
@@ -405,6 +407,7 @@ fn sysdig_the_generic_deployer_disables_with_the_held_version_and_no_policy() {
         rule_id: "42".to_owned(),
         operation: opentide_connectors::connector::Operation::Disable,
         body: body.clone(),
+        policies: None,
     };
     let platform = sysdig::Sysdig;
     let outcome = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await })
@@ -419,14 +422,16 @@ fn sysdig_the_generic_deployer_disables_with_the_held_version_and_no_policy() {
     assert_eq!(received[1].body, expected);
 }
 
-/// Runs *operation* on rule 42 with *body* through the platform's
-/// [`Deployer`] on a tenant whose policy `POLICY` (id 7) holds *held*:
-/// the outcome and the requests sent. The tenant still has rule 42, named
-/// `Sysdig Falco Rule`.
+/// Runs *operation* on rule 42 with *body* and the request's *policies*
+/// through the platform's [`Deployer`] on a tenant whose setup names
+/// `POLICY` (id 7), which holds *held*: the outcome and the requests sent.
+/// The tenant has rule 42, named `Sysdig Falco Rule`, when *found*.
 fn deploy_with_policy(
     operation: opentide_connectors::connector::Operation,
     body: Vec<u8>,
+    policies: Option<Vec<String>>,
     held: &[&str],
+    found: bool,
 ) -> (
     Result<opentide_connectors::connector::DeployOutcome, ConnectorError>,
     Vec<wiremock::Request>,
@@ -435,13 +440,17 @@ fn deploy_with_policy(
     use wiremock::{Mock, ResponseTemplate};
     let rt = tokio::runtime::Runtime::new().unwrap();
     let server = rt.block_on(wiremock::MockServer::start());
-    let policies = serde_json::json!([{"id": 7, "name": POLICY, "ruleNames": held}]);
+    let listed = serde_json::json!([{"id": 7, "name": POLICY, "ruleNames": held}]);
     rt.block_on(async {
         Mock::given(method("GET"))
             .and(path("/api/secure/rules/42"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(
-                serde_json::json!({"id": 42, "version": 7, "name": "Sysdig Falco Rule"}),
-            ))
+            .respond_with(if found {
+                ResponseTemplate::new(200).set_body_json(
+                    serde_json::json!({"id": 42, "version": 7, "name": "Sysdig Falco Rule"}),
+                )
+            } else {
+                ResponseTemplate::new(404).set_body_string(r#"{"message": "not found"}"#)
+            })
             .mount(&server)
             .await;
         for verb in ["PUT", "DELETE"] {
@@ -453,7 +462,7 @@ fn deploy_with_policy(
         }
         Mock::given(method("GET"))
             .and(path("/api/v2/policies"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(policies))
+            .respond_with(ResponseTemplate::new(200).set_body_json(listed))
             .mount(&server)
             .await;
         Mock::given(method("PUT"))
@@ -473,6 +482,7 @@ fn deploy_with_policy(
         rule_id: "42".to_owned(),
         operation,
         body,
+        policies,
     };
     let platform = sysdig::Sysdig;
     let outcome =
@@ -496,7 +506,9 @@ fn sysdig_the_generic_deployer_deletes_without_a_body_out_of_the_policies() {
     let (outcome, requests) = deploy_with_policy(
         opentide_connectors::connector::Operation::Delete,
         Vec::new(),
+        None,
         &["Other rule", "Sysdig Falco Rule"],
+        true,
     );
     assert_eq!(outcome.unwrap().remote_id, None);
     assert_eq!(saved_policy(&requests), serde_json::json!(["Other rule"]));
@@ -513,8 +525,52 @@ fn sysdig_the_generic_deployer_disables_out_of_the_tenants_policies() {
     let (outcome, requests) = deploy_with_policy(
         opentide_connectors::connector::Operation::Disable,
         body,
+        None,
         &["Sysdig Falco Rule", "Other rule"],
+        true,
     );
     assert_eq!(outcome.unwrap().remote_id.as_deref(), Some("42"));
     assert_eq!(saved_policy(&requests), serde_json::json!(["Other rule"]));
+}
+
+/// The request's policies replace the tenant's, as a block's own do in
+/// `opentide deploy`: none named, none read or changed.
+#[test]
+fn sysdig_the_generic_deployer_takes_the_requests_policies() {
+    let (_, body, _) = compiled("DISABLED", None);
+    let (outcome, requests) = deploy_with_policy(
+        opentide_connectors::connector::Operation::Disable,
+        body,
+        Some(Vec::new()),
+        &["Sysdig Falco Rule"],
+        true,
+    );
+    assert_eq!(outcome.unwrap().remote_id.as_deref(), Some("42"));
+    let paths: Vec<&str> = requests.iter().map(|request| request.url.path()).collect();
+    assert_eq!(paths, ["/api/secure/rules/42", "/api/secure/rules/42"]);
+}
+
+/// A delete without a body of a rule the tenant no longer has: no name to
+/// take out of a policy, the delete is sent and the id forgotten.
+#[test]
+fn sysdig_the_generic_deployer_deletes_a_rule_the_tenant_lost() {
+    let (outcome, requests) = deploy_with_policy(
+        opentide_connectors::connector::Operation::Delete,
+        Vec::new(),
+        None,
+        &["Other rule"],
+        false,
+    );
+    assert_eq!(outcome.unwrap().remote_id, None);
+    let sent: Vec<(&str, &str)> = requests
+        .iter()
+        .map(|request| (request.method.as_str(), request.url.path()))
+        .collect();
+    assert_eq!(
+        sent,
+        [
+            ("GET", "/api/secure/rules/42"),
+            ("DELETE", "/api/secure/rules/42")
+        ]
+    );
 }

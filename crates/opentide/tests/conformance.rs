@@ -427,6 +427,7 @@ fn tenant_call(connection: &Connection, operation: &Value) -> Result<Json, opent
                     other => panic!("operation: {other}"),
                 },
                 body: operation["body"].as_str().unwrap().as_bytes().to_vec(),
+                policies: None,
             };
             let outcome = connectors::block_on(connection.deploy(&request))??;
             let operation = match outcome.operation {
