@@ -94,7 +94,7 @@ impl Json {
         }
     }
 
-    /// The compact JSON text (`separators=(",", ":")`, UTF-8 as is).
+    /// serde_json's compact JSON text, UTF-8 as is.
     pub fn to_compact(&self) -> String {
         // Writing to a String cannot fail, and every value is serialisable:
         // a float that JSON cannot carry (NaN, infinity) is written `null`.

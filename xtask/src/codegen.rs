@@ -684,7 +684,6 @@ pub fn workspace_artifacts(dir: &Path) -> Result<Vec<Artifact>> {
     let own = read_folder(&own_dir, &own_dir.to_string_lossy())?;
     let resolved = resolve(&Instance {
         workspace: own.as_ref(),
-        overlay: None,
         parent: None,
         // Generation sets OPENTIDE_TIDE_WORKSPACE: no parent instance.
         skip_parent: true,
