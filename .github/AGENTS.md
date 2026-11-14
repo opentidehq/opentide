@@ -65,7 +65,9 @@ closed). Then:
   the pages and runs the docs tests that need no wheel;
 - each specialised job runs only when its own paths change: `node` (`bindings/node/`), `wasi`
   (`crates/opentide-wasm/`, the WASI shims: `crates/*wasi*`, `vendor/`, `packages/`,
-  `build-wasm.sh`), `grammars` (`grammars/`), `textmate` (`highlights/`, `editors/`),
+  `build-wasm.sh`; the parser layer, where a C dependency and a parse's stack show only in
+  WebAssembly: `crates/opentide-syntax/`, `crates/opentide-parse/`, the eleven query-language
+  crates (`PARSER_CRATES` in `scripts/ci/changes.py`), `grammars/`, `highlights/`), `grammars` (`grammars/`), `textmate` (`highlights/`, `editors/`),
   `gitlab-ci-lint` (opentide-cli's CI renderer and `setup` commands, the linters' installer, its
   test), `facade` (`crates/opentide/`: the public API), `deny` (`Cargo.lock`, `deny.toml`, a
   manifest, `vendor/`, `fuzz/`, `publishing/`), `docs` (`docs/`, the root guides);

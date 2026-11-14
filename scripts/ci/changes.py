@@ -121,9 +121,9 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("scripts/*.py", ("python", "pylint"), ()),
     ("scripts/*.sh", ("ci",), ()),
     # What the engine compiles in, and its hosts.
-    ("grammars/*", ("grammars",), ("opentide-syntax",)),
+    ("grammars/*", ("grammars", "wasi"), ("opentide-syntax",)),
     ("highlights/test/*", ("textmate",), ()),
-    ("highlights/*", ("textmate",), ALL),
+    ("highlights/*", ("textmate", "wasi"), ALL),
     ("editors/*", ("textmate",), ()),
     ("packages/*", ("wasi",), ()),
     ("data/*", (), ALL),
@@ -145,6 +145,28 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     (".github/*", ("ci",), ()),
 )
 
+#: The parser layer and the query-language crates. A change to one runs the
+#: WASI build (CRATE_PATHS), where a C dependency gained or lost and the stack
+#: a deep parse needs show: the native build sees neither. Not the reverse
+#: closure of opentide-wasm: the facade it depends on lists every crate, so
+#: that would run it on every pull request. opentide-parse is ADR 0012's
+#: pure-Rust parser, before it lands.
+PARSER_CRATES = (
+    "opentide-syntax",
+    "opentide-parse",
+    "opentide-cql",
+    "opentide-eql",
+    "opentide-esql",
+    "opentide-exabeam",
+    "opentide-falco",
+    "opentide-kql",
+    "opentide-kuery",
+    "opentide-lucene",
+    "opentide-spl",
+    "opentide-yara",
+    "opentide-yaral",
+)
+
 #: Paths inside crates that run a specialised job. Only the paths a job is
 #: about run it (a change below a crate runs that crate's reverse
 #: dependencies' tests, not every job that builds it): the push to the base
@@ -164,6 +186,9 @@ CRATE_PATHS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # The WASI crate and the WASI shims of the crates that have one.
     ("crates/opentide-wasm/*", ("wasi",)),
     ("crates/*wasi*", ("wasi",)),
+    # The parser layer and the query languages: their C (or its absence) and
+    # their stack depth show only in the WebAssembly builds (ADR 0012).
+    *((f"crates/{crate}/*", ("wasi",)) for crate in PARSER_CRATES),
     ("crates/opentide-cli/src/render/ci.rs", ("gitlab",)),
     ("crates/opentide-cli/src/commands/setup/*", ("gitlab",)),
     ("crates/*/Cargo.toml", ("deny",)),
