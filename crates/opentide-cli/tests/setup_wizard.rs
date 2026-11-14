@@ -35,7 +35,9 @@ struct Session {
     ended: Arc<AtomicBool>,
     /// How much of `printed` an expectation has consumed.
     seen: usize,
-    _master: Box<dyn MasterPty + Send>,
+    /// The pseudo-terminal, closed once the run has exited: a pseudo
+    /// console on Windows ends its output only then.
+    master: Option<Box<dyn MasterPty + Send>>,
 }
 
 /// `opentide <args>` in `cwd` on a pseudo-terminal, in `human` mode
@@ -110,7 +112,7 @@ fn spawn_with(cwd: &Path, args: &[&str], env: &[(String, String)]) -> Session {
         printed,
         ended,
         seen: 0,
-        _master: pair.master,
+        master: Some(pair.master),
     }
 }
 
@@ -132,6 +134,25 @@ impl Session {
                     started.elapsed() < TIMEOUT,
                     "waiting for {text:?}; printed:\n{}",
                     String::from_utf8_lossy(&printed)
+                );
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// The exit code, once the run has exited; killed, and a failure, past
+    /// [`TIMEOUT`].
+    fn wait(&mut self) -> i64 {
+        let started = Instant::now();
+        loop {
+            if let Some(status) = self.child.try_wait().unwrap() {
+                return i64::from(status.exit_code());
+            }
+            if started.elapsed() > TIMEOUT {
+                let _ = self.child.kill();
+                panic!(
+                    "the run did not exit in {TIMEOUT:?}; printed:\n{}",
+                    String::from_utf8_lossy(&self.printed.lock().unwrap())
                 );
             }
             std::thread::sleep(Duration::from_millis(20));
@@ -193,21 +214,28 @@ fn answer(session: &mut Session, text: &str, keys: &[&str]) {
 /// pseudo console on Windows does not signal while it is open.
 fn finish(mut session: Session, last: &str) -> (String, i64) {
     let printed = session.expect(last);
-    let status = session.child.wait().unwrap();
-    (printed, i64::from(status.exit_code()))
+    (printed, session.wait())
 }
 
 /// Everything the session printed, its escapes removed and its lines ending
-/// `\n`, and its exit code, once it has exited and its output has ended (a
-/// pseudo console on Windows does not signal the end: a few seconds then).
+/// `\n`, and its exit code, once it has exited and its output has ended: the
+/// pseudo-terminal is closed first, which ends a Windows pseudo console's
+/// output. Output that has not ended by [`TIMEOUT`] is a failure, not a
+/// partial result.
 fn everything(mut session: Session) -> (String, i64) {
-    let status = session.child.wait().unwrap();
+    let code = session.wait();
+    drop(session.master.take());
     let started = Instant::now();
-    while !session.ended.load(Ordering::SeqCst) && started.elapsed() < Duration::from_secs(5) {
+    while !session.ended.load(Ordering::SeqCst) {
+        assert!(
+            started.elapsed() < TIMEOUT,
+            "the output did not end in {TIMEOUT:?}; printed:\n{}",
+            String::from_utf8_lossy(&session.printed.lock().unwrap())
+        );
         std::thread::sleep(Duration::from_millis(20));
     }
     let printed = String::from_utf8_lossy(&session.printed.lock().unwrap()).into_owned();
-    (plain(&printed), i64::from(status.exit_code()))
+    (plain(&printed), code)
 }
 
 /// `text` without its terminal escapes (CSI and OSC), lines ending `\n`.
@@ -556,12 +584,19 @@ fn json_setup_at_a_terminal_works_when_scripted() {
     assert!(repo.join("objects").is_dir());
 }
 
-/// With no terminal on stdin the wizard refuses rather than waits.
+/// With no terminal on stdin the wizard refuses rather than waits, whatever
+/// `OPENTIDE_*` the test runs under.
 #[test]
 fn setup_without_a_terminal_refuses() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("no-tty-detections");
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_opentide-cli"))
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_opentide-cli"));
+    for (name, _) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with("OPENTIDE_") || name == "DEPLOYMENT_PLAN" {
+            command.env_remove(name);
+        }
+    }
+    let output = command
         .args([
             "--json",
             "--no-color",
