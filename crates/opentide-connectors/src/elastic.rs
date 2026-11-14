@@ -15,7 +15,9 @@
 //! The tenant's `index` (a list) is not a [`crate::Tenant`] setup value:
 //! the calls that fall back on it take it as an argument.
 
+use opentide_compile::deploy::PATH_SEGMENT;
 use opentide_compile::json::{Json, Object};
+use percent_encoding::utf8_percent_encode;
 
 use crate::answer::Answer;
 use crate::connector::{BoxFuture, LiveCheck, LiveValidator, Platform, QueryRunner, TenantContext};
@@ -144,7 +146,7 @@ pub struct Elastic;
 /// Why `find_rules` stopped (UC-4.4b).
 #[derive(Debug, thiserror::Error)]
 pub enum FindError {
-    /// An error status, as `requests.HTTPError` words it.
+    /// An error status: `Elastic answered HTTP <status> <reason> for <url>`.
     #[error("{0}")]
     Status(String),
     /// A body that is not JSON.
@@ -172,10 +174,12 @@ impl Elastic {
         let url = format!(
             "{}/api/detection_engine/rules/_find?{}",
             client.kibana_base,
-            crate::encode::urlencode([
-                ("page", page.to_string().as_str()),
-                ("per_page", per_page.to_string().as_str()),
-            ])
+            url::form_urlencoded::Serializer::new(String::new())
+                .extend_pairs([
+                    ("page", page.to_string().as_str()),
+                    ("per_page", per_page.to_string().as_str()),
+                ])
+                .finish()
         );
         let answer = client
             .call(cx, crate::transport::Method::GET, &url, None, false)
@@ -265,7 +269,9 @@ impl Client {
         format!(
             "{}?{}",
             self.rules(),
-            crate::encode::urlencode([("rule_id", rule_id)])
+            url::form_urlencoded::Serializer::new(String::new())
+                .extend_pairs([("rule_id", rule_id)])
+                .finish()
         )
     }
 
@@ -390,7 +396,7 @@ impl Client {
     ) -> Result<Answer, ConnectorError> {
         let url = self.es(&format!(
             "/_resolve/index/{}?ignore_unavailable=true&allow_no_indices=true",
-            crate::encode::quote(pattern, "")
+            utf8_percent_encode(pattern, PATH_SEGMENT)
         ));
         self.call(cx, crate::transport::Method::GET, &url, None, false)
             .await
@@ -403,10 +409,14 @@ impl Client {
         sources: &str,
         fields: &[String],
     ) -> Result<Answer, ConnectorError> {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("fields", &fields.join(","))
+            .append_pair("ignore_unavailable", "true")
+            .append_pair("allow_no_indices", "true")
+            .finish();
         let url = self.es(&format!(
-            "/{}/_field_caps?fields={}&ignore_unavailable=true&allow_no_indices=true",
-            crate::encode::quote(sources, ",*-_"),
-            crate::encode::quote(&fields.join(","), ",*-_.")
+            "/{}/_field_caps?{query}",
+            utf8_percent_encode(sources, PATH_SEGMENT),
         ));
         self.call(cx, crate::transport::Method::GET, &url, None, false)
             .await
@@ -1267,18 +1277,14 @@ impl Platform for Elastic {
     }
 }
 
-/// `str(requests.HTTPError)` of an answer `raise_for_status` refused.
+/// An error status of *answer* to *url*.
 fn http_error_text(answer: &Answer, url: &str) -> String {
-    let kind = if answer.status < 500 {
-        "Client"
-    } else {
-        "Server"
-    };
     let reason = crate::transport::StatusCode::from_u16(answer.status)
         .ok()
         .and_then(|status| status.canonical_reason())
+        .map(|reason| format!(" {reason}"))
         .unwrap_or_default();
-    format!("{} {kind} Error: {reason} for url: {url}", answer.status)
+    format!("Elastic answered HTTP {}{reason} for {url}", answer.status)
 }
 
 /// `_write_failed`: a 401 or 403 fails the tenant; any other error fails
@@ -1585,7 +1591,7 @@ async fn eql(
     ]);
     let url = client.es(&format!(
         "/{}/_eql/search",
-        crate::encode::quote(indices, ",*-_.")
+        utf8_percent_encode(indices, PATH_SEGMENT)
     ));
     let answer = client
         .call(
@@ -1654,7 +1660,7 @@ async fn lucene(
     ]);
     let url = client.es(&format!(
         "/{}/_search",
-        crate::encode::quote(indices, ",*-_.")
+        utf8_percent_encode(indices, PATH_SEGMENT)
     ));
     let answer = client
         .call(
@@ -1771,7 +1777,7 @@ async fn kuery_preview(
     ]);
     let url = client.es(&format!(
         "/.preview.alerts-security.alerts-{}/_search",
-        crate::encode::quote(&client.space, "")
+        utf8_percent_encode(&client.space, PATH_SEGMENT)
     ));
     let found = client
         .call(
