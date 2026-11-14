@@ -721,8 +721,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
-      # `-n 4` for the runner's four cores (measured: more workers hit a memory
-      # cliff, each holding an interpreter and the subprocess its test runs).
+      # `-n 6` on the runner's four cores: the E2E tests wait on the
+      # subprocesses they start (measured on one E2E shard: -n 4 62 s, -n 6
+      # 51 s; ten workers hit a memory cliff, 137 s).
       # Coverage is combined across the xdist workers by pytest-cov, so the
       # gate reads the same number as a serial run.
       - name: Pytest with coverage (unit and E2E)
@@ -732,7 +733,7 @@ jobs:
           uv run pytest tests/ \
             --ignore=tests/test_ci \
             -m "not full_set and not gitlab_ci_lint" \
-            -n 4 \
+            -n 6 \
             --cov-report=xml:coverage.xml \
             --cov-report=html:htmlcov \
             --junitxml=pytest-results.xml
