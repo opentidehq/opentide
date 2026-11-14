@@ -607,25 +607,12 @@ pub(crate) fn unset_credentials(platform: &str, tenant: &Configured, env: &Env) 
     })
 }
 
-/// The HTTP settings each platform's client mounts.
+/// The HTTP settings a tenant's client mounts for `query`, `validate query
+/// --live` and `generate extract`, at `--timeout`: the connectors' own
+/// ([`opentide_connectors::http_settings`]), which `opentide::Connection`
+/// reads for its queries too.
 pub(crate) fn http_settings(platform: &str, timeout: Duration) -> HttpSettings {
-    use opentide_connectors::{
-        carbon_black, crowdstrike, defender, elastic, harfanglab, sentinel, sentinel_one, splunk,
-    };
-    match platform {
-        "defender_for_endpoint" => defender::http_settings(),
-        "sentinel_one" => sentinel_one::http_settings(),
-        "crowdstrike" => crowdstrike::http_defaults(),
-        "harfanglab" => harfanglab::http_defaults(),
-        "elastic" => elastic::http_settings(timeout),
-        "splunk" => splunk::http_settings(timeout),
-        "carbon_black_cloud" => carbon_black::http_settings(timeout),
-        "graylog" => opentide_connectors::graylog::http_defaults(),
-        // azure-core reads for 300 s; the server holds the query up to its
-        // own timeout (`Prefer: wait`).
-        "sentinel" => sentinel::http_settings(timeout.max(Duration::from_secs(300))),
-        _ => HttpSettings::default(),
-    }
+    opentide_connectors::http_settings(platform, timeout)
 }
 
 /// One tenant's run of the query (`run_on_tenant`).
@@ -1437,6 +1424,22 @@ fn table(headers: &[String], rows: &[Vec<String>], width: Option<usize>) -> Vec<
 mod tests {
     use super::*;
 
+    #[test]
+    fn every_platform_mounts_the_connectors_http_settings() {
+        // A platform the command line listed apart drifted: Google SecOps
+        // left --timeout unread, Exabeam waited 120 s for 30 s.
+        for platform in opentide_schema::platforms::PLATFORMS.iter().map(|p| p.id) {
+            // The default --timeout, and one a user gives.
+            for timeout in [Duration::from_secs(120), Duration::from_secs(7)] {
+                assert_eq!(
+                    http_settings(platform, timeout),
+                    opentide_connectors::http_settings(platform, timeout),
+                    "{platform} at {timeout:?}"
+                );
+            }
+        }
+    }
+
     fn at(text: &str) -> jiff::Timestamp {
         text.parse().unwrap()
     }
@@ -2091,9 +2094,9 @@ mod tests {
             let settings = http_settings(platform, Duration::from_secs(30));
             assert!(settings.timeout > Duration::ZERO, "{platform}");
         }
-        // Splunk and Carbon Black Cloud read for --timeout; Sentinel for
-        // azure-core's 300 s at least; a platform with no runner mounts the
-        // defaults.
+        // Splunk, Carbon Black Cloud and Google SecOps read for --timeout;
+        // Sentinel for azure-core's 300 s at least; Sysdig keeps its
+        // client's 30 s.
         assert_eq!(
             http_settings("splunk", Duration::from_secs(5)).timeout,
             Duration::from_secs(5)
@@ -2107,8 +2110,12 @@ mod tests {
             Duration::from_secs(300)
         );
         assert_eq!(
+            http_settings("google_secops", Duration::from_secs(5)).timeout,
+            Duration::from_secs(5)
+        );
+        assert_eq!(
             http_settings("sysdig", Duration::from_secs(5)).timeout,
-            HttpSettings::default().timeout
+            Duration::from_secs(30)
         );
     }
 
