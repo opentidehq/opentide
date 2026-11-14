@@ -1,13 +1,13 @@
 //! Styled text: a string and the styled spans over it, written as the terminal reads it.
 //!
 //! The renderers build each line as a [`Text`] and write it with
-//! [`Text::render`]: one SGR sequence per run of text written the same
-//! (`ESC[1;31m…ESC[0m`), an OSC 8 hyperlink around a linked run, and the bare
-//! text where no style applies. A [`Style`] is typed ([`Style::BOLD`],
-//! `Style::fg(Color::Red).bold()`), so a misspelt style does not compile.
-//! Widths are terminal cells ([`cell_len`], the `unicode-width` crate);
-//! offsets are characters, as in the code frames' columns.
+//! [`Text::render`]: each run of text written the same in its [`anstyle`]
+//! style, an OSC 8 hyperlink around a linked run, and the bare text where no
+//! style applies. Widths are terminal cells ([`cell_len`], the
+//! `unicode-width` crate); offsets are characters, as in the code frames'
+//! columns.
 
+use anstyle::Style;
 use unicode_width::UnicodeWidthChar;
 
 /// The cells `text` takes in a terminal: a wide character two, a combining one none.
@@ -48,212 +48,11 @@ pub enum Colour {
     Full,
 }
 
-/// A colour a [`Style`] gives text: one of the terminal's named colours the
-/// renderers use, or one of its 256 (`Indexed`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Color {
-    /// SGR 31.
-    Red,
-    /// SGR 32.
-    Green,
-    /// SGR 33.
-    Yellow,
-    /// SGR 34.
-    Blue,
-    /// SGR 35.
-    Magenta,
-    /// SGR 36.
-    Cyan,
-    /// SGR 96.
-    BrightCyan,
-    /// One of the 256 colours (`38;5;n`, `48;5;n`).
-    Indexed(u8),
-}
-
-impl Color {
-    /// The SGR parameters of the colour as a foreground (`base` 30) or a background (`base` 40).
-    fn sgr(self, base: u8) -> String {
-        let named = |offset: u8| (base + offset).to_string();
-        match self {
-            Color::Red => named(1),
-            Color::Green => named(2),
-            Color::Yellow => named(3),
-            Color::Blue => named(4),
-            Color::Magenta => named(5),
-            Color::Cyan => named(6),
-            Color::BrightCyan => named(66),
-            Color::Indexed(index) => format!("{};5;{index}", base + 8),
-        }
-    }
-}
-
-/// The SGR attributes, one bit each, in the order they are written.
-const ATTRIBUTES: [(u8, &str); 5] = [
-    (BOLD, "1"),
-    (DIM, "2"),
-    (ITALIC, "3"),
-    (UNDERLINE, "4"),
-    (REVERSE, "7"),
-];
-const BOLD: u8 = 1;
-const DIM: u8 = 1 << 1;
-const ITALIC: u8 = 1 << 2;
-const UNDERLINE: u8 = 1 << 3;
-const REVERSE: u8 = 1 << 4;
-
-/// How a run of text looks: attributes, a foreground and a background colour,
-/// and a hyperlink. Built from the constants and the chained constructors
-/// (`Style::fg(Color::Red).bold()`), so a style a renderer names is checked
-/// when it compiles.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Style {
-    /// The bits of [`ATTRIBUTES`].
-    attributes: u8,
-    fg: Option<Color>,
-    bg: Option<Color>,
-    link: Option<String>,
-}
-
-impl Style {
-    /// No style at all.
-    pub const PLAIN: Style = Style {
-        attributes: 0,
-        fg: None,
-        bg: None,
-        link: None,
-    };
-    /// Bold (SGR 1).
-    pub const BOLD: Style = Style::PLAIN.bold();
-    /// Dim (SGR 2).
-    pub const DIM: Style = Style::PLAIN.dim();
-    /// Italic (SGR 3).
-    pub const ITALIC: Style = Style::PLAIN.italic();
-    /// Underlined (SGR 4).
-    pub const UNDERLINE: Style = Style::PLAIN.underline();
-
-    /// Text in `color`.
-    pub const fn fg(color: Color) -> Style {
-        Style::PLAIN.with_fg(color)
-    }
-
-    /// A hyperlink to `url`, with no other style.
-    pub fn link(url: impl Into<String>) -> Style {
-        Style {
-            link: Some(url.into()),
-            ..Style::PLAIN
-        }
-    }
-
-    const fn with(mut self, attribute: u8) -> Style {
-        self.attributes |= attribute;
-        self
-    }
-
-    const fn with_fg(mut self, color: Color) -> Style {
-        self.fg = Some(color);
-        self
-    }
-
-    /// `self`, bold.
-    pub const fn bold(self) -> Style {
-        self.with(BOLD)
-    }
-
-    /// `self`, dim.
-    pub const fn dim(self) -> Style {
-        self.with(DIM)
-    }
-
-    /// `self`, italic.
-    pub const fn italic(self) -> Style {
-        self.with(ITALIC)
-    }
-
-    /// `self`, underlined.
-    pub const fn underline(self) -> Style {
-        self.with(UNDERLINE)
-    }
-
-    /// `self` in reverse video (SGR 7): the brand mark without colour.
-    pub const fn reverse(self) -> Style {
-        self.with(REVERSE)
-    }
-
-    /// `self` on a `color` background.
-    pub const fn on(mut self, color: Color) -> Style {
-        self.bg = Some(color);
-        self
-    }
-
-    /// Whether the style is bold.
-    pub fn is_bold(&self) -> bool {
-        self.attributes & BOLD != 0
-    }
-
-    /// Whether the style is dim.
-    pub fn is_dim(&self) -> bool {
-        self.attributes & DIM != 0
-    }
-
-    /// The foreground colour, if the style sets one.
-    pub fn foreground(&self) -> Option<Color> {
-        self.fg
-    }
-
-    /// Whether the style changes nothing.
-    pub fn is_plain(&self) -> bool {
-        *self == Style::PLAIN
-    }
-
-    /// `self`, then `other` on top: attributes add up, `other`'s colours and link win.
-    pub fn combine(&self, other: &Style) -> Style {
-        Style {
-            attributes: self.attributes | other.attributes,
-            fg: other.fg.or(self.fg),
-            bg: other.bg.or(self.bg),
-            link: other.link.clone().or_else(|| self.link.clone()),
-        }
-    }
-
-    /// The SGR parameters at `colour`: the attributes in the order 1, 2, 3, 4, 7,
-    /// then, at [`Colour::Full`], the foreground and the background.
-    fn sgr(&self, colour: Colour) -> String {
-        let mut codes: Vec<String> = ATTRIBUTES
-            .iter()
-            .filter(|(bit, _)| self.attributes & bit != 0)
-            .map(|(_, code)| (*code).to_owned())
-            .collect();
-        if colour == Colour::Full {
-            codes.extend(self.fg.map(|fg| fg.sgr(30)));
-            codes.extend(self.bg.map(|bg| bg.sgr(40)));
-        }
-        codes.join(";")
-    }
-
-    /// A style from space-separated words (`bold`, `dim`, `italic`, `underline`
-    /// and the colour names): kept only for the command renderers that still
-    /// name their styles as text, until they move to the typed constructors.
-    /// An unknown word fails a debug build.
-    pub fn new(words: &str) -> Style {
-        words
-            .split_whitespace()
-            .fold(Style::PLAIN, |style, word| match word {
-                "bold" => style.bold(),
-                "dim" => style.dim(),
-                "italic" => style.italic(),
-                "underline" => style.underline(),
-                "red" => style.with_fg(Color::Red),
-                "green" => style.with_fg(Color::Green),
-                "yellow" => style.with_fg(Color::Yellow),
-                "blue" => style.with_fg(Color::Blue),
-                "magenta" => style.with_fg(Color::Magenta),
-                "cyan" => style.with_fg(Color::Cyan),
-                _ => {
-                    debug_assert!(false, "unknown style word {word:?}");
-                    style
-                }
-            })
-    }
+/// `base` with `top` drawn over it: their effects add up, `top`'s colours win.
+pub fn layer(base: Style, top: Style) -> Style {
+    base.effects(base.get_effects() | top.get_effects())
+        .fg_color(top.get_fg_color().or(base.get_fg_color()))
+        .bg_color(top.get_bg_color().or(base.get_bg_color()))
 }
 
 /// A styled span: characters `start..end` of a [`Text`].
@@ -262,6 +61,7 @@ struct Span {
     start: usize,
     end: usize,
     style: Style,
+    link: Option<String>,
 }
 
 /// A line of text with styled spans; later spans are drawn over earlier ones.
@@ -321,15 +121,30 @@ impl Text {
             self.spans.push(Span {
                 start,
                 end,
-                style: style.clone(),
+                style: *style,
+                link: None,
             });
         }
         self
     }
 
+    /// Adds `text` at the end, linked to `url` (an OSC 8 hyperlink where links are written).
+    pub fn append_link(&mut self, text: &str, url: String) -> &mut Text {
+        let start = self.chars.len();
+        self.chars.extend(strip_control(text));
+        let end = self.chars.len();
+        self.spans.push(Span {
+            start,
+            end,
+            style: Style::new(),
+            link: Some(url),
+        });
+        self
+    }
+
     /// Adds unstyled `text` at the end.
     pub fn push_str(&mut self, text: &str) -> &mut Text {
-        self.append(text, &Style::PLAIN)
+        self.append(text, &Style::new())
     }
 
     /// Adds `other`, its spans with it, at the end.
@@ -339,7 +154,7 @@ impl Text {
         self.spans.extend(other.spans.iter().map(|span| Span {
             start: span.start + offset,
             end: span.end + offset,
-            style: span.style.clone(),
+            ..span.clone()
         }));
         self
     }
@@ -353,7 +168,8 @@ impl Text {
         self.spans.push(Span {
             start,
             end,
-            style: style.clone(),
+            style: *style,
+            link: None,
         });
     }
 
@@ -370,7 +186,7 @@ impl Text {
                 .map(|span| Span {
                     start: span.start.max(start) - start,
                     end: span.end.min(end) - start,
-                    style: span.style.clone(),
+                    ..span.clone()
                 })
                 .collect(),
         }
@@ -475,176 +291,122 @@ impl Text {
     }
 
     /// The text as written to a stream at `colour`: each run of characters
-    /// written the same in one SGR sequence (`ESC[1;31m…ESC[0m`), a linked run
-    /// inside an OSC 8 hyperlink (`links`), the rest bare. `link_id` names
-    /// each hyperlink.
+    /// written the same in its style and a reset, a linked run inside an OSC 8
+    /// hyperlink (`links`), the rest bare. [`Colour::Mono`] keeps the effects
+    /// and drops the colours.
     pub fn render(&self, colour: Colour, links: bool) -> String {
         if colour == Colour::None && !links || self.spans.is_empty() {
             return self.as_plain();
         }
         let mut bounds: Vec<usize> = vec![0, self.chars.len()];
-        for span in &self.spans {
-            bounds.push(span.start);
-            bounds.push(span.end);
-        }
+        bounds.extend(self.spans.iter().flat_map(|span| [span.start, span.end]));
         bounds.sort_unstable();
         bounds.dedup();
-        // (SGR parameters, link, text): neighbours written the same are one run.
-        let mut runs: Vec<(String, Option<String>, String)> = Vec::new();
+        // (style, link, text): neighbours written the same are one run.
+        let mut runs: Vec<(Style, Option<&str>, String)> = Vec::new();
         for window in bounds.windows(2) {
             let (start, end) = (window[0], window[1]);
-            let style = self
-                .spans
-                .iter()
-                .filter(|span| span.start <= start && span.end >= end)
-                .fold(Style::PLAIN, |style, span| style.combine(&span.style));
-            let codes = if colour == Colour::None {
-                String::new()
-            } else {
-                style.sgr(colour)
+            let over = || {
+                self.spans
+                    .iter()
+                    .filter(|span| span.start <= start && span.end >= end)
             };
-            let link = style.link.filter(|_| links);
+            let style = over().fold(Style::new(), |style, span| layer(style, span.style));
+            let style = match colour {
+                Colour::None => Style::new(),
+                Colour::Mono => style.fg_color(None).bg_color(None).underline_color(None),
+                Colour::Full => style,
+            };
+            let link = over()
+                .filter_map(|span| span.link.as_deref())
+                .next_back()
+                .filter(|_| links);
             let chars = self.chars[start..end].iter();
             match runs.last_mut() {
-                Some((last_codes, last_link, text))
-                    if *last_codes == codes && *last_link == link =>
+                Some((last_style, last_link, text))
+                    if *last_style == style && *last_link == link =>
                 {
                     text.extend(chars);
                 }
-                _ => runs.push((codes, link, chars.collect())),
+                _ => runs.push((style, link, chars.collect())),
             }
         }
+        // OSC 8 without an `id=`: no run here splits a link, so a terminal's
+        // grouping by URI is enough.
         let mut out = String::new();
-        for (codes, link, text) in runs {
-            let piece = if codes.is_empty() {
-                text
-            } else {
-                format!("\u{1b}[{codes}m{text}\u{1b}[0m")
-            };
+        for (style, link, text) in runs {
             match link {
                 Some(url) => out.push_str(&format!(
-                    "\u{1b}]8;id={};{url}\u{1b}\\{piece}\u{1b}]8;;\u{1b}\\",
-                    link_id(&url)
+                    "\u{1b}]8;;{url}\u{1b}\\{style}{text}{style:#}\u{1b}]8;;\u{1b}\\"
                 )),
-                None => out.push_str(&piece),
+                None => out.push_str(&format!("{style}{text}{style:#}")),
             }
         }
         out
     }
 }
 
-/// A hyperlink's id: a terminal groups the cells of one link by it. Derived
-/// from the URL, so a run is reproducible (the oracle's are random).
-fn link_id(url: &str) -> String {
-    // FNV-1a: a stable, dependency-free hash; the id only has to be the same
-    // for the same link within one run.
-    let mut hash: u32 = 0x811c_9dc5;
-    for byte in url.bytes() {
-        hash ^= u32::from(byte);
-        hash = hash.wrapping_mul(0x0100_0193);
-    }
-    format!("{hash:08x}")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anstyle::{Ansi256Color, AnsiColor};
+
+    const RED: Style = AnsiColor::Red.on_default();
+    const BLUE: Style = AnsiColor::Blue.on_default();
 
     #[test]
-    fn typed_styles_write_their_sgr_parameters() {
-        let cases = [
-            (Style::BOLD, "1", "1"),
-            (Style::DIM, "2", "2"),
-            (Style::ITALIC.dim(), "2;3", "2;3"),
-            (Style::UNDERLINE, "4", "4"),
-            (Style::BOLD.reverse(), "1;7", "1;7"),
-            (Style::fg(Color::Red).bold(), "1;31", "1"),
-            (Style::fg(Color::Green), "32", ""),
-            (Style::fg(Color::Yellow), "33", ""),
-            (Style::fg(Color::Blue), "34", ""),
-            (Style::fg(Color::Magenta).bold(), "1;35", "1"),
-            (Style::fg(Color::Cyan), "36", ""),
-            (Style::fg(Color::BrightCyan), "96", ""),
-            (
-                Style::fg(Color::Indexed(231)).bold().on(Color::Indexed(18)),
-                "1;38;5;231;48;5;18",
-                "1",
-            ),
-            (Style::PLAIN.on(Color::Blue), "44", ""),
-            (Style::PLAIN, "", ""),
-        ];
-        for (style, full, mono) in cases {
-            assert_eq!(style.sgr(Colour::Full), full, "{style:?}");
-            assert_eq!(style.sgr(Colour::Mono), mono, "{style:?}");
-        }
-        assert!(Style::PLAIN.is_plain());
-        assert_eq!(Style::PLAIN, Style::default());
-        assert!(!Style::link("https://x").is_plain());
-        // On top: attributes add up, the colour drawn last wins.
-        let combined = Style::fg(Color::Red)
-            .bold()
-            .combine(&Style::fg(Color::Blue).underline());
-        assert_eq!(combined, Style::fg(Color::Blue).bold().underline());
+    fn layers_add_effects_and_the_top_colour_wins() {
+        let combined = layer(RED.bold(), BLUE.underline());
+        assert_eq!(combined, BLUE.bold().underline());
+        let background = Ansi256Color(231).on(Ansi256Color(18));
+        assert_eq!(layer(background, Style::new().bold()), background.bold());
     }
 
     #[test]
-    fn the_command_renderers_style_words_map_to_typed_styles() {
-        assert_eq!(Style::new("bold dim"), Style::BOLD.dim());
-        assert_eq!(Style::new("yellow bold"), Style::fg(Color::Yellow).bold());
-        assert_eq!(Style::new("underline dim"), Style::UNDERLINE.dim());
-        assert_eq!(Style::new("italic"), Style::ITALIC);
-        assert_eq!(Style::new("cyan"), Style::fg(Color::Cyan));
-        assert_eq!(Style::new(""), Style::PLAIN);
-    }
-
-    #[test]
-    fn render_one_sgr_run_per_run_written_the_same() {
+    fn render_one_style_per_run_written_the_same() {
         let mut text = Text::default();
-        text.append("ab", &Style::fg(Color::Blue));
-        text.append("c", &Style::fg(Color::Blue));
+        text.append("ab", &BLUE);
+        text.append("c", &BLUE);
         text.push_str(" d");
         assert_eq!(text.render(Colour::Full, false), "\u{1b}[34mabc\u{1b}[0m d");
         // Blue and red differ in colour, not without it.
-        let mut two = Text::styled("a", &Style::fg(Color::Blue).bold());
-        two.append("b", &Style::fg(Color::Red).bold());
+        let mut two = Text::styled("a", &BLUE.bold());
+        two.append("b", &RED.bold());
         assert_eq!(
             two.render(Colour::Full, false),
-            "\u{1b}[1;34ma\u{1b}[0m\u{1b}[1;31mb\u{1b}[0m"
+            "\u{1b}[1m\u{1b}[34ma\u{1b}[0m\u{1b}[1m\u{1b}[31mb\u{1b}[0m"
         );
         assert_eq!(two.render(Colour::Mono, false), "\u{1b}[1mab\u{1b}[0m");
         assert_eq!(text.render(Colour::Mono, false), "abc d");
         assert_eq!(text.render(Colour::None, false), "abc d");
-        let bold = Text::styled("x", &Style::fg(Color::Red).bold());
-        assert_eq!(bold.render(Colour::Mono, false), "\u{1b}[1mx\u{1b}[0m");
+        let brand = Text::styled("x", &Ansi256Color(231).on(Ansi256Color(18)).bold());
         assert_eq!(
-            Text::styled("y", &Style::fg(Color::BrightCyan)).render(Colour::Full, false),
-            "\u{1b}[96my\u{1b}[0m"
+            brand.render(Colour::Full, false),
+            "\u{1b}[1m\u{1b}[38;5;231m\u{1b}[48;5;18mx\u{1b}[0m"
         );
+        assert_eq!(brand.render(Colour::Mono, false), "\u{1b}[1mx\u{1b}[0m");
     }
 
     #[test]
     fn render_links_and_overlapping_styles() {
-        let mut text = Text::styled("abc", &Style::link("file:///a"));
-        text.stylize(&Style::BOLD, 1, 2);
-        let rendered = text.render(Colour::Full, true);
-        let id = link_id("file:///a");
+        let mut text = Text::default();
+        text.append_link("abc", "file:///a".to_owned());
+        text.stylize(&Style::new().bold(), 1, 2);
+        let (open, close) = ("\u{1b}]8;;file:///a\u{1b}\\", "\u{1b}]8;;\u{1b}\\");
         assert_eq!(
-            rendered,
-            format!(
-                "\u{1b}]8;id={id};file:///a\u{1b}\\a\u{1b}]8;;\u{1b}\\\u{1b}]8;id={id};file:///a\u{1b}\\\u{1b}[1mb\u{1b}[0m\u{1b}]8;;\u{1b}\\\u{1b}]8;id={id};file:///a\u{1b}\\c\u{1b}]8;;\u{1b}\\"
-            )
+            text.render(Colour::Full, true),
+            format!("{open}a{close}{open}\u{1b}[1mb\u{1b}[0m{close}{open}c{close}")
         );
         assert_eq!(text.render(Colour::Full, false), "a\u{1b}[1mb\u{1b}[0mc");
+        assert_eq!(text.render(Colour::None, true), format!("{open}abc{close}"));
+        assert_eq!(text.render(Colour::None, false), "abc");
     }
 
     #[test]
     fn control_characters_are_dropped_and_tabs_expand() {
         assert_eq!(Text::plain("a\r\nb\u{7}").as_plain(), "a\nb");
         // Escape sequences and other controls are shown, never written raw.
-        let hostile = Text::styled(
-            "\u{1b}[2J\u{1b}]8;;x\u{7}\0\u{7f}\u{9b}",
-            &Style::fg(Color::Red),
-        );
+        let hostile = Text::styled("\u{1b}[2J\u{1b}]8;;x\u{7}\0\u{7f}\u{9b}", &RED);
         assert_eq!(hostile.as_plain(), "␛[2J␛]8;;x␀␡\u{fffd}");
         assert!(!hostile.render(Colour::None, false).contains('\u{1b}'));
         assert_eq!(
@@ -654,10 +416,10 @@ mod tests {
         assert_eq!(char_width('\u{1b}'), 1);
         assert_eq!(char_width('\u{7}'), 0);
         assert_eq!(cell_len("\u{1b}[1m"), 4);
-        let parts = Text::styled("a\nb", &Style::fg(Color::Red)).split_lines();
+        let parts = Text::styled("a\nb", &RED).split_lines();
         assert_eq!(parts.len(), 2);
         assert_eq!(parts[1].render(Colour::Full, false), "\u{1b}[31mb\u{1b}[0m");
-        let mut text = Text::styled("ab", &Style::fg(Color::Blue));
+        let mut text = Text::styled("ab", &BLUE);
         text.push_str("\tc\t");
         text.expand_tabs();
         assert_eq!(text.as_plain(), "ab      c       ");
@@ -671,22 +433,22 @@ mod tests {
 
     #[test]
     fn the_last_colour_drawn_wins_and_attributes_add_up() {
-        let mut text = Text::styled("abc", &Style::fg(Color::Red).bold());
-        text.stylize(&Style::fg(Color::Blue), 1, 2);
-        text.stylize(&Style::UNDERLINE, 2, 3);
+        let mut text = Text::styled("abc", &RED.bold());
+        text.stylize(&BLUE, 1, 2);
+        text.stylize(&Style::new().underline(), 2, 3);
         assert_eq!(
             text.render(Colour::Full, false),
-            "\u{1b}[1;31ma\u{1b}[0m\u{1b}[1;34mb\u{1b}[0m\u{1b}[1;4;31mc\u{1b}[0m"
+            "\u{1b}[1m\u{1b}[31ma\u{1b}[0m\u{1b}[1m\u{1b}[34mb\u{1b}[0m\u{1b}[1m\u{1b}[4m\u{1b}[31mc\u{1b}[0m"
         );
         assert_eq!(
             text.render(Colour::Mono, false),
-            "\u{1b}[1mab\u{1b}[0m\u{1b}[1;4mc\u{1b}[0m"
+            "\u{1b}[1mab\u{1b}[0m\u{1b}[1m\u{1b}[4mc\u{1b}[0m"
         );
     }
 
     #[test]
     fn truncate_pads_where_a_wide_character_no_longer_fits() {
-        let mut wide = Text::styled("名前名", &Style::fg(Color::Red));
+        let mut wide = Text::styled("名前名", &RED);
         wide.truncate_ellipsis(4);
         assert_eq!(wide.as_plain(), "名 …");
         assert_eq!(wide.cell_len(), 4);
@@ -700,7 +462,7 @@ mod tests {
 
     #[test]
     fn slice_rstrip_and_cells() {
-        let mut text = Text::styled("ab  ", &Style::fg(Color::Red));
+        let mut text = Text::styled("ab  ", &RED);
         text.rstrip();
         assert_eq!(text.render(Colour::Full, false), "\u{1b}[31mab\u{1b}[0m");
         assert_eq!(cell_len("名前x"), 5);
