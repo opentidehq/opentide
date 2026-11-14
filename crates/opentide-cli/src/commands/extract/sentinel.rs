@@ -1,9 +1,8 @@
 //! `opentide generate extract sentinel` (UC-4.4e, #834;
 //! `extraction/sentinel_importer.py`): the analytics rules of each Sentinel
 //! tenant, listed through the connectors' ARM client
-//! ([`opentide_connectors::sentinel::Sentinel::list`]), dumped as
-//! `output-<tenant>.json` and written as opentide rule files under
-//! `Imported/`.
+//! ([`opentide_connectors::sentinel::Sentinel::list`]), and written as
+//! opentide rule files under `Imported/`.
 //!
 //! A listed rule is read as the oracle read it (`alert_rule_as_flat_dict`):
 //! its `properties` merged up and every key in snake case, the custom
@@ -111,12 +110,6 @@ pub(crate) fn flat_rule(rule: &CJson) -> CJson {
         }
     }
     snake_keys(&CJson::Object(merged))
-}
-
-/// `value` as a file: serde_json's pretty printer at four spaces, UTF-8,
-/// with a final newline.
-pub(crate) fn json_indent4(value: &CJson) -> String {
-    opentide_compile::generate::json_text::pretty(value, 4)
 }
 
 // ------------------------------------------------------ the oracle's helpers
@@ -234,14 +227,15 @@ fn list_items(values: &[CJson], indent: &str) -> String {
     out
 }
 
-/// The items of a list value (`rule.get(key) or []`); a value that is not a
-/// list fails where the oracle iterated it as one.
+/// The items of a list value: none when it is absent or empty, a single
+/// string as its one item; any other value that is not a list fails.
 fn items(object: &Object, key: &str) -> Result<Vec<CJson>, String> {
     match object.get(key) {
         Some(CJson::Array(items)) => Ok(items.clone()),
         Some(value) if !value.truthy() => Ok(Vec::new()),
         None => Ok(Vec::new()),
-        Some(CJson::Str(text)) => Ok(text.chars().map(|c| CJson::Str(c.to_string())).collect()),
+        // A single string is the one item it is, never its characters.
+        Some(text @ CJson::Str(_)) => Ok(vec![text.clone()]),
         Some(other) => Err(format!(
             "TypeError: '{}' object is not iterable",
             type_name(other)
@@ -686,8 +680,6 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
         .map_err(|error| failure(&error))?
         .map_err(|error| error.to_string())?;
         let rules: Vec<CJson> = rules.iter().map(flat_rule).collect();
-        let dump = cx.cwd.join(format!("output-{}.json", configured.name));
-        write_text(&dump, &json_indent4(&CJson::Array(rules.clone())))?;
         for rule in &rules {
             let CJson::Object(rule) = rule else {
                 return Err(no_attribute(rule, "get"));
@@ -706,17 +698,9 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
                 );
                 continue;
             }
-            let mut stem = sanitize_filename(&format!("\"{display_name}\""));
-            if written.contains(&stem.to_lowercase()) {
-                let id: String = rule
-                    .get("name")
-                    .map(json_text)
-                    .unwrap_or_default()
-                    .chars()
-                    .take(8)
-                    .collect();
-                stem = format!("{stem} {id}");
-            }
+            let field = |key: &str| rule.get(key).map(json_text).unwrap_or_default();
+            let stem = file_stem(&field("display_name"), &configured.name, &field("name"));
+            let stem = unique_stem(stem, &field("name"), &written);
             written.push(stem.to_lowercase());
             let destination = cx.cwd.join("Imported");
             std::fs::create_dir_all(&destination)
@@ -729,6 +713,49 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
         }
     }
     Ok(Vec::new())
+}
+
+/// The name of a rule's file, without `.yaml`: `<display name> - <tenant>`,
+/// the characters a file name cannot hold as spaces and no space at either
+/// end. A blank display name falls back to the rule's id, so a file is never
+/// named `.yaml` (hidden) or ` - soc.yaml`.
+fn file_stem(display_name: &str, tenant: &str, id: &str) -> String {
+    let blank = |text: &str| sanitize_filename(text).trim().is_empty();
+    let name = [display_name, id].into_iter().find(|text| !blank(text));
+    let parts: Vec<&str> = name
+        .into_iter()
+        .chain((!blank(tenant)).then_some(tenant))
+        .collect();
+    let stem = sanitize_filename(&parts.join(" - ")).trim().to_owned();
+    if stem.is_empty() {
+        "rule".to_owned()
+    } else {
+        stem
+    }
+}
+
+/// `stem`, or, when a file of this run already has that name (compared
+/// without case: display names are not unique in Sentinel), `stem` followed
+/// by the first eight characters of the rule's id, or by a counter when the
+/// id is blank or taken too. Never ends in a space.
+fn unique_stem(stem: String, id: &str, taken: &[String]) -> String {
+    let free = |candidate: &str| !taken.contains(&candidate.to_lowercase());
+    if free(&stem) {
+        return stem;
+    }
+    let short: String = id.chars().take(8).collect();
+    let short = sanitize_filename(&short).trim().to_owned();
+    if !short.is_empty() {
+        let candidate = format!("{stem} {short}");
+        if free(&candidate) {
+            return candidate;
+        }
+    }
+    // `taken` holds fewer names than this range: one of them is free.
+    (2..=taken.len() + 2)
+        .map(|n| format!("{stem} {n}"))
+        .find(|candidate| free(candidate))
+        .unwrap_or(stem)
 }
 
 /// A failure before ARM answered, as the importer's exception reads.
@@ -770,16 +797,6 @@ mod tests {
         assert_eq!(snake_case("subTechniques"), "sub_techniques");
         assert_eq!(snake_case("ID"), "i_d");
         assert_eq!(snake_case("Name"), "name");
-    }
-
-    #[test]
-    fn the_dump_is_indented_four_spaces() {
-        let value = json(r#"[{"a": [], "b": {}, "c": [1, true, null], "d": "é—\"", "e": 1.5}]"#);
-        assert_eq!(
-            json_indent4(&value),
-            "[\n    {\n        \"a\": [],\n        \"b\": {},\n        \"c\": [\n            1,\n            true,\n            null\n        ],\n        \"d\": \"é—\\\"\",\n        \"e\": 1.5\n    }\n]\n"
-        );
-        assert_eq!(json_indent4(&CJson::Array(Vec::new())), "[]\n");
     }
 
     #[test]
@@ -840,6 +857,72 @@ mod tests {
         // A Fusion rule is not imported.
         let fusion = RULE.replace("\"Scheduled\"", "\"Fusion\"");
         assert!(render(&object(&fusion), "soc").unwrap().is_none());
+    }
+
+    /// A blank display name is named after the rule's id, never `.yaml` or
+    /// ` - soc.yaml`; no name has a space at either end.
+    #[test]
+    fn a_file_name_is_never_blank_nor_padded() {
+        assert_eq!(file_stem("Rule", "soc", "id"), "Rule - soc");
+        assert_eq!(file_stem(" a:b? ", "soc", "id"), "a b   - soc");
+        assert_eq!(file_stem("", "soc", "0123"), "0123 - soc");
+        assert_eq!(file_stem("  ", "soc", "0123"), "0123 - soc");
+        assert_eq!(file_stem("", "", "0123"), "0123");
+        assert_eq!(file_stem("Rule", "", "0123"), "Rule");
+        assert_eq!(file_stem("", "", ""), "rule");
+        assert_eq!(file_stem("?", "*", "/"), "rule");
+    }
+
+    /// A second rule of the same name takes the id's first eight
+    /// characters; without an id, a counter, never a trailing space.
+    #[test]
+    fn a_repeated_file_name_takes_a_suffix_without_a_trailing_space() {
+        let taken = |names: &[&str]| names.iter().map(|n| n.to_lowercase()).collect::<Vec<_>>();
+        assert_eq!(
+            unique_stem("R - soc".into(), "0123456789", &taken(&[])),
+            "R - soc"
+        );
+        assert_eq!(
+            unique_stem("R - soc".into(), "0123456789", &taken(&["r - soc"])),
+            "R - soc 01234567"
+        );
+        assert_eq!(
+            unique_stem("R - soc".into(), "", &taken(&["r - soc"])),
+            "R - soc 2"
+        );
+        assert_eq!(
+            unique_stem("R - soc".into(), " ", &taken(&["r - soc"])),
+            "R - soc 2"
+        );
+        assert_eq!(
+            unique_stem(
+                "R - soc".into(),
+                "01234567",
+                &taken(&["r - soc", "r - soc 01234567", "r - soc 2"])
+            ),
+            "R - soc 3"
+        );
+    }
+
+    /// A single string where a list is expected is the one item it is: a
+    /// rule's `tactics: "Execution"` is `- Execution`, not one item per
+    /// character (the Python importer iterated the string).
+    #[test]
+    fn a_single_string_is_one_item_of_a_list() {
+        let rule = RULE.replace(
+            "\"severity\": \"High\",",
+            "\"severity\": \"High\", \"tactics\": \"Execution\", \"techniques\": \"T1059\",",
+        );
+        let (_, text) = render(&object(&rule), "soc").unwrap().unwrap();
+        assert!(
+            text.contains("\n      tactics:\n        - Execution\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("\n      techniques:\n        - T1059\n"),
+            "{text}"
+        );
+        assert!(!text.contains("- E\n"), "{text}");
     }
 
     #[test]

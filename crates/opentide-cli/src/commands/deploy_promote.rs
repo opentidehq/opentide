@@ -43,8 +43,9 @@ pub struct Promotion<'a> {
     /// Every rule file directly in the rules folder (`local_rule_files`),
     /// promoted instead in debug mode.
     pub local: &'a [PathBuf],
-    /// Debug mode: `--debug`, or the environment asking for it
-    /// ([`crate::env::Env::debug_requested`]); never the terminal the run starts in.
+    /// Debug mode: `--debug` or `OPENTIDE_DEBUG`
+    /// ([`crate::env::Env::opentide_debug`]); never a bare `DEBUG`, nor the
+    /// terminal the run starts in.
     pub debug: bool,
 }
 

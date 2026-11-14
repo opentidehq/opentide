@@ -235,8 +235,10 @@ fn yaml(text: &str) -> Node {
 
 /// A platform card is enabled only by the boolean `true`, as `deploy` reads
 /// `enabled`: the string "false" (or "0") is not on, as it was under the
-/// Python CLI's truth value. A tenant's name and a block's status are read as
-/// the strings they are.
+/// Python CLI's truth value. Only `[platform] enabled` counts, the one place
+/// `deploy` reads: a `flat` platform's `enabled: true` outside that table
+/// does not deploy, so the card is off. A tenant's name and a block's status
+/// are read as the strings they are.
 #[test]
 fn a_platform_is_enabled_only_by_the_boolean_true() {
     let resolved = yaml(concat!(
@@ -262,7 +264,7 @@ fn a_platform_is_enabled_only_by_the_boolean_true() {
     assert_eq!(
         enabled,
         [
-            ("flat", true),
+            ("flat", false),
             ("off", false),
             ("on", true),
             ("text", false),

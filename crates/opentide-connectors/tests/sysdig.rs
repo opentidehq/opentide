@@ -272,6 +272,52 @@ fn sysdig_does_not_create_again_a_rule_deployment_state_cannot_record() {
     assert_eq!(rt.block_on(server.received_requests()).unwrap().len(), 1);
 }
 
+/// A rule update is a `PUT` with the version the tenant held: a 503 after
+/// the tenant may have applied it is not answered with a second copy, which
+/// would name a stale version. The read before it is a `GET`, retried.
+#[test]
+fn sysdig_a_versioned_update_is_not_sent_again_after_a_503() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/secure/rules/42"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_string(r#"{"id": 42, "version": 7, "name": "Sysdig Falco Rule"}"#),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("PUT"))
+            .and(path("/api/secure/rules/42"))
+            .respond_with(wiremock::ResponseTemplate::new(503).set_body_string("{}"))
+            .mount(&server)
+            .await;
+    });
+    let (tenant, http) = local(&server);
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let (_, body, _) = compiled("DISABLED", None);
+    let request = opentide_connectors::connector::DeployRequest {
+        rule_id: "42".to_owned(),
+        operation: opentide_connectors::connector::Operation::Disable,
+        body,
+    };
+    let platform = sysdig::Sysdig;
+    let _outcome = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await });
+    let received = rt.block_on(server.received_requests()).unwrap();
+    let puts = received
+        .iter()
+        .filter(|request| request.method.as_str() == "PUT")
+        .count();
+    assert_eq!(puts, 1, "the update is sent once");
+}
+
 #[test]
 fn sysdig_the_generic_deployer_disables_with_the_held_version_and_no_policy() {
     use wiremock::matchers::{method, path};
