@@ -6,10 +6,10 @@ args: opentide generate docs rules
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m Generated 10 files in <SECONDS> · docs
+␛[1m␛[32m✓␛[0m Generated 10 files in <SECONDS> · docs
 
 ━━━ stderr
-  ␛[1;32m✓␛[0m  ␛[1mdocs␛[0m  ␛[2m10 files␛[0m ␛[2m<SECONDS>␛[0m ␛[2mdocs/rules/␛[0m
+  ␛[1m␛[32m✓␛[0m  ␛[1mdocs␛[0m  ␛[2m10 files␛[0m ␛[2m<SECONDS>␛[0m ␛[2mdocs/rules/␛[0m
 
 ━━━ ws/docs/ · created 0755
 

@@ -264,19 +264,29 @@ pub struct Cli {
     pub repo: Option<String>,
     #[arg(long = "data", env = "OPENTIDE_DATA_ROOT", help = "Bundled data root")]
     pub data: Option<String>,
-    #[arg(long = "debug", help = "Enable debug logging. Also OPENTIDE_DEBUG=1")]
+    #[arg(
+        long = "debug",
+        global = true,
+        help = "Enable debug logging. Also OPENTIDE_DEBUG=1"
+    )]
     pub debug: bool,
-    #[arg(long = "quiet", help = "Print only the outcome line and errors")]
+    #[arg(
+        long = "quiet",
+        global = true,
+        help = "Print only the outcome line and errors"
+    )]
     pub quiet: bool,
     #[arg(
         long = "verbose",
+        global = true,
         help = "Also print notes, such as a missing optional field. --json always includes them"
     )]
     pub verbose: bool,
-    #[arg(long = "no-color", help = "Disable colour")]
+    #[arg(long = "no-color", global = true, help = "Disable colour")]
     pub no_color: bool,
     #[arg(
         long = "json",
+        global = true,
         help = "Machine-readable output: one JSON object on stdout"
     )]
     pub json_output: bool,

@@ -6,9 +6,9 @@ args: opentide generate inflight
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m Generated 0 files in <SECONDS> · inflight
+␛[1m␛[32m✓␛[0m Generated 0 files in <SECONDS> · inflight
 
 ━━━ stderr
 warning: Inflight no git baseline · detail: changed-object discovery requires a git repository with at least one commit
 warning: Inflight no local git diff found
-  ␛[1;32m✓␛[0m  ␛[1minflight␛[0m  ␛[2m0 files␛[0m ␛[2m<SECONDS>␛[0m
+  ␛[1m␛[32m✓␛[0m  ␛[1minflight␛[0m  ␛[2m0 files␛[0m ␛[2m<SECONDS>␛[0m

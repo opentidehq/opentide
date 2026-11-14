@@ -1,0 +1,8 @@
+bin.name = "opentide"
+args = ["generate", "schemas", "--json", "--bogus"]
+env.inherit = false
+status.code = 2
+stdout = '''
+{"error":"Unknown option /"--bogus/".","ok":false,"status":"failed","message":"Unknown option /"--bogus/".","schema_version":1,"command":"generate","duration_ms":[..],"exit_code":2,"summary":{},"next_actions":[],"failure":{"code":"usage_unknown_option","message":"Unknown option /"--bogus/".","argument":"--bogus","suggestion":null,"crash_log":null}}
+'''
+stderr = ""

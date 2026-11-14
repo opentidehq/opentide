@@ -8,9 +8,9 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-  ␛[1;32m✓␛[0m  ␛[1mtemplates␛[0m  ␛[2m13 files␛[0m ␛[2m<SECONDS>␛[0m ␛[2m.opentide/templates/␛[0m
-  ␛[1;32m✓␛[0m  ␛[1mschemas␛[0m    ␛[2m 8 files␛[0m ␛[2m<SECONDS>␛[0m ␛[2m.opentide/␛[0m
-␛[1;31merror:␛[0m No threat in Objects/Threat Vectors has uuid 00000000-0000-4000-8000-000000000000
+  ␛[1m␛[32m✓␛[0m  ␛[1mtemplates␛[0m  ␛[2m13 files␛[0m ␛[2m<SECONDS>␛[0m ␛[2m.opentide/templates/␛[0m
+  ␛[1m␛[32m✓␛[0m  ␛[1mschemas␛[0m    ␛[2m 8 files␛[0m ␛[2m<SECONDS>␛[0m ␛[2m.opentide/␛[0m
+␛[1m␛[31merror:␛[0m No threat in Objects/Threat Vectors has uuid 00000000-0000-4000-8000-000000000000
 
 ━━━ ws/.opentide/lsp/ · created 0755
 

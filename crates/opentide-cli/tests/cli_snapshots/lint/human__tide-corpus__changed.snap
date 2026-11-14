@@ -8,4 +8,4 @@ exit: 1
 ━━━ stdout · empty
 
 ━━━ stderr
-␛[1;31merror:␛[0m --changed needs a git checkout; no .git was found from <WS>
+␛[1m␛[31merror:␛[0m --changed needs a git checkout; no .git was found from <WS>

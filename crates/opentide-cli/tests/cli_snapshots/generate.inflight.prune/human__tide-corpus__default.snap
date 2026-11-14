@@ -6,7 +6,7 @@ args: opentide generate inflight prune
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m Generated 0 files in <SECONDS> · inflight prune
+␛[1m␛[32m✓␛[0m Generated 0 files in <SECONDS> · inflight prune
 
 ━━━ stderr
-  ␛[1;32m✓␛[0m  ␛[1minflight prune␛[0m  ␛[2m0 files␛[0m ␛[2m<SECONDS>␛[0m
+  ␛[1m␛[32m✓␛[0m  ␛[1minflight prune␛[0m  ␛[2m0 files␛[0m ␛[2m<SECONDS>␛[0m

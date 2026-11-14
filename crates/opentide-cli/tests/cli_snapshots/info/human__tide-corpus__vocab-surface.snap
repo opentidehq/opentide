@@ -24,6 +24,6 @@ Stages           OS, Application, Authentication, Cloud, Infrastructure, Sec…
 ␛[1mSchema␛[0m       ␛[1mField␛[0m           ␛[1mRevision␛[0m  ␛[1mAdmitted␛[0m  ␛[1mScoped␛[0m
 -----------  --------------  --------  --------  ------
 threat::1.0  threat.surface  1.0            895  yes
-␛[1;32m✓␛[0m 10 rules · 1 threat · 1 objective · 0 load errors
+␛[1m␛[32m✓␛[0m 10 rules · 1 threat · 1 objective · 0 load errors
 
 ━━━ stderr · empty

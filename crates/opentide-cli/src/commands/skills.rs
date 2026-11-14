@@ -19,7 +19,8 @@ use crate::commands::{Block, Report};
 use crate::env::Env;
 use crate::envelope::NextAction;
 use crate::json::Json;
-use crate::render::text::{Style, Text};
+use crate::render::text::Text;
+use anstyle::{AnsiColor, Style};
 
 /// The only catalogue opentide reads.
 pub const DEFAULT_SOURCE: &str = "opentidehq/skills";
@@ -523,15 +524,15 @@ pub fn discover(args: &DiscoverArgs, network: Network<'_>, width: usize) -> Repo
             .iter()
             .map(|entry| {
                 vec![
-                    Text::styled(&entry.slug, &Style::new("bold")),
+                    Text::styled(&entry.slug, &Style::new().bold()),
                     if installed.contains(&entry.slug) {
-                        Text::styled("installed", &Style::new("green"))
+                        Text::styled("installed", &AnsiColor::Green.on_default())
                     } else {
                         Text::default()
                     },
                     Text::styled(
                         &shorten(&entry.description, column, "…"),
-                        &Style::new("dim"),
+                        &Style::new().dimmed(),
                     ),
                 ]
             })
@@ -585,10 +586,10 @@ pub fn show(name: &str, repo: &Path, refresh: bool, network: Network<'_>, json: 
             ("install_hint".into(), Json::str(&hint)),
         ],
     );
-    let mut title = Text::styled(&entry.slug, &Style::new("bold"));
+    let mut title = Text::styled(&entry.slug, &Style::new().bold());
     if entry.name != entry.slug {
         // Rich lays the title's bold under the appended dim.
-        title.append(&format!("  {}", entry.name), &Style::new("bold dim"));
+        title.append(&format!("  {}", entry.name), &Style::new().bold().dimmed());
     }
     let lines = vec![
         title,
@@ -605,7 +606,7 @@ pub fn show(name: &str, repo: &Path, refresh: bool, network: Network<'_>, json: 
             } else {
                 "not installed"
             },
-            &Style::new("dim"),
+            &Style::new().dimmed(),
         ),
     ];
     report.body.push(Block::Lines(lines));

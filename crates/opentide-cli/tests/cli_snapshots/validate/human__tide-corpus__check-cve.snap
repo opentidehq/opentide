@@ -6,9 +6,9 @@ args: opentide validate --check cve
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m Validation passed · <SECONDS>
+␛[1m␛[32m✓␛[0m Validation passed · <SECONDS>
 
 ━━━ stderr
-␛[?25l<LIVE></LIVE>␛[1;36m⠋␛[0m Validating objects
+␛[?25l<LIVE></LIVE>␛[1m␛[36m⠋␛[0m Validating objects
 ␛[?25h
 ⏎ no final newline
