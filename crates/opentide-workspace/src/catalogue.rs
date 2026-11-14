@@ -553,7 +553,8 @@ impl Builder<'_> {
             if !matches!(signal.value, Value::Map(_)) {
                 continue;
             }
-            let Some(signal_uuid) = get(signal, "uuid").filter(|n| crate::index::truthy(n)) else {
+            let Some(signal_uuid) = get(signal, "uuid").filter(|n| crate::index::holds_name(n))
+            else {
                 continue;
             };
             let signal_uuid = signal_uuid.value.to_string();
