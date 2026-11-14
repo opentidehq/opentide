@@ -116,7 +116,13 @@ mod tests {
             ("sentinel", &["status", "query", "scheduling", "alert"]),
             (
                 "defender_for_endpoint",
-                &["status", "query", "alert", "impacted_entities", "scheduling"],
+                &[
+                    "status",
+                    "query",
+                    "alert",
+                    "impacted_entities",
+                    "scheduling",
+                ],
             ),
             ("splunk", &["status", "query"]),
             ("sentinel_one", &["status", "condition"]),
