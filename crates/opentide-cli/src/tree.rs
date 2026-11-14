@@ -1778,12 +1778,51 @@ pub struct ValidateArgs {
     pub command: Option<ValidateCommand>,
 }
 
+/// `validate query --platform`'s help, from the platform table
+/// (`opentide_schema::platforms`): the platforms the engine parses offline
+/// and those `--live` checks on a tenant, each list by name. A platform row
+/// changes both.
+#[must_use]
+pub fn validate_query_platform_help() -> String {
+    use opentide_schema::platforms::{Order, ids_where};
+    format!(
+        "Check this platform's queries. Offline, default every platform the engine parses: \
+         {}. --live needs one of: {}",
+        ids_where(Order::Name, |platform| platform.offline().is_some()).join(", "),
+        ids_where(Order::Name, |platform| platform.live_check).join(", ")
+    )
+}
+
+/// The query file suffixes in the order `validate query --file`'s help
+/// names them (0.28.1's, then the ones it lacks).
+const SUFFIX_ORDER: [&str; 12] = [
+    "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "yar", "yara", "yaral", "yl2", "cql",
+];
+
+/// `validate query --file`'s help, with every query file suffix of the
+/// platform table (`query_file_suffixes`).
+#[must_use]
+pub fn validate_query_file_help() -> String {
+    let mut suffixes = opentide_schema::platforms::query_file_suffixes();
+    suffixes.sort_by_key(|suffix| {
+        SUFFIX_ORDER
+            .iter()
+            .position(|known| known == suffix)
+            .unwrap_or(SUFFIX_ORDER.len())
+    });
+    let listed: Vec<String> = suffixes.iter().map(|suffix| format!(".{suffix}")).collect();
+    format!(
+        "Check only this rule file, or this query file ({}) offline (repeatable)",
+        listed.join(", ")
+    )
+}
+
 /// `opentide validate query`.
 #[derive(Debug, Args)]
 pub struct ValidateQueryArgs {
     #[arg(
         long = "platform",
-        help = "Check this platform's queries. Offline, default every platform the engine parses: carbon_black_cloud, crowdstrike, defender_for_endpoint, elastic, sentinel, splunk, sysdig. --live needs one of: carbon_black_cloud, defender_for_endpoint, elastic, exabeam, sentinel, sentinel_one, splunk",
+        help = validate_query_platform_help(),
         value_name = "PLATFORM",
         value_parser = PlatformName
     )]
@@ -1807,7 +1846,7 @@ pub struct ValidateQueryArgs {
         help = "Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (the files deploy reads)"
     )]
     pub changed: bool,
-    #[arg(long = "file", help = "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .cql) offline (repeatable)", action = clap::ArgAction::Append)]
+    #[arg(long = "file", help = validate_query_file_help(), action = clap::ArgAction::Append)]
     pub file: Vec<String>,
     #[arg(long = "uuid", help = "Check only the rule with this UUID (repeatable)", action = clap::ArgAction::Append)]
     pub uuid: Vec<String>,

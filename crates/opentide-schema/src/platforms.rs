@@ -272,8 +272,10 @@ pub const PLATFORMS: &[Platform] = &[
         live_check: false,
         query_runner: true,
         runner_languages: &["telemetry"],
-        offline_languages: &[],
-        query_file_suffixes: &[],
+        // harfanglab-1.0 1.2: its YARA (the HarfangLab profile), and `.yar`
+        // and `.yara` files, checked offline as libyara 4.5 compiles them.
+        offline_languages: &["yara"],
+        query_file_suffixes: &["yar", "yara"],
         cli_rank: 6,
         connector_rank: 6,
         configuration_rank: 6,
@@ -752,7 +754,7 @@ mod tests {
         assert_eq!(
             query_file_suffixes(),
             [
-                "kql", "spl", "cql", "lucene", "esql", "eql", "kuery", "falco", "yar", "yara",
+                "kql", "spl", "cql", "yar", "yara", "lucene", "esql", "eql", "kuery", "falco",
                 "yaral"
             ]
         );

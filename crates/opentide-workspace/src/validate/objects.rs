@@ -450,6 +450,23 @@ pub fn check_object(
                             .at(advisory.field_path)
                     }),
             );
+            if let Some(anchored) =
+                opentide_schema::objects::platform::harfanglab::yara::aliased_signature(root)
+            {
+                let path = opentide_schema::objects::platform::harfanglab::yara::SIGNATURE_PATH;
+                let mut issue = new(
+                    "yara_signature_alias",
+                    format!(
+                        "{} is a YAML alias; what the block deploys must be written in the \
+                             block",
+                        path.join(".")
+                    ),
+                )
+                .at(path.map(str::to_owned));
+                // Where the aliased text is written: the anchor's node.
+                issue.yaml_line = anchored.start.line.checked_sub(1);
+                issues.push(issue);
+            }
             for (platform, key) in states::legacy_external_id_keys(root) {
                 issues.push(
                     new(

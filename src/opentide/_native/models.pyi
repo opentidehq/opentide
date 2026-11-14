@@ -7082,7 +7082,7 @@ class HarfangLabConfig:
     @property
     def sigma(self, /) -> HarfangLabSigma | None:
         """
-        Behavioural rule. Preferred when `yara` is also set.
+        Behavioural rule. Not with `yara`.
         """
     @property
     def status(self, /) -> str:
@@ -7093,7 +7093,7 @@ class HarfangLabConfig:
     @property
     def tags(self, /) -> list[str] | None:
         """
-        Sigma tags, and the YARA `tags` meta line.
+        Sigma tags, and the YARA `tags` meta line of the decomposed form.
         """
     @property
     def tenants(self, /) -> list[str] | None:
@@ -7103,7 +7103,7 @@ class HarfangLabConfig:
     @property
     def yara(self, /) -> HarfangLabYara | None:
         """
-        File or memory scan rule.
+        File or memory scan rule. Not with `sigma`.
         """
 
 @final
@@ -7372,7 +7372,7 @@ class HarfangLabSigmaSelection:
 @final
 class HarfangLabYara:
     """
-    File or memory scan rule (`HarfangLabYara`).
+    One form: `signature`, or the decomposed `meta`, `strings`, `condition`, and `imports`.
     """
     __tide_fields__: Final[list[tuple[str, str]]]
     """
@@ -7389,19 +7389,21 @@ class HarfangLabYara:
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
     @property
-    def condition(self, /) -> str:
+    def condition(self, /) -> str | None:
         """
-        YARA condition body, without the `condition:` header.
+        Decomposed form: YARA condition body, without the `condition:` header. Required without
+        `signature`.
         """
     @property
     def imports(self, /) -> list[str] | None:
         """
-        YARA modules (`pe`, `elf`). Each becomes `import "<module>"`.
+        Decomposed form: YARA modules (`pe`, `elf`). Each becomes `import "<module>"`.
         """
     @property
-    def meta(self, /) -> HarfangLabYaraMeta:
+    def meta(self, /) -> HarfangLabYaraMeta | None:
         """
-        Scan context, OS, and optional score override.
+        Decomposed form: scan context, OS, and optional score override. Required without
+        `signature`.
         """
     @classmethod
     def model_construct(cls, /, _fields_set: Any | None = None, **values) -> HarfangLabYara:
@@ -7455,9 +7457,16 @@ class HarfangLabYara:
         `model_validate` of a JSON document.
         """
     @property
-    def strings(self, /) -> str:
+    def signature(self, /) -> str | None:
         """
-        YARA string section body, one definition per line, without the `strings:` header.
+        A whole YARA text: imports, then one or more YARA rules, written out in the block. Deploy
+        sends it as the YaraFile `content`, verbatim.
+        """
+    @property
+    def strings(self, /) -> str | None:
+        """
+        Decomposed form: YARA string section body, one definition per line, without the
+        `strings:` header. Required without `signature`.
         """
 
 @final
