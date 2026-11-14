@@ -52,17 +52,24 @@ closed). Then:
 
 - the Rust jobs (`engine-lint`, `build`, `rust-tests`) run when a crate is affected, and test only
   the affected crates;
-- the Python job (`python`) runs when Python changes (`src/opentide`, `tests/` but `tests/test_ci`,
-  `pyproject.toml`, `uv.lock`, `hatch_build.py`, the scripts) or the affected crates reach
-  `opentide-native`, the binding that holds the command line (in practice most Rust changes; a
-  docs-only, skills-only or Node-only change does not);
+- the Python job (`python`: the `_native` wheel built by `build`, then one pytest run of the
+  package and the E2E suite) runs **only when the Python surface changes**: `src/opentide/`,
+  `bindings/python/`, the facade's API (`crates/opentide/src/`), `pyproject.toml`,
+  `hatch_build.py`, `uv.lock`, `tests/` (but `tests/test_ci` and the docs tests that need no
+  wheel). A Rust-only change to an engine, schema, compile or CLI crate builds no wheel and runs
+  no pytest: the Rust tests cover it (the maintainer's rule). Every push runs it; a release pull
+  request and the nightly run Python 3.10 to 3.14 and the `full_set` E2E tests;
+- `lint`'s steps run on their own inputs: ruff, ty, the sdist and twine when a Python file
+  changes; actionlint and `tests/test_ci` when a workflow, `scripts/ci/` or those tests change;
+  the skills' validation; the engine's invariant scripts when a crate changes. `docs` validates
+  the pages and runs the docs tests that need no wheel;
 - each specialised job runs only when its own paths change: `node` (`bindings/node/`), `wasi`
   (`crates/opentide-wasm/`, the WASI shims: `crates/*wasi*`, `vendor/`, `packages/`,
   `build-wasm.sh`), `grammars` (`grammars/`), `textmate` (`highlights/`, `editors/`),
   `gitlab-ci-lint` (opentide-cli's CI renderer and `setup` commands, the linters' installer, its
   test), `facade` (`crates/opentide/`: the public API), `deny` (`Cargo.lock`, `deny.toml`, a
   manifest, `vendor/`, `fuzz/`, `publishing/`), `docs` (`docs/`, the root guides);
-- a docs-only pull request runs `docs` alone; a skills-only one, `lint` alone.
+- a docs-only pull request runs `docs` alone; a skills-only one, `lint`'s skills step alone.
 
 The push to the base branch runs everything, so what a pull request's filter leaves out is still
 checked before the next pull request builds on it.
@@ -78,7 +85,7 @@ checked before the next pull request builds on it.
 | `rust-tests` | The archive's tests, `cargo nextest run --archive-file ... --partition count:k/N --profile ci`: two partitions when the heavy crates (`opentide-cli`, `opentide-analysis`, `opentide-lsp`, `xtask`, the facade) are affected, one otherwise; nothing compiles. Fails when a test leaves a file in the checkout (#931) |
 | `python` | Python is the packaging layer: **one** job, one pytest run (`-n 4`) of the package's surface (the SDK, the models, the plugin API, the console script) and the E2E suite (CLI, MCP and LSP over stdio), Python **3.14** with the coverage gate, on the build's extension (`OPENTIDE_ENGINE_PREBUILT`: `hatch_build.py` installs it, nothing compiles). No shards; the tests marked `full_set` run nightly; `tests/test_ci` runs in `lint` |
 | `gitlab-ci-lint` | The pipeline `opentide setup ci gitlab` renders, linted (glint, gitlab-ci-verify) |
-| `docs` | `scripts/validate-docs.sh` (the site builds in opentidehq/website) |
+| `docs` | `scripts/validate-docs.sh` (the site builds in opentidehq/website) and the docs tests that need no wheel (`tests/test_docs` but `test_docs_commands_golden.py` and `test_sdk_snippets.py`, the Python job's) |
 | `facade` | The `opentide` facade with every feature: tests and doctests, rustdoc as docs.rs builds it, `cargo semver-checks` (0.51.0) against the first parent |
 | `node` | `@opentide/opentide` (`bindings/node`): the napi-rs addon for linux-x64-gnu, the generated `index.js` and `index.d.ts` against the committed ones, `npm test`, and `npx . --json commands` byte for byte the console script's (on the build's extension) |
 | `wasi` | The WASI command line the VS Code extension runs: `build-wasm.sh cli`, its size held to the .vsix's 15 MiB, tenant commands through `@opentide/wasi-host` |

@@ -119,6 +119,9 @@ jobs:
       rust: ${{ steps.plan.outputs.rust }}
       python: ${{ steps.plan.outputs.python }}
       lint: ${{ steps.plan.outputs.lint }}
+      pylint: ${{ steps.plan.outputs.pylint }}
+      ci: ${{ steps.plan.outputs.ci }}
+      skills: ${{ steps.plan.outputs.skills }}
       docs: ${{ steps.plan.outputs.docs }}
       node: ${{ steps.plan.outputs.node }}
       wasi: ${{ steps.plan.outputs.wasi }}
@@ -147,8 +150,10 @@ jobs:
           RUSTUP_TOOLCHAIN: stable
         run: python3 scripts/ci/changes.py
 
-  # ruff, ty (on the checked-in stubs of `_native`: no Rust build), actionlint,
-  # the sdist and twine, the skills and the engine's invariant scripts.
+  # Each step when its inputs change: ruff, ty (on the checked-in stubs of
+  # `_native`: no Rust build), the sdist and twine when a Python file does;
+  # actionlint and the CI contracts (tests/test_ci) when a workflow or they do;
+  # the skills; the engine's invariant scripts when a crate does.
   lint:
     name: Lint
     needs: changes
@@ -157,6 +162,11 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    env:
+      PYLINT: ${{ needs.changes.outputs.pylint }}
+      CI_CONTRACTS: ${{ needs.changes.outputs.ci }}
+      SKILLS: ${{ needs.changes.outputs.skills }}
+      RUST: ${{ needs.changes.outputs.rust }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -179,40 +189,52 @@ jobs:
       # The sdist first: hatch-vcs writes src/opentide/_version.py, which ty
       # resolves; the engine is compiled for a wheel only.
       - name: Build the sdist
+        if: env.PYLINT == 'true'
         run: uv build --sdist
 
       - name: Ruff check
+        if: env.PYLINT == 'true'
         run: uv run --no-sync ruff check src/opentide tests scripts --output-format github
 
       - name: Ruff format
+        if: env.PYLINT == 'true'
         run: uv run --no-sync ruff format --check src/opentide tests scripts
 
       # src/opentide/_native/*.pyi stand for the extension.
       - name: Ty type check
+        if: env.PYLINT == 'true'
         run: uv run --no-sync ty check src/opentide --output-format github
 
       # The workflows themselves, with shellcheck over their scripts;
       # .github/actionlint.yaml names what this version does not know.
       - name: actionlint
+        if: env.CI_CONTRACTS == 'true'
         run: |
           GOBIN="${RUNNER_TEMP}/bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
           "${RUNNER_TEMP}/bin/actionlint" -color
 
       - name: Twine check
+        if: env.PYLINT == 'true'
         run: uvx twine check dist/*
 
-      - name: Engine invariants (I/O-free crates, names, skills)
+      - name: Engine invariants (I/O-free crates, names)
+        if: env.RUST == 'true'
         run: |
           bash scripts/engine/check-io-free.sh
           bash scripts/engine/check-names.sh
-          bash scripts/engine/validate-skills.sh
+
+      - name: The agent skills
+        if: env.SKILLS == 'true'
+        run: bash scripts/engine/validate-skills.sh
 
       - name: The engine release script's tests
+        if: env.PYLINT == 'true'
         run: python -m unittest discover -s scripts/engine -p "test_*.py"
 
       # The CI contracts (tests/test_ci): plain Python over the workflows and
       # scripts/ci/changes.py, no extension.
       - name: CI contracts
+        if: env.CI_CONTRACTS == 'true'
         run: uv run --no-sync pytest tests/test_ci -q --no-cov -p no:cacheprovider
 
   # rustfmt, clippy and rustdoc, workspace-wide whatever changed: with a warm
@@ -645,12 +667,15 @@ jobs:
           path: target/nextest/ci/junit.xml
           retention-days: 14
 
-  # The Python package as a package (UC-6.2: Python is the packaging layer):
-  # its surface (the SDK, the models, the plugin API, the console script) and
-  # the console script end to end (CLI, MCP and LSP over stdio), on the build's
-  # `_native` extension, in ONE pytest run with the coverage gate. No shards:
-  # the run is a minute and a half. tests/test_ci runs in `lint`; the tests
-  # marked `full_set` (a wheel built per test) run nightly.
+  # The Python package as a package (Python is the packaging layer): its
+  # surface (the SDK, the models, the plugin API, the console script) and the
+  # console script end to end (CLI, MCP and LSP over stdio), on the build's
+  # `_native` extension, in ONE pytest run with the coverage gate. On a pull
+  # request only when the Python surface changes (src/opentide, the binding,
+  # the facade's API, pyproject, hatch_build, uv.lock, tests/ but test_ci and
+  # the wheel-less docs tests): a Rust-only change builds no wheel and runs no
+  # pytest, the Rust tests cover it. Every push runs it; a release pull
+  # request and the nightly add Python 3.10-3.13 and the `full_set` E2E tests.
   python:
     name: Python (3.14, package and E2E, coverage)
     needs: [changes, build]
@@ -801,6 +826,26 @@ jobs:
           persist-credentials: false
       - name: Validate Fumadocs-ready content
         run: scripts/validate-docs.sh
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.COVERAGE_PYTHON }}
+
+      # The docs tests that need no wheel (the pages' structure, links,
+      # snippets' syntax, the changelog); the two that run the command line
+      # and the SDK (test_docs_commands_golden.py, test_sdk_snippets.py) are
+      # the Python job's.
+      - name: Docs tests (no wheel)
+        run: |
+          uv sync --group dev --no-install-project
+          uv run --no-sync pytest tests/test_docs -q --no-cov -n 4 -p no:cacheprovider \
+            --ignore=tests/test_docs/test_docs_commands_golden.py \
+            --ignore=tests/test_docs/test_sdk_snippets.py
 
 
   # The opentide facade crate (UC-5.1, #836), when its public API changes
@@ -1471,7 +1516,7 @@ jobs:
   test-full:
     name: Python (${{ matrix.python-version }})
     needs: [changes, build]
-    if: needs.changes.outputs.mode == 'nightly'
+    if: needs.changes.outputs.mode == 'nightly' || needs.changes.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1509,7 +1554,7 @@ jobs:
   e2e-full:
     name: E2E (3.14, full set)
     needs: [changes, build]
-    if: needs.changes.outputs.mode == 'nightly'
+    if: needs.changes.outputs.mode == 'nightly' || needs.changes.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -2320,6 +2365,8 @@ jobs:
       - engine-package
       - smoke-cargo
       - publish-dry-run
+      - test-full
+      - e2e-full
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -2351,8 +2398,6 @@ jobs:
       - changes
       - gate
       - engine-test-os
-      - test-full
-      - e2e-full
       - coverage
       - benchmarks
       - oracle

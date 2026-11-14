@@ -113,16 +113,33 @@ def test_a_docs_only_change_runs_docs_alone() -> None:
 def test_a_leaf_crate_runs_itself_and_its_reverse_dependencies() -> None:
     outputs = plan("crates/opentide-syntax/src/lib.rs")
     assert set(outputs["crates"].split()) == ABOVE_SYNTAX
-    # The binding is reached: the Python job runs; specialised jobs do not.
-    assert {"rust", "python", "build", "lint"} <= on(outputs)
-    assert not on(outputs) & {"node", "wasi", "facade", "docs", "deny"}
+    # A Rust-only change builds no wheel and runs no pytest: the Rust tests
+    # cover it (the maintainer's rule); no specialised job either.
+    assert on(outputs) == {"rust", "build", "lint"}
     assert outputs["packages"].startswith("-p ")
 
 
-def test_a_crate_below_no_binding_runs_no_python() -> None:
+def test_the_python_surface_runs_the_python_job() -> None:
+    for path in (
+        "src/opentide/sdk.py",
+        "bindings/python/src/lib.rs",
+        "crates/opentide/src/lib.rs",
+        "tests/test_sdk/test_workspace.py",
+        "pyproject.toml",
+    ):
+        assert plan(path)["python"] == "true", path
+    assert plan("crates/opentide-cli/src/lib.rs")["python"] == "false"
+
+
+def test_the_tests_that_need_no_wheel_run_without_the_python_job() -> None:
+    assert on(plan("tests/test_ci/test_workflows.py")) == {"ci", "pylint", "lint"}
+    assert on(plan("tests/test_docs/test_docs_mdx.py")) == {"docs", "pylint", "lint"}
+    assert plan("tests/test_docs/test_sdk_snippets.py")["python"] == "true"
+
+
+def test_a_crate_below_no_heavy_crate_runs_one_partition() -> None:
     outputs = plan("crates/opentide-compare/src/lib.rs")
     assert outputs["crates"] == "opentide-compare"
-    assert outputs["python"] == "false"
     assert outputs["partitions"] == "[1]"
 
 
@@ -137,10 +154,6 @@ def test_shared_configuration_and_unknown_paths_mark_everything(path: str) -> No
     outputs = plan(path)
     assert outputs["packages"] == "--workspace"
     assert {"rust", "python", "node", "wasi", "docs", "deny", "facade"} <= on(outputs)
-
-
-def test_the_ci_contracts_run_in_lint_not_the_python_job() -> None:
-    assert on(plan("tests/test_ci/test_workflows.py")) == {"lint"}
 
 
 @pytest.mark.parametrize(
