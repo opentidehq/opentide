@@ -80,21 +80,6 @@ impl Json {
         matches!(self, Self::Null)
     }
 
-    /// Python's truthiness. The compile crate no longer reads it; the
-    /// connectors and the command line move to the typed reads below in the
-    /// next change of #1140, which removes it.
-    pub fn truthy(&self) -> bool {
-        match self {
-            Self::Null => false,
-            Self::Bool(flag) => *flag,
-            Self::Int(integer) => *integer != 0,
-            Self::Float(float) => *float != 0.0,
-            Self::Str(text) => !text.is_empty(),
-            Self::Array(items) => !items.is_empty(),
-            Self::Object(object) => !object.is_empty(),
-        }
-    }
-
     /// Whether the value is `true`.
     pub fn is_true(&self) -> bool {
         matches!(self, Self::Bool(true))

@@ -7,7 +7,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
-use super::value::{Table, Value, parse_json, text as text_of, title, truthy};
+use super::value::{Table, Value, filled, named, parse_json, text as text_of, title};
 
 /// The external reference source that carries ATT&CK ids and links.
 const MITRE_SOURCE: &str = "mitre-attack";
@@ -27,7 +27,7 @@ fn bundle_objects(document: Value) -> Result<Vec<Value>> {
         Value::Object(mut table) => match table.remove("objects") {
             // `list(data.get("objects") or [])`
             Some(Value::Array(objects)) => Ok(objects),
-            Some(value) if !truthy(&value) => Ok(Vec::new()),
+            Some(value) if !filled(&value) => Ok(Vec::new()),
             None if table.get("type").and_then(Value::as_str) == Some("bundle") => Ok(Vec::new()),
             _ => bail!("no list of objects"),
         },
@@ -39,8 +39,9 @@ fn kind(object: &Value) -> Option<&str> {
     object.get("type").and_then(Value::as_str)
 }
 
+/// Whether the STIX switch `key` is `true`.
 fn flag(object: &Value, key: &str) -> bool {
-    object.get(key).is_some_and(truthy)
+    object.get(key) == Some(&Value::Bool(true))
 }
 
 /// `x_mitre_deprecated or revoked`.
@@ -59,7 +60,7 @@ fn references(object: &Value) -> &[Value] {
 fn mitre_reference(object: &Value, field: &str) -> Result<Option<String>> {
     for reference in references(object) {
         if reference.get("source_name").and_then(Value::as_str) == Some(MITRE_SOURCE)
-            && let Some(value) = reference.get(field).filter(|value| truthy(value))
+            && let Some(value) = reference.get(field).filter(|value| named(value))
         {
             return Ok(Some(text_of(value)?));
         }
@@ -82,11 +83,11 @@ fn text(object: &Value, key: &str) -> Result<String> {
     object.get(key).map_or_else(|| Ok(String::new()), text_of)
 }
 
-/// `obj.get("description") or ""`, the value as it is.
+/// The object's description as it is, or `""`.
 fn description(object: &Value) -> Value {
     object
         .get("description")
-        .filter(|value| truthy(value))
+        .filter(|value| filled(value))
         .cloned()
         .unwrap_or_else(|| Value::from(""))
 }
@@ -100,12 +101,12 @@ pub fn tactic_names(objects: &[Value]) -> Result<Table> {
         }
         let shortname = object
             .get("x_mitre_shortname")
-            .filter(|value| truthy(value))
+            .filter(|value| named(value))
             .or_else(|| object.get("x-mitre-shortname"));
         let name = object.get("name");
         if let (Some(shortname), Some(name)) = (shortname, name)
-            && truthy(shortname)
-            && truthy(name)
+            && named(shortname)
+            && named(name)
         {
             names.insert(text_of(shortname)?, Value::from(text_of(name)?));
         }
@@ -147,7 +148,7 @@ pub fn matrix_tactics(objects: &[Value]) -> Result<Vec<String>> {
     let mut tactics = Table::new();
     for object in objects {
         if kind(object) == Some("x-mitre-tactic")
-            && object.get("id").is_some_and(truthy)
+            && object.get("id").is_some_and(named)
             && !retired(object)
         {
             tactics.insert(text(object, "id")?, Value::from(text(object, "name")?));
@@ -221,7 +222,7 @@ pub fn techniques(objects: &[Value], prefix: &str, tactics: &Table) -> Result<Ve
         };
         let mut name = text(object, "name")?;
         if let Some((parent, _)) = id.split_once('.')
-            && let Some(parent_name) = parents.get(parent).filter(|value| truthy(value))
+            && let Some(parent_name) = parents.get(parent).filter(|value| named(value))
         {
             name = format!("{}: {name}", text_of(parent_name)?);
         }
@@ -270,7 +271,7 @@ pub fn groups(objects: &[Value], prefix: &str) -> Result<Vec<Table>> {
         if let Some(url) = mitre_url(object)?.filter(|url| !url.is_empty()) {
             entry.insert("link".to_owned(), Value::from(url));
         }
-        if let Some(aliases) = object.get("aliases").filter(|value| truthy(value)) {
+        if let Some(aliases) = object.get("aliases").filter(|value| filled(value)) {
             let aliases = match aliases {
                 Value::Array(items) => Value::Array(items.clone()),
                 // `list(aliases)` of a string is its characters; of a table,
@@ -367,9 +368,9 @@ pub fn datasources(objects: &[Value]) -> Result<Vec<Table>> {
             Some("x-mitre-data-component") => {
                 let parent_ref = object
                     .get("x_mitre_data_source_ref")
-                    .filter(|value| truthy(value))
+                    .filter(|value| named(value))
                     .or_else(|| object.get("x-mitre-data-source-ref"))
-                    .filter(|value| truthy(value));
+                    .filter(|value| named(value));
                 let parent = match parent_ref {
                     Some(reference) => sources.get(&text_of(reference)?),
                     None => None,
@@ -390,7 +391,7 @@ pub fn datasources(objects: &[Value]) -> Result<Vec<Table>> {
                 entry.insert("name".to_owned(), Value::from(text(object, "name")?));
                 entry.insert("description".to_owned(), description(object));
                 entry.insert("link".to_owned(), Value::from(link));
-                entry.retain(|_, value| truthy(value));
+                entry.retain(|_, value| filled(value));
                 entries.push(entry);
             }
             _ => {}

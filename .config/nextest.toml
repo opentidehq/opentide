@@ -17,7 +17,8 @@ slow-timeout = { period = "60s", terminate-after = 5 }
 [profile.fast]
 # Leaves out what spawns a server, runs Python or walks a long corpus: the
 # language server over stdio, the Pydantic comparison (it needs `uv sync`), the
-# deep-nesting stack test and the public detection corpora. `-p <crate>`
+# deep-nesting stack test, the public detection corpora and the binary's E2E
+# tests on scratch git repositories (`opentide-cli::workspace_e2e`). `-p <crate>`
 # narrows it further; `--ignore-default-filter` runs everything.
 default-filter = """
 not (
@@ -30,6 +31,7 @@ not (
     | binary_id(opentide-analysis::live_elasticsearch_probes)
     | binary_id(opentide-analysis::elastic_detection_rules)
     | binary_id(opentide-lucene::sigma_sweep)
+    | binary_id(opentide-cli::workspace_e2e)
 )
 """
 
