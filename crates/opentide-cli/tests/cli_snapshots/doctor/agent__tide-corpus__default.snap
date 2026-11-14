@@ -7,10 +7,10 @@ exit: 1
 
 ━━━ stdout
 ✓ opentide 0.28.1 · opentide_version
-! Could not ask PyPI for the latest release (Cannot reach pypi tenant 'pypi.org' at https://pypi.org: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)) · opentide_latest
+! Could not ask PyPI for the latest release (Cannot reach pypi tenant 'pypi.org' at https://pypi.org: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)) · opentide_latest
   → check the network or --proxy, or pass --offline to skip network checks
 ✓ Workspace ./ has .opentide/ (found from the current directory) · workspace
-✓ git 2.43.0 · git
+✓ git <GIT_VERSION> · git
 ! ./ is not in a git repository · git_repository
   → git init ./
 ✓ 9 configuration files load · configuration
@@ -39,7 +39,7 @@ exit: 1
   → set ELASTIC_API_KEY in the environment (or a .env file you load)
 ! sysdig/staging: 1 of 1 variables unset: SYSDIG_SECURE_API_TOKEN · credentials
   → set SYSDIG_SECURE_API_TOKEN in the environment (or a .env file you load)
-✗ Cannot connect to proxy http://127.0.0.1:9 (Connection refused (os error 111)) · proxy
+✗ Cannot connect to proxy http://127.0.0.1:9 (Connection refused (os error <ECONNREFUSED>)) · proxy
   → check --proxy, OPENTIDE_PROXY or HTTPS_PROXY, and that the proxy is up
 ○ No .vscode/extensions.json: VS Code does not suggest opentidehq.opentide · vscode_settings
   → opentide setup vscode

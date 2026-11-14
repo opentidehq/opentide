@@ -357,10 +357,15 @@ pub fn run_case(case: &Case) -> String {
     let mut text = String::new();
     writeln!(text, "args: {}", shell_words(&case.args)).unwrap();
     writeln!(text, "exit: {exit_code}").unwrap();
+    // Requests the cassette does not hold fail the case outright: a snapshot
+    // must never record them as expected.
     if let Some(proxy) = &proxy {
-        for mismatch in proxy.verify() {
-            writeln!(text, "cassette: not the recorded requests: {mismatch}").unwrap();
-        }
+        let mismatches = proxy.verify();
+        assert!(
+            mismatches.is_empty(),
+            "{}: not the cassette's requests: {mismatches:#?}",
+            case.id
+        );
     }
     section(&mut text, "stdout", &stdout);
     section(&mut text, "stderr", &stderr);
@@ -416,9 +421,17 @@ fn normaliser(
         .collect();
     Normaliser::new(
         &Volatile {
+            // The case's paths, and a refused connection's errno, which is
+            // the host's (111 on Linux, 61 on macOS).
             literals: literals
                 .iter()
                 .map(|(literal, placeholder)| (literal.clone(), (*placeholder).to_owned()))
+                .chain(["111", "61"].map(|errno| {
+                    (
+                        format!("Connection refused (os error {errno})"),
+                        "Connection refused (os error <ECONNREFUSED>)".to_owned(),
+                    )
+                }))
                 .collect(),
             dates,
             recent_dates: if windowed {
@@ -427,11 +440,27 @@ fn normaliser(
                 Vec::new()
             },
             known_uuids,
-            ..Volatile::default()
+            git_version: git_version(),
         },
         &case.normalise,
         fixture_text.iter().map(String::as_str),
     )
+}
+
+/// This host's `git --version` number, which `doctor` reports (the case's
+/// `host-git` rule replaces it).
+fn git_version() -> Option<String> {
+    static VERSION: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    VERSION
+        .get_or_init(|| {
+            let out = std::process::Command::new("git")
+                .arg("--version")
+                .output()
+                .ok()?;
+            let text = String::from_utf8(out.stdout).ok()?;
+            text.split_whitespace().nth(2).map(str::to_owned)
+        })
+        .clone()
 }
 
 /// The arguments as a person would type them.
@@ -496,10 +525,33 @@ fn as_json(text: &str) -> Option<String> {
     if !(trimmed.starts_with('{') || trimmed.starts_with('[')) {
         return None;
     }
-    let value: serde_json::Value = serde_json::from_str(text).ok()?;
+    let mut value: serde_json::Value = serde_json::from_str(text).ok()?;
+    host_dependent(&mut value);
     let mut pretty = serde_json::to_string_pretty(&value).ok()?;
     pretty.push('\n');
     Some(pretty)
+}
+
+/// `validate`'s worker counts (`stats.workers`, `object_workers`,
+/// `id_workers`, `parallel`), which follow the host's cores, as `"<CORES>"`.
+fn host_dependent(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(fields) => {
+            for (key, field) in fields.iter_mut() {
+                if matches!(
+                    key.as_str(),
+                    "workers" | "object_workers" | "id_workers" | "parallel"
+                ) && (field.is_number() || field.is_boolean())
+                {
+                    *field = serde_json::Value::String("<CORES>".to_owned());
+                } else {
+                    host_dependent(field);
+                }
+            }
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(host_dependent),
+        _ => {}
+    }
 }
 
 /// A written file's body: its text (a JSON file as its parsed value). Past
@@ -513,7 +565,7 @@ fn file_body(
     path: &str,
     bytes: &[u8],
 ) -> String {
-    // A `.json` or `.sarif` file, or any other one document (`as_json`).
+    // A `.json` or `.sarif` file, past the limit, is shown structurally.
     let json = Path::new(path)
         .extension()
         .is_some_and(|ext| ext.eq_ignore_ascii_case("json") || ext.eq_ignore_ascii_case("sarif"));
@@ -521,10 +573,9 @@ fn file_body(
         return digest_line(bytes);
     };
     if text.len() <= INLINE_LIMIT {
+        // As written, not reparsed: a file's layout (key order, indentation,
+        // final newline) is what a user's editor and tools see.
         let text = normaliser.text(text);
-        if json && let Some(pretty) = as_json(&text) {
-            return pretty;
-        }
         let mut body = visible(&text);
         if !text.is_empty() && !text.ends_with('\n') {
             body.push_str("\n⏎ no final newline\n");
@@ -570,10 +621,11 @@ fn large_json(text: &str) -> Option<String> {
 fn elide(value: &mut serde_json::Value) {
     match value {
         serde_json::Value::String(text) if text.chars().count() > 200 => {
+            let digest = digest_line(text.as_bytes());
             *text = format!(
                 "<{} chars, {}>",
                 text.chars().count(),
-                &digest_line(text.as_bytes())[1..]
+                digest.trim_end().trim_matches(['(', ')'])
             );
         }
         serde_json::Value::Array(items) => items.iter_mut().for_each(elide),

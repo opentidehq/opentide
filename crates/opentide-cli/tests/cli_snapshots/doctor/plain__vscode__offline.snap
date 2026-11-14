@@ -9,7 +9,7 @@ exit: 0
 ✓ opentide 0.28.1 · opentide_version
 ○ Not checked: --offline · opentide_latest
 ✓ Workspace ./ has .opentide/ (found from the current directory) · workspace
-✓ git 2.43.0 · git
+✓ git <GIT_VERSION> · git
 ! ./ is not in a git repository · git_repository
   → git init ./
 ✓ 1 configuration file loads · configuration

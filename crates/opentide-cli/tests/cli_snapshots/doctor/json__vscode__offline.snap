@@ -32,7 +32,7 @@ exit: 0
     {
       "code": "git",
       "fix": null,
-      "message": "git 2.43.0",
+      "message": "git <GIT_VERSION>",
       "status": "pass",
       "subject": null
     },

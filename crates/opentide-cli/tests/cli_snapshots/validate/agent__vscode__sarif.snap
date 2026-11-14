@@ -917,7 +917,7 @@ tip: add --json for machine-readable output
         "driver": {
           "informationUri": "https://opentide.org/docs/cli/diagnostics",
           "name": "opentide",
-          "rules": "<elided 279262 bytes, sha256 319e7e4bfad6c747fa04ce9740b12fbae3c60c8751b80c929051b0dee49d9508>",
+          "rules": "<elided 276424 bytes, sha256 f3787538dbb0d55969003596e41686de489b888359a39848a09c0c5a9581a0bd>",
           "version": "0.28.1"
         }
       }
