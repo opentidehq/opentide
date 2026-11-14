@@ -9,11 +9,12 @@
 
 use std::path::{Path, PathBuf};
 
-use opentide_schema::FromNode;
+use opentide_schema::configuration::codes;
 use opentide_schema::configuration::models::PathsConfiguration;
 use opentide_schema::configuration::resolve::{Folder, Instance, ResolveError, Resolved, resolve};
 use opentide_schema::from_node::Context;
 use opentide_schema::node::{Node, Value};
+use opentide_schema::{FromNode, Surface};
 
 use crate::fs::{EntryKind, FileSystem};
 use crate::root::{OPENTIDE_DIR, Roots};
@@ -43,8 +44,15 @@ pub enum ConfigError {
         message: String,
     },
     /// The merged `paths.toml` does not fit its model.
-    #[error("paths.toml: {}", .0.join("; "))]
-    Paths(Vec<String>),
+    #[error("paths.toml: {}", .problems.join("; "))]
+    Paths {
+        /// The first problem's code: `missing_field`, `unknown_key` or
+        /// `schema_validation`, as `validate`'s configuration check reports
+        /// it.
+        code: &'static str,
+        /// Each problem, `field.path: message`.
+        problems: Vec<String>,
+    },
 }
 
 fn resolve_message(error: &ResolveError) -> String {
@@ -55,13 +63,12 @@ fn resolve_message(error: &ResolveError) -> String {
 }
 
 impl ConfigError {
-    /// The diagnostic code, where the oracle gives one.
+    /// The diagnostic code; `None` for a retired proxy setting.
     pub fn code(&self) -> Option<&'static str> {
         match self {
             Self::Resolve(error) => error.code(),
             Self::Unreadable { .. } => Some(opentide_schema::configuration::codes::CONFIG_PARSE),
-            // The oracle raises a plain `ValueError` (`ConfigurationError`).
-            Self::Paths(_) => None,
+            Self::Paths { code, .. } => Some(code),
         }
     }
 }
@@ -290,21 +297,25 @@ pub fn load(fs: &dyn FileSystem, roots: &Roots) -> Result<Configuration, ConfigE
             match model {
                 Some(model) if errors.is_empty() => model,
                 _ => {
-                    return Err(ConfigError::Paths(
-                        errors
+                    return Err(ConfigError::Paths {
+                        code: errors.first().map_or(codes::SCHEMA_VALIDATION, |error| {
+                            error.code(Surface::Configuration)
+                        }),
+                        problems: errors
                             .iter()
                             .map(|error| {
                                 format!("{}: {}", error.field_path().join("."), error.message)
                             })
                             .collect(),
-                    ));
+                    });
                 }
             }
         }
         None => {
-            return Err(ConfigError::Paths(vec![
-                "the bundled paths.toml is missing".to_owned(),
-            ]));
+            return Err(ConfigError::Paths {
+                code: codes::MISSING_FIELD,
+                problems: vec!["the bundled paths.toml is missing".to_owned()],
+            });
         }
     };
     let paths_node = paths_node
