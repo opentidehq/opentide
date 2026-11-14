@@ -7,9 +7,11 @@ points, ``end_column`` exclusive).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from opentide import analysis
+from opentide import Workspace, analysis
 from opentide._native import analyze_query
 
 
@@ -70,6 +72,29 @@ def test_a_span_that_ends_on_a_newline_ends_on_its_own_line() -> None:
     [finding] = analysis.check_query("SecurityEvent | where (\n", language="kql")
     assert finding.code == "kql_parse_error"
     assert finding.end_line == finding.line
+
+
+def test_a_workspace_run_leaves_the_declared_datasets_as_it_found_them(
+    tide_corpus_repo: Path,
+) -> None:
+    # validate and lint install the workspace's visibility.toml for their run
+    # only: a query checked on its own afterwards is checked as before.
+    (tide_corpus_repo / ".opentide/configurations/visibility.toml").write_text(
+        '[[logsources]]\nname = "SecurityEvent"\ndescription = "x"\nsystem = "sentinel"\n',
+        encoding="utf-8",
+    )
+    query = "DeviceProcessEvents | take 1"
+    before = analyze_query(query, "kql")
+    assert "kql_table_not_declared" not in {diagnostic.code for diagnostic in before}
+    ws = Workspace.open(tide_corpus_repo)
+    ws.validate()
+    assert [diagnostic.code for diagnostic in analyze_query(query, "kql")] == [
+        diagnostic.code for diagnostic in before
+    ]
+    ws.lint()
+    assert [diagnostic.code for diagnostic in analyze_query(query, "kql")] == [
+        diagnostic.code for diagnostic in before
+    ]
 
 
 def test_an_unknown_language_is_a_value_error() -> None:

@@ -440,6 +440,32 @@ pub fn install_visibility(text: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
+/// The workspace's declared datasets as they were when [`save_visibility`]
+/// made it: dropping it installs them again, so a run that installs its own
+/// leaves the process as it found it, on an early return or a panic too.
+/// Drop it while the host still holds the lock it installs datasets under.
+#[must_use = "dropping it at once restores the datasets at once"]
+pub struct RestoreVisibility {
+    previous: Option<DeclaredDatasets>,
+}
+
+impl Drop for RestoreVisibility {
+    fn drop(&mut self) {
+        set_dataset_layer(true, self.previous.take());
+    }
+}
+
+/// Saves the workspace's declared datasets in use now; see
+/// [`RestoreVisibility`].
+pub fn save_visibility() -> RestoreVisibility {
+    let layers = dataset_layers()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    RestoreVisibility {
+        previous: layers.workspace.clone(),
+    }
+}
+
 fn set_dataset_layer(workspace: bool, datasets: Option<DeclaredDatasets>) {
     let mut layers = dataset_layers()
         .write()
@@ -450,6 +476,28 @@ fn set_dataset_layer(workspace: bool, datasets: Option<DeclaredDatasets>) {
         layers.default = datasets;
     }
     opentide_core::datasets::install(layers.workspace.clone().or(layers.default.clone()));
+}
+
+/// The declared datasets a query checked on its own uses on this thread
+/// until it is dropped: the host's ([`set_default_catalog`]), never a
+/// workspace's that a run on another thread, or one this thread is in the
+/// middle of, installed. It takes no lock.
+#[must_use = "dropping it at once ends the scope at once"]
+pub struct StandaloneDatasets {
+    _scope: opentide_core::datasets::ThreadScope,
+}
+
+/// Checks on this thread ignore a workspace's declared datasets until the
+/// returned scope drops; see [`StandaloneDatasets`].
+pub fn standalone_datasets() -> StandaloneDatasets {
+    let default = dataset_layers()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .default
+        .clone();
+    StandaloneDatasets {
+        _scope: opentide_core::datasets::scope_thread(default),
+    }
 }
 
 /// Install workspace catalogs for the whole process. A `None` part goes back
