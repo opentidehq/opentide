@@ -751,7 +751,8 @@ fn unique_stem(stem: String, id: &str, taken: &[String]) -> String {
             return candidate;
         }
     }
-    (2_usize..)
+    // `taken` holds fewer names than this range: one of them is free.
+    (2..=taken.len() + 2)
         .map(|n| format!("{stem} {n}"))
         .find(|candidate| free(candidate))
         .unwrap_or(stem)
