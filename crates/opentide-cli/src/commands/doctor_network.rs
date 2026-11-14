@@ -140,18 +140,18 @@ pub fn connect(host: &str, port: u16, timeout: Duration) -> Result<(), String> {
     Err(last)
 }
 
-/// A proxy URL as the connectors read it: one written without a scheme
-/// (`proxy.internal:8080`) is an HTTP proxy.
-///
-/// # Errors
-///
-/// The text is not a URL: the parser's reason.
-pub fn parse_proxy(url: &str) -> Result<url::Url, url::ParseError> {
-    let url = url.trim();
-    if url.contains("://") {
-        url::Url::parse(url)
-    } else {
-        url::Url::parse(&format!("http://{url}"))
+/// The proxy `doctor` tests, as the connectors choose it ([`ProxySettings`]
+/// from the run's environment and `--proxy`): the one their `https://`
+/// requests go through (PyPI's, and nearly every tenant's), else the one of
+/// their `http://` requests, with `true` when only those use it. `None` when
+/// no proxy is set. `no_proxy` does not change the choice: it sends some
+/// hosts direct, not every request.
+pub fn proxy_to_test(env: &Environment, proxy: Option<&str>) -> Option<(String, bool)> {
+    let settings = ProxySettings::from_env(env, proxy);
+    match (settings.https, settings.http) {
+        (Some(https), _) => Some((https, false)),
+        (None, Some(http)) => Some((http, true)),
+        (None, None) => None,
     }
 }
 
@@ -223,7 +223,7 @@ mod tests {
 
     /// The scheme, host and port the proxy check connects to.
     fn endpoint(url: &str) -> Option<(String, String, Option<u16>)> {
-        let parsed = parse_proxy(url).ok()?;
+        let parsed = opentide_connectors::proxy::parse(url).ok()?;
         Some((
             parsed.scheme().to_owned(),
             parsed.host_str()?.to_owned(),
@@ -257,7 +257,10 @@ mod tests {
             "ht tp://host",
             "http://",
         ] {
-            assert!(parse_proxy(unparsed).is_err(), "{unparsed}");
+            assert!(
+                opentide_connectors::proxy::parse(unparsed).is_err(),
+                "{unparsed}"
+            );
         }
     }
 

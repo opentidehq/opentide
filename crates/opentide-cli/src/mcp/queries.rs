@@ -125,7 +125,14 @@ fn command_result(argv: &[String], context: &Context<'_>) -> Result<(Json, i32),
     let cwd = context
         .cwd
         .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
-    let run = crate::embed::run_captured(&full, context.env, &cwd, context.version, false);
+    let run = crate::embed::run_interruptible(
+        &full,
+        context.env,
+        &cwd,
+        context.version,
+        false,
+        context.interrupt.cloned().unwrap_or_default(),
+    );
     let text = String::from_utf8_lossy(&run.stdout);
     match Json::parse(text.trim()) {
         Ok(Json::Object(members)) => {
@@ -497,6 +504,7 @@ mod tests {
             repo: None,
             version: "1",
             workspace_problem: None,
+            interrupt: None,
         }
     }
 

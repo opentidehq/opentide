@@ -406,8 +406,8 @@ impl Defender {
                 .iter()
                 .filter_map(|column| {
                     column.as_object()?;
-                    let name = truthy_or(column.get("name"), column.get("Name"));
-                    let kind = truthy_or(column.get("type"), column.get("Type"));
+                    let name = first_filled(column.get("name"), column.get("Name"));
+                    let kind = first_filled(column.get("type"), column.get("Type"));
                     Some(QueryColumn {
                         name: name.map_or_else(|| "null".to_owned(), json_text),
                         kind: kind.map(json_text),
@@ -419,7 +419,7 @@ impl Defender {
         let rows: Vec<Row> = match first_present(&body, "results", "Results") {
             Some(Json::Array(items)) => items
                 .iter()
-                .filter(|row| row.truthy())
+                .filter(|row| row.is_filled())
                 .filter_map(Json::as_object)
                 .cloned()
                 .collect(),
@@ -497,7 +497,7 @@ pub fn safer_configuration(body: &Json) -> Json {
         return rule;
     };
     if let Some(Json::Object(template)) = action.get_mut("alertTemplate")
-        && template.get("impactedAssets").is_some_and(Json::truthy)
+        && template.get("impactedAssets").is_some_and(Json::is_filled)
     {
         let mut device = Object::new();
         device.insert(
@@ -547,7 +547,7 @@ fn error_message(answer: &Answer) -> String {
         .get("error")
         .filter(|error| error.as_object().is_some())
         .and_then(|error| error.get("message"))
-        .filter(|message| message.truthy());
+        .filter(|message| message.is_filled());
     json_text(message.unwrap_or(&body))
 }
 
@@ -556,12 +556,12 @@ fn first_present<'j>(body: &'j Json, first: &str, second: &str) -> Option<&'j Js
     body.get(first).or_else(|| body.get(second))
 }
 
-/// `a or b`.
-fn truthy_or<'j>(first: Option<&'j Json>, second: Option<&'j Json>) -> Option<&'j Json> {
+/// `first` when it holds a value, else `second` when it does.
+fn first_filled<'j>(first: Option<&'j Json>, second: Option<&'j Json>) -> Option<&'j Json> {
     first
-        .filter(|value| value.truthy())
+        .filter(|value| value.is_filled())
         .or(second)
-        .filter(|value| value.truthy())
+        .filter(|value| value.is_filled())
 }
 
 /// The Defender XDR advanced hunting tables a custom detection names, with

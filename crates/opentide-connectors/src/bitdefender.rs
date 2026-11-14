@@ -438,7 +438,7 @@ impl<'a> Client<'a> {
             };
             let message = error
                 .get("message")
-                .filter(|message| message.truthy())
+                .filter(|message| message.is_filled())
                 .map(crate::text::json_text)
                 .unwrap_or_default();
             return match code {
