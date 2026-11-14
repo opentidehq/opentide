@@ -20,6 +20,6 @@ Coverage for T1059: 10 rules (10 own, 0 inherited)
 00000000-0000-4000-8003-000000000008  Staging Promote Rule      sentinel
 00000000-0000-4000-8003-000000000009  Elastic KQL Rule          elastic
 00000000-0000-4000-8003-0000005d1a90  Sysdig Falco Rule         sysdig
-␛[1;32m✓␛[0m 10 rules · 1 threat · 1 objective · 0 load errors
+␛[1m␛[32m✓␛[0m 10 rules · 1 threat · 1 objective · 0 load errors
 
 ━━━ stderr · empty

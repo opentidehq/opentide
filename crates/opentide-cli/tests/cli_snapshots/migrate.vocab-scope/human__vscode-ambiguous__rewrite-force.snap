@@ -6,10 +6,10 @@ args: opentide migrate vocab-scope --apply --force
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m Rewrote 1 file · 2 scanned
+␛[1m␛[32m✓␛[0m Rewrote 1 file · 2 scanned
 
 ━━━ stderr
-␛[1;33mwarning:␛[0m entities: "Account" is defined under several stages: "Host::Account", "Cloud::Account"
+␛[1m␛[33mwarning:␛[0m entities: "Account" is defined under several stages: "Host::Account", "Cloud::Account"
 
 ━━━ ws/objects/objectives/detect-lsass-access.yaml · modified 0644
 name: Detect LSASS access

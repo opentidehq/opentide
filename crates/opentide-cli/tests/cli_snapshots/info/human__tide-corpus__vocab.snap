@@ -44,6 +44,6 @@ tier                         7        0  1.0              no
 tlp                          5        0  1.0              no
 viability                    8        0  1.0              no
 violation                    9        0  1.0              no
-␛[1;32m✓␛[0m 10 rules · 1 threat · 1 objective · 0 load errors
+␛[1m␛[32m✓␛[0m 10 rules · 1 threat · 1 objective · 0 load errors
 
 ━━━ stderr · empty

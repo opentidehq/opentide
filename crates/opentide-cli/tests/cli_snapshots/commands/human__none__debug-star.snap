@@ -64,6 +64,6 @@ exit: 0
 ␛[1mlsp              Serve the language server for editors␛[0m
 ␛[1m  start          Serve LSP on stdio until the editor closes stdin␛[0m
 ␛[1mserve            Run CLI commands in one warm process, for editors␛[0m
-␛[1;32m✓␛[0m 58 commands
+␛[1m␛[32m✓␛[0m 58 commands
 
 ━━━ stderr · empty

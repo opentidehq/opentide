@@ -6,6 +6,6 @@ args: opentide migrate vocab-scope --apply
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m Rewrote 0 files · 0 scanned
+␛[1m␛[32m✓␛[0m Rewrote 0 files · 0 scanned
 
 ━━━ stderr · empty

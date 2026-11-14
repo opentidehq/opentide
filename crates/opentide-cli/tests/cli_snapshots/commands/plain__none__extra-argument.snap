@@ -9,5 +9,5 @@ exit: 2
 
 ━━━ stderr
 error: Unexpected argument "extra".
-  usage: opentide commands
+  usage: opentide commands [OPTIONS]
   help: run 'opentide commands --help'

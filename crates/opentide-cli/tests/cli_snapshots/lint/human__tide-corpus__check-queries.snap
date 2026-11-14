@@ -6,6 +6,6 @@ args: opentide lint --check queries
 exit: 0
 
 ━━━ stdout
-␛[1;32m✓␛[0m 12 files clean
+␛[1m␛[32m✓␛[0m 12 files clean
 
 ━━━ stderr · empty
