@@ -39,15 +39,15 @@ exit: 1
 
 ━━━ ws/.claude/settings.json · created 0644
 {
-  "enabledPlugins": {
-    "opentide@opentide": true
-  },
   "extraKnownMarketplaces": {
     "opentide": {
       "source": {
-        "repo": "opentidehq/skills",
-        "source": "github"
+        "source": "github",
+        "repo": "opentidehq/skills"
       }
     }
+  },
+  "enabledPlugins": {
+    "opentide@opentide": true
   }
 }
