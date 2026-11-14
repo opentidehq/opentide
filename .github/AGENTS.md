@@ -100,9 +100,8 @@ per-runner sccache or restore-only, and engine lint building xtask once.
 | `engine-release-consumers` | opentidehq/vscode-extension's own grammar and engine scripts (a pinned commit) accept the dry run's assets as this repository's release (`scripts/engine/check-vscode-extension.mjs`) |
 | `clients`, `bench` | Informational (`continue-on-error`): real LSP clients (pytest-lsp, Neovim) and `cargo bench`; never required |
 
-The other workflows follow the same split: `coverage.yml` (Rust coverage gates), golden.yml's
-`Golden determinism`, `docs.yml` and `publish-dry-run.yml` run their jobs in the
-full set only (their `pull_request` trigger has no path filter, so the label reaches them);
+The other workflows follow the same split: `coverage.yml` (Rust coverage gates), `docs.yml`
+and `publish-dry-run.yml` run their jobs in the full set only (their `pull_request` trigger has no path filter, so the label reaches them);
 `schema.yml` and `oracle.yml` run on a pull request only when it changes their inputs (a path
 filter on the trigger), and on every push; `bench.yml` keeps its `perf` label. Below, "The other
 workflows".
@@ -230,11 +229,13 @@ Golden paths
 Golden check (python)
 ```
 
-`Golden determinism` (recording every case twice, about 26 minutes) is in the full set:
-nightly, on every push and Run workflow, and on a pull request only with the `full-ci` label; it
-is no longer required. `Golden check (python)` (about 20 minutes) runs on a pull request only
-when a golden input changed or with the `full-ci` label: since UC-6.2 (#841) its oracle is a frozen
-PyPI release, so a pull request that touches none of its inputs cannot change its result.
+`Golden check (python)` (about 16 minutes) runs on a pull request only when a golden input
+changed (or the filter failed), weekly and on Run workflow; not on a push, the nightly or the
+`full-ci` label: since UC-6.2 (#841) its oracle is a frozen PyPI release, so a run that touches
+none of its inputs cannot change its result. A skipped run reports success, so the check stays
+required. `Golden determinism` (recording every case twice, about 28 minutes) left CI
+(2026-11-14): a pull request that re-records runs `cargo xtask golden record
+--check-determinism` locally (`tests/golden/README.md`, review rule 5).
 `Golden compare` (ci.yml) runs on every pull request.
 `Golden paths` is the filter, and is required so that it cannot fail unnoticed (its dependants
 also run when it fails).
@@ -307,14 +308,14 @@ removed from the rule too, or every pull request that does not run it waits for 
   Lucene jar. The pinned Elastic references (Lucene's jars from Maven Central, the EQL and kuery
   grammars) are cached under `oracle.py`'s pins and saved from pushes; `oracle.py` checks each
   file's SHA-256, a restored one too (`tests/test_ci/test_ci_scope.py`).
-- [`golden.yml`](workflows/golden.yml) runs `cargo xtask golden check --engine python` and
-  `golden record --check-determinism` against the committed recordings of the frozen Python CLI
-  (`tests/golden/README.md`) on every push to `development` and `integration/unified-core`,
-  nightly and on demand. On a pull request its `Golden paths` job reads whether the pull request
-  touches `tests/golden/`, `tests/corpora/`, the tide corpus, the render tests' inputs,
-  `scripts/golden/`, xtask's golden, corpus, compare and parallel code, `crates/opentide-compare/`
-  or golden.yml: the check runs when it does, or with the `full-ci` label. The determinism run is in the full set
-  (the `full-ci` label on a pull request). The trigger itself has no path filter, so
+- [`golden.yml`](workflows/golden.yml) runs `cargo xtask golden check --engine python`
+  against the committed recordings of the frozen Python CLI (`tests/golden/README.md`) weekly,
+  on demand, and on a pull request whose `Golden paths` job finds it touching
+  `tests/golden/` (the recordings, `ORACLE`, the oracle's requirements), `tests/corpora/`, the
+  tide corpus, the render tests' inputs, `scripts/golden/`, xtask's golden, corpus, compare and
+  parallel code, `crates/opentide-compare/` or golden.yml; not on a push, nightly or with the
+  `full-ci` label. `golden record --check-determinism` runs locally, before a re-record's pull
+  request (the determinism job left CI, 2026-11-14). The trigger itself has no path filter, so
   `integration/unified-core` requires `Golden paths` and the check (Required checks, above).
 - [`golden-preview.yml`](workflows/golden-preview.yml), on every push to `train/catchup-0.28`,
   every pull request into it and on demand (no other branch): the preview of the next oracle

@@ -51,13 +51,21 @@ report only.
    `cases.toml`, a fixture change, a normalisation rule (with its unit test), or a new oracle.
    Review the diff of `cases/` as you would code: each changed line follows from that cause.
 3. **The oracle changes only in a PR of its own**: edit `ORACLE` (tag, wheel, its SHA-256 from
-   PyPI), run `cargo xtask golden lock` and `cargo xtask golden record`, and review every
-   difference: each one is a behaviour change between the two releases.
+   PyPI), run `cargo xtask golden lock` (`git diff` must show the new requirements only) and
+   `cargo xtask golden record --check-determinism`, and review every difference: each one is a
+   behaviour change between the two releases.
 4. **Normalisation hides only what differs between two runs of the same case** (below). A rule
    is code in `crates/opentide-compare/src/normalise.rs` (moved there by UC-0.7 so the CLI's compare mode shares it) with a unit test; widening one to make a difference
    go away is a review failure.
-5. **Recording is deterministic**: CI records every case twice and fails on any difference, and
-   on any difference from the committed recordings (`.github/workflows/golden.yml`).
+5. **Recording is deterministic**: a pull request that re-records runs
+   `cargo xtask golden record --check-determinism` before it is opened, and says so in its
+   description. It records every case twice (about 26 minutes on a CI runner) and fails, writing
+   nothing, on any difference between the runs; `git diff tests/golden` must then show only the
+   change the pull request is for. CI no longer re-records: the oracle is a pinned, frozen
+   release, so only a re-record can change the recordings, and
+   `.github/workflows/golden.yml`'s `Golden check (python)` holds them on that pull request (it
+   runs when the recordings, `ORACLE`, the oracle's requirements, the inputs the cases read or
+   the harness change, and weekly).
 6. **Coverage**: every command path has at least one case in every mode. `COVERAGE.md` is
    generated with the recordings; `record` and `check` fail when a path or mode has none, or when
    the recordings outgrow their budget.

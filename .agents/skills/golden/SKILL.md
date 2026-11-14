@@ -47,7 +47,7 @@ usage).
 | Command | What it does |
 |---------|--------------|
 | `cargo xtask golden record` | Runs every case of `cases.toml` through the oracle and writes `cases/`, `blobs/` and `COVERAGE.md`. Only the oracle records: `record` takes no `--engine` |
-| `cargo xtask golden record --check-determinism` | Runs every case twice and fails, writing nothing, unless both runs agree byte for byte |
+| `cargo xtask golden record --check-determinism` | Runs every case twice and fails, writing nothing, unless both runs agree byte for byte. **Run it, with `golden lock`, before opening any pull request that re-records**: CI no longer does (golden.yml) |
 | `cargo xtask golden check --engine python` | A fresh run against the recordings; also checks `COVERAGE.md` and that no recording is missing or orphaned |
 | `cargo xtask golden diff` | `check`, printing every difference in full |
 | `cargo xtask golden lock` | Rewrites `oracle-requirements.txt` from `ORACLE` |

@@ -1,61 +1,50 @@
 name: Golden
 
 # The goldens of the frozen Python CLI, the oracle every Rust port is checked
-# against (tests/golden/README.md, plan §5.1, UC-0.5). Both jobs install the
-# oracle from PyPI by its wheel's SHA-256 (tests/golden/ORACLE) and run every
-# case of tests/golden/cases.toml through it:
-#
-# - check: `cargo xtask golden check --engine python`, the recordings against
-#   a fresh run, plus COVERAGE.md and no missing or orphaned recording.
-# - determinism: `cargo xtask golden lock` must reproduce the committed
-#   oracle-requirements.txt; then `cargo xtask golden record
-#   --check-determinism` runs every case twice and fails unless both runs
-#   agree byte for byte, and the recordings it wrote must be the committed ones.
+# against (tests/golden/README.md, plan §5.1, UC-0.5). `check` installs the
+# oracle from PyPI by its wheel's SHA-256 (tests/golden/ORACLE) and runs every
+# case of tests/golden/cases.toml through it: `cargo xtask golden check
+# --engine python`, the recordings against a fresh run, plus COVERAGE.md and
+# no missing or orphaned recording, and the renderers' oracle snapshots.
 #
 # `cargo xtask golden check --engine compare` (UC-0.7) runs in ci.yml's
 # `golden-compare` job instead: it checks this repository's code, so it runs
 # on every pull request.
 #
-# When each job runs on a pull request (tests/test_ci/test_golden_workflow.py).
-# The pull_request trigger has no path filter, so that the checks can be
-# required on integration/unified-core; the `changes` job filters by path
-# instead, and a job skipped by its `if` reports success to branch protection:
+# When it runs (tests/test_ci/test_golden_workflow.py). The oracle is a frozen,
+# pinned PyPI release (UC-6.2, #841), so only a change to what it is fed, how
+# it is run or what it is compared with can change the result: GOLDEN_PATHS
+# below (the recordings, ORACLE and oracle-requirements.txt under
+# tests/golden/, the inputs the cases read, and the harness). It runs on a
+# pull request that changes one of them, when the `changes` filter did not
+# succeed (it fails open), weekly, and on Run workflow; not on a push, the
+# nightly or a `full-ci` pull request (the maintainer's decision, 2026-11-14:
+# about 16 minutes of the full set's 45 for a result that cannot change). The
+# pull_request trigger has no path filter, so that integration/unified-core
+# can require `Golden check (python)` by name: a job its `if` skips reports
+# success.
 #
-# - check (about 20 minutes) runs on a pull request with the `full-ci` label
-#   or one that changes GOLDEN_PATHS, and when `changes` did not succeed: the
-#   filter fails open. It ran on every pull request into
-#   integration/unified-core (#803) while the Python implementation in this
-#   repository could change the oracle; since UC-6.2 (#841) the oracle is a
-#   frozen PyPI release, so a pull request that touches none of its inputs
-#   cannot change its result. It still runs on every push, schedule and Run
-#   workflow, and a skipped run reports success, so integration/unified-core
-#   still requires it by name (the maintainer's decision, 2026-11-13).
-# - determinism (recording twice, about 26 minutes) is in the full set
-#   (ci.yml's header): nightly, every push to integration/unified-core and
-#   development, Run workflow, and a pull request with the `full-ci` label.
-#   It is not a required check.
+# `cargo xtask golden record --check-determinism` (every case recorded twice,
+# about 26 minutes) is not run here: whoever re-records the goldens runs it,
+# with `golden lock`, before opening the pull request (tests/golden/README.md,
+# the golden skill), whose recordings this check then holds.
 #
 # Nothing here publishes or writes to the repository.
 
 on:
-  push:
-    # integration/unified-core collects the unified-core work (epic #790) before development.
-    branches: [development, integration/unified-core, "train/catchup-*"]
   pull_request:
     # All base branches and all paths: the `changes` job below holds the path
-    # filter, so that integration/unified-core can require the checks.
+    # filter, so that integration/unified-core can require the check.
   schedule:
-    # Nightly, so a change outside the repository (PyPI, the runner image)
-    # shows, with the determinism run. GitHub runs a schedule on the default
-    # branch only.
-    - cron: "17 4 * * *"
+    # Weekly, so a change outside the repository (PyPI, the runner image)
+    # shows. GitHub runs a schedule on the default branch only.
+    - cron: "17 4 * * 1"
   workflow_dispatch:
 
 concurrency:
-  # A pull request's new push cancels its stale run; every other run (a push
-  # to development, integration/unified-core or main, the nightly, Run
-  # workflow) has a group of its own, its run id, so none cancels another and
-  # each push to a base branch gets a complete run (tests/test_ci/test_concurrency.py).
+  # A pull request's new push cancels its stale run; every other run (the
+  # weekly schedule, Run workflow) has a group of its own, its run id, so none
+  # cancels another (tests/test_ci/test_concurrency.py).
   group: golden-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
@@ -120,11 +109,11 @@ jobs:
   check:
     name: Golden check (python)
     needs: changes
-    # The full set, or a pull request that changes a golden input.
+    # A pull request that changes a golden input (or whose filter failed),
+    # the weekly schedule and Run workflow.
     if: >-
       !cancelled() && (
         github.event_name != 'pull_request'
-        || contains(github.event.pull_request.labels.*.name, 'full-ci')
         || needs.changes.result != 'success'
         || needs.changes.outputs.golden == 'true'
       )
@@ -171,55 +160,3 @@ jobs:
           HOME="${work}" "${python}" -I scripts/golden/render_oracle.py \
             --fault "${work}/fault" --scratch "${work}/scratch" \
             --out crates/opentide-cli/tests/render --check
-
-  determinism:
-    name: Golden determinism
-    # The full set: recording twice takes about 26 minutes.
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          # The uv that wrote oracle-requirements.txt (`golden lock` must reproduce it).
-          version: "0.11.32"
-          enable-cache: true
-          cache-dependency-glob: tests/golden/oracle-requirements.txt
-
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          # Saved by the nightly and pushes to development only (the default
-          # branch, whose caches every pull request reads): a target tree per
-          # integration merge, whose Cargo.lock nearly always changed, evicted
-          # the compiler caches pull requests restore (#841).
-          save-if: ${{ github.event_name == 'schedule' || github.ref == 'refs/heads/development' }}
-          workspaces: . -> target
-
-      - name: The oracle's lock file is the one golden lock writes
-        run: |
-          set -euo pipefail
-          cargo xtask golden lock
-          if ! git diff --exit-code -- tests/golden/oracle-requirements.txt; then
-            echo "::error::cargo xtask golden lock changed tests/golden/oracle-requirements.txt: run it and commit the result"
-            exit 1
-          fi
-
-      - name: Record every case twice
-        run: cargo xtask golden record --check-determinism
-
-      - name: The recordings are the committed ones
-        run: |
-          set -euo pipefail
-          git add --intent-to-add tests/golden
-          if ! git diff --quiet -- tests/golden; then
-            git diff --stat -- tests/golden
-            echo "::error::recording again changed tests/golden: run cargo xtask golden record and review the diff"
-            exit 1
-          fi

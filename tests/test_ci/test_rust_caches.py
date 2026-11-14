@@ -602,7 +602,8 @@ def test_target_trees_are_saved_by_the_nightly_and_development_only() -> None:
                     continue
                 assert save_if == TARGET_TREE_SAVE, (path.name, job_id, save_if)
                 checked += 1
-    assert checked >= 6
+    # (golden.yml's determinism job, with one, left CI.)
+    assert checked >= 5
 
 
 def test_a_job_with_a_compiler_cache_restores_no_target_tree() -> None:

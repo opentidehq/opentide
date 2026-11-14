@@ -6,14 +6,13 @@ starts blocks the merge, so the ``pull_request`` trigger takes no path or
 branch filter: the ``changes`` job (``Golden paths``) filters by path inside
 the workflow, and a job its ``if`` skips reports success.
 
-- ``Golden check (python)`` runs on a pull request when a golden input changed,
-  with the ``full-ci`` label, and when the filter did not succeed. Since UC-6.2
-  (#841) its oracle is a frozen PyPI release, so a pull request that touches
-  none of its inputs cannot change its result (the maintainer's decision).
-- ``Golden determinism`` records every case twice (about 26 minutes): it is in
-  ci.yml's full set, so on a pull request it runs only with the ``full-ci``
-  label, and it is not required.
-- Both run on every push, the nightly schedule and Run workflow.
+- ``Golden check (python)`` runs on a pull request when a golden input changed
+  and when the filter did not succeed, weekly and on Run workflow; not on a
+  push, the nightly or a ``full-ci`` pull request. Since UC-6.2 (#841) its
+  oracle is a frozen PyPI release, so a run that touches none of its inputs
+  cannot change its result (the maintainer's decisions, 2026-11-13 and -14).
+- ``Golden determinism`` (every case recorded twice, about 26 minutes) left CI:
+  whoever re-records runs ``golden record --check-determinism`` locally.
 """
 
 from __future__ import annotations
@@ -36,7 +35,6 @@ INTEGRATION = "integration/unified-core"
 JOB_NAMES = {
     "changes": "Golden paths",
     "check": "Golden check (python)",
-    "determinism": "Golden determinism",
 }
 # The ones integration/unified-core requires: they start on every pull request
 # into it (a job its `if` skips counts as passing).
@@ -135,11 +133,12 @@ def test_the_pull_request_trigger_has_no_filter() -> None:
     assert pull_request == {}, f"golden.yml's pull_request trigger is filtered: {pull_request}"
 
 
-def test_push_and_the_nightly_schedule() -> None:
+def test_no_push_and_a_weekly_schedule() -> None:
     triggers = _triggers()
-    assert triggers["push"] == {"branches": ["development", INTEGRATION, "train/catchup-*"]}
-    # Nightly: the determinism run is in the full set.
-    assert triggers["schedule"] == [{"cron": "17 4 * * *"}]
+    # No push: the oracle is frozen, and every change to a golden input came
+    # through a pull request that ran the check.
+    assert "push" not in triggers
+    assert triggers["schedule"] == [{"cron": "17 4 * * 1"}]
     assert "workflow_dispatch" in triggers
 
 
@@ -147,8 +146,18 @@ def test_the_job_names_are_stable() -> None:
     jobs = _workflow()["jobs"]
     assert {job_id: job["name"] for job_id, job in jobs.items()} == JOB_NAMES
     assert jobs["check"]["needs"] == "changes"
-    # The determinism run reads no path filter: the label decides on a pull request.
-    assert "needs" not in jobs["determinism"]
+
+
+def test_the_determinism_run_left_ci_for_the_re_record() -> None:
+    """`golden record --check-determinism` runs where the goldens are
+    re-recorded: no workflow runs it, and the guides say who does."""
+    for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job_id, job in (workflow.get("jobs") or {}).items():
+            for step in job.get("steps") or []:
+                assert "--check-determinism" not in str(step.get("run", "")), (path.name, job_id)
+    for guide in (ROOT / "tests/golden/README.md", ROOT / ".agents/skills/golden/SKILL.md"):
+        assert "golden record --check-determinism" in guide.read_text(encoding="utf-8"), guide
 
 
 def test_the_integration_branch_requires_the_golden_jobs() -> None:
@@ -163,9 +172,14 @@ def test_the_integration_branch_requires_the_golden_jobs() -> None:
 
 @pytest.mark.parametrize("result", ["success", "failure", "skipped"])
 @pytest.mark.parametrize("golden", ["true", "false", ""])
-def test_the_check_runs_on_every_full_ci_pull_request(result: str, golden: str) -> None:
+def test_the_full_ci_label_does_not_decide(result: str, golden: str) -> None:
     condition = _workflow()["jobs"]["check"]["if"]
-    assert _evaluate(condition, _context("pull_request", INTEGRATION, result, golden, FULL_CI))
+    assert "full-ci" not in condition
+    with_label = _evaluate(
+        condition, _context("pull_request", INTEGRATION, result, golden, FULL_CI)
+    )
+    without = _evaluate(condition, _context("pull_request", INTEGRATION, result, golden))
+    assert with_label is without
 
 
 @pytest.mark.parametrize(
@@ -176,26 +190,15 @@ def test_the_check_runs_on_every_full_ci_pull_request(result: str, golden: str) 
         ("check", "pull_request", INTEGRATION, "success", "true", "", True),
         ("check", "pull_request", INTEGRATION, "failure", "", "", True),
         ("check", "pull_request", INTEGRATION, "success", "false", "perf", False),
-        ("check", "pull_request", "development", "success", "false", FULL_CI, True),
+        ("check", "pull_request", "development", "success", "false", FULL_CI, False),
         ("check", "pull_request", "development", "success", "false", "", False),
         ("check", "pull_request", "development", "success", "true", "", True),
         ("check", "pull_request", "feat/stacked", "success", "false", "", False),
         # The filter fails open.
         ("check", "pull_request", "development", "failure", "", "", True),
-        # Determinism is in the full set: on a pull request, only with the label,
-        # whatever the base and whatever changed.
-        ("determinism", "pull_request", INTEGRATION, "success", "true", "", False),
-        ("determinism", "pull_request", "development", "success", "true", "", False),
-        ("determinism", "pull_request", INTEGRATION, "success", "", "", False),
-        ("determinism", "pull_request", "development", "success", "false", "perf", False),
-        ("determinism", "pull_request", INTEGRATION, "success", "false", FULL_CI, True),
-        ("determinism", "pull_request", "development", "success", "false", f"perf,{FULL_CI}", True),
-        # Pushes, the schedule and Run workflow run both.
-        ("check", "push", "", "success", "true", "", True),
-        ("determinism", "push", "", "success", "true", "", True),
-        ("determinism", "schedule", "", "success", "true", "", True),
-        # (determinism needs no job: `changes` failing does not skip it.)
-        ("determinism", "workflow_dispatch", "", "success", "", "", True),
+        # The weekly schedule and Run workflow run it.
+        ("check", "schedule", "", "success", "true", "", True),
+        ("check", "workflow_dispatch", "", "success", "true", "", True),
     ],
 )
 def test_when_each_job_runs(

@@ -126,14 +126,15 @@ CI_DEPENDENT = {"engine-release-consumers": "engine-release-dry-run"}
 # The other workflows' jobs in the full set: (workflow, job).
 OTHER_FULL = [
     ("coverage.yml", "rust"),
-    ("golden.yml", "determinism"),
     ("docs.yml", "validate"),
     ("publish-dry-run.yml", "crate"),
     ("publish-dry-run.yml", "npm"),
     ("publish-dry-run.yml", "pypi"),
 ]
 # Every workflow with a job in the full set runs it nightly.
-NIGHTLY = ["ci.yml", "coverage.yml", "golden.yml", "docs.yml", "publish-dry-run.yml"]
+# golden.yml runs weekly and on a pull request that changes a golden input:
+# its oracle is frozen (test_golden_workflow.py).
+NIGHTLY = ["ci.yml", "coverage.yml", "docs.yml", "publish-dry-run.yml"]
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -726,7 +727,8 @@ def test_the_full_set_e2e_tests_run_in_the_full_set_only() -> None:
 # runs on a push to a catch-up train too. Only the catch-up trains: the other
 # train/ branches are pull requests' heads, whose pushes run as pull requests.
 TRAINS = "train/catchup-*"
-SAVES_ON_PUSH = ["ci.yml", "golden.yml", "schema.yml", "oracle.yml", "coverage.yml"]
+# (golden.yml runs on no push: its weekly run on development saves its tree.)
+SAVES_ON_PUSH = ["ci.yml", "schema.yml", "oracle.yml", "coverage.yml"]
 
 
 @pytest.mark.parametrize("name", SAVES_ON_PUSH)

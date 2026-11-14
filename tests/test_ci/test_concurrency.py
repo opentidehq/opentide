@@ -33,7 +33,6 @@ EXPECTED = {
     "codeql.yml",
     "coverage.yml",
     "docs.yml",
-    "golden.yml",
     "publish-dry-run.yml",
     "schema.yml",
 }
