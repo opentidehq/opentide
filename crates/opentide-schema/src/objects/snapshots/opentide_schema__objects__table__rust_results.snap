@@ -2915,40 +2915,23 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "rule-version-float": {
     "errors": [
       {
-        "ctx": {},
+        "ctx": {
+          "expected": "a string or an integer"
+        },
         "field_path": [
           "metadata",
-          "version",
-          "str"
+          "version"
         ],
         "input": null,
-        "msg": "Input should be a valid string",
+        "msg": "expected a string or an integer",
         "span": [
           5,
-          3,
-          10,
-          false
+          12,
+          15,
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "metadata",
-          "version",
-          "int"
-        ],
-        "input": null,
-        "msg": "Input should be a valid integer",
-        "span": [
-          5,
-          3,
-          10,
-          false
-        ],
-        "type": "int_type",
-        "yaml_line": null
+        "yaml_line": 4
       }
     ]
   },
@@ -2971,40 +2954,23 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "rule-version-list": {
     "errors": [
       {
-        "ctx": {},
+        "ctx": {
+          "expected": "a string or an integer"
+        },
         "field_path": [
           "metadata",
-          "version",
-          "str"
+          "version"
         ],
         "input": null,
-        "msg": "Input should be a valid string",
+        "msg": "expected a string or an integer",
         "span": [
           5,
           3,
           10,
-          false
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "metadata",
-          "version",
-          "int"
-        ],
-        "input": null,
-        "msg": "Input should be a valid integer",
-        "span": [
-          5,
-          3,
-          10,
-          false
-        ],
-        "type": "int_type",
-        "yaml_line": null
+        "yaml_line": 4
       }
     ]
   },
@@ -3416,77 +3382,41 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "field_path": [
           "threat",
           "killchain",
-          "str"
-        ],
-        "input": null,
-        "msg": "Input should be a valid string",
-        "span": [
-          19,
-          3,
-          12,
-          false
-        ],
-        "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "threat",
-          "killchain",
-          "list[str]",
           "1"
         ],
         "input": null,
         "msg": "Input should be a valid string",
         "span": [
           19,
-          3,
-          12,
-          false
+          25,
+          26,
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
+        "yaml_line": 18
       }
     ]
   },
   "threat-killchain-number": {
     "errors": [
       {
-        "ctx": {},
+        "ctx": {
+          "expected": "a string or a list of strings"
+        },
         "field_path": [
           "threat",
-          "killchain",
-          "str"
+          "killchain"
         ],
         "input": null,
-        "msg": "Input should be a valid string",
+        "msg": "expected a string or a list of strings",
         "span": [
           19,
-          3,
-          12,
-          false
+          14,
+          15,
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "threat",
-          "killchain",
-          "list[str]"
-        ],
-        "input": null,
-        "msg": "Input should be a valid list",
-        "span": [
-          19,
-          3,
-          12,
-          false
-        ],
-        "type": "list_type",
-        "yaml_line": null
+        "yaml_line": 18
       }
     ]
   },

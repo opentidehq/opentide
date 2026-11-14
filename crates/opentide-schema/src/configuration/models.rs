@@ -22,7 +22,7 @@ use super::types::{
 };
 use crate::FromNode;
 use crate::error::{ErrorKind, PathSegment};
-use crate::from_node::{Context, Fields, Missing, model_entries};
+use crate::from_node::{Context, Fields, Missing, Shape, model_entries};
 use crate::node::{Node, Value};
 
 fn yes() -> bool {
@@ -181,6 +181,10 @@ impl FromNode for Flavor {
         );
         None
     }
+
+    fn shape() -> Shape {
+        Shape::String
+    }
 }
 
 fn generic_flavor() -> Flavor {
@@ -202,10 +206,8 @@ pub struct FlavorSettings {
 #[from_node(union)]
 pub enum FlavorChoice {
     /// The name.
-    #[from_node(tag = "function-before[<lambda>(), lax-or-strict[...]]")]
     Name(Flavor),
     /// The table.
-    #[from_node(tag = "FlavorSettings")]
     Settings(FlavorSettings),
 }
 
@@ -598,13 +600,10 @@ pub struct Modifier {
 #[from_node(union)]
 pub enum SslValue {
     /// A boolean.
-    #[from_node(tag = "bool")]
     Bool(bool),
     /// A placeholder.
-    #[from_node(tag = "constrained-str")]
     Placeholder(EnvPlaceholder),
     /// A word.
-    #[from_node(tag = "constrained-str")]
     Word(Matching<SslWordPattern>),
 }
 
@@ -614,10 +613,8 @@ pub enum SslValue {
 #[from_node(union)]
 pub enum BoolOrPlaceholder {
     /// A boolean.
-    #[from_node(tag = "bool")]
     Bool(bool),
     /// A placeholder.
-    #[from_node(tag = "constrained-str")]
     Placeholder(EnvPlaceholder),
 }
 
@@ -627,10 +624,8 @@ pub enum BoolOrPlaceholder {
 #[from_node(union)]
 pub enum IntOrPlaceholder {
     /// An integer.
-    #[from_node(tag = "int")]
     Int(i64),
     /// A placeholder.
-    #[from_node(tag = "constrained-str")]
     Placeholder(EnvPlaceholder),
 }
 
@@ -640,10 +635,8 @@ pub enum IntOrPlaceholder {
 #[from_node(union)]
 pub enum IntOrString {
     /// An integer.
-    #[from_node(tag = "int")]
     Int(i64),
     /// A string.
-    #[from_node(tag = "str")]
     Str(String),
 }
 
@@ -653,13 +646,10 @@ pub enum IntOrString {
 #[from_node(union)]
 pub enum Skew {
     /// A string.
-    #[from_node(tag = "str")]
     Str(String),
     /// An integer.
-    #[from_node(tag = "int")]
     Int(i64),
     /// A number.
-    #[from_node(tag = "float")]
     Float(f64),
 }
 
@@ -669,10 +659,8 @@ pub enum Skew {
 #[from_node(union)]
 pub enum Strategies {
     /// A list.
-    #[from_node(tag = "list[function-before[_run_strategy(), enum[StatusStrategy]]]")]
     List(NonEmptyList<RunStrategyName>),
     /// One strategy.
-    #[from_node(tag = "function-before[_run_strategy(), enum[StatusStrategy]]")]
     One(RunStrategyName),
 }
 
@@ -1347,10 +1335,8 @@ platform!(
 #[from_node(union)]
 pub enum GraylogNames {
     /// One.
-    #[from_node(tag = "str")]
     One(Matching<GraylogNamePattern>),
     /// Several.
-    #[from_node(tag = "list[str]")]
     Many(Vec<Matching<GraylogNamePattern>>),
 }
 
@@ -1550,16 +1536,12 @@ pub const COLUMN_TYPES: [(&str, &[&str]); 4] = [
 #[from_node(union)]
 pub enum DetailValue {
     /// A string.
-    #[from_node(tag = "str")]
     Str(String),
     /// A boolean.
-    #[from_node(tag = "bool")]
     Bool(bool),
     /// An integer.
-    #[from_node(tag = "int")]
     Int(i64),
     /// A number.
-    #[from_node(tag = "float")]
     Float(f64),
 }
 

@@ -974,66 +974,25 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "yaml_line": 18
       },
       {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "elastic",
-          "integration",
-          "0",
-          "str"
-        ],
-        "input": null,
-        "msg": "Input should be a valid string",
-        "span": [
-          18,
-          19,
-          20,
-          false
-        ],
-        "type": "string_type",
-        "yaml_line": null
-      },
-      {
         "ctx": {
-          "class_name": "ElasticIntegration"
+          "expected": "a string or a mapping"
         },
         "field_path": [
           "configurations",
           "elastic",
           "integration",
-          "0",
-          "ElasticIntegration"
+          "0"
         ],
         "input": null,
-        "msg": "Input should be a valid dictionary or instance of ElasticIntegration",
+        "msg": "expected a string or a mapping",
         "span": [
           18,
           19,
           20,
-          false
-        ],
-        "type": "model_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "elastic",
-          "integration",
-          "1",
-          "str"
-        ],
-        "input": null,
-        "msg": "Input should be a valid string",
-        "span": [
-          18,
-          22,
-          34,
-          false
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
+        "yaml_line": 17
       },
       {
         "ctx": {},
@@ -1042,7 +1001,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic",
           "integration",
           "1",
-          "ElasticIntegration",
           "package"
         ],
         "input": null,
@@ -1063,19 +1021,18 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic",
           "integration",
           "1",
-          "ElasticIntegration",
           "version"
         ],
         "input": null,
         "msg": "Input should be a valid string",
         "span": [
           18,
-          22,
-          34,
-          false
+          32,
+          33,
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
+        "yaml_line": 17
       },
       {
         "ctx": {
@@ -1410,39 +1367,18 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "elastic",
           "integration",
           "0",
-          "str"
-        ],
-        "input": null,
-        "msg": "Input should be a valid string",
-        "span": [
-          15,
-          19,
-          41,
-          false
-        ],
-        "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "elastic",
-          "integration",
-          "0",
-          "ElasticIntegration",
           "extra"
         ],
         "input": null,
         "msg": "Extra inputs are not permitted",
         "span": [
           15,
-          19,
-          41,
-          false
+          32,
+          37,
+          true
         ],
         "type": "extra_forbidden",
-        "yaml_line": null
+        "yaml_line": 14
       }
     ]
   },
@@ -1553,44 +1489,25 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "platform-elastic-ml-job-number": {
     "errors": [
       {
-        "ctx": {},
+        "ctx": {
+          "expected": "a string or a list of strings"
+        },
         "field_path": [
           "configurations",
           "elastic",
           "machine_learning",
-          "job_id",
-          "str"
+          "job_id"
         ],
         "input": null,
-        "msg": "Input should be a valid string",
+        "msg": "expected a string or a list of strings",
         "span": [
           14,
-          24,
-          30,
-          false
+          32,
+          33,
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "elastic",
-          "machine_learning",
-          "job_id",
-          "list[str]"
-        ],
-        "input": null,
-        "msg": "Input should be a valid list",
-        "span": [
-          14,
-          24,
-          30,
-          false
-        ],
-        "type": "list_type",
-        "yaml_line": null
+        "yaml_line": 13
       }
     ]
   },
@@ -2080,44 +1997,24 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "platform-elastic-risk-bool": {
     "errors": [
       {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "elastic",
-          "risk",
-          "int"
-        ],
-        "input": null,
-        "msg": "Input should be a valid integer",
-        "span": [
-          15,
-          5,
-          9,
-          false
-        ],
-        "type": "int_type",
-        "yaml_line": null
-      },
-      {
         "ctx": {
-          "class_name": "ElasticRisk"
+          "expected": "an integer or a mapping"
         },
         "field_path": [
           "configurations",
           "elastic",
-          "risk",
-          "ElasticRisk"
+          "risk"
         ],
         "input": null,
-        "msg": "Input should be a valid dictionary or instance of ElasticRisk",
+        "msg": "expected an integer or a mapping",
         "span": [
           15,
-          5,
-          9,
-          false
+          11,
+          15,
+          true
         ],
-        "type": "model_type",
-        "yaml_line": null
+        "type": "int_type",
+        "yaml_line": 14
       }
     ]
   },
@@ -2348,25 +2245,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "platform-elastic-severity-mapping-fields": {
     "errors": [
       {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "elastic",
-          "severity",
-          "str"
-        ],
-        "input": null,
-        "msg": "Input should be a valid string",
-        "span": [
-          15,
-          5,
-          13,
-          false
-        ],
-        "type": "string_type",
-        "yaml_line": null
-      },
-      {
         "ctx": {
           "expected": "\"equals\""
         },
@@ -2374,7 +2252,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "configurations",
           "elastic",
           "severity",
-          "ElasticSeverity",
           "mapping",
           "0",
           "operator"
@@ -2383,12 +2260,12 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "msg": "Input should be \"equals\"",
         "span": [
           15,
-          5,
-          13,
-          false
+          89,
+          91,
+          true
         ],
         "type": "literal_error",
-        "yaml_line": null
+        "yaml_line": 14
       },
       {
         "ctx": {
@@ -2398,7 +2275,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "configurations",
           "elastic",
           "severity",
-          "ElasticSeverity",
           "mapping",
           "0",
           "severity"
@@ -2407,12 +2283,12 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "msg": "Input should be \"low\", \"medium\", \"high\" or \"critical\"",
         "span": [
           15,
-          5,
-          13,
-          false
+          71,
+          77,
+          true
         ],
         "type": "literal_error",
-        "yaml_line": null
+        "yaml_line": 14
       }
     ]
   },
@@ -3081,221 +2957,45 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           "selections",
           "0",
           "value",
-          "str"
-        ],
-        "input": null,
-        "msg": "Input should be a valid string",
-        "span": [
-          16,
-          33,
-          38,
-          false
-        ],
-        "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "harfanglab",
-          "sigma",
-          "selections",
-          "0",
-          "value",
-          "list[str]",
           "1"
         ],
         "input": null,
         "msg": "Input should be a valid string",
         "span": [
           16,
-          33,
-          38,
-          false
+          44,
+          45,
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "harfanglab",
-          "sigma",
-          "selections",
-          "0",
-          "value",
-          "bool"
-        ],
-        "input": null,
-        "msg": "Input should be a valid boolean",
-        "span": [
-          16,
-          33,
-          38,
-          false
-        ],
-        "type": "bool_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "harfanglab",
-          "sigma",
-          "selections",
-          "0",
-          "value",
-          "int"
-        ],
-        "input": null,
-        "msg": "Input should be a valid integer",
-        "span": [
-          16,
-          33,
-          38,
-          false
-        ],
-        "type": "int_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "harfanglab",
-          "sigma",
-          "selections",
-          "0",
-          "value",
-          "float"
-        ],
-        "input": null,
-        "msg": "Input should be a valid number",
-        "span": [
-          16,
-          33,
-          38,
-          false
-        ],
-        "type": "float_type",
-        "yaml_line": null
+        "yaml_line": 15
       }
     ]
   },
   "platform-harfanglab-value-union": {
     "errors": [
       {
-        "ctx": {},
+        "ctx": {
+          "expected": "a string, a list of strings, a boolean, an integer or a number"
+        },
         "field_path": [
           "configurations",
           "harfanglab",
           "sigma",
           "selections",
           "0",
-          "value",
-          "str"
+          "value"
         ],
         "input": null,
-        "msg": "Input should be a valid string",
+        "msg": "expected a string, a list of strings, a boolean, an integer or a number",
         "span": [
           16,
           33,
           38,
-          false
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "harfanglab",
-          "sigma",
-          "selections",
-          "0",
-          "value",
-          "list[str]"
-        ],
-        "input": null,
-        "msg": "Input should be a valid list",
-        "span": [
-          16,
-          33,
-          38,
-          false
-        ],
-        "type": "list_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "harfanglab",
-          "sigma",
-          "selections",
-          "0",
-          "value",
-          "bool"
-        ],
-        "input": null,
-        "msg": "Input should be a valid boolean",
-        "span": [
-          16,
-          33,
-          38,
-          false
-        ],
-        "type": "bool_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "harfanglab",
-          "sigma",
-          "selections",
-          "0",
-          "value",
-          "int"
-        ],
-        "input": null,
-        "msg": "Input should be a valid integer",
-        "span": [
-          16,
-          33,
-          38,
-          false
-        ],
-        "type": "int_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "harfanglab",
-          "sigma",
-          "selections",
-          "0",
-          "value",
-          "float"
-        ],
-        "input": null,
-        "msg": "Input should be a valid number",
-        "span": [
-          16,
-          33,
-          38,
-          false
-        ],
-        "type": "float_type",
-        "yaml_line": null
+        "yaml_line": 15
       }
     ]
   },
@@ -4354,88 +4054,50 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "platform-sentinel-suppression-int": {
     "errors": [
       {
-        "ctx": {},
+        "ctx": {
+          "expected": "a string or a boolean"
+        },
         "field_path": [
           "configurations",
           "sentinel",
           "alert",
-          "suppression",
-          "str"
+          "suppression"
         ],
         "input": null,
-        "msg": "Input should be a valid string",
+        "msg": "expected a string or a boolean",
         "span": [
           15,
-          13,
-          24,
-          false
+          26,
+          27,
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "sentinel",
-          "alert",
-          "suppression",
-          "bool"
-        ],
-        "input": null,
-        "msg": "Input should be a valid boolean",
-        "span": [
-          15,
-          13,
-          24,
-          false
-        ],
-        "type": "bool_type",
-        "yaml_line": null
+        "yaml_line": 14
       }
     ]
   },
   "platform-sentinel-suppression-list": {
     "errors": [
       {
-        "ctx": {},
+        "ctx": {
+          "expected": "a string or a boolean"
+        },
         "field_path": [
           "configurations",
           "sentinel",
           "alert",
-          "suppression",
-          "str"
+          "suppression"
         ],
         "input": null,
-        "msg": "Input should be a valid string",
+        "msg": "expected a string or a boolean",
         "span": [
           15,
           13,
           24,
-          false
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "sentinel",
-          "alert",
-          "suppression",
-          "bool"
-        ],
-        "input": null,
-        "msg": "Input should be a valid boolean",
-        "span": [
-          15,
-          13,
-          24,
-          false
-        ],
-        "type": "bool_type",
-        "yaml_line": null
+        "yaml_line": 14
       }
     ]
   },

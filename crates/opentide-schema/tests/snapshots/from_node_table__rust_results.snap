@@ -2659,186 +2659,106 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "union-bool": {
     "errors": [
       {
-        "ctx": {},
+        "ctx": {
+          "expected": "a string or an integer"
+        },
         "field_path": [
-          "either",
-          "str"
+          "either"
         ],
         "input": null,
-        "msg": "Input should be a valid string",
+        "msg": "expected a string or an integer",
         "span": [
           2,
-          1,
-          7,
-          false
+          9,
+          13,
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "either",
-          "int"
-        ],
-        "input": null,
-        "msg": "Input should be a valid integer",
-        "span": [
-          2,
-          1,
-          7,
-          false
-        ],
-        "type": "int_type",
-        "yaml_line": null
+        "yaml_line": 1
       }
     ]
   },
   "union-errors": {
     "errors": [
       {
-        "ctx": {},
+        "ctx": {
+          "expected": "a string or an integer"
+        },
         "field_path": [
-          "either",
-          "str"
+          "either"
         ],
         "input": null,
-        "msg": "Input should be a valid string",
+        "msg": "expected a string or an integer",
         "span": [
           2,
           1,
           7,
-          false
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
+        "yaml_line": 1
       },
       {
-        "ctx": {},
+        "ctx": {
+          "expected": "a string or a list of strings"
+        },
         "field_path": [
-          "either",
-          "int"
+          "some"
         ],
         "input": null,
-        "msg": "Input should be a valid integer",
-        "span": [
-          2,
-          1,
-          7,
-          false
-        ],
-        "type": "int_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "some",
-          "str"
-        ],
-        "input": null,
-        "msg": "Input should be a valid string",
+        "msg": "expected a string or a list of strings",
         "span": [
           3,
           1,
           5,
-          false
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "some",
-          "list[str]"
-        ],
-        "input": null,
-        "msg": "Input should be a valid list",
-        "span": [
-          3,
-          1,
-          5,
-          false
-        ],
-        "type": "list_type",
-        "yaml_line": null
+        "yaml_line": 2
       }
     ]
   },
   "union-float": {
     "errors": [
       {
-        "ctx": {},
+        "ctx": {
+          "expected": "a string or an integer"
+        },
         "field_path": [
-          "either",
-          "str"
+          "either"
         ],
         "input": null,
-        "msg": "Input should be a valid string",
+        "msg": "expected a string or an integer",
         "span": [
           2,
-          1,
-          7,
-          false
+          9,
+          12,
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "either",
-          "int"
-        ],
-        "input": null,
-        "msg": "Input should be a valid integer",
-        "span": [
-          2,
-          1,
-          7,
-          false
-        ],
-        "type": "int_type",
-        "yaml_line": null
+        "yaml_line": 1
       }
     ]
   },
   "union-float-whole": {
     "errors": [
       {
-        "ctx": {},
+        "ctx": {
+          "expected": "a string or an integer"
+        },
         "field_path": [
-          "either",
-          "str"
+          "either"
         ],
         "input": null,
-        "msg": "Input should be a valid string",
+        "msg": "expected a string or an integer",
         "span": [
           2,
-          1,
-          7,
-          false
+          9,
+          12,
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "either",
-          "int"
-        ],
-        "input": null,
-        "msg": "Input should be a valid integer",
-        "span": [
-          2,
-          1,
-          7,
-          false
-        ],
-        "type": "int_type",
-        "yaml_line": null
+        "yaml_line": 1
       }
     ]
   },
@@ -2866,36 +2786,18 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "ctx": {},
         "field_path": [
           "some",
-          "str"
-        ],
-        "input": null,
-        "msg": "Input should be a valid string",
-        "span": [
-          2,
-          1,
-          5,
-          false
-        ],
-        "type": "string_type",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "some",
-          "list[str]",
           "1"
         ],
         "input": null,
         "msg": "Input should be a valid string",
         "span": [
           2,
-          1,
-          5,
-          false
+          11,
+          12,
+          true
         ],
         "type": "string_type",
-        "yaml_line": null
+        "yaml_line": 1
       }
     ]
   },

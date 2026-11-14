@@ -336,22 +336,18 @@ platform_block! {
 #[from_node(union)]
 pub enum SavedSearchValue {
     /// A string.
-    #[from_node(tag = "str")]
     #[schemars(description = "")]
     Text(String),
     /// An integer.
-    #[from_node(tag = "int")]
     #[schemars(description = "")]
     Int(i64),
     /// A number.
-    #[from_node(tag = "float")]
     #[schemars(
         description = "",
         schema_with = "crate::objects::platform::number_schema"
     )]
     Float(f64),
     /// A boolean, sent as `1` or `0`.
-    #[from_node(tag = "bool")]
     #[schemars(description = "")]
     Bool(bool),
 }
