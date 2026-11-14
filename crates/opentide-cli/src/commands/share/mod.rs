@@ -33,7 +33,8 @@ use crate::json::Json;
 use crate::render::glyphs;
 use crate::render::outcome::OutcomeKind;
 use crate::render::progress::{columns, plural};
-use crate::render::text::{Style, Text};
+use crate::render::text::Text;
+use anstyle::{AnsiColor, Style};
 
 /// The share subcommand a run is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -707,7 +708,7 @@ fn targets_payload(sharing: &Sharing) -> Payload {
         payload.outcome = Some(NO_TARGET.to_owned());
         payload.put("advice", Json::str(ADD_TARGET));
     } else {
-        let (bold, dim) = (Style::new("bold"), Style::new("dim"));
+        let (bold, dim) = (Style::new().bold(), Style::new().dimmed());
         let rows: Vec<Vec<Text>> = sharing
             .blocks
             .iter()
@@ -865,17 +866,42 @@ fn from_run(
 }
 
 /// A record's glyph, labels and style (`_SHARE_ROWS`).
-fn row_style(action: &str) -> (&'static str, &str, &str, &'static str) {
+fn row_style(action: &str) -> (&'static str, &str, &str, Style) {
     match action {
-        "created" => ("+", "create", "created", "bold green"),
-        "updated" => ("~", "update", "updated", "bold yellow"),
-        "unchanged" => (glyphs::SKIP, "unchanged", "unchanged", "dim"),
-        "retracted" => ("×", "retract", "retracted", "bold red"),
+        "created" => (
+            "+",
+            "create",
+            "created",
+            AnsiColor::Green.on_default().bold(),
+        ),
+        "updated" => (
+            "~",
+            "update",
+            "updated",
+            AnsiColor::Yellow.on_default().bold(),
+        ),
+        "unchanged" => (
+            glyphs::SKIP,
+            "unchanged",
+            "unchanged",
+            Style::new().dimmed(),
+        ),
+        "retracted" => (
+            "×",
+            "retract",
+            "retracted",
+            AnsiColor::Red.on_default().bold(),
+        ),
         "skipped_tlp" | "skipped_status" | "skipped_type" => {
-            (glyphs::SKIP, "skip", "skipped", "dim")
+            (glyphs::SKIP, "skip", "skipped", Style::new().dimmed())
         }
-        "failed" => (glyphs::FAILED, "fail", "failed", "bold red"),
-        other => (glyphs::SKIP, other, other, "dim"),
+        "failed" => (
+            glyphs::FAILED,
+            "fail",
+            "failed",
+            AnsiColor::Red.on_default().bold(),
+        ),
+        other => (glyphs::SKIP, other, other, Style::new().dimmed()),
     }
 }
 
@@ -898,14 +924,14 @@ fn rows(records: &[Record], preview: bool, names: &BTreeMap<String, String>) -> 
             None => targets.push((&record.target, vec![record])),
         }
     }
-    let (bold, dim) = (Style::new("bold"), Style::new("dim"));
+    let (bold, dim) = (Style::new().bold(), Style::new().dimmed());
     let mut body = Vec::new();
     for (target, members) in targets {
         let mut title = Text::styled(target, &bold);
         if preview {
             title.append(
                 &format!(" {} dry run, nothing is sent", glyphs::SEPARATOR),
-                &bold.combine(&dim),
+                &bold.dimmed(),
             );
         }
         body.push(BodyBlock::Hanging(vec![(title, 0)]));
@@ -921,7 +947,7 @@ fn rows(records: &[Record], preview: bool, names: &BTreeMap<String, String>) -> 
                 vec![
                     Text::styled(
                         &format!("{mark} {}", if preview { planned } else { done }),
-                        &Style::new(style),
+                        &style,
                     ),
                     Text::styled(
                         names

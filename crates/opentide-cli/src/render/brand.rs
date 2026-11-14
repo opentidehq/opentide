@@ -5,18 +5,19 @@
 //! `18`, white as `231`. Without colour the shapes stay: the blue pixels are
 //! drawn in the terminal's own foreground and the rest left blank.
 
-use super::text::{Color, Colour, Style, Text};
+use super::text::{Colour, Text};
+use anstyle::{Ansi256Color, Style};
 
 /// Said wherever the product describes itself.
 pub const TAGLINE: &str = "Spec-driven development for agentic detection engineering";
 
 /// Reflex Blue as the terminal's 256 colours give it.
-const BLUE: Color = Color::Indexed(18);
+const BLUE: Ansi256Color = Ansi256Color(18);
 /// White as the terminal's 256 colours give it.
-const WHITE: Color = Color::Indexed(231);
+const WHITE: Ansi256Color = Ansi256Color(231);
 
 /// A pixel's colour; `.` is the terminal's own background.
-fn pixel(cell: char) -> Option<Color> {
+fn pixel(cell: char) -> Option<Ansi256Color> {
     match cell {
         'B' => Some(BLUE),
         'W' => Some(WHITE),
@@ -27,9 +28,9 @@ fn pixel(cell: char) -> Option<Color> {
 /// The ` ≋ ` mark's style: white on Reflex Blue, in reverse video without colour.
 pub fn mark_style(colour: Colour) -> Style {
     if colour == Colour::Full {
-        Style::fg(WHITE).bold().on(BLUE)
+        WHITE.on(BLUE).bold()
     } else {
-        Style::BOLD.reverse()
+        Style::new().bold().invert()
     }
 }
 
@@ -59,16 +60,16 @@ pub fn grid(rows: &[&str], colour: Colour) -> Vec<Text> {
                         line.push_str(" ");
                     }
                     (None, Some(lower)) => {
-                        line.append("▄", &Style::fg(lower));
+                        line.append("▄", &lower.on_default());
                     }
                     (Some(upper), None) => {
-                        line.append("▀", &Style::fg(upper));
+                        line.append("▀", &upper.on_default());
                     }
                     (Some(upper), Some(lower)) if upper == lower => {
-                        line.append("█", &Style::fg(upper));
+                        line.append("█", &upper.on_default());
                     }
                     (Some(upper), Some(lower)) => {
-                        line.append("▀", &Style::fg(upper).on(lower));
+                        line.append("▀", &upper.on(lower));
                     }
                 }
             }
@@ -81,9 +82,9 @@ pub fn grid(rows: &[&str], colour: Colour) -> Vec<Text> {
 /// Blue pill, in reverse video without colour.
 pub fn pill(colour: Colour) -> Text {
     let edge = if colour == Colour::Full {
-        Style::fg(BLUE)
+        BLUE.on_default()
     } else {
-        Style::PLAIN
+        Style::new()
     };
     let mut text = Text::styled("▐", &edge);
     text.append(" ≋ opentide ", &mark_style(colour));
@@ -96,7 +97,7 @@ pub fn pill(colour: Colour) -> Text {
 pub fn header(label: &str, colour: Colour) -> Text {
     let mut text = Text::styled(" ≋ ", &mark_style(colour));
     text.push_str(" ");
-    text.append(label, &Style::BOLD);
+    text.append(label, &Style::new().bold());
     text
 }
 
@@ -110,7 +111,7 @@ mod tests {
         assert_eq!(lines.len(), 1);
         assert_eq!(
             lines[0].render(Colour::Full, false),
-            "\u{1b}[38;5;18m▄\u{1b}[0m\u{1b}[38;5;18;48;5;231m▀\u{1b}[0m"
+            "\u{1b}[38;5;18m▄\u{1b}[0m\u{1b}[38;5;18m\u{1b}[48;5;231m▀\u{1b}[0m"
         );
         assert_eq!(grid(&["BB.", "B.."], Colour::None)[0].as_plain(), "█▀ ");
         // An odd row out is drawn over nothing.
@@ -121,7 +122,7 @@ mod tests {
     fn the_header_is_a_mark_and_a_bold_label() {
         assert_eq!(
             header("Next", Colour::Full).render(Colour::Full, false),
-            "\u{1b}[1;38;5;231;48;5;18m ≋ \u{1b}[0m \u{1b}[1mNext\u{1b}[0m"
+            "\u{1b}[1m\u{1b}[38;5;231m\u{1b}[48;5;18m ≋ \u{1b}[0m \u{1b}[1mNext\u{1b}[0m"
         );
         assert_eq!(header("Next", Colour::None).as_plain(), " ≋  Next");
     }

@@ -42,7 +42,8 @@ use crate::logging::Sink;
 use crate::render::glyphs;
 use crate::render::outcome::Console;
 use crate::render::progress::{Step, StepStatus, plural, seconds_text};
-use crate::render::text::{Style, Text};
+use crate::render::text::Text;
+use anstyle::{AnsiColor, Style};
 
 /// The command path.
 pub const COMMAND: &str = "deploy";
@@ -814,11 +815,11 @@ fn deploy(
     let started = Instant::now();
     let separator = format!(" {} ", glyphs::SEPARATOR);
     // The header is bold throughout, its labels bold and dim.
-    let bold_dim = Style::new("bold dim");
-    let mut header = Text::styled("Deploy plan", &Style::new("bold"));
+    let bold_dim = Style::new().bold().dimmed();
+    let mut header = Text::styled("Deploy plan", &Style::new().bold());
     header.append(&format!("{separator}strategy "), &bold_dim);
     let strategy_names: Vec<&str> = runs.iter().map(|run| run.name()).collect();
-    header.append(&strategy_names.join(" "), &Style::new("bold"));
+    header.append(&strategy_names.join(" "), &Style::new().bold());
     header.append(
         &format!(
             "{separator}{}",
@@ -828,7 +829,7 @@ fn deploy(
     );
     cx.lines.line(&header, false);
     cx.lines.line(
-        &Text::styled(&plan::message(&changes), &Style::new("dim")),
+        &Text::styled(&plan::message(&changes), &Style::new().dimmed()),
         false,
     );
     let compile_cx = owned.context(index);
@@ -1478,13 +1479,13 @@ fn header_line(platform: &str, tenant: Option<&str>, rules: Option<usize>) -> Te
         Some(tenant) if !tenant.is_empty() => format!("{platform} / {tenant}"),
         _ => platform.to_owned(),
     };
-    let bold = Style::new("bold");
+    let bold = Style::new().bold();
     let mut line = Text::styled("Deploying to ", &bold);
     line.append(&place, &bold);
     if let Some(rules) = rules {
         line.append(
             &format!(" {} {}", glyphs::SEPARATOR, plural(rules, "rule", None)),
-            &Style::new("bold dim"),
+            &Style::new().bold().dimmed(),
         );
     }
     line
@@ -1521,20 +1522,23 @@ fn result_line(
         glyphs::OK
     };
     let style = if failed {
-        "bold red"
+        AnsiColor::Red.on_default().bold()
     } else if skipped {
-        "dim"
+        Style::new().dimmed()
     } else {
-        "green"
+        AnsiColor::Green.on_default()
     };
     let mut line = Text::plain("  ");
-    line.append(&format!("[{index:>digits$}/{total}]"), &Style::new("dim"));
+    line.append(
+        &format!("[{index:>digits$}/{total}]"),
+        &Style::new().dimmed(),
+    );
     line.push_str(" ");
-    line.append(&format!("{mark} {:<9} ", verb(result)), &Style::new(style));
+    line.append(&format!("{mark} {:<9} ", verb(result)), &style);
     let pad = name_width.saturating_sub(result.name.chars().count());
     let name = format!("{}{}", result.name, " ".repeat(pad));
     if failed {
-        line.append(&name, &Style::new("bold"));
+        line.append(&name, &Style::new().bold());
     } else {
         line.push_str(&name);
     }
@@ -1559,16 +1563,16 @@ fn result_line(
             }
             detail = pieces.join(&format!("\n{}", " ".repeat(lead)));
         }
-        line.append(&detail, &Style::new("red"));
+        line.append(&detail, &AnsiColor::Red.on_default());
     } else if skipped {
         line.append(
             result.reason.as_deref().unwrap_or_default(),
-            &Style::new("dim"),
+            &Style::new().dimmed(),
         );
     } else {
         line.append(
             &seconds_text(result.seconds.unwrap_or(0.0)),
-            &Style::new("dim"),
+            &Style::new().dimmed(),
         );
     }
     line

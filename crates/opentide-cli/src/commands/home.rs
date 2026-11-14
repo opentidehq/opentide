@@ -26,7 +26,8 @@
 use std::path::{Path, PathBuf};
 
 use crate::render::brand;
-use crate::render::text::{Colour, Style, Text};
+use crate::render::text::{Colour, Text};
+use anstyle::{AnsiColor, Style};
 
 /// Narrower than this, the icon gives way to the facts alone.
 pub const ICON_MIN_WIDTH: usize = 76;
@@ -322,19 +323,19 @@ pub fn workspace_path(path: &Path, cwd: &Path, home: Option<&Path>) -> String {
 /// The `workspace`, `catalogue`, `health` and `platforms` rows: each label
 /// right-aligned, two columns before its value.
 fn facts_rows(facts: &Facts, screen: &Screen<'_>) -> Vec<Text> {
-    let label = |text: &str| Text::styled(text, &Style::new("bold dim"));
-    let dim = Style::new("dim");
+    let label = |text: &str| Text::styled(text, &Style::new().bold().dimmed());
+    let dim = Style::new().dimmed();
     let mut rows: Vec<Vec<Text>> = Vec::new();
     match &facts.workspace {
         None => rows.push(vec![label("workspace"), Text::styled("none here", &dim)]),
         Some(workspace) => {
             let mut place = Text::styled(
                 &workspace_path(workspace, screen.cwd, screen.home),
-                &Style::new("underline"),
+                &Style::new().underline(),
             );
             if let Some(git) = &facts.git {
                 // The whole place is underlined, its git part dim too.
-                place.append(&format!("  git: {git}"), &Style::new("underline dim"));
+                place.append(&format!("  git: {git}"), &Style::new().underline().dimmed());
             }
             rows.push(vec![label("workspace"), place]);
             let counts: Vec<String> = KINDS
@@ -351,10 +352,10 @@ fn facts_rows(facts: &Facts, screen: &Screen<'_>) -> Vec<Text> {
             rows.push(vec![label("catalogue"), Text::plain(&counts.join(" · "))]);
             let mut health = Text::default();
             if facts.schemas {
-                health.append("✓ ", &Style::new("green"));
+                health.append("✓ ", &AnsiColor::Green.on_default());
                 health.push_str("schemas generated");
             } else {
-                health.append("! ", &Style::new("yellow"));
+                health.append("! ", &AnsiColor::Yellow.on_default());
                 health.push_str("schemas not generated yet");
             }
             rows.push(vec![label("health"), health]);
@@ -362,14 +363,14 @@ fn facts_rows(facts: &Facts, screen: &Screen<'_>) -> Vec<Text> {
                 rows.push(vec![label("platforms"), Text::styled("none enabled", &dim)]);
             }
             for (number, (name, tenants)) in facts.platforms.iter().enumerate() {
-                let mut value = Text::styled(name, &Style::new("bold"));
+                let mut value = Text::styled(name, &Style::new().bold());
                 let count = if *tenants == 0 {
                     " (no tenant yet)".to_owned()
                 } else {
                     format!(" ({})", plural(*tenants, "tenant"))
                 };
                 // The whole value is bold, its count dim too.
-                value.append(&count, &Style::new("bold dim"));
+                value.append(&count, &Style::new().bold().dimmed());
                 rows.push(vec![
                     label(if number == 0 { "platforms" } else { "" }),
                     value,
@@ -397,10 +398,10 @@ pub struct Screen<'a> {
 pub fn render(facts: &Facts, screen: &Screen<'_>) -> String {
     let colour = screen.colour;
     let mut title = brand::pill(colour);
-    title.append(&format!("  {}", facts.version), &Style::new("dim"));
+    title.append(&format!("  {}", facts.version), &Style::new().dimmed());
     let mut right = vec![
         title,
-        Text::styled(brand::TAGLINE, &Style::new("italic")),
+        Text::styled(brand::TAGLINE, &Style::new().italic()),
         Text::default(),
     ];
     right.extend(facts_rows(facts, screen));
@@ -437,8 +438,8 @@ pub fn render(facts: &Facts, screen: &Screen<'_>) -> String {
         .iter()
         .map(|(command, reason)| {
             vec![
-                Text::styled(command, &Style::new("bold")),
-                Text::styled(reason, &Style::new("dim")),
+                Text::styled(command, &Style::new().bold()),
+                Text::styled(reason, &Style::new().dimmed()),
             ]
         })
         .collect();
@@ -449,8 +450,8 @@ pub fn render(facts: &Facts, screen: &Screen<'_>) -> String {
     }
     lines.extend(rows);
     lines.push(Text::default());
-    let bold = Style::new("bold");
-    let dim = Style::new("dim");
+    let bold = Style::new().bold();
+    let dim = Style::new().dimmed();
     let mut help = Text::styled("opentide --help", &bold);
     help.append(" for every command", &dim);
     let mut agents = Text::styled("opentide --json <command>", &bold);
