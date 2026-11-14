@@ -443,8 +443,25 @@ interface Server {
 // the same cases under Node's own WASI when OPENTIDE_WASI_CLI names it: the
 // module has no network, so every tenant request goes through the host.
 const debugBinary = join(root, "target/debug/opentide-cli");
-const nativeBinary = process.env.OPENTIDE_BIN ?? (existsSync(debugBinary) ? debugBinary : undefined);
+// Both are resolved here: the server is spawned in a scratch workspace, where
+// a relative path would name nothing.
+const nativeBinary =
+  process.env.OPENTIDE_BIN === undefined
+    ? existsSync(debugBinary)
+      ? debugBinary
+      : undefined
+    : resolve(process.env.OPENTIDE_BIN);
 const wasiModule = process.env.OPENTIDE_WASI_CLI === undefined ? undefined : resolve(process.env.OPENTIDE_WASI_CLI);
+// A path that is set must exist: CI names a binary it built, and a wrong one
+// fails the run rather than skipping its cases.
+for (const [variable, path] of [
+  ["OPENTIDE_BIN", process.env.OPENTIDE_BIN === undefined ? undefined : nativeBinary],
+  ["OPENTIDE_WASI_CLI", wasiModule],
+] as const) {
+  if (path !== undefined && !existsSync(path)) {
+    throw new Error(`${variable} names ${path}, which does not exist`);
+  }
+}
 const SERVERS: (Server | string)[] = [
   nativeBinary === undefined
     ? "native: no opentide binary (OPENTIDE_BIN)"
