@@ -7,9 +7,10 @@ It regressed silently through 0.13.0, which shipped with four pages naming
 0.12.1 beside ``pip install 'opentide==0.14.0'``, because the release runbook
 tests cover the release *commands* and nothing covered the version *claims*.
 
-``CHANGELOG.md`` is the authoritative in-repo source: the package version is
-derived from the git tag by hatch-vcs, so at test time the newest released
-changelog heading is the only statement of record that exists in the tree.
+``CHANGELOG.md`` is the authoritative in-repo source for the released
+version: the newest released changelog heading is the statement of record
+(the Cargo workspace's version, which the package takes, is the next one's
+between releases).
 """
 
 from __future__ import annotations

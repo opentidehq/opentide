@@ -72,13 +72,15 @@ def test_the_wheel_lists_python_dependencies_and_the_compiled_crates() -> None:
     assert len(python["components"]) == 1
 
 
-def test_the_wheel_version_comes_from_the_version_file(tmp_path: Path) -> None:
+def test_the_wheel_version_is_the_cargo_workspaces(tmp_path: Path) -> None:
     assert sbom.wheel_version("9.9.9", tmp_path) == "9.9.9"
     assert sbom.wheel_version(None, tmp_path) is None
-    version_file = tmp_path / "src" / "opentide" / "_version.py"
-    version_file.parent.mkdir(parents=True)
-    version_file.write_text("__version__ = version = '0.24.0'\n", encoding="utf-8")
+    (tmp_path / "Cargo.toml").write_text(
+        '[workspace]\nmembers = []\n\n[workspace.package]\nversion = "0.24.0"\nedition = "2024"\n',
+        encoding="utf-8",
+    )
     assert sbom.wheel_version(None, tmp_path) == "0.24.0"
+    assert sbom.wheel_version("0.24.0rc1", tmp_path) == "0.24.0rc1"
 
 
 def test_structural_problems_catch_what_the_schema_does_not() -> None:

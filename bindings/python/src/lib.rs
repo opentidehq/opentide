@@ -1,7 +1,7 @@
 //! Python bindings for the opentide engine (the `opentide-analysis` crate),
 //! the command line (`opentide-cli`), the SDK's core (the `opentide` facade),
 //! the Tide models and the platform plugin host, compiled into the opentide
-//! package as `opentide._native` (hatch_build.py).
+//! package as `opentide._native` (maturin, pyproject.toml's `[tool.maturin]`).
 //!
 //! Positions follow the `opentide` CLI, not LSP: lines and columns are
 //! 1-based, columns count Unicode code points, and `end_column` is exclusive.
@@ -14,6 +14,25 @@ use pyo3::prelude::*;
 
 mod plugins;
 mod sdk;
+
+/// The package's version, PEP 440: this crate's Cargo version, which maturin
+/// writes into the wheel's metadata the same way (`X.Y.Z-rc.N` is `X.Y.ZrcN`,
+/// a CI build's `X.Y.Z-dev.N` is `X.Y.Z.devN`). The console script hands it
+/// to the command line without reading the package's metadata, which would
+/// cost its start more than the rest of it (UC-3.8b, #960).
+fn python_version(cargo: &str) -> String {
+    let Some((release, pre)) = cargo.split_once('-') else {
+        return cargo.to_owned();
+    };
+    let (label, number) = pre.split_once('.').unwrap_or((pre, ""));
+    match label {
+        "alpha" | "a" => format!("{release}a{number}"),
+        "beta" | "b" => format!("{release}b{number}"),
+        "rc" => format!("{release}rc{number}"),
+        "dev" => format!("{release}.dev{number}"),
+        _ => cargo.to_owned(),
+    }
+}
 
 /// One finding, in the CLI's coordinates.
 #[pyclass(frozen, get_all, module = "opentide._native")]
@@ -199,6 +218,7 @@ mod _native {
         // Every run of the command line in this process reaches the
         // platforms the Python packages register (UC-4.5, #835).
         opentide::plugins::set_host(Box::new(super::plugins::PythonPlugins::default()));
+        module.add("__version__", python_version(env!("CARGO_PKG_VERSION")))?;
         module.add("ENGINE_VERSION", opentide::analysis::VERSION)?;
         module.add("CODES", codes::ALL.to_vec())?;
         module.add("LANGUAGES", languages())?;
@@ -218,6 +238,15 @@ mod _native {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_cargo_version_reads_as_maturin_writes_it() {
+        assert_eq!(python_version("1.0.0"), "1.0.0");
+        assert_eq!(python_version("1.0.0-rc.1"), "1.0.0rc1");
+        assert_eq!(python_version("0.12.0-dev.2474"), "0.12.0.dev2474");
+        assert_eq!(python_version("2.1.0-beta.3"), "2.1.0b3");
+        assert_eq!(python_version("2.1.0-alpha.1"), "2.1.0a1");
+    }
 
     #[test]
     fn file_names_imply_their_language() {

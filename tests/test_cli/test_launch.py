@@ -21,7 +21,7 @@ from opentide import _cli
 
 class _Native(SimpleNamespace):
     def __init__(self, code: int = 0) -> None:
-        super().__init__(calls=[])
+        super().__init__(calls=[], __version__="9.9.9.dev1")
         self.code = code
 
     def cli_main(self, argv: list[str], version: str) -> int:
@@ -48,7 +48,7 @@ def test_the_arguments_and_the_version_reach_the_rust_command_line(
     native = _Native(code=3)
     _with_native(monkeypatch, native)
     assert _cli.main(["--json", "validate"]) == 3
-    assert native.calls == [(["--json", "validate"], opentide.__version__)]
+    assert native.calls == [(["--json", "validate"], "9.9.9.dev1")]
 
 
 def test_without_arguments_it_reads_sys_argv(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -56,7 +56,7 @@ def test_without_arguments_it_reads_sys_argv(monkeypatch: pytest.MonkeyPatch) ->
     _with_native(monkeypatch, native)
     monkeypatch.setattr(sys, "argv", ["opentide", "info", "--json"])
     assert _cli.main() == 0
-    assert native.calls == [(["info", "--json"], opentide.__version__)]
+    assert native.calls == [(["info", "--json"], "9.9.9.dev1")]
 
 
 def test_an_engine_that_does_not_load_is_an_error(
@@ -82,3 +82,13 @@ def test_python_m_opentide_is_the_console_script() -> None:
     )
     assert done.returncode == 0, done.stderr
     assert done.stdout == f"opentide {opentide.__version__}\n"
+
+
+def test_the_engine_carries_the_version_the_package_metadata_does() -> None:
+    """The console script passes ``_native.__version__`` (compiled from the
+    Cargo version) where ``opentide.__version__`` reads the metadata maturin
+    wrote from the same version: both spell it alike (PEP 440)."""
+    from importlib.metadata import version
+
+    native = importlib.import_module("opentide._native")
+    assert native.__version__ == version("opentide") == opentide.__version__

@@ -52,14 +52,14 @@ closed). Then:
 
 - the Rust jobs (`engine-lint`, `build`, `rust-tests`) run when a crate is affected, and test only
   the affected crates;
-- the Python job (`python`: the `_native` wheel built by `build`, then one pytest run of the
+- the Python job (`python`: the opentide wheel built by `build`, then one pytest run of the
   package and the E2E suite) runs **only when the Python surface changes**: `src/opentide/`,
   `bindings/python/`, the facade's API (`crates/opentide/src/`), `pyproject.toml`,
-  `hatch_build.py`, `uv.lock`, `tests/` (but `tests/test_ci` and the docs tests that need no
+  `uv.lock`, `tests/` (but `tests/test_ci` and the docs tests that need no
   wheel). A Rust-only change to an engine, schema, compile or CLI crate builds no wheel and runs
   no pytest: the Rust tests cover it (the maintainer's rule). Every push runs it; a release pull
   request and the nightly run Python 3.10 to 3.14 and the `full_set` E2E tests;
-- `lint`'s steps run on their own inputs: ruff, ty, the sdist and twine when a Python file
+- `lint`'s steps run on their own inputs: ruff and ty when a Python file
   changes; actionlint and `tests/test_ci` when a workflow, `scripts/ci/` or those tests change;
   the skills' validation; the engine's invariant scripts when a crate changes. `docs` validates
   the pages and runs the docs tests that need no wheel;
@@ -81,9 +81,9 @@ checked before the next pull request builds on it.
 | `changes` | The plan: the tier, the affected crates (`packages`: `--workspace` or `-p` per crate, with the facade's and opentide-schema's test features), the Rust test partitions, the areas. Seconds: the runner's stable cargo reads the manifests |
 | `lint` | ruff, ty over `src/opentide` on the checked-in stubs of `_native` (`src/opentide/_native/*.pyi`: nothing compiles), actionlint 1.7.7 with shellcheck (`.github/actionlint.yaml`), `uv build --sdist` and `twine check`, the engine's invariant scripts (`check-io-free.sh`, `check-names.sh`, `validate-skills.sh`), the engine release script's tests and the CI contracts (`tests/test_ci`). About a minute |
 | `engine-lint` | rustfmt, clippy `-D warnings` and `cargo doc --no-deps` with `RUSTDOCFLAGS=-D warnings`, **workspace-wide** whatever changed (a warm cache re-checks only what changed) |
-| `build` | **The gate's one build** (the only gate job that compiles the workspace): the affected crates' tests as a `cargo nextest archive` (their binaries, the binaries their tests run, build-script output), and the `_native` extension (`cargo build -p opentide-native --lib`, `PYO3_BUILD_EXTENSION_MODULE=1`, in the profile the tests used, so their dependencies are compiled once), linked with mold, one sccache family; both uploaded at once. Then, while the test jobs run: `xtask check-layers`, `xtask cassettes check`, `xtask codegen --check` (never `--oracle`), `opentide-lsp generate-highlights --check`, `xtask vocab sync --check` and `xtask spec-fields` against `opentidehq/specifications` when their inputs change (and on every push and nightly), the doctests (nextest runs none), and opentide-schema's compile-fail cases (trybuild, which compiles at test time) when the derive, the crate, the cases, `Cargo.lock` or the toolchain change |
+| `build` | **The gate's one build** (the only gate job that compiles the workspace): the affected crates' tests as a `cargo nextest archive` (their binaries, the binaries their tests run, build-script output), and opentide's wheel (`maturin build --locked --profile dev --compatibility linux`, in the profile the tests used, so their dependencies are compiled once), linked with mold, one sccache family; both uploaded at once. Then, while the test jobs run: `xtask check-layers`, `xtask cassettes check`, `xtask codegen --check` (never `--oracle`), `opentide-lsp generate-highlights --check`, `xtask vocab sync --check` and `xtask spec-fields` against `opentidehq/specifications` when their inputs change (and on every push and nightly), the doctests (nextest runs none), and opentide-schema's compile-fail cases (trybuild, which compiles at test time) when the derive, the crate, the cases, `Cargo.lock` or the toolchain change |
 | `rust-tests` | The archive's tests, `cargo nextest run --archive-file ... --partition count:k/N --profile ci`: two partitions when the heavy crates (`opentide-cli`, `opentide-analysis`, `opentide-lsp`, `xtask`, the facade) are affected, one otherwise; nothing compiles. Fails when a test leaves a file in the checkout (#931) |
-| `python` | Python is the packaging layer: **one** job, one pytest run (`-n 4`) of the package's surface (the SDK, the models, the plugin API, the console script) and the E2E suite (CLI, MCP and LSP over stdio), Python **3.14** with the coverage gate, on the build's extension (`OPENTIDE_ENGINE_PREBUILT`: `hatch_build.py` installs it, nothing compiles). No shards; the tests marked `full_set` run nightly; `tests/test_ci` runs in `lint` |
+| `python` | Python is the packaging layer: **one** job, one pytest run (`-n 4`) of the package's surface (the SDK, the models, the plugin API, the console script) and the E2E suite (CLI, MCP and LSP over stdio), Python **3.14** with the coverage gate, on the build's wheel (`uv sync --no-install-project`, then `uv pip install` of the wheel, its `_native` module copied into `src/opentide/` for the tests, which import from `src/`; `UV_NO_SYNC=1`: nothing compiles). No shards; the tests marked `full_set` run nightly; `tests/test_ci` runs in `lint` |
 | `gitlab-ci-lint` | The pipeline `opentide setup ci gitlab` renders, linted (glint, gitlab-ci-verify) |
 | `docs` | `scripts/validate-docs.sh` (the site builds in opentidehq/website) and the docs tests that need no wheel (`tests/test_docs` but `test_docs_commands_golden.py` and `test_sdk_snippets.py`, the Python job's) |
 | `facade` | The `opentide` facade with every feature: tests and doctests, rustdoc as docs.rs builds it, `cargo semver-checks` (0.51.0) against the first parent |
@@ -94,9 +94,9 @@ checked before the next pull request builds on it.
 | `gate` (**`PR gate`**) | The one required check (below) |
 
 **The release tier** (a release pull request, `scope: release`; the packaging jobs nightly too):
-`sdist` and `smoke-sdist` (a build from the sdist with the runner's stable Rust); `packages`
-([`build-packages.yml`](workflows/build-packages.yml): every wheel, each installed and run on its
-platform by cibuildwheel, and every npm tarball, at `X.Y.Z.devN` / `X.Y.Z-dev.N`, kept 14 days:
+`sdist` (`maturin sdist`, then twine's check) and `smoke-sdist` (a build from the sdist with the runner's stable Rust); `packages`
+([`build-packages.yml`](workflows/build-packages.yml): every wheel, built by maturin
+(PyO3/maturin-action), each installed and run on its own platform (`wheel-smoke`), and every npm tarball, at `X.Y.Z.devN` / `X.Y.Z-dev.N`, kept 14 days:
 [`docs/internal/publishing.md`](../docs/internal/publishing.md#testing-a-build-without-publishing));
 `smoke-wheel` (pip install on Linux x64 and arm64, macOS, Windows); `smoke-npm` (a throwaway local
 registry, Linux, macOS, Windows); `engine-release-dry-run`
@@ -134,10 +134,11 @@ Every Rust job installs the release `rust-toolchain.toml` pins (`rustup toolchai
 name, never floating `stable`), then its targets with `rustup target add`: that install drops
 `--target` and `--component` silently. `changes` alone
 uses the runner's stable cargo, for `cargo metadata --no-deps`. Only the fuzz jobs name a
-toolchain, the dated nightly `fuzz/NIGHTLY` pins. The package builds are stricter
+toolchain, the dated nightly `fuzz/NIGHTLY` pins. The npm addons are stricter
 (`build-packages.yml`): `scripts/build/install-rust.sh` installs the pinned release by name with
-the minimal profile and names it in `RUSTUP_TOOLCHAIN`; the Linux wheels' containers do the same
-in `pyproject.toml`'s `[tool.cibuildwheel.linux]`. Every job that runs cargo sets
+the minimal profile and names it in `RUSTUP_TOOLCHAIN`; the wheels' maturin-action installs
+`rust-toolchain.toml`'s release (in the manylinux container on Linux) and sets it as the
+directory's override, so rustup installs nothing mid-build either. Every job that runs cargo sets
 `RUSTFLAGS=-Dwarnings` (the nightly fuzz build aside); the test jobs also set
 `CARGO_PROFILE_DEV_DEBUG=line-tables-only` and `INSTA_UPDATE=no` (CI never writes a snapshot).
 

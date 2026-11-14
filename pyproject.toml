@@ -1,6 +1,11 @@
+# maturin, PyO3's build backend, compiles bindings/python/ (Rust) into the
+# package as opentide._native ([tool.maturin] below). The version is the Cargo
+# workspace's, which bindings/python/ takes (`scripts/engine/release.py bump`);
+# a candidate's or a CI build's is written into that crate in the workflow's
+# checkout (`scripts/engine/release.py pypi-version`).
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
-build-backend = "hatchling.build"
+requires = ["maturin==1.16.0"]
+build-backend = "maturin"
 
 [project]
 name = "opentide"
@@ -50,7 +55,7 @@ dependencies = [
     # The plugin API (opentide.plugins): a platform plugin's configuration_model
     # is a pydantic model, which PlatformPlugin.check_configuration validates a
     # rule's block with. Everything else is the Rust core, compiled into this
-    # package (opentide._native, bindings/python/, by hatch_build.py): the
+    # package (opentide._native, bindings/python/, by maturin): the
     # command line, the SDK, the Tide models and the platform connectors.
     "pydantic>=2.0",
 ]
@@ -73,11 +78,15 @@ dev = [
 ]
 
 [tool.uv]
-# Rebuild opentide, which compiles the engine (hatch_build.py), when the Rust
-# sources change, as well as on a new commit or tag (the version).
+# What uv builds of opentide (`uv sync`'s editable install, `uv build`) compile
+# the engine with cargo's `develop` profile: optimised, so the engine runs at
+# full speed in the test suite, without the release profile's slow link-time
+# optimisation. The published wheels are release builds (build-packages.yml).
+config-settings-package = { opentide = { build-args = "--profile develop" } }
+# Rebuild opentide, which compiles the engine (maturin), when the Rust sources
+# or what they compile in change.
 cache-keys = [
     { file = "pyproject.toml" },
-    { file = "hatch_build.py" },
     { file = "Cargo.toml" },
     { file = "Cargo.lock" },
     { file = "bindings/python/Cargo.toml" },
@@ -95,7 +104,6 @@ cache-keys = [
     { file = "highlights/spec.toml" },
     { file = "highlights/queries/**" },
     { file = "highlights/generated/**" },
-    { git = { commit = true, tags = true } },
 ]
 
 [project.urls]
@@ -109,129 +117,58 @@ Issues = "https://github.com/opentidehq/opentide/issues"
 [project.scripts]
 opentide = "opentide._cli:main"
 
-[tool.hatch.version]
-source = "vcs"
-
-# opentide's versions are its `vX.Y.Z` tags. The engine's releases tagged
-# `engine-vX.Y.Z` until the release train (publish.yml, UC-5.5) gave everything
-# one `vX.Y.Z`; those tags remain, and setuptools-scm's defaults (`git
-# describe --match *[0-9]*`, a tag regex that drops any `word-` prefix) would
-# read the nearest of those as opentide's version: describe and parse `v` tags
-# only (tests/test_package/test_version_tags.py).
-[tool.hatch.version.raw-options]
-git_describe_command = ["git", "describe", "--dirty", "--tags", "--long", "--match", "v[0-9]*"]
-tag_regex = '^v(?P<version>[0-9]+(?:\.[0-9]+)*[^+]*)(?:\+.*)?$'
-
-[tool.hatch.build.targets.sdist]
-# hatchling 1.32 defaults to Core Metadata 2.5; PyPI/twine still gate on 2.4.
-core-metadata-version = "2.4"
-# The sdist carries the engine's Rust sources and the hook that compiles them,
-# so it builds wherever a Rust toolchain is installed (crates.io dependencies are
-# fetched as usual): the Cargo workspace's manifests and lock, every member's
-# sources, build script and benches (cargo reads every member's targets), and the
-# data the crates compile in (data/catalogs, grammars/*/src and queries,
-# highlights/). The rest of the engine's tree stays out: test data and the
-# crates' and xtask's integration tests, the fuzz targets, editor samples, npm packages (the
-# Node binding's npm side too: bindings/node keeps its manifest, build script and sources), the
-# engine's docs and scripts, the grammar sources tree-sitter
-# generates parser.c from, and the reference Tide schemas. rust-toolchain.toml
-# stays out too, so a build from the sdist uses the toolchain it finds instead of
-# asking rustup for components.
-# An editable install's compiled module is left out; its stubs (_native/*.pyi) ship.
+# The wheel: src/opentide (python-source: the package data and the stubs of
+# _native/*.pyi with it) and bindings/python/ compiled into it as
+# opentide/_native (.abi3.so, or .pyd on Windows). The extension uses the stable
+# ABI from CPython 3.10 (pyo3's abi3-py310 feature, bindings/python/Cargo.toml),
+# so the wheel is tagged cp310-abi3-<platform>: one wheel per platform serves
+# every CPython from 3.10 on. A free-threaded CPython (3.14t) has no stable ABI:
+# it builds from the sdist, and no cp314t wheel is published. No musllinux
+# wheel either: the maintainer decided against musl builds; Alpine builds from
+# the sdist too (docs/internal/publishing.md, "The release train").
+#
+# A wheel builds cargo's `release` profile. Development builds name another:
+# `maturin develop --uv --profile develop` (optimised, no link-time
+# optimisation; .agents/skills/uv/SKILL.md), and CI's gate `--profile dev`.
+[tool.maturin]
+python-source = "src"
+module-name = "opentide._native"
+manifest-path = "bindings/python/Cargo.toml"
+bindings = "pyo3"
+profile = "release"
+# No `locked` here: the sdist's workspace keeps only the members the binding
+# needs (maturin trims the rest), so cargo drops their entries from the lock it
+# carries; every version it keeps is the lock's. CI's builds pass --locked.
+# A development install's compiled module (in src/opentide) stays out of the
+# sdist; a wheel gets its own build.
 exclude = [
-    "/target",
-    "/src/opentide/_native.so",
-    "/src/opentide/_native.*.so",
-    "/src/opentide/_native.pyd",
-    "/src/opentide/_native.*.pyd",
-    "/rust-toolchain.toml",
-    "/crates/testdata",
-    "/crates/*/tests",
-    "/xtask/tests",
-    "/fuzz",
-    "/editors",
-    "/packages",
-    "/bindings/node/npm",
-    "/bindings/node/alias",
-    "/bindings/node/test",
-    "/bindings/node/*.js",
-    "/bindings/node/*.mjs",
-    "/bindings/node/*.d.ts",
-    "/bindings/node/*.json",
-    "/bindings/node/*.md",
-    "/bindings/node/LICENSE",
-    "/highlights/test",
-    "/grammars/*/grammar.js",
-    "/grammars/*/package.json",
-    "/grammars/*/tree-sitter.json",
-    "/data/catalogs/tide/schemas",
-    "/docs/engine",
-    "/scripts/engine",
+    { path = "src/opentide/_native.so", format = "sdist" },
+    { path = "src/opentide/_native.*.so", format = "sdist" },
+    { path = "src/opentide/_native.pyd", format = "sdist" },
+    { path = "src/opentide/_native.*.pyd", format = "sdist" },
+    # The crates' integration tests and the reference Tide schemas: no build reads them.
+    { path = "crates/*/tests/**/*", format = "sdist" },
+    { path = "data/catalogs/tide/schemas/**/*", format = "sdist" },
 ]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/opentide"]
-core-metadata-version = "2.4"
-# An editable install's compiled module, in src/; a wheel gets its own build.
-# The stubs (_native/*.pyi) ship, for type checkers.
-exclude = [
-    "src/opentide/_native.so",
-    "src/opentide/_native.*.so",
-    "src/opentide/_native.pyd",
-    "src/opentide/_native.*.pyd",
+# The sdist carries the engine's Rust sources, so it builds wherever a Rust
+# toolchain is installed (crates.io dependencies are fetched as usual): maturin
+# packs the binding and every workspace crate it depends on (their `cargo
+# package` files) with the workspace manifest and lock; the data the crates
+# compile in from the repository root is added here. The rest of the engine's
+# tree stays out: test data, the fuzz targets, editors, npm packages, the
+# engine's docs and scripts, the grammar sources tree-sitter generates parser.c
+# from, the reference Tide schemas, and rust-toolchain.toml, so a build from the
+# sdist uses the toolchain it finds instead of asking rustup for components.
+include = [
+    { path = "data/catalogs/**/*", format = "sdist" },
+    { path = "grammars/*/src/**/*", format = "sdist" },
+    { path = "grammars/*/queries/**/*", format = "sdist" },
+    { path = "highlights/spec.toml", format = "sdist" },
+    { path = "highlights/queries/**/*", format = "sdist" },
+    { path = "highlights/generated/**/*", format = "sdist" },
+    # The crates the workspace patches in ([patch.crates-io], vendor/README.md).
+    { path = "vendor/**/*", format = "sdist" },
 ]
-
-# Compiles bindings/python/ (Rust) into opentide/_native: see hatch_build.py.
-[tool.hatch.build.targets.wheel.hooks.custom]
-path = "hatch_build.py"
-
-[tool.hatch.build.hooks.vcs]
-version-file = "src/opentide/_version.py"
-
-# Release wheels (.github/workflows/publish.yml, the release train). Each
-# compiles the engine (hatch_build.py). The extension uses the stable ABI from
-# CPython 3.10, so one build per platform, on 3.10, serves every later CPython.
-# A free-threaded CPython (3.14t) has no stable ABI: it builds from the sdist,
-# and no cp314t wheel is published (docs/internal/publishing.md, "The release
-# train"). No musllinux wheel either: the maintainer decided against musl
-# builds; Alpine builds from the sdist too.
-[tool.cibuildwheel]
-build = "cp310-*"
-skip = ["*-win32", "*_i686", "*_ppc64le", "*_s390x", "*_armv7l", "*_riscv64", "*-musllinux_*"]
-# The workflow sets the version from the release tag: the Linux containers
-# build from a copy of the checkout.
-environment-pass = ["SETUPTOOLS_SCM_PRETEND_VERSION"]
-# The win_arm64 wheel is installed and tested by build-packages.yml itself,
-# the way a user installs it, with scripts/build/smoke_package.py (cibuildwheel
-# skipped it when its test install compiled cryptography, a dependency until
-# UC-6.2).
-test-skip = "*-win_arm64"
-test-command = [
-    "opentide --version",
-    "python -c \"from opentide.analysis import check_query; assert [f.code for f in check_query('SecurityEvent | wher x', language='kql')] == ['kql_unknown_operator']\"",
-]
-
-[tool.cibuildwheel.macos]
-# rustc's floor for x86_64-apple-darwin is 10.12; cibuildwheel's default (10.9)
-# makes delocate reject the extension. arm64 starts at 11.0 regardless.
-environment = { MACOSX_DEPLOYMENT_TARGET = "10.12" }
-
-[tool.cibuildwheel.linux]
-# glibc 2.28 and later (named, though cibuildwheel's default): RHEL 8, Debian
-# 10, Ubuntu 18.10 and their successors.
-manylinux-x86_64-image = "manylinux_2_28"
-manylinux-aarch64-image = "manylinux_2_28"
-# The manylinux images have no Rust toolchain: before-all installs
-# rust-toolchain.toml's release, minimal, before anything builds, and
-# RUSTUP_TOOLCHAIN names it so that rustup never reads the file inside the
-# container. Without it, the first rustc or cargo in /project auto-installed
-# the file's toolchain with its components (rustfmt, clippy, in the default
-# profile) mid-build: hatch_build.py's `rustc -vV` hid a failed install, and
-# cargo then failed "recovering from a partially installed toolchain" with
-# `detected conflict: 'bin/cargo-clippy'`. A wheel needs rustc and cargo only.
-# tests/test_ci/test_workflows.py holds the version to the file's.
-before-all = "curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain \"$RUSTUP_TOOLCHAIN\""
-environment = { PATH = "$HOME/.cargo/bin:$PATH", RUSTUP_TOOLCHAIN = "1.99.1" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -249,9 +186,6 @@ markers = [
 [tool.coverage.run]
 source = ["src/opentide"]
 relative_files = true
-omit = [
-    "src/opentide/_version.py",
-]
 
 [tool.coverage.report]
 fail_under = 85.0
