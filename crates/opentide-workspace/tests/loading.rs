@@ -461,6 +461,41 @@ mod loading {
         assert_eq!(workspace.index().rules().count(), 0);
     }
 
+    /// With `OPENTIDE_TIDE_WORKSPACE` set, the configuration is the
+    /// workspace's own: the repository's
+    /// `tests/fixtures/generation/configurations` is not merged over it.
+    #[test]
+    fn a_tide_workspace_reads_no_configuration_from_the_repository() {
+        let fs = Arc::new(MemoryFs::new());
+        fs.write(
+            "/repo/tests/fixtures/generation/configurations/paths.toml",
+            "[paths.objects]\nrule = \"fixture-rules/\"\n",
+        );
+        fs.write("/repo/ws/fixture-rules/r.yaml", object("r-f"));
+        fs.write("/repo/ws/objects/rules/r.yaml", object("r-o"));
+        let options = Options {
+            roots: RootOptions {
+                repo: Some(PathBuf::from("/repo")),
+                tide_workspace_env: Some(PathBuf::from("/repo/ws")),
+                cwd: PathBuf::from("/repo"),
+                ..RootOptions::default()
+            },
+        };
+        let workspace = Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, options).unwrap();
+        assert!(workspace.roots().tide_workspace);
+        assert!(workspace.index().get("rule", "r-o").is_some());
+        assert!(workspace.index().get("rule", "r-f").is_none());
+        assert!(
+            !workspace
+                .configuration()
+                .folders
+                .iter()
+                .any(|folder| folder.starts_with("/repo/tests")),
+            "{:?}",
+            workspace.configuration().folders
+        );
+    }
+
     #[test]
     fn the_registry_loads_once_and_reloads_on_request() {
         let fs = sample();
