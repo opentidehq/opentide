@@ -560,8 +560,7 @@ fn a_rules_query_runs_as_deploy_would_send_it() {
     assert_eq!(invalid.code, 2);
     assert_eq!(
         invalid.document()["message"],
-        "cannot read the rule in objects/rules/bad.yaml: 1 validation error for DetectionRule\n\
-         metadata.tlp\n  Field required [type=missing]"
+        "cannot read the rule in objects/rules/bad.yaml: metadata.tlp: Field required"
     );
     assert_eq!(invalid.document()["failure"]["argument"], "--file");
     // A UUID no rule has, with the closest; a rule without the platform.

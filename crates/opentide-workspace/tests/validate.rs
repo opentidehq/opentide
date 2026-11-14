@@ -1240,7 +1240,7 @@ mod validate {
     }
     mod cve {
         use super::*;
-        use opentide_workspace::validate::{CveCheck, CveLookup, cve_identifiers};
+        use opentide_workspace::validate::{CveCheck, CveLookup, cve_identifiers, cve_non_strings};
 
         /// Answers from a table, as the CLI's lookup would.
         struct Table(Mutex<Vec<String>>);
@@ -1271,7 +1271,7 @@ mod validate {
             let fs = workspace();
             fs.write(
                 "/ws/objects/threats/a.yaml",
-                threat(U1, "[cve-2024-1, CVE-2024-2, x, ' cve-2024-2']"),
+                threat(U1, "[cve-2024-1, CVE-2024-2, x, ' cve-2024-2', 7]"),
             );
             fs.write("/ws/objects/threats/b.yaml", threat(U2, "null"));
             let table = Table(Mutex::new(Vec::new()));
@@ -1293,7 +1293,10 @@ mod validate {
             );
             let invalid = with_code(&validation, "invalid_cve");
             assert_eq!(invalid.len(), 1);
-            assert_eq!(invalid[0].message, "Invalid CVE references: CVE-2024-2");
+            assert_eq!(
+                invalid[0].message,
+                "Invalid CVE references: 7 (integer, not a string), CVE-2024-2"
+            );
             assert_eq!(invalid[0].field_path, ["threat", "cve"]);
             let unchecked = with_code(&validation, "cve_lookup_unavailable");
             assert_eq!(
@@ -1314,7 +1317,7 @@ mod validate {
         }
 
         #[test]
-        fn identifiers_read_as_python_reads_the_field() {
+        fn identifiers_are_the_fields_strings() {
             let canonical = |text: &str| text.trim().to_owned();
             let doc = opentide_schema::node::load(
                 "a: CVE-1\nb: [1, true, null, CVE-1, CVE-1]\nc: 5\nd: ' '\n",
@@ -1323,11 +1326,18 @@ mod validate {
             let root = doc.root().unwrap();
             let get = |key: &str| root.get(key).map(AsRef::as_ref);
             assert_eq!(cve_identifiers(get("a"), &canonical), ["CVE-1"]);
+            assert_eq!(cve_identifiers(get("b"), &canonical), ["CVE-1"]);
             assert_eq!(
-                cve_identifiers(get("b"), &canonical),
-                ["1", "True", "None", "CVE-1"]
+                cve_non_strings(get("b")),
+                [
+                    "1 (integer, not a string)",
+                    "true (boolean, not a string)",
+                    "null (null, not a string)"
+                ]
             );
-            assert_eq!(cve_identifiers(get("c"), &canonical), ["5"]);
+            assert!(cve_identifiers(get("c"), &canonical).is_empty());
+            assert_eq!(cve_non_strings(get("c")), ["5 (integer, not a string)"]);
+            assert!(cve_non_strings(get("a")).is_empty());
             assert!(cve_identifiers(get("d"), &canonical).is_empty());
             assert!(cve_identifiers(None, &canonical).is_empty());
         }
