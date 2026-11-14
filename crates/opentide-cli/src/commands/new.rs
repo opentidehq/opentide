@@ -150,26 +150,22 @@ pub struct NewArgs {
 impl From<&crate::tree::NewCommand> for NewArgs {
     fn from(command: &crate::tree::NewCommand) -> Self {
         use crate::tree::NewCommand;
-        let (family, name, path) = match command {
-            NewCommand::Threat(args) => ("threat", &args.name, &args.path),
-            NewCommand::Objective(args) => ("objective", &args.name, &args.path),
-            NewCommand::Rule(args) => ("rule", &args.name, &args.path),
-        };
-        Self {
+        let new = |family: &str, name: &Option<String>, path: &Option<String>| Self {
             family: family.to_owned(),
             name: name.clone(),
             path: path.clone(),
-            platforms: match command {
-                NewCommand::Rule(args) => args.platform.iter().map(crate::tree::spelled).collect(),
-                _ => Vec::new(),
+            ..Self::default()
+        };
+        match command {
+            NewCommand::Threat(args) => new("threat", &args.name, &args.path),
+            NewCommand::Objective(args) => Self {
+                threats: args.threat.clone(),
+                ..new("objective", &args.name, &args.path)
             },
-            objective: match command {
-                NewCommand::Rule(args) => args.objective.clone(),
-                _ => None,
-            },
-            threats: match command {
-                NewCommand::Objective(args) => args.threat.clone(),
-                _ => Vec::new(),
+            NewCommand::Rule(args) => Self {
+                platforms: args.platform.iter().map(crate::tree::spelled).collect(),
+                objective: args.objective.clone(),
+                ..new("rule", &args.name, &args.path)
             },
         }
     }

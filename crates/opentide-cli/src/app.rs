@@ -594,10 +594,8 @@ impl Run<'_> {
         // The commands dispatched by their clap derive structs (`tree.rs`).
         let typed = match crate::tree::Cli::from_arg_matches(&matches) {
             Ok(cli) => cli,
-            Err(error) => {
-                let problem = usage::describe(&self.root, &self.args, error);
-                return self.emit_usage(problem, out, err);
-            }
+            // The tree and its derive disagree: a bug, reported as one.
+            Err(error) => return Err(std::io::Error::other(error.to_string())),
         };
         match &typed.command {
             Some(RootCommand::Info(args)) => {
@@ -802,11 +800,7 @@ impl Run<'_> {
             "share" | "share push" | "share preview" | "share status" | "share retract"
             | "share targets" => match self.share(&matches, &path) {
                 Ok(report) => self.emit_report(&report, out, err),
-                Err(refused) => {
-                    let words: Vec<String> =
-                        refused.0.split_whitespace().map(str::to_owned).collect();
-                    self.refuse(&words, refused.1, out, err)
-                }
+                Err(failure) => self.refuse(&words, *failure, out, err),
             },
             "doctor" => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
@@ -2185,7 +2179,7 @@ impl Run<'_> {
         &self,
         matches: &clap::ArgMatches,
         path: &str,
-    ) -> Result<crate::commands::Report, Box<(String, Failure)>> {
+    ) -> Result<crate::commands::Report, Box<Failure>> {
         use crate::commands::share::{Args, Context, Mode, run};
         let Some(("share", group)) = matches.subcommand() else {
             return Ok(crate::commands::Report::error(path, "share was not parsed"));
@@ -2266,7 +2260,7 @@ impl Run<'_> {
             if let Some(problem) = problem {
                 // A usage error, in clap's layout.
                 let failure = Failure::new(code::USAGE_INVALID_VALUE, problem);
-                return Err(Box::new((path.to_owned(), failure)));
+                return Err(Box::new(failure));
             }
         }
         // An option typed on `share` alone is the subcommand's.
@@ -4051,6 +4045,24 @@ mod tests {
             bad.stdout
         );
         assert!(bad.stdout.contains("\"code\":\"usage_invalid_value\""));
+        // At a terminal: clap's layout, the root's usage and the help hint.
+        let plain = dispatched(
+            "--show-completion bash zsh",
+            &[("OPENTIDE_OUTPUT", "plain")],
+            false,
+        );
+        assert_eq!(plain.code, 2);
+        assert!(
+            plain
+                .stderr
+                .starts_with("error: --show-completion: \"bash zsh\"")
+                && plain
+                    .stderr
+                    .contains("\nUsage: opentide [OPTIONS] <COMMAND>")
+                && plain.stderr.contains("For more information, try '--help'."),
+            "{}",
+            plain.stderr
+        );
         let home = tempfile::tempdir().unwrap();
         let home_text = home.path().display().to_string();
         // The home folder is USERPROFILE on Windows, as Python's Path.home().
