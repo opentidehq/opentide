@@ -20,9 +20,7 @@ use crate::from_node::Context;
 use crate::node::{Node, Value};
 use crate::objects::any::Any;
 use crate::objects::platform::durations::duration_seconds;
-use crate::objects::platform::{
-    get, is_map, literal_enum, platform_block, present, python_strip, truthy,
-};
+use crate::objects::platform::{get, is_map, literal_enum, platform_block, present, truthy};
 use crate::pins::Pins;
 
 literal_enum! {
@@ -979,9 +977,7 @@ pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
     if present(level) {
         let known = level
             .and_then(|node| node.value.as_str())
-            .is_some_and(|text| {
-                ALERT_SEVERITIES.contains(&python_strip(text).to_lowercase().as_str())
-            });
+            .is_some_and(|text| ALERT_SEVERITIES.contains(&text.trim().to_lowercase().as_str()));
         if !known {
             // RFC 0007 §2: alert_severity vocabulary. An unknown value used
             // to compile silently to Informational (low, risk 1).

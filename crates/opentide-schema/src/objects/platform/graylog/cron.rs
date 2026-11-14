@@ -15,8 +15,6 @@
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
 
-use opentide_core::falco::{is_python_space, python_strip};
-
 const MONTHS: [&str; 12] = [
     "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
 ];
@@ -102,10 +100,7 @@ fn part(text: &str, index: usize) -> bool {
 /// week `L`, `nL` and `n#k`. Quartz needs `?` in exactly one of day of month
 /// and day of week.
 pub fn cron_ok(cron: &str) -> bool {
-    let fields: Vec<&str> = cron
-        .split(is_python_space)
-        .filter(|field| !field.is_empty())
-        .collect();
+    let fields: Vec<&str> = cron.split_whitespace().collect();
     if !(6..=7).contains(&fields.len()) {
         return false;
     }
@@ -137,7 +132,7 @@ fn zones() -> &'static BTreeSet<&'static str> {
 
 /// Whether `name` is an IANA time zone name.
 pub fn timezone_ok(name: &str) -> bool {
-    !python_strip(name).is_empty() && zones().contains(name)
+    !name.trim().is_empty() && zones().contains(name)
 }
 
 #[cfg(test)]

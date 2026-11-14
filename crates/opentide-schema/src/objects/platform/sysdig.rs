@@ -22,7 +22,7 @@ use crate::FromNode;
 use crate::error::ErrorKind;
 use crate::from_node::Context;
 use crate::node::{Node, Value};
-use crate::objects::platform::{get, is_map, platform_block, present, python_strip};
+use crate::objects::platform::{get, is_map, platform_block, present};
 use crate::pins::Pins;
 
 use super::falco_text::join_lines;
@@ -414,7 +414,7 @@ pub fn exception_shape_ok(entry: &Node) -> bool {
         Some(_) => return false,
     };
     if let Some(field) = fields.and_then(|node| node.value.as_str()) {
-        if python_strip(field).is_empty() {
+        if field.trim().is_empty() {
             return false;
         }
         if let Some(comps) = comps {

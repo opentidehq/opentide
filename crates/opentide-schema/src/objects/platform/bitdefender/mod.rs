@@ -645,9 +645,7 @@ pub fn normalise(text: &str) -> String {
                 .map_or(character, |(_, after)| *after)
         })
         .collect();
-    replaced
-        .trim_start_matches(crate::objects::platform::is_python_space)
-        .to_owned()
+    replaced.trim_start().to_owned()
 }
 
 /// The first `limit` characters of `text` (Python's `text[:limit]`).

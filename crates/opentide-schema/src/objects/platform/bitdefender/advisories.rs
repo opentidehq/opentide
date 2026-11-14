@@ -209,7 +209,7 @@ pub fn advisories(rule: &Node) -> Vec<Advisory> {
         .filter(|severity| crate::objects::platform::truthy(Some(severity)));
     if let Some(severity) = severity {
         let written = text(severity);
-        let level = crate::objects::platform::python_strip(&written).to_lowercase();
+        let level = written.trim().to_lowercase();
         if let Some(collapsed) = collapsed(&level)
             && get(block, "severity").is_none_or(|value| matches!(value.value, Value::Null))
         {

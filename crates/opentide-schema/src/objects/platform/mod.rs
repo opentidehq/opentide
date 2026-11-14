@@ -615,15 +615,11 @@ pub(crate) fn json_node(value: &serde_json::Value) -> Node {
     }
 }
 
-/// Python's `str.isspace()` and `text.strip()`: `opentide_core::falco`'s,
-/// which the language server's Sysdig findings use too.
-pub use opentide_core::falco::{is_python_space, python_strip};
-
 /// `QueryText`: a query must not be blank. Every deployer treats a falsy query
 /// as "nothing to deploy" and moves on, so `query: ""` is the same silent skip
 /// as no query at all.
 pub fn check_query_text(value: &str) -> Result<(), Violation> {
-    if python_strip(value).is_empty() {
+    if value.trim().is_empty() {
         Err(Violation::value_error("query must not be empty"))
     } else {
         Ok(())

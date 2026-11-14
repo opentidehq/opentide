@@ -31,7 +31,7 @@ fn workspace_with(top: &str, block: &str) -> Workspace {
         "/ws/objects/rules/r.yaml",
         format!(
             "name: Rule\nmetadata:\n  uuid: {UUID}\n  schema: rule::1.0\n\
-             description: \"a\\u001cb  c\"\n{top}configurations:\n  sysdig:\n{block}"
+             description: \"a\\tb \\n c\"\n{top}configurations:\n  sysdig:\n{block}"
         ),
     );
     Workspace::open(
