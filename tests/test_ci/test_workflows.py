@@ -165,6 +165,8 @@ def test_only_the_build_compiles_the_gates_workspace() -> None:
             # The build's wheel, and `uv run` never builds the project again.
             assert "uv pip install --no-deps .native/opentide-*.whl" in runs, job_id
             assert env.get("UV_NO_SYNC") == "1", job_id
+            # The wheel E2E tests install that wheel instead of building one.
+            assert env.get("OPENTIDE_TEST_WHEELHOUSE") == "${{ github.workspace }}/.native"
     build = "\n".join(str(step.get("run", "")) for step in ci_jobs()["build"]["steps"])
     assert "maturin build --locked --profile dev" in build
 

@@ -491,6 +491,7 @@ def test_concurrent_wheel_builds_share_one_build(
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr(sys.modules[__name__], "_run", fake_run)
+    monkeypatch.delenv("OPENTIDE_TEST_WHEELHOUSE", raising=False)
     shared = tmp_path / "shared"
     found: list[Path] = []
     threads = [
@@ -507,3 +508,21 @@ def test_concurrent_wheel_builds_share_one_build(
     assert len(builds) == 1
     assert sorted(p.parent.name for p in found) == ["d0", "d1", "d2", "d3"]
     assert all(p.read_bytes() == b"wheel" for p in found)
+
+
+def test_a_wheelhouse_wheel_is_used_without_building(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CI builds opentide's wheel once (the gate's `build` job): the tests install that one."""
+
+    def no_build(cmd: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError(f"built a wheel: {cmd}")
+
+    monkeypatch.setattr(sys.modules[__name__], "_run", no_build)
+    wheelhouse = tmp_path / "wheelhouse"
+    wheelhouse.mkdir()
+    (wheelhouse / "opentide-1.0.0-cp310-abi3-linux_x86_64.whl").write_bytes(b"wheel")
+    monkeypatch.setenv("OPENTIDE_TEST_WHEELHOUSE", str(wheelhouse))
+    wheel = _build_wheel("uv", tmp_path / "dist", tmp_path / "shared")
+    assert wheel == tmp_path / "dist" / "opentide-1.0.0-cp310-abi3-linux_x86_64.whl"
+    assert wheel.read_bytes() == b"wheel"

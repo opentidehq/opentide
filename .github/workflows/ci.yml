@@ -667,8 +667,10 @@ jobs:
       checks: write
       code-quality: write
     env:
-      # opentide is the build's wheel: `uv run` builds nothing.
+      # opentide is the build's wheel: `uv run` builds nothing, and the
+      # tests that install opentide's wheel take it.
       UV_NO_SYNC: "1"
+      OPENTIDE_TEST_WHEELHOUSE: ${{ github.workspace }}/.native
     steps:
       # The pull request's head commit (not the merge commit), so coverage
       # line numbers map to the diff.
@@ -764,8 +766,10 @@ jobs:
     permissions:
       contents: read
     env:
-      # opentide is the build's wheel: `uv run` builds nothing.
+      # opentide is the build's wheel: `uv run` builds nothing, and the
+      # tests that install opentide's wheel take it.
       UV_NO_SYNC: "1"
+      OPENTIDE_TEST_WHEELHOUSE: ${{ github.workspace }}/.native
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1505,8 +1509,10 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     env:
-      # opentide is the build's wheel: `uv run` builds nothing.
+      # opentide is the build's wheel: `uv run` builds nothing, and the
+      # tests that install opentide's wheel take it.
       UV_NO_SYNC: "1"
+      OPENTIDE_TEST_WHEELHOUSE: ${{ github.workspace }}/.native
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1548,9 +1554,9 @@ jobs:
     permissions:
       contents: read
     env:
-      # opentide is the build's wheel: `uv run` builds nothing.
+      # opentide is the build's wheel: `uv run` builds nothing, and the
+      # tests that install opentide's wheel take it.
       UV_NO_SYNC: "1"
-      # The tests that install opentide's wheel take the build's.
       OPENTIDE_TEST_WHEELHOUSE: ${{ github.workspace }}/.native
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
