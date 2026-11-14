@@ -9,17 +9,17 @@ exit: 1
 {
   "command": "query",
   "duration_ms": 0,
-  "error": "1 of 1 queries failed on 1 sentinel_one tenant: lab: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)",
+  "error": "1 of 1 queries failed on 1 sentinel_one tenant: lab: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
   "exit_code": 1,
   "failure": {
     "argument": null,
     "code": "command_failed",
     "crash_log": null,
-    "message": "1 of 1 queries failed on 1 sentinel_one tenant: lab: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)",
+    "message": "1 of 1 queries failed on 1 sentinel_one tenant: lab: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
     "suggestion": null
   },
   "limit": 100,
-  "message": "1 of 1 queries failed on 1 sentinel_one tenant: lab: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)",
+  "message": "1 of 1 queries failed on 1 sentinel_one tenant: lab: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
   "next_actions": [],
   "ok": false,
   "platform": "sentinel_one",
@@ -27,7 +27,7 @@ exit: 1
   "results": [
     {
       "elapsed_ms": 0,
-      "error": "Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)",
+      "error": "Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
       "status": "failed",
       "tenant": "lab",
       "warnings": []

@@ -16,6 +16,6 @@ Deploying to crowdstrike / lab · 3 rules
   [2/3] · skipped   CrowdStrike update rule  not attempted after a failure
   [3/3] · skipped   CrowdStrike retire rule  not attempted after a failure
 ✗ crowdstrike · 0 deployed, 0 failed, 3 not attempted · <SECONDS>
-error: Platform deployment failed · system: crowdstrike · detail: Cannot reach crowdstrike tenant '***' at https://api.eu-1.crowdstrike.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)
-error: Deployment to crowdstrike failed: Cannot reach crowdstrike tenant 'lab' at https://api.eu-1.crowdstrike.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)
+error: Platform deployment failed · system: crowdstrike · detail: Cannot reach crowdstrike tenant '***' at https://api.eu-1.crowdstrike.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
+error: Deployment to crowdstrike failed: Cannot reach crowdstrike tenant 'lab' at https://api.eu-1.crowdstrike.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 tip: add --json for machine-readable output

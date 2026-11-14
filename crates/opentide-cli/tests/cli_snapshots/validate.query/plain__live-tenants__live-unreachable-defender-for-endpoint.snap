@@ -9,5 +9,5 @@ exit: 1
 
 ━━━ stderr
 ✗ Microsoft Defender for Endpoint queries · 1 rule · <SECONDS>
-error: Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)
+error: Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
   help: check the 'lab' tenant in .opentide/configurations/platforms/defender_for_endpoint.toml and the network path to https://login.microsoftonline.com; behind a proxy, pass opentide --proxy

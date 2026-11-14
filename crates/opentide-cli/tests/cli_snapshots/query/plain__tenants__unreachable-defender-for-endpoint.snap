@@ -8,4 +8,4 @@ exit: 1
 ━━━ stdout · empty
 
 ━━━ stderr
-error: 1 of 1 queries failed on 1 defender_for_endpoint tenant: lab: Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)
+error: 1 of 1 queries failed on 1 defender_for_endpoint tenant: lab: Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)

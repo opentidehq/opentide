@@ -8,4 +8,4 @@ exit: 1
 ━━━ stdout · empty
 
 ━━━ stderr
-error: 1 of 1 queries failed on 1 elastic tenant: soc: Cannot reach elastic tenant 'soc' at https://es.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error 111)
+error: 1 of 1 queries failed on 1 elastic tenant: soc: Cannot reach elastic tenant 'soc' at https://es.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
