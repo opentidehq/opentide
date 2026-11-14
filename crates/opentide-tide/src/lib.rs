@@ -208,7 +208,8 @@ impl InjectedQuery {
 ///
 /// The inner offset is always on a character boundary of the query: a
 /// decoded escape (`\u00e9` in a double-quoted scalar) maps every byte of
-/// its character onto the escape's source, so a cursor inside the escape
+/// its character onto the escape's source (the bytes past a short escape's
+/// end, as `\L`'s, onto its last byte), so a cursor inside the escape
 /// lands on a character boundary (before the character on `\` and `u`,
 /// after it on the hex digits).
 pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery, usize)> {
@@ -2235,6 +2236,21 @@ configurations:
         for offset in [escape, escape + 1] {
             let (inj, inner) = injection_at_offset(source, offset).unwrap();
             assert_eq!(&inj.inner[inner..], "\u{e9}", "{offset}");
+        }
+    }
+
+    #[test]
+    fn a_cursor_after_a_short_escape_of_a_long_character_lands_after_it() {
+        // `\L` is two source bytes for U+2028's three: its last byte once
+        // mapped onto `f` as well, and a cursor before `f` landed before
+        // U+2028.
+        let source = "name: R\nconfigurations:\n  sentinel:\n    query: \"T\\Lfoo\"\n";
+        let f = source.find("foo").unwrap();
+        let (inj, inner) = injection_at_offset(source, f).unwrap();
+        assert_eq!(&inj.inner[inner..], "foo");
+        for offset in [f - 2, f - 1] {
+            let (inj, inner) = injection_at_offset(source, offset).unwrap();
+            assert_eq!(&inj.inner[inner..], "\u{2028}foo", "{offset}");
         }
     }
 }

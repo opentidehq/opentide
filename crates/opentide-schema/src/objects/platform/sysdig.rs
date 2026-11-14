@@ -22,7 +22,7 @@ use crate::FromNode;
 use crate::error::ErrorKind;
 use crate::from_node::Context;
 use crate::node::{Node, Value};
-use crate::objects::platform::{get, is_map, platform_block, present, python_strip};
+use crate::objects::platform::{get, is_map, platform_block, present};
 use crate::pins::Pins;
 
 use super::falco_text::join_lines;
@@ -364,7 +364,7 @@ fn report_at(cx: &mut Context, path: &[usize], null: &Node) {
 }
 
 /// The finding of a null exception value.
-pub const NULL_VALUE: &str = "Value error, an exception value cannot be null: Falco reads each \
+pub const NULL_VALUE: &str = "an exception value cannot be null: Falco reads each \
                               value as text, so write the text it should match (quote it, \
                               \"null\", to match that word)";
 
@@ -414,7 +414,7 @@ pub fn exception_shape_ok(entry: &Node) -> bool {
         Some(_) => return false,
     };
     if let Some(field) = fields.and_then(|node| node.value.as_str()) {
-        if python_strip(field).is_empty() {
+        if field.trim().is_empty() {
             return false;
         }
         if let Some(comps) = comps {

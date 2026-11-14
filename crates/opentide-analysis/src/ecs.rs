@@ -13,9 +13,12 @@ fn is_field_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '@' | '-')
 }
 
-/// The dotted field name being typed at `offset`.
+/// The dotted field name being typed at `offset`: empty for an offset
+/// inside a character (a decoded escape).
 fn prefix_at(text: &str, offset: usize) -> &str {
-    let before = &text[..offset.min(text.len())];
+    let Some(before) = text.get(..offset.min(text.len())) else {
+        return "";
+    };
     let start = before
         .char_indices()
         .rev()
@@ -25,10 +28,14 @@ fn prefix_at(text: &str, offset: usize) -> &str {
     &before[start..]
 }
 
-/// The dotted field name under `offset`.
+/// The dotted field name under `offset`: empty for an offset inside a
+/// character (a decoded escape).
 fn word_at(text: &str, offset: usize) -> &str {
     let offset = offset.min(text.len());
-    let start = text[..offset]
+    let Some(before) = text.get(..offset) else {
+        return "";
+    };
+    let start = before
         .char_indices()
         .rev()
         .take_while(|(_, c)| is_field_char(*c))
@@ -82,7 +89,10 @@ pub(crate) fn complete(
     offset: usize,
     items: &mut Vec<CompletionItem>,
 ) {
-    let before = &text[..offset.min(text.len())];
+    // An offset inside a character (a decoded escape) adds nothing.
+    let Some(before) = text.get(..offset.min(text.len())) else {
+        return;
+    };
 
     // EQL event categories are `event.category` values: add their docs.
     if let Some(category) = opentide_ecs::field("event.category") {
@@ -201,5 +211,18 @@ mod tests {
             "{md}"
         );
         assert!(hover("my.custom.field:1", 3).is_none());
+    }
+
+    #[test]
+    fn an_offset_inside_a_character_is_answered_empty() {
+        // A cursor inside a decoded escape (`\u00e9` in a double-quoted Tide
+        // query) can reach the engine as the second byte of `\u{e9}`.
+        let src = "FROM logs | WHERE event.category == \"\u{e9}\"";
+        let inside = src.find('\u{e9}').unwrap() + 1;
+        // opentide_esql answers nothing there; the ECS fallback must too.
+        assert_eq!(hover(src, inside), None);
+        let mut items = vec![CompletionItem::new("event.category", "property")];
+        complete(LanguageId::Esql, src, inside, &mut items);
+        assert_eq!(items.len(), 1);
     }
 }

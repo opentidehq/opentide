@@ -90,7 +90,7 @@ pub struct SentinelTrigger {
 /// deploy's `timedelta` holds ([`MAX_DURATION_SECONDS`]: `1000000000d`,
 /// `P99999999999D`), both of which the oracle accepted and deploy refused.
 pub fn check_duration(value: &str) -> Result<(), Violation> {
-    let text = crate::objects::platform::python_strip(value);
+    let text = value.trim();
     if text.is_empty() {
         return Ok(());
     }
@@ -741,7 +741,7 @@ mod tests {
         }
         assert_eq!(
             check_duration("hourly").unwrap_err().message,
-            "Value error, Duration \"hourly\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a \
+            "Duration \"hourly\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a \
              shorthand duration (30m, 1h, 1d, 1h10m)"
         );
     }
@@ -777,7 +777,7 @@ mod tests {
         }
         assert_eq!(
             check_duration("1000000000d").unwrap_err().message,
-            "Value error, Duration \"1000000000d\" is longer than a rule can be deployed with (at \
+            "Duration \"1000000000d\" is longer than a rule can be deployed with (at \
              most 999999999 days, 23 hours, 59 minutes and 59 seconds)"
         );
     }

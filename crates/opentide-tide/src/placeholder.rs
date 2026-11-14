@@ -51,22 +51,16 @@ pub fn is_placeholder_query(source: &str, query: &InjectedQuery) -> bool {
 /// without the marker after it.
 fn is_stand_in(value: &str) -> bool {
     let value = marker_start(value).map_or(value, |at| &value[..at]);
-    value.trim_matches(is_space) == STAND_IN
+    value.trim() == STAND_IN
 }
 
 /// Where the marker that ends `line` starts: opentide's
 /// `\s#\s*opentide:placeholder\s*$`, from the blank before the `#`.
 fn marker_start(line: &str) -> Option<usize> {
-    let rest = line.trim_end_matches(is_space).strip_suffix(MARKER)?;
-    let rest = rest.trim_end_matches(is_space).strip_suffix('#')?;
-    let blank = rest.chars().next_back().filter(|&c| is_space(c))?;
+    let rest = line.trim_end().strip_suffix(MARKER)?;
+    let rest = rest.trim_end().strip_suffix('#')?;
+    let blank = rest.chars().next_back().filter(|c| c.is_whitespace())?;
     Some(rest.len() - blank.len_utf8())
-}
-
-/// Python's whitespace (`\s` in a `str` pattern, `str.strip`): Unicode
-/// `White_Space` and the separators `U+001C`..=`U+001F`.
-fn is_space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
 }
 
 #[cfg(test)]
@@ -77,7 +71,10 @@ mod tests {
     fn the_marker_ends_the_line_after_a_blank() {
         assert_eq!(marker_start("query: |  # opentide:placeholder"), Some(9));
         assert_eq!(marker_start("query: |\t#opentide:placeholder \r"), Some(8));
-        assert_eq!(marker_start("x\u{a0}#\u{1f}opentide:placeholder"), Some(1));
+        assert_eq!(
+            marker_start("x\u{a0}#\u{2003}opentide:placeholder"),
+            Some(1)
+        );
         // Not at the end, no blank before the `#`, or another word.
         assert_eq!(marker_start("query: |  # opentide:placeholder x"), None);
         assert_eq!(marker_start("query: |# opentide:placeholder"), None);
