@@ -319,10 +319,12 @@ jobs:
           path: native
           pattern: npm-native-*
       # Before npm-version, which `npm ci` would find out of step with the lock.
+      # @opentide/wasi-host is installed for check-npm-packs.mjs, whose pack runs
+      # its build (prepack: tsc); it is not one of the packages a release publishes.
       - name: Build the language server's packages
         run: |
           set -euo pipefail
-          for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done
+          for p in lsp-client lsp-worker wasi-host; do (cd "packages/$p" && npm ci); done
       - name: The packages at the build's version, each with its addon
         run: |
           set -euo pipefail
