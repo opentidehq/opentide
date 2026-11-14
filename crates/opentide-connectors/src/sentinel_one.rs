@@ -20,6 +20,7 @@ use crate::connector::{
     kql_code, utc_z,
 };
 use crate::error::ConnectorError;
+use crate::retry::RetryPolicy;
 use crate::text::json_text;
 use crate::{HttpSettings, Secret};
 
@@ -36,9 +37,13 @@ pub const PING_PATH: &str = "/web/api/v2.1/dv/events/pq-ping";
 /// The longest wait between two polls of a running PowerQuery.
 pub const MAX_POLL_DELAY: Duration = Duration::from_secs(5);
 
-/// The HTTP settings of a SentinelOne tenant: `TenantSession`'s, no retries.
+/// The HTTP settings of a SentinelOne tenant: 120 s and the connectors'
+/// retries.
 pub fn http_settings() -> HttpSettings {
-    HttpSettings::default()
+    HttpSettings {
+        retry: RetryPolicy::standard(),
+        ..HttpSettings::default()
+    }
 }
 
 /// Why a STAR rule call failed (`_http_errors`).

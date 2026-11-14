@@ -34,17 +34,11 @@ pub const POLL_DELAY: Duration = Duration::from_millis(500);
 pub const JOB_ROWS: i64 = 10_000;
 
 /// The HTTP settings of a Carbon Black Cloud tenant: *timeout* on each
-/// request, and the SDK's `Retry(total=5, status_forcelist=[502, 504],
-/// backoff_factor=0.5)` with urllib3's default methods.
+/// request, and the connectors' retries.
 pub fn http_settings(timeout: Duration) -> HttpSettings {
     HttpSettings {
         timeout,
-        retry: RetryPolicy::urllib3(
-            5,
-            0.5,
-            &[502, 504],
-            &["DELETE", "GET", "HEAD", "OPTIONS", "PUT", "TRACE"],
-        ),
+        retry: RetryPolicy::standard(),
         ..HttpSettings::default()
     }
 }

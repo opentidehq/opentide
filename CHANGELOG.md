@@ -199,6 +199,8 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Fixed
 
+- **Deploys no longer re-send a rule creation on a server error.** Elastic and Sysdig sent a `POST` again after a 429 or 5xx answer, so a rule create or a search a gateway answered with a 503 after the tenant had acted on it could run twice. Every platform now retries one way ([Configuration → Retries](docs/usage/configuration.md#retries)): a request whose connection could not be made is sent again whatever its method; a `GET`, `HEAD`, `OPTIONS`, `PUT` or `DELETE` also after an HTTP 408, 429, 502, 503 or 504, up to three times (0.5, 1 and 2 seconds, or `Retry-After`, at most 120 seconds); a `POST` or `PATCH` is sent once. CrowdStrike, Defender for Endpoint, Graylog, HarfangLab, SentinelOne and Splunk, which never retried, now retry too; an HTTP 500 or a read timeout is no longer retried on any platform; Carbon Black Cloud retries three times, not five.
+
 - **Exabeam messages name a value as JSON.** A block status that is not a string, or a missing one, a recurrence day and a create that answers no id are named `true`, `false` or `null`, as the other platforms' messages name them, not Python's `True`, `False` or `None`.
 - **Google SecOps rules no longer carry Python's `None` and `True`.** A rule without `metadata.version` deploys without `opentide_version` in its meta, where it sent `opentide_version = "None"`; a boolean in `match` is written `true` or `false`.
 - **An Elastic boolean is not an integer.** `threshold.value`, `risk` and `risk.score` refuse `true` and `false` as `int_type` on the value itself; `threshold.value: false` was reported on the whole block as `threshold_fields`, as if it were `0`.
