@@ -207,7 +207,8 @@ impl InjectedQuery {
 /// The inner offset is always on a character boundary of the query: a
 /// decoded escape (`\u00e9` in a double-quoted scalar) maps every byte of
 /// its character onto the escape's source, so a cursor inside the escape
-/// lands on the character's start.
+/// lands on a character boundary (before the character on `\` and `u`,
+/// after it on the hex digits).
 pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery, usize)> {
     let (source, offset) = opentide_core::strip_bom_at(source, offset);
     for inj in extract_injections(source) {
