@@ -9,8 +9,8 @@
 //! whole; at a terminal narrower than a line it is broken between words, never
 //! inside one, and continued under its text.
 
-use super::glyphs;
-use super::text::{Colour, Style, Text, cell_len, char_width};
+use super::text::{Color, Colour, Style, Text, cell_len, char_width};
+use super::{brand, glyphs};
 use crate::envelope::NextAction;
 use crate::mode::Mode;
 
@@ -53,12 +53,12 @@ impl OutcomeKind {
     }
 
     fn style(self) -> Style {
-        Style::new(match self {
-            OutcomeKind::Ok => "bold green",
-            OutcomeKind::Warning => "bold yellow",
-            OutcomeKind::Failed => "bold red",
-            OutcomeKind::Skipped | OutcomeKind::Plan => "bold",
-        })
+        match self {
+            OutcomeKind::Ok => Style::fg(Color::Green).bold(),
+            OutcomeKind::Warning => Style::fg(Color::Yellow).bold(),
+            OutcomeKind::Failed => Style::fg(Color::Red).bold(),
+            OutcomeKind::Skipped | OutcomeKind::Plan => Style::BOLD,
+        }
     }
 }
 
@@ -169,24 +169,16 @@ impl Console {
             return String::new();
         }
         let mut out = String::from("\n");
-        let bold = Style::new("bold");
-        let mut header = Text::default();
-        if mode == Mode::Human {
-            let mark = if self.colour == Colour::Full {
-                Style::new("bold color(231) on_color(18)")
-            } else {
-                Style::new("bold reverse")
-            };
-            header.append(" \u{224b} ", &mark);
-            header.push_str(" ");
-        }
-        header.append("Next steps", &bold);
+        let header = if mode == Mode::Human {
+            brand::header("Next steps", self.colour)
+        } else {
+            Text::styled("Next steps", &Style::BOLD)
+        };
         out.push_str(&self.line(&header));
-        let dim = Style::new("dim");
+        let dim = Style::DIM;
         for (number, action) in shown.iter().enumerate() {
             let mut line = Text::styled(&format!("  {}  ", number + 1), &dim);
-            // The row is dim, the command bold on top of it (Rich's nesting).
-            line.append(&action.command, &Style::new("bold dim"));
+            line.append(&action.command, &Style::BOLD);
             if !action.reason.is_empty() {
                 line.append(&format!(" {} ", glyphs::SEPARATOR), &dim);
                 line.append(&action.reason, &dim);
@@ -243,13 +235,13 @@ pub fn outcome_text(kind: OutcomeKind, message: &str) -> Text {
 
 /// The style of a line's label.
 fn label_style(label: &str) -> Style {
-    Style::new(match label {
-        "error" => "bold red",
-        "warning" => "bold yellow",
-        "note" => "bold blue",
-        "help" | "tip" => "bold cyan",
-        _ => "bold",
-    })
+    match label {
+        "error" => Style::fg(Color::Red).bold(),
+        "warning" => Style::fg(Color::Yellow).bold(),
+        "note" => Style::fg(Color::Blue).bold(),
+        "help" | "tip" => Style::fg(Color::Cyan).bold(),
+        _ => Style::BOLD,
+    }
 }
 
 /// `error: message`, `  help: message` and so on.
@@ -264,11 +256,11 @@ pub fn labelled_text(label: &str, message: &str, indent: usize) -> Text {
 /// `→ opentide lint --fix · rename 2 files to match their names`.
 pub fn next_action_text(action: &NextAction) -> Text {
     let mut line = Text::default();
-    line.append(glyphs::NEXT, &Style::new("bold cyan"));
+    line.append(glyphs::NEXT, &Style::fg(Color::Cyan).bold());
     line.push_str(" ");
-    line.append(&action.command, &Style::new("bold"));
+    line.append(&action.command, &Style::BOLD);
     if !action.reason.is_empty() {
-        let dim = Style::new("dim");
+        let dim = Style::DIM;
         line.append(&format!(" {} ", glyphs::SEPARATOR), &dim);
         line.append(&action.reason, &dim);
     }
@@ -488,6 +480,25 @@ mod tests {
             .iter()
             .map(Text::as_plain)
             .collect()
+    }
+
+    #[test]
+    fn numbered_next_steps_have_a_header_and_a_bold_command_on_a_dim_row() {
+        let actions = [NextAction::new("opentide lint --fix", "rename 2 files")];
+        let terminal = Console {
+            colour: Colour::Full,
+            width: Some(80),
+        };
+        assert_eq!(
+            terminal.numbered_next_actions(&actions, Mode::Human),
+            "\n\u{1b}[1;38;5;231;48;5;18m ≋ \u{1b}[0m \u{1b}[1mNext steps\u{1b}[0m\n\
+             \u{1b}[2m  1  \u{1b}[0m\u{1b}[1mopentide lint --fix\u{1b}[0m\u{1b}[2m · rename 2 files\u{1b}[0m\n"
+        );
+        assert_eq!(
+            PIPE.numbered_next_actions(&actions, Mode::Plain),
+            "\nNext steps\n  1  opentide lint --fix · rename 2 files\n"
+        );
+        assert_eq!(PIPE.numbered_next_actions(&[], Mode::Human), "");
     }
 
     #[test]

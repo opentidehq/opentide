@@ -271,7 +271,7 @@ fn sentinel_stops_the_run_on_a_refusal_with_the_platforms_words() {
             ),
         )],
     );
-    // The DELETE ARM answered 404: `SentinelApiError` stops the run.
+    // The DELETE ARM answered 404: the run stops with ARM's words.
     let (proxy, env, _ca) = replay("sentinel/deploy", &[0, 1, 7], "AZURE_CLIENT_SECRET");
     let (sent, _) = deploy(ws.path(), "sentinel", &env, &sentinel_registry(), 0);
     assert_eq!(proxy.verify(), Vec::new());
@@ -279,7 +279,7 @@ fn sentinel_stops_the_run_on_a_refusal_with_the_platforms_words() {
     assert_eq!(rows[0].0, "failed");
     let error = rows[0].1.clone().unwrap();
     assert!(
-        error.starts_with("HTTP 404: DELETE https://management.azure.com/"),
+        error.starts_with("DELETE https://management.azure.com/"),
         "{error}"
     );
     assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
@@ -520,8 +520,8 @@ fn a_refusal_stops_the_run_and_the_rest_is_not_attempted() {
     assert_eq!(
         value(&sent, "error"),
         &Json::str(
-            "Deployment to sentinel failed on Second: HTTP 400: PUT https://x failed with HTTP 400 \
-             BadRequest: no"
+            "Deployment to sentinel failed on Second: PUT https://x failed with HTTP 400 BadRequest: \
+             no"
         )
     );
     assert_eq!(value(&sent, "deployed"), &Json::Array(Vec::new()));
@@ -852,7 +852,11 @@ fn crowdstrike_stops_on_a_delete_the_tenant_refuses() {
         rows(&sent),
         [(
             "failed".to_owned(),
-            Some("DetectionRuleDeletionFailed: Could not delete rule".to_owned())
+            Some(
+                "could not delete the rule: Was not able to delete rule with ID cs-rule-missing \
+                 against tenant lab - Error Code 404"
+                    .to_owned()
+            )
         )]
     );
     // The shard is kept: the platform did not confirm the delete.

@@ -129,11 +129,11 @@ impl Table {
         };
         let mut out = Vec::new();
         if let Some(title) = &self.title {
-            out.push(Text::styled(title, &Style::new("bold")));
+            out.push(Text::styled(title, &Style::BOLD));
         }
         if !self.columns.is_empty() {
             let headers: Vec<&str> = self.columns.iter().map(|c| c.header.as_str()).collect();
-            out.push(line(&headers, &Style::new("bold")));
+            out.push(line(&headers, &Style::BOLD));
             let rule: Vec<String> = widths.iter().map(|width| "-".repeat(*width)).collect();
             let rule: Vec<&str> = rule.iter().map(String::as_str).collect();
             out.push(line(&rule, &Style::default()));
@@ -143,7 +143,7 @@ impl Table {
             }
         }
         if let Some(caption) = &self.caption {
-            out.push(Text::styled(caption, &Style::new("dim")));
+            out.push(Text::styled(caption, &Style::DIM));
         }
         if let Some(width) = width {
             for line in &mut out {

@@ -17,7 +17,9 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
+use opentide_compile::deploy::PATH_SEGMENT;
 use opentide_compile::json::{Json, Object};
+use percent_encoding::utf8_percent_encode;
 
 use crate::answer::Answer;
 use crate::connector::{
@@ -25,7 +27,6 @@ use crate::connector::{
     Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
     kql_with_limit,
 };
-use crate::encode::{segment, urlencode};
 use crate::error::ConnectorError;
 use crate::retry::RetryPolicy;
 use crate::text::json_text;
@@ -198,13 +199,15 @@ impl Sentinel {
         }
         // MSAL draws a correlation id it does not send.
         let _ = (self.ids)();
-        let form = urlencode([
-            ("client_id", client_id.as_str()),
-            ("grant_type", "client_credentials"),
-            ("client_info", "1"),
-            ("client_secret", client_secret.as_str()),
-            ("scope", scope),
-        ]);
+        let form = url::form_urlencoded::Serializer::new(String::new())
+            .extend_pairs([
+                ("client_id", client_id.as_str()),
+                ("grant_type", "client_credentials"),
+                ("client_info", "1"),
+                ("client_secret", client_secret.as_str()),
+                ("scope", scope),
+            ])
+            .finish();
         let request = cx
             .http
             .request(
@@ -261,13 +264,13 @@ impl Sentinel {
         let workspace = cx.tenant.secret("workspace_name")?.expose();
         let mut url = format!(
             "{ARM_ENDPOINT}/subscriptions/{}/resourceGroups/{}/providers/Microsoft.OperationalInsights/workspaces/{}/providers/Microsoft.SecurityInsights/alertRules",
-            segment(subscription),
-            segment(group),
-            segment(workspace)
+            utf8_percent_encode(subscription, PATH_SEGMENT),
+            utf8_percent_encode(group, PATH_SEGMENT),
+            utf8_percent_encode(workspace, PATH_SEGMENT)
         );
         if let Some(rule_id) = rule_id {
             url.push('/');
-            url.push_str(&segment(rule_id));
+            url.extend(utf8_percent_encode(rule_id, PATH_SEGMENT));
         }
         Ok(url)
     }
@@ -418,7 +421,10 @@ impl Sentinel {
             .http
             .request(
                 crate::transport::Method::POST,
-                &format!("{LOGS_ENDPOINT}/workspaces/{}/query", segment(&workspace)),
+                &format!(
+                    "{LOGS_ENDPOINT}/workspaces/{}/query",
+                    utf8_percent_encode(&workspace, PATH_SEGMENT)
+                ),
             )
             .header("Accept", "application/json")
             .header("Authorization", format!("Bearer {}", token.expose()))
@@ -515,8 +521,8 @@ fn arm_error(answer: &Answer) -> (String, String) {
     }
 }
 
-/// The KQL parser's message inside a Log Analytics error (`_inner_message`),
-/// else azure-core's text of the error.
+/// The KQL parser's message inside a Log Analytics error, else the error's
+/// `code: message` (and its target), else its HTTP status.
 fn inner_message(answer: &Answer) -> String {
     let body = answer.json().unwrap_or(Json::Null);
     let error = body
@@ -540,15 +546,20 @@ fn inner_message(answer: &Answer) -> String {
     }
     match error {
         Some(error) => {
-            let code = error
-                .get("code")
-                .map_or_else(|| "null".to_owned(), json_text);
-            let message = error
-                .get("message")
-                .map_or_else(|| "null".to_owned(), json_text);
-            let mut text = format!("({code}) {message}\nCode: {code}\nMessage: {message}");
-            if let Some(target) = error.get("target").filter(|target| target.truthy()) {
-                text.push_str(&format!("\nTarget: {}", json_text(target)));
+            let field = |name: &str| {
+                error
+                    .get(name)
+                    .filter(|value| !value.is_null())
+                    .map(json_text)
+                    .filter(|text| !text.is_empty())
+            };
+            let mut text = match (field("code"), field("message")) {
+                (Some(code), Some(message)) => format!("{code}: {message}"),
+                (Some(text), None) | (None, Some(text)) => text,
+                (None, None) => format!("HTTP {}", answer.status),
+            };
+            if let Some(target) = field("target") {
+                text.push_str(&format!(" (target: {target})"));
             }
             text
         }
@@ -556,8 +567,9 @@ fn inner_message(answer: &Answer) -> String {
             let reason = crate::transport::StatusCode::from_u16(answer.status)
                 .ok()
                 .and_then(|status| status.canonical_reason())
-                .unwrap_or("");
-            format!("Operation returned an invalid status '{reason}'")
+                .map(|reason| format!(" {reason}"))
+                .unwrap_or_default();
+            format!("Log Analytics answered HTTP {}{reason}", answer.status)
         }
     }
 }

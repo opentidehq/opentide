@@ -560,8 +560,7 @@ fn a_rules_query_runs_as_deploy_would_send_it() {
     assert_eq!(invalid.code, 2);
     assert_eq!(
         invalid.document()["message"],
-        "cannot read the rule in objects/rules/bad.yaml: 1 validation error for DetectionRule\n\
-         metadata.tlp\n  Field required [type=missing]"
+        "cannot read the rule in objects/rules/bad.yaml: metadata.tlp: Field required"
     );
     assert_eq!(invalid.document()["failure"]["argument"], "--file");
     // A UUID no rule has, with the closest; a rule without the platform.
@@ -836,9 +835,10 @@ fn a_carbon_black_tenant_that_refuses_the_token_fails_authentication() {
     let (error, detail) = tenant_failure(&ran);
     assert_eq!(
         error,
-        "cannot authenticate to carbon_black_cloud tenant \"lab\": Unauthorized (Check API \
-         creds): attempted to POST \
-         https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation"
+        "cannot authenticate to carbon_black_cloud tenant \"lab\": Carbon Black Cloud answered \
+         HTTP 401 Unauthorized to POST \
+         https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation \
+         (check the API ID and key)"
     );
     assert_eq!(detail, None);
 }

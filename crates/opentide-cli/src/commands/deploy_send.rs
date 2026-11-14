@@ -1581,74 +1581,56 @@ fn result_line(
 
 // ---------------------------------------------------------------- sending
 
-/// An exception a platform raised: it stops the run (`failure`).
+/// What stopped a platform's deploy, in words: the failed rule's line and
+/// the run's message say it (`failure`).
 #[derive(Debug, Clone)]
-struct Raised {
-    /// The exception's type name.
-    kind: String,
-    /// `str(exc)`.
-    detail: String,
-}
+struct Raised(String);
 
 impl Raised {
-    fn new(kind: &str, detail: impl Into<String>) -> Self {
-        Self {
-            kind: kind.to_owned(),
-            detail: detail.into(),
-        }
+    fn new(problem: impl Into<String>) -> Self {
+        Self(problem.into())
     }
 
-    /// `Type: detail`, or the type alone.
+    /// The problem, for the run's message.
     fn error(&self) -> String {
-        let detail = self.detail.trim();
-        if detail.is_empty() {
-            self.kind.clone()
-        } else {
-            format!("{}: {detail}", self.kind)
-        }
+        self.0.trim().to_owned()
     }
 
-    /// What the rule being sent says about it (`describe_error`).
+    /// The problem on one bounded line, for the rule being sent.
     fn describe(&self) -> String {
-        if self.kind == "KeyboardInterrupt" {
-            return "interrupted".into();
-        }
-        if let Some(status) = http_status(&self.detail) {
-            return bounded(&format!("HTTP {status}: {}", self.detail));
-        }
-        let detail = self.detail.trim();
-        if detail.is_empty() || detail == self.kind {
-            bounded(&self.kind)
-        } else {
-            bounded(&format!("{}: {detail}", self.kind))
-        }
+        bounded(&self.0)
     }
 }
 
-/// The HTTP status an SDK exception carries: Splunk's `HTTP 400 Bad
-/// Request -- ...`, Sentinel's `... failed with HTTP 400 ...`.
-fn http_status(detail: &str) -> Option<u16> {
-    let rest = detail.strip_prefix("HTTP ").or_else(|| {
-        detail
-            .split_once(" failed with HTTP ")
-            .map(|(_, rest)| rest)
-    })?;
-    rest.split(' ').next()?.parse().ok()
+/// A connector error as the problem that stops the run: its own message,
+/// the tenant's reason after a refusal, and the tenant that refused the
+/// credentials.
+fn raised(error: &ConnectorError) -> Raised {
+    match error {
+        ConnectorError::Cancelled => Raised::new("interrupted"),
+        ConnectorError::Authentication {
+            platform,
+            tenant,
+            message,
+            ..
+        } => Raised::new(format!("{platform} tenant '{tenant}': {message}")),
+        ConnectorError::Refused {
+            message,
+            detail: Some(detail),
+            ..
+        } if !detail.trim().is_empty() && !message.contains(detail.trim()) => {
+            Raised::new(format!("{message}: {}", detail.trim()))
+        }
+        other => Raised::new(other.to_string()),
+    }
 }
 
-/// A connector error as the exception the oracle's client raised.
-fn raised(error: &ConnectorError, refused_kind: &str) -> Raised {
-    match error {
-        ConnectorError::Cancelled => Raised::new("KeyboardInterrupt", ""),
-        ConnectorError::Authentication { message, .. } => {
-            Raised::new("TenantConnectionError", message.clone())
-        }
-        ConnectorError::Refused { message, .. } => Raised::new(refused_kind, message.clone()),
-        ConnectorError::Setup { .. } | ConnectorError::MissingCredential { .. } => {
-            Raised::new("ValueError", error.to_string())
-        }
-        ConnectorError::Timeout { .. } => Raised::new("ReadTimeout", error.to_string()),
-        _ => Raised::new("ConnectionError", error.to_string()),
+/// `create`, `update` or `delete`: what a planned change does.
+fn action_verb(action: &Planned) -> &'static str {
+    match action {
+        Planned::Create => "create",
+        Planned::Update(_) => "update",
+        Planned::Delete(_) => "delete",
     }
 }
 
@@ -1741,14 +1723,14 @@ impl Sender<'_, '_> {
             Resolve::Counting,
             &settings,
         )
-        .map_err(|error| Raised::new("ValueError", error.to_string()))?;
+        .map_err(|error| Raised::new(error.to_string()))?;
         let http = HttpClient::new(
             &tenant.label,
             &tenant.http,
             &self.environment,
             self.cx.proxy,
         )
-        .map_err(|error| Raised::new("ValueError", error.to_string()))?;
+        .map_err(|error| Raised::new(error.to_string()))?;
         Ok(Connection { tenant, http })
     }
 
@@ -1768,7 +1750,7 @@ impl Sender<'_, '_> {
             self.workspace,
             self.compile,
         )
-        .map_err(|message| Raised::new("KeyError", message))
+        .map_err(Raised::new)
     }
 
     /// One platform's deploy (`deployer.deploy(mdr_deployment=uuids, strategies=run)`).
@@ -1886,7 +1868,7 @@ impl Sender<'_, '_> {
         self.compile
             .statuses
             .strategy(&status)
-            .map_err(|error| Raised::new("ValueError", error.to_string()))
+            .map_err(|error| Raised::new(error.to_string()))
     }
 
     fn deployer(
@@ -1897,12 +1879,7 @@ impl Sender<'_, '_> {
             .registry
             .get(platform)
             .and_then(opentide_connectors::Platform::deployer)
-            .ok_or_else(|| {
-                Raised::new(
-                    "ValueError",
-                    format!("Cannot find a deployment engine for {platform}"),
-                )
-            })
+            .ok_or_else(|| Raised::new(format!("Cannot find a deployment engine for {platform}")))
     }
 
     fn by_uuid_rule(
@@ -1916,8 +1893,8 @@ impl Sender<'_, '_> {
         let strategy = self.strategy_of(rule, platform)?;
         let deletion = strategy == StatusStrategy::Deletion;
         let tenant = batch.tenant.name.as_str();
-        let compile_error = |kind: &str, error: opentide_compile::rule::CompileError| {
-            Raised::new(kind, format!("Rule {} ({}): {error}", rule.uuid, rule.name))
+        let compile_error = |error: opentide_compile::rule::CompileError| {
+            Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
         match platform {
             "sentinel" => {
@@ -1935,7 +1912,7 @@ impl Sender<'_, '_> {
                     }
                 } else {
                     let body = opentide_compile::sentinel::compile(self.compile, rule, tenant)
-                        .map_err(|error| compile_error("SentinelCompileError", error))?;
+                        .map_err(compile_error)?;
                     DeployRequest {
                         rule_id: rule.uuid.clone(),
                         operation: Operation::Update,
@@ -1944,7 +1921,7 @@ impl Sender<'_, '_> {
                 };
                 let context = self.context(connection);
                 self.block(deployer.deploy(context, &request))
-                    .map_err(|error| raised(&error, "SentinelApiError"))?;
+                    .map_err(|error| raised(&error))?;
             }
             "splunk" => {
                 let splunk_cx = self.compile;
@@ -1959,7 +1936,7 @@ impl Sender<'_, '_> {
                 };
                 let writes =
                     opentide_compile::splunk::compile(splunk_cx, rule, &batch.table, clock)
-                        .map_err(|error| compile_error("ValueError", error))?;
+                        .map_err(compile_error)?;
                 let mut name = rule.name.trim().to_owned();
                 let correlation = match rule
                     .block(platform)
@@ -1977,10 +1954,10 @@ impl Sender<'_, '_> {
                 if deletion {
                     let found = self
                         .block(splunk.saved_search(context, &name))
-                        .map_err(|error| raised(&error, "HTTPError"))?;
+                        .map_err(|error| raised(&error))?;
                     if found.is_some() {
                         self.block(splunk.delete_saved_search(context, &name))
-                            .map_err(|error| raised(&error, "HTTPError"))?;
+                            .map_err(|error| raised(&error))?;
                         tracing::warn!(
                             name = name.as_str(),
                             logger = "opentide.platforms.splunk.deployer",
@@ -1998,12 +1975,12 @@ impl Sender<'_, '_> {
                     }
                 }
                 self.block(splunk.apply_saved_search(context, &name, &settings, false))
-                    .map_err(|error| raised(&error, "HTTPError"))?;
+                    .map_err(|error| raised(&error))?;
             }
             "carbon_black_cloud" => {
                 let Some(report) =
                     opentide_compile::carbon_black::report(self.compile, rule, &batch.table)
-                        .map_err(|error| compile_error("ValueError", error))?
+                        .map_err(compile_error)?
                 else {
                     return Ok(());
                 };
@@ -2025,14 +2002,7 @@ impl Sender<'_, '_> {
                         opentide_connectors::carbon_black::CarbonBlack
                             .deploy_report(context, &plan),
                     )
-                    .map_err(|error| {
-                        let kind = if error.to_string().starts_with("The CBC Deployer cannot") {
-                            "RuntimeError"
-                        } else {
-                            "ApiError"
-                        };
-                        raised(&error, kind)
-                    })?;
+                    .map_err(|error| raised(&error))?;
                 let logger = "opentide.platforms.carbon_black.deployer";
                 match change {
                     opentide_connectors::carbon_black::ReportChange::Deleted
@@ -2057,7 +2027,7 @@ impl Sender<'_, '_> {
             _ => {
                 let writes =
                     opentide_compile::harfanglab::compile(self.compile, rule, &batch.table)
-                        .map_err(|error| compile_error("Exception", error))?;
+                        .map_err(compile_error)?;
                 let Some(write) = writes.first() else {
                     return Ok(());
                 };
@@ -2077,7 +2047,7 @@ impl Sender<'_, '_> {
                 };
                 let context = self.context(connection);
                 self.block(deployer.deploy(context, &request))
-                    .map_err(|error| raised(&error, "DetectionRuleCreationFailed"))?;
+                    .map_err(|error| raised(&error))?;
             }
         }
         let _ = result;
@@ -2318,12 +2288,12 @@ impl Sender<'_, '_> {
                             .await
                             .map_err(|error| error.into_connector(&batch.tenant.name))
                     })
-                    .map_err(|error| raised(&error, "TenantConnectionError"))?;
+                    .map_err(|error| raised(&error))?;
                     None
                 }
                 "crowdstrike" => Some(
                     self.block(opentide_connectors::crowdstrike::Session::connect(context))
-                        .map_err(|error| raised(&error, "TenantConnectionError"))?,
+                        .map_err(|error| raised(&error))?,
                 ),
                 _ => None,
             };
@@ -2362,12 +2332,7 @@ impl Sender<'_, '_> {
             .registry
             .get(platform)
             .and_then(opentide_connectors::Platform::deployer)
-            .ok_or_else(|| {
-                Raised::new(
-                    "ValueError",
-                    format!("platform plugin {platform} cannot deploy"),
-                )
-            })?;
+            .ok_or_else(|| Raised::new(format!("platform plugin {platform} cannot deploy")))?;
         for batch in batches {
             let planned = self.screen(platform, batch, log);
             if planned.is_empty() {
@@ -2402,14 +2367,14 @@ impl Sender<'_, '_> {
             Resolve::Required,
             &opentide_connectors::HttpSettings::default(),
         )
-        .map_err(|error| Raised::new("ValueError", error.to_string()))?;
+        .map_err(|error| Raised::new(error.to_string()))?;
         let http = HttpClient::new(
             &tenant.label,
             &tenant.http,
             &self.environment,
             self.cx.proxy,
         )
-        .map_err(|error| Raised::new("ValueError", error.to_string()))?;
+        .map_err(|error| Raised::new(error.to_string()))?;
         Ok(Connection { tenant, http })
     }
 
@@ -2488,10 +2453,7 @@ impl Sender<'_, '_> {
         use opentide_connectors::defender::DefenderError;
         use opentide_connectors::sentinel_one::{SentinelOne, SentinelOneError};
         let compile_error = |error: opentide_compile::rule::CompileError| {
-            Raised::new(
-                "TideRuleDataModelErrors",
-                format!("Rule {} ({}): {error}", rule.uuid, rule.name),
-            )
+            Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
         let body = match platform {
             "defender_for_endpoint" => opentide_compile::defender::body(self.compile, rule, tenant),
@@ -2499,11 +2461,6 @@ impl Sender<'_, '_> {
             _ => opentide_compile::crowdstrike::body(self.compile, rule, table),
         }
         .map_err(compile_error)?;
-        let kind = |action: &Planned| match action {
-            Planned::Create => "DetectionRuleCreationFailed",
-            Planned::Update(_) => "DetectionRuleUpdateFailed",
-            Planned::Delete(_) => "DetectionRuleDeletionFailed",
-        };
         match platform {
             "defender_for_endpoint" => {
                 let logger = "opentide.platforms.defender_for_endpoint.client";
@@ -2535,26 +2492,34 @@ impl Sender<'_, '_> {
                                 "fatal_error"
                             ),
                         }
-                        Raised::new(kind(action), "")
+                        let context = if context.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" ({context})")
+                        };
+                        Raised::new(format!(
+                            "could not {} the rule on tenant '{tenant}': {message}{context}",
+                            action_verb(action)
+                        ))
                     }
-                    other => raised(&other.into_connector(tenant), "TenantConnectionError"),
+                    other => raised(&other.into_connector(tenant)),
                 };
                 match action {
                     Planned::Delete(id) => {
                         self.block(async { Ok(defender.delete_rule(context, id).await) })
-                            .map_err(|error| raised(&error, "ConnectionError"))?
+                            .map_err(|error| raised(&error))?
                             .map_err(|error| refused(error, action))?;
                         self.record_deleted(result, platform, tenant);
                     }
                     Planned::Update(id) => {
                         self.block(async { Ok(defender.update_rule(context, &body, id).await) })
-                            .map_err(|error| raised(&error, "ConnectionError"))?
+                            .map_err(|error| raised(&error))?
                             .map_err(|error| refused(error, action))?;
                     }
                     Planned::Create => {
                         let created = self
                             .block(async { Ok(defender.create_rule(context, &body).await) })
-                            .map_err(|error| raised(&error, "ConnectionError"))?
+                            .map_err(|error| raised(&error))?
                             .map_err(|error| refused(error, action))?;
                         if created.partial {
                             self.warned = true;
@@ -2585,7 +2550,10 @@ impl Sender<'_, '_> {
                                 logger,
                                 "received_code_401_unauthorized_access"
                             );
-                            return Raised::new("TideTenantConfigurationMissingPermissions", "");
+                            return Raised::new(format!(
+                                "could not {} the rule on tenant '{tenant}': {error}",
+                                action_verb(action)
+                            ));
                         }
                         SentinelOneError::NotFound { detail } => tracing::error!(
                             detail = detail.as_str(),
@@ -2601,35 +2569,20 @@ impl Sender<'_, '_> {
                             logger,
                             "fatal_error"
                         ),
-                        SentinelOneError::Connector(error) => {
-                            return raised(error, "ConnectionError");
-                        }
-                        SentinelOneError::BadId(text) => {
-                            return Raised::new(
-                                "ValueError",
-                                format!("invalid literal for int() with base 10: {text:?}"),
-                            );
-                        }
-                        SentinelOneError::Unreadable { detail } => {
-                            return Raised::new("KeyError", detail.clone());
-                        }
+                        SentinelOneError::Connector(error) => return raised(error),
+                        SentinelOneError::BadId(_) | SentinelOneError::Unreadable { .. } => {}
                     }
-                    // A create or an update raises the creation error class.
-                    Raised::new(
-                        if matches!(action, Planned::Delete(_)) {
-                            "DetectionRuleDeletionFailed"
-                        } else {
-                            "DetectionRuleCreationFailed"
-                        },
-                        "",
-                    )
+                    Raised::new(format!(
+                        "could not {} the rule on tenant '{tenant}': {error}",
+                        action_verb(action)
+                    ))
                 };
                 match action {
                     Planned::Delete(id) => {
                         let id = opentide_connectors::sentinel_one::rule_id(id)
                             .map_err(|error| refused(error, action))?;
                         self.block(async { Ok(SentinelOne.delete_rule(context, id).await) })
-                            .map_err(|error| raised(&error, "ConnectionError"))?
+                            .map_err(|error| raised(&error))?
                             .map_err(|error| refused(error, action))?;
                         self.record_deleted(result, platform, tenant);
                     }
@@ -2641,7 +2594,7 @@ impl Sender<'_, '_> {
                                 .create_update_rule(context, &body, Some(id))
                                 .await)
                         })
-                        .map_err(|error| raised(&error, "ConnectionError"))?
+                        .map_err(|error| raised(&error))?
                         .map_err(|error| refused(error, action))?;
                     }
                     Planned::Create => {
@@ -2649,7 +2602,7 @@ impl Sender<'_, '_> {
                             .block(async {
                                 Ok(SentinelOne.create_update_rule(context, &body, None).await)
                             })
-                            .map_err(|error| raised(&error, "ConnectionError"))?
+                            .map_err(|error| raised(&error))?
                             .map_err(|error| refused(error, action))?;
                         self.record_created(result, platform, tenant, &ExternalId::Int(id));
                     }
@@ -2657,10 +2610,9 @@ impl Sender<'_, '_> {
             }
             _ => {
                 let Some(session) = session else {
-                    return Err(Raised::new(
-                        "TenantConnectionError",
-                        "Cannot authenticate with the tenant configuration",
-                    ));
+                    return Err(Raised::new(format!(
+                        "{platform} tenant '{tenant}': Cannot authenticate with the tenant configuration"
+                    )));
                 };
                 let logger = "opentide.platforms.crowdstrike.client";
                 let refused = |error: ConnectorError, action: &Planned| match &error {
@@ -2679,14 +2631,12 @@ impl Sender<'_, '_> {
                             logger,
                             "fatal_error"
                         );
-                        let words = match action {
-                            Planned::Create => "Could not create rule",
-                            Planned::Update(_) => "Could not update rule",
-                            Planned::Delete(_) => "Could not delete rule",
-                        };
-                        Raised::new(kind(action), words)
+                        Raised::new(format!(
+                            "could not {} the rule: {message}",
+                            action_verb(action)
+                        ))
                     }
-                    other => raised(other, "ConnectionError"),
+                    other => raised(other),
                 };
                 match action {
                     Planned::Delete(id) => {
@@ -2749,7 +2699,7 @@ impl Sender<'_, '_> {
                 let strategy = match self.compile.statuses.strategy(&status) {
                     Ok(strategy) => strategy,
                     Err(error) => {
-                        result.fail(&format!("ValueError: {error}"));
+                        result.fail(&error.to_string());
                         log.finished(result);
                         stopped = Some(error.to_string());
                         break;
@@ -2785,7 +2735,7 @@ impl Sender<'_, '_> {
                         Ok(payload) => payload,
                         Err(error) => {
                             let text = format!("Rule {} ({}): {error}", rule.uuid, rule.name);
-                            result.fail(&format!("TideRuleDataModelErrors: {text}"));
+                            result.fail(&text);
                             log.finished(result);
                             stopped = Some(text);
                             break;
@@ -2848,14 +2798,14 @@ impl Sender<'_, '_> {
                     }
                     Ok(Err(other)) => {
                         let text = other.to_string();
-                        result.fail(&format!("ElasticTenantError: {text}"));
+                        result.fail(&text);
                         log.finished(result);
                         stopped = Some(text);
                         break;
                     }
                     Err(error) => {
                         let text = error.to_string();
-                        result.fail(&raised(&error, "ConnectionError").describe());
+                        result.fail(&raised(&error).describe());
                         log.finished(result);
                         stopped = Some(text);
                         break;
@@ -2941,10 +2891,7 @@ impl Sender<'_, '_> {
                 let body = strategy.clone().and_then(|_| {
                     opentide_compile::sysdig::compile_body(self.compile, rule, Some(&batch.table))
                         .map_err(|error| {
-                            Raised::new(
-                                "TideRuleDataModelErrors",
-                                format!("Rule {} ({}): {error}", rule.uuid, rule.name),
-                            )
+                            Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
                         })
                 });
                 let (strategy, body) = match (strategy, body) {
@@ -3742,10 +3689,7 @@ impl Sender<'_, '_> {
                     )
                     .map(Some)
                     .map_err(|error| {
-                        Raised::new(
-                            "TideRuleDataModelErrors",
-                            format!("Rule {} ({}): {error}", rule.uuid, rule.name),
-                        )
+                        Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
                     })
                 };
                 let compiled = match compiled {
@@ -3786,7 +3730,7 @@ impl Sender<'_, '_> {
                     (!matches!(action, Planned::Delete(_))).then_some(rule.name.as_str());
                 match self
                     .block(async { Ok(deploy_rule(&session, &request).await) })
-                    .map_err(|error| raised(&error, "ConnectionError"))?
+                    .map_err(|error| raised(&error))?
                 {
                     Ok(outcome) => {
                         for warning in &outcome.warnings {
@@ -3913,13 +3857,15 @@ fn plugin_raised(error: &ConnectorError) -> Raised {
             message,
             detail: Some(detail),
             ..
-        } => Raised::new("PlatformRefused", format!("{message}: {detail}")),
-        ConnectorError::Refused { message, .. } => Raised::new("PlatformRefused", message.clone()),
-        ConnectorError::Authentication { message, .. } => {
-            Raised::new("PlatformAuthenticationError", message.clone())
+        } => Raised::new(format!("PlatformRefused: {message}: {detail}")),
+        ConnectorError::Refused { message, .. } => {
+            Raised::new(format!("PlatformRefused: {message}"))
         }
-        ConnectorError::Crashed { message, .. } => Raised::new("PluginError", message.clone()),
-        other => raised(other, "PlatformRefused"),
+        ConnectorError::Authentication { message, .. } => {
+            Raised::new(format!("PlatformAuthenticationError: {message}"))
+        }
+        ConnectorError::Crashed { message, .. } => Raised::new(format!("PluginError: {message}")),
+        other => raised(other),
     }
 }
 
@@ -3993,28 +3939,46 @@ mod tests {
     }
 
     #[test]
-    fn a_raised_error_reads_as_describe_error() {
-        let splunk = Raised::new("HTTPError", "HTTP 400 Bad Request -- bad");
-        assert_eq!(splunk.describe(), "HTTP 400: HTTP 400 Bad Request -- bad");
-        assert_eq!(splunk.error(), "HTTPError: HTTP 400 Bad Request -- bad");
-        let bare = Raised::new("DetectionRuleCreationFailed", "");
-        assert_eq!(bare.describe(), "DetectionRuleCreationFailed");
-        assert_eq!(bare.error(), "DetectionRuleCreationFailed");
+    fn a_failure_says_what_went_wrong_without_an_exception_class() {
+        let splunk = Raised::new("Splunk answered HTTP 400 Bad Request: bad");
         assert_eq!(
-            Raised::new(
-                "SentinelApiError",
-                "PUT https://x failed with HTTP 409 Conflict: busy"
-            )
-            .describe(),
-            "HTTP 409: PUT https://x failed with HTTP 409 Conflict: busy"
+            splunk.describe(),
+            "Splunk answered HTTP 400 Bad Request: bad"
         );
+        assert_eq!(splunk.error(), "Splunk answered HTTP 400 Bad Request: bad");
+        assert_eq!(raised(&ConnectorError::Cancelled).describe(), "interrupted");
+        // A refusal carries the tenant's own reason, not only the log line.
+        let refused = ConnectorError::Refused {
+            platform: "crowdstrike".into(),
+            tenant: "lab".into(),
+            message: "CrowdStrike refused the rule".into(),
+            detail: Some("severity is out of range".into()),
+        };
         assert_eq!(
-            Raised::new("KeyboardInterrupt", "").describe(),
-            "interrupted"
+            raised(&refused).error(),
+            "CrowdStrike refused the rule: severity is out of range"
         );
+        // A refused credential names the tenant.
+        let denied = ConnectorError::Authentication {
+            platform: "sentinel".into(),
+            tenant: "soc".into(),
+            message: "Cannot authenticate with the tenant configuration".into(),
+            detail: None,
+        };
         assert_eq!(
-            Raised::new("RuntimeError", "no watchlist").describe(),
-            "RuntimeError: no watchlist"
+            raised(&denied).error(),
+            "sentinel tenant 'soc': Cannot authenticate with the tenant configuration"
+        );
+        // A plugin's failure keeps the plugin API's documented type names.
+        let refused = ConnectorError::Refused {
+            platform: "acme".into(),
+            tenant: "lab".into(),
+            message: "Acme answered 422".into(),
+            detail: None,
+        };
+        assert_eq!(
+            plugin_raised(&refused).error(),
+            "PlatformRefused: Acme answered 422"
         );
     }
 

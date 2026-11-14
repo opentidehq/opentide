@@ -274,7 +274,7 @@ pub fn kql_code(query: &str) -> String {
             continue;
         }
         // A multi-line string (```…``` or ~~~…~~~) has no escapes and ends at
-        // the next chord of the same kind (Kusto.Language's `KqlTokens.g4`).
+        // the next chord of the same kind (the Kusto grammar's `KqlTokens.g4`).
         if (character == '`' || character == '~')
             && chars.get(index + 1) == Some(&character)
             && chars.get(index + 2) == Some(&character)
@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn a_block_comment_is_code() {
-        // Kusto's comments are `//` only (Kusto.Language's `KqlTokens.g4`).
+        // Kusto's comments are `//` only (the Kusto grammar's `KqlTokens.g4`).
         assert_eq!(kql_code("/* T */ U"), "/* T */ U");
     }
 }
