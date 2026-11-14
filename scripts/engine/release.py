@@ -33,10 +33,11 @@ pinned one finds the next by version.
 `lockstep` is the check that keeps the one version: the workspace version in
 Cargo.toml is the release's (`bump` sets it with the internal pins), and every
 npm package of the release (`@opentide/opentide`, its native packages, the
-`opentide` alias, `@opentide/lsp-client` and `@opentide/lsp-worker`) carries
-one version, its dependencies on each other included. The tree keeps the npm
-packages at a placeholder version, `npm-version` writes the release's into
-them in the workflow, and `lockstep --npm` checks the result. The Python
+`opentide` alias, `@opentide/lsp-client`, `@opentide/lsp-worker` and
+`@opentide/wasi-host`) carries one version, its dependencies on each other
+included. The tree keeps the npm packages at a placeholder version,
+`npm-version` writes the release's into them in the workflow, and
+`lockstep --npm` checks the result. The Python
 package's version is the tag's (hatch-vcs), which `scripts/build/release.py`
 checks against CHANGELOG.md.
 
@@ -140,23 +141,31 @@ FIXED_ASSETS = [
     SUMS,
 ]
 # The CycloneDX SBOMs scripts/engine/sbom.py writes, one per artifact (#843):
-# the opentide-lsp binaries and WASI build, the browser build, the two lsp npm
-# packages, the `opentide` binaries and crate, the @opentide/opentide npm
+# the opentide-lsp binaries and WASI build, the browser build, the three npm
+# packages built from packages/ (the language server's two and the WASI
+# host), the `opentide` binaries and crate, the @opentide/opentide npm
 # package, and the PyPI wheel.
 SBOM_ASSETS = [
     "opentide-lsp.cdx.json",
     "opentide-wasm.cdx.json",
     "opentide-lsp-client.cdx.json",
     "opentide-lsp-worker.cdx.json",
+    "opentide-wasi-host.cdx.json",
     "opentide.cdx.json",
     "opentide-node.cdx.json",
     "opentide-wheel.cdx.json",
 ]
 # The npm packages a release publishes, each directory with its package.json:
 # @opentide/opentide's native packages first (it depends on them), then the
-# package, its `opentide` alias, and the language server's two packages.
+# package, its `opentide` alias, then the TypeScript packages in packages/: the
+# language server's two and the extension host's half of `opentide/fetch`,
+# whose contract is the serve protocol of the same version.
 NPM_NODE = ROOT / "bindings" / "node"
-NPM_LSP = [ROOT / "packages" / "lsp-client", ROOT / "packages" / "lsp-worker"]
+NPM_TYPESCRIPT = [
+    ROOT / "packages" / "lsp-client",
+    ROOT / "packages" / "lsp-worker",
+    ROOT / "packages" / "wasi-host",
+]
 
 
 def npm_native_dirs() -> list[Path]:
@@ -166,7 +175,7 @@ def npm_native_dirs() -> list[Path]:
 
 def npm_packages() -> list[Path]:
     """Every npm package of the release, in the order it is published."""
-    return [*npm_native_dirs(), NPM_NODE, NPM_NODE / "alias", *NPM_LSP]
+    return [*npm_native_dirs(), NPM_NODE, NPM_NODE / "alias", *NPM_TYPESCRIPT]
 
 
 def workspace_version() -> str:

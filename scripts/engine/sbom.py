@@ -19,8 +19,9 @@
   every target).
 - `opentide-node.cdx.json`: the npm package `@opentide/opentide` (`npm sbom`),
   with the Rust crates its native packages compile in (the facade with `cli`).
-- `opentide-lsp-client.cdx.json`, `opentide-lsp-worker.cdx.json`: the npm
-  packages (`npm sbom`, without dev dependencies).
+- `opentide-lsp-client.cdx.json`, `opentide-lsp-worker.cdx.json`,
+  `opentide-wasi-host.cdx.json`: the npm packages (`npm sbom`, without dev
+  dependencies).
 
 The Rust SBOMs come from cargo-cyclonedx without build dependencies (`cc`
 runs at build time and ships nothing). Its references name each workspace
@@ -67,7 +68,7 @@ NATIVE = "bindings__python"
 # over the whole workspace (default features) leaves out.
 FACADE = "crates/opentide"
 FACADE_FEATURES = "cli"
-NPM_PACKAGES = ("lsp-client", "lsp-worker")
+NPM_PACKAGES = ("lsp-client", "lsp-worker", "wasi-host")
 # @opentide/opentide (bindings/node): its own lock, and the crates its native
 # packages compile in.
 NODE_PACKAGE = "bindings/node"

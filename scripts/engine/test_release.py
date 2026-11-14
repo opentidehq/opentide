@@ -311,7 +311,7 @@ class LockstepTest(unittest.TestCase):
 
     def test_the_tree_keeps_the_npm_packages_at_one_placeholder(self) -> None:
         main = json.loads((release.NPM_NODE / "package.json").read_text(encoding="utf-8"))
-        node = [d for d in release.npm_packages() if d not in release.NPM_LSP]
+        node = [d for d in release.npm_packages() if d not in release.NPM_TYPESCRIPT]
         versions = {
             json.loads((d / "package.json").read_text(encoding="utf-8"))["version"] for d in node
         }
@@ -325,15 +325,15 @@ class LockstepTest(unittest.TestCase):
         shutil.copy(release.NPM_NODE / "package.json", node / "package.json")
         (node / "alias").mkdir()
         shutil.copy(release.NPM_NODE / "alias" / "package.json", node / "alias" / "package.json")
-        lsp = []
-        for source in release.NPM_LSP:
+        typescript = []
+        for source in release.NPM_TYPESCRIPT:
             target = root / "packages" / source.name
             target.mkdir(parents=True)
             shutil.copy(source / "package.json", target / "package.json")
-            lsp.append(target)
+            typescript.append(target)
         with (
             mock.patch.object(release, "NPM_NODE", node),
-            mock.patch.object(release, "NPM_LSP", lsp),
+            mock.patch.object(release, "NPM_TYPESCRIPT", typescript),
         ):
             self.assertTrue(release.npm_problems("1.2.3-rc.1"))
             release.set_npm_version("1.2.3-rc.1")
@@ -355,6 +355,51 @@ class LockstepTest(unittest.TestCase):
             for bad in ["1.2", "1.2.3-dev.0", "1.2.3-beta.1", "v1.2.3"]:
                 with self.subTest(version=bad), self.assertRaises(SystemExit):
                     release.set_npm_version(bad)
+
+    def test_the_wasi_host_is_released_at_the_version_of_the_rest(self) -> None:
+        # @opentide/wasi-host speaks the serve protocol of the opentide it
+        # ships with: the extension pins it with the .wasm, so it carries the
+        # release's one version, as the language server's packages do.
+        names = {
+            json.loads((d / "package.json").read_text(encoding="utf-8"))["name"]: d
+            for d in release.npm_packages()
+        }
+        self.assertIn("@opentide/wasi-host", names)
+        self.assertEqual(names["@opentide/wasi-host"], release.ROOT / "packages" / "wasi-host")
+        # The tree keeps the TypeScript packages at one placeholder of their own.
+        versions = {
+            json.loads((d / "package.json").read_text(encoding="utf-8"))["version"]
+            for d in release.NPM_TYPESCRIPT
+        }
+        self.assertEqual(len(versions), 1, versions)
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root)
+        node = root / "bindings" / "node"
+        shutil.copytree(release.NPM_NODE / "npm", node / "npm")
+        shutil.copy(release.NPM_NODE / "package.json", node / "package.json")
+        (node / "alias").mkdir()
+        shutil.copy(release.NPM_NODE / "alias" / "package.json", node / "alias" / "package.json")
+        typescript = []
+        for source in release.NPM_TYPESCRIPT:
+            target = root / "packages" / source.name
+            target.mkdir(parents=True)
+            shutil.copy(source / "package.json", target / "package.json")
+            typescript.append(target)
+        with (
+            mock.patch.object(release, "NPM_NODE", node),
+            mock.patch.object(release, "NPM_TYPESCRIPT", typescript),
+        ):
+            release.set_npm_version("1.2.3")
+            host = root / "packages" / "wasi-host" / "package.json"
+            self.assertEqual(json.loads(host.read_text(encoding="utf-8"))["version"], "1.2.3")
+            self.assertEqual(release.npm_problems("1.2.3"), [])
+            # Left behind at another version, it fails the lockstep check.
+            manifest = json.loads(host.read_text(encoding="utf-8"))
+            manifest["version"] = "1.2.2"
+            host.write_text(json.dumps(manifest), encoding="utf-8")
+            self.assertEqual(
+                release.npm_problems("1.2.3"), ["@opentide/wasi-host is at 1.2.2, not 1.2.3"]
+            )
 
     def test_no_musl_package(self) -> None:
         names = [d.name for d in release.npm_native_dirs()]
@@ -442,6 +487,7 @@ SBOM_ASSETS = [
     "opentide-wasm.cdx.json",
     "opentide-lsp-client.cdx.json",
     "opentide-lsp-worker.cdx.json",
+    "opentide-wasi-host.cdx.json",
     "opentide.cdx.json",
     "opentide-node.cdx.json",
     "opentide-wheel.cdx.json",
