@@ -1,3 +1,4 @@
+// [throwaway] PR gate measurement (#1141): do not merge.
 //! I/O-free YARA engine (yara-1.0, #165).
 //!
 //! The contract is YARA as libyara 4.5 compiles it; YARA-X 1.x is a second
