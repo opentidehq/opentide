@@ -1334,4 +1334,24 @@ mod tests {
         });
         assert_eq!(run(&command).unwrap(), 0);
     }
+
+    #[test]
+    fn the_command_line_is_checked() {
+        for bad in [
+            &[][..],
+            &["check"],
+            &["diff", "--nope"],
+            &["diff", "--filter"],
+            &["diff", "--keep"],
+        ] {
+            let error = crate::parse_subcommand::<DiffCmd>(bad).unwrap_err();
+            assert_eq!(error.exit_code(), 2, "{bad:?}");
+        }
+        // A bare `validate` is clap's help for a missing subcommand, exit 2.
+        let error = crate::parse_subcommand::<DiffCmd>(&[]).unwrap_err();
+        assert_eq!(
+            error.kind(),
+            clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+        );
+    }
 }

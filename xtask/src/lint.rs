@@ -1224,7 +1224,8 @@ mod tests {
             &["diff", "--filter"],
             &["diff", "--keep"],
         ] {
-            assert!(crate::parse_subcommand::<DiffCmd>(bad).is_err(), "{bad:?}");
+            let error = crate::parse_subcommand::<DiffCmd>(bad).unwrap_err();
+            assert_eq!(error.exit_code(), 2, "{bad:?}");
         }
         // A bad glob is the run's error, a filter that matches nothing too.
         assert!(run(&diff("[", None, false)).is_err());

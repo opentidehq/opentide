@@ -23,9 +23,12 @@ use serde::Deserialize;
 use crate::golden::Layout;
 use crate::golden::oracle::{self, Oracle};
 
-/// `cargo xtask cassettes <command>`. Exit status: 0 success, 1 a check
-/// failed, 2 usage error or the run could not start.
+/// `cargo xtask cassettes <command>`.
 #[derive(Subcommand)]
+#[command(
+    after_help = "Exit status: 0 success, 1 a check failed, 2 usage error or the run \
+    could not start."
+)]
 pub enum Cmd {
     /// Check every cassette under tests/cassettes
     Check,

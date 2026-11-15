@@ -37,9 +37,12 @@ pub const FIXTURES: [&str; 5] = crate::vocab::diff::FIXTURES;
 /// The seed of the heavy workspace CI checks (`corpus generate`).
 pub const HEAVY_SEED: u64 = 20_261_107;
 
-/// `cargo xtask schema <command>`. Exit status: 0 passed, 1 a check failed, 2
-/// usage error or the check could not run.
+/// `cargo xtask schema <command>`.
 #[derive(clap::Subcommand, Debug)]
+#[command(
+    after_help = "Exit status: 0 passed, 1 a check failed, 2 usage error or the check \
+    could not run."
+)]
 pub enum Cmd {
     /// Compare the object models (opentide-schema, UC-1.3) with the oracle's
     /// Pydantic models: each model's JSON Schema, structurally after
