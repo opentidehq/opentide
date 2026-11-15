@@ -1854,10 +1854,12 @@ jobs:
   # and WASI servers.
   engine-wasm:
     name: Engine WebAssembly and npm packages
-    # The full set (the workflow's header), and a pull request that touches the
-    # parser layer or a query-language crate (the `wasm` area of changes.py):
-    # the browser build is where a C dependency gained or lost and the stack a
-    # deep parse needs show. The release dry run builds the WebAssembly assets too.
+    # The nightly; a push to a base branch, Run workflow (scope `full`) and a
+    # release pull request, which turn every area on; and a pull request that
+    # touches the parser layer or a query-language crate (the `wasm` area of
+    # changes.py): the browser build is where a C dependency gained or lost and
+    # the stack a deep parse needs show. The release dry run builds the
+    # WebAssembly assets too.
     needs: changes
     if: needs.changes.outputs.mode == 'nightly' || needs.changes.outputs.wasm == 'true'
     runs-on: ubuntu-latest
