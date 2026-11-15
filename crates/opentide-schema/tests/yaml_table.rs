@@ -214,7 +214,6 @@ fn bytes(case: &Case) -> Vec<u8> {
 }
 
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
