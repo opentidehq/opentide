@@ -97,17 +97,8 @@ pub(crate) fn default_host(platform: &str) -> &'static str {
     }
 }
 
-/// How rows are written when `--json` is off.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum RowFormat {
-    /// A table per tenant.
-    #[default]
-    Table,
-    /// One JSON object per row.
-    Jsonl,
-    /// CSV, one header.
-    Csv,
-}
+/// How rows are written when `--json` is off: `--format`, as clap parses it.
+pub use crate::tree::RowFormat;
 
 /// `query`'s options.
 #[derive(Clone, Debug, Default)]
@@ -142,6 +133,28 @@ pub struct Args {
     pub columns: Option<String>,
     /// `--format`.
     pub format: RowFormat,
+}
+
+impl From<&crate::tree::QueryArgs> for Args {
+    fn from(args: &crate::tree::QueryArgs) -> Self {
+        Self {
+            query: args.query.clone(),
+            platform: args.platform.0.clone(),
+            tenants: args.tenant.clone(),
+            rule: args.rule.clone(),
+            file: args.file.clone(),
+            query_file: args.query_file.clone(),
+            since: args.since.clone(),
+            start: args.start.clone(),
+            end: args.end.clone(),
+            limit: args.limit,
+            language: args.language.clone(),
+            index: args.index.clone(),
+            timeout: args.timeout,
+            columns: args.columns.clone(),
+            format: args.row_format,
+        }
+    }
 }
 
 /// What a run reads besides its options.
@@ -545,6 +558,10 @@ pub(crate) fn toml_value(value: &opentide_compile::Json) -> Option<toml::Value> 
     Some(match value {
         J::Str(text) => toml::Value::String(text.clone()),
         J::Int(number) => toml::Value::Integer(*number),
+        // TOML integers are signed 64-bit: a larger one is the nearest float,
+        // as it was read before `Json` kept it exact.
+        #[expect(clippy::cast_precision_loss, reason = "the nearest float, as before")]
+        J::UInt(number) => toml::Value::Float(*number as f64),
         J::Float(number) => toml::Value::Float(*number),
         J::Bool(flag) => toml::Value::Boolean(*flag),
         J::Array(items) => toml::Value::Array(items.iter().filter_map(toml_value).collect()),

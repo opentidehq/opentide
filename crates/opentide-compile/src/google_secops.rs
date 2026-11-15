@@ -170,7 +170,7 @@ fn settled_schedule(custom: Option<&Json>) -> (bool, f64) {
     (
         custom
             .get("ensureEnrichmentCompleteness")
-            .is_some_and(Json::truthy),
+            .is_some_and(Json::is_true),
         protobuf_seconds(custom.get("lateArrivingDataAdjustment")).unwrap_or(0.0),
     )
 }
@@ -218,7 +218,7 @@ impl RunState {
                 if remote.get(key) != Some(value) || wanted != current {
                     changed.push(key);
                 }
-            } else if remote.get(key).is_some_and(Json::truthy) != value.truthy() {
+            } else if remote.get(key).is_some_and(Json::is_true) != value.is_true() {
                 changed.push(key);
             }
         }
@@ -532,7 +532,7 @@ pub fn compile(
     tenant: &Json,
     known: Option<&str>,
 ) -> Result<Vec<Write>, CompileError> {
-    let Some(block) = rule.block(PLATFORM).filter(|block| block.truthy()) else {
+    let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Ok(Vec::new());
     };
     let status = block

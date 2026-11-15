@@ -32,7 +32,7 @@ use super::ingest::generate::{
     Generated, VOCAB_SUFFIX, keys_of, read_vocab_document, set_keys, write_vocab_file,
 };
 use super::ingest::lifecycle::{identity, merge};
-use super::ingest::value::{Table, Value, truthy};
+use super::ingest::value::{Table, Value, named};
 use super::ingest::{curl, specifications_root, utc_now_iso};
 
 /// The vocabulary's field.
@@ -263,7 +263,7 @@ pub fn build(existing: Table, path: PathBuf, scrape: Scrape, now: &str) -> Resul
     for key in &existing_keys {
         if let Some(name) = identity(key, "name")?
             && scrape.unfetched.contains(&name)
-            && !key.get("removed").is_some_and(truthy)
+            && !key.get("removed").is_some_and(named)
         {
             upstream.push(key.clone());
         }

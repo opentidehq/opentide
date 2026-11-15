@@ -169,7 +169,7 @@ pub fn returned_rule_id(name: Option<&Json>) -> Option<String> {
 fn etag(remote: &Json) -> Option<String> {
     remote
         .get("etag")
-        .filter(|value| value.truthy())
+        .filter(|value| value.is_filled())
         .map(opentide_compile::deploy::text)
 }
 
@@ -410,7 +410,7 @@ async fn update(
         }
     };
     health(&remote, &deployment, outcome);
-    let archived = deployment.get("archived").is_some_and(Json::truthy);
+    let archived = deployment.get("archived").is_some_and(Json::is_true);
     if disabling && archived {
         return Ok(());
     }
@@ -468,7 +468,7 @@ async fn update(
     // tenant names it by id, and a rule's scope is always in its own instance.
     let current = remote
         .get("scope")
-        .filter(|value| value.truthy())
+        .filter(|value| value.is_filled())
         .map(opentide_compile::deploy::text)
         .unwrap_or_default();
     if scope_id(&current) != scope_id(&wanted)
@@ -557,7 +557,7 @@ async fn archive(
 ) -> Result<(), ConnectorError> {
     let steps = async {
         let remote = client.get_deployment(rule_id).await?;
-        if remote.get("archived").is_some_and(Json::truthy) {
+        if remote.get("archived").is_some_and(Json::is_true) {
             return Ok(());
         }
         let disabled = RunState::disabled();

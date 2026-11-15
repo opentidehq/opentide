@@ -260,7 +260,7 @@ fn message_of(answer: &Answer) -> (String, Vec<(String, Vec<String>)>) {
     };
     let message = body
         .get("message")
-        .filter(|message| message.truthy())
+        .filter(|message| message.is_filled())
         .map(text_of)
         .unwrap_or_default();
     (message, errors_of(Some(&body)))
@@ -287,7 +287,7 @@ pub fn explanation_text(explanation: &Json) -> String {
     let field = |key: &str| {
         explanation
             .get(key)
-            .filter(|value| value.truthy())
+            .filter(|value| value.is_filled())
             .map(|value| text_of(value).trim().to_owned())
             .filter(|text| !text.is_empty())
     };
@@ -319,7 +319,7 @@ pub fn explanation_text(explanation: &Json) -> String {
 pub fn read_verdict(payload: &Json) -> (Vec<String>, Vec<(&'static str, String)>) {
     let status = payload
         .get("status")
-        .filter(|status| status.truthy())
+        .filter(|status| status.is_filled())
         .map_or_else(|| "OK".to_owned(), |status| text_of(status).to_uppercase());
     let explanations = match payload.get("explanations") {
         Some(Json::Array(items)) => items.as_slice(),
@@ -330,7 +330,7 @@ pub fn read_verdict(payload: &Json) -> (Vec<String>, Vec<(&'static str, String)>
     for explanation in explanations {
         let kind = explanation
             .get("error_type")
-            .filter(|kind| kind.truthy())
+            .filter(|kind| kind.is_filled())
             .map(text_of)
             .unwrap_or_default();
         let warning = WARNING_TYPES
@@ -1001,7 +1001,7 @@ pub fn read_rows(payload: &Json) -> (Vec<QueryColumn>, Vec<Row>) {
         .map(|entry| {
             let name = entry
                 .get("field")
-                .filter(|name| name.truthy())
+                .filter(|name| name.is_filled())
                 .or_else(|| entry.get("name"))
                 .map(text_of)
                 .unwrap_or_default();
