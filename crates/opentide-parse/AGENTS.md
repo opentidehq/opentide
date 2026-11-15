@@ -62,10 +62,10 @@ the `verdict` (valid, judged from an observation), the lexer's token ranges and 
 - Every difference is counted; `max_examples` caps only the listed examples per (surface, class).
 - Offsets: every char boundary up to `max_offsets` per input, else an even stride (always with `0`
   and the end), so the sample is the same on every run. Prefixes are sampled the same way.
-- Deterministic from `Config::seed`. `Report::write_json(path)` writes the report.
+- Deterministic from `Config::seed`. `Report::to_json`/`to_json_string` render the report; the caller writes the file (the crate is I/O-free).
 - Only dev-dependencies enable the feature (`opentide-parse = { workspace = true, features =
-  ["differential"] }`): production code never links both engines. The test target needs it, so run
-  `cargo nextest run -p opentide-parse --all-features`.
+  ["differential"] }`): production code never links both engines. Its test file is `cfg`-gated on the
+  feature, so run `cargo nextest run -p opentide-parse --all-features`.
 
 ## Test
 

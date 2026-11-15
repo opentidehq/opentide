@@ -30,7 +30,6 @@
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::ops::Range;
-use std::path::Path;
 
 /// Named observations of one input: `(surface name, rendered value)`.
 pub type Surfaces = Vec<(String, String)>;
@@ -213,16 +212,13 @@ impl Report {
         })
     }
 
-    /// Write [`Report::to_json`] to `path`, creating its directory.
-    ///
-    /// # Errors
-    /// When the directory or the file cannot be written.
-    pub fn write_json(&self, path: &Path) -> std::io::Result<()> {
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
-        let text = serde_json::to_string_pretty(&self.to_json()).map_err(std::io::Error::other)?;
-        std::fs::write(path, text + "\n")
+    /// [`Report::to_json`] pretty-printed, for the caller to write where it
+    /// wants (the crate does no file I/O).
+    #[must_use]
+    pub fn to_json_string(&self) -> String {
+        let mut text = serde_json::to_string_pretty(&self.to_json()).unwrap_or_default();
+        text.push('\n');
+        text
     }
 }
 

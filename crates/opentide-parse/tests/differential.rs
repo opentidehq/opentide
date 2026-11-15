@@ -1,5 +1,7 @@
 //! The differential harness on a toy old/new pair with known differences.
 
+#![cfg(feature = "differential")]
+
 use opentide_parse::differential::{
     Class, Config, Engine, Report, Source, Surfaces, assert_gates, run,
 };
@@ -185,7 +187,7 @@ fn a_run_is_deterministic_and_the_seed_changes_the_inputs() {
 }
 
 #[test]
-fn the_json_report_has_totals_and_examples_and_is_written_where_asked() {
+fn the_json_report_has_totals_and_examples_and_has_a_string_form_to_write() {
     let report = go(Tweak::BrokenMessage, |_| {});
     let json = report.to_json();
     assert_eq!(json["inputs"]["total"], report.inputs);
@@ -202,7 +204,8 @@ fn the_json_report_has_totals_and_examples_and_is_written_where_asked() {
 
     let dir = std::env::temp_dir().join(format!("opentide-parse-diff-{}", std::process::id()));
     let path = dir.join("nested").join("report.json");
-    report.write_json(&path).unwrap();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, report.to_json_string()).unwrap();
     let back: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     assert_eq!(back, json);

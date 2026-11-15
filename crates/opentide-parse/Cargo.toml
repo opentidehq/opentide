@@ -24,7 +24,3 @@ serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 insta.workspace = true
-
-[[test]]
-name = "differential"
-required-features = ["differential"]
