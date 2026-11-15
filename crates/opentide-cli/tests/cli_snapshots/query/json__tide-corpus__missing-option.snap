@@ -9,16 +9,16 @@ exit: 2
 {
   "command": "query",
   "duration_ms": 0,
-  "error": "Missing option --platform: choose from sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops.",
+  "error": "the following required arguments were not provided: --platform <PLATFORM>",
   "exit_code": 2,
   "failure": {
     "argument": "--platform",
     "code": "usage_missing_option",
     "crash_log": null,
-    "message": "Missing option --platform: choose from sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops.",
+    "message": "the following required arguments were not provided: --platform <PLATFORM>",
     "suggestion": null
   },
-  "message": "Missing option --platform: choose from sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops.",
+  "message": "the following required arguments were not provided: --platform <PLATFORM>",
   "next_actions": [],
   "ok": false,
   "schema_version": 1,

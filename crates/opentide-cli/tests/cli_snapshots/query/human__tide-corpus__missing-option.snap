@@ -8,8 +8,9 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-␛[1m␛[31merror:␛[0m Missing option --platform: choose from sentinel, defender_for_endpoint, splunk, sentinel_one,
-       crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam,
-       google_secops.
-  ␛[1musage:␛[0m opentide query [OPTIONS] --platform <PLATFORM> [query]
-  ␛[1m␛[36mhelp:␛[0m run 'opentide query --help'
+␛[1m␛[31merror:␛[0m the following required arguments were not provided:
+  ␛[32m--platform <PLATFORM>␛[0m
+
+␛[1m␛[4mUsage:␛[0m ␛[1mopentide query␛[0m ␛[1m--platform␛[0m <PLATFORM> <query>
+
+For more information, try '␛[1m--help␛[0m'.
