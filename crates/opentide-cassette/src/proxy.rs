@@ -21,13 +21,12 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll};
 
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::cassette::{self, Body, Cassette, Interaction};
@@ -226,64 +225,78 @@ impl Proxy {
     }
 }
 
-/// One client connection: a tunnel or a plain proxied request.
-async fn connection(mut stream: TcpStream, shared: Arc<Shared>) -> Result<(), String> {
-    let mut head = Vec::new();
-    let mut byte = [0u8; 1];
-    while !head.ends_with(b"\r\n\r\n") {
-        if head.len() > 65_536 || stream.read(&mut byte).await.map_err(|e| e.to_string())? == 0 {
-            return Ok(());
-        }
-        head.push(byte[0]);
-    }
-    let line = String::from_utf8_lossy(&head);
-    let mut words = line.split_whitespace();
-    let method = words.next().unwrap_or_default().to_owned();
-    let target = words.next().unwrap_or_default().to_owned();
-    if method.eq_ignore_ascii_case("CONNECT") {
-        stream
-            .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
-            .await
-            .map_err(|error| error.to_string())?;
-        let (host, port) = target
-            .rsplit_once(':')
-            .map_or((target.as_str(), "443"), |(host, port)| (host, port));
-        let config = shared.ca.server_config(host)?;
-        let tls = tokio_rustls::TlsAcceptor::from(config)
-            .accept(stream)
-            .await
-            .map_err(|error| error.to_string())?;
-        let origin = if port == "443" {
-            format!("https://{host}")
-        } else {
-            format!("https://{host}:{port}")
-        };
-        serve(TokioIo::new(tls), shared, Some(origin)).await
-    } else {
-        let stream = Prefixed {
-            prefix: head,
-            at: 0,
-            inner: stream,
-        };
-        serve(TokioIo::new(stream), shared, None).await
-    }
+/// One client connection: plain proxied requests, or a `CONNECT` that turns
+/// the connection into a tunnel.
+async fn connection(stream: TcpStream, shared: Arc<Shared>) -> Result<(), String> {
+    serve(TokioIo::new(stream), shared, None).await
 }
 
+/// Answers `CONNECT host:port` and, once the client has the answer, takes
+/// the connection over ([`hyper::upgrade::on`]): a certificate for the host,
+/// then the requests inside the tunnel.
+fn tunnel(request: hyper::Request<hyper::body::Incoming>, shared: Arc<Shared>) -> Response {
+    let Some(target) = request.uri().authority().map(ToString::to_string) else {
+        return failure(400, "CONNECT needs host:port");
+    };
+    let (host, port) = target
+        .rsplit_once(':')
+        .map_or((target.as_str(), "443"), |(host, port)| (host, port));
+    let origin = if port == "443" {
+        format!("https://{host}")
+    } else {
+        format!("https://{host}:{port}")
+    };
+    let host = host.to_owned();
+    tokio::spawn(async move {
+        let Ok(upgraded) = hyper::upgrade::on(request).await else {
+            return;
+        };
+        let Ok(config) = shared.ca.server_config(&host) else {
+            return;
+        };
+        let Ok(tls) = tokio_rustls::TlsAcceptor::from(config)
+            .accept(TokioIo::new(upgraded))
+            .await
+        else {
+            return;
+        };
+        let _ = serve(TokioIo::new(tls), shared, Some(origin)).await;
+    });
+    hyper::Response::new(Full::new(Bytes::new()))
+}
+
+type Response = hyper::Response<Full<Bytes>>;
+
 /// Serves HTTP/1.1 on *io*: the requests of one tunnel to *origin*, or
-/// proxied requests in absolute form.
-async fn serve<I>(io: TokioIo<I>, shared: Arc<Shared>, origin: Option<String>) -> Result<(), String>
+/// proxied requests in absolute form (and `CONNECT`s, outside a tunnel).
+/// Boxed: a tunnel's requests are served by `serve` again.
+fn serve<I>(
+    io: TokioIo<I>,
+    shared: Arc<Shared>,
+    origin: Option<String>,
+) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>>
 where
     I: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    let service = service_fn(move |request| {
-        let shared = shared.clone();
-        let origin = origin.clone();
-        async move { Ok::<_, std::convert::Infallible>(handle(request, &shared, origin).await) }
-    });
-    hyper::server::conn::http1::Builder::new()
-        .serve_connection(io, service)
-        .await
-        .map_err(|error| error.to_string())
+    Box::pin(async move {
+        let service = service_fn(move |request: hyper::Request<hyper::body::Incoming>| {
+            let shared = shared.clone();
+            let origin = origin.clone();
+            async move {
+                let answer = if origin.is_none() && request.method() == hyper::Method::CONNECT {
+                    tunnel(request, shared)
+                } else {
+                    handle(request, &shared, origin).await
+                };
+                Ok::<_, std::convert::Infallible>(answer)
+            }
+        });
+        hyper::server::conn::http1::Builder::new()
+            .serve_connection(io, service)
+            .with_upgrades()
+            .await
+            .map_err(|error| error.to_string())
+    })
 }
 
 /// A failure the proxy answers itself.
@@ -426,44 +439,63 @@ fn route<'a>(routes: &'a BTreeMap<String, String>, url: &url::Url) -> Option<&'a
         .map(|base| base.trim_end_matches('/'))
 }
 
-/// A stream that first yields bytes already read from it.
-struct Prefixed {
-    prefix: Vec<u8>,
-    at: usize,
-    inner: TcpStream,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Read as _, Write as _};
 
-impl AsyncRead for Prefixed {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        if self.at < self.prefix.len() {
-            let rest = &self.prefix[self.at..];
-            let count = rest.len().min(buf.remaining());
-            buf.put_slice(&rest[..count]);
-            self.at += count;
-            return Poll::Ready(Ok(()));
+    fn started() -> Proxy {
+        Proxy::start(
+            Mode::Record {
+                routes: BTreeMap::new(),
+            },
+            Redaction::default(),
+        )
+        .unwrap()
+    }
+
+    /// What the proxy answers to *request* on a new connection: its head.
+    fn answer(proxy: &Proxy, request: &str) -> String {
+        let mut stream = std::net::TcpStream::connect(proxy.addr).unwrap();
+        stream
+            .set_read_timeout(Some(std::time::Duration::from_secs(10)))
+            .unwrap();
+        stream.write_all(request.as_bytes()).unwrap();
+        let mut head = Vec::new();
+        let mut byte = [0u8; 1];
+        while !head.ends_with(b"\r\n\r\n") && stream.read(&mut byte).is_ok_and(|n| n == 1) {
+            head.push(byte[0]);
         }
-        Pin::new(&mut self.inner).poll_read(cx, buf)
-    }
-}
-
-impl AsyncWrite for Prefixed {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.inner).poll_write(cx, buf)
+        String::from_utf8_lossy(&head).into_owned()
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.inner).poll_flush(cx)
+    #[test]
+    fn a_connect_is_answered_and_the_tunnel_is_taken_over() {
+        let proxy = started();
+        let head = answer(
+            &proxy,
+            "CONNECT api.example.test:8443 HTTP/1.1\r\nHost: api.example.test:8443\r\n\r\n",
+        );
+        assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     }
 
-    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.inner).poll_shutdown(cx)
+    #[test]
+    fn a_connect_without_a_target_is_refused() {
+        let proxy = started();
+        let head = answer(&proxy, "CONNECT / HTTP/1.1\r\nHost: x\r\n\r\n");
+        assert!(!head.starts_with("HTTP/1.1 200"), "{head}");
+    }
+
+    #[test]
+    fn a_plain_request_is_still_proxied_in_absolute_form() {
+        let proxy = started();
+        // Nothing routes the host and the network is not asked for a name
+        // that does not exist: the proxy answers itself, not the tunnel's way.
+        let head = answer(
+            &proxy,
+            "GET http://nothing.invalid/x HTTP/1.1\r\nHost: nothing.invalid\r\n\r\n",
+        );
+        assert!(head.starts_with("HTTP/1.1 "), "{head}");
+        assert!(!head.starts_with("HTTP/1.1 200"), "{head}");
     }
 }

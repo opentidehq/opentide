@@ -201,40 +201,6 @@ fn location(diagnostic: &Diagnostic, cwd: &Path) -> Option<String> {
     Some(shown)
 }
 
-/// A value quoted as Python's `repr` quotes (`'clear'`, `"it's"`), with what is inside
-/// escaped by [`str::escape_debug`]: a character that is not printable reads
-/// `\u{a0}` or `\u{1b}` (Python wrote `\xa0`), and only the quote that
-/// delimits the value is escaped. Kept only for `explain`'s unknown-code
-/// message (`commands/explain.rs`) until it quotes with `{:?}` as every other
-/// message does; then this goes.
-pub fn quoted(text: &str) -> String {
-    let (quote, other) = if text.contains('\'') && !text.contains('"') {
-        ('"', '\'')
-    } else {
-        ('\'', '"')
-    };
-    let mut out = String::from(quote);
-    // Every `\` in `escape_debug`'s output starts an escape of two or more
-    // characters; the one for the other quote is undone.
-    let mut escaped = text.escape_debug();
-    while let Some(ch) = escaped.next() {
-        if ch != '\\' {
-            out.push(ch);
-            continue;
-        }
-        match escaped.next() {
-            Some(next) if next == other => out.push(next),
-            Some(next) => {
-                out.push('\\');
-                out.push(next);
-            }
-            None => out.push('\\'),
-        }
-    }
-    out.push(quote);
-    out
-}
-
 fn notes(diagnostic: &Diagnostic) -> Vec<(String, String)> {
     let mut notes = diagnostic.notes.clone();
     if let Some(help) = diagnostic.help.as_deref().filter(|help| !help.is_empty()) {
@@ -817,18 +783,7 @@ mod tests {
     }
 
     #[test]
-    fn repr_and_offsets() {
-        assert_eq!(quoted("clear"), "'clear'");
-        assert_eq!(quoted("it's"), "\"it's\"");
-        assert_eq!(quoted("a'\"b\n"), "'a\\'\"b\\n'");
-        assert_eq!(quoted("a\\b\t"), "'a\\\\b\\t'");
-        // Not printable: escaped as Rust escapes it, never written raw.
-        assert_eq!(
-            quoted("a\u{a0}b\u{200b}\u{85}\u{1b}\0"),
-            "'a\\u{a0}b\\u{200b}\\u{85}\\u{1b}\\0'"
-        );
-        // A combining mark after its letter is text, as Python shows it.
-        assert_eq!(quoted("e\u{301}名"), "'e\u{301}名'");
+    fn tabs_and_wide_characters_are_underlined_by_cells() {
         assert_eq!(underline_offset("\t名x", 4), "\t   ");
         assert_eq!(
             engine_reference("cql_parse"),

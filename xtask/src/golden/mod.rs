@@ -30,6 +30,7 @@ pub mod wasi;
 
 use anyhow::{Context, Result, bail};
 use case::{Case, Spec};
+use clap::{Args, Subcommand, ValueEnum};
 use oracle::Oracle;
 use recording::Recording;
 use run::RunContext;
@@ -41,76 +42,131 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
-/// The usage of `cargo xtask golden`.
-pub const USAGE: &str = "\
-usage: cargo xtask golden <command> [options]
+/// `cargo xtask golden <command>`: records what the frozen Python CLI does, and
+/// checks an engine against the recordings. Exit status: 0 passed, 1 a
+/// difference or a failed case, 2 usage error or the run could not start.
+#[derive(Subcommand, Debug)]
+pub enum Cmd {
+    /// Run every case through the oracle and write tests/golden/cases/ and
+    /// COVERAGE.md. --check-determinism runs every case twice and fails,
+    /// writing nothing, unless both runs agree byte for byte
+    Record(RecordArgs),
+    /// Run every case through the engine and compare with the recordings; also
+    /// checks COVERAGE.md and that no recording is missing or orphaned
+    Check(CompareArgs),
+    /// Check, printing every difference in full
+    Diff(CompareArgs),
+    /// Rewrite tests/golden/oracle-requirements.txt from ORACLE (uv pip
+    /// compile)
+    Lock {
+        /// Lock the oracle file FILE names: the requirements file beside it
+        #[arg(long, value_name = "FILE")]
+        oracle: Option<PathBuf>,
+    },
+    /// Rewrite COVERAGE.md from cases.toml and the recordings
+    Coverage,
+}
 
-commands:
-  record [--check-determinism] [--filter GLOB] [--jobs N] [--oracle FILE --out DIR]
-             run every case through the oracle and write tests/golden/cases/
-             and COVERAGE.md. --check-determinism runs every case twice and
-             fails, writing nothing, unless both runs agree byte for byte
-  check [--engine python|rust] [--runner python|node] [--filter GLOB] [--jobs N]
-        [--partition K/N [--unused FILE]] [--recordings DIR] [--report FILE] [--keep DIR]
-             run every case through the engine and compare with the
-             recordings; also checks COVERAGE.md and that no recording is
-             missing or orphaned
-  diff [--engine ...] [--runner ...] [--filter GLOB] [--jobs N] [--partition K/N]
-       [--unused FILE] [--recordings DIR] [--report FILE] [--keep DIR]
-             check, printing every difference in full
-  lock [--oracle FILE]
-             rewrite tests/golden/oracle-requirements.txt from ORACLE (uv pip
-             compile); with --oracle, the requirements file FILE names, beside it
-  coverage   rewrite COVERAGE.md from cases.toml and the recordings
+/// The options of `golden record`.
+#[derive(Args, Debug)]
+pub struct RecordArgs {
+    /// Only the cases whose id (`<command>/<mode>/<fixture>/<variant>`), or a
+    /// leading part of it, matches: `explain/*` is every explain case
+    #[arg(long, value_name = "GLOB")]
+    filter: Option<String>,
+    /// Run this many cases at once
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize))]
+    jobs: Option<usize>,
+    /// Run every case twice and fail, writing nothing, unless both runs agree
+    /// byte for byte
+    #[arg(long)]
+    check_determinism: bool,
+    /// Another oracle file than tests/golden/ORACLE, in its format (a preview of
+    /// the next oracle: tests/golden/ORACLE.next); needs --out, so that the
+    /// committed recordings stay the ORACLE's
+    #[arg(long, value_name = "FILE")]
+    oracle: Option<PathBuf>,
+    /// Record into DIR/cases and DIR/blobs instead of tests/golden, and copy the
+    /// oracle file (as DIR/ORACLE) and its requirements there; a case that
+    /// fails is reported and the others are still written; no COVERAGE.md. DIR
+    /// must be outside tests/golden
+    #[arg(long, value_name = "DIR")]
+    out: Option<PathBuf>,
+}
 
---filter GLOB  only the cases whose id (<command>/<mode>/<fixture>/<variant>), or a
-               leading part of it, matches: `explain/*` is every explain case
---partition K/N
-               (check, diff) only part K of N: the cases whose id hashes to it
-               (FNV-1a, so every host splits alike); parts 1/N to N/N run every
-               case exactly once. Like --filter, no orphan or COVERAGE.md check
---unused FILE  with --engine rust and --partition: write the ledger entries that
-               applied to no case of this part (JSON, as the report's `stale`)
-               instead of failing on them; an entry is stale when it is in
-               every part's FILE (CI's `Golden compare` gathers them)
---engine       python (the oracle, the default); rust: this repository's CLI against
-               the recordings, every case, through the comparator and
-               tests/golden/APPROVED_DIFFS.toml (UC-6.2: the Rust core is the
-               only implementation)
---runner       how --engine rust's candidate is launched: python (the default),
-               the PyPI console script of .venv; node, the npm package's `opentide`
-               bin (bindings/node/cli.js, after `npm run build` there) under the
-               `node` on PATH, which runs the same command line in-process
-               (UC-5.3); wasi, the WASI build of the command line
-               (target/wasm32-wasip1/wasi/opentide.wasm, `build-wasm.sh cli`) under
-               wasmtime, or $OPENTIDE_WASI_RUNTIME (`node`: Node's WASI), the case's
-               paths mapped where they are, its environment and working directory
-               passed in (ADR 0007's amendment); cases that need the network are
-               left out (tests/golden/WASI_EXCLUDED.toml). `--runner node` or
-               `--runner wasi` alone implies --engine rust
---report FILE  with --engine rust: write the JSON report (opentide-compare's RunReport)
---keep DIR     with --engine rust: write each differing case's candidate run into
-               DIR/cases and DIR/blobs, in the recordings' format (normalised as a
-               recording is, before the comparison's version rule), to read or to
-               re-base ledger entries against
---oracle FILE  another oracle file than tests/golden/ORACLE, in its format (a preview
-               of the next oracle: tests/golden/ORACLE.next); `record` with it
-               needs --out, so that the committed recordings stay the ORACLE's
---out DIR      record into DIR/cases and DIR/blobs instead of tests/golden, and copy
-               the oracle file (as DIR/ORACLE) and its requirements there; a case
-               that fails is reported and the others are still written; no
-               COVERAGE.md. DIR must be outside tests/golden
---recordings DIR
-               check against the recordings of `record --out DIR`, with the
-               oracle of DIR/ORACLE; no COVERAGE.md check, and with --engine rust
-               no stale-ledger check (the ledger is the committed oracle's)
+/// The engine `check` and `diff` run the cases through.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum Engine {
+    /// The oracle, the default
+    Python,
+    /// This repository's CLI against the recordings, every case, through the
+    /// comparator and tests/golden/APPROVED_DIFFS.toml (UC-6.2: the Rust core
+    /// is the only implementation)
+    Rust,
+}
 
-exit status: 0 passed, 1 a difference or a failed case, 2 usage error or the run could not start
-";
+/// How the candidate of `--engine rust` is launched.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum RunnerArg {
+    /// The PyPI console script of .venv, the default
+    Python,
+    /// The npm package's `opentide` bin (bindings/node/cli.js, after `npm run
+    /// build` there) under the `node` on PATH
+    Node,
+    /// The WASI build of the command line
+    /// (target/wasm32-wasip1/wasi/opentide.wasm, `build-wasm.sh cli`) under
+    /// wasmtime, or $OPENTIDE_WASI_RUNTIME (`node`: Node's WASI); cases that
+    /// need the network are left out (tests/golden/WASI_EXCLUDED.toml)
+    Wasi,
+}
 
-/// `cargo xtask golden <args>`.
-pub fn main(args: &[String]) -> ExitCode {
-    match parse(args).and_then(|command| command.run()) {
+/// The options of `golden check` and `golden diff`.
+#[derive(Args, Debug)]
+pub struct CompareArgs {
+    /// Only the cases whose id (`<command>/<mode>/<fixture>/<variant>`), or a
+    /// leading part of it, matches: `explain/*` is every explain case
+    #[arg(long, value_name = "GLOB")]
+    filter: Option<String>,
+    /// Run this many cases at once
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize))]
+    jobs: Option<usize>,
+    /// The engine to run the cases through
+    #[arg(long, value_enum)]
+    engine: Option<Engine>,
+    /// How --engine rust's candidate is launched; `--runner node` or `--runner
+    /// wasi` alone implies --engine rust
+    #[arg(long, value_enum)]
+    runner: Option<RunnerArg>,
+    /// Only part K of N of the cases: those whose id hashes to it (FNV-1a, so
+    /// every host splits alike); parts 1/N to N/N run every case exactly once.
+    /// Like --filter, no orphan or COVERAGE.md check
+    #[arg(long, value_name = "K/N", value_parser = Partition::parse_arg)]
+    partition: Option<Partition>,
+    /// With --engine rust and --partition: write the ledger entries that applied
+    /// to no case of this part (JSON, as the report's `stale`) instead of
+    /// failing on them; an entry is stale when it is in every part's FILE (CI's
+    /// `Golden compare` gathers them)
+    #[arg(long, value_name = "FILE")]
+    unused: Option<PathBuf>,
+    /// Check against the recordings of `record --out DIR`, with the oracle of
+    /// DIR/ORACLE; no COVERAGE.md check, and with --engine rust no stale-ledger
+    /// check (the ledger is the committed oracle's)
+    #[arg(long, value_name = "DIR")]
+    recordings: Option<PathBuf>,
+    /// With --engine rust: write the JSON report (opentide-compare's RunReport)
+    #[arg(long, value_name = "FILE")]
+    report: Option<PathBuf>,
+    /// With --engine rust: write each differing case's candidate run into
+    /// DIR/cases and DIR/blobs, in the recordings' format (normalised as a
+    /// recording is, before the comparison's version rule), to read or to
+    /// re-base ledger entries against
+    #[arg(long, value_name = "DIR")]
+    keep: Option<PathBuf>,
+}
+
+/// `cargo xtask golden <command>`.
+pub fn main(command: Cmd) -> ExitCode {
+    match command.into_command().and_then(|command| command.run()) {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::FAILURE,
         Err(error) => {
@@ -127,7 +183,6 @@ enum Verb {
     Diff,
     Lock,
     Coverage,
-    Help,
 }
 
 /// How the candidate of `--engine rust` is launched (`--runner`).
@@ -173,6 +228,11 @@ struct Partition {
 }
 
 impl Partition {
+    /// `--partition K/N` as clap reads it.
+    fn parse_arg(text: &str) -> Result<Partition, String> {
+        Partition::parse(text).map_err(|error| format!("{error:#}"))
+    }
+
     fn parse(text: &str) -> Result<Partition> {
         let parsed = text.split_once('/').and_then(|(k, n)| {
             Some(Partition {
@@ -201,103 +261,98 @@ fn fnv1a(text: &str) -> u64 {
     })
 }
 
-fn parse(args: &[String]) -> Result<Command> {
-    let Some((verb, rest)) = args.split_first() else {
-        bail!("missing command\n\n{USAGE}");
-    };
-    let verb = match verb.as_str() {
-        "record" => Verb::Record,
-        "check" => Verb::Check,
-        "diff" => Verb::Diff,
-        "lock" => Verb::Lock,
-        "coverage" => Verb::Coverage,
-        "help" | "--help" | "-h" => Verb::Help,
-        other => bail!("unknown command `{other}`\n\n{USAGE}"),
-    };
-    let mut command = Command {
-        verb,
-        engine: "python".into(),
-        runner: Runner::Python,
-        filter: None,
-        determinism: false,
-        jobs: None,
-        report: None,
-        keep: None,
-        oracle: None,
-        out: None,
-        recordings: None,
-        partition: None,
-        unused: None,
-    };
-    let mut engine_given = false;
-    let mut rest = rest.iter();
-    while let Some(arg) = rest.next() {
-        let mut value = || {
-            rest.next()
-                .cloned()
-                .with_context(|| format!("{arg} needs a value"))
+impl Cmd {
+    /// The command the parsed arguments name, once the options that only make
+    /// sense together have been checked.
+    fn into_command(self) -> Result<Command> {
+        let mut command = Command {
+            verb: Verb::Record,
+            engine: "python".into(),
+            runner: Runner::Python,
+            filter: None,
+            determinism: false,
+            jobs: None,
+            report: None,
+            keep: None,
+            oracle: None,
+            out: None,
+            recordings: None,
+            partition: None,
+            unused: None,
         };
-        match arg.as_str() {
-            "--filter" => command.filter = Some(value()?),
-            "--engine" => {
-                command.engine = value()?;
-                engine_given = true;
+        let mut engine_given = false;
+        match self {
+            Cmd::Record(args) => {
+                command.filter = args.filter;
+                command.jobs = args.jobs.map(|jobs| jobs.max(1));
+                command.determinism = args.check_determinism;
+                command.oracle = args.oracle;
+                command.out = args.out;
             }
-            "--runner" => {
-                command.runner = match value()?.as_str() {
-                    "python" => Runner::Python,
-                    "node" => Runner::Node,
-                    "wasi" => Runner::Wasi,
-                    other => bail!("unknown runner `{other}`: python, node or wasi"),
-                };
+            Cmd::Check(args) => {
+                command.verb = Verb::Check;
+                engine_given = command.compare_options(args);
             }
-            "--report" if command.verb != Verb::Record => {
-                command.report = Some(PathBuf::from(value()?));
+            Cmd::Diff(args) => {
+                command.verb = Verb::Diff;
+                engine_given = command.compare_options(args);
             }
-            "--keep" if matches!(command.verb, Verb::Check | Verb::Diff) => {
-                command.keep = Some(PathBuf::from(value()?));
+            Cmd::Lock { oracle } => {
+                command.verb = Verb::Lock;
+                command.oracle = oracle;
             }
-            "--jobs" => {
-                let jobs: usize = value()?.parse().context("--jobs needs a number")?;
-                command.jobs = Some(jobs.max(1));
-            }
-            "--check-determinism" if command.verb == Verb::Record => command.determinism = true,
-            "--oracle" if matches!(command.verb, Verb::Record | Verb::Lock) => {
-                command.oracle = Some(PathBuf::from(value()?));
-            }
-            "--out" if command.verb == Verb::Record => command.out = Some(PathBuf::from(value()?)),
-            "--recordings" if matches!(command.verb, Verb::Check | Verb::Diff) => {
-                command.recordings = Some(PathBuf::from(value()?));
-            }
-            "--partition" if matches!(command.verb, Verb::Check | Verb::Diff) => {
-                command.partition = Some(Partition::parse(&value()?)?);
-            }
-            "--unused" if matches!(command.verb, Verb::Check | Verb::Diff) => {
-                command.unused = Some(PathBuf::from(value()?));
-            }
-            other => bail!("unknown option `{other}` for this command\n\n{USAGE}"),
+            Cmd::Coverage => command.verb = Verb::Coverage,
         }
+        command.finish(engine_given)
     }
-    if command.verb == Verb::Record
-        && (command.engine != "python" || command.runner != Runner::Python)
-    {
-        bail!("only the oracle records: `record` takes no --engine or --runner");
-    }
-    if command.keep.is_some() && command.engine != "rust" && command.runner == Runner::Python {
-        bail!("--keep writes the candidate runs of --engine rust");
-    }
-    if matches!(command.runner, Runner::Node | Runner::Wasi) {
-        if !engine_given {
-            command.engine = "rust".into();
+}
+
+impl Command {
+    /// Takes the options of `check` and `diff`; whether `--engine` was given.
+    fn compare_options(&mut self, args: CompareArgs) -> bool {
+        self.filter = args.filter;
+        self.jobs = args.jobs.map(|jobs| jobs.max(1));
+        if let Some(engine) = args.engine {
+            self.engine = match engine {
+                Engine::Python => "python",
+                Engine::Rust => "rust",
+            }
+            .into();
         }
-        if command.engine != "rust" {
-            bail!("--runner node and --runner wasi launch the candidate of --engine rust");
+        self.runner = match args.runner {
+            None | Some(RunnerArg::Python) => Runner::Python,
+            Some(RunnerArg::Node) => Runner::Node,
+            Some(RunnerArg::Wasi) => Runner::Wasi,
+        };
+        self.partition = args.partition;
+        self.unused = args.unused;
+        self.recordings = args.recordings;
+        self.report = args.report;
+        self.keep = args.keep;
+        args.engine.is_some()
+    }
+
+    /// The combinations of options clap cannot see.
+    fn finish(mut self, engine_given: bool) -> Result<Command> {
+        if self.verb == Verb::Record && (self.engine != "python" || self.runner != Runner::Python) {
+            bail!("only the oracle records: `record` takes no --engine or --runner");
         }
+        if self.keep.is_some() && self.engine != "rust" && self.runner == Runner::Python {
+            bail!("--keep writes the candidate runs of --engine rust");
+        }
+        if matches!(self.runner, Runner::Node | Runner::Wasi) {
+            if !engine_given {
+                self.engine = "rust".into();
+            }
+            if self.engine != "rust" {
+                bail!("--runner node and --runner wasi launch the candidate of --engine rust");
+            }
+        }
+        if self.unused.is_some() && (self.partition.is_none() || self.engine != "rust") {
+            bail!("--unused is for a part of --engine rust's run: it needs --partition");
+        }
+        Ok(self)
     }
-    if command.unused.is_some() && (command.partition.is_none() || command.engine != "rust") {
-        bail!("--unused is for a part of --engine rust's run: it needs --partition");
-    }
-    Ok(command)
 }
 
 /// The repository's golden directory and the places around it.
@@ -381,10 +436,6 @@ fn absolute(path: &Path) -> Result<PathBuf> {
 
 impl Command {
     fn run(&self) -> Result<bool> {
-        if self.verb == Verb::Help {
-            print!("{USAGE}");
-            return Ok(true);
-        }
         let mut layout = Layout::find()?;
         let (oracle_file, oracle, oracle_dir) = self.oracle_file(&mut layout)?;
         if self.verb == Verb::Lock {
@@ -1041,6 +1092,19 @@ fixtures = ["made"]
 
     fn args(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    /// `golden <args>` as the command line parses it.
+    fn parse(args: &[String]) -> Result<Command> {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Cli {
+            #[command(subcommand)]
+            command: Cmd,
+        }
+        Cli::try_parse_from(std::iter::once(&"golden".to_owned()).chain(args))?
+            .command
+            .into_command()
     }
 
     #[test]

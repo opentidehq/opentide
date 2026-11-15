@@ -29,6 +29,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::diff_args::{DiffArgs, DiffCmd};
+
 use anyhow::{Context, Result, bail};
 use serde_json::{Value as Json, json};
 
@@ -40,18 +42,6 @@ use crate::lint::unquoted_json;
 use opentide_workspace::fix::FixRun;
 use opentide_workspace::validate::{Check, Options, QueriesMode, Selection};
 use opentide_workspace::{OsFs, RootOptions, Workspace};
-
-/// The usage of `cargo xtask validate`.
-pub const USAGE: &str = "\
-usage: cargo xtask validate diff [--filter GLOB] [--keep DIR] [--show-approved]
-
-  run opentide-workspace's validate on every recorded `validate --json`
-  case that checks or fixes (no --format, --watch) and compare its
-  report, checks and summary with the oracle's recording; a --fix case
-  also what it fixed, its diff and the files it wrote. GLOB filters
-  the case ids (validate/json/<fixture>/<variant>). --show-approved
-  prints each approved difference too.
-";
 
 /// An approved class of difference: where it applies, and why.
 pub struct Approved {
@@ -902,27 +892,12 @@ fn show(value: Option<&Json>) -> String {
 ///
 /// A recording or the fixtures cannot be read.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-pub fn run(args: &[String]) -> Result<u8> {
-    let mut filter = None;
-    let mut keep = None;
-    let mut show_approved = false;
-    let mut rest = args.iter();
-    match rest.next().map(String::as_str) {
-        Some("diff") => {}
-        Some("help" | "--help") | None => {
-            print!("{USAGE}");
-            return Ok(0);
-        }
-        Some(other) => bail!("unknown subcommand `{other}`\n{USAGE}"),
-    }
-    while let Some(arg) = rest.next() {
-        match arg.as_str() {
-            "--filter" => filter = Some(rest.next().context("--filter needs a glob")?.clone()),
-            "--keep" => keep = Some(PathBuf::from(rest.next().context("--keep needs a dir")?)),
-            "--show-approved" => show_approved = true,
-            other => bail!("unknown option `{other}`\n{USAGE}"),
-        }
-    }
+pub fn run(command: &DiffCmd) -> Result<u8> {
+    let DiffCmd::Diff(DiffArgs {
+        filter,
+        keep,
+        show_approved,
+    }) = command;
     let repo = repo_root();
     let spec = Spec::parse(&std::fs::read_to_string(
         repo.join("tests/golden/cases.toml"),
@@ -1019,7 +994,7 @@ pub fn run(args: &[String]) -> Result<u8> {
                 used[index] += 1;
                 APPROVED[index].id
             });
-            if !show_approved {
+            if !*show_approved {
                 continue;
             }
             println!("approved ({id}): {} {}", difference.case, difference.what);
@@ -1359,7 +1334,10 @@ mod tests {
 
     #[test]
     fn the_fix_cases_agree_with_their_recordings() {
-        let args = ["diff", "--filter", "validate/json/*/fix*"].map(str::to_owned);
-        assert_eq!(run(&args).unwrap(), 0);
+        let command = DiffCmd::Diff(DiffArgs {
+            filter: Some("validate/json/*/fix*".to_owned()),
+            ..DiffArgs::default()
+        });
+        assert_eq!(run(&command).unwrap(), 0);
     }
 }
