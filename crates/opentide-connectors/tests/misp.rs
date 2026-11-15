@@ -115,9 +115,12 @@ fn a_retract_sends_what_pymisp_sent() {
 #[test]
 fn an_unreachable_instance_is_a_connectivity_failure() {
     let env = opentide_connectors::Environment::from_pairs([("NO_PROXY", "*")]);
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-    drop(listener);
+    // A port held but never listening: a connect is refused, and no other
+    // test can take the port while this one runs (a dropped listener frees
+    // it for whichever test binds next).
+    let closed = tokio::net::TcpSocket::new_v4().unwrap();
+    closed.bind("127.0.0.1:0".parse().unwrap()).unwrap();
+    let port = closed.local_addr().unwrap().port();
     let client = MispClient::new(
         "gone",
         &format!("http://127.0.0.1:{port}"),
