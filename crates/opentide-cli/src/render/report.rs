@@ -17,7 +17,6 @@ use super::summary::{DIAGNOSTICS_DOCS_URL, explain_url};
 use crate::envelope::{Failure, code};
 use crate::json::Json;
 use regex::Regex;
-use sha2::{Digest, Sha256};
 use std::collections::{BTreeSet, HashMap};
 use std::sync::LazyLock;
 
@@ -223,15 +222,9 @@ fn fingerprint(diagnostic: &Diagnostic, path: &str, seen: &mut HashMap<String, u
     ]
     .join("\u{1f}");
     let occurrence = seen.entry(key.clone()).or_insert(0);
-    let digest = Sha256::digest(format!("{key}\u{1f}{occurrence}").as_bytes());
+    let digest = crate::digest::sha256_hex(format!("{key}\u{1f}{occurrence}").as_bytes());
     *occurrence += 1;
     digest
-        .iter()
-        .fold(String::with_capacity(64), |mut hex, byte| {
-            use std::fmt::Write as _;
-            let _ = write!(hex, "{byte:02x}");
-            hex
-        })
 }
 
 fn region(diagnostic: &Diagnostic) -> Option<Json> {

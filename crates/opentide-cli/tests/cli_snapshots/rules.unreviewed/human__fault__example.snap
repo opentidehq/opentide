@@ -1,0 +1,12 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: rules.unreviewed/human/fault/example
+---
+args: opentide rules unreviewed --older-than 90d
+exit: 1
+
+━━━ stdout · empty
+
+━━━ stderr
+␛[1m␛[31merror:␛[0m metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must
+       be in range `1..=28`

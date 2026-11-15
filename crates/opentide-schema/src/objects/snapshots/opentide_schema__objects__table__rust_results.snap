@@ -1044,7 +1044,24 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "loader": "schema_missing"
   },
   "revision-metadata-float-zero": {
-    "loader": "schema_missing"
+    "errors": [
+      {
+        "ctx": {},
+        "field_path": [
+          "metadata"
+        ],
+        "input": null,
+        "msg": "Input should be a valid dictionary",
+        "span": [
+          2,
+          11,
+          14,
+          true
+        ],
+        "type": "dict_type",
+        "yaml_line": 1
+      }
+    ]
   },
   "revision-metadata-list": {
     "errors": [
@@ -1111,7 +1128,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "loader": "unknown schema identifier: \"true\""
   },
   "revision-schema-float-zero": {
-    "loader": "schema_missing"
+    "loader": "unknown schema identifier: \"0.0\""
   },
   "revision-schema-list": {
     "loader": "unknown schema identifier: \"[...]\""
@@ -1120,7 +1137,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
     "loader": "unknown schema identifier: \"{...}\""
   },
   "revision-schema-negative-float-zero": {
-    "loader": "schema_missing"
+    "loader": "unknown schema identifier: \"-0.0\""
   },
   "revision-schema-quote": {
     "loader": "unknown schema identifier: \"rule's::1.1\""
