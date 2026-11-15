@@ -1,0 +1,28 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/empty/send-every-platform
+---
+args: opentide --json deploy --strategy PREVIEW --all
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": false,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "No rule this run read has a status that maps to its strategies",
+  "next_actions": [],
+  "ok": true,
+  "plan": {},
+  "schema_version": 1,
+  "status": "skipped",
+  "strategies": [
+    "PREVIEW"
+  ],
+  "summary": {}
+}
+
+━━━ stderr · empty

@@ -1,0 +1,14 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/plain/live-tenants/tenant-sentinel-one-file-jsonl
+---
+args: opentide query --platform sentinel_one --file objects/rules/sentinel-one-process.yaml --from 2099-01-01T00:00:00Z --to 2099-01-01T01:00:00Z --format jsonl
+exit: 0
+
+━━━ stdout
+{"_tenant":"lab","_label":"sub-query 1","src.process.name":"cmd.exe","endpoint.name":"ws-1"}
+{"_tenant":"lab","_label":"sub-query 1","src.process.name":"powershell.exe","endpoint.name":"ws-2"}
+{"_tenant":"lab","_label":"sub-query 2","src.process.name":"cmd.exe","endpoint.name":"ws-1"}
+{"_tenant":"lab","_label":"sub-query 2","src.process.name":"powershell.exe","endpoint.name":"ws-2"}
+
+━━━ stderr · empty

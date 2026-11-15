@@ -1,0 +1,43 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.exports.revisions/json/vscode/default
+---
+args: opentide --json generate exports revisions
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "generate exports revisions",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Generated 1 file in <SECONDS> · exports revisions",
+  "next_actions": [],
+  "ok": true,
+  "schema_version": 1,
+  "status": "completed",
+  "steps": [
+    {
+      "count": 1,
+      "name": "exports revisions",
+      "seconds": 0.0,
+      "status": "ok",
+      "unit": "file",
+      "where": ".opentide/exports/"
+    }
+  ],
+  "summary": {
+    "files": 1,
+    "phases": 1,
+    "removed": 0,
+    "seconds": 0.0
+  },
+  "target": "revisions"
+}
+
+━━━ stderr · empty
+
+━━━ ws/.opentide/exports/ · created 0755
+
+━━━ ws/.opentide/exports/revisions.export.json · created 0644
+{}
