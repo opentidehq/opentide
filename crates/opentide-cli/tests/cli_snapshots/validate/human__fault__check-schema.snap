@@ -6,20 +6,18 @@ args: opentide validate --check schema
 exit: 1
 
 ━━━ stdout
-␛[1m␛[31merror[deployment_state_shape]␛[0m␛[1m:␛[0m
-  ␛[1m<WS>/.opentide/states/deployment/e2cb0ccd-ebb4-4031-996c-2055d3d4de9e.json has no␛[0m
-  ␛[1mplatforms object␛[0m
+␛[1m␛[31merror[deployment_state_shape]␛[0m␛[1m: <WS>/.opentide/states/deployment/␛[0m
+  ␛[1me2cb0ccd-ebb4-4031-996c-2055d3d4de9e.json has no platforms object␛[0m
   ␛[34m╰─▶␛[0m ␛]8;;file://<WS>/.opentide/states/deployment/e2cb0ccd-ebb4-4031-996c-2055d3d4de9e.json␛\.opentide/states/deployment/e2cb0ccd-ebb4-4031-996c-2055d3d4de9e.json␛]8;;␛\
 
-␛[1m␛[31merror[deployment_state_platform]␛[0m␛[1m:␛[0m
-  ␛[1m<WS>/.opentide/states/deployment/f9b687ac-3536-4bb1-a283-2b278f3f0780.json names␛[0m
-  ␛[1mplatform "splunk"; only defender_for_endpoint, sentinel_one, crowdstrike, sysdig, bitdefender,␛[0m
-  ␛[1mgraylog, exabeam, google_secops store external ids␛[0m
+␛[1m␛[31merror[deployment_state_platform]␛[0m␛[1m: <WS>/.opentide/states/deployment/␛[0m
+  ␛[1mf9b687ac-3536-4bb1-a283-2b278f3f0780.json names platform "splunk"; only defender_for_endpoint,␛[0m
+  ␛[1msentinel_one, crowdstrike, sysdig, bitdefender, graylog, exabeam, google_secops store external ids␛[0m
   ␛[34m╰─▶␛[0m ␛]8;;file://<WS>/.opentide/states/deployment/f9b687ac-3536-4bb1-a283-2b278f3f0780.json␛\.opentide/states/deployment/f9b687ac-3536-4bb1-a283-2b278f3f0780.json␛]8;;␛\
 
-␛[1m␛[31merror[deployment_state_uuid_mismatch]␛[0m␛[1m:␛[0m
-  ␛[1m<WS>/.opentide/states/deployment/ffa05d91-6966-4583-ac48-7f849cd08261.json␛[0m
-  ␛[1mrecords object_uuid "00000000-0000-4000-8000-000000000001", but its file name is␛[0m
+␛[1m␛[31merror[deployment_state_uuid_mismatch]␛[0m␛[1m: <WS>/.opentide/states/deployment/␛[0m
+  ␛[1mffa05d91-6966-4583-ac48-7f849cd08261.json records object_uuid␛[0m
+  ␛[1m"00000000-0000-4000-8000-000000000001", but its file name is␛[0m
   ␛[1m"ffa05d91-6966-4583-ac48-7f849cd08261"␛[0m
   ␛[34m╰─▶␛[0m ␛]8;;file://<WS>/.opentide/states/deployment/ffa05d91-6966-4583-ac48-7f849cd08261.json␛\.opentide/states/deployment/ffa05d91-6966-4583-ac48-7f849cd08261.json␛]8;;␛\
 
@@ -169,8 +167,8 @@ exit: 1
 
 ␛[1m␛[33mwarning[nested_object_file]␛[0m␛[1m: objects/rules/nested/encoded-spray-rule-0017.yaml is in a subfolder of␛[0m
   ␛[1mobjects/rules and is not an object instance: it is not indexed, validated, shared, documented or␛[0m
-  ␛[1mdeployed (opentide reads only files directly in objects/rules; see␛[0m
-  ␛[1mhttps://github.com/opentidehq/opentide/issues/584)␛[0m
+  ␛[1mdeployed (opentide reads only files directly in objects/rules; see https://github.com/opentidehq/␛[0m
+  ␛[1mopentide/issues/584)␛[0m
   ␛[34m╰─▶␛[0m ␛]8;;file://<WS>/objects/rules/nested/encoded-spray-rule-0017.yaml␛\objects/rules/nested/encoded-spray-rule-0017.yaml␛]8;;␛\
 
 ␛[1m␛[31merror[schema_validation]␛[0m␛[1m: metadata.reviewed: metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD)␛[0m
@@ -246,8 +244,8 @@ exit: 1
 ␛[34m55 │␛[0m     rule_id: abc-1
 ␛[34m   │␛[0m              ␛[1m␛[31m━━━━━␛[0m
 ␛[34m   │␛[0m
-   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m Run 'opentide deploy migrate-state' and commit the rule together with
-   ␛[34m ␛[0m        .opentide/states/deployment/
+   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m Run 'opentide deploy migrate-state' and commit the rule together with .opentide/states/
+   ␛[34m ␛[0m        deployment/
 
 ␛[1m␛[31merror[vocab_unknown]␛[0m␛[1m: "clearr" is not a TLP value␛[0m
   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/rogue-relay-rule-0011.yaml␛\objects/rules/rogue-relay-rule-0011.yaml:9:8␛]8;;␛\

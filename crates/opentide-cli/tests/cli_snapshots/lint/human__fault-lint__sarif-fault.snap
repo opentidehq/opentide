@@ -15,8 +15,8 @@ exit: 0
 ␛[34m    │␛[0m
     ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
 
-␛[1m␛[33mwarning[kql_wildcard_table]␛[0m␛[1m: wildcard table `*` scans every table; name the table instead␛[0m
-  ␛[1m(https://learn.microsoft.com/en-us/kusto/query/best-practices)␛[0m
+␛[1m␛[33mwarning[kql_wildcard_table]␛[0m␛[1m: wildcard table `*` scans every table; name the table instead (https://␛[0m
+  ␛[1mlearn.microsoft.com/en-us/kusto/query/best-practices)␛[0m
    ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/covert-exfiltration-rule-0157.yaml␛\objects/rules/covert-exfiltration-rule-0157.yaml:45:33␛]8;;␛\
 ␛[34m   │␛[0m
 ␛[34m44 │␛[0m     query: |
@@ -193,9 +193,8 @@ exit: 0
 ␛[34m55 │␛[0m       ␛[32mprocess.pid␛[0m ␛[32m>=␛[0m ␛[32m10␛[0m
 ␛[34m   │␛[0m                   ␛[1m␛[33m━━␛[0m
 ␛[34m   │␛[0m
-   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference:
-   ␛[34m ␛[0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
-   ␛[34m ␛[0m        query-dsl-query-string-query
+   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference: https://www.elastic.co/docs/reference/
+   ␛[34m ␛[0m        query-languages/query-dsl/query-dsl-query-string-query
 
 ␛[1m␛[33mwarning[lucene_unescaped_slash]␛[0m␛[1m: `/var/` is read as a regular expression because `/` is unescaped,␛[0m
   ␛[1mso the value splits into separate clauses; escape the slashes (`\/`) or quote the value␛[0m
@@ -205,9 +204,8 @@ exit: 0
 ␛[34m55 │␛[0m       file.path␛[35m:␛[0m␛[32m/var/log␛[0m ␛[1m␛[35mAND␛[0m process.pid␛[35m:␛[0m␛[32m1␛[0m
 ␛[34m   │␛[0m                 ␛[1m␛[33m━━━━━␛[0m
 ␛[34m   │␛[0m
-   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference:
-   ␛[34m ␛[0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
-   ␛[34m ␛[0m        query-dsl-query-string-query
+   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference: https://www.elastic.co/docs/reference/
+   ␛[34m ␛[0m        query-languages/query-dsl/query-dsl-query-string-query
 
 ␛[1m␛[33mwarning[threshold_lookback]␛[0m␛[1m: threshold rule's lookback exceeds its interval (5m): threshold counts␛[0m
   ␛[1mare not de-duplicated across overlapping runs␛[0m
@@ -264,9 +262,8 @@ exit: 0
 ␛[34m79 │␛[0m       process.name␛[35m:␛[0m␛[32ma␛[0m ␛[1m␛[35mOR␛[0m process.name␛[35m:␛[0m␛[32mb␛[0m ␛[1m␛[35mAND␛[0m user.name␛[35m:␛[0m␛[32mc␛[0m
 ␛[34m   │␛[0m                      ␛[1m␛[33m━━␛[0m
 ␛[34m   │␛[0m
-   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference:
-   ␛[34m ␛[0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
-   ␛[34m ␛[0m        query-dsl-query-string-query
+   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference: https://www.elastic.co/docs/reference/
+   ␛[34m ␛[0m        query-languages/query-dsl/query-dsl-query-string-query
 
 ␛[1m␛[33mwarning[kql_where_not_first]␛[0m␛[1m: `where` is not the first operator after the table reference; filter␛[0m
   ␛[1mbefore later operators (https://learn.microsoft.com/en-us/kusto/query/best-practices)␛[0m
@@ -310,8 +307,8 @@ exit: 0
 
 ␛[1m␛[33mwarning[nested_object_file]␛[0m␛[1m: objects/rules/nested/encoded-spray-rule-0017.yaml is in a subfolder of␛[0m
   ␛[1mobjects/rules and is not an object instance: it is not indexed, validated, shared, documented or␛[0m
-  ␛[1mdeployed (opentide reads only files directly in objects/rules; see␛[0m
-  ␛[1mhttps://github.com/opentidehq/opentide/issues/584)␛[0m
+  ␛[1mdeployed (opentide reads only files directly in objects/rules; see https://github.com/opentidehq/␛[0m
+  ␛[1mopentide/issues/584)␛[0m
   ␛[34m╰─▶␛[0m ␛]8;;file://<WS>/objects/rules/nested/encoded-spray-rule-0017.yaml␛\objects/rules/nested/encoded-spray-rule-0017.yaml␛]8;;␛\
 
 ␛[1m␛[33mwarning[spl_dataset_not_declared]␛[0m␛[1m: sourcetype `linux_secure` is not declared: no Splunk log source␛[0m
@@ -456,9 +453,8 @@ exit: 0
 ␛[34m58 │␛[0m       process.name␛[35m:␛[0m␛[32m/(?i)cmd.*/␛[0m
 ␛[34m   │␛[0m                     ␛[1m␛[33m━━␛[0m
 ␛[34m   │␛[0m
-   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference:
-   ␛[34m ␛[0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
-   ␛[34m ␛[0m        query-dsl-query-string-query
+   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference: https://www.elastic.co/docs/reference/
+   ␛[34m ␛[0m        query-languages/query-dsl/query-dsl-query-string-query
 
 ␛[1m␛[33mwarning[spl_subsearch_truncation]␛[0m␛[1m: `join` silently truncates at 50,000 events or 60 seconds without␛[0m
   ␛[1man error (https://docs.splunk.com/Documentation/Splunk/latest/Search/Aboutsubsearches)␛[0m
@@ -615,9 +611,8 @@ exit: 0
 ␛[34m57 │␛[0m       _exists_␛[35m:␛[0m␛[32mprocess_name␛[0m
 ␛[34m   │␛[0m       ␛[1m␛[33m━━━━━━━━␛[0m
 ␛[34m   │␛[0m
-   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference:
-   ␛[34m ␛[0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
-   ␛[34m ␛[0m        query-dsl-query-string-query
+   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference: https://www.elastic.co/docs/reference/
+   ␛[34m ␛[0m        query-languages/query-dsl/query-dsl-query-string-query
 
 ␛[1m␛[33mwarning[sysdig_list_self_reference]␛[0m␛[1m: list `corpus_shells_35` names itself: Falco keeps␛[0m
   ␛[1m`corpus_shells_35` as a literal item, which on Sysdig resolves against a tenant list of that name,␛[0m
@@ -667,9 +662,8 @@ exit: 0
 ␛[34m59 │␛[0m       process.name␛[35m:␛[0m␛[32mcmd.exe␛[0m ␛[32mand␛[0m ␛[32mevent.code␛[0m ␛[32m>=␛[0m ␛[32m4624␛[0m
 ␛[34m   │␛[0m       ␛[1m␛[33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━␛[0m
 ␛[34m   │␛[0m
-   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference:
-   ␛[34m ␛[0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
-   ␛[34m ␛[0m        query-dsl-query-string-query
+   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference: https://www.elastic.co/docs/reference/
+   ␛[34m ␛[0m        query-languages/query-dsl/query-dsl-query-string-query
 
 ␛[1m␛[33mwarning[lucene_lowercase_operator]␛[0m␛[1m: `and` is a search term in Lucene, not an operator; operators are␛[0m
   ␛[1mupper case (`AND`)␛[0m
@@ -689,9 +683,8 @@ exit: 0
 ␛[34m59 │␛[0m       process.name␛[35m:␛[0m␛[32mcmd.exe␛[0m ␛[32mand␛[0m ␛[32mevent.code␛[0m ␛[32m>=␛[0m ␛[32m4624␛[0m
 ␛[34m   │␛[0m                                           ␛[1m␛[33m━━␛[0m
 ␛[34m   │␛[0m
-   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference:
-   ␛[34m ␛[0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
-   ␛[34m ␛[0m        query-dsl-query-string-query
+   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference: https://www.elastic.co/docs/reference/
+   ␛[34m ␛[0m        query-languages/query-dsl/query-dsl-query-string-query
 
 ␛[1m␛[33mwarning[spl_leading_not]␛[0m␛[1m: leading `NOT` used as the search filter scans events before excluding them␛[0m
   ␛[1m(https://docs.splunk.com/Documentation/Splunk/latest/Search/Booleanexpressions)␛[0m

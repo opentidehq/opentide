@@ -126,9 +126,8 @@ exit: 1
 ␛[34m55 │␛[0m       process.name␛[35m:␛[0m␛[32mfoo␛[0m␛[33m~3␛[0m
 ␛[34m   │␛[0m                       ␛[1m␛[31m━━␛[0m
 ␛[34m   │␛[0m
-   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference:
-   ␛[34m ␛[0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
-   ␛[34m ␛[0m        query-dsl-query-string-query
+   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference: https://www.elastic.co/docs/reference/
+   ␛[34m ␛[0m        query-languages/query-dsl/query-dsl-query-string-query
 
 ␛[1m␛[31merror[kql_control_command_unsupported]␛[0m␛[1m: KQL control command '.show' is not valid in detections␛[0m
    ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/hidden-beacon-rule-0062.yaml␛\objects/rules/hidden-beacon-rule-0062.yaml:63:7␛]8;;␛\
@@ -345,9 +344,8 @@ exit: 1
 ␛[34m59 │␛[0m       name␛[35m:␛[0m(␛[32ma␛[0m ␛[1m␛[35mOR␛[0m ␛[32mb␛[0m
 ␛[34m   │␛[0m       ␛[1m␛[31m━━━━━━━━━━━━␛[0m
 ␛[34m   │␛[0m
-   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference:
-   ␛[34m ␛[0m        https://www.elastic.co/docs/reference/query-languages/query-dsl/
-   ␛[34m ␛[0m        query-dsl-query-string-query
+   ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the Lucene query string reference: https://www.elastic.co/docs/reference/
+   ␛[34m ␛[0m        query-languages/query-dsl/query-dsl-query-string-query
 
 ␛[1m␛[31merror[eql_function_arity]␛[0m␛[1m: `length` takes 1 arguments, found 2␛[0m
    ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/scheduled-relay-rule-0151.yaml␛\objects/rules/scheduled-relay-rule-0151.yaml:57:21␛]8;;␛\
