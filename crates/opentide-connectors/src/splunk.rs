@@ -13,7 +13,7 @@
 //! the API's answer is a gateway's or a proxy's (`_html_answer`).
 
 use std::collections::BTreeMap;
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
 use opentide_compile::json::{Json, Object};
@@ -158,110 +158,91 @@ enum XmlDetail {
 }
 
 fn xml_message(body: &[u8]) -> XmlDetail {
-    static MSG: OnceLock<Option<regex::Regex>> = OnceLock::new();
     let text = String::from_utf8_lossy(body);
     let trimmed = text.trim_start();
     if !trimmed.starts_with('<') || !trimmed.trim_end().ends_with('>') {
         return XmlDetail::NotXml;
     }
-    let found = MSG
-        .get_or_init(|| {
-            regex::Regex::new(r"(?s)^(?:<\?xml[^>]*\?>\s*)?<[A-Za-z][^>]*>\s*<messages>\s*<msg\b[^>]*>(.*?)</msg>").ok()
-        })
-        .as_ref()
-        .and_then(|pattern| pattern.captures(trimmed))
-        .and_then(|captures| captures.get(1));
-    match found {
-        Some(text) => XmlDetail::Message(xml_unescape(text.as_str())),
+    // XML that does not parse is read as no message, as a page of HTML is.
+    let Ok(document) = roxmltree::Document::parse(trimmed) else {
+        return XmlDetail::None;
+    };
+    let message = first_element(document.root_element())
+        .filter(|messages| messages.has_tag_name("messages"))
+        .and_then(first_element)
+        .filter(|msg| msg.has_tag_name("msg"));
+    match message {
+        Some(msg) => XmlDetail::Message(text_of(msg)),
         None => XmlDetail::None,
     }
 }
 
-/// XML's character references and the five named entities, unescaped.
-pub fn xml_unescape(text: &str) -> String {
-    if !text.contains('&') {
-        return text.to_owned();
-    }
-    let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(at) = rest.find('&') {
-        out.push_str(&rest[..at]);
-        let tail = &rest[at..];
-        let Some(end) = tail.find(';') else {
-            out.push_str(tail);
-            return out;
-        };
-        let name = &tail[1..end];
-        let replaced = match name {
-            "lt" => Some('<'),
-            "gt" => Some('>'),
-            "amp" => Some('&'),
-            "quot" => Some('"'),
-            "apos" => Some('\''),
-            _ => name
-                .strip_prefix("#x")
-                .and_then(|hex| u32::from_str_radix(hex, 16).ok())
-                .or_else(|| name.strip_prefix('#').and_then(|dec| dec.parse().ok()))
-                .and_then(char::from_u32),
-        };
-        match replaced {
-            Some(character) => {
-                out.push(character);
-                rest = &tail[end + 1..];
-            }
-            None => {
-                out.push('&');
-                rest = &tail[1..];
+/// The first element inside *node*.
+fn first_element<'a, 'input>(
+    node: roxmltree::Node<'a, 'input>,
+) -> Option<roxmltree::Node<'a, 'input>> {
+    node.children().find(roxmltree::Node::is_element)
+}
+
+/// The text inside *node*, character references unescaped.
+fn text_of(node: roxmltree::Node<'_, '_>) -> String {
+    node.descendants()
+        .filter(roxmltree::Node::is_text)
+        .filter_map(|text| text.text())
+        .collect()
+}
+
+/// An entry of an Atom feed: what the saved-search and `server/info`
+/// answers are read from.
+#[derive(Debug, Default)]
+struct Entry {
+    /// Its `alternate` link (`state.links.alternate`).
+    alternate: Option<String>,
+    /// The `s:key`s of its content, by name: the first of a name wins.
+    keys: Vec<(String, String)>,
+}
+
+impl Entry {
+    fn read(entry: roxmltree::Node<'_, '_>) -> Self {
+        let mut read = Self::default();
+        for node in entry.descendants().filter(roxmltree::Node::is_element) {
+            match node.tag_name().name() {
+                "link"
+                    if read.alternate.is_none() && node.attribute("rel") == Some("alternate") =>
+                {
+                    read.alternate = node.attribute("href").map(str::to_owned);
+                }
+                "key" => {
+                    if let Some(name) = node.attribute("name") {
+                        read.keys.push((name.to_owned(), text_of(node)));
+                    }
+                }
+                _ => {}
             }
         }
+        read
     }
-    out.push_str(rest);
-    out
+
+    /// The value of the content key *name*.
+    fn key(&self, name: &str) -> Option<String> {
+        self.keys
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.clone())
+    }
 }
 
-/// The entries of an Atom feed, each as its raw XML.
-fn entries(body: &[u8]) -> Vec<String> {
-    static ENTRY: OnceLock<Option<regex::Regex>> = OnceLock::new();
+/// The entries of an Atom feed; a body that is not XML has none.
+fn entries(body: &[u8]) -> Vec<Entry> {
     let text = String::from_utf8_lossy(body);
-    ENTRY
-        .get_or_init(|| regex::Regex::new(r"(?s)<entry\b.*?</entry>").ok())
-        .as_ref()
-        .map(|pattern| {
-            pattern
-                .find_iter(&text)
-                .map(|found| found.as_str().to_owned())
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-/// The value of the content key *name* of an entry, unescaped.
-fn content_key(entry: &str, name: &str) -> Option<String> {
-    let open = format!("<s:key name=\"{name}\">");
-    let start = entry.find(&open)? + open.len();
-    let end = entry[start..].find("</s:key>")? + start;
-    Some(xml_unescape(&entry[start..end]))
-}
-
-/// The `alternate` link of an entry (`state.links.alternate`), unescaped.
-fn alternate(entry: &str) -> Option<String> {
-    static LINK: OnceLock<Option<regex::Regex>> = OnceLock::new();
-    static ATTRIBUTE: OnceLock<Option<regex::Regex>> = OnceLock::new();
-    let link = LINK
-        .get_or_init(|| regex::Regex::new(r"<link\b[^>]*>").ok())
-        .as_ref()?;
-    let attribute = ATTRIBUTE
-        .get_or_init(|| regex::Regex::new(r#"([A-Za-z:]+)="([^"]*)""#).ok())
-        .as_ref()?;
-    link.find_iter(entry).find_map(|tag| {
-        let attributes: BTreeMap<&str, &str> = attribute
-            .captures_iter(tag.as_str())
-            .filter_map(|captures| Some((captures.get(1)?.as_str(), captures.get(2)?.as_str())))
-            .collect();
-        (attributes.get("rel") == Some(&"alternate"))
-            .then(|| attributes.get("href").map(|href| xml_unescape(href)))
-            .flatten()
-    })
+    let Ok(document) = roxmltree::Document::parse(&text) else {
+        return Vec::new();
+    };
+    document
+        .descendants()
+        .filter(|node| node.is_element() && node.tag_name().name() == "entry")
+        .map(Entry::read)
+        .collect()
 }
 
 /// An entity's path without its namespace (`_entity_path`): the link's,
@@ -299,10 +280,10 @@ pub struct SavedSearch {
 }
 
 impl SavedSearch {
-    fn from_entry(entry: &str) -> Option<Self> {
+    fn from_entry(entry: &Entry) -> Option<Self> {
         Some(Self {
-            path: entity_path(&alternate(entry)?),
-            search: content_key(entry, "search"),
+            path: entity_path(entry.alternate.as_deref()?),
+            search: entry.key("search"),
         })
     }
 }
@@ -464,7 +445,7 @@ impl Splunk {
         {
             return Ok(*v2);
         }
-        let info = |reply: &Reply| -> Result<String, ConnectorError> {
+        let info = |reply: &Reply| -> Result<Entry, ConnectorError> {
             if reply.failed() {
                 return Err(ConnectorError::refused(
                     PLATFORM,
@@ -488,7 +469,7 @@ impl Splunk {
             None,
         )
         .await?;
-        let instance = content_key(&info(&first)?, "instance_type").unwrap_or_default();
+        let instance = info(&first)?.key("instance_type").unwrap_or_default();
         let second = Self::send(
             cx,
             crate::transport::Method::GET,
@@ -496,7 +477,7 @@ impl Splunk {
             None,
         )
         .await?;
-        let version = content_key(&info(&second)?, "version").unwrap_or_default();
+        let version = info(&second)?.key("version").unwrap_or_default();
         let parsed: Option<Vec<u64>> = version.split('.').map(|part| part.parse().ok()).collect();
         let Some(parsed) = parsed else {
             return Err(ConnectorError::refused(
@@ -551,9 +532,7 @@ impl Splunk {
                 None,
             ));
         }
-        Ok(found
-            .first()
-            .and_then(|entry| SavedSearch::from_entry(entry)))
+        Ok(found.first().and_then(SavedSearch::from_entry))
     }
 
     /// Creates the saved search *name* running *search*
@@ -575,7 +554,7 @@ impl Splunk {
         }
         match entries(&reply.answer.body)
             .first()
-            .and_then(|entry| SavedSearch::from_entry(entry))
+            .and_then(SavedSearch::from_entry)
         {
             Some(created) => Ok(created),
             None => self.saved_search(cx, name).await?.ok_or_else(|| {
@@ -1039,7 +1018,7 @@ mod tests {
 
     #[test]
     fn atom_entries_read_as_the_python_client_reads_them() {
-        let feed = br#"<feed><entry><title>a b</title><link href="/servicesNS/nobody/search/saved/searches/a%20b" rel="alternate"/><content type="text/xml"><s:dict><s:key name="search">index=x &amp; y &lt;z&gt;</s:key></s:dict></content></entry></feed>"#;
+        let feed = br#"<feed xmlns="http://www.w3.org/2005/Atom" xmlns:s="http://dev.splunk.com/ns/rest"><entry><title>a b</title><link href="/servicesNS/nobody/search/saved/searches/a%20b" rel="alternate"/><content type="text/xml"><s:dict><s:key name="search">index=x &amp; y &lt;z&gt;</s:key></s:dict></content></entry></feed>"#;
         let found = entries(feed);
         assert_eq!(
             SavedSearch::from_entry(&found[0]),
@@ -1048,7 +1027,68 @@ mod tests {
                 search: Some("index=x & y <z>".into()),
             })
         );
-        assert_eq!(xml_unescape("&#233;&#xe9;&bogus;"), "éé&bogus;");
+        assert!(entries(b"not xml at all").is_empty());
+    }
+
+    #[test]
+    fn an_error_body_gives_its_first_message_unescaped() {
+        let message = |body: &str| match xml_message(body.as_bytes()) {
+            XmlDetail::Message(text) => format!("message: {text}"),
+            XmlDetail::None => "none".to_owned(),
+            XmlDetail::NotXml => "not xml".to_owned(),
+        };
+        let wrapped = |inner: &str| {
+            format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<response>{inner}</response>\n")
+        };
+        assert_eq!(
+            message(&wrapped(
+                "\n  <messages>\n    <msg type=\"FATAL\">Unknown &quot;x&quot; &amp; &#233;&#xe9; &lt;</msg>\n    <msg>second</msg>\n  </messages>\n"
+            )),
+            "message: Unknown \"x\" & éé <"
+        );
+        // No messages, a messages list that is empty, or one not first.
+        assert_eq!(message(&wrapped("<other/>")), "none");
+        assert_eq!(message(&wrapped("<messages/>")), "none");
+        assert_eq!(
+            message(&wrapped("<a/><messages><msg>late</msg></messages>")),
+            "none"
+        );
+        // A page of HTML is no message; plain text is not XML. A body cut
+        // off after a whole `msg` is no message either: the old regex read
+        // one there, and the parser does not (Splunk sends whole documents).
+        // One cut before a closing `>` is not XML, as before.
+        assert_eq!(message("<html><body><br></body></html>"), "none");
+        assert_eq!(message("<response><messages><msg>cut</msg>"), "none");
+        assert_eq!(message("<response><messages><msg>cut"), "not xml");
+        assert_eq!(message("Network Error"), "not xml");
+        assert_eq!(message(""), "not xml");
+    }
+
+    #[test]
+    fn a_feed_reads_its_links_and_keys_whatever_the_prefix() {
+        let feed = br#"<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:s="http://dev.splunk.com/ns/rest" xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">
+  <entry>
+    <link href="/services/server/info/server-info" rel="alternate"/>
+    <link href="/services/server/info/server-info/other" rel="list"/>
+    <content type="text/xml"><s:dict>
+      <s:key name="instance_type">cloud</s:key>
+      <s:key name="version">9.0.2209</s:key>
+      <s:key name="version">ignored</s:key>
+    </s:dict></content>
+  </entry>
+  <entry><title>second</title></entry>
+</feed>"#;
+        let found = entries(feed);
+        assert_eq!(found.len(), 2);
+        assert_eq!(found[0].key("instance_type").as_deref(), Some("cloud"));
+        assert_eq!(found[0].key("version").as_deref(), Some("9.0.2209"));
+        assert_eq!(found[0].key("absent"), None);
+        assert_eq!(
+            found[0].alternate.as_deref(),
+            Some("/services/server/info/server-info")
+        );
+        assert_eq!(SavedSearch::from_entry(&found[1]), None);
     }
 
     #[test]

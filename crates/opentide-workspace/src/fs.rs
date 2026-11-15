@@ -361,8 +361,57 @@ pub fn write_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
         std::fs::set_permissions(temporary.path(), metadata.permissions())?;
     }
     // Dropped on an error, the temporary file is deleted.
-    temporary.persist(&target).map_err(|error| error.error)?;
-    Ok(())
+    persist_over(temporary, &target)
+}
+
+/// Renames `temporary` over `target`.
+///
+/// On Windows the replace (`MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`)
+/// is not atomic against another writer of the same file: while one rename
+/// is replacing the target, or a reader holds it open, a second one answers
+/// `ERROR_ACCESS_DENIED`, `ERROR_SHARING_VIOLATION` or `ERROR_LOCK_VIOLATION`
+/// and succeeds a moment later (the temporary file is whole and still ours).
+/// Those, and only those, are tried again for a bounded time; every other
+/// error, and a read-only target (which stays denied), is returned at once.
+/// Elsewhere `rename` replaces atomically and there is nothing to retry.
+fn persist_over(temporary: tempfile::NamedTempFile, target: &Path) -> io::Result<()> {
+    #[cfg(not(windows))]
+    {
+        temporary
+            .persist(target)
+            .map(drop)
+            .map_err(|failed| failed.error)
+    }
+    #[cfg(windows)]
+    {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut temporary = temporary;
+        loop {
+            match temporary.persist(target) {
+                Ok(_) => return Ok(()),
+                Err(failed)
+                    if replace_may_succeed_later(&failed.error, target)
+                        && std::time::Instant::now() < deadline =>
+                {
+                    temporary = failed.file;
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                Err(failed) => return Err(failed.error),
+            }
+        }
+    }
+}
+
+/// Whether `error` from replacing `target` is one Windows clears by itself.
+#[cfg(windows)]
+fn replace_may_succeed_later(error: &io::Error, target: &Path) -> bool {
+    const ERROR_ACCESS_DENIED: i32 = 5;
+    const ERROR_SHARING_VIOLATION: i32 = 32;
+    const ERROR_LOCK_VIOLATION: i32 = 33;
+    matches!(
+        error.raw_os_error(),
+        Some(ERROR_ACCESS_DENIED | ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION)
+    ) && !std::fs::metadata(target).is_ok_and(|metadata| metadata.permissions().readonly())
 }
 
 /// `path` with `.` and `..` folded away, lexically.
@@ -802,6 +851,32 @@ mod tests {
         assert_eq!(last.len(), 64);
         assert!(last.iter().all(|byte| *byte == last[0]));
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 3);
+    }
+
+    /// A reader holding the file open without sharing delete (a virus
+    /// scanner, an editor) blocks the replace on Windows for a moment: the
+    /// write waits for it rather than failing.
+    #[cfg(windows)]
+    #[test]
+    fn an_atomic_write_waits_for_a_reader_to_let_go_of_the_file() {
+        use std::os::windows::fs::OpenOptionsExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ledger.jsonl");
+        std::fs::write(&path, b"old").unwrap();
+        // FILE_SHARE_READ | FILE_SHARE_WRITE, not FILE_SHARE_DELETE.
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0b11)
+            .open(&path)
+            .unwrap();
+        let reader = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            drop(held);
+        });
+        write_atomically(&path, b"new").unwrap();
+        reader.join().unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"new");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 
     /// The temporary file is created owner-only: a rule committed as 0644
