@@ -168,9 +168,9 @@ impl Runner for Recording {
 
     fn run(&self, request: &RunRequest, plan: &Plan, job: &Arc<Job>, _: EventSink) -> RunOutcome {
         self.calls.lock().unwrap().push(request.argv.clone());
-        self.started.store(true, Ordering::SeqCst);
         assert!(!self.panic, "the runner exploded");
         if self.block {
+            self.started.store(true, Ordering::SeqCst);
             while !self.interrupted.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(5));
             }
@@ -178,6 +178,11 @@ impl Runner for Recording {
             return failure(&plan.words, "Interrupted", 130);
         }
         let cancelled = job.finish();
+        // `started` is set only now, after `finish`: a test that cancels once
+        // it sees `started` cancels a run that has already returned, which is
+        // what `hold_after_return` tests (set before `finish`, a cancel could
+        // land first, and the run would rightly report itself cancelled).
+        self.started.store(true, Ordering::SeqCst);
         if let Some(release) = &self.hold_after_return {
             while !release.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(5));
