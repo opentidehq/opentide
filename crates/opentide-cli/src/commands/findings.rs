@@ -72,7 +72,8 @@ pub fn report(
     )
 }
 
-/// Writes `text` to `output` (relative to `cwd`), creating its folder.
+/// Writes `text` to `output` (relative to `cwd`), creating its folder; the
+/// file is replaced whole, through a temporary file beside it.
 ///
 /// # Errors
 ///
@@ -89,7 +90,7 @@ pub fn write_report(output: &Path, cwd: &Path, text: &str) -> std::io::Result<Pa
     {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(&path, text)?;
+    opentide_workspace::fs::write_atomically(&path, text.as_bytes())?;
     Ok(path)
 }
 
