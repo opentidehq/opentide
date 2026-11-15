@@ -127,6 +127,7 @@ pub fn live_lines(
 /// # Errors
 ///
 /// stdout cannot be written.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn run(
     args: &Args,
     cx: &Context<'_>,

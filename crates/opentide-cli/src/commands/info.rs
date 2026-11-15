@@ -79,6 +79,7 @@ pub struct Context<'a> {
 const COMMAND: &str = "info";
 
 /// Runs `opentide info`.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let section = args.section.as_deref();
     if let Some(section) = section

@@ -474,6 +474,7 @@ fn require_python(engine: Option<&str>) -> Result<Option<u8>> {
     }
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn faults_command(args: &[String]) -> Result<u8> {
     let parsed = parse_fault_args(args)?;
     let catalogue = load_catalogue(&parsed.catalogue)?;
@@ -714,6 +715,7 @@ fn rust_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
 /// reports query findings for, the Rust `validate` with the query engines
 /// against the oracle, and the kinds lint's queries check reports, the Rust
 /// `lint` against the oracle's, finding for finding ([`queries`]).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<String>) -> Result<u8> {
     let bin = oracle_bin(parsed.oracle.as_deref());
     check_oracle_version(&bin, &catalogue.oracle)?;
@@ -950,6 +952,7 @@ fn workspace_folders(dir: &Path) -> Result<Folders> {
 /// `faults --check --engine rust --only configuration`: the configuration
 /// kinds, the Rust resolution and checks against the oracle
 /// ([`configuration`]).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn configuration_check(
     parsed: &FaultArgs,
     catalogue: &Catalogue,
@@ -1072,6 +1075,7 @@ fn configuration_check(
 
 /// `faults --check --engine rust`: the object kinds, the Rust object models
 /// against the oracle, finding for finding ([`structural`]).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
     let objects: BTreeSet<&str> = structural::kinds().into_iter().collect();
     let mut ids: BTreeSet<String> = BTreeSet::new();

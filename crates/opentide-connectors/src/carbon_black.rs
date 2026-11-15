@@ -243,6 +243,7 @@ impl CarbonBlack {
 
     /// Writes the rule's IOC to its watchlist report, or retires it
     /// (`_deploy_to_org`).
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     pub async fn deploy_report(
         &self,
         cx: TenantContext<'_>,
@@ -475,6 +476,7 @@ impl CarbonBlack {
     /// A process search over the request's window (`CarbonBlackQueryRunner.run`):
     /// validated, started, polled until it completes, read until one row
     /// more than the limit.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     pub async fn run(
         &self,
         cx: TenantContext<'_>,

@@ -403,6 +403,7 @@ pub fn placed(findings: &[&Finding]) -> Vec<Finding> {
 /// findings, an annotation gives each one's code, message and help. The
 /// finding `current` (`n`/`p`) is marked `▶`. A long line folds inside the
 /// source column, and an underline stays on its own characters.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn source_view(
     path: Option<&Path>,
     findings: &[&Finding],
@@ -650,6 +651,7 @@ fn query_panel(row: &FieldRow, language: Option<&str>, width: usize) -> Vec<Line
 /// An object as a page at `width` cells: a header, a section per top-level
 /// field, queries in panels; a field with a finding is marked under its
 /// value, as the file marks its line.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn object_page(
     view: &ObjectView,
     findings: &[&Finding],
