@@ -2665,7 +2665,6 @@ dependencies = [
  "opentide-yara",
  "opentide-yaral",
  "regex",
- "serde",
  "serde_json",
  "toml_edit",
 ]
@@ -2745,7 +2744,6 @@ dependencies = [
  "gix-discover",
  "gix-error",
  "gix-filter",
- "gix-fs",
  "gix-hash",
  "gix-ignore",
  "gix-index",
@@ -2879,7 +2877,6 @@ dependencies = [
  "regex-syntax",
  "serde",
  "toml",
- "tree-sitter",
 ]
 
 [[package]]
@@ -2958,9 +2955,7 @@ dependencies = [
  "opentide-analysis",
  "opentide-core",
  "opentide-highlight",
- "opentide-kql",
  "opentide-schema",
- "opentide-spl",
  "opentide-tide",
  "opentide-workspace",
  "percent-encoding",
