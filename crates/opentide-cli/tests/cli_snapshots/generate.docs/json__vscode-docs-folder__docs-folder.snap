@@ -1,0 +1,30 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.docs/json/vscode-docs-folder/docs-folder
+---
+args: opentide --json generate docs
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "generate docs",
+  "duration_ms": 0,
+  "error": "docs: paths.toml: paths.core: Extra inputs are not permitted",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "docs: paths.toml: paths.core: Extra inputs are not permitted",
+    "suggestion": null
+  },
+  "message": "docs: paths.toml: paths.core: Extra inputs are not permitted",
+  "next_actions": [],
+  "ok": false,
+  "phase": "docs",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

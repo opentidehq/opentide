@@ -1,0 +1,36 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.platforms/json/setup-merge/merge
+---
+args: opentide --json setup platforms --sentinel --yes
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup platforms",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "files": [],
+  "message": "Platform enabled flags updated",
+  "next_actions": [],
+  "ok": true,
+  "path": "<WS>",
+  "platforms": [
+    "sentinel"
+  ],
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {},
+  "updated": [
+    ".opentide/configurations/platforms/sentinel.toml"
+  ]
+}
+
+━━━ stderr · empty
+
+━━━ ws/.opentide/configurations/platforms/sentinel.toml · modified 0644
+[platform]
+enabled = true
+name = "Microsoft Sentinel"
+# tenants follow
