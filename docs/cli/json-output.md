@@ -180,7 +180,7 @@ opentide decides once per command who is reading. The first rule that matches wi
 | 2 | `--json` | `json`: one document on stdout |
 | 3 | `OPENTIDE_OUTPUT` is `json`, `agent`, `plain` or `human` | that mode |
 | 4 | A coding agent is detected | `agent` |
-| 5 | stdout is not a terminal, `NO_COLOR` or `--no-color`, `TERM=dumb`, or CI | `plain` |
+| 5 | stdout is not a terminal, `NO_COLOR`, `FORCE_COLOR=0` or `--no-color`, `TERM=dumb`, or CI | `plain` |
 | 6 | Otherwise | `human` |
 
 `OPENTIDE_OUTPUT=json` is the same as passing `--json` to every command.
