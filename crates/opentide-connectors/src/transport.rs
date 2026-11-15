@@ -164,8 +164,15 @@ impl RequestBuilder {
     pub(crate) fn new(method: Method, url: &str) -> Self {
         Self {
             request: url::Url::parse(url)
-                .map(|url| Request::new(method, url))
-                .map_err(|error| format!("builder error: {error}")),
+                .map_err(|error| format!("builder error: {error}"))
+                // `mailto:x`, `file:///x` and `data:` name no host to ask.
+                .and_then(|url| {
+                    if url.has_host() {
+                        Ok(Request::new(method, url))
+                    } else {
+                        Err("builder error: URL scheme is not allowed".to_owned())
+                    }
+                }),
         }
     }
 
@@ -627,6 +634,9 @@ mod tests {
         let build = |url: &str| RequestBuilder::new(Method::GET, url);
         let reasons = [
             (build("not a url"), "relative URL without a base"),
+            (build("mailto:x@example.test"), "URL scheme is not allowed"),
+            (build("file:///etc/hosts"), "URL scheme is not allowed"),
+            (build("data:text/plain,x"), "URL scheme is not allowed"),
             (
                 build("https://u:p@a.example/").header("bad name", "v"),
                 "invalid HTTP header name",
