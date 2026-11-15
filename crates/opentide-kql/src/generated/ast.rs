@@ -2197,7 +2197,7 @@ impl JoinOperator {
     }
 }
 
-/// `ParseOperator = 'parse' OperatorOption* column:Expr 'with' ParsePiece ParsePiece*`
+/// `ParseOperator = 'parse' OperatorOption* column:Expr 'with' ParsePart ParsePart*`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ParseOperator {
     syntax: SyntaxNode,
@@ -2233,13 +2233,13 @@ impl ParseOperator {
     pub fn with_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, T![with])
     }
-    /// The `ParsePiece` children.
-    pub fn parse_pieces(&self) -> AstChildren<ParsePiece> {
+    /// The `ParsePart` children.
+    pub fn parse_parts(&self) -> AstChildren<ParsePart> {
         support::children(&self.syntax)
     }
 }
 
-/// `ParseWhereOperator = keyword:'parse-where' OperatorOption* column:Expr 'with' ParsePiece ParsePiece*`
+/// `ParseWhereOperator = keyword:'parse-where' OperatorOption* column:Expr 'with' ParsePart ParsePart*`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ParseWhereOperator {
     syntax: SyntaxNode,
@@ -2275,8 +2275,8 @@ impl ParseWhereOperator {
     pub fn with_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, T![with])
     }
-    /// The `ParsePiece` children.
-    pub fn parse_pieces(&self) -> AstChildren<ParsePiece> {
+    /// The `ParsePart` children.
+    pub fn parse_parts(&self) -> AstChildren<ParsePart> {
         support::children(&self.syntax)
     }
 }
@@ -3588,7 +3588,49 @@ impl From<ParenTabular> for UnionLeg {
     }
 }
 
-/// `ParsePiece = pattern:'string' | star:'*' | ParseColumn`
+/// `ParsePart = ParsePiece | ParseColumn`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ParsePart {
+    /// A `ParsePiece`.
+    ParsePiece(ParsePiece),
+    /// A `ParseColumn`.
+    ParseColumn(ParseColumn),
+}
+
+impl AstNode for ParsePart {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        ParsePiece::can_cast(kind) || ParseColumn::can_cast(kind)
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        let node = match syntax.kind() {
+            SyntaxKind::PARSE_PIECE => Self::ParsePiece(ParsePiece { syntax }),
+            SyntaxKind::PARSE_COLUMN => Self::ParseColumn(ParseColumn { syntax }),
+            _ => return None,
+        };
+        Some(node)
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        match self {
+            Self::ParsePiece(it) => it.syntax(),
+            Self::ParseColumn(it) => it.syntax(),
+        }
+    }
+}
+
+impl From<ParsePiece> for ParsePart {
+    fn from(node: ParsePiece) -> Self {
+        Self::ParsePiece(node)
+    }
+}
+
+impl From<ParseColumn> for ParsePart {
+    fn from(node: ParseColumn) -> Self {
+        Self::ParseColumn(node)
+    }
+}
+
+/// `ParsePiece = piece:('string' | '*')`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ParsePiece {
     syntax: SyntaxNode,
@@ -3609,16 +3651,8 @@ impl AstNode for ParsePiece {
 
 impl ParsePiece {
     /// The token child.
-    pub fn pattern(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![string])
-    }
-    /// The token child.
-    pub fn star(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![*])
-    }
-    /// The `ParseColumn` child.
-    pub fn parse_column(&self) -> Option<ParseColumn> {
-        support::child(&self.syntax)
+    pub fn piece(&self) -> Option<SyntaxToken> {
+        support::token_in(&self.syntax, &[T![string], T![*]])
     }
 }
 
@@ -6080,7 +6114,7 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::PARSE_OPERATOR as u16,
         name: "ParseOperator",
-        text: "'parse' OperatorOption* column:Expr 'with' ParsePiece ParsePiece*",
+        text: "'parse' OperatorOption* column:Expr 'with' ParsePart ParsePart*",
         rule: Rule::Seq(&[
             Rule::Kind(T![parse] as u16),
             Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
@@ -6104,14 +6138,20 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
             ]),
             Rule::Kind(T![with] as u16),
-            Rule::Kind(SyntaxKind::PARSE_PIECE as u16),
-            Rule::Rep(&Rule::Kind(SyntaxKind::PARSE_PIECE as u16)),
+            Rule::Alt(&[
+                Rule::Kind(SyntaxKind::PARSE_PIECE as u16),
+                Rule::Kind(SyntaxKind::PARSE_COLUMN as u16),
+            ]),
+            Rule::Rep(&Rule::Alt(&[
+                Rule::Kind(SyntaxKind::PARSE_PIECE as u16),
+                Rule::Kind(SyntaxKind::PARSE_COLUMN as u16),
+            ])),
         ]),
     },
     NodeRule {
         kind: SyntaxKind::PARSE_WHERE_OPERATOR as u16,
         name: "ParseWhereOperator",
-        text: "keyword:'parse-where' OperatorOption* column:Expr 'with' ParsePiece ParsePiece*",
+        text: "keyword:'parse-where' OperatorOption* column:Expr 'with' ParsePart ParsePart*",
         rule: Rule::Seq(&[
             Rule::Kind(T![parse-where] as u16),
             Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
@@ -6135,8 +6175,14 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
             ]),
             Rule::Kind(T![with] as u16),
-            Rule::Kind(SyntaxKind::PARSE_PIECE as u16),
-            Rule::Rep(&Rule::Kind(SyntaxKind::PARSE_PIECE as u16)),
+            Rule::Alt(&[
+                Rule::Kind(SyntaxKind::PARSE_PIECE as u16),
+                Rule::Kind(SyntaxKind::PARSE_COLUMN as u16),
+            ]),
+            Rule::Rep(&Rule::Alt(&[
+                Rule::Kind(SyntaxKind::PARSE_PIECE as u16),
+                Rule::Kind(SyntaxKind::PARSE_COLUMN as u16),
+            ])),
         ]),
     },
     NodeRule {
@@ -7158,12 +7204,8 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::PARSE_PIECE as u16,
         name: "ParsePiece",
-        text: "pattern:'string' | star:'*' | ParseColumn",
-        rule: Rule::Alt(&[
-            Rule::Kind(T![string] as u16),
-            Rule::Kind(T![*] as u16),
-            Rule::Kind(SyntaxKind::PARSE_COLUMN as u16),
-        ]),
+        text: "piece:('string' | '*')",
+        rule: Rule::Alt(&[Rule::Kind(T![string] as u16), Rule::Kind(T![*] as u16)]),
     },
     NodeRule {
         kind: SyntaxKind::PARSE_COLUMN as u16,

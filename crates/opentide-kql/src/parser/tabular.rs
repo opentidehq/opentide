@@ -290,21 +290,23 @@ fn assignment_or_expr(p: &mut P<'_>) {
     }
 }
 
-/// `Name = expr`, `(A, B) = expr`.
+/// `Name = expr`, or `(A, B) = expr` (a tuple assignment).
 fn assignment(p: &mut P<'_>) {
     let m = p.start();
-    if p.at(K::L_PAREN) {
+    let kind = if p.at(K::L_PAREN) {
         let tuple = p.start();
         p.bump();
         list(p, name_ref);
         p.expect(K::R_PAREN);
         p.done(tuple, K::NAME_TUPLE);
+        K::TUPLE_ASSIGNMENT
     } else {
         name_ref(p);
-    }
+        K::ASSIGNMENT
+    };
     p.expect(K::EQ);
     expr::expr(p);
-    p.done(m, K::ASSIGNMENT);
+    p.done(m, kind);
 }
 
 /// A plain or quoted name.
@@ -480,7 +482,9 @@ fn join(p: &mut P<'_>) -> K {
     };
     p.bump();
     options(p);
+    let s = p.start();
     source(p);
+    p.done(s, K::TABULAR_SOURCE);
     p.expect(K::ON_KW);
     list(p, expr_item);
     kind
@@ -618,9 +622,12 @@ fn make_series(p: &mut P<'_>) -> K {
 fn series_aggregate(p: &mut P<'_>) {
     let m = p.start();
     assignment_or_expr(p);
-    if p.eat(K::DEFAULT_KW) {
+    if p.at(K::DEFAULT_KW) {
+        let d = p.start();
+        p.bump();
         p.expect(K::EQ);
         expr::expr(p);
+        p.done(d, K::SERIES_DEFAULT);
     }
     p.done(m, K::SERIES_AGGREGATE);
 }
@@ -646,19 +653,26 @@ fn top_nested_clause(p: &mut P<'_>) {
     if !p.at(K::OF_KW) {
         expr::expr(p);
     }
+    let of = p.start();
     p.expect(K::OF_KW);
     assignment_or_expr(p);
-    if p.eat(K::WITH_KW) {
+    p.done(of, K::TOP_NESTED_OF);
+    if p.at(K::WITH_KW) {
+        let others = p.start();
+        p.bump();
         p.expect(K::OTHERS_KW);
         p.expect(K::EQ);
         expr::expr(p);
+        p.done(others, K::TOP_NESTED_OTHERS);
     }
+    let by = p.start();
     p.expect(K::BY_KW);
     assignment_or_expr(p);
     if matches!(p.current(), K::ASC_KW | K::DESC_KW) {
         p.bump();
     }
     nulls(p);
+    p.done(by, K::TOP_NESTED_BY);
     p.done(m, K::TOP_NESTED_CLAUSE);
 }
 

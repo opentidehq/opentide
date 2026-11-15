@@ -5,19 +5,20 @@ expression: "show(\"search kind = case_sensitive \\\"x\\\" | search \\\"y\\\" | 
 SOURCE_FILE@0..54
   QUERY@0..54
     TABULAR_EXPRESSION@0..54
-      SEARCH_SOURCE@0..32
-        SEARCH_KW@0..6 "search"
-        WHITESPACE@6..7 " "
-        OPERATOR_OPTION@7..28
-          IDENT@7..11 "kind"
-          WHITESPACE@11..12 " "
-          EQ@12..13 "="
-          WHITESPACE@13..14 " "
-          OPTION_VALUE@14..28
-            IDENT@14..28 "case_sensitive"
-        WHITESPACE@28..29 " "
-        LITERAL@29..32
-          STRING@29..32 "\"x\""
+      TABULAR_SOURCE@0..32
+        SEARCH_SOURCE@0..32
+          SEARCH_KW@0..6 "search"
+          WHITESPACE@6..7 " "
+          OPERATOR_OPTION@7..28
+            IDENT@7..11 "kind"
+            WHITESPACE@11..12 " "
+            EQ@12..13 "="
+            WHITESPACE@13..14 " "
+            OPTION_VALUE@14..28
+              IDENT@14..28 "case_sensitive"
+          WHITESPACE@28..29 " "
+          LITERAL@29..32
+            STRING@29..32 "\"x\""
       WHITESPACE@32..33 " "
       PIPE@33..34 "|"
       WHITESPACE@34..35 " "

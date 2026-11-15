@@ -175,10 +175,12 @@ UnionLeg = TableRef | FunctionCall | ParenTabular
 
 // `parse col with "a" x:long * "b"`.
 ParseOperator =
-  'parse' OperatorOption* column:Expr 'with' ParsePiece ParsePiece*
+  'parse' OperatorOption* column:Expr 'with' ParsePart ParsePart*
 ParseWhereOperator =
-  keyword:'parse-where' OperatorOption* column:Expr 'with' ParsePiece ParsePiece*
-ParsePiece = pattern:'string' | star:'*' | ParseColumn
+  keyword:'parse-where' OperatorOption* column:Expr 'with' ParsePart ParsePart*
+// A literal piece (`"id="`, `*`) or a typed column (`id:long`).
+ParsePart = ParsePiece | ParseColumn
+ParsePiece = piece:('string' | '*')
 ParseColumn = name:'ident' (':' Type)?
 ParseKvOperator = keyword:'parse-kv' args:Expr?
 

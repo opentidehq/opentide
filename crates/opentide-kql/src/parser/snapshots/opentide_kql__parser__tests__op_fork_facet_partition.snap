@@ -5,8 +5,9 @@ expression: "show(\"T | fork a = (where x > 1 | take 5) (count) | facet by a, b 
 SOURCE_FILE@0..213
   QUERY@0..213
     TABULAR_EXPRESSION@0..213
-      TABLE_REF@0..1
-        IDENT@0..1 "T"
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
       WHITESPACE@1..2 " "
       PIPE@2..3 "|"
       WHITESPACE@3..4 " "
@@ -154,8 +155,9 @@ SOURCE_FILE@0..213
         L_BRACE@199..200 "{"
         WHITESPACE@200..201 " "
         TABULAR_EXPRESSION@201..211
-          TABLE_REF@201..202
-            IDENT@201..202 "U"
+          TABULAR_SOURCE@201..202
+            TABLE_REF@201..202
+              IDENT@201..202 "U"
           WHITESPACE@202..203 " "
           PIPE@203..204 "|"
           WHITESPACE@204..205 " "
