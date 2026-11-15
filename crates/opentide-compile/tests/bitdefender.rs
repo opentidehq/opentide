@@ -345,6 +345,56 @@ fn tenant_without_automatic_actions_omits_them() {
     assert!(!compiled.settings.contains_key("automaticActions"));
 }
 
+/// `automatic_actions` is on when unset or `true`. A value that is not a
+/// boolean is an error naming the key, not an off switch: `"true"` and `1`
+/// used to turn the actions off without a word.
+#[test]
+fn a_tenant_automatic_actions_that_is_not_a_boolean_is_refused() {
+    let rule = json!({"actions": {"isolate": true}});
+    let on = compiled(
+        &rule,
+        &json!({}),
+        StatusStrategy::Release,
+        Some(&tenant(&json!({}))),
+    )
+    .unwrap();
+    assert!(on.settings.contains_key("automaticActions"));
+    for value in [
+        json!("true"),
+        json!("yes"),
+        json!(1),
+        json!(0),
+        json!(""),
+        json!("$ACTIONS"),
+    ] {
+        let error = compiled(
+            &rule,
+            &json!({}),
+            StatusStrategy::Release,
+            Some(&tenant(&json!({"automatic_actions": value}))),
+        )
+        .err()
+        .unwrap_or_else(|| panic!("{value} was accepted"));
+        assert!(
+            error.reason.contains("automatic_actions"),
+            "{value}: {}",
+            error.reason
+        );
+    }
+    let error = compiled(
+        &rule,
+        &json!({}),
+        StatusStrategy::Release,
+        Some(&tenant(&json!({"automatic_actions": "true"}))),
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.reason,
+        "Bitdefender GravityZone cannot compile this rule: \
+         automatic_actions must be true or false, got \"true\""
+    );
+}
+
 #[test]
 fn antimalware_scans_and_scopes_are_settings() {
     let compiled = compiled(

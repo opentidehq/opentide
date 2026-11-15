@@ -408,6 +408,14 @@ fn block_targets(block: &BitdefenderConfig) -> Option<Json> {
     Some(Json::Object(out))
 }
 
+/// Whether the tenant's GravityZone accepts the rules' automatic actions:
+/// `automatic_actions` is `true` or unset. Any other value, text such as
+/// `"true"` included, is an error that names the key, not an off switch.
+pub fn automatic_actions_on(tenant: &Json) -> Result<bool, CompileError> {
+    crate::deploy::setup_switch(tenant, "automatic_actions", true)
+        .map_err(|message| CompileError::failed(DISPLAY, &message))
+}
+
 /// What `rule` deploys under `strategy` on `tenant` (`compile_rule`). Without
 /// a tenant (an offline preview) there are no tenant tags, default targets
 /// or `companyId`, and `targets` is left out: its aliases resolve only
@@ -420,9 +428,7 @@ pub fn compile_rule(
     tenant: Option<&Json>,
 ) -> Result<GravityZoneRule, CompileError> {
     let block = block_of(rule)?;
-    let automatic = tenant
-        .and_then(|tenant| setup(tenant, "automatic_actions"))
-        .is_none_or(Json::is_true);
+    let automatic = tenant.map_or(Ok(true), automatic_actions_on)?;
     let mut targets = None;
     let mut tenant_tags = Vec::new();
     let mut company_id = None;
