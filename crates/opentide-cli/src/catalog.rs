@@ -33,7 +33,17 @@ pub fn environment() -> Vec<(String, String)> {
         ("OPENTIDE_DEBUG", "1 for debug logging, like --debug".into()),
         (
             "NO_COLOR",
-            "Any value turns colour off, like --no-color".into(),
+            "Any non-empty value turns colour off, like --no-color".into(),
+        ),
+        (
+            "FORCE_COLOR",
+            "0, false, no or off turns colour off; any other value forces it in human and \
+             plain output; NO_COLOR and --no-color win"
+                .into(),
+        ),
+        (
+            "CLICOLOR_FORCE",
+            "Any value but 0 forces colour, like FORCE_COLOR=1; FORCE_COLOR wins".into(),
         ),
         (
             "OPENTIDE_JSON_INDENT",

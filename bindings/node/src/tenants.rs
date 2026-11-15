@@ -133,7 +133,8 @@ pub struct ConnectOptions {
     /// The proxy every request goes through, before the environment's.
     pub proxy: Option<String>,
     /// How long, in seconds, the tenant may take to answer a read (Elastic,
-    /// Splunk, Carbon Black Cloud, Sentinel); default 120.
+    /// Splunk, Carbon Black Cloud, Sentinel, Google SecOps); default 120. A
+    /// deploy waits as long as `opentide deploy` does, whatever this is.
     pub timeout: Option<f64>,
 }
 
