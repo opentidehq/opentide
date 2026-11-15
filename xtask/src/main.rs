@@ -101,7 +101,10 @@ enum Cmd {
     },
     /// Record what the frozen Python CLI does, and check an engine against the
     /// recordings (tests/golden/README.md); `golden help` lists the options
-    Golden(Passthrough),
+    Golden {
+        #[command(subcommand)]
+        command: xtask::golden::Cmd,
+    },
     /// Run the benchmarks against their budgets (UC-0.8, #806)
     Bench(Passthrough),
     /// The deploy compile's request bodies against the oracle's (UC-3.1, #823)
@@ -239,7 +242,7 @@ fn main() -> ExitCode {
         Cmd::Codegen(args) => status("codegen", xtask::codegen::run(&args)),
         Cmd::Mcp { command } => status("mcp", xtask::mcp::run(&command)),
         Cmd::Cassettes { command } => status("cassettes", xtask::cassettes::run(&command)),
-        Cmd::Golden(p) => xtask::golden::main(&p.args),
+        Cmd::Golden { command } => xtask::golden::main(command),
         Cmd::Bench(p) => xtask::bench::main(&p.args),
         Cmd::Payloads(p) => xtask::payloads::main(&p.args),
         Cmd::Vocab(p) => xtask::vocab::main(&p.args),
