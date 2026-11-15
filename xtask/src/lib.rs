@@ -47,3 +47,15 @@ pub(crate) fn parse_subcommand<C: clap::Subcommand + clap::FromArgMatches>(
         command.try_get_matches_from(std::iter::once("xtask").chain(argv.iter().copied()))?;
     C::from_arg_matches(&matches)
 }
+
+/// Parses `argv` (without the program name) as the options `A`, for the
+/// command modules' tests.
+#[cfg(test)]
+pub(crate) fn parse_args<A: clap::Args + clap::FromArgMatches>(
+    argv: &[&str],
+) -> Result<A, clap::Error> {
+    let command = A::augment_args(clap::Command::new("xtask"));
+    let matches =
+        command.try_get_matches_from(std::iter::once("xtask").chain(argv.iter().copied()))?;
+    A::from_arg_matches(&matches)
+}

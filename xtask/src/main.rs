@@ -117,7 +117,10 @@ enum Cmd {
     },
     /// The vocabularies: sync, generate, compare and ingest (UC-1.6, #812);
     /// `vocab help` lists the options
-    Vocab(Passthrough),
+    Vocab {
+        #[command(subcommand)]
+        command: xtask::vocab::Cmd,
+    },
     /// The object models against the oracle: their JSON Schemas, and their
     /// verdict on every object file of every corpus (UC-1.3, #809)
     Schema {
@@ -137,15 +140,6 @@ enum Cmd {
     /// Generate src/opentide/_native/models.pyi and sdk.pyi from the
     /// extension's introspection data (UC-1.9, #815; UC-5.2b, #837)
     Stubs(xtask::stubs::StubsArgs),
-}
-
-/// The arguments of a command that still reads its own: handed over as they
-/// are, help flags included.
-#[derive(Args)]
-#[command(disable_help_flag = true)]
-struct Passthrough {
-    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-    args: Vec<String>,
 }
 
 #[derive(Args)]
@@ -263,7 +257,7 @@ fn main() -> ExitCode {
         Cmd::Golden { command } => xtask::golden::main(command),
         Cmd::Bench(args) => xtask::bench::main(args),
         Cmd::Payloads { command } => xtask::payloads::main(&command),
-        Cmd::Vocab(p) => xtask::vocab::main(&p.args),
+        Cmd::Vocab { command } => xtask::vocab::main(&command),
         Cmd::Schema { command } => xtask::schema::main(&command),
         Cmd::SpecFields(args) => xtask::spec_fields::main(&args),
         Cmd::Stubs(args) => xtask::stubs::main(&args),

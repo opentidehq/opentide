@@ -2,68 +2,94 @@
 
 ```console
 $ xtask vocab help
-usage: cargo xtask vocab <command> [options]
+The vocabularies: sync, generate, compare and ingest (UC-1.6, #812); `vocab help` lists the options
 ...
 
 $ xtask vocab
 ? 2
-usage: cargo xtask vocab <command> [options]
+The vocabularies: sync, generate, compare and ingest (UC-1.6, #812); `vocab help` lists the options
 ...
 
 $ xtask vocab frobnicate
 ? 2
-xtask vocab: unknown command `frobnicate`
+error: unrecognized subcommand 'frobnicate'
 ...
 
 $ xtask vocab diff
 ? 2
-error: vocab diff needs --against python
+error: the following required arguments were not provided:
+  --against <AGAINST>
+
+Usage: cargo xtask vocab diff --against <AGAINST>
+
+For more information, try '--help'.
 
 $ xtask vocab diff --against rust
 ? 2
-error: --against rust: only `python` (the oracle) is supported
+error: invalid value 'rust' for '--against <AGAINST>'
+  [possible values: python]
+
+For more information, try '--help'.
 
 $ xtask vocab sync --bogus
 ? 2
-error: unknown option `--bogus`
+error: unexpected argument '--bogus' found
 ...
 
 $ xtask vocab sentinel-attack --stix-dir
 ? 2
-error: --stix-dir needs a directory
+error: a value is required for '--stix-dir <DIR>' but none was supplied
+
+For more information, try '--help'.
 
 $ xtask vocab ingest --check --apply
 ? 2
-error: use either --check or --apply, not both
+error: the argument '--check' cannot be used with '--apply'
+
+Usage: cargo xtask vocab ingest --check
+
+For more information, try '--help'.
 
 $ xtask vocab ingest --misp-url
 ? 2
-error: --misp-url needs a value
+error: a value is required for '--misp-url <URL>' but none was supplied
+
+For more information, try '--help'.
 
 $ xtask vocab ingest --bogus
 ? 2
-error: unknown option `--bogus`
+error: unexpected argument '--bogus' found
 ...
 
 $ xtask vocab malapi --check --apply
 ? 2
-error: use either --check or --apply, not both
+error: the argument '--check' cannot be used with '--apply'
+
+Usage: cargo xtask vocab malapi --check
+
+For more information, try '--help'.
 
 $ xtask vocab malapi --delay soon
 ? 2
-error: --delay soon: expected a number of seconds
+error: invalid value 'soon' for '--delay <SECS>': `soon` is not a number of seconds
+
+For more information, try '--help'.
 
 $ xtask vocab malapi --delay -1
 ? 2
-error: --delay -1: expected a number of seconds
+error: invalid value '-1' for '--delay <SECS>': `-1` is not a number of seconds
+
+For more information, try '--help'.
 
 $ xtask vocab malapi --html-dir
 ? 2
-error: --html-dir needs a value
+error: a value is required for '--html-dir <DIR>' but none was supplied
+
+For more information, try '--help'.
 
 $ xtask vocab malapi --bogus
 ? 2
-error: unknown option `--bogus`
+error: unexpected argument '--bogus' found
 ...
 
 ```
