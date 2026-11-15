@@ -489,6 +489,7 @@ impl Run<'_> {
         self.emit(&outcome, &[], out, err)
     }
 
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn dispatch(&self, out: &mut dyn Write, err: &mut dyn Write) -> std::io::Result<i32> {
         if self.globals.version {
             writeln!(out, "{} {}", catalog::PROGRAM, self.host.version)?;
@@ -656,6 +657,12 @@ impl Run<'_> {
                 let report = self.generate(args, &generate_phases, &matches);
                 return self.emit_report(&report, out, err);
             }
+            Some(RootCommand::Share(share)) => {
+                return match self.share(share, &matches, &words.join(" ")) {
+                    Ok(report) => self.emit_report(&report, out, err),
+                    Err(failure) => self.refuse(&words, *failure, out, err),
+                };
+            }
             Some(RootCommand::Doctor(args)) => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
                 let report = crate::commands::doctor::run(
@@ -693,11 +700,6 @@ impl Run<'_> {
                 let report = self.validate_query(&matches);
                 self.emit_report(&report, out, err)
             }
-            "share" | "share push" | "share preview" | "share status" | "share retract"
-            | "share targets" => match self.share(&matches, &path) {
-                Ok(report) => self.emit_report(&report, out, err),
-                Err(failure) => self.refuse(&words, *failure, out, err),
-            },
             "deploy replay-state" => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
                 let commit = leaf(&matches)
@@ -1375,6 +1377,7 @@ impl Run<'_> {
     /// `opentide validate query`, from its parsed arguments. The options of
     /// `validate` it also takes, typed before `query`, are its own
     /// (`hand_down`); the others are refused, as is one typed on both.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn validate_query(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
         use crate::commands::validate_query::{Args, COMMAND, Context, plugin_live, run};
         let args = leaf(matches);
@@ -1849,6 +1852,7 @@ impl Run<'_> {
     }
 
     /// Prints `report` in this run's mode; its exit code.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn emit_report(
         &self,
         report: &crate::commands::Report,
@@ -2087,6 +2091,7 @@ impl Run<'_> {
     /// (`hand_down`, `refuse_dropped`), then the run.
     fn share(
         &self,
+        share: &crate::tree::ShareArgs,
         matches: &clap::ArgMatches,
         path: &str,
     ) -> Result<crate::commands::Report, Box<Failure>> {
@@ -2111,20 +2116,16 @@ impl Run<'_> {
             ("changed", "--changed"),
             ("since", "--since"),
         ];
-        let sub = group.subcommand();
-        let (mode, args) = match sub {
-            None => (Mode::Push, group),
-            Some((name, args)) => (
-                match name {
-                    "preview" => Mode::Preview,
-                    "status" => Mode::Status,
-                    "retract" => Mode::Retract,
-                    "targets" => Mode::Targets,
-                    _ => Mode::Push,
-                },
-                args,
-            ),
+        use crate::tree::ShareCommand as Command;
+        let mode = match &share.command {
+            None | Some(Command::Push(_)) => Mode::Push,
+            Some(Command::Preview(_)) => Mode::Preview,
+            Some(Command::Status(_)) => Mode::Status,
+            Some(Command::Retract(_)) => Mode::Retract,
+            Some(Command::Targets(_)) => Mode::Targets,
         };
+        let sub = group.subcommand();
+        let args = sub.map_or(group, |(_, own)| own);
         let accepts = |id: &str| match mode {
             Mode::Push => true,
             Mode::Preview => matches!(id, "target" | "uuid" | "object_type" | "file" | "workers"),
@@ -2173,41 +2174,7 @@ impl Run<'_> {
                 return Err(Box::new(failure));
             }
         }
-        // An option typed on `share` alone is the subcommand's.
-        let pick = |id: &str| -> Option<&clap::ArgMatches> {
-            if typed(group, id) && sub.is_some() {
-                return Some(group);
-            }
-            args.try_contains_id(id).unwrap_or(false).then_some(args)
-        };
-        let strings = |id: &str| -> Vec<String> {
-            pick(id)
-                .and_then(|m| m.get_many::<String>(id))
-                .map(|values| values.cloned().collect())
-                .unwrap_or_default()
-        };
-        let flag = |id: &str| pick(id).is_some_and(|m| m.get_flag(id));
-        let publish = match (pick("publish"), pick("no_publish")) {
-            (Some(m), _) if m.get_flag("publish") => Some(true),
-            (_, Some(m)) if m.get_flag("no_publish") => Some(false),
-            _ => None,
-        };
-        let parsed = Args {
-            mode,
-            targets: strings("target"),
-            uuids: strings("uuid"),
-            types: strings("object_type"),
-            files: strings("file"),
-            dry_run: flag("dry_run"),
-            publish,
-            workers: pick("workers")
-                .and_then(|m| m.get_one::<i64>("workers").copied())
-                .unwrap_or(1),
-            delete: flag("delete"),
-            yes: flag("yes"),
-            changed: flag("changed"),
-            since: pick("since").and_then(|m| m.get_one::<String>("since").cloned()),
-        };
+        let parsed = Args::from_cli(share, |id| typed(group, id));
         let cwd = self.host.cwd.clone().unwrap_or_default();
         Ok(run(
             &parsed,
@@ -2224,6 +2191,7 @@ impl Run<'_> {
 
     /// `setup skills discover` and `setup skills show` (UC-4.1, #831): the
     /// target the command and its groups name, then the catalogue.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn setup_skills_catalogue(
         &self,
         matches: &clap::ArgMatches,
@@ -3880,6 +3848,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn framework_small_behaviours() {
         // TERM=DUMB in any case: no SGR, even in human mode on a terminal.
         let dumb = dispatched(

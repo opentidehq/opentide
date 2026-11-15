@@ -1568,6 +1568,7 @@ async fn generic(
 /// Credentials that cannot be loaded fail every rule on the instance;
 /// refused ones fail the rule they were refused on, and the rest are not
 /// sent.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 async fn google_secops(
     batches: &[Batch],
     timeout: f64,
@@ -1809,6 +1810,7 @@ fn timed_out(
 // ---------------------------------------------------------------- Elastic
 
 /// One advisory's log line (`warn_advisory`, `_emit_rule_advisories`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str, severity: &str) {
     let scheduling = block.get("scheduling").filter(|s| s.is_filled());
     let text = |key: &str, default: &str| {
@@ -1958,6 +1960,7 @@ enum RuleFailure {
 
 /// `ElasticValidator._validate_rule`: the advisories, the Elasticsearch
 /// checks, then a preview of the rule deploy would create.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 async fn elastic_rule(
     connector: &Elastic,
     context: TenantContext<'_>,
@@ -2079,6 +2082,7 @@ async fn elastic_rule(
 }
 
 /// `ElasticValidator.validate`: each rule checked as a whole on each tenant.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 async fn elastic(
     batches: &[Batch],
     timeout: f64,

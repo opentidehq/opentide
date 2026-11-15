@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 use std::process::{Command, Stdio};
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn initialize_and_analyze_kql() {
     let mut lsp = Lsp::spawn();
     let init = lsp.request(
@@ -224,6 +225,7 @@ fn a_cursor_inside_an_escape_in_a_quoted_query_is_answered() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn tide_yaml_pull_diagnostics_and_symbols() {
     let mut lsp = Lsp::spawn();
     let root = repo_root().join("crates/testdata/workspaces/tide_corpus");
@@ -840,6 +842,7 @@ fn yara_rename_across_decomposed_fragments_over_stdio() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn cql_over_stdio() {
     let mut lsp = Lsp::spawn();
     lsp.request("initialize", json!({ "capabilities": {} }));
@@ -1006,6 +1009,7 @@ fn labels(items: &[Value]) -> Vec<String> {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn falco_completion_follows_the_cursor_over_stdio() {
     let mut lsp = Lsp::spawn();
     lsp.request("initialize", json!({ "capabilities": {} }));
@@ -2584,6 +2588,7 @@ fn decoded_tokens(init: &Value, tokens: &Value) -> Vec<(u64, u64, u64, String)> 
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn cql_in_a_crowdstrike_block_and_hunt_over_stdio() {
     // 0.24.0's "CQL in the editor": the CrowdStrike block's query and a
     // `system: crowdstrike` hunt get CQL's hover, completion, highlighting

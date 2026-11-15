@@ -506,6 +506,7 @@ pub fn defender(cx: &Context<'_>) -> Report {
     report("defender", started, written, outcome)
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
     let (tenants, root) = configured(cx, DEFENDER)?;
     super::query::log_unset(&tenants, cx.env);
@@ -1833,6 +1834,7 @@ pub fn elastic(cx: &Context<'_>, space: &str, include_prebuilt: bool) -> Report 
     report(ELASTIC, started, written, outcome)
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn elastic_run(
     cx: &Context<'_>,
     space: &str,

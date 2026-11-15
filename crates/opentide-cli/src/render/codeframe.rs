@@ -405,6 +405,7 @@ impl LineStyles for QueryHighlighter {
 
 impl Frames {
     /// The lines of one diagnostic's frame.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     pub fn diagnostic_lines(
         &self,
         diagnostic: &Diagnostic,

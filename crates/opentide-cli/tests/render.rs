@@ -453,6 +453,7 @@ fn strings(value: &Value) -> Vec<String> {
 
 #[test]
 #[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn render_ci_sinks_escaping_caps_and_summaries() {
     let data = input("ci.input.json");
     for case in data["cases"].as_array().unwrap() {

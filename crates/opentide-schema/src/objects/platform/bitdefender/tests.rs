@@ -178,6 +178,7 @@ fn omitted_status_is_the_missing_field_not_a_code() {
     assert_eq!(found, [("missing".to_owned(), path(&["status"]))]);
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn each_constraint_case() -> Vec<(&'static str, Json)> {
     let mut with_target = process();
     with_target["target"] = json!("flow");
@@ -420,6 +421,7 @@ fn unknown_keys_fail() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn the_specification_1_1_rules() {
     for (code, criteria, target, alert) in [
         (
