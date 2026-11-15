@@ -3574,7 +3574,9 @@ version = "0.12.0"
 dependencies = [
  "insta",
  "logos",
+ "opentide-parse",
  "rowan",
+ "serde_json",
 ]
 
 [[package]]
