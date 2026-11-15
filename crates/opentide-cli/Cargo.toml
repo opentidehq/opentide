@@ -129,6 +129,9 @@ shlex = "2.0"
 terminal_size = "0.4"
 textwrap = { version = "0.16", default-features = false, features = ["unicode-width"] }
 toml.workspace = true
+# `setup platforms` sets `enabled` in a configuration's `[platform]` table,
+# every other byte of the file kept.
+toml_edit.workspace = true
 tracing = "0.1"
 unicode-width = "0.2"
 # The `setup` wizard (UC-3.6c, #951): its questions at a terminal, on
