@@ -12,7 +12,9 @@ check-layers: 1 violation(s) of the layer table (layers.toml)
 
 $ xtask check-layers --layers layers.toml --metadata
 ? 2
-xtask check-layers: --metadata needs a FILE
+error: a value is required for '--metadata <FILE>' but none was supplied
+
+For more information, try '--help'.
 
 $ xtask check-layers --layers missing.toml
 ? 2

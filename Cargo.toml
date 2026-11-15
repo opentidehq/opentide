@@ -168,9 +168,11 @@ quote = "1"
 syn = { version = "3", features = ["full", "extra-traits"] }
 # Test tools, for dev-dependencies only. insta: snapshot assertions, reviewed
 # with `cargo insta review` and committed beside the test (tests/snapshots/);
-# without its `colors` feature, which only colours a failing diff. trycmd:
+# without its `colors` feature, which only colours a failing diff; with `glob`,
+# for one snapshot per corpus file (`insta::glob!`, the pure-Rust parsers'
+# tree snapshots, epic #1219). trycmd:
 # command-line cases (tests/cmd/*.trycmd). Conventions: crates/AGENTS.md.
-insta = { version = "1.49", default-features = false }
+insta = { version = "1.49", default-features = false, features = ["glob"] }
 trycmd = "1.2"
 # Compile-fail cases (tests/ui/*.rs with the expected .stderr beside them).
 trybuild = "1.0"
