@@ -4,97 +4,54 @@ commands; the library's unit tests cover their parts.
 
 ```console
 $ xtask golden help
-usage: cargo xtask golden <command> [options]
+Record what the frozen Python CLI does, and check an engine against the recordings (tests/golden/README.md); `golden help` lists the options
 
-commands:
-  record [--check-determinism] [--filter GLOB] [--jobs N] [--oracle FILE --out DIR]
-             run every case through the oracle and write tests/golden/cases/
-             and COVERAGE.md. --check-determinism runs every case twice and
-             fails, writing nothing, unless both runs agree byte for byte
-  check [--engine python|rust] [--runner python|node] [--filter GLOB] [--jobs N]
-        [--partition K/N [--unused FILE]] [--recordings DIR] [--report FILE] [--keep DIR]
-             run every case through the engine and compare with the
-             recordings; also checks COVERAGE.md and that no recording is
-             missing or orphaned
-  diff [--engine ...] [--runner ...] [--filter GLOB] [--jobs N] [--partition K/N]
-       [--unused FILE] [--recordings DIR] [--report FILE] [--keep DIR]
-             check, printing every difference in full
-  lock [--oracle FILE]
-             rewrite tests/golden/oracle-requirements.txt from ORACLE (uv pip
-             compile); with --oracle, the requirements file FILE names, beside it
-  coverage   rewrite COVERAGE.md from cases.toml and the recordings
+Usage: cargo xtask golden <COMMAND>
 
---filter GLOB  only the cases whose id (<command>/<mode>/<fixture>/<variant>), or a
-               leading part of it, matches: `explain/*` is every explain case
---partition K/N
-               (check, diff) only part K of N: the cases whose id hashes to it
-               (FNV-1a, so every host splits alike); parts 1/N to N/N run every
-               case exactly once. Like --filter, no orphan or COVERAGE.md check
---unused FILE  with --engine rust and --partition: write the ledger entries that
-               applied to no case of this part (JSON, as the report's `stale`)
-               instead of failing on them; an entry is stale when it is in
-               every part's FILE (CI's `Golden compare` gathers them)
---engine       python (the oracle, the default); rust: this repository's CLI against
-               the recordings, every case, through the comparator and
-               tests/golden/APPROVED_DIFFS.toml (UC-6.2: the Rust core is the
-               only implementation)
---runner       how --engine rust's candidate is launched: python (the default),
-               the PyPI console script of .venv; node, the npm package's `opentide`
-               bin (bindings/node/cli.js, after `npm run build` there) under the
-               `node` on PATH, which runs the same command line in-process
-               (UC-5.3); wasi, the WASI build of the command line
-               (target/wasm32-wasip1/wasi/opentide.wasm, `build-wasm.sh cli`) under
-               wasmtime, or $OPENTIDE_WASI_RUNTIME (`node`: Node's WASI), the case's
-               paths mapped where they are, its environment and working directory
-               passed in (ADR 0007's amendment); cases that need the network are
-               left out (tests/golden/WASI_EXCLUDED.toml). `--runner node` or
-               `--runner wasi` alone implies --engine rust
---report FILE  with --engine rust: write the JSON report (opentide-compare's RunReport)
---keep DIR     with --engine rust: write each differing case's candidate run into
-               DIR/cases and DIR/blobs, in the recordings' format (normalised as a
-               recording is, before the comparison's version rule), to read or to
-               re-base ledger entries against
---oracle FILE  another oracle file than tests/golden/ORACLE, in its format (a preview
-               of the next oracle: tests/golden/ORACLE.next); `record` with it
-               needs --out, so that the committed recordings stay the ORACLE's
---out DIR      record into DIR/cases and DIR/blobs instead of tests/golden, and copy
-               the oracle file (as DIR/ORACLE) and its requirements there; a case
-               that fails is reported and the others are still written; no
-               COVERAGE.md. DIR must be outside tests/golden
---recordings DIR
-               check against the recordings of `record --out DIR`, with the
-               oracle of DIR/ORACLE; no COVERAGE.md check, and with --engine rust
-               no stale-ledger check (the ledger is the committed oracle's)
+Commands:
+  record    Run every case through the oracle and write tests/golden/cases/ and COVERAGE.md. --check-determinism runs every case twice and fails, writing nothing, unless both runs agree byte for byte
+  check     Run every case through the engine and compare with the recordings; also checks COVERAGE.md and that no recording is missing or orphaned
+  diff      Check, printing every difference in full
+  lock      Rewrite tests/golden/oracle-requirements.txt from ORACLE (uv pip compile)
+  coverage  Rewrite COVERAGE.md from cases.toml and the recordings
+  help      Print this message or the help of the given subcommand(s)
 
-exit status: 0 passed, 1 a difference or a failed case, 2 usage error or the run could not start
+Options:
+  -h, --help  Print help
 
 $ xtask golden
 ? 2
-xtask golden: missing command
+Record what the frozen Python CLI does, and check an engine against the recordings (tests/golden/README.md); `golden help` lists the options
 
-usage: cargo xtask golden <command> [options]
+Usage: cargo xtask golden <COMMAND>
 ...
 
 $ xtask golden frobnicate
 ? 2
-xtask golden: unknown command `frobnicate`
+error: unrecognized subcommand 'frobnicate'
 
-usage: cargo xtask golden <command> [options]
+Usage: cargo xtask golden <COMMAND>
 ...
 
 $ xtask golden record --engine rust
 ? 2
-xtask golden: only the oracle records: `record` takes no --engine or --runner
+error: unexpected argument '--engine' found
+
+Usage: cargo xtask golden record [OPTIONS]
+
+For more information, try '--help'.
 
 $ xtask golden check --check-determinism
 ? 2
-xtask golden: unknown option `--check-determinism` for this command
+error: unexpected argument '--check-determinism' found
 
-usage: cargo xtask golden <command> [options]
+Usage: cargo xtask golden check [OPTIONS]
 ...
 
 $ xtask golden check --jobs many
 ? 2
-xtask golden: --jobs needs a number: invalid digit found in string
+error: invalid value 'many' for '--jobs <N>': invalid digit found in string
+
+For more information, try '--help'.
 
 ```

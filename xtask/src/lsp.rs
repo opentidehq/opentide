@@ -29,61 +29,49 @@ use crate::corpus::cli::{Scratch, corpora_dir, load_catalogue, write_workspace};
 use crate::corpus::faults::{self, Kind};
 use crate::corpus::generate;
 use anyhow::{Context, Result, bail};
+use clap::{Subcommand, ValueEnum};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
-/// The usage of `cargo xtask lsp`.
-pub const USAGE: &str = "\
-usage: cargo xtask lsp parity --corpus faults [--only ID,...] [--keep DIR]
-
-  For each fault kind `opentide validate` reports, the language server's
-  published diagnostics must equal validate's findings, with lint's file
-  name and metadata findings, file by file: codes, severities and ranges
-  (code points converted to UTF-16).
-";
-
 /// One finding as both sides are compared: code, severity, and the range
 /// `(line, character)` to `(line, character)` in LSP's coordinates.
 type Key = (String, String, (u32, u32), (u32, u32));
 
-/// Runs `lsp <args>`; the process exit status.
-pub fn run(args: &[String]) -> Result<u8> {
-    let Some((command, rest)) = args.split_first() else {
-        bail!("missing command\n\n{USAGE}");
-    };
-    if command != "parity" {
-        if matches!(command.as_str(), "help" | "--help" | "-h") {
-            print!("{USAGE}");
-            return Ok(0);
-        }
-        bail!("unknown command `{command}`\n\n{USAGE}");
-    }
-    let mut corpus = None;
-    let mut only: Option<BTreeSet<String>> = None;
-    let mut keep = None;
-    let mut rest = rest.iter();
-    while let Some(arg) = rest.next() {
-        let mut value = || {
-            rest.next()
-                .cloned()
-                .with_context(|| format!("{arg} needs a value"))
-        };
-        match arg.as_str() {
-            "--corpus" => corpus = Some(value()?),
-            "--only" => {
-                only = Some(value()?.split(',').map(str::to_owned).collect());
-            }
-            "--keep" => keep = Some(PathBuf::from(value()?)),
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        }
-    }
-    if corpus.as_deref() != Some("faults") {
-        bail!("--corpus faults is the one corpus\n\n{USAGE}");
-    }
-    parity(only.as_ref(), keep)
+/// `lsp` commands.
+#[derive(Subcommand)]
+pub enum Cmd {
+    /// For each fault kind `opentide validate` reports, the language server's
+    /// published diagnostics must equal validate's findings, with lint's file
+    /// name and metadata findings, file by file: codes, severities and ranges
+    /// (code points converted to UTF-16)
+    Parity {
+        /// The one corpus there is
+        #[arg(long, value_enum)]
+        corpus: Corpus,
+        /// Only these fault kinds
+        #[arg(long, value_name = "ID", value_delimiter = ',')]
+        only: Option<Vec<String>>,
+        /// Keep the workspaces in DIR, which must not exist
+        #[arg(long, value_name = "DIR")]
+        keep: Option<PathBuf>,
+    },
+}
+
+/// The workspaces compared.
+#[derive(Clone, Copy, ValueEnum)]
+pub enum Corpus {
+    /// Each fault kind alone
+    Faults,
+}
+
+/// Runs `lsp <command>`; the process exit status.
+pub fn run(command: &Cmd) -> Result<u8> {
+    let Cmd::Parity { only, keep, .. } = command;
+    let only: Option<BTreeSet<String>> = only.as_ref().map(|ids| ids.iter().cloned().collect());
+    parity(only.as_ref(), keep.clone())
 }
 
 /// Whether `kind` is what `opentide validate` alone reports.
@@ -542,8 +530,8 @@ mod tests {
         assert!(catalogue.kinds.iter().any(|kind| compared(kind).is_ok()));
     }
 
-    fn args(args: &[&str]) -> Vec<String> {
-        args.iter().map(|arg| (*arg).to_owned()).collect()
+    fn parse(argv: &[&str]) -> Result<Cmd, clap::Error> {
+        crate::parse_subcommand(argv)
     }
 
     #[test]
@@ -562,7 +550,7 @@ mod tests {
             "lint-placeholder",
         ]
         .join(",");
-        let status = run(&args(&[
+        let status = run(&parse(&[
             "parity",
             "--corpus",
             "faults",
@@ -570,7 +558,8 @@ mod tests {
             &only,
             "--keep",
             keep.to_str().unwrap(),
-        ]))
+        ])
+        .unwrap())
         .unwrap();
         assert_eq!(status, 0);
         // --keep keeps each compared kind's workspace, and only those.
@@ -578,7 +567,7 @@ mod tests {
         assert!(keep.join("config-schema-validation-platform").is_dir());
         assert!(!keep.join("lint-placeholder").exists());
         // A kept folder is never written over.
-        let error = run(&args(&[
+        let error = run(&parse(&[
             "parity",
             "--corpus",
             "faults",
@@ -586,7 +575,8 @@ mod tests {
             "uuid-invalid-rule",
             "--keep",
             keep.to_str().unwrap(),
-        ]))
+        ])
+        .unwrap())
         .unwrap_err()
         .to_string();
         assert!(
@@ -597,18 +587,15 @@ mod tests {
 
     #[test]
     fn the_command_line_is_parity_on_the_fault_corpus() {
-        assert_eq!(run(&args(&["--help"])).unwrap(), 0);
-        let error = |argv: &[&str]| run(&args(argv)).unwrap_err().to_string();
-        assert!(error(&[]).starts_with("missing command"));
-        assert!(error(&["diff"]).starts_with("unknown command `diff`"));
-        assert!(error(&["parity", "--fast"]).starts_with("unknown option `--fast`"));
-        assert_eq!(error(&["parity", "--only"]), "--only needs a value");
-        assert!(error(&["parity"]).starts_with("--corpus faults is the one corpus"));
-        assert!(
-            error(&["parity", "--corpus", "fixtures"]).starts_with("--corpus faults is the one")
-        );
+        assert!(parse(&[]).is_err());
+        assert!(parse(&["diff"]).is_err());
+        assert!(parse(&["parity", "--fast"]).is_err());
+        assert!(parse(&["parity", "--only"]).is_err());
+        assert!(parse(&["parity"]).is_err(), "no --corpus");
+        assert!(parse(&["parity", "--corpus", "fixtures"]).is_err());
+        let command = parse(&["parity", "--corpus", "faults", "--only", "no-such-kind"]).unwrap();
         assert_eq!(
-            error(&["parity", "--corpus", "faults", "--only", "no-such-kind"]),
+            run(&command).unwrap_err().to_string(),
             "--only: no fault kind `no-such-kind`"
         );
     }

@@ -100,6 +100,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 - **`opentide`'s `queries` and `plugins` features no longer build the terminal UI.** They brought the command line's `terminal` feature (ratatui, crossterm, the `setup` wizard's prompts) along, which a host that only checks queries or runs platform plugins never uses. Only the `cli` feature enables it, so the `opentide` binary and the bindings are unchanged. A crate that depends on `opentide-cli` directly keeps its default features ([#1180](https://github.com/opentidehq/opentide/issues/1180)).
 
+- **`opentide_connectors::transport::BuildError` shows its whole text** ([opentide#1180](https://github.com/opentidehq/opentide/issues/1180)). Its `Display` was reqwest's bare `builder error`; it is now `builder error: <reason>` (for example `builder error: relative URL without a base`), as `describe()` already gave. `RequestBuilder` parses with `url` and `http` on every target and refuses a URL with no host (`mailto:`, `file:`, `data:`) as before.
+
 ### Fixed
 
 - **Defender's custom-detection column check reads a string before a comment.** `opentide_connectors::defender::defender_xdr_tables_in_query` (and `required_column_groups`, `missing_required_column_groups`) masked `//` comments before strings, so `let u = "http://x"; DeviceNetworkEvents | …` named no table; they mask with `opentide_connectors::connector::kql_code` now, which now also reads a doubled quote inside a verbatim string (`@"a""b"`) as part of it and blanks multi-line strings (```` ```…``` ````, `~~~…~~~`). As Kusto has no `/* */` comments, a table named inside one is read as code and its columns are required. `kql_with_limit` and SentinelOne's stage check read these strings the same way.

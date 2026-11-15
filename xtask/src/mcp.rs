@@ -30,6 +30,7 @@
 
 use crate::golden::fixture::FixtureSpec;
 use anyhow::{Context, Result, bail, ensure};
+use clap::{ArgGroup, Args, Subcommand, ValueEnum};
 use opentide_compare::ledger::{Ledger, Usage};
 use opentide_compare::{Case, Run};
 use serde::Deserialize;
@@ -58,23 +59,62 @@ pub const DEFAULT_PROTOCOL_VERSION: &str = "2025-06-18";
 /// How long one message may take to be answered.
 const ANSWER_TIMEOUT: Duration = Duration::from_secs(300);
 
-const USAGE: &str = "\
-usage: cargo xtask mcp record --python PATH|--oracle FILE [--only NAME]
-       cargo xtask mcp replay --engine rust [--python PATH] [--show-approved] FILE...
+/// `cargo xtask mcp <command>`.
+#[derive(Subcommand)]
+pub enum Cmd {
+    /// Send each session of tests/golden/mcp/sessions.toml to the Python
+    /// server of the opentide release the interpreter runs (one before the
+    /// Python implementation was removed) and write
+    /// `tests/golden/mcp/<session>.jsonl`
+    Record(RecordArgs),
+    /// Send each recording's messages to this repository's server and compare
+    /// the answers; differences only through tests/golden/APPROVED_DIFFS.toml
+    /// (command `mcp start`)
+    Replay(ReplayArgs),
+}
 
-record   sends each session of tests/golden/mcp/sessions.toml to the Python
-         server of the opentide release PATH runs (one before the Python
-         implementation was removed) and writes tests/golden/mcp/<session>.jsonl
-replay   sends each recording's messages to this repository's server and
-         compares the answers; differences only through
-         tests/golden/APPROVED_DIFFS.toml (command `mcp start`)
+/// The options of `mcp record`.
+#[derive(Args)]
+#[command(group = ArgGroup::new("interpreter").required(true).args(["python", "oracle"]))]
+pub struct RecordArgs {
+    /// The interpreter of the package
+    #[arg(long, value_name = "PATH")]
+    pub python: Option<PathBuf>,
+    /// An oracle file (tests/golden/ORACLE, or a preview such as
+    /// tests/golden/ORACLE.next): install that release, as `golden record`
+    /// does, and run its interpreter
+    #[arg(long, value_name = "FILE")]
+    pub oracle: Option<PathBuf>,
+    /// Only the session NAME
+    #[arg(long, value_name = "NAME")]
+    pub only: Option<String>,
+}
 
---python names the interpreter of the package (replay's default: the
-repository's .venv, or OPENTIDE_PYTHON).
---oracle names an oracle file (tests/golden/ORACLE, or a preview such as
-tests/golden/ORACLE.next): record installs that release, as `golden record`
-does, and runs its interpreter.
-";
+/// The server replayed against.
+#[derive(Clone, Copy, ValueEnum)]
+pub enum Engine {
+    /// This repository's server: opentide's only one, the recordings being the
+    /// Python server's
+    Rust,
+}
+
+/// The options of `mcp replay`.
+#[derive(Args)]
+pub struct ReplayArgs {
+    /// The server to replay against
+    #[arg(long, value_enum)]
+    pub engine: Engine,
+    /// The interpreter of the package (default: the repository's .venv, or
+    /// $OPENTIDE_PYTHON)
+    #[arg(long, value_name = "PATH")]
+    pub python: Option<PathBuf>,
+    /// Print each approved difference too
+    #[arg(long)]
+    pub show_approved: bool,
+    /// The recordings
+    #[arg(required = true, value_name = "FILE")]
+    pub files: Vec<PathBuf>,
+}
 
 /// `tests/golden/mcp/sessions.toml`.
 #[derive(Debug, Deserialize)]
@@ -245,73 +285,37 @@ impl Recording {
     }
 }
 
-/// `cargo xtask mcp <args>`; the exit status.
-pub fn run(args: &[String]) -> Result<u8> {
-    let Some((command, rest)) = args.split_first() else {
-        eprint!("{USAGE}");
-        return Ok(2);
-    };
+/// `cargo xtask mcp <command>`; the exit status.
+pub fn run(command: &Cmd) -> Result<u8> {
     let repo = crate::corpus::cli::repo_root();
-    let mut python: Option<PathBuf> = None;
-    let mut oracle_file: Option<PathBuf> = None;
-    let mut only: Option<String> = None;
-    let mut engine: Option<String> = None;
-    let mut show_approved = false;
-    let mut files = Vec::new();
-    let mut iter = rest.iter();
-    while let Some(arg) = iter.next() {
-        match arg.as_str() {
-            "--python" => python = Some(PathBuf::from(iter.next().context("--python PATH")?)),
-            "--oracle" => {
-                oracle_file = Some(PathBuf::from(iter.next().context("--oracle FILE")?));
-            }
-            "--only" => only = Some(iter.next().context("--only NAME")?.clone()),
-            "--engine" => engine = Some(iter.next().context("--engine NAME")?.clone()),
-            "--show-approved" => show_approved = true,
-            "help" | "--help" | "-h" => {
-                print!("{USAGE}");
-                return Ok(0);
-            }
-            other if other.starts_with('-') => bail!("unknown option {other}\n{USAGE}"),
-            other => files.push(PathBuf::from(other)),
-        }
-    }
     let sessions = load_sessions(&repo)?;
-    match command.as_str() {
-        "record" => {
+    match command {
+        Cmd::Record(RecordArgs {
+            python,
+            oracle,
+            only,
+        }) => {
             // This repository has no Python server any more: the recordings
             // come from a release that has one.
-            let python = match (python, oracle_file) {
-                (Some(_), Some(_)) => {
-                    bail!("record takes --python PATH or --oracle FILE, not both")
-                }
-                (Some(python), None) => python,
-                (None, Some(file)) => oracle_python(&file)?,
-                (None, None) => bail!(
-                    "record needs --python PATH or --oracle FILE: an opentide release with the \
-                     Python server"
-                ),
+            let python = match (python, oracle) {
+                (Some(python), _) => python.clone(),
+                (None, Some(file)) => oracle_python(file)?,
+                // clap requires one of the two.
+                (None, None) => bail!("record needs --python PATH or --oracle FILE"),
             };
             record(&repo, &python, &sessions, only.as_deref())?;
             Ok(0)
         }
-        "replay" => {
-            let python = python.unwrap_or_else(|| default_python(&repo));
-            let engine = engine.context("replay needs --engine rust")?;
-            ensure!(
-                engine == "rust",
-                "--engine {engine}: the Rust server is opentide's only one (rust); \
-                 the recordings are the Python server's"
-            );
-            ensure!(!files.is_empty(), "replay needs recordings\n{USAGE}");
-            let passed = replay(&repo, &python, &sessions, &files, show_approved)?;
+        Cmd::Replay(ReplayArgs {
+            python,
+            show_approved,
+            files,
+            ..
+        }) => {
+            let python = python.clone().unwrap_or_else(|| default_python(&repo));
+            let passed = replay(&repo, &python, &sessions, files, *show_approved)?;
             Ok(u8::from(!passed))
         }
-        "help" | "--help" | "-h" => {
-            print!("{USAGE}");
-            Ok(0)
-        }
-        other => bail!("unknown command `{other}`\n{USAGE}"),
     }
 }
 
