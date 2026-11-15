@@ -249,9 +249,7 @@ impl FileSystem for OsFs {
                 }
                 Component::Normal(name) => {
                     let candidate = resolved.join(name);
-                    resolved = std::fs::canonicalize(&candidate)
-                        .map(strip_verbatim)
-                        .unwrap_or(candidate);
+                    resolved = dunce::canonicalize(&candidate).unwrap_or(candidate);
                 }
             }
         }
@@ -261,7 +259,7 @@ impl FileSystem for OsFs {
 
 impl WriteFs for OsFs {
     fn replace(&self, path: &Path, before: &[u8], after: &[u8]) -> Result<(), WriteError> {
-        let target = std::fs::canonicalize(path).map(strip_verbatim)?;
+        let target = dunce::canonicalize(path)?;
         if std::fs::read(&target)? != before {
             return Err(WriteError::Changed);
         }
@@ -317,8 +315,8 @@ impl WriteFs for OsFs {
 /// The folder or the file cannot be written.
 pub fn write_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
     use std::io::Write as _;
-    let target = match std::fs::canonicalize(path) {
-        Ok(target) => strip_verbatim(target),
+    let target = match dunce::canonicalize(path) {
+        Ok(target) => target,
         Err(error) if error.kind() == io::ErrorKind::NotFound => path.to_path_buf(),
         Err(error) => return Err(error),
     };
@@ -414,21 +412,6 @@ fn replace_may_succeed_later(error: &io::Error, target: &Path) -> bool {
         error.raw_os_error(),
         Some(ERROR_ACCESS_DENIED | ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION)
     ) && !std::fs::metadata(target).is_ok_and(|metadata| metadata.permissions().readonly())
-}
-
-/// `canonicalize` on Windows answers `\\?\C:\...`; the rest of the path, and
-/// every path a user gives, has no such prefix.
-fn strip_verbatim(path: PathBuf) -> PathBuf {
-    #[cfg(windows)]
-    {
-        let text = path.to_string_lossy();
-        if let Some(rest) = text.strip_prefix(r"\\?\")
-            && !rest.starts_with("UNC\\")
-        {
-            return PathBuf::from(rest.to_owned());
-        }
-    }
-    path
 }
 
 /// `path` with `.` and `..` folded away, lexically.
