@@ -12,7 +12,7 @@
 # The comparison base (BASE_BRANCH): integration/unified-core, where the Rust command
 # line is; development has none until the Unified Core merges there (epic #790), so its
 # runs would compare the Rust engine with nothing. Set BASE_BRANCH back to development
-# when it does. The last result is the bench-<engine> artifact of the newest run on
+# when it does. The rust engine's last result is the bench-rust artifact of the newest run on
 # BASE_BRANCH, of ci.yml's nightly or of this workflow run alone, whose job for that
 # engine succeeded on the same CPU model (scripts/ci/bench_reference.py). A job that failed its check is never the
 # reference, so a regression stays red until it is fixed or the budgets are
@@ -158,7 +158,14 @@ jobs:
       # workflow, so the run and its artifacts are ci.yml's) or of this workflow
       # run alone, whose job for this engine succeeded on this run's CPU: its
       # bench-<engine> artifact is the reference (scripts/ci/bench_reference.py).
+      #
+      # Only for the rust engine: the python engine is a fixed PyPI wheel (the
+      # oracle) that no change to this repository touches, so its last result
+      # differs from this one by the runner alone (the same wheel moved up to 27%
+      # between two runs on one CPU model, all commands together) and the 10% rule
+      # would measure the hardware. It is held to the oracle baseline of its CPU.
       - name: Find the base branch's last result
+        if: matrix.engine == 'rust'
         env:
           GH_TOKEN: ${{ github.token }}
           ENGINE: ${{ matrix.engine }}

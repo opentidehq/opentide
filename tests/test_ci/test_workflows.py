@@ -240,6 +240,15 @@ def test_the_nightly_is_one_workflow() -> None:
         assert set(triggers(load(WORKFLOWS / name))) <= {"workflow_call", "workflow_dispatch"}
 
 
+def test_only_the_rust_benchmark_is_held_to_a_last_result() -> None:
+    """The python engine is a fixed PyPI wheel: its last result measures the runner."""
+    steps = load(WORKFLOWS / "bench.yml")["jobs"]["bench"]["steps"]
+    (find,) = (s for s in steps if s.get("name") == "Find the base branch's last result")
+    assert find["if"] == "matrix.engine == 'rust'"
+    check = next(s for s in steps if s.get("name") == "Check against the budgets")
+    assert "--previous" in check["run"]  # still given to rust, only when a reference exists
+
+
 def test_no_workflow_runs_on_a_tag() -> None:
     for path in ALL:
         push = triggers(load(path)).get("push") or {}
