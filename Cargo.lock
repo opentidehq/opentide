@@ -3376,10 +3376,12 @@ dependencies = [
 name = "opentide-core"
 version = "0.12.0"
 dependencies = [
+ "indexmap",
  "regex",
  "saphyr",
  "saphyr-parser",
  "serde",
+ "serde_json",
  "strsim",
  "thiserror 2.0.21",
  "toml 0.8.23",

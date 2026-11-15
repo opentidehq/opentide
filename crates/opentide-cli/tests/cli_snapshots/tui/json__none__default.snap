@@ -1,0 +1,38 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: tui/json/none/default
+---
+args: opentide --json tui
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "tui",
+  "duration_ms": 0,
+  "error": "opentide tui needs an interactive terminal; this run is in json mode",
+  "exit_code": 2,
+  "failure": {
+    "argument": null,
+    "code": "usage_tui_needs_tty",
+    "crash_log": null,
+    "message": "opentide tui needs an interactive terminal; this run is in json mode",
+    "suggestion": null
+  },
+  "message": "opentide tui needs an interactive terminal; this run is in json mode",
+  "next_actions": [
+    {
+      "command": "opentide --json info",
+      "reason": "catalogue counts and platforms"
+    },
+    {
+      "command": "opentide --json validate",
+      "reason": "diagnostics for every object"
+    }
+  ],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

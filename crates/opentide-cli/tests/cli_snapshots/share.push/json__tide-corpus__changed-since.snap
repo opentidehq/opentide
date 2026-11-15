@@ -1,0 +1,23 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.push/json/tide-corpus/changed-since
+---
+args: opentide --json share push --changed --since 0123456789abcdef0123456789abcdef01234567
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share push",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "No enabled sharing target",
+  "next_actions": [],
+  "ok": true,
+  "records": [],
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {}
+}
+
+━━━ stderr · empty

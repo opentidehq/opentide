@@ -1,0 +1,40 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/live-tenants/live-unset-defender-for-endpoint
+---
+args: opentide --json validate query --live --platform defender_for_endpoint
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate query",
+  "duration_ms": 0,
+  "error": "Microsoft Graph credentials are unset ($DEFENDER_CLIENT_SECRET). Set those environment variables before a live check.",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "Microsoft Graph credentials are unset ($DEFENDER_CLIENT_SECRET). Set those environment variables before a live check.",
+    "suggestion": null
+  },
+  "message": "Microsoft Graph credentials are unset ($DEFENDER_CLIENT_SECRET). Set those environment variables before a live check.",
+  "mode": "live",
+  "next_actions": [],
+  "ok": false,
+  "platform": "defender_for_endpoint",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "supported": true
+}
+
+━━━ stderr · json, 1 lines
+{
+  "advice": "Set those environment variables before a live check.",
+  "detail": "Unset configuration variables: $DEFENDER_CLIENT_SECRET",
+  "event": "environment_variable_missing",
+  "level": "critical",
+  "logger": "opentide.core.environment",
+  "timestamp": "0000-00-00 00:00:00"
+}

@@ -1,0 +1,19 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/plain/empty/send-every-platform-ci-github
+---
+args: opentide deploy --strategy PREVIEW --all
+exit: 0
+
+━━━ stdout
+::warning::No rule this run read has a status that maps to its strategies
+Skipped: No rule this run read has a status that maps to its strategies
+
+━━━ stderr · empty
+
+━━━ tmp/github-step-summary.md · created 0644
+### – opentide deploy
+
+No rule this run read has a status that maps to its strategies
+
+Strategies: `PREVIEW`

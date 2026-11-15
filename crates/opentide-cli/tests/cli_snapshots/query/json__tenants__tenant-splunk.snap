@@ -1,0 +1,77 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/json/tenants/tenant-splunk
+---
+args: opentide --json query --platform splunk --from 2099-01-01T00:00:00Z --to 2099-01-01T01:00:00Z --limit 2 'index=main EventCode=4688'
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "query",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "limit": 2,
+  "message": "2 rows from 1 splunk tenant (limited to 2 per tenant)",
+  "next_actions": [],
+  "ok": true,
+  "platform": "splunk",
+  "query": "index=main EventCode=4688",
+  "results": [
+    {
+      "columns": [
+        {
+          "name": "_time",
+          "type": null
+        },
+        {
+          "name": "host",
+          "type": null
+        },
+        {
+          "name": "count",
+          "type": null
+        }
+      ],
+      "elapsed_ms": 0,
+      "language": "spl",
+      "partial": false,
+      "row_count": 2,
+      "rows": [
+        {
+          "_time": "2026-10-27T07:51:00.000+00:00",
+          "count": "1",
+          "host": "ws-1"
+        },
+        {
+          "_time": "2026-10-27T07:52:00.000+00:00",
+          "count": "2",
+          "host": "ws-2"
+        }
+      ],
+      "sent": "search index=main EventCode=4688",
+      "status": "ok",
+      "tenant": "lab",
+      "truncated": true,
+      "warnings": []
+    }
+  ],
+  "row_count": 2,
+  "schema_version": 1,
+  "source": "query",
+  "status": "completed",
+  "summary": {
+    "failed": 0,
+    "rows": 2,
+    "tenants": 1
+  },
+  "tenants": [
+    "lab"
+  ],
+  "window": {
+    "from": "2099-01-01T00:00:00.000Z",
+    "to": "2099-01-01T01:00:00.000Z"
+  }
+}
+
+━━━ stderr · empty
