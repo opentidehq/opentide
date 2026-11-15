@@ -29,9 +29,10 @@ pub const SARIF_VERSION: &str = "2.1.0";
 pub const SRCROOT: &str = "%SRCROOT%";
 
 /// `--format`: the code frames people read, or a report file for a CI service.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ReportFormat {
     /// Code frames.
+    #[default]
     Text,
     /// SARIF 2.1.0.
     Sarif,
