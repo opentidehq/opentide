@@ -6,7 +6,36 @@
 //! `failure`. A non-zero exit always carries `error`: where the command put it,
 //! else after `message`.
 
-use crate::json::Json;
+use crate::json::{Json, Object};
+
+/// Puts a run's `warnings` in a document's members, after `message`. A
+/// command that wrote `warnings` among its own keys keeps them: the run's
+/// come first, then the command's that are not already there; a `warnings`
+/// that is not an array is kept as one entry.
+///
+/// With no run warnings the members are untouched, so the command's own
+/// `warnings` stay where it put them. With some, the key moves to just after
+/// `message` (the end when there is no `message`).
+pub fn put_warnings(members: &mut Object, warnings: &[String]) {
+    if warnings.is_empty() {
+        return;
+    }
+    let mut all: Vec<Json> = warnings.iter().map(Json::str).collect();
+    let own = match members.shift_remove("warnings") {
+        Some(Json::Array(own)) => own,
+        Some(other) => vec![other],
+        None => Vec::new(),
+    };
+    for item in own {
+        if !all.contains(&item) {
+            all.push(item);
+        }
+    }
+    let at = members
+        .get_index_of("message")
+        .map_or(members.len(), |at| at + 1);
+    members.shift_insert(at, "warnings".into(), Json::Array(all));
+}
 
 /// Bumped only when an existing key changes meaning, which the contract forbids.
 pub const SCHEMA_VERSION: i64 = 1;
@@ -276,5 +305,43 @@ mod tests {
         );
         assert_eq!(json_command("opentide --json lint"), "opentide --json lint");
         assert_eq!(json_command("git status"), "git status");
+    }
+
+    #[test]
+    fn a_runs_warnings_join_the_commands_own() {
+        let mut members = Object::new();
+        members.insert("own".into(), Json::Int(1));
+        members.insert(
+            "warnings".into(),
+            Json::Array(vec![Json::str("b"), Json::str("a")]),
+        );
+        members.insert("message".into(), Json::str("m"));
+        members.insert("exit_code".into(), Json::Int(0));
+        put_warnings(&mut members, &[]);
+        assert_eq!(
+            members.keys().collect::<Vec<_>>(),
+            ["own", "warnings", "message", "exit_code"]
+        );
+        put_warnings(&mut members, &["a".to_owned(), "c".to_owned()]);
+        assert_eq!(
+            document_text(&Json::Object(members), false),
+            "{\"own\":1,\"message\":\"m\",\"warnings\":[\"a\",\"c\",\"b\"],\"exit_code\":0}\n"
+        );
+        let mut plain = Object::new();
+        plain.insert("message".into(), Json::str("m"));
+        plain.insert("next".into(), Json::Null);
+        put_warnings(&mut plain, &["w".to_owned()]);
+        assert_eq!(
+            plain.keys().collect::<Vec<_>>(),
+            ["message", "warnings", "next"]
+        );
+        let mut odd = Object::new();
+        odd.insert("warnings".into(), Json::str("own"));
+        odd.insert("message".into(), Json::str("m"));
+        put_warnings(&mut odd, &["w".to_owned()]);
+        assert_eq!(
+            document_text(&Json::Object(odd), false),
+            "{\"message\":\"m\",\"warnings\":[\"w\",\"own\"]}\n"
+        );
     }
 }

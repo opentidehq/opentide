@@ -547,9 +547,12 @@ fn approved(
             && allowance.refused_by == refuser
             && allowance.at == reason.at
     });
-    found
-        .inspect(|allowance| tally.allowed.push(**allowance))
-        .is_some()
+    if let Some(allowance) = found {
+        tally.allowed.push(*allowance);
+        true
+    } else {
+        false
+    }
 }
 
 /// A problem for each allowance no comparison used.

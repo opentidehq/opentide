@@ -32,7 +32,6 @@ pub async fn watched<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicBool, Ordering};
 
     fn run<T>(work: impl std::future::Future<Output = T>) -> T {
         tokio::runtime::Builder::new_current_thread()
@@ -53,21 +52,13 @@ mod tests {
     #[test]
     fn a_press_cancels_the_token_and_ends_the_work() {
         let cancel = CancellationToken::new();
-        let pressed = AtomicBool::new(false);
-        let answer: Result<(), _> = run(async {
-            let press = async {
-                tokio::time::sleep(Duration::from_millis(120)).await;
-                pressed.store(true, Ordering::Relaxed);
-            };
-            let is_pressed = || pressed.load(Ordering::Relaxed);
-            // The work ends when the token is cancelled, as a runner's does.
-            let work = async {
-                cancel.cancelled().await;
-                Err(ConnectorError::Cancelled)
-            };
-            let watch = watched(work, &cancel, &is_pressed);
-            tokio::join!(press, watch).1
-        });
+        // The work ends when the token is cancelled, as a runner's does, so
+        // it only returns once the press has cancelled the token.
+        let work = async {
+            cancel.cancelled().await;
+            Err::<(), _>(ConnectorError::Cancelled)
+        };
+        let answer = run(watched(work, &cancel, &|| true));
         assert!(matches!(answer, Err(ConnectorError::Cancelled)));
         assert!(cancel.is_cancelled());
     }
