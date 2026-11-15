@@ -35,4 +35,4 @@ SOURCE_FILE@0..32
     WHITESPACE@30..31 " "
     NUMBER_LIT@31..32 "1"
 --- errors
-21..21: unexpected input after the query (expected AND_KW, OR_KW, PIPE, R_PAREN)
+21..21: expected `|` or the end of the query (expected AND_KW, OR_KW, PIPE, R_PAREN)

@@ -237,7 +237,7 @@ fn source_text(rest: &str) -> usize {
 /// (close, then open a nested comment, then plain text); the first reading
 /// to close the outermost comment records its end, drops the readings of
 /// lower preference, and the higher ones may still find a longer comment.
-fn block_comment(rest: &str) -> Option<usize> {
+fn block_comment(rest: &str, budget: &mut usize) -> Option<usize> {
     #[derive(Clone, Copy, PartialEq)]
     enum Half {
         None,
@@ -258,6 +258,13 @@ fn block_comment(rest: &str) -> Option<usize> {
         if readings.is_empty() {
             break;
         }
+        // The scanner reads on to the end of the text after a close, for a
+        // longer comment: `/*` repeated would read quadratically. Past the
+        // budget (a multiple of the source) the first close is the end.
+        if *budget < readings.len() {
+            return end.or_else(|| rest.get(2..)?.find("*/").map(|at| at + 4));
+        }
+        *budget -= readings.len();
         next.clear();
         for &(depth, half) in &readings {
             match half {
@@ -351,11 +358,17 @@ struct Driver<'s> {
     seen: usize,
     /// Whether the last token that is not trivia was the word `in`.
     after_in: bool,
+    /// Whether a `/*` found no close: the plain-text reading closes at any
+    /// `*/` after it, so none follows, and a later `/*` would not close
+    /// either. Without it, `/*` repeated is read quadratically.
+    no_block_close: bool,
+    /// What the readings of block comments may still cost (reading steps).
+    budget: usize,
 }
 
 impl Driver<'_> {
     /// The next token's kind and length.
-    fn token(&self) -> (K, usize) {
+    fn token(&mut self) -> (K, usize) {
         let rest = &self.source[self.pos..];
         let spaces = take(rest, char::is_whitespace);
         if spaces > 0 {
@@ -364,10 +377,11 @@ impl Driver<'_> {
         if rest.starts_with("//") {
             return (K::COMMENT, rest.find(['\r', '\n']).unwrap_or(rest.len()));
         }
-        if rest.starts_with("/*")
-            && let Some(len) = block_comment(rest)
-        {
-            return (K::COMMENT, len);
+        if rest.starts_with("/*") && !self.no_block_close {
+            match block_comment(rest, &mut self.budget) {
+                Some(len) => return (K::COMMENT, len),
+                None => self.no_block_close = true,
+            }
         }
         if rest.starts_with('"')
             && let Some(len) = string(rest)
@@ -551,6 +565,8 @@ pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
         stack: Vec::new(),
         seen: 0,
         after_in: false,
+        no_block_close: false,
+        budget: 16 * source.len() + 200_000,
     };
     let mut out = Vec::new();
     while driver.pos < source.len() {

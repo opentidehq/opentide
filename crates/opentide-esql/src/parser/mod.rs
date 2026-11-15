@@ -41,7 +41,7 @@ fn source_file(p: &mut Parser<'_>) {
         commands::query(p);
     }
     if !p.at_eof() {
-        p.err_until("unexpected input after the query", TokenSet::EMPTY);
+        p.err_until("expected `|` or the end of the query", TokenSet::EMPTY);
     }
     m.complete(p, K::SOURCE_FILE.raw());
 }
@@ -174,6 +174,23 @@ mod tests {
             let (tree, errors) = tree(source);
             assert!(errors > 0, "{source}\n{tree}");
         }
+    }
+
+    #[test]
+    fn a_word_is_a_unit_where_no_keyword_is_valid() {
+        // tree-sitter lexed a word as a keyword only where the grammar takes it.
+        for source in [
+            "FROM a | LIMIT 1 LIKE",
+            "FROM a | LIMIT 5WITH",
+            "FROM a | SAMPLE 1 BY",
+        ] {
+            let t = clean(source);
+            assert!(t.contains("QUALIFIED_INTERVAL@"), "{source}\n{t}");
+        }
+        let t = clean("FROM a | LIMIT 1 BY x");
+        assert!(!t.contains("QUALIFIED_INTERVAL@"), "{t}");
+        let t = clean("FROM a | WHERE x > 1 AND y");
+        assert!(!t.contains("QUALIFIED_INTERVAL@"), "{t}");
     }
 
     #[test]

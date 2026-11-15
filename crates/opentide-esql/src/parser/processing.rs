@@ -2,7 +2,7 @@
 
 use super::commands::{COMMAND_END, at_end, identifier, index_pattern, keyword, unknown_command};
 use super::expressions::{
-    constant, expr, map_expression, name_part, name_pattern, primary, qualified_name,
+    constant_before, expr, map_expression, name_part, name_pattern, primary, qualified_name,
 };
 use super::{at_kw, comma_list, eat_kw, expect_kw, token_node};
 use crate::syntax::SyntaxKind as K;
@@ -43,7 +43,7 @@ pub(super) fn command(p: &mut Parser<'_>) {
         K::COMPLETION_KW => (K::COMPLETION_COMMAND, completion),
         K::RERANK_KW => (K::RERANK_COMMAND, rerank),
         K::SAMPLE_KW => (K::SAMPLE_COMMAND, |p| {
-            constant(p);
+            constant_before(p, &[]);
         }),
         K::FORK_KW => (K::FORK_COMMAND, fork),
         K::FUSE_KW => (K::FUSE_COMMAND, fuse),
@@ -65,7 +65,7 @@ pub(super) fn command(p: &mut Parser<'_>) {
         K::HIGHLIGHT_KW => (K::HIGHLIGHT_COMMAND, highlight),
         K::DENSE_VECTOR_KW => (K::DENSE_VECTOR_COMMAND, dense_vector),
         K::FILLNULL_KW => (K::FILL_NULL_COMMAND, |p| {
-            constant(p);
+            constant_before(p, &["on"]);
             expect_kw(p, K::ON_KW);
             names(p);
         }),
@@ -139,7 +139,7 @@ fn order_expression(p: &mut Parser<'_>) {
 }
 
 fn limit(p: &mut Parser<'_>) {
-    constant(p);
+    constant_before(p, &["by"]);
     if eat_kw(p, K::BY_KW) {
         comma_list(p, |p| {
             expr(p);
@@ -175,7 +175,7 @@ fn dissect(p: &mut Parser<'_>) {
             let m = p.start();
             identifier(p);
             p.expect(K::EQ.raw(), "expected `=`");
-            constant(p);
+            constant_before(p, &[]);
             m.complete(p, K::COMMAND_OPTION.raw());
         });
     }
@@ -293,7 +293,7 @@ fn completion(p: &mut Parser<'_>) {
 
 fn rerank(p: &mut Parser<'_>) {
     target(p);
-    constant(p);
+    constant_before(p, &["on"]);
     expect_kw(p, K::ON_KW);
     comma_list(p, |p| field(p, K::FIELD_ASSIGNMENT_OR_EXPRESSION, false));
     named_parameters(p);
@@ -354,7 +354,7 @@ fn mmr(p: &mut Parser<'_>) {
     expect_kw(p, K::ON_KW);
     qualified_name(p);
     expect_kw(p, K::LIMIT_KW);
-    constant(p);
+    constant_before(p, &["with"]);
     named_parameters(p);
 }
 

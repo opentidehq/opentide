@@ -28,3 +28,5 @@ rowan.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
+# The old-versus-new differential harness (tests/differential.rs).
+opentide-parse = { workspace = true, features = ["differential"] }

@@ -1,7 +1,7 @@
 //! Queries and their commands: the source commands and the pipeline. The
 //! processing commands are in `processing.rs`.
 
-use super::expressions::{constant, map_expression};
+use super::expressions::{constant_before, map_expression};
 use super::{at_kw, comma_list, expect_kw, nth_kw, processing, token_node};
 use crate::syntax::SyntaxKind as K;
 use opentide_parse::{Parser, TokenSet};
@@ -30,7 +30,7 @@ pub(super) fn set_command(p: &mut Parser<'_>) {
     if p.at(K::L_BRACE.raw()) {
         map_expression(p);
     } else {
-        constant(p);
+        constant_before(p, &[]);
     }
     p.expect(K::SEMI.raw(), "expected `;` after the setting");
     m.complete(p, K::SET_COMMAND.raw());

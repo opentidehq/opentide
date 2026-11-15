@@ -88,3 +88,44 @@ fn tokens_are_the_leaves_tree_sitter_read() {
     }
     assert!(compared > 120, "compared {compared} files");
 }
+
+/// A logos regex with a repeated group of alternatives recurses once per
+/// repetition in its generated code: a long enough token aborts the process.
+/// Every token class of the lexer, one million characters long, on a 1 MB
+/// stack.
+#[test]
+fn a_million_character_token_does_not_overflow_the_stack() {
+    let n: usize = std::env::var("N")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1_000_000);
+    let cases = [
+        format!("FROM a | EVAL {}", "a".repeat(n)),
+        format!("FROM a | EVAL {}", "1".repeat(n)),
+        format!("FROM a | EVAL 1.{}e5", "1".repeat(n)),
+        format!("FROM a | EVAL ?{}", "p".repeat(n)),
+        format!("FROM a | EVAL ??{}", "7".repeat(n)),
+        format!("FROM a | KEEP {}", "a*".repeat(n / 2)),
+        format!("FROM {}", "a-".repeat(n / 2)),
+        format!("FROM a | ENRICH {}", "p".repeat(n)),
+        format!("FROM a | EVAL \"{}\"", "\\\"".repeat(n / 2)),
+        format!("FROM a | EVAL \"\"\"{}\"\"\"", "x".repeat(n)),
+        format!("FROM a | EVAL `{}`", "``".repeat(n / 2)),
+        format!("FROM a | EVAL /*{}*/", "/*".repeat(n / 20)),
+        format!("FROM a | EVAL // {}", "c".repeat(n)),
+        format!("FROM a | WEHRE {}", "u".repeat(n)),
+        format!("PROMQL {}", "q".repeat(n)),
+        "\u{e9}".repeat(n / 2),
+    ];
+    for source in cases {
+        let ok = std::thread::Builder::new()
+            .stack_size(1 << 20)
+            .spawn(move || {
+                let lexemes = lexer::lex(&source);
+                lexemes.last().map(|l| usize::from(l.range.end())) == Some(source.len())
+            })
+            .map(|h| h.join().unwrap_or(false))
+            .unwrap_or(false);
+        assert!(ok);
+    }
+}

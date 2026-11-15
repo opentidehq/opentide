@@ -425,7 +425,7 @@ pub(super) fn map_expression(p: &mut Parser<'_>) {
                 if p.at(K::L_BRACE.raw()) {
                     map_expression(p);
                 } else {
-                    constant(p);
+                    constant_before(p, &[]);
                 }
                 entry.complete(p, K::MAP_ENTRY.raw());
             });
@@ -438,6 +438,13 @@ pub(super) fn map_expression(p: &mut Parser<'_>) {
 
 /// `_constant`: null, an interval, a number, a boolean, a parameter, a string or an array.
 pub(super) fn constant(p: &mut Parser<'_>) -> Option<CompletedMarker> {
+    constant_before(p, &NOT_A_UNIT)
+}
+
+/// A constant, where the words `follow` are keywords after a number and not
+/// its unit: tree-sitter lexed a word as a keyword only where the grammar
+/// could take it, so `LIMIT 5 WITH` reads `WITH` as the unit of `5`.
+pub(super) fn constant_before(p: &mut Parser<'_>, follow: &[&str]) -> Option<CompletedMarker> {
     let kind = p.current();
     let word = |p: &Parser<'_>, w: &str| p.current_text().eq_ignore_ascii_case(w);
     if kind == K::WORD.raw() && word(p, "null") {
@@ -458,7 +465,7 @@ pub(super) fn constant(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     } else if kind == K::NUMBER_LIT.raw() {
         let number = number(p);
         let unit = p.current() == K::WORD.raw()
-            && !NOT_A_UNIT
+            && !follow
                 .iter()
                 .any(|w| p.current_text().eq_ignore_ascii_case(w));
         if !unit {
