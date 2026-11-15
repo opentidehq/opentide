@@ -105,6 +105,7 @@ fn changed_files(root: &Path, cwd: &Path, env: &Env) -> Changed {
 }
 
 /// `opentide lint`.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let terminal = cx.terminal;
     let format = args.format;

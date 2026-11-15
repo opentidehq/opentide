@@ -545,6 +545,7 @@ fn sysdig_omitted_status_is_the_missing_field_not_a_code() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn sysdig_each_constraint_reports_its_code() {
     let (r, t) = (rule(), tuning());
     for (code, block) in [

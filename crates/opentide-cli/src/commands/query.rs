@@ -634,6 +634,7 @@ pub(crate) fn http_settings(platform: &str, timeout: Duration) -> HttpSettings {
 }
 
 /// One tenant's run of the query (`run_on_tenant`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn run_on_tenant(
     platform: &str,
     configured: &Configured,
@@ -789,6 +790,7 @@ fn run_on_tenant(
 }
 
 /// Runs `opentide query`.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let platform = args.platform.as_str();
     let text = match query_text(args, cx) {
@@ -1038,6 +1040,7 @@ fn rule_queries(
 }
 
 /// The run's report (`run_payload`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn payload(
     platform: &str,
     window: &TimeWindow,

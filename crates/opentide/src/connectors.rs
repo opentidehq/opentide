@@ -587,6 +587,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn every_connector_error_has_its_code_and_keeps_its_tenant() {
         let (platform, tenant) = who();
         let cases = [

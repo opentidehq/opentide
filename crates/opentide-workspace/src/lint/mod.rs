@@ -499,6 +499,7 @@ pub fn lint(
 type Parses = std::collections::HashMap<PathBuf, std::sync::Arc<node::Document>>;
 
 /// [`lint`], reading the files `parses` holds from there.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn lint_with(
     fs: &dyn FileSystem,
     writer: Option<&dyn WriteFs>,
@@ -1487,6 +1488,7 @@ fn file_name(path: &Path) -> String {
         .unwrap_or_default()
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn filename_findings(
     fs: &dyn FileSystem,
     writer: Option<&dyn WriteFs>,

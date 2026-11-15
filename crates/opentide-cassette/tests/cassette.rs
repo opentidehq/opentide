@@ -107,6 +107,7 @@ fn a_cassette_is_recorded_never_edited() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn replay_serves_in_order_checks_bodies_and_repeats_whole_passes() {
     let cassette = Cassette::new(
         "s",
@@ -391,6 +392,7 @@ fn request(method: &str, url: &str, headers: &[(&str, &str)], body: &str) -> Req
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn identity_headers_are_ignored_and_meaningful_ones_compared() {
     const URL: &str = "https://login.microsoftonline.com/tenant/oauth2/v2.0/token";
     const ACCEPT: (&str, &str) = ("accept", "application/json");
