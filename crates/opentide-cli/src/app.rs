@@ -314,7 +314,9 @@ impl Run<'_> {
 
     /// The stream the lines go to: colour in `human` mode, bold and dim only
     /// in `plain` mode, on a terminal that is not `TERM=dumb`; wrapped at its
-    /// width there, whole on a pipe.
+    /// width there, whole on a pipe. `FORCE_COLOR` (or `CLICOLOR_FORCE`) asks
+    /// for colour on a pipe, in CI and under `TERM=dumb` too, in `human` and
+    /// `plain` modes; the other modes stay free of it.
     fn console(&self, tty: bool) -> Console {
         let dumb = self
             .env
@@ -322,7 +324,9 @@ impl Run<'_> {
             .unwrap_or_default()
             .trim()
             .eq_ignore_ascii_case("dumb");
+        let forced = self.env.colour_choice() == Some(true);
         let colour = match self.mode {
+            Mode::Human | Mode::Plain if forced => Colour::Full,
             _ if !tty || dumb => Colour::None,
             Mode::Human => Colour::Full,
             Mode::Plain => Colour::Mono,
@@ -330,7 +334,7 @@ impl Run<'_> {
         };
         Console {
             colour,
-            width: self.host.width.filter(|_| colour != Colour::None),
+            width: self.host.width.filter(|_| tty && colour != Colour::None),
         }
     }
 
@@ -3988,6 +3992,30 @@ mod tests {
             true,
         );
         assert!(coloured.stderr.contains('\u{1b}'), "{}", coloured.stderr);
+        // FORCE_COLOR and CLICOLOR_FORCE colour a pipe, under CI and under
+        // TERM=dumb; NO_COLOR and FORCE_COLOR=0 win or switch it off; a
+        // machine mode never takes colour.
+        let sgr = |pairs: &[(&str, &str)], tty: bool| {
+            let ran = dispatched("deploy", pairs, tty);
+            assert_ne!(ran.stderr, "", "{pairs:?}");
+            ran.stderr.contains('\u{1b}')
+        };
+        assert!(!sgr(&[], false));
+        assert!(sgr(&[("FORCE_COLOR", "1")], false));
+        assert!(sgr(&[("CLICOLOR_FORCE", "1")], false));
+        assert!(sgr(&[("FORCE_COLOR", "1"), ("CI", "true")], false));
+        assert!(sgr(&[("FORCE_COLOR", "1"), ("TERM", "dumb")], true));
+        assert!(!sgr(&[("FORCE_COLOR", "0")], false));
+        assert!(!sgr(&[("CLICOLOR_FORCE", "0")], false));
+        assert!(!sgr(&[("FORCE_COLOR", "1"), ("NO_COLOR", "1")], false));
+        assert!(!sgr(
+            &[("FORCE_COLOR", "0"), ("CLICOLOR_FORCE", "1")],
+            false
+        ));
+        assert!(!sgr(
+            &[("FORCE_COLOR", "1"), ("OPENTIDE_OUTPUT", "agent")],
+            false
+        ));
         // A bare argv in machine mode is the usage error, not help.
         let bare = dispatched("--json", &[], false);
         assert_eq!(bare.code, 2);
