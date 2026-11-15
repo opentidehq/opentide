@@ -1424,6 +1424,7 @@ mod tests {
         {
             Some(crate::tree::RootCommand::Generate(crate::tree::GenerateArgs {
                 command: Some(command),
+                ..
             })) => command,
             other => panic!("not a generate subcommand: {other:?}"),
         }

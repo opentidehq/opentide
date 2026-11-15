@@ -531,49 +531,12 @@ impl Run<'_> {
                 return self.emit_usage(problem, out, err);
             }
         };
-        let mut words = command_path(&matches);
+        let words = command_path(&matches);
         let typed = match crate::tree::Cli::from_arg_matches(&matches) {
             Ok(cli) => cli,
             // The tree and its derive disagree: a bug, reported as one.
             Err(error) => return Err(std::io::Error::other(error.to_string())),
         };
-        // `generate schemas templates`: the words after `generate` that are
-        // no subcommand of it are its phases.
-        let mut generate_phases = Vec::new();
-        if let Some(RootCommand::Generate(crate::tree::GenerateArgs {
-            command: Some(crate::tree::GenerateCommand::Phases(named)),
-        })) = &typed.command
-        {
-            generate_phases.clone_from(named);
-            words.truncate(1);
-            // The phases end at the first word that starts with `-`
-            // (`GeneratePhaseGroup`): what follows is `generate`'s own
-            // options, parsed as such, so `generate schemas --bogus` is an
-            // unknown option and `generate schemas --help` the group's help.
-            if let Some(end) = generate_phases
-                .iter()
-                .position(|word| word.starts_with('-'))
-            {
-                let options = generate_phases.split_off(end);
-                // The command line up to `generate`, the phases left out.
-                let start = self
-                    .args
-                    .windows(2)
-                    .position(|pair| pair[0] == "generate" && pair[1] == generate_phases[0])
-                    .unwrap_or_default();
-                let mut reparsed = self.args[..=start].to_vec();
-                reparsed.extend(options);
-                let argv =
-                    std::iter::once(catalog::PROGRAM.to_owned()).chain(reparsed.iter().cloned());
-                if let Err(error) = self.root.clone().try_get_matches_from(argv) {
-                    if error.kind() == clap::error::ErrorKind::DisplayHelp {
-                        return self.help(&words, 0, out);
-                    }
-                    let problem = usage::describe(&self.root, &reparsed, error);
-                    return self.emit_usage(problem, out, err);
-                }
-            }
-        }
         if matches.value_source("repo") == Some(ValueSource::CommandLine)
             && let Some(repo) = &self.globals.repo
             && words.first().map(String::as_str) != Some("setup")
@@ -654,7 +617,7 @@ impl Run<'_> {
                 return self.emit(&outcome, &lines, out, err);
             }
             Some(RootCommand::Generate(args)) => {
-                let report = self.generate(args, &generate_phases, &matches);
+                let report = self.generate(args, &matches);
                 return self.emit_report(&report, out, err);
             }
             Some(RootCommand::Setup(args)) => {
@@ -881,7 +844,6 @@ impl Run<'_> {
     fn generate(
         &self,
         args: &crate::tree::GenerateArgs,
-        phases: &[String],
         matches: &clap::ArgMatches,
     ) -> crate::commands::Report {
         use crate::commands::{extract, generate};
@@ -904,7 +866,7 @@ impl Run<'_> {
             proxy: self.globals.proxy.as_deref(),
         };
         match &args.command {
-            None | Some(Command::Phases(_)) => generate::phases(phases, &cx, &self.host.version),
+            None => generate::phases(&args.phases, &cx, &self.host.version),
             Some(Command::Exports(exports)) => generate::exports(exports.into(), &cx),
             Some(Command::Explorer(explorer)) => {
                 let typed =
@@ -4144,7 +4106,7 @@ mod tests {
             pipeline.stdout
         );
         // The phases end at the first `-` word: what follows is
-        // `generate`'s own options (`GeneratePhaseGroup`).
+        // `generate`'s own options.
         for (argv, option) in [
             ("--json generate schemas --bogus", "--bogus"),
             ("--json generate schemas templates --repo .", "--repo"),
