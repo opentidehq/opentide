@@ -94,7 +94,7 @@ policing out of CI: no workflow records, checks or compares the goldens (golden 
 golden determinism, the golden preview, the corpora, the MCP replay, the payload, config,
 validate and lint diffs, `codegen --check --oracle`), and `APPROVED_DIFFS.toml` gates nothing.
 Every command here stays, run by hand when a change calls for it: a re-record, a new oracle, or a
-behaviour change you want measured against the oracle. No Rust test replays the recordings any
+behaviour change you want measured against the oracle. No Rust test replays `cases/` any
 more (#1139): the in-process replays were retired in favour of the snapshot suite
 ("Snapshots"), which runs the same `cases.toml` and is a reviewed record of the Rust
 implementation's own output. The recordings under `cases/` and `blobs/`, and `APPROVED_DIFFS.toml`,

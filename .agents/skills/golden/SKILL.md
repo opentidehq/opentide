@@ -64,7 +64,7 @@ hide a difference. A new behaviour gets a `[[case]]` in `cases.toml`, and so a s
 4. **Never loosen the comparison** to get green: no widened normalisation rule, no broader ledger
    entry, no skipped case, no deleted recording. Normalisation hides only what differs between two
    runs of the same case; each rule is code in `crates/opentide-compare/src/normalise.rs` (which
-   `xtask::golden::normalise` re-exports) with a unit test. No Rust test replays the recordings any more (#1139): the commands' behaviour is
+   `xtask::golden::normalise` re-exports) with a unit test. No Rust test replays `tests/golden/cases` any more (#1139): the commands' behaviour is
    held by the reviewed snapshots of `crates/opentide-cli/tests/cli_snapshots.rs`
    ([golden README](../../../tests/golden/README.md), "Snapshots"), and a new `#[ignore]` is a
    loosened comparison.
