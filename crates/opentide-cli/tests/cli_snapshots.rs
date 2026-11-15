@@ -222,6 +222,7 @@ fn every_case_has_a_group_and_every_snapshot_a_case() {
                 snapshot::snapshot_name(case)
             )
         })
+        .chain(snapshot::session_snapshots())
         .collect();
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/cli_snapshots");
     let mut stale = Vec::new();
