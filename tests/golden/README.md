@@ -45,8 +45,8 @@ Byte-for-byte parity with Python is not what they check; what the Rust CLI does 
   fixed length, so wrapping is stable), the clock (dates, timestamps, durations, `<SECONDS>`;
   the week back only for `query`'s default window), the spinner's glyph and a live frame's
   content where the case opts in, crash-log names, catalog fingerprints, UUIDs a run mints where
-  the case opts in (`fresh-uuids`), the host's git version where the case opts in (`host-git`),
-  a refused connection's errno (`<ECONNREFUSED>`), and `validate`'s worker counts in JSON
+  the case opts in (`fresh-uuids`), the host's git version where the case opts in (`host-git`, the vendor's suffix with it),
+  a refused connection's errno (`<ECONNREFUSED>`, 111 on Linux, 61 on macOS), and `validate`'s worker counts in JSON
   (`<CORES>`). The host reports a fixed version (`0.28.1`, `tests/common/snapshot.rs`
   `VERSION`), so a release changes nothing. Every case runs under umask 022 with `/dev/null` as
   standard input, and the fixtures get fixed modes.
@@ -70,6 +70,24 @@ user-visible change. Never edit a `.snap` by hand, never commit a `.snap.new`, a
 normalisation rule to make a diff go away. A new case is a `[[case]]` in `cases.toml`; its
 snapshot is written on the first run outside CI (CI sets `INSTA_UPDATE=no`, so a missing
 snapshot fails there).
+
+**Recording on macOS.** The snapshots are Linux's, and a re-record on macOS gives no diff when
+the host differences are masked (git's `(Apple Git-157)` suffix, errno 61, the clock) and the
+case roots are on a **case-sensitive** volume: the `tide-corpus` fixture holds `Objects/` and
+`objects/` side by side, which are one folder on macOS's default volume, and the harness stops
+with a message instead of recording that. Make a small case-sensitive volume and point the
+roots at it (a short mount point keeps the roots as long as the recordings', so paths wrap
+alike):
+
+```bash
+hdiutil create -size 2g -fs 'Case-sensitive APFS' -volname cs -type SPARSE "$HOME/cs.sparseimage"
+hdiutil attach "$HOME/cs.sparseimage" -mountpoint /Volumes/cs
+OPENTIDE_CASE_ROOT=/Volumes/cs INSTA_UPDATE=always cargo nextest run -p opentide-cli --test cli_snapshots
+git status --short   # nothing changed: a diff here is a real change, or a host difference to mask
+```
+
+A date that a case's own cassette or fixture holds (`2026-10-27` in the query cassettes) is
+content, so it is never masked as the clock: no snapshot depends on the day it is run.
 
 **In CI: none of it, since 2026-11-14.** The Rust port is done, and the maintainer took the oracle
 policing out of CI: no workflow records, checks or compares the goldens (golden compare and check,
