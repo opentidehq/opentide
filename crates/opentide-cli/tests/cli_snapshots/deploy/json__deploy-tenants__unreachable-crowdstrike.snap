@@ -117,7 +117,6 @@ exit: 1
   "detail": "Cannot reach crowdstrike tenant '***' at https://api.eu-1.crowdstrike.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
   "event": "platform_deployment_failed",
   "level": "error",
-  "logger": "opentide.cli.services.deploy",
   "system": "crowdstrike",
   "timestamp": "0000-00-00 00:00:00"
 }
