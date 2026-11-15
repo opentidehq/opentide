@@ -808,6 +808,13 @@ impl Run<'_> {
             cwd: &cwd,
             proxy: self.globals.proxy.as_deref(),
         };
+        if !args.phases.is_empty() && args.command.is_some() {
+            // A phase word before a subcommand name (`generate schemas
+            // extract`): clap parsed the subcommand, but the words were
+            // always phases, so the unknown one is refused as it was.
+            let words = phases_and_subcommands(&args.phases, matches);
+            return generate::phases(&words, &cx, &self.host.version);
+        }
         match &args.command {
             None => generate::phases(&args.phases, &cx, &self.host.version),
             Some(Command::Exports(exports)) => generate::exports(exports.into(), &cx),
@@ -2511,6 +2518,19 @@ fn unhandled(path: &str) -> Outcome {
     Outcome::failed(path, 1, Failure::new(code::INTERNAL, message))
 }
 
+/// The phase words followed by the subcommand names clap took after them
+/// (`generate schemas extract elastic` gives `schemas extract elastic`),
+/// the words the phase check always saw.
+fn phases_and_subcommands(phases: &[String], matches: &clap::ArgMatches) -> Vec<String> {
+    let mut words = phases.to_vec();
+    let mut level = matches.subcommand_matches("generate");
+    while let Some((name, next)) = level.and_then(clap::ArgMatches::subcommand) {
+        words.push(name.to_owned());
+        level = Some(next);
+    }
+    words
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4009,6 +4029,31 @@ mod tests {
             "{}",
             help.stdout
         );
+        // A phase word before a subcommand name is still an unknown phase.
+        for argv in [
+            "generate schemas extract elastic",
+            "generate schemas inflight",
+            "generate schemas help",
+        ] {
+            for json in ["", "--json "] {
+                let line = format!("{json}{argv}");
+                let refused = dispatched(&line, &[], false);
+                let shown = format!("{}{}", refused.stdout, refused.stderr);
+                assert_eq!(refused.code, 2, "{line}: {shown}");
+                assert!(
+                    shown.contains("Unknown generation phase"),
+                    "{line}: {shown}"
+                );
+                if !json.is_empty() {
+                    assert!(
+                        refused.stdout.contains("\"code\":\"usage_invalid_choice\"")
+                            && refused.stdout.contains("\"argument\":\"phase\""),
+                        "{line}: {}",
+                        refused.stdout
+                    );
+                }
+            }
+        }
         let subcommand = dispatched("--json generate inflight prune --bogus", &[], false);
         assert!(
             subcommand.stdout.contains("usage_unknown_option"),
