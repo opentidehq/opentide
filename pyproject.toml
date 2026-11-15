@@ -99,6 +99,7 @@ cache-keys = [
     { file = "vendor/*/src/**/*.rs" },
     # What the engine crates compile in (include_str!, build.rs).
     { file = "data/catalogs/**" },
+    { file = "src/opentide/data/**" },
     { file = "grammars/*/src/**" },
     { file = "grammars/*/queries/**" },
     { file = "highlights/spec.toml" },
