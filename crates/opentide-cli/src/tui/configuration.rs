@@ -984,8 +984,11 @@ fn proven(document: &Node, redacted: &str) -> bool {
         .any(|secret| redacted.contains(secret.as_str()))
 }
 
+/// Why a configuration file is not read as text: its bytes are not UTF-8.
+pub(crate) const NOT_UTF8: &str = "the file is not valid UTF-8";
+
 /// Where a parse error is, never its message: that may quote the file.
-fn toml_position(error: &config_toml::ParseError) -> String {
+pub(crate) fn toml_position(error: &config_toml::ParseError) -> String {
     if error.too_deep {
         return "nested too deep".to_owned();
     }
@@ -1032,15 +1035,6 @@ fn has(document: &Node, parts: &[String]) -> bool {
     at(document, parts).is_some()
 }
 
-fn io_error_name(error: &std::io::Error) -> &'static str {
-    match error.kind() {
-        std::io::ErrorKind::NotFound => "FileNotFoundError",
-        std::io::ErrorKind::PermissionDenied => "PermissionError",
-        std::io::ErrorKind::IsADirectory => "IsADirectoryError",
-        _ => "OSError",
-    }
-}
-
 /// One configuration file (`_file`).
 fn file(
     file_key: &str,
@@ -1057,17 +1051,13 @@ fn file(
     if let Some(file_path) = &path {
         match std::fs::read(file_path) {
             Err(error) => {
-                raw_problem = Some(format!(
-                    "the file could not be read ({})",
-                    io_error_name(&error)
-                ));
+                raw_problem = Some(format!("the file could not be read: {error}"));
             }
             Ok(bytes) => {
                 let bytes = bytes.strip_prefix("\u{feff}".as_bytes()).unwrap_or(&bytes);
                 match std::str::from_utf8(bytes) {
                     Err(_) => {
-                        raw_problem =
-                            Some("the file could not be read (UnicodeDecodeError)".to_owned());
+                        raw_problem = Some(NOT_UTF8.to_owned());
                     }
                     Ok(text) => {
                         own = config_toml::parse(text).ok();
