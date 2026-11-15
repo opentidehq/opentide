@@ -77,6 +77,58 @@ impl Reply {
 
     /// `Splunk answered HTTP <status> <reason>`, then the first `<msg>` of an
     /// XML error, else the body's text when there is one.
+    /// A failed search's detail: its `ERROR` and `FATAL` messages, else
+    /// [`http_error`](Self::http_error), read from the masked text.
+    fn search_refusal(&self) -> String {
+        let found = messages(&parse(self.answer.text().as_bytes()), &["ERROR", "FATAL"]);
+        if found.is_empty() {
+            self.http_error()
+        } else {
+            found
+        }
+    }
+
+    /// A searched answer's `ERROR` and `FATAL` messages, masked: a body
+    /// that is not JSON is one message holding its text.
+    fn search_errors(&self, body: &Object) -> String {
+        self.answer
+            .credentials
+            .mask_text(&messages(body, &["ERROR", "FATAL"]))
+    }
+
+    /// What a failed parser check is (`_validate`), read from the masked
+    /// text: a 307 "Network Error" is the parser's timeout, a 502 to 504
+    /// that is not JSON a gateway's, anything else a refusal.
+    fn check_failure(&self, tenant: &str) -> Result<LiveCheck, ConnectorError> {
+        let status = self.answer.status;
+        let text = self.answer.text();
+        if status == 307 && text.contains("Network Error") {
+            return Ok(LiveCheck {
+                result: None,
+                errors: Vec::new(),
+                warnings: vec![PARSER_TIMEOUT_WARNING.into()],
+            });
+        }
+        if matches!(status, 502..=504) && serde_json::from_str::<Json>(&text).is_err() {
+            return Err(ConnectorError::Gateway {
+                platform: PLATFORM.into(),
+                tenant: tenant.to_owned(),
+                message: format!(
+                    "Splunk's parser did not answer on {tenant}: {}",
+                    describe_answer(status, text.as_bytes(), None, None)
+                ),
+                status,
+            });
+        }
+        let all = all_messages(&parse(text.as_bytes()));
+        Err(ConnectorError::refused(
+            PLATFORM,
+            tenant,
+            format!("Splunk refused the query on {tenant}"),
+            (!all.is_empty()).then_some(all),
+        ))
+    }
+
     fn http_error(&self) -> String {
         let status = self.answer.status;
         let reason = crate::transport::StatusCode::from_u16(status)
@@ -84,10 +136,11 @@ impl Reply {
             .and_then(|status| status.canonical_reason())
             .map(|reason| format!(" {reason}"))
             .unwrap_or_default();
-        let detail = match xml_message(&self.answer.body) {
+        // Masked text: a message the API wrote may echo the token.
+        let detail = match xml_message(self.answer.text().as_bytes()) {
             XmlDetail::Message(text) => text,
             XmlDetail::None => String::new(),
-            XmlDetail::NotXml => String::from_utf8_lossy(&self.answer.body).trim().to_owned(),
+            XmlDetail::NotXml => self.answer.text().trim().to_owned(),
         };
         if detail.is_empty() {
             format!("Splunk answered HTTP {status}{reason}")
@@ -670,12 +723,7 @@ impl Splunk {
             .finish();
         let reply = Self::send(cx, crate::transport::Method::POST, &path, Some(body)).await?;
         if reply.failed() {
-            let found = messages(&parse(&reply.answer.body), &["ERROR", "FATAL"]);
-            let detail = if found.is_empty() {
-                reply.http_error()
-            } else {
-                found
-            };
+            let detail = reply.search_refusal();
             return Err(ConnectorError::refused(
                 PLATFORM,
                 &tenant,
@@ -687,7 +735,7 @@ impl Splunk {
             ));
         }
         let body = parse(&reply.answer.body);
-        let errors = messages(&body, &["ERROR", "FATAL"]);
+        let errors = reply.search_errors(&body);
         if !errors.is_empty() {
             return Err(ConnectorError::refused(
                 PLATFORM,
@@ -763,36 +811,8 @@ impl Splunk {
             let path = format!("{namespace}search/parser?{form}");
             Self::send(cx, crate::transport::Method::GET, &path, None).await?
         };
-        let status = reply.answer.status;
         if reply.failed() {
-            let body = &reply.answer.body;
-            if status == 307 && String::from_utf8_lossy(body).contains("Network Error") {
-                return Ok(LiveCheck {
-                    result: None,
-                    errors: Vec::new(),
-                    warnings: vec![PARSER_TIMEOUT_WARNING.into()],
-                });
-            }
-            if matches!(status, 502..=504)
-                && serde_json::from_str::<Json>(&String::from_utf8_lossy(body)).is_err()
-            {
-                return Err(ConnectorError::Gateway {
-                    platform: PLATFORM.into(),
-                    tenant: tenant.clone(),
-                    message: format!(
-                        "Splunk's parser did not answer on {tenant}: {}",
-                        describe_answer(status, body, None, None)
-                    ),
-                    status,
-                });
-            }
-            let all = all_messages(&parse(body));
-            return Err(ConnectorError::refused(
-                PLATFORM,
-                &tenant,
-                format!("Splunk refused the query on {tenant}"),
-                (!all.is_empty()).then_some(all),
-            ));
+            return reply.check_failure(&tenant);
         }
         // Another 2xx is neither a refusal nor an acceptance: Python logs it
         // (`unexpected_splunk_validation_response`) and passes the query.
@@ -862,7 +882,7 @@ fn html_answer(cx: TenantContext<'_>, url: &str, answer: &Answer) -> ConnectorEr
         .as_ref()
         .map(crate::error::origin)
         .unwrap_or_default();
-    let page = page_title(&answer.body)
+    let page = page_title(answer.text().as_bytes())
         .map(|title| format!(" (page title: {title:?})"))
         .unwrap_or_default();
     let answered = format!(
@@ -1032,6 +1052,49 @@ mod tests {
     }
 
     #[test]
+    fn every_quote_of_a_failed_answer_masks_the_token() {
+        const TOKEN: &str = "splunk-token-never-shown";
+        let mut request = crate::transport::Request::new(
+            crate::transport::Method::POST,
+            "https://splunk.invalid:8089/x".parse().unwrap(),
+        );
+        request.headers_mut().insert(
+            http::header::AUTHORIZATION,
+            format!("Bearer {TOKEN}").parse().unwrap(),
+        );
+        let credentials = crate::answer::Credentials::of(&request);
+        let reply = |status, body: String| Reply {
+            answer: Answer::new(
+                status,
+                None,
+                body.into_bytes(),
+                Duration::ZERO,
+                &credentials,
+            ),
+        };
+        let xml = format!(
+            "<response><messages><msg type=\"ERROR\">bad {TOKEN}</msg></messages></response>"
+        );
+        let plain = format!("you sent Bearer {TOKEN}");
+        let messages = format!(r#"{{"messages":[{{"type":"ERROR","text":"bad {TOKEN}"}}]}}"#);
+        let mut shown = vec![
+            reply(400, xml.clone()).http_error(),
+            reply(400, xml).search_refusal(),
+            reply(400, plain.clone()).search_refusal(),
+            reply(200, plain.clone()).search_errors(&parse(plain.as_bytes())),
+            reply(200, messages.clone()).search_errors(&parse(messages.as_bytes())),
+        ];
+        for (status, body) in [(503, plain.clone()), (400, plain), (400, messages)] {
+            let error = reply(status, body).check_failure("t").unwrap_err();
+            shown.push(format!("{error} {}", error.text()));
+        }
+        for text in &shown {
+            assert!(!text.contains(TOKEN), "{text}");
+            assert!(text.contains("***"), "{text}");
+        }
+    }
+
+    #[test]
     fn errors_quote_the_first_message_else_the_bytes() {
         let reply = |status, body: &[u8]| Reply {
             answer: Answer {
@@ -1039,6 +1102,7 @@ mod tests {
                 content_type: None,
                 body: body.to_vec(),
                 elapsed: Duration::ZERO,
+                credentials: crate::answer::Credentials::default(),
             },
         };
         assert_eq!(
