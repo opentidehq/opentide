@@ -195,8 +195,8 @@ mod tests {
         assert_eq!(settings.timeout, Duration::from_millis(2500));
     }
 
-    /// A setting of the wrong type is refused, naming it, where it was read
-    /// as Python's `str()` of the value (`base_url = true` asked `True`).
+    /// A setting of the wrong type is refused, naming it, and not read as the
+    /// text of its value (`base_url = true` is not the URL `true`).
     #[test]
     fn a_wrong_typed_setting_is_refused() {
         let refused = |toml: &str| Settings::from_documentation(Some(&documentation(toml)));

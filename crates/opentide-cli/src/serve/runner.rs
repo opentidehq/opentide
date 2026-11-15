@@ -341,8 +341,8 @@ pub fn keeps_workspace(words: &[String], argv: &[String]) -> bool {
     })
 }
 
-/// `path` as Python's `Path` prints it: no `.` parts, no repeated or
-/// trailing separator.
+/// `path` normalised without touching the disk: no `.` parts, no repeated
+/// or trailing separator.
 fn normalised(path: &str) -> PathBuf {
     let mut out = PathBuf::new();
     for component in Path::new(path).components() {
