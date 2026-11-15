@@ -7,16 +7,11 @@
 /// Whether this build can start threads.
 pub const AVAILABLE: bool = cfg!(not(target_os = "wasi"));
 
-/// Runs `work` on a thread of its own and waits for it, as
-/// `std::thread::scope(|s| s.spawn(work).join())` does (a fresh thread for a
-/// runtime of its own, or a tracing dispatcher of its own); without threads,
-/// on this one. A panic in `work` is the `Err`, as `join` gives it.
+/// Runs `work` on a thread of its own and waits for it, or on this one
+/// without threads ([`opentide_connectors::runtime::apart`]). A panic in
+/// `work` is the `Err`, as `join` gives it.
 pub fn run_apart<T: Send>(work: impl FnOnce() -> T + Send) -> std::thread::Result<T> {
-    if AVAILABLE {
-        std::thread::scope(|scope| scope.spawn(work).join())
-    } else {
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
-    }
+    opentide_connectors::runtime::apart(work)
 }
 
 #[cfg(test)]

@@ -80,13 +80,13 @@ jobs:
         run: |
           cargo build --locked -p opentide-schema
           cargo build --locked -p opentide-schema --features python
-          cargo build --locked -p opentide-schema --target wasm32-unknown-unknown --features wasm
+          cargo build --locked -p opentide-schema --target wasm32-unknown-unknown
 
       - name: clippy (python, wasm32)
         run: |
           cargo clippy --locked -p opentide-schema --all-targets --features python -- -D warnings
           cargo clippy --locked -p opentide-schema --all-targets --features stubs -- -D warnings
-          cargo clippy --locked -p opentide-schema --target wasm32-unknown-unknown --features wasm -- -D warnings
+          cargo clippy --locked -p opentide-schema --target wasm32-unknown-unknown -- -D warnings
 
       # PYO3_PYTHON: link the interpreter setup-python installed, not the
       # runner's; LD_LIBRARY_PATH: where the test binary finds its libpython.

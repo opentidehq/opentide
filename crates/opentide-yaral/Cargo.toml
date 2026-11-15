@@ -21,6 +21,3 @@ tree-sitter.workspace = true
 serde.workspace = true
 toml.workspace = true
 regex-syntax.workspace = true
-
-[dev-dependencies]
-serde_json.workspace = true

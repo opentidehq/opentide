@@ -20,6 +20,3 @@ opentide-highlight.workspace = true
 tree-sitter.workspace = true
 serde.workspace = true
 toml.workspace = true
-
-[dev-dependencies]
-serde_json.workspace = true

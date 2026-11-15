@@ -3184,7 +3184,6 @@ dependencies = [
  "opentide-yara",
  "opentide-yaral",
  "regex",
- "serde",
  "serde_json",
  "toml 0.8.23",
  "toml_edit 0.22.27",
@@ -3206,8 +3205,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.1",
- "tempfile",
- "thiserror 2.0.21",
  "tokio",
  "tokio-rustls",
  "url",
@@ -3308,7 +3305,6 @@ dependencies = [
  "gix-discover",
  "gix-error",
  "gix-filter",
- "gix-fs",
  "gix-hash",
  "gix-ignore",
  "gix-index",
@@ -3326,7 +3322,6 @@ dependencies = [
  "opentide-schema",
  "opentide-workspace",
  "percent-encoding",
- "proptest",
  "rayon",
  "regex",
  "schemars",
@@ -3400,7 +3395,6 @@ dependencies = [
  "opentide-highlight",
  "opentide-syntax",
  "serde",
- "serde_json",
  "toml 0.8.23",
  "tree-sitter",
 ]
@@ -3454,7 +3448,6 @@ dependencies = [
  "serde",
  "serde_json",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3520,9 +3513,7 @@ dependencies = [
  "opentide-analysis",
  "opentide-core",
  "opentide-highlight",
- "opentide-kql",
  "opentide-schema",
- "opentide-spl",
  "opentide-tide",
  "opentide-workspace",
  "percent-encoding",
@@ -3669,7 +3660,6 @@ version = "0.12.0"
 dependencies = [
  "js-sys",
  "opentide",
- "serde",
  "serde_json",
  "wasm-bindgen",
 ]
@@ -3721,7 +3711,6 @@ dependencies = [
  "opentide-syntax",
  "regex-syntax",
  "serde",
- "serde_json",
  "toml 0.8.23",
  "tree-sitter",
 ]
