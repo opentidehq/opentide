@@ -1443,6 +1443,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn an_integer_beyond_i64_is_the_nearest_float_in_a_setup_value() {
+        use opentide_compile::Json as J;
+        // TOML integers are signed 64-bit: u64::MAX is 2^64 as the nearest float.
+        let Some(toml::Value::Float(float)) = toml_value(&J::UInt(u64::MAX)) else {
+            panic!("a UInt is a TOML float");
+        };
+        assert_eq!(float.to_bits(), 2f64.powi(64).to_bits());
+        assert_eq!(
+            toml_value(&J::Int(i64::MAX)),
+            Some(toml::Value::Integer(i64::MAX))
+        );
+    }
+
+    #[test]
     fn every_platform_mounts_the_connectors_http_settings() {
         // A platform the command line listed apart drifted: Google SecOps
         // left --timeout unread, Exabeam waited 120 s for 30 s.

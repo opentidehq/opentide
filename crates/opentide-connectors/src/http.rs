@@ -232,6 +232,7 @@ impl HttpClient {
             .map_err(|failure| self.error(failure, &url))
     }
 }
+
 /// What a retry policy reads of an attempt.
 fn retry_outcome(outcome: &Result<Response, TransportFailure>) -> Outcome<'_> {
     match outcome {
