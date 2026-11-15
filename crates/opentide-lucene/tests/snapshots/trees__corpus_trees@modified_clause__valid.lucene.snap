@@ -1,0 +1,36 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/modified_clause__valid.lucene
+---
+SourceFile@0..54
+  BooleanQuery@0..54
+    ModifiedClause@0..23
+      Required@0..1
+        Plus@0..1 "+"
+      FieldQuery@1..23
+        FieldName@1..15
+          Term@1..15 "event.category"
+        Colon@15..16 ":"
+        TermQuery@16..23
+          Term@16..23 "process"
+    Whitespace@23..24 " "
+    ModifiedClause@24..41
+      Prohibited@24..25
+        Minus@24..25 "-"
+      FieldQuery@25..41
+        FieldName@25..34
+          Term@25..34 "user.name"
+        Colon@34..35 ":"
+        TermQuery@35..41
+          Term@35..41 "SYSTEM"
+    Whitespace@41..42 " "
+    ModifiedClause@42..54
+      Not@42..43
+        Bang@42..43 "!"
+      FieldQuery@43..54
+        FieldName@43..52
+          Term@43..52 "host.name"
+        Colon@52..53 ":"
+        TermQuery@53..54
+          Term@53..54 "a"

@@ -1,0 +1,35 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/range_query__valid.lucene
+---
+SourceFile@0..51
+  BooleanQuery@0..51
+    FieldQuery@0..18
+      FieldName@0..5
+        Term@0..5 "bytes"
+      Colon@5..6 ":"
+      RangeQuery@6..18
+        LBracket@6..7 "["
+        RangeTerm@7..10 "100"
+        Whitespace@10..11 " "
+        ToKw@11..13 "TO"
+        Whitespace@13..14 " "
+        RangeTerm@14..17 "200"
+        RBrace@17..18 "}"
+    Whitespace@18..19 " "
+    And@19..22
+      AndKw@19..22 "AND"
+    Whitespace@22..23 " "
+    FieldQuery@23..51
+      FieldName@23..33
+        Term@23..33 "@timestamp"
+      Colon@33..34 ":"
+      RangeQuery@34..51
+        LBracket@34..35 "["
+        RangeTerm@35..43 "now-1d/d"
+        Whitespace@43..44 " "
+        ToKw@44..46 "TO"
+        Whitespace@46..47 " "
+        RangeTerm@47..50 "now"
+        RBracket@50..51 "]"

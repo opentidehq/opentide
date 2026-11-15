@@ -1,0 +1,25 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/group__valid.lucene
+---
+SourceFile@0..14
+  BooleanQuery@0..14
+    Group@0..8
+      LParen@0..1 "("
+      BooleanQuery@1..7
+        TermQuery@1..2
+          Term@1..2 "a"
+        Whitespace@2..3 " "
+        Or@3..5
+          OrKw@3..5 "OR"
+        Whitespace@5..6 " "
+        TermQuery@6..7
+          Term@6..7 "b"
+      RParen@7..8 ")"
+    Whitespace@8..9 " "
+    And@9..12
+      AndKw@9..12 "AND"
+    Whitespace@12..13 " "
+    TermQuery@13..14
+      Term@13..14 "c"

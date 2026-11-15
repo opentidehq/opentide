@@ -1,0 +1,23 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/term_query__valid.lucene
+---
+SourceFile@0..43
+  BooleanQuery@0..43
+    FieldQuery@0..20
+      FieldName@0..12
+        Term@0..12 "process.name"
+      Colon@12..13 ":"
+      TermQuery@13..20
+        Term@13..20 "cmd.exe"
+    Whitespace@20..21 " "
+    And@21..24
+      AndKw@21..24 "AND"
+    Whitespace@24..25 " "
+    FieldQuery@25..43
+      FieldName@25..33
+        Term@25..33 "_exists_"
+      Colon@33..34 ":"
+      TermQuery@34..43
+        Term@34..43 "host.name"

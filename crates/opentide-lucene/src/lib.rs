@@ -24,9 +24,19 @@
 pub mod carbon_black;
 mod ecs;
 pub mod graylog;
+mod parser;
 pub mod regexp;
+mod syntax;
 
 pub use ecs::ecs_diagnostics;
+
+/// The tree of `source` and its errors as indented text, for the snapshot
+/// tests of the parser (`tests/trees.rs`). Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_parse(source: &str) -> String {
+    parser::debug(source)
+}
 
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, Range, Severity, codes, position_to_offset,

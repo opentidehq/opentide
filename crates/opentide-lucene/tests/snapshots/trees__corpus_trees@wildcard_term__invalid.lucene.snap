@@ -1,0 +1,12 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/wildcard_term__invalid.lucene
+---
+SourceFile@0..8
+  FieldQuery@0..8
+    FieldName@0..6
+      WildcardTerm@0..6 "book.*"
+    Colon@6..7 ":"
+    TermQuery@7..8
+      Term@7..8 "x"

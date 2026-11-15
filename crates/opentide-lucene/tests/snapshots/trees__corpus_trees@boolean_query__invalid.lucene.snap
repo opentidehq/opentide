@@ -1,0 +1,16 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/boolean_query__invalid.lucene
+---
+SourceFile@0..26
+  FieldQuery@0..22
+    FieldName@0..14
+      Term@0..14 "event.category"
+    Colon@14..15 ":"
+    TermQuery@15..22
+      Term@15..22 "process"
+  Whitespace@22..23 " "
+  And@23..26
+    AndKw@23..26 "AND"
+26..26: missing a clause
