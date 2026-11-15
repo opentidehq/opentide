@@ -2,7 +2,7 @@
 //! that cannot run, and runs on Elastic tenants served by a stand-in
 //! Elasticsearch on the loopback (one that answers, one that refuses the
 //! query, one that is not listening, one that never answers). The recorded
-//! tenants' runs are `command_goldens.rs`'s; two are replayed here with one
+//! tenants' runs are `cli_snapshots.rs`'; two are replayed here with one
 //! answer changed (a gateway's page in front of Splunk, Carbon Black Cloud
 //! refusing the token).
 
