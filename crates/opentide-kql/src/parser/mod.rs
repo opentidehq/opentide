@@ -21,7 +21,7 @@ use opentide_parse::{CompletedMarker, Grammar, Input, Marker, Parse, Parser, Tok
 /// of the input in one error node.
 const MAX_DEPTH: u32 = 256;
 
-const GRAMMAR: Grammar = Grammar {
+pub(crate) const GRAMMAR: Grammar = Grammar {
     eof: K::EOF.raw(),
     error: K::ERROR.raw(),
     trivia: TokenSet::new(&[K::WHITESPACE.raw(), K::COMMENT.raw()]),

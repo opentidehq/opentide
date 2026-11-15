@@ -16,6 +16,8 @@ description = "opentide's differential comparator: the oracle's run against a ca
 workspace = true
 
 [dependencies]
+# `utc_date`: the UTC date of a moment (no time zone database).
+jiff.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true

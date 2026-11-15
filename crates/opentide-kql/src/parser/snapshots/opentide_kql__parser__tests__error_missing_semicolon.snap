@@ -15,7 +15,8 @@ SOURCE_FILE@0..11
   WHITESPACE@9..10 "\n"
   QUERY@10..11
     TABULAR_EXPRESSION@10..11
-      TABLE_REF@10..11
-        IDENT@10..11 "T"
+      TABULAR_SOURCE@10..11
+        TABLE_REF@10..11
+          IDENT@10..11 "T"
 errors:
 9..10: expected `;` (expected `;`, `+`, `-`, `*`, `/`, `%`, `and`, `or`)

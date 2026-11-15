@@ -4,7 +4,7 @@
 mod common;
 use common::corpus;
 use opentide_core::LanguageId;
-use opentide_kql::testing::{lex_spans, parse_error_count, parse_is_lossless};
+use opentide_kql::testing::{conformance, lex_spans, parse_error_count, parse_is_lossless};
 
 /// Every corpus file, and its prefixes, parses without a panic and into a
 /// lossless tree (the debug assertions of the toolkit are on in tests).
@@ -91,5 +91,30 @@ fn the_verdicts_agree_with_tree_sitter() {
         disagree.len(),
         valid + broken,
         disagree.join("\n")
+    );
+}
+
+/// Every tree of a corpus file that parses without error has the shape
+/// `kql.ungram` says: the typed AST reads it as the grammar spells it.
+#[test]
+fn every_valid_tree_conforms_to_the_ungram() {
+    let mut checked = 0;
+    let mut failures = Vec::new();
+    for path in corpus() {
+        let source = std::fs::read_to_string(&path).expect("corpus file");
+        if parse_error_count(&source) > 0 {
+            continue;
+        }
+        checked += 1;
+        for problem in conformance(&source) {
+            failures.push(format!("{}: {problem}", path.display()));
+        }
+    }
+    assert!(checked > 140, "{checked} files");
+    assert!(
+        failures.is_empty(),
+        "{} problems:\n{}",
+        failures.len(),
+        failures.join("\n")
     );
 }

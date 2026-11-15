@@ -5,8 +5,9 @@ expression: "show(\"T | evaluate hint.distribution = single bag_unpack(x) | dist
 SOURCE_FILE@0..105
   QUERY@0..105
     TABULAR_EXPRESSION@0..105
-      TABLE_REF@0..1
-        IDENT@0..1 "T"
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
       WHITESPACE@1..2 " "
       PIPE@2..3 "|"
       WHITESPACE@3..4 " "
