@@ -618,17 +618,6 @@ pub enum BoolOrPlaceholder {
     Placeholder(EnvPlaceholder),
 }
 
-/// An integer, or a `$NAME` placeholder.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
-#[serde(untagged)]
-#[from_node(union)]
-pub enum IntOrPlaceholder {
-    /// An integer.
-    Int(i64),
-    /// A placeholder.
-    Placeholder(EnvPlaceholder),
-}
-
 /// An integer or a string.
 #[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(untagged)]
@@ -757,10 +746,6 @@ fn random() -> String {
     "random".to_owned()
 }
 
-fn zero_offset() -> IntOrPlaceholder {
-    IntOrPlaceholder::Int(0)
-}
-
 fn bool_true() -> BoolOrPlaceholder {
     BoolOrPlaceholder::Bool(true)
 }
@@ -788,9 +773,10 @@ pub struct SplunkSetup {
     /// Splunk `allow_skew`.
     #[serde(default)]
     pub allow_skew: Option<Skew>,
-    /// Minutes added to the computed schedule.
-    #[serde(default = "zero_offset")]
-    pub schedule_offset: IntOrPlaceholder,
+    /// Minutes added to the computed schedule: an integer, not a `$NAME`
+    /// placeholder, which `deploy` does not resolve for it.
+    #[serde(default)]
+    pub schedule_offset: i64,
     /// How a search's cron minute is chosen.
     #[serde(default = "random")]
     pub frequency_scheduling: String,
