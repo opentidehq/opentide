@@ -18,7 +18,7 @@ use super::findings::{self, diagnostic};
 use super::{Block, ISSUES_FOUND, Report, Terminal, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE, code};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::mode::Mode;
 use crate::queries::EngineQueries;
 use crate::render::codeframe::{FixedValue, render_diff, render_fixed};
@@ -53,9 +53,33 @@ pub struct Args {
     /// `--watch`.
     pub watch: bool,
     /// `--format`.
-    pub format: Option<ReportFormat>,
+    pub format: ReportFormat,
     /// `--output`.
     pub output: Option<PathBuf>,
+}
+
+impl From<&crate::tree::ValidateArgs> for Args {
+    fn from(args: &crate::tree::ValidateArgs) -> Self {
+        Self {
+            check: args.check.map(Check::from),
+            selection: Selection {
+                files: args.file.clone(),
+                uuids: args.uuid.clone(),
+                types: args.object_type.clone(),
+            },
+            strict: args.strict,
+            queries: args.queries.map(|queries| match queries {
+                crate::tree::Queries::Error => QueriesMode::Error,
+                crate::tree::Queries::Warn => QueriesMode::Warn,
+                crate::tree::Queries::Off => QueriesMode::Off,
+            }),
+            fix: args.fix,
+            dry_run: args.dry_run,
+            watch: args.watch,
+            format: args.report_format.into(),
+            output: args.output.clone(),
+        }
+    }
 }
 
 /// What a run reads besides its options.
@@ -98,7 +122,7 @@ pub fn usage(message: impl Into<String>, argument: &str, failure_code: &str) -> 
 
 /// The usage errors the options make, before anything runs.
 pub fn refuse(args: &Args, mode: Mode) -> Option<Report> {
-    let format = args.format.unwrap_or(ReportFormat::Text);
+    let format = args.format;
     if let Some(failure) = check_report_options(format, args.output.is_some(), mode == Mode::Json) {
         return Some(Report::failed(COMMAND, USAGE_EXIT_CODE, failure));
     }
@@ -395,7 +419,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if let Some(report) = refuse(args, terminal.mode) {
         return report;
     }
-    let format = args.format.unwrap_or(ReportFormat::Text);
+    let format = args.format;
     let queries = args.queries.unwrap_or_default();
     let (_, root_options) = placement(cx.repo, cx.env, cx.cwd);
     let mut ws = match super::open(root_options) {
@@ -512,7 +536,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     }
     let mut summary_json = match super::json(&summary) {
         Json::Object(members) => members,
-        _ => Vec::new(),
+        _ => Object::new(),
     };
     let mut fix_phrase_text = None;
     let mut unwritten_lines = Vec::new();
@@ -538,7 +562,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 warnings.push(warning.clone());
                 unwritten_lines.push(warning);
             }
-            summary_json.push(("fixed".into(), Json::from(fix.changes.len())));
+            summary_json.insert("fixed".into(), Json::from(fix.changes.len()));
             data.push(("fixed".into(), changes));
         }
         if !fix.changes.is_empty() || fix.unwritten_fixes > 0 || failed {
@@ -555,7 +579,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     report.outcome.status = if failed { "failed" } else { "passed" }.into();
     report.outcome.message.clone_from(&message);
     report.outcome.exit_code = exit_code;
-    report.outcome.summary = summary_json;
+    report.outcome.summary = summary_json.into_iter().collect();
     report.outcome.next_actions = next;
     if failed {
         report.outcome.failure = Some(Failure::new(ISSUES_FOUND, message.clone()));

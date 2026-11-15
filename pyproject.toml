@@ -68,8 +68,6 @@ dev = [
     "pytest-console-scripts>=1.4",
     "pytest-xdist>=3.6",
     "pytest-split>=0.9",
-    # Drives the console script on a real PTY (the setup wizard's Ctrl-C).
-    "pexpect>=4.9",
     # CI's contract tests read the workflows (tests/test_ci/).
     "pyyaml>=6.0",
     "ruff>=0.17.2",
@@ -99,6 +97,7 @@ cache-keys = [
     { file = "vendor/*/src/**/*.rs" },
     # What the engine crates compile in (include_str!, build.rs).
     { file = "data/catalogs/**" },
+    { file = "src/opentide/data/**" },
     { file = "grammars/*/src/**" },
     { file = "grammars/*/queries/**" },
     { file = "highlights/spec.toml" },
@@ -149,6 +148,11 @@ exclude = [
     # The crates' integration tests and the reference Tide schemas: no build reads them.
     { path = "crates/*/tests/**/*", format = "sdist" },
     { path = "data/catalogs/tide/schemas/**/*", format = "sdist" },
+    # The engine compiles src/opentide/data and src/opentide/schemas/data in
+    # (build.rs, `include_str!`) and the package reads neither at run time, so a
+    # wheel carries a binary and no copy; the sdist keeps them for the build.
+    { path = "src/opentide/data/**/*", format = "wheel" },
+    { path = "src/opentide/schemas/**/*", format = "wheel" },
 ]
 # The sdist carries the engine's Rust sources, so it builds wherever a Rust
 # toolchain is installed (crates.io dependencies are fetched as usual): maturin

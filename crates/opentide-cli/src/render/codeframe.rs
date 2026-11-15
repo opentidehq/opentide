@@ -440,11 +440,7 @@ impl QueryHighlighter {
 
 /// The 1-based line and code-point column of byte `offset` in `text`.
 fn position(text: &str, offset: usize) -> (usize, usize) {
-    let offset = offset.min(text.len());
-    let mut offset = offset;
-    while !text.is_char_boundary(offset) {
-        offset -= 1;
-    }
+    let offset = text.floor_char_boundary(offset);
     let before = &text[..offset];
     let line = before.matches('\n').count() + 1;
     let start = before.rfind('\n').map_or(0, |at| at + 1);

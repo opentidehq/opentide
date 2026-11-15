@@ -31,7 +31,7 @@ fn framework_binary_prints_the_catalogue_and_usage_errors() {
     assert!(typo.stdout.is_empty());
     assert_eq!(
         String::from_utf8(typo.stderr).unwrap(),
-        "error: Unknown command \"valdiate\".\n  help: did you mean \"validate\"?\n  usage: opentide [OPTIONS] <COMMAND>\n  help: run 'opentide --help'\n"
+        "error: unrecognized subcommand 'valdiate'\n\n  tip: some similar subcommands exist: 'lint', 'validate'\n\nUsage: opentide [OPTIONS] <COMMAND>\n\nFor more information, try '--help'.\n"
     );
 
     let version = opentide(&["--version"]);

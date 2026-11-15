@@ -8,13 +8,13 @@ use std::path::{Path, PathBuf};
 
 use super::jsonc;
 use super::stage::Stage;
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// A step's result: its members, in order.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct StepResult {
     /// The members.
-    pub fields: Vec<(String, Json)>,
+    pub fields: Object,
 }
 
 impl StepResult {
@@ -27,7 +27,7 @@ impl StepResult {
 
     /// The value of `key`.
     pub fn get(&self, key: &str) -> Option<&Json> {
-        self.fields.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+        self.fields.get(key)
     }
 
     /// The strings of the list `key` (empty when there is none).
@@ -54,16 +54,12 @@ impl StepResult {
 
     /// Sets `key`, in its place when it is there, else last.
     pub fn set(&mut self, key: &str, value: Json) {
-        match self.fields.iter_mut().find(|(k, _)| k == key) {
-            Some((_, slot)) => *slot = value,
-            None => self.fields.push((key.to_owned(), value)),
-        }
+        self.fields.insert(key.to_owned(), value);
     }
 
     /// Removes `key`, returning its value.
     pub fn take(&mut self, key: &str) -> Option<Json> {
-        let at = self.fields.iter().position(|(k, _)| k == key)?;
-        Some(self.fields.remove(at).1)
+        self.fields.shift_remove(key)
     }
 }
 
@@ -234,28 +230,74 @@ pub fn platform_file(platform: &str) -> Option<String> {
 }
 
 /// `content` with `enabled = true` in its `[platform]` table
-/// (`_enable_platform_toml`), its line endings kept.
-pub fn enable_platform_toml(content: &str) -> String {
-    #[expect(clippy::expect_used, reason = "regex literals")]
-    let (present, value) = (
-        regex::Regex::new(r"(?m)^enabled\s*=").expect("regex"),
-        regex::Regex::new(r"(?m)^enabled\s*=\s*\w+[ \t]*(\r?)$").expect("regex"),
-    );
-    if present.is_match(content) {
-        return value
-            .replacen(content, 1, "enabled = true${1}")
-            .into_owned();
-    }
-    let newline = if content.contains("\r\n") {
-        "\r\n"
-    } else {
-        "\n"
+/// (`_enable_platform_toml`), everything else in the file kept: comments,
+/// the other tables and keys (another table's `enabled` untouched), and CRLF
+/// line endings. A file with no `[platform]` table, or one already enabled,
+/// comes back as it is.
+///
+/// # Errors
+///
+/// `content` is not TOML.
+pub fn enable_platform_toml(content: &str) -> Result<String, toml_edit::TomlError> {
+    let mut document: toml_edit::DocumentMut = content.parse()?;
+    let changed = match document.get_mut("platform") {
+        // A key toml_edit adds goes last: an `enabled` added goes first, as
+        // in the bundled templates.
+        Some(toml_edit::Item::Table(table)) => {
+            let added = !table.contains_key("enabled");
+            let changed = set_enabled(table);
+            if added {
+                table.sort_values_by(|left, _, right, _| enabled_first(left, right));
+            }
+            changed
+        }
+        Some(toml_edit::Item::Value(toml_edit::Value::InlineTable(table))) => {
+            let added = !table.contains_key("enabled");
+            let changed = set_enabled(table);
+            if added {
+                table.sort_values_by(|left, _, right, _| enabled_first(left, right));
+            }
+            changed
+        }
+        _ => false,
     };
-    content.replacen(
-        "[platform]",
-        &format!("[platform]{newline}enabled = true"),
-        1,
-    )
+    if !changed {
+        return Ok(content.to_owned());
+    }
+    let written = document.to_string();
+    // A key toml_edit adds ends in `\n`: a CRLF file keeps CRLF throughout.
+    Ok(if content.contains("\r\n") {
+        written.replace("\r\n", "\n").replace('\n', "\r\n")
+    } else {
+        written
+    })
+}
+
+/// Sets `enabled = true` in `table`, the value's comments and spacing kept;
+/// false when it already was.
+fn set_enabled(table: &mut dyn toml_edit::TableLike) -> bool {
+    match table.get_mut("enabled") {
+        Some(item) if item.as_bool() == Some(true) => false,
+        Some(toml_edit::Item::Value(value)) => {
+            let decor = value.decor().clone();
+            *value = true.into();
+            *value.decor_mut() = decor;
+            true
+        }
+        Some(item) => {
+            *item = toml_edit::value(true);
+            true
+        }
+        None => {
+            table.insert("enabled", toml_edit::value(true));
+            true
+        }
+    }
+}
+
+/// The order that puts `enabled` first and keeps the other keys' order.
+fn enabled_first(left: &toml_edit::Key, right: &toml_edit::Key) -> std::cmp::Ordering {
+    (left.get() != "enabled").cmp(&(right.get() != "enabled"))
 }
 
 /// `setup platforms`: each platform's bundled configuration, enabled.
@@ -284,7 +326,8 @@ pub fn platforms(
         let out = dest.join(&file);
         let relative = format!("{OPENTIDE_DIR}/configurations/platforms/{file}");
         if let Some(current) = read_text(stage, &out)? {
-            let enabled = enable_platform_toml(&current);
+            let enabled = enable_platform_toml(&current)
+                .map_err(|error| format!("{}: {error}", out.display()))?;
             if enabled == current {
                 skipped.push(relative);
             } else {
@@ -293,7 +336,9 @@ pub fn platforms(
             }
             continue;
         }
-        stage.write(&out, enable_platform_toml(template));
+        let enabled =
+            enable_platform_toml(template).map_err(|error| format!("platforms/{file}: {error}"))?;
+        stage.write(&out, enabled);
         written.push(relative);
     }
     let message = if !written.is_empty() {
@@ -692,20 +737,58 @@ mod tests {
     #[test]
     fn enabling_a_platform_keeps_crlf_and_the_rest_of_the_line_endings() {
         assert_eq!(
-            enable_platform_toml("[platform]\r\nenabled = false\r\nx = 1\r\n"),
+            enable_platform_toml("[platform]\r\nenabled = false\r\nx = 1\r\n").unwrap(),
             "[platform]\r\nenabled = true\r\nx = 1\r\n"
         );
         assert_eq!(
-            enable_platform_toml("[platform]\r\nx = 1\r\n"),
+            enable_platform_toml("[platform]\r\nx = 1\r\n").unwrap(),
             "[platform]\r\nenabled = true\r\nx = 1\r\n"
         );
         assert_eq!(
-            enable_platform_toml("[platform]\nenabled=false\n"),
-            "[platform]\nenabled = true\n"
+            enable_platform_toml("[platform]\nenabled=false # off\n").unwrap(),
+            "[platform]\nenabled=true # off\n"
         );
         // Already enabled: no change, so the step skips the file.
         let enabled = "[platform]\nenabled = true\n";
-        assert_eq!(enable_platform_toml(enabled), enabled);
+        assert_eq!(enable_platform_toml(enabled).unwrap(), enabled);
+        // No `[platform]` table: nothing to enable.
+        let other = "[other]\nenabled = false\n";
+        assert_eq!(enable_platform_toml(other).unwrap(), other);
+        assert!(enable_platform_toml("[platform\n").is_err());
+    }
+
+    #[test]
+    fn enabling_a_platform_sets_enabled_in_the_platform_table_only() {
+        // Another table's `enabled` comes first in the file: it stays false.
+        let content = "# Sentinel\n[defaults]\nenabled = false\n\n[platform]\n\
+                       name = \"Sentinel\" # shown\nenabled = false\n\n\
+                       # [[tenants]]\n[[tenants]]\nname = \"t\"\n";
+        assert_eq!(
+            enable_platform_toml(content).unwrap(),
+            "# Sentinel\n[defaults]\nenabled = false\n\n[platform]\n\
+             name = \"Sentinel\" # shown\nenabled = true\n\n\
+             # [[tenants]]\n[[tenants]]\nname = \"t\"\n"
+        );
+        // `[platform]` without `enabled`, after a table that has one.
+        assert_eq!(
+            enable_platform_toml("[defaults]\nenabled = false\n[platform]\nname = \"x\"\n")
+                .unwrap(),
+            "[defaults]\nenabled = false\n[platform]\nenabled = true\nname = \"x\"\n"
+        );
+        // Every bundled template comes out enabled and otherwise unchanged.
+        for platform in opentide_schema::platforms::PLATFORMS {
+            let Some(file) = platform_file(platform.id) else {
+                continue;
+            };
+            let template =
+                opentide_schema::configuration::bundled::text(&format!("platforms/{file}"))
+                    .unwrap();
+            assert_eq!(
+                enable_platform_toml(template).unwrap(),
+                template.replacen("enabled = false", "enabled = true", 1),
+                "{file}"
+            );
+        }
     }
 
     #[test]

@@ -11,7 +11,7 @@ use serde_json::{Map, Value, json};
 use super::args::Args;
 use super::{catalog, deploy, queries};
 use crate::env::Env;
-use crate::json::{Json, document_text};
+use crate::json::{Json, Object, document_text};
 
 /// What a tool runs against.
 pub struct Context<'a> {
@@ -25,6 +25,9 @@ pub struct Context<'a> {
     pub version: &'a str,
     /// Why there is no workspace to serve (`workspace_not_found`), if so.
     pub workspace_problem: Option<String>,
+    /// What stops this call's command runs (the client's
+    /// `notifications/cancelled`); none, a run no one stops.
+    pub interrupt: Option<&'a crate::app::Interrupt>,
 }
 
 /// What a tool returns.
@@ -284,22 +287,18 @@ pub fn validation_report(
     };
     let diagnostics = diagnostics_of(&payload);
     let again = again_action(file, uuid, object_type, queries);
-    payload.push((
+    payload.insert(
         "next_actions".into(),
         Json::Array(validation_next_actions(&diagnostics, again)),
-    ));
+    );
     Ok(Json::Object(payload))
 }
 
 /// The report's issues, then its warnings: every diagnostic a next step reads.
-fn diagnostics_of(payload: &[(String, Json)]) -> Vec<Json> {
+fn diagnostics_of(payload: &Object) -> Vec<Json> {
     let mut diagnostics = Vec::new();
     for bucket in ["issues", "warnings"] {
-        if let Some(Json::Array(items)) = payload
-            .iter()
-            .find(|(key, _)| key == bucket)
-            .map(|(_, value)| value)
-        {
+        if let Some(Json::Array(items)) = payload.get(bucket) {
             diagnostics.extend(items.iter().cloned());
         }
     }
@@ -350,7 +349,7 @@ pub fn next_action(tool: &str, arguments: Json, command: &str, reason: &str) -> 
 
 fn set(object: &mut Json, key: &str, value: Json) {
     if let Json::Object(members) = object
-        && let Some((_, slot)) = members.iter_mut().find(|(name, _)| name == key)
+        && let Some(slot) = members.get_mut(key)
     {
         *slot = value;
     }
@@ -424,6 +423,7 @@ mod tests {
             repo: None,
             version: "1",
             workspace_problem: None,
+            interrupt: None,
         }
     }
 
@@ -539,6 +539,7 @@ mod tests {
             repo: None,
             version: "1",
             workspace_problem: Some("workspace_not_found: set OPENTIDE_REPO_ROOT".into()),
+            interrupt: None,
         };
         let result = call("validation_report", &Map::new(), &context);
         assert_eq!(result["isError"], true);
@@ -557,6 +558,7 @@ mod tests {
             repo: None,
             version: "1",
             workspace_problem: Some("workspace_not_found: no workspace".into()),
+            interrupt: None,
         };
         let result = call(
             "validation_report",
@@ -607,7 +609,7 @@ mod tests {
     #[test]
     fn a_fix_on_a_warning_alone_still_shapes_the_rerun() {
         let safe = Json::object([("safe", Json::Bool(true))]);
-        let payload = vec![
+        let payload = Object::from([
             (
                 "issues".to_owned(),
                 Json::Array(vec![issue("e", "error", Json::Null)]),
@@ -616,7 +618,7 @@ mod tests {
                 "warnings".to_owned(),
                 Json::Array(vec![issue("w", "warning", safe)]),
             ),
-        ];
+        ]);
         let diagnostics = diagnostics_of(&payload);
         assert_eq!(diagnostics.len(), 2);
         let actions =

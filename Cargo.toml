@@ -11,6 +11,7 @@ members = [
     "crates/opentide-core",
     "crates/opentide-highlight",
     "crates/opentide-syntax",
+    "crates/opentide-parse",
     "crates/opentide-kql",
     "crates/opentide-spl",
     "crates/opentide-esql",
@@ -54,6 +55,7 @@ authors = ["opentide"]
 opentide-core = { path = "crates/opentide-core", version = "=0.12.0" }
 opentide-highlight = { path = "crates/opentide-highlight", version = "=0.12.0" }
 opentide-syntax = { path = "crates/opentide-syntax", version = "=0.12.0" }
+opentide-parse = { path = "crates/opentide-parse", version = "=0.12.0" }
 opentide-kql = { path = "crates/opentide-kql", version = "=0.12.0" }
 opentide-spl = { path = "crates/opentide-spl", version = "=0.12.0" }
 opentide-esql = { path = "crates/opentide-esql", version = "=0.12.0" }
@@ -70,7 +72,10 @@ opentide-schema = { path = "crates/opentide-schema", version = "=0.12.0" }
 opentide-schema-derive = { path = "crates/opentide-schema-derive", version = "=0.12.0" }
 opentide-tide = { path = "crates/opentide-tide", version = "=0.12.0" }
 opentide-workspace = { path = "crates/opentide-workspace", version = "=0.12.0" }
-opentide-cli = { path = "crates/opentide-cli", version = "=0.12.0" }
+# Without its default `terminal` feature (the terminal UI and the wizard's
+# prompts): the facade's `queries` and `plugins` features need the engines, not
+# a terminal; its `cli` feature turns `terminal` on.
+opentide-cli = { path = "crates/opentide-cli", version = "=0.12.0", default-features = false }
 opentide-compile = { path = "crates/opentide-compile", version = "=0.12.0" }
 opentide-analysis = { path = "crates/opentide-analysis", version = "=0.12.0" }
 opentide-lsp = { path = "crates/opentide-lsp", version = "=0.12.0" }
@@ -79,18 +84,21 @@ opentide-connectors = { path = "crates/opentide-connectors", version = "=0.12.0"
 opentide-cassette = { path = "crates/opentide-cassette" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Canonical paths without Windows' `\\?\` prefix (the CLI's E2E tests).
+dunce = "1"
 toml = "0.8"
-# Spans of configuration TOML keys (opentide-analysis `config`). The version
+# Spans of configuration TOML keys (opentide-analysis `config`); `display`
+# writes an edited document back (opentide-cli `setup platforms`). The version
 # `toml` 0.8 already locks.
-toml_edit = { version = "0.22", default-features = false, features = ["parse"] }
+toml_edit = { version = "0.22", default-features = false, features = ["parse", "display"] }
 thiserror = "2"
 anyhow = "1"
 # The LSP host (#90, #185): framing, typed messages, file URIs.
 lsp-server = "0.10"
 lsp-types = "0.97"
 url = "2.5"
-# Percent-decoding a URL path segment (opentide-cassette's matcher). The
-# version `url` already locks.
+# Percent-decoding a URL path segment (opentide-cassette's matcher,
+# opentide-lsp's `file:` URIs). The version `url` already locks.
 percent-encoding = "2.3"
 regex = "1"
 # Look-around and back-references, which `regex` has not: the oracle's
@@ -135,6 +143,11 @@ js-sys = "0.3"
 # (scripts/engine/oracles). Exact pins: they set the floor (rust-version 1.95).
 yara-x-parser = "=1.23.0"
 yara-x-fmt = "=1.23.0"
+# The pure-Rust parsers' toolkit (crates/opentide-parse, ADR 0012): logos
+# lexers and lossless rowan trees, the versions yara-x-parser already locks.
+# rowan stays on 0.17: 0.18 is an alpha.
+logos = "0.16.1"
+rowan = "0.17.0"
 # The Tide model as code (plan D-2, docs/internal/adr/0001-tide-model-as-rust-code.md):
 # JSON Schema 2020-12 from the structs, and their constraints. garde has no
 # default features; a model that needs one (`regex` for `pattern`) adds it then.

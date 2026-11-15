@@ -6,7 +6,9 @@
 //! value starts (`--platform defender` -> `defender_for_endpoint`). Otherwise
 //! the shared rule every other suggestion follows ([`opentide_core::suggest`]:
 //! the fewest edits, at most a third of the length), so the command line, the
-//! editor and `validate` suggest the same word for the same typo.
+//! editor and `validate` suggest the same word for the same typo. A mistyped
+//! command or option is clap's to suggest (`crate::usage`); a value clap
+//! checks gets this rule where clap's own match finds nothing.
 
 use opentide_core::suggest::{self, fold};
 

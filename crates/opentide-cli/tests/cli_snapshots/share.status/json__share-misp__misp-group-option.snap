@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.status/json/share-misp/misp-group-option
+---
+args: opentide --json share --dry-run status
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share status",
+  "duration_ms": 0,
+  "error": "--dry-run configures `opentide share` itself and would be ignored by `opentide share status`.",
+  "exit_code": 2,
+  "failure": {
+    "argument": null,
+    "code": "usage_invalid_value",
+    "crash_log": null,
+    "message": "--dry-run configures `opentide share` itself and would be ignored by `opentide share status`.",
+    "suggestion": null
+  },
+  "message": "--dry-run configures `opentide share` itself and would be ignored by `opentide share status`.",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

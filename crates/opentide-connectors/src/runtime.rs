@@ -35,29 +35,51 @@ pub fn builder() -> tokio::runtime::Builder {
     }
 }
 
-/// Runs *work* on a thread of its own and waits for it: `None` when it
-/// panicked. A runtime cannot start on a thread that is already driving
+/// Runs *work* on a thread of its own and waits for it, as
+/// `std::thread::scope(|s| s.spawn(work).join())` does: a panic in *work*
+/// is the `Err`. A runtime cannot start on a thread that is already driving
 /// one, so a blocking caller inside a command hands the work to this. On
-/// WASI, which has no threads (a spawn traps), it runs on the caller's.
-pub fn apart<T: Send>(work: impl FnOnce() -> T + Send) -> Option<T> {
+/// WASI, which has no threads (a spawn traps), it runs on the caller's, and
+/// a panic is caught there.
+///
+/// # Errors
+///
+/// The panic of *work*.
+pub fn apart<T: Send>(work: impl FnOnce() -> T + Send) -> std::thread::Result<T> {
     #[cfg(not(target_os = "wasi"))]
     {
-        std::thread::scope(|scope| scope.spawn(work).join().ok())
+        std::thread::scope(|scope| scope.spawn(work).join())
     }
     #[cfg(target_os = "wasi")]
     {
-        Some(work())
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
     }
 }
 
 /// Runs *work* to completion on a runtime of its own.
+///
+/// # Errors
+///
+/// The runtime cannot start; or, on WASI, the caller is inside a runtime
+/// (the MCP server's): tokio refuses to start one there (it panics), and
+/// WASI has no other thread to hand the work to (`apart` runs it on this
+/// one).
 pub fn block_on<F: Future>(work: F) -> Result<F::Output, String> {
+    #[cfg(target_os = "wasi")]
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return Err(INSIDE_A_RUNTIME.into());
+    }
     let runtime = builder()
         .enable_all()
         .build()
         .map_err(|error| format!("cannot start the network runtime: {error}"))?;
     Ok(runtime.block_on(work))
 }
+
+/// [`block_on`]'s refusal inside a runtime on WASI.
+#[cfg(target_os = "wasi")]
+const INSIDE_A_RUNTIME: &str =
+    "cannot start the network runtime inside another on a target without threads";
 
 /// Cancels *token* once *requested* returns true, checking every 50 ms
 /// until the token is cancelled. For the CLI's Ctrl-C flag.
@@ -215,5 +237,21 @@ fn panic_message(failure: tokio::task::JoinError) -> String {
         text.clone()
     } else {
         "a panic".to_owned()
+    }
+}
+
+#[cfg(all(test, target_os = "wasi"))]
+mod tests {
+    use super::*;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn block_on_inside_a_runtime_is_refused_not_a_panic() {
+        assert_eq!(block_on(async { 7 }), Err(INSIDE_A_RUNTIME.to_owned()));
+    }
+
+    #[test]
+    fn apart_gives_the_result_or_the_panic() {
+        assert_eq!(apart(|| 1 + 1).ok(), Some(2));
+        assert!(apart(|| -> u8 { panic!("stopped") }).is_err());
     }
 }

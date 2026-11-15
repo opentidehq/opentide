@@ -213,7 +213,8 @@ merging** → add `PR gate`, remove the others → **Save changes**.
   --check --require-reference` against `tests/bench/budgets.toml` and the `bench-<engine>`
   artifact of the last successful run on the comparison base, `BASE_BRANCH`
   (`integration/unified-core` until the Unified Core merges into development), on the same CPU
-  (a command compared with nothing fails). The rules
+  (a command compared with nothing fails); the `python` engine, a fixed PyPI wheel, is held to
+  its oracle baseline only, never to a last result (that measures the runner). The rules
   (10% over the base branch's last result or the oracle baseline of the runner's CPU, the absolute
   plan section 11 target for `rust`, the noise floor, the ceiling on an unrecorded CPU, the
   waiver) are in [`xtask/AGENTS.md`](../xtask/AGENTS.md), "bench"; the table lands in the job

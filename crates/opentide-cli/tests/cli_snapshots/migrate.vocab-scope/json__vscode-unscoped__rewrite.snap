@@ -1,0 +1,55 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: migrate.vocab-scope/json/vscode-unscoped/rewrite
+---
+args: opentide --json migrate vocab-scope
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "applied": false,
+  "changed_files": [
+    "objects/objectives/detect-lsass-access.yaml"
+  ],
+  "command": "migrate vocab-scope",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failed_files": {},
+  "failure": null,
+  "fields": {
+    "entities": {
+      "blocked": {},
+      "by_status": {
+        "prefixed": 2,
+        "rescoped": 1,
+        "scoped": 1
+      },
+      "rewrites": {
+        "Process": "Host::Process",
+        "host::command line": "Host::Command Line",
+        "hostname": "Host::Hostname"
+      },
+      "values": 4,
+      "vocab": "signal.entities"
+    },
+    "surface": {
+      "blocked": {},
+      "by_status": {},
+      "rewrites": {},
+      "values": 0,
+      "vocab": "surface"
+    }
+  },
+  "message": "Would rewrite 1 file · 2 scanned",
+  "next_actions": [],
+  "ok": true,
+  "scanned": 2,
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {
+    "files": 1,
+    "scanned": 2
+  }
+}
+
+━━━ stderr · empty

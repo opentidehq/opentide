@@ -62,8 +62,8 @@ def test_pip_installed_wheel_validate_generate_and_skills(
 
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
-    assert any(name.endswith("data/configurations/__init__.py") for name in names)
-    assert any(name.endswith("data/configurations/platforms/__init__.py") for name in names)
+    # The binary compiles the data and the schemas in: the wheel carries no copy.
+    assert not any(name.startswith(("opentide/data/", "opentide/schemas/")) for name in names)
     assert not any(
         "/data/skills/" in name or name.endswith("data/skills/manifest.json") for name in names
     )
@@ -76,24 +76,6 @@ def test_pip_installed_wheel_validate_generate_and_skills(
         timeout=180,
     )
     assert install.returncode == 0, install.stdout + install.stderr
-
-    probe = _run(
-        [
-            str(python),
-            "-c",
-            (
-                "import compileall, pathlib, opentide; "
-                "root = pathlib.Path(opentide.__file__).resolve().parent "
-                "/ 'data' / 'configurations'; "
-                "compileall.compile_dir(str(root), quiet=1, force=True); "
-                "print(root)"
-            ),
-        ],
-        timeout=60,
-    )
-    assert probe.returncode == 0, probe.stdout + probe.stderr
-    config_dir = Path(probe.stdout.strip())
-    assert any(config_dir.rglob("*.pyc")), f"no bytecode under {config_dir}"
 
     opentide = _venv_bin(env_dir, "opentide")
     assert opentide.is_file(), f"missing console script {opentide}"

@@ -3,8 +3,8 @@
 //! `elastic_rule_shape` ([`block_codes`]): the constraint codes of the
 //! oracle's `_validate_raw_elastic_block`, judged on the raw block before its
 //! fields. A key is set when its value is not null (`present`), or, where a
-//! check needs a value, when it is not null, `false`, zero or empty
-//! (`truthy`); a value's type is its YAML node's kind (a mapping, a sequence,
+//! check needs a value, when it is not null and not an empty string,
+//! sequence or mapping (`filled`); a value's type is its YAML node's kind (a mapping, a sequence,
 //! an integer; a boolean is never an integer).
 
 use std::collections::BTreeSet;
@@ -20,7 +20,9 @@ use crate::from_node::Context;
 use crate::node::{Node, Value};
 use crate::objects::any::Any;
 use crate::objects::platform::durations::duration_seconds;
-use crate::objects::platform::{get, is_map, literal_enum, platform_block, present, truthy};
+use crate::objects::platform::{
+    filled, get, is_map, literal_enum, non_empty_str, platform_block, present,
+};
 use crate::pins::Pins;
 
 literal_enum! {
@@ -735,20 +737,19 @@ fn valid_response(action: &Node) -> bool {
             && keys(action).iter().all(|key| ENDPOINT_KEYS.contains(key));
     }
     if let Some(osquery) = action.get("osquery") {
-        return entries.len() == 1 && is_map(Some(osquery)) && truthy(get(Some(osquery), "query"));
+        return entries.len() == 1
+            && is_map(Some(osquery))
+            && non_empty_str(get(Some(osquery), "query")).is_some();
     }
     false
 }
 
-/// The items a Python `for item in value` visits, for a value that is a
-/// list, a string (its characters) or a mapping (its keys): each is judged
-/// as an item. `None`: a value Python cannot iterate (the oracle crashed).
-fn iterated(node: &Node) -> Option<Vec<Option<&Node>>> {
-    match &node.value {
-        Value::Seq(items) => Some(items.iter().map(|item| Some(item.as_ref())).collect()),
-        Value::Str(text) => Some(text.chars().map(|_| None).collect()),
-        Value::Map(entries) => Some(entries.iter().map(|_| None).collect()),
-        _ => None,
+/// The items of a list field. A value that is not a sequence has none here:
+/// the field's type refuses it (`list_type`).
+fn items(node: Option<&Node>) -> &[std::sync::Arc<Node>] {
+    match node.map(|node| &node.value) {
+        Some(Value::Seq(items)) => items,
+        _ => &[],
     }
 }
 
@@ -819,24 +820,24 @@ pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
     {
         codes.insert("type_block");
     }
-    if !is_type("machine_learning") && !truthy(field("query")) {
+    if !is_type("machine_learning") && !filled(field("query")) {
         codes.insert("type_block");
     }
     if ["eql", "esql", "machine_learning"]
         .iter()
         .any(|kind| is_type(kind))
-        && truthy(field("language"))
+        && filled(field("language"))
     {
         codes.insert("language");
     }
     if ["esql", "machine_learning"]
         .iter()
         .any(|kind| is_type(kind))
-        && (truthy(field("index")) || truthy(field("data_view_id")) || truthy(field("filters")))
+        && (filled(field("index")) || filled(field("data_view_id")) || filled(field("filters")))
     {
         codes.insert("esql_source");
     }
-    if truthy(field("index")) && truthy(field("data_view_id")) {
+    if filled(field("index")) && filled(field("data_view_id")) {
         codes.insert("index_xor_data_view");
     }
     if let Some(index) = field("index").filter(|node| present(Some(node)))
@@ -883,21 +884,14 @@ pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
             }
         }
     }
-    // `(raw.get("exceptions") or {}).get("lists") or []`.
-    let exceptions = field("exceptions").filter(|node| truthy(Some(node)));
-    if let Some(lists) = get(exceptions, "lists").filter(|node| truthy(Some(node)))
-        && let Some(items) = iterated(lists)
-    {
-        for item in items {
-            let ok = item.is_some_and(|item| {
-                is_map(Some(item))
-                    && get(Some(item), "type")
-                        .and_then(|kind| kind.value.as_str())
-                        .is_some_and(|kind| EXCEPTION_TYPES.contains(&kind))
-            });
-            if !ok {
-                codes.insert("exception_type");
-            }
+    // Each item of `exceptions.lists`, when there is such a list.
+    for item in items(get(field("exceptions"), "lists")) {
+        let ok = is_map(Some(item))
+            && get(Some(item), "type")
+                .and_then(|kind| kind.value.as_str())
+                .is_some_and(|kind| EXCEPTION_TYPES.contains(&kind));
+        if !ok {
+            codes.insert("exception_type");
         }
     }
     let actions = field("actions");
@@ -905,16 +899,12 @@ pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
         Some(Value::Seq(_)) => {
             codes.insert("type_block");
         }
-        Some(Value::Map(_)) => {
-            if let Some(respond) = get(actions, "respond").filter(|node| truthy(Some(node)))
-                && let Some(items) = iterated(respond)
-            {
-                for action in items {
-                    if !action.is_some_and(valid_response) {
-                        codes.insert("response_action");
-                    }
-                }
-            }
+        Some(Value::Map(_))
+            if !items(get(actions, "respond"))
+                .iter()
+                .all(|action| valid_response(action)) =>
+        {
+            codes.insert("response_action");
         }
         _ => {}
     }
@@ -928,14 +918,14 @@ pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
         if is_type("threshold") {
             // A missing duration is a shape fault; an empty one is a
             // `duration` fault, reported by the duration check below.
-            if !present(get(suppression, "duration")) || truthy(group_by) {
+            if !present(get(suppression, "duration")) || filled(group_by) {
                 codes.insert("suppression_shape");
             }
         } else {
             let ok = match group_by.map(|node| &node.value) {
                 Some(Value::Seq(items)) => {
                     (1..=3).contains(&items.len())
-                        && items.iter().all(|item| truthy(Some(item)))
+                        && items.iter().all(|item| non_empty_str(Some(item)).is_some())
                         && items.iter().enumerate().all(|(index, item)| {
                             items[..index]
                                 .iter()
@@ -957,7 +947,7 @@ pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
     }
     let threshold = field("threshold");
     if is_map(threshold) {
-        let threshold_field = get(threshold, "field").filter(|node| truthy(Some(node)));
+        let threshold_field = get(threshold, "field").filter(|node| filled(Some(node)));
         let field_ok = match threshold_field.map(|node| &node.value) {
             None => true,
             Some(Value::Seq(items)) => items.len() <= 5,

@@ -1,0 +1,42 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.inflight/json/vscode/default
+---
+args: opentide --json generate inflight
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "generate inflight",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Generated 0 files in <SECONDS> · inflight",
+  "next_actions": [],
+  "ok": true,
+  "phase": "inflight",
+  "schema_version": 1,
+  "status": "completed",
+  "steps": [
+    {
+      "count": 0,
+      "name": "inflight",
+      "seconds": 0.0,
+      "status": "ok",
+      "unit": "file",
+      "where": null
+    }
+  ],
+  "summary": {
+    "files": 0,
+    "phases": 1,
+    "removed": 0,
+    "seconds": 0.0
+  }
+}
+
+━━━ stderr
+{"detail":"changed-object discovery requires a git repository with at least one commit","event":"inflight_no_git_baseline","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"event":"inflight_no_local_git_diff_found","level":"warning","timestamp":"0000-00-00 00:00:00"}
+
+━━━ ws/.opentide/inflight/ · created 0755
