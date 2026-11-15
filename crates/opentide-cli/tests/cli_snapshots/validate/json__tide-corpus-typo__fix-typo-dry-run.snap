@@ -1,0 +1,126 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/tide-corpus-typo/fix-typo-dry-run
+---
+args: opentide --json validate --fix --dry-run
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "checks": {
+    "configuration": {
+      "check": "configuration",
+      "status": "passed"
+    },
+    "id-uniqueness": {
+      "check": "id-uniqueness",
+      "status": "passed"
+    },
+    "queries": {
+      "check": "queries",
+      "status": "passed"
+    },
+    "schema": {
+      "check": "schema",
+      "status": "failed"
+    },
+    "uuid-format": {
+      "check": "uuid-format",
+      "status": "passed"
+    }
+  },
+  "command": "validate",
+  "diff": "--- a/Objects/Detection Rules/rule-0001-sentinel-kql.yaml\n+++ b/Objects/Detection Rules/rule-0001-sentinel-kql.yaml\n@@ -11,7 +11,7 @@\n description: |\n   Simulated Sentinel rule for CLI E2E corpus.\n status: STAGING\n-severity: high\n+severity: High\n techniques:\n   - T1059\n detection_model: 00000000-0000-4000-8002-000000000001\n",
+  "duration_ms": 0,
+  "error": "Validation failed",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Validation failed",
+    "suggestion": null
+  },
+  "message": "Validation failed",
+  "next_actions": [
+    {
+      "command": "opentide --json validate --fix",
+      "reason": "apply 1 safe fix"
+    }
+  ],
+  "ok": false,
+  "report": {
+    "issues": [
+      {
+        "code": "vocab_unknown",
+        "column": 11,
+        "context": {
+          "value": "high",
+          "vocab": "alert_severity::1.0"
+        },
+        "end_column": 15,
+        "end_line": 14,
+        "explain": "opentide explain vocab_unknown",
+        "field_path": [
+          "severity"
+        ],
+        "file_path": "<WS>/Objects/Detection Rules/rule-0001-sentinel-kql.yaml",
+        "fix": {
+          "edits": [
+            {
+              "column": 11,
+              "end_column": 15,
+              "end_line": 14,
+              "line": 14,
+              "replacement": "High"
+            }
+          ],
+          "safe": true
+        },
+        "help": "did you mean \"High\"?",
+        "line": 14,
+        "message": "Value \"high\" is not a valid \"alert_severity::1.0\" vocabulary entry",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8003-000000000001",
+        "path": "Objects/Detection Rules/rule-0001-sentinel-kql.yaml",
+        "severity": "error",
+        "suggestion": "High",
+        "yaml_line": 13
+      }
+    ],
+    "ok": false,
+    "stats": {
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
+      "objects_checked": 12,
+      "parallel": "<CORES>",
+      "queries_checked": 8,
+      "wall_ms": 0.0,
+      "workers": "<CORES>"
+    },
+    "warnings": []
+  },
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {
+    "errors": 1,
+    "files": 1,
+    "fixable": 1,
+    "objects": 12,
+    "queries": 8,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "workspace": "<WS>",
+  "would_fix": [
+    {
+      "after": "High",
+      "before": "high",
+      "code": "vocab_unknown",
+      "line": 14,
+      "path": "Objects/Detection Rules/rule-0001-sentinel-kql.yaml"
+    }
+  ]
+}
+
+━━━ stderr · empty

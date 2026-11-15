@@ -196,10 +196,10 @@ fn scalar_text(value: &Json) -> String {
 
 /// One `errors[]` entry as `code: message (fields: a, b)` (`_error_entry`).
 fn error_entry(entry: &Object) -> String {
-    let code = entry.get("code").filter(|code| code.truthy());
+    let code = entry.get("code").filter(|code| code.is_filled());
     let message = entry
         .get("message")
-        .filter(|message| message.truthy())
+        .filter(|message| message.is_filled())
         .map(|message| scalar_text(message).trim().to_owned())
         .unwrap_or_default();
     let mut text = match code {
@@ -212,7 +212,7 @@ fn error_entry(entry: &Object) -> String {
             let names: Vec<String> = fields.iter().map(scalar_text).collect();
             text.push_str(&format!(" (fields: {})", names.join(", ")));
         }
-        Some(fields @ (Json::Str(_) | Json::Object(_))) if fields.truthy() => {
+        Some(fields @ (Json::Str(_) | Json::Object(_))) if fields.is_filled() => {
             text.push_str(&format!(" (fields: {})", scalar_text(fields)));
         }
         _ => {}
@@ -235,7 +235,7 @@ pub fn api_error(action: &str, reply: &Reply) -> ApiError {
         }
         error.trace_id = payload
             .get("traceId")
-            .filter(|trace| trace.truthy())
+            .filter(|trace| trace.is_filled())
             .map(scalar_text);
         message = error
             .errors
@@ -247,8 +247,8 @@ pub fn api_error(action: &str, reply: &Reply) -> ApiError {
         if message.is_empty() {
             message = payload
                 .get("message")
-                .filter(|value| value.truthy())
-                .or_else(|| payload.get("error").filter(|value| value.truthy()))
+                .filter(|value| value.is_filled())
+                .or_else(|| payload.get("error").filter(|value| value.is_filled()))
                 .map(scalar_text)
                 .unwrap_or_default();
         }
@@ -921,8 +921,8 @@ pub fn schedule_retained(stored: &Object, has_schedule: bool) -> bool {
         return false;
     }
     match stored.get("scheduleConfig") {
-        Some(Json::Object(config)) => config.get("recurrences").is_some_and(Json::truthy),
-        Some(other) => other.truthy(),
+        Some(Json::Object(config)) => config.get("recurrences").is_some_and(Json::is_filled),
+        Some(other) => other.is_filled(),
         None => false,
     }
 }

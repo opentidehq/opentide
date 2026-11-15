@@ -313,6 +313,13 @@ fn the_loader_refuses_what_is_not_a_revision_of_the_family() {
         ("[rule::1.1]", "[...]"),
         ("{rule: 1.1}", "{...}"),
         ("\"rule's::1.1\"", "rule's::1.1"),
+        // A schema identifier is text: a number, a boolean or an empty
+        // collection is an identifier no revision has, not a missing one.
+        ("0", "0"),
+        ("0.0", "0.0"),
+        ("false", "false"),
+        ("[]", "[...]"),
+        ("{}", "{...}"),
     ] {
         assert_eq!(
             verdict(schema, "rule"),
@@ -322,7 +329,7 @@ fn the_loader_refuses_what_is_not_a_revision_of_the_family() {
             "{schema}"
         );
     }
-    for schema in ["''", "null", "0", "0.0", "-0.0", "false", "[]", "{}"] {
+    for schema in ["''", "null"] {
         let verdict = verdict(schema, "rule");
         assert_eq!(verdict, Err(Rejection::SchemaMissing), "{schema}");
         assert_eq!(verdict.unwrap_err().code(), "schema_missing");
@@ -353,28 +360,30 @@ fn the_loader_refuses_what_is_not_a_revision_of_the_family() {
             family: "detection".into()
         })
     );
-    for text in [
-        "",
-        "- a\n",
-        "name: x\n",
-        "metadata:\n",
-        "metadata: 0\n",
-        "metadata: 0.0\n",
-    ] {
+    for text in ["", "- a\n", "name: x\n", "metadata:\n", "metadata: {}\n"] {
         assert_eq!(
             select(&node::load(text).unwrap(), "rule"),
             Err(Rejection::SchemaMissing),
             "{text:?}"
         );
     }
-    let Err(Rejection::MetadataNotAMapping(error)) =
-        select(&node::load("name: x\nmetadata: [1]\n").unwrap(), "rule")
-    else {
-        panic!("a list is not a mapping")
-    };
-    assert_eq!(error.kind, ErrorKind::InvalidType("dict_type"));
-    assert_eq!(error.field_path(), ["metadata"]);
-    assert!(error.span.is_some());
+    // `metadata` that is not a mapping, empty or `0` included, is refused
+    // as one, not read as a missing schema.
+    for text in [
+        "name: x\nmetadata: [1]\n",
+        "name: x\nmetadata: []\n",
+        "name: x\nmetadata: 0\n",
+        "name: x\nmetadata: ''\n",
+        "name: x\nmetadata: false\n",
+    ] {
+        let Err(Rejection::MetadataNotAMapping(error)) = select(&node::load(text).unwrap(), "rule")
+        else {
+            panic!("{text:?} is not a mapping")
+        };
+        assert_eq!(error.kind, ErrorKind::InvalidType("dict_type"));
+        assert_eq!(error.field_path(), ["metadata"]);
+        assert!(error.span.is_some());
+    }
 }
 
 /// Every object file of the corpora (`tests/fixtures/tide_corpus` and the VS

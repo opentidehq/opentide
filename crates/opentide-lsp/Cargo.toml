@@ -50,6 +50,9 @@ regex.workspace = true
 lsp-server.workspace = true
 lsp-types.workspace = true
 url.workspace = true
+# A `file:` URI's path where `url` gives no file path (a UNC URI off
+# Windows, the browser build), decoded and encoded.
+percent-encoding.workspace = true
 
 [dev-dependencies]
 trycmd.workspace = true

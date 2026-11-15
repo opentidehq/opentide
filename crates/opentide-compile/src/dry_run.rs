@@ -236,7 +236,7 @@ pub fn selected_scope(
                 .and_then(|document| document.root().map(|root| Json::from_node(root)))
                 .and_then(|data| {
                     data.get("uuid")
-                        .filter(|value| value.truthy())
+                        .filter(|value| value.is_name())
                         .or_else(|| data.get("metadata").and_then(|m| m.get("uuid")))
                         .and_then(Json::as_str)
                         .map(|uuid| uuid.trim().to_lowercase())
@@ -732,7 +732,7 @@ fn diagnostic(platform: &str, entry: &Json, root: &Path) -> Json {
         "code".into(),
         entry
             .get("code")
-            .filter(|code| code.truthy())
+            .filter(|code| code.is_filled())
             .cloned()
             .unwrap_or_else(|| crate::rule::codes::COMPILE_FAILED.into()),
     );
@@ -987,7 +987,7 @@ fn report_skipped(
         format!("set a platform block's status to {listed} for {run_names} to deploy it")
     };
     let skipped_run = outcome.payload.get("status").and_then(Json::as_str) == Some("skipped");
-    let planned = outcome.payload.get("plan").is_some_and(Json::truthy);
+    let planned = outcome.payload.get("plan").is_some_and(Json::is_filled);
     if skipped_run && !planned {
         outcome.outcome_line = Some(format!(
             "No rule has a status {run_names} deploys · {in_status}"
