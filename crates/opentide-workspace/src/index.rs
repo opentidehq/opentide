@@ -468,6 +468,7 @@ fn index_signals(index: &mut Index, objective: &str, root: &Node) {
     }
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn references(index: &mut Index) {
     let mut found = Vec::new();
     let mut chaining: IndexMap<String, IndexMap<String, Vec<String>>> = IndexMap::new();

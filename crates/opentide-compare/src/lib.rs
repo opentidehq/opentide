@@ -424,6 +424,7 @@ impl Comparison<'_> {
         true
     }
 
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn json_content(&mut self, target: &Target, oracle_doc: &Json, candidate_doc: Json) {
         let mut applied = Vec::new();
         let entries: Vec<(usize, Rule)> = self

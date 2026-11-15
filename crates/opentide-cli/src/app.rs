@@ -489,6 +489,7 @@ impl Run<'_> {
         self.emit(&outcome, &[], out, err)
     }
 
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn dispatch(&self, out: &mut dyn Write, err: &mut dyn Write) -> std::io::Result<i32> {
         if self.globals.version {
             writeln!(out, "{} {}", catalog::PROGRAM, self.host.version)?;
@@ -1375,6 +1376,7 @@ impl Run<'_> {
     /// `opentide validate query`, from its parsed arguments. The options of
     /// `validate` it also takes, typed before `query`, are its own
     /// (`hand_down`); the others are refused, as is one typed on both.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn validate_query(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
         use crate::commands::validate_query::{Args, COMMAND, Context, plugin_live, run};
         let args = leaf(matches);
@@ -1600,6 +1602,7 @@ impl Run<'_> {
                 interrupted: &interrupted,
                 stdin: &stdin,
                 now: jiff::Timestamp::now(),
+                log: &self.host.log_sink,
             },
         )
     }
@@ -1848,6 +1851,7 @@ impl Run<'_> {
     }
 
     /// Prints `report` in this run's mode; its exit code.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn emit_report(
         &self,
         report: &crate::commands::Report,
@@ -2084,6 +2088,7 @@ impl Run<'_> {
     /// `share` and its subcommands (UC-4.4b, #834): the group's options
     /// handed down to the subcommand that takes them too, or refused
     /// (`hand_down`, `refuse_dropped`), then the run.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn share(
         &self,
         matches: &clap::ArgMatches,
@@ -2223,6 +2228,7 @@ impl Run<'_> {
 
     /// `setup skills discover` and `setup skills show` (UC-4.1, #831): the
     /// target the command and its groups name, then the catalogue.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn setup_skills_catalogue(
         &self,
         matches: &clap::ArgMatches,
@@ -3879,6 +3885,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn framework_small_behaviours() {
         // TERM=DUMB in any case: no SGR, even in human mode on a terminal.
         let dumb = dispatched(

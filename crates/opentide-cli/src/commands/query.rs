@@ -176,6 +176,9 @@ pub struct Context<'a> {
     pub stdin: &'a dyn Fn() -> String,
     /// The current time, the end of a window without `--to`.
     pub now: jiff::Timestamp,
+    /// Where log lines and `OPENTIDE_PROGRESS=json`'s events go: the host's
+    /// stderr.
+    pub log: &'a crate::logging::Sink,
 }
 
 impl std::fmt::Debug for Context<'_> {
@@ -634,6 +637,7 @@ pub(crate) fn http_settings(platform: &str, timeout: Duration) -> HttpSettings {
 }
 
 /// One tenant's run of the query (`run_on_tenant`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn run_on_tenant(
     platform: &str,
     configured: &Configured,
@@ -789,6 +793,7 @@ fn run_on_tenant(
 }
 
 /// Runs `opentide query`.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let platform = args.platform.as_str();
     let text = match query_text(args, cx) {
@@ -938,7 +943,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     };
     let default_language = languages.first().copied().unwrap_or_default();
     let environment = Environment::from_pairs(cx.env.iter());
-    let progress = Progress::from_env(cx.env);
+    let progress = Progress::from_env_to_log(cx.env, cx.log);
     let mut outcomes: Vec<TenantResult> = Vec::new();
     'tenants: for tenant in &selected {
         for item in &queries {
@@ -1038,6 +1043,7 @@ fn rule_queries(
 }
 
 /// The run's report (`run_payload`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn payload(
     platform: &str,
     window: &TimeWindow,
@@ -1999,6 +2005,7 @@ mod tests {
         let terminal = Terminal::plain(crate::mode::Mode::Json);
         let never = || false;
         let stdin = || "from stdin".to_owned();
+        let log: crate::logging::Sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let cx = Context {
             repo: None,
             env: &env,
@@ -2008,6 +2015,7 @@ mod tests {
             interrupted: &never,
             stdin: &stdin,
             now: at("2026-10-27T08:00:00Z"),
+            log: &log,
         };
         assert!(format!("{cx:?}").starts_with("Context { repo: None, cwd: "));
         let args = |query: Option<&str>, file: Option<&str>| Args {

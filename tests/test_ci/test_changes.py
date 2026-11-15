@@ -30,10 +30,17 @@ ROOT = "/repo"
 CRATES: dict[str, tuple[str, list[tuple[str, str | None]]]] = {
     "opentide-syntax": ("crates/opentide-syntax", [("serde", None)]),
     "opentide-kql": ("crates/opentide-kql", [("opentide-syntax", None)]),
+    "opentide-kuery": ("crates/opentide-kuery", [("opentide-syntax", None)]),
+    "opentide-parse": ("crates/opentide-parse", []),
     "opentide-schema": ("crates/opentide-schema", []),
     "opentide-analysis": (
         "crates/opentide-analysis",
-        [("opentide-kql", None), ("opentide-schema", None)],
+        [
+            ("opentide-kql", None),
+            ("opentide-kuery", None),
+            ("opentide-parse", None),
+            ("opentide-schema", None),
+        ],
     ),
     "opentide-cli": ("crates/opentide-cli", [("opentide-analysis", None)]),
     "opentide": ("crates/opentide", [("opentide-cli", None)]),
@@ -50,6 +57,7 @@ MEMBERS = sorted(CRATES)
 ABOVE_SYNTAX = {
     "opentide-syntax",
     "opentide-kql",
+    "opentide-kuery",
     "opentide-analysis",
     "opentide-cli",
     "opentide",
@@ -116,14 +124,62 @@ def test_a_leaf_crate_runs_itself_and_its_reverse_dependencies() -> None:
     outputs = plan("crates/opentide-syntax/src/lib.rs")
     assert set(outputs["crates"].split()) == ABOVE_SYNTAX
     # A Rust-only change builds no wheel and runs no pytest: the Rust tests
-    # cover it (the maintainer's rule); no specialised job either.
-    assert on(outputs) == {"rust", "lint"}
+    # cover it (the maintainer's rule); of the specialised jobs, the parser
+    # layer runs the WebAssembly builds (WASI and browser) alone.
+    assert on(outputs) == {"rust", "lint", "wasi", "wasm"}
     # The anchors are built, so the third-party features resolve as on the
     # push that saved the compiler cache; only the affected crates' tests run.
     built = set(outputs["packages"].replace("-p ", "").split())
     assert built == ABOVE_SYNTAX | {"opentide-connectors"}
     assert "opentide-connectors" not in outputs["filter"]
     assert outputs["filter"].count("package(=") == len(ABOVE_SYNTAX)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "crates/opentide-kuery/src/lib.rs",
+        "crates/opentide-kql/src/parse.rs",
+        "crates/opentide-parse/src/lib.rs",
+        "crates/opentide-syntax/build.rs",
+        "grammars/kql/grammar.js",
+        "highlights/queries/kql.scm",
+    ],
+)
+def test_the_parser_layer_runs_the_webassembly_builds(path: str) -> None:
+    # A known path, not the fail-open of an unknown one: the WASI build and
+    # the browser build (engine-wasm), and no other specialised job.
+    outputs = plan(path)
+    assert outputs["wasi"] == "true"
+    assert outputs["wasm"] == "true"
+    assert outputs["node"] == "false"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "docs/usage/configuration.md",
+        "crates/opentide-schema/src/lib.rs",
+        "crates/opentide-cli/src/main.rs",
+        "highlights/test/embedded.test.mjs",
+    ],
+)
+def test_other_changes_skip_the_webassembly_builds(path: str) -> None:
+    outputs = plan(path)
+    assert outputs["wasi"] == "false"
+    assert outputs["wasm"] == "false"
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["crates/opentide-wasm/src/lib.rs", "scripts/engine/build-wasm.sh"],
+)
+def test_the_browser_build_runs_on_its_own_paths(path: str) -> None:
+    assert plan(path)["wasm"] == "true"
+
+
+def test_a_pull_request_that_changes_a_workflow_runs_the_browser_build() -> None:
+    assert plan(".github/workflows/ci.yml")["wasm"] == "true"
 
 
 def test_the_python_surface_runs_the_python_job() -> None:
@@ -154,7 +210,7 @@ def test_a_test_only_dependency_counts() -> None:
 def test_shared_configuration_and_unknown_paths_mark_everything(path: str) -> None:
     outputs = plan(path)
     assert outputs["packages"] == "--workspace"
-    assert {"rust", "python", "node", "wasi", "docs", "deny", "facade"} <= on(outputs)
+    assert {"rust", "python", "node", "wasi", "wasm", "docs", "deny", "facade"} <= on(outputs)
 
 
 @pytest.mark.parametrize(

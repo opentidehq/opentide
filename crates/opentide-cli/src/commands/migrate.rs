@@ -103,6 +103,7 @@ struct Migration {
     failed_files: IndexMap<String, String>,
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn migrate(root: &Path, fields: &[&ScopedField], apply: bool) -> Result<Migration, String> {
     let mut indexes: Vec<(&ScopedField, ScopeIndex)> = Vec::new();
     for field in fields {
@@ -269,6 +270,7 @@ fn int(count: usize) -> Json {
     Json::Int(i64::try_from(count).unwrap_or(i64::MAX))
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn report(migration: &Migration, args: &Args) -> Report {
     let mut changed = migration.changed_files.clone();
     changed.sort();
@@ -490,6 +492,26 @@ objective:
         assert_eq!(std::fs::read_to_string(&before).unwrap(), OBJECTIVE);
         assert_ne!(std::fs::read_to_string(&file).unwrap(), OBJECTIVE);
         assert!(!dir.path().join("objects/objectives/.o.yaml.tmp").exists());
+    }
+
+    /// A symbolic link stays a link: the file it names is rewritten, as 0.28.1
+    /// wrote through the link.
+    #[cfg(unix)]
+    #[test]
+    fn apply_writes_through_a_symbolic_link() {
+        let dir = workspace(&[("shared/o.yaml", OBJECTIVE)]);
+        let link = dir.path().join("objects/objectives/o.yaml");
+        std::fs::create_dir_all(link.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(dir.path().join("shared/o.yaml"), &link).unwrap();
+        let args = Args {
+            apply: true,
+            ..Args::default()
+        };
+        let report = run_in(dir.path(), &args);
+        assert_eq!(report.outcome.exit_code, 0);
+        assert!(std::fs::symlink_metadata(&link).unwrap().is_symlink());
+        let written = std::fs::read_to_string(dir.path().join("shared/o.yaml")).unwrap();
+        assert!(written.contains("- Host::Process"), "{written}");
     }
 
     #[test]

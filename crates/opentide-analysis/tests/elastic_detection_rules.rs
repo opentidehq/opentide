@@ -103,6 +103,7 @@ fn strings(value: Option<&toml::Value>) -> Vec<&str> {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn every_public_elastic_rule_is_free_of_engine_errors() {
     let Some(root) = std::env::var_os("OPENTIDE_DETECTION_RULES") else {
         eprintln!("OPENTIDE_DETECTION_RULES is not set; skipping the detection-rules sweep");

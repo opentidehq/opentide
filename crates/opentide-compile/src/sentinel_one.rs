@@ -88,6 +88,7 @@ pub fn without_nulls(value: Json) -> Json {
 
 /// The rule body `rule` deploys to `tenant` (`DetectionRule`: `data` and
 /// `filter`), `null` values left out.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, CompileError> {
     let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Err(bare());

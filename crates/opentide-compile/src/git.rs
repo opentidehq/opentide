@@ -513,6 +513,7 @@ fn head_commit(repo: &Repo) -> Option<ObjectId> {
 /// The files the run's commits changed (`diff_calculation`), from the git
 /// top level. `workspace` is the detection workspace; `cwd` the working
 /// directory a CI run without its checkout variable searches from.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn changed_paths(
     workspace: &Path,
     cwd: &Path,
@@ -1128,6 +1129,7 @@ struct WorkTree {
 }
 
 impl WorkTree {
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn open(top: &Path, git_dir: &Path) -> Self {
         let common = match gix_discover::path::from_plain_file_relative_to_file(
             &git_dir.join("commondir"),
@@ -1462,6 +1464,7 @@ const STATE_PROBES: [&str; 4] = [
 /// repository's `info/exclude` and `core.excludesFile`; a folder ignored
 /// above the shards hides them too. `None` when git keeps them. Outside a
 /// checkout, the workspace's `.gitignore` files alone are read.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn state_ignore(workspace: &Path) -> Option<IgnoreRule> {
     let root = std::fs::canonicalize(workspace).unwrap_or_else(|_| workspace.to_path_buf());
     let top = root

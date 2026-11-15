@@ -265,6 +265,7 @@ fn record_state(
 
 /// Builds the scripted history under `root` (git's `HOME` is `home`): each
 /// state, named, with the directory the baseline reads it in.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn history(repo_root: &Path, root: &Path, home: &Path) -> Result<Vec<(String, PathBuf)>> {
     let golden = repo_root.join("tests/golden");
     let spec = crate::golden::case::Spec::parse(&fs::read_to_string(golden.join("cases.toml"))?)?;

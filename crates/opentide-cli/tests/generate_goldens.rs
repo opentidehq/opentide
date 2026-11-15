@@ -1119,6 +1119,7 @@ fn vulnerability_lookup() -> (String, Arc<Mutex<Vec<String>>>) {
 /// The page's CVE parts are opentide 0.28.1's, byte for byte, on the same
 /// stand-in.
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn docs_with_cve_details_fetch_each_record() {
     let scratch = tempfile::tempdir().unwrap();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");

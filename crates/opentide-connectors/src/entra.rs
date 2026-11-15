@@ -66,6 +66,7 @@ pub async fn sign_in(
 /// # Errors
 ///
 /// As [`sign_in`].
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub async fn sign_in_at(
     cx: TenantContext<'_>,
     authority: &str,

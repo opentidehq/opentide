@@ -131,6 +131,7 @@ fn strings(value: Option<&Json>) -> Vec<String> {
 }
 
 /// The alert-rule body `rule` deploys to `tenant`.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, CompileError> {
     let Some(block) = rule.block("sentinel").filter(|block| block.is_filled()) else {
         return Err(CompileError::invalid_rule(format!(

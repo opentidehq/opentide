@@ -71,8 +71,9 @@ pub use tenant::{Tenant, TenantLabel};
 
 /// The HTTP settings *platform*'s client mounts: its timeout and retries,
 /// as its Python client mounts them. *timeout* is the read timeout of the
-/// clients that take the caller's (Elastic, Splunk and Carbon Black Cloud;
-/// Sentinel's at least 300 s, azure-core's read); the others keep their own.
+/// clients that take the caller's (Elastic, Splunk, Carbon Black Cloud and
+/// Google SecOps; Sentinel's at least 300 s, azure-core's read); the others
+/// keep their own.
 /// A platform without a connector gets the defaults.
 pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettings {
     match platform {

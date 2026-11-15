@@ -16,7 +16,7 @@ dependencies = ["opentide==0.28.1"]
 pip install 'opentide==0.28.1'
 ```
 
-Includes the CLI, the thirteen platform connectors, the MCP server and the SDK, all compiled into one Rust core inside the wheel; its one Python dependency is `pydantic`, for the [plugin API](./platforms.md#platform-plugins). There are no extras. Start the MCP server with `opentide mcp start`; see [MCP installation](../mcp/installation.md).
+Includes the CLI, the thirteen platform connectors, the MCP server and the SDK, all compiled into one Rust core inside the wheel; it has no Python dependency. The `plugins` extra installs `pydantic`, which the [plugin API](./platforms.md#platform-plugins) needs: `pip install 'opentide[plugins]'`; nothing else asks for an extra. Start the MCP server with `opentide mcp start`; see [MCP installation](../mcp/installation.md).
 
 ## Platforms
 

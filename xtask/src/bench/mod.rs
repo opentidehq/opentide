@@ -400,6 +400,7 @@ fn absolute(text: &str) -> Result<PathBuf> {
 }
 
 /// Parses the arguments after `bench`.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn parse_args(args: &[String]) -> Result<Mode> {
     let mut options = Options {
         engine: Engine::Python,
@@ -816,6 +817,7 @@ fn run(options: &Options) -> Result<()> {
     outcome
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()> {
     let inject = measure::injected_sleep()?;
     if let Some(sleep) = inject {

@@ -11,7 +11,7 @@ description: >-
 
 The command line is the Rust core's (UC-6.2, #841): what a command prints and writes is held by
 the goldens (`cargo xtask golden check --engine rust`, [golden](../golden/SKILL.md)) and by
-`crates/opentide-cli`'s tests (`tests/cmd/*.trycmd`, `command_goldens.rs`). The binary's own
+`crates/opentide-cli`'s tests (`tests/cmd/*.trycmd`, `cli_snapshots.rs`). The binary's own
 behaviour at a terminal, on stdio and on real folders and git repositories is held by Rust tests
 that run it as a subprocess (#1139): `setup_wizard.rs` and `tui_pty.rs` (a pseudo-terminal,
 through portable-pty), `lsp_start.rs` (the language server over stdio), `interrupt.rs`, and
