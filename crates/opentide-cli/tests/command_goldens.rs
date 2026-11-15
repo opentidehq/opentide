@@ -43,7 +43,7 @@ fn a_case_root_is_as_long_as_the_golden_checks() {
         name.starts_with(prefix) && name.len() == prefix.len() + random,
         "{name}"
     );
-    assert_eq!(root.path().parent().unwrap(), std::path::Path::new("/tmp"));
+    assert_eq!(root.path().parent().unwrap(), replay::case_root_parent());
     if canonical.parent() == Some(std::path::Path::new("/tmp")) {
         assert_eq!((prefix, random), ("golden-", 6));
     } else if cfg!(unix) {

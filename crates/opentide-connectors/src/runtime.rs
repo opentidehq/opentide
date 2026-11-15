@@ -35,18 +35,24 @@ pub fn builder() -> tokio::runtime::Builder {
     }
 }
 
-/// Runs *work* on a thread of its own and waits for it: `None` when it
-/// panicked. A runtime cannot start on a thread that is already driving
+/// Runs *work* on a thread of its own and waits for it, as
+/// `std::thread::scope(|s| s.spawn(work).join())` does: a panic in *work*
+/// is the `Err`. A runtime cannot start on a thread that is already driving
 /// one, so a blocking caller inside a command hands the work to this. On
-/// WASI, which has no threads (a spawn traps), it runs on the caller's.
-pub fn apart<T: Send>(work: impl FnOnce() -> T + Send) -> Option<T> {
+/// WASI, which has no threads (a spawn traps), it runs on the caller's, and
+/// a panic is caught there.
+///
+/// # Errors
+///
+/// The panic of *work*.
+pub fn apart<T: Send>(work: impl FnOnce() -> T + Send) -> std::thread::Result<T> {
     #[cfg(not(target_os = "wasi"))]
     {
-        std::thread::scope(|scope| scope.spawn(work).join().ok())
+        std::thread::scope(|scope| scope.spawn(work).join())
     }
     #[cfg(target_os = "wasi")]
     {
-        Some(work())
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
     }
 }
 
@@ -241,5 +247,11 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn block_on_inside_a_runtime_is_refused_not_a_panic() {
         assert_eq!(block_on(async { 7 }), Err(INSIDE_A_RUNTIME.to_owned()));
+    }
+
+    #[test]
+    fn apart_gives_the_result_or_the_panic() {
+        assert_eq!(apart(|| 1 + 1).ok(), Some(2));
+        assert!(apart(|| -> u8 { panic!("stopped") }).is_err());
     }
 }

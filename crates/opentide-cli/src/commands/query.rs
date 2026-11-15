@@ -558,6 +558,10 @@ pub(crate) fn toml_value(value: &opentide_compile::Json) -> Option<toml::Value> 
     Some(match value {
         J::Str(text) => toml::Value::String(text.clone()),
         J::Int(number) => toml::Value::Integer(*number),
+        // TOML integers are signed 64-bit: a larger one is the nearest float,
+        // as it was read before `Json` kept it exact.
+        #[expect(clippy::cast_precision_loss, reason = "the nearest float, as before")]
+        J::UInt(number) => toml::Value::Float(*number as f64),
         J::Float(number) => toml::Value::Float(*number),
         J::Bool(flag) => toml::Value::Boolean(*flag),
         J::Array(items) => toml::Value::Array(items.iter().filter_map(toml_value).collect()),

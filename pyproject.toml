@@ -68,8 +68,6 @@ dev = [
     "pytest-console-scripts>=1.4",
     "pytest-xdist>=3.6",
     "pytest-split>=0.9",
-    # Drives the console script on a real PTY (the setup wizard's Ctrl-C).
-    "pexpect>=4.9",
     # CI's contract tests read the workflows (tests/test_ci/).
     "pyyaml>=6.0",
     "ruff>=0.17.2",
@@ -99,6 +97,7 @@ cache-keys = [
     { file = "vendor/*/src/**/*.rs" },
     # What the engine crates compile in (include_str!, build.rs).
     { file = "data/catalogs/**" },
+    { file = "src/opentide/data/**" },
     { file = "grammars/*/src/**" },
     { file = "grammars/*/queries/**" },
     { file = "highlights/spec.toml" },

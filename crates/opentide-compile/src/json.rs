@@ -20,8 +20,11 @@ pub enum Json {
     Null,
     /// `true` or `false`.
     Bool(bool),
-    /// An integer.
+    /// An integer that fits `i64`.
     Int(i64),
+    /// A non-negative integer beyond `i64::MAX`, kept exact (serde reads one
+    /// as `u64`); every integer `i64` holds is an [`Json::Int`].
+    UInt(u64),
     /// A float.
     Float(f64),
     /// A string.
@@ -94,7 +97,7 @@ impl Json {
             Self::Str(text) => !text.is_empty(),
             Self::Array(items) => !items.is_empty(),
             Self::Object(object) => !object.is_empty(),
-            Self::Bool(_) | Self::Int(_) | Self::Float(_) => true,
+            Self::Bool(_) | Self::Int(_) | Self::UInt(_) | Self::Float(_) => true,
         }
     }
 
@@ -104,7 +107,7 @@ impl Json {
     pub fn is_name(&self) -> bool {
         match self {
             Self::Str(text) => !text.is_empty(),
-            Self::Int(_) | Self::Float(_) => true,
+            Self::Int(_) | Self::UInt(_) | Self::Float(_) => true,
             Self::Null | Self::Bool(_) | Self::Array(_) | Self::Object(_) => false,
         }
     }
@@ -148,6 +151,7 @@ impl Serialize for Json {
             Self::Null => serializer.serialize_unit(),
             Self::Bool(flag) => serializer.serialize_bool(*flag),
             Self::Int(integer) => serializer.serialize_i64(*integer),
+            Self::UInt(integer) => serializer.serialize_u64(*integer),
             Self::Float(float) => serializer.serialize_f64(*float),
             Self::Str(text) => serializer.serialize_str(text),
             Self::Array(items) => {
@@ -206,12 +210,8 @@ impl<'de> Visitor<'de> for JsonVisitor {
     }
 
     fn visit_u64<E>(self, value: u64) -> Result<Json, E> {
-        // An integer beyond i64 is a float, as JSON carries it.
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "only an integer beyond i64, which no model holds, is approximated"
-        )]
-        Ok(i64::try_from(value).map_or(Json::Float(value as f64), Json::Int))
+        // An integer beyond i64 stays exact, as JSON carries it.
+        Ok(i64::try_from(value).map_or(Json::UInt(value), Json::Int))
     }
 
     fn visit_f64<E>(self, value: f64) -> Result<Json, E> {
@@ -332,10 +332,26 @@ mod tests {
         .unwrap();
         assert_eq!(
             json.to_compact(),
-            r#"{"zeta":1,"alpha":null,"nested":[0.5],"big":1.8446744073709552e+19}"#
+            r#"{"zeta":1,"alpha":null,"nested":[0.5],"big":18446744073709551615}"#
         );
         let back: Json = serde_json::from_str(r#"{"b":[true,"x"],"a":{}}"#).unwrap();
         assert_eq!(back.to_compact(), r#"{"b":[true,"x"],"a":{}}"#);
+    }
+
+    #[test]
+    fn an_integer_beyond_i64_stays_exact() {
+        let text = r#"[9223372036854775807,9223372036854775808,18446744073709551615]"#;
+        let json: Json = serde_json::from_str(text).unwrap();
+        assert_eq!(
+            json,
+            Json::Array(vec![
+                Json::Int(i64::MAX),
+                Json::UInt(1 << 63),
+                Json::UInt(u64::MAX),
+            ])
+        );
+        assert_eq!(json.to_compact(), text);
+        assert!(Json::UInt(u64::MAX).is_filled() && Json::UInt(u64::MAX).is_name());
     }
 
     /// A value is read by its type: `false` and `0` are values, not empty
