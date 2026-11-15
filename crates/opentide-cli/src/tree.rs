@@ -985,6 +985,16 @@ pub struct SetupRepoArgs {
 /// `opentide share`.
 #[derive(Debug, Args)]
 pub struct ShareArgs {
+    #[command(flatten)]
+    pub push: SharePushArgs,
+    #[command(subcommand)]
+    pub command: Option<ShareCommand>,
+}
+
+/// The objects a `share` command selects: the destinations, and what to
+/// limit the run to.
+#[derive(Clone, Debug, Args)]
+pub struct ShareSelection {
     #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
     pub target: Vec<String>,
     #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
@@ -993,42 +1003,17 @@ pub struct ShareArgs {
     pub object_type: Vec<String>,
     #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
     pub file: Vec<String>,
-    #[arg(
-        long = "dry-run",
-        help = "Resolve the run locally and make no request."
-    )]
-    pub dry_run: bool,
-    #[arg(
-        long = "publish",
-        help = "Override the block publish flag.",
-        overrides_with = "no_publish"
-    )]
-    pub publish: bool,
-    #[arg(
-        long = "no-publish",
-        overrides_with = "publish",
-        help = "Turn --publish off"
-    )]
-    pub no_publish: bool,
+}
+
+/// `--workers`, as `share push`, `preview` and `retract` take it.
+#[derive(Clone, Debug, Args)]
+pub struct ShareWorkers {
     #[arg(
         long = "workers",
         help = "Parallel object workers for one destination.",
         default_value = "1"
     )]
     pub workers: i64,
-    #[arg(
-        long = "changed",
-        help = "Share only objects the default-branch CI diff changed."
-    )]
-    pub changed: bool,
-    #[arg(
-        long = "since",
-        help = "With --changed: diff from this commit SHA or ref to HEAD.",
-        value_name = "COMMIT"
-    )]
-    pub since: Option<String>,
-    #[command(subcommand)]
-    pub command: Option<ShareCommand>,
 }
 
 /// `opentide share targets`.
@@ -1038,14 +1023,8 @@ pub struct ShareTargetsArgs {}
 /// `opentide share retract`.
 #[derive(Debug, Args)]
 pub struct ShareRetractArgs {
-    #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
-    pub target: Vec<String>,
-    #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
-    #[arg(long = "type", help = "Limit to threat, objective, or rule.", action = clap::ArgAction::Append)]
-    pub object_type: Vec<String>,
-    #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
+    #[command(flatten)]
+    pub selection: ShareSelection,
     #[arg(
         long = "delete",
         help = "Delete the remote event instead of unpublishing it."
@@ -1053,57 +1032,31 @@ pub struct ShareRetractArgs {
     pub delete: bool,
     #[arg(long = "yes", help = "Confirm --delete.")]
     pub yes: bool,
-    #[arg(
-        long = "workers",
-        help = "Parallel object workers for one destination.",
-        default_value = "1"
-    )]
-    pub workers: i64,
+    #[command(flatten)]
+    pub workers: ShareWorkers,
 }
 
 /// `opentide share status`.
 #[derive(Debug, Args)]
 pub struct ShareStatusArgs {
-    #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
-    pub target: Vec<String>,
-    #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
-    #[arg(long = "type", help = "Limit to threat, objective, or rule.", action = clap::ArgAction::Append)]
-    pub object_type: Vec<String>,
-    #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
+    #[command(flatten)]
+    pub selection: ShareSelection,
 }
 
 /// `opentide share preview`.
 #[derive(Debug, Args)]
 pub struct SharePreviewArgs {
-    #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
-    pub target: Vec<String>,
-    #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
-    #[arg(long = "type", help = "Limit to threat, objective, or rule.", action = clap::ArgAction::Append)]
-    pub object_type: Vec<String>,
-    #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
-    #[arg(
-        long = "workers",
-        help = "Parallel object workers for one destination.",
-        default_value = "1"
-    )]
-    pub workers: i64,
+    #[command(flatten)]
+    pub selection: ShareSelection,
+    #[command(flatten)]
+    pub workers: ShareWorkers,
 }
 
-/// `opentide share push`.
-#[derive(Debug, Args)]
+/// `opentide share push`, and the options `opentide share` takes for it.
+#[derive(Clone, Debug, Args)]
 pub struct SharePushArgs {
-    #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
-    pub target: Vec<String>,
-    #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
-    #[arg(long = "type", help = "Limit to threat, objective, or rule.", action = clap::ArgAction::Append)]
-    pub object_type: Vec<String>,
-    #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
+    #[command(flatten)]
+    pub selection: ShareSelection,
     #[arg(
         long = "dry-run",
         help = "Resolve the run locally and make no request."
@@ -1121,12 +1074,8 @@ pub struct SharePushArgs {
         help = "Turn --publish off"
     )]
     pub no_publish: bool,
-    #[arg(
-        long = "workers",
-        help = "Parallel object workers for one destination.",
-        default_value = "1"
-    )]
-    pub workers: i64,
+    #[command(flatten)]
+    pub workers: ShareWorkers,
     #[arg(
         long = "changed",
         help = "Share only objects the default-branch CI diff changed."
