@@ -104,8 +104,8 @@ pub struct Report {
     /// middle of a run, `deploy`'s invalid promotion target).
     pub bare_exit: bool,
     /// A usage error the command found once it ran (a value refused
-    /// after parsing): the text modes print the command's `usage:`
-    /// and `help:` notes under it, as for a parse error.
+    /// after parsing): printed as clap prints a parse error, with the
+    /// command's `Usage:` line and `--help` hint.
     pub usage_notes: bool,
 }
 
