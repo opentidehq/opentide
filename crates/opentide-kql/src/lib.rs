@@ -47,6 +47,8 @@ mod lexer;
     )
 )]
 mod syntax;
+#[doc(hidden)]
+pub mod testing;
 
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;

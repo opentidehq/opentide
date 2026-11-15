@@ -280,7 +280,6 @@ fn split_words(range: TextRange, text: &str, at: &[usize], out: &mut Vec<Lexeme>
 mod tests {
     use super::*;
     use crate::syntax::{OPERATOR_WORDS, TEXTS};
-    use std::path::{Path, PathBuf};
 
     fn kinds(source: &str) -> Vec<(K, &str)> {
         lex_kql(source)
@@ -288,49 +287,6 @@ mod tests {
             .filter(|l| !matches!(K::from_raw(l.kind), K::WHITESPACE))
             .map(|l| (K::from_raw(l.kind), &source[l.range]))
             .collect()
-    }
-
-    /// Every `.kql` file under `crates/testdata`, sorted.
-    pub(crate) fn corpus() -> Vec<PathBuf> {
-        fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-            let Ok(entries) = std::fs::read_dir(dir) else {
-                return;
-            };
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    walk(&path, out);
-                } else if path.extension().is_some_and(|e| e == "kql") {
-                    out.push(path);
-                }
-            }
-        }
-        let mut out = Vec::new();
-        walk(
-            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata"),
-            &mut out,
-        );
-        out.sort();
-        out
-    }
-
-    /// Every byte of every corpus file, and of prefixes of it, is in one
-    /// lexeme (the lexer is lossless).
-    #[test]
-    fn lexing_is_lossless_over_the_corpus() {
-        let files = corpus();
-        assert!(files.len() > 150, "{} files", files.len());
-        for path in files {
-            let source = std::fs::read_to_string(&path).expect("corpus file");
-            for cut in (0..=source.len()).filter(|i| source.is_char_boundary(*i)) {
-                if cut % 7 != 0 && cut != source.len() {
-                    continue;
-                }
-                let text = &source[..cut];
-                let rebuilt: String = lex_kql(text).iter().map(|l| &text[l.range]).collect();
-                assert_eq!(rebuilt, text, "{} cut at {cut}", path.display());
-            }
-        }
     }
 
     #[test]
@@ -546,88 +502,6 @@ mod tests {
                 K::WHITESPACE,
                 K::ERROR_TOKEN
             ]
-        );
-    }
-}
-
-#[cfg(test)]
-mod parity {
-    use super::tests::corpus;
-    use super::*;
-    use opentide_core::LanguageId;
-
-    /// The byte ranges of the leaves of the tree-sitter tree, comments apart.
-    fn leaves(node: tree_sitter::Node, out: &mut Vec<(usize, usize)>) {
-        if node.child_count() == 0 {
-            if node.kind() != "comment" && node.end_byte() > node.start_byte() {
-                out.push((node.start_byte(), node.end_byte()));
-            }
-            return;
-        }
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            leaves(child, out);
-        }
-    }
-
-    /// On every corpus file tree-sitter reads without error, the new lexer's
-    /// tokens are the tree-sitter tokens, but for the glued ones the parser
-    /// puts back together (`Foo*`, a column pattern, is one tree-sitter token
-    /// and two here; the test folds them).
-    #[test]
-    fn the_tokens_are_the_tree_sitter_tokens_on_valid_files() {
-        let mut different = Vec::new();
-        let mut checked = 0;
-        for path in corpus() {
-            let source = std::fs::read_to_string(&path).expect("corpus file");
-            let Some(tree) = opentide_syntax::parse(LanguageId::Kql, &source) else {
-                continue;
-            };
-            if opentide_syntax::has_error(&tree) {
-                continue;
-            }
-            checked += 1;
-            let mut old = Vec::new();
-            leaves(tree.root_node(), &mut old);
-            let mut new: Vec<(usize, usize)> = Vec::new();
-            for l in lex_kql(&source)
-                .iter()
-                .filter(|l| !matches!(K::from_raw(l.kind), K::WHITESPACE | K::COMMENT))
-            {
-                let (start, end) = (usize::from(l.range.start()), usize::from(l.range.end()));
-                // Fold the pieces of a glued column pattern into its token.
-                match old.iter().find(|&&(s, e)| {
-                    s <= start && end <= e && e - s > end - start && source[s..e].contains('*')
-                }) {
-                    Some(&whole) => {
-                        if new.last() != Some(&whole) {
-                            new.push(whole);
-                        }
-                    }
-                    None => new.push((start, end)),
-                }
-            }
-            if old != new {
-                let at = old
-                    .iter()
-                    .zip(&new)
-                    .position(|(a, b)| a != b)
-                    .unwrap_or(old.len().min(new.len()));
-                different.push(format!(
-                    "{}: token {at}: tree-sitter {:?}, here {:?}",
-                    path.file_name()
-                        .map_or_else(String::new, |n| n.to_string_lossy().into_owned()),
-                    old.get(at).map(|&(s, e)| &source[s..e]),
-                    new.get(at).map(|&(s, e)| &source[s..e]),
-                ));
-            }
-        }
-        assert!(checked > 100, "{checked} files");
-        assert!(
-            different.is_empty(),
-            "{} of {checked}:\n{}",
-            different.len(),
-            different.join("\n")
         );
     }
 }
