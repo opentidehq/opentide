@@ -69,7 +69,14 @@ node, `UPPER_SNAKE` of its name), `SyntaxNode`, `SyntaxToken` and a `T!` macro (
 `T!['(']`) for the grammar's tokens. A corpus test then runs
 `assert_conforms(&root, RULES, GRAMMAR)` on every tree it parses. The generator refuses a node
 type twice in one rule outside a repetition unless every occurrence is labeled, required and not
-repeated: label them or write the accessor by hand. The toolkit's own test language
+repeated (and, where an enum contains another occurrence's type, each after only occurrences its
+type includes: `Index = base:Name idx:Expr` with `Name` in `Expr` is fine, `a:Expr b:Name` is not):
+label them or write the accessor by hand. Unlabeled tokens of one kind share one accessor that
+returns the first (`R = ('+' Name)*` gives one `plus_token`), and unlabeled repeated nodes of one
+type merge into one `AstChildren` (`Call = Name '(' Name*` puts the callee in `names()`): label
+what you need apart. A label also overrides the default plural (`day` -> `days`, `box` -> `boxes`
+by the common English rules only). A Rust keyword becomes a raw identifier (`r#use`; `self`,
+`Self`, `crate` and `super` take a trailing `_`). The toolkit's own test language
 (`tests/ast_fixture/`) shows the whole loop.
 
 ## Differential harness (feature `differential`)

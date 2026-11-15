@@ -91,7 +91,7 @@ fn accessors_are_named_by_labels_nodes_and_tokens() -> TestResult {
         "toy.ungram",
     )?;
     for expected in [
-        "pub fn type_(&self) -> Option<Name>",
+        "pub fn r#type(&self) -> Option<Name>",
         "pub fn where_token(&self) -> Option<SyntaxToken>",
         "pub fn entries(&self) -> AstChildren<Entry>",
         "pub fn x(&self) -> Option<SyntaxToken>",
@@ -163,4 +163,118 @@ fn what_it_cannot_name_it_refuses() {
     assert!(cycle.contains("contains itself"), "{cycle}");
     let syntax = refusal("Root = Missing\n");
     assert!(!syntax.is_empty());
+}
+
+/// The text without whitespace, for matching generated (unformatted) code.
+fn squeezed(text: &str) -> String {
+    text.split_whitespace().collect()
+}
+
+#[test]
+fn a_node_overlapping_an_enum_that_contains_it_is_indexed_with_it() -> TestResult {
+    // `Lit` is castable to `Expr`: the first `Expr` child of a Pair may be
+    // its `Lit`, so without labels the generator refuses to guess.
+    let result = generate(
+        "Pair = Lit Expr\nExpr = Name | Lit\nName = 'n'\nLit = 'l'\n",
+        "toy.ungram",
+    );
+    assert!(refuses_unlabeled(&result), "{result:?}");
+    let text = squeezed(&generate(
+        "Pair = a:Lit b:Expr\nExpr = Name | Lit\nName = 'n'\nLit = 'l'\n",
+        "toy.ungram",
+    )?);
+    assert!(text.contains("fna(&self)->Option<Lit>{support::child(&self.syntax)}"));
+    assert!(text.contains("fnb(&self)->Option<Expr>{support::nth_child(&self.syntax,1)}"));
+    // The realistic case.
+    let text = squeezed(&generate(
+        "Index = base:Name '[' idx:Expr ']'\nExpr = Name | Lit\nName = 'n'\nLit = 'l'\n",
+        "toy.ungram",
+    )?);
+    assert!(text.contains("fnbase(&self)->Option<Name>{support::child(&self.syntax)}"));
+    assert!(text.contains("fnidx(&self)->Option<Expr>{support::nth_child(&self.syntax,1)}"));
+    Ok(())
+}
+
+fn refuses_unlabeled(result: &anyhow::Result<String>) -> bool {
+    result
+        .as_ref()
+        .err()
+        .is_some_and(|e| format!("{e:#}").contains("cannot tell which child"))
+}
+
+#[test]
+fn an_earlier_occurrence_the_later_type_does_not_include_is_refused() {
+    // `a:Expr b:Lit`: the first `Lit` child may be `a`.
+    let result = generate(
+        "Pair = a:Expr b:Lit\nExpr = Name | Lit\nName = 'n'\nLit = 'l'\n",
+        "toy.ungram",
+    );
+    assert!(refuses_unlabeled(&result), "{result:?}");
+    // A node and a repeated enum that contains it merge by accident: refused.
+    let result = generate(
+        "R = Name Expr*\nExpr = Name | Lit\nName = 'n'\nLit = 'l'\n",
+        "toy.ungram",
+    );
+    assert!(refuses_unlabeled(&result), "{result:?}");
+    // Two enums sharing a member.
+    let result = generate(
+        "R = A B\nA = X | Y\nB = Y | Z\nX = 'x'\nY = 'y'\nZ = 'z'\n",
+        "toy.ungram",
+    );
+    assert!(refuses_unlabeled(&result), "{result:?}");
+}
+
+#[test]
+fn rust_keywords_become_raw_identifiers() -> TestResult {
+    let text = generate(
+        "Use = While Mut Self_ Fn Gen Await Dyn\nWhile = 'w'\nMut = 'm'\nSelf_ = 's'\nFn = 'f'\nGen = 'g'\nAwait = 'a'\nDyn = 'd'\n",
+        "toy.ungram",
+    )?;
+    for name in ["r#while", "r#mut", "r#fn", "r#gen", "r#await", "r#dyn"] {
+        assert!(
+            text.contains(&format!("pub fn {name}(&self)")),
+            "{name}\n{text}"
+        );
+    }
+    assert!(squeezed(&text).contains("fnself_(&self)"), "{text}");
+    for (label, expected) in [
+        ("use", "r#use"),
+        ("self", "self_"),
+        ("crate", "crate_"),
+        ("super", "super_"),
+        ("true", "r#true"),
+    ] {
+        let text = generate(&format!("Root = {label}:Name\nName = 'n'\n"), "toy.ungram")?;
+        assert!(
+            text.contains(&format!("pub fn {expected}(&self)")),
+            "{label}\n{text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn an_unreferenced_choice_cycle_is_refused() {
+    let error = refusal("A = B | C\nB = A | D\nC = 'c'\nD = 'd'\n");
+    assert!(error.contains("contains itself"), "{error}");
+}
+
+#[test]
+fn plurals_follow_the_common_english_rules() -> TestResult {
+    for (ty, expected) in [
+        ("Day", "days"),
+        ("Entry", "entries"),
+        ("Box", "boxes"),
+        ("Class", "classes"),
+        ("Match", "matches"),
+        ("Dash", "dashes"),
+        ("Item", "items"),
+    ] {
+        let text = generate(&format!("Root = {ty}*\n{ty} = 'x'\n"), "toy.ungram")?;
+        assert!(
+            text.contains(&format!("pub fn {expected}(&self)")),
+            "{ty}\n{text}"
+        );
+    }
+    Ok(())
 }

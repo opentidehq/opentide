@@ -129,6 +129,7 @@ pub fn generate(source: &str, origin: &str) -> Result<String> {
     for node in grammar.iter() {
         let name = &grammar[node].name;
         if let Some(members) = enum_members(&grammar, node) {
+            leaves(&grammar, node, &mut Vec::new())?;
             nodes += &emit_enum(&grammar, name, &members);
             continue;
         }
@@ -301,42 +302,25 @@ fn fields(grammar: &Grammar, node: Node) -> Result<Vec<Field>> {
             }
         }
     }
-    for (n, occs) in by_node {
-        let ty = grammar[n].name.clone();
-        let first = occs[0].0;
-        let node = |name, nth, many| Field {
-            name,
-            shape: Shape::Node {
-                ty: ty.clone(),
-                nth,
-                many,
-            },
-        };
-        if let [(_, occ)] = occs.as_slice() {
-            let name = match (&occ.label, occ.many) {
-                (Some(label), _) => ident(label),
-                (None, true) => plural(&snake(&ty)),
-                (None, false) => ident(&snake(&ty)),
-            };
-            fields.push((first, node(name, 0, occ.many)));
-        } else if occs.iter().all(|(_, o)| o.label.is_none()) && occs.iter().any(|(_, o)| o.many) {
-            fields.push((first, node(plural(&snake(&ty)), 0, true)));
-        } else if occs
-            .iter()
-            .all(|(_, o)| o.label.is_some() && !o.many && !o.loose)
-        {
-            for (nth, (at, occ)) in occs.iter().enumerate() {
-                let name = ident(occ.label.as_deref().unwrap_or_default());
-                fields.push((*at, node(name, nth, false)));
-            }
-        } else {
-            bail!(
-                "`{ty}` occurs {} times and the generator cannot tell which is which: give \
-                 each occurrence a label (`lhs:{ty} rhs:{ty}`, all of them required and none \
-                 repeated), or write the accessors by hand",
-                occs.len()
-            );
-        }
+    // Nodes whose castable sets overlap (an enum and a member, two enums
+    // sharing one) are one type to `support::child`, which selects by
+    // `can_cast`: they form one group, indexed together.
+    let mut castable: BTreeMap<Node, BTreeSet<Node>> = BTreeMap::new();
+    for n in by_node.keys() {
+        castable.insert(*n, leaves(grammar, *n, &mut Vec::new())?);
+    }
+    let mut groups: Vec<Vec<Node>> = Vec::new();
+    for n in by_node.keys() {
+        let (touching, rest): (Vec<_>, Vec<_>) = groups
+            .drain(..)
+            .partition(|g| g.iter().any(|m| !castable[m].is_disjoint(&castable[n])));
+        groups = rest;
+        let mut merged = vec![*n];
+        merged.extend(touching.into_iter().flatten());
+        groups.push(merged);
+    }
+    for group in groups {
+        group_fields(grammar, &group, &by_node, &castable, &mut fields)?;
     }
     fields.sort_by_key(|(at, _)| *at);
     let fields: Vec<Field> = fields.into_iter().map(|(_, field)| field).collect();
@@ -347,6 +331,94 @@ fn fields(grammar: &Grammar, node: Node) -> Result<Vec<Field>> {
         }
     }
     Ok(fields)
+}
+
+/// The accessors of one group of overlapping node types (`fields`).
+fn group_fields(
+    grammar: &Grammar,
+    group: &[Node],
+    by_node: &BTreeMap<Node, Vec<(usize, &Occurrence)>>,
+    castable: &BTreeMap<Node, BTreeSet<Node>>,
+    fields: &mut Vec<(usize, Field)>,
+) -> Result<()> {
+    let mut occs: Vec<(usize, &Occurrence, Node)> = group
+        .iter()
+        .flat_map(|n| by_node[n].iter().map(move |(at, o)| (*at, *o, *n)))
+        .collect();
+    occs.sort_by_key(|(at, ..)| *at);
+    let first = occs[0].0;
+    let types: BTreeSet<Node> = occs.iter().map(|(.., n)| *n).collect();
+    let ty_of = |n: Node| grammar[n].name.clone();
+    let field = |name, n: Node, nth, many| Field {
+        name,
+        shape: Shape::Node {
+            ty: ty_of(n),
+            nth,
+            many,
+        },
+    };
+    if let [(_, occ, n)] = occs.as_slice() {
+        let ty = ty_of(*n);
+        let name = match (&occ.label, occ.many) {
+            (Some(label), _) => ident(label),
+            (None, true) => plural(&snake(&ty)),
+            (None, false) => ident(&snake(&ty)),
+        };
+        fields.push((first, field(name, *n, 0, occ.many)));
+    } else if types.len() == 1
+        && occs.iter().all(|(_, o, _)| o.label.is_none())
+        && occs.iter().any(|(_, o, _)| o.many)
+    {
+        let n = occs[0].2;
+        fields.push((first, field(plural(&snake(&ty_of(n))), n, 0, true)));
+    } else if occs
+        .iter()
+        .all(|(_, o, _)| o.label.is_some() && !o.many && !o.loose)
+        && occs.iter().enumerate().all(|(i, (_, _, n))| {
+            // The `nth` child castable to `n` is this occurrence only if
+            // every earlier one is castable to `n` too.
+            occs[..i]
+                .iter()
+                .all(|(.., m)| castable[m].is_subset(&castable[n]))
+        })
+    {
+        for (at, occ, n) in &occs {
+            let nth = occs.iter().take_while(|(a, ..)| a != at).count();
+            let name = ident(occ.label.as_deref().unwrap_or_default());
+            fields.push((*at, field(name, *n, nth, false)));
+        }
+    } else {
+        let names: Vec<String> = types.iter().map(|n| format!("`{}`", ty_of(*n))).collect();
+        bail!(
+            "{} occur{} {} times, or overlap{}, and the generator cannot tell which child \
+             is which: give each occurrence a label (`lhs:Expr rhs:Expr`, all required, none \
+             repeated, each after only occurrences its type includes), or write the \
+             accessors by hand",
+            names.join(" and "),
+            if names.len() == 1 { "s" } else { "" },
+            occs.len(),
+            if names.len() == 1 { "s" } else { "" },
+        );
+    }
+    Ok(())
+}
+
+/// The node kinds a `can_cast` of `node` accepts: itself, or for a choice of
+/// nodes the union of its members'. A choice that contains itself is refused.
+fn leaves(grammar: &Grammar, node: Node, open: &mut Vec<Node>) -> Result<BTreeSet<Node>> {
+    let Some(members) = enum_members(grammar, node) else {
+        return Ok(BTreeSet::from([node]));
+    };
+    if open.contains(&node) {
+        bail!("`{}` contains itself", grammar[node].name);
+    }
+    open.push(node);
+    let mut out = BTreeSet::new();
+    for member in members {
+        out.extend(leaves(grammar, member, open)?);
+    }
+    open.pop();
+    Ok(out)
 }
 
 fn emit_struct(grammar: &Grammar, node: Node, fields: &[Field]) -> String {
@@ -634,23 +706,40 @@ fn upper_snake(name: &str) -> String {
 
 /// A name that is a Rust keyword, made an identifier.
 fn ident(name: &str) -> String {
-    const KEYWORDS: [&str; 24] = [
-        "as", "break", "const", "continue", "else", "enum", "fn", "for", "if", "impl", "in", "let",
-        "loop", "match", "mod", "move", "pub", "ref", "return", "static", "struct", "trait",
-        "type", "where",
+    // Strict, reserved and 2024-edition keywords.
+    const KEYWORDS: &[&str] = &[
+        "as", "async", "await", "break", "const", "continue", "dyn", "else", "enum", "extern",
+        "false", "fn", "for", "gen", "if", "impl", "in", "let", "loop", "match", "mod", "move",
+        "mut", "pub", "ref", "return", "static", "struct", "trait", "true", "try", "type",
+        "unsafe", "use", "where", "while", "abstract", "become", "box", "do", "final", "macro",
+        "override", "priv", "typeof", "unsized", "virtual", "yield",
     ];
-    if KEYWORDS.contains(&name) {
+    // Keywords that cannot be raw identifiers.
+    const NO_RAW: &[&str] = &["self", "Self", "crate", "super"];
+    if NO_RAW.contains(&name) {
         format!("{name}_")
+    } else if KEYWORDS.contains(&name) {
+        format!("r#{name}")
     } else {
         name.to_owned()
     }
 }
 
+/// The default accessor name of a repeated node; a label names it otherwise.
 fn plural(name: &str) -> String {
-    if name.ends_with('s') {
-        format!("{name}es")
-    } else if name.ends_with('y') && !name.ends_with("ey") {
+    let consonant_y = name.ends_with('y')
+        && name
+            .chars()
+            .rev()
+            .nth(1)
+            .is_some_and(|c| !"aeiou".contains(c));
+    if consonant_y {
         format!("{}ies", &name[..name.len() - 1])
+    } else if ["s", "x", "z", "ch", "sh"]
+        .iter()
+        .any(|e| name.ends_with(e))
+    {
+        format!("{name}es")
     } else {
         format!("{name}s")
     }
