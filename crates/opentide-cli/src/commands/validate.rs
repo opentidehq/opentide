@@ -58,6 +58,32 @@ pub struct Args {
     pub output: Option<PathBuf>,
 }
 
+impl From<&crate::tree::ValidateArgs> for Args {
+    fn from(args: &crate::tree::ValidateArgs) -> Self {
+        Self {
+            check: args
+                .check
+                .and_then(|check| Check::parse(&crate::tree::spelled(&check))),
+            selection: Selection {
+                files: args.file.clone(),
+                uuids: args.uuid.clone(),
+                types: args.object_type.clone(),
+            },
+            strict: args.strict,
+            queries: args.queries.map(|queries| match queries {
+                crate::tree::Queries::Error => QueriesMode::Error,
+                crate::tree::Queries::Warn => QueriesMode::Warn,
+                crate::tree::Queries::Off => QueriesMode::Off,
+            }),
+            fix: args.fix,
+            dry_run: args.dry_run,
+            watch: args.watch,
+            format: Some(args.report_format.into()),
+            output: args.output.clone(),
+        }
+    }
+}
+
 /// What a run reads besides its options.
 #[derive(Clone, Copy, Debug)]
 pub struct Context<'a> {

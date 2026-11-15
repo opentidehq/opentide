@@ -8,7 +8,10 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-error: Missing command.
-  usage: opentide rules [OPTIONS] <COMMAND>
-  help: run 'opentide rules --help'
+error: 'opentide rules' requires a subcommand but one was not provided
+  [subcommands: unreviewed]
+
+Usage: opentide rules [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
 tip: add --json for machine-readable output

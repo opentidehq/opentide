@@ -8,7 +8,10 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-error: Missing command.
-  usage: opentide migrate [OPTIONS] <COMMAND>
-  help: run 'opentide migrate --help'
+error: 'opentide migrate' requires a subcommand but one was not provided
+  [subcommands: vocab-scope]
+
+Usage: opentide migrate [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
 tip: add --json for machine-readable output
