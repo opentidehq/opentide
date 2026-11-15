@@ -525,7 +525,9 @@ class Connection:
         *environment* replaces the process's environment for the tenant's
         ``$NAME`` credentials, CA bundles and proxies; *proxy* is used before
         the environment's; *timeout* is how long, in seconds, the tenant may
-        take to answer a read (Elastic, Splunk, Carbon Black Cloud, Sentinel).
+        take to answer a read (Elastic, Splunk, Carbon Black Cloud, Sentinel,
+        Google SecOps). A deploy waits as long as ``opentide deploy`` does,
+        whatever *timeout* is.
 
         Raises :class:`OpentideError` (``credential_unset``,
         ``tenant_setup_invalid``, ``operation_unsupported``).

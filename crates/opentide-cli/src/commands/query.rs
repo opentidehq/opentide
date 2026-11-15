@@ -176,6 +176,9 @@ pub struct Context<'a> {
     pub stdin: &'a dyn Fn() -> String,
     /// The current time, the end of a window without `--to`.
     pub now: jiff::Timestamp,
+    /// Where log lines and `OPENTIDE_PROGRESS=json`'s events go: the host's
+    /// stderr.
+    pub log: &'a crate::logging::Sink,
 }
 
 impl std::fmt::Debug for Context<'_> {
@@ -938,7 +941,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     };
     let default_language = languages.first().copied().unwrap_or_default();
     let environment = Environment::from_pairs(cx.env.iter());
-    let progress = Progress::from_env(cx.env);
+    let progress = Progress::from_env_to_log(cx.env, cx.log);
     let mut outcomes: Vec<TenantResult> = Vec::new();
     'tenants: for tenant in &selected {
         for item in &queries {
@@ -1999,6 +2002,7 @@ mod tests {
         let terminal = Terminal::plain(crate::mode::Mode::Json);
         let never = || false;
         let stdin = || "from stdin".to_owned();
+        let log: crate::logging::Sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let cx = Context {
             repo: None,
             env: &env,
@@ -2008,6 +2012,7 @@ mod tests {
             interrupted: &never,
             stdin: &stdin,
             now: at("2026-10-27T08:00:00Z"),
+            log: &log,
         };
         assert!(format!("{cx:?}").starts_with("Context { repo: None, cwd: "));
         let args = |query: Option<&str>, file: Option<&str>| Args {

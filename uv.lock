@@ -266,7 +266,9 @@ wheels = [
 [[package]]
 name = "opentide"
 source = { editable = "." }
-dependencies = [
+
+[package.optional-dependencies]
+plugins = [
     { name = "pydantic" },
 ]
 
@@ -274,6 +276,7 @@ dependencies = [
 dev = [
     { name = "pre-commit", version = "4.6.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pre-commit", version = "4.7.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "pydantic" },
     { name = "pytest" },
     { name = "pytest-console-scripts" },
     { name = "pytest-cov" },
@@ -286,11 +289,13 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.0" }]
+requires-dist = [{ name = "pydantic", marker = "extra == 'plugins'", specifier = ">=2.0" }]
+provides-extras = ["plugins"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "pre-commit", specifier = ">=4.0" },
+    { name = "pydantic", specifier = ">=2.0" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-console-scripts", specifier = ">=1.4" },
     { name = "pytest-cov", specifier = ">=5.0" },

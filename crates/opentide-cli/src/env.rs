@@ -53,6 +53,30 @@ impl Env {
         }
     }
 
+    /// What the colour variables ask for: `Some(false)` to turn colour off,
+    /// `Some(true)` to force it, `None` to leave it to the terminal.
+    ///
+    /// `NO_COLOR` set to anything non-empty (a blank value counts, as at
+    /// no-color.org) wins; then `FORCE_COLOR` (`0`, `false`, `no` or `off`
+    /// off, any other value on), then `CLICOLOR_FORCE` (any non-empty value
+    /// but `0` on). An empty or, for the two force variables, blank value is
+    /// the same as unset.
+    pub fn colour_choice(&self) -> Option<bool> {
+        let set = |name: &str| self.get(name).map(str::trim).filter(|v| !v.is_empty());
+        if self.get("NO_COLOR").is_some_and(|value| !value.is_empty()) {
+            return Some(false);
+        }
+        if let Some(value) = set("FORCE_COLOR") {
+            return Some(!matches!(
+                value.to_lowercase().as_str(),
+                "0" | "false" | "no" | "off"
+            ));
+        }
+        set("CLICOLOR_FORCE")
+            .filter(|value| *value != "0")
+            .map(|_| true)
+    }
+
     /// Whether the environment asks for `--debug`: `OPENTIDE_DEBUG` when it
     /// is a boolean, otherwise `DEBUG` when it is one.
     pub fn debug_requested(&self) -> bool {
@@ -73,6 +97,45 @@ impl Env {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn framework_colour_choice_follows_no_color_then_force_color_then_clicolor_force() {
+        let choice =
+            |pairs: &[(&str, &str)]| Env::from_pairs(pairs.iter().copied()).colour_choice();
+        assert_eq!(choice(&[]), None);
+        assert_eq!(choice(&[("NO_COLOR", "1")]), Some(false));
+        assert_eq!(choice(&[("NO_COLOR", "")]), None);
+        assert_eq!(choice(&[("NO_COLOR", " ")]), Some(false));
+        assert_eq!(choice(&[("FORCE_COLOR", " ")]), None);
+        assert_eq!(choice(&[("FORCE_COLOR", "no")]), Some(false));
+        assert_eq!(choice(&[("FORCE_COLOR", "OFF")]), Some(false));
+        assert_eq!(
+            choice(&[("FORCE_COLOR", "1"), ("CLICOLOR_FORCE", "0")]),
+            Some(true)
+        );
+        assert_eq!(choice(&[("FORCE_COLOR", "1")]), Some(true));
+        assert_eq!(choice(&[("FORCE_COLOR", "true")]), Some(true));
+        assert_eq!(choice(&[("FORCE_COLOR", "3")]), Some(true));
+        assert_eq!(choice(&[("FORCE_COLOR", "0")]), Some(false));
+        assert_eq!(choice(&[("FORCE_COLOR", "false")]), Some(false));
+        assert_eq!(choice(&[("FORCE_COLOR", "")]), None);
+        assert_eq!(choice(&[("CLICOLOR_FORCE", "1")]), Some(true));
+        assert_eq!(choice(&[("CLICOLOR_FORCE", "0")]), None);
+        assert_eq!(choice(&[("CLICOLOR_FORCE", "")]), None);
+        // NO_COLOR beats both; FORCE_COLOR beats CLICOLOR_FORCE.
+        assert_eq!(
+            choice(&[
+                ("NO_COLOR", "1"),
+                ("FORCE_COLOR", "1"),
+                ("CLICOLOR_FORCE", "1")
+            ]),
+            Some(false)
+        );
+        assert_eq!(
+            choice(&[("FORCE_COLOR", "0"), ("CLICOLOR_FORCE", "1")]),
+            Some(false)
+        );
+    }
 
     #[test]
     fn framework_debug_reads_opentide_debug_then_a_boolean_debug() {

@@ -53,6 +53,10 @@
 
 pub mod ast;
 pub mod conformance;
+
+#[cfg(feature = "differential")]
+pub mod differential;
+
 mod debug;
 mod input;
 mod parser;
