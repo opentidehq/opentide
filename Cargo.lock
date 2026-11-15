@@ -3621,7 +3621,9 @@ version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
+ "rowan",
  "serde",
  "strsim",
  "toml 0.8.23",
