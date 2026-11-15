@@ -39,9 +39,9 @@ Options:
 
 $ xtask codegen --frobnicate
 ? 2
-xtask codegen: unknown option `--frobnicate`
+error: unexpected argument '--frobnicate' found
 
-usage: cargo xtask codegen [--check [--oracle]]
+Usage: cargo xtask codegen [OPTIONS]
 ...
 
 $ xtask frobnicate

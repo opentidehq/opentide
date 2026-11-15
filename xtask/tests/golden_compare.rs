@@ -315,7 +315,8 @@ fn the_oracle_and_its_requirements_agree() {
 }
 
 /// `cassettes record` and `mcp record` take the same oracle file: each reads
-/// it before anything runs, and a bad command line installs nothing.
+/// it before anything runs, and a bad command line installs nothing (clap
+/// refuses a missing value or an unknown option for `cassettes record`).
 #[test]
 fn cassettes_and_mcp_record_take_an_oracle_file() {
     let args = |list: &[&str]| -> Vec<String> { list.iter().map(|a| (*a).to_owned()).collect() };
@@ -323,17 +324,26 @@ fn cassettes_and_mcp_record_take_an_oracle_file() {
     let missing = missing.path().join("ORACLE.none");
     let missing = missing.to_string_lossy();
 
-    assert_eq!(
-        xtask::cassettes::run(&args(&["record", "--all", "--oracle"])).unwrap(),
-        2
-    );
-    assert_eq!(
-        xtask::cassettes::run(&args(&["record", "--all", "--nope"])).unwrap(),
-        2
-    );
-    let error = xtask::cassettes::run(&args(&["record", "--all", "--oracle", &missing]))
-        .unwrap_err()
-        .to_string();
+    // clap refuses a missing value and an unknown option: usage errors, exit 2.
+    for bad in [
+        &["record", "--all", "--oracle"][..],
+        &["record", "--all", "--nope"],
+    ] {
+        let error = parse_cassettes(bad).err().expect("a usage error");
+        assert_eq!(error.exit_code(), 2, "{bad:?}");
+        let text = error.to_string();
+        assert!(
+            text.contains("--oracle") || text.contains("--nope"),
+            "{bad:?}: {text}"
+        );
+    }
+    let error = xtask::cassettes::run(&xtask::cassettes::Cmd::Record {
+        names: Vec::new(),
+        all: true,
+        oracle: Some(std::path::PathBuf::from(&*missing)),
+    })
+    .unwrap_err()
+    .to_string();
     assert!(error.contains("ORACLE.none"), "{error}");
 
     let error = xtask::mcp::run(&args(&["record", "--python", "py", "--oracle", &missing]))
@@ -346,4 +356,15 @@ fn cassettes_and_mcp_record_take_an_oracle_file() {
         .unwrap_err()
         .to_string();
     assert!(error.contains("ORACLE.none"), "{error}");
+}
+
+/// `cargo xtask cassettes <args>`, parsed as the command line does.
+fn parse_cassettes(argv: &[&str]) -> Result<xtask::cassettes::Cmd, clap::Error> {
+    use clap::{Command, FromArgMatches, Subcommand};
+    let command = xtask::cassettes::Cmd::augment_subcommands(
+        Command::new("cassettes").subcommand_required(true),
+    );
+    let matches =
+        command.try_get_matches_from(std::iter::once("cassettes").chain(argv.iter().copied()))?;
+    xtask::cassettes::Cmd::from_arg_matches(&matches)
 }

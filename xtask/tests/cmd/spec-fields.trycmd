@@ -3,18 +3,37 @@ specifications checkout it cannot run, which is an error, never a pass.
 
 ```console
 $ xtask spec-fields --help
-usage: cargo xtask spec-fields [--specifications DIR] [--list]
-...
+Check every model field's description against its row in the field tables of the specifications checkout
+
+The checkout is DIR, else $OPENTIDE_SPECIFICATIONS_ROOT, else ../specifications: specs/platforms/*.md, specs/objects/*-1.0.md and specs/metadata.md. --list prints each row it matched with a model field.
+
+Exit status: 0 no drift, 1 drift (or fewer rows matched than the floor), 2 usage error or no checkout.
+
+Usage: cargo xtask spec-fields [OPTIONS]
+
+Options:
+      --specifications <DIR>
+          The checkout: DIR, else $OPENTIDE_SPECIFICATIONS_ROOT, else ../specifications
+
+      --list
+          Print each row matched with a model field
+
+  -h, --help
+          Print help (see a summary with '-h')
 
 $ xtask spec-fields --bogus
 ? 2
-xtask spec-fields: unknown option `--bogus`
-...
+error: unexpected argument '--bogus' found
+
+Usage: cargo xtask spec-fields [OPTIONS]
+
+For more information, try '--help'.
 
 $ xtask spec-fields --specifications
 ? 2
-xtask spec-fields: --specifications needs a directory
-...
+error: a value is required for '--specifications <DIR>' but none was supplied
+
+For more information, try '--help'.
 
 $ xtask spec-fields --specifications no-such-checkout
 ? 2
