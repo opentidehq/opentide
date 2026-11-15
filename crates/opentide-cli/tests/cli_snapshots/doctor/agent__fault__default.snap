@@ -1,0 +1,65 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: doctor/agent/fault/default
+---
+args: opentide doctor
+exit: 1
+
+━━━ stdout
+✓ opentide 0.28.1 · opentide_version
+! Could not ask PyPI for the latest release (Cannot reach pypi tenant 'pypi.org' at https://pypi.org: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)) · opentide_latest
+  → check the network or --proxy, or pass --offline to skip network checks
+✓ Workspace ./ has .opentide/ (found from the current directory) · workspace
+✓ git <GIT_VERSION> · git
+! ./ is not in a git repository · git_repository
+  → git init ./
+✓ 17 configuration files load · configuration
+! 4 template(s) missing: objective.1.0.template.yaml, rule.1.0.template.yaml, rule.1.1.template.yaml, threat.1.0.template.yaml · templates_fresh
+  → opentide generate templates schemas snippets
+! 6 schema(s) this version generates are missing: objective.1.0.schema.json, rule.1.0.schema.json, rule.1.1.schema.json, threat.1.0.schema.json, opentide.schema.json, visibility.1.0.schema.json · schemas_fresh
+  → opentide generate schemas
+✓ Language-server catalog compiled into opentide 0.28.1 · lsp_catalog
+✓ Enabled: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops · platforms_enabled
+✓ The analysis engine (language server 0.12.0) loads · analysis_engine
+! sentinel/sentinel-staging: 5 of 5 variables unset: SENTINEL_STAGING_CLIENT_ID, SENTINEL_STAGING_CLIENT_SECRET, SENTINEL_STAGING_SUBSCRIPTION_ID, SENTINEL_STAGING_TENANT_ID, SENTINEL_STAGING_WORKSPACE_ID · credentials
+  → set SENTINEL_STAGING_CLIENT_ID, SENTINEL_STAGING_CLIENT_SECRET, SENTINEL_STAGING_SUBSCRIPTION_ID, SENTINEL_STAGING_TENANT_ID, SENTINEL_STAGING_WORKSPACE_ID in the environment (or a .env file you load)
+! sentinel/sentinel-production: 5 of 5 variables unset: SENTINEL_PRODUCTION_CLIENT_ID, SENTINEL_PRODUCTION_CLIENT_SECRET, SENTINEL_PRODUCTION_SUBSCRIPTION_ID, SENTINEL_PRODUCTION_TENANT_ID, SENTINEL_PRODUCTION_WORKSPACE_ID · credentials
+  → set SENTINEL_PRODUCTION_CLIENT_ID, SENTINEL_PRODUCTION_CLIENT_SECRET, SENTINEL_PRODUCTION_SUBSCRIPTION_ID, SENTINEL_PRODUCTION_TENANT_ID, SENTINEL_PRODUCTION_WORKSPACE_ID in the environment (or a .env file you load)
+! defender_for_endpoint/tenant 1: 3 of 3 variables unset: MDE_PRODUCTION_CLIENT_ID, MDE_PRODUCTION_CLIENT_SECRET, MDE_PRODUCTION_TENANT_ID · credentials
+  → set MDE_PRODUCTION_CLIENT_ID, MDE_PRODUCTION_CLIENT_SECRET, MDE_PRODUCTION_TENANT_ID in the environment (or a .env file you load)
+! splunk/splunk-es: 1 of 1 variables unset: SPLUNK_ES_TOKEN · credentials
+  → set SPLUNK_ES_TOKEN in the environment (or a .env file you load)
+○ sentinel_one: no tenant configured · credentials
+  → add a [[tenants]] entry in .opentide/configurations/platforms/sentinel_one.toml
+○ crowdstrike: no tenant configured · credentials
+  → add a [[tenants]] entry in .opentide/configurations/platforms/crowdstrike.toml
+○ harfanglab: no tenant configured · credentials
+  → add a [[tenants]] entry in .opentide/configurations/platforms/harfanglab.toml
+○ carbon_black_cloud: no tenant configured · credentials
+  → add a [[tenants]] entry in .opentide/configurations/platforms/carbon_black_cloud.toml
+! elastic/elastic-staging: 1 of 1 variables unset: ELASTIC_STAGING_API_KEY · credentials
+  → set ELASTIC_STAGING_API_KEY in the environment (or a .env file you load)
+! elastic/elastic-production: 1 of 1 variables unset: ELASTIC_PRODUCTION_API_KEY · credentials
+  → set ELASTIC_PRODUCTION_API_KEY in the environment (or a .env file you load)
+! sysdig/sysdig-production: 1 of 1 variables unset: SYSDIG_PRODUCTION_API_TOKEN · credentials
+  → set SYSDIG_PRODUCTION_API_TOKEN in the environment (or a .env file you load)
+○ bitdefender: no tenant configured · credentials
+  → add a [[tenants]] entry in .opentide/configurations/platforms/bitdefender.toml
+○ graylog: no tenant configured · credentials
+  → add a [[tenants]] entry in .opentide/configurations/platforms/graylog.toml
+! exabeam/exabeam-production: 2 of 2 variables unset: EXABEAM_PRODUCTION_CLIENT_ID, EXABEAM_PRODUCTION_CLIENT_SECRET · credentials
+  → set EXABEAM_PRODUCTION_CLIENT_ID, EXABEAM_PRODUCTION_CLIENT_SECRET in the environment (or a .env file you load)
+○ google_secops: no tenant configured · credentials
+  → add a [[tenants]] entry in .opentide/configurations/platforms/google_secops.toml
+✗ Cannot connect to proxy http://127.0.0.1:9 (Connection refused (os error <ECONNREFUSED>)) · proxy
+  → check --proxy, OPENTIDE_PROXY, https_proxy or all_proxy, and that the proxy is up
+○ No .vscode/extensions.json: VS Code does not suggest opentidehq.opentide · vscode_settings
+  → opentide setup vscode
+○ No snippets at .vscode/model-templates.code-snippets · vscode_snippets
+  → opentide generate snippets
+○ No MCP configuration: agents in editors cannot call opentide tools · mcp_config
+  → opentide setup mcp --vscode (or --cursor, --claude-code, --generic)
+
+━━━ stderr
+error: 1 check failed · 7 passed, 12 warnings, 10 skipped
+tip: add --json for machine-readable output
