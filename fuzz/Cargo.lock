@@ -3068,6 +3068,7 @@ dependencies = [
 name = "opentide-workspace"
 version = "0.12.0"
 dependencies = [
+ "dunce",
  "indexmap",
  "jiff",
  "notify",
