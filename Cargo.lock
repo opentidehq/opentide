@@ -6556,6 +6556,7 @@ dependencies = [
  "glob",
  "html5ever",
  "indexmap",
+ "jiff",
  "jsonschema",
  "markup5ever_rcdom",
  "opentide-analysis",
