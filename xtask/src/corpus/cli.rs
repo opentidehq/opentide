@@ -12,8 +12,6 @@ use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 /// `cargo xtask corpus <command>`: the corpora of UC-0.6 (#804).
@@ -393,17 +391,53 @@ fn object_files(workspace: &Workspace) -> usize {
         .count()
 }
 
-/// Removes the scratch directory however the run ends, unless `--keep`.
+/// A command's working directory: a fresh temporary directory removed when
+/// this is dropped, however the run ends, or the directory `--keep` names,
+/// which stays.
 pub(crate) struct Scratch {
+    /// The directory, absolute.
     pub(crate) path: PathBuf,
-    pub(crate) keep: bool,
+    /// The temporary directory `path` is, removed on drop; `None` for `--keep`.
+    _temp: Option<tempfile::TempDir>,
 }
 
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        if !self.keep {
-            let _ = std::fs::remove_dir_all(&self.path);
+impl Scratch {
+    /// A new directory named `prefix` and a unique suffix under the system's
+    /// temporary directory, or `keep`, which must not exist yet (a kept run
+    /// never writes over another).
+    pub(crate) fn new(prefix: &str, keep: Option<&Path>) -> Result<Scratch> {
+        Self::create(prefix, keep, false)
+    }
+
+    /// Like [`Scratch::new`], but a `keep` that exists is used as it is.
+    pub(crate) fn reusing(prefix: &str, keep: Option<&Path>) -> Result<Scratch> {
+        Self::create(prefix, keep, true)
+    }
+
+    fn create(prefix: &str, keep: Option<&Path>, reuse: bool) -> Result<Scratch> {
+        let Some(dir) = keep else {
+            let temp = tempfile::Builder::new()
+                .prefix(prefix)
+                .tempdir()
+                .context("cannot create a temporary directory")?;
+            return Ok(Scratch {
+                path: temp.path().to_path_buf(),
+                _temp: Some(temp),
+            });
+        };
+        // Absolute, so that a path handed to the oracle (XDG_STATE_HOME) is one
+        // it honours.
+        let path = std::path::absolute(dir)
+            .with_context(|| format!("cannot resolve {}", dir.display()))?;
+        if !reuse && path.exists() {
+            bail!(
+                "{} exists; remove it or name another --keep",
+                path.display()
+            );
         }
+        std::fs::create_dir_all(&path)
+            .with_context(|| format!("cannot create {}", path.display()))?;
+        Ok(Scratch { path, _temp: None })
     }
 }
 
@@ -538,23 +572,8 @@ fn faults_command(args: &FaultsArgs) -> Result<u8> {
             }
         }
     }
-    let scratch = match &parsed.keep {
-        Some(dir) => dir.clone(),
-        None => std::env::temp_dir().join(format!("opentide-corpus-faults-{}", std::process::id())),
-    };
-    // Absolute, so that XDG_STATE_HOME below is one the oracle honours.
-    let scratch = std::path::absolute(&scratch)
-        .with_context(|| format!("cannot resolve {}", scratch.display()))?;
-    if scratch.exists() {
-        bail!(
-            "{} exists; remove it or name another --keep",
-            scratch.display()
-        );
-    }
-    let guard = Scratch {
-        path: scratch.clone(),
-        keep: parsed.keep.is_some(),
-    };
+    let guard = Scratch::new("opentide-corpus-faults-", parsed.keep.as_deref())?;
+    let scratch = guard.path.clone();
     let started = Instant::now();
     // The clean base must be clean under every command the kinds use.
     let commands: BTreeSet<(Vec<String>, BTreeMap<String, String>)> = kinds
@@ -584,34 +603,17 @@ fn faults_command(args: &FaultsArgs) -> Result<u8> {
             );
         }
     }
-    let verdicts: Mutex<Vec<(Verdict, Vec<String>)>> = Mutex::new(Vec::new());
-    let errors: Mutex<Vec<String>> = Mutex::new(Vec::new());
-    let next = AtomicUsize::new(0);
-    std::thread::scope(|scope| {
-        for _ in 0..parsed.jobs.min(kinds.len().max(1)) {
-            scope.spawn(|| {
-                loop {
-                    let index = next.fetch_add(1, Ordering::SeqCst);
-                    let Some(kind) = kinds.get(index) else { break };
-                    match run_kind(&bin, &base, kind, &scratch) {
-                        Ok(result) => {
-                            if let Ok(mut v) = verdicts.lock() {
-                                v.push(result);
-                            }
-                        }
-                        Err(error) => {
-                            if let Ok(mut e) = errors.lock() {
-                                e.push(format!("{}: {error:#}", kind.id));
-                            }
-                        }
-                    }
-                }
-            });
+    let mut verdicts: Vec<(Verdict, Vec<String>)> = Vec::new();
+    let mut errors: Vec<String> = Vec::new();
+    for outcome in crate::parallel::in_order_on(parsed.jobs, &kinds, |kind| {
+        run_kind(&bin, &base, kind, &scratch).map_err(|error| format!("{}: {error:#}", kind.id))
+    }) {
+        match outcome {
+            Ok(result) => verdicts.push(result),
+            Err(error) => errors.push(error),
         }
-    });
-    let mut verdicts = verdicts.into_inner().unwrap_or_default();
+    }
     verdicts.sort_by(|a, b| a.0.id.cmp(&b.0.id));
-    let mut errors = errors.into_inner().unwrap_or_default();
     drop(guard);
     if verdicts.len() + errors.len() != kinds.len() {
         errors.push(format!(
@@ -753,24 +755,9 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
     let bin = oracle_bin(parsed.oracle.as_deref());
     check_oracle_version(&bin, &catalogue.oracle)?;
     let base = generate::generate(&catalogue.base.options()?);
-    let scratch = match &parsed.keep {
-        Some(dir) => dir.join("queries"),
-        None => {
-            std::env::temp_dir().join(format!("opentide-corpus-queries-{}", std::process::id()))
-        }
-    };
-    let scratch = std::path::absolute(&scratch)
-        .with_context(|| format!("cannot resolve {}", scratch.display()))?;
-    if scratch.exists() {
-        bail!(
-            "{} exists; remove it or name another --keep",
-            scratch.display()
-        );
-    }
-    let guard = Scratch {
-        path: scratch.clone(),
-        keep: parsed.keep.is_some(),
-    };
+    let keep = parsed.keep.as_ref().map(|dir| dir.join("queries"));
+    let guard = Scratch::new("opentide-corpus-queries-", keep.as_deref())?;
+    let scratch = guard.path.clone();
     let started = Instant::now();
     let mut failed = 0usize;
     let mut used = BTreeSet::new();
@@ -985,7 +972,6 @@ fn workspace_folders(dir: &Path) -> Result<Folders> {
 /// `faults --check --engine rust --only configuration`: the configuration
 /// kinds, the Rust resolution and checks against the oracle
 /// ([`configuration`]).
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn configuration_check(
     parsed: &FaultArgs,
     catalogue: &Catalogue,
@@ -999,25 +985,9 @@ fn configuration_check(
     let bin = oracle_bin(parsed.oracle.as_deref());
     check_oracle_version(&bin, &catalogue.oracle)?;
     let base = generate::generate(&catalogue.base.options()?);
-    let scratch = match &parsed.keep {
-        Some(dir) => dir.join("configuration"),
-        None => std::env::temp_dir().join(format!(
-            "opentide-corpus-configuration-{}",
-            std::process::id()
-        )),
-    };
-    let scratch = std::path::absolute(&scratch)
-        .with_context(|| format!("cannot resolve {}", scratch.display()))?;
-    if scratch.exists() {
-        bail!(
-            "{} exists; remove it or name another --keep",
-            scratch.display()
-        );
-    }
-    let guard = Scratch {
-        path: scratch.clone(),
-        keep: parsed.keep.is_some(),
-    };
+    let keep = parsed.keep.as_ref().map(|dir| dir.join("configuration"));
+    let guard = Scratch::new("opentide-corpus-configuration-", keep.as_deref())?;
+    let scratch = guard.path.clone();
     let changelog = std::fs::read_to_string(repo_root().join("CHANGELOG.md"))
         .context("reading CHANGELOG.md for the approved differences")?;
     let started = Instant::now();
@@ -1136,24 +1106,8 @@ fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
     let bin = oracle_bin(parsed.oracle.as_deref());
     check_oracle_version(&bin, &catalogue.oracle)?;
     let base = generate::generate(&catalogue.base.options()?);
-    let scratch = match &parsed.keep {
-        Some(dir) => dir.clone(),
-        None => {
-            std::env::temp_dir().join(format!("opentide-corpus-structural-{}", std::process::id()))
-        }
-    };
-    let scratch = std::path::absolute(&scratch)
-        .with_context(|| format!("cannot resolve {}", scratch.display()))?;
-    if scratch.exists() {
-        bail!(
-            "{} exists; remove it or name another --keep",
-            scratch.display()
-        );
-    }
-    let guard = Scratch {
-        path: scratch.clone(),
-        keep: parsed.keep.is_some(),
-    };
+    let guard = Scratch::new("opentide-corpus-structural-", parsed.keep.as_deref())?;
+    let scratch = guard.path.clone();
     let changelog = std::fs::read_to_string(repo_root().join("CHANGELOG.md"))
         .context("reading CHANGELOG.md for the approved differences")?;
     let started = Instant::now();
@@ -1619,9 +1573,8 @@ mod tests {
 
     #[test]
     fn the_oracles_python_is_the_venvs() {
-        let dir = std::env::temp_dir().join(format!("xtask-oracle-python-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().to_path_buf();
         let bin = dir.join("opentide");
         std::fs::write(&bin, "#!/opt/elsewhere/python3\n").unwrap();
         // The shebang, when no interpreter sits beside the script.
@@ -1635,21 +1588,26 @@ mod tests {
         assert_eq!(super::oracle_python(&bin).unwrap(), dir.join("python.exe"));
         std::fs::write(&bin, "no interpreter line").unwrap();
         assert_eq!(super::oracle_python(&bin).unwrap(), dir.join("python.exe"));
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
     fn scratch_is_removed_unless_kept() {
-        let base = std::env::temp_dir().join(format!("xtask-scratch-test-{}", std::process::id()));
-        for keep in [false, true] {
-            std::fs::create_dir_all(base.join("_base")).unwrap();
-            drop(Scratch {
-                path: base.clone(),
-                keep,
-            });
-            assert_eq!(base.exists(), keep);
-        }
-        std::fs::remove_dir_all(&base).unwrap();
+        let base = tempfile::tempdir().unwrap();
+        let kept = base.path().join("kept");
+        let scratch = Scratch::new("xtask-scratch-test-", Some(&kept)).unwrap();
+        assert_eq!(scratch.path, kept);
+        drop(scratch);
+        assert!(kept.is_dir(), "--keep keeps it");
+        assert!(
+            Scratch::new("xtask-scratch-test-", Some(&kept)).is_err(),
+            "a kept run is never written over"
+        );
+        drop(Scratch::reusing("xtask-scratch-test-", Some(&kept)).unwrap());
+        let scratch = Scratch::new("xtask-scratch-test-", None).unwrap();
+        let path = scratch.path.clone();
+        assert!(path.is_dir() && path.is_absolute());
+        drop(scratch);
+        assert!(!path.exists(), "a temporary directory goes with its guard");
     }
 
     #[test]

@@ -95,22 +95,8 @@ fn parity(only: Option<&BTreeSet<String>>, keep: Option<PathBuf>) -> Result<u8> 
         }
     }
     let base = generate::generate(&catalogue.base.options()?);
-    let scratch = match &keep {
-        Some(dir) => dir.clone(),
-        None => std::env::temp_dir().join(format!("opentide-lsp-parity-{}", std::process::id())),
-    };
-    let scratch = std::path::absolute(&scratch)
-        .with_context(|| format!("cannot resolve {}", scratch.display()))?;
-    if scratch.exists() {
-        bail!(
-            "{} exists; remove it or name another --keep",
-            scratch.display()
-        );
-    }
-    let _guard = Scratch {
-        path: scratch.clone(),
-        keep: keep.is_some(),
-    };
+    let guard = Scratch::new("opentide-lsp-parity-", keep.as_deref())?;
+    let scratch = guard.path.clone();
     let started = Instant::now();
     let (mut passed, mut failed, mut skipped) = (0usize, 0usize, 0usize);
     let mut findings = 0usize;

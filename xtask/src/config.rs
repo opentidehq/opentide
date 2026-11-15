@@ -87,21 +87,8 @@ pub fn run(command: &Cmd) -> Result<u8> {
     let catalogue = load_catalogue(&repo_root().join("tests/corpora/faults.toml"))?;
     check_oracle_version(&bin, &catalogue.oracle)?;
     let python = bin.with_file_name("python");
-    let scratch = keep.clone().unwrap_or_else(|| {
-        std::env::temp_dir().join(format!("opentide-config-diff-{}", std::process::id()))
-    });
-    let scratch = std::path::absolute(&scratch)?;
-    if scratch.exists() {
-        bail!(
-            "{} exists; remove it or name another --keep",
-            scratch.display()
-        );
-    }
-    std::fs::create_dir_all(&scratch)?;
-    let guard = Scratch {
-        path: scratch.clone(),
-        keep: keep.is_some(),
-    };
+    let guard = Scratch::new("opentide-config-diff-", keep.as_deref())?;
+    let scratch = guard.path.clone();
     let mut workspaces = Vec::new();
     if fixtures {
         workspaces.extend(fixture_workspaces(&scratch)?);
@@ -404,11 +391,8 @@ mod tests {
 
     #[test]
     fn a_workspace_without_configuration_resolves_to_the_bundled_files() {
-        let dir =
-            std::env::temp_dir().join(format!("opentide-config-diff-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let result = rust_result(&dir).unwrap();
-        std::fs::remove_dir_all(&dir).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let result = rust_result(dir.path()).unwrap();
         assert!(result["resolved"]["platforms"]["splunk"].is_object());
         assert_eq!(result["issues"], json!([]));
     }

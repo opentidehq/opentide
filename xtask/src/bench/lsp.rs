@@ -342,8 +342,11 @@ done
         prelude: &str,
         before_spawn: impl FnOnce(),
     ) -> Result<FirstDiagnostics> {
-        let dir =
-            std::env::temp_dir().join(format!("xtask-bench-lsp-{name}-{}", std::process::id()));
+        let temp = tempfile::Builder::new()
+            .prefix(&format!("xtask-bench-lsp-{name}-"))
+            .tempdir()
+            .unwrap();
+        let dir = temp.path().to_path_buf();
         let source = dir.join("source");
         std::fs::create_dir_all(source.join("objects/rules")).unwrap();
         std::fs::write(source.join("objects/rules/a.yaml"), "name: a\n").unwrap();
@@ -359,7 +362,6 @@ done
             None,
             before_spawn,
         );
-        std::fs::remove_dir_all(&dir).unwrap();
         result
     }
 

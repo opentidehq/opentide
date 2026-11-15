@@ -193,7 +193,11 @@ mod tests {
 
     #[test]
     fn a_workspace_without_an_enabled_platform_is_refused() {
-        let root = std::env::temp_dir().join(format!("xtask-bench-ws-{}", std::process::id()));
+        let dir = tempfile::Builder::new()
+            .prefix("xtask-bench-ws-")
+            .tempdir()
+            .unwrap();
+        let root = dir.path();
         let platforms = root.join(PLATFORMS_DIR);
         std::fs::create_dir_all(&platforms).unwrap();
         std::fs::write(
@@ -201,17 +205,16 @@ mod tests {
             "[platform]\nenabled = false\n",
         )
         .unwrap();
-        assert!(disable_platforms(&root).is_err());
+        assert!(disable_platforms(root).is_err());
         std::fs::write(
             platforms.join("sentinel.toml"),
             "[platform]\nenabled = true\n",
         )
         .unwrap();
-        assert_eq!(disable_platforms(&root).unwrap(), 1);
+        assert_eq!(disable_platforms(root).unwrap(), 1);
         assert_eq!(
             std::fs::read_to_string(platforms.join("sentinel.toml")).unwrap(),
             "[platform]\nenabled = false\n"
         );
-        std::fs::remove_dir_all(root).unwrap();
     }
 }
