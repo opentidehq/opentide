@@ -318,25 +318,26 @@ fn diff_surfaces(
     old: &Surfaces,
     new: &Surfaces,
 ) {
-    let values = |s: &'_ Surfaces, name: &str| {
-        let all: Vec<&str> = s
-            .iter()
+    let values = |s: &'_ Surfaces, name: &str| -> Vec<String> {
+        s.iter()
             .filter(|(n, _)| n == name)
-            .map(|(_, v)| v.as_str())
-            .collect();
-        if all.is_empty() {
-            "<absent>".to_owned()
-        } else {
-            all.join("\n")
-        }
+            .map(|(_, v)| v.clone())
+            .collect()
+    };
+    let render = |values: &[String]| match values {
+        [] => "<absent>".to_owned(),
+        [one] => one.clone(),
+        many => format!("{many:?}"),
     };
     // A name an engine reports more than once is compared as the ordered
-    // list of its values, so no copy hides a difference.
+    // list of its values (never joined first, so `"x\ny"` is not `"x"`, `"y"`).
     let names: BTreeSet<&str> = old.iter().chain(new).map(|(n, _)| n.as_str()).collect();
     for name in names {
         let (ov, nv) = (values(old, name), values(new, name));
         if ov != nv {
-            report.record((name, class), cap, || example(at.0, at.1, at.2, &ov, &nv));
+            report.record((name, class), cap, || {
+                example(at.0, at.1, at.2, &render(&ov), &render(&nv))
+            });
         }
     }
 }

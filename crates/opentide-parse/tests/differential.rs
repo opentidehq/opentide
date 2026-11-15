@@ -275,13 +275,26 @@ fn a_surface_reported_twice_is_compared_on_every_value() {
             entry.examples[0].old.as_str(),
             entry.examples[0].new.as_str()
         ),
-        ("same\nold", "same\nnew")
+        (r#"["same", "old"]"#, r#"["same", "new"]"#)
     );
     assert!(
         run(&Twice("x"), &Twice("x"), &one, &config)
             .entries
             .is_empty()
     );
+    // One value holding a newline is not two values.
+    let report = run(&Twice("old"), &Joined, &one, &config);
+    assert!(report.entries.contains_key(&("a".to_owned(), Class::Valid)));
+}
+
+/// An engine that reports `a` once, as the two values of `Twice("old")`
+/// joined by a newline.
+struct Joined;
+
+impl Engine for Joined {
+    fn observe(&self, _: &str) -> Surfaces {
+        vec![("a".to_owned(), "same\nold".to_owned())]
+    }
 }
 
 #[test]
