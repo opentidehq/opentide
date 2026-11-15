@@ -87,7 +87,7 @@ impl Reply {
         let detail = match xml_message(&self.answer.body) {
             XmlDetail::Message(text) => text,
             XmlDetail::None => String::new(),
-            XmlDetail::NotXml => String::from_utf8_lossy(&self.answer.body).trim().to_owned(),
+            XmlDetail::NotXml => self.answer.text().trim().to_owned(),
         };
         if detail.is_empty() {
             format!("Splunk answered HTTP {status}{reason}")
@@ -862,7 +862,7 @@ fn html_answer(cx: TenantContext<'_>, url: &str, answer: &Answer) -> ConnectorEr
         .as_ref()
         .map(crate::error::origin)
         .unwrap_or_default();
-    let page = page_title(&answer.body)
+    let page = page_title(answer.text().as_bytes())
         .map(|title| format!(" (page title: {title:?})"))
         .unwrap_or_default();
     let answered = format!(
@@ -1039,6 +1039,7 @@ mod tests {
                 content_type: None,
                 body: body.to_vec(),
                 elapsed: Duration::ZERO,
+                credentials: crate::answer::Credentials::default(),
             },
         };
         assert_eq!(

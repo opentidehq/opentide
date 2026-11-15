@@ -78,23 +78,41 @@ async fn the_description_of_an_answer_that_is_not_json_has_no_credential() {
     assert!(!detail.contains(SECRET), "{detail}");
 }
 
-#[test]
-fn a_successful_json_answer_is_kept_and_an_error_is_masked() {
+fn form_request(body: &[u8], content_type: &str) -> opentide_connectors::transport::Request {
     let mut request = opentide_connectors::transport::Request::new(
         Method::POST,
         "https://example.test/token".parse().unwrap(),
     );
-    request.headers_mut().insert(
-        "content-type",
-        "application/x-www-form-urlencoded".parse().unwrap(),
+    request
+        .headers_mut()
+        .insert("content-type", content_type.parse().unwrap());
+    request.set_body(Some(body.to_vec()));
+    request
+}
+
+#[test]
+fn json_reads_the_answer_as_it_came_and_every_quote_masks_it() {
+    let request = form_request(
+        b"client_secret=secret-of-a",
+        "application/x-www-form-urlencoded",
     );
-    request.set_body(Some(b"client_secret=secret-of-a".to_vec()));
     let credentials = Credentials::of(&request);
     let issued = br#"{"access_token":"token-secret-of-a"}"#.to_vec();
-    let kept = Answer::new(200, None, issued.clone(), Duration::ZERO, &credentials);
-    assert_eq!(kept.body, issued);
-    let refused = Answer::new(400, None, issued, Duration::ZERO, &credentials);
-    assert_eq!(refused.text(), r#"{"access_token":"token-***"}"#);
+    // A token endpoint's data: `json` reads the token intact.
+    let answer = Answer::new(200, None, issued.clone(), Duration::ZERO, &credentials);
+    assert_eq!(answer.body, issued);
+    let token = answer.json().unwrap();
+    assert_eq!(
+        token.get("access_token").and_then(|token| token.as_str()),
+        Some("token-secret-of-a")
+    );
+    // A 2xx JSON answer an error quotes (a wrong shape, an unexpected
+    // status): masked, whatever its status.
+    for status in [200, 201, 204, 400] {
+        let answer = Answer::new(status, None, issued.clone(), Duration::ZERO, &credentials);
+        assert_eq!(answer.text(), r#"{"access_token":"token-***"}"#, "{status}");
+        assert_eq!(answer.text_head(200), answer.text(), "{status}");
+    }
     let page = Answer::new(
         200,
         None,
@@ -102,7 +120,30 @@ fn a_successful_json_answer_is_kept_and_an_error_is_masked() {
         Duration::ZERO,
         &credentials,
     );
-    assert_eq!(page.text(), "<p>***</p>");
+    assert!(page.not_json_detail().unwrap().contains("<p>***</p>"));
+    assert!(!format!("{credentials:?}").contains("secret-of-a"));
+}
+
+#[test]
+fn a_json_request_body_credential_is_masked() {
+    // Exabeam signs in with `{"client_id": ..., "client_secret": ...}`.
+    let request = form_request(
+        br#"{"grant_type":"client_credentials","client_id":"exa-client-1","client_secret":"exa-secret-123"}"#,
+        "application/json",
+    );
+    let credentials = Credentials::of(&request);
+    let answer = Answer::new(
+        400,
+        None,
+        br#"{"error":"bad request client_secret=exa-secret-123 grant_type=client_credentials"}"#
+            .to_vec(),
+        Duration::ZERO,
+        &credentials,
+    );
+    assert_eq!(
+        answer.text(),
+        r#"{"error":"bad request client_secret=*** grant_type=client_credentials"}"#
+    );
 }
 
 #[test]

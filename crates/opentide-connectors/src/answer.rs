@@ -17,7 +17,10 @@ use crate::http::HttpClient;
 pub const SLOW_ANSWER: Duration = Duration::from_secs(30);
 
 /// One answer. Its `Debug` leaves the body out: a token endpoint's answer
-/// carries a bearer token.
+/// carries a bearer token. Its body is kept as it came, for [`json`](Self::json)
+/// to read the API's data; every quote of it ([`text`](Self::text),
+/// [`text_head`](Self::text_head), [`not_json_detail`](Self::not_json_detail))
+/// has the request's [`Credentials`] masked.
 #[derive(Clone)]
 pub struct Answer {
     /// The HTTP status.
@@ -28,6 +31,8 @@ pub struct Answer {
     pub body: Vec<u8>,
     /// From sending the request to its headers (`requests`' `elapsed`).
     pub elapsed: Duration,
+    /// What the request sent as a credential, masked in every quote.
+    pub credentials: Credentials,
 }
 
 impl std::fmt::Debug for Answer {
@@ -37,20 +42,28 @@ impl std::fmt::Debug for Answer {
             .field("content_type", &self.content_type)
             .field("body_bytes", &self.body.len())
             .field("elapsed", &self.elapsed)
+            .field("credentials", &self.credentials)
             .finish()
     }
 }
 
 /// What the request itself carries as a credential, to keep out of what the
 /// API says back: an answer may echo the `Authorization` header it got.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct Credentials(Vec<String>);
+
+impl std::fmt::Debug for Credentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Credentials({} masked)", self.0.len())
+    }
+}
 
 /// A credential shorter than this is not masked: a short word (a Basic
 /// password like `token`) would be hidden wherever the answer says it.
 const MIN_CREDENTIAL: usize = 8;
 
-/// The fields of a form body that hold a credential (a token endpoint's).
+/// The fields of a form or JSON body that hold a credential (a token
+/// endpoint's).
 const FORM_CREDENTIALS: [&str; 6] = [
     "client_secret",
     "client_assertion",
@@ -64,7 +77,8 @@ impl Credentials {
     /// The credentials *request* sends: the value of each `Authorization`,
     /// `Proxy-Authorization`, `X-API-Key` and `X-Auth-Token` header (and any
     /// header marked sensitive): its parameter after the scheme, or the value
-    /// whole with none, and a Basic header's decoded user and password.
+    /// whole with none, and a Basic header's decoded user and password; and
+    /// the credential fields of a form body or a JSON object body.
     pub fn of(request: &crate::transport::Request) -> Self {
         use crate::transport::header;
         use base64::Engine as _;
@@ -102,12 +116,24 @@ impl Credentials {
             .get(header::CONTENT_TYPE)
             .and_then(|value| value.to_str().ok())
             .is_some_and(|kind| kind.contains("application/x-www-form-urlencoded"));
-        if let (true, Some(body)) = (is_form, request.body()) {
-            found.extend(
+        match (is_form, request.body()) {
+            (true, Some(body)) => found.extend(
                 url::form_urlencoded::parse(body)
                     .filter(|(name, _)| FORM_CREDENTIALS.contains(&name.as_ref()))
                     .map(|(_, value)| value.into_owned()),
-            );
+            ),
+            // `{"client_id": ..., "client_secret": ...}`, as Exabeam signs in.
+            (false, Some(body)) => {
+                if let Ok(serde_json::Value::Object(fields)) = serde_json::from_slice(body) {
+                    found.extend(
+                        fields
+                            .iter()
+                            .filter(|(name, _)| FORM_CREDENTIALS.contains(&name.as_str()))
+                            .filter_map(|(_, value)| value.as_str().map(str::to_owned)),
+                    );
+                }
+            }
+            _ => {}
         }
         found.retain(|credential| credential.len() >= MIN_CREDENTIAL);
         // The longest first, so a credential that holds another is masked
@@ -121,30 +147,34 @@ impl Credentials {
     /// themselves when it echoes none.
     pub fn mask(&self, body: Vec<u8>) -> Vec<u8> {
         let text = String::from_utf8_lossy(&body);
-        if !self
-            .0
-            .iter()
-            .any(|credential| text.contains(credential.as_str()))
-        {
+        if !self.echoed(&text) {
             return body;
         }
+        self.mask_text(&text).into_bytes()
+    }
+
+    /// *text* with each credential it holds replaced by `***`.
+    pub fn mask_text(&self, text: &str) -> String {
+        if !self.echoed(text) {
+            return text.to_owned();
+        }
+        self.0.iter().fold(text.to_owned(), |text, credential| {
+            text.replace(credential.as_str(), "***")
+        })
+    }
+
+    fn echoed(&self, text: &str) -> bool {
         self.0
             .iter()
-            .fold(text.into_owned(), |text, credential| {
-                text.replace(credential.as_str(), "***")
-            })
-            .into_bytes()
+            .any(|credential| text.contains(credential.as_str()))
     }
 }
 
 impl Answer {
-    /// An answer to a request that sent *credentials*. A successful JSON
-    /// answer is the API's data and is kept as it came (a token endpoint's
-    /// token may well contain the secret it was asked with); any other
-    /// answer, an error status or a body that is not JSON, is only ever
-    /// quoted, so it has none of the credentials: no cut of it, whatever its
-    /// length, can show one the API echoed, nor the head of one that
-    /// straddles the cut.
+    /// An answer to a request that sent *credentials*: its body is kept as
+    /// it came, and every quote of it masks them, whatever its status or
+    /// shape, before any cut, so no cut can show the head of one that
+    /// straddles it.
     pub fn new(
         status: u16,
         content_type: Option<String>,
@@ -152,12 +182,12 @@ impl Answer {
         elapsed: Duration,
         credentials: &Credentials,
     ) -> Self {
-        let data = status < 400 && serde_json::from_slice::<serde::de::IgnoredAny>(&body).is_ok();
         Self {
             status,
             content_type,
-            body: if data { body } else { credentials.mask(body) },
+            body,
             elapsed,
+            credentials: credentials.clone(),
         }
     }
 
@@ -189,9 +219,11 @@ impl Answer {
         serde_json::from_slice(&self.body).ok()
     }
 
-    /// The body as text, invalid UTF-8 replaced (`response.text`).
+    /// The body as text, invalid UTF-8 replaced (`response.text`), the
+    /// request's credentials masked.
     pub fn text(&self) -> String {
-        String::from_utf8_lossy(&self.body).into_owned()
+        self.credentials
+            .mask_text(&String::from_utf8_lossy(&self.body))
     }
 
     /// The first *chars* characters of the text (`response.text[:chars]`).
@@ -207,7 +239,7 @@ impl Answer {
         }
         Some(describe_answer(
             self.status,
-            &self.body,
+            self.text().as_bytes(),
             self.content_type.as_deref(),
             Some(self.elapsed),
         ))
@@ -316,6 +348,7 @@ mod tests {
             content_type: Some("application/json".into()),
             body: br#"{"access_token":"eyJ.secret.token","expires_in":3599}"#.to_vec(),
             elapsed: Duration::from_millis(5),
+            credentials: crate::answer::Credentials::default(),
         };
         let shown = format!("{answer:?}");
         assert!(!shown.contains("eyJ.secret.token"), "{shown}");

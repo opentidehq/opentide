@@ -556,6 +556,7 @@ mod tests {
                 content_type: Some("application/json".to_owned()),
                 body: body.as_bytes().to_vec(),
                 elapsed: Duration::ZERO,
+                credentials: crate::answer::Credentials::default(),
             },
             retry_after: retry_after.map(str::to_owned),
         }
