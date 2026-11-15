@@ -226,3 +226,27 @@ fn every_case_has_a_group_and_every_snapshot_a_case() {
     }
     assert!(stale.is_empty(), "snapshots of no case: {stale:#?}");
 }
+
+#[test]
+fn a_date_the_inputs_hold_is_not_the_clock() {
+    let held = ["{\"at\": \"2026-10-27T07:51:00Z\"}", "created: 2026-01-01"];
+    let candidates = ["2026-10-27", "2026-11-03", "2026-01-01"].map(str::to_owned);
+    assert_eq!(
+        snapshot::clock_dates(candidates.to_vec(), &held),
+        ["2026-11-03"]
+    );
+    assert_eq!(snapshot::clock_dates(candidates.to_vec(), &[]), candidates);
+}
+
+#[test]
+fn the_git_version_keeps_the_vendors_suffix() {
+    assert_eq!(
+        snapshot::git_version_in("git version 2.54.0 (Apple Git-157)\n").as_deref(),
+        Some("2.54.0 (Apple Git-157)")
+    );
+    assert_eq!(
+        snapshot::git_version_in("git version 2.43.0\n").as_deref(),
+        Some("2.43.0")
+    );
+    assert_eq!(snapshot::git_version_in("not git"), None);
+}
