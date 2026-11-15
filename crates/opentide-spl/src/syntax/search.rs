@@ -1,0 +1,391 @@
+//! Search terms: what the base search, `search`, a subsearch and (later)
+//! `tstats ... where` share. Adjacent terms are ANDed; `AND` and `OR` sit
+//! between two terms and `NOT` before one; the parse is flat, because it only
+//! has to accept what Splunk accepts (`grammar.js`: `search_expression`).
+
+use super::kind::SyntaxKind as K;
+use super::parser::{Context, at, at_name, close, leaf, pipeline};
+use opentide_parse::{CompletedMarker, Parser, TokenSet};
+
+/// A word that can name a field in a search comparison.
+const FIELD_WORDS: TokenSet = K::set(&[
+    K::IDENT,
+    K::STRING_TOKEN,
+    K::FIELD_WORD,
+    K::SEARCH_WORD_TOKEN,
+    K::CALL_WORD,
+]);
+/// Search words that are neither names, numbers nor wildcards.
+const WORDS: TokenSet = K::set(&[K::FIELD_WORD, K::SEARCH_WORD_TOKEN, K::CALL_WORD]);
+/// What can be compared (`=`, `<`, ...) with a field and a value.
+const COMPARISONS: TokenSet = K::set(&[K::EQ, K::NE, K::LT, K::GT, K::LE, K::GE]);
+/// Splunk parses these too, with or without a term on either side.
+const LOOSE: TokenSet = K::set(&[K::EQ2, K::LT_GT, K::EQ_GT, K::EQ_LT, K::BANG_TILDE]);
+/// What starts a term.
+const TERM_START: TokenSet = K::set(&[
+    K::IDENT,
+    K::NUMBER_TOKEN,
+    K::STRING_TOKEN,
+    K::GLOB_TOKEN,
+    K::FIELD_WORD,
+    K::SEARCH_WORD_TOKEN,
+    K::CALL_WORD,
+    K::MACRO_TOKEN,
+    K::L_PAREN,
+    K::L_BRACKET,
+]);
+/// What a comparison's value can be.
+const VALUE: TokenSet = K::set(&[
+    K::IDENT,
+    K::NUMBER_TOKEN,
+    K::STRING_TOKEN,
+    K::GLOB_TOKEN,
+    K::FIELD_WORD,
+    K::SEARCH_WORD_TOKEN,
+    K::CALL_WORD,
+    K::MACRO_TOKEN,
+]);
+
+/// The upper-case boolean operators, reserved in search: `a AND OR b` is an
+/// error, and lower-case `and`, `or` and `not` are plain terms.
+fn boolean(p: &Parser<'_>) -> Option<K> {
+    if p.current() != K::IDENT.raw() {
+        return None;
+    }
+    match p.current_text() {
+        "AND" => Some(K::AND_KW),
+        "OR" => Some(K::OR_KW),
+        "NOT" => Some(K::NOT_KW),
+        _ => None,
+    }
+}
+
+/// A `TERM(`, `CASE(` or `PREFIX(`.
+fn directive(p: &Parser<'_>) -> Option<(K, K)> {
+    if p.current() != K::IDENT.raw() || p.nth(1) != K::L_PAREN.raw() {
+        return None;
+    }
+    match p.current_text() {
+        "TERM" => Some((K::TERM_CLAUSE, K::TERM_KW)),
+        "CASE" => Some((K::CASE_CLAUSE, K::CASE_KW)),
+        _ => None,
+    }
+}
+
+/// Whether the current token starts a search term (a reserved boolean does
+/// not).
+fn starts_term(p: &Parser<'_>) -> bool {
+    let kind = p.current();
+    (TERM_START.contains(kind) || LOOSE.contains(kind)) && boolean(p).is_none()
+}
+
+/// Whether a macro at the current token is followed by more terms (then the
+/// stage is a search that starts with the macro; alone, it is the stage).
+pub(super) fn more_terms_after_macro(p: &Parser<'_>) -> bool {
+    let next = p.nth(1);
+    TERM_START.contains(next) || LOOSE.contains(next) || {
+        next == K::IDENT.raw() && matches!(p.nth_text(1), "AND" | "OR" | "NOT")
+    }
+}
+
+/// Whether a subsearch body that starts here is search terms, not a command:
+/// anything but a bare name or a macro (`[ foo ... ]` runs `foo`; `[ a=1 ]`
+/// searches).
+pub(super) fn starts_bare_head(p: &Parser<'_>) -> bool {
+    let kind = p.current();
+    if boolean(p) == Some(K::NOT_KW) || directive(p).is_some() {
+        return true;
+    }
+    if kind == K::IDENT.raw() {
+        let next = p.nth(1);
+        return COMPARISONS.contains(next)
+            || LOOSE.contains(next)
+            || (next == K::IDENT.raw() && p.nth_text(1) == "IN" && p.nth(2) == K::L_PAREN.raw());
+    }
+    kind != K::MACRO_TOKEN.raw() && starts_term(p) && !boolean_word(p)
+}
+
+fn boolean_word(p: &Parser<'_>) -> bool {
+    boolean(p).is_some()
+}
+
+/// `search [expression]`.
+pub(super) fn search_command(p: &mut Parser<'_>) {
+    let m = p.start();
+    p.bump_as(K::SEARCH_KW.raw());
+    if starts_term(p) || boolean(p).is_some() {
+        search_expression(p, K::SEARCH_EXPRESSION);
+    }
+    m.complete(p, K::SEARCH_COMMAND.raw());
+}
+
+/// Terms with no `search` keyword. A query's first stage may start with a
+/// bare word (`error`, `tstats count`); a subsearch's may not.
+pub(super) fn bare_search(p: &mut Parser<'_>, leading_word: bool) {
+    let _ = leading_word;
+    search_expression(p, K::BARE_SEARCH);
+}
+
+/// `NOT`s and terms, `AND` and `OR` between them, as the children of one
+/// node of `kind`.
+fn search_expression(p: &mut Parser<'_>, kind: K) {
+    let m = p.start();
+    let mut first = true;
+    loop {
+        let operator = boolean(p);
+        match operator {
+            Some(K::NOT_KW) => {
+                boolean_node(p, K::NOT_KW);
+                while boolean(p) == Some(K::NOT_KW) {
+                    boolean_node(p, K::NOT_KW);
+                }
+                if !starts_term(p) {
+                    p.error("expected a search term after `NOT`");
+                    break;
+                }
+            }
+            Some(op) => {
+                if first {
+                    p.err_and_bump("expected a search term before the operator");
+                } else {
+                    boolean_node(p, op);
+                }
+                if !starts_term(p) && boolean(p) != Some(K::NOT_KW) {
+                    p.error("expected a search term");
+                    break;
+                }
+                continue;
+            }
+            None => {}
+        }
+        if !term(p) {
+            if !first || boolean(p).is_some() {
+                p.error("expected a search term");
+            }
+            break;
+        }
+        first = false;
+        if !(starts_term(p) || boolean(p).is_some()) {
+            break;
+        }
+    }
+    m.complete(p, kind.raw());
+}
+
+fn boolean_node(p: &mut Parser<'_>, kind: K) {
+    leaf(p, K::SEARCH_BOOLEAN, kind);
+}
+
+/// One search term; `false` when the current token starts none.
+fn term(p: &mut Parser<'_>) -> bool {
+    if let Some((node, keyword)) = directive(p) {
+        let m = p.start();
+        p.bump_as(keyword.raw());
+        raw_arguments(p);
+        m.complete(p, node.raw());
+        return true;
+    }
+    match p.current() {
+        k if k == K::L_PAREN.raw() => group(p),
+        k if k == K::L_BRACKET.raw() => subsearch(p),
+        k if k == K::MACRO_TOKEN.raw() => macro_call(p),
+        k if LOOSE.contains(k) => {
+            // A comparison with no field: `==1`.
+            let m = p.start();
+            p.bump();
+            optional_value(p);
+            m.complete(p, K::FIELD_VALUE.raw());
+        }
+        k if TERM_START.contains(k) => {
+            let atom = atom(p);
+            if FIELD_WORDS.contains(atom.kind_token) {
+                after_field(p, atom.node);
+            }
+        }
+        _ => return false,
+    }
+    true
+}
+
+/// What a search term's first token became.
+struct Atom {
+    node: CompletedMarker,
+    kind_token: rowan::SyntaxKind,
+}
+
+/// A name, number, string, wildcard or other word, as its node. The kind
+/// returned is the lexed one, which says whether it can name a field.
+fn atom(p: &mut Parser<'_>) -> Atom {
+    let lexed = p.current();
+    let node = value_atom(p);
+    Atom {
+        node,
+        kind_token: lexed,
+    }
+}
+
+/// A leaf node for the current token, which must be one of [`VALUE`] or
+/// [`FIELD_WORDS`].
+fn value_atom(p: &mut Parser<'_>) -> CompletedMarker {
+    let kind = p.current();
+    let node = if kind == K::IDENT.raw() {
+        K::IDENTIFIER
+    } else if kind == K::NUMBER_TOKEN.raw() {
+        K::NUMBER
+    } else if kind == K::STRING_TOKEN.raw() {
+        K::STR
+    } else if kind == K::GLOB_TOKEN.raw() {
+        K::GLOB
+    } else if kind == K::MACRO_TOKEN.raw() {
+        K::MACRO_CALL
+    } else {
+        K::SEARCH_WORD
+    };
+    let m = p.start();
+    p.bump();
+    m.complete(p, node.raw())
+}
+
+/// After a word that can be a field: a comparison, `IN (...)`, or nothing
+/// (the word is a term).
+fn after_field(p: &mut Parser<'_>, field: CompletedMarker) {
+    let next = p.current();
+    if COMPARISONS.contains(next) {
+        let m = field.precede(p);
+        p.bump();
+        if VALUE.contains(p.current()) && boolean(p).is_none() {
+            value_atom(p);
+        } else if at(p, K::L_PAREN) {
+            value_list(p);
+        } else {
+            p.error("missing the value of the comparison");
+        }
+        m.complete(p, K::FIELD_VALUE.raw());
+    } else if LOOSE.contains(next) {
+        let m = field.precede(p);
+        p.bump();
+        optional_value(p);
+        m.complete(p, K::FIELD_VALUE.raw());
+    } else if at_name(p, "IN") && p.nth(1) == K::L_PAREN.raw() {
+        let m = field.precede(p);
+        p.bump_as(K::IN_KW.raw());
+        value_list(p);
+        m.complete(p, K::IN_CLAUSE.raw());
+    }
+}
+
+/// A loose comparison's value, if there is one.
+fn optional_value(p: &mut Parser<'_>) {
+    if VALUE.contains(p.current()) && boolean(p).is_none() {
+        value_atom(p);
+    }
+}
+
+/// `( a, "b" c )`: values, with commas or without.
+fn value_list(p: &mut Parser<'_>) {
+    let m = p.start();
+    p.bump();
+    let mut any = false;
+    loop {
+        if p.eat(K::COMMA.raw()) {
+            continue;
+        }
+        if VALUE.contains(p.current()) && boolean(p).is_none() {
+            value_atom(p);
+            any = true;
+        } else {
+            break;
+        }
+    }
+    if !any {
+        p.error("expected a value");
+    }
+    close(p, K::R_PAREN, "missing `)`");
+    m.complete(p, K::VALUE_LIST.raw());
+}
+
+/// `( terms )`.
+fn group(p: &mut Parser<'_>) {
+    if !p.enter() {
+        return;
+    }
+    let m = p.start();
+    p.bump();
+    if starts_term(p) || boolean(p).is_some() {
+        search_expression(p, K::SEARCH_EXPRESSION);
+    } else {
+        p.error("expected a search term");
+    }
+    close(p, K::R_PAREN, "missing `)`");
+    m.complete(p, K::SEARCH_GROUP.raw());
+    p.exit();
+}
+
+/// `[ pipeline ]`.
+pub(super) fn subsearch(p: &mut Parser<'_>) {
+    if !p.enter() {
+        return;
+    }
+    let m = p.start();
+    p.bump();
+    pipeline(p, Context::Subsearch);
+    close(p, K::R_BRACKET, "missing `]`");
+    m.complete(p, K::SUBSEARCH.raw());
+    p.exit();
+}
+
+pub(super) fn macro_call(p: &mut Parser<'_>) {
+    leaf(p, K::MACRO_CALL, K::MACRO_TOKEN);
+}
+
+/// The `(` and the raw text of a directive, and its `)` when it has one
+/// (`TERM(EventID=4688` before a pipe is accepted, as Splunk does).
+fn raw_arguments(p: &mut Parser<'_>) {
+    p.bump();
+    if at(p, K::TERM_TEXT_TOKEN) {
+        leaf(p, K::TERM_TEXT, K::TERM_TEXT_TOKEN);
+    }
+    p.eat(K::R_PAREN.raw());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::parser::tests::render;
+
+    #[test]
+    fn terms_booleans_and_groups() {
+        let out = render("search a AND (b OR c) NOT d");
+        assert!(out.ends_with("--\n"), "{out}");
+        assert_eq!(out.matches("SEARCH_BOOLEAN@").count(), 3, "{out}");
+        assert_eq!(out.matches("SEARCH_GROUP@").count(), 1, "{out}");
+    }
+
+    #[test]
+    fn comparisons_in_and_directives() {
+        let out = render(r#"app IN ("a", "b") TERM(x=y) a==b c>=1 CASE(Ab"#);
+        assert!(out.ends_with("--\n"), "{out}");
+        for node in [
+            "IN_CLAUSE",
+            "VALUE_LIST",
+            "TERM_CLAUSE",
+            "TERM_TEXT",
+            "CASE_CLAUSE",
+        ] {
+            assert!(out.contains(node), "{node} in {out}");
+        }
+        assert_eq!(out.matches("FIELD_VALUE@").count(), 2, "{out}");
+    }
+
+    #[test]
+    fn a_subsearch_runs_a_leading_word_as_a_command() {
+        let out = render("a [ foo b | c ] [ x=1 ]");
+        assert_eq!(out.matches("UNKNOWN_COMMAND@").count(), 2, "{out}");
+        assert_eq!(out.matches("BARE_SEARCH@").count(), 2, "{out}");
+    }
+
+    #[test]
+    fn a_missing_close_is_one_error() {
+        let out = render("a (b");
+        assert!(out.contains("missing `)`"), "{out}");
+    }
+}

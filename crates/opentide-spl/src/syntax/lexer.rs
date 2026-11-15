@@ -614,8 +614,9 @@ impl Driver<'_> {
                 return;
             }
             K::L_PAREN => {
+                let name = f.prev.is_some_and(|(k, _)| k == K::IDENT);
                 let adjacent_name = f.prev.is_some_and(|(k, e)| k == K::IDENT && e == start);
-                if adjacent_name
+                if name
                     && matches!(f.prev_word, "TERM" | "CASE" | "PREFIX")
                     && f.mode() != Paren::Expr
                 {

@@ -1,0 +1,33 @@
+---
+source: crates/opentide-spl/tests/search_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/macro__valid.spl
+---
+SOURCE_FILE@0..134
+  PIPELINE@0..134
+    PIPE@0..1 "|"
+    WHITESPACE@1..2 " "
+    UNKNOWN_COMMAND@2..99
+      IDENT@2..8 "tstats"
+      WHITESPACE@8..9 " "
+      ARGUMENT_LIST@9..99
+        MACRO_CALL@9..41
+          MACRO_TOKEN@9..41 "`security_content_summariesonly`"
+        WHITESPACE@41..42 " "
+        IDENT@42..47 "count"
+        WHITESPACE@47..48 " "
+        IDENT@48..52 "from"
+        WHITESPACE@52..53 " "
+        IDENT@53..62 "datamodel"
+        EQ@62..63 "="
+        IDENT@63..81 "Endpoint.Processes"
+        WHITESPACE@81..82 " "
+        IDENT@82..84 "by"
+        WHITESPACE@84..85 " "
+        IDENT@85..99 "Processes.user"
+    WHITESPACE@99..100 "\n"
+    PIPE@100..101 "|"
+    WHITESPACE@101..102 " "
+    MACRO_CALL@102..134
+      MACRO_TOKEN@102..134 "`drop_dm_object_name(Processes)`"
+--
