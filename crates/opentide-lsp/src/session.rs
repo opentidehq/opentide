@@ -766,8 +766,10 @@ impl Session {
                 }
             }
         }
-        self.activate(root);
+        // The catalogs first: installing them resets the declared datasets,
+        // which `activate` then installs again.
         self.install_field_catalog(root);
+        self.activate(root);
         SessionHost {
             session: self,
             root,
@@ -875,6 +877,12 @@ impl Session {
         }
         match opentide_analysis::install_catalog(&catalog) {
             Ok(()) => {
+                // The catalogs carry no `visibility.toml` (it is installed
+                // on its own), so installing them declared no dataset: the
+                // root's declarations are installed again ([`activate`]).
+                // Catalogs generated on a thread arrive whenever they are
+                // ready, after the declarations were installed.
+                self.active.set(None);
                 if installed.replace(catalog).is_some() {
                     self.touch();
                 }
@@ -1780,7 +1788,7 @@ impl Session {
 
 #[cfg(test)]
 mod tests {
-    use super::{Arc, DiskObjects, HashMap, Ordering, path_key, root_key};
+    use super::{Arc, DiskObjects, HashMap, Ordering, Session, path_key, root_key};
 
     /// #914: reading a root's object files indexes none of them; the first
     /// request for the index indexes each, as `index_object` does, from the
@@ -1826,6 +1834,38 @@ mod tests {
         assert!(disk.refresh(&root).is_empty());
         assert!(disk.files.values().all(|file| file.indexed.get().is_some()));
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// The field catalogs the warm-up thread generates arrive whenever they
+    /// are ready; installing them declares no dataset, so the declared ones
+    /// are installed again after them: a query is checked against
+    /// `visibility.toml` whether the catalogs arrived before the first check
+    /// or between two.
+    #[test]
+    fn catalogs_that_arrive_late_keep_the_declared_datasets() {
+        let mut session = Session::default();
+        session.supplied.visibility = Some(
+            "[[logsources]]\nname = \"NTANetAnalytics\"\ndescription = \"x\"\nsystem = \"sentinel\"\n"
+                .to_owned(),
+        );
+        // Ready now: the first check installs them.
+        crate::models::default_catalog();
+        let codes = |session: &Session| -> Vec<String> {
+            let request = opentide_analysis::AnalyzeRequest {
+                uri: "/q.kql".to_owned(),
+                language: opentide_core::LanguageId::Kql,
+                text: "NTAIpDetails | take 1".to_owned(),
+            };
+            super::analyze(&session.host(None), request)
+                .diagnostics
+                .into_iter()
+                .map(|d| d.code)
+                .collect()
+        };
+        assert_eq!(codes(&session), ["kql_table_not_declared"]);
+        // As if they arrived only now, once the declarations were installed.
+        session.installed_catalog.borrow_mut().take();
+        assert_eq!(codes(&session), ["kql_table_not_declared"]);
     }
 
     #[test]
