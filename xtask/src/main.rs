@@ -54,7 +54,10 @@ enum Cmd {
     Conformance(xtask::conformance::cli::ConformanceArgs),
     /// Generate the heavy workspace, run the fault catalogue against the
     /// oracle, report coverage (UC-0.6, #804); `corpus help` lists its commands
-    Corpus(Passthrough),
+    Corpus {
+        #[command(subcommand)]
+        command: xtask::corpus::cli::Cmd,
+    },
     /// Resolve every fixture and generated workspace's configuration with
     /// opentide-schema and compare it with the oracle's (UC-1.5, #811)
     Config {
@@ -248,7 +251,7 @@ fn main() -> ExitCode {
         Cmd::Mutants { command } => verdict("mutants", mutants_command(&command).map(|()| true)),
         Cmd::Compare(args) => verdict("compare", run_compare(&args)),
         Cmd::Conformance(args) => status("conformance", xtask::conformance::cli::run(&args)),
-        Cmd::Corpus(p) => status("corpus", xtask::corpus::cli::run(&p.args)),
+        Cmd::Corpus { command } => status("corpus", xtask::corpus::cli::run_command(&command)),
         Cmd::Config { command } => status("config", xtask::config::run(&command)),
         Cmd::Registry { command } => status("registry", xtask::registry::run(&command)),
         Cmd::Lsp { command } => status("lsp", xtask::lsp::run(&command)),
