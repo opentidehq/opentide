@@ -27,12 +27,13 @@
 
 use super::diagnostic::{Diagnostic, Severity, Sources, relative_path, sort_diagnostics};
 use super::glyphs;
-use super::text::{Colour, Text, cell_len, char_width};
+use super::text::{Colour, Text, cell_len};
 use crate::env::Env;
 use anstyle::{AnsiColor, Style};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use unicode_segmentation::UnicodeSegmentation;
 
 /// How frames are drawn on one stream.
 #[derive(Clone, Debug)]
@@ -157,29 +158,22 @@ pub fn link_url(
 /// Blanks that reach `column` in `source` as the terminal draws it: tabs kept,
 /// so they expand to the same stop, and a wide character as many spaces as its cells.
 pub fn underline_offset(source: &str, column: usize) -> String {
-    source
-        .chars()
-        .take(column.saturating_sub(1))
-        .map(|ch| {
-            if ch == '\t' {
-                "\t".to_owned()
-            } else {
-                " ".repeat(char_width(ch))
-            }
-        })
-        .collect()
+    let prefix: String = source.chars().take(column.saturating_sub(1)).collect();
+    let mut parts = prefix.split('\t');
+    let mut out = " ".repeat(parts.next().map_or(0, cell_len));
+    for part in parts {
+        out.push('\t');
+        out.push_str(&" ".repeat(cell_len(part)));
+    }
+    out
 }
 
 /// The cell a terminal reaches after writing `text` from cell `from`: a tab
 /// moves to the next stop of 8, as [`Text::expand_tabs`] expands it.
 pub fn expanded_end(text: &str, from: usize) -> usize {
-    text.chars().fold(from, |cell, ch| {
-        if ch == '\t' {
-            (cell / 8 + 1) * 8
-        } else {
-            cell + char_width(ch)
-        }
-    })
+    let mut parts = text.split('\t');
+    let first = from + parts.next().map_or(0, cell_len);
+    parts.fold(first, |cell, part| (cell / 8 + 1) * 8 + cell_len(part))
 }
 
 /// The path to show: relative to `cwd` when inside it, else the workspace path.
@@ -287,22 +281,21 @@ pub fn shorten_path(location: &str, room: usize) -> String {
     }
     let head = ((room.saturating_sub(1)) / 3).max(1);
     let tail = room.saturating_sub(1).saturating_sub(head).max(1);
-    // Cut by cells: the start and the end of `location` that fit in `head`
-    // and `tail` cells.
-    let within = |cells: usize, chars: &mut dyn Iterator<Item = char>| -> Vec<char> {
+    // Cut by cells, at grapheme boundaries: the start and the end of
+    // `location` that fit in `head` and `tail` cells.
+    fn within<'a>(cells: usize, graphemes: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
         let mut used = 0;
-        chars
-            .take_while(|ch| {
-                used += char_width(*ch);
+        graphemes
+            .take_while(|grapheme| {
+                used += cell_len(grapheme);
                 used <= cells
             })
             .collect()
-    };
-    let head_text: String = within(head, &mut location.chars()).into_iter().collect();
-    let tail_text: String = within(tail, &mut location.chars().rev())
-        .into_iter()
-        .rev()
-        .collect();
+    }
+    let head_text: String = within(head, location.graphemes(true)).concat();
+    let mut tail_parts = within(tail, location.graphemes(true).rev());
+    tail_parts.reverse();
+    let tail_text = tail_parts.concat();
     format!("{head_text}…{tail_text}")
 }
 
@@ -819,7 +812,7 @@ mod tests {
         assert_eq!(plain, ["aaa", "  bbb/", "  ccc/", "  ddd"]);
         let lines = &Text::plain("abcdefghij").wrap(4, &Text::plain(" "));
         let plain: Vec<String> = lines.iter().map(Text::as_plain).collect();
-        assert_eq!(plain, ["abc", " def", " ghi", " j"]);
+        assert_eq!(plain, ["abcd", " efg", " hij"]);
     }
 
     #[test]
@@ -961,7 +954,7 @@ mod tests {
         }
         let lines = Text::plain("名前名前名前名前名前 x").wrap(10, &Text::plain("  "));
         let plain: Vec<String> = lines.iter().map(Text::as_plain).collect();
-        assert_eq!(plain, ["名前名前", "  名前名前", "  名前 x"]);
+        assert_eq!(plain, ["名前名前名", "  前名前名", "  前 x"]);
         let shortened = shorten_path("名前名前名前名前名前名前.yaml:1:2", 9);
         assert!(cell_len(&shortened) <= 9, "{shortened}");
         assert_eq!(shortened, "名…ml:1:2");
