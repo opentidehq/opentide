@@ -427,7 +427,8 @@ fn the_validation_report_carries_the_diagnostic_fields() {
 }
 
 /// MCP stdio is newline-delimited: LSP's `Content-Length` header is no
-/// frame, and the body on its own line is still answered.
+/// frame, and the body, a last line that only the end of stdin terminates,
+/// is still answered.
 #[test]
 fn content_length_headers_are_skipped_and_the_body_is_answered() {
     let (_dir, ws, mut client) = on_the_corpus();
@@ -437,8 +438,10 @@ fn content_length_headers_are_skipped_and_the_body_is_answered() {
     let body = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": params});
     let body = body.to_string();
     let stdin = client.stdin.as_mut().unwrap();
-    write!(stdin, "Content-Length: {}\r\n\r\n{body}\n", body.len()).unwrap();
+    write!(stdin, "Content-Length: {}\r\n\r\n{body}", body.len()).unwrap();
     stdin.flush().unwrap();
+    // No newline ends the body: the end of stdin does.
+    drop(client.stdin.take());
     let line = client
         .lines
         .recv_timeout(PATIENCE)
