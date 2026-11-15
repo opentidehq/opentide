@@ -657,6 +657,51 @@ impl Run<'_> {
                 let report = self.generate(args, &generate_phases, &matches);
                 return self.emit_report(&report, out, err);
             }
+            Some(RootCommand::Mcp(crate::tree::McpArgs {
+                command: Some(crate::tree::McpCommand::Start(_)),
+            })) => {
+                // The server never polls the interrupt and serves stdio until
+                // its client closes stdin: after a Ctrl-C it does not start
+                // ([`run`] reports the interrupt).
+                if self.interrupted() {
+                    return Ok(INTERRUPTED_EXIT_CODE);
+                }
+                // stdout is JSON-RPC's: nothing is emitted around the server.
+                let places = self.server_places();
+                let launch = crate::mcp::Launch {
+                    cwd: places.cwd,
+                    repo: places.repo,
+                    data: places.data,
+                    proxy: places.proxy,
+                    debug: places.debug,
+                };
+                return crate::mcp::serve(&launch, &self.host.version);
+            }
+            Some(RootCommand::Serve(_)) => {
+                // As `mcp start`: it does not start after a Ctrl-C.
+                if self.interrupted() {
+                    return Ok(INTERRUPTED_EXIT_CODE);
+                }
+                let places = self.server_places();
+                let launch = crate::serve::Launch {
+                    cwd: places.cwd,
+                    repo: places.repo,
+                    data: places.data,
+                    proxy: places.proxy,
+                    debug: places.debug,
+                };
+                return crate::serve::serve(&launch, &self.host.version, &self.host.interrupt);
+            }
+            Some(RootCommand::Tui(_)) => return self.run_tui(out, err),
+            Some(RootCommand::Lsp(crate::tree::LspArgs {
+                command: Some(crate::tree::LspCommand::Start(_)),
+            })) => {
+                // The server blocks on stdin and polls no interrupt: Ctrl-C
+                // ends it at once, with 130, as it ends the Python host.
+                self.host.interrupt.stop_at_once();
+                // stdout is the protocol's: nothing is emitted around the server.
+                return crate::commands::lsp::start_stdio(&self.host.version, err);
+            }
             Some(RootCommand::Share(share)) => {
                 return match self.share(share, &matches, &words.join(" ")) {
                     Ok(report) => self.emit_report(&report, out, err),
@@ -756,82 +801,6 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
-            "mcp start" => {
-                // The server never polls the interrupt and serves stdio until
-                // its client closes stdin: after a Ctrl-C it does not start
-                // ([`run`] reports the interrupt).
-                if self.interrupted() {
-                    return Ok(INTERRUPTED_EXIT_CODE);
-                }
-                // stdout is JSON-RPC's: nothing is emitted around the server.
-                let resolved =
-                    |path: Option<&str>| path.map(|path| self.resolve(path).display().to_string());
-                let launch = crate::mcp::Launch {
-                    cwd: self.host.cwd.clone(),
-                    repo: resolved(self.globals.repo.as_deref()),
-                    data: resolved(self.globals.data.as_deref()),
-                    proxy: self.globals.proxy.clone(),
-                    debug: self.globals.debug || self.env.debug_requested(),
-                };
-                crate::mcp::serve(&launch, &self.host.version)
-            }
-            "serve" => {
-                // The server never polls the interrupt and serves stdio until
-                // its client closes stdin: after a Ctrl-C it does not start
-                // ([`run`] reports the interrupt).
-                if self.interrupted() {
-                    return Ok(INTERRUPTED_EXIT_CODE);
-                }
-                // stdout is JSON-RPC's: nothing is emitted around the server.
-                let resolved =
-                    |path: Option<&str>| path.map(|path| self.resolve(path).display().to_string());
-                let launch = crate::serve::Launch {
-                    cwd: self.host.cwd.clone(),
-                    repo: resolved(self.globals.repo.as_deref()),
-                    data: resolved(self.globals.data.as_deref()),
-                    proxy: self.globals.proxy.clone(),
-                    debug: self.globals.debug || self.env.debug_requested(),
-                };
-                crate::serve::serve(&launch, &self.host.version, &self.host.interrupt)
-            }
-            "tui" => {
-                use std::io::IsTerminal as _;
-                let place = crate::commands::tui::Place {
-                    mode: self.mode,
-                    interactive: std::io::stdin().is_terminal() && self.host.stdout_tty,
-                    no_color: self.globals.no_color,
-                    env: self.env,
-                };
-                if let Some(report) = crate::commands::tui::gate(&place) {
-                    return self.emit_report(&report, out, err);
-                }
-                // A person at a terminal: the UI (UC-3.6d), which owns the
-                // terminal until it quits.
-                #[cfg(feature = "terminal")]
-                {
-                    let launch = crate::tui::Launch {
-                        repo: self.globals.repo.clone(),
-                        env: self.env.clone(),
-                        cwd: self.host.cwd.clone().unwrap_or_default(),
-                        version: self.host.version.clone(),
-                    };
-                    crate::tui::open(&launch)
-                }
-                // A build without the terminal UI (the WASI build) refuses
-                // it, as a run without a terminal is refused above.
-                #[cfg(not(feature = "terminal"))]
-                {
-                    let report = crate::commands::tui::unavailable();
-                    self.emit_report(&report, out, err)
-                }
-            }
-            "lsp start" => {
-                // The server blocks on stdin and polls no interrupt: Ctrl-C
-                // ends it at once, with 130, as it ends the Python host.
-                self.host.interrupt.stop_at_once();
-                // stdout is the protocol's: nothing is emitted around the server.
-                crate::commands::lsp::start_stdio(&self.host.version, err)
-            }
             "setup ci" => {
                 let report = self.setup_ci(&matches);
                 self.emit_report(&report, out, err)
@@ -872,6 +841,54 @@ impl Run<'_> {
                 self.emit_report(&report, out, err)
             }
             _ => self.emit(&unhandled(&path), &[], out, err),
+        }
+    }
+
+    /// Where the stdio servers (`mcp start`, `serve`) run: the working
+    /// directory and the global options, as the server reads them.
+    fn server_places(&self) -> ServerPlaces {
+        let resolved =
+            |path: Option<&str>| path.map(|path| self.resolve(path).display().to_string());
+        ServerPlaces {
+            cwd: self.host.cwd.clone(),
+            repo: resolved(self.globals.repo.as_deref()),
+            data: resolved(self.globals.data.as_deref()),
+            proxy: self.globals.proxy.clone(),
+            debug: self.globals.debug || self.env.debug_requested(),
+        }
+    }
+
+    /// `opentide tui`: the terminal UI for a person at a terminal, else the
+    /// refusal.
+    fn run_tui(&self, out: &mut dyn Write, err: &mut dyn Write) -> std::io::Result<i32> {
+        use std::io::IsTerminal as _;
+        let place = crate::commands::tui::Place {
+            mode: self.mode,
+            interactive: std::io::stdin().is_terminal() && self.host.stdout_tty,
+            no_color: self.globals.no_color,
+            env: self.env,
+        };
+        if let Some(report) = crate::commands::tui::gate(&place) {
+            return self.emit_report(&report, out, err);
+        }
+        // A person at a terminal: the UI (UC-3.6d), which owns the
+        // terminal until it quits.
+        #[cfg(feature = "terminal")]
+        {
+            let launch = crate::tui::Launch {
+                repo: self.globals.repo.clone(),
+                env: self.env.clone(),
+                cwd: self.host.cwd.clone().unwrap_or_default(),
+                version: self.host.version.clone(),
+            };
+            crate::tui::open(&launch)
+        }
+        // A build without the terminal UI (the WASI build) refuses
+        // it, as a run without a terminal is refused above.
+        #[cfg(not(feature = "terminal"))]
+        {
+            let report = crate::commands::tui::unavailable();
+            self.emit_report(&report, out, err)
         }
     }
 
@@ -2354,6 +2371,15 @@ impl Run<'_> {
         report.warnings.splice(0..0, warnings);
         report
     }
+}
+
+/// Where a stdio server runs, as its launch takes it.
+struct ServerPlaces {
+    cwd: Option<PathBuf>,
+    repo: Option<String>,
+    data: Option<String>,
+    proxy: Option<String>,
+    debug: bool,
 }
 
 /// The matches of the subcommand `matches` ran.
