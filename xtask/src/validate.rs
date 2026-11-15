@@ -39,6 +39,10 @@ use crate::golden::case::{Case, Spec};
 use crate::golden::recording::Recording;
 use crate::golden::snapshot::{ChangeKind, Snapshot};
 use crate::lint::unquoted_json;
+use opentide_cli::commands::validate::{Args as CliArgs, refuse};
+use opentide_cli::mode::Mode;
+use opentide_cli::render::report::ReportFormat;
+use opentide_cli::tree::RootCommand;
 use opentide_workspace::fix::FixRun;
 use opentide_workspace::validate::{Check, Options, QueriesMode, Selection};
 use opentide_workspace::{OsFs, RootOptions, Workspace};
@@ -411,45 +415,28 @@ pub(crate) struct Args {
     pub(crate) fix: Option<bool>,
 }
 
-/// `argv`'s `validate` options; `None` when it holds another (`--format`,
-/// `--watch`, ...) or no `validate`.
+/// `argv`'s `validate` options, as the product reads them; `None` when it
+/// holds another (`--format`, `--output`, `--watch`, a global flag, ...), the
+/// command line's usage errors (UC-3.5: `--dry-run` without `--fix`, another
+/// `--type` spelling, `--queries` with another `--check`: the product's
+/// `refuse`) or no `validate`.
 pub(crate) fn parse_args(argv: &[String]) -> Option<Args> {
-    let rest = argv.iter().skip_while(|arg| *arg != "validate").skip(1);
-    let mut parsed = Args::default();
-    let mut rest = rest.peekable();
-    while let Some(arg) = rest.next() {
-        let mut value = || rest.next().cloned();
-        match arg.as_str() {
-            "--strict" => parsed.strict = true,
-            "--fix" => parsed.fix = Some(parsed.fix.unwrap_or(false)),
-            "--dry-run" => parsed.fix = Some(true),
-            "--check" => parsed.check = Some(Check::parse(&value()?)?),
-            "--type" => {
-                // Another spelling is the command line's usage error (UC-3.5).
-                let family = value()?;
-                if !["rule", "threat", "objective"].contains(&family.as_str()) {
-                    return None;
-                }
-                parsed.selection.types.push(family);
-            }
-            "--uuid" => parsed.selection.uuids.push(value()?),
-            "--file" => parsed.selection.files.push(value()?),
-            "--queries" => {
-                parsed.queries = match value()?.as_str() {
-                    "error" => QueriesMode::Error,
-                    "warn" => QueriesMode::Warn,
-                    "off" => QueriesMode::Off,
-                    _ => return None,
-                };
-            }
-            _ => return None,
-        }
-    }
-    // `--dry-run` without `--fix` is the command line's usage error (UC-3.5).
-    if parsed.fix == Some(true) && !argv.iter().any(|arg| arg == "--fix") {
+    let Some(RootCommand::Validate(parsed)) = crate::recorded::command(argv, "validate") else {
         return None;
-    }
-    Some(parsed)
+    };
+    let flags = CliArgs::from(&parsed);
+    let replayed = parsed.command.is_none()
+        && !flags.watch
+        && flags.format == ReportFormat::Text
+        && flags.output.is_none()
+        && refuse(&flags, Mode::Json).is_none();
+    replayed.then(|| Args {
+        check: flags.check,
+        selection: flags.selection,
+        strict: flags.strict,
+        queries: flags.queries.unwrap_or_default(),
+        fix: flags.fix.then_some(flags.dry_run),
+    })
 }
 
 /// The difference in the number of queries checked.
@@ -1048,6 +1035,19 @@ mod tests {
         assert!(parse_args(&argv(&["--dry-run"])).is_none());
         assert!(parse_args(&argv(&["--format", "sarif"])).is_none());
         assert!(parse_args(&argv(&["--check", "nope"])).is_none());
+        // The usage errors the product reports are not cases to replay.
+        assert!(parse_args(&argv(&["--type", "RULE"])).is_none());
+        assert!(parse_args(&argv(&["--check", "schema", "--queries", "warn"])).is_none());
+        assert!(parse_args(&argv(&["--watch"])).is_none());
+        assert!(parse_args(&argv(&["--output", "r.sarif"])).is_none());
+        assert!(parse_args(&argv(&["--verbose"])).is_none());
+        assert!(parse_args(&argv(&["query"])).is_none());
+        assert_eq!(
+            parse_args(&argv(&["--type", "rule", "--queries", "off"]))
+                .unwrap()
+                .queries,
+            QueriesMode::Off
+        );
     }
 
     #[test]
