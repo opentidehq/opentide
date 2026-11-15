@@ -405,7 +405,7 @@ mod tests {
     }
 
     /// Every required option or argument with a fixed set of values names the
-    /// set when it is missing (the oracle did, in every mode).
+    /// set when it is missing, in every mode.
     #[test]
     fn framework_usage_a_missing_choice_lists_its_choices() {
         fn walk(command: &Command, path: &mut Vec<String>, found: &mut Vec<(String, String)>) {

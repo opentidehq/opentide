@@ -199,7 +199,7 @@ fn workspace(command: &str, cx: &Context<'_>) -> Result<Workspace, Box<Report>> 
 }
 
 /// The workspace a generate command reads, opened as the first work of its
-/// step `step`: the oracle reads the configuration inside the phase, so a
+/// step `step`: the configuration is read inside the phase, so a
 /// configuration that does not resolve (a paths.toml its model refuses,
 /// #936, #946) fails that phase, with `phase`, `extra` and the failed row.
 fn workspace_in_step(
@@ -256,7 +256,7 @@ pub fn exports(target: Option<Target>, cx: &Context<'_>) -> Report {
             match export(*target, workspace.index(), &settings, &vocabularies) {
                 Ok(output) => outputs.push(output),
                 Err(PhaseError { detail }) => {
-                    // The oracle writes the exports one after another: the
+                    // The exports are written one after another: the
                     // ones before a failure are on disk.
                     write(changes, &outputs)?;
                     return Err(detail);
@@ -846,7 +846,7 @@ pub fn visibility_report(
     visibility::report(index, &inputs)
 }
 
-/// The UTC time now as Python's `isoformat()` writes an aware datetime.
+/// The UTC time now as ISO 8601 with microseconds and a `+00:00` offset.
 fn now_iso() -> String {
     jiff::Timestamp::now()
         .to_zoned(jiff::tz::TimeZone::UTC)
@@ -1271,7 +1271,7 @@ pub fn run_phases(
     }
 }
 
-/// The full pipeline's phases, in the oracle's order (`_PHASE_ORDER`): what
+/// The full pipeline's phases, in the order they run: what
 /// a person reads first (the pages, the exports), then the framework's own
 /// files.
 pub const PIPELINE: [&str; 6] = [
@@ -1294,7 +1294,7 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
             Json::Array(PIPELINE.iter().map(|phase| Json::str(*phase)).collect()),
         )]
     };
-    // The oracle reads the configuration inside the first phase.
+    // The configuration is read inside the first phase.
     let workspace = match workspace_in_step(command, "docs", "docs", Vec::new(), cx) {
         Ok(workspace) => workspace,
         Err(report) => return *report,
@@ -1424,6 +1424,7 @@ mod tests {
         {
             Some(crate::tree::RootCommand::Generate(crate::tree::GenerateArgs {
                 command: Some(command),
+                ..
             })) => command,
             other => panic!("not a generate subcommand: {other:?}"),
         }
@@ -1734,9 +1735,8 @@ mod tests {
         assert_eq!(report.outcome.data[1].0, "target");
     }
 
-    /// A relative docs output is under the repository root, as the oracle's
-    /// `get_repo_root() / output`, not under the Tide workspace that
-    /// `OPENTIDE_TIDE_WORKSPACE` places elsewhere (#931).
+    /// A relative docs output is under the repository root, not under the
+    /// Tide workspace that `OPENTIDE_TIDE_WORKSPACE` places elsewhere (#931).
     #[test]
     fn docs_output_is_under_the_repository_root_not_the_tide_workspace() {
         let dir = tempfile::tempdir().unwrap();
