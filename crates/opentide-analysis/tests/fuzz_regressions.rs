@@ -11,14 +11,6 @@ use std::time::{Duration, Instant};
 /// The fuzzer's `-timeout` in CI is 10 s per input; a debug build gets more.
 const BUDGET: Duration = Duration::from_secs(30);
 
-fn boundary(text: &str, offset: usize) -> usize {
-    let mut offset = offset.min(text.len());
-    while !text.is_char_boundary(offset) {
-        offset -= 1;
-    }
-    offset
-}
-
 fn exercise(language: LanguageId, text: &str) {
     let path = match language {
         LanguageId::TideYaml => "/w/objects/rules/fuzz.yaml",
@@ -36,7 +28,7 @@ fn exercise(language: LanguageId, text: &str) {
         },
     );
     for offset in [0, text.len() / 3, text.len() / 2, text.len()] {
-        let offset = boundary(text, offset);
+        let offset = text.floor_char_boundary(offset);
         let _ = opentide_analysis::hover(&host, language, text, offset);
         let _ = opentide_analysis::completions(&host, language, text, offset);
         let _ = opentide_analysis::signature_help(&host, language, text, offset);
