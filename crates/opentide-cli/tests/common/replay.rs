@@ -59,18 +59,34 @@ pub fn generated(name: &str) -> Option<PathBuf> {
 /// The replay reads the root by its canonical path, so where `/tmp` is a
 /// link (macOS: `/private/tmp`) the name is shortened to keep the canonical
 /// root as long as the recordings' `/tmp/golden-XXXXXX`.
+///
+/// `OPENTIDE_CASE_ROOT` names another folder to put the roots in, for a
+/// host whose `/tmp` is case-insensitive (macOS): the `tide-corpus` fixtures
+/// hold `Objects/` and `objects/` side by side, which are one folder there
+/// (the snapshot harness refuses to record on one). A short mount point
+/// keeps the root's length (a long one is cut as above, to the room it
+/// leaves); see tests/golden/README.md, "Snapshots".
 pub fn case_root() -> tempfile::TempDir {
-    let parent = if Path::new("/tmp").is_dir() {
-        PathBuf::from("/tmp")
-    } else {
-        std::env::temp_dir()
-    };
+    let parent = case_root_parent();
     let (prefix, random) = root_name(&std::fs::canonicalize(&parent).unwrap_or(parent.clone()));
     tempfile::Builder::new()
         .prefix(prefix)
         .rand_bytes(random)
         .tempdir_in(parent)
         .unwrap()
+}
+
+/// The folder the case roots are made in: `OPENTIDE_CASE_ROOT`, else `/tmp`
+/// (the recordings' place), else the host's temporary directory.
+pub fn case_root_parent() -> PathBuf {
+    if let Some(dir) = std::env::var_os("OPENTIDE_CASE_ROOT").filter(|dir| !dir.is_empty()) {
+        return PathBuf::from(dir);
+    }
+    if Path::new("/tmp").is_dir() {
+        PathBuf::from("/tmp")
+    } else {
+        std::env::temp_dir()
+    }
 }
 
 /// The prefix and the count of random characters of a case root's name in
