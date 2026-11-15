@@ -66,6 +66,7 @@ pub struct Options {
         long,
         value_name = "SECS",
         default_value = "60",
+        allow_negative_numbers = true,
         value_parser = parse_delay_arg
     )]
     pub delay: Duration,
