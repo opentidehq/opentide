@@ -129,6 +129,13 @@ enum Cmd {
     },
     /// Check every model field's description against its row in the field
     /// tables of the specifications checkout
+    ///
+    /// The checkout is DIR, else $OPENTIDE_SPECIFICATIONS_ROOT, else
+    /// ../specifications: specs/platforms/*.md, specs/objects/*-1.0.md and
+    /// specs/metadata.md. --list prints each row it matched with a model field.
+    ///
+    /// Exit status: 0 no drift, 1 drift (or fewer rows matched than the
+    /// floor), 2 usage error or no checkout.
     SpecFields(xtask::spec_fields::SpecFieldsArgs),
     /// Generate src/opentide/_native/models.pyi and sdk.pyi from the
     /// extension's introspection data (UC-1.9, #815; UC-5.2b, #837)

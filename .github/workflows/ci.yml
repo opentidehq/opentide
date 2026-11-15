@@ -1511,6 +1511,17 @@ jobs:
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: cargo-nextest@0.9.148
+      # The cli_snapshots cases hold `Objects/` and `objects/` side by side,
+      # which are one folder on macOS's default (case-insensitive) volume, and
+      # the harness stops there. A small case-sensitive volume, at a short
+      # mount point (tests/golden/README.md, "Snapshots"), holds their roots.
+      - name: Case-sensitive volume for the snapshot cases
+        if: runner.os == 'macOS'
+        run: |
+          hdiutil create -size 2g -fs 'Case-sensitive APFS' -volname cs -type SPARSE "${RUNNER_TEMP}/cs.sparseimage"
+          hdiutil attach "${RUNNER_TEMP}/cs.sparseimage" -mountpoint /Volumes/cs
+          sudo chown "$(id -u)" /Volumes/cs
+          echo "OPENTIDE_CASE_ROOT=/Volumes/cs" >> "${GITHUB_ENV}"
       - name: cargo nextest (profile ci)
         shell: bash
         run: |
