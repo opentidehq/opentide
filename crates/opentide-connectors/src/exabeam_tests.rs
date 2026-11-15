@@ -30,6 +30,7 @@ fn reply(status: u16, body: &str) -> Reply {
             content_type: Some("application/json".to_owned()),
             body: body.as_bytes().to_vec(),
             elapsed: Duration::from_millis(5),
+            credentials: crate::answer::Credentials::default(),
         },
         retry_after: None,
         challenge: None,

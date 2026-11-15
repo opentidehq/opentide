@@ -230,7 +230,7 @@ pub struct Context<'a> {
     /// `--proxy`, for a platform plugin's tenants.
     pub proxy: Option<&'a str>,
     /// Whether Ctrl-C was pressed.
-    pub interrupted: &'a dyn Fn() -> bool,
+    pub interrupted: &'a (dyn Fn() -> bool + Sync),
 }
 
 /// Seconds a live check waits on each query when neither `--check-timeout`
