@@ -251,6 +251,14 @@
 #   (rule::1.1): the comparison approves exactly that verdict difference
 #   (xtask/src/verdict.rs `ALLOWANCES`: that case, `rule.1.1.schema.json`,
 #   refused at `/references`) and fails if it stops occurring.
+# - `schema-splunk-offset-integer`: a Splunk tenant's `schedule_offset` is an
+#   integer and nothing else, where the oracle also accepted a `$NAME`
+#   placeholder that `deploy` refuses. One compared configuration writes it,
+#   config_cases.toml `splunk-valid`: the comparison approves exactly Rust's
+#   refusal at `/tenants/0/setup/schedule_offset` of
+#   `platforms.splunk.schema.json` (`ALLOWANCES`, refused by Rust) and fails
+#   if it stops occurring. The CHANGELOG announces it under "**Splunk
+#   `schedule_offset` takes an integer, not a placeholder**".
 # - `schema-dropdowns`: a vocabulary dropdown's Markdown leaves out empty
 #   lines and the icon placeholders the oracle wrote as empty strings, and
 #   writes the TLP as `**TLP:AMBER**` after the level. An all-lower-case

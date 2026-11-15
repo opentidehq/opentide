@@ -148,6 +148,9 @@ yara-x-fmt = "=1.23.0"
 # rowan stays on 0.17: 0.18 is an alpha.
 logos = "0.16.1"
 rowan = "0.17.0"
+# The grammar DSL the typed-AST codegen reads (`cargo xtask codegen`, #1221 item i):
+# rust-analyzer's, zero dependencies, a dependency of xtask only.
+ungrammar = "=1.16.1"
 # The Tide model as code (plan D-2, docs/internal/adr/0001-tide-model-as-rust-code.md):
 # JSON Schema 2020-12 from the structs, and their constraints. garde has no
 # default features; a model that needs one (`regex` for `pattern`) adds it then.

@@ -7,37 +7,46 @@ SOURCE_FILE@0..46
   PIPELINE@0..46
     BARE_SEARCH@0..46
       FIELD_VALUE@0..10
-        IDENTIFIER@0..5
-          IDENT@0..5 "index"
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
         EQ@5..6 "="
-        IDENTIFIER@6..10
-          IDENT@6..10 "main"
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
       WHITESPACE@10..11 " "
       FIELD_VALUE@11..24
-        IDENTIFIER@11..17
-          IDENT@11..17 "status"
+        FIELD_REF@11..17
+          IDENTIFIER@11..17
+            IDENT@11..17 "status"
         EQ2@17..19 "=="
-        STR@19..24
-          STRING_TOKEN@19..24 "\"200\""
+        FIELD_VALUE_RHS@19..24
+          STR@19..24
+            STRING_TOKEN@19..24 "\"200\""
       WHITESPACE@24..25 " "
       FIELD_VALUE@25..33
-        IDENTIFIER@25..31
-          IDENT@25..31 "dGVzdA"
+        FIELD_REF@25..31
+          IDENTIFIER@25..31
+            IDENT@25..31 "dGVzdA"
         EQ2@31..33 "=="
       WHITESPACE@33..34 " "
       FIELD_VALUE@34..39
         EQ2@34..36 "=="
-        NUMBER@36..39
-          NUMBER_TOKEN@36..39 "200"
+        FIELD_VALUE_RHS@36..39
+          NUMBER@36..39
+            NUMBER_TOKEN@36..39 "200"
       WHITESPACE@39..40 " "
       FIELD_VALUE@40..43
-        IDENTIFIER@40..41
-          IDENT@40..41 "x"
+        FIELD_REF@40..41
+          IDENTIFIER@40..41
+            IDENT@40..41 "x"
         EQ@41..42 "="
-        IDENTIFIER@42..43
-          IDENT@42..43 "a"
+        FIELD_VALUE_RHS@42..43
+          IDENTIFIER@42..43
+            IDENT@42..43 "a"
       FIELD_VALUE@43..46
         EQ2@43..45 "=="
-        IDENTIFIER@45..46
-          IDENT@45..46 "b"
+        FIELD_VALUE_RHS@45..46
+          IDENTIFIER@45..46
+            IDENT@45..46 "b"
 --

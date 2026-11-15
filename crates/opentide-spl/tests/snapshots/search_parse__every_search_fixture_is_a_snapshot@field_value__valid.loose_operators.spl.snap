@@ -7,44 +7,56 @@ SOURCE_FILE@0..64
   PIPELINE@0..64
     BARE_SEARCH@0..64
       FIELD_VALUE@0..10
-        IDENTIFIER@0..5
-          IDENT@0..5 "index"
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
         EQ@5..6 "="
-        IDENTIFIER@6..10
-          IDENT@6..10 "main"
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
       WHITESPACE@10..11 " "
       FIELD_VALUE@11..22
-        IDENTIFIER@11..17
-          IDENT@11..17 "status"
+        FIELD_REF@11..17
+          IDENTIFIER@11..17
+            IDENT@11..17 "status"
         EQ2@17..19 "=="
-        NUMBER@19..22
-          NUMBER_TOKEN@19..22 "200"
+        FIELD_VALUE_RHS@19..22
+          NUMBER@19..22
+            NUMBER_TOKEN@19..22 "200"
       WHITESPACE@22..23 " "
       FIELD_VALUE@23..32
-        IDENTIFIER@23..27
-          IDENT@23..27 "code"
+        FIELD_REF@23..27
+          IDENTIFIER@23..27
+            IDENT@23..27 "code"
         LT_GT@27..29 "<>"
-        NUMBER@29..32
-          NUMBER_TOKEN@29..32 "404"
+        FIELD_VALUE_RHS@29..32
+          NUMBER@29..32
+            NUMBER_TOKEN@29..32 "404"
       WHITESPACE@32..33 " "
       FIELD_VALUE@33..42
-        IDENTIFIER@33..38
-          IDENT@33..38 "bytes"
+        FIELD_REF@33..38
+          IDENTIFIER@33..38
+            IDENT@33..38 "bytes"
         EQ_GT@38..40 "=>"
-        NUMBER@40..42
-          NUMBER_TOKEN@40..42 "10"
+        FIELD_VALUE_RHS@40..42
+          NUMBER@40..42
+            NUMBER_TOKEN@40..42 "10"
       WHITESPACE@42..43 " "
       FIELD_VALUE@43..52
-        IDENTIFIER@43..48
-          IDENT@43..48 "bytes"
+        FIELD_REF@43..48
+          IDENTIFIER@43..48
+            IDENT@43..48 "bytes"
         EQ_LT@48..50 "=<"
-        NUMBER@50..52
-          NUMBER_TOKEN@50..52 "99"
+        FIELD_VALUE_RHS@50..52
+          NUMBER@50..52
+            NUMBER_TOKEN@50..52 "99"
       WHITESPACE@52..53 " "
       FIELD_VALUE@53..64
-        IDENTIFIER@53..57
-          IDENT@53..57 "user"
+        FIELD_REF@53..57
+          IDENTIFIER@53..57
+            IDENT@53..57 "user"
         BANG_TILDE@57..59 "!~"
-        IDENTIFIER@59..64
-          IDENT@59..64 "admin"
+        FIELD_VALUE_RHS@59..64
+          IDENTIFIER@59..64
+            IDENT@59..64 "admin"
 --

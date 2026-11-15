@@ -16,11 +16,13 @@ SOURCE_FILE@0..43
         IDENT@13..18 "where"
       WHITESPACE@18..19 " "
       FIELD_VALUE@19..29
-        IDENTIFIER@19..24
-          IDENT@19..24 "index"
+        FIELD_REF@19..24
+          IDENTIFIER@19..24
+            IDENT@19..24 "index"
         EQ@24..25 "="
-        IDENTIFIER@25..29
-          IDENT@25..29 "main"
+        FIELD_VALUE_RHS@25..29
+          IDENTIFIER@25..29
+            IDENT@25..29 "main"
       WHITESPACE@29..30 " "
       IDENTIFIER@30..32
         IDENT@30..32 "by"

@@ -484,7 +484,7 @@ impl Shard {
             })
             .collect();
         payload.insert("platforms".into(), serde_json::Value::Object(platforms));
-        let mut text = python_dumps(&serde_json::Value::Object(payload))?;
+        let mut text = pretty_state(&serde_json::Value::Object(payload))?;
         text.push('\n');
         Ok(text)
     }
@@ -534,11 +534,10 @@ fn ordered_keys(
     keys
 }
 
-/// *value* as `json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False)`
-/// writes it: serde_json's map sorts its keys, and its pretty printer
-/// indents by two spaces with `": "` and `","` between items. A failure is
+/// *value* pretty-printed: serde_json's map sorts its keys, and its pretty
+/// printer indents by two spaces with `": "` and `","` between items. A failure is
 /// an error, never an empty text that would replace the state.
-fn python_dumps(value: &serde_json::Value) -> std::io::Result<String> {
+fn pretty_state(value: &serde_json::Value) -> std::io::Result<String> {
     serde_json::to_string_pretty(value).map_err(std::io::Error::other)
 }
 
