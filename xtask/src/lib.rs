@@ -22,6 +22,7 @@ pub mod mcp;
 pub mod mutants;
 pub mod parallel;
 pub mod payloads;
+pub(crate) mod recorded;
 pub mod registry;
 pub mod schema;
 #[cfg(unix)]
