@@ -92,8 +92,8 @@ SOURCE_FILE@0..111
                 WHITESPACE@98..99 " "
                 PIPE@99..100 "|"
                 WHITESPACE@100..101 " "
-                UNKNOWN_OPERATOR@101..110
-                  IDENT@101..108 "project"
+                PROJECT_OPERATOR@101..110
+                  PROJECT_KW@101..108 "project"
                   WHITESPACE@108..109 " "
                   NAME_REF@109..110
                     IDENT@109..110 "x"

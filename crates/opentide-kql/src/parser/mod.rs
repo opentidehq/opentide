@@ -52,6 +52,10 @@ impl P<'_> {
         self.0.at(kind.raw())
     }
 
+    pub(crate) fn current_range(&self) -> Option<rowan::TextRange> {
+        self.0.current_range()
+    }
+
     pub(crate) fn at_eof(&self) -> bool {
         self.0.at_eof()
     }

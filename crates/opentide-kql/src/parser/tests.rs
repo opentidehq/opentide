@@ -65,6 +65,71 @@ snapshots! {
     error_unclosed_function: "let f = () { T ;\nf()";
 }
 
+snapshots! {
+    op_project_family: "T | project a, b = 1, (c, d) = f() | project-away Foo*, *Bar, ['x y'], * | project-keep a* | project-reorder a desc, *, b granny-asc | project-rename n = o | extend e = 1, f(x)";
+    op_summarize: "T | summarize hint.strategy = shuffle count(), c = dcount(a) by bin(t, 1h), k = b | summarize by x | summarize count()";
+    op_join_lookup: "T | join kind = inner (U | project a) on $left.a == $right.a, b | join U on a | lookup kind=leftouter V on k";
+    op_union_parse: "T | union withsource = S A, (B | take 1), f(\"a\") | parse Msg with \"id=\" id:long * \"x\" rest | parse-where Msg with * \"a\" b | parse-kv Msg";
+    op_take_top_sort: "T | take 5 | limit 3 | top 5 by a desc nulls last, b | count | sort by a asc nulls first, b | order a";
+    op_mv: "T | mv-expand kind = array a, b = c to typeof(int) limit 10 | mvexpand x | mv-apply e = a on (where e > 1 | take 2)";
+    op_make_series: "T | make-series c = count() default = 0 on t from ago(1d) to now() step 1h by k | make-series s = sum(v) on t in range(a, b, 1h)";
+    op_evaluate_distinct_render: "T | evaluate hint.distribution = single bag_unpack(x) | distinct a, b = c | distinct * | render timechart";
+    op_range_and_sources: "let r = range(1, 5, 1);\nrange x from 1 to 3 step 1 | extend y = x";
+    op_print_and_datatable: "let d = datatable (a: string, b: int) [\"x\", 1, ];\nprint a = 1, 2 | union d";
+    op_externaldata: "externaldata (c: string, d: dynamic,) [@\"https://e/x.csv\", \"b\"] with (format = \"csv\") | take 1";
+    op_search_source: "search kind = case_sensitive \"x\" | search \"y\" | take 1";
+    op_search_in: "search in (A, B) where c == 1";
+    op_find_in: "find in (T) where a == 1 | take 1";
+    op_top_nested_sample: "T | top-nested 3 of x with others = \"o\" by count() desc, top-nested of y by sum(z) asc nulls last | sample-distinct 10 of a";
+    op_fork_facet_partition: "T | fork a = (where x > 1 | take 5) (count) | facet by a, b with (where x > 1 | take 5) | facet by c with take 5 | partition hint.strategy = native by k (top 1 by t) | partition by k in dynamic([1]) { U | take 1 }";
+    op_scan: "T | scan order by t partition by k declare (n: long = 0) with (step s output = last: x == 1 => n = s.n + 1; step t optional: y == 2;)";
+    op_keyword_operators: "T | getschema | invoke f() | as R | serialize | sample 10 | consume";
+    op_hyphen_names_in_expressions: "T | extend d = a - parse - b";
+    op_parenthesised_pipelines: "let x = materialize(T | take 1);\nlet y = (U | take 2);\n(x | take 1) | union y, (print 1)";
+}
+
+snapshots! {
+    error_pipe_without_operator: "T | | take 1";
+    error_trailing_pipe: "T |";
+    error_join_without_on: "T | join U a";
+    error_unclosed_subquery: "T | mv-apply e = a on (take 1";
+    error_unclosed_fork: "T | fork (take 1";
+    error_missing_top_count: "T | top by a";
+    error_parse_without_pattern: "T | parse Msg with";
+    error_scan_without_step: "T | scan with ()";
+    error_make_series_without_step: "T | make-series c = count() on t";
+}
+
+#[test]
+fn a_column_pattern_is_the_touching_tokens_only() {
+    // `a *` is a name and a star (an error after project-away: a second item needs a comma).
+    assert!(errors("T | project-away Foo*, *Bar, *").is_empty());
+    assert!(!errors("T | project-away a *").is_empty());
+    let tree = SyntaxNode::new_root(parse("T | project-away User*Id1").green);
+    let patterns = tree
+        .descendants()
+        .filter(|n| n.kind() == K::COLUMN_PATTERN)
+        .count();
+    assert_eq!(patterns, 1);
+}
+
+#[test]
+fn deep_pipelines_stop_at_the_limit_with_one_error() {
+    let nested = format!("{}T | take 1{}", "(".repeat(5_000), ")".repeat(5_000));
+    let deep = parse(&nested);
+    assert_eq!(deep.errors.len(), 1, "{:?}", deep.errors);
+    let forks = format!("T | {}take 1{}", "fork (".repeat(5_000), ")".repeat(5_000));
+    assert_eq!(parse(&forks).errors.len(), 1);
+}
+
+#[test]
+fn a_long_pipeline_is_not_deep() {
+    let source = format!("T{}", " | take 1".repeat(20_000));
+    let parsed = parse(&source);
+    assert!(parsed.errors.is_empty());
+    assert!(parsed.depth < 20, "{} levels", parsed.depth);
+}
+
 #[test]
 fn an_empty_source_and_a_comment_are_valid() {
     assert!(errors("").is_empty());

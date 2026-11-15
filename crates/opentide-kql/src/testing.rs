@@ -34,29 +34,3 @@ pub fn parse_is_lossless(source: &str) -> bool {
 pub fn parse_error_count(source: &str) -> usize {
     parse(source).errors.len()
 }
-
-/// Whether `source` holds a keyword of an operator that the parser does not
-/// take yet (it reads it as an unknown operator): the verdict comparison
-/// with tree-sitter leaves those files out. Goes when the operators land.
-#[must_use]
-pub fn names_an_unparsed_operator(source: &str) -> bool {
-    crate::lexer::lex_kql(source).iter().any(|l| {
-        let kind = K::from_raw(l.kind);
-        (K::MATERIALIZE_KW as u16..=K::REGEX_KW as u16).contains(&(kind as u16))
-            && !matches!(
-                kind,
-                K::WHERE_KW
-                    | K::FILTER_KW
-                    | K::TAKE_KW
-                    | K::LIMIT_KW
-                    | K::COUNT_KW
-                    | K::IN_KW
-                    | K::AND_KW
-                    | K::OR_KW
-                    | K::NOT_KW
-                    | K::MATCHES_KW
-                    | K::REGEX_KW
-                    | K::MATERIALIZE_KW
-            )
-    })
-}

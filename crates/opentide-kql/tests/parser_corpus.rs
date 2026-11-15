@@ -1,11 +1,10 @@
 //! The new parser over every `.kql` of `crates/testdata`: lossless on every
-//! file and prefix, and the same verdict as tree-sitter on the files that
-//! need only the forms parsed so far.
+//! file and prefix, and the same verdict as tree-sitter on every file.
 
 mod common;
 use common::corpus;
 use opentide_core::LanguageId;
-use opentide_kql::testing::{parse_error_count, parse_is_lossless};
+use opentide_kql::testing::{lex_spans, parse_error_count, parse_is_lossless};
 
 /// Every corpus file, and its prefixes, parses without a panic and into a
 /// lossless tree (the debug assertions of the toolkit are on in tests).
@@ -26,37 +25,43 @@ fn the_corpus_parses_losslessly() {
     }
 }
 
-/// The node kinds of the old tree that name an operator or a form this PR
-/// does not parse yet.
-fn uses_unparsed_forms(node: tree_sitter::Node) -> bool {
-    const PARSED: [&str; 6] = [
-        "where_operator",
-        "filter_operator",
-        "take_operator",
-        "limit_operator",
-        "count_operator",
-        "tabular_operator",
-    ];
-    let kind = node.kind();
-    let unparsed = (kind.ends_with("_operator") && !PARSED.contains(&kind))
-        || matches!(
-            kind,
-            "search_source"
-                | "datatable_expression"
-                | "externaldata_expression"
-                | "range_operator"
-                | "column_pattern"
-                | "unknown_operator"
-        );
-    let mut cursor = node.walk();
-    unparsed || node.children(&mut cursor).any(uses_unparsed_forms)
+/// Deleting one token in three of a corpus file, or doubling it, never panics
+/// (the toolkit's debug assertions catch an unbalanced marker or a loop
+/// that does not consume) and keeps the tree lossless.
+#[test]
+fn a_deleted_or_doubled_token_never_breaks_the_parser() {
+    for path in corpus() {
+        let source = std::fs::read_to_string(&path).expect("corpus file");
+        for (i, (start, end, _)) in lex_spans(&source).into_iter().enumerate() {
+            if i % 3 != 0 {
+                continue;
+            }
+            let deleted = format!("{}{}", &source[..start], &source[end..]);
+            assert!(
+                parse_is_lossless(&deleted),
+                "{} without {start}..{end}",
+                path.display()
+            );
+            let doubled = format!(
+                "{}{}{}",
+                &source[..end],
+                &source[start..end],
+                &source[end..]
+            );
+            assert!(
+                parse_is_lossless(&doubled),
+                "{} doubling {start}..{end}",
+                path.display()
+            );
+        }
+    }
 }
 
-/// Against tree-sitter, on the files that need nothing from the next PR:
+/// Against tree-sitter, on every corpus file:
 /// what it reads without error, the new parser reads without error, and
 /// what it reads with one, the new parser does too (the verdicts agree).
 #[test]
-fn the_verdicts_agree_with_tree_sitter_on_the_forms_parsed_so_far() {
+fn the_verdicts_agree_with_tree_sitter() {
     let (mut valid, mut broken) = (0, 0);
     let mut disagree = Vec::new();
     for path in corpus() {
@@ -64,11 +69,6 @@ fn the_verdicts_agree_with_tree_sitter_on_the_forms_parsed_so_far() {
         let Some(tree) = opentide_syntax::parse(LanguageId::Kql, &source) else {
             continue;
         };
-        if uses_unparsed_forms(tree.root_node())
-            || opentide_kql::testing::names_an_unparsed_operator(&source)
-        {
-            continue;
-        }
         let old_error = opentide_syntax::has_error(&tree);
         let new_error = parse_error_count(&source) > 0;
         if old_error {
