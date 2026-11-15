@@ -2333,16 +2333,19 @@ pub fn utc_now() -> (String, String, String) {
     utc_at(SystemTime::now())
 }
 
-/// [`utc_now`] at `time`, formatted by humantime's RFC 3339.
+/// [`utc_now`] at `time`, formatted by jiff (RFC 3339, in UTC).
 pub fn utc_at(time: SystemTime) -> (String, String, String) {
-    let iso = humantime::format_rfc3339_seconds(time).to_string();
-    // `2026-11-09T10:11:12.123456Z` -> `20261109T101112123456Z`.
-    let stamp: String = humantime::format_rfc3339_micros(time)
-        .to_string()
-        .chars()
-        .filter(|c| !matches!(c, '-' | ':' | '.'))
-        .collect();
-    let clock = iso.get(11..19).unwrap_or_default().to_owned();
+    // A moment outside jiff's range (before year -9999 or after the end of
+    // 9999) stops at the nearest end of it, not at 1970: the stamp stays
+    // ordered with the time that made it.
+    let at = jiff::Timestamp::try_from(time).unwrap_or(if time >= SystemTime::UNIX_EPOCH {
+        jiff::Timestamp::MAX
+    } else {
+        jiff::Timestamp::MIN
+    });
+    let iso = at.strftime("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let stamp = at.strftime("%Y%m%dT%H%M%S%6fZ").to_string();
+    let clock = at.strftime("%H:%M:%S").to_string();
     (iso, stamp, clock)
 }
 
@@ -2745,6 +2748,82 @@ mod tests {
         assert_eq!(iso.len(), 20);
         assert_eq!(stamp.len(), 22);
         assert_eq!(clock.len(), 8);
+    }
+
+    /// The strings humantime gave (checked against Python's `datetime`) for
+    /// the instants where a hand-written calendar goes wrong.
+    #[test]
+    fn framework_utc_stamps_at_calendar_edges() {
+        let after = |secs: u64, micros: u64| {
+            utc_at(
+                std::time::UNIX_EPOCH + Duration::from_secs(secs) + Duration::from_micros(micros),
+            )
+        };
+        let before = |secs: u64| utc_at(std::time::UNIX_EPOCH - Duration::from_secs(secs));
+        let table = [
+            // 1900 is not a leap year: the day after the 28th is 1 March.
+            (
+                before(2_203_891_201),
+                "1900-02-28T23:59:59Z",
+                "19000228T235959000000Z",
+            ),
+            (
+                before(2_203_891_200),
+                "1900-03-01T00:00:00Z",
+                "19000301T000000000000Z",
+            ),
+            // The second before 1970.
+            (before(1), "1969-12-31T23:59:59Z", "19691231T235959000000Z"),
+            (
+                after(1_709_210_096, 789_012),
+                "2024-02-29T12:34:56Z",
+                "20240229T123456789012Z",
+            ),
+            // 2100 is not a leap year either.
+            (
+                after(4_107_542_399, 0),
+                "2100-02-28T23:59:59Z",
+                "21000228T235959000000Z",
+            ),
+            (
+                after(4_107_542_400, 0),
+                "2100-03-01T00:00:00Z",
+                "21000301T000000000000Z",
+            ),
+            // A year-end rollover.
+            (
+                after(1_798_761_599, 999_999),
+                "2026-12-31T23:59:59Z",
+                "20261231T235959999999Z",
+            ),
+            (
+                after(1_798_761_600, 0),
+                "2027-01-01T00:00:00Z",
+                "20270101T000000000000Z",
+            ),
+        ];
+        for ((iso, stamp, clock), want_iso, want_stamp) in table {
+            assert_eq!((iso.as_str(), stamp.as_str()), (want_iso, want_stamp));
+            assert_eq!(clock, &want_iso[11..19]);
+        }
+    }
+
+    /// jiff ends at `9999-12-30T22:00:00.999999999Z`: a moment past it (or
+    /// before its start) stops there instead of becoming 1970.
+    #[test]
+    fn framework_utc_stamps_stop_at_the_end_of_jiffs_range() {
+        let last = 253_402_207_200;
+        let (iso, stamp, _) = utc_at(std::time::UNIX_EPOCH + Duration::from_secs(last));
+        assert_eq!(iso, "9999-12-30T22:00:00Z");
+        assert_eq!(stamp, "99991230T220000000000Z");
+        let past = utc_at(std::time::UNIX_EPOCH + Duration::from_secs(last + 1));
+        assert_eq!(past.0, "9999-12-30T22:00:00Z");
+        assert_eq!(past.1, "99991230T220000999999Z");
+        let first = utc_at(std::time::UNIX_EPOCH - Duration::from_secs(377_705_023_202));
+        assert_eq!(
+            first,
+            utc_at(std::time::UNIX_EPOCH - Duration::from_secs(377_705_023_201))
+        );
     }
 
     #[test]
