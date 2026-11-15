@@ -2709,7 +2709,6 @@ dependencies = [
  "serde",
  "serde-saphyr",
  "serde_json",
- "sha1",
  "sha2 0.11.1",
  "shlex",
  "signal-hook",
@@ -3068,6 +3067,7 @@ dependencies = [
 name = "opentide-workspace"
 version = "0.12.0"
 dependencies = [
+ "dunce",
  "indexmap",
  "jiff",
  "notify",
@@ -4037,6 +4037,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1_smol"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4837,6 +4843,7 @@ dependencies = [
  "atomic",
  "getrandom 0.4.3",
  "js-sys",
+ "sha1_smol",
  "wasm-bindgen",
 ]
 
