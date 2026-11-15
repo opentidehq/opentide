@@ -1,0 +1,119 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/json/live-tenants/tenant-sentinel-one-file
+---
+args: opentide --json query --platform sentinel_one --file objects/rules/sentinel-one-process.yaml --from 2099-01-01T00:00:00Z --to 2099-01-01T01:00:00Z
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "query",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "limit": 100,
+  "message": "4 rows from 1 sentinel_one tenant",
+  "next_actions": [],
+  "ok": true,
+  "platform": "sentinel_one",
+  "results": [
+    {
+      "columns": [
+        {
+          "name": "src.process.name",
+          "type": null
+        },
+        {
+          "name": "endpoint.name",
+          "type": null
+        }
+      ],
+      "elapsed_ms": 0,
+      "label": "sub-query 1",
+      "language": "powerquery",
+      "partial": false,
+      "row_count": 2,
+      "rows": [
+        {
+          "endpoint.name": "ws-1",
+          "src.process.name": "cmd.exe"
+        },
+        {
+          "endpoint.name": "ws-2",
+          "src.process.name": "powershell.exe"
+        }
+      ],
+      "sent": "EventType = \"Process Create\"\n| limit 101",
+      "status": "ok",
+      "tenant": "lab",
+      "truncated": false,
+      "vendor_query_id": "pq-1",
+      "warnings": [
+        "one correlation sub-query: the correlation itself is not applied",
+        "Add a filter on event.type to speed up the query"
+      ]
+    },
+    {
+      "columns": [
+        {
+          "name": "src.process.name",
+          "type": null
+        },
+        {
+          "name": "endpoint.name",
+          "type": null
+        }
+      ],
+      "elapsed_ms": 0,
+      "label": "sub-query 2",
+      "language": "powerquery",
+      "partial": false,
+      "row_count": 2,
+      "rows": [
+        {
+          "endpoint.name": "ws-1",
+          "src.process.name": "cmd.exe"
+        },
+        {
+          "endpoint.name": "ws-2",
+          "src.process.name": "powershell.exe"
+        }
+      ],
+      "sent": "src.process.name = 'cmd.exe'\n| limit 101",
+      "status": "ok",
+      "tenant": "lab",
+      "truncated": false,
+      "vendor_query_id": "pq-2",
+      "warnings": [
+        "one correlation sub-query: the correlation itself is not applied",
+        "Add a filter on event.type to speed up the query"
+      ]
+    }
+  ],
+  "row_count": 4,
+  "rule": {
+    "name": "SentinelOne process rule",
+    "queries": [
+      "EventType = \"Process Create\"",
+      "src.process.name = 'cmd.exe'"
+    ],
+    "uuid": "00000000-0000-4000-8046-000000000008"
+  },
+  "schema_version": 1,
+  "source": "rule",
+  "status": "completed",
+  "summary": {
+    "failed": 0,
+    "rows": 4,
+    "tenants": 1
+  },
+  "tenants": [
+    "lab"
+  ],
+  "window": {
+    "from": "2099-01-01T00:00:00.000Z",
+    "to": "2099-01-01T01:00:00.000Z"
+  }
+}
+
+━━━ stderr · empty

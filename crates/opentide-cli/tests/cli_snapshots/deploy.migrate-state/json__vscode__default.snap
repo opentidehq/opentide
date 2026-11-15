@@ -1,0 +1,31 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy.migrate-state/json/vscode/default
+---
+args: opentide --json deploy migrate-state
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "deploy migrate-state",
+  "duration_ms": 0,
+  "errors": [],
+  "exit_code": 0,
+  "failure": null,
+  "message": "No vendor rule ids left on rules",
+  "migrated": [],
+  "next_actions": [],
+  "ok": true,
+  "rules_edited": 0,
+  "schema_version": 1,
+  "shards_written": 0,
+  "status": "completed",
+  "summary": {
+    "ids": 0,
+    "rules": 0,
+    "shards": 0
+  },
+  "unused": []
+}
+
+━━━ stderr · empty

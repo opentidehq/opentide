@@ -1,0 +1,16 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/plain/tide-corpus/missing-option
+---
+args: opentide query 'SecurityEvent | take 10'
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: the following required arguments were not provided:
+  --platform <PLATFORM>
+
+Usage: opentide query --platform <PLATFORM> <query>
+
+For more information, try '--help'.
