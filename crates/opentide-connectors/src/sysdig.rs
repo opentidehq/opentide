@@ -93,7 +93,7 @@ fn api_error(answer: &Answer) -> String {
         for key in ["message", "error", "errors"] {
             match body.get(key) {
                 Some(Json::Str(text)) if !text.is_empty() => return text.clone(),
-                Some(value) if value.truthy() => return value.to_compact(),
+                Some(value) if value.is_filled() => return value.to_compact(),
                 _ => {}
             }
         }
@@ -724,7 +724,7 @@ fn identity(rule: Option<&Json>) -> (String, bool) {
     let tuning = rule
         .and_then(|rule| rule.get("details"))
         .and_then(|details| details.get("append"))
-        .is_some_and(Json::truthy);
+        .is_some_and(Json::is_true);
     (name, tuning)
 }
 

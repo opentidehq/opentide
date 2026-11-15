@@ -1,0 +1,595 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/vscode/fix-dry-run
+---
+args: opentide --json validate --fix --dry-run
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "checks": {
+    "configuration": {
+      "check": "configuration",
+      "status": "passed"
+    },
+    "id-uniqueness": {
+      "check": "id-uniqueness",
+      "status": "passed"
+    },
+    "queries": {
+      "check": "queries",
+      "status": "passed"
+    },
+    "schema": {
+      "check": "schema",
+      "status": "failed"
+    },
+    "uuid-format": {
+      "check": "uuid-format",
+      "status": "passed"
+    }
+  },
+  "command": "validate",
+  "diff": "",
+  "duration_ms": 0,
+  "error": "Validation failed",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Validation failed",
+    "suggestion": null
+  },
+  "message": "Validation failed",
+  "next_actions": [
+    {
+      "command": "opentide --json explain schema_validation",
+      "reason": "how to fix it"
+    },
+    {
+      "command": "opentide --json validate",
+      "reason": "check again"
+    }
+  ],
+  "ok": false,
+  "report": {
+    "issues": [
+      {
+        "code": "schema_validation",
+        "column": 3,
+        "context": {},
+        "end_column": 11,
+        "end_line": 8,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "alert"
+        ],
+        "file_path": "<WS>/detections/rules/custom-folder-rule.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 8,
+        "message": "Field required",
+        "object_type": "rule",
+        "object_uuid": "ff8bf67e-64dc-460d-b5df-48db643f3560",
+        "path": "detections/rules/custom-folder-rule.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 3,
+        "context": {},
+        "end_column": 11,
+        "end_line": 8,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "scheduling"
+        ],
+        "file_path": "<WS>/detections/rules/custom-folder-rule.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 8,
+        "message": "Field required",
+        "object_type": "rule",
+        "object_uuid": "ff8bf67e-64dc-460d-b5df-48db643f3560",
+        "path": "detections/rules/custom-folder-rule.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 3,
+        "context": {},
+        "end_column": 11,
+        "end_line": 8,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "status"
+        ],
+        "file_path": "<WS>/detections/rules/custom-folder-rule.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 8,
+        "message": "Field required",
+        "object_type": "rule",
+        "object_uuid": "ff8bf67e-64dc-460d-b5df-48db643f3560",
+        "path": "detections/rules/custom-folder-rule.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 1,
+        "context": {},
+        "end_column": 5,
+        "end_line": 1,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "description"
+        ],
+        "file_path": "<WS>/detections/rules/custom-folder-rule.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 1,
+        "message": "Field required",
+        "object_type": "rule",
+        "object_uuid": "ff8bf67e-64dc-460d-b5df-48db643f3560",
+        "path": "detections/rules/custom-folder-rule.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 1,
+        "context": {},
+        "end_column": 9,
+        "end_line": 2,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "metadata",
+          "created"
+        ],
+        "file_path": "<WS>/detections/rules/custom-folder-rule.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 2,
+        "message": "Field required",
+        "object_type": "rule",
+        "object_uuid": "ff8bf67e-64dc-460d-b5df-48db643f3560",
+        "path": "detections/rules/custom-folder-rule.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 1,
+        "context": {},
+        "end_column": 9,
+        "end_line": 2,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "metadata",
+          "modified"
+        ],
+        "file_path": "<WS>/detections/rules/custom-folder-rule.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 2,
+        "message": "Field required",
+        "object_type": "rule",
+        "object_uuid": "ff8bf67e-64dc-460d-b5df-48db643f3560",
+        "path": "detections/rules/custom-folder-rule.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 1,
+        "context": {},
+        "end_column": 9,
+        "end_line": 2,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "metadata",
+          "version"
+        ],
+        "file_path": "<WS>/detections/rules/custom-folder-rule.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 2,
+        "message": "Field required",
+        "object_type": "rule",
+        "object_uuid": "ff8bf67e-64dc-460d-b5df-48db643f3560",
+        "path": "detections/rules/custom-folder-rule.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 3,
+        "context": {},
+        "end_column": 11,
+        "end_line": 8,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "alert"
+        ],
+        "file_path": "<WS>/detections/rules/misspelled-tlp.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 8,
+        "message": "Field required",
+        "object_type": "rule",
+        "object_uuid": "6d1c3a52-8f0e-4b7a-9c21-5e4f3a2b1c0d",
+        "path": "detections/rules/misspelled-tlp.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 3,
+        "context": {},
+        "end_column": 11,
+        "end_line": 8,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "scheduling"
+        ],
+        "file_path": "<WS>/detections/rules/misspelled-tlp.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 8,
+        "message": "Field required",
+        "object_type": "rule",
+        "object_uuid": "6d1c3a52-8f0e-4b7a-9c21-5e4f3a2b1c0d",
+        "path": "detections/rules/misspelled-tlp.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 3,
+        "context": {},
+        "end_column": 11,
+        "end_line": 8,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "status"
+        ],
+        "file_path": "<WS>/detections/rules/misspelled-tlp.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 8,
+        "message": "Field required",
+        "object_type": "rule",
+        "object_uuid": "6d1c3a52-8f0e-4b7a-9c21-5e4f3a2b1c0d",
+        "path": "detections/rules/misspelled-tlp.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 1,
+        "context": {},
+        "end_column": 5,
+        "end_line": 1,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "description"
+        ],
+        "file_path": "<WS>/detections/rules/misspelled-tlp.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 1,
+        "message": "Field required",
+        "object_type": "rule",
+        "object_uuid": "6d1c3a52-8f0e-4b7a-9c21-5e4f3a2b1c0d",
+        "path": "detections/rules/misspelled-tlp.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 1,
+        "context": {},
+        "end_column": 9,
+        "end_line": 2,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "metadata",
+          "created"
+        ],
+        "file_path": "<WS>/detections/rules/misspelled-tlp.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 2,
+        "message": "Field required",
+        "object_type": "rule",
+        "object_uuid": "6d1c3a52-8f0e-4b7a-9c21-5e4f3a2b1c0d",
+        "path": "detections/rules/misspelled-tlp.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 1,
+        "context": {},
+        "end_column": 9,
+        "end_line": 2,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "metadata",
+          "modified"
+        ],
+        "file_path": "<WS>/detections/rules/misspelled-tlp.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 2,
+        "message": "Field required",
+        "object_type": "rule",
+        "object_uuid": "6d1c3a52-8f0e-4b7a-9c21-5e4f3a2b1c0d",
+        "path": "detections/rules/misspelled-tlp.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 1,
+        "context": {},
+        "end_column": 9,
+        "end_line": 2,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "metadata",
+          "version"
+        ],
+        "file_path": "<WS>/detections/rules/misspelled-tlp.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 2,
+        "message": "Field required",
+        "object_type": "rule",
+        "object_uuid": "6d1c3a52-8f0e-4b7a-9c21-5e4f3a2b1c0d",
+        "path": "detections/rules/misspelled-tlp.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "vocab_unknown",
+        "column": 8,
+        "context": {
+          "value": "ambr",
+          "vocab": "tlp::1.0"
+        },
+        "end_column": 12,
+        "end_line": 5,
+        "explain": "opentide explain vocab_unknown",
+        "field_path": [
+          "metadata",
+          "tlp"
+        ],
+        "file_path": "<WS>/detections/rules/misspelled-tlp.yaml",
+        "fix": {
+          "edits": [
+            {
+              "column": 8,
+              "end_column": 12,
+              "end_line": 5,
+              "line": 5,
+              "replacement": "amber"
+            }
+          ],
+          "safe": false
+        },
+        "help": "did you mean \"amber\"?",
+        "line": 5,
+        "message": "Value \"ambr\" is not a valid \"tlp::1.0\" vocabulary entry",
+        "object_type": "rule",
+        "object_uuid": "6d1c3a52-8f0e-4b7a-9c21-5e4f3a2b1c0d",
+        "path": "detections/rules/misspelled-tlp.yaml",
+        "severity": "error",
+        "suggestion": "amber",
+        "yaml_line": 4
+      },
+      {
+        "code": "schema_validation",
+        "column": 1,
+        "context": {},
+        "end_column": 9,
+        "end_line": 2,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "metadata",
+          "created"
+        ],
+        "file_path": "<WS>/objects/objectives/detect-lsass-access.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 2,
+        "message": "Field required",
+        "object_type": "objective",
+        "object_uuid": "04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f",
+        "path": "objects/objectives/detect-lsass-access.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 1,
+        "context": {},
+        "end_column": 9,
+        "end_line": 2,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "metadata",
+          "modified"
+        ],
+        "file_path": "<WS>/objects/objectives/detect-lsass-access.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 2,
+        "message": "Field required",
+        "object_type": "objective",
+        "object_uuid": "04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f",
+        "path": "objects/objectives/detect-lsass-access.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 1,
+        "context": {},
+        "end_column": 9,
+        "end_line": 2,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "metadata",
+          "version"
+        ],
+        "file_path": "<WS>/objects/objectives/detect-lsass-access.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 2,
+        "message": "Field required",
+        "object_type": "objective",
+        "object_uuid": "04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f",
+        "path": "objects/objectives/detect-lsass-access.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      },
+      {
+        "code": "schema_validation",
+        "column": 1,
+        "context": {},
+        "end_column": 5,
+        "end_line": 1,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "objective"
+        ],
+        "file_path": "<WS>/objects/objectives/detect-lsass-access.yaml",
+        "fix": null,
+        "help": "the template in .opentide/templates/ shows the field and its values",
+        "line": 1,
+        "message": "Field required",
+        "object_type": "objective",
+        "object_uuid": "04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f",
+        "path": "objects/objectives/detect-lsass-access.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      }
+    ],
+    "ok": false,
+    "stats": {
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
+      "objects_checked": 3,
+      "parallel": "<CORES>",
+      "queries_checked": 2,
+      "wall_ms": 0.0,
+      "workers": "<CORES>"
+    },
+    "warnings": [
+      {
+        "code": "platform_not_enabled",
+        "column": 3,
+        "context": {
+          "platform": "sentinel"
+        },
+        "end_column": 11,
+        "end_line": 8,
+        "explain": "opentide explain platform_not_enabled",
+        "field_path": [
+          "configurations",
+          "sentinel"
+        ],
+        "file_path": "<WS>/detections/rules/custom-folder-rule.yaml",
+        "fix": null,
+        "help": "enable sentinel with 'opentide setup platforms --sentinel'",
+        "line": 8,
+        "message": "this block will not deploy while sentinel is disabled in this workspace; enable sentinel with 'opentide setup platforms --sentinel'",
+        "object_type": "rule",
+        "object_uuid": "ff8bf67e-64dc-460d-b5df-48db643f3560",
+        "path": "detections/rules/custom-folder-rule.yaml",
+        "severity": "warning",
+        "suggestion": null,
+        "yaml_line": 8
+      },
+      {
+        "code": "platform_not_enabled",
+        "column": 3,
+        "context": {
+          "platform": "sentinel"
+        },
+        "end_column": 11,
+        "end_line": 8,
+        "explain": "opentide explain platform_not_enabled",
+        "field_path": [
+          "configurations",
+          "sentinel"
+        ],
+        "file_path": "<WS>/detections/rules/misspelled-tlp.yaml",
+        "fix": null,
+        "help": "enable sentinel with 'opentide setup platforms --sentinel'",
+        "line": 8,
+        "message": "this block will not deploy while sentinel is disabled in this workspace; enable sentinel with 'opentide setup platforms --sentinel'",
+        "object_type": "rule",
+        "object_uuid": "6d1c3a52-8f0e-4b7a-9c21-5e4f3a2b1c0d",
+        "path": "detections/rules/misspelled-tlp.yaml",
+        "severity": "warning",
+        "suggestion": null,
+        "yaml_line": 8
+      }
+    ]
+  },
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {
+    "errors": 19,
+    "files": 3,
+    "fixable": 0,
+    "objects": 3,
+    "queries": 2,
+    "warning_files": 2,
+    "warnings": 2
+  },
+  "warnings": [
+    "<WS>/detections/rules/custom-folder-rule.yaml:9: configurations.sentinel: this block will not deploy while sentinel is disabled in this workspace; enable sentinel with 'opentide setup platforms --sentinel'",
+    "<WS>/detections/rules/misspelled-tlp.yaml:9: configurations.sentinel: this block will not deploy while sentinel is disabled in this workspace; enable sentinel with 'opentide setup platforms --sentinel'"
+  ],
+  "workspace": "<WS>",
+  "would_fix": []
+}
+
+━━━ stderr · empty

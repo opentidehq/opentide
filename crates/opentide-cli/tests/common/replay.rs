@@ -257,6 +257,11 @@ pub fn fixture(name: &str, ws: &Path) {
         "deploy-push-no-target" | "deploy-push-key" | "deploy-push-unreadable" => {
             pushed_from_cases(name, ws);
         }
+        // #1139: the vscode workspace with the edits cases.toml declares.
+        "vscode-unscoped" | "vscode-ambiguous" => {
+            fixture("vscode", ws);
+            apply_edits(name, ws);
+        }
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");
@@ -357,7 +362,7 @@ fn pushed_from_cases(name: &str, ws: &Path) {
 /// `xtask/src/golden/fixture.rs`'s `fix_modes` does: a checkout's modes follow
 /// the umask of whoever cloned, and status promotion keeps a rule file's mode
 /// (#987), which the recordings name.
-fn fix_modes(dir: &Path) {
+pub fn fix_modes(dir: &Path) {
     use std::os::unix::fs::PermissionsExt;
     for entry in std::fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
@@ -532,7 +537,7 @@ pub fn ledger() -> Ledger {
 
 /// The UUIDs in the package's data (`src/opentide`), which no run mints:
 /// `cargo xtask compare`'s `package_uuids`.
-fn package_uuids() -> &'static std::collections::BTreeSet<String> {
+pub fn package_uuids() -> &'static std::collections::BTreeSet<String> {
     static CELL: std::sync::OnceLock<std::collections::BTreeSet<String>> =
         std::sync::OnceLock::new();
     CELL.get_or_init(|| {
