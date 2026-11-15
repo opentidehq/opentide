@@ -1515,7 +1515,7 @@ mod tests {
                 let Json::Object(members) = item else {
                     panic!("a check is an object")
                 };
-                let get = |key: &str| match &members.iter().find(|(k, _)| k == key).unwrap().1 {
+                let get = |key: &str| match &members[key] {
                     Json::Str(text) => text.clone(),
                     _ => String::new(),
                 };
