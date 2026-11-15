@@ -26,7 +26,8 @@ mod search_operators;
     dead_code,
     reason = "the pure-Rust parser is reached from tests until the series' last PR switches production to it (#1229)"
 )]
-mod syntax;
+#[doc(hidden)]
+pub mod syntax;
 
 use opentide_syntax::{parse as ts_parse, walk_with_ancestors};
 use serde::Deserialize;

@@ -16,7 +16,6 @@ macro_rules! kinds {
         #[repr(u16)]
         #[expect(
             non_camel_case_types,
-            clippy::upper_case_acronyms,
             reason = "the kinds are written as rust-analyzer's are"
         )]
         pub enum SyntaxKind {

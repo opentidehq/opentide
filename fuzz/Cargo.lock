@@ -3026,6 +3026,7 @@ dependencies = [
 name = "opentide-spl"
 version = "0.12.0"
 dependencies = [
+ "logos",
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
