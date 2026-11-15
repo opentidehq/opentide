@@ -215,9 +215,7 @@ def test_a_deploy_takes_the_rules_policies(connection: Connection, policies: lis
     """``policies`` is Sysdig's: another platform's deploy takes it and sends it nowhere."""
     body = json.dumps({"data": {"name": "Example", "queryType": "events"}}).encode()
     outcome = run(
-        connection.deploy(
-            "22222222-2222-4222-8222-222222222222", "create", body, policies=policies
-        )
+        connection.deploy("22222222-2222-4222-8222-222222222222", "create", body, policies=policies)
     )
     assert isinstance(outcome, DeployOutcome)
     assert outcome.operation == "create"
