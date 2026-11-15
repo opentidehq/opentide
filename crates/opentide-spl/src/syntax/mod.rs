@@ -7,6 +7,7 @@ mod expr;
 mod kind;
 mod lexer;
 mod parser;
+mod rest;
 mod search;
 mod stats;
 mod table;

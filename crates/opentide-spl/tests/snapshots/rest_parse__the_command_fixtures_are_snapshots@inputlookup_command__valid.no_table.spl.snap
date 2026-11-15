@@ -1,0 +1,12 @@
+---
+source: crates/opentide-spl/tests/rest_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/inputlookup_command__valid.no_table.spl
+---
+SOURCE_FILE@0..13
+  PIPELINE@0..13
+    PIPE@0..1 "|"
+    WHITESPACE@1..2 " "
+    INPUTLOOKUP_COMMAND@2..13
+      INPUTLOOKUP_KW@2..13 "inputlookup"
+--

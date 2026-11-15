@@ -6,7 +6,7 @@
 
 use super::kind::{SyntaxKind as K, SyntaxNode};
 use super::lexer::lex;
-use super::{expr, search, stats, table};
+use super::{expr, rest, search, stats, table};
 use opentide_parse::{Grammar, Input, Parse, Parser, TokenSet, build};
 
 /// Nesting (groups, subsearches) deeper than this is one error: the floor
@@ -83,7 +83,7 @@ pub(super) fn pipeline(p: &mut Parser<'_>, ctx: Context) {
                 }
                 break;
             }
-            command_stage(p);
+            command_stage(p, false);
         } else {
             // Something a stage cannot continue with: a stray `)` or `]`, a
             // term after a command that takes none.
@@ -111,7 +111,7 @@ fn first_stage(p: &mut Parser<'_>, ctx: Context, piped: bool) {
         if at(p, K::MACRO_TOKEN) && search::more_terms_after_macro(p) {
             search::bare_search(p, true);
         } else {
-            command_stage(p);
+            command_stage(p, true);
         }
         return;
     }
@@ -129,7 +129,7 @@ fn first_stage(p: &mut Parser<'_>, ctx: Context, piped: bool) {
             if search::starts_bare_head(p) {
                 search::bare_search(p, false);
             } else {
-                command_stage(p);
+                command_stage(p, true);
             }
         }
     }
@@ -149,7 +149,7 @@ const STATS_COMMANDS: [&str; 9] = [
 ];
 
 /// A stage after a pipe: a command, or a macro that stands for one.
-fn command_stage(p: &mut Parser<'_>) {
+fn command_stage(p: &mut Parser<'_>, first: bool) {
     if at(p, K::MACRO_TOKEN) {
         search::macro_call(p);
     } else if at_name(p, "search") {
@@ -164,8 +164,10 @@ fn command_stage(p: &mut Parser<'_>) {
         stats::tstats_command(p);
     } else if at(p, K::IDENT) && table::is_table_command(p.current_text()) {
         table::command(p);
+    } else if at(p, K::IDENT) && rest::is_rest_command(p.current_text()) {
+        rest::command(p, first);
     } else if at(p, K::IDENT) {
-        generic_command(p);
+        rest::catalog_or_unknown(p);
     } else {
         let stop = K::set(&[K::PIPE, K::R_BRACKET]);
         if p.at_eof() || stop.contains(p.current()) {
@@ -175,31 +177,6 @@ fn command_stage(p: &mut Parser<'_>) {
             p.err_until("expected a command", stop);
         }
     }
-}
-
-/// A command with no rule of its own yet: its name and whatever follows
-/// up to the next pipe. Subsearches and macros inside keep their shape.
-fn generic_command(p: &mut Parser<'_>) {
-    let m = p.start();
-    p.bump();
-    let args = p.start();
-    let mut any = false;
-    while !p.at_eof() && !at(p, K::PIPE) && !at(p, K::R_BRACKET) {
-        any = true;
-        if at(p, K::L_BRACKET) {
-            search::subsearch(p);
-        } else if at(p, K::MACRO_TOKEN) {
-            search::macro_call(p);
-        } else {
-            p.bump();
-        }
-    }
-    if any {
-        args.complete(p, K::ARGUMENT_LIST.raw());
-    } else {
-        args.abandon(p);
-    }
-    m.complete(p, K::UNKNOWN_COMMAND.raw());
 }
 
 /// The tokens a search term, and so a stage, cannot continue past.

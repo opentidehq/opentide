@@ -1,0 +1,31 @@
+---
+source: crates/opentide-spl/tests/rest_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/lookup_command__invalid.spl
+---
+SOURCE_FILE@0..27
+  PIPELINE@0..27
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    LOOKUP_COMMAND@13..27
+      LOOKUP_KW@13..19 "lookup"
+      WHITESPACE@19..20 " "
+      COMMAND_OPTION@20..27
+        IDENTIFIER@20..25
+          IDENT@20..25 "local"
+        EQ@25..26 "="
+        IDENTIFIER@26..27
+          IDENT@26..27 "t"
+--
+27..27: expected a lookup table
+27..27: expected a lookup field (expected COMMA)

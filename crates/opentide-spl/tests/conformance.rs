@@ -61,15 +61,7 @@ fn every_accepted_file_conforms_to_the_ungram() {
         }
         checked += 1;
         let (tree, _) = parse(&source);
-        // The commands with no rule of their own yet are read as a name and
-        // loose tokens (UNKNOWN_COMMAND, ARGUMENT_LIST): the commands PRs of
-        // the series replace them and this filter goes with them.
-        let found = check(&tree, RULES, GRAMMAR);
-        for mismatch in found
-            .iter()
-            .filter(|m| !matches!(m.kind.as_str(), "UNKNOWN_COMMAND" | "ARGUMENT_LIST"))
-            .take(2)
-        {
+        for mismatch in check(&tree, RULES, GRAMMAR).iter().take(2) {
             failures.push(format!("{}: {mismatch}", path.display()));
         }
     }
