@@ -240,8 +240,8 @@ pub fn commands_digest(document: &Json) -> String {
         Json::Object(members) => Json::Object(
             members
                 .iter()
-                .filter(|(key, _)| key != "duration_ms")
-                .cloned()
+                .filter(|(key, _)| *key != "duration_ms")
+                .map(|(key, value)| (key.clone(), value.clone()))
                 .collect(),
         ),
         other => other.clone(),

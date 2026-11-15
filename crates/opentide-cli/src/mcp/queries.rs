@@ -136,10 +136,7 @@ fn command_result(argv: &[String], context: &Context<'_>) -> Result<(Json, i32),
     let text = String::from_utf8_lossy(&run.stdout);
     match Json::parse(text.trim()) {
         Ok(Json::Object(members)) => {
-            let message = members
-                .iter()
-                .find(|(key, _)| key == "message")
-                .map(|(_, value)| value.clone());
+            let message = members.get("message").cloned();
             let added_error = |key: &str, value: &Json| {
                 key == "error" && run.exit_code != 0 && Some(value) == message.as_ref()
             };
@@ -197,7 +194,7 @@ pub fn validate_query(check: &QueryCheck, context: &Context<'_>) -> Result<Json,
             return Ok(result);
         };
         if exit_code != 0 {
-            members.push(("_exit_code".to_owned(), Json::Int(i64::from(exit_code))));
+            members.insert("_exit_code".to_owned(), Json::Int(i64::from(exit_code)));
         }
         return Ok(Json::Object(members));
     }
@@ -458,8 +455,8 @@ pub fn run_query(run: &QueryRun, context: &Context<'_>) -> Result<Json, String> 
         let (Json::Object(mut result), _) = command_result(&command, context)? else {
             return Err("command_failed: query wrote no result".into());
         };
-        result.retain(|(key, _)| key != "supported");
-        result.push(("supported".to_owned(), Json::Bool(true)));
+        result.shift_remove("supported");
+        result.insert("supported".to_owned(), Json::Bool(true));
         return Ok(Json::Object(result));
     }
     let shown = std::iter::once("opentide".to_owned())

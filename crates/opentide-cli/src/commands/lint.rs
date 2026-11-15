@@ -182,7 +182,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     }
     if let Some(summary) = &lint.summary {
         report.outcome.summary = match super::json(summary) {
-            Json::Object(members) => members,
+            Json::Object(members) => members.into_iter().collect(),
             _ => Vec::new(),
         };
     }

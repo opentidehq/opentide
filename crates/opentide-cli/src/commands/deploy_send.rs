@@ -434,10 +434,7 @@ fn report_skipped(
         Some((_, Json::Object(members))) => members.clone(),
         _ => Object::new(),
     };
-    match summary.iter_mut().find(|(key, _)| key == "skipped") {
-        Some(entry) => entry.1 = Json::from(rules.len()),
-        None => summary.push(("skipped".into(), Json::from(rules.len()))),
-    }
+    summary.insert("skipped".into(), Json::from(rules.len()));
     set(result, "_summary", Json::Object(summary));
     let owned = opentide_compile::Owned::new(
         &Vocabularies::bundled(),
@@ -1130,21 +1127,21 @@ impl RuleResult {
     /// The row `results` carries (`to_dict`).
     fn to_json(&self) -> Json {
         let text = |value: &Option<String>| value.as_ref().map_or(Json::Null, Json::str);
-        Json::object(vec![
-            ("platform".into(), Json::str(&self.platform)),
-            ("tenant".into(), text(&self.tenant)),
-            ("id".into(), Json::str(&self.id)),
-            ("name".into(), Json::str(&self.name)),
-            ("status".into(), Json::str(self.status)),
-            ("action".into(), text(&self.action)),
+        Json::object([
+            ("platform", Json::str(&self.platform)),
+            ("tenant", text(&self.tenant)),
+            ("id", Json::str(&self.id)),
+            ("name", Json::str(&self.name)),
+            ("status", Json::str(self.status)),
+            ("action", text(&self.action)),
             (
-                "seconds".into(),
+                "seconds",
                 self.seconds.map_or(Json::Null, |seconds| {
                     Json::Float((seconds * 1000.0).round() / 1000.0)
                 }),
             ),
-            ("error".into(), text(&self.error)),
-            ("reason".into(), text(&self.reason)),
+            ("error", text(&self.error)),
+            ("reason", text(&self.reason)),
         ])
     }
 }

@@ -12,7 +12,7 @@ use super::stage::Stage;
 use super::{CiArgs, Context, bad_parameter, confirm_write, needs_input_for, resolved};
 use crate::commands::{Block, Report};
 use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE, code};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::mode::Mode;
 use crate::render::outcome::OutcomeKind;
 use crate::render::table::columns;
@@ -1202,7 +1202,7 @@ impl Recorder<'_> {
                 self.warnings.push(warning);
             }
         }
-        let mut fields = vec![("step".to_owned(), Json::str(name))];
+        let mut fields = Object::from([("step".to_owned(), Json::str(name))]);
         fields.extend(result.fields);
         self.steps.push(StepResult { fields });
         Ok(())
@@ -1352,7 +1352,7 @@ fn execute(
     if run_repo && let Some(platforms) = platforms {
         fields.push(("platforms".to_owned(), platforms));
     }
-    finish(COMMAND, StepResult { fields }, name, root, cx)
+    finish(COMMAND, StepResult::new(fields), name, root, cx)
 }
 
 fn run_steps(

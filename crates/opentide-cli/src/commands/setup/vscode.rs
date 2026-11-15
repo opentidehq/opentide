@@ -23,7 +23,7 @@ use super::Context;
 use super::files::{self, EXTENSION_ID, EXTENSION_MCP_NOTE, StepResult, strings};
 use super::jsonc::{self, MergeError};
 use super::stage::Stage;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::mode::Mode;
 
 /// What every run says first: the command is on its way out.
@@ -316,20 +316,17 @@ fn write_edited(
 }
 
 /// The members of an object value (none for another value).
-fn members(value: &Json) -> Vec<(String, Json)> {
+fn members(value: &Json) -> Object {
     match value {
         Json::Object(members) => members.clone(),
-        _ => Vec::new(),
+        _ => Object::new(),
     }
 }
 
 /// `members` with `key` set to `value`, in its place when it is there.
-fn with_member(mut members: Vec<(String, Json)>, key: &str, value: Json) -> Json {
-    match members.iter_mut().find(|(name, _)| name == key) {
-        Some((_, slot)) => *slot = value,
-        None => members.push((key.to_owned(), value)),
-    }
-    Json::object(members)
+fn with_member(mut members: Object, key: &str, value: Json) -> Json {
+    members.insert(key.to_owned(), value);
+    Json::Object(members)
 }
 
 /// Writes or merges `.vscode/extensions.json` recommending the extension
@@ -370,13 +367,7 @@ fn write_extensions(
         }
     };
     let existing = members(&existing);
-    let field = |key: &str| {
-        existing
-            .iter()
-            .rev()
-            .find(|(name, _)| name == key)
-            .map(|(_, value)| value)
-    };
+    let field = |key: &str| existing.get(key);
     let (listed, recommendations) = match field("recommendations") {
         None => (true, Vec::new()),
         Some(Json::Array(items)) => (true, items.clone()),
@@ -443,16 +434,11 @@ fn write_settings(
     let Json::Object(existing) = existing else {
         return None;
     };
-    let Some(Json::Object(schemas)) = existing
-        .iter()
-        .rev()
-        .find(|(name, _)| name == "yaml.schemas")
-        .map(|(_, value)| value.clone())
-    else {
+    let Some(Json::Object(schemas)) = existing.get("yaml.schemas").cloned() else {
         return None;
     };
     let mappings = Mappings::of(config);
-    let kept: Vec<(String, Json)> = schemas
+    let kept: Object = schemas
         .iter()
         .filter_map(|(schema, globs)| {
             mappings
@@ -467,12 +453,12 @@ fn write_settings(
         Json::Object(
             existing
                 .iter()
-                .filter(|(name, _)| name != "yaml.schemas")
-                .cloned()
+                .filter(|(name, _)| *name != "yaml.schemas")
+                .map(|(name, value)| (name.clone(), value.clone()))
                 .collect(),
         )
     } else {
-        with_member(existing.clone(), "yaml.schemas", Json::object(kept.clone()))
+        with_member(existing.clone(), "yaml.schemas", Json::Object(kept.clone()))
     };
     let edited = jsonc::edit(&text, |object| {
         let member = object
@@ -489,9 +475,9 @@ fn write_settings(
             let Some(entry) = inner.get(schema) else {
                 continue;
             };
-            match kept.iter().find(|(name, _)| name == schema) {
+            match kept.get(schema) {
                 None => entry.remove(),
-                Some((_, rest)) if rest != globs => entry.set_value(jsonc::input(rest)),
+                Some(rest) if rest != globs => entry.set_value(jsonc::input(rest)),
                 Some(_) => {}
             }
         }

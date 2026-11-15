@@ -160,8 +160,8 @@ pub fn report_of(command: &str, result: &[(String, Json)]) -> Report {
         _ => Vec::new(),
     };
     let summary = match take("_summary") {
-        Some(Json::Object(members)) => members.clone(),
-        _ => Object::new(),
+        Some(Json::Object(members)) => members.clone().into_iter().collect(),
+        _ => Vec::new(),
     };
     let next_actions = match take("_next_actions") {
         Some(Json::Array(items)) => items

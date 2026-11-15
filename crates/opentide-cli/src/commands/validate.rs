@@ -564,7 +564,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 warnings.push(warning.clone());
                 unwritten_lines.push(warning);
             }
-            summary_json.push(("fixed".into(), Json::from(fix.changes.len())));
+            summary_json.insert("fixed".into(), Json::from(fix.changes.len()));
             data.push(("fixed".into(), changes));
         }
         if !fix.changes.is_empty() || fix.unwritten_fixes > 0 || failed {
@@ -581,7 +581,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     report.outcome.status = if failed { "failed" } else { "passed" }.into();
     report.outcome.message.clone_from(&message);
     report.outcome.exit_code = exit_code;
-    report.outcome.summary = summary_json;
+    report.outcome.summary = summary_json.into_iter().collect();
     report.outcome.next_actions = next;
     if failed {
         report.outcome.failure = Some(Failure::new(ISSUES_FOUND, message.clone()));

@@ -16,7 +16,7 @@ pub const SOURCE: &str = include_str!("../data/output-schemas.json");
 
 /// The schemas: each command's `output_schema`, and the shared `$defs`.
 pub struct Schemas {
-    by_path: Vec<(String, Json)>,
+    by_path: Object,
     defs: Json,
 }
 
@@ -43,10 +43,7 @@ impl Schemas {
 
     /// The `output_schema` of the command at `path`, `null` when it has none.
     pub fn output_schema(&self, path: &str) -> Json {
-        self.by_path
-            .iter()
-            .find(|(p, _)| p == path)
-            .map_or(Json::Null, |(_, schema)| schema.clone())
+        self.by_path.get(path).cloned().unwrap_or(Json::Null)
     }
 
     /// `$defs`.

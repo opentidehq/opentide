@@ -16,7 +16,7 @@ use opentide_workspace::{OsFs, root};
 use super::{COMMAND_FAILED, open, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction, Outcome, USAGE_EXIT_CODE, code};
-use crate::json::{Json, Object};
+use crate::json::Json;
 use crate::render::diagnostic::{Diagnostic, Severity};
 use crate::render::glyphs;
 use crate::render::progress::{columns, plural};
@@ -340,8 +340,8 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
         next_actions.push(NextAction::new(NO_WORKSPACE_STEP.0, NO_WORKSPACE_STEP.1));
     }
     let summary = match outcome.summary.as_ref().map(convert) {
-        Some(Json::Object(members)) => members,
-        _ => Object::new(),
+        Some(Json::Object(members)) => members.into_iter().collect(),
+        _ => Vec::new(),
     };
     let diagnostics = result
         .get("diagnostics")
