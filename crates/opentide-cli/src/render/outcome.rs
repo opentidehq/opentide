@@ -529,6 +529,31 @@ mod tests {
         assert_eq!(rows("   ", 1, 0), ["   "]);
     }
 
+    /// A ZWJ family is two cells and `❤` + VS16 is two: a row is measured
+    /// as the terminal draws it, not char by char.
+    #[test]
+    fn word_wrap_measures_emoji_sequences_as_the_terminal_draws_them() {
+        let family = "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}";
+        let heart = "\u{2764}\u{fe0f}";
+        // `! family family` is 2 + 2 + 1 + 2 = 7 cells: it fits a row of 7, where
+        // the 11 chars it holds would not.
+        let line = format!("! {family} {family} {heart}");
+        assert_eq!(
+            rows(&line, 7, 2),
+            [format!("! {family} {family}"), format!("  {heart}")]
+        );
+        for width in 4..12 {
+            for row in rows(&line, width, 2) {
+                assert!(cell_len(row.trim_end()) <= width, "{width}: {row}");
+            }
+        }
+        // A row holds as many sequences as fit its cells.
+        assert_eq!(
+            rows(&format!("! {family} {family} {family}"), 9, 2),
+            [format!("! {family} {family}"), format!("  {family}")]
+        );
+    }
+
     #[test]
     fn a_line_break_in_a_message_continues_under_its_text() {
         assert_eq!(

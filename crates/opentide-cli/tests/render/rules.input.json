@@ -2391,7 +2391,7 @@
   "code": "usage_unknown_command",
   "retired": false,
   "summary": "The command line names a command that does not exist.",
-  "markdown": "# usage_unknown_command\n\nThe command line names a command that does not exist.\n\nExit 2, as `failure.code`. `failure.suggestion` names the closest command.\n\n## Example\n\n```text\nopentide valdiate\n```\n\n## How to fix\n\nRun the command `did you mean` names, or `opentide --help` for the list. In an agent, `opentide commands --json` prints the whole command tree.\n"
+  "markdown": "# usage_unknown_command\n\nThe command line names a command that does not exist.\n\nExit 2, as `failure.code`. `failure.suggestion` names the closest command.\n\n## Example\n\n```text\nopentide valdiate\n```\n\n## How to fix\n\nRun the command named by the tip (`a similar subcommand exists`) or by `failure.suggestion`, or `opentide --help` for the list. In an agent, `opentide commands --json` prints the whole command tree.\n"
  },
  {
   "code": "usage_unknown_option",

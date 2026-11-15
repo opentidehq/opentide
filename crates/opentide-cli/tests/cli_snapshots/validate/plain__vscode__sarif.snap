@@ -201,7 +201,7 @@ error[schema_validation]: missing required field "version" in metadata
 ━━━ ws/opentide-reports/ · created 0755
 
 ━━━ ws/opentide-reports/validate.sarif · created 0644
-(1010838 bytes; long strings and the largest parts elided)
+(1010946 bytes; long strings and the largest parts elided)
 {
   "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
   "runs": [
@@ -916,7 +916,7 @@ error[schema_validation]: missing required field "version" in metadata
         "driver": {
           "informationUri": "https://opentide.org/docs/cli/diagnostics",
           "name": "opentide",
-          "rules": "<elided 276424 bytes, sha256 f3787538dbb0d55969003596e41686de489b888359a39848a09c0c5a9581a0bd>",
+          "rules": "<elided 276424 bytes, sha256 cd328ca8a4efbb9946faa4ef8213ccbd033d7fe8d470e9c288b5946d640660a0>",
           "version": "0.28.1"
         }
       }
