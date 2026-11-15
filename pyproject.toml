@@ -51,18 +51,22 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
 ]
-dependencies = [
-    # The plugin API (opentide.plugins): a platform plugin's configuration_model
-    # is a pydantic model, which PlatformPlugin.check_configuration validates a
-    # rule's block with. Everything else is the Rust core, compiled into this
-    # package (opentide._native, bindings/python/, by maturin): the
-    # command line, the SDK, the Tide models and the platform connectors.
-    "pydantic>=2.0",
-]
+# None: the command line, the SDK, the Tide models and the platform connectors
+# are the Rust core, compiled into this package (opentide._native,
+# bindings/python/, by maturin).
+dependencies = []
+
+[project.optional-dependencies]
+# The plugin API (opentide.plugins): a platform plugin's configuration_model is
+# a pydantic model, which PlatformPlugin.check_configuration validates a rule's
+# block with. Nothing else in the package imports pydantic.
+plugins = ["pydantic>=2.0"]
 
 [dependency-groups]
 dev = [
     "tomli>=2.0",
+    # The plugin API's tests and the sample plugin (the `plugins` extra).
+    "pydantic>=2.0",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "pytest-console-scripts>=1.4",

@@ -73,7 +73,7 @@ Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent h
 
 ### `UnicodeDecodeError` reading bundled configurations after pip install
 
-`0.1.0` loaded every file under nested configuration directories as UTF-8 TOML. A pip install compiles `opentide/data/configurations/__init__.py` to `__pycache__/*.pyc`. Python 3.13+ bytecode starts with `0xf3`, which is not valid UTF-8, so `validate` and `generate` crashed.
+`0.1.0` shipped the bundled configurations as package files and loaded every file under nested configuration directories as UTF-8 TOML. A pip install compiled the package's `__init__.py` files, among them one under `opentide/data/configurations/`, to `__pycache__/*.pyc`. (Current wheels carry no `opentide/data` folder: the data is compiled into the binary.) Python 3.13+ bytecode starts with `0xf3`, which is not valid UTF-8, so `validate` and `generate` crashed.
 
 Upgrade:
 
