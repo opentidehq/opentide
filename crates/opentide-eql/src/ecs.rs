@@ -79,7 +79,7 @@ pub fn ecs_diagnostics(source: &str) -> Vec<Diagnostic> {
         return Vec::new();
     }
     let mut out = Vec::new();
-    crate::walk(root, &mut |node| check(node, source, &mut out));
+    opentide_syntax::walk(root, |node| check(node, source, &mut out));
     out
 }
 

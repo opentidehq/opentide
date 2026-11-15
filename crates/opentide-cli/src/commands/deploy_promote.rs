@@ -16,7 +16,7 @@
 //! not a string, and promoted text that does not read back, fail it with the
 //! exception the oracle raises.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Instant;
 
 use opentide_compile::Json as Setting;
@@ -141,7 +141,9 @@ pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> Result<(), Stop> {
     }
     if ended.is_none() {
         for (path, bytes) in &planned {
-            if let Err(error) = write_atomically(path, bytes) {
+            // `_write_atomically`: through a temporary file beside it, the
+            // rule's permission bits kept (#987).
+            if let Err(error) = opentide_workspace::fs::write_atomically(path, bytes) {
                 ended = Some(Stop::Failed(format!("{}: {error}", path.display())));
                 break;
             }
@@ -290,38 +292,6 @@ fn plan(promotion: &Promotion<'_>) -> Planned {
     (events, planned, None)
 }
 
-/// Replaces `path` with `bytes` through a temporary file beside it
-/// (`_write_atomically`): the file is created owner-only, as `mkstemp`
-/// creates it, takes `path`'s permission bits, so a rule committed as 0644
-/// stays 0644 (#987), and takes `path`'s place. Windows has no such bits to
-/// keep.
-fn write_atomically(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    use std::io::Write as _;
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let name = path
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let temporary = parent.join(format!(".{name}.{}.tmp", std::process::id()));
-    let written = (|| {
-        let mut options = std::fs::OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-        let mut file = options.open(&temporary)?;
-        file.write_all(bytes)?;
-        file.flush()?;
-        drop(file);
-        #[cfg(unix)]
-        std::fs::set_permissions(&temporary, std::fs::metadata(path)?.permissions())?;
-        std::fs::rename(&temporary, path)
-    })();
-    if written.is_err() {
-        let _ = std::fs::remove_file(&temporary);
-    }
-    written
-}
-
 /// The result of a run the promotion stopped.
 pub fn stopped(stop: &Stop) -> Vec<(String, Json)> {
     match stop {
@@ -449,7 +419,7 @@ mod tests {
             let path = dir.path().join("r.yaml");
             std::fs::write(&path, "x").unwrap();
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(kept)).unwrap();
-            write_atomically(&path, b"y").unwrap();
+            opentide_workspace::fs::write_atomically(&path, b"y").unwrap();
             let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o7777;
             assert_eq!(mode, kept, "{kept:o}");
             assert_eq!(std::fs::read(&path).unwrap(), b"y");

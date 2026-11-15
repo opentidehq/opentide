@@ -30,30 +30,6 @@ pub fn command_at<'a>(root: &'a Command, path: &[String]) -> &'a Command {
     command
 }
 
-/// `opentide validate [OPTIONS] [COMMAND]`: clap's usage of the command at
-/// `path`, as its `--help` shows it, without the `Usage:` in front.
-pub fn usage_line(root: &Command, path: &[String]) -> String {
-    fn usage_of(command: &mut Command, path: &[String]) -> clap::builder::StyledStr {
-        match path.split_first() {
-            Some((first, rest)) => match command.find_subcommand_mut(first) {
-                Some(sub) => usage_of(sub, rest),
-                None => command.render_usage(),
-            },
-            None => command.render_usage(),
-        }
-    }
-    let mut root = root.clone();
-    // Built, every command knows its parents' names (`opentide validate`).
-    root.build();
-    usage_of(&mut root, path)
-        .to_string()
-        .lines()
-        .map(|line| line.trim().trim_start_matches("Usage:").trim())
-        .filter(|line| !line.is_empty())
-        .collect::<Vec<_>>()
-        .join(" | ")
-}
-
 /// A context value of `error`; of a list, the last: clap lists its
 /// suggestions closest last.
 fn context(error: &clap::Error, kind: ContextKind) -> Option<String> {
@@ -398,15 +374,5 @@ mod tests {
         assert_eq!(upper.failure.code, code::USAGE_INVALID_CHOICE);
         assert_eq!(upper.failure.suggestion.as_deref(), Some("filenames"));
         assert!(upper.rendered.to_string().contains("'filenames'"));
-    }
-
-    #[test]
-    fn framework_usage_line_is_clap_usage() {
-        let root = root();
-        assert_eq!(usage_line(&root, &[]), "opentide [OPTIONS] <COMMAND>");
-        assert_eq!(
-            usage_line(&root, &args("setup ci")),
-            "opentide setup ci [OPTIONS] <ci_platform>"
-        );
     }
 }

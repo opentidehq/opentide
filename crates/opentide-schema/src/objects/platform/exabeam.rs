@@ -1298,7 +1298,7 @@ pub fn name_findings<'r>(
             continue;
         };
         if let Some(block) = rule_block(rule)
-            && !field(block, "name").is_some_and(|name| super::truthy(Some(name)))
+            && text(field(block, "name")).is_none_or(str::is_empty)
             && let Some(resolved) = rule_exabeam_name(rule, false)
             && resolved.chars().count() > NAME_LIMIT
         {
