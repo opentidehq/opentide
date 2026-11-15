@@ -18,8 +18,9 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
+use super::interrupt::watched;
 use indexmap::IndexMap;
 use opentide_compile::Json as CJson;
 use opentide_compile::plan::{self, Change, Scope, SelectOptions};
@@ -1680,19 +1681,7 @@ impl Sender<'_, '_> {
         };
         let cancel = &self.cancel;
         let interrupted = self.cx.interrupted;
-        runtime.block_on(async {
-            let watch = async {
-                while !interrupted() {
-                    tokio::time::sleep(Duration::from_millis(50)).await;
-                }
-                cancel.cancel();
-                std::future::pending::<()>().await;
-            };
-            tokio::select! {
-                result = work => result,
-                () = watch => Err(ConnectorError::Cancelled),
-            }
-        })
+        runtime.block_on(watched(work, cancel, interrupted))
     }
 
     fn context<'a>(&'a self, connection: &'a Connection) -> TenantContext<'a> {

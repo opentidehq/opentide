@@ -27,7 +27,7 @@ behaviour change against the oracle (`tests/golden/README.md`).
 
 **`tests/golden/README.md` is the reference** for the commands, the case and recording layout,
 the fixtures and the normalisation rules. Where this skill and the README disagree, the README is
-right: fix this skill. Never use a flag that neither names (`cargo xtask golden help` prints the
+right: fix this skill. Never use a flag that neither names (`cargo xtask golden --help` prints the
 usage).
 
 ## Snapshots first (#1139)

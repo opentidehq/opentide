@@ -51,61 +51,95 @@ enum Cmd {
     /// Run every operation of tests/conformance/manifest.json on every corpus
     /// through the Rust, Python and Node SDKs and require byte-identical
     /// documents (UC-5.4, #839)
-    Conformance(Passthrough),
+    Conformance(xtask::conformance::cli::ConformanceArgs),
     /// Generate the heavy workspace, run the fault catalogue against the
     /// oracle, report coverage (UC-0.6, #804); `corpus help` lists its commands
-    Corpus(Passthrough),
+    Corpus {
+        #[command(subcommand)]
+        command: xtask::corpus::cli::Cmd,
+    },
     /// Resolve every fixture and generated workspace's configuration with
     /// opentide-schema and compare it with the oracle's (UC-1.5, #811)
-    Config(Passthrough),
+    Config {
+        #[command(subcommand)]
+        command: xtask::config::Cmd,
+    },
     /// Load every corpus with opentide-workspace and compare its index with
     /// the Python registry's (UC-2.1, #816)
-    Registry(Passthrough),
+    Registry {
+        #[command(subcommand)]
+        command: xtask::registry::Cmd,
+    },
     /// For each fault kind `opentide validate` reports, the language server's
     /// published diagnostics against validate's findings (UC-2.6, #821)
-    Lsp(Passthrough),
+    Lsp {
+        #[command(subcommand)]
+        command: xtask::lsp::Cmd,
+    },
     /// Run opentide-workspace's validate on every recorded `validate --json`
     /// case and compare it with the recording (UC-2.2, #817; UC-2.3, #818)
-    Validate(Passthrough),
+    Validate {
+        #[command(subcommand)]
+        command: xtask::diff_args::DiffCmd,
+    },
     /// Run opentide-workspace's lint on every recorded `lint --json` case and
     /// compare it with the recording (UC-2.3, #818)
-    Lint(Passthrough),
+    Lint {
+        #[command(subcommand)]
+        command: xtask::diff_args::DiffCmd,
+    },
     /// Write the artifacts generated from the Rust model (the platform
     /// templates); `--check` compares them (UC-1.8, #814)
-    Codegen(Passthrough),
+    Codegen(xtask::codegen::CodegenArgs),
     /// Record the MCP sessions from the Python server and replay them against
     /// the Rust server (UC-3.7, #829)
-    Mcp(Passthrough),
+    Mcp {
+        #[command(subcommand)]
+        command: xtask::mcp::Cmd,
+    },
     /// The recorded-HTTP cassettes of tests/cassettes (UC-4.1, #831)
-    Cassettes(Passthrough),
+    Cassettes {
+        #[command(subcommand)]
+        command: xtask::cassettes::Cmd,
+    },
     /// Record what the frozen Python CLI does, and check an engine against the
-    /// recordings (tests/golden/README.md); `golden help` lists the options
-    Golden(Passthrough),
+    /// recordings (tests/golden/README.md); `golden --help` lists the commands
+    Golden {
+        #[command(subcommand)]
+        command: xtask::golden::Cmd,
+    },
     /// Run the benchmarks against their budgets (UC-0.8, #806)
-    Bench(Passthrough),
+    Bench(xtask::bench::BenchArgs),
     /// The deploy compile's request bodies against the oracle's (UC-3.1, #823)
-    Payloads(Passthrough),
+    Payloads {
+        #[command(subcommand)]
+        command: xtask::payloads::Cmd,
+    },
     /// The vocabularies: sync, generate, compare and ingest (UC-1.6, #812);
-    /// `vocab help` lists the options
-    Vocab(Passthrough),
+    /// `vocab --help` lists the commands
+    Vocab {
+        #[command(subcommand)]
+        command: xtask::vocab::Cmd,
+    },
     /// The object models against the oracle: their JSON Schemas, and their
     /// verdict on every object file of every corpus (UC-1.3, #809)
-    Schema(Passthrough),
+    Schema {
+        #[command(subcommand)]
+        command: xtask::schema::Cmd,
+    },
     /// Check every model field's description against its row in the field
     /// tables of the specifications checkout
-    SpecFields(Passthrough),
+    ///
+    /// The checkout is DIR, else $OPENTIDE_SPECIFICATIONS_ROOT, else
+    /// ../specifications: specs/platforms/*.md, specs/objects/*-1.0.md and
+    /// specs/metadata.md. --list prints each row it matched with a model field.
+    ///
+    /// Exit status: 0 no drift, 1 drift (or fewer rows matched than the
+    /// floor), 2 usage error or no checkout.
+    SpecFields(xtask::spec_fields::SpecFieldsArgs),
     /// Generate src/opentide/_native/models.pyi and sdk.pyi from the
     /// extension's introspection data (UC-1.9, #815; UC-5.2b, #837)
-    Stubs(Passthrough),
-}
-
-/// The arguments of a command that still reads its own: handed over as they
-/// are, help flags included.
-#[derive(Args)]
-#[command(disable_help_flag = true)]
-struct Passthrough {
-    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-    args: Vec<String>,
+    Stubs(xtask::stubs::StubsArgs),
 }
 
 #[derive(Args)]
@@ -195,29 +229,38 @@ struct CompareArgs {
 }
 
 fn main() -> ExitCode {
+    // The benchmarks call this binary for their child processes; those modes are
+    // not part of the command line.
+    let raw: Vec<String> = std::env::args().skip(1).collect();
+    if let [verb, rest @ ..] = raw.as_slice()
+        && verb == "bench"
+        && let Some(code) = xtask::bench::internal(rest)
+    {
+        return code;
+    }
     let command = Cli::parse().command;
     match command {
         Cmd::CheckLayers(args) => verdict("check-layers", check_layers(&args)),
         Cmd::Coverage { command } => verdict("coverage", coverage_command(&command)),
         Cmd::Mutants { command } => verdict("mutants", mutants_command(&command).map(|()| true)),
         Cmd::Compare(args) => verdict("compare", run_compare(&args)),
-        Cmd::Conformance(p) => status("conformance", xtask::conformance::cli::run(&p.args)),
-        Cmd::Corpus(p) => status("corpus", xtask::corpus::cli::run(&p.args)),
-        Cmd::Config(p) => status("config", xtask::config::run(&p.args)),
-        Cmd::Registry(p) => status("registry", xtask::registry::run(&p.args)),
-        Cmd::Lsp(p) => status("lsp", xtask::lsp::run(&p.args)),
-        Cmd::Validate(p) => status("validate", xtask::validate::run(&p.args)),
-        Cmd::Lint(p) => status("lint", xtask::lint::run(&p.args)),
-        Cmd::Codegen(p) => status("codegen", xtask::codegen::run(&p.args)),
-        Cmd::Mcp(p) => status("mcp", xtask::mcp::run(&p.args)),
-        Cmd::Cassettes(p) => status("cassettes", xtask::cassettes::run(&p.args)),
-        Cmd::Golden(p) => xtask::golden::main(&p.args),
-        Cmd::Bench(p) => xtask::bench::main(&p.args),
-        Cmd::Payloads(p) => xtask::payloads::main(&p.args),
-        Cmd::Vocab(p) => xtask::vocab::main(&p.args),
-        Cmd::Schema(p) => xtask::schema::main(&p.args),
-        Cmd::SpecFields(p) => xtask::spec_fields::main(&p.args),
-        Cmd::Stubs(p) => xtask::stubs::main(&p.args),
+        Cmd::Conformance(args) => status("conformance", xtask::conformance::cli::run(&args)),
+        Cmd::Corpus { command } => status("corpus", xtask::corpus::cli::run_command(&command)),
+        Cmd::Config { command } => status("config", xtask::config::run(&command)),
+        Cmd::Registry { command } => status("registry", xtask::registry::run(&command)),
+        Cmd::Lsp { command } => status("lsp", xtask::lsp::run(&command)),
+        Cmd::Validate { command } => status("validate", xtask::validate::run(&command)),
+        Cmd::Lint { command } => status("lint", xtask::lint::run(&command)),
+        Cmd::Codegen(args) => status("codegen", xtask::codegen::run(&args)),
+        Cmd::Mcp { command } => status("mcp", xtask::mcp::run(&command)),
+        Cmd::Cassettes { command } => status("cassettes", xtask::cassettes::run(&command)),
+        Cmd::Golden { command } => xtask::golden::main(command),
+        Cmd::Bench(args) => xtask::bench::main(args),
+        Cmd::Payloads { command } => xtask::payloads::main(&command),
+        Cmd::Vocab { command } => xtask::vocab::main(&command),
+        Cmd::Schema { command } => xtask::schema::main(&command),
+        Cmd::SpecFields(args) => xtask::spec_fields::main(&args),
+        Cmd::Stubs(args) => xtask::stubs::main(&args),
     }
 }
 

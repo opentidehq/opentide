@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::tools::{Context, next_action};
+use super::tools::{Context, next_action, quote};
 use crate::commands::validate_query::{live_query_platforms, offline_languages};
 use crate::json::Json;
 use crate::queries::{ENGINE, Profiles};
@@ -86,21 +86,6 @@ pub struct QueryRun {
 /// The first 200 characters of `query`.
 fn preview(query: &str) -> String {
     query.chars().take(200).collect()
-}
-
-/// A word of a command line as Python's `shlex.quote` writes it.
-pub fn py_quote(word: &str) -> String {
-    if word.is_empty() {
-        return "''".to_owned();
-    }
-    let safe = word
-        .chars()
-        .all(|c| c.is_alphanumeric() || "_@%+=:,./-".contains(c));
-    if safe {
-        word.to_owned()
-    } else {
-        format!("'{}'", word.replace('\'', "'\"'\"'"))
-    }
 }
 
 /// The comma-separated names of `text`, each trimmed, blanks dropped.
@@ -464,7 +449,7 @@ pub fn run_query(run: &QueryRun, context: &Context<'_>) -> Result<Json, String> 
     let shown = std::iter::once("opentide".to_owned())
         .chain(std::iter::once("--json".to_owned()))
         .chain(command)
-        .map(|word| py_quote(&word))
+        .map(|word| quote(&word))
         .collect::<Vec<_>>()
         .join(" ");
     Ok(Json::object([
@@ -508,11 +493,12 @@ mod tests {
     }
 
     #[test]
-    fn words_are_quoted_as_python_quotes_them() {
-        assert_eq!(py_quote("logs-*"), "'logs-*'");
-        assert_eq!(py_quote("a/b.c:d=e,f@g%h+i"), "a/b.c:d=e,f@g%h+i");
-        assert_eq!(py_quote(""), "''");
-        assert_eq!(py_quote("it's"), "'it'\"'\"'s'");
+    fn words_are_quoted_for_a_posix_shell() {
+        assert_eq!(quote("logs-*"), "'logs-*'");
+        assert_eq!(quote("plain-word_1"), "plain-word_1");
+        assert_eq!(quote("a/b.c:d=e,f@g%h+i"), "'a/b.c:d=e,f@g%h+i'");
+        assert_eq!(quote(""), "''");
+        assert_eq!(quote("it's"), "\"it's\"");
     }
 
     #[test]

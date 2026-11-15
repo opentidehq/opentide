@@ -118,7 +118,6 @@ walkdir = "2.5"
 percent-encoding = "2.3"
 # `opentide explain <code>` in human mode: the page's Markdown, parsed for the terminal.
 pulldown-cmark = { version = "0.13", default-features = false }
-humantime = "2.4"
 regex.workspace = true
 url.workspace = true
 serde.workspace = true
