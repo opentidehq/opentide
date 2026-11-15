@@ -5,8 +5,9 @@ expression: "show(\"T | where a == dynamic([1, -2, \\\"x\\\", {\\\"k\\\": [true,
 SOURCE_FILE@0..110
   QUERY@0..110
     TABULAR_EXPRESSION@0..110
-      TABLE_REF@0..1
-        IDENT@0..1 "T"
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
       WHITESPACE@1..2 " "
       PIPE@2..3 "|"
       WHITESPACE@3..4 " "
@@ -70,8 +71,9 @@ SOURCE_FILE@0..110
               TOSCALAR_KW@68..76 "toscalar"
               L_PAREN@76..77 "("
               TABULAR_EXPRESSION@77..86
-                TABLE_REF@77..78
-                  IDENT@77..78 "U"
+                TABULAR_SOURCE@77..78
+                  TABLE_REF@77..78
+                    IDENT@77..78 "U"
                 WHITESPACE@78..79 " "
                 PIPE@79..80 "|"
                 WHITESPACE@80..81 " "

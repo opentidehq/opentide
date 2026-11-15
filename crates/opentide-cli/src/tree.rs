@@ -1543,20 +1543,12 @@ pub struct ValidateArgs {
         value_name = "CHECK"
     )]
     pub check: Option<Check>,
-    #[arg(long = "file", help = "Validate only this file (repeatable)", action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
-    #[arg(long = "uuid", help = "Validate only the object with this UUID (repeatable)", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
+    #[command(flatten)]
+    pub select: QuerySelect,
     #[arg(long = "type", help = "Validate only this type: rule, threat or objective (repeatable)", value_parser = CommandChecked(&["rule", "threat", "objective"]), action = clap::ArgAction::Append)]
     pub object_type: Vec<String>,
-    #[arg(long = "strict", help = "Fail on warnings too")]
-    pub strict: bool,
-    #[arg(
-        long = "queries",
-        help = "How a query the platform would reject is reported: error (the default), warn (passes unless --strict) or off (queries are not checked)",
-        value_name = "error|warn|off"
-    )]
-    pub queries: Option<Queries>,
+    #[command(flatten)]
+    pub strictness: QueryStrictness,
     #[arg(
         long = "fix",
         help = "Apply every safe fix (vocabulary typos), then validate again"
@@ -1626,6 +1618,30 @@ pub fn validate_query_file_help() -> String {
     )
 }
 
+/// `--file` and `--uuid`, which `validate` and `validate query` both take;
+/// `validate query` words them for rules and queries (`ValidateCommand`).
+#[derive(Debug, Args)]
+pub struct QuerySelect {
+    #[arg(long = "file", help = "Validate only this file (repeatable)", action = clap::ArgAction::Append)]
+    pub file: Vec<String>,
+    #[arg(long = "uuid", help = "Validate only the object with this UUID (repeatable)", action = clap::ArgAction::Append)]
+    pub uuid: Vec<String>,
+}
+
+/// `--strict` and `--queries`, which `validate` and `validate query` both
+/// take; `validate query` words `--queries` for what it checks.
+#[derive(Debug, Args)]
+pub struct QueryStrictness {
+    #[arg(long = "strict", help = "Fail on warnings too")]
+    pub strict: bool,
+    #[arg(
+        long = "queries",
+        help = "How a query the platform would reject is reported: error (the default), warn (passes unless --strict) or off (queries are not checked)",
+        value_name = "error|warn|off"
+    )]
+    pub queries: Option<Queries>,
+}
+
 /// `opentide validate query`.
 #[derive(Debug, Args)]
 pub struct ValidateQueryArgs {
@@ -1655,18 +1671,10 @@ pub struct ValidateQueryArgs {
         help = "Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (the files deploy reads)"
     )]
     pub changed: bool,
-    #[arg(long = "file", help = validate_query_file_help(), action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
-    #[arg(long = "uuid", help = "Check only the rule with this UUID (repeatable)", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
-    #[arg(long = "strict", help = "Fail on warnings too")]
-    pub strict: bool,
-    #[arg(
-        long = "queries",
-        help = "How a rejected query is reported offline: error (the default) or warn",
-        value_name = "error|warn"
-    )]
-    pub queries: Option<Queries>,
+    #[command(flatten)]
+    pub select: QuerySelect,
+    #[command(flatten)]
+    pub strictness: QueryStrictness,
     #[arg(
         long = "check-timeout",
         help = "Seconds each query may take on a tenant before its check fails (--live; default: OPENTIDE_QUERY_CHECK_TIMEOUT, else 120)",
@@ -2243,7 +2251,17 @@ pub enum ValidateCommand {
         name = "query",
         about = "Check rule queries offline, or on the tenants (--live)",
         long_about = "Check rule queries offline with the analysis engine, or on the tenants (--live).\n\nOffline, the engine reports the queries the platform would reject, as\n`opentide validate` does; `opentide lint` reports their style.",
-        after_help = "Examples:\n  $ opentide validate query\n  $ opentide validate query --platform splunk --changed\n  $ opentide validate query --file hunting/lsass.kql\n  $ opentide validate query --platform sentinel --live"
+        after_help = "Examples:\n  $ opentide validate query\n  $ opentide validate query --platform splunk --changed\n  $ opentide validate query --file hunting/lsass.kql\n  $ opentide validate query --platform sentinel --live",
+        // `mut_arg` moves the argument it changes to the end, so every one
+        // from `--file` on is named, in order: the catalogue lists them as
+        // they were declared.
+        mut_arg("file", |arg| arg.help(validate_query_file_help())),
+        mut_arg("uuid", |arg| arg.help("Check only the rule with this UUID (repeatable)")),
+        mut_arg("strict", |arg| arg),
+        mut_arg("queries", |arg| arg
+            .help("How a rejected query is reported offline: error (the default) or warn")
+            .value_name("error|warn")),
+        mut_arg("check_timeout", |arg| arg)
     )]
     Query(ValidateQueryArgs),
 }

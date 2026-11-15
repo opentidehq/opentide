@@ -23,6 +23,18 @@ pub mod tables;
 
 // The pure-Rust parser (#1230, ADR 0012) grows beside the tree-sitter path,
 // which serves until the last PR of the series switches production to it.
+// Generated from kql.ungram by `cargo xtask codegen`: an accessor for every
+// child of every node, most of which the engine never calls, and names the
+// grammar chooses (`TabularOperator::WhereOperator`, `RenameItem::new`).
+#[expect(
+    dead_code,
+    clippy::enum_variant_names,
+    clippy::wrong_self_convention,
+    clippy::new_ret_no_self,
+    reason = "generated from kql.ungram: every accessor of every node, named by the grammar"
+)]
+#[path = "generated/ast.rs"]
+mod ast;
 #[cfg_attr(
     not(test),
     expect(
@@ -48,6 +60,8 @@ mod parser;
     )
 )]
 mod syntax;
+// The typed AST names the kinds from the crate root.
+use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 #[doc(hidden)]
 pub mod testing;
 

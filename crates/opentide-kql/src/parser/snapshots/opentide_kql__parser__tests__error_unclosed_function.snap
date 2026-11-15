@@ -17,17 +17,19 @@ SOURCE_FILE@0..20
       L_BRACE@11..12 "{"
       WHITESPACE@12..13 " "
       TABULAR_EXPRESSION@13..14
-        TABLE_REF@13..14
-          IDENT@13..14 "T"
+        TABULAR_SOURCE@13..14
+          TABLE_REF@13..14
+            IDENT@13..14 "T"
       WHITESPACE@14..15 " "
       SEMICOLON@15..16 ";"
   WHITESPACE@16..17 "\n"
   QUERY@17..20
     TABULAR_EXPRESSION@17..20
-      FUNCTION_CALL@17..20
-        IDENT@17..18 "f"
-        L_PAREN@18..19 "("
-        R_PAREN@19..20 ")"
+      TABULAR_SOURCE@17..20
+        FUNCTION_CALL@17..20
+          IDENT@17..18 "f"
+          L_PAREN@18..19 "("
+          R_PAREN@19..20 ")"
 errors:
 16..17: expected `}` (expected `}`)
 16..17: expected `;` (expected `}`, `;`)

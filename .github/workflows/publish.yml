@@ -372,7 +372,8 @@ jobs:
 
   # --- Smoke tests: each artifact installed the way a user installs it ------
 
-  # `pip install` the wheel (it has no dependency; the `plugins` extra is pydantic), then
+  # `pip install` the wheel (it has no dependency; the `plugins` extra is
+  # pydantic), then
   # scripts/build/smoke_package.py: `opentide --version`, the package's
   # requirements against pyproject.toml, `opentide --json validate` on the
   # tide corpus, and the SDK (Workspace.open, validate, run_json, the models).
