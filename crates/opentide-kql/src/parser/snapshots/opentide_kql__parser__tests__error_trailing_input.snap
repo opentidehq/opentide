@@ -5,8 +5,9 @@ expression: "show(\"T | take 5 )\")"
 SOURCE_FILE@0..12
   QUERY@0..10
     TABULAR_EXPRESSION@0..10
-      TABLE_REF@0..1
-        IDENT@0..1 "T"
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
       WHITESPACE@1..2 " "
       PIPE@2..3 "|"
       WHITESPACE@3..4 " "

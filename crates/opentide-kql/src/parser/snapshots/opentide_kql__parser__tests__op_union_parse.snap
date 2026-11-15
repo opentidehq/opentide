@@ -5,8 +5,9 @@ expression: "show(\"T | union withsource = S A, (B | take 1), f(\\\"a\\\") | par
 SOURCE_FILE@0..136
   QUERY@0..136
     TABULAR_EXPRESSION@0..136
-      TABLE_REF@0..1
-        IDENT@0..1 "T"
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
       WHITESPACE@1..2 " "
       PIPE@2..3 "|"
       WHITESPACE@3..4 " "
@@ -28,8 +29,9 @@ SOURCE_FILE@0..136
         PAREN_TABULAR@28..40
           L_PAREN@28..29 "("
           TABULAR_EXPRESSION@29..39
-            TABLE_REF@29..30
-              IDENT@29..30 "B"
+            TABULAR_SOURCE@29..30
+              TABLE_REF@29..30
+                IDENT@29..30 "B"
             WHITESPACE@30..31 " "
             PIPE@31..32 "|"
             WHITESPACE@32..33 " "

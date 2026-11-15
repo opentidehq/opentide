@@ -5,8 +5,9 @@ expression: "show(\"T | take 5 | limit 3 | top 5 by a desc nulls last, b | count
 SOURCE_FILE@0..101
   QUERY@0..101
     TABULAR_EXPRESSION@0..101
-      TABLE_REF@0..1
-        IDENT@0..1 "T"
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
       WHITESPACE@1..2 " "
       PIPE@2..3 "|"
       WHITESPACE@3..4 " "

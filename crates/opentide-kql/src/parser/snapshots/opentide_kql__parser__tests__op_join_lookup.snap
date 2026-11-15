@@ -5,8 +5,9 @@ expression: "show(\"T | join kind = inner (U | project a) on $left.a == $right.a
 SOURCE_FILE@0..108
   QUERY@0..108
     TABULAR_EXPRESSION@0..108
-      TABLE_REF@0..1
-        IDENT@0..1 "T"
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
       WHITESPACE@1..2 " "
       PIPE@2..3 "|"
       WHITESPACE@3..4 " "
@@ -21,20 +22,22 @@ SOURCE_FILE@0..108
           OPTION_VALUE@16..21
             IDENT@16..21 "inner"
         WHITESPACE@21..22 " "
-        PAREN_TABULAR@22..37
-          L_PAREN@22..23 "("
-          TABULAR_EXPRESSION@23..36
-            TABLE_REF@23..24
-              IDENT@23..24 "U"
-            WHITESPACE@24..25 " "
-            PIPE@25..26 "|"
-            WHITESPACE@26..27 " "
-            PROJECT_OPERATOR@27..36
-              PROJECT_KW@27..34 "project"
-              WHITESPACE@34..35 " "
-              NAME_REF@35..36
-                IDENT@35..36 "a"
-          R_PAREN@36..37 ")"
+        TABULAR_SOURCE@22..37
+          PAREN_TABULAR@22..37
+            L_PAREN@22..23 "("
+            TABULAR_EXPRESSION@23..36
+              TABULAR_SOURCE@23..24
+                TABLE_REF@23..24
+                  IDENT@23..24 "U"
+              WHITESPACE@24..25 " "
+              PIPE@25..26 "|"
+              WHITESPACE@26..27 " "
+              PROJECT_OPERATOR@27..36
+                PROJECT_KW@27..34 "project"
+                WHITESPACE@34..35 " "
+                NAME_REF@35..36
+                  IDENT@35..36 "a"
+            R_PAREN@36..37 ")"
         WHITESPACE@37..38 " "
         ON_KW@38..40 "on"
         WHITESPACE@40..41 " "
@@ -62,8 +65,9 @@ SOURCE_FILE@0..108
       JOIN_OPERATOR@66..77
         JOIN_KW@66..70 "join"
         WHITESPACE@70..71 " "
-        TABLE_REF@71..72
-          IDENT@71..72 "U"
+        TABULAR_SOURCE@71..72
+          TABLE_REF@71..72
+            IDENT@71..72 "U"
         WHITESPACE@72..73 " "
         ON_KW@73..75 "on"
         WHITESPACE@75..76 " "
@@ -81,8 +85,9 @@ SOURCE_FILE@0..108
           OPTION_VALUE@92..101
             IDENT@92..101 "leftouter"
         WHITESPACE@101..102 " "
-        TABLE_REF@102..103
-          IDENT@102..103 "V"
+        TABULAR_SOURCE@102..103
+          TABLE_REF@102..103
+            IDENT@102..103 "V"
         WHITESPACE@103..104 " "
         ON_KW@104..106 "on"
         WHITESPACE@106..107 " "

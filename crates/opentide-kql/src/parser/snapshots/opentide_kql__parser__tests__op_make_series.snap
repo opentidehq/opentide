@@ -5,8 +5,9 @@ expression: "show(\"T | make-series c = count() default = 0 on t from ago(1d) to
 SOURCE_FILE@0..128
   QUERY@0..128
     TABULAR_EXPRESSION@0..128
-      TABLE_REF@0..1
-        IDENT@0..1 "T"
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
       WHITESPACE@1..2 " "
       PIPE@2..3 "|"
       WHITESPACE@3..4 " "
@@ -25,12 +26,13 @@ SOURCE_FILE@0..128
               L_PAREN@25..26 "("
               R_PAREN@26..27 ")"
           WHITESPACE@27..28 " "
-          DEFAULT_KW@28..35 "default"
-          WHITESPACE@35..36 " "
-          EQ@36..37 "="
-          WHITESPACE@37..38 " "
-          LITERAL@38..39
-            NUMBER@38..39 "0"
+          SERIES_DEFAULT@28..39
+            DEFAULT_KW@28..35 "default"
+            WHITESPACE@35..36 " "
+            EQ@36..37 "="
+            WHITESPACE@37..38 " "
+            LITERAL@38..39
+              NUMBER@38..39 "0"
         WHITESPACE@39..40 " "
         ON_KW@40..42 "on"
         WHITESPACE@42..43 " "

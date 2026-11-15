@@ -5,8 +5,9 @@ expression: "show(\"T | project a, b = 1, (c, d) = f() | project-away Foo*, *Bar
 SOURCE_FILE@0..176
   QUERY@0..176
     TABULAR_EXPRESSION@0..176
-      TABLE_REF@0..1
-        IDENT@0..1 "T"
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
       WHITESPACE@1..2 " "
       PIPE@2..3 "|"
       WHITESPACE@3..4 " "
@@ -27,7 +28,7 @@ SOURCE_FILE@0..176
             NUMBER@19..20 "1"
         COMMA@20..21 ","
         WHITESPACE@21..22 " "
-        ASSIGNMENT@22..34
+        TUPLE_ASSIGNMENT@22..34
           NAME_TUPLE@22..28
             L_PAREN@22..23 "("
             NAME_REF@23..24
