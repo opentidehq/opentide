@@ -47,8 +47,8 @@ removed with the Python implementation (UC-6.2, #841); its recorded sessions
    `<session>/<step>`), with its reason, issue and changelog entry ([golden](../golden/SKILL.md)).
    A tool the recordings do not cover adds a session to `sessions.toml`; its recording comes from
    `cargo xtask mcp record --python PATH` against a release that has the Python server, or the
-   new tool is held by Rust tests and `tests/test_mcp/e2e/` alone.
-3. Extend `tests/test_mcp/e2e/test_mcp_stdio_e2e.py` when the wire shape matters.
+   new tool is held by Rust tests (`src/mcp/tests.rs`, `tests/mcp_stdio.rs`) alone.
+3. Extend `crates/opentide-cli/tests/mcp_stdio.rs` when the wire shape matters.
 4. Document it in `docs/mcp/tools.md` (or `resources.md`), keeping the existing section shape,
    and run `scripts/validate-docs.sh`.
 
