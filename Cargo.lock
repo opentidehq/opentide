@@ -3225,7 +3225,6 @@ dependencies = [
  "ctrlc",
  "dunce",
  "form_urlencoded",
- "humantime",
  "indexmap",
  "inquire",
  "insta",
@@ -3284,6 +3283,7 @@ dependencies = [
 name = "opentide-compare"
 version = "0.12.0"
 dependencies = [
+ "jiff",
  "regex",
  "serde",
  "serde_json",

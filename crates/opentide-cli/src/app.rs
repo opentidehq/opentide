@@ -2460,16 +2460,12 @@ pub fn utc_now() -> (String, String, String) {
     utc_at(SystemTime::now())
 }
 
-/// [`utc_now`] at `time`, formatted by humantime's RFC 3339.
+/// [`utc_now`] at `time`, formatted by jiff (RFC 3339, in UTC).
 pub fn utc_at(time: SystemTime) -> (String, String, String) {
-    let iso = humantime::format_rfc3339_seconds(time).to_string();
-    // `2026-11-09T10:11:12.123456Z` -> `20261109T101112123456Z`.
-    let stamp: String = humantime::format_rfc3339_micros(time)
-        .to_string()
-        .chars()
-        .filter(|c| !matches!(c, '-' | ':' | '.'))
-        .collect();
-    let clock = iso.get(11..19).unwrap_or_default().to_owned();
+    let at = jiff::Timestamp::try_from(time).unwrap_or(jiff::Timestamp::UNIX_EPOCH);
+    let iso = at.strftime("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let stamp = at.strftime("%Y%m%dT%H%M%S%6fZ").to_string();
+    let clock = at.strftime("%H:%M:%S").to_string();
     (iso, stamp, clock)
 }
 
