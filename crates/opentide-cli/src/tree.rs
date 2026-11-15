@@ -529,6 +529,48 @@ pub struct SetupArgs {
         default_value = "."
     )]
     pub path: String,
+    #[command(flatten)]
+    pub repo: SetupRepoFields,
+    #[arg(
+        long = "ci",
+        help = "CI/CD pipeline to write: github, gitlab, azure or none",
+        value_name = "PROVIDER"
+    )]
+    pub ci: Option<Ci>,
+    #[command(flatten)]
+    pub pipeline: SetupPipelineFields,
+    #[arg(
+        long = "vscode-setup",
+        help = "Run deprecated setup vscode: the extension recommendation and snippets"
+    )]
+    pub vscode_setup: bool,
+    #[arg(long = "mcp", help = "Write MCP configuration for vscode, cursor, claude-code or generic (repeatable)", action = clap::ArgAction::Append, value_name = "HOST")]
+    pub mcp: Vec<Mcp>,
+    #[arg(long = "skills", help = "Install agent skills for claude-code, cursor, github-copilot or generic (repeatable)", action = clap::ArgAction::Append, value_name = "TARGET")]
+    pub skills: Vec<Skills>,
+    #[arg(
+        long = "plugin",
+        help = "Register the opentidehq/skills Agent Plugin for Claude Code (.claude/settings.json)"
+    )]
+    pub plugin: bool,
+    #[arg(long = "hooks", help = "Validate objects on every commit")]
+    pub hooks: bool,
+    #[arg(long = "env", help = "Write .env.example and ignore .env")]
+    pub env: bool,
+    #[arg(
+        long = "plan",
+        help = "List the files each step would write, and write nothing"
+    )]
+    pub plan: bool,
+    #[arg(long = "yes", short = 'y', help = "Non-interactive mode")]
+    pub yes: bool,
+    #[command(subcommand)]
+    pub command: Option<SetupCommand>,
+}
+
+/// The repository's descriptive options, taken by `setup` and `setup repo`.
+#[derive(Debug, Args)]
+pub struct SetupRepoFields {
     #[arg(long = "name", help = "Repository name, used in the README")]
     pub name: Option<String>,
     #[arg(long = "org", help = "Organisation or team, used in the README")]
@@ -540,12 +582,11 @@ pub struct SetupArgs {
     pub description: Option<String>,
     #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
-    #[arg(
-        long = "ci",
-        help = "CI/CD pipeline to write: github, gitlab, azure or none",
-        value_name = "PROVIDER"
-    )]
-    pub ci: Option<Ci>,
+}
+
+/// The CI/CD pipeline's options, taken by `setup` and `setup ci`.
+#[derive(Debug, Args)]
+pub struct SetupPipelineFields {
     #[arg(
         long = "staging",
         help = "Deploy to staging tenants from pull requests",
@@ -634,33 +675,42 @@ pub struct SetupArgs {
         help = "Branch that deploys and receives inflight shards (default: origin/HEAD, then the checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)"
     )]
     pub default_branch: Option<String>,
-    #[arg(
-        long = "vscode-setup",
-        help = "Run deprecated setup vscode: the extension recommendation and snippets"
-    )]
-    pub vscode_setup: bool,
-    #[arg(long = "mcp", help = "Write MCP configuration for vscode, cursor, claude-code or generic (repeatable)", action = clap::ArgAction::Append, value_name = "HOST")]
-    pub mcp: Vec<Mcp>,
-    #[arg(long = "skills", help = "Install agent skills for claude-code, cursor, github-copilot or generic (repeatable)", action = clap::ArgAction::Append, value_name = "TARGET")]
-    pub skills: Vec<Skills>,
-    #[arg(
-        long = "plugin",
-        help = "Register the opentidehq/skills Agent Plugin for Claude Code (.claude/settings.json)"
-    )]
-    pub plugin: bool,
-    #[arg(long = "hooks", help = "Validate objects on every commit")]
-    pub hooks: bool,
-    #[arg(long = "env", help = "Write .env.example and ignore .env")]
-    pub env: bool,
+}
+
+/// `--plan` and `--yes`, as the file-writing `setup` steps take them.
+#[derive(Debug, Args)]
+pub struct SetupConfirm {
     #[arg(
         long = "plan",
         help = "List the files each step would write, and write nothing"
     )]
     pub plan: bool,
-    #[arg(long = "yes", short = 'y', help = "Non-interactive mode")]
+    #[arg(
+        long = "yes",
+        short = 'y',
+        help = "Write without asking for confirmation"
+    )]
     pub yes: bool,
-    #[command(subcommand)]
-    pub command: Option<SetupCommand>,
+}
+
+/// The repository a `setup` step writes to: `--path`, and the positional
+/// path it replaces (hidden, deprecated).
+#[derive(Debug, Args)]
+pub struct SetupTarget {
+    #[arg(
+        hide = true,
+        help = "Repository path (alias for --path)",
+        default_value = ".",
+        value_name = "path"
+    )]
+    pub path: String,
+    #[arg(
+        long = "path",
+        short = 'C',
+        help = "Repository path",
+        default_value = "."
+    )]
+    pub path_flag: String,
 }
 
 /// `opentide setup skills`.
@@ -779,20 +829,8 @@ pub struct SetupSkillsDiscoverArgs {
 /// `opentide setup vscode`.
 #[derive(Debug, Args)]
 pub struct SetupVscodeArgs {
-    #[arg(
-        hide = true,
-        help = "Repository path (alias for --path)",
-        default_value = ".",
-        value_name = "path"
-    )]
-    pub path: String,
-    #[arg(
-        long = "path",
-        short = 'C',
-        help = "Repository path",
-        default_value = "."
-    )]
-    pub path_flag: String,
+    #[command(flatten)]
+    pub target: SetupTarget,
     #[arg(
         long = "settings",
         help = "Recommend the opentide extension in .vscode/extensions.json, and remove opentide's yaml.schemas from .vscode/settings.json"
@@ -825,20 +863,8 @@ pub struct SetupVscodeArgs {
 /// `opentide setup mcp`.
 #[derive(Debug, Args)]
 pub struct SetupMcpArgs {
-    #[arg(
-        hide = true,
-        help = "Repository path (alias for --path)",
-        default_value = ".",
-        value_name = "path"
-    )]
-    pub path: String,
-    #[arg(
-        long = "path",
-        short = 'C',
-        help = "Repository path",
-        default_value = "."
-    )]
-    pub path_flag: String,
+    #[command(flatten)]
+    pub target: SetupTarget,
     #[arg(long = "vscode", help = "Configure VS Code (.vscode/mcp.json)")]
     pub vscode: bool,
     #[arg(long = "cursor", help = "Configure Cursor (.cursor/mcp.json)")]
@@ -847,36 +873,15 @@ pub struct SetupMcpArgs {
     pub claude_code: bool,
     #[arg(long = "generic", help = "Configure any MCP host (opentide.mcp.json)")]
     pub generic: bool,
-    #[arg(
-        long = "plan",
-        help = "List the files each step would write, and write nothing"
-    )]
-    pub plan: bool,
-    #[arg(
-        long = "yes",
-        short = 'y',
-        help = "Write without asking for confirmation"
-    )]
-    pub yes: bool,
+    #[command(flatten)]
+    pub confirm: SetupConfirm,
 }
 
 /// `opentide setup hooks`.
 #[derive(Debug, Args)]
 pub struct SetupHooksArgs {
-    #[arg(
-        hide = true,
-        help = "Repository path (alias for --path)",
-        default_value = ".",
-        value_name = "path"
-    )]
-    pub path: String,
-    #[arg(
-        long = "path",
-        short = 'C',
-        help = "Repository path",
-        default_value = "."
-    )]
-    pub path_flag: String,
+    #[command(flatten)]
+    pub target: SetupTarget,
     #[arg(
         long = "install",
         help = "Install .git/hooks/pre-commit when this path is a Git repository",
@@ -889,47 +894,17 @@ pub struct SetupHooksArgs {
         help = "Turn --install off"
     )]
     pub no_install: bool,
-    #[arg(
-        long = "plan",
-        help = "List the files each step would write, and write nothing"
-    )]
-    pub plan: bool,
-    #[arg(
-        long = "yes",
-        short = 'y',
-        help = "Write without asking for confirmation"
-    )]
-    pub yes: bool,
+    #[command(flatten)]
+    pub confirm: SetupConfirm,
 }
 
 /// `opentide setup env`.
 #[derive(Debug, Args)]
 pub struct SetupEnvArgs {
-    #[arg(
-        hide = true,
-        help = "Repository path (alias for --path)",
-        default_value = ".",
-        value_name = "path"
-    )]
-    pub path: String,
-    #[arg(
-        long = "path",
-        short = 'C',
-        help = "Repository path",
-        default_value = "."
-    )]
-    pub path_flag: String,
-    #[arg(
-        long = "plan",
-        help = "List the files each step would write, and write nothing"
-    )]
-    pub plan: bool,
-    #[arg(
-        long = "yes",
-        short = 'y',
-        help = "Write without asking for confirmation"
-    )]
-    pub yes: bool,
+    #[command(flatten)]
+    pub target: SetupTarget,
+    #[command(flatten)]
+    pub confirm: SetupConfirm,
 }
 
 /// `opentide setup ci`.
@@ -948,124 +923,17 @@ pub struct SetupCiArgs {
         default_value = "."
     )]
     pub path: String,
-    #[arg(
-        long = "staging",
-        help = "Deploy to staging tenants from pull requests",
-        overrides_with = "no_staging"
-    )]
-    pub staging: bool,
-    #[arg(
-        long = "no-staging",
-        overrides_with = "staging",
-        help = "Turn --staging off"
-    )]
-    pub no_staging: bool,
-    #[arg(
-        long = "inflight",
-        help = "Update .opentide/inflight/ preview shards on pull requests",
-        overrides_with = "no_inflight"
-    )]
-    pub inflight: bool,
-    #[arg(
-        long = "no-inflight",
-        overrides_with = "inflight",
-        help = "Turn --inflight off"
-    )]
-    pub no_inflight: bool,
-    #[arg(
-        long = "sharing",
-        help = "Share changed objects on the default branch (off unless selected)",
-        overrides_with = "no_sharing"
-    )]
-    pub sharing: bool,
-    #[arg(
-        long = "no-sharing",
-        overrides_with = "sharing",
-        help = "Turn --sharing off"
-    )]
-    pub no_sharing: bool,
-    #[arg(
-        long = "lint-changed",
-        help = "Gate lint on the object files each run changes, so a catalogue with inherited findings can adopt it (validate still checks every file)",
-        overrides_with = "lint_all"
-    )]
-    pub lint_changed: bool,
-    #[arg(
-        long = "lint-all",
-        overrides_with = "lint_changed",
-        help = "Turn --lint-changed off"
-    )]
-    pub lint_all: bool,
-    #[arg(
-        long = "promotion",
-        help = "Write [promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
-        overrides_with = "no_promotion"
-    )]
-    pub promotion: bool,
-    #[arg(
-        long = "no-promotion",
-        overrides_with = "promotion",
-        help = "Turn --promotion off"
-    )]
-    pub no_promotion: bool,
-    #[arg(
-        long = "promotion-target",
-        help = "Status deploy promotes rules to. Omit to keep the repository's setting."
-    )]
-    pub promotion_target: Option<String>,
-    #[arg(
-        long = "python-version",
-        help = "Python version the pipeline installs",
-        default_value = "3.12"
-    )]
-    pub python_version: String,
-    #[arg(
-        long = "explorer-pages",
-        help = "Include GitHub Pages explorer build and deploy jobs",
-        overrides_with = "no_explorer_pages"
-    )]
-    pub explorer_pages: bool,
-    #[arg(
-        long = "no-explorer-pages",
-        overrides_with = "explorer_pages",
-        help = "Turn --explorer-pages off"
-    )]
-    pub no_explorer_pages: bool,
-    #[arg(
-        long = "default-branch",
-        help = "Branch that deploys and receives inflight shards (default: origin/HEAD, then the checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)"
-    )]
-    pub default_branch: Option<String>,
-    #[arg(
-        long = "plan",
-        help = "List the files each step would write, and write nothing"
-    )]
-    pub plan: bool,
-    #[arg(
-        long = "yes",
-        short = 'y',
-        help = "Write without asking for confirmation"
-    )]
-    pub yes: bool,
+    #[command(flatten)]
+    pub pipeline: SetupPipelineFields,
+    #[command(flatten)]
+    pub confirm: SetupConfirm,
 }
 
 /// `opentide setup platforms`.
 #[derive(Debug, Args)]
 pub struct SetupPlatformsArgs {
-    #[arg(
-        hide = true,
-        help = "Repository path (alias for --path)",
-        default_value = ".",
-        value_name = "path"
-    )]
-    pub path: String,
-    #[arg(
-        long = "path",
-        short = 'C',
-        help = "Repository path",
-        default_value = "."
-    )]
-    pub path_flag: String,
+    #[command(flatten)]
+    pub target: SetupTarget,
     #[arg(long = "sentinel", help = "Enable Microsoft Sentinel")]
     pub sentinel: bool,
     #[arg(
@@ -1098,58 +966,19 @@ pub struct SetupPlatformsArgs {
         help = "Enable Google Security Operations (YARA-L)"
     )]
     pub google_secops: bool,
-    #[arg(
-        long = "plan",
-        help = "List the files each step would write, and write nothing"
-    )]
-    pub plan: bool,
-    #[arg(
-        long = "yes",
-        short = 'y',
-        help = "Write without asking for confirmation"
-    )]
-    pub yes: bool,
+    #[command(flatten)]
+    pub confirm: SetupConfirm,
 }
 
 /// `opentide setup repo`.
 #[derive(Debug, Args)]
 pub struct SetupRepoArgs {
-    #[arg(
-        hide = true,
-        help = "Repository path (alias for --path)",
-        default_value = ".",
-        value_name = "path"
-    )]
-    pub path: String,
-    #[arg(
-        long = "path",
-        short = 'C',
-        help = "Repository path",
-        default_value = "."
-    )]
-    pub path_flag: String,
-    #[arg(long = "name", help = "Repository name, used in the README")]
-    pub name: Option<String>,
-    #[arg(long = "org", help = "Organisation or team, used in the README")]
-    pub org: Option<String>,
-    #[arg(
-        long = "description",
-        help = "One-line description, used in the README"
-    )]
-    pub description: Option<String>,
-    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
-    pub platform: Vec<Platform>,
-    #[arg(
-        long = "plan",
-        help = "List the files each step would write, and write nothing"
-    )]
-    pub plan: bool,
-    #[arg(
-        long = "yes",
-        short = 'y',
-        help = "Write without asking for confirmation"
-    )]
-    pub yes: bool,
+    #[command(flatten)]
+    pub target: SetupTarget,
+    #[command(flatten)]
+    pub repo: SetupRepoFields,
+    #[command(flatten)]
+    pub confirm: SetupConfirm,
 }
 
 /// `opentide share`.

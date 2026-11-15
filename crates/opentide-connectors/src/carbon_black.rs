@@ -215,7 +215,7 @@ impl CarbonBlack {
             Err(error) => Ok(Err(SdkError::Api(format!(
                 "Carbon Black Cloud answered HTTP {} with a body that is not JSON ({error}): {}",
                 answer.status,
-                String::from_utf8_lossy(&answer.body).trim()
+                answer.text().trim()
             )))),
         }
     }
@@ -808,6 +808,7 @@ mod tests {
             content_type: None,
             body: body.to_vec(),
             elapsed: Duration::ZERO,
+            credentials: crate::answer::Credentials::default(),
         }
     }
 
