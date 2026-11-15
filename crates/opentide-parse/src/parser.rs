@@ -17,6 +17,14 @@ pub enum ErrorKind {
         /// The limit.
         limit: u32,
     },
+    /// The tree went past [`MAX_TREE_DEPTH`](crate::MAX_TREE_DEPTH) nodes
+    /// (a long chain of nodes each wrapped by
+    /// [`CompletedMarker::precede`]); the nodes past it are flattened into
+    /// the node at the limit, their tokens kept.
+    TreeTooDeep {
+        /// The limit.
+        limit: u32,
+    },
     /// The grammar looked ahead without consuming until its fuel ran out: an
     /// engine bug (a loop that never advances). The rest of the input is one
     /// error node; debug builds panic in [`Parser::finish`].
@@ -146,8 +154,12 @@ impl<'i> Parser<'i> {
         self.nth_text(0)
     }
 
-    /// Where the current token is; `None` at end of input.
+    /// Where the current token is; `None` at end of input, and once the
+    /// parser has stalled (as [`Parser::nth`]).
     pub fn current_range(&self) -> Option<TextRange> {
+        if self.stalled.get() {
+            return None;
+        }
         self.input.significant(self.pos).map(|l| l.range)
     }
 
@@ -248,13 +260,23 @@ impl<'i> Parser<'i> {
         self.check_stall();
         let pos = u32::try_from(self.events.len()).unwrap_or(u32::MAX);
         self.events.push(Event::Tombstone);
-        Marker { pos, armed: true }
+        Marker {
+            pos,
+            child: None,
+            armed: true,
+        }
     }
 
     /// One level deeper. Past `max_depth` it records one error, wraps the
     /// rest of the input in an error node, and returns `false`: the caller
-    /// returns at once without [`Parser::exit`], and so does every rule above
-    /// it, the input consumed.
+    /// returns at once without [`Parser::exit`]. The rules above it unwind
+    /// as usual; whether they call `exit` makes no difference, since the
+    /// input is consumed and the parser records nothing more.
+    ///
+    /// It bounds the grammar's recursion. A loop that wraps a node in a new
+    /// one ([`CompletedMarker::precede`]) nests the tree without recursing:
+    /// [`build`](crate::build) bounds that at
+    /// [`MAX_TREE_DEPTH`](crate::MAX_TREE_DEPTH).
     pub fn enter(&mut self) -> bool {
         self.check_stall();
         self.depth = self.depth.saturating_add(1);
@@ -331,6 +353,9 @@ impl<'i> Parser<'i> {
 #[must_use = "a node is complete()d or abandon()ed"]
 pub struct Marker {
     pos: u32,
+    /// The node [`CompletedMarker::precede`] opened this one around: its
+    /// `forward_parent` points here until [`Marker::abandon`] clears it.
+    child: Option<u32>,
     armed: bool,
 }
 
@@ -351,9 +376,16 @@ impl Marker {
         }
     }
 
-    /// Drops the node; its tokens belong to the enclosing one.
+    /// Drops the node; its tokens belong to the enclosing one. A node
+    /// [`CompletedMarker::precede`] opened lets go of the node it was to
+    /// enclose, which can be preceded again.
     pub fn abandon(mut self, p: &mut Parser<'_>) {
         self.armed = false;
+        if let Some(child) = self.child
+            && let Some(Event::Start { forward_parent, .. }) = p.events.get_mut(child as usize)
+        {
+            *forward_parent = None;
+        }
         if self.pos as usize + 1 == p.events.len() {
             p.events.pop();
         }
@@ -379,10 +411,20 @@ pub struct CompletedMarker {
 impl CompletedMarker {
     /// Opens a node that starts where this one does and encloses it
     /// (`a + b` after `a` is parsed).
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, when this node is already preceded by a marker that
+    /// was not abandoned (a grammar bug: two nodes would claim it).
     pub fn precede(self, p: &mut Parser<'_>) -> Marker {
-        let m = p.start();
+        let mut m = p.start();
         if let Some(Event::Start { forward_parent, .. }) = p.events.get_mut(self.pos as usize) {
+            debug_assert!(
+                forward_parent.is_none(),
+                "opentide-parse: a CompletedMarker was preceded twice"
+            );
             *forward_parent = Some(m.pos - self.pos);
+            m.child = Some(self.pos);
         }
         m
     }
@@ -437,6 +479,11 @@ mod tests {
         p.panic_on_stall = false;
         let root = p.start();
         stuck(&mut p);
+        assert_eq!(
+            p.current_range(),
+            None,
+            "a stalled parser is at end of input"
+        );
         p.error("dropped: the stall is the one error");
         root.complete(&mut p, ROOT);
         assert!(p.stalled());

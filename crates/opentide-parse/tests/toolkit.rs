@@ -8,8 +8,8 @@
 
 use logos::Logos;
 use opentide_parse::{
-    ErrorKind, Grammar, Input, Lexeme, Parser, SyntaxError, TokenSet, build, debug_errors,
-    debug_tree, lex,
+    ErrorKind, Grammar, Input, Lexeme, MAX_TREE_DEPTH, Parser, SyntaxError, TokenSet, build,
+    debug_errors, debug_tree, lex,
 };
 use rowan::{SyntaxKind, TextRange, TextSize};
 use std::thread;
@@ -35,8 +35,9 @@ const EOF: SyntaxKind = SyntaxKind(5);
 const ERROR: SyntaxKind = SyntaxKind(6);
 const ROOT: SyntaxKind = SyntaxKind(7);
 const GROUP: SyntaxKind = SyntaxKind(8);
-const NAMES: [&str; 9] = [
-    "WS", "WORD", "L", "R", "JUNK", "EOF", "ERROR", "ROOT", "GROUP",
+const PAIR: SyntaxKind = SyntaxKind(9);
+const NAMES: [&str; 10] = [
+    "WS", "WORD", "L", "R", "JUNK", "EOF", "ERROR", "ROOT", "GROUP", "PAIR",
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -240,9 +241,8 @@ fn a_hundred_thousand_open_parens_are_one_diagnostic_on_a_small_stack() {
 
 /// `build` never recurses; rowan drops a green tree recursively, which on a
 /// 1 MB stack holds about 10 000 levels in a debug build (measured on
-/// aarch64 macOS: 8 000 drop, 12 000 overflow). A language's own recursive
-/// descent costs more stack per level than that, so its `max_depth` binds
-/// first. This keeps half the measured margin.
+/// aarch64 macOS: 8 000 drop, 12 000 overflow). `MAX_TREE_DEPTH` (4 096)
+/// keeps under half of that; this checks a tree just below it.
 #[test]
 fn a_tree_four_thousand_nodes_deep_builds_and_drops_on_a_small_stack() {
     const N: usize = 4_000;
@@ -292,4 +292,115 @@ fn random_inputs_never_panic_hang_or_lose_a_byte() {
             assert!(source.is_char_boundary(usize::from(e.gap.start())));
         }
     }
+}
+
+/// Parses `source` with `grammar` driving the parser; returns the tree as
+/// text and the parse.
+fn parse_with(source: &str, grammar: impl FnOnce(&mut Parser<'_>)) -> (String, Vec<SyntaxError>) {
+    let input = Input::new(source, toy_lex(source), self::grammar(8));
+    let mut p = Parser::new(&input);
+    grammar(&mut p);
+    let parse = build(&input, p.finish());
+    let node = rowan::SyntaxNode::<Toy>::new_root(parse.green);
+    assert_eq!(node.to_string(), source, "lossless");
+    (debug_tree(&node, name), parse.errors)
+}
+
+/// A Pratt loop that wraps `a` in a node, gives up (`abandon`), and parses
+/// `b` as a sibling: the abandoned wrapper must not leave `a` pointing at
+/// the next node opened, which would make `b`'s node enclose `a`'s.
+#[test]
+fn an_abandoned_wrapper_lets_go_of_the_node_it_preceded() {
+    let (tree, errors) = parse_with("a b", |p| {
+        let root = p.start();
+        let a = p.start();
+        p.bump();
+        let a = a.complete(p, GROUP);
+        a.precede(p).abandon(p);
+        let b = p.start();
+        p.bump();
+        b.complete(p, PAIR);
+        root.complete(p, ROOT);
+    });
+    assert_eq!(errors, []);
+    insta::assert_snapshot!(tree, @r#"
+    ROOT@0..3
+      GROUP@0..1
+        WORD@0..1 "a"
+      WS@1..2 " "
+      PAIR@2..3
+        WORD@2..3 "b"
+    "#);
+}
+
+/// After an abandoned wrapper, the node can be wrapped again.
+#[test]
+fn a_node_can_be_preceded_again_after_an_abandon() {
+    let (tree, _) = parse_with("a b", |p| {
+        let root = p.start();
+        let a = p.start();
+        p.bump();
+        let a = a.complete(p, GROUP);
+        a.precede(p).abandon(p);
+        let pair = a.precede(p);
+        p.bump();
+        pair.complete(p, PAIR);
+        root.complete(p, ROOT);
+    });
+    insta::assert_snapshot!(tree, @r#"
+    ROOT@0..3
+      PAIR@0..3
+        GROUP@0..1
+          WORD@0..1 "a"
+        WS@1..2 " "
+        WORD@2..3 "b"
+    "#);
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "preceded twice")]
+fn preceding_a_node_twice_panics_in_debug_builds() {
+    let _ = parse_with("a", |p| {
+        let root = p.start();
+        let a = p.start();
+        p.bump();
+        let a = a.complete(p, GROUP);
+        let outer = a.precede(p);
+        let inner = a.precede(p);
+        inner.complete(p, PAIR);
+        outer.complete(p, PAIR);
+        root.complete(p, ROOT);
+    });
+}
+
+/// A left-associative loop (`a b c …` as `((a b) c) …`, one `precede` per
+/// word) nests the tree without calling `enter`. 30 000 levels overflow a
+/// 1 MB stack when rowan drops the tree; `build` flattens everything past
+/// `MAX_TREE_DEPTH` instead, with one diagnostic and no byte lost.
+#[test]
+fn a_long_left_associative_chain_is_flattened_not_overflowed() {
+    const N: usize = 30_000;
+    on_small_stack(|| {
+        let source = "a ".repeat(N);
+        let input = Input::new(&source, toy_lex(&source), grammar(8));
+        let mut p = Parser::new(&input);
+        let root = p.start();
+        let first = p.start();
+        p.bump();
+        let mut lhs = first.complete(&mut p, PAIR);
+        while p.at(WORD) {
+            let m = lhs.precede(&mut p);
+            p.bump();
+            lhs = m.complete(&mut p, PAIR);
+        }
+        root.complete(&mut p, ROOT);
+        let parse = build(&input, p.finish());
+        assert_eq!(parse.depth, MAX_TREE_DEPTH);
+        assert_eq!(parse.errors.len(), 1, "{:?}", parse.errors);
+        let limit = u32::try_from(MAX_TREE_DEPTH).unwrap();
+        assert_eq!(parse.errors[0].kind, ErrorKind::TreeTooDeep { limit });
+        let node = rowan::SyntaxNode::<Toy>::new_root(parse.green);
+        assert_eq!(node.to_string(), source, "lossless");
+    });
 }

@@ -6,10 +6,11 @@
 //! [`SyntaxError`]s, each with the set of kinds the parser expected there.
 //!
 //! The toolkit knows no language: kinds are [`rowan::SyntaxKind`] (a `u16`),
-//! and a language names the few it needs in a [`Grammar`]. Three guards keep
+//! and a language names the few it needs in a [`Grammar`]. Four guards keep
 //! every input finite: the nesting limit ([`Parser::enter`]), the fuel that
-//! stops a loop that never consumes ([`ErrorKind::Stalled`]), and a replay
-//! that never recurses ([`build`]).
+//! stops a loop that never consumes ([`ErrorKind::Stalled`]), a replay that
+//! never recurses ([`build`]), and the tree depth limit
+//! ([`MAX_TREE_DEPTH`]) that keeps dropping a tree off the end of the stack.
 //!
 //! ```
 //! use opentide_parse::{Grammar, Input, Lexeme, Parser, TokenSet, build};
@@ -60,7 +61,7 @@ pub use debug::{debug_errors, debug_tree, describe_expected};
 pub use input::{Grammar, Input, Lexeme, lex};
 pub use parser::{CompletedMarker, ErrorKind, Event, Marker, Parser};
 pub use token_set::TokenSet;
-pub use tree::{Parse, SyntaxError, build};
+pub use tree::{MAX_TREE_DEPTH, Parse, SyntaxError, build};
 
 pub use logos;
 pub use rowan;
