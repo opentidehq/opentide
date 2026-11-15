@@ -124,6 +124,7 @@ jobs:
       docs: ${{ steps.plan.outputs.docs }}
       node: ${{ steps.plan.outputs.node }}
       wasi: ${{ steps.plan.outputs.wasi }}
+      wasm: ${{ steps.plan.outputs.wasm }}
       grammars: ${{ steps.plan.outputs.grammars }}
       textmate: ${{ steps.plan.outputs.textmate }}
       gitlab: ${{ steps.plan.outputs.gitlab }}
@@ -1853,10 +1854,12 @@ jobs:
   # and WASI servers.
   engine-wasm:
     name: Engine WebAssembly and npm packages
-    # The full set (the workflow's header); the release dry run builds the
-    # WebAssembly assets too.
+    # The full set (the workflow's header), and a pull request that touches the
+    # parser layer or a query-language crate (the `wasm` area of changes.py):
+    # the browser build is where a C dependency gained or lost and the stack a
+    # deep parse needs show. The release dry run builds the WebAssembly assets too.
     needs: changes
-    if: needs.changes.outputs.mode == 'nightly'
+    if: needs.changes.outputs.mode == 'nightly' || needs.changes.outputs.wasm == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -2368,6 +2371,7 @@ jobs:
       - facade
       - node
       - wasi
+      - engine-wasm
       - grammars
       - textmate
       - deny
