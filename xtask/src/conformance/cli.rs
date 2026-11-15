@@ -39,12 +39,12 @@ const MARKER: &str = ".xtask-conformance";
 /// The arguments of `cargo xtask conformance`.
 ///
 /// Lays out the corpora of tests/conformance/manifest.json under DIR (default
-/// <target>/conformance), runs every operation on each through every runner
+/// `<target>/conformance`), runs every operation on each through every runner
 /// (the Rust SDK's `cargo test -p opentide --features cli,connectors --test
 /// conformance`, the Python SDK's pytest under `uv run`, the Node SDK's `node
 /// --test`), and requires their documents byte-identical; a difference is
 /// reported by its JSON pointer. The first runner is the reference. The
-/// stand-in tenants of the manifest (tests/cassettes/<name>/tenant.py, run with
+/// stand-in tenants of the manifest (`tests/cassettes/<name>/tenant.py`, run with
 /// $PYTHON, else python3) start once, on loopback, and every runner talks to
 /// them; each is reset before each runner.
 ///

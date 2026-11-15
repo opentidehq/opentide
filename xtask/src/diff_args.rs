@@ -17,7 +17,7 @@ pub enum DiffCmd {
 /// The options of a `diff` command.
 #[derive(Args, Debug, Default)]
 pub struct DiffArgs {
-    /// Only the cases whose id (<command>/json/<fixture>/<variant>) matches
+    /// Only the cases whose id (`<command>/json/<fixture>/<variant>`) matches
     /// GLOB
     #[arg(long, value_name = "GLOB")]
     pub filter: Option<String>,

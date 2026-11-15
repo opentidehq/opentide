@@ -65,7 +65,7 @@ pub enum Cmd {
     /// Send each session of tests/golden/mcp/sessions.toml to the Python
     /// server of the opentide release the interpreter runs (one before the
     /// Python implementation was removed) and write
-    /// tests/golden/mcp/<session>.jsonl
+    /// `tests/golden/mcp/<session>.jsonl`
     Record(RecordArgs),
     /// Send each recording's messages to this repository's server and compare
     /// the answers; differences only through tests/golden/APPROVED_DIFFS.toml
