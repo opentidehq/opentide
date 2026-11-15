@@ -210,6 +210,12 @@ fn toml_value(value: &opentide_compile::Json) -> Option<toml::Value> {
     Some(match value {
         J::Str(text) => toml::Value::String(text.clone()),
         J::Int(number) => toml::Value::Integer(*number),
+        // TOML has no integer beyond i64: the nearest float, as before.
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "only an integer beyond i64 is approximated"
+        )]
+        J::UInt(number) => toml::Value::Float(*number as f64),
         J::Float(number) => toml::Value::Float(*number),
         J::Bool(flag) => toml::Value::Boolean(*flag),
         J::Array(items) => toml::Value::Array(items.iter().filter_map(toml_value).collect()),

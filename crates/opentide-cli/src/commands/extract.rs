@@ -853,7 +853,7 @@ fn is_set(value: &CJson) -> bool {
         CJson::Str(text) => !text.is_empty(),
         CJson::Array(items) => !items.is_empty(),
         CJson::Object(members) => !members.is_empty(),
-        CJson::Bool(true) | CJson::Int(_) | CJson::Float(_) => true,
+        CJson::Bool(true) | CJson::Int(_) | CJson::UInt(_) | CJson::Float(_) => true,
     }
 }
 
@@ -1615,6 +1615,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                 reason = "`int()` of a float truncates toward zero, as here"
             )]
             Some(CJson::Float(number)) => number.trunc() as i64,
+            Some(CJson::UInt(_)) => i64::MAX,
             Some(CJson::Str(text)) => text.trim().parse().unwrap_or(50),
             _ => 50,
         };

@@ -57,7 +57,6 @@ crate-type = ["cdylib", "rlib"]
 # default features: `analysis` (highlight, the legend) and `lsp` (the language
 # server one message at a time).
 opentide = { path = "../opentide", default-features = false, features = ["analysis", "lsp"] }
-serde.workspace = true
 serde_json.workspace = true
 wasm-bindgen.workspace = true
 js-sys.workspace = true
