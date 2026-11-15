@@ -13,6 +13,7 @@ pub mod config;
 pub mod conformance;
 pub mod corpus;
 pub mod coverage;
+pub mod diff_args;
 pub mod golden;
 pub mod layers;
 pub mod lint;
