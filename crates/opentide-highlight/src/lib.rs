@@ -1136,15 +1136,6 @@ pub fn generate_helix(spec: &HighlightSpec) -> String {
     out
 }
 
-pub fn generated_artifacts_stale(
-    spec: &HighlightSpec,
-    tm: &str,
-    monaco: &str,
-    helix: &str,
-) -> Result<(), String> {
-    generated_artifacts_stale_for(spec, LanguageId::Kql, tm, monaco, helix)
-}
-
 pub fn generated_artifacts_stale_for(
     spec: &HighlightSpec,
     language: LanguageId,

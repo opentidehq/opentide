@@ -49,6 +49,7 @@ fn let_literal(value: &Json) -> Option<String> {
     match value {
         Json::Bool(flag) => Some(if *flag { "true" } else { "false" }.to_owned()),
         Json::Int(integer) => Some(integer.to_string()),
+        Json::UInt(integer) => Some(integer.to_string()),
         Json::Float(float) => Some(kql_real(*float)),
         Json::Str(text) => Some(kql_string(text)),
         Json::Null | Json::Array(_) | Json::Object(_) => None,
