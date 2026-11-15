@@ -1,0 +1,19 @@
+// A tiny language for the toolkit's own tests of the typed AST and the
+// conformance helper: `f(a, 1) + (b - 2)`, any number of expressions in a row.
+// `cargo xtask codegen` turns it into generated/ast.rs.
+
+Root = Expr*
+
+Expr = Call | Binary | Paren | Name | Literal
+
+Call = callee:Name '(' args:Args? ')'
+
+Args = Expr (',' Expr)*
+
+Binary = lhs:Expr op:('+' | '-') rhs:Expr
+
+Paren = '(' Expr ')'
+
+Name = 'ident'
+
+Literal = 'number'
