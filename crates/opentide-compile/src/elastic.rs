@@ -158,7 +158,7 @@ fn text_of<'j>(value: &'j Json, field: &str) -> Result<&'j str, CompileError> {
         let kind = match value {
             Json::Null => "null",
             Json::Bool(_) => "a boolean",
-            Json::Int(_) | Json::Float(_) => "a number",
+            Json::Int(_) | Json::UInt(_) | Json::Float(_) => "a number",
             Json::Str(_) => "a string",
             Json::Array(_) => "a list",
             Json::Object(_) => "a mapping",

@@ -97,8 +97,10 @@ compile = ["workspace", "dep:opentide-compile"]
 # feature builds opentide-cli.
 queries = ["workspace", "dep:opentide-cli"]
 # The command line: `opentide::cli::main(argv)`, `opentide::cli::run_json`,
-# and the `opentide` binary (`cargo install opentide --features cli`).
-cli = ["compile", "queries"]
+# and the `opentide` binary (`cargo install opentide --features cli`). The
+# only feature that brings the command line's terminal UI and prompts
+# (opentide-cli's `terminal`).
+cli = ["compile", "queries", "opentide-cli?/terminal"]
 # The language server (`opentide::lsp`): stdio, or one message at a time.
 lsp = ["workspace", "dep:opentide-lsp"]
 # Tenant operations (`opentide::connectors`): a query run, a live query check

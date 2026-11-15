@@ -51,7 +51,6 @@ gix-worktree = { version = "0.56", default-features = false, features = ["attrib
 gix-ignore = "0.22"
 gix-attributes = "0.35"
 gix-filter = "0.34"
-gix-fs = "0.22"
 gix-path = "0.12"
 gix-command = "0.10"
 # Paths without Windows' verbatim prefix (`\\?\`), which git, the oracle
@@ -95,6 +94,5 @@ shlex = "2.0"
 toml.workspace = true
 
 [dev-dependencies]
-proptest.workspace = true
 # Repositories the git baseline's tests build (the version xtask locks).
 tempfile = "3"

@@ -123,7 +123,7 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 ```bash
 cargo nextest run -p opentide-schema                       # native, no Python
 cargo nextest run -p opentide-schema --features python     # + the Python class and trybuild
-cargo build -p opentide-schema --target wasm32-unknown-unknown --features wasm
+cargo build -p opentide-schema --target wasm32-unknown-unknown
 cargo nextest run -p opentide-schema vocab                 # the vocabularies, 13k misspellings
 cargo xtask vocab diff --against python                    # against the oracle, every corpus
 cargo nextest run -p opentide-schema objects::table        # the object models against the oracle's table
