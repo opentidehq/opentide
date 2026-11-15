@@ -93,7 +93,7 @@ fn api_error(answer: &Answer) -> String {
         for key in ["message", "error", "errors"] {
             match body.get(key) {
                 Some(Json::Str(text)) if !text.is_empty() => return text.clone(),
-                Some(value) if value.truthy() => return value.to_compact(),
+                Some(value) if value.is_filled() => return value.to_compact(),
                 _ => {}
             }
         }
@@ -643,9 +643,9 @@ impl Deployer for Sysdig {
     /// One rule, from the compiled body alone: its name and whether it is a
     /// tuning are read from the body (`name`, `details.append`), a
     /// [`Operation::Disable`] disables, and the rule joins (or, disabled,
-    /// leaves) the tenant's runtime policies (its setup's `policies`), as
-    /// `opentide deploy` does for a block that names none: a block's own
-    /// `policies` are not in the compiled body. A recorded rule the tenant
+    /// leaves) the request's runtime policies ([`DeployRequest::policies`]:
+    /// the block's), else the tenant's (its setup's `policies`), as
+    /// `opentide deploy` chooses them. A recorded rule the tenant
     /// lost is created again and its new id returned, which the caller
     /// keeps: the deployment-state refusals of `opentide deploy`
     /// ([`RuleDeploy::recreate_refusal`]) are about the state it writes, and
@@ -664,7 +664,10 @@ impl Deployer for Sysdig {
                 message,
                 detail: None,
             };
-            let mut policies = cx.tenant.list("policies").to_vec();
+            let mut policies = request
+                .policies
+                .clone()
+                .unwrap_or_else(|| cx.tenant.list("policies").to_vec());
             let mut body: Option<Json> = serde_json::from_slice(&request.body).ok();
             if request.operation == Operation::Delete
                 && !policies.is_empty()
@@ -721,7 +724,7 @@ fn identity(rule: Option<&Json>) -> (String, bool) {
     let tuning = rule
         .and_then(|rule| rule.get("details"))
         .and_then(|details| details.get("append"))
-        .is_some_and(Json::truthy);
+        .is_some_and(Json::is_true);
     (name, tuning)
 }
 

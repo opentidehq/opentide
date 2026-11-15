@@ -79,18 +79,21 @@ opentide-connectors = { path = "crates/opentide-connectors", version = "=0.12.0"
 opentide-cassette = { path = "crates/opentide-cassette" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Canonical paths without Windows' `\\?\` prefix (the CLI's E2E tests).
+dunce = "1"
 toml = "0.8"
-# Spans of configuration TOML keys (opentide-analysis `config`). The version
+# Spans of configuration TOML keys (opentide-analysis `config`); `display`
+# writes an edited document back (opentide-cli `setup platforms`). The version
 # `toml` 0.8 already locks.
-toml_edit = { version = "0.22", default-features = false, features = ["parse"] }
+toml_edit = { version = "0.22", default-features = false, features = ["parse", "display"] }
 thiserror = "2"
 anyhow = "1"
 # The LSP host (#90, #185): framing, typed messages, file URIs.
 lsp-server = "0.10"
 lsp-types = "0.97"
 url = "2.5"
-# Percent-decoding a URL path segment (opentide-cassette's matcher). The
-# version `url` already locks.
+# Percent-decoding a URL path segment (opentide-cassette's matcher,
+# opentide-lsp's `file:` URIs). The version `url` already locks.
 percent-encoding = "2.3"
 regex = "1"
 # Look-around and back-references, which `regex` has not: the oracle's

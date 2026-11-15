@@ -97,17 +97,8 @@ pub(crate) fn default_host(platform: &str) -> &'static str {
     }
 }
 
-/// How rows are written when `--json` is off.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum RowFormat {
-    /// A table per tenant.
-    #[default]
-    Table,
-    /// One JSON object per row.
-    Jsonl,
-    /// CSV, one header.
-    Csv,
-}
+/// How rows are written when `--json` is off: `--format`, as clap parses it.
+pub use crate::tree::RowFormat;
 
 /// `query`'s options.
 #[derive(Clone, Debug, Default)]
@@ -142,6 +133,28 @@ pub struct Args {
     pub columns: Option<String>,
     /// `--format`.
     pub format: RowFormat,
+}
+
+impl From<&crate::tree::QueryArgs> for Args {
+    fn from(args: &crate::tree::QueryArgs) -> Self {
+        Self {
+            query: args.query.clone(),
+            platform: args.platform.0.clone(),
+            tenants: args.tenant.clone(),
+            rule: args.rule.clone(),
+            file: args.file.clone(),
+            query_file: args.query_file.clone(),
+            since: args.since.clone(),
+            start: args.start.clone(),
+            end: args.end.clone(),
+            limit: args.limit,
+            language: args.language.clone(),
+            index: args.index.clone(),
+            timeout: args.timeout,
+            columns: args.columns.clone(),
+            format: args.row_format,
+        }
+    }
 }
 
 /// What a run reads besides its options.

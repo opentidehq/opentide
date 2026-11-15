@@ -186,7 +186,8 @@ pub fn blank(text: &str) -> String {
             while end < size && bytes[end] != b'/' && bytes[end] != b'\n' {
                 end += if bytes[end] == b'\\' { 2 } else { 1 };
             }
-            let end = boundary(text, end.min(size));
+            // A `\\` before a multi-byte character skips one byte of it.
+            let end = text.ceil_char_boundary(end.min(size));
             space(&mut out, index + 1, end, false);
             index = end + 1;
         } else if rest.starts_with(b"//") {
@@ -204,7 +205,7 @@ pub fn blank(text: &str) -> String {
             while end < size && bytes[end] != b'"' && bytes[end] != b'\n' {
                 end += if bytes[end] == b'\\' { 2 } else { 1 };
             }
-            let end = boundary(text, end.min(size));
+            let end = text.ceil_char_boundary(end.min(size));
             space(&mut out, index + 1, end, false);
             index = end + 1;
         } else {
@@ -214,15 +215,6 @@ pub fn blank(text: &str) -> String {
     // Every byte replaced is a whole character's (a space for each of its
     // bytes), so the text stays UTF-8.
     String::from_utf8(out).unwrap_or_else(|_| text.to_owned())
-}
-
-/// The first character boundary of `text` at or after `at`: a `\\` before a
-/// multi-byte character skips one byte of it.
-fn boundary(text: &str, mut at: usize) -> usize {
-    while at < text.len() && !text.is_char_boundary(at) {
-        at += 1;
-    }
-    at
 }
 
 /// One `rule` of a signature: its name, modifiers and where its text runs.
@@ -579,7 +571,7 @@ pub fn advisories(signature: &str) -> Vec<YaraAdvisory> {
             while end < bytes.len() && bytes[end] != b'"' && bytes[end] != b'\n' {
                 end += if bytes[end] == b'\\' { 2 } else { 1 };
             }
-            let value = &quoted[..boundary(quoted, end.min(quoted.len()))];
+            let value = &quoted[..quoted.ceil_char_boundary(end.min(quoted.len()))];
             (!context_accepted(value)).then(|| {
                 format!(
                     "YARA rule {name} sets meta context {}; HarfangLab expects {}",

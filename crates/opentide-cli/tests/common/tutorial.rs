@@ -86,6 +86,13 @@ pub fn tutorial() -> (tempfile::TempDir, PathBuf) {
         String::from_utf8_lossy(&out),
         String::from_utf8_lossy(&err.0.lock().unwrap())
     );
+    write_objects(&repo);
+    (base, repo)
+}
+
+/// Writes the tutorial's threat, objective and rule into `repo`, as its
+/// reader does.
+pub fn write_objects(repo: &Path) {
     let markdown = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/usage/tutorial.md"),
     )
@@ -95,7 +102,6 @@ pub fn tutorial() -> (tempfile::TempDir, PathBuf) {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, yaml_after(&markdown, heading)).unwrap();
     }
-    (base, repo)
 }
 
 /// Rewrites `path` under `repo` with `from` replaced by `to`, once.
