@@ -41,3 +41,8 @@ item = "UC-3.1 (#823)"
 crate = "opentide-cli"
 lines = 86
 item = "UC-3.3 (#825)"
+
+# 88: the connectors' error paths are tested against stand-in tenants (#1139).
+[[gate]]
+crate = "opentide-connectors"
+lines = 88
