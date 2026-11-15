@@ -594,3 +594,27 @@ mod configuration_never_panics {
         }
     }
 }
+
+#[test]
+fn splunk_enterprise_security_is_a_boolean_and_never_a_placeholder() {
+    // `deploy` refuses a `$NAME` placeholder in `enterprise_security` (it
+    // resolves placeholders in credentials and `ssl` only), so `validate`
+    // refuses it too, at the key's path.
+    let path = "/w/.opentide/configurations/platforms/splunk.toml";
+    let splunk = |value: &str| {
+        format!(
+            "[[tenants]]\nname = \"a\"\n[tenants.setup]\nurl = \"u\"\nport = 8089\n\
+             app = \"search\"\nenterprise_security = {value}\n"
+        )
+    };
+    for value in ["true", "false"] {
+        let issues = checks::buffer_issues(path, &splunk(value), &checks::BufferContext::default());
+        assert!(issues.is_empty(), "{value}: {issues:?}");
+    }
+    for value in ["\"$SPLUNK_ES\"", "\"yes\"", "0"] {
+        let issues = checks::buffer_issues(path, &splunk(value), &checks::BufferContext::default());
+        assert_eq!(issues.len(), 1, "{value}: {issues:?}");
+        let shown = format!("{:?}", issues[0]);
+        assert!(shown.contains("enterprise_security"), "{value}: {shown}");
+    }
+}
