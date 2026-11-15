@@ -305,6 +305,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 - **MCP tool descriptions are the same on Python 3.10 to 3.12 as on 3.13 and later** ([#829](https://github.com/opentidehq/opentide/issues/829)). Every line after the first kept four spaces of indentation on 3.10 to 3.12.
 - **MCP `validate_query` suggests a live check only where there is one.** For a Sysdig or CrowdStrike query, its `next_actions` name the finding's `explain` page, not `validate_query` with `live: true`, which those platforms refuse.
 - **A huge `Content-Length` no longer crashes `opentide lsp start`** ([#843](https://github.com/opentidehq/opentide/issues/843)). A message header alone could make the server allocate the length it named and exhaust memory; the body is read as it arrives.
+- **A bearer token in a platform's second `401` answer is masked whole** ([#1140](https://github.com/opentidehq/opentide/issues/1140)). When a tenant refused a new token too, the error showed the first 300 characters of what the API said, with the token masked only after the cut, so a token the API echoed across the 300th character was shown in part. The token is masked in the whole answer first, then the answer is cut.
 
 ## [0.28.1] — 2026-11-13
 

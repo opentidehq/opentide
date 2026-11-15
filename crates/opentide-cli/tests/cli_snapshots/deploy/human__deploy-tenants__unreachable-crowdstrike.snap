@@ -20,4 +20,4 @@ error: Platform deployment failed · system: crowdstrike · detail: Cannot reach
 ␛[1m␛[31merror:␛[0m Deployment to crowdstrike failed: Cannot reach crowdstrike tenant 'lab' at
        https://api.eu-1.crowdstrike.com: error sending request: client error (Connect): tunnel
        error: failed to create underlying connection: tcp connect error: Connection refused (os
-       error 111)
+       error <ECONNREFUSED>)
