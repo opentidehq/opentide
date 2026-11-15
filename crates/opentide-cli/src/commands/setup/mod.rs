@@ -9,6 +9,7 @@
 //! terminal, and anything that cannot answer (`--json`, an agent, no
 //! terminal) is refused with `usage_needs_input`.
 
+pub mod args;
 pub mod files;
 pub mod hooks;
 pub mod jsonc;

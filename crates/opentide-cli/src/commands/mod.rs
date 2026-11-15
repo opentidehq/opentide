@@ -23,6 +23,7 @@ pub mod findings;
 pub mod generate;
 pub mod home;
 pub mod info;
+mod interrupt;
 pub mod lint;
 pub mod lsp;
 pub mod migrate;

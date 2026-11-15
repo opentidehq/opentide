@@ -1,6 +1,6 @@
 ---
 source: crates/opentide-cli/tests/render.rs
-expression: validate_fault_frames_plain
+expression: candidate
 ---
 error[deployment_state_uuid_mismatch]: <WS>/.opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json records object_uuid '00000000-0000-4000-8000-000000000001', but its file name is '1fe3b71b-24be-4604-9b91-72cb32381bfc'
   ╰─▶ .opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json
@@ -340,7 +340,7 @@ error[yaml_parse]: Could not parse object YAML: found character that cannot star
    │
 67 │       lookback: "2h"
 68 │    indent: tab
-   │ ━
+   │ ━━━
    │
    ├─ note: while scanning for the next token
    ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
@@ -827,5 +827,3 @@ warning[asset_unknown]: visibility.toml.logsources.9.assets.0: logsource 'Ghost3
 warning[asset_unknown]: visibility.toml.logsources.10.assets.0: logsource 'Ghost4' names asset 'ghost-4', which [[assets]] does not declare.
 
 warning[asset_unknown]: visibility.toml.logsources.11.assets.0: logsource 'Ghost5' names asset 'ghost-5', which [[assets]] does not declare.
-
-
