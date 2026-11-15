@@ -126,7 +126,7 @@ fn validate_and_the_language_server_report_the_same_codes_on_the_same_lines() {
             .or_default()
             .push((
                 issue["code"].as_str().unwrap().to_owned(),
-                issue["line"].as_u64().unwrap_or(1),
+                issue["line"].as_u64().expect("an issue carries its line"),
             ));
     }
 
