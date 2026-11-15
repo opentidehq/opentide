@@ -1981,7 +1981,7 @@ impl Run<'_> {
                 match block {
                     Block::Lines(lines) => {
                         for line in lines {
-                            for row in crate::render::table::wrap_text(line, width) {
+                            for row in line.wrap(width, &Text::default()) {
                                 out.write_all(stdout.line(&row).as_bytes())?;
                             }
                         }
