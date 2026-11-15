@@ -2,7 +2,7 @@
 name: cli-e2e-testing
 description: >-
   Write and debug opentide's console-script end-to-end tests: subprocess smoke tests of the
-  installed `opentide`, the MCP and LSP stdio tests, the wheel install tests, the tide_corpus
+  installed `opentide`, the MCP server in the package's process, the LSP stdio tests, the wheel install tests, the tide_corpus
   fixture workspace, the full_set marker and CI's one Python job. Use when adding
   or changing a test that runs the console script, or when the Python job's E2E tests fail.
 ---
@@ -13,8 +13,11 @@ The command line is the Rust core's (UC-6.2, #841): what a command prints and wr
 the goldens (`cargo xtask golden check --engine rust`, [golden](../golden/SKILL.md)) and by
 `crates/opentide-cli`'s tests (`tests/cmd/*.trycmd`, `command_goldens.rs`). The Python E2E tests
 cover what only the installed package can show: the console script and `python -m opentide`,
-signals through them, the MCP and LSP servers over stdio, a wheel installed in a fresh
-environment, and platform plugins loaded from their entry points.
+signals through them, the LSP server over stdio, the MCP server in the package's process (stdout
+kept to JSON-RPC whatever else the process writes), a wheel installed in a fresh environment, and
+platform plugins loaded from their entry points. The MCP server over stdio as the binary runs it
+(the handshake, the frames, the workspace each launch finds) is held in Rust by
+`crates/opentide-cli/tests/mcp_stdio.rs` (#1139): add such a test there, not here.
 
 ## Terminology
 
@@ -38,7 +41,7 @@ tests/
   test_cli/
     test_launch.py         # opentide._cli.main, in process
     e2e/                   # @pytest.mark.cli_e2e / cli_smoke: the console script as a subprocess
-  test_mcp/e2e/            # `opentide mcp start` NDJSON JSON-RPC
+  test_mcp/e2e/            # `opentide mcp start` in the package's process (stdio: mcp_stdio.rs)
   test_lsp/e2e/            # `opentide lsp start` over stdio
   test_platforms/          # the plugin API, the plugin through `python -m opentide`
 ```
