@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.push/json/share-misp/misp-unknown-type
+---
+args: opentide --json share push --type rules
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share push",
+  "duration_ms": 0,
+  "error": "Unknown object type(s): rules. Choose threat, objective, or rule.",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--type",
+    "code": "usage_invalid_choice",
+    "crash_log": null,
+    "message": "Unknown object type(s): rules. Choose threat, objective, or rule.",
+    "suggestion": null
+  },
+  "message": "Unknown object type(s): rules. Choose threat, objective, or rule.",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

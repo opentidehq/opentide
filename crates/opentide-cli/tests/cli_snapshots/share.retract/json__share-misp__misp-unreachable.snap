@@ -1,0 +1,49 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.retract/json/share-misp/misp-unreachable
+---
+args: opentide --json share retract --target misp-prod --uuid 00000000-0000-4000-8048-000000000012
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share retract",
+  "duration_ms": 0,
+  "error": "Nothing to retract · 1 failed",
+  "exit_code": 2,
+  "failure": {
+    "argument": null,
+    "code": "share_unreachable",
+    "crash_log": null,
+    "message": "Nothing to retract · 1 failed",
+    "suggestion": null
+  },
+  "message": "Nothing to retract · 1 failed",
+  "next_actions": [],
+  "ok": false,
+  "records": [
+    {
+      "action": "failed",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000012",
+      "reason": "connectivity_failed",
+      "target": "misp-prod"
+    }
+  ],
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {
+    "failed": 1,
+    "new": 0,
+    "objects": 0,
+    "retracted": 0,
+    "skipped": 0,
+    "unchanged": 0,
+    "updated": 0
+  },
+  "warnings": [
+    "[[misp]] block \"misp-lab\" api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED]."
+  ]
+}
+
+━━━ stderr · empty
