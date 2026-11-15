@@ -147,7 +147,7 @@ pub fn setup_text(tenant: &Json, key: &str) -> String {
 /// and `"true"` are refused, and so is a `$NAME` placeholder, which a deploy
 /// never resolves for these settings (only `ssl` is resolved, by the
 /// connectors). The error names the key; callers wrap it in their platform's
-/// [`CompileError`](crate::rule::CompileError).
+/// [`CompileError`].
 pub fn setup_switch(tenant: &Json, key: &str, default: bool) -> Result<bool, String> {
     match setup(tenant, key) {
         None => Ok(default),
