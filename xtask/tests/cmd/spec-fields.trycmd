@@ -3,17 +3,17 @@ specifications checkout it cannot run, which is an error, never a pass.
 
 ```console
 $ xtask spec-fields --help
-usage: cargo xtask spec-fields [--specifications DIR] [--list]
+Check every model field's description against its row in the field tables of the specifications checkout
 ...
 
 $ xtask spec-fields --bogus
 ? 2
-xtask spec-fields: unknown option `--bogus`
+error: unexpected argument '--bogus' found
 ...
 
 $ xtask spec-fields --specifications
 ? 2
-xtask spec-fields: --specifications needs a directory
+error: a value is required for '--specifications <DIR>' but none was supplied
 ...
 
 $ xtask spec-fields --specifications no-such-checkout
