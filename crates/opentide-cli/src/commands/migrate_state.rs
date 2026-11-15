@@ -602,7 +602,7 @@ pub fn migrate(workspace: &Path, rules_dir: &Path) -> Report {
                 members.extend(binding);
             }
             unused.push((
-                Json::Object(members),
+                Json::object(members),
                 format!(
                     "external_id_unused: {} tenant {} id {} removed from {relative} (never read \
                      by its deployer; not stored)",
@@ -984,8 +984,16 @@ mod tests {
             let Json::Object(first) = &errors[0] else {
                 panic!("an error is an object")
             };
-            assert_eq!(first[0].1, Json::str(code), "{configurations}");
-            assert_eq!(first[3].1, Json::str(message), "{configurations}");
+            assert_eq!(
+                first.get_index(0).unwrap().1,
+                &Json::str(code),
+                "{configurations}"
+            );
+            assert_eq!(
+                first.get_index(3).unwrap().1,
+                &Json::str(message),
+                "{configurations}"
+            );
         }
     }
 
@@ -1016,7 +1024,7 @@ mod tests {
         let Json::Object(first) = &unused[0] else {
             panic!("an object")
         };
-        assert_eq!(first[1].1, Json::str("7"));
+        assert_eq!(first.get_index(1).unwrap().1, &Json::str("7"));
         assert_eq!(data(&report, "shards_written"), &Json::Int(0));
     }
 

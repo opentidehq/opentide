@@ -37,7 +37,7 @@ use super::validate_live::{Batch, batches};
 use super::{Report, placement};
 use crate::env::Env;
 use crate::envelope::code;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::logging::Sink;
 use crate::render::glyphs;
 use crate::render::outcome::Console;
@@ -432,12 +432,9 @@ fn report_skipped(
     ));
     let mut summary = match result.iter().find(|(key, _)| key == "_summary") {
         Some((_, Json::Object(members))) => members.clone(),
-        _ => Vec::new(),
+        _ => Object::new(),
     };
-    match summary.iter_mut().find(|(key, _)| key == "skipped") {
-        Some(entry) => entry.1 = Json::from(rules.len()),
-        None => summary.push(("skipped".into(), Json::from(rules.len()))),
-    }
+    summary.insert("skipped".into(), Json::from(rules.len()));
     set(result, "_summary", Json::Object(summary));
     let owned = opentide_compile::Owned::new(
         &Vocabularies::bundled(),
@@ -500,7 +497,7 @@ fn nothing(message: &str, refused: bool, field: (&str, Json)) -> Vec<(String, Js
         ),
         ("deployed".into(), Json::Array(Vec::new())),
         ("dry_run".into(), Json::Bool(false)),
-        ("plan".into(), Json::Object(Vec::new())),
+        ("plan".into(), Json::Object(Object::new())),
     ];
     if refused {
         result.push(("_exit_code".into(), Json::Int(1)));
@@ -1130,21 +1127,21 @@ impl RuleResult {
     /// The row `results` carries (`to_dict`).
     fn to_json(&self) -> Json {
         let text = |value: &Option<String>| value.as_ref().map_or(Json::Null, Json::str);
-        Json::Object(vec![
-            ("platform".into(), Json::str(&self.platform)),
-            ("tenant".into(), text(&self.tenant)),
-            ("id".into(), Json::str(&self.id)),
-            ("name".into(), Json::str(&self.name)),
-            ("status".into(), Json::str(self.status)),
-            ("action".into(), text(&self.action)),
+        Json::object([
+            ("platform", Json::str(&self.platform)),
+            ("tenant", text(&self.tenant)),
+            ("id", Json::str(&self.id)),
+            ("name", Json::str(&self.name)),
+            ("status", Json::str(self.status)),
+            ("action", text(&self.action)),
             (
-                "seconds".into(),
+                "seconds",
                 self.seconds.map_or(Json::Null, |seconds| {
                     Json::Float((seconds * 1000.0).round() / 1000.0)
                 }),
             ),
-            ("error".into(), text(&self.error)),
-            ("reason".into(), text(&self.reason)),
+            ("error", text(&self.error)),
+            ("reason", text(&self.reason)),
         ])
     }
 }
@@ -1212,7 +1209,7 @@ fn run_summary(results: &[RuleResult], platforms: usize, tenants: usize, seconds
     ));
     members.push(("platforms".into(), Json::from(platforms)));
     members.push(("tenants".into(), Json::from(tenants)));
-    Json::Object(members)
+    Json::object(members)
 }
 
 /// The run's last line, for a pass and for a failure alike (`outcome_message`).

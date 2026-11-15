@@ -185,7 +185,7 @@ fn node_json(node: &jsonc_parser::cst::CstNode) -> Option<Json> {
             let name = prop.name()?.decoded_value().ok()?;
             members.push((name, node_json(&prop.value()?)?));
         }
-        return Some(Json::Object(members));
+        return Some(Json::object(members));
     }
     if let Some(array) = node.as_array() {
         return array
