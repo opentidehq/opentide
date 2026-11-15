@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: rules.unreviewed/json/tide-corpus/bad-duration
+---
+args: opentide --json rules unreviewed --older-than 90x
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "rules unreviewed",
+  "duration_ms": 0,
+  "error": "window must look like 90d, 12h, or 30m",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--older-than",
+    "code": "usage_invalid_value",
+    "crash_log": null,
+    "message": "window must look like 90d, 12h, or 30m",
+    "suggestion": null
+  },
+  "message": "window must look like 90d, 12h, or 30m",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

@@ -1,0 +1,16 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.ci/plain/tide-corpus/missing-argument
+---
+args: opentide setup ci --yes
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: the following required arguments were not provided:
+  <ci_platform>
+
+Usage: opentide setup ci --yes <ci_platform>
+
+For more information, try '--help'.

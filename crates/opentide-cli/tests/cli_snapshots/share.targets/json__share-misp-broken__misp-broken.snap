@@ -1,0 +1,36 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.targets/json/share-misp-broken/misp-broken
+---
+args: opentide --json share targets
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share targets",
+  "duration_ms": 0,
+  "error": "sharing.toml failed validation",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "sharing.toml failed validation",
+    "suggestion": null
+  },
+  "issues": [
+    "[[misp]] block \"misp-prod\" max_tlp is not a tlp vocabulary name."
+  ],
+  "message": "sharing.toml failed validation",
+  "next_actions": [],
+  "ok": false,
+  "preflight": "sharing_config",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "warnings": [
+    "[[misp]] block \"misp-lab\" api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED]."
+  ]
+}
+
+━━━ stderr · empty

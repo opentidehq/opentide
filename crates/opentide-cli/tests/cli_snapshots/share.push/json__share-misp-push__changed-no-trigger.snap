@@ -1,0 +1,34 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.push/json/share-misp-push/changed-no-trigger
+---
+args: opentide --json share push --changed
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share push",
+  "duration_ms": 0,
+  "error": "CI_COMMIT_SHA is required to compute the changed objects",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "changed_diff",
+    "crash_log": null,
+    "message": "CI_COMMIT_SHA is required to compute the changed objects",
+    "suggestion": null
+  },
+  "message": "CI_COMMIT_SHA is required to compute the changed objects",
+  "next_actions": [],
+  "ok": false,
+  "preflight": "changed_diff",
+  "records": [],
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "warnings": [
+    "[[misp]] block \"misp-lab\" api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED]."
+  ]
+}
+
+━━━ stderr · empty

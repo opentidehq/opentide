@@ -1,0 +1,30 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.skills.discover/json/tide-corpus/catalogue-installed
+---
+args: opentide --json setup skills discover --installed
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup skills discover",
+  "count": 0,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "manifest_refreshed": false,
+  "manifest_source": "remote",
+  "message": "Completed successfully",
+  "next_actions": [],
+  "ok": true,
+  "schema_version": 1,
+  "skills": [],
+  "source": "opentidehq/skills@main",
+  "status": "completed",
+  "summary": {
+    "installed": 0,
+    "skills": 0
+  }
+}
+
+━━━ stderr · empty
