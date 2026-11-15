@@ -39,13 +39,6 @@ mod keywords;
     )
 )]
 mod lexer;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the new parser is reached from tests until the switch"
-    )
-)]
 mod parser;
 #[cfg_attr(
     not(test),

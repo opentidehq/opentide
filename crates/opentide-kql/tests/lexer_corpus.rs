@@ -3,31 +3,8 @@
 
 use opentide_core::LanguageId;
 use opentide_kql::testing::lex_spans;
-use std::path::{Path, PathBuf};
-
-/// Every `.kql` file under `crates/testdata`, sorted.
-fn corpus() -> Vec<PathBuf> {
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "kql") {
-                out.push(path);
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata"),
-        &mut out,
-    );
-    out.sort();
-    out
-}
+mod common;
+use common::corpus;
 
 /// Every byte of every corpus file, and of prefixes of it, is in one
 /// lexeme (the lexer is lossless).
