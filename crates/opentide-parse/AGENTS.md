@@ -9,7 +9,7 @@ names the few the toolkit needs in a `Grammar`. I/O-free, no `unsafe`, no worksp
 | `token_set.rs` | `TokenSet`: a 512-kind bitset (expected sets, recovery sets); a kind past `CAPACITY` panics, never vanishes |
 | `input.rs` | `Grammar`, `Lexeme`, `lex` (a logos token source that resumes one character after an error), `Input` (trivia kept, skipped for lookahead) |
 | `parser.rs` | `Parser` (`nth`/`at`/`eat`/`expect`/`bump_as`/`err_*`/`enter`/`exit`), `Marker`/`CompletedMarker::precede`, `Event`, `ErrorKind` |
-| `tree.rs` | `build`: events to a lossless rowan `GreenNode` and `SyntaxError`s, iteratively |
+| `tree.rs` | `build`: events to a lossless rowan `GreenNode` and `SyntaxError`s, iteratively, no deeper than `MAX_TREE_DEPTH` |
 | `differential.rs` | feature `differential`: the old-versus-new harness (below) |
 | `debug.rs` | `debug_tree`/`debug_errors` for insta snapshots, `describe_expected` for messages |
 
@@ -23,19 +23,27 @@ on no workspace crate, and the query engines (tier 2 and up) build on it. Publis
 - **Lossless.** Every byte of the source is in exactly one token of the tree: a language's logos
   token type never `skip`s (whitespace and comments are trivia kinds), and `build` puts whatever
   the grammar left unconsumed into an error node at the end of the root.
-- **Finite on every input.** Three guards, each one diagnostic (`ErrorKind`) and never a panic in
+- **Finite on every input.** Four guards, each one diagnostic (`ErrorKind`) and never a panic in
   a release build:
   - nesting past `Grammar::max_depth` (`Parser::enter` returns `false`; the caller returns
     without `exit`) wraps the rest of the input in one error node: `TooDeep`;
+  - a tree deeper than `MAX_TREE_DEPTH` (4 096) nodes, which a `precede` loop reaches without
+    calling `enter` (a left-associative `a + b + c …`), is flattened by `build`: the nodes past
+    the limit are not opened and their tokens go to the node at the limit: `TreeTooDeep`;
   - a grammar loop that looks ahead without consuming runs out of fuel (2²⁴ lookups between two
     consumed tokens): `Stalled`, and debug builds panic in `Parser::finish`;
   - events that are not one balanced root become one error node over the source: `Unbalanced`,
     and debug builds panic in `build`.
 - **No recursion in the toolkit.** `build`, `debug_tree` and the guards are iterative. A
   language keeps its own recursion bounded with `enter`, and keeps chains flat (`a or b or c` is
-  one n-ary node): rowan drops a green tree recursively, one stack frame chain per level.
+  one n-ary node): rowan drops a green tree recursively, a few stack frames per level, and
+  `MAX_TREE_DEPTH` keeps under half of what a 1 MB debug-build stack holds.
 - **Markers.** A `Marker` is completed or abandoned; dropping one otherwise panics in debug
-  builds (a grammar bug).
+  builds (a grammar bug). Abandoning a marker `precede` opened lets go of the node it was to
+  wrap, which can be preceded again; preceding a node twice panics in debug builds.
+- **Lexemes tile the source**: in order, contiguous, from 0 to the source's length, on char
+  boundaries. `Input::new` checks it in debug builds only: a hand-driven lexer (modes) that
+  breaks it loses bytes in a release build, so its tests must run its corpus in debug.
 - **Spans** are rowan's `TextRange`/`TextSize` (bytes). UTF-16 is converted only at the LSP edge,
   by `opentide-core`.
 

@@ -92,6 +92,19 @@ pub(crate) fn range(start: usize, end: usize) -> TextRange {
     TextRange::new(offset(start), offset(end.max(start)))
 }
 
+/// Whether `lexemes` tile `source` ([`Input::new`]).
+fn tiles(source: &str, lexemes: &[Lexeme]) -> bool {
+    let mut end = 0usize;
+    for l in lexemes {
+        let (start, stop) = (usize::from(l.range.start()), usize::from(l.range.end()));
+        if start != end || !source.is_char_boundary(stop) {
+            return false;
+        }
+        end = stop;
+    }
+    end == source.len()
+}
+
 /// A source and its lexemes, with the significant ones (not trivia) indexed
 /// for the parser's lookahead.
 #[derive(Debug)]
@@ -103,11 +116,14 @@ pub struct Input<'s> {
 }
 
 impl<'s> Input<'s> {
-    /// The input of `source`'s `lexemes`, in source order and covering it.
+    /// The input of `source`'s `lexemes`, which must tile it: in source
+    /// order, contiguous, from 0 to `source.len()`, on char boundaries.
+    /// Debug builds check it; a release build given lexemes that do not tile
+    /// the source builds a tree that misses bytes.
     pub fn new(source: &'s str, lexemes: Vec<Lexeme>, grammar: Grammar) -> Self {
         debug_assert!(
-            lexemes.last().map_or(0, |l| usize::from(l.range.end())) == source.len(),
-            "the lexemes do not cover the source"
+            tiles(source, &lexemes),
+            "the lexemes do not tile the source (in order, contiguous, 0 to its length, on char boundaries)"
         );
         let significant = (0..lexemes.len())
             .filter(|&i| !grammar.trivia.contains(lexemes[i].kind))

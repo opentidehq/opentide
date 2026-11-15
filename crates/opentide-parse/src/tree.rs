@@ -33,6 +33,20 @@ pub struct Parse {
 const UNBALANCED: &str =
     "the parser built an unbalanced tree (an engine bug: please report this query)";
 
+/// The deepest tree [`build`] makes, in nodes (the root is 1).
+///
+/// rowan drops a green tree recursively, a few stack frames per level: on a
+/// 1 MB stack (the browser WASM module's) a debug build holds about 10 000
+/// levels (measured on aarch64 macOS). [`Parser::enter`](crate::Parser::enter)
+/// bounds a grammar's recursion, but a loop that wraps each node in a new one
+/// ([`CompletedMarker::precede`](crate::CompletedMarker::precede): a
+/// left-associative `a + b + c`) nests the tree without recursing. Past this
+/// depth [`build`] opens no more nodes: their tokens go to the node at the
+/// limit, with one [`ErrorKind::TreeTooDeep`] diagnostic, so no input can
+/// overflow the stack when the tree is dropped. A language keeps chains flat
+/// (`a or b or c` as one n-ary node) to stay far below it.
+pub const MAX_TREE_DEPTH: usize = 4_096;
+
 /// Replays `events` over `input` into a green tree, iteratively: no
 /// recursion, whatever the nesting.
 ///
@@ -47,16 +61,17 @@ const UNBALANCED: &str =
 /// bug). Release builds return the source as one error node instead, with
 /// one diagnostic.
 pub fn build(input: &Input<'_>, events: Vec<Event>) -> Parse {
-    build_or_fallback(input, events, cfg!(debug_assertions))
+    build_or_fallback(input, events, cfg!(debug_assertions), MAX_TREE_DEPTH)
 }
 
 pub(crate) fn build_or_fallback(
     input: &Input<'_>,
     events: Vec<Event>,
     panic_on_bug: bool,
+    max_tree_depth: usize,
 ) -> Parse {
     let mut errors = Vec::new();
-    if let Some((green, depth)) = replay(input, events, &mut errors) {
+    if let Some((green, depth)) = replay(input, events, &mut errors, max_tree_depth) {
         return Parse {
             green,
             errors,
@@ -86,16 +101,22 @@ pub(crate) fn build_or_fallback(
     }
 }
 
-/// The replay; `None` when the events are not one balanced root.
+/// The replay; `None` when the events are not one balanced root. Nodes past
+/// `max_tree_depth` are not opened ([`MAX_TREE_DEPTH`]).
 fn replay(
     input: &Input<'_>,
     mut events: Vec<Event>,
     errors: &mut Vec<SyntaxError>,
+    max_tree_depth: usize,
 ) -> Option<(GreenNode, usize)> {
     let mut builder = GreenNodeBuilder::new();
     let lexemes = &input.lexemes;
     let mut next = 0usize; // the next lexeme to emit
+    // Each open node, and whether the builder opened it (false past the
+    // depth limit); `depth` counts the opened ones.
+    let mut open: Vec<bool> = Vec::new();
     let (mut depth, mut deepest, mut roots) = (0usize, 0usize, 0usize);
+    let mut flattened = false;
     let mut last_end = TextSize::from(0);
     let mut parents = Vec::new();
     for i in 0..events.len() {
@@ -124,7 +145,7 @@ fn replay(
                     };
                 }
                 for &kind in parents.iter().rev() {
-                    if depth == 0 {
+                    if open.is_empty() {
                         roots += 1;
                         if roots > 1 {
                             return None;
@@ -132,23 +153,39 @@ fn replay(
                     } else {
                         flush_trivia(&mut builder, input, &mut next);
                     }
-                    builder.start_node(kind);
-                    depth += 1;
-                    deepest = deepest.max(depth);
+                    let opened = depth < max_tree_depth.max(1);
+                    if opened {
+                        builder.start_node(kind);
+                        depth += 1;
+                        deepest = deepest.max(depth);
+                    } else if !flattened {
+                        flattened = true;
+                        errors.push(SyntaxError {
+                            kind: ErrorKind::TreeTooDeep {
+                                limit: u32::try_from(max_tree_depth).unwrap_or(u32::MAX),
+                            },
+                            message: format!(
+                                "the syntax tree nests deeper than {max_tree_depth} nodes"
+                            ),
+                            expected: TokenSet::EMPTY,
+                            gap: gap(input, next, last_end),
+                        });
+                    }
+                    open.push(opened);
                 }
             }
             Event::Finish => {
-                if depth == 0 {
-                    return None;
-                }
-                depth -= 1;
-                if depth == 0 {
+                let opened = open.pop()?;
+                if open.is_empty() {
                     flush_rest(&mut builder, input, &mut next);
                 }
-                builder.finish_node();
+                if opened {
+                    builder.finish_node();
+                    depth -= 1;
+                }
             }
             Event::Token { kind } => {
-                if depth == 0 {
+                if open.is_empty() {
                     return None;
                 }
                 flush_trivia(&mut builder, input, &mut next);
@@ -163,23 +200,30 @@ fn replay(
                 message,
                 expected,
             } => {
-                let after = lexemes
-                    .get(next..)
-                    .unwrap_or_default()
-                    .iter()
-                    .find(|l| !input.grammar.trivia.contains(l.kind))
-                    .map_or(offset(input.source.len()), |l| l.range.start());
                 errors.push(SyntaxError {
                     kind,
                     message,
                     expected,
-                    gap: TextRange::new(last_end, after.max(last_end)),
+                    gap: gap(input, next, last_end),
                 });
             }
             Event::Tombstone => {}
         }
     }
-    (depth == 0 && roots == 1).then(|| (builder.finish(), deepest))
+    (open.is_empty() && roots == 1).then(|| (builder.finish(), deepest))
+}
+
+/// From the end of the last significant token emitted (`last_end`) to the
+/// start of the next one at or after lexeme `next` (or the end of input).
+fn gap(input: &Input<'_>, next: usize, last_end: TextSize) -> TextRange {
+    let after = input
+        .lexemes
+        .get(next..)
+        .unwrap_or_default()
+        .iter()
+        .find(|l| !input.grammar.trivia.contains(l.kind))
+        .map_or(offset(input.source.len()), |l| l.range.start());
+    TextRange::new(last_end, after.max(last_end))
 }
 
 fn flush_trivia(builder: &mut GreenNodeBuilder<'_>, input: &Input<'_>, next: &mut usize) {
@@ -251,12 +295,36 @@ mod tests {
             vec![start(ROOT), Event::Finish, Event::Finish],
             vec![start(ROOT), Event::Finish, start(ROOT), Event::Finish],
         ] {
-            let parse = build_or_fallback(&input, events.clone(), false);
+            let parse = build_or_fallback(&input, events.clone(), false, MAX_TREE_DEPTH);
             assert_eq!(parse.green.kind(), ERROR, "{events:?}");
             assert_eq!(parse.green.to_string(), "ab");
             assert_eq!(parse.errors.len(), 1);
             assert_eq!(parse.errors[0].message, UNBALANCED);
         }
+    }
+
+    #[test]
+    fn nodes_past_the_tree_depth_limit_are_flattened_with_one_error() {
+        // ROOT[a A[b B[c C[D[d]]]]] on a limit of 3: C and D are flattened
+        // into B, which keeps their word.
+        let input = input("abcd");
+        let (a, b, c, d) = (SyntaxKind(5), SyntaxKind(6), SyntaxKind(7), SyntaxKind(8));
+        let token = || Event::Token { kind: WORD };
+        let mut events = vec![start(ROOT), token(), start(a), token()];
+        events.extend([start(b), token(), start(c), start(d), token()]);
+        events.extend([Event::Finish, Event::Finish, Event::Finish, Event::Finish]);
+        events.push(Event::Finish);
+        let parse = build_or_fallback(&input, events, true, 3);
+        let tree = rowan::SyntaxNode::<crate::tests::Raw>::new_root(parse.green);
+        let tree = crate::debug_tree(&tree, |k| k.0);
+        assert_eq!(
+            tree,
+            "4@0..4\n  1@0..1 \"a\"\n  5@1..4\n    1@1..2 \"b\"\n    6@2..4\n      1@2..3 \"c\"\n      1@3..4 \"d\"\n"
+        );
+        assert_eq!(parse.depth, 3);
+        assert_eq!(parse.errors.len(), 1, "{:?}", parse.errors);
+        assert_eq!(parse.errors[0].kind, ErrorKind::TreeTooDeep { limit: 3 });
+        assert_eq!(parse.errors[0].gap, range(3, 3));
     }
 
     #[test]
