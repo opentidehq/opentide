@@ -3917,6 +3917,28 @@ mod tests {
             &[("FORCE_COLOR", "1"), ("OPENTIDE_OUTPUT", "agent")],
             false
         ));
+        // Blank and unusual values; machine modes (--json, a detected coding
+        // agent) and usage errors never take forced colour.
+        assert!(!sgr(&[("FORCE_COLOR", "1"), ("NO_COLOR", " ")], false));
+        assert!(!sgr(&[("FORCE_COLOR", "no")], false));
+        assert!(!sgr(&[("FORCE_COLOR", "off")], false));
+        assert!(!sgr(&[("FORCE_COLOR", " ")], false));
+        assert!(sgr(&[("FORCE_COLOR", "1"), ("CLICOLOR_FORCE", "0")], false));
+        assert!(!sgr(&[("FORCE_COLOR", "1"), ("CLAUDECODE", "1")], false));
+        let json = dispatched("--json deploy", &[("FORCE_COLOR", "1")], false);
+        assert!(
+            !json.stdout.contains('\u{1b}') && !json.stderr.contains('\u{1b}'),
+            "{}{}",
+            json.stdout,
+            json.stderr
+        );
+        let usage = dispatched("--json nonesuch", &[("FORCE_COLOR", "1")], false);
+        assert_eq!(usage.code, 2);
+        assert!(!usage.stdout.contains('\u{1b}'), "{}", usage.stdout);
+        // OPENTIDE_OUTPUT=human is explicit: it keeps colour at a terminal
+        // even with --no-color (documented in global-options.md).
+        let human = dispatched("deploy --no-color", &[("OPENTIDE_OUTPUT", "human")], true);
+        assert!(human.stderr.contains('\u{1b}'), "{}", human.stderr);
         // An explicit --no-color wins over FORCE_COLOR and CLICOLOR_FORCE, as
         // NO_COLOR does, on a pipe and at a terminal.
         let flagged = |pairs: &[(&str, &str)], tty: bool| {

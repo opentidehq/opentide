@@ -158,7 +158,7 @@
     },
     {
       "name": "NO_COLOR",
-      "meaning": "Any value turns colour off, like --no-color"
+      "meaning": "Any non-empty value turns colour off, like --no-color"
     },
     {
       "name": "OPENTIDE_JSON_INDENT",

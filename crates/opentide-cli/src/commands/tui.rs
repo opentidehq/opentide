@@ -105,13 +105,10 @@ fn plain_reason(place: &Place<'_>) -> Option<&'static str> {
     }
     if env.colour_choice() == Some(false) {
         return Some(
-            if env
-                .get("NO_COLOR")
-                .is_some_and(|value| !value.trim().is_empty())
-            {
+            if env.get("NO_COLOR").is_some_and(|value| !value.is_empty()) {
                 "NO_COLOR is set"
             } else {
-                "FORCE_COLOR is 0"
+                "FORCE_COLOR turns colour off"
             },
         );
     }

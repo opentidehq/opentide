@@ -56,16 +56,21 @@ impl Env {
     /// What the colour variables ask for: `Some(false)` to turn colour off,
     /// `Some(true)` to force it, `None` to leave it to the terminal.
     ///
-    /// `NO_COLOR` set to anything non-empty wins; then `FORCE_COLOR` (`0` or
-    /// `false` off, any other non-empty value on), then `CLICOLOR_FORCE` (any
-    /// non-empty value but `0` on). An empty value is the same as unset.
+    /// `NO_COLOR` set to anything non-empty (a blank value counts, as at
+    /// no-color.org) wins; then `FORCE_COLOR` (`0`, `false`, `no` or `off`
+    /// off, any other value on), then `CLICOLOR_FORCE` (any non-empty value
+    /// but `0` on). An empty or, for the two force variables, blank value is
+    /// the same as unset.
     pub fn colour_choice(&self) -> Option<bool> {
         let set = |name: &str| self.get(name).map(str::trim).filter(|v| !v.is_empty());
-        if set("NO_COLOR").is_some() {
+        if self.get("NO_COLOR").is_some_and(|value| !value.is_empty()) {
             return Some(false);
         }
         if let Some(value) = set("FORCE_COLOR") {
-            return Some(!matches!(value.to_lowercase().as_str(), "0" | "false"));
+            return Some(!matches!(
+                value.to_lowercase().as_str(),
+                "0" | "false" | "no" | "off"
+            ));
         }
         set("CLICOLOR_FORCE")
             .filter(|value| *value != "0")
@@ -100,6 +105,14 @@ mod tests {
         assert_eq!(choice(&[]), None);
         assert_eq!(choice(&[("NO_COLOR", "1")]), Some(false));
         assert_eq!(choice(&[("NO_COLOR", "")]), None);
+        assert_eq!(choice(&[("NO_COLOR", " ")]), Some(false));
+        assert_eq!(choice(&[("FORCE_COLOR", " ")]), None);
+        assert_eq!(choice(&[("FORCE_COLOR", "no")]), Some(false));
+        assert_eq!(choice(&[("FORCE_COLOR", "OFF")]), Some(false));
+        assert_eq!(
+            choice(&[("FORCE_COLOR", "1"), ("CLICOLOR_FORCE", "0")]),
+            Some(true)
+        );
         assert_eq!(choice(&[("FORCE_COLOR", "1")]), Some(true));
         assert_eq!(choice(&[("FORCE_COLOR", "true")]), Some(true));
         assert_eq!(choice(&[("FORCE_COLOR", "3")]), Some(true));

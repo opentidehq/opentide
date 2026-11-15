@@ -33,7 +33,7 @@ pub fn environment() -> Vec<(String, String)> {
         ("OPENTIDE_DEBUG", "1 for debug logging, like --debug".into()),
         (
             "NO_COLOR",
-            "Any value turns colour off, like --no-color".into(),
+            "Any non-empty value turns colour off, like --no-color".into(),
         ),
         (
             "OPENTIDE_JSON_INDENT",

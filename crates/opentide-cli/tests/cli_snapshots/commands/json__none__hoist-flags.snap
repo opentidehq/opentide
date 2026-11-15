@@ -15259,7 +15259,7 @@ exit: 0
       "name": "OPENTIDE_DEBUG"
     },
     {
-      "meaning": "Any value turns colour off, like --no-color",
+      "meaning": "Any non-empty value turns colour off, like --no-color",
       "name": "NO_COLOR"
     },
     {
