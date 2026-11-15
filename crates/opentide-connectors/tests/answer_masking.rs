@@ -79,6 +79,33 @@ async fn the_description_of_an_answer_that_is_not_json_has_no_credential() {
 }
 
 #[test]
+fn a_successful_json_answer_is_kept_and_an_error_is_masked() {
+    let mut request = opentide_connectors::transport::Request::new(
+        Method::POST,
+        "https://example.test/token".parse().unwrap(),
+    );
+    request.headers_mut().insert(
+        "content-type",
+        "application/x-www-form-urlencoded".parse().unwrap(),
+    );
+    request.set_body(Some(b"client_secret=secret-of-a".to_vec()));
+    let credentials = Credentials::of(&request);
+    let issued = br#"{"access_token":"token-secret-of-a"}"#.to_vec();
+    let kept = Answer::new(200, None, issued.clone(), Duration::ZERO, &credentials);
+    assert_eq!(kept.body, issued);
+    let refused = Answer::new(400, None, issued, Duration::ZERO, &credentials);
+    assert_eq!(refused.text(), r#"{"access_token":"token-***"}"#);
+    let page = Answer::new(
+        200,
+        None,
+        b"<p>secret-of-a</p>".to_vec(),
+        Duration::ZERO,
+        &credentials,
+    );
+    assert_eq!(page.text(), "<p>***</p>");
+}
+
+#[test]
 fn a_body_that_echoes_no_credential_is_kept_as_it_is() {
     let credentials = Credentials::default();
     let body = b"\xff not utf-8 \xfe".to_vec();

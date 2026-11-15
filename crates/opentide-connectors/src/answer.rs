@@ -138,9 +138,13 @@ impl Credentials {
 }
 
 impl Answer {
-    /// An answer to a request that sent *credentials*: its body has none of
-    /// them, so no cut of it, whatever its length, can show a credential
-    /// the API echoed, nor the head of one that straddles the cut.
+    /// An answer to a request that sent *credentials*. A successful JSON
+    /// answer is the API's data and is kept as it came (a token endpoint's
+    /// token may well contain the secret it was asked with); any other
+    /// answer, an error status or a body that is not JSON, is only ever
+    /// quoted, so it has none of the credentials: no cut of it, whatever its
+    /// length, can show one the API echoed, nor the head of one that
+    /// straddles the cut.
     pub fn new(
         status: u16,
         content_type: Option<String>,
@@ -148,10 +152,11 @@ impl Answer {
         elapsed: Duration,
         credentials: &Credentials,
     ) -> Self {
+        let data = status < 400 && serde_json::from_slice::<serde::de::IgnoredAny>(&body).is_ok();
         Self {
             status,
             content_type,
-            body: credentials.mask(body),
+            body: if data { body } else { credentials.mask(body) },
             elapsed,
         }
     }
