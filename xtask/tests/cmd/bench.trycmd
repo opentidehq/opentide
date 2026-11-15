@@ -64,9 +64,9 @@ bench --check: every command is within its budget
 
 $ xtask bench --check budgets.toml
 ? 2
-xtask bench: --check needs a value
+error: 2 values required for '--check <BUDGETS> <BENCH.json>' but 1 was provided
 
-usage: cargo xtask bench [--engine python|rust] [--scale 1|10] [--json] [--out FILE]
+Usage: cargo xtask bench [OPTIONS]
 ...
 
 $ xtask bench --check budgets.toml missing.json
@@ -75,9 +75,9 @@ xtask bench --check: read missing.json: [..]
 
 $ xtask bench --engine go
 ? 2
-xtask bench: --engine is python or rust, not `go`
+error: invalid value 'go' for '--engine <ENGINE>'
+  [possible values: python, rust]
 
-usage: cargo xtask bench [--engine python|rust] [--scale 1|10] [--json] [--out FILE]
 ...
 
 ```

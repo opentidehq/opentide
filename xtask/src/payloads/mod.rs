@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use std::sync::Arc;
 
-use anyhow::{Context as _, Result, bail, ensure};
+use anyhow::{Context as _, Result, ensure};
 use opentide_compile::json::{Json, Object};
 use opentide_compile::preview::{self, Inputs};
 use opentide_compile::{CompileError, Owned, Rule, splunk};
@@ -61,61 +61,81 @@ pub const CORPORA: [&str; 6] = [
     "fault",
 ];
 
-/// The usage.
-pub const USAGE: &str = "\
-usage: cargo xtask payloads <command> [options]
+/// `cargo xtask payloads <command>`. Exit status: 0 passed, 1 a body differs,
+/// 2 usage error or the check could not run.
+#[derive(clap::Subcommand, Debug)]
+pub enum Cmd {
+    /// Compile every platform block of every rule of each corpus (the fixtures
+    /// of tests/golden/cases.toml) with the oracle and with opentide-compile:
+    /// the dry run's body, each configured tenant's body (the writes the
+    /// deployer sends, for Defender, Splunk, SentinelOne, CrowdStrike,
+    /// HarfangLab and Carbon Black), and the dry run's payload entry; any
+    /// difference not in tests/golden/payloads/APPROVED.toml fails
+    Diff(DiffArgs),
+    /// The changed rule files of a scripted git history (first commit, edits, a
+    /// non-ASCII name, a nested rule, a rename, a delete, a detached HEAD, a
+    /// merge, a shallow clone, no commit, no checkout), read by the oracle and
+    /// by opentide-compile's gix baseline
+    Git(GitArgs),
+    /// Make deploy --dry-run's plan with opentide-compile for every dry-run case
+    /// recorded in tests/golden/cases/deploy/json and compare it with the
+    /// oracle's document
+    Plan {
+        /// Only the cases whose id starts with PREFIX
+        #[arg(long, value_name = "PREFIX")]
+        filter: Option<String>,
+    },
+}
 
-commands:
-  diff --against python [--corpus NAME|all ...] [--python PATH] [--record]
-                 compile every platform block of every rule of each corpus (the
-                 fixtures of tests/golden/cases.toml) with the oracle and with
-                 opentide-compile: the dry run's body, each configured tenant's
-                 body (the writes the deployer sends, for Defender, Splunk,
-                 SentinelOne, CrowdStrike, HarfangLab and Carbon Black), and the
-                 dry run's payload entry; any difference not in
-                 tests/golden/payloads/APPROVED.toml fails. The corpus
-                 `payloads` is tests/golden/payloads/corpus; the oracle's result on it
-                 must equal tests/golden/payloads/oracle.json (--record writes it)
-  git --against python [--python PATH]
-                 the changed rule files of a scripted git history (first commit,
-                 edits, a non-ASCII name, a nested rule, a rename, a delete, a
-                 detached HEAD, a merge, a shallow clone, no commit, no checkout),
-                 read by the oracle and by opentide-compile's gix baseline
-  plan [--filter PREFIX]
-                 make deploy --dry-run's plan with opentide-compile for every
-                 dry-run case recorded in tests/golden/cases/deploy/json and
-                 compare it with the oracle's document
-  help           print this message
+/// The arguments of `payloads diff`.
+#[derive(clap::Args, Debug)]
+pub struct DiffArgs {
+    /// What to compare with
+    #[arg(long, value_enum)]
+    against: crate::diff_args::Against,
+    /// A corpus to compare, or `all`; repeat for several. The corpus `payloads`
+    /// is tests/golden/payloads/corpus; the oracle's result on it must equal
+    /// tests/golden/payloads/oracle.json (--record writes it)
+    #[arg(
+        long,
+        value_name = "NAME",
+        value_parser = corpus_names()
+    )]
+    corpus: Vec<String>,
+    /// The oracle's interpreter; installed from tests/golden/ORACLE when not
+    /// given
+    #[arg(long, value_name = "PATH")]
+    python: Option<PathBuf>,
+    /// Write the oracle's result on the `payloads` corpus instead of checking it
+    #[arg(long)]
+    record: bool,
+}
 
-exit status: 0 passed, 1 a body differs, 2 usage error or the check could not run
-";
+/// The arguments of `payloads git`.
+#[derive(clap::Args, Debug)]
+pub struct GitArgs {
+    /// What to compare with
+    #[arg(long, value_enum)]
+    against: crate::diff_args::Against,
+    /// The oracle's interpreter; installed from tests/golden/ORACLE when not
+    /// given
+    #[arg(long, value_name = "PATH")]
+    python: Option<PathBuf>,
+}
 
-/// Runs `cargo xtask payloads ARGS`.
-pub fn main(args: &[String]) -> ExitCode {
-    let Some((command, rest)) = args.split_first() else {
-        eprint!("{USAGE}");
-        return ExitCode::from(2);
-    };
-    let result = match command.as_str() {
-        "diff" => parse(rest).and_then(|options| run(&options)),
-        "git" => {
-            parse(rest).and_then(|options| git::run(&oracle_python(options.python.as_deref())?))
+/// The corpora `--corpus` names, and `all`.
+fn corpus_names() -> clap::builder::PossibleValuesParser {
+    clap::builder::PossibleValuesParser::new(CORPORA.into_iter().chain(["all"]))
+}
+
+/// Runs `cargo xtask payloads <command>`.
+pub fn main(command: &Cmd) -> ExitCode {
+    let result = match command {
+        Cmd::Diff(args) => run(&args.options()),
+        Cmd::Git(args) => {
+            oracle_python(args.python.as_deref()).and_then(|python| git::run(&python))
         }
-        "plan" => match rest {
-            [] => plan::run(None),
-            [flag, filter] if flag == "--filter" => plan::run(Some(filter)),
-            _ => Err(anyhow::anyhow!(
-                "usage: cargo xtask payloads plan [--filter PREFIX]"
-            )),
-        },
-        "help" | "--help" | "-h" => {
-            print!("{USAGE}");
-            return ExitCode::SUCCESS;
-        }
-        other => {
-            eprint!("xtask payloads: unknown command `{other}`\n\n{USAGE}");
-            return ExitCode::from(2);
-        }
+        Cmd::Plan { filter } => plan::run(filter.as_deref()),
     };
     match result {
         Ok(true) => ExitCode::SUCCESS,
@@ -123,6 +143,26 @@ pub fn main(args: &[String]) -> ExitCode {
         Err(error) => {
             eprintln!("error: {error:#}");
             ExitCode::from(2)
+        }
+    }
+}
+
+impl DiffArgs {
+    /// The options the comparison runs with: `all` is every corpus.
+    fn options(&self) -> DiffOptions {
+        let mut corpora: Vec<String> = Vec::new();
+        for corpus in &self.corpus {
+            if corpus == "all" {
+                corpora.extend(CORPORA.iter().map(|c| (*c).to_owned()));
+            } else {
+                corpora.push(corpus.clone());
+            }
+        }
+        corpora.dedup();
+        DiffOptions {
+            python: self.python.clone(),
+            corpora,
+            record: self.record,
         }
     }
 }
@@ -136,42 +176,6 @@ pub struct DiffOptions {
     pub corpora: Vec<String>,
     /// Write [`ORACLE_RECORD`] instead of checking it.
     pub record: bool,
-}
-
-/// Reads the options.
-pub fn parse(args: &[String]) -> Result<DiffOptions> {
-    let mut options = DiffOptions::default();
-    let mut against = None;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let mut value = |name: &str| {
-            args.next()
-                .cloned()
-                .with_context(|| format!("{name} takes a value"))
-        };
-        match arg.as_str() {
-            "--against" => against = Some(value("--against")?),
-            "--corpus" => {
-                let corpus = value("--corpus")?;
-                if corpus == "all" {
-                    options
-                        .corpora
-                        .extend(CORPORA.iter().map(|c| (*c).to_owned()));
-                } else {
-                    options.corpora.push(corpus);
-                }
-            }
-            "--python" => options.python = Some(PathBuf::from(value("--python")?)),
-            "--record" => options.record = true,
-            other => bail!("unknown option `{other}`"),
-        }
-    }
-    ensure!(
-        against.as_deref() == Some("python"),
-        "pass --against python: the oracle is the only reference"
-    );
-    options.corpora.dedup();
-    Ok(options)
 }
 
 /// One approved difference.
@@ -927,19 +931,31 @@ pub fn run(options: &DiffOptions) -> Result<bool> {
 mod tests {
     use super::*;
 
-    fn args(line: &str) -> Vec<String> {
-        line.split_whitespace().map(str::to_owned).collect()
+    fn parse(line: &str) -> Result<DiffOptions> {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Cli {
+            #[command(subcommand)]
+            command: Cmd,
+        }
+        let words = std::iter::once("payloads").chain(line.split_whitespace());
+        match Cli::try_parse_from(words)?.command {
+            Cmd::Diff(args) => Ok(args.options()),
+            _ => anyhow::bail!("not diff"),
+        }
     }
 
     #[test]
     fn options_parse() {
-        let options = parse(&args("--against python --corpus all")).unwrap();
+        let options = parse("diff --against python --corpus all").unwrap();
         assert_eq!(options.corpora.len(), CORPORA.len());
-        let options = parse(&args("--against python --corpus vscode --python /p")).unwrap();
+        let options = parse("diff --against python --corpus vscode --python /p").unwrap();
         assert_eq!(options.corpora, ["vscode"]);
         assert_eq!(options.python.as_deref(), Some(Path::new("/p")));
-        assert!(parse(&args("--against rust")).is_err());
-        assert!(parse(&args("--against python --nope")).is_err());
+        assert!(parse("diff --against rust").is_err());
+        assert!(parse("diff --against python --corpus nonesuch").is_err());
+        assert!(parse("diff --against python --nope").is_err());
+        assert!(parse("diff").is_err(), "no --against");
     }
 
     #[test]
@@ -1218,10 +1234,23 @@ mod tests {
 
     #[test]
     fn the_command_line_answers_usage_and_unknown_commands() {
-        assert_eq!(main(&[]), ExitCode::from(2));
-        assert_eq!(main(&args("help")), ExitCode::SUCCESS);
-        assert_eq!(main(&args("nope")), ExitCode::from(2));
-        assert_eq!(main(&args("plan --filter")), ExitCode::from(2));
-        assert_eq!(main(&args("diff --against rust")), ExitCode::from(2));
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Cli {
+            #[command(subcommand)]
+            command: Cmd,
+        }
+        let code = |line: &str| {
+            let words = std::iter::once("payloads").chain(line.split_whitespace());
+            Cli::try_parse_from(words)
+                .err()
+                .map(|error| error.exit_code())
+        };
+        assert_eq!(code(""), Some(2));
+        assert_eq!(code("help"), Some(0));
+        assert_eq!(code("nope"), Some(2));
+        assert_eq!(code("plan --filter"), Some(2));
+        assert_eq!(code("diff --against rust"), Some(2));
+        assert_eq!(code("plan --filter x"), None);
     }
 }
