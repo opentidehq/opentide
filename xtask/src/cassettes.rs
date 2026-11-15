@@ -16,24 +16,35 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
+use clap::Subcommand;
 use opentide_cassette::{Cassette, Mode, Proxy, Redaction, cassette};
 use serde::Deserialize;
 
 use crate::golden::Layout;
 use crate::golden::oracle::{self, Oracle};
 
-const USAGE: &str = "\
-Usage: cargo xtask cassettes <command>
-
-Commands:
-  check            check every cassette under tests/cassettes
-  record <name>… [--oracle FILE]
-                   record the scenarios named (all with --all) from the oracle
-                   of tests/golden/ORACLE, or of FILE (tests/golden/ORACLE.next)
-  list             list the scenarios
-
-Exit status: 0 success, 1 a check failed, 2 usage error or the run could not start
-";
+/// `cargo xtask cassettes <command>`. Exit status: 0 success, 1 a check
+/// failed, 2 usage error or the run could not start.
+#[derive(Subcommand)]
+pub enum Cmd {
+    /// Check every cassette under tests/cassettes
+    Check,
+    /// Record the scenarios named (all with --all) from the oracle of
+    /// tests/golden/ORACLE, or of FILE (tests/golden/ORACLE.next)
+    Record {
+        /// Scenarios of tests/cassettes/scenarios.toml
+        #[arg(required_unless_present = "all")]
+        names: Vec<String>,
+        /// Every scenario
+        #[arg(long)]
+        all: bool,
+        /// The oracle to record from
+        #[arg(long, value_name = "FILE")]
+        oracle: Option<PathBuf>,
+    },
+    /// List the scenarios
+    List,
+}
 
 /// `tests/cassettes/scenarios.toml`.
 #[derive(Debug, Deserialize)]
@@ -103,19 +114,15 @@ impl Scenarios {
     }
 }
 
-/// Runs `cargo xtask cassettes <args>`.
-pub fn run(args: &[String]) -> Result<u8> {
-    let Some((verb, rest)) = args.split_first() else {
-        eprint!("{USAGE}");
-        return Ok(2);
-    };
+/// Runs `cargo xtask cassettes <command>`.
+pub fn run(command: &Cmd) -> Result<u8> {
     let layout = Layout::find()?;
     let dir = layout.repo.join("tests/cassettes");
     let scenarios = Scenarios::parse(
         &std::fs::read_to_string(dir.join("scenarios.toml")).context("read scenarios.toml")?,
     )?;
-    match verb.as_str() {
-        "check" => {
+    match command {
+        Cmd::Check => {
             let problems = check(&dir, &scenarios)?;
             for problem in &problems {
                 eprintln!("cassettes check: {problem}");
@@ -130,41 +137,24 @@ pub fn run(args: &[String]) -> Result<u8> {
                 Ok(1)
             }
         }
-        "list" => {
+        Cmd::List => {
             for scenario in &scenarios.scenario {
                 println!("{}  {}", scenario.name, scenario.description);
             }
             Ok(0)
         }
-        "record" => {
-            let mut all = false;
-            let mut oracle_file = layout.golden.join("ORACLE");
-            let mut names: Vec<&String> = Vec::new();
-            let mut args = rest.iter();
-            while let Some(arg) = args.next() {
-                match arg.as_str() {
-                    "--all" => all = true,
-                    "--oracle" => {
-                        let Some(file) = args.next() else {
-                            eprint!("cassettes record: --oracle needs a file\n\n{USAGE}");
-                            return Ok(2);
-                        };
-                        oracle_file = PathBuf::from(file);
-                    }
-                    other if other.starts_with("--") => {
-                        eprint!("cassettes record: unknown option `{other}`\n\n{USAGE}");
-                        return Ok(2);
-                    }
-                    _ => names.push(arg),
-                }
-            }
+        Cmd::Record { names, all, oracle } => {
+            let all = *all;
+            let oracle_file = oracle
+                .clone()
+                .unwrap_or_else(|| layout.golden.join("ORACLE"));
             let chosen: Vec<&Scenario> = scenarios
                 .scenario
                 .iter()
-                .filter(|scenario| all || names.contains(&&scenario.name))
+                .filter(|scenario| all || names.contains(&scenario.name))
                 .collect();
             if chosen.is_empty() || (!all && chosen.len() != names.len()) {
-                eprint!("cassettes record: name scenarios of scenarios.toml, or --all\n\n{USAGE}");
+                eprintln!("cassettes record: name scenarios of scenarios.toml, or --all");
                 return Ok(2);
             }
             let (oracle, oracle_dir) = Oracle::read_file(&oracle_file)?;
@@ -184,14 +174,6 @@ pub fn run(args: &[String]) -> Result<u8> {
                 );
             }
             Ok(0)
-        }
-        "help" | "--help" | "-h" => {
-            print!("{USAGE}");
-            Ok(0)
-        }
-        other => {
-            eprint!("cassettes: unknown command `{other}`\n\n{USAGE}");
-            Ok(2)
         }
     }
 }
@@ -633,23 +615,30 @@ mod tests {
         words.iter().map(|word| (*word).to_owned()).collect()
     }
 
+    /// The exit status of `cassettes <args>`: clap's 2 for a usage error.
+    fn exit_status(args: &[&str]) -> u8 {
+        match crate::parse_subcommand::<Cmd>(args) {
+            Ok(command) => run(&command).unwrap(),
+            Err(error) => u8::try_from(error.exit_code()).unwrap(),
+        }
+    }
+
     #[test]
     fn the_command_line_exit_statuses() {
-        assert_eq!(run(&[]).unwrap(), 2, "no command");
-        assert_eq!(run(&words(&["frobnicate"])).unwrap(), 2);
-        assert_eq!(run(&words(&["help"])).unwrap(), 0);
-        assert_eq!(run(&words(&["list"])).unwrap(), 0);
+        assert_eq!(exit_status(&[]), 2, "no command");
+        assert_eq!(exit_status(&["frobnicate"]), 2);
+        assert_eq!(exit_status(&["list"]), 0);
         // The repository's cassettes are recorded and redacted (a Windows
         // checkout may convert their line endings, which the check refuses).
         if !cfg!(windows) {
-            assert_eq!(run(&words(&["check"])).unwrap(), 0);
+            assert_eq!(exit_status(&["check"]), 0);
         }
         // `record` names scenarios of scenarios.toml, every one known, before
         // it provisions the oracle.
-        assert_eq!(run(&words(&["record"])).unwrap(), 2);
-        assert_eq!(run(&words(&["record", "no-such-scenario"])).unwrap(), 2);
+        assert_eq!(exit_status(&["record"]), 2);
+        assert_eq!(exit_status(&["record", "no-such-scenario"]), 2);
         assert_eq!(
-            run(&words(&["record", "skills/manifest", "no-such-scenario"])).unwrap(),
+            exit_status(&["record", "skills/manifest", "no-such-scenario"]),
             2
         );
     }
