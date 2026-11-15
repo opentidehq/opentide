@@ -143,7 +143,8 @@ impl<'py> IntoPyObject<'py> for ValidationErrorClass {
 // Values: serde data and nodes to Python, Python to nodes.
 // ---------------------------------------------------------------------------
 
-/// A JSON value as the Python value `json.loads` would give.
+/// A JSON value as the matching Python value: `None`, `bool`, `int`,
+/// `float`, `str`, `list` or `dict`.
 fn json_to_py<'py>(py: Python<'py>, value: &serde_json::Value) -> PyResult<Bound<'py, PyAny>> {
     Ok(match value {
         serde_json::Value::Null => py.None().into_bound(py),

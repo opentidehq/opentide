@@ -8,7 +8,9 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-error: Unexpected argument "extra".
-  usage: opentide commands [OPTIONS]
-  help: run 'opentide commands --help'
+error: unexpected argument 'extra' found
+
+Usage: opentide commands [OPTIONS]
+
+For more information, try '--help'.
 tip: add --json for machine-readable output

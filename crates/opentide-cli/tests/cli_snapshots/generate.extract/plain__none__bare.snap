@@ -8,6 +8,9 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-error: Missing command.
-  usage: opentide generate extract [OPTIONS] <COMMAND>
-  help: run 'opentide generate extract --help'
+error: 'opentide generate extract' requires a subcommand but one was not provided
+  [subcommands: sentinel, defender, elastic]
+
+Usage: opentide generate extract [OPTIONS] <COMMAND>
+
+For more information, try '--help'.

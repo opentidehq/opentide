@@ -173,9 +173,10 @@ fn field<'j>(block: &'j CJson, key: &str) -> Option<&'j CJson> {
     block.get(key).filter(|value| !value.is_null())
 }
 
-/// Python's truth of a block's value: a non-empty list, string or mapping.
-fn truthy(value: Option<&CJson>) -> bool {
-    value.is_some_and(CJson::truthy)
+/// Whether a block's value holds something: a non-empty list, string or
+/// mapping, or a scalar.
+fn filled(value: Option<&CJson>) -> bool {
+    value.is_some_and(CJson::is_filled)
 }
 
 /// `_required`: the query, stripped, or the refusal of an empty one.
@@ -298,7 +299,7 @@ fn exabeam(block: &CJson, rule: &Rule) -> Result<Vec<RuleQuery>, String> {
         .enumerate()
         .map(|(at, sequence)| {
             let filtered =
-                field(sequence, "threshold").is_some() || truthy(field(sequence, "group_by"));
+                field(sequence, "threshold").is_some() || filled(field(sequence, "group_by"));
             Ok(RuleQuery {
                 text: required(sequence.get("query"), rule, "exabeam")?,
                 language: Some("exabeam".into()),
@@ -338,7 +339,7 @@ fn elastic(block: &CJson, rule: &Rule) -> Result<RuleQuery, String> {
     let data_view = field(block, "data_view_id")
         .and_then(CJson::as_str)
         .map(str::to_owned);
-    let filtered = truthy(field(block, "filters"));
+    let filtered = filled(field(block, "filters"));
     let query = RuleQuery {
         text,
         index,

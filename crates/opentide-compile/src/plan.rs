@@ -272,12 +272,12 @@ fn object_uuid(rule: &Json) -> Option<String> {
         Json::Str(text) => text.clone(),
         other => other.to_compact(),
     };
-    if let Some(top) = rule.get("uuid").filter(|value| value.truthy()) {
+    if let Some(top) = rule.get("uuid").filter(|value| value.is_name()) {
         return Some(text(top));
     }
     rule.get("metadata")
         .and_then(|metadata| metadata.get("uuid"))
-        .filter(|value| value.truthy())
+        .filter(|value| value.is_name())
         .map(text)
 }
 
@@ -350,7 +350,7 @@ pub fn select(
             for (platform, block) in configurations {
                 let status = block
                     .get("status")
-                    .filter(|status| status.truthy())
+                    .filter(|status| status.is_filled())
                     .map(|status| match status {
                         Json::Str(text) => text.clone(),
                         other => other.to_compact(),

@@ -9,16 +9,16 @@ exit: 2
 {
   "command": "setup ci",
   "duration_ms": 0,
-  "error": "Invalid value \"githb\" for ci_platform: choose from github, gitlab, azure.",
+  "error": "invalid value 'githb' for '<ci_platform>' [possible values: github, gitlab, azure]",
   "exit_code": 2,
   "failure": {
     "argument": "ci_platform",
     "code": "usage_invalid_choice",
     "crash_log": null,
-    "message": "Invalid value \"githb\" for ci_platform: choose from github, gitlab, azure.",
+    "message": "invalid value 'githb' for '<ci_platform>' [possible values: github, gitlab, azure]",
     "suggestion": "github"
   },
-  "message": "Invalid value \"githb\" for ci_platform: choose from github, gitlab, azure.",
+  "message": "invalid value 'githb' for '<ci_platform>' [possible values: github, gitlab, azure]",
   "next_actions": [],
   "ok": false,
   "schema_version": 1,

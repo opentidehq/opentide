@@ -74,7 +74,7 @@ fn the_binary_reports_a_usage_error_as_the_cli_does() {
     assert!(
         String::from_utf8(output.stderr)
             .unwrap()
-            .starts_with("error: Unknown command \"valdiate\".")
+            .starts_with("error: unrecognized subcommand 'valdiate'")
     );
 }
 

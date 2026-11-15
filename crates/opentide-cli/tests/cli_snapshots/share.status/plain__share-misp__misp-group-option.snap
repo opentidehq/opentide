@@ -9,5 +9,7 @@ exit: 2
 
 ━━━ stderr
 error: --dry-run configures `opentide share` itself and would be ignored by `opentide share status`.
-  usage: opentide share status [OPTIONS]
-  help: run 'opentide share status --help'
+
+Usage: opentide share status [OPTIONS]
+
+For more information, try '--help'.

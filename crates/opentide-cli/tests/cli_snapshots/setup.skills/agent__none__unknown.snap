@@ -9,6 +9,8 @@ exit: 2
 
 ━━━ stderr
 error: Unknown skill slug(s): no-such-skill. Run 'opentide setup skills discover' to list available skills.
-  usage: opentide setup skills [OPTIONS] [COMMAND]
-  help: run 'opentide setup skills --help'
+
+Usage: opentide setup skills [OPTIONS] [COMMAND]
+
+For more information, try '--help'.
 tip: add --json for machine-readable output

@@ -8,8 +8,9 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-␛[1m␛[31merror:␛[0m Invalid value "filenamez" for --check: choose from filenames, metadata, recommended,
-       placeholders, queries.
-  ␛[1m␛[36mhelp:␛[0m did you mean "filenames"?
-  ␛[1musage:␛[0m opentide lint [OPTIONS]
-  ␛[1m␛[36mhelp:␛[0m run 'opentide lint --help'
+␛[1m␛[31merror:␛[0m invalid value '␛[33mfilenamez␛[0m' for '␛[1m--check <CHECK>␛[0m'
+  [possible values: ␛[32mfilenames␛[0m, ␛[32mmetadata␛[0m, ␛[32mrecommended␛[0m, ␛[32mplaceholders␛[0m, ␛[32mqueries␛[0m]
+
+  ␛[32mtip:␛[0m a similar value exists: '␛[32mfilenames␛[0m'
+
+For more information, try '␛[1m--help␛[0m'.

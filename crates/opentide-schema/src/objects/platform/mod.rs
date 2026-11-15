@@ -806,18 +806,23 @@ pub(crate) fn within_budget(node: &Node) -> bool {
     true
 }
 
-/// Python's truthiness of a YAML value: `null`, `false`, `0`, `0.0`, `""`,
-/// `[]` and `{}` are false.
-pub(crate) fn truthy(node: Option<&Node>) -> bool {
+/// Whether a key holds a value: it is set (not null) and is not an empty
+/// string, sequence or mapping. A boolean or a number is a value, `false`
+/// and `0` included.
+pub(crate) fn filled(node: Option<&Node>) -> bool {
     match node.map(|node| &node.value) {
         None | Some(Value::Null) => false,
-        Some(Value::Bool(flag)) => *flag,
-        Some(Value::Int(integer)) => *integer != 0,
-        Some(Value::Float(float)) => *float != 0.0,
         Some(Value::Str(text) | Value::Datetime(text)) => !text.is_empty(),
         Some(Value::Seq(items)) => !items.is_empty(),
         Some(Value::Map(entries)) => !entries.is_empty(),
+        Some(Value::Bool(_) | Value::Int(_) | Value::Float(_)) => true,
     }
+}
+
+/// The node's text when it is a non-empty string.
+pub(crate) fn non_empty_str(node: Option<&Node>) -> Option<&str> {
+    node.and_then(|node| node.value.as_str())
+        .filter(|text| !text.is_empty())
 }
 
 /// `raw.get(key) is not None`.
