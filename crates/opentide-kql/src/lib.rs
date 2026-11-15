@@ -46,6 +46,14 @@ mod lexer;
         reason = "the new parser is reached from tests until the switch"
     )
 )]
+mod parser;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the new parser is reached from tests until the switch"
+    )
+)]
 mod syntax;
 
 use opentide_syntax::{has_error, parse as ts_parse};

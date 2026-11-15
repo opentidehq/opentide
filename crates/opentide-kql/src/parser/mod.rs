@@ -1,0 +1,171 @@
+//! The KQL parser on `opentide-parse` (#1230): recursive descent, with the
+//! expressions by precedence climbing. `kql.ungram` is the shape of the
+//! tree it builds.
+//!
+//! A word is a keyword only where the grammar takes one (the lexer reads
+//! every word as the kind its text names): where a name is wanted, any
+//! word is one, and the parser relabels it `IDENT` ([`P::bump_name`]).
+
+mod expr;
+mod statement;
+mod tabular;
+#[cfg(test)]
+mod tests;
+
+use crate::lexer::lex_kql;
+use crate::syntax::SyntaxKind as K;
+use opentide_parse::{CompletedMarker, Grammar, Input, Marker, Parse, Parser, TokenSet, build};
+
+/// The deepest nesting of expressions and sub-pipelines the parser takes
+/// (tree-sitter took 35 on a 1 MB stack). Past it: one error and the rest
+/// of the input in one error node.
+const MAX_DEPTH: u32 = 256;
+
+const GRAMMAR: Grammar = Grammar {
+    eof: K::EOF.raw(),
+    error: K::ERROR.raw(),
+    trivia: TokenSet::new(&[K::WHITESPACE.raw(), K::COMMENT.raw()]),
+    max_depth: MAX_DEPTH,
+};
+
+/// Parses `source` into a lossless tree and its syntax errors.
+pub(crate) fn parse(source: &str) -> Parse {
+    let input = Input::new(source, lex_kql(source), GRAMMAR);
+    let mut p = P(Parser::new(&input));
+    statement::source_file(&mut p);
+    build(&input, p.0.finish())
+}
+
+/// The toolkit's parser, spoken in this language's kinds.
+pub(crate) struct P<'i>(Parser<'i>);
+
+impl P<'_> {
+    pub(crate) fn nth(&self, n: usize) -> K {
+        K::from_raw(self.0.nth(n))
+    }
+
+    pub(crate) fn current(&self) -> K {
+        self.nth(0)
+    }
+
+    pub(crate) fn at(&mut self, kind: K) -> bool {
+        self.0.at(kind.raw())
+    }
+
+    pub(crate) fn at_eof(&self) -> bool {
+        self.0.at_eof()
+    }
+
+    pub(crate) fn eat(&mut self, kind: K) -> bool {
+        self.0.eat(kind.raw())
+    }
+
+    pub(crate) fn bump(&mut self) {
+        self.0.bump();
+    }
+
+    pub(crate) fn bump_as(&mut self, kind: K) {
+        self.0.bump_as(kind.raw());
+    }
+
+    /// Consumes `kind`, or records "expected ..." without consuming.
+    pub(crate) fn expect(&mut self, kind: K) -> bool {
+        let found = self.0.eat(kind.raw());
+        if !found {
+            self.0.error(format!("expected {}", kind.describe()));
+        }
+        found
+    }
+
+    pub(crate) fn error(&mut self, message: &str) {
+        self.0.error(message);
+    }
+
+    pub(crate) fn err_until(&mut self, message: &str, stop: TokenSet) {
+        self.0.err_until(message, stop);
+    }
+
+    pub(crate) fn start(&mut self) -> Marker {
+        self.0.start()
+    }
+
+    pub(crate) fn enter(&mut self) -> bool {
+        self.0.enter()
+    }
+
+    pub(crate) fn exit(&mut self) {
+        self.0.exit();
+    }
+
+    pub(crate) fn done(&mut self, marker: Marker, kind: K) -> CompletedMarker {
+        marker.complete(&mut self.0, kind.raw())
+    }
+
+    pub(crate) fn precede(&mut self, done: CompletedMarker) -> Marker {
+        done.precede(&mut self.0)
+    }
+
+    /// Whether the token `n` ahead is a word that can be a name: an
+    /// identifier, or a keyword spelled like one (`has` is a column when no
+    /// operator can come, `!has` never is).
+    pub(crate) fn name_at(&self, n: usize) -> bool {
+        let kind = self.nth(n);
+        kind == K::IDENT
+            || (kind.is_word()
+                && self
+                    .0
+                    .nth_text(n)
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_'))
+    }
+
+    /// Consumes a name (a word, or a quoted name) as an identifier, or
+    /// records "expected a name".
+    pub(crate) fn expect_name(&mut self) -> bool {
+        if self.name_at(0) {
+            self.bump_as(K::IDENT);
+            true
+        } else {
+            self.0.error("expected a name");
+            false
+        }
+    }
+
+    /// The index, past `n`, of the token after the group that opens at `n`
+    /// (`(`, `[` or `{`): `n + 1` for any other token; the end of the input
+    /// for a group that never closes.
+    pub(crate) fn after_group(&self, n: usize) -> usize {
+        let mut depth = 0usize;
+        let mut at = n;
+        loop {
+            match self.nth(at) {
+                K::EOF => return at,
+                K::L_PAREN | K::L_BRACKET | K::L_BRACE => depth += 1,
+                K::R_PAREN | K::R_BRACKET | K::R_BRACE => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return at + 1;
+                    }
+                }
+                _ if depth == 0 => return at + 1,
+                _ => {}
+            }
+            at += 1;
+        }
+    }
+
+    /// Whether a `|` stands at the top level of the group that opens at `n`.
+    pub(crate) fn pipe_in_group(&self, n: usize) -> bool {
+        let end = self.after_group(n);
+        let mut depth = 0usize;
+        for at in n..end {
+            match self.nth(at) {
+                K::L_PAREN | K::L_BRACKET | K::L_BRACE => depth += 1,
+                K::R_PAREN | K::R_BRACKET | K::R_BRACE => depth = depth.saturating_sub(1),
+                K::PIPE if depth == 1 => return true,
+                _ => {}
+            }
+        }
+        false
+    }
+}

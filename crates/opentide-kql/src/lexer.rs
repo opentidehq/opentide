@@ -277,7 +277,7 @@ fn split_words(range: TextRange, text: &str, at: &[usize], out: &mut Vec<Lexeme>
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::syntax::{OPERATOR_WORDS, TEXTS};
     use std::path::{Path, PathBuf};

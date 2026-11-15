@@ -27,3 +27,4 @@ regex.workspace = true
 tree-sitter.workspace = true
 
 [dev-dependencies]
+insta.workspace = true
