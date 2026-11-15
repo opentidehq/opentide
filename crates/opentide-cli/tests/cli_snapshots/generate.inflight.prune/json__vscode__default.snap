@@ -1,0 +1,38 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.inflight.prune/json/vscode/default
+---
+args: opentide --json generate inflight prune
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "generate inflight prune",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Generated 0 files in <SECONDS> · inflight prune",
+  "next_actions": [],
+  "ok": true,
+  "phase": "inflight-prune",
+  "schema_version": 1,
+  "status": "completed",
+  "steps": [
+    {
+      "count": 0,
+      "name": "inflight prune",
+      "seconds": 0.0,
+      "status": "ok",
+      "unit": "file",
+      "where": null
+    }
+  ],
+  "summary": {
+    "files": 0,
+    "phases": 1,
+    "removed": 0,
+    "seconds": 0.0
+  }
+}
+
+━━━ stderr · empty

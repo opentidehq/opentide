@@ -1,0 +1,52 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/plain/deploy-tenants/send-crowdstrike-ci-github
+---
+args: opentide deploy --platform crowdstrike --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
+exit: 0
+
+━━━ stdout
+✓ Deployed 3 rules to 1 tenant · 1 created, 1 updated, 1 deleted · 0 failed, 0 not attempted · <SECONDS>
+
+━━━ stderr
+Deploy plan · strategy PREVIEW RELEASE · 1 platform, 1 tenant
+Plan: 1 to create, 1 to update, 0 to disable, 1 to delete
+warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000021 · platform: crowdstrike · tenant: *** · external_id: cs-rule-1
+
+Deploying to crowdstrike / lab · 3 rules
+  [1/3] ✓ created   CrowdStrike create rule <SECONDS>
+  [2/3] ✓ updated   CrowdStrike update rule <SECONDS>
+  [3/3] ✓ deleted   CrowdStrike retire rule <SECONDS>
+✓ crowdstrike · 3 deployed, 0 failed, 0 not attempted · <SECONDS>
+
+━━━ ws/.opentide/states/deployment/00000000-0000-4000-8047-000000000021.json · created 0644
+{
+  "object_uuid": "00000000-0000-4000-8047-000000000021",
+  "platforms": {
+    "crowdstrike": {
+      "lab": "cs-rule-1"
+    }
+  },
+  "schema": "deployment.state::1.0"
+}
+
+━━━ ws/.opentide/states/deployment/00000000-0000-4000-8047-000000000023.json · deleted
+
+━━━ tmp/github-step-summary.md · created 0644
+### ✓ opentide deploy
+
+Deployed 3 rules to 1 tenant · 1 created, 1 updated, 1 deleted · 0 failed, 0 not attempted · <SECONDS>
+
+Strategies: `PREVIEW`, `RELEASE`
+
+| Platform | Result | Rules |
+|---|---|---|
+| `crowdstrike` | deployed | 3 |
+
+<details><summary>crowdstrike: 3 rules</summary>
+
+- `00000000-0000-4000-8047-000000000021`
+- `00000000-0000-4000-8047-000000000022`
+- `00000000-0000-4000-8047-000000000023`
+
+</details>

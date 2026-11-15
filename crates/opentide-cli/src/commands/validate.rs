@@ -53,7 +53,7 @@ pub struct Args {
     /// `--watch`.
     pub watch: bool,
     /// `--format`.
-    pub format: Option<ReportFormat>,
+    pub format: ReportFormat,
     /// `--output`.
     pub output: Option<PathBuf>,
 }
@@ -61,9 +61,7 @@ pub struct Args {
 impl From<&crate::tree::ValidateArgs> for Args {
     fn from(args: &crate::tree::ValidateArgs) -> Self {
         Self {
-            check: args
-                .check
-                .and_then(|check| Check::parse(&crate::tree::spelled(&check))),
+            check: args.check.map(Check::from),
             selection: Selection {
                 files: args.file.clone(),
                 uuids: args.uuid.clone(),
@@ -78,7 +76,7 @@ impl From<&crate::tree::ValidateArgs> for Args {
             fix: args.fix,
             dry_run: args.dry_run,
             watch: args.watch,
-            format: Some(args.report_format.into()),
+            format: args.report_format.into(),
             output: args.output.clone(),
         }
     }
@@ -124,7 +122,7 @@ pub fn usage(message: impl Into<String>, argument: &str, failure_code: &str) -> 
 
 /// The usage errors the options make, before anything runs.
 pub fn refuse(args: &Args, mode: Mode) -> Option<Report> {
-    let format = args.format.unwrap_or(ReportFormat::Text);
+    let format = args.format;
     if let Some(failure) = check_report_options(format, args.output.is_some(), mode == Mode::Json) {
         return Some(Report::failed(COMMAND, USAGE_EXIT_CODE, failure));
     }
@@ -421,7 +419,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if let Some(report) = refuse(args, terminal.mode) {
         return report;
     }
-    let format = args.format.unwrap_or(ReportFormat::Text);
+    let format = args.format;
     let queries = args.queries.unwrap_or_default();
     let (_, root_options) = placement(cx.repo, cx.env, cx.cwd);
     let mut ws = match super::open(root_options) {

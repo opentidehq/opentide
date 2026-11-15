@@ -1,0 +1,32 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.skills.show/json/none/help
+---
+args: opentide --json setup skills show --help
+exit: 0
+
+━━━ stdout
+Show details for one skill from the catalogue.
+
+Usage: opentide setup skills show [OPTIONS] <name>
+
+Arguments:
+  <name>
+          Skill slug or name
+
+Options:
+  -C, --path <PATH>
+          Repository path
+          
+          [default: .]
+
+      --refresh
+          Fetch the catalogue again, not the in-process copy of the last 30s
+
+      --help
+          Print help
+
+Examples:
+  $ opentide setup skills show <slug>
+
+━━━ stderr · empty

@@ -1,0 +1,83 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/tide-corpus-splunk-advanced/splunk-advanced
+---
+args: opentide --json deploy --platform splunk --dry-run --strategy PREVIEW --all
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "advice": "add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/splunk.toml",
+  "changes": [
+    {
+      "action": "upsert",
+      "name": "Splunk SPL Rule",
+      "platform": "splunk",
+      "status": "STAGING",
+      "tenant": null,
+      "uuid": "00000000-0000-4000-8003-000000000003"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": true,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete",
+  "missing_tenants": {
+    "splunk": ".opentide/configurations/platforms/splunk.toml"
+  },
+  "next_actions": [],
+  "ok": true,
+  "payloads": {
+    "splunk": [
+      {
+        "api_request": {
+          "advanced": {
+            "action.misp_alert_create_event.param.distribution": 0,
+            "action.misp_alert_create_event.param.publish_on_creation": false,
+            "action.misp_alert_create_event.param.tags": null,
+            "action.misp_alert_create_event.param.title": "Canary token triggered"
+          },
+          "enabled": true,
+          "name": "Splunk SPL Rule",
+          "query": "index=main | head 1",
+          "scheduling": {
+            "schedule": {
+              "cron": "0 * * * *"
+            }
+          },
+          "status": "STAGING"
+        },
+        "name": "Splunk SPL Rule",
+        "uuid": "00000000-0000-4000-8003-000000000003"
+      }
+    ]
+  },
+  "plan": {
+    "splunk": [
+      "00000000-0000-4000-8003-000000000003"
+    ]
+  },
+  "schema_version": 1,
+  "status": "completed",
+  "strategies": [
+    "PREVIEW"
+  ],
+  "summary": {
+    "create": 0,
+    "delete": 0,
+    "disable": 0,
+    "platforms": 1,
+    "tenants": 0,
+    "update": 0,
+    "upsert": 1
+  },
+  "tenants": {},
+  "warnings": [
+    "splunk has no tenants configured in .opentide/configurations/platforms/splunk.toml, so a real deploy would stop"
+  ]
+}
+
+━━━ stderr · empty
