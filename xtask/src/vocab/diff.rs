@@ -28,7 +28,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use indexmap::IndexMap;
 use opentide_schema::vocab::{
     Entry, KeyKind, Metadata, Selector, Version, VocabRef, Vocabularies, Vocabulary,
@@ -528,15 +528,23 @@ pub fn workspace() -> Result<(PathBuf, PathBuf)> {
 }
 
 /// The options of `vocab diff`.
-#[derive(Debug, Default)]
+#[derive(Debug, clap::Args)]
 pub struct Options {
-    /// The oracle's Python; installed from `tests/golden/ORACLE` when `None`.
+    /// What to compare with
+    #[arg(long, value_enum)]
+    pub against: crate::diff_args::Against,
+    /// The oracle's interpreter; installed from tests/golden/ORACLE when not
+    /// given
+    #[arg(long, value_name = "PATH")]
     pub python: Option<PathBuf>,
-    /// The fixtures; [`FIXTURES`] when empty.
+    /// Only this fixture; repeat for several (default: every fixture)
+    #[arg(long = "fixture", value_name = "NAME")]
     pub fixtures: Vec<String>,
-    /// Accepted values sampled per schema field for the generated set.
+    /// Accepted values sampled per schema field for the generated set
+    #[arg(long, value_name = "N", default_value_t = 60)]
     pub per_field: usize,
-    /// Where to write the JSON report.
+    /// Where to write the JSON report
+    #[arg(long, value_name = "FILE")]
     pub report: Option<PathBuf>,
 }
 
@@ -735,38 +743,6 @@ fn describe(outcome: &Outcome) -> String {
     out
 }
 
-/// Parses `vocab diff`'s arguments.
-pub fn parse(args: &[String]) -> Result<Options> {
-    let mut options = Options {
-        per_field: 60,
-        ..Options::default()
-    };
-    let mut against = None;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let mut value = || {
-            args.next()
-                .cloned()
-                .with_context(|| format!("{arg} needs a value"))
-        };
-        match arg.as_str() {
-            "--against" => against = Some(value()?),
-            "--python" => options.python = Some(PathBuf::from(value()?)),
-            "--fixture" => options.fixtures.push(value()?),
-            "--per-field" => {
-                options.per_field = value()?.parse().context("--per-field is a number")?;
-            }
-            "--report" => options.report = Some(PathBuf::from(value()?)),
-            other => bail!("unknown option `{other}`"),
-        }
-    }
-    match against.as_deref() {
-        Some("python") => Ok(options),
-        Some(other) => bail!("--against {other}: only `python` (the oracle) is supported"),
-        None => bail!("vocab diff needs --against python"),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -791,14 +767,14 @@ mod tests {
 
     #[test]
     fn options() {
-        let args = |list: &[&str]| list.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
-        let parsed = parse(&args(&["--against", "python", "--fixture", "vscode"])).unwrap();
+        let parse = |list: &[&str]| crate::parse_args::<Options>(list);
+        let parsed = parse(&["--against", "python", "--fixture", "vscode"]).unwrap();
         assert_eq!(parsed.fixtures, ["vscode"]);
         assert_eq!(parsed.per_field, 60);
-        assert!(parse(&args(&["--against", "rust"])).is_err());
-        assert!(parse(&args(&[])).is_err());
-        assert!(parse(&args(&["--against"])).is_err());
-        assert!(parse(&args(&["--against", "python", "--bogus"])).is_err());
+        assert!(parse(&["--against", "rust"]).is_err());
+        assert!(parse(&[]).is_err());
+        assert!(parse(&["--against"]).is_err());
+        assert!(parse(&["--against", "python", "--bogus"]).is_err());
     }
 
     #[test]

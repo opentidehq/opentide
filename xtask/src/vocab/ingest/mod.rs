@@ -50,56 +50,33 @@ pub const BUNDLE_FILES: [(&str, &str); 3] = [
 const PIN_FAMILIES: [&str; 3] = ["threat", "objective", "rule"];
 
 /// What a run does.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, clap::Args)]
 pub struct Options {
-    /// Compute without writing; dirty is a failure (also the default).
+    /// Compute without writing; dirty is a failure (also the default)
+    #[arg(long, conflicts_with = "apply")]
     pub check: bool,
-    /// Write the vocabularies and sync the bundle.
+    /// Write the vocabularies and sync the bundle
+    #[arg(long)]
     pub apply: bool,
-    /// Read the STIX bundles already in the STIX directory.
+    /// Read the STIX bundles already in the STIX directory
+    #[arg(long)]
     pub no_fetch: bool,
     /// The STIX directory; else `$OPENTIDE_ATTACK_STIX_DIR`, else a scratch
-    /// directory for the fetch.
+    /// directory for the fetch
+    #[arg(long, value_name = "DIR")]
     pub stix_dir: Option<PathBuf>,
     /// The MISP galaxy; else the bundled `resources.toml`'s
-    /// `misp.galaxies.threat_actors`. `file://` reads a local file.
+    /// `misp.galaxies.threat_actors`. `file://` reads a local file
+    #[arg(long, value_name = "URL")]
     pub misp_url: Option<String>,
-    /// The specifications checkout; else `$OPENTIDE_SPECIFICATIONS_ROOT`,
-    /// else `../specifications`.
+    /// The specifications checkout; else `$OPENTIDE_SPECIFICATIONS_ROOT`, else
+    /// `../specifications`
+    #[arg(long, value_name = "DIR")]
     pub specifications: Option<PathBuf>,
-    /// The time to write where the run would read the clock (`2026-11-13T00:00:00.000Z`),
-    /// for a reproducible run.
+    /// The time to write where the run would read the clock
+    /// (`2026-11-13T00:00:00.000Z`), for a reproducible run
+    #[arg(long, value_name = "TIMESTAMP")]
     pub now: Option<String>,
-}
-
-/// Parses `vocab ingest`'s options.
-pub fn parse(args: &[String]) -> Result<Options> {
-    let mut options = Options::default();
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let mut value = |name: &str| {
-            args.next()
-                .cloned()
-                .with_context(|| format!("{name} needs a value"))
-        };
-        match arg.as_str() {
-            "--check" => options.check = true,
-            "--apply" => options.apply = true,
-            "--no-fetch" => options.no_fetch = true,
-            "--stix-dir" => options.stix_dir = Some(PathBuf::from(value("--stix-dir")?)),
-            "--misp-url" => options.misp_url = Some(value("--misp-url")?),
-            "--specifications" => {
-                options.specifications = Some(PathBuf::from(value("--specifications")?));
-            }
-            "--now" => options.now = Some(value("--now")?),
-            other => bail!("unknown option `{other}`\n\n{}", super::USAGE),
-        }
-    }
-    ensure!(
-        !(options.check && options.apply),
-        "use either --check or --apply, not both"
-    );
-    Ok(options)
 }
 
 /// The ingest's result.
