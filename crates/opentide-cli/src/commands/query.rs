@@ -17,6 +17,7 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+use super::interrupt::watched;
 use opentide_connectors::connector::{QueryOutcome, QueryRequest, TenantContext, TimeWindow};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, HttpSettings, Tenant};
@@ -725,17 +726,7 @@ fn run_on_tenant(
                 let work = runner.run(context, request);
                 // Ctrl-C stops the search, which the runner stops on the
                 // tenant where the API allows it.
-                let watch = async {
-                    while !interrupted() {
-                        tokio::time::sleep(Duration::from_millis(50)).await;
-                    }
-                    cancel.cancel();
-                    std::future::pending::<()>().await;
-                };
-                tokio::select! {
-                    result = work => result,
-                    () = watch => Err(ConnectorError::Cancelled),
-                }
+                watched(work, &cancel, interrupted).await
             })
         });
     let result = match ran {

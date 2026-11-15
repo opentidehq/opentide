@@ -1881,7 +1881,7 @@ mod tests {
         assert!(
             check
                 .message
-                .starts_with("The proxy URL cannot be parsed: its user or password"),
+                .starts_with("The proxy URL cannot be parsed: an `@` follows a `/`"),
             "{}",
             check.message
         );
