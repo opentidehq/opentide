@@ -6530,6 +6530,7 @@ name = "xtask"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "clap",
  "dunce",
  "glob",
  "html5ever",

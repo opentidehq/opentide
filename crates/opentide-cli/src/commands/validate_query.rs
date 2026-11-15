@@ -88,16 +88,32 @@ pub struct Args {
     pub check_timeout: Option<String>,
 }
 
+/// Which of the options `validate` and `validate query` share were typed on
+/// `validate`, before `query`: those are `query`'s.
+#[derive(Clone, Copy, Debug, Default)]
+#[expect(clippy::struct_excessive_bools, reason = "one flag per shared option")]
+pub struct HandDown {
+    /// `--file`.
+    pub file: bool,
+    /// `--uuid`.
+    pub uuid: bool,
+    /// `--strict`.
+    pub strict: bool,
+    /// `--queries`.
+    pub queries: bool,
+}
+
 impl Args {
-    /// `validate query`'s run. `file`, `uuid`, `strict` and `queries` are
-    /// options of `validate` too: one typed on `validate`, before `query`,
-    /// is `query`'s (`group_given` says which were typed there).
+    /// `validate query`'s run: each shared option is `validate`'s where it
+    /// was typed there (`hand_down`), else `query`'s own.
     pub fn from_cli(
         validate: &crate::tree::ValidateArgs,
         query: &crate::tree::ValidateQueryArgs,
-        group_given: impl Fn(&str) -> bool,
+        hand_down: HandDown,
     ) -> Self {
-        let from_group = |id: &str| group_given(id);
+        let pick = |handed: bool, group: &Vec<String>, own: &Vec<String>| {
+            if handed { group } else { own }.clone()
+        };
         Self {
             platform: query.platform.as_ref().map(|platform| platform.0.clone()),
             strategies: query.strategy.clone(),
@@ -105,22 +121,14 @@ impl Args {
             wide: query.wide,
             live: query.live,
             changed: query.changed,
-            files: if from_group("file") {
-                validate.file.clone()
-            } else {
-                query.file.clone()
-            },
-            uuids: if from_group("uuid") {
-                validate.uuid.clone()
-            } else {
-                query.uuid.clone()
-            },
-            strict: if from_group("strict") {
+            files: pick(hand_down.file, &validate.file, &query.file),
+            uuids: pick(hand_down.uuid, &validate.uuid, &query.uuid),
+            strict: if hand_down.strict {
                 validate.strict
             } else {
                 query.strict
             },
-            queries: if from_group("queries") {
+            queries: if hand_down.queries {
                 validate.queries
             } else {
                 query.queries
@@ -1351,18 +1359,22 @@ mod from_cli_tests {
     use clap::Parser as _;
     use opentide_workspace::validate::QueriesMode;
 
-    use super::Args;
+    use super::{Args, HandDown};
     use crate::tree::{Cli, RootCommand, ValidateCommand};
 
     /// `args` as `Args::from_cli` reads them; `group` names the options
     /// typed on `validate` itself, before `query`.
     fn parse(words: &[&str], group: &[&str]) -> Args {
+        let hand_down = HandDown {
+            file: group.contains(&"file"),
+            uuid: group.contains(&"uuid"),
+            strict: group.contains(&"strict"),
+            queries: group.contains(&"queries"),
+        };
         let words = std::iter::once("opentide").chain(words.iter().copied());
         match Cli::try_parse_from(words).map(|cli| cli.command) {
             Ok(Some(RootCommand::Validate(validate))) => match &validate.command {
-                Some(ValidateCommand::Query(query)) => {
-                    Args::from_cli(&validate, query, |id| group.contains(&id))
-                }
+                Some(ValidateCommand::Query(query)) => Args::from_cli(&validate, query, hand_down),
                 None => panic!("not validate query"),
             },
             other => panic!("not a validate command: {other:?}"),

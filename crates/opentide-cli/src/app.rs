@@ -657,10 +657,12 @@ impl Run<'_> {
                 let report = self.generate(args, &generate_phases, &matches);
                 return self.emit_report(&report, out, err);
             }
-            Some(RootCommand::Validate(validate)) => {
-                let Some(crate::tree::ValidateCommand::Query(query)) = &validate.command else {
-                    return self.emit(&unhandled(&words.join(" ")), &[], out, err);
-                };
+            Some(RootCommand::Validate(
+                validate @ crate::tree::ValidateArgs {
+                    command: Some(crate::tree::ValidateCommand::Query(query)),
+                    ..
+                },
+            )) => {
                 let report = self.validate_query(validate, query, &matches);
                 return self.emit_report(&report, out, err);
             }
@@ -677,6 +679,12 @@ impl Run<'_> {
                 return self.emit_report(&report, out, err);
             }
             Some(RootCommand::Deploy(deploy)) => return self.run_deploy(deploy, out, err),
+            Some(RootCommand::Share(share)) => {
+                return match self.share(share, &matches, &words.join(" ")) {
+                    Ok(report) => self.emit_report(&report, out, err),
+                    Err(failure) => self.refuse(&words, *failure, out, err),
+                };
+            }
             Some(RootCommand::Doctor(args)) => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
                 let report = crate::commands::doctor::run(
@@ -710,11 +718,6 @@ impl Run<'_> {
         }
         let path = words.join(" ");
         match path.as_str() {
-            "share" | "share push" | "share preview" | "share status" | "share retract"
-            | "share targets" => match self.share(&matches, &path) {
-                Ok(report) => self.emit_report(&report, out, err),
-                Err(failure) => self.refuse(&words, *failure, out, err),
-            },
             "mcp start" => {
                 // The server never polls the interrupt and serves stdio until
                 // its client closes stdin: after a Ctrl-C it does not start
@@ -1324,52 +1327,39 @@ impl Run<'_> {
         query: &crate::tree::ValidateQueryArgs,
         matches: &clap::ArgMatches,
     ) -> crate::commands::Report {
-        use crate::commands::validate_query::{Args, COMMAND, Context, plugin_live, run};
-        let Some(group) = matches.subcommand_matches("validate") else {
-            return crate::commands::Report::error(COMMAND, "validate query was not parsed");
-        };
+        use crate::commands::validate_query::{Args, COMMAND, Context, HandDown, plugin_live, run};
+        // Both are there: this is `validate query`. (`typed` of the root's own
+        // matches would read nothing, were they not.)
+        let group = matches.subcommand_matches("validate").unwrap_or(matches);
         let args = group.subcommand_matches("query").unwrap_or(group);
         let typed =
             |on: &clap::ArgMatches, id: &str| on.value_source(id) == Some(ValueSource::CommandLine);
-        // `validate`'s options in its order, with their flags.
-        const GROUP: [(&str, &str, bool); 11] = [
-            ("check", "--check", false),
-            ("file", "--file", true),
-            ("uuid", "--uuid", true),
-            ("object_type", "--type", false),
-            ("strict", "--strict", true),
-            ("queries", "--queries", true),
-            ("fix", "--fix", false),
-            ("dry_run", "--dry-run", false),
-            ("watch", "--watch", false),
-            ("report_format", "--format", false),
-            ("output", "--output", false),
-        ];
-        let refused: Vec<&str> = GROUP
-            .iter()
-            .filter(|(id, _, shared)| !shared && typed(group, id))
-            .map(|(_, flag, _)| *flag)
-            .collect();
-        let problem = if refused.is_empty() {
-            // `validate query`'s own options, in its order.
-            let twice: Vec<&str> = [
-                ("file", "--file"),
-                ("uuid", "--uuid"),
-                ("strict", "--strict"),
-                ("queries", "--queries"),
-            ]
-            .iter()
-            .filter(|(id, _)| typed(group, id) && typed(args, id))
-            .map(|(_, flag)| *flag)
-            .collect();
-            (!twice.is_empty()).then(|| {
-                format!(
-                    "Pass {} once, before or after `query`, not both: `opentide validate \
-                         query` would use only the second.",
-                    twice.join(", ")
-                )
-            })
-        } else {
+        // `validate`'s options `query` does not take are refused, in
+        // `validate`'s order; one both take, typed on both, is refused too.
+        let own = self
+            .root
+            .find_subcommand("validate")
+            .and_then(|validate| validate.find_subcommand("query"));
+        let mut refused: Vec<String> = Vec::new();
+        let mut twice: Vec<String> = Vec::new();
+        for arg in self
+            .root
+            .find_subcommand("validate")
+            .into_iter()
+            .flat_map(clap::Command::get_arguments)
+        {
+            let id = arg.get_id().as_str();
+            let (Some(long), true) = (arg.get_long(), typed(group, id)) else {
+                continue;
+            };
+            let flag = format!("--{long}");
+            if !own.is_some_and(|own| own.get_arguments().any(|other| other.get_id() == id)) {
+                refused.push(flag);
+            } else if typed(args, id) {
+                twice.push(flag);
+            }
+        }
+        let problem = if !refused.is_empty() {
             let verb = if refused.len() == 1 {
                 "configures"
             } else {
@@ -1377,15 +1367,33 @@ impl Run<'_> {
             };
             Some(format!(
                 "{} {verb} `opentide validate` itself and would be ignored by `opentide \
-                     validate query`.",
+                 validate query`.",
                 refused.join(", ")
             ))
+        } else if !twice.is_empty() {
+            Some(format!(
+                "Pass {} once, before or after `query`, not both: `opentide validate \
+                 query` would use only the second.",
+                twice.join(", ")
+            ))
+        } else {
+            None
         };
         if let Some(problem) = problem {
             let failure = Failure::new(code::USAGE_INVALID_VALUE, problem);
             return crate::commands::Report::failed(COMMAND, USAGE_EXIT_CODE, failure);
         }
-        let parsed = Args::from_cli(validate, query, |id| typed(group, id) && !typed(args, id));
+        let handed = |id: &str| typed(group, id) && !typed(args, id);
+        let parsed = Args::from_cli(
+            validate,
+            query,
+            HandDown {
+                file: handed("file"),
+                uuid: handed("uuid"),
+                strict: handed("strict"),
+                queries: handed("queries"),
+            },
+        );
         let cwd = self.host.cwd.clone().unwrap_or_default();
         let plugin = parsed
             .platform
@@ -2030,9 +2038,9 @@ impl Run<'_> {
     /// `share` and its subcommands (UC-4.4b, #834): the group's options
     /// handed down to the subcommand that takes them too, or refused
     /// (`hand_down`, `refuse_dropped`), then the run.
-    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn share(
         &self,
+        share: &crate::tree::ShareArgs,
         matches: &clap::ArgMatches,
         path: &str,
     ) -> Result<crate::commands::Report, Box<Failure>> {
@@ -2057,20 +2065,16 @@ impl Run<'_> {
             ("changed", "--changed"),
             ("since", "--since"),
         ];
-        let sub = group.subcommand();
-        let (mode, args) = match sub {
-            None => (Mode::Push, group),
-            Some((name, args)) => (
-                match name {
-                    "preview" => Mode::Preview,
-                    "status" => Mode::Status,
-                    "retract" => Mode::Retract,
-                    "targets" => Mode::Targets,
-                    _ => Mode::Push,
-                },
-                args,
-            ),
+        use crate::tree::ShareCommand as Command;
+        let mode = match &share.command {
+            None | Some(Command::Push(_)) => Mode::Push,
+            Some(Command::Preview(_)) => Mode::Preview,
+            Some(Command::Status(_)) => Mode::Status,
+            Some(Command::Retract(_)) => Mode::Retract,
+            Some(Command::Targets(_)) => Mode::Targets,
         };
+        let sub = group.subcommand();
+        let args = sub.map_or(group, |(_, own)| own);
         let accepts = |id: &str| match mode {
             Mode::Push => true,
             Mode::Preview => matches!(id, "target" | "uuid" | "object_type" | "file" | "workers"),
@@ -2119,41 +2123,7 @@ impl Run<'_> {
                 return Err(Box::new(failure));
             }
         }
-        // An option typed on `share` alone is the subcommand's.
-        let pick = |id: &str| -> Option<&clap::ArgMatches> {
-            if typed(group, id) && sub.is_some() {
-                return Some(group);
-            }
-            args.try_contains_id(id).unwrap_or(false).then_some(args)
-        };
-        let strings = |id: &str| -> Vec<String> {
-            pick(id)
-                .and_then(|m| m.get_many::<String>(id))
-                .map(|values| values.cloned().collect())
-                .unwrap_or_default()
-        };
-        let flag = |id: &str| pick(id).is_some_and(|m| m.get_flag(id));
-        let publish = match (pick("publish"), pick("no_publish")) {
-            (Some(m), _) if m.get_flag("publish") => Some(true),
-            (_, Some(m)) if m.get_flag("no_publish") => Some(false),
-            _ => None,
-        };
-        let parsed = Args {
-            mode,
-            targets: strings("target"),
-            uuids: strings("uuid"),
-            types: strings("object_type"),
-            files: strings("file"),
-            dry_run: flag("dry_run"),
-            publish,
-            workers: pick("workers")
-                .and_then(|m| m.get_one::<i64>("workers").copied())
-                .unwrap_or(1),
-            delete: flag("delete"),
-            yes: flag("yes"),
-            changed: flag("changed"),
-            since: pick("since").and_then(|m| m.get_one::<String>("since").cloned()),
-        };
+        let parsed = Args::from_cli(share, |id| typed(group, id));
         let cwd = self.host.cwd.clone().unwrap_or_default();
         Ok(run(
             &parsed,
