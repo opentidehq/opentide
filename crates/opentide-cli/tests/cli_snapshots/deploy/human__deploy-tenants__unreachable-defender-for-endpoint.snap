@@ -20,4 +20,4 @@ error: Platform deployment failed · system: defender_for_endpoint · detail: Ca
 ␛[1m␛[31merror:␛[0m Deployment to defender_for_endpoint failed: Cannot reach defender_for_endpoint tenant 'lab'
        at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel
        error: failed to create underlying connection: tcp connect error: Connection refused (os
-       error 111)
+       error <ECONNREFUSED>)
