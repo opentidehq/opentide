@@ -1690,19 +1690,8 @@ impl Run<'_> {
                 line.log();
             }
             let mut document = outcome.document(self.duration_ms());
-            if !report.warnings.is_empty()
-                && let crate::json::Json::Object(members) = &mut document
-            {
-                let at = members
-                    .get_index_of("message")
-                    .map_or(members.len(), |at| at + 1);
-                members.shift_insert(
-                    at,
-                    "warnings".into(),
-                    crate::json::Json::Array(
-                        report.warnings.iter().map(crate::json::Json::str).collect(),
-                    ),
-                );
+            if let crate::json::Json::Object(members) = &mut document {
+                crate::envelope::put_warnings(members, &report.warnings);
             }
             out.write_all(document_text(&document, self.indent).as_bytes())?;
             out.flush()?;
