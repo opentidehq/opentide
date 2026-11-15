@@ -442,6 +442,7 @@ fn route<'a>(routes: &'a BTreeMap<String, String>, url: &url::Url) -> Option<&'a
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rustls::pki_types::pem::PemObject as _;
     use std::io::{Read as _, Write as _};
 
     fn started() -> Proxy {
@@ -469,33 +470,101 @@ mod tests {
         String::from_utf8_lossy(&head).into_owned()
     }
 
+    /// A stand-in origin on a loopback port: every connection is answered
+    /// `202` with the body `stand-in` and closed. Its base URL.
+    fn stand_in() -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { return };
+                let mut seen = Vec::new();
+                let mut byte = [0u8; 1];
+                while !seen.ends_with(b"\r\n\r\n") && stream.read(&mut byte).is_ok_and(|n| n == 1) {
+                    seen.push(byte[0]);
+                }
+                let _ = stream.write_all(
+                    b"HTTP/1.1 202 Accepted\r\ncontent-length: 8\r\nconnection: close\r\n\r\nstand-in",
+                );
+            }
+        });
+        base
+    }
+
+    fn routed(host: &str) -> Proxy {
+        Proxy::start(
+            Mode::Record {
+                routes: BTreeMap::from([(host.to_owned(), stand_in())]),
+            },
+            Redaction::default(),
+        )
+        .unwrap()
+    }
+
     #[test]
     fn a_connect_is_answered_and_the_tunnel_is_taken_over() {
-        let proxy = started();
-        let head = answer(
-            &proxy,
-            "CONNECT api.example.test:8443 HTTP/1.1\r\nHost: api.example.test:8443\r\n\r\n",
-        );
+        let proxy = routed("api.example.test:8443");
+        let mut stream = std::net::TcpStream::connect(proxy.addr).unwrap();
+        stream
+            .set_read_timeout(Some(std::time::Duration::from_secs(10)))
+            .unwrap();
+        stream
+            .write_all(
+                b"CONNECT api.example.test:8443 HTTP/1.1\r\nHost: api.example.test:8443\r\n\r\n",
+            )
+            .unwrap();
+        let mut head = Vec::new();
+        let mut byte = [0u8; 1];
+        while !head.ends_with(b"\r\n\r\n") {
+            stream.read_exact(&mut byte).unwrap();
+            head.push(byte[0]);
+        }
+        let head = String::from_utf8(head).unwrap();
         assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+
+        // The tunnel carries TLS to a certificate for the host, signed by the
+        // run's CA: bytes go in, and the stand-in's answer comes back.
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let mut roots = rustls::RootCertStore::empty();
+        let ca =
+            rustls::pki_types::CertificateDer::from_pem_slice(proxy.ca_pem().as_bytes()).unwrap();
+        roots.add(ca).unwrap();
+        let config = rustls::ClientConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        let name = rustls::pki_types::ServerName::try_from("api.example.test").unwrap();
+        let connection = rustls::ClientConnection::new(Arc::new(config), name).unwrap();
+        let mut tls = rustls::StreamOwned::new(connection, stream);
+        tls.write_all(
+            b"GET /x HTTP/1.1\r\nHost: api.example.test:8443\r\nConnection: close\r\n\r\n",
+        )
+        .unwrap();
+        let mut answered = String::new();
+        // The proxy closes the tunnel after the answer (`Connection: close`),
+        // with a close_notify: reading to the end is not an error.
+        tls.read_to_string(&mut answered).unwrap();
+        assert!(answered.starts_with("HTTP/1.1 202"), "{answered}");
+        assert!(answered.ends_with("stand-in"), "{answered}");
     }
 
     #[test]
     fn a_connect_without_a_target_is_refused() {
         let proxy = started();
         let head = answer(&proxy, "CONNECT / HTTP/1.1\r\nHost: x\r\n\r\n");
-        assert!(!head.starts_with("HTTP/1.1 200"), "{head}");
+        assert!(head.starts_with("HTTP/1.1 400"), "{head}");
     }
 
     #[test]
     fn a_plain_request_is_still_proxied_in_absolute_form() {
-        let proxy = started();
-        // Nothing routes the host and the network is not asked for a name
-        // that does not exist: the proxy answers itself, not the tunnel's way.
+        let proxy = routed("nothing.invalid");
+        // The routed stand-in answers 202: the proxy forwarded the request,
+        // not the tunnel's way and not with an answer of its own.
         let head = answer(
             &proxy,
             "GET http://nothing.invalid/x HTTP/1.1\r\nHost: nothing.invalid\r\n\r\n",
         );
-        assert!(head.starts_with("HTTP/1.1 "), "{head}");
-        assert!(!head.starts_with("HTTP/1.1 200"), "{head}");
+        assert!(head.starts_with("HTTP/1.1 202"), "{head}");
     }
 }

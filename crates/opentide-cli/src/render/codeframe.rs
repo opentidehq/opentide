@@ -725,6 +725,42 @@ pub fn render_fixed(changes: &[FixedValue], cwd: &Path, colour: Colour) -> Strin
 mod tests {
     use super::*;
 
+    const FAMILY: &str = "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}";
+    const HEART: &str = "\u{2764}\u{fe0f}";
+
+    #[test]
+    fn the_underline_reaches_a_column_past_an_emoji_sequence_in_its_cells() {
+        // The family is five characters and two cells; the heart two and two.
+        assert_eq!(underline_offset(&format!("{FAMILY} x"), 7), "   ");
+        assert_eq!(underline_offset(&format!("{HEART}x"), 3), "  ");
+        // A column inside the sequence counts the part before it.
+        assert_eq!(underline_offset(&format!("{FAMILY}x"), 2), "  ");
+        // A tab stays a tab, the text around it in cells.
+        assert_eq!(underline_offset(&format!("{FAMILY}\tx"), 7), "  \t");
+    }
+
+    #[test]
+    fn the_end_cell_counts_an_emoji_sequence_as_the_terminal_draws_it() {
+        assert_eq!(expanded_end(FAMILY, 0), 2);
+        assert_eq!(expanded_end(HEART, 3), 5);
+        // Two cells, then the tab stop at 8, then `x`.
+        assert_eq!(expanded_end(&format!("{FAMILY}\tx"), 0), 9);
+    }
+
+    #[test]
+    fn a_shortened_path_fits_its_room_and_never_cuts_an_emoji_sequence() {
+        let location = format!("{FAMILY}{FAMILY}{FAMILY}/{HEART}{HEART}/file.rs:1:1");
+        // Below 3 cells nothing is left of the head, the `…` and the tail.
+        for room in 3..location.chars().count() {
+            let shown = shorten_path(&location, room);
+            assert!(cell_len(&shown) <= room, "{room}: {shown}");
+            // Whole sequences only: a ZWJ always has a character on both sides.
+            assert!(!shown.starts_with('\u{200d}') && !shown.ends_with('\u{200d}'));
+            assert_eq!(shown.matches('\u{200d}').count() % 2, 0, "{room}: {shown}");
+            assert_eq!(shown.matches('\u{fe0f}').count() % 2, 0, "{room}: {shown}");
+        }
+    }
+
     #[test]
     fn quote_matches_python() {
         assert_eq!(
