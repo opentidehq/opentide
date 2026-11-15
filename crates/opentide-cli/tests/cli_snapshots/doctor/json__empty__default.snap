@@ -87,7 +87,7 @@ exit: 1
     },
     {
       "code": "proxy",
-      "fix": "check --proxy, OPENTIDE_PROXY or HTTPS_PROXY, and that the proxy is up",
+      "fix": "check --proxy, OPENTIDE_PROXY, https_proxy or all_proxy, and that the proxy is up",
       "message": "Cannot connect to proxy http://127.0.0.1:9 (Connection refused (os error <ECONNREFUSED>))",
       "status": "fail",
       "subject": null

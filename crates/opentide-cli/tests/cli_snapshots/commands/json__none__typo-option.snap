@@ -9,16 +9,16 @@ exit: 2
 {
   "command": "commands",
   "duration_ms": 0,
-  "error": "Unknown option \"--jsno\".",
+  "error": "unexpected argument '--jsno' found",
   "exit_code": 2,
   "failure": {
     "argument": "--jsno",
     "code": "usage_unknown_option",
     "crash_log": null,
-    "message": "Unknown option \"--jsno\".",
-    "suggestion": null
+    "message": "unexpected argument '--jsno' found",
+    "suggestion": "--json"
   },
-  "message": "Unknown option \"--jsno\".",
+  "message": "unexpected argument '--jsno' found",
   "next_actions": [],
   "ok": false,
   "schema_version": 1,

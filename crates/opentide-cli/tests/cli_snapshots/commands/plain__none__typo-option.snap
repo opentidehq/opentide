@@ -8,6 +8,10 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-error: Unknown option "--jsno".
-  usage: opentide commands [OPTIONS]
-  help: run 'opentide commands --help'
+error: unexpected argument '--jsno' found
+
+  tip: a similar argument exists: '--json'
+
+Usage: opentide commands --json
+
+For more information, try '--help'.

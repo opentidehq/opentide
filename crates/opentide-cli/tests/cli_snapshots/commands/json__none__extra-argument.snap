@@ -9,16 +9,16 @@ exit: 2
 {
   "command": "commands",
   "duration_ms": 0,
-  "error": "Unexpected argument \"extra\".",
+  "error": "unexpected argument 'extra' found",
   "exit_code": 2,
   "failure": {
-    "argument": null,
+    "argument": "extra",
     "code": "usage_error",
     "crash_log": null,
-    "message": "Unexpected argument \"extra\".",
+    "message": "unexpected argument 'extra' found",
     "suggestion": null
   },
-  "message": "Unexpected argument \"extra\".",
+  "message": "unexpected argument 'extra' found",
   "next_actions": [],
   "ok": false,
   "schema_version": 1,
