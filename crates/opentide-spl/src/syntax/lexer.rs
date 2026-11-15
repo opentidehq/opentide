@@ -76,6 +76,99 @@ fn backtick<'s, T: Logos<'s, Source = str>>(lex: &mut Lexer<'s, T>) -> Option<Ti
     Some(tick)
 }
 
+/// The dotted segments of a name (`a.b.c`): a callback, because logos'
+/// generated code for a repeated group recurses once per repetition and
+/// aborts the process on a long token.
+fn ident_tail(lex: &mut Lexer<'_, Expr>) {
+    loop {
+        let rest = lex.remainder().as_bytes();
+        if rest.first() != Some(&b'.') {
+            return;
+        }
+        let segment = rest[1..]
+            .iter()
+            .take_while(|c| c.is_ascii_alphanumeric() || **c == b'_' || **c == b':')
+            .count();
+        if segment == 0 {
+            return;
+        }
+        lex.bump(1 + segment);
+    }
+}
+
+/// The length of the string at the start of `s`, quoted with `"` or `'`
+/// (a backslash escapes any character but a line break), or `None` when it
+/// is not closed. In a search a `'` string that a word continues
+/// (`'ab'cd`) is that word, as the longest match was in the old lexer.
+fn string_len(s: &str, in_search: bool, dead: &mut [bool; 2]) -> Option<usize> {
+    let bytes = s.as_bytes();
+    let quote = *bytes.first()?;
+    if quote != b'"' && quote != b'\'' {
+        return None;
+    }
+    // A scan that found no closing quote would find none from any later
+    // quote of the same kind either (it ends in the same state), so it is
+    // not repeated: a source of unclosed quotes stays linear.
+    let kind = usize::from(quote == b'\'');
+    if dead[kind] {
+        return None;
+    }
+    let mut i = 1;
+    let end = loop {
+        match bytes.get(i) {
+            None => {
+                dead[kind] = true;
+                return None;
+            }
+            Some(b'\\') => match bytes.get(i + 1) {
+                Some(&c) if c != b'\n' => i += 2,
+                None => {
+                    dead[kind] = true;
+                    return None;
+                }
+                // A line break after the backslash ends this string only: a
+                // later quote may close.
+                Some(_) => return None,
+            },
+            Some(&c) if c == quote => break i + 1,
+            Some(_) => i += 1,
+        }
+    };
+    if quote == b'\'' && in_search {
+        let next = s.get(end..)?.chars().next();
+        if next.is_some_and(|c| !c.is_whitespace() && !"\"()[]|=<>!,`".contains(c)) {
+            return None;
+        }
+    }
+    Some(end)
+}
+
+/// The length of the `foreach` template at the start of `s`: name
+/// characters and `<<FIELD>>` markers, at least one marker.
+fn template_len(s: &str) -> Option<usize> {
+    let bytes = s.as_bytes();
+    let (mut i, mut seen) = (0, false);
+    loop {
+        if bytes[i..].starts_with(b"<<") {
+            let name = bytes[i + 2..]
+                .iter()
+                .take_while(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || **c == b'_')
+                .count();
+            if name > 0 && bytes[i + 2 + name..].starts_with(b">>") {
+                i += name + 4;
+                seen = true;
+                continue;
+            }
+            break;
+        }
+        match bytes.get(i) {
+            Some(c) if c.is_ascii_alphanumeric() || *c == b'_' || *c == b'.' => i += 1,
+            _ => break,
+        }
+    }
+    seen.then_some(i)
+}
+
 /// Words, strings and operators of a search, a command's arguments, and a
 /// call's arguments in an aggregate. A word is the broad run of characters
 /// that break no term; [`classify`] tells what it is.
@@ -85,9 +178,6 @@ enum Search {
     Whitespace,
     #[token("`", backtick)]
     Backtick(Tick),
-    #[regex(r#""([^"\\]|\\[^\n])*""#, priority = 10)]
-    #[regex(r"'([^'\\]|\\[^\n])*'", priority = 10)]
-    Str,
     #[regex(r#"[^\s"()\[\]|=<>!,`]+"#)]
     Word,
     #[regex(r"[A-Za-z_]+\(\)", priority = 5)]
@@ -136,10 +226,7 @@ enum Expr {
     Whitespace,
     #[token("`", backtick)]
     Backtick(Tick),
-    #[regex(r#""([^"\\]|\\[^\n])*""#)]
-    #[regex(r"'([^'\\]|\\[^\n])*'")]
-    Str,
-    #[regex(r"[A-Za-z_][A-Za-z0-9_:]*(\.[A-Za-z0-9_:]+)*")]
+    #[regex(r"[A-Za-z_][A-Za-z0-9_:]*", ident_tail)]
     Ident,
     #[regex(r"[0-9]+(\.[0-9]+)?")]
     Number,
@@ -147,8 +234,6 @@ enum Expr {
     Dynamic,
     #[regex(r"\$[A-Za-z_][A-Za-z0-9_.:]*\$")]
     TokenName,
-    #[regex(r"([A-Za-z0-9_.]|<<[A-Z_0-9]+>>)*<<[A-Z_0-9]+>>([A-Za-z0-9_.]|<<[A-Z_0-9]+>>)*")]
-    Template,
     #[token("|")]
     Pipe,
     #[token("[")]
@@ -474,6 +559,8 @@ struct Driver<'s> {
     frames: Vec<Frame>,
     /// The next significant token is the raw text of a directive.
     raw: bool,
+    /// Whether an unclosed `"` or `'` was met: no later one closes.
+    dead_quotes: [bool; 2],
 }
 
 impl Driver<'_> {
@@ -503,9 +590,18 @@ impl Driver<'_> {
         };
         match mode {
             Paren::Expr => {
+                if let Some(len) = string_len(rest, false, &mut self.dead_quotes) {
+                    return (K::STRING_TOKEN, len);
+                }
                 let mut lexer = Expr::lexer(rest);
                 match lexer.next() {
-                    Some(Ok(token)) => (expr_kind(token, lexer.slice()), lexer.span().end),
+                    Some(Ok(token)) => {
+                        let len = lexer.span().end;
+                        match template_len(rest) {
+                            Some(t) if t >= len => (K::TEMPLATE_NAME, t),
+                            _ => (expr_kind(token, lexer.slice()), len),
+                        }
+                    }
                     _ => (K::ERROR_TOKEN, first_char),
                 }
             }
@@ -519,6 +615,9 @@ impl Driver<'_> {
                     && class != Class::Search
                     && let Some(len) = compound_len(rest)
                 {
+                    return (K::STRING_TOKEN, len);
+                }
+                if let Some(len) = string_len(rest, true, &mut self.dead_quotes) {
                     return (K::STRING_TOKEN, len);
                 }
                 let mut lexer = Search::lexer(rest);
@@ -665,7 +764,6 @@ fn search_kind(token: Search, text: &str) -> K {
         Search::Whitespace => K::WHITESPACE,
         Search::Backtick(Tick::Comment) => K::COMMENT,
         Search::Backtick(Tick::Macro) => K::MACRO_TOKEN,
-        Search::Str => K::STRING_TOKEN,
         Search::Word => classify(text),
         Search::CallWord => K::CALL_WORD,
         Search::Pipe => K::PIPE,
@@ -693,12 +791,10 @@ fn expr_kind(token: Expr, _text: &str) -> K {
         Expr::Whitespace => K::WHITESPACE,
         Expr::Backtick(Tick::Comment) => K::COMMENT,
         Expr::Backtick(Tick::Macro) => K::MACRO_TOKEN,
-        Expr::Str => K::STRING_TOKEN,
         Expr::Ident => K::IDENT,
         Expr::Number => K::NUMBER_TOKEN,
         Expr::Dynamic => K::DYNAMIC_NAME,
         Expr::TokenName => K::TOKEN_NAME,
-        Expr::Template => K::TEMPLATE_NAME,
         Expr::Pipe => K::PIPE,
         Expr::LBracket => K::L_BRACKET,
         Expr::RBracket => K::R_BRACKET,
@@ -732,6 +828,7 @@ pub fn lex(source: &str) -> Vec<Lexeme> {
         source,
         frames: vec![Frame::new(true)],
         raw: false,
+        dead_quotes: [false; 2],
     };
     let mut out = Vec::with_capacity(source.len() / 4 + 1);
     let mut pos = 0;
