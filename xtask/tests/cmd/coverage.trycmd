@@ -34,11 +34,16 @@ coverage: 1 error(s) in the policy (loose.toml)
 
 $ xtask coverage gate --metadata metadata.json --policy policy.toml
 ? 2
-xtask coverage: --report FILE is required
+error: the following required arguments were not provided:
+  --report <FILE>
+
+Usage: cargo xtask coverage gate --report <FILE> --metadata <FILE> --policy <FILE>
+
+For more information, try '--help'.
 
 $ xtask coverage report
 ? 2
-xtask coverage: expected `coverage gate`
+error: unrecognized subcommand 'report'
 ...
 
 ```
