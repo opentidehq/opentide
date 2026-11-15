@@ -360,6 +360,9 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
             added.extend(adds.iter().cloned());
             used.insert((*name).to_owned());
         }
+        // The snapshot records every finding Rust reports, the added ones
+        // included; only the comparison with the oracle sets them aside.
+        results.insert(id.to_owned(), rust.clone());
         let mut rust = rust;
         for path in &added {
             let Json::Array(findings) = &mut rust else {
@@ -372,9 +375,9 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
             }
         }
         let joined = names.join(" + ");
-        let difference = (!names.is_empty()).then_some((joined.as_str(), &fields));
+        // A difference that only adds findings leaves the rest exact.
+        let difference = (!fields.is_empty()).then_some((joined.as_str(), &fields));
         failures.extend(compare(id, oracle, &rust, difference));
-        results.insert(id.to_owned(), rust);
     }
     for name in differences.keys() {
         if !used.contains(name) {
@@ -654,5 +657,29 @@ fn splunk_enterprise_security_is_a_boolean_and_never_a_placeholder() {
         assert_eq!(issues.len(), 1, "{value}: {issues:?}");
         let shown = format!("{:?}", issues[0]);
         assert!(shown.contains("enterprise_security"), "{value}: {shown}");
+    }
+}
+
+#[test]
+fn splunk_schedule_offset_is_an_integer_and_never_a_placeholder() {
+    // `deploy` refuses a `$NAME` placeholder in `schedule_offset` (it
+    // resolves placeholders in credentials and `ssl` only), so `validate`
+    // refuses it too, at the key's path.
+    let path = "/w/.opentide/configurations/platforms/splunk.toml";
+    let splunk = |value: &str| {
+        format!(
+            "[[tenants]]\nname = \"a\"\n[tenants.setup]\nurl = \"u\"\nport = 8089\n\
+             app = \"search\"\nschedule_offset = {value}\n"
+        )
+    };
+    for value in ["0", "5", "-3"] {
+        let issues = checks::buffer_issues(path, &splunk(value), &checks::BufferContext::default());
+        assert!(issues.is_empty(), "{value}: {issues:?}");
+    }
+    for value in ["\"$SPLUNK_OFFSET\"", "\"soon\"", "1.5"] {
+        let issues = checks::buffer_issues(path, &splunk(value), &checks::BufferContext::default());
+        assert_eq!(issues.len(), 1, "{value}: {issues:?}");
+        let shown = format!("{:?}", issues[0]);
+        assert!(shown.contains("schedule_offset"), "{value}: {shown}");
     }
 }
