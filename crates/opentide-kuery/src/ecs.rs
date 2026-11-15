@@ -10,6 +10,7 @@ use crate::parser;
 use crate::syntax::{SyntaxElement, SyntaxKind as K, SyntaxNode};
 use crate::{field_value, node_span, range, text};
 use opentide_core::Diagnostic;
+use opentide_core::LineIndex;
 use opentide_ecs::ValueType;
 
 /// A literal as Kibana reads it: its text, and whether it holds an
@@ -83,10 +84,12 @@ fn literals(element: SyntaxElement, out: &mut Vec<SyntaxElement>) {
 /// ECS documents. Fields inside a nested query (`a:{ b:c }`) are relative to
 /// their parent and are not checked. A query that does not parse gets none.
 pub fn ecs_diagnostics(source: &str) -> Vec<Diagnostic> {
-    let (root, parse) = parser::parse(source, true);
+    let parsed = parser::parse_memo(source);
+    let (root, parse) = &*parsed;
     if !parse.errors.is_empty() {
         return Vec::new();
     }
+    let lines = LineIndex::new(source);
     let mut out = Vec::new();
     for node in root.descendants() {
         let kind = node.kind();
@@ -102,7 +105,7 @@ pub fn ecs_diagnostics(source: &str) -> Vec<Diagnostic> {
             continue;
         };
         if let Some(d) = opentide_ecs::unknown_field_diagnostic(&name, || {
-            range(source, node_span(field.text_range()))
+            range(&lines, node_span(field.text_range()))
         }) {
             out.push(d);
             continue;
@@ -125,7 +128,7 @@ pub fn ecs_diagnostics(source: &str) -> Vec<Diagnostic> {
         literals(value, &mut values);
         for v in values {
             let (value_text, wildcard) = literal(&v, source);
-            let at = || range(source, node_span(v.text_range()));
+            let at = || range(&lines, node_span(v.text_range()));
             if kind == K::FieldValueExpression && wildcard {
                 // `field:*` asks whether the field exists.
                 if value_text.trim() == "*" || value_type == ValueType::String {
