@@ -214,12 +214,44 @@ fn space_before_uppercase(text: &str) -> String {
     out
 }
 
+/// The longest stem [`sanitize_filename`] returns, in bytes: callers add a
+/// de-duplicating suffix and `.yaml`, and file systems cap a name at 255.
+const STEM_LIMIT: usize = 200;
+
 /// `name` as a file name on every system: each character Windows refuses
-/// in a file name (`< > : " / \ | ? *`) is a space.
+/// in a file name (`< > : " / \ | ? *`) and each control character is a
+/// space, the stem is cut to [`STEM_LIMIT`] bytes at a character boundary,
+/// and a reserved Windows device name (`CON`, `NUL`, `COM1`, ..., with any
+/// extension) gets a `_` before it.
 fn sanitize_filename(name: &str) -> String {
-    name.chars()
-        .map(|c| if "<>:\"/\\|?*".contains(c) { ' ' } else { c })
-        .collect()
+    let mut stem: String = name
+        .chars()
+        .map(|c| {
+            if "<>:\"/\\|?*".contains(c) || c.is_control() {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect();
+    stem.truncate(stem.floor_char_boundary(STEM_LIMIT));
+    if is_windows_device(&stem) {
+        stem.insert(0, '_');
+    }
+    stem
+}
+
+/// Whether Windows takes `stem` for a device, not a file: its base (up to
+/// the first `.`, trimmed) is `CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9` or
+/// `LPT1`-`LPT9`, in any case.
+fn is_windows_device(stem: &str) -> bool {
+    let base = stem.split('.').next().unwrap_or_default().trim();
+    let upper = base.to_ascii_uppercase();
+    matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || upper
+            .strip_prefix("COM")
+            .or_else(|| upper.strip_prefix("LPT"))
+            .is_some_and(|digit| matches!(digit.as_bytes(), [b'1'..=b'9']))
 }
 
 /// `text` as a JSON string.
@@ -676,12 +708,60 @@ mod tests {
             "Suspicious Activity"
         );
         assert_eq!(sanitize_filename("a:b/c?"), "a b c ");
+        assert_eq!(sanitize_filename("a\tb\nc\u{7f}d"), "a b c d");
         assert_eq!(
             sanitize_filename("Encoded PowerShell"),
             "Encoded PowerShell"
         );
         assert_eq!(capitalised("deviceId"), "DeviceId");
         assert_eq!(json_string("a\"é"), "\"a\\\"é\"");
+    }
+
+    #[test]
+    fn a_long_name_is_cut_at_a_character_boundary() {
+        assert_eq!(sanitize_filename(&"a".repeat(300)), "a".repeat(200));
+        // 'é' takes two bytes: 100 of them are 200 bytes, and a cut inside
+        // the next one leaves it out.
+        let long = "é".repeat(150);
+        assert_eq!(sanitize_filename(&long), "é".repeat(100));
+        let odd = format!("a{}", "é".repeat(150));
+        let cut = sanitize_filename(&odd);
+        assert_eq!(cut, format!("a{}", "é".repeat(99)));
+        assert_eq!(cut.len(), 199);
+        assert_eq!(sanitize_filename("short"), "short");
+    }
+
+    #[test]
+    fn a_windows_device_name_gets_an_underscore() {
+        for (name, expected) in [
+            ("CON", "_CON"),
+            ("nul", "_nul"),
+            ("Aux.txt", "_Aux.txt"),
+            ("prn.tar.gz", "_prn.tar.gz"),
+            ("COM1", "_COM1"),
+            ("com9.log", "_com9.log"),
+            ("LPT5", "_LPT5"),
+            ("lpt9 ", "_lpt9 "),
+            (" con", "_ con"),
+            ("con<", "_con "),
+        ] {
+            assert_eq!(sanitize_filename(name), expected, "{name:?}");
+        }
+        for name in [
+            "CONSOLE",
+            "COM",
+            "COM0",
+            "COM10",
+            "LPT",
+            "LPT0",
+            "ACON",
+            "con ect",
+            "NULL",
+            "my.con",
+            "Encoded PowerShell",
+        ] {
+            assert_eq!(sanitize_filename(name), name, "{name:?}");
+        }
     }
 
     #[test]

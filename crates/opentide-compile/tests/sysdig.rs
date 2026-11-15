@@ -412,3 +412,40 @@ fn the_preview_lists_the_blocks_own_policies() {
         unnamed.to_compact()
     );
 }
+
+/// `policies: []` names no policy, which is not the same as naming none: the
+/// block's list, empty, replaces the tenant's (`block_policies` is
+/// `Some([])`, and a deploy joins no policy), and a dry run lists it.
+#[test]
+fn an_empty_policies_list_replaces_the_tenants_policies_with_none() {
+    let policies = |block: &str| {
+        let workspace = workspace(block);
+        let index = workspace.index().clone();
+        let object = index.get("rule", UUID).unwrap();
+        sysdig::block_policies(&Rule::new(object.root().unwrap(), None))
+    };
+    let base = "    status: STAGING\n    condition: proc.name = x\n";
+    assert_eq!(policies(base), None);
+    assert_eq!(
+        policies(&format!("{base}    policies: []\n")),
+        Some(Vec::new())
+    );
+    assert_eq!(
+        policies(&format!("{base}    policies: [a, b]\n")),
+        Some(vec!["a".to_owned(), "b".to_owned()])
+    );
+
+    let workspace = workspace(&format!("{base}    policies: []\n"));
+    let owned = Owned::new(
+        &Vocabularies::bundled(),
+        &workspace.configuration().resolved,
+    );
+    let index = workspace.index().clone();
+    let cx = owned.context(&index);
+    let object = index.get("rule", UUID).unwrap();
+    let entry = preview::preview(&cx, "sysdig", &Rule::new(object.root().unwrap(), None));
+    assert_eq!(
+        entry.get("policies").map(Json::to_compact).as_deref(),
+        Some("[]")
+    );
+}
