@@ -6,11 +6,12 @@
 //! A writer reads the shard, changes one tenant entry and writes the rest
 //! back, root keys this version does not know included. The text is UTF-8
 //! JSON with sorted keys, a two-space indent and one trailing newline. A
-//! write goes to `.<name>.tmp` beside the shard, is flushed to disk, then
-//! replaces the shard: a run that fails part-way leaves the shard as it was.
+//! write goes to a temporary file of a unique name beside the shard
+//! (`opentide_workspace::fs::write_atomically`), is flushed to disk, then
+//! replaces the shard: a run that fails part-way leaves the shard as it was,
+//! and two runs never share a temporary file.
 
 use std::fmt;
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
@@ -551,37 +552,15 @@ fn sync_dir(dir: &Path) {
 }
 
 /// Replaces *path* with *text* atomically and flushes it to disk before
-/// returning (`write_durable`): the text goes to `.<name>.tmp` beside it,
-/// takes the file's permissions, then replaces it. On failure the temporary
-/// file is removed and *path* is left as it was.
+/// returning (`write_durable`): the text goes to a temporary file of a unique
+/// name beside it (`opentide_workspace::fs::write_atomically`, which keeps
+/// the file's permissions and a symbolic link a link), then replaces it, and
+/// the folder is flushed. On failure the temporary file is removed and *path*
+/// is left as it was.
 pub fn write_durable(path: &Path, text: &str) -> std::io::Result<()> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     std::fs::create_dir_all(parent)?;
-    let permissions = std::fs::metadata(path).ok().map(|meta| meta.permissions());
-    let name = path
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let temporary = parent.join(format!(".{name}.tmp"));
-    let written = (|| {
-        let mut file = std::fs::File::create(&temporary)?;
-        file.write_all(text.as_bytes())?;
-        file.flush()?;
-        file.sync_all()?;
-        drop(file);
-        // WASI has no permissions to keep (its `set_permissions` is unsupported).
-        #[cfg(not(target_os = "wasi"))]
-        if let Some(permissions) = permissions {
-            std::fs::set_permissions(&temporary, permissions)?;
-        }
-        #[cfg(target_os = "wasi")]
-        let _ = permissions;
-        std::fs::rename(&temporary, path)
-    })();
-    if let Err(error) = written {
-        let _ = std::fs::remove_file(&temporary);
-        return Err(error);
-    }
+    opentide_workspace::fs::write_atomically(path, text.as_bytes())?;
     sync_dir(parent);
     Ok(())
 }
@@ -986,6 +965,32 @@ mod tests {
         assert!(mismatch.message.contains("the only valid name is"));
     }
 
+    /// A folder nothing can be created in, until dropped.
+    #[cfg(unix)]
+    struct ReadOnly(PathBuf);
+
+    #[cfg(unix)]
+    impl ReadOnly {
+        /// `None` when the folder stays writable (the tests run as root).
+        fn new(folder: &Path) -> Option<Self> {
+            use std::os::unix::fs::PermissionsExt as _;
+            std::fs::set_permissions(folder, std::fs::Permissions::from_mode(0o555)).unwrap();
+            let guard = Self(folder.to_path_buf());
+            std::fs::File::create(folder.join("probe"))
+                .is_err()
+                .then_some(guard)
+        }
+    }
+
+    #[cfg(unix)]
+    impl Drop for ReadOnly {
+        fn drop(&mut self) {
+            use std::os::unix::fs::PermissionsExt as _;
+            let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
+        }
+    }
+
+    #[cfg(unix)]
     #[test]
     fn a_failed_write_leaves_the_shard_as_it_was() {
         let dir = tempfile::tempdir().unwrap();
@@ -994,8 +999,11 @@ mod tests {
         let path = folder.join(format!("{UUID}.json"));
         let before = shard_text(r#"{"sysdig": {"lab": "42"}}"#);
         std::fs::write(&path, &before).unwrap();
-        // The temporary file's name is a folder: the write fails before the replace.
-        std::fs::create_dir_all(folder.join(format!(".{UUID}.json.tmp"))).unwrap();
+        // A folder the user cannot write refuses the temporary file: the
+        // write fails before the replace.
+        let Some(read_only) = ReadOnly::new(&folder) else {
+            return; // root writes anywhere: nothing to refuse the write
+        };
         let error =
             record_created(dir.path(), UUID, "sysdig", "other", &ExternalId::Int(43)).unwrap_err();
         assert_eq!(error.code, "deployment_state_write_failed");
@@ -1003,7 +1011,29 @@ mod tests {
             "sysdig created rule 43 for {UUID} on tenant \"other\", but the deployment state \
              could not be written ("
         )));
+        drop(read_only);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+        // No temporary file is left beside it.
+        assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn the_names_earlier_writers_used_for_a_temporary_file_do_not_block_a_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = state_dir(dir.path());
+        std::fs::create_dir_all(&folder).unwrap();
+        let path = folder.join(format!("{UUID}.json"));
+        std::fs::write(&path, shard_text(r#"{"sysdig": {"lab": "42"}}"#)).unwrap();
+        // Taken, by folders: the fixed `.<name>.tmp` a write used to need.
+        for taken in [format!(".{UUID}.json.tmp"), format!("{UUID}.json.tmp")] {
+            std::fs::create_dir_all(folder.join(taken)).unwrap();
+        }
+        record_created(dir.path(), UUID, "sysdig", "other", &ExternalId::Int(43)).unwrap();
+        assert!(
+            std::fs::read_to_string(&path)
+                .unwrap()
+                .contains("\"other\": \"43\"")
+        );
     }
 
     #[test]

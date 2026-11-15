@@ -39,16 +39,19 @@ def test_the_corpus_is_copied_into_the_current_layout(tmp_path: Path) -> None:
 
 def test_the_requirements_are_pyprojects(monkeypatch: pytest.MonkeyPatch) -> None:
     script = _script()
-    monkeypatch.setattr(script.importlib.metadata, "requires", lambda _name: ["pydantic >=2.0"])
-    assert script.check_requirements() == ["pydantic>=2.0"]
+    monkeypatch.setattr(
+        script.importlib.metadata, "requires", lambda _name: ["pydantic >=2.0 ; extra == 'plugins'"]
+    )
+    assert script.check_requirements() == ['pydantic>=2.0;extra=="plugins"']
 
 
 @pytest.mark.parametrize(
     "requires",
     [
-        ["pydantic>=2.0", "typer>=0.27"],  # a dependency the wheel gained
-        [],  # or lost
-        ["pydantic>=1.0"],
+        ['pydantic>=2.0;extra=="plugins"', "typer>=0.27"],  # a dependency the wheel gained
+        [],  # or an extra it lost
+        ["pydantic>=2.0"],  # pydantic as a dependency of every install
+        ['pydantic>=1.0;extra=="plugins"'],
     ],
 )
 def test_another_requirement_fails(monkeypatch: pytest.MonkeyPatch, requires: list[str]) -> None:
