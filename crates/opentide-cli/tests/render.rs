@@ -1,14 +1,14 @@
-//! The renderers against the oracle (UC-3.4, #826): code frames, outcome lines,
-//! SARIF, Code Quality, CI sinks and progress, byte for byte.
+//! The renderers (UC-3.4, #826): code frames, outcome lines, SARIF, Code
+//! Quality, CI sinks and progress.
 //!
-//! `tests/render/*.input.json` are what the oracle's commands build in memory
-//! (the fault workspace's diagnostics as `validate` and `lint` hand them to
-//! their report writer, one synthetic diagnostic per code with a page, the
-//! catalogue of explain pages, outcome, CI and progress cases), and
-//! `tests/render/snapshots/render__*.snap` what the oracle prints for them.
-//! Both are written by `scripts/golden/render_oracle.py`, run with the oracle's
-//! interpreter; never edited. Each test renders the same input with the Rust
-//! renderers and compares: exactly, and as an insta snapshot for review.
+//! `tests/render/*.input.json` are what the commands build in memory (the
+//! fault workspace's diagnostics as `validate` and `lint` hand them to their
+//! report writer, one synthetic diagnostic per code with a page, the
+//! catalogue of explain pages, outcome, CI and progress cases), recorded once
+//! from the Python implementation and never edited. Each test renders an input
+//! with the Rust renderers and holds the result to its reviewed insta snapshot
+//! in `tests/render/snapshots/`, or, for the CI sinks and the progress
+//! events, to the values the input records.
 #![expect(
     clippy::expect_used,
     clippy::unwrap_used,
@@ -44,117 +44,9 @@ fn input(name: &str) -> Value {
     serde_json::from_str(&text).expect("parse an input")
 }
 
-/// The oracle's output: the snapshot's body, exactly.
-fn oracle(name: &str) -> String {
-    let path = dir().join(format!("snapshots/render__{name}.snap"));
-    let text = std::fs::read_to_string(&path).expect("read a snapshot");
-    let body = text
-        .splitn(3, "---\n")
-        .nth(2)
-        .expect("an insta header between two `---` lines");
-    body.strip_suffix('\n')
-        .expect("a body ends in a newline")
-        .to_owned()
-}
-
-/// The lines where the Rust renderers differ from the oracle by design:
-/// `(snapshot, oracle line, Rust line)`. Each is a difference UC-3.4 decided
-/// (`tests/golden/APPROVED_DIFFS.toml`, "Decided by UC-3.4"), announced in the
-/// CHANGELOG; [`check`] takes it back to the oracle's line where both sides
-/// are found at the same line number, and fails when an entry applies nowhere.
-const APPROVED: &[(&str, &str, &str)] = &[
-    // An underline under a tab covers the tab as the terminal expands it
-    // (the source starts at cell 5, so the tab reaches the stop at 8).
-    (
-        "validate_fault_frames_human",
-        "\u{1b}[34m   \u{1b}[0m\u{1b}[34m│\u{1b}[0m \u{1b}[1;31m━\u{1b}[0m",
-        "\u{1b}[34m   \u{1b}[0m\u{1b}[34m│\u{1b}[0m \u{1b}[1;31m━━━\u{1b}[0m",
-    ),
-    ("validate_fault_frames_plain", "   │ ━", "   │ ━━━"),
-    (
-        "lint_fault_frames_human",
-        "\u{1b}[34m   \u{1b}[0m\u{1b}[34m│\u{1b}[0m \u{1b}[1;31m━\u{1b}[0m",
-        "\u{1b}[34m   \u{1b}[0m\u{1b}[34m│\u{1b}[0m \u{1b}[1;31m━━━\u{1b}[0m",
-    ),
-    ("lint_fault_frames_plain", "   │ ━", "   │ ━━━"),
-    // A `cql_` finding's frame is highlighted, as every query code's is: the
-    // Rust CLI checks CrowdStrike's CQL and names its reference ("**`opentide
-    // validate` checks CrowdStrike queries, and fails a rule whose query
-    // Next-Gen SIEM would refuse**"), where 0.28.1's table of query references
-    // has no `cql_`, so it frames CQL findings unhighlighted. The lines of
-    // frame-shapes.yaml a CQL frame shows, coloured.
-    (
-        "codes_frames_human",
-        "\u{1b}[34m1 \u{1b}[0m\u{1b}[34m│\u{1b}[0m name: Frame shapes",
-        "\u{1b}[34m1 \u{1b}[0m\u{1b}[34m│\u{1b}[0m name: \u{1b}[32mFrame shapes\u{1b}[0m",
-    ),
-    (
-        "codes_frames_human",
-        "\u{1b}[34m5 \u{1b}[0m\u{1b}[34m│\u{1b}[0m   created: 2026-01-01",
-        "\u{1b}[34m5 \u{1b}[0m\u{1b}[34m│\u{1b}[0m   created: \u{1b}[32m2026-01-01\u{1b}[0m",
-    ),
-    (
-        "codes_frames_human",
-        "\u{1b}[34m6 \u{1b}[0m\u{1b}[34m│\u{1b}[0m   modified: 2026-01-02",
-        "\u{1b}[34m6 \u{1b}[0m\u{1b}[34m│\u{1b}[0m   modified: \u{1b}[32m2026-01-02\u{1b}[0m",
-    ),
-];
-
-/// `candidate` equals the oracle's `name` byte for byte, but for the
-/// [`APPROVED`] lines, and its insta snapshot.
+/// `candidate` is the reviewed insta snapshot `name`.
 fn check(name: &str, candidate: &str) {
-    let expected = oracle(name);
-    let oracle_lines: Vec<&str> = expected.split('\n').collect();
-    let mut applied = vec![false; APPROVED.len()];
-    let candidate = candidate
-        .split('\n')
-        .enumerate()
-        .map(|(index, line)| {
-            for (entry, (snapshot, oracle_line, rust_line)) in APPROVED.iter().enumerate() {
-                if *snapshot == name
-                    && line == *rust_line
-                    && oracle_lines.get(index) == Some(oracle_line)
-                {
-                    applied[entry] = true;
-                    return *oracle_line;
-                }
-            }
-            line
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    for (entry, (snapshot, _, rust_line)) in APPROVED.iter().enumerate() {
-        assert!(
-            *snapshot != name || applied[entry],
-            "{name}: the approved difference {rust_line:?} applies nowhere: remove it"
-        );
-    }
-    if candidate != expected {
-        let differing: Vec<usize> = candidate
-            .split('\n')
-            .zip(expected.split('\n'))
-            .enumerate()
-            .filter(|(_, (a, b))| a != b)
-            .map(|(index, _)| index + 1)
-            .collect();
-        let line = candidate
-            .split('\n')
-            .zip(expected.split('\n'))
-            .position(|(a, b)| a != b)
-            .unwrap_or_else(|| {
-                candidate
-                    .split('\n')
-                    .count()
-                    .min(expected.split('\n').count())
-            });
-        panic!(
-            "{name}: the Rust renderer differs from the oracle at line {} (lines {differing:?})\n  oracle: {:?}\n  rust:   {:?}",
-            line + 1,
-            expected.split('\n').nth(line).unwrap_or("<end>"),
-            candidate.split('\n').nth(line).unwrap_or("<end>"),
-        );
-    }
-    insta::with_settings!({snapshot_path => dir().join("snapshots"), prepend_module_to_snapshot => true}, {
+    insta::with_settings!({snapshot_path => dir().join("snapshots"), prepend_module_to_snapshot => true, omit_expression => true}, {
         insta::assert_snapshot!(name, candidate);
     });
 }
@@ -266,19 +158,16 @@ fn fault(command: &str) {
 }
 
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn render_validate_fault_workspace_frames_reports_and_sinks() {
     fault("validate");
 }
 
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn render_lint_fault_workspace_frames_reports_and_sinks() {
     fault("lint");
 }
 
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn render_every_code_frame_human_and_plain() {
     let data = input("codes.input.json");
     let items = diagnostics(&data["diagnostics"]);
@@ -355,10 +244,10 @@ fn step(spec: &Value) -> Step {
 }
 
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn render_every_outcome_line_variant() {
     let data = input("outcome.input.json");
-    for case in data["cases"].as_array().unwrap() {
+    let mut rendered_lines = String::new();
+    for (number, case) in data["cases"].as_array().unwrap().iter().enumerate() {
         for (mode, console, output_mode) in [
             (
                 "human",
@@ -420,13 +309,13 @@ fn render_every_outcome_line_variant() {
                     .collect(),
                 other => panic!("unknown case kind {other}"),
             };
-            assert_eq!(
-                rendered,
-                case["rendered"][mode].as_str().unwrap(),
-                "{case} in {mode}"
-            );
+            rendered_lines.push_str(&format!(
+                "{number} {} {mode}: {rendered:?}\n",
+                case["kind"].as_str().unwrap()
+            ));
         }
     }
+    check("outcome_lines", &rendered_lines);
     for entry in data["words"]["plural"].as_array().unwrap() {
         let count = usize::try_from(entry[0].as_u64().unwrap()).unwrap();
         assert_eq!(
@@ -452,7 +341,6 @@ fn strings(value: &Value) -> Vec<String> {
 }
 
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn render_ci_sinks_escaping_caps_and_summaries() {
     let data = input("ci.input.json");
@@ -578,7 +466,6 @@ fn render_ci_sinks_escaping_caps_and_summaries() {
 }
 
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn render_progress_events_and_tickers() {
     let text = std::fs::read_to_string(dir().join("progress.input.json")).unwrap();
     let data = Json::parse(&text).unwrap();
