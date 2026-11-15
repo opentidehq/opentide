@@ -61,10 +61,7 @@ impl<'t> Positions<'t> {
     }
 
     fn mark(&self, byte: usize) -> Mark {
-        let mut byte = byte.min(self.text.len());
-        while !self.text.is_char_boundary(byte) {
-            byte -= 1;
-        }
+        let byte = self.text.floor_char_boundary(byte);
         let line = self.line_starts.partition_point(|start| *start <= byte);
         let start = self.line_starts[line.saturating_sub(1)];
         let before = self.text[start..byte].chars().count();

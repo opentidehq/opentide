@@ -25,6 +25,24 @@
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+/// The word the command line spells `value` with (`defender_for_endpoint`).
+pub fn spelled<T: ValueEnum>(value: &T) -> String {
+    value
+        .to_possible_value()
+        .map(|value| value.get_name().to_owned())
+        .unwrap_or_default()
+}
+
+impl From<ReportFormat> for crate::render::report::ReportFormat {
+    fn from(format: ReportFormat) -> Self {
+        match format {
+            ReportFormat::Text => Self::Text,
+            ReportFormat::Sarif => Self::Sarif,
+            ReportFormat::Codequality => Self::Codequality,
+        }
+    }
+}
+
 /// A string option whose choices the catalogue lists but the command checks
 /// itself, with its own message (`validate --type`: "Unknown object
 /// type(s): …"): clap accepts any value and still knows the choices.
@@ -174,8 +192,9 @@ pub enum Platform {
 }
 
 /// The values of `RowFormat`, as the command line spells them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
 pub enum RowFormat {
+    #[default]
     #[value(name = "table")]
     Table,
     #[value(name = "jsonl")]
@@ -264,19 +283,29 @@ pub struct Cli {
     pub repo: Option<String>,
     #[arg(long = "data", env = "OPENTIDE_DATA_ROOT", help = "Bundled data root")]
     pub data: Option<String>,
-    #[arg(long = "debug", help = "Enable debug logging. Also OPENTIDE_DEBUG=1")]
+    #[arg(
+        long = "debug",
+        global = true,
+        help = "Enable debug logging. Also OPENTIDE_DEBUG=1"
+    )]
     pub debug: bool,
-    #[arg(long = "quiet", help = "Print only the outcome line and errors")]
+    #[arg(
+        long = "quiet",
+        global = true,
+        help = "Print only the outcome line and errors"
+    )]
     pub quiet: bool,
     #[arg(
         long = "verbose",
+        global = true,
         help = "Also print notes, such as a missing optional field. --json always includes them"
     )]
     pub verbose: bool,
-    #[arg(long = "no-color", help = "Disable colour")]
+    #[arg(long = "no-color", global = true, help = "Disable colour")]
     pub no_color: bool,
     #[arg(
         long = "json",
+        global = true,
         help = "Machine-readable output: one JSON object on stdout"
     )]
     pub json_output: bool,

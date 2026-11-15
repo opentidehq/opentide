@@ -65,7 +65,7 @@ fn diagnostic(raw: &Json) -> Diagnostic {
         .filter(|value| value.as_object().is_some());
     let text = |key: &str| {
         raw.get(key)
-            .filter(|value| value.truthy())
+            .filter(|value| value.is_filled())
             .map(opentide_compile::deploy::text)
     };
     Diagnostic {

@@ -52,12 +52,13 @@ class Connection:
         What this tenant's connector can do: `(deploy, live_validation,
         query)`.
         """
-    def deploy(self, /, rule_id: str, operation: str, body: SupportsGetItem[int, SupportsIndex]) -> Awaitable[str]:
+    def deploy(self, /, rule_id: str, operation: str, body: SupportsGetItem[int, SupportsIndex], *, policies: SupportsGetItem[int, str] | None = None) -> Awaitable[str]:
         """
         Applies *operation* (`create`, `update`, `disable` or `delete`) to the
         rule *rule_id* on the tenant, sending *body* (a deploy plan's
         payload) as its bytes: an awaitable of `{remote_id, operation}`, as
-        JSON.
+        JSON. *policies* are Sysdig's runtime policies for the rule (a plan
+        entry's `policies`); `None` takes the tenant's.
         """
     @staticmethod
     def open(tenant: TenantConfig, *, environment: SupportsGetItem[int, tuple[str, str]] | None = None, proxy: str | None = None, timeout: SupportsFloat | SupportsIndex | None = None) -> Connection:

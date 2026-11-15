@@ -3,6 +3,7 @@
 
 use std::future::Future;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, CustomRequest, CustomResult,
@@ -14,8 +15,10 @@ use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
+use tokio_util::sync::CancellationToken;
 
 use super::{resources, tools};
+use crate::app::Interrupt;
 use crate::env::Env;
 
 /// What the Python server says of itself (`scripts/build/mcp_manifest.py`).
@@ -59,13 +62,50 @@ fn from_value<T: DeserializeOwned>(value: Value) -> Result<T, serde_json::Error>
 }
 
 /// The MCP server.
+///
+/// Each tool call and resource read runs apart from the runtime's thread
+/// (`Server::apart`), so the server keeps reading the client meanwhile: a
+/// `ping` or a list is answered, and `notifications/cancelled` stops the
+/// call. They run one at a time, in the order they came, as they ran when
+/// the server waited for each.
 pub struct Server {
     manifest: Manifest,
+    state: Arc<State>,
+    /// Held by the call or read running; queued ones wait for it.
+    turn: Arc<tokio::sync::Mutex<()>>,
+}
+
+/// Interrupts a call's work when its handler ends ([`Server::apart`]).
+#[cfg(not(target_os = "wasi"))]
+struct StopOnDrop(Interrupt);
+
+#[cfg(not(target_os = "wasi"))]
+impl Drop for StopOnDrop {
+    fn drop(&mut self) {
+        self.0.request();
+    }
+}
+
+/// What the tools and resources run against.
+struct State {
     env: Env,
     cwd: Option<PathBuf>,
     repo: Option<String>,
     version: String,
     workspace_problem: Option<String>,
+}
+
+impl State {
+    fn context<'a>(&'a self, interrupt: Option<&'a Interrupt>) -> tools::Context<'a> {
+        tools::Context {
+            env: &self.env,
+            cwd: self.cwd.as_deref(),
+            repo: self.repo.as_deref(),
+            version: &self.version,
+            workspace_problem: self.workspace_problem.clone(),
+            interrupt,
+        }
+    }
 }
 
 impl Server {
@@ -81,21 +121,60 @@ impl Server {
     ) -> Server {
         Server {
             manifest: Manifest::load(version),
-            env,
-            cwd,
-            repo,
-            version: version.to_owned(),
-            workspace_problem,
+            state: Arc::new(State {
+                env,
+                cwd,
+                repo,
+                version: version.to_owned(),
+                workspace_problem,
+            }),
+            turn: Arc::default(),
         }
     }
 
-    fn context(&self) -> tools::Context<'_> {
-        tools::Context {
-            env: &self.env,
-            cwd: self.cwd.as_deref(),
-            repo: self.repo.as_deref(),
-            version: &self.version,
-            workspace_problem: self.workspace_problem.clone(),
+    /// Runs `work` on the runtime's blocking pool once the calls before it
+    /// are done, with an [`Interrupt`] of its own that `cancelled` sets: the
+    /// commands it runs stop as Ctrl-C stops them, and no other call is
+    /// interrupted. A cancelled call answers nothing (rmcp drops the answer
+    /// of a cancelled request, as MCP has it); the next call waits until it
+    /// has stopped. WASI has no threads: there the work runs on this thread,
+    /// and the server reads the client again once it is done.
+    async fn apart<T: Send + 'static>(
+        &self,
+        cancelled: &CancellationToken,
+        work: impl FnOnce(&State, &Interrupt) -> T + Send + 'static,
+    ) -> Result<T, ErrorData> {
+        let stopped = || ErrorData::internal_error("Request cancelled", None);
+        let turn = tokio::select! {
+            turn = Arc::clone(&self.turn).lock_owned() => turn,
+            () = cancelled.cancelled() => return Err(stopped()),
+        };
+        let state = Arc::clone(&self.state);
+        let interrupt = Interrupt::default();
+        #[cfg(target_os = "wasi")]
+        {
+            let _turn = turn;
+            Ok(work(&state, &interrupt))
+        }
+        #[cfg(not(target_os = "wasi"))]
+        {
+            let running = tokio::task::spawn_blocking({
+                let interrupt = interrupt.clone();
+                move || {
+                    let _turn = turn;
+                    work(&state, &interrupt)
+                }
+            });
+            // Cancelled, or dropped unfinished (the session ending drops its
+            // handlers), the work is interrupted; once it has finished,
+            // interrupting it changes nothing.
+            let _stop = StopOnDrop(interrupt);
+            tokio::select! {
+                ran = running => ran.map_err(|_| {
+                    ErrorData::internal_error("the call stopped unexpectedly", None)
+                }),
+                () = cancelled.cancelled() => Err(stopped()),
+            }
         }
     }
 
@@ -126,12 +205,12 @@ impl Server {
 
     /// The answer to `tools/call`, as the Python server gives it.
     pub fn call(&self, name: &str, arguments: &serde_json::Map<String, Value>) -> Answer {
-        Answer::Result(tools::call(name, arguments, &self.context()))
+        Answer::Result(tools::call(name, arguments, &self.state.context(None)))
     }
 
     /// The answer to `resources/read`, as the Python server gives it.
     pub fn read(&self, uri: &str) -> Answer {
-        resources::read(uri, &self.context())
+        resources::read(uri, &self.state.context(None))
     }
 }
 
@@ -175,18 +254,20 @@ impl ServerHandler for Server {
         std::future::ready(Ok(self.manifest.tools.clone()))
     }
 
-    fn call_tool(
+    async fn call_tool(
         &self,
         request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
-    ) -> impl Future<Output = Result<CallToolResponse, ErrorData>> + Send + '_ {
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, ErrorData> {
         let arguments = request.arguments.unwrap_or_default();
-        std::future::ready(match self.call(&request.name, &arguments) {
-            Answer::Result(result) => from_value::<CallToolResult>(result)
-                .map(CallToolResponse::from)
-                .map_err(|error| invalid_result(&error)),
-            Answer::Error(error) => Err(error_data(&error)),
-        })
+        let result = self
+            .apart(&context.ct, move |state, interrupt| {
+                tools::call(&request.name, &arguments, &state.context(Some(interrupt)))
+            })
+            .await?;
+        from_value::<CallToolResult>(result)
+            .map(CallToolResponse::from)
+            .map_err(|error| invalid_result(&error))
     }
 
     fn list_resources(
@@ -205,17 +286,22 @@ impl ServerHandler for Server {
         std::future::ready(Ok(self.manifest.templates.clone()))
     }
 
-    fn read_resource(
+    async fn read_resource(
         &self,
         request: ReadResourceRequestParams,
-        _context: RequestContext<RoleServer>,
-    ) -> impl Future<Output = Result<ReadResourceResponse, ErrorData>> + Send + '_ {
-        std::future::ready(match self.read(&request.uri) {
+        context: RequestContext<RoleServer>,
+    ) -> Result<ReadResourceResponse, ErrorData> {
+        let answer = self
+            .apart(&context.ct, move |state, interrupt| {
+                resources::read(&request.uri, &state.context(Some(interrupt)))
+            })
+            .await?;
+        match answer {
             Answer::Result(result) => from_value::<ReadResourceResult>(result)
                 .map(ReadResourceResponse::from)
                 .map_err(|error| invalid_result(&error)),
             Answer::Error(error) => Err(error_data(&error)),
-        })
+        }
     }
 
     /// A method the server has no handler for: the Python server's answer,

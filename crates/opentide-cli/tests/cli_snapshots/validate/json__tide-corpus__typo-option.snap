@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/tide-corpus/typo-option
+---
+args: opentide --json validate --strictt
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate",
+  "duration_ms": 0,
+  "error": "unexpected argument '--strictt' found",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--strictt",
+    "code": "usage_unknown_option",
+    "crash_log": null,
+    "message": "unexpected argument '--strictt' found",
+    "suggestion": "--strict"
+  },
+  "message": "unexpected argument '--strictt' found",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

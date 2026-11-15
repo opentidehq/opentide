@@ -1,0 +1,67 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/tide-corpus/uuid
+---
+args: opentide --json validate --uuid 00000000-0000-4000-8003-000000000001
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "checks": {
+    "configuration": {
+      "check": "configuration",
+      "status": "passed"
+    },
+    "id-uniqueness": {
+      "check": "id-uniqueness",
+      "status": "passed"
+    },
+    "queries": {
+      "check": "queries",
+      "status": "passed"
+    },
+    "schema": {
+      "check": "schema",
+      "status": "passed"
+    },
+    "uuid-format": {
+      "check": "uuid-format",
+      "status": "passed"
+    }
+  },
+  "command": "validate",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Validation passed",
+  "next_actions": [],
+  "ok": true,
+  "report": {
+    "issues": [],
+    "ok": true,
+    "stats": {
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
+      "objects_checked": 1,
+      "parallel": "<CORES>",
+      "queries_checked": 1,
+      "wall_ms": 0.0,
+      "workers": "<CORES>"
+    },
+    "warnings": []
+  },
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "errors": 0,
+    "files": 0,
+    "fixable": 0,
+    "objects": 1,
+    "queries": 1,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "workspace": "<WS>"
+}
+
+━━━ stderr · empty

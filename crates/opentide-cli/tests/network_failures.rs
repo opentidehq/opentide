@@ -562,6 +562,185 @@ fn a_doctor_ctrl_c_while_the_proxy_holds_its_request_is_interrupted() {
     ran.assert_interrupted();
 }
 
+#[test]
+fn doctor_never_prints_any_part_of_a_proxy_password() {
+    // Passwords written as people write them, some percent-encoded and some
+    // not; each fragment would identify a piece of the secret. The proxy is
+    // a closed port on the loopback: nothing leaves this machine.
+    let address = closed_port();
+    let fragments = ["al1ceU", "Qz7k", "Wm4r", "Jx9v"];
+    let (_scratch, ws) = fixture("tenants", ELASTIC, &[]);
+    for userinfo in [
+        "al1ceU:Qz7k@Wm4r",
+        "al1ceU:Qz7k/Wm4r",
+        "al1ceU:Qz7k#Wm4r",
+        "al1ceU:Qz7k?Wm4r",
+        "al1ceU:Qz7k%40Wm4r",
+        "al1ceU:Qz7k:Wm4r",
+        "al1ceU:Qz7k@Jx9v/Wm4r#x",
+    ] {
+        for (name, proxy) in [
+            ("HTTPS_PROXY", format!("http://{userinfo}@{address}")),
+            ("OPENTIDE_PROXY", format!("http://{userinfo}@{address}")),
+            ("all_proxy", format!("{userinfo}@{address}")),
+        ] {
+            for words in [&["--debug", "--json", "doctor"][..], &["--debug", "doctor"]] {
+                let ran = run_at(
+                    &ws,
+                    words,
+                    &[(name, &proxy), ("OPENTIDE_LOG_JSON", "1")],
+                    &Interrupt::default(),
+                );
+                let printed = format!("{}\n{}", ran.stdout, ran.stderr);
+                assert!(printed.contains("proxy"), "{name}={proxy}: {printed}");
+                for fragment in fragments {
+                    assert!(
+                        !printed.contains(fragment),
+                        "{name}={proxy} {words:?} printed {fragment}: {printed}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// A proxy stand-in on the loopback that keeps the head of each request it
+/// takes, then closes the connection unanswered. Its address and the heads.
+fn recording_proxy() -> (String, Arc<Mutex<Vec<String>>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let heads = Arc::new(Mutex::new(Vec::new()));
+    let kept = Arc::clone(&heads);
+    std::thread::spawn(move || {
+        for mut stream in listener.incoming().flatten() {
+            let mut head = Vec::new();
+            let mut byte = [0_u8; 1];
+            while !head.ends_with(b"\r\n\r\n") {
+                match std::io::Read::read(&mut stream, &mut byte) {
+                    Ok(1) => head.push(byte[0]),
+                    _ => break,
+                }
+            }
+            kept.lock()
+                .unwrap()
+                .push(String::from_utf8_lossy(&head).into_owned());
+        }
+    });
+    (address, heads)
+}
+
+/// `query` on the `tenants` fixture's Elastic tenant (`https://…invalid`),
+/// with `env` besides its key.
+fn elastic_query(ws: &Path, env: &[(&str, &str)]) -> Ran {
+    let mut words = vec!["--json", "query", "--platform", "elastic"];
+    words.extend(WINDOW);
+    words.push("FROM logs-*");
+    let env: Vec<(&str, &str)> = [("ELASTIC_API_KEY", KEY)]
+        .into_iter()
+        .chain(env.iter().copied())
+        .collect();
+    run_at(ws, &words, &env, &Interrupt::default())
+}
+
+#[test]
+fn a_proxy_password_with_an_unencoded_at_still_goes_to_the_proxy_unshown() {
+    // `@` and `:` in a password need no encoding: the last `@` ends the user
+    // info, so the request goes to the proxy, which gets the whole password.
+    let (address, heads) = recording_proxy();
+    let (_scratch, ws) = fixture("tenants", ELASTIC, &[]);
+    for (name, proxy) in [
+        ("HTTPS_PROXY", format!("http://al1ceU:Qz7k@Wm4r@{address}")),
+        ("all_proxy", format!("al1ceU:Qz7k@Wm4r@{address}")),
+    ] {
+        heads.lock().unwrap().clear();
+        let ran = elastic_query(&ws, &[(name, &proxy)]);
+        assert_ne!(ran.code, 0, "{ran:?}");
+        let printed = format!("{}\n{}", ran.stdout, ran.stderr);
+        for fragment in ["al1ceU", "Qz7k", "Wm4r"] {
+            assert!(
+                !printed.contains(fragment),
+                "{name}: printed {fragment}: {printed}"
+            );
+        }
+        let heads = heads.lock().unwrap().clone();
+        let head = heads
+            .first()
+            .unwrap_or_else(|| panic!("{name}: no request reached the proxy: {printed}"));
+        assert!(
+            head.starts_with("CONNECT es.elastic.invalid:443 ")
+                || head.starts_with("CONNECT kibana.elastic.invalid:443 "),
+            "{name}: {head}"
+        );
+        // base64 of `al1ceU:Qz7k@Wm4r`: the password as written, not cut at
+        // its first `@`.
+        assert!(
+            head.to_ascii_lowercase()
+                .contains("proxy-authorization: basic ywwxy2vvolf6n2tav200cg=="),
+            "{name}: {head}"
+        );
+    }
+}
+
+#[test]
+fn query_and_deploy_refuse_a_proxy_whose_password_would_name_its_host() {
+    // An unencoded `/`, `?`, `#` or `\` would make a URL parser read part of
+    // the password as the host: every command refuses the URL before it
+    // connects anywhere, in words that repeat none of it.
+    let (address, heads) = recording_proxy();
+    let port = address.rsplit(':').next().unwrap().to_owned();
+    for userinfo in [
+        "al1ceU:Qz7k/Wm4r",
+        "al1ceU:Qz7k?Wm4r",
+        "al1ceU:Qz7k#Wm4r",
+        "al1ceU:Qz7k\\Wm4r",
+        "al1ceU:Qz7k@Jx9v/Wm4r#x",
+    ] {
+        for (name, proxy) in [
+            ("HTTPS_PROXY", format!("http://{userinfo}@{address}")),
+            ("OPENTIDE_PROXY", format!("http://{userinfo}@{address}")),
+            ("all_proxy", format!("{userinfo}@{address}")),
+        ] {
+            let (_scratch, ws) = fixture("tenants", ELASTIC, &[]);
+            let queried = elastic_query(&ws, &[(name, &proxy)]);
+            let (_scratch, ws) = fixture("deploy-tenants", ELASTIC, &[]);
+            let deployed = run_at(
+                &ws,
+                &[
+                    "--json",
+                    "deploy",
+                    "--platform",
+                    "elastic",
+                    "--strategy",
+                    "PREVIEW",
+                    "--strategy",
+                    "RELEASE",
+                    "--all",
+                    "--keep-deprecated",
+                ],
+                &[("ELASTIC_API_KEY", KEY), (name, &proxy)],
+                &Interrupt::default(),
+            );
+            for (command, ran) in [("query", &queried), ("deploy", &deployed)] {
+                let printed = format!("{}\n{}", ran.stdout, ran.stderr);
+                assert_ne!(ran.code, 0, "{command} {name}={proxy}: {printed}");
+                assert!(
+                    printed.contains(
+                        "the proxy is not a proxy URL: its user or password holds an unencoded"
+                    ),
+                    "{command} {name}={proxy}: {printed}"
+                );
+                for fragment in ["al1ceU", "Qz7k", "Wm4r", "Jx9v", "127.0.0.1", port.as_str()] {
+                    assert!(
+                        !printed.contains(fragment),
+                        "{command} {name}={proxy} printed {fragment}: {printed}"
+                    );
+                }
+            }
+        }
+    }
+    assert_eq!(*heads.lock().unwrap(), Vec::<String>::new());
+}
+
 // ---- setup skills discover ----
 
 #[test]

@@ -382,3 +382,33 @@ fn a_rule_without_a_block_fails() {
         assert_eq!(sysdig::maturity_tag(strategy), tag);
     }
 }
+
+/// A dry run's entry lists the runtime policies the block names, beside its
+/// body: a deploy takes them before the tenant's. A block that names none
+/// lists none.
+#[test]
+fn the_preview_lists_the_blocks_own_policies() {
+    let entry = |block: &str| {
+        let workspace = workspace(block);
+        let owned = Owned::new(
+            &Vocabularies::bundled(),
+            &workspace.configuration().resolved,
+        );
+        let index = workspace.index().clone();
+        let cx = owned.context(&index);
+        let object = index.get("rule", UUID).unwrap();
+        let rule = Rule::new(object.root().unwrap(), None);
+        preview::preview(&cx, "sysdig", &rule)
+    };
+    let named = entry("    status: STAGING\n    condition: proc.name = x\n    policies: [a, b]\n");
+    assert_eq!(
+        named.get("policies").map(Json::to_compact).as_deref(),
+        Some(r#"["a","b"]"#)
+    );
+    let unnamed = entry("    status: STAGING\n    condition: proc.name = x\n");
+    assert!(
+        unnamed.get("policies").is_none(),
+        "{}",
+        unnamed.to_compact()
+    );
+}
