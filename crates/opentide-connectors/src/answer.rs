@@ -41,13 +41,102 @@ impl std::fmt::Debug for Answer {
     }
 }
 
+/// What the request itself carries as a credential, to keep out of what the
+/// API says back: an answer may echo the `Authorization` header it got.
+#[derive(Clone, Debug, Default)]
+pub struct Credentials(Vec<String>);
+
+/// A credential shorter than this is not masked: a short word (a Basic
+/// password like `token`) would be hidden wherever the answer says it.
+const MIN_CREDENTIAL: usize = 8;
+
+impl Credentials {
+    /// The credentials *request* sends: the value of each `Authorization`,
+    /// `Proxy-Authorization`, `X-API-Key` and `X-Auth-Token` header (and any
+    /// header marked sensitive): its parameter after the scheme, or the value
+    /// whole with none, and a Basic header's decoded user and password.
+    pub fn of(request: &crate::transport::Request) -> Self {
+        use crate::transport::header;
+        use base64::Engine as _;
+        let named = [
+            header::AUTHORIZATION,
+            header::PROXY_AUTHORIZATION,
+            header::HeaderName::from_static("x-api-key"),
+            header::HeaderName::from_static("x-auth-token"),
+        ];
+        let mut found = Vec::new();
+        for (name, value) in request.headers() {
+            if !value.is_sensitive() && !named.contains(name) {
+                continue;
+            }
+            let Ok(value) = value.to_str() else { continue };
+            // `Bearer <token>`: the token, the scheme staying readable; a
+            // value with no scheme (an API key) is the credential whole.
+            let Some((scheme, parameter)) = value.trim().split_once(' ') else {
+                found.push(value.trim().to_owned());
+                continue;
+            };
+            let parameter = parameter.trim();
+            found.push(parameter.to_owned());
+            if scheme.eq_ignore_ascii_case("basic") {
+                let decoded = base64::engine::general_purpose::STANDARD.decode(parameter);
+                if let Some(pair) = decoded.ok().and_then(|bytes| String::from_utf8(bytes).ok()) {
+                    found.extend(pair.split(':').map(str::to_owned));
+                }
+            }
+        }
+        found.retain(|credential| credential.len() >= MIN_CREDENTIAL);
+        found.sort();
+        found.dedup();
+        Self(found)
+    }
+
+    /// *body* with each credential it echoes replaced by `***`; the bytes
+    /// themselves when it echoes none.
+    pub fn mask(&self, body: Vec<u8>) -> Vec<u8> {
+        let text = String::from_utf8_lossy(&body);
+        if !self
+            .0
+            .iter()
+            .any(|credential| text.contains(credential.as_str()))
+        {
+            return body;
+        }
+        self.0
+            .iter()
+            .fold(text.into_owned(), |text, credential| {
+                text.replace(credential.as_str(), "***")
+            })
+            .into_bytes()
+    }
+}
+
 impl Answer {
+    /// An answer to a request that sent *credentials*: its body has none of
+    /// them, so no cut of it, whatever its length, can show a credential
+    /// the API echoed, nor the head of one that straddles the cut.
+    pub fn new(
+        status: u16,
+        content_type: Option<String>,
+        body: Vec<u8>,
+        elapsed: Duration,
+        credentials: &Credentials,
+    ) -> Self {
+        Self {
+            status,
+            content_type,
+            body: credentials.mask(body),
+            elapsed,
+        }
+    }
+
     /// Sends *request* on *http* and reads its answer whole.
     pub async fn fetch(
         http: &HttpClient,
         request: crate::transport::Request,
         cancel: &CancellationToken,
     ) -> Result<Self, ConnectorError> {
+        let credentials = Credentials::of(&request);
         let started = Instant::now();
         let response = http.send(request, cancel).await?;
         // To the answer's headers, retries included: the transport reads
@@ -60,12 +149,7 @@ impl Answer {
             .and_then(|value| value.to_str().ok())
             .map(str::to_owned);
         let body = http.bytes(response, cancel).await?;
-        Ok(Self {
-            status,
-            content_type,
-            body,
-            elapsed,
-        })
+        Ok(Self::new(status, content_type, body, elapsed, &credentials))
     }
 
     /// The body as JSON, keys in order; `None` when it is not JSON
@@ -208,6 +292,41 @@ mod tests {
             shown.contains("status: 200") && shown.contains("body_bytes: 53"),
             "{shown}"
         );
+    }
+
+    fn request_with(name: &'static str, value: &str) -> crate::transport::Request {
+        let mut request = crate::transport::Request::new(
+            crate::transport::Method::GET,
+            "https://example.test/".parse().unwrap(),
+        );
+        request.headers_mut().insert(name, value.parse().unwrap());
+        request
+    }
+
+    #[test]
+    fn a_credential_is_masked_whole_and_by_its_parameter() {
+        let credentials =
+            Credentials::of(&request_with("authorization", "Bearer abcdefgh12345678"));
+        let body = b"Bearer abcdefgh12345678 and abcdefgh12345678".to_vec();
+        let masked = String::from_utf8(credentials.mask(body)).unwrap();
+        assert_eq!(masked, "Bearer *** and ***");
+    }
+
+    #[test]
+    fn a_basic_header_masks_its_user_and_leaves_a_short_password() {
+        // user "a-user-name", password "token".
+        let credentials = Credentials::of(&request_with(
+            "proxy-authorization",
+            "Basic YS11c2VyLW5hbWU6dG9rZW4=",
+        ));
+        let masked = credentials.mask(b"a-user-name token".to_vec());
+        assert_eq!(String::from_utf8(masked).unwrap(), "*** token");
+    }
+
+    #[test]
+    fn a_short_credential_is_not_masked() {
+        let credentials = Credentials::of(&request_with("x-api-key", "short"));
+        assert_eq!(credentials.mask(b"a short key".to_vec()), b"a short key");
     }
 
     #[test]
