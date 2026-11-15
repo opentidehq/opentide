@@ -1600,6 +1600,7 @@ impl Run<'_> {
                 interrupted: &interrupted,
                 stdin: &stdin,
                 now: jiff::Timestamp::now(),
+                log: &self.host.log_sink,
             },
         )
     }
