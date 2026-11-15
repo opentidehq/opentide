@@ -113,7 +113,11 @@ def test_the_wheel_leaves_out_the_data_the_binary_compiles_in() -> None:
     ):
         assert any(pattern.fullmatch(file) for pattern in wheel), file
         assert not any(pattern.fullmatch(file) for pattern in sdist), file
-    for kept in ("src/opentide/__init__.py", "src/opentide/py.typed", "src/opentide/_native/sdk.pyi"):
+    for kept in (
+        "src/opentide/__init__.py",
+        "src/opentide/py.typed",
+        "src/opentide/_native/sdk.pyi",
+    ):
         assert not any(pattern.fullmatch(kept) for pattern in wheel), kept
 
 
