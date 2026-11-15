@@ -58,6 +58,16 @@ pub struct Args {
     pub output: Option<PathBuf>,
 }
 
+impl From<crate::tree::Queries> for QueriesMode {
+    fn from(queries: crate::tree::Queries) -> Self {
+        match queries {
+            crate::tree::Queries::Error => Self::Error,
+            crate::tree::Queries::Warn => Self::Warn,
+            crate::tree::Queries::Off => Self::Off,
+        }
+    }
+}
+
 impl From<&crate::tree::ValidateArgs> for Args {
     fn from(args: &crate::tree::ValidateArgs) -> Self {
         Self {
@@ -68,11 +78,7 @@ impl From<&crate::tree::ValidateArgs> for Args {
                 types: args.object_type.clone(),
             },
             strict: args.strict,
-            queries: args.queries.map(|queries| match queries {
-                crate::tree::Queries::Error => QueriesMode::Error,
-                crate::tree::Queries::Warn => QueriesMode::Warn,
-                crate::tree::Queries::Off => QueriesMode::Off,
-            }),
+            queries: args.queries.map(QueriesMode::from),
             fix: args.fix,
             dry_run: args.dry_run,
             watch: args.watch,

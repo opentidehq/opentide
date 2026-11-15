@@ -88,6 +88,49 @@ pub struct Args {
     pub check_timeout: Option<String>,
 }
 
+impl Args {
+    /// `validate query`'s run. `file`, `uuid`, `strict` and `queries` are
+    /// options of `validate` too: one typed on `validate`, before `query`,
+    /// is `query`'s (`group_given` says which were typed there).
+    pub fn from_cli(
+        validate: &crate::tree::ValidateArgs,
+        query: &crate::tree::ValidateQueryArgs,
+        group_given: impl Fn(&str) -> bool,
+    ) -> Self {
+        let from_group = |id: &str| group_given(id);
+        Self {
+            platform: query.platform.as_ref().map(|platform| platform.0.clone()),
+            strategies: query.strategy.clone(),
+            plan: query.plan.clone(),
+            wide: query.wide,
+            live: query.live,
+            changed: query.changed,
+            files: if from_group("file") {
+                validate.file.clone()
+            } else {
+                query.file.clone()
+            },
+            uuids: if from_group("uuid") {
+                validate.uuid.clone()
+            } else {
+                query.uuid.clone()
+            },
+            strict: if from_group("strict") {
+                validate.strict
+            } else {
+                query.strict
+            },
+            queries: if from_group("queries") {
+                validate.queries
+            } else {
+                query.queries
+            }
+            .map(QueriesMode::from),
+            check_timeout: query.check_timeout.clone(),
+        }
+    }
+}
+
 /// What a run reads besides its options.
 #[derive(Clone, Copy)]
 pub struct Context<'a> {
@@ -1300,5 +1343,72 @@ mod tests {
             json.get("explain"),
             Some(&Json::str("opentide explain kql_parse_error"))
         );
+    }
+}
+
+#[cfg(test)]
+mod from_cli_tests {
+    use clap::Parser as _;
+    use opentide_workspace::validate::QueriesMode;
+
+    use super::Args;
+    use crate::tree::{Cli, RootCommand, ValidateCommand};
+
+    /// `args` as `Args::from_cli` reads them; `group` names the options
+    /// typed on `validate` itself, before `query`.
+    fn parse(words: &[&str], group: &[&str]) -> Args {
+        let words = std::iter::once("opentide").chain(words.iter().copied());
+        match Cli::try_parse_from(words).map(|cli| cli.command) {
+            Ok(Some(RootCommand::Validate(validate))) => match &validate.command {
+                Some(ValidateCommand::Query(query)) => {
+                    Args::from_cli(&validate, query, |id| group.contains(&id))
+                }
+                None => panic!("not validate query"),
+            },
+            other => panic!("not a validate command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_option_typed_before_query_is_querys() {
+        let args = parse(
+            &[
+                "validate",
+                "--strict",
+                "--queries",
+                "warn",
+                "--file",
+                "a.kql",
+                "query",
+            ],
+            &["strict", "queries", "file"],
+        );
+        assert!(args.strict);
+        assert_eq!(args.queries, Some(QueriesMode::Warn));
+        assert_eq!(args.files, ["a.kql"]);
+    }
+
+    #[test]
+    fn query_takes_its_own_options_when_the_group_was_not_given_them() {
+        let args = parse(
+            &[
+                "validate",
+                "query",
+                "--strict",
+                "--uuid",
+                "u",
+                "--platform",
+                "splunk",
+                "--live",
+                "--check-timeout",
+                "9",
+            ],
+            &[],
+        );
+        assert!(args.strict && args.live);
+        assert_eq!(args.uuids, ["u"]);
+        assert_eq!(args.platform.as_deref(), Some("splunk"));
+        assert_eq!(args.check_timeout.as_deref(), Some("9"));
+        assert_eq!(args.queries, None);
     }
 }

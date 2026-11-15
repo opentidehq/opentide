@@ -40,6 +40,16 @@ pub struct Args {
     pub force: bool,
 }
 
+impl From<&crate::tree::MigrateVocabScopeArgs> for Args {
+    fn from(args: &crate::tree::MigrateVocabScopeArgs) -> Self {
+        Self {
+            apply: args.apply,
+            fields: args.field.clone(),
+            force: args.force,
+        }
+    }
+}
+
 /// What one scoped field needed across the corpus.
 #[derive(Debug, Default)]
 struct FieldReport {
