@@ -20,6 +20,10 @@ exclude = [
     "tests/render.rs",
     "tests/extract_sentinel/",
     "tests/extract_sentinel.rs",
+    # The command line's snapshots (#1139): megabytes, and their manifest and
+    # fixtures are the repository's tests/golden/.
+    "tests/cli_snapshots/",
+    "tests/cli_snapshots.rs",
 ]
 description = "opentide engine component: the command line (command tree, output modes, JSON envelope, exit codes, crash handler). Internal: depend on the opentide facade (its `cli` feature)."
 readme = "README.md"
@@ -103,6 +107,13 @@ jsonc-parser = { version = "0.26", features = ["cst", "serde"] }
 # a path resolved where it exists and kept where it does not (`Path.resolve()`).
 pathdiff = "0.2"
 soft-canonicalize = { version = "0.5", default-features = false, features = ["dunce"] }
+# A path resolved without Windows' `\\?\` prefix where it can be written
+# without one (`new`'s printed and written paths).
+dunce = "1"
+# The folder walks on disk (`new`, `migrate`, `doctor`, `setup skills`):
+# sorted siblings, links to folders not followed, or followed with loops cut.
+# The workspace's `FileSystem` (opentide-workspace) walks its own trees.
+walkdir = "2.5"
 # Percent-encoded paths in links and SARIF URIs.
 percent-encoding = "2.3"
 # `opentide explain <code>` in human mode: the page's Markdown, parsed for the terminal.
@@ -195,6 +206,9 @@ wiremock.workspace = true
 # The goldens' normalisation, for the generate cases (tests/generate_goldens.rs).
 opentide-compare.workspace = true
 tempfile = "3"
+# A scratch folder's canonical path without Windows' `\\?\` prefix, which
+# git and the binary print otherwise (tests/workspace_e2e.rs).
+dunce.workspace = true
 # The pseudo-terminal tests (tests/setup_wizard.rs, tests/tui_pty.rs), on
 # wezterm's portable-pty: a pty on Unix, ConPTY on Windows. The one crate
 # that drives a run at a terminal.

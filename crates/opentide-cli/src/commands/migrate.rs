@@ -243,22 +243,17 @@ fn migrate(root: &Path, fields: &[&ScopedField], apply: bool) -> Result<Migratio
     Ok(migration)
 }
 
-/// Every `*.yaml` file under `dir`, at any depth.
+/// Every `*.yaml` file under `dir`, at any depth; a link to a folder is not
+/// entered.
 fn collect_yaml(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Ok(kind) = entry.file_type() else {
-            continue;
-        };
-        if kind.is_dir() {
-            collect_yaml(&path, out);
-        } else if path.extension().is_some_and(|ext| ext == "yaml") && path.is_file() {
-            out.push(path);
-        }
-    }
+    out.extend(
+        walkdir::WalkDir::new(dir)
+            .min_depth(1)
+            .into_iter()
+            .filter_map(Result::ok)
+            .map(walkdir::DirEntry::into_path)
+            .filter(|path| path.extension().is_some_and(|ext| ext == "yaml") && path.is_file()),
+    );
 }
 
 fn relative(path: &Path, root: &Path) -> String {

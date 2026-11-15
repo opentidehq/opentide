@@ -93,7 +93,8 @@ pub fn deprecations_catalog(version: &str) -> Json {
 
 /// The `fields` of `deprecations.json` from each platform's root extras: a
 /// `rule` row at `configurations.{platform}.{name}` for every property extra
-/// whose `tide.meta.deprecation` is truthy, with that message, sorted by
+/// whose `tide.meta.deprecation` is a message (a non-empty string), with
+/// that message, sorted by
 /// schema, path and message.
 fn deprecation_rows(extras: impl IntoIterator<Item = (&'static str, Value)>) -> Vec<Json> {
     let mut rows: Vec<(String, String, String)> = Vec::new();
@@ -102,13 +103,15 @@ fn deprecation_rows(extras: impl IntoIterator<Item = (&'static str, Value)>) -> 
             continue;
         };
         for (name, spec) in properties {
-            if let Some(message) = spec.get(keys::META_DEPRECATION)
-                && truthy(message)
+            if let Some(message) = spec
+                .get(keys::META_DEPRECATION)
+                .and_then(Value::as_str)
+                .filter(|message| !message.is_empty())
             {
                 rows.push((
                     "rule".to_owned(),
                     format!("configurations.{platform}.{name}"),
-                    scalar_text(message),
+                    message.to_owned(),
                 ));
             }
         }
@@ -247,22 +250,9 @@ fn closed(node: &Value) -> bool {
     node.get("additionalProperties") == Some(&Value::Bool(false))
 }
 
-fn truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(flag) => *flag,
-        Value::String(text) => !text.is_empty(),
-        Value::Array(items) => !items.is_empty(),
-        Value::Object(map) => !map.is_empty(),
-        Value::Number(number) => number.as_f64().is_some_and(|n| n != 0.0),
-    }
-}
-
-fn scalar_text(value: &Value) -> String {
-    match value {
-        Value::String(text) => text.clone(),
-        other => other.to_string(),
-    }
+/// Whether a schema flag (`tide.template.hide`, ...) is `true`.
+fn flag(value: &Value) -> bool {
+    value.as_bool() == Some(true)
 }
 
 // --- what the model says ------------------------------------------------------------------
@@ -303,10 +293,10 @@ impl Facts {
             self.required
                 .insert(child.clone(), required.contains(&key.as_str()));
             let merged = effective(root, spec);
-            if merged.get(keys::TEMPLATE_MULTILINE).is_some_and(truthy) {
+            if merged.get(keys::TEMPLATE_MULTILINE).is_some_and(flag) {
                 self.multiline.insert(child.clone());
             }
-            if merged.get(keys::TEMPLATE_HIDE).is_some_and(truthy) {
+            if merged.get(keys::TEMPLATE_HIDE).is_some_and(flag) {
                 self.hidden.insert(child.clone());
             }
             if let Some(Value::String(default)) = merged.get("default")

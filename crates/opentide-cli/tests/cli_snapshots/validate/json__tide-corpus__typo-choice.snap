@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/tide-corpus/typo-choice
+---
+args: opentide --json validate --type rulez
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate",
+  "duration_ms": 0,
+  "error": "Unknown object type(s): rulez. Choose rule, threat, or objective.",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--type",
+    "code": "usage_invalid_choice",
+    "crash_log": null,
+    "message": "Unknown object type(s): rulez. Choose rule, threat, or objective.",
+    "suggestion": "rule"
+  },
+  "message": "Unknown object type(s): rulez. Choose rule, threat, or objective.",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

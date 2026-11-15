@@ -382,15 +382,15 @@ fn arm_error(answer: &Answer) -> (String, String) {
     let head = || answer.text().trim().chars().take(500).collect::<String>();
     match answer.json() {
         Some(body) => {
-            let error = body.get("error").filter(|error| error.truthy());
+            let error = body.get("error").filter(|error| error.is_filled());
             let code = error
                 .and_then(|error| error.get("code"))
-                .filter(|code| code.truthy())
+                .filter(|code| code.is_filled())
                 .map(json_text)
                 .unwrap_or_default();
             let message = error
                 .and_then(|error| error.get("message"))
-                .filter(|message| message.truthy())
+                .filter(|message| message.is_filled())
                 .map_or_else(head, json_text);
             (code, message)
         }
@@ -413,11 +413,11 @@ fn inner_message(answer: &Answer) -> String {
             .get("innererror")
             .filter(|nested| nested.as_object().is_some())
             .and_then(|nested| nested.get("message"))
-            .filter(|message| message.truthy())
+            .filter(|message| message.is_filled())
         {
             return json_text(message);
         }
-        if let Some(message) = inner.get("message").filter(|message| message.truthy()) {
+        if let Some(message) = inner.get("message").filter(|message| message.is_filled()) {
             return json_text(message);
         }
     }
