@@ -12,6 +12,12 @@
 //! (`code severity start-end message`, 0-based UTF-16 `line:character`) and
 //! every highlight token (`start..end capture`, byte offsets).
 //!
+//! Tokens are not recorded for the external YARA rule sets
+//! (`conformance/external/yara/`, 3,000-line vendor files): YARA moves to
+//! YARA-X (#1225), so their tree-sitter tokens are not a parity target and
+//! would add about 1.5 MB of unreviewable lines. Their diagnostics stay
+//! complete, and every other file keeps both sections.
+//!
 //! What this protects: ADR 0012 replaces the tree-sitter parsers with
 //! hand-written Rust ones. On valid input the swap must keep these snapshots
 //! identical; a change on broken input (where error recovery differs) is a
@@ -87,6 +93,12 @@ fn files(language: LanguageId) -> Vec<(String, String)> {
     out
 }
 
+/// Paths whose highlight tokens are left out of the snapshot (see the module
+/// documentation).
+fn tokens_recorded(path: &str) -> bool {
+    !path.starts_with("conformance/external/yara/")
+}
+
 fn one_line(message: &str) -> String {
     message.replace('\r', "\\r").replace('\n', "\\n")
 }
@@ -125,8 +137,10 @@ fn baseline(language: LanguageId) -> String {
                 one_line(&d.message)
             );
         }
-        for t in &response.tokens {
-            let _ = writeln!(out, "{}..{} {}", t.span.start, t.span.end, t.capture);
+        if tokens_recorded(path) {
+            for t in &response.tokens {
+                let _ = writeln!(out, "{}..{} {}", t.span.start, t.span.end, t.capture);
+            }
         }
     }
     out
