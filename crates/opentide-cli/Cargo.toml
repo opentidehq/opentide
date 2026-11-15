@@ -137,11 +137,9 @@ unicode-width = "0.2"
 # The `setup` wizard (UC-3.6c, #951): its questions at a terminal, on
 # crossterm (Linux, macOS and Windows consoles).
 inquire = { version = "0.9", default-features = false, features = ["crossterm"], optional = true }
-# `new`'s fresh object identifiers.
-uuid = { workspace = true, features = ["v4"] }
-# `generate extract elastic --include-prebuilt` (UC-4.4b, #834): the UUID a
-# prebuilt rule's id derives (`uuid.uuid5`), from SHA-1 (RustCrypto).
-sha1 = "0.10"
+# `new`'s fresh object identifiers, and `generate extract elastic
+# --include-prebuilt` (UC-4.4b, #834): the UUIDv5 a prebuilt rule's id derives.
+uuid = { workspace = true, features = ["v4", "v5"] }
 # `generate extract elastic` (UC-4.4b, #834): the extracted rule written as
 # YAML by serde-saphyr's emitter, as `opentide-compile` writes Sigma rules.
 serde-saphyr.workspace = true
