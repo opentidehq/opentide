@@ -33,8 +33,7 @@ use opentide_core::Diagnostic;
 
 /// Cap of the chain search: the longest chain probed.
 const CHAIN_CAP: usize = 20_000;
-/// Cap of the nesting search: the deepest nesting probed.
-const NEST_CAP: usize = 10_000;
+// The nesting search was capped at 10,000 levels.
 
 // Chain floors. Measured edge (the largest size that finished within 60 s, or
 // the cap), in a debug build under a host load average of 15 to 25.
@@ -64,30 +63,40 @@ const KUERY_CHAIN_FLOOR: usize = CHAIN_CAP;
 /// lucene passed the cap in 0.3 s.
 const LUCENE_CHAIN_FLOOR: usize = CHAIN_CAP;
 
-// Nesting floors: the largest depth with no stack overflow and no parse error.
+// Nesting floors: the largest depth with no stack overflow and no parse error,
+// capped at NESTING_CEILING.
+/// The deepest nesting every new parser must accept (epic #1219): its recursive
+/// descent and the rowan tree it builds (dropped recursively) must fit the browser
+/// WASM module's 1 MB stack, which cannot hold the 10,000 levels tree-sitter accepts
+/// for some languages (a minimal descent on the toolkit overflows near 6,000 in a
+/// debug build). 1,000 is above every vendor's own limit known (ES|QL 400, EQL 250,
+/// Falco 100); past it a new parser reports one `TooDeep` diagnostic.
+const NESTING_CEILING: usize = 1_000;
 /// kql: 35 levels passed; 36 overflows the 1 MB stack (abort).
 const KQL_NEST_FLOOR: usize = 35;
-/// spl passed the cap in 0.2 s.
-const SPL_NEST_FLOOR: usize = NEST_CAP;
-/// cql passed the cap in 0.1 s.
-const CQL_NEST_FLOOR: usize = NEST_CAP;
-/// yaral passed the cap in 19 s (33 s on a CI runner; quadratic: 5,000 took
-/// 6 s). Set at 5,000 so that load cannot push the test over the time budget.
-const YARAL_NEST_FLOOR: usize = 5_000;
+/// spl passed the 10,000 cap in 0.2 s; held at the ceiling.
+const SPL_NEST_FLOOR: usize = NESTING_CEILING;
+/// cql passed the 10,000 cap in 0.1 s; held at the ceiling.
+const CQL_NEST_FLOOR: usize = NESTING_CEILING;
+/// yaral passed the 10,000 cap in 19 s (33 s on a CI runner; quadratic: 5,000
+/// took 6 s); held at the ceiling.
+const YARAL_NEST_FLOOR: usize = NESTING_CEILING;
 /// yara: 495 levels passed; 496 gives `yara_parse_error`.
 const YARA_NEST_FLOOR: usize = 495;
 /// exabeam: 199 levels passed; 200 gives `exabeam_parse_error`.
 const EXABEAM_NEST_FLOOR: usize = 199;
 /// falco: 18 levels passed; 19 gives `falco_parse_error`.
 const FALCO_NEST_FLOOR: usize = 18;
-/// esql passed the cap in 0.1 s (it reports `esql_expression_depth`, not a parse error).
-const ESQL_NEST_FLOOR: usize = NEST_CAP;
-/// eql passed the cap in 0.1 s (it reports `eql_expression_depth`, not a parse error).
-const EQL_NEST_FLOOR: usize = NEST_CAP;
-/// kuery passed the cap in 0.04 s.
-const KUERY_NEST_FLOOR: usize = NEST_CAP;
-/// lucene passed the cap in 0.04 s.
-const LUCENE_NEST_FLOOR: usize = NEST_CAP;
+/// esql passed the 10,000 cap in 0.1 s (it reports `esql_expression_depth`, not a
+/// parse error); held at the ceiling.
+const ESQL_NEST_FLOOR: usize = NESTING_CEILING;
+/// eql passed the 10,000 cap in 0.1 s (it reports `eql_expression_depth`, not a
+/// parse error); held at the ceiling.
+const EQL_NEST_FLOOR: usize = NESTING_CEILING;
+/// kuery passed the 10,000 cap in 0.04 s; held at the ceiling.
+const KUERY_NEST_FLOOR: usize = NESTING_CEILING;
+/// lucene passed the 10,000 cap in 0.04 s; held at the ceiling.
+const LUCENE_NEST_FLOOR: usize = NESTING_CEILING;
 
 /// Run `run` on a 1 MB stack and fail on an overflow, a panic or a blown time budget.
 fn on_small_stack<T: Send + 'static>(name: &str, run: impl FnOnce() -> T + Send + 'static) -> T {
@@ -108,15 +117,26 @@ fn on_small_stack<T: Send + 'static>(name: &str, run: impl FnOnce() -> T + Send 
     out
 }
 
-/// Like [`on_small_stack`] for a query whose diagnostics must hold no parse error.
+/// The depth checks that fire on deep valid queries today: Elasticsearch caps ES|QL
+/// expressions at 400 (300 on recent patches) and EQL at 250 levels, and the engines
+/// say so. They are analysis findings about the vendor, not a failure to parse.
+const VENDOR_DEPTH_CODES: [&str; 2] = ["esql_expression_depth", "eql_expression_depth"];
+
+/// Like [`on_small_stack`] for a query whose diagnostics must hold no parse error and
+/// no depth limit of the engine itself (a new parser's `max_depth` diagnostic must not
+/// pass this gate silently); only the vendor's depth checks are tolerated.
 fn analyzes_cleanly(name: &str, query: String, analyze: fn(&str) -> Vec<Diagnostic>) {
     let diagnostics = on_small_stack(name, move || analyze(&query));
-    let parse_errors: Vec<_> = diagnostics
+    let failures: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.ends_with("_parse_error"))
         .map(|d| d.code.as_str())
+        .filter(|code| {
+            code.ends_with("_parse_error")
+                || ((code.contains("depth") || code.contains("deep"))
+                    && !VENDOR_DEPTH_CODES.contains(code))
+        })
         .collect();
-    assert!(parse_errors.is_empty(), "{name}: {parse_errors:?}");
+    assert!(failures.is_empty(), "{name}: {failures:?}");
 }
 
 fn chain(term: &str, op: &str, n: usize) -> String {
@@ -271,6 +291,32 @@ fn falco_chain_floor() {
 fn falco_nest_floor() {
     let q = nest("proc.name = a", FALCO_NEST_FLOOR);
     analyzes_cleanly("falco nest", q, |q| opentide_falco::analyze(q).diagnostics);
+}
+
+#[test]
+fn esql_chain_floor() {
+    let q = esql(&chain("a == 1", " OR ", ESQL_CHAIN_FLOOR));
+    analyzes_cleanly("esql chain", q, |q| opentide_esql::analyze(q).diagnostics);
+}
+
+#[test]
+fn eql_chain_floor() {
+    let q = eql(&chain("a == 1", " or ", EQL_CHAIN_FLOOR));
+    analyzes_cleanly("eql chain", q, |q| opentide_eql::analyze(q).diagnostics);
+}
+
+#[test]
+fn kuery_chain_floor() {
+    let q = chain("a:1", " or ", KUERY_CHAIN_FLOOR);
+    analyzes_cleanly("kuery chain", q, |q| opentide_kuery::analyze(q).diagnostics);
+}
+
+#[test]
+fn lucene_chain_floor() {
+    let q = chain("a:1", " OR ", LUCENE_CHAIN_FLOOR);
+    analyzes_cleanly("lucene chain", q, |q| {
+        opentide_lucene::analyze(q).diagnostics
+    });
 }
 
 #[test]
