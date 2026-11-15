@@ -49,7 +49,11 @@ layout = "explicit"
         }
 
         fn oracle(&self) -> String {
-            self.dir.path().join("opentide").to_string_lossy().into_owned()
+            self.dir
+                .path()
+                .join("opentide")
+                .to_string_lossy()
+                .into_owned()
         }
 
         fn path(&self, name: &str) -> String {
