@@ -18,6 +18,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - If you called `opentide_tide::completions_for` or `opentide_highlight::generated_artifacts_stale`, drop the call: both are removed. Filter `IndexedObject`s by `object_type` where you listed completions, and call `opentide_highlight::generated_artifacts_stale_for(spec, LanguageId::Kql, tm, monaco, helix)` where you checked the generated artifacts.
 - If you pass or read the YAML values of `opentide-tide` (`IndexedObject::body`, `IndexedObject::from_body`, `index_value`, `object_refs`, `TideObject`), use `Arc<opentide_core::node::Node>` where you used `serde_yaml::Value`, and read a document with `opentide_core::node::load` (or `TideObject::parse`) where you called `serde_yaml::from_str`.
 - If you build `opentide-schema` with `--features wasm`, drop the flag: the crate builds for `wasm32-unknown-unknown` without it.
+- If you use `opentide_schema::generate::json::{Json, Object}`, they are now `opentide_core::json::{Json, Object}`: match `Json::Str` where you matched `Json::String`, `Json::Int`, `Json::UInt` and `Json::Float` where you matched `Json::Number`, build an empty object with `Json::Object(Object::new())` (`Json::object` now takes the members), and treat `Object` as an ordered map behind a pointer rather than an `IndexMap` alias (`Object::from(map)`, `Object::into_map`).
 - If you build the engine crates from source, use Rust 1.95 or later: `rust-version` is 1.95, which the YARA parser crates (`yara-x-parser`, `yara-x-fmt`) need.
 
 ### Breaking

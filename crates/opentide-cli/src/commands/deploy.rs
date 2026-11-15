@@ -132,18 +132,15 @@ impl DryRun {
         } else {
             members.shift_remove("error")
         };
-        let mut at = members
-            .get_index_of("message")
-            .map_or(members.len(), |at| at + 1);
-        if !self.warnings.is_empty() {
-            members.shift_insert(
-                at,
-                "warnings".into(),
-                Json::Array(self.warnings.iter().map(Json::str).collect()),
-            );
-            at += 1;
-        }
+        crate::envelope::put_warnings(&mut members, &self.warnings);
         if let Some(error) = error {
+            let at = members
+                .get_index_of(if self.warnings.is_empty() {
+                    "message"
+                } else {
+                    "warnings"
+                })
+                .map_or(members.len(), |at| at + 1);
             members.shift_insert(at, "error".into(), error);
         }
         Json::Object(members)
