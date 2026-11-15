@@ -157,6 +157,11 @@ pub fn fixture(name: &str, ws: &Path) {
     match name {
         "none" => {}
         "empty" => std::fs::create_dir_all(ws.join(".opentide")).unwrap(),
+        // `fault` with lint's recommended check off (`cases.toml`).
+        "fault-lint" => {
+            fixture("fault", ws);
+            apply_edits(name, ws);
+        }
         // `objects/<family>` as real folders: a walk of `objects/` enters
         // no link to a folder (`migrate vocab-scope`'s does not).
         "tide-corpus-folders" => {
