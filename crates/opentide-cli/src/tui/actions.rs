@@ -100,7 +100,7 @@ impl Outcome {
         shown
             .as_bytes()
             .into_text()
-            .unwrap_or_else(|_| Text::raw(strip_sgr(&shown)))
+            .unwrap_or_else(|_| Text::raw(strip_escapes(&shown)))
     }
 }
 
@@ -200,7 +200,7 @@ pub fn run_words(launch: &Launch, command: &str, words: &[String], validates: bo
 /// What the status line says of a run: the counted outcome line the
 /// command printed (`✓ 3 objects valid · 1.2s`), else its message.
 fn said(output: &str, document: Option<&serde_json::Value>) -> String {
-    let plain = strip_sgr(&clean(output));
+    let plain = strip_escapes(&clean(output));
     let marks = ["✓ ", "✗ ", "! ", "error: ", "error[", "warning: "];
     let outcome = plain
         .lines()
@@ -248,8 +248,9 @@ pub fn clean(text: &str) -> String {
         .replace("\r\x1b[2K", "")
 }
 
-/// `text` without its escape sequences (anstream's stripper).
-pub fn strip_sgr(text: &str) -> String {
+/// `text` without its escape sequences: SGR colours, OSC 8 links and every
+/// other `ESC` sequence (anstream's stripper).
+pub fn strip_escapes(text: &str) -> String {
     anstream::adapter::strip_str(text).to_string()
 }
 
@@ -285,7 +286,11 @@ mod tests {
         let text = "\x1b[?25l\r\x1b[2K\x1b[?25h\
                     \x1b]8;;file:///x.yaml\x1b\\x.yaml\x1b]8;;\x1b\\:8\n";
         assert_eq!(clean(text), "x.yaml:8\n");
-        assert_eq!(strip_sgr("\x1b[1;31merror\x1b[0m: x"), "error: x");
+        assert_eq!(strip_escapes("\x1b[1;31merror\x1b[0m: x"), "error: x");
+        assert_eq!(
+            strip_escapes("\x1b]8;;http://x\x1b\\link\x1b]8;;\x1b\\ \x1b(Bdone"),
+            "link done"
+        );
     }
 
     #[test]
