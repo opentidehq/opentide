@@ -564,6 +564,11 @@ jobs:
       # The CLI's snapshot cases on the generated workspaces (`fault`,
       # `heavy-small`, UC-0.6): xtask writes them, which the crate's tests
       # cannot; the tests fail without them when the variable is set.
+      # A Linux gate by design: the nightly `engine-test-os` (macOS, Windows)
+      # runs `cli_snapshots` without these workspaces, so the 101 generated
+      # cases print "skipped" there. Writing them costs minutes
+      # of debug-build CPU per OS for output the snapshots (Linux's) already
+      # hold.
       - name: Generated workspaces for the CLI snapshots
         run: |
           read -ra pkg_args <<< "${PACKAGES}"
@@ -1476,7 +1481,9 @@ jobs:
   # ---------------------------------------------------------------------------
 
   # The workspace's tests on macOS and Windows, built there (no archive
-  # crosses an OS), without a compiler cache.
+  # crosses an OS), without a compiler cache. The 101 generated-workspace
+  # cases of `cli_snapshots` print "skipped" here by design: they are a
+  # Linux-gate check (see "Generated workspaces for the CLI snapshots").
   engine-test-os:
     name: Engine tests (${{ matrix.os }})
     needs: changes
