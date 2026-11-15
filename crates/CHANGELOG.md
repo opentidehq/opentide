@@ -17,7 +17,6 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - If you called `opentide_connectors::defender::strip_kql_literals_and_comments` or `opentide_kql::defender_required_column_groups`, use `opentide_connectors::connector::kql_code` to mask a query and `opentide_connectors::defender::missing_required_column_groups` to check its columns.
 - If you called `opentide_tide::completions_for` or `opentide_highlight::generated_artifacts_stale`, drop the call: both are removed. Filter `IndexedObject`s by `object_type` where you listed completions, and call `opentide_highlight::generated_artifacts_stale_for(spec, LanguageId::Kql, tm, monaco, helix)` where you checked the generated artifacts.
 - If you pass or read the YAML values of `opentide-tide` (`IndexedObject::body`, `IndexedObject::from_body`, `index_value`, `object_refs`, `TideObject`), use `Arc<opentide_core::node::Node>` where you used `serde_yaml::Value`, and read a document with `opentide_core::node::load` (or `TideObject::parse`) where you called `serde_yaml::from_str`.
-
 - If you build `opentide-schema` with `--features wasm`, drop the flag: the crate builds for `wasm32-unknown-unknown` without it.
 - If you build the engine crates from source, use Rust 1.95 or later: `rust-version` is 1.95, which the YARA parser crates (`yara-x-parser`, `yara-x-fmt`) need.
 
