@@ -3,6 +3,22 @@
 //! module runs with a 1 MB stack, so every engine is checked on one here,
 //! within a time budget that a quadratic walk (`Node::parent` re-descends
 //! from the root on every call) would blow.
+//!
+//! Every language has two floors, measured on the tree-sitter engines on a
+//! 1 MB stack in a debug build (`cargo test`), with bounded probes, one
+//! process per size, bisecting up to a cap of 20,000 terms for chains and
+//! 10,000 levels for nesting:
+//!
+//! - the chain floor: the longest flat `a or b or ...` chain analysed without
+//!   a stack overflow, within the time budget below, and with no
+//!   `<lang>_parse_error` diagnostic;
+//! - the nesting floor: the deepest parenthesised nesting analysed the same way.
+//!
+//! A replacement parser must keep every floor (its `max_depth` sits at or
+//! above it). A floor equal to the cap means the engine passed at the cap, so
+//! the true limit is higher. Two chain floors are set below the measured edge
+//! on purpose: kql and yaral are quadratic in the chain length on tree-sitter,
+//! so the edge sits near the time budget and a test there would be flaky.
 
 #![expect(
     clippy::unwrap_used,
@@ -12,9 +28,68 @@
 use std::thread;
 use std::time::{Duration, Instant};
 
-fn on_small_stack(name: &str, run: impl FnOnce() + Send + 'static) {
+use opentide_core::Diagnostic;
+
+/// Cap of the chain search: the longest chain probed.
+const CHAIN_CAP: usize = 20_000;
+/// Cap of the nesting search: the deepest nesting probed.
+const NEST_CAP: usize = 10_000;
+
+// Chain floors. Measured edge (the largest size that finished within 60 s, or
+// the cap), in a debug build under a host load average of 15 to 25.
+/// kql: 2,000 terms took 21 s, 3,000 took 41 s, 4,000 took 72 s (quadratic).
+/// Set below the edge so that load cannot flip the test.
+const KQL_CHAIN_FLOOR: usize = 2_000;
+/// yaral: 1,500 terms took 20 s, 2,000 took 44 s, 2,500 took 87 s (quadratic).
+/// Set below the edge so that load cannot flip the test.
+const YARAL_CHAIN_FLOOR: usize = 1_500;
+/// spl passed the cap in 0.9 s.
+const SPL_CHAIN_FLOOR: usize = CHAIN_CAP;
+/// cql passed the cap in 0.3 s.
+const CQL_CHAIN_FLOOR: usize = CHAIN_CAP;
+/// yara passed the cap in 0.2 s.
+const YARA_CHAIN_FLOOR: usize = CHAIN_CAP;
+/// exabeam passed the cap in 0.3 s.
+const EXABEAM_CHAIN_FLOOR: usize = CHAIN_CAP;
+/// falco passed the cap in 8 s.
+const FALCO_CHAIN_FLOOR: usize = CHAIN_CAP;
+/// esql passed the cap in 0.4 s.
+const ESQL_CHAIN_FLOOR: usize = CHAIN_CAP;
+/// eql passed the cap in 0.3 s.
+const EQL_CHAIN_FLOOR: usize = CHAIN_CAP;
+/// kuery passed the cap in 0.4 s.
+const KUERY_CHAIN_FLOOR: usize = CHAIN_CAP;
+/// lucene passed the cap in 0.3 s.
+const LUCENE_CHAIN_FLOOR: usize = CHAIN_CAP;
+
+// Nesting floors: the largest depth with no stack overflow and no parse error.
+/// kql: 35 levels passed; 36 overflows the 1 MB stack (abort).
+const KQL_NEST_FLOOR: usize = 35;
+/// spl passed the cap in 0.2 s.
+const SPL_NEST_FLOOR: usize = NEST_CAP;
+/// cql passed the cap in 0.1 s.
+const CQL_NEST_FLOOR: usize = NEST_CAP;
+/// yaral passed the cap in 19 s.
+const YARAL_NEST_FLOOR: usize = NEST_CAP;
+/// yara: 495 levels passed; 496 gives `yara_parse_error`.
+const YARA_NEST_FLOOR: usize = 495;
+/// exabeam: 199 levels passed; 200 gives `exabeam_parse_error`.
+const EXABEAM_NEST_FLOOR: usize = 199;
+/// falco: 18 levels passed; 19 gives `falco_parse_error`.
+const FALCO_NEST_FLOOR: usize = 18;
+/// esql passed the cap in 0.1 s (it reports `esql_expression_depth`, not a parse error).
+const ESQL_NEST_FLOOR: usize = NEST_CAP;
+/// eql passed the cap in 0.1 s (it reports `eql_expression_depth`, not a parse error).
+const EQL_NEST_FLOOR: usize = NEST_CAP;
+/// kuery passed the cap in 0.04 s.
+const KUERY_NEST_FLOOR: usize = NEST_CAP;
+/// lucene passed the cap in 0.04 s.
+const LUCENE_NEST_FLOOR: usize = NEST_CAP;
+
+/// Run `run` on a 1 MB stack and fail on an overflow, a panic or a blown time budget.
+fn on_small_stack<T: Send + 'static>(name: &str, run: impl FnOnce() -> T + Send + 'static) -> T {
     let started = Instant::now();
-    thread::Builder::new()
+    let out = thread::Builder::new()
         .name(name.into())
         .stack_size(1 << 20)
         .spawn(run)
@@ -27,31 +102,196 @@ fn on_small_stack(name: &str, run: impl FnOnce() + Send + 'static) {
         "{name} took {:?}",
         started.elapsed()
     );
+    out
+}
+
+/// Like [`on_small_stack`] for a query whose diagnostics must hold no parse error.
+fn analyzes_cleanly(name: &str, query: String, analyze: fn(&str) -> Vec<Diagnostic>) {
+    let diagnostics = on_small_stack(name, move || analyze(&query));
+    let parse_errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.ends_with("_parse_error"))
+        .map(|d| d.code.as_str())
+        .collect();
+    assert!(parse_errors.is_empty(), "{name}: {parse_errors:?}");
 }
 
 fn chain(term: &str, op: &str, n: usize) -> String {
     vec![term; n].join(op)
 }
 
+fn nest(atom: &str, n: usize) -> String {
+    format!("{}{atom}{}", "(".repeat(n), ")".repeat(n))
+}
+
+fn kql(expr: &str) -> String {
+    format!("T | where {expr}")
+}
+
+fn kql_diagnostics(q: &str) -> Vec<Diagnostic> {
+    opentide_kql::analyze(q, opentide_kql::Profile::Sentinel).diagnostics
+}
+
+fn spl(expr: &str) -> String {
+    format!("index=x ({expr})")
+}
+
+fn yaral(expr: &str) -> String {
+    format!(
+        "rule r {{\n  meta:\n    author = \"x\"\n  events:\n    {expr}\n  condition:\n    $e\n}}\n"
+    )
+}
+
+const YARAL_TERM: &str = "$e.principal.hostname = \"x\"";
+
+fn yara(expr: &str) -> String {
+    format!("rule r {{\n  strings:\n    $a = \"x\"\n  condition:\n    {expr}\n}}\n")
+}
+
+fn esql(expr: &str) -> String {
+    // `FROM logs-*` also runs the ECS checks.
+    format!("FROM logs-* | WHERE {expr}")
+}
+
+fn eql(expr: &str) -> String {
+    format!("process where {expr}")
+}
+
 #[test]
 fn long_or_chains_do_not_overflow_the_stack() {
-    const N: usize = 20_000;
     // `FROM logs-*` also runs the ECS checks.
     on_small_stack("esql", || {
-        let q = format!("FROM logs-* | WHERE {}", chain("a == 1", " OR ", N));
+        let q = esql(&chain("a == 1", " OR ", ESQL_CHAIN_FLOOR));
         opentide_esql::analyze(&q);
     });
     on_small_stack("eql", || {
-        let q = format!("process where {}", chain("a == 1", " or ", N));
+        let q = eql(&chain("a == 1", " or ", EQL_CHAIN_FLOOR));
         opentide_eql::analyze(&q);
         opentide_eql::ecs_diagnostics(&q);
     });
     on_small_stack("kuery", || {
-        opentide_kuery::analyze(&chain("a:1", " or ", N));
-        opentide_kuery::ecs_diagnostics(&chain("source.port:1", " or ", N));
+        opentide_kuery::analyze(&chain("a:1", " or ", KUERY_CHAIN_FLOOR));
+        opentide_kuery::ecs_diagnostics(&chain("source.port:1", " or ", KUERY_CHAIN_FLOOR));
     });
     on_small_stack("lucene", || {
-        opentide_lucene::analyze(&chain("a:1", " OR ", N));
-        opentide_lucene::ecs_diagnostics(&chain("source.port:1", " OR ", N));
+        opentide_lucene::analyze(&chain("a:1", " OR ", LUCENE_CHAIN_FLOOR));
+        opentide_lucene::ecs_diagnostics(&chain("source.port:1", " OR ", LUCENE_CHAIN_FLOOR));
+    });
+}
+
+#[test]
+fn kql_chain_floor() {
+    let q = kql(&chain("a == 1", " or ", KQL_CHAIN_FLOOR));
+    analyzes_cleanly("kql chain", q, kql_diagnostics);
+}
+
+#[test]
+fn kql_nest_floor() {
+    analyzes_cleanly(
+        "kql nest",
+        kql(&nest("a == 1", KQL_NEST_FLOOR)),
+        kql_diagnostics,
+    );
+}
+
+#[test]
+fn spl_chain_floor() {
+    let q = spl(&chain("a=1", " OR ", SPL_CHAIN_FLOOR));
+    analyzes_cleanly("spl chain", q, |q| opentide_spl::analyze(q).diagnostics);
+}
+
+#[test]
+fn spl_nest_floor() {
+    let q = format!("index=x {}", nest("a=1", SPL_NEST_FLOOR));
+    analyzes_cleanly("spl nest", q, |q| opentide_spl::analyze(q).diagnostics);
+}
+
+#[test]
+fn cql_chain_floor() {
+    let q = chain("a=1", " or ", CQL_CHAIN_FLOOR);
+    analyzes_cleanly("cql chain", q, |q| opentide_cql::analyze(q).diagnostics);
+}
+
+#[test]
+fn cql_nest_floor() {
+    let q = nest("a=1", CQL_NEST_FLOOR);
+    analyzes_cleanly("cql nest", q, |q| opentide_cql::analyze(q).diagnostics);
+}
+
+#[test]
+fn yaral_chain_floor() {
+    let q = yaral(&chain(YARAL_TERM, " or ", YARAL_CHAIN_FLOOR));
+    analyzes_cleanly("yaral chain", q, |q| opentide_yaral::analyze(q).diagnostics);
+}
+
+#[test]
+fn yaral_nest_floor() {
+    let q = yaral(&nest(YARAL_TERM, YARAL_NEST_FLOOR));
+    analyzes_cleanly("yaral nest", q, |q| opentide_yaral::analyze(q).diagnostics);
+}
+
+#[test]
+fn yara_chain_floor() {
+    let q = yara(&chain("$a", " or ", YARA_CHAIN_FLOOR));
+    analyzes_cleanly("yara chain", q, |q| opentide_yara::analyze(q).diagnostics);
+}
+
+#[test]
+fn yara_nest_floor() {
+    let q = yara(&nest("$a", YARA_NEST_FLOOR));
+    analyzes_cleanly("yara nest", q, |q| opentide_yara::analyze(q).diagnostics);
+}
+
+#[test]
+fn exabeam_chain_floor() {
+    let q = chain("vendor:\"x\"", " OR ", EXABEAM_CHAIN_FLOOR);
+    analyzes_cleanly("exabeam chain", q, |q| {
+        opentide_exabeam::analyze(q).diagnostics
+    });
+}
+
+#[test]
+fn exabeam_nest_floor() {
+    let q = nest("vendor:\"x\"", EXABEAM_NEST_FLOOR);
+    analyzes_cleanly("exabeam nest", q, |q| {
+        opentide_exabeam::analyze(q).diagnostics
+    });
+}
+
+#[test]
+fn falco_chain_floor() {
+    let q = chain("proc.name = a", " or ", FALCO_CHAIN_FLOOR);
+    analyzes_cleanly("falco chain", q, |q| opentide_falco::analyze(q).diagnostics);
+}
+
+#[test]
+fn falco_nest_floor() {
+    let q = nest("proc.name = a", FALCO_NEST_FLOOR);
+    analyzes_cleanly("falco nest", q, |q| opentide_falco::analyze(q).diagnostics);
+}
+
+#[test]
+fn esql_nest_floor() {
+    let q = esql(&nest("a == 1", ESQL_NEST_FLOOR));
+    analyzes_cleanly("esql nest", q, |q| opentide_esql::analyze(q).diagnostics);
+}
+
+#[test]
+fn eql_nest_floor() {
+    let q = eql(&nest("a == 1", EQL_NEST_FLOOR));
+    analyzes_cleanly("eql nest", q, |q| opentide_eql::analyze(q).diagnostics);
+}
+
+#[test]
+fn kuery_nest_floor() {
+    let q = nest("a:1", KUERY_NEST_FLOOR);
+    analyzes_cleanly("kuery nest", q, |q| opentide_kuery::analyze(q).diagnostics);
+}
+
+#[test]
+fn lucene_nest_floor() {
+    let q = nest("a:1", LUCENE_NEST_FLOOR);
+    analyzes_cleanly("lucene nest", q, |q| {
+        opentide_lucene::analyze(q).diagnostics
     });
 }
