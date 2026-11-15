@@ -517,23 +517,19 @@ impl Run<'_> {
             }
         };
         let mut words = command_path(&matches);
+        let typed = match crate::tree::Cli::from_arg_matches(&matches) {
+            Ok(cli) => cli,
+            // The tree and its derive disagree: a bug, reported as one.
+            Err(error) => return Err(std::io::Error::other(error.to_string())),
+        };
         // `generate schemas templates`: the words after `generate` that are
         // no subcommand of it are its phases.
         let mut generate_phases = Vec::new();
-        if words.first().map(String::as_str) == Some("generate")
-            && let Some(("generate", group)) = matches.subcommand()
-            && let Some((first, external)) = group.subcommand()
-            && self
-                .root
-                .find_subcommand("generate")
-                .is_some_and(|generate| generate.find_subcommand(first).is_none())
+        if let Some(RootCommand::Generate(crate::tree::GenerateArgs {
+            command: Some(crate::tree::GenerateCommand::Phases(named)),
+        })) = &typed.command
         {
-            generate_phases.push(first.to_owned());
-            if let Ok(Some(rest)) = external.try_get_many::<String>("") {
-                generate_phases.extend(rest.cloned());
-            } else if let Ok(Some(rest)) = external.try_get_many::<std::ffi::OsString>("") {
-                generate_phases.extend(rest.map(|word| word.to_string_lossy().into_owned()));
-            }
+            generate_phases.clone_from(named);
             words.truncate(1);
             // The phases end at the first word that starts with `-`
             // (`GeneratePhaseGroup`): what follows is `generate`'s own
@@ -593,11 +589,6 @@ impl Run<'_> {
             return self.emit(&outcome, &[], out, err);
         }
         // The commands dispatched by their clap derive structs (`tree.rs`).
-        let typed = match crate::tree::Cli::from_arg_matches(&matches) {
-            Ok(cli) => cli,
-            // The tree and its derive disagree: a bug, reported as one.
-            Err(error) => return Err(std::io::Error::other(error.to_string())),
-        };
         match &typed.command {
             Some(RootCommand::Info(args)) => {
                 let report = self.info(args);
@@ -627,15 +618,11 @@ impl Run<'_> {
                 let report = crate::commands::explain::run(args.code.as_deref(), &self.terminal());
                 return self.emit_report(&report, out, err);
             }
-            _ => {}
-        }
-        let path = words.join(" ");
-        match path.as_str() {
-            "commands" => {
+            Some(RootCommand::Commands(_)) => {
                 let (data, summary) = catalog::document(&self.host.version);
                 let count = catalog::entries(&self.root).len();
                 let outcome = Outcome {
-                    command: path.clone(),
+                    command: "commands".into(),
                     status: "completed".into(),
                     message: format!("{count} commands"),
                     data,
@@ -649,164 +636,16 @@ impl Run<'_> {
                 } else {
                     catalog::tree_lines()
                 };
-                self.emit(&outcome, &lines, out, err)
+                return self.emit(&outcome, &lines, out, err);
             }
-            "generate exports"
-            | "generate exports navigator"
-            | "generate exports objects"
-            | "generate exports revisions" => {
-                use opentide_compile::generate::exports::Target;
-                let target = match words.get(2).map(String::as_str) {
-                    Some("navigator") => Some(Target::Navigator),
-                    Some("objects") => Some(Target::Objects),
-                    Some("revisions") => Some(Target::Revisions),
-                    _ => None,
-                };
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let report = crate::commands::generate::exports(
-                    target,
-                    &crate::commands::generate::Context {
-                        repo: self.globals.repo.as_deref(),
-                        env: self.env,
-                        cwd: &cwd,
-                        proxy: self.globals.proxy.as_deref(),
-                        version: &self.host.version,
-                    },
-                );
-                self.emit_report(&report, out, err)
+            Some(RootCommand::Generate(args)) => {
+                let report = self.generate(args, &generate_phases, &matches);
+                return self.emit_report(&report, out, err);
             }
-            "generate" => {
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let report = crate::commands::generate::phases(
-                    &generate_phases,
-                    &crate::commands::generate::Context {
-                        repo: self.globals.repo.as_deref(),
-                        env: self.env,
-                        cwd: &cwd,
-                        proxy: self.globals.proxy.as_deref(),
-                        version: &self.host.version,
-                    },
-                    &self.host.version,
-                );
-                self.emit_report(&report, out, err)
-            }
-            "generate explorer" => {
-                let parsed = leaf(&matches);
-                let options = crate::commands::generate::ExplorerOptions {
-                    include_visibility: parsed.get_flag("include_visibility"),
-                    visibility_tlp: (parsed.value_source("visibility_tlp")
-                        == Some(ValueSource::CommandLine))
-                    .then(|| parsed.get_one::<String>("visibility_tlp").cloned())
-                    .flatten(),
-                };
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let report = crate::commands::generate::explorer(
-                    &options,
-                    &crate::commands::generate::Context {
-                        repo: self.globals.repo.as_deref(),
-                        env: self.env,
-                        cwd: &cwd,
-                        proxy: self.globals.proxy.as_deref(),
-                        version: &self.host.version,
-                    },
-                );
-                self.emit_report(&report, out, err)
-            }
-            "validate query" => {
-                let report = self.validate_query(&matches);
-                self.emit_report(&report, out, err)
-            }
-            "generate docs"
-            | "generate docs rules"
-            | "generate docs objectives"
-            | "generate docs threats"
-            | "generate docs index" => {
-                use crate::commands::generate::{DocsArgs, DocsScope};
-                use opentide_compile::generate::docs::catalog::Scope;
-                let docs = leaf(&matches);
-                let flag = |name: &str| {
-                    docs.try_get_one::<bool>(name)
-                        .ok()
-                        .flatten()
-                        .copied()
-                        .unwrap_or(false)
-                };
-                let parsed = DocsArgs {
-                    scope: match words.get(2).map(String::as_str) {
-                        Some("rules") => Some(DocsScope::Objects(Scope::Rules)),
-                        Some("objectives") => Some(DocsScope::Objects(Scope::Objectives)),
-                        Some("threats") => Some(DocsScope::Objects(Scope::Threats)),
-                        Some("index") => Some(DocsScope::Index),
-                        _ => None,
-                    },
-                    output: docs.get_one::<String>("output").cloned(),
-                    flavor: docs.get_one::<String>("flavor").cloned(),
-                    rules: flag("rules"),
-                    threats: flag("threats"),
-                    objectives: flag("objectives"),
-                    changed: flag("changed"),
-                };
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let report = crate::commands::generate::docs(
-                    &parsed,
-                    &crate::commands::generate::Context {
-                        repo: self.globals.repo.as_deref(),
-                        env: self.env,
-                        cwd: &cwd,
-                        proxy: self.globals.proxy.as_deref(),
-                        version: &self.host.version,
-                    },
-                );
-                self.emit_report(&report, out, err)
-            }
-            "generate extract elastic" => {
-                let options = leaf(&matches);
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let report = crate::commands::extract::elastic(
-                    &crate::commands::extract::Context {
-                        repo: self.globals.repo.as_deref(),
-                        env: self.env,
-                        cwd: &cwd,
-                        proxy: self.globals.proxy.as_deref(),
-                    },
-                    options
-                        .get_one::<String>("space")
-                        .map_or("default", String::as_str),
-                    options.get_flag("include_prebuilt"),
-                );
-                self.emit_report(&report, out, err)
-            }
-            "generate extract sentinel" => {
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let report =
-                    crate::commands::extract::sentinel(&crate::commands::extract::Context {
-                        repo: self.globals.repo.as_deref(),
-                        env: self.env,
-                        cwd: &cwd,
-                        proxy: self.globals.proxy.as_deref(),
-                    });
-                self.emit_report(&report, out, err)
-            }
-            "generate extract defender" => {
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let report =
-                    crate::commands::extract::defender(&crate::commands::extract::Context {
-                        repo: self.globals.repo.as_deref(),
-                        env: self.env,
-                        cwd: &cwd,
-                        proxy: self.globals.proxy.as_deref(),
-                    });
-                self.emit_report(&report, out, err)
-            }
-            "share" | "share push" | "share preview" | "share status" | "share retract"
-            | "share targets" => match self.share(&matches, &path) {
-                Ok(report) => self.emit_report(&report, out, err),
-                Err(failure) => self.refuse(&words, *failure, out, err),
-            },
-            "doctor" => {
+            Some(RootCommand::Doctor(args)) => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
                 let report = crate::commands::doctor::run(
-                    leaf(&matches).get_flag("offline"),
+                    args.offline,
                     &crate::commands::doctor::Context {
                         repo: self.globals.repo.as_deref(),
                         env: self.env,
@@ -816,8 +655,35 @@ impl Run<'_> {
                         proxy: self.globals.proxy.as_deref(),
                     },
                 );
+                return self.emit_report(&report, out, err);
+            }
+            Some(RootCommand::Rules(crate::tree::RulesArgs {
+                command: Some(crate::tree::RulesCommand::Unreviewed(args)),
+            })) => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::rules::run(
+                    &args.older_than,
+                    self.globals.repo.as_deref(),
+                    self.env,
+                    &cwd,
+                    jiff::Timestamp::now(),
+                    self.mode != Mode::Json,
+                );
+                return self.emit_report(&report, out, err);
+            }
+            _ => {}
+        }
+        let path = words.join(" ");
+        match path.as_str() {
+            "validate query" => {
+                let report = self.validate_query(&matches);
                 self.emit_report(&report, out, err)
             }
+            "share" | "share push" | "share preview" | "share status" | "share retract"
+            | "share targets" => match self.share(&matches, &path) {
+                Ok(report) => self.emit_report(&report, out, err),
+                Err(failure) => self.refuse(&words, *failure, out, err),
+            },
             "deploy replay-state" => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
                 let commit = leaf(&matches)
@@ -872,22 +738,6 @@ impl Run<'_> {
                     self.env,
                     &cwd,
                 );
-                self.emit_report(&report, out, err)
-            }
-            "generate inflight" | "generate inflight prune" => {
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let cx = crate::commands::generate::Context {
-                    repo: self.globals.repo.as_deref(),
-                    env: self.env,
-                    cwd: &cwd,
-                    proxy: self.globals.proxy.as_deref(),
-                    version: &self.host.version,
-                };
-                let report = if path == "generate inflight" {
-                    crate::commands::generate::inflight_shards(&cx)
-                } else {
-                    crate::commands::generate::inflight_prune(&cx)
-                };
                 self.emit_report(&report, out, err)
             }
             "mcp start" => {
@@ -987,22 +837,6 @@ impl Run<'_> {
                 let report = self.setup_group(&matches);
                 self.emit_report(&report, out, err)
             }
-            "rules unreviewed" => {
-                let older_than = leaf(&matches)
-                    .get_one::<String>("older_than")
-                    .cloned()
-                    .unwrap_or_else(|| "90d".to_owned());
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let report = crate::commands::rules::run(
-                    &older_than,
-                    self.globals.repo.as_deref(),
-                    self.env,
-                    &cwd,
-                    jiff::Timestamp::now(),
-                    self.mode != Mode::Json,
-                );
-                self.emit_report(&report, out, err)
-            }
             "deploy" if leaf(&matches).get_flag("dry_run") => {
                 let run = self.deploy(&matches);
                 self.emit_deploy(&run, out, err)
@@ -1022,6 +856,66 @@ impl Run<'_> {
                 self.emit_report(&report, out, err)
             }
             _ => self.emit(&unhandled(&path), &[], out, err),
+        }
+    }
+
+    /// `opentide generate`: the bare pipeline, the phases named as words, or
+    /// one of its subcommands. `matches` is only asked where an option came
+    /// from.
+    fn generate(
+        &self,
+        args: &crate::tree::GenerateArgs,
+        phases: &[String],
+        matches: &clap::ArgMatches,
+    ) -> crate::commands::Report {
+        use crate::commands::{extract, generate};
+        use crate::tree::{
+            GenerateCommand as Command, GenerateExtractCommand as Extract,
+            GenerateInflightCommand as Inflight,
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        let cx = generate::Context {
+            repo: self.globals.repo.as_deref(),
+            env: self.env,
+            cwd: &cwd,
+            proxy: self.globals.proxy.as_deref(),
+            version: &self.host.version,
+        };
+        let extract_cx = extract::Context {
+            repo: self.globals.repo.as_deref(),
+            env: self.env,
+            cwd: &cwd,
+            proxy: self.globals.proxy.as_deref(),
+        };
+        match &args.command {
+            None | Some(Command::Phases(_)) => generate::phases(phases, &cx, &self.host.version),
+            Some(Command::Exports(exports)) => generate::exports(exports.into(), &cx),
+            Some(Command::Explorer(explorer)) => {
+                let typed =
+                    leaf(matches).value_source("visibility_tlp") == Some(ValueSource::CommandLine);
+                generate::explorer(&generate::ExplorerOptions::new(explorer, typed), &cx)
+            }
+            Some(Command::Docs(docs)) => generate::docs(&docs.into(), &cx),
+            Some(Command::Extract(extraction)) => match &extraction.command {
+                Some(Extract::Elastic(elastic)) => {
+                    extract::elastic(&extract_cx, &elastic.space, elastic.include_prebuilt)
+                }
+                Some(Extract::Sentinel(_)) => extract::sentinel(&extract_cx),
+                Some(Extract::Defender(_)) => extract::defender(&extract_cx),
+                // `generate extract` needs a subcommand: clap refused it.
+                None => crate::commands::Report::failed(
+                    "generate extract",
+                    1,
+                    Failure::new(
+                        code::INTERNAL,
+                        "opentide generate extract has no implementation: this is a bug in opentide",
+                    ),
+                ),
+            },
+            Some(Command::Inflight(inflight)) => match inflight.command {
+                None => generate::inflight_shards(&cx),
+                Some(Inflight::Prune(_)) => generate::inflight_prune(&cx),
+            },
         }
     }
 
@@ -2008,16 +1902,13 @@ impl Run<'_> {
                 && let crate::json::Json::Object(members) = &mut document
             {
                 let at = members
-                    .iter()
-                    .position(|(key, _)| key == "message")
+                    .get_index_of("message")
                     .map_or(members.len(), |at| at + 1);
-                members.insert(
+                members.shift_insert(
                     at,
-                    (
-                        "warnings".into(),
-                        crate::json::Json::Array(
-                            report.warnings.iter().map(crate::json::Json::str).collect(),
-                        ),
+                    "warnings".into(),
+                    crate::json::Json::Array(
+                        report.warnings.iter().map(crate::json::Json::str).collect(),
                     ),
                 );
             }

@@ -37,7 +37,7 @@ pub struct Args {
     /// `--file`, repeatable.
     pub files: Vec<String>,
     /// `--format`.
-    pub format: Option<ReportFormat>,
+    pub format: ReportFormat,
     /// `--output`.
     pub output: Option<PathBuf>,
 }
@@ -47,14 +47,10 @@ impl From<&crate::tree::LintArgs> for Args {
         Self {
             fix: args.fix,
             strict: args.strict,
-            checks: args
-                .check
-                .iter()
-                .filter_map(|check| LintCheck::parse(&crate::tree::spelled(check)))
-                .collect(),
+            checks: args.check.iter().copied().map(LintCheck::from).collect(),
             changed: args.changed,
             files: args.file.clone(),
-            format: Some(args.report_format.into()),
+            format: args.report_format.into(),
             output: args.output.clone(),
         }
     }
@@ -111,7 +107,7 @@ fn changed_files(root: &Path, cwd: &Path, env: &Env) -> Changed {
 /// `opentide lint`.
 pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let terminal = cx.terminal;
-    let format = args.format.unwrap_or(ReportFormat::Text);
+    let format = args.format;
     if let Some(failure) = check_report_options(
         format,
         args.output.is_some(),
@@ -182,7 +178,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     }
     if let Some(summary) = &lint.summary {
         report.outcome.summary = match super::json(summary) {
-            Json::Object(members) => members,
+            Json::Object(members) => members.into_iter().collect(),
             _ => Vec::new(),
         };
     }

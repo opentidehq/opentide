@@ -7,7 +7,8 @@
 //! escaped so it shows as written ([`cell`], [`code`]).
 
 use super::diagnostic::{Diagnostic, sort_diagnostics};
-use crate::json::Json;
+use crate::json::{Json, Object};
+use std::sync::LazyLock;
 
 /// The generated reference of diagnostic codes; `#<code>` is each one's section.
 pub const DIAGNOSTICS_DOCS_URL: &str = "https://opentide.org/docs/cli/diagnostics";
@@ -184,12 +185,21 @@ fn text<'a>(value: &'a Json, key: &str) -> &'a str {
 
 /// The items of the array at `key` of an object; none when it is not an array.
 fn array<'a>(value: &'a Json, key: &str) -> &'a [Json] {
-    value.get(key).and_then(Json::as_array).unwrap_or_default()
+    value
+        .get(key)
+        .and_then(Json::as_array)
+        .map_or(&[], Vec::as_slice)
 }
 
+/// What [`members`] reads when there is no object.
+static NO_MEMBERS: LazyLock<Object> = LazyLock::new(Object::new);
+
 /// The members of the object at `key` of an object; none when it is not an object.
-fn members<'a>(value: &'a Json, key: &str) -> &'a [(String, Json)] {
-    value.get(key).and_then(Json::as_object).unwrap_or_default()
+fn members<'a>(value: &'a Json, key: &str) -> &'a Object {
+    value
+        .get(key)
+        .and_then(Json::as_object)
+        .unwrap_or(&NO_MEMBERS)
 }
 
 /// The strings of an array, skipping anything else.
@@ -199,7 +209,7 @@ fn strings(items: &[Json]) -> impl Iterator<Item = &str> {
 
 /// The number of items of an array, `0` for anything else.
 fn len(value: &Json) -> usize {
-    value.as_array().map_or(0, <[Json]>::len)
+    value.as_array().map_or(0, Vec::len)
 }
 
 fn status_kind(result: &Json) -> &'static str {
@@ -311,10 +321,9 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
     let mut rows: Vec<Vec<String>> = Vec::new();
     for (platform, uuids) in plan {
         let reach = tenants
-            .iter()
-            .find(|(name, _)| name == platform)
-            .and_then(|(_, value)| value.as_object())
-            .unwrap_or_default();
+            .get(platform)
+            .and_then(Json::as_object)
+            .unwrap_or(&NO_MEMBERS);
         match reach {
             reach if !reach.is_empty() => {
                 for (tenant, rules) in reach {
@@ -351,17 +360,16 @@ pub fn deploy_summary(result: &Json, message: Option<&str>, dry_run: Option<bool
     let payloads = members(result, "payloads");
     for (platform, uuids) in plan {
         let entries: &[Json] = payloads
-            .iter()
-            .find(|(name, _)| name == platform)
-            .and_then(|(_, value)| value.as_array())
-            .unwrap_or_default();
+            .get(platform)
+            .and_then(Json::as_array)
+            .map_or(&[], Vec::as_slice);
         let named = |uuid: &str| -> Option<&Json> {
             entries
                 .iter()
                 .rev()
                 .find(|entry| entry.get("uuid").and_then(Json::as_str) == Some(uuid))
         };
-        let uuids = uuids.as_array().unwrap_or_default();
+        let uuids = uuids.as_array().map_or(&[][..], Vec::as_slice);
         let count = uuids.len();
         let noun = if count == 1 { "rule" } else { "rules" };
         // An HTML block: Markdown escapes would show, so HTML escaping only.
