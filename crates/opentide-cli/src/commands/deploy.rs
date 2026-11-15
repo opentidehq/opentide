@@ -496,6 +496,7 @@ fn json_text(value: Option<&Json>) -> String {
 }
 
 /// The plan grouped by platform, then tenant (`plan_view`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn plan_view(result: &Json, summary: &[(String, Json)]) -> Vec<(Text, Option<usize>)> {
     let Some(Json::Array(changes)) = result.get("changes") else {
         return Vec::new();

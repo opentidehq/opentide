@@ -266,6 +266,7 @@ impl Shard {
     }
 
     /// Parses one shard file (`DeploymentState.from_file`).
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     pub fn from_file(path: &Path, expected: Option<&str>) -> Result<Self, StateError> {
         let name = path
             .file_name()

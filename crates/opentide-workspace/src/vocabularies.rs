@@ -39,6 +39,7 @@ fn text(node: Option<&Node>) -> Option<String> {
 /// names the family (`config`); a family with no objects has an empty one. An object
 /// without a name or a `metadata` mapping is left out, as the oracle leaves
 /// it out.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn object_vocabularies(index: &Index, config: &Node) -> Vec<Vocabulary> {
     let mut out = Vec::new();
     for family in OBJECT_TYPES {

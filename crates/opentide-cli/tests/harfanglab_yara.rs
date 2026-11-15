@@ -139,6 +139,7 @@ fn file(path: &Value) -> String {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn validate_and_lint_report_what_0_28_1_reports() {
     let dir = workspace();
     let report = &run(dir.path(), "validate")["report"];

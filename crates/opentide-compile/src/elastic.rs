@@ -379,6 +379,7 @@ fn strings(value: Option<&Json>) -> Vec<String> {
 }
 
 /// The Detection Engine body of `rule` for a tenant with `setup`.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, CompileError> {
     let empty = Json::Object(Object::new());
     let block = rule.block("elastic").unwrap_or(&empty);

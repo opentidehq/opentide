@@ -106,6 +106,7 @@ macro_rules! models {
 }
 
 /// Every model the object and platform templates and schemas reach.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn models() -> &'static [Model] {
     static MODELS: OnceLock<Vec<Model>> = OnceLock::new();
     MODELS.get_or_init(|| {

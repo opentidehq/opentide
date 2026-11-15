@@ -27637,6 +27637,83 @@ changelog = "**`opentide validate` checks CrowdStrike queries, and fails a rule 
 
 [[diff]]
 command = "commands"
+case = "commands/json/none/default"
+target = "stdout"
+rule = "json:/commands/57/help"
+oracle = "\"Run CLI commands in one warm process, for editors\\n\\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\\ncommand as opentide --json would and answers with its document and exit\\ncode, without starting Python and rebuilding the registry each time. The\\neditor owns the process: it ends on exit or when stdin closes. stdout\\ncarries the protocol only; logs go to stderr.\""
+candidate = "\"Run CLI commands in one warm process, for editors\\n\\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\\ncommand as opentide --json would and answers with its document and exit\\ncode, without starting a new process each time; the read-only commands\\nkeep the workspace loaded between runs. The editor owns the process: it\\nends on exit or when stdin closes. stdout carries the protocol only; logs\\ngo to stderr.\""
+reason = "`opentide serve` runs every command on Rust, in the server's own process (UC-6.0d, #841): no Python starts, so its help no longer says it saves starting Python and rebuilding the registry; it says what it saves now, starting a new process for every command, and that the read-only commands keep the workspace loaded."
+issue = "https://github.com/opentidehq/opentide/issues/1140"
+changelog = "**`opentide serve --help` describes the Rust host**"
+
+[[diff]]
+command = "commands"
+case = "commands/*/none/json-after"
+target = "stdout"
+rule = "json:/commands/57/help"
+oracle = "\"Run CLI commands in one warm process, for editors\\n\\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\\ncommand as opentide --json would and answers with its document and exit\\ncode, without starting Python and rebuilding the registry each time. The\\neditor owns the process: it ends on exit or when stdin closes. stdout\\ncarries the protocol only; logs go to stderr.\""
+candidate = "\"Run CLI commands in one warm process, for editors\\n\\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\\ncommand as opentide --json would and answers with its document and exit\\ncode, without starting a new process each time; the read-only commands\\nkeep the workspace loaded between runs. The editor owns the process: it\\nends on exit or when stdin closes. stdout carries the protocol only; logs\\ngo to stderr.\""
+reason = "`opentide serve` runs every command on Rust, in the server's own process (UC-6.0d, #841): no Python starts, so its help no longer says it saves starting Python and rebuilding the registry; it says what it saves now, starting a new process for every command, and that the read-only commands keep the workspace loaded."
+issue = "https://github.com/opentidehq/opentide/issues/1140"
+changelog = "**`opentide serve --help` describes the Rust host**"
+
+[[diff]]
+command = "commands"
+case = "commands/json/none/hoist-flags"
+target = "stdout"
+rule = "json:/commands/57/help"
+oracle = "\"Run CLI commands in one warm process, for editors\\n\\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\\ncommand as opentide --json would and answers with its document and exit\\ncode, without starting Python and rebuilding the registry each time. The\\neditor owns the process: it ends on exit or when stdin closes. stdout\\ncarries the protocol only; logs go to stderr.\""
+candidate = "\"Run CLI commands in one warm process, for editors\\n\\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\\ncommand as opentide --json would and answers with its document and exit\\ncode, without starting a new process each time; the read-only commands\\nkeep the workspace loaded between runs. The editor owns the process: it\\nends on exit or when stdin closes. stdout carries the protocol only; logs\\ngo to stderr.\""
+reason = "`opentide serve` runs every command on Rust, in the server's own process (UC-6.0d, #841): no Python starts, so its help no longer says it saves starting Python and rebuilding the registry; it says what it saves now, starting a new process for every command, and that the read-only commands keep the workspace loaded."
+issue = "https://github.com/opentidehq/opentide/issues/1140"
+changelog = "**`opentide serve --help` describes the Rust host**"
+
+[[diff]]
+command = "commands"
+case = "commands/json/none/debug-star"
+target = "stdout"
+rule = "json:/commands/57/help"
+oracle = "\"Run CLI commands in one warm process, for editors\\n\\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\\ncommand as opentide --json would and answers with its document and exit\\ncode, without starting Python and rebuilding the registry each time. The\\neditor owns the process: it ends on exit or when stdin closes. stdout\\ncarries the protocol only; logs go to stderr.\""
+candidate = "\"Run CLI commands in one warm process, for editors\\n\\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\\ncommand as opentide --json would and answers with its document and exit\\ncode, without starting a new process each time; the read-only commands\\nkeep the workspace loaded between runs. The editor owns the process: it\\nends on exit or when stdin closes. stdout carries the protocol only; logs\\ngo to stderr.\""
+reason = "`opentide serve` runs every command on Rust, in the server's own process (UC-6.0d, #841): no Python starts, so its help no longer says it saves starting Python and rebuilding the registry; it says what it saves now, starting a new process for every command, and that the read-only commands keep the workspace loaded."
+issue = "https://github.com/opentidehq/opentide/issues/1140"
+changelog = "**`opentide serve --help` describes the Rust host**"
+
+[[diff]]
+command = "commands"
+case = "commands/json/none/indent-2"
+target = "stdout"
+rule = "json:/commands/57/help"
+oracle = "\"Run CLI commands in one warm process, for editors\\n\\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\\ncommand as opentide --json would and answers with its document and exit\\ncode, without starting Python and rebuilding the registry each time. The\\neditor owns the process: it ends on exit or when stdin closes. stdout\\ncarries the protocol only; logs go to stderr.\""
+candidate = "\"Run CLI commands in one warm process, for editors\\n\\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\\ncommand as opentide --json would and answers with its document and exit\\ncode, without starting a new process each time; the read-only commands\\nkeep the workspace loaded between runs. The editor owns the process: it\\nends on exit or when stdin closes. stdout carries the protocol only; logs\\ngo to stderr.\""
+reason = "`opentide serve` runs every command on Rust, in the server's own process (UC-6.0d, #841): no Python starts, so its help no longer says it saves starting Python and rebuilding the registry; it says what it saves now, starting a new process for every command, and that the read-only commands keep the workspace loaded."
+issue = "https://github.com/opentidehq/opentide/issues/1140"
+changelog = "**`opentide serve --help` describes the Rust host**"
+
+[[diff]]
+command = "commands"
+case = "commands/human/none/indent-0"
+target = "stdout"
+rule = "json:/commands/57/help"
+oracle = "\"Run CLI commands in one warm process, for editors\\n\\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\\ncommand as opentide --json would and answers with its document and exit\\ncode, without starting Python and rebuilding the registry each time. The\\neditor owns the process: it ends on exit or when stdin closes. stdout\\ncarries the protocol only; logs go to stderr.\""
+candidate = "\"Run CLI commands in one warm process, for editors\\n\\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\\ncommand as opentide --json would and answers with its document and exit\\ncode, without starting a new process each time; the read-only commands\\nkeep the workspace loaded between runs. The editor owns the process: it\\nends on exit or when stdin closes. stdout carries the protocol only; logs\\ngo to stderr.\""
+reason = "`opentide serve` runs every command on Rust, in the server's own process (UC-6.0d, #841): no Python starts, so its help no longer says it saves starting Python and rebuilding the registry; it says what it saves now, starting a new process for every command, and that the read-only commands keep the workspace loaded."
+issue = "https://github.com/opentidehq/opentide/issues/1140"
+changelog = "**`opentide serve --help` describes the Rust host**"
+
+[[diff]]
+command = "serve"
+case = "serve/*/none/help"
+target = "stdout"
+rule = "help-text"
+oracle = "Run CLI commands in one warm process, for editors JSON-RPC 2.0 on stdio, one message per line. Each run request executes a command as opentide --json would and answers with its document and exit code, without starting Python and rebuilding the registry each time. The editor owns the process: it ends on exit or when stdin closes. stdout carries the protocol only; logs go to stderr."
+candidate = "Run CLI commands in one warm process, for editors JSON-RPC 2.0 on stdio, one message per line. Each run request executes a command as opentide --json would and answers with its document and exit code, without starting a new process each time; the read-only commands keep the workspace loaded between runs. The editor owns the process: it ends on exit or when stdin closes. stdout carries the protocol only; logs go to stderr."
+reason = "`opentide serve` runs every command on Rust, in the server's own process (UC-6.0d, #841): no Python starts, so its help no longer says it saves starting Python and rebuilding the registry; it says what it saves now, starting a new process for every command, and that the read-only commands keep the workspace loaded."
+issue = "https://github.com/opentidehq/opentide/issues/1140"
+changelog = "**`opentide serve --help` describes the Rust host**"
+
+[[diff]]
+command = "commands"
 case = "commands/*/none/*"
 target = "stdout"
 rule = "json:/environment/2/meaning"

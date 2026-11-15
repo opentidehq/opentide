@@ -448,6 +448,7 @@ fn masked_for(text: &str, ws: &str, windows: bool) -> String {
 }
 
 /// Runs one case on `ws`, a fresh copy of its fixture.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn run_case(recording: &Recording, ws: &Path) -> Result<Vec<Difference>> {
     let case = &recording.case;
     let Some(args) = parse_args(&case.argv) else {
@@ -610,6 +611,7 @@ fn show(value: Option<&Json>) -> String {
 /// # Errors
 ///
 /// A recording or a fixture cannot be read or laid out.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn run(args: &[String]) -> Result<u8> {
     let mut filter = None;
     let mut keep = None;

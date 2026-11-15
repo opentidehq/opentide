@@ -113,6 +113,7 @@ struct Migration {
     failed_files: IndexMap<String, String>,
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn migrate(root: &Path, fields: &[&ScopedField], apply: bool) -> Result<Migration, String> {
     let mut indexes: Vec<(&ScopedField, ScopeIndex)> = Vec::new();
     for field in fields {
@@ -279,6 +280,7 @@ fn int(count: usize) -> Json {
     Json::Int(i64::try_from(count).unwrap_or(i64::MAX))
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn report(migration: &Migration, args: &Args) -> Report {
     let mut changed = migration.changed_files.clone();
     changed.sort();
