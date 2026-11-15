@@ -1053,8 +1053,10 @@ mod tests {
             message(&wrapped("<a/><messages><msg>late</msg></messages>")),
             "none"
         );
-        // A page of HTML or XML that is cut off is no message; plain text is
-        // not XML.
+        // A page of HTML is no message; plain text is not XML. A body cut
+        // off after a whole `msg` is no message either: the old regex read
+        // one there, and the parser does not (Splunk sends whole documents).
+        // One cut before a closing `>` is not XML, as before.
         assert_eq!(message("<html><body><br></body></html>"), "none");
         assert_eq!(message("<response><messages><msg>cut</msg>"), "none");
         assert_eq!(message("<response><messages><msg>cut"), "not xml");
