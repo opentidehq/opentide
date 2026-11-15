@@ -438,6 +438,36 @@ fn a_delete_refused_otherwise_fails_the_rule_and_keeps_its_id() {
 // --- the rule is gone ----------------------------------------------------------------
 
 #[test]
+fn an_api_error_that_echoes_the_key_is_quoted_without_it() {
+    const KEY: &str = "gz-api-key-never-in-a-message";
+    let run = Run::new();
+    run.script(|body| {
+        answer(
+            200,
+            &error(
+                &body["id"],
+                -32000,
+                &format!("bad key {KEY}"),
+                Some(&format!("details name {KEY}")),
+            ),
+        )
+    });
+    let delete = rule(
+        Action::Delete(FIRST_ID.to_owned()),
+        StatusStrategy::Deletion,
+    );
+    let outcome = run
+        .deploy_with_key(&delete, KEY, "", Duration::from_secs(5))
+        .unwrap();
+    let shown = format!("{:?}", outcome.failure);
+    assert!(!shown.contains(KEY), "{shown}");
+    assert!(
+        shown.contains("bad key ***") && shown.contains("details name ***"),
+        "{shown}"
+    );
+}
+
+#[test]
 fn an_update_of_a_rule_gone_creates_it_again() {
     let run = Run::new();
     let outcome = run.deploy(&update(GONE)).unwrap();
