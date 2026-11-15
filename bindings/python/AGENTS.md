@@ -53,7 +53,7 @@ needs goes into the facade's API first. It inherits the workspace lints, `unsafe
 ```bash
 cargo nextest run --profile fast -p opentide-native     # the binding's unit tests
 uv sync --group dev                                      # rebuild _native into src/opentide/
-uv run pytest tests/test_sdk tests/test_lsp -q --no-cov
+uv run pytest tests/test_sdk -q --no-cov
 ```
 
 `uv sync` builds with the `develop` profile and rebuilds when the workspace's manifests, lock,
