@@ -12,28 +12,28 @@ use opentide_parse::Parser;
 
 /// Whether the current token is the word `word` (any case), the way the
 /// grammar's `kw()` tokens read.
-fn kw(p: &Parser<'_>, word: &str) -> bool {
+pub(super) fn kw(p: &Parser<'_>, word: &str) -> bool {
     let kind = p.current();
     (kind == K::IDENT.raw() || kind == K::FIELD_WORD.raw())
         && p.current_text().eq_ignore_ascii_case(word)
 }
 
-fn at_stage_end(p: &Parser<'_>) -> bool {
+pub(super) fn at_stage_end(p: &Parser<'_>) -> bool {
     let kind = p.current();
     p.at_eof() || kind == K::PIPE.raw() || kind == K::R_BRACKET.raw() || kind == K::R_PAREN.raw()
 }
 
 /// A field name: a name, or a field word (`a-b`, `{}.Id`).
-fn at_field(p: &Parser<'_>) -> bool {
+pub(super) fn at_field(p: &Parser<'_>) -> bool {
     let kind = p.current();
     kind == K::IDENT.raw() || kind == K::FIELD_WORD.raw()
 }
 
-fn at_option(p: &Parser<'_>) -> bool {
+pub(super) fn at_option(p: &Parser<'_>) -> bool {
     at_field(p) && p.nth(1) == K::EQ.raw()
 }
 
-fn at_call(p: &Parser<'_>) -> bool {
+pub(super) fn at_call(p: &Parser<'_>) -> bool {
     p.current() == K::IDENT.raw() && p.nth(1) == K::L_PAREN.raw()
 }
 
@@ -41,12 +41,12 @@ fn at_prefix(p: &Parser<'_>) -> bool {
     at_call(p) && p.current_text() == "PREFIX"
 }
 
-fn commas(p: &mut Parser<'_>) {
+pub(super) fn commas(p: &mut Parser<'_>) {
     while p.eat(K::COMMA.raw()) {}
 }
 
 /// The current field name as an identifier node.
-fn name_leaf(p: &mut Parser<'_>) {
+pub(super) fn name_leaf(p: &mut Parser<'_>) {
     let kind = p.current();
     let m = p.start();
     p.bump_as(kind);
@@ -54,7 +54,7 @@ fn name_leaf(p: &mut Parser<'_>) {
 }
 
 /// `PREFIX(dst=)`.
-fn prefix_clause(p: &mut Parser<'_>) {
+pub(super) fn prefix_clause(p: &mut Parser<'_>) {
     let m = p.start();
     p.bump_as(K::PREFIX_KW.raw());
     p.bump();

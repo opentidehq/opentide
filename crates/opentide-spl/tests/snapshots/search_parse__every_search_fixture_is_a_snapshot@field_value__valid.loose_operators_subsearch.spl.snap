@@ -39,10 +39,10 @@ SOURCE_FILE@0..60
           WHITESPACE@43..44 " "
           PIPE@44..45 "|"
           WHITESPACE@45..46 " "
-          UNKNOWN_COMMAND@46..59
-            IDENT@46..52 "fields"
+          FIELDS_COMMAND@46..59
+            FIELDS_KW@46..52 "fields"
             WHITESPACE@52..53 " "
-            ARGUMENT_LIST@53..59
+            IDENTIFIER@53..59
               IDENT@53..59 "status"
         R_BRACKET@59..60 "]"
 --

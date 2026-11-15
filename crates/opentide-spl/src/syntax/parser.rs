@@ -6,7 +6,7 @@
 
 use super::kind::{SyntaxKind as K, SyntaxNode};
 use super::lexer::lex;
-use super::{expr, search, stats};
+use super::{expr, search, stats, table};
 use opentide_parse::{Grammar, Input, Parse, Parser, TokenSet, build};
 
 /// Nesting (groups, subsearches) deeper than this is one error: the floor
@@ -162,6 +162,8 @@ fn command_stage(p: &mut Parser<'_>) {
         stats::stats_command(p);
     } else if at_name(p, "tstats") {
         stats::tstats_command(p);
+    } else if at(p, K::IDENT) && table::is_table_command(p.current_text()) {
+        table::command(p);
     } else if at(p, K::IDENT) {
         generic_command(p);
     } else {
