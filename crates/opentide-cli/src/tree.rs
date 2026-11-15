@@ -395,13 +395,20 @@ pub struct ExportObjectsArgs {}
 #[derive(Debug, Args)]
 pub struct ExportNavigatorArgs {}
 
-/// `opentide document`.
+/// The options `opentide document` and each of its subcommands take.
 #[derive(Debug, Args)]
-pub struct DocumentArgs {
+pub struct DocumentOptions {
     #[arg(long = "output")]
     pub output: Option<String>,
     #[arg(long = "flavor")]
     pub flavor: Option<String>,
+}
+
+/// `opentide document`.
+#[derive(Debug, Args)]
+pub struct DocumentArgs {
+    #[command(flatten)]
+    pub options: DocumentOptions,
     #[command(subcommand)]
     pub command: Option<DocumentCommand>,
 }
@@ -409,37 +416,29 @@ pub struct DocumentArgs {
 /// `opentide document index`.
 #[derive(Debug, Args)]
 pub struct DocumentIndexArgs {
-    #[arg(long = "output")]
-    pub output: Option<String>,
-    #[arg(long = "flavor")]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub options: DocumentOptions,
 }
 
 /// `opentide document threats`.
 #[derive(Debug, Args)]
 pub struct DocumentThreatsArgs {
-    #[arg(long = "output")]
-    pub output: Option<String>,
-    #[arg(long = "flavor")]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub options: DocumentOptions,
 }
 
 /// `opentide document objectives`.
 #[derive(Debug, Args)]
 pub struct DocumentObjectivesArgs {
-    #[arg(long = "output")]
-    pub output: Option<String>,
-    #[arg(long = "flavor")]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub options: DocumentOptions,
 }
 
 /// `opentide document rules`.
 #[derive(Debug, Args)]
 pub struct DocumentRulesArgs {
-    #[arg(long = "output")]
-    pub output: Option<String>,
-    #[arg(long = "flavor")]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub options: DocumentOptions,
 }
 
 /// `opentide serve`.
