@@ -608,7 +608,7 @@ impl RexCommand {
     }
 }
 
-/// `TableCommand = 'table' FieldName*`
+/// `TableCommand = 'table' (FieldName | ',')*`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TableCommand {
     syntax: SyntaxNode,
@@ -635,6 +635,10 @@ impl TableCommand {
     /// The `FieldName` children.
     pub fn field_names(&self) -> AstChildren<FieldName> {
         support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![,])
     }
 }
 
@@ -4076,14 +4080,17 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::TABLE_COMMAND as u16,
         name: "TableCommand",
-        text: "'table' FieldName*",
+        text: "'table' (FieldName | ',')*",
         rule: Rule::Seq(&[
             Rule::Kind(T![table] as u16),
             Rule::Rep(&Rule::Alt(&[
-                Rule::Kind(SyntaxKind::IDENTIFIER as u16),
-                Rule::Kind(SyntaxKind::GLOB as u16),
-                Rule::Kind(SyntaxKind::STR as u16),
-                Rule::Kind(SyntaxKind::MACRO_CALL as u16),
+                Rule::Alt(&[
+                    Rule::Kind(SyntaxKind::IDENTIFIER as u16),
+                    Rule::Kind(SyntaxKind::GLOB as u16),
+                    Rule::Kind(SyntaxKind::STR as u16),
+                    Rule::Kind(SyntaxKind::MACRO_CALL as u16),
+                ]),
+                Rule::Kind(T![,] as u16),
             ])),
         ]),
     },
