@@ -329,7 +329,7 @@ impl SentinelOne {
         let mut data = data(&answer, &tenant)?;
         let query_id = data
             .get("queryId")
-            .filter(|id| id.truthy())
+            .filter(|id| id.is_filled())
             .map(json_text)
             .filter(|id| !id.is_empty());
         let ping = format!("{}{PING_PATH}", setup.url);
@@ -393,7 +393,7 @@ impl SentinelOne {
         let warnings = match data.get("recommendations") {
             Some(Json::Array(items)) => items
                 .iter()
-                .filter(|item| item.truthy())
+                .filter(|item| item.is_filled())
                 .map(json_text)
                 .collect(),
             _ => Vec::new(),
@@ -480,9 +480,9 @@ fn finished(data: &Json, tenant: &str) -> Result<bool, ConnectorError> {
     if ["FAILED", "FAILED_CLIENT", "TIMED_OUT", "CANCELLED"].contains(&status.as_str()) {
         let detail = data
             .get("responseError")
-            .filter(|value| value.truthy())
+            .filter(|value| value.is_filled())
             .or_else(|| data.get("error"))
-            .filter(|value| value.truthy())
+            .filter(|value| value.is_filled())
             .map(json_text)
             .filter(|text| !text.is_empty());
         return Err(ConnectorError::refused(
@@ -515,10 +515,10 @@ fn data(answer: &Answer, tenant: &str) -> Result<Json, ConnectorError> {
             .and_then(|error| {
                 error
                     .get("detail")
-                    .filter(|value| value.truthy())
+                    .filter(|value| value.is_filled())
                     .or_else(|| error.get("title"))
             })
-            .filter(|value| value.truthy())
+            .filter(|value| value.is_filled())
             .map(json_text)
             .filter(|text| !text.is_empty());
         let text: String = answer.text().chars().take(500).collect();
@@ -543,9 +543,9 @@ fn column_name(column: &Json) -> String {
     match column {
         Json::Object(_) => column
             .get("name")
-            .filter(|value| value.truthy())
+            .filter(|value| value.is_filled())
             .or_else(|| column.get("title"))
-            .filter(|value| value.truthy())
+            .filter(|value| value.is_filled())
             .map(json_text)
             .unwrap_or_default(),
         other => json_text(other),
