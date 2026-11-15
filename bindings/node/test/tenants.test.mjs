@@ -191,6 +191,16 @@ test('a deploy creates the rule', async () => {
   assert.deepEqual(updated, { remoteId: created.remoteId, operation: 'update' })
 })
 
+test('a deploy takes the rule\'s policies, which only Sysdig sends', async () => {
+  const connection = connect()
+  const body = JSON.stringify({ data: { name: 'Example', queryType: 'events' } })
+  for (const policies of [['Default policy'], []]) {
+    const created = await connection.deploy('22222222-2222-4222-8222-222222222222', 'create', body, { policies })
+    assert.equal(created.operation, 'create')
+    assert.match(created.remoteId, /^19000000000000000/)
+  }
+})
+
 test('an unreachable tenant is reported without its secret', async () => {
   const closed = Connection.open(soc('http://127.0.0.1:9'), ENVIRONMENT)
   const error = await rejects(closed.query('x'), 'tenant_unreachable')

@@ -11,6 +11,8 @@ exit: 2
 error: the following required arguments were not provided:
   <ci_platform>
 
+  tip: ci_platform: choose from github, gitlab, azure
+
 Usage: opentide setup ci --yes <ci_platform>
 
 For more information, try '--help'.
