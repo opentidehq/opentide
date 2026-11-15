@@ -147,6 +147,30 @@ pub struct NewArgs {
     pub threats: Vec<String>,
 }
 
+impl From<&crate::tree::NewCommand> for NewArgs {
+    fn from(command: &crate::tree::NewCommand) -> Self {
+        use crate::tree::NewCommand;
+        let new = |family: &str, name: &Option<String>, path: &Option<String>| Self {
+            family: family.to_owned(),
+            name: name.clone(),
+            path: path.clone(),
+            ..Self::default()
+        };
+        match command {
+            NewCommand::Threat(args) => new("threat", &args.name, &args.path),
+            NewCommand::Objective(args) => Self {
+                threats: args.threat.clone(),
+                ..new("objective", &args.name, &args.path)
+            },
+            NewCommand::Rule(args) => Self {
+                platforms: args.platform.iter().map(crate::tree::spelled).collect(),
+                objective: args.objective.clone(),
+                ..new("rule", &args.name, &args.path)
+            },
+        }
+    }
+}
+
 /// Where `new` runs.
 pub struct Context<'a> {
     /// `--repo`.

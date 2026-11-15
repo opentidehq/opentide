@@ -9,16 +9,16 @@ exit: 2
 {
   "command": "validate",
   "duration_ms": 0,
-  "error": "Unknown option \"--strictt\".",
+  "error": "unexpected argument '--strictt' found",
   "exit_code": 2,
   "failure": {
     "argument": "--strictt",
     "code": "usage_unknown_option",
     "crash_log": null,
-    "message": "Unknown option \"--strictt\".",
+    "message": "unexpected argument '--strictt' found",
     "suggestion": "--strict"
   },
-  "message": "Unknown option \"--strictt\".",
+  "message": "unexpected argument '--strictt' found",
   "next_actions": [],
   "ok": false,
   "schema_version": 1,

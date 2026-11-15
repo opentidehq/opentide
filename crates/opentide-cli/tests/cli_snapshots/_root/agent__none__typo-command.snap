@@ -8,8 +8,11 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-error: Unknown command "valdiate".
-  help: did you mean "validate"?
-  usage: opentide [OPTIONS] <COMMAND>
-  help: run 'opentide --help'
+error: unrecognized subcommand 'valdiate'
+
+  tip: some similar subcommands exist: 'lint', 'validate'
+
+Usage: opentide [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
 tip: add --json for machine-readable output
