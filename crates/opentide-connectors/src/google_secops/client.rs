@@ -303,6 +303,7 @@ impl<'a> Client<'a> {
             tenant: self.tenant().to_owned(),
             message: error.describe(),
         })?;
+        let credentials = crate::answer::Credentials::of(&built);
         let started = Instant::now();
         let response = self.cx.http.send(built, self.cx.cancel).await?;
         let elapsed = started.elapsed();
@@ -318,12 +319,7 @@ impl<'a> Client<'a> {
         let retry_after = header(crate::transport::header::RETRY_AFTER);
         let body = self.cx.http.bytes(response, self.cx.cancel).await?;
         Ok(Reply {
-            answer: Answer {
-                status,
-                content_type,
-                body,
-                elapsed,
-            },
+            answer: Answer::new(status, content_type, body, elapsed, &credentials),
             retry_after,
         })
     }

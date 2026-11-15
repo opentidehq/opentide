@@ -50,6 +50,16 @@ pub struct Credentials(Vec<String>);
 /// password like `token`) would be hidden wherever the answer says it.
 const MIN_CREDENTIAL: usize = 8;
 
+/// The fields of a form body that hold a credential (a token endpoint's).
+const FORM_CREDENTIALS: [&str; 6] = [
+    "client_secret",
+    "client_assertion",
+    "assertion",
+    "refresh_token",
+    "password",
+    "api_key",
+];
+
 impl Credentials {
     /// The credentials *request* sends: the value of each `Authorization`,
     /// `Proxy-Authorization`, `X-API-Key` and `X-Auth-Token` header (and any
@@ -81,12 +91,28 @@ impl Credentials {
             if scheme.eq_ignore_ascii_case("basic") {
                 let decoded = base64::engine::general_purpose::STANDARD.decode(parameter);
                 if let Some(pair) = decoded.ok().and_then(|bytes| String::from_utf8(bytes).ok()) {
-                    found.extend(pair.split(':').map(str::to_owned));
+                    // A password may hold a colon: split once.
+                    found.extend(pair.splitn(2, ':').map(str::to_owned));
                 }
             }
         }
+        // A form body names its credentials: `client_secret=...` is one.
+        let is_form = request
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|kind| kind.contains("application/x-www-form-urlencoded"));
+        if let (true, Some(body)) = (is_form, request.body()) {
+            found.extend(
+                url::form_urlencoded::parse(body)
+                    .filter(|(name, _)| FORM_CREDENTIALS.contains(&name.as_ref()))
+                    .map(|(_, value)| value.into_owned()),
+            );
+        }
         found.retain(|credential| credential.len() >= MIN_CREDENTIAL);
-        found.sort();
+        // The longest first, so a credential that holds another is masked
+        // whole, not left with a tail.
+        found.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
         found.dedup();
         Self(found)
     }
@@ -321,6 +347,35 @@ mod tests {
         ));
         let masked = credentials.mask(b"a-user-name token".to_vec());
         assert_eq!(String::from_utf8(masked).unwrap(), "*** token");
+    }
+
+    #[test]
+    fn a_basic_password_with_a_colon_is_masked_whole() {
+        use base64::Engine as _;
+        let pair = base64::engine::general_purpose::STANDARD.encode("a-user-name:pass:word-1234");
+        let credentials = Credentials::of(&request_with("authorization", &format!("Basic {pair}")));
+        let masked = credentials.mask(b"pass:word-1234 a-user-name".to_vec());
+        assert_eq!(String::from_utf8(masked).unwrap(), "*** ***");
+    }
+
+    #[test]
+    fn a_credential_holding_another_is_masked_whole() {
+        let mut request = request_with("authorization", "Bearer abcdefgh12345678-and-more");
+        request
+            .headers_mut()
+            .insert("x-api-key", "abcdefgh12345678".parse().unwrap());
+        let masked = Credentials::of(&request).mask(b"abcdefgh12345678-and-more".to_vec());
+        assert_eq!(String::from_utf8(masked).unwrap(), "***");
+    }
+
+    #[test]
+    fn a_form_body_credential_is_masked() {
+        let mut request = request_with("content-type", "application/x-www-form-urlencoded");
+        request.set_body(Some(
+            b"grant_type=refresh_token&client_secret=s3cr3t%2Bvalue%21&scope=x".to_vec(),
+        ));
+        let masked = Credentials::of(&request).mask(b"bad client s3cr3t+value! x".to_vec());
+        assert_eq!(String::from_utf8(masked).unwrap(), "bad client *** x");
     }
 
     #[test]
