@@ -14,7 +14,7 @@ use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, Range, Severity, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
-use opentide_syntax::{first_error, node_span, parse as ts_parse};
+use opentide_syntax::{first_error, node_span, parse as ts_parse, walk};
 use regex::Regex;
 use std::sync::OnceLock;
 use tree_sitter::Node;
@@ -625,26 +625,6 @@ fn fuzzy_or_boost(word: &str) -> bool {
     tail('~') || tail('^')
 }
 
-/// Pre-order walk. Iterative: a query thousands of levels deep (a long
-/// `OR` chain) must not overflow the stack, notably in WASM.
-fn walk<'t>(node: Node<'t>, f: &mut impl FnMut(Node<'t>)) {
-    let mut cursor = node.walk();
-    loop {
-        f(cursor.node());
-        if cursor.goto_first_child() {
-            continue;
-        }
-        loop {
-            if cursor.goto_next_sibling() {
-                break;
-            }
-            if !cursor.goto_parent() {
-                return;
-            }
-        }
-    }
-}
-
 fn range(source: &str, span: ByteSpan) -> Range {
     span_to_range(source, span)
 }
@@ -671,7 +651,7 @@ pub fn fields(source: &str) -> Vec<String> {
         return Vec::new();
     };
     let mut names = std::collections::BTreeSet::new();
-    walk(tree.root_node(), &mut |node| {
+    walk(tree.root_node(), |node| {
         if node.kind() == "field" && !node.has_error() {
             names.insert(text(node, source).trim_matches('"').to_string());
         }

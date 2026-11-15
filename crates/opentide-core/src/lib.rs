@@ -365,10 +365,13 @@ impl<'a> LineIndex<'a> {
     }
 }
 
-fn utf16_len(s: &str) -> u32 {
-    s.chars()
-        .map(|c| if c.len_utf16() == 2 { 2 } else { 1 })
-        .sum()
+/// The length of `text` in UTF-16 code units, the unit of an LSP column.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a char is one or two UTF-16 units"
+)]
+pub fn utf16_len(text: &str) -> u32 {
+    text.chars().map(|c| c.len_utf16() as u32).sum()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
