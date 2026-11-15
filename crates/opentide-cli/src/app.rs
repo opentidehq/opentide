@@ -21,7 +21,7 @@ use anstyle::Style;
 use clap::FromArgMatches;
 use clap::parser::ValueSource;
 
-use crate::tree::RootCommand;
+use crate::tree::{RootCommand, SetupArgs};
 use std::cell::RefCell;
 use std::io::Write;
 use std::path::PathBuf;
@@ -656,6 +656,10 @@ impl Run<'_> {
                 let report = self.generate(args, &generate_phases, &matches);
                 return self.emit_report(&report, out, err);
             }
+            Some(RootCommand::Setup(args)) => {
+                let report = self.setup(args, &matches);
+                return self.emit_report(&report, out, err);
+            }
             Some(RootCommand::Doctor(args)) => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
                 let report = crate::commands::doctor::run(
@@ -830,27 +834,6 @@ impl Run<'_> {
                 // stdout is the protocol's: nothing is emitted around the server.
                 crate::commands::lsp::start_stdio(&self.host.version, err)
             }
-            "setup ci" => {
-                let report = self.setup_ci(&matches);
-                self.emit_report(&report, out, err)
-            }
-            "setup skills" => {
-                let report = self.setup_skills(&matches);
-                self.emit_report(&report, out, err)
-            }
-            "setup skills discover" | "setup skills show" => {
-                let report = self.setup_skills_catalogue(&matches, &path);
-                self.emit_report(&report, out, err)
-            }
-            "setup env" | "setup hooks" | "setup platforms" | "setup repo" | "setup mcp"
-            | "setup vscode" => {
-                let report = self.setup_step(&matches);
-                self.emit_report(&report, out, err)
-            }
-            "setup" => {
-                let report = self.setup_group(&matches);
-                self.emit_report(&report, out, err)
-            }
             "deploy" if leaf(&matches).get_flag("dry_run") => {
                 let run = self.deploy(&matches);
                 self.emit_deploy(&run, out, err)
@@ -990,57 +973,102 @@ impl Run<'_> {
         )
     }
 
-    /// `opentide setup ci`, from its parsed arguments and the `setup`
-    /// group's.
-    fn setup_ci(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
-        use crate::commands::setup::{CiArgs, ci};
-        let Some((_, group)) = matches.subcommand() else {
-            return crate::commands::Report::error("setup ci", "no setup command");
-        };
-        let args = leaf(matches);
-        let given = |matches: &clap::ArgMatches, id: &str| {
-            matches.value_source(id) == Some(ValueSource::CommandLine)
-        };
-        let flag = |id: &str| args.get_flag(id);
-        let text = |id: &str| args.get_one::<String>(id).cloned();
-        let provider = args
-            .get_one::<crate::tree::CiPlatform>("ci_platform")
-            .map_or(
-                opentide_compile::ci::Provider::GitHub,
-                |platform| match platform {
-                    crate::tree::CiPlatform::Github => opentide_compile::ci::Provider::GitHub,
-                    crate::tree::CiPlatform::Gitlab => opentide_compile::ci::Provider::GitLab,
-                    crate::tree::CiPlatform::Azure => opentide_compile::ci::Provider::Azure,
-                },
-            );
-        let group_only = self.setup_group_only(group);
-        let parsed = CiArgs {
-            provider,
-            path: given(args, "path").then(|| text("path")).flatten(),
-            group_path: given(group, "path")
-                .then(|| group.get_one::<String>("path").cloned())
-                .flatten(),
-            staging: !flag("no_staging"),
-            inflight: !flag("no_inflight"),
-            sharing: flag("sharing"),
-            lint_changed: flag("lint_changed"),
-            promotion: if flag("promotion") {
-                Some(true)
-            } else if flag("no_promotion") {
-                Some(false)
-            } else {
-                None
-            },
-            promotion_target: text("promotion_target"),
-            python_version: text("python_version").unwrap_or_else(|| "3.12".to_owned()),
-            explorer_pages: flag("explorer_pages"),
-            default_branch: text("default_branch"),
-            plan: flag("plan") || group.get_flag("plan"),
-            yes: flag("yes") || group.get_flag("yes"),
-            group_only,
+    /// `opentide setup`: the group's own run, or one of its subcommands.
+    /// `matches` is only asked where an option came from.
+    fn setup(&self, args: &SetupArgs, matches: &clap::ArgMatches) -> crate::commands::Report {
+        use crate::commands::setup::files::RepoOptions;
+        use crate::commands::setup::run::Step;
+        use crate::tree::{SetupCommand as Command, SetupSkillsCommand as Skills};
+        let Some(group) = matches.subcommand_matches("setup") else {
+            return crate::commands::Report::error("setup", "no setup command");
         };
         let cwd = self.host.cwd.clone().unwrap_or_default();
-        ci(&parsed, &self.setup_context(&cwd))
+        match &args.command {
+            None => crate::commands::setup::run::group(
+                &crate::commands::setup::run::GroupArgs::from(args),
+                &self.setup_context(&cwd),
+            ),
+            Some(Command::Ci(ci)) => self.setup_ci(args, ci, group),
+            Some(Command::Env(env)) => {
+                self.setup_step(args, group, Step::Env, &env.target, &env.confirm)
+            }
+            Some(Command::Hooks(hooks)) => {
+                let step = Step::Hooks {
+                    install: !hooks.no_install,
+                };
+                self.setup_step(args, group, step, &hooks.target, &hooks.confirm)
+            }
+            Some(Command::Platforms(platforms)) => {
+                let step = Step::Platforms(platforms.enabled());
+                self.setup_step(args, group, step, &platforms.target, &platforms.confirm)
+            }
+            Some(Command::Repo(repo)) => {
+                let step = Step::Repo(RepoOptions::from(&repo.repo));
+                self.setup_step(args, group, step, &repo.target, &repo.confirm)
+            }
+            Some(Command::Mcp(mcp)) => {
+                let step = Step::Mcp(mcp.hosts());
+                self.setup_step(args, group, step, &mcp.target, &mcp.confirm)
+            }
+            Some(Command::Vscode(vscode)) => {
+                let step = Step::Vscode(crate::commands::setup::vscode::Options {
+                    generate: !vscode.no_generate,
+                    merge: !vscode.no_merge,
+                    mcp: vscode.mcp,
+                    ..crate::commands::setup::vscode::Options::from_flags(
+                        vscode.settings,
+                        vscode.snippets,
+                    )
+                });
+                let confirm = crate::tree::SetupConfirm {
+                    plan: vscode.plan,
+                    yes: vscode.yes,
+                };
+                self.setup_step(args, group, step, &vscode.target, &confirm)
+            }
+            Some(Command::Skills(skills)) => match &skills.command {
+                None => self.setup_skills(args, skills, group),
+                Some(Skills::Discover(discover)) => {
+                    self.setup_skills_catalogue(matches, group, SkillsCommand::Discover(discover))
+                }
+                Some(Skills::Show(show)) => {
+                    self.setup_skills_catalogue(matches, group, SkillsCommand::Show(show))
+                }
+            },
+        }
+    }
+
+    /// `opentide setup ci`: its options, and the `setup` group's handed down.
+    fn setup_ci(
+        &self,
+        args: &SetupArgs,
+        ci: &crate::tree::SetupCiArgs,
+        group: &clap::ArgMatches,
+    ) -> crate::commands::Report {
+        use crate::commands::setup::{CiArgs, ci as run};
+        let own = group.subcommand().map(|(_, own)| own);
+        let pipeline = &ci.pipeline;
+        let parsed = CiArgs {
+            provider: ci.ci_platform.into(),
+            path: own
+                .is_some_and(|own| given(own, "path"))
+                .then(|| ci.path.clone()),
+            group_path: given(group, "path").then(|| args.path.clone()),
+            staging: !pipeline.no_staging,
+            inflight: !pipeline.no_inflight,
+            sharing: pipeline.sharing,
+            lint_changed: pipeline.lint_changed,
+            promotion: pipeline.promotion_choice(),
+            promotion_target: pipeline.promotion_target.clone(),
+            python_version: pipeline.python_version.clone(),
+            explorer_pages: pipeline.explorer_pages,
+            default_branch: pipeline.default_branch.clone(),
+            plan: ci.confirm.plan || args.plan,
+            yes: ci.confirm.yes || args.yes,
+            group_only: self.setup_group_only(group),
+        };
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        run(&parsed, &self.setup_context(&cwd))
     }
 
     /// The `setup` group's own options given on the command line before a
@@ -1102,228 +1130,66 @@ impl Run<'_> {
         }
     }
 
-    /// `opentide setup env|hooks|platforms|repo|mcp|vscode`.
-    fn setup_step(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
-        use crate::commands::setup::files::RepoOptions;
-        use crate::commands::setup::run::{Paths, Step, subcommand};
-        use clap::ValueEnum;
-        let Some((_, group)) = matches.subcommand() else {
-            return crate::commands::Report::error("setup", "no setup command");
-        };
-        let Some((name, args)) = group.subcommand() else {
-            return crate::commands::Report::error("setup", "no setup command");
-        };
-        let given = |matches: &clap::ArgMatches, id: &str| {
-            matches.value_source(id) == Some(ValueSource::CommandLine)
-        };
-        let text = |id: &str| args.get_one::<String>(id).cloned();
-        let flag_given = given(args, "path_flag");
-        let positional_given = given(args, "path");
+    /// `opentide setup env|hooks|platforms|repo|mcp|vscode`: the step, where
+    /// it writes, and whether to ask first.
+    fn setup_step(
+        &self,
+        args: &SetupArgs,
+        group: &clap::ArgMatches,
+        step: crate::commands::setup::run::Step,
+        target: &crate::tree::SetupTarget,
+        confirm: &crate::tree::SetupConfirm,
+    ) -> crate::commands::Report {
+        use crate::commands::setup::run::{Paths, subcommand};
+        let own = group.subcommand().map(|(_, own)| own);
+        let flag_given = own.is_some_and(|own| given(own, "path_flag"));
+        let positional_given = own.is_some_and(|own| given(own, "path"));
         let paths = Paths {
             own: if flag_given {
-                text("path_flag")
+                Some(target.path_flag.clone())
             } else if positional_given {
-                text("path")
+                Some(target.path.clone())
             } else {
                 None
             },
-            group: given(group, "path")
-                .then(|| group.get_one::<String>("path").cloned())
-                .flatten(),
+            group: given(group, "path").then(|| args.path.clone()),
             both: flag_given && positional_given,
             group_only: self.setup_group_only(group),
-        };
-        let flag = |id: &str| {
-            args.try_get_one::<bool>(id)
-                .ok()
-                .flatten()
-                .copied()
-                .unwrap_or(false)
-        };
-        let step = match name {
-            "env" => Step::Env,
-            "hooks" => Step::Hooks {
-                install: !flag("no_install"),
-            },
-            "platforms" => Step::Platforms(
-                opentide_schema::platforms::IDS
-                    .into_iter()
-                    .filter(|id| flag(id))
-                    .map(str::to_owned)
-                    .collect(),
-            ),
-            "repo" => Step::Repo(RepoOptions {
-                name: text("name"),
-                org: text("org"),
-                description: text("description"),
-                platforms: args
-                    .get_many::<crate::tree::Platform>("platform")
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|platform| platform.to_possible_value())
-                    .map(|value| value.get_name().to_owned())
-                    .collect(),
-            }),
-            "vscode" => Step::Vscode(crate::commands::setup::vscode::Options {
-                generate: !flag("no_generate"),
-                merge: !flag("no_merge"),
-                mcp: flag("mcp"),
-                ..crate::commands::setup::vscode::Options::from_flags(
-                    flag("settings"),
-                    flag("snippets"),
-                )
-            }),
-            _ => Step::Mcp(
-                [
-                    ("vscode", "vscode"),
-                    ("cursor", "cursor"),
-                    ("claude_code", "claude-code"),
-                    ("generic", "generic"),
-                ]
-                .into_iter()
-                .filter(|(id, _)| flag(id))
-                .map(|(_, value)| value.to_owned())
-                .collect(),
-            ),
         };
         let cwd = self.host.cwd.clone().unwrap_or_default();
         subcommand(
             &step,
             &paths,
-            flag("yes") || group.get_flag("yes"),
-            flag("plan") || group.get_flag("plan"),
+            confirm.yes || args.yes,
+            confirm.plan || args.plan,
             &self.setup_context(&cwd),
         )
     }
 
     /// `opentide setup skills` without a subcommand: the install.
-    fn setup_skills(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
-        use crate::commands::setup::run::{Paths, SkillsArgs, skills};
-        use crate::commands::setup::skills::{Options, Target};
-        let Some((_, group)) = matches.subcommand() else {
-            return crate::commands::Report::error("setup", "no setup command");
-        };
-        let Some((_, args)) = group.subcommand() else {
-            return crate::commands::Report::error("setup", "no setup command");
-        };
-        let given = |matches: &clap::ArgMatches, id: &str| {
-            matches.value_source(id) == Some(ValueSource::CommandLine)
-        };
-        let text = |id: &str| args.get_one::<String>(id).cloned();
-        let flag = |id: &str| args.get_flag(id);
+    fn setup_skills(
+        &self,
+        args: &SetupArgs,
+        skills: &crate::tree::SetupSkillsArgs,
+        group: &clap::ArgMatches,
+    ) -> crate::commands::Report {
+        use crate::commands::setup::run::{Paths, SkillsArgs, skills as install};
+        let own = group.subcommand().map(|(_, own)| own);
         let paths = Paths {
-            own: given(args, "path").then(|| text("path")).flatten(),
-            group: given(group, "path")
-                .then(|| group.get_one::<String>("path").cloned())
-                .flatten(),
+            own: own
+                .is_some_and(|own| given(own, "path"))
+                .then(|| skills.path.clone()),
+            group: given(group, "path").then(|| args.path.clone()),
             both: false,
             group_only: self.setup_group_only(group),
         };
-        let targets = [
-            ("cursor", Target::Cursor),
-            ("claude_code", Target::ClaudeCode),
-            ("generic", Target::Generic),
-            ("github_copilot", Target::GithubCopilot),
-        ]
-        .into_iter()
-        .filter(|(id, _)| flag(id))
-        .map(|(_, target)| target)
-        .collect();
         let parsed = SkillsArgs {
-            options: Options {
-                targets,
-                slugs: args
-                    .get_many::<String>("install")
-                    .map(|values| values.cloned().collect())
-                    .unwrap_or_default(),
-                all: flag("all_skills"),
-                name: text("name"),
-                org: text("org"),
-                description: text("description"),
-                plugin: flag("plugin"),
-            },
-            yes: flag("yes") || group.get_flag("yes"),
-            plan: flag("plan") || group.get_flag("plan"),
+            options: skills.into(),
+            yes: skills.yes || args.yes,
+            plan: skills.plan || args.plan,
         };
         let cwd = self.host.cwd.clone().unwrap_or_default();
-        skills(&parsed, &paths, &self.setup_context(&cwd))
-    }
-
-    /// `opentide setup` without a subcommand.
-    fn setup_group(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
-        use crate::commands::setup::files::RepoOptions;
-        use crate::commands::setup::run::{GroupArgs, group};
-        use clap::ValueEnum;
-        let args = leaf(matches);
-        let flag = |id: &str| args.get_flag(id);
-        let text = |id: &str| args.get_one::<String>(id).cloned();
-        let names = |values: Vec<Option<clap::builder::PossibleValue>>| -> Vec<String> {
-            let mut out: Vec<String> = Vec::new();
-            for value in values.into_iter().flatten() {
-                let name = value.get_name().to_owned();
-                if !out.contains(&name) {
-                    out.push(name);
-                }
-            }
-            out
-        };
-        let parsed = GroupArgs {
-            path: text("path").unwrap_or_else(|| ".".to_owned()),
-            repo: RepoOptions {
-                name: text("name"),
-                org: text("org"),
-                description: text("description"),
-                platforms: args
-                    .get_many::<crate::tree::Platform>("platform")
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|platform| platform.to_possible_value())
-                    .map(|value| value.get_name().to_owned())
-                    .collect(),
-            },
-            ci: args
-                .get_one::<crate::tree::Ci>("ci")
-                .and_then(|ci| ci.to_possible_value())
-                .map(|value| value.get_name().to_owned()),
-            pipeline: None,
-            staging: !flag("no_staging"),
-            inflight: !flag("no_inflight"),
-            sharing: flag("sharing"),
-            lint_changed: flag("lint_changed"),
-            explorer_pages: flag("explorer_pages"),
-            promotion: if flag("promotion") {
-                Some(true)
-            } else if flag("no_promotion") {
-                Some(false)
-            } else {
-                None
-            },
-            promotion_target: text("promotion_target"),
-            python_version: text("python_version").unwrap_or_else(|| "3.12".to_owned()),
-            default_branch: text("default_branch"),
-            vscode_setup: flag("vscode_setup"),
-            mcp: names(
-                args.get_many::<crate::tree::Mcp>("mcp")
-                    .into_iter()
-                    .flatten()
-                    .map(ValueEnum::to_possible_value)
-                    .collect(),
-            ),
-            skills: names(
-                args.get_many::<crate::tree::Skills>("skills")
-                    .into_iter()
-                    .flatten()
-                    .map(ValueEnum::to_possible_value)
-                    .collect(),
-            ),
-            plugin: flag("plugin"),
-            hooks: flag("hooks"),
-            env: flag("env"),
-            plan: flag("plan"),
-            yes: flag("yes"),
-        };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
-        group(&parsed, &self.setup_context(&cwd))
+        install(&parsed, &paths, &self.setup_context(&cwd))
     }
 
     /// `opentide info`, from its parsed arguments.
@@ -2226,12 +2092,14 @@ impl Run<'_> {
     fn setup_skills_catalogue(
         &self,
         matches: &clap::ArgMatches,
-        path: &str,
+        group: &clap::ArgMatches,
+        skills_command: SkillsCommand<'_>,
     ) -> crate::commands::Report {
         use crate::commands::skills;
         let cwd = self.host.cwd.clone().unwrap_or_default();
-        let given = |matches: &clap::ArgMatches, id: &str| {
-            matches.value_source(id) == Some(ValueSource::CommandLine)
+        let path = match skills_command {
+            SkillsCommand::Discover(_) => "setup skills discover",
+            SkillsCommand::Show(_) => "setup skills show",
         };
         // The groups' own options, which the subcommand would ignore, and
         // their paths, which it takes (`_hand_down`, `_group_path`).
@@ -2287,7 +2155,11 @@ impl Run<'_> {
             current = sub;
             command = group;
         }
-        let leaf = leaf(matches);
+        // `setup skills`' own matches, then the subcommand's.
+        let leaf = group
+            .subcommand()
+            .and_then(|(_, skills)| skills.subcommand())
+            .map(|(_, leaf)| leaf);
         let usage = |message: String| {
             let mut failure = crate::envelope::Failure::new(code::USAGE_INVALID_VALUE, message);
             failure.argument = None;
@@ -2297,37 +2169,38 @@ impl Run<'_> {
             return usage(refusal);
         }
         let mut warnings = Vec::new();
-        let own = if path == "setup skills discover" {
-            let flag = given(leaf, "path_flag");
-            let positional = given(leaf, "path");
-            if flag && positional {
-                return usage(
-                    "Pass the repository path once: use --path/-C or the positional PATH, not both."
-                        .to_owned(),
-                );
-            }
-            if positional {
-                let value = leaf.get_one::<String>("path").cloned().unwrap_or_default();
-                let legacy = format!("positional PATH (opentide setup skills discover {value})");
-                if self.mode == Mode::Json {
-                    tracing::warn!(
-                        legacy = legacy.as_str(),
-                        use_instead = "--path/-C",
-                        "cli_command_deprecated"
+        let leaf_given = |id: &str| leaf.is_some_and(|leaf| given(leaf, id));
+        let own = match skills_command {
+            SkillsCommand::Discover(discover) => {
+                let flag = leaf_given("path_flag");
+                let positional = leaf_given("path");
+                if flag && positional {
+                    return usage(
+                        "Pass the repository path once: use --path/-C or the positional PATH, not both."
+                            .to_owned(),
                     );
-                } else {
-                    warnings.push(format!("{legacy} is deprecated; use --path/-C"));
                 }
-                Some(value)
-            } else if flag {
-                leaf.get_one::<String>("path_flag").cloned()
-            } else {
-                None
+                if positional {
+                    let value = discover.path.clone();
+                    let legacy =
+                        format!("positional PATH (opentide setup skills discover {value})");
+                    if self.mode == Mode::Json {
+                        tracing::warn!(
+                            legacy = legacy.as_str(),
+                            use_instead = "--path/-C",
+                            "cli_command_deprecated"
+                        );
+                    } else {
+                        warnings.push(format!("{legacy} is deprecated; use --path/-C"));
+                    }
+                    Some(value)
+                } else if flag {
+                    Some(discover.path_flag.clone())
+                } else {
+                    None
+                }
             }
-        } else {
-            given(leaf, "path")
-                .then(|| leaf.get_one::<String>("path").cloned())
-                .flatten()
+            SkillsCommand::Show(show) => leaf_given("path").then(|| show.path.clone()),
         };
         let setup_path = |given: &str| -> std::path::PathBuf {
             let candidate = std::path::Path::new(given);
@@ -2362,29 +2235,40 @@ impl Run<'_> {
             proxy: self.globals.proxy.as_deref(),
             interrupted: &interrupted,
         };
-        let mut report = if path == "setup skills discover" {
-            skills::discover(
+        let mut report = match skills_command {
+            SkillsCommand::Discover(discover) => skills::discover(
                 &skills::DiscoverArgs {
                     repo,
-                    query: leaf.get_one::<String>("query").cloned(),
-                    installed_only: leaf.get_flag("installed"),
-                    refresh: leaf.get_flag("refresh"),
+                    query: discover.query.clone(),
+                    installed_only: discover.installed,
+                    refresh: discover.refresh,
                 },
                 network,
                 self.stdout_width(),
-            )
-        } else {
-            skills::show(
-                &leaf.get_one::<String>("name").cloned().unwrap_or_default(),
+            ),
+            SkillsCommand::Show(show) => skills::show(
+                &show.name,
                 &repo,
-                leaf.get_flag("refresh"),
+                show.refresh,
                 network,
                 self.mode == Mode::Json,
-            )
+            ),
         };
         report.warnings.splice(0..0, warnings);
         report
     }
+}
+
+/// Whether `id` was typed on the command line, not defaulted.
+fn given(matches: &clap::ArgMatches, id: &str) -> bool {
+    matches.value_source(id) == Some(ValueSource::CommandLine)
+}
+
+/// The subcommands of `setup skills` that read the catalogue.
+#[derive(Clone, Copy)]
+enum SkillsCommand<'a> {
+    Discover(&'a crate::tree::SetupSkillsDiscoverArgs),
+    Show(&'a crate::tree::SetupSkillsShowArgs),
 }
 
 /// The matches of the subcommand `matches` ran.
