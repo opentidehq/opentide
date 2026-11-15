@@ -1,0 +1,89 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-push/promote-push
+---
+args: opentide --json deploy --platform splunk --strategy RELEASE
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "upsert",
+      "name": "Splunk create rule",
+      "platform": "splunk",
+      "status": "STAGING",
+      "tenant": null,
+      "uuid": "00000000-0000-4000-8047-000000000041"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [
+    "splunk"
+  ],
+  "dry_run": false,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Deployed 1 rule to 0 tenants · 1 created or updated · 0 failed, 0 not attempted · <SECONDS>",
+  "next_actions": [],
+  "ok": true,
+  "plan": {
+    "splunk": [
+      "00000000-0000-4000-8047-000000000041"
+    ]
+  },
+  "results": [
+    {
+      "action": "upsert",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000041",
+      "name": "Splunk create rule",
+      "platform": "splunk",
+      "reason": null,
+      "seconds": null,
+      "status": "deployed",
+      "tenant": null
+    }
+  ],
+  "schema_version": 1,
+  "status": "completed",
+  "strategies": [
+    "RELEASE"
+  ],
+  "summary": {
+    "create": 0,
+    "delete": 0,
+    "disable": 0,
+    "failed": 0,
+    "not_attempted": 0,
+    "platforms": 1,
+    "seconds": 0.0,
+    "skipped": 0,
+    "tenants": 0,
+    "update": 0,
+    "upsert": 1
+  }
+}
+
+━━━ stderr · empty
+
+━━━ ws/objects/rules/splunk-a-create.yaml · modified 0644
+name: Splunk create rule
+metadata:
+  uuid: 00000000-0000-4000-8047-000000000041
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A changed rule the splunk stand-in tenant receives in a deploy that sends.
+response:
+  alert_severity: High
+configurations:
+  splunk:
+    status: PRODUCTION
+    query: index=main EventCode=4688
+    scheduling:
+      schedule:
+        cron: "0 * * * *"

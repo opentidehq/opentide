@@ -1,0 +1,77 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup/json/skills-merge/skills-plan
+---
+args: opentide --json setup --skills claude-code --plan
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Plan: 6 files to write (4 new, 2 changed), 1 to remove · nothing written",
+  "next_actions": [],
+  "ok": true,
+  "path": "<WS>",
+  "plan": true,
+  "schema_version": 1,
+  "status": "completed",
+  "steps": [
+    {
+      "files": [
+        {
+          "action": "merge",
+          "path": ".agents/skills/detection-engineering/SKILL.md"
+        },
+        {
+          "action": "create",
+          "path": ".agents/skills/detection-engineering/references/kql.md"
+        },
+        {
+          "action": "create",
+          "path": ".agents/skills/opentide-detection-rule/SKILL.md"
+        },
+        {
+          "action": "merge",
+          "path": ".claude/skills/detection-engineering/SKILL.md"
+        },
+        {
+          "action": "create",
+          "path": ".claude/skills/detection-engineering/references/kql.md"
+        },
+        {
+          "action": "create",
+          "path": ".claude/skills/opentide-detection-rule/SKILL.md"
+        },
+        {
+          "action": "delete",
+          "path": ".agents/skills/detection-engineering/references/old.md"
+        },
+        {
+          "action": "skip",
+          "path": "CLAUDE.md"
+        }
+      ],
+      "step": "skills",
+      "warnings": [
+        "Left CLAUDE.md unchanged because the file already exists; point it at .agents/skills/ by hand, or delete it and re-run to write opentide's template.",
+        "Kept 1 file(s) in .claude/skills/detection-engineering that the skill does not ship (NOTES.md); delete them by hand if they are left over from an older version."
+      ]
+    }
+  ],
+  "summary": {
+    "create": 4,
+    "delete": 1,
+    "merge": 2,
+    "skip": 1,
+    "steps": 1
+  },
+  "warnings": [
+    "Left CLAUDE.md unchanged because the file already exists; point it at .agents/skills/ by hand, or delete it and re-run to write opentide's template.",
+    "Kept 1 file(s) in .claude/skills/detection-engineering that the skill does not ship (NOTES.md); delete them by hand if they are left over from an older version."
+  ]
+}
+
+━━━ stderr · empty

@@ -1,142 +1,15 @@
-//! Generated JSON documents: keys in the order they are built in (a schema
-//! reads in that order), written by `serde_json`'s pretty printer at four
-//! spaces with a final newline, every character as UTF-8.
-//!
-//! The workspace's `serde_json` keeps object keys sorted (`preserve_order`
-//! is off: ADR 0001), so a generated document is a [`Json`], whose objects
-//! are `IndexMap`s.
+//! Generated JSON documents: [`opentide_core::json::Json`], whose objects keep
+//! their keys in the order they are built in (a schema reads in that order),
+//! written as a file by serde_json's pretty printer.
 
-use indexmap::IndexMap;
-use serde::Serialize;
-use serde_json::ser::PrettyFormatter;
+pub use opentide_core::json::{Json, Object};
 
-/// An object: keys in insertion order.
-pub type Object = IndexMap<String, Json>;
-
-/// A JSON value whose objects keep their keys in insertion order.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(untagged)]
-pub enum Json {
-    /// `null`.
-    Null,
-    /// `true` or `false`.
-    Bool(bool),
-    /// A number, as `serde_json` writes it.
-    Number(serde_json::Number),
-    /// A string.
-    String(String),
-    /// An array.
-    Array(Vec<Json>),
-    /// An object.
-    Object(Object),
-}
-
-impl Json {
-    /// An empty object.
-    pub fn object() -> Self {
-        Self::Object(Object::new())
-    }
-
-    /// The object, if this is one.
-    pub fn as_object(&self) -> Option<&Object> {
-        match self {
-            Self::Object(map) => Some(map),
-            _ => None,
-        }
-    }
-
-    /// The object, mutably, if this is one.
-    pub fn as_object_mut(&mut self) -> Option<&mut Object> {
-        match self {
-            Self::Object(map) => Some(map),
-            _ => None,
-        }
-    }
-
-    /// The string, if this is one.
-    pub fn as_str(&self) -> Option<&str> {
-        match self {
-            Self::String(text) => Some(text),
-            _ => None,
-        }
-    }
-
-    /// The array, if this is one.
-    pub fn as_array(&self) -> Option<&Vec<Json>> {
-        match self {
-            Self::Array(items) => Some(items),
-            _ => None,
-        }
-    }
-
-    /// The value at `key`, if this is an object that holds it.
-    pub fn get(&self, key: &str) -> Option<&Json> {
-        self.as_object().and_then(|map| map.get(key))
-    }
-
-    /// The document as a file: four-space indentation and a final newline.
-    pub fn to_text(&self) -> String {
-        let mut out = Vec::new();
-        let mut serializer =
-            serde_json::Serializer::with_formatter(&mut out, PrettyFormatter::with_indent(b"    "));
-        // Writing into a Vec cannot fail, and a Json holds no map with
-        // non-string keys.
-        if self.serialize(&mut serializer).is_err() {
-            return String::new();
-        }
-        out.push(b'\n');
-        // serde_json writes UTF-8.
-        String::from_utf8(out).unwrap_or_default()
-    }
-}
-
-impl From<&str> for Json {
-    fn from(value: &str) -> Self {
-        Self::String(value.to_owned())
-    }
-}
-
-impl From<String> for Json {
-    fn from(value: String) -> Self {
-        Self::String(value)
-    }
-}
-
-impl From<bool> for Json {
-    fn from(value: bool) -> Self {
-        Self::Bool(value)
-    }
-}
-
-impl From<Vec<Json>> for Json {
-    fn from(value: Vec<Json>) -> Self {
-        Self::Array(value)
-    }
-}
-
-impl From<Object> for Json {
-    fn from(value: Object) -> Self {
-        Self::Object(value)
-    }
-}
-
-impl From<&serde_json::Value> for Json {
-    /// A `serde_json` value, its object keys in the order it holds them
-    /// (sorted, in this workspace).
-    fn from(value: &serde_json::Value) -> Self {
-        match value {
-            serde_json::Value::Null => Self::Null,
-            serde_json::Value::Bool(flag) => Self::Bool(*flag),
-            serde_json::Value::Number(number) => Self::Number(number.clone()),
-            serde_json::Value::String(text) => Self::String(text.clone()),
-            serde_json::Value::Array(items) => Self::Array(items.iter().map(Self::from).collect()),
-            serde_json::Value::Object(map) => Self::Object(
-                map.iter()
-                    .map(|(key, value)| (key.clone(), Self::from(value)))
-                    .collect(),
-            ),
-        }
-    }
+/// `document` as a file: four-space indentation, every character as UTF-8,
+/// and a final newline.
+pub fn to_text(document: &Json) -> String {
+    let mut text = document.to_pretty(4);
+    text.push('\n');
+    text
 }
 
 #[cfg(test)]
@@ -144,19 +17,14 @@ mod tests {
     use super::*;
 
     fn object(entries: &[(&str, Json)]) -> Json {
-        Json::Object(
-            entries
-                .iter()
-                .map(|(key, value)| ((*key).to_owned(), value.clone()))
-                .collect(),
-        )
+        Json::object(entries.iter().map(|(key, value)| (*key, value.clone())))
     }
 
     #[test]
     fn keys_keep_their_insertion_order() {
         let document = object(&[("b", Json::from("1")), ("a", Json::from(true))]);
         assert_eq!(
-            document.to_text(),
+            to_text(&document),
             "{\n    \"b\": \"1\",\n    \"a\": true\n}\n"
         );
     }
@@ -168,19 +36,34 @@ mod tests {
                 "list",
                 Json::Array(vec![Json::from("x"), Json::Array(Vec::new())]),
             ),
-            ("empty", Json::object()),
+            ("empty", Json::Object(Object::new())),
             ("null", Json::Null),
-            ("number", Json::Number(3.into())),
+            ("number", Json::Int(3)),
         ]);
         assert_eq!(
-            document.to_text(),
+            to_text(&document),
             "{\n    \"list\": [\n        \"x\",\n        []\n    ],\n    \"empty\": {},\n    \"null\": null,\n    \"number\": 3\n}\n"
         );
     }
 
     #[test]
     fn non_ascii_stays_utf8() {
-        let text = Json::from("é — 😀\n\"\\\u{1}").to_text();
+        let text = to_text(&Json::from("é — 😀\n\"\\\u{1}"));
         assert_eq!(text, "\"é — 😀\\n\\\"\\\\\\u0001\"\n");
+    }
+
+    #[test]
+    fn a_schema_writes_the_bytes_serde_json_writes() {
+        // A generated schema starts as serde_json's Value (schemars): read
+        // into the ordered tree, it is written byte for byte as serde_json's
+        // own pretty printer writes it at four spaces.
+        let text = r#"{"a":{"minItems":2,"maximum":1.5,"big":18446744073709551615},"b":["x",null,true,-1],"c":"é"}"#;
+        let value: serde_json::Value = serde_json::from_str(text).unwrap();
+        let mut reference = Vec::new();
+        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+        let mut serializer = serde_json::Serializer::with_formatter(&mut reference, formatter);
+        serde::Serialize::serialize(&value, &mut serializer).unwrap();
+        reference.push(b'\n');
+        assert_eq!(to_text(&Json::from(&value)).into_bytes(), reference);
     }
 }

@@ -253,7 +253,7 @@ pub fn plain_text(markdown: &str, one_line: bool) -> String {
 }
 
 fn annotate_description(node: &mut Object) {
-    let Some(Json::String(description)) = node.get("description").cloned() else {
+    let Some(Json::Str(description)) = node.get("description").cloned() else {
         return;
     };
     if !node.contains_key("markdownDescription") && is_match(&patterns().markdown, &description) {
@@ -297,8 +297,8 @@ fn annotate_enum(node: &mut Object) {
 /// its JSON.
 fn item_text(item: &Json) -> String {
     match item {
-        Json::String(text) => text.clone(),
-        other => other.to_text().trim_end().to_owned(),
+        Json::Str(text) => text.clone(),
+        other => other.to_pretty(4),
     }
 }
 
@@ -329,9 +329,9 @@ pub fn annotate_editor_schema(schema: &mut Json) {
     if let Json::Object(root) = schema {
         root.entry("$comment".to_owned())
             .or_insert_with(|| Json::from(SCHEMA_COMMENT));
-        if !matches!(root.get("description"), Some(Json::String(_))) {
+        if !matches!(root.get("description"), Some(Json::Str(_))) {
             let subject = match root.get("title") {
-                Some(Json::String(title)) if !title.is_empty() => format!("{title}, generated"),
+                Some(Json::Str(title)) if !title.is_empty() => format!("{title}, generated"),
                 _ => "Generated".to_owned(),
             };
             root.insert(
@@ -506,7 +506,7 @@ mod tests {
 
     #[test]
     fn descriptions_and_enums_are_annotated() {
-        let mut schema = Json::object();
+        let mut schema = Json::Object(Object::new());
         let root = schema.as_object_mut().into_iter().next();
         if let Some(root) = root {
             root.insert("title".to_owned(), Json::from("Router"));

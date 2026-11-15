@@ -1,0 +1,11 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup/plain/none/prompt
+---
+args: opentide setup
+exit: 2
+
+━━━ stdout · empty
+
+━━━ stderr
+error: Interactive setup requires a terminal. Run 'opentide setup' with --yes and explicit flags (--platform, --ci).
