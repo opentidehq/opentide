@@ -663,6 +663,10 @@ fn non_printable(source: &str) -> Option<(char, Mark)> {
 }
 
 impl Builder {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the node builder's single pass over the parsed document, kept whole; split when next touched"
+    )]
     fn run(mut self, source: &str) -> Result<Option<Arc<Node>>, LoadError> {
         if let Some((character, mark)) = non_printable(source) {
             return Err(LoadError::at(
