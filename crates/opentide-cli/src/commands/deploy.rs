@@ -141,7 +141,8 @@ impl DryRun {
     }
 
     /// The JSON document, `duration_ms` as given: the command's keys, then
-    /// `ok`, `status`, `message`, `warnings`, then `error` when the run
+    /// `ok`, `status`, `message`, `warnings` (the run's, with the command's
+    /// own merged in by `put_warnings`), then `error` when the run
     /// exits non-zero and its keys hold none, then the envelope's keys.
     pub fn document(&self, duration_ms: i64) -> Json {
         let had_error = self.outcome.data.iter().any(|(key, _)| key == "error");
