@@ -253,22 +253,29 @@ fn value_atom(p: &mut Parser<'_>) -> CompletedMarker {
 fn after_field(p: &mut Parser<'_>, field: CompletedMarker) {
     let next = p.current();
     if COMPARISONS.contains(next) {
+        let field = wrap_field(p, field);
         let m = field.precede(p);
         p.bump();
         if VALUE.contains(p.current()) && boolean(p).is_none() {
+            let rhs = p.start();
             value_atom(p);
+            rhs.complete(p, K::FIELD_VALUE_RHS.raw());
         } else if at(p, K::L_PAREN) {
+            let rhs = p.start();
             value_list(p);
+            rhs.complete(p, K::FIELD_VALUE_RHS.raw());
         } else {
             p.error("missing the value of the comparison");
         }
         m.complete(p, K::FIELD_VALUE.raw());
     } else if LOOSE.contains(next) {
+        let field = wrap_field(p, field);
         let m = field.precede(p);
         p.bump();
         optional_value(p);
         m.complete(p, K::FIELD_VALUE.raw());
     } else if at_name(p, "IN") && p.nth(1) == K::L_PAREN.raw() {
+        let field = wrap_field(p, field);
         let m = field.precede(p);
         p.bump_as(K::IN_KW.raw());
         value_list(p);
@@ -276,10 +283,17 @@ fn after_field(p: &mut Parser<'_>, field: CompletedMarker) {
     }
 }
 
+/// The word that is compared, as a `FIELD_REF`.
+fn wrap_field(p: &mut Parser<'_>, field: CompletedMarker) -> CompletedMarker {
+    field.precede(p).complete(p, K::FIELD_REF.raw())
+}
+
 /// A loose comparison's value, if there is one.
 fn optional_value(p: &mut Parser<'_>) {
     if VALUE.contains(p.current()) && boolean(p).is_none() {
+        let rhs = p.start();
         value_atom(p);
+        rhs.complete(p, K::FIELD_VALUE_RHS.raw());
     }
 }
 

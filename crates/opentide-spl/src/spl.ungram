@@ -105,10 +105,15 @@ FieldValue =
   value:FieldValueRhs?
 
 // A field compared in a search: a name, a quoted name, or any other run of
-// non-breaking characters (`alert.attack-time`, `{}.Id`).
-FieldRef = Identifier | Str | SearchWord
+// non-breaking characters (`alert.attack-time`, `{}.Id`). Wrapped in a node
+// of its own so the field and the value tell apart where both are words.
+FieldRef = FieldTarget
 
-FieldValueRhs = Value | ValueList
+FieldTarget = Identifier | Str | SearchWord
+
+FieldValueRhs = FieldValueRhsItem
+
+FieldValueRhsItem = Value | ValueList
 
 Subsearch = '[' Pipeline ']'
 
@@ -131,23 +136,23 @@ StatsCommand =
 
 OverClause = 'over' (Identifier | Glob | Str | PrefixClause | MacroCall | Subsearch) CommandOption*
 
-ChartWhere =
-  'where' field:AggFunction
-  operator:('in' | 'notin' | '=' | '!=' | '<' | '>' | '<=' | '>=')
-  value:ChartValue
+// where count in top5, where count > 10: a name or call, the operator, a name or number.
+ChartWhere = 'where' (FunctionCall | Identifier | Number | 'in' | 'notin' | '=' | '!=' | '<' | '>' | '<=' | '>=')*
 
 ChartValue = Identifier | Number
 
 ByClause = 'by' (Identifier | Glob | Str | PrefixClause | MacroCall | Subsearch | CommandOption | ',')*
 
-// `count`, `dc(src) as c`, `values(*) as *`.
-AggregateItem = function:AggFunction ('as' alias:AliasName)?
+// `count`, `dc(src) as c`, `values(*) as *`: the function or name, then the
+// alias after `as`.
+AggregateItem = (FunctionCall | Identifier | Glob | Str | 'as')*
 
 AggFunction = FunctionCall | Identifier
 
 AliasName = Identifier | Glob | Str
 
-FunctionCall = name:Identifier '(' (Expr | PrefixClause | Glob | Str | Number | ',')* ')'
+// The first child is the name; the rest are the arguments.
+FunctionCall = (Expr | PrefixClause | Glob | '(' | ')' | ',')*
 
 RexCommand = 'rex' (CommandOption | 'field' | ',' | Str)*
 
@@ -157,7 +162,7 @@ FieldName = Identifier | Glob | Str | MacroCall
 
 RenameCommand = 'rename' (RenameItem | ',')*
 
-RenameItem = old:RenameOld ','? 'as' new:AliasName
+RenameItem = (Identifier | Glob | Str | FunctionCall | ',' | 'as')*
 
 RenameOld = Identifier | Glob | Str | FunctionCall
 
@@ -238,15 +243,15 @@ Expr = BinExpr | UnaryExpr | ParenExpr | FunctionCall | MacroCall | Subsearch | 
 
 // `or`, `and`, comparisons, `IN (...)`, `+ - .`, `* / %`, by precedence. A run
 // of one level is one node: `a or b or c` is three operands and two `or`s.
-BinExpr = (Expr | ValueList | 'or' | 'and' | '==' | '!=' | '<' | '>' | '<=' | '>=' | '=' | 'LIKE' | 'IN' | '+' | '-' | '.' | '*' | '/' | '%')*
+BinExpr = (Expr | ValueList | 'or' | 'and' | '==' | '!=' | '<' | '>' | '<=' | '>=' | '=' | 'LIKE' | 'like' | 'IN' | '+' | '-' | '.' | '*' | '/' | '%')*
 
-UnaryExpr = operator:('NOT' | '!' | '-' | '+') Expr
+UnaryExpr = operator:('NOT' | 'not' | '!' | '-' | '+') Expr
 
 ParenExpr = '(' Expr ')'
 
 // ---- Leaves --------------------------------------------------------------
 
-Identifier = 'ident' | 'field_word' | 'dynamic_name' | 'token_name' | 'template_name' | 'prefix_field'
+Identifier = 'ident' | 'bool' | 'field_word' | 'dynamic_name' | 'token_name' | 'template_name' | 'prefix_field'
 
 Number = 'number'
 
@@ -256,6 +261,6 @@ Boolean = 'bool'
 
 Glob = 'glob'
 
-SearchWord = 'search_word' | 'call_word'
+SearchWord = 'search_word' | 'call_word' | 'field_word'
 
 MacroCall = 'macro'

@@ -7,11 +7,13 @@ SOURCE_FILE@0..28
   PIPELINE@0..28
     BARE_SEARCH@0..28
       FIELD_VALUE@0..10
-        IDENTIFIER@0..5
-          IDENT@0..5 "index"
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
         EQ@5..6 "="
-        IDENTIFIER@6..10
-          IDENT@6..10 "main"
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
       WHITESPACE@10..11 " "
       TERM_CLAUSE@11..28
         TERM_KW@11..15 "TERM"

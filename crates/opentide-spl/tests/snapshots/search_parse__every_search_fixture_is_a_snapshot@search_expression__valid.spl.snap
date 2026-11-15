@@ -7,46 +7,55 @@ SOURCE_FILE@0..104
   PIPELINE@0..104
     BARE_SEARCH@0..104
       FIELD_VALUE@0..10
-        IDENTIFIER@0..5
-          IDENT@0..5 "index"
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
         EQ@5..6 "="
-        IDENTIFIER@6..10
-          IDENT@6..10 "main"
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
       WHITESPACE@10..11 " "
       SEARCH_GROUP@11..45
         L_PAREN@11..12 "("
         SEARCH_EXPRESSION@12..44
           FIELD_VALUE@12..26
-            IDENTIFIER@12..21
-              IDENT@12..21 "EventCode"
+            FIELD_REF@12..21
+              IDENTIFIER@12..21
+                IDENT@12..21 "EventCode"
             EQ@21..22 "="
-            NUMBER@22..26
-              NUMBER_TOKEN@22..26 "4624"
+            FIELD_VALUE_RHS@22..26
+              NUMBER@22..26
+                NUMBER_TOKEN@22..26 "4624"
           WHITESPACE@26..27 " "
           SEARCH_BOOLEAN@27..29
             OR_KW@27..29 "OR"
           WHITESPACE@29..30 " "
           FIELD_VALUE@30..44
-            IDENTIFIER@30..39
-              IDENT@30..39 "EventCode"
+            FIELD_REF@30..39
+              IDENTIFIER@30..39
+                IDENT@30..39 "EventCode"
             EQ@39..40 "="
-            NUMBER@40..44
-              NUMBER_TOKEN@40..44 "4625"
+            FIELD_VALUE_RHS@40..44
+              NUMBER@40..44
+                NUMBER_TOKEN@40..44 "4625"
         R_PAREN@44..45 ")"
       WHITESPACE@45..46 " "
       SEARCH_BOOLEAN@46..49
         NOT_KW@46..49 "NOT"
       WHITESPACE@49..50 " "
       FIELD_VALUE@50..61
-        IDENTIFIER@50..54
-          IDENT@50..54 "user"
+        FIELD_REF@50..54
+          IDENTIFIER@50..54
+            IDENT@50..54 "user"
         EQ@54..55 "="
-        IDENTIFIER@55..61
-          IDENT@55..61 "SYSTEM"
+        FIELD_VALUE_RHS@55..61
+          IDENTIFIER@55..61
+            IDENT@55..61 "SYSTEM"
       WHITESPACE@61..62 " "
       IN_CLAUSE@62..78
-        IDENTIFIER@62..65
-          IDENT@62..65 "app"
+        FIELD_REF@62..65
+          IDENTIFIER@62..65
+            IDENT@62..65 "app"
         WHITESPACE@65..66 " "
         IN_KW@66..68 "IN"
         WHITESPACE@68..69 " "
@@ -60,16 +69,20 @@ SOURCE_FILE@0..104
           R_PAREN@77..78 ")"
       WHITESPACE@78..79 " "
       FIELD_VALUE@79..93
-        IDENTIFIER@79..87
-          IDENT@79..87 "earliest"
+        FIELD_REF@79..87
+          IDENTIFIER@79..87
+            IDENT@79..87 "earliest"
         EQ@87..88 "="
-        SEARCH_WORD@88..93
-          SEARCH_WORD_TOKEN@88..93 "-1h@h"
+        FIELD_VALUE_RHS@88..93
+          SEARCH_WORD@88..93
+            SEARCH_WORD_TOKEN@88..93 "-1h@h"
       WHITESPACE@93..94 " "
       FIELD_VALUE@94..104
-        IDENTIFIER@94..100
-          IDENT@94..100 "latest"
+        FIELD_REF@94..100
+          IDENTIFIER@94..100
+            IDENT@94..100 "latest"
         EQ@100..101 "="
-        IDENTIFIER@101..104
-          IDENT@101..104 "now"
+        FIELD_VALUE_RHS@101..104
+          IDENTIFIER@101..104
+            IDENT@101..104 "now"
 --
