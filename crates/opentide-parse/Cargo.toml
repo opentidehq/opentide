@@ -13,9 +13,18 @@ readme = "../COMPONENT.md"
 [lints]
 workspace = true
 
+[features]
+# The old-versus-new differential harness; only dev-dependencies enable it.
+differential = ["dep:serde_json"]
+
 [dependencies]
 logos.workspace = true
 rowan.workspace = true
+serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 insta.workspace = true
+
+[[test]]
+name = "differential"
+required-features = ["differential"]

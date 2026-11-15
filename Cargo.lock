@@ -3583,6 +3583,7 @@ dependencies = [
  "insta",
  "logos",
  "rowan",
+ "serde_json",
 ]
 
 [[package]]

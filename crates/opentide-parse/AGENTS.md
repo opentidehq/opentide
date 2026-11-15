@@ -10,6 +10,7 @@ names the few the toolkit needs in a `Grammar`. I/O-free, no `unsafe`, no worksp
 | `input.rs` | `Grammar`, `Lexeme`, `lex` (a logos token source that resumes one character after an error), `Input` (trivia kept, skipped for lookahead) |
 | `parser.rs` | `Parser` (`nth`/`at`/`eat`/`expect`/`bump_as`/`err_*`/`enter`/`exit`), `Marker`/`CompletedMarker::precede`, `Event`, `ErrorKind` |
 | `tree.rs` | `build`: events to a lossless rowan `GreenNode` and `SyntaxError`s, iteratively |
+| `differential.rs` | feature `differential`: the old-versus-new harness (below) |
 | `debug.rs` | `debug_tree`/`debug_errors` for insta snapshots, `describe_expected` for messages |
 
 ## Place
@@ -47,9 +48,28 @@ on no workspace crate, and the query engines (tier 2 and up) build on it. Publis
 - Messages: the language maps `SyntaxError::kind` to its diagnostic codes and renders
   `SyntaxError::expected` with `describe_expected`.
 
+## Differential harness (feature `differential`)
+
+`differential::run(old, new, files, &config)` compares two `Engine`s (`observe` for whole-input
+surfaces, `observe_at` for offset-indexed ones: hover, completions) over each file, its prefixes,
+seeded token mutations (delete, duplicate, swap, insert a sample, duplicate a line, drop a
+bracket, drop a quote) and random sentences. It knows no language: the caller's `Config` carries
+the `verdict` (valid, judged from an observation), the lexer's token ranges and the token samples.
+
+- Gates (`assert_gates`): valid input, zero differences on every surface (`Class::Valid`); broken
+  input, the same verdict (`Class::Verdict`). Message and range changes on broken input
+  (`Class::Broken`) are counted and listed, never failed: review them as snapshot diffs.
+- Every difference is counted; `max_examples` caps only the listed examples per (surface, class).
+- Offsets: every char boundary up to `max_offsets` per input, else an even stride (always with `0`
+  and the end), so the sample is the same on every run. Prefixes are sampled the same way.
+- Deterministic from `Config::seed`. `Report::write_json(path)` writes the report.
+- Only dev-dependencies enable the feature (`opentide-parse = { workspace = true, features =
+  ["differential"] }`): production code never links both engines. The test target needs it, so run
+  `cargo nextest run -p opentide-parse --all-features`.
+
 ## Test
 
 ```bash
-cargo nextest run --profile fast -p opentide-parse
+cargo nextest run --profile fast -p opentide-parse --all-features
 cargo test -p opentide-parse --doc
 ```
