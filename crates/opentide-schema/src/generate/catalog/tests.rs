@@ -207,7 +207,7 @@ fn min_items_falls_back_to_an_alternative() {
     let direct = json!({"type": "array", "minItems": 2, "items": {"type": "string"}});
     assert_eq!(
         row_of(&root, "a.b", &direct, &facts).node["min_items"],
-        Json::Number(2.into())
+        Json::Int(2)
     );
     let nullable = json!({"anyOf": [
         {"type": "null"},
@@ -215,7 +215,7 @@ fn min_items_falls_back_to_an_alternative() {
     ]});
     assert_eq!(
         row_of(&root, "a.b", &nullable, &facts).node["min_items"],
-        Json::Number(1.into())
+        Json::Int(1)
     );
     let none = json!({"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]});
     assert!(
