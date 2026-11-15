@@ -273,6 +273,7 @@ mod tests {
     /// Each clap error kind maps onto the documented `failure.code`, with
     /// the argument at fault and clap's closest suggestion.
     #[test]
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn framework_usage_codes_arguments_and_suggestions() {
         for (line, command, failure_code, argument, suggestion) in [
             (

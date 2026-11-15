@@ -347,6 +347,7 @@ pub fn annotate(diagnostics: &mut [Diagnostic], sources: &mut Sources<'_>, works
     }
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn annotate_one(
     diagnostic: &mut Diagnostic,
     sources: &mut Sources<'_>,

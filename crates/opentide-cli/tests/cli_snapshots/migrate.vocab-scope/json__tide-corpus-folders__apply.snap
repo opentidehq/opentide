@@ -1,13 +1,13 @@
 ---
 source: crates/opentide-cli/tests/common/snapshot.rs
-description: migrate.vocab-scope/json/tide-corpus/default
+description: migrate.vocab-scope/json/tide-corpus-folders/apply
 ---
-args: opentide --json migrate vocab-scope
+args: opentide --json migrate vocab-scope --apply
 exit: 0
 
 ━━━ stdout · json, 1 lines
 {
-  "applied": false,
+  "applied": true,
   "changed_files": [],
   "command": "migrate vocab-scope",
   "duration_ms": 0,
@@ -17,28 +17,32 @@ exit: 0
   "fields": {
     "entities": {
       "blocked": {},
-      "by_status": {},
+      "by_status": {
+        "scoped": 1
+      },
       "rewrites": {},
-      "values": 0,
+      "values": 1,
       "vocab": "signal.entities"
     },
     "surface": {
       "blocked": {},
-      "by_status": {},
+      "by_status": {
+        "scoped": 1
+      },
       "rewrites": {},
-      "values": 0,
+      "values": 1,
       "vocab": "surface"
     }
   },
-  "message": "Would rewrite 0 files · 0 scanned",
+  "message": "Rewrote 0 files · 12 scanned",
   "next_actions": [],
   "ok": true,
-  "scanned": 0,
+  "scanned": 12,
   "schema_version": 1,
   "status": "completed",
   "summary": {
     "files": 0,
-    "scanned": 0
+    "scanned": 12
   }
 }
 

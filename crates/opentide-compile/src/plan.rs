@@ -282,6 +282,7 @@ fn object_uuid(rule: &Json) -> Option<String> {
 }
 
 /// The rule files of `scope`, read with `read`, selected for the run.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn select(
     statuses: &Statuses,
     scope: &Scope,

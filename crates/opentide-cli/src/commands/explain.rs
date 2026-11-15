@@ -104,6 +104,7 @@ enum Part {
 }
 
 /// The page's Markdown as styled, wrapped lines for a terminal.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn render_markdown(markdown: &str, terminal: &Terminal) -> String {
     let mut parts: Vec<Part> = Vec::new();
     let mut current = Text::default();

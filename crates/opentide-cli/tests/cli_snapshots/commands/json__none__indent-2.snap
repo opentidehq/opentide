@@ -5,7 +5,7 @@ description: commands/json/none/indent-2
 args: opentide --json commands
 exit: 0
 
-━━━ stdout · json, 15509 lines
+━━━ stdout · json, 15517 lines
 {
   "$defs": {
     "AttackSkeleton": {
@@ -15238,7 +15238,7 @@ exit: 0
       "deprecated": false,
       "example": "opentide serve",
       "group": false,
-      "help": "Run CLI commands in one warm process, for editors\n\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\ncommand as opentide --json would and answers with its document and exit\ncode, without starting Python and rebuilding the registry each time. The\neditor owns the process: it ends on exit or when stdin closes. stdout\ncarries the protocol only; logs go to stderr.",
+      "help": "Run CLI commands in one warm process, for editors\n\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\ncommand as opentide --json would and answers with its document and exit\ncode, without starting a new process each time; the read-only commands\nkeep the workspace loaded between runs. The editor owns the process: it\nends on exit or when stdin closes. stdout carries the protocol only; logs\ngo to stderr.",
       "name": "serve",
       "options": [],
       "output_schema": null,
@@ -15259,8 +15259,16 @@ exit: 0
       "name": "OPENTIDE_DEBUG"
     },
     {
-      "meaning": "Any value turns colour off, like --no-color",
+      "meaning": "Any non-empty value turns colour off, like --no-color",
       "name": "NO_COLOR"
+    },
+    {
+      "meaning": "0, false, no or off turns colour off; any other value forces it in human and plain output; NO_COLOR and --no-color win",
+      "name": "FORCE_COLOR"
+    },
+    {
+      "meaning": "Any value but 0 forces colour, like FORCE_COLOR=1; FORCE_COLOR wins",
+      "name": "CLICOLOR_FORCE"
     },
     {
       "meaning": "0 for one-line JSON, 2 for indented; default: indented on a terminal",

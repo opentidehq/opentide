@@ -380,12 +380,15 @@ _REMOVED_DEPENDENCIES = (
 _NOT_INSTALLED = ("pandas", "numpy", "openpyxl")
 
 
-def test_bare_wheel_has_no_extras_and_no_vendor_sdks(tmp_path: Path, wheel_cache: Path) -> None:
+def test_bare_wheel_has_only_the_plugins_extra_and_no_vendor_sdks(
+    tmp_path: Path, wheel_cache: Path
+) -> None:
     """A bare install, resolved with uv's default pre-release policy, is the slim package.
 
     uv refuses a transitive pre-release, so a pre-release-only dependency would
-    fail this install outright. The wheel declares no extras, and none of the
-    Python implementation's dependencies are installed (UC-6.2).
+    fail this install outright. The wheel declares one extra, `plugins` (pydantic,
+    for the plugin API), and none of the Python implementation's dependencies,
+    pydantic included, are installed (UC-6.2, #1180).
     """
     uv = shutil.which("uv")
     if uv is None:
@@ -399,13 +402,13 @@ def test_bare_wheel_has_no_extras_and_no_vendor_sdks(tmp_path: Path, wheel_cache
         "print(metadata('opentide').get_all('Provides-Extra') or [])"
     )
     metadata = _run([str(python), "-c", print_extras], timeout=60)
-    assert metadata.stdout.strip() == "[]", metadata.stdout + metadata.stderr
+    assert metadata.stdout.strip() == "['plugins']", metadata.stdout + metadata.stderr
     print_installed = (
         "import importlib.metadata as m; "
         "print(sorted(d.metadata['Name'].lower() for d in m.distributions()))"
     )
     installed = _run([str(python), "-c", print_installed], timeout=60)
-    for gone in (*_REMOVED_DEPENDENCIES, *_NOT_INSTALLED):
+    for gone in (*_REMOVED_DEPENDENCIES, *_NOT_INSTALLED, "pydantic"):
         assert f"'{gone}'" not in installed.stdout, installed.stdout + installed.stderr
 
 

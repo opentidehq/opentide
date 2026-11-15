@@ -421,6 +421,7 @@ pub fn text_matches(oracle: &str, candidate: &str) -> bool {
 /// approved changes of wording (`help-text` entries: the oracle's text and
 /// the candidate's, each a whole description, about text or epilog), and
 /// `used` gets the index of each one that applied.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn mismatches(
     oracle: &Screen,
     candidate: &Screen,

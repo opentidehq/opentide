@@ -1253,6 +1253,7 @@ fn status_strategies(
 
 /// A card per platform file (`_platform_cards`): `rules` are the rule
 /// bodies by UUID, in the catalogue's order.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn platform_cards(resolved: &Node, rules: &[(String, &Node)], env: &Env) -> Vec<PlatformCard> {
     let strategies = status_strategies(resolved.get("deployment").map(AsRef::as_ref));
     let Some(Value::Map(platforms)) = resolved.get("platforms").map(|node| &node.value) else {

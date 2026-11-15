@@ -67,7 +67,9 @@ class Connection:
         Nothing is sent until an operation runs. *environment* replaces the
         process's environment for credentials, CA bundles and proxies;
         *proxy* comes before the environment's; *timeout* is how long, in
-        seconds, a tenant may take to answer a read.
+        seconds, a tenant may take to answer a read (a query or a query
+        check): a deploy waits as long as `opentide deploy` does, whatever
+        *timeout* is.
         """
     @property
     def platform(self, /) -> str:

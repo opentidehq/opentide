@@ -510,6 +510,7 @@ fn text_of(node: Option<&Node>) -> Option<Json> {
 
 /// The workspace's object vocabularies as the registry's index holds them
 /// (`build_object_vocabularies`), in the families' order.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
     let config = &workspace.configuration().resolved.tree;
     let documentation = config.get("documentation");
@@ -874,6 +875,7 @@ fn path_json(path: &Path) -> Json {
 /// `opentide://index`: the registry's index (`Opentide.Index`) as far as it
 /// is the workspace's: its paths, configuration, vocabularies, generated
 /// schemas and templates, objects and the files they came from.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
     let config = &workspace.configuration().resolved.tree;
     let root = workspace.roots().workspace.clone();

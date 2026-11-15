@@ -7,7 +7,7 @@
 //! edge with `…`; in a pipe it is whole. [`columns`] lays rows out as label
 //! and value columns without a header.
 
-use crate::render::text::{Text, char_width};
+use crate::render::text::Text;
 use anstyle::Style;
 
 /// The cells a table cell shows before it is cut with `…`.
@@ -153,88 +153,6 @@ impl Table {
         }
         out
     }
-}
-
-/// A positioned word of a styled line: characters `start..end`, and the
-/// whitespace after it.
-#[derive(Debug)]
-struct Span {
-    start: usize,
-    end: usize,
-    cells: usize,
-    space: usize,
-}
-
-impl textwrap::core::Fragment for Span {
-    #[expect(clippy::cast_precision_loss, reason = "a terminal's columns")]
-    fn width(&self) -> f64 {
-        self.cells as f64
-    }
-
-    #[expect(clippy::cast_precision_loss, reason = "a terminal's columns")]
-    fn whitespace_width(&self) -> f64 {
-        self.space as f64
-    }
-
-    fn penalty_width(&self) -> f64 {
-        0.0
-    }
-}
-
-/// A styled line as a stream `width` cells wide shows it: whole when it
-/// fits, else wrapped at words (first fit), a word wider than the stream cut
-/// into pieces; styles kept.
-pub fn wrap_text(line: &Text, width: usize) -> Vec<Text> {
-    if width == 0 || line.cell_len() <= width {
-        return vec![line.clone()];
-    }
-    let chars: Vec<char> = line.as_plain().chars().collect();
-    let mut spans: Vec<Span> = Vec::new();
-    // Leading whitespace stays with the first word.
-    let mut index = chars.iter().take_while(|c| c.is_whitespace()).count();
-    while index < chars.len() {
-        let start = if spans.is_empty() { 0 } else { index };
-        while index < chars.len() && !chars[index].is_whitespace() {
-            index += 1;
-        }
-        let end = index;
-        while index < chars.len() && chars[index].is_whitespace() {
-            index += 1;
-        }
-        let space: usize = chars[end..index].iter().copied().map(char_width).sum();
-        // Cut a word wider than the stream into stream-wide pieces.
-        let mut piece_start = start;
-        let mut cells = 0;
-        for (at, ch) in chars.iter().enumerate().take(end).skip(start) {
-            let w = char_width(*ch);
-            if cells + w > width && at > piece_start {
-                spans.push(Span {
-                    start: piece_start,
-                    end: at,
-                    cells,
-                    space: 0,
-                });
-                piece_start = at;
-                cells = 0;
-            }
-            cells += w;
-        }
-        spans.push(Span {
-            start: piece_start,
-            end,
-            cells,
-            space,
-        });
-    }
-    if spans.is_empty() {
-        return vec![line.clone()];
-    }
-    #[expect(clippy::cast_precision_loss, reason = "a terminal's columns")]
-    let widths = [width as f64];
-    textwrap::wrap_algorithms::wrap_first_fit(&spans, &widths)
-        .into_iter()
-        .filter_map(|row| Some(line.slice(row.first()?.start, row.last()?.end)))
-        .collect()
 }
 
 /// Rows as aligned columns, `gap` cells apart, each line without trailing

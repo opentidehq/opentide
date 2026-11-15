@@ -512,6 +512,7 @@ fn output_base(workspace: &Workspace) -> PathBuf {
 
 /// The work of the docs phase: the pages, the stale pages removed, the
 /// index; `run` gets the result's keys.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn docs_phase(
     args: &DocsArgs,
     workspace: &Workspace,

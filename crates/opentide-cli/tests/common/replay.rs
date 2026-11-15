@@ -109,6 +109,7 @@ pub const FIXTURES: &[&str] = &[
     "none",
     "empty",
     "tide-corpus",
+    "tide-corpus-folders",
     "tide-corpus-typo",
     "tide-corpus-cve",
     "tide-corpus-legacy-ids",
@@ -172,6 +173,7 @@ pub fn copy_tree(from: &Path, to: &Path) {
 }
 
 /// The fixture as `cargo xtask golden record` lays it out (`xtask/src/golden/fixture.rs`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn fixture(name: &str, ws: &Path) {
     if let Some(dir) = generated(name) {
         copy_tree(&dir, ws);
@@ -180,6 +182,20 @@ pub fn fixture(name: &str, ws: &Path) {
     match name {
         "none" => {}
         "empty" => std::fs::create_dir_all(ws.join(".opentide")).unwrap(),
+        // `objects/<family>` as real folders: a walk of `objects/` enters
+        // no link to a folder (`migrate vocab-scope`'s does not).
+        "tide-corpus-folders" => {
+            fixture("tide-corpus", ws);
+            for (family, legacy) in [
+                ("threats", "Objects/Threat Vectors"),
+                ("objectives", "Objects/Detection Objectives"),
+                ("rules", "Objects/Detection Rules"),
+            ] {
+                let folder = ws.join("objects").join(family);
+                std::fs::remove_file(&folder).unwrap();
+                copy_tree(&ws.join(legacy), &folder);
+            }
+        }
         "tide-corpus-typo" => {
             fixture("tide-corpus", ws);
             let path = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");
@@ -589,6 +605,7 @@ pub fn last_files() -> BTreeMap<String, FileState> {
 }
 
 /// Replays the recording in `dir`; the differences found, if any.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn replay(id: &str, dir: &Path, ledger: &Ledger, usage: &mut Usage) -> Vec<String> {
     let case: toml::Table = std::fs::read_to_string(dir.join("case.toml"))
         .unwrap()

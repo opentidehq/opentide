@@ -5,7 +5,7 @@ description: Run CLI commands in one warm process, for editors, over newline-del
 
 # opentide serve
 
-`opentide serve` runs opentide commands in one long-lived process, for editors. Each command answers as `opentide --json <command>` would, without starting Python, importing the models and rebuilding the registry from every YAML file each time. The VS Code extension uses it for the commands it runs on every save and click (`validate --file`, `info`, `lint`, `explain`), and spawns `opentide` when the installed version has no `serve`.
+`opentide serve` runs opentide commands in one long-lived process, for editors. Each command answers as `opentide --json <command>` would, without starting a new process each time; the commands that only read the workspace keep it loaded between runs. The VS Code extension uses it for the commands it runs on every save and click (`validate --file`, `info`, `lint`, `explain`), and spawns `opentide` when the installed version has no `serve`.
 
 ```bash
 opentide serve
