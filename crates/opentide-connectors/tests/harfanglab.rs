@@ -215,6 +215,7 @@ fn query_cassette() -> opentide_cassette::Cassette {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn harfanglab_searches_telemetry_as_the_python_runner_does() {
     let replay = replay_cassette(query_cassette(), &[TOKEN]);
     let (tenant, http) = tenant(

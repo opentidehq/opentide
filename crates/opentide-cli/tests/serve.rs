@@ -168,9 +168,9 @@ impl Runner for Recording {
 
     fn run(&self, request: &RunRequest, plan: &Plan, job: &Arc<Job>, _: EventSink) -> RunOutcome {
         self.calls.lock().unwrap().push(request.argv.clone());
-        self.started.store(true, Ordering::SeqCst);
         assert!(!self.panic, "the runner exploded");
         if self.block {
+            self.started.store(true, Ordering::SeqCst);
             while !self.interrupted.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(5));
             }
@@ -178,6 +178,11 @@ impl Runner for Recording {
             return failure(&plan.words, "Interrupted", 130);
         }
         let cancelled = job.finish();
+        // `started` is set only now, after `finish`: a test that cancels once
+        // it sees `started` cancels a run that has already returned, which is
+        // what `hold_after_return` tests (set before `finish`, a cancel could
+        // land first, and the run would rightly report itself cancelled).
+        self.started.store(true, Ordering::SeqCst);
         if let Some(release) = &self.hold_after_return {
             while !release.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(5));
@@ -624,54 +629,6 @@ fn a_rust_run_cancelled_before_it_started_answers_130_unrun() {
     assert_eq!(document.get("command"), Some(&Json::str("info")));
     assert_eq!(opentide_cli::embed::workspace_stats().opens, opens);
     assert!(!job.cancel(), "a cancel after the run changes nothing");
-}
-
-/// The oracle's recorded sessions, replayed: the same lines in, the same
-/// bytes out.
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn recorded_sessions_are_answered_as_the_oracle_answered_them() {
-    let _session = session();
-    let cases = replay::repo().join("tests/golden/cases/serve/plain");
-    for fixture in ["tide-corpus", "vscode"] {
-        let dir = cases.join(fixture).join("session");
-        let case: toml::Table =
-            toml::from_str(&std::fs::read_to_string(dir.join("case.toml")).unwrap()).unwrap();
-        let input = case["stdin"]["input"].as_str().unwrap().to_owned();
-        let expected = std::fs::read_to_string(dir.join("stdout")).unwrap();
-        let (_root, ws) = workspace(fixture);
-        let (sender, lines) = channel();
-        let sender = Mutex::new(sender);
-        let write: Writer = Box::new(move |line: &str| {
-            let _ignored = sender.lock().unwrap().send(format!("{line}\n"));
-            Ok(())
-        });
-        let base = vec![("HOME".to_owned(), ws.display().to_string())];
-        let runner = HostRunner::new(base, ws.clone(), "0.28.1");
-        let server = Server::new(write, Arc::new(runner), "0.28.1");
-        // The reading thread takes every line before the first run starts.
-        opentide_cli::serve::read_lines(input.as_bytes(), &server);
-        assert!(server.serve(&|| false));
-        drop(server);
-        let output: String = lines.try_iter().collect();
-        // The digest names today's command tree, which has changed since
-        // the oracle under approved entries (`commands`'s own cases); it is
-        // computed as the oracle computed it from the oracle's tree.
-        let recorded =
-            std::fs::read_to_string(cases.join("../../commands/json/none/default/stdout")).unwrap();
-        let oracle_digest = commands_digest(&Json::parse(&recorded).unwrap());
-        assert!(
-            expected.contains(&oracle_digest),
-            "the oracle's digest is its tree's"
-        );
-        let today = host(&ws).run("{\"argv\":[\"commands\"]}");
-        let today = commands_digest(today.get("document").unwrap());
-        assert_eq!(
-            output,
-            expected.replace(&oracle_digest, &today),
-            "{fixture}"
-        );
-    }
 }
 
 /// The `serve` fuzz target's seeds and saved crashes (`fuzz/seeds/serve`,

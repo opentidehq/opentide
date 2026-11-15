@@ -541,6 +541,7 @@ pub struct Options {
 }
 
 /// Runs the comparison. Whether it passed.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn run(options: &Options) -> Result<bool> {
     let (repo, target) = workspace()?;
     let golden = repo.join("tests/golden");

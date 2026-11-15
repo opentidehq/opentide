@@ -589,6 +589,7 @@ fn online_cve(
 }
 
 /// Runs one case; its differences.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn run_case(
     case: &Case,
     ws: &Path,
@@ -900,6 +901,7 @@ fn show(value: Option<&Json>) -> String {
 /// # Errors
 ///
 /// A recording or the fixtures cannot be read.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn run(args: &[String]) -> Result<u8> {
     let mut filter = None;
     let mut keep = None;

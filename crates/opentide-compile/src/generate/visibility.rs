@@ -242,6 +242,7 @@ impl Row<'_> {
 }
 
 /// The report (`collect_visibility`, `VisibilityReport.to_dict`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn report(index: &Index, inputs: &Inputs) -> Json {
     let empty = Vec::new();
     let declared = inputs.declared.as_ref().unwrap_or(&empty);

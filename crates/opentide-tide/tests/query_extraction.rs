@@ -52,6 +52,7 @@ fn sequence(value: Option<&Arc<Node>>) -> Option<&[Arc<Node>]> {
 }
 
 /// The queries a YAML loader finds, as `(path, language, platform, text)`.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn expected(doc: &Node, source: &str) -> BTreeSet<Query> {
     let mut out = BTreeSet::new();
     let mut add = |path: String, language: LanguageId, platform: &str, value: &str| {

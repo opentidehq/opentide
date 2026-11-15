@@ -38,7 +38,6 @@ fn files() -> Vec<(String, String)> {
 }
 
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn each_corpus_file_in_the_table_is_as_it_is_on_disk() {
     let files = files();
     assert!(!files.is_empty());
@@ -55,7 +54,6 @@ fn each_corpus_file_in_the_table_is_as_it_is_on_disk() {
 }
 
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 fn every_object_file_of_the_corpora_is_in_the_table() {
     let listed: BTreeSet<String> = files().into_iter().map(|(path, _)| path).collect();
     let root = repo();

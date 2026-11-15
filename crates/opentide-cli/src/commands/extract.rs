@@ -214,12 +214,44 @@ fn space_before_uppercase(text: &str) -> String {
     out
 }
 
+/// The longest stem [`sanitize_filename`] returns, in bytes: callers add a
+/// de-duplicating suffix and `.yaml`, and file systems cap a name at 255.
+const STEM_LIMIT: usize = 200;
+
 /// `name` as a file name on every system: each character Windows refuses
-/// in a file name (`< > : " / \ | ? *`) is a space.
+/// in a file name (`< > : " / \ | ? *`) and each control character is a
+/// space, the stem is cut to [`STEM_LIMIT`] bytes at a character boundary,
+/// and a reserved Windows device name (`CON`, `NUL`, `COM1`, ..., with any
+/// extension) gets a `_` before it.
 fn sanitize_filename(name: &str) -> String {
-    name.chars()
-        .map(|c| if "<>:\"/\\|?*".contains(c) { ' ' } else { c })
-        .collect()
+    let mut stem: String = name
+        .chars()
+        .map(|c| {
+            if "<>:\"/\\|?*".contains(c) || c.is_control() {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect();
+    stem.truncate(stem.floor_char_boundary(STEM_LIMIT));
+    if is_windows_device(&stem) {
+        stem.insert(0, '_');
+    }
+    stem
+}
+
+/// Whether Windows takes `stem` for a device, not a file: its base (up to
+/// the first `.`, trimmed) is `CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9` or
+/// `LPT1`-`LPT9`, in any case.
+fn is_windows_device(stem: &str) -> bool {
+    let base = stem.split('.').next().unwrap_or_default().trim();
+    let upper = base.to_ascii_uppercase();
+    matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || upper
+            .strip_prefix("COM")
+            .or_else(|| upper.strip_prefix("LPT"))
+            .is_some_and(|digit| matches!(digit.as_bytes(), [b'1'..=b'9']))
 }
 
 /// `text` as a JSON string.
@@ -474,6 +506,7 @@ pub fn defender(cx: &Context<'_>) -> Report {
     report("defender", started, written, outcome)
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
     let (tenants, root) = configured(cx, DEFENDER)?;
     super::query::log_unset(&tenants, cx.env);
@@ -676,12 +709,60 @@ mod tests {
             "Suspicious Activity"
         );
         assert_eq!(sanitize_filename("a:b/c?"), "a b c ");
+        assert_eq!(sanitize_filename("a\tb\nc\u{7f}d"), "a b c d");
         assert_eq!(
             sanitize_filename("Encoded PowerShell"),
             "Encoded PowerShell"
         );
         assert_eq!(capitalised("deviceId"), "DeviceId");
         assert_eq!(json_string("a\"é"), "\"a\\\"é\"");
+    }
+
+    #[test]
+    fn a_long_name_is_cut_at_a_character_boundary() {
+        assert_eq!(sanitize_filename(&"a".repeat(300)), "a".repeat(200));
+        // 'é' takes two bytes: 100 of them are 200 bytes, and a cut inside
+        // the next one leaves it out.
+        let long = "é".repeat(150);
+        assert_eq!(sanitize_filename(&long), "é".repeat(100));
+        let odd = format!("a{}", "é".repeat(150));
+        let cut = sanitize_filename(&odd);
+        assert_eq!(cut, format!("a{}", "é".repeat(99)));
+        assert_eq!(cut.len(), 199);
+        assert_eq!(sanitize_filename("short"), "short");
+    }
+
+    #[test]
+    fn a_windows_device_name_gets_an_underscore() {
+        for (name, expected) in [
+            ("CON", "_CON"),
+            ("nul", "_nul"),
+            ("Aux.txt", "_Aux.txt"),
+            ("prn.tar.gz", "_prn.tar.gz"),
+            ("COM1", "_COM1"),
+            ("com9.log", "_com9.log"),
+            ("LPT5", "_LPT5"),
+            ("lpt9 ", "_lpt9 "),
+            (" con", "_ con"),
+            ("con<", "_con "),
+        ] {
+            assert_eq!(sanitize_filename(name), expected, "{name:?}");
+        }
+        for name in [
+            "CONSOLE",
+            "COM",
+            "COM0",
+            "COM10",
+            "LPT",
+            "LPT0",
+            "ACON",
+            "con ect",
+            "NULL",
+            "my.con",
+            "Encoded PowerShell",
+        ] {
+            assert_eq!(sanitize_filename(name), name, "{name:?}");
+        }
     }
 
     #[test]
@@ -820,24 +901,12 @@ const VALID_FIELD_TYPES: [&str; 25] = [
     "nested",
 ];
 
-/// `uuid.uuid5(namespace, name)`.
-fn uuid5(namespace: &uuid::Uuid, name: &str) -> uuid::Uuid {
-    use sha1::Digest as _;
-    let mut hasher = sha1::Sha1::new();
-    hasher.update(namespace.as_bytes());
-    hasher.update(name.as_bytes());
-    let digest = hasher.finalize();
-    let mut bytes = [0u8; 16];
-    bytes.copy_from_slice(&digest[..16]);
-    uuid::Builder::from_sha1_bytes(bytes).into_uuid()
-}
-
 /// The namespace of the UUIDs derived from prebuilt rules' ids
 /// (`OPENTIDE_MIGRATION_NS`).
 fn migration_namespace() -> uuid::Uuid {
-    uuid5(
+    uuid::Uuid::new_v5(
         &uuid::Uuid::NAMESPACE_URL,
-        "https://opentide.org/ns/elastic-rule-migration",
+        b"https://opentide.org/ns/elastic-rule-migration",
     )
 }
 
@@ -1027,7 +1096,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         .map(py)
         .unwrap_or_default();
     let rule_id = if make_custom && prebuilt {
-        uuid5(&migration_namespace(), &raw_rule_id).to_string()
+        uuid::Uuid::new_v5(&migration_namespace(), raw_rule_id.as_bytes()).to_string()
     } else {
         raw_rule_id
     };
@@ -1765,6 +1834,7 @@ pub fn elastic(cx: &Context<'_>, space: &str, include_prebuilt: bool) -> Report 
     report(ELASTIC, started, written, outcome)
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn elastic_run(
     cx: &Context<'_>,
     space: &str,
@@ -1929,7 +1999,32 @@ mod elastic_tests {
         assert!(is_uuid("{11111111-1111-4111-8111-111111111111}"));
         assert!(!is_uuid("rule-1"));
         assert_eq!(elastic_filename("a:  b"), "a b");
-        assert_eq!(uuid5(&migration_namespace(), "x").get_version_num(), 5);
+        assert_eq!(
+            uuid::Uuid::new_v5(&migration_namespace(), b"x").get_version_num(),
+            5
+        );
+    }
+
+    /// The derived ids are those of Python's `uuid.uuid5`, which the
+    /// importer this ports used: the values below come from it.
+    #[test]
+    fn prebuilt_rule_ids_match_python_uuid5() {
+        assert_eq!(
+            migration_namespace().to_string(),
+            "5da6e36a-e8d0-548e-a5c9-ab00fc1064b8"
+        );
+        for (name, expected) in [
+            ("x", "87858671-b9f3-579e-a900-1c7acaec5523"),
+            ("", "8e1ed917-1a18-579e-957c-390d0c182e8b"),
+            (
+                "12345678-1234-4234-8234-123456789abc",
+                "fb9030c2-1585-514d-8db1-df2329fa9d42",
+            ),
+            ("é rule", "e1d30b5a-aa28-528d-a62e-a4e46d6a3e42"),
+        ] {
+            let id = uuid::Uuid::new_v5(&migration_namespace(), name.as_bytes());
+            assert_eq!(id.to_string(), expected, "{name:?}");
+        }
     }
 
     /// A field Kibana holds as one string where it usually holds a list is a

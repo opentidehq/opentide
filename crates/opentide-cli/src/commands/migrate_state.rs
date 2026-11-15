@@ -367,6 +367,7 @@ fn unsupported_breaks(text: &str) -> bool {
 }
 
 /// Finds the ids in one file and computes its edited text (`_plan_rule`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn plan_rule(path: &Path) -> (RuleIds, Option<String>) {
     let mut rule = RuleIds::default();
     let text = match std::fs::read(path) {
@@ -543,6 +544,7 @@ pub fn run(repo: Option<&str>, env: &Env, cwd: &Path) -> Report {
 }
 
 /// Moves every vendor id under `rules_dir` into shards (`run_migrate_state`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn migrate(workspace: &Path, rules_dir: &Path) -> Report {
     if let Some(rule) = opentide_compile::git::state_ignore(workspace) {
         return refused(&rule);

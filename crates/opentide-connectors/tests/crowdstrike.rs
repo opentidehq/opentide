@@ -233,6 +233,7 @@ fn query(text: &str, limit: usize, index: &[&str], timeout: Duration) -> QueryRe
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn crowdstrike_runs_and_stops_query_jobs_as_the_python_runner_does() {
     let replay = replay("crowdstrike/query", &[SECRET]);
     let (tenant, http) = tenant(

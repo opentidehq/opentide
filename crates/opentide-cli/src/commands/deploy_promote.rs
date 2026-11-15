@@ -177,6 +177,7 @@ type Planned = (Vec<Event>, Vec<(PathBuf, Vec<u8>)>, Option<Stop>);
 
 /// Every file read and planned (`PromoteMDR.promote` up to its writes): the
 /// events to log, the bytes to write, and how the run stops, if it does.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn plan(promotion: &Promotion<'_>) -> Planned {
     let settings = promotion.settings;
     let mut events = vec![Event::Info(
