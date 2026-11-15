@@ -23,13 +23,8 @@ pub mod tables;
 
 // The pure-Rust parser (#1230, ADR 0012) grows beside the tree-sitter path,
 // which serves until the last PR of the series switches production to it.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the new parser is reached from tests until the switch"
-    )
-)]
+mod diagnose;
+mod highlight;
 mod lexer;
 mod parser;
 #[cfg_attr(
@@ -1365,7 +1360,24 @@ fn check_table(
     lets: &BTreeSet<String>,
     out: &mut Vec<Diagnostic>,
 ) {
-    let table = &source[name.byte_range()];
+    check_table_named(
+        &source[name.byte_range()],
+        node_range(source, at),
+        catalog,
+        lets,
+        out,
+    );
+}
+
+/// [`check_table`] on the table's name and the range to report: the part of
+/// the check no parser is in.
+fn check_table_named(
+    table: &str,
+    range: Range,
+    catalog: &Catalog,
+    lets: &BTreeSet<String>,
+    out: &mut Vec<Diagnostic>,
+) {
     // `let` bindings, tabular parameters, functions the engine knows
     // (`_GetWatchlist`) and ASIM parsers are not tables.
     if table.starts_with('$')
@@ -1391,7 +1403,6 @@ fn check_table(
     {
         return;
     }
-    let range = node_range(source, at);
     let status = datasets.status(platform, table);
     // A near miss of a declared table, else of a catalog table.
     let suggest = |catalog_too: bool| {
