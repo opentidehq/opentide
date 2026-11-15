@@ -219,4 +219,16 @@ mod tests {
         assert_eq!(group.promotion, Some(true));
         assert_eq!(group.python_version, "3.12");
     }
+
+    #[test]
+    fn every_platform_of_the_table_has_a_flag_that_enables_it() {
+        for id in opentide_schema::platforms::IDS {
+            let flag = format!("--{}", id.replace('_', "-"));
+            let args = parse(&["setup", "platforms", &flag]);
+            let Some(SetupCommand::Platforms(platforms)) = args.command else {
+                panic!("not setup platforms");
+            };
+            assert_eq!(platforms.enabled(), [id], "{flag}");
+        }
+    }
 }
