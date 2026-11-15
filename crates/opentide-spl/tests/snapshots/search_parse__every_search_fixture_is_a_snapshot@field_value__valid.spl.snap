@@ -7,37 +7,47 @@ SOURCE_FILE@0..84
   PIPELINE@0..84
     BARE_SEARCH@0..84
       FIELD_VALUE@0..10
-        IDENTIFIER@0..5
-          IDENT@0..5 "index"
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
         EQ@5..6 "="
-        IDENTIFIER@6..10
-          IDENT@6..10 "main"
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
       WHITESPACE@10..11 " "
       FIELD_VALUE@11..38
-        STR@11..36
-          STRING_TOKEN@11..36 "\"http_request.user_agent\""
+        FIELD_REF@11..36
+          STR@11..36
+            STRING_TOKEN@11..36 "\"http_request.user_agent\""
         EQ@36..37 "="
-        IDENTIFIER@37..38
-          IDENT@37..38 "x"
+        FIELD_VALUE_RHS@37..38
+          IDENTIFIER@37..38
+            IDENT@37..38 "x"
       WHITESPACE@38..39 " "
       FIELD_VALUE@39..52
-        IDENTIFIER@39..46
-          IDENT@39..46 "version"
+        FIELD_REF@39..46
+          IDENTIFIER@39..46
+            IDENT@39..46 "version"
         EQ@46..47 "="
-        SEARCH_WORD@47..52
-          FIELD_WORD@47..52 "2.0.0"
+        FIELD_VALUE_RHS@47..52
+          SEARCH_WORD@47..52
+            FIELD_WORD@47..52 "2.0.0"
       WHITESPACE@52..53 " "
       FIELD_VALUE@53..67
-        IDENTIFIER@53..64
-          IDENT@53..64 "domain_rank"
+        FIELD_REF@53..64
+          IDENTIFIER@53..64
+            IDENT@53..64 "domain_rank"
         EQ@64..65 "="
-        SEARCH_WORD@65..67
-          SEARCH_WORD_TOKEN@65..67 "-1"
+        FIELD_VALUE_RHS@65..67
+          SEARCH_WORD@65..67
+            SEARCH_WORD_TOKEN@65..67 "-1"
       WHITESPACE@67..68 " "
       FIELD_VALUE@68..84
-        IDENTIFIER@68..81
-          IDENT@68..81 "_index_latest"
+        FIELD_REF@68..81
+          IDENTIFIER@68..81
+            IDENT@68..81 "_index_latest"
         EQ@81..82 "="
-        SEARCH_WORD@82..84
-          FIELD_WORD@82..84 "@m"
+        FIELD_VALUE_RHS@82..84
+          SEARCH_WORD@82..84
+            FIELD_WORD@82..84 "@m"
 --

@@ -43,6 +43,7 @@ schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
+ungrammar.workspace = true
 wait4.workspace = true
 regex.workspace = true
 # xtask golden (src/golden/): only the tooling uses these, at the versions

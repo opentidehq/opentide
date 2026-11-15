@@ -13,4 +13,4 @@ mod table;
 
 pub use kind::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 pub use lexer::lex;
-pub use parser::parse;
+pub use parser::{GRAMMAR, parse};

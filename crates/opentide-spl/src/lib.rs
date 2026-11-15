@@ -29,6 +29,15 @@ mod search_operators;
 #[doc(hidden)]
 pub mod syntax;
 
+// What the generated typed AST names from the crate root (`use crate::{..}`).
+#[doc(hidden)]
+pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
+
+/// The typed AST `cargo xtask codegen` writes from `spl.ungram`.
+#[doc(hidden)]
+#[path = "generated/ast.rs"]
+pub mod ast;
+
 use opentide_syntax::{parse as ts_parse, walk_with_ancestors};
 use serde::Deserialize;
 use std::sync::OnceLock;

@@ -2556,6 +2556,19 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
       "message": "expected a string, an integer or a number",
       "severity": "error"
+    },
+    {
+      "code": "schema_validation",
+      "context": {},
+      "field_path": [
+        "tenants",
+        "0",
+        "setup",
+        "enterprise_security"
+      ],
+      "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+      "message": "Input should be a valid boolean",
+      "severity": "error"
     }
   ],
   "splunk-strategy-list": [
@@ -2647,11 +2660,25 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "schedule_offset"
       ],
       "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
-      "message": "String should match pattern \"^\\\\$\"",
+      "message": "Input should be a valid integer",
       "severity": "error"
     }
   ],
-  "splunk-valid": [],
+  "splunk-valid": [
+    {
+      "code": "schema_validation",
+      "context": {},
+      "field_path": [
+        "tenants",
+        "0",
+        "setup",
+        "schedule_offset"
+      ],
+      "file_path": "/w/.opentide/configurations/platforms/splunk.toml",
+      "message": "Input should be a valid integer",
+      "severity": "error"
+    }
+  ],
   "sysdig-setup": [
     {
       "code": "schema_validation",
