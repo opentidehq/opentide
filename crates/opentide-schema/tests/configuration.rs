@@ -360,6 +360,9 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
             added.extend(adds.iter().cloned());
             used.insert((*name).to_owned());
         }
+        // The snapshot records every finding Rust reports, the added ones
+        // included; only the comparison with the oracle sets them aside.
+        results.insert(id.to_owned(), rust.clone());
         let mut rust = rust;
         for path in &added {
             let Json::Array(findings) = &mut rust else {
@@ -375,7 +378,6 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
         // A difference that only adds findings leaves the rest exact.
         let difference = (!fields.is_empty()).then_some((joined.as_str(), &fields));
         failures.extend(compare(id, oracle, &rust, difference));
-        results.insert(id.to_owned(), rust);
     }
     for name in differences.keys() {
         if !used.contains(name) {
