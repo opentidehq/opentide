@@ -146,7 +146,7 @@ opentide --json tui
 }
 ```
 
-At a terminal, `NO_COLOR`, `--no-color`, `TERM=dumb`, a CI environment and `OPENTIDE_OUTPUT=plain` select the `plain` mode too. The refusal then names the setting and how to open the UI anyway:
+At a terminal, `NO_COLOR`, `--no-color`, `FORCE_COLOR=0`, `TERM=dumb`, a CI environment and `OPENTIDE_OUTPUT=plain` select the `plain` mode too. The refusal then names the setting and how to open the UI anyway:
 
 ```text illustrative
 error: opentide tui runs only in the human output mode; this run is in plain mode because NO_COLOR is set
