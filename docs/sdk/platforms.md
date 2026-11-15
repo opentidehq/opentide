@@ -13,6 +13,8 @@ The Python platform registry (`Opentide.Platforms`, `opentide.platforms`, the `d
 
 A package can add a detection platform opentide does not ship: a **platform plugin**. It registers an `opentide.platforms` entry point named after the platform, pointing at an `opentide.plugins.PlatformPlugin`. The Rust core (the command line compiled into the package) discovers the entry points through the SDK layer and calls the plugin through PyO3, behind the same traits as the built-in platforms: `deploy` (`Deployer`), `validate_query` (`LiveValidator`), `run_query` (`QueryRunner`), and `check_configuration`, which `opentide validate` runs on each rule's block for the platform. The interpreter lock is held for the plugin call alone.
 
+A plugin's `configuration_model` is a pydantic model, and pydantic is the `plugins` extra of opentide: install `opentide[plugins]` (a plugin package lists it as its dependency), without it, a plugin that imports pydantic fails to load, and the message names the extra.
+
 A runnable sample is in the repository: [`tests/fixtures/plugin_platform/`](https://github.com/opentidehq/opentide/tree/development/tests/fixtures/plugin_platform), the platform `acme`, which `tests/test_platforms/test_plugin_hook.py` deploys, validates and queries against a recorded stand-in tenant.
 
 <Steps>

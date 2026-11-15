@@ -115,6 +115,7 @@ fn common(block: &Json, rule: &Rule) -> Common {
 }
 
 /// The Sigma rule body (`SigmaRule`, `overwrite` true).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn sigma(
     cx: &Context<'_>,
     rule: &Rule,

@@ -125,11 +125,53 @@ fn tidy_context(error: &mut clap::Error, root: &Command, path: &[String]) {
     }
 }
 
+/// `--platform: choose from sentinel, …` for each missing required argument
+/// that takes one of a fixed set of values: clap names a missing argument and
+/// its usage but not its choices, which the oracle's missing-option error
+/// listed. A hidden value is not listed.
+fn choice_hints(error: &clap::Error, command: &Command) -> Vec<String> {
+    if error.kind() != ErrorKind::MissingRequiredArgument {
+        return Vec::new();
+    }
+    let Some(ContextValue::Strings(shown)) = error.get(ContextKind::InvalidArg) else {
+        return Vec::new();
+    };
+    shown
+        .iter()
+        .filter_map(|shown| {
+            let name = argument_name(shown);
+            let arg = command.get_arguments().find(|arg| {
+                arg.get_long()
+                    .is_some_and(|long| name.strip_prefix("--") == Some(long))
+                    || (arg.get_long().is_none() && arg.get_id().as_str() == name)
+            })?;
+            let values: Vec<String> = arg
+                .get_possible_values()
+                .iter()
+                .filter(|value| !value.is_hide_set())
+                .map(|value| value.get_name().to_owned())
+                .collect();
+            (!values.is_empty()).then(|| format!("{name}: choose from {}", values.join(", ")))
+        })
+        .collect()
+}
+
 /// The failure for a clap error, in the command `args` named.
 pub fn describe(root: &Command, args: &[String], mut error: clap::Error) -> UsageError {
     let path = crate::app::command_words(root, args);
     let command = command_at(root, &path);
     tidy_context(&mut error, root, &path);
+    // The choices a missing option takes, as a tip in the text modes and
+    // after the message in the machine ones.
+    let hints = choice_hints(&error, command);
+    if !hints.is_empty() {
+        let mut tips = match error.remove(ContextKind::Suggested) {
+            Some(ContextValue::StyledStrs(tips)) => tips,
+            _ => Vec::new(),
+        };
+        tips.extend(hints.iter().cloned().map(Into::into));
+        error.insert(ContextKind::Suggested, ContextValue::StyledStrs(tips));
+    }
     let error = &error;
     let argument = match (error.kind(), error.get(ContextKind::InvalidArg)) {
         (ErrorKind::InvalidSubcommand, _) => context(error, ContextKind::InvalidSubcommand),
@@ -175,6 +217,7 @@ pub fn describe(root: &Command, args: &[String], mut error: clap::Error) -> Usag
                 format!("missing command: choose from {}", names.join(", "))
             }
         }
+        _ if !hints.is_empty() => format!("{}. {}", first_line(error), hints.join(". ")),
         _ => first_line(error),
     };
     // clap renders the group's help for this kind; a person gets the help
@@ -230,6 +273,7 @@ mod tests {
     /// Each clap error kind maps onto the documented `failure.code`, with
     /// the argument at fault and clap's closest suggestion.
     #[test]
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn framework_usage_codes_arguments_and_suggestions() {
         for (line, command, failure_code, argument, suggestion) in [
             (
@@ -325,9 +369,75 @@ mod tests {
             );
         }
         let missing = parse("query x");
+        let platforms = opentide_schema::platforms::ids().join(", ");
         assert_eq!(
             missing.failure.message,
-            "the following required arguments were not provided: --platform <PLATFORM>"
+            format!(
+                "the following required arguments were not provided: --platform <PLATFORM>. \
+                 --platform: choose from {platforms}"
+            )
+        );
+        assert!(
+            missing
+                .rendered
+                .to_string()
+                .contains(&format!("tip: --platform: choose from {platforms}")),
+            "{}",
+            missing.rendered
+        );
+    }
+
+    /// Every required option or argument with a fixed set of values names the
+    /// set when it is missing (the oracle did, in every mode).
+    #[test]
+    fn framework_usage_a_missing_choice_lists_its_choices() {
+        fn walk(command: &Command, path: &mut Vec<String>, found: &mut Vec<(String, String)>) {
+            for arg in command.get_arguments() {
+                if arg.is_required_set() && !arg.get_possible_values().is_empty() {
+                    found.push((path.join(" "), arg.get_id().to_string()));
+                }
+            }
+            for sub in command.get_subcommands() {
+                path.push(sub.get_name().to_owned());
+                walk(sub, path, found);
+                path.pop();
+            }
+        }
+        let mut found = Vec::new();
+        walk(&root(), &mut Vec::new(), &mut found);
+        assert_eq!(
+            found,
+            [
+                ("query".to_owned(), "platform".to_owned()),
+                ("deploy metadata".to_owned(), "platform".to_owned()),
+                ("setup ci".to_owned(), "ci_platform".to_owned()),
+            ]
+        );
+        let ci = parse("setup ci --yes");
+        assert_eq!(ci.failure.code, code::USAGE_MISSING_OPTION);
+        assert!(
+            ci.failure.message.contains("ci_platform: choose from "),
+            "{}",
+            ci.failure.message
+        );
+        assert!(
+            ci.rendered
+                .to_string()
+                .contains("tip: ci_platform: choose from ")
+        );
+        let metadata = parse("deploy metadata");
+        assert!(
+            metadata.failure.message.contains("platform: choose from "),
+            "{}",
+            metadata.failure.message
+        );
+        // A missing option with no fixed set says nothing more.
+        let plain = parse("setup skills show");
+        assert_eq!(plain.failure.code, code::USAGE_MISSING_OPTION);
+        assert!(
+            !plain.failure.message.contains("choose from"),
+            "{}",
+            plain.failure.message
         );
     }
 

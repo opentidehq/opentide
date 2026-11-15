@@ -247,6 +247,25 @@ impl Progress {
         }
     }
 
+    /// Events as lines on `log`, the run's stderr (`Host::log_sink`), when
+    /// `env` asks for them (`OPENTIDE_PROGRESS=json`), instead of the
+    /// process's stderr: a run in a host that captures its stderr (the
+    /// tests, `opentide serve`, an embedder) holds them.
+    pub fn from_env_to_log(env: &Env, log: &crate::logging::Sink) -> Progress {
+        let progress = Progress::from_env(env);
+        if !progress.enabled() {
+            return progress;
+        }
+        let log = Arc::clone(log);
+        Progress::to_sink(Arc::new(move |event| {
+            let line = event_line(&event);
+            if let Ok(mut log) = log.lock() {
+                // A closed stderr is not worth failing the command.
+                let _ignored = log.write_all(line.as_bytes()).and_then(|()| log.flush());
+            }
+        }))
+    }
+
     /// Events to `sink` and nowhere else.
     pub fn to_sink(sink: EventSink) -> Progress {
         Progress {

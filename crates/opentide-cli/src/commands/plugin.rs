@@ -247,6 +247,7 @@ fn queries(count: usize) -> String {
 
 /// `opentide validate query --live --platform <plugin>`: each selected
 /// rule's `configurations.<platform>.query` checked on each tenant.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn validate_live(
     platform: &str,
     selection: &Selection,

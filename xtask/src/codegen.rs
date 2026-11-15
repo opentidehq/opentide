@@ -833,6 +833,7 @@ fn catalog_drift(root: &Path) -> Result<(usize, Vec<String>)> {
     Ok((compared, drift))
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn catalog_parity(
     root: &Path,
     ledger: &opentide_compare::ledger::Ledger,
@@ -1005,6 +1006,7 @@ struct SchemaComparison {
 /// The number of verdicts compared, and the differences: the schemas of
 /// every recorded `generate` that wrote them, and the configuration
 /// schemas, against the oracle's.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn schema_verdicts(root: &Path) -> Result<(usize, Vec<String>)> {
     let golden = root.join("tests/golden");
     let spec_text = std::fs::read_to_string(golden.join("cases.toml"))

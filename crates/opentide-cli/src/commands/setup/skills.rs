@@ -739,6 +739,7 @@ fn register_plugin(stage: &mut Stage, root: &Path) -> Result<String, String> {
 ///
 /// No target, an unknown slug, or a catalogue or skill that cannot be
 /// read. What was staged before the error stays staged.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn install(
     stage: &mut Stage,
     root: &Path,

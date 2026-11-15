@@ -330,6 +330,7 @@ impl Defender {
     /// Runs an advanced hunting query over the request's window
     /// (`DefenderQueryRunner.run`). *now* is the moment the 30-day retention
     /// is counted from.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     pub async fn run(
         &self,
         cx: TenantContext<'_>,

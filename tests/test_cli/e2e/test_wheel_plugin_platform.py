@@ -70,7 +70,8 @@ def test_a_plugin_runs_on_opentide_installed_from_its_wheel(
         pytest.skip("uv is required to build and install the wheel")
     wheel = _build_wheel(uv, tmp_path / "dist", wheel_cache)
     env_dir = tmp_path / "wheel-venv"
-    python = _install(uv, env_dir, str(wheel))
+    # The sample plugin's configuration model is a pydantic model: the `plugins` extra.
+    python = _install(uv, env_dir, f"opentide[plugins] @ {wheel.as_uri()}")
     _install_plugin(python)
     repo = _workspace(tmp_path / "workspace")
     opentide = _venv_bin(env_dir, "opentide")
