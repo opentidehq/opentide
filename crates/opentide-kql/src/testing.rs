@@ -34,3 +34,14 @@ pub fn parse_is_lossless(source: &str) -> bool {
 pub fn parse_error_count(source: &str) -> usize {
     parse(source).errors.len()
 }
+
+/// The kinds of the significant tokens of `source`, by name.
+#[must_use]
+pub fn token_kinds(source: &str) -> Vec<String> {
+    lex_kql(source)
+        .iter()
+        .map(|l| K::from_raw(l.kind))
+        .filter(|k| !matches!(k, K::WHITESPACE | K::COMMENT))
+        .map(|k| format!("{k:?}"))
+        .collect()
+}

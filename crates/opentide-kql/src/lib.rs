@@ -30,14 +30,6 @@ pub mod tables;
         reason = "the new parser is reached from tests until the switch"
     )
 )]
-mod keywords;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the new parser is reached from tests until the switch"
-    )
-)]
 mod lexer;
 mod parser;
 #[cfg_attr(

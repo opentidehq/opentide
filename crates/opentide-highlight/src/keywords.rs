@@ -40,14 +40,176 @@ impl Capture {
 /// A language's keywords and punctuation, each with its capture.
 pub type Keywords = &'static [(&'static str, Capture)];
 
+/// KQL: `highlights/queries/kql/highlights.scm`, read by capture. The
+/// lexer of `opentide-kql` knows each token (its tests hold it to this table).
+const KQL: Keywords = &[
+    // @keyword
+    ("let", Capture::new("keyword")),
+    ("where", Capture::new("keyword")),
+    ("filter", Capture::new("keyword")),
+    ("project", Capture::new("keyword")),
+    ("project-away", Capture::new("keyword")),
+    ("project-rename", Capture::new("keyword")),
+    ("project-keep", Capture::new("keyword")),
+    ("project-reorder", Capture::new("keyword")),
+    ("extend", Capture::new("keyword")),
+    ("summarize", Capture::new("keyword")),
+    ("join", Capture::new("keyword")),
+    ("union", Capture::new("keyword")),
+    ("parse", Capture::new("keyword")),
+    ("parse-where", Capture::new("keyword")),
+    ("parse-kv", Capture::new("keyword")),
+    ("lookup", Capture::new("keyword")),
+    ("take", Capture::new("keyword")),
+    ("limit", Capture::new("keyword")),
+    ("sort", Capture::new("keyword")),
+    ("order", Capture::new("keyword")),
+    ("distinct", Capture::new("keyword")),
+    ("render", Capture::new("keyword")),
+    ("print", Capture::new("keyword")),
+    ("top", Capture::new("keyword")),
+    ("mv-expand", Capture::new("keyword")),
+    ("mvexpand", Capture::new("keyword")),
+    ("search", Capture::new("keyword")),
+    ("find", Capture::new("keyword")),
+    ("invoke", Capture::new("keyword")),
+    ("evaluate", Capture::new("keyword")),
+    ("serialize", Capture::new("keyword")),
+    ("scan", Capture::new("keyword")),
+    ("as", Capture::new("keyword")),
+    ("getschema", Capture::new("keyword")),
+    ("make-series", Capture::new("keyword")),
+    ("sample", Capture::new("keyword")),
+    ("sample-distinct", Capture::new("keyword")),
+    ("mv-apply", Capture::new("keyword")),
+    ("datatable", Capture::new("keyword")),
+    ("externaldata", Capture::new("keyword")),
+    ("external_data", Capture::new("keyword")),
+    ("with", Capture::new("keyword")),
+    ("from", Capture::new("keyword")),
+    ("to", Capture::new("keyword")),
+    ("step", Capture::new("keyword")),
+    ("asc", Capture::new("keyword")),
+    ("desc", Capture::new("keyword")),
+    ("granny-asc", Capture::new("keyword")),
+    ("granny-desc", Capture::new("keyword")),
+    ("of", Capture::new("keyword")),
+    ("others", Capture::new("keyword")),
+    ("by", Capture::new("keyword")),
+    ("partition", Capture::new("keyword")),
+    ("declare", Capture::new("keyword")),
+    ("optional", Capture::new("keyword")),
+    ("output", Capture::new("keyword")),
+    ("last", Capture::new("keyword")),
+    ("range", Capture::new("keyword")),
+    ("fork", Capture::new("keyword")),
+    ("facet", Capture::new("keyword")),
+    ("consume", Capture::new("keyword")),
+    ("reduce", Capture::new("keyword")),
+    ("make-graph", Capture::new("keyword")),
+    ("graph-match", Capture::new("keyword")),
+    ("graph-shortest-paths", Capture::new("keyword")),
+    ("graph-to-table", Capture::new("keyword")),
+    ("graph-mark-components", Capture::new("keyword")),
+    ("top-hitters", Capture::new("keyword")),
+    ("top-nested", Capture::new("keyword")),
+    ("typeof", Capture::new("keyword")),
+    ("on", Capture::new("keyword")),
+    ("nulls", Capture::new("keyword")),
+    ("first", Capture::new("keyword")),
+    ("default", Capture::new("keyword")),
+    ("and", Capture::new("keyword")),
+    ("kind", Capture::new("keyword")),
+    // @function.builtin
+    ("materialize", Capture::new("function.builtin")),
+    ("toscalar", Capture::new("function.builtin")),
+    // @type
+    ("dynamic", Capture::new("type")),
+    // @error
+    (".", Capture::new("error")),
+    // @operator.pipe
+    ("|", Capture::new("operator.pipe")),
+    // @operator
+    ("or", Capture::new("operator")),
+    ("not", Capture::new("operator")),
+    ("==", Capture::new("operator")),
+    ("!=", Capture::new("operator")),
+    ("=~", Capture::new("operator")),
+    ("!~", Capture::new("operator")),
+    ("<>", Capture::new("operator")),
+    ("<", Capture::new("operator")),
+    (">", Capture::new("operator")),
+    ("<=", Capture::new("operator")),
+    (">=", Capture::new("operator")),
+    ("+", Capture::new("operator")),
+    ("-", Capture::new("operator")),
+    ("*", Capture::new("operator")),
+    ("/", Capture::new("operator")),
+    ("%", Capture::new("operator")),
+    ("has", Capture::new("operator")),
+    ("!has", Capture::new("operator")),
+    ("has_cs", Capture::new("operator")),
+    ("!has_cs", Capture::new("operator")),
+    ("has_any", Capture::new("operator")),
+    ("has_all", Capture::new("operator")),
+    ("contains", Capture::new("operator")),
+    ("!contains", Capture::new("operator")),
+    ("contains_cs", Capture::new("operator")),
+    ("!contains_cs", Capture::new("operator")),
+    ("containscs", Capture::new("operator")),
+    ("notcontains", Capture::new("operator")),
+    ("notcontainscs", Capture::new("operator")),
+    ("=>", Capture::new("operator")),
+    ("startswith", Capture::new("operator")),
+    ("!startswith", Capture::new("operator")),
+    ("startswith_cs", Capture::new("operator")),
+    ("!startswith_cs", Capture::new("operator")),
+    ("endswith", Capture::new("operator")),
+    ("!endswith", Capture::new("operator")),
+    ("endswith_cs", Capture::new("operator")),
+    ("!endswith_cs", Capture::new("operator")),
+    ("hasprefix", Capture::new("operator")),
+    ("!hasprefix", Capture::new("operator")),
+    ("hasprefix_cs", Capture::new("operator")),
+    ("!hasprefix_cs", Capture::new("operator")),
+    ("hassuffix", Capture::new("operator")),
+    ("!hassuffix", Capture::new("operator")),
+    ("hassuffix_cs", Capture::new("operator")),
+    ("!hassuffix_cs", Capture::new("operator")),
+    ("has_ipv4", Capture::new("operator")),
+    ("has_ipv4_prefix", Capture::new("operator")),
+    ("has_any_ipv4", Capture::new("operator")),
+    ("has_any_ipv4_prefix", Capture::new("operator")),
+    ("in", Capture::new("operator")),
+    ("!in", Capture::new("operator")),
+    ("in~", Capture::new("operator")),
+    ("!in~", Capture::new("operator")),
+    ("between", Capture::new("operator")),
+    ("!between", Capture::new("operator")),
+    ("..", Capture::new("operator")),
+    ("matches", Capture::new("operator")),
+    ("regex", Capture::new("operator")),
+    ("=", Capture::new("operator")),
+    // @punctuation.bracket
+    ("(", Capture::new("punctuation.bracket")),
+    (")", Capture::new("punctuation.bracket")),
+    ("[", Capture::new("punctuation.bracket")),
+    ("]", Capture::new("punctuation.bracket")),
+    ("{", Capture::new("punctuation.bracket")),
+    ("}", Capture::new("punctuation.bracket")),
+    // @punctuation.delimiter
+    (",", Capture::new("punctuation.delimiter")),
+    (";", Capture::new("punctuation.delimiter")),
+];
+
 /// The `KEYWORDS` table of `language`, or `None` while it is generated from
-/// its `highlights.scm`. No language has a table yet: each one adds an arm
-/// when its engine moves to `opentide-parse`.
+/// its `highlights.scm`. Each language adds an arm when its engine moves to
+/// `opentide-parse`.
 #[must_use]
 pub const fn keywords(language: LanguageId) -> Option<Keywords> {
     match language {
-        LanguageId::Kql
-        | LanguageId::Spl
+        LanguageId::Kql => Some(KQL),
+        LanguageId::Spl
         | LanguageId::TideYaml
         | LanguageId::Esql
         | LanguageId::Eql
@@ -171,6 +333,24 @@ mod tests {
                 .as_array()
                 .is_some_and(|p| p.iter().any(|v| v["comment"] == "capture:keyword")),
             "the KQL grammar has keyword patterns"
+        );
+    }
+
+    #[test]
+    fn the_kql_table_says_what_its_scm_says() {
+        // Until the tree-sitter grammar goes, the `.scm` is still a source:
+        // the table holds the same pairs, so the generated bytes are the same.
+        let scm = crate::highlights_scm(LanguageId::Kql);
+        let table = keywords(LanguageId::Kql).expect("a KQL table");
+        assert_eq!(
+            by_capture(table_pairs(table)),
+            by_capture(scm_pairs(scm)),
+            "the KQL table and highlights.scm differ"
+        );
+        let spec = HighlightSpec::load().expect("spec");
+        assert_eq!(
+            generate_tm_language(LanguageId::Kql, &spec),
+            generate_tm_language_from(LanguageId::Kql, &spec, scm_pairs(scm)),
         );
     }
 
