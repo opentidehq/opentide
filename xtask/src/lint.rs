@@ -31,6 +31,9 @@ use crate::diff_args::{DiffArgs, DiffCmd};
 use crate::golden::case::Spec;
 use crate::golden::recording::Recording;
 use crate::golden::snapshot::Snapshot;
+use opentide_cli::commands::lint::Args as CliArgs;
+use opentide_cli::render::report::ReportFormat;
+use opentide_cli::tree::RootCommand;
 use opentide_workspace::lint::{Changed, LintCheck, LintOptions, LintReport};
 use opentide_workspace::{FileSystem as _, OsFs, RootOptions, Workspace};
 
@@ -250,21 +253,21 @@ struct Args {
     changed: bool,
 }
 
+/// `argv`'s `lint` options, as the product reads them; `None` when it holds
+/// another (`--format`, `--output`, a global flag, ...), the command line's
+/// usage errors (UC-3.5: another `--check` spelling) or no `lint`.
 fn parse_args(argv: &[String]) -> Option<Args> {
-    let mut rest = argv.iter().skip_while(|arg| *arg != "lint").skip(1);
-    let mut parsed = Args::default();
-    while let Some(arg) = rest.next() {
-        match arg.as_str() {
-            "--strict" => parsed.strict = true,
-            "--fix" => parsed.fix = true,
-            "--changed" => parsed.changed = true,
-            // Another check name is the command line's usage error (UC-3.5).
-            "--check" => parsed.checks.push(LintCheck::parse(rest.next()?)?),
-            "--file" => parsed.files.push(rest.next()?.clone()),
-            _ => return None,
-        }
-    }
-    Some(parsed)
+    let Some(RootCommand::Lint(parsed)) = crate::recorded::command(argv, "lint") else {
+        return None;
+    };
+    let flags = CliArgs::from(&parsed);
+    (flags.format == ReportFormat::Text && flags.output.is_none()).then_some(Args {
+        checks: flags.checks,
+        fix: flags.fix,
+        strict: flags.strict,
+        files: flags.files,
+        changed: flags.changed,
+    })
 }
 
 /// One difference.
@@ -1221,7 +1224,8 @@ mod tests {
             &["diff", "--filter"],
             &["diff", "--keep"],
         ] {
-            assert!(crate::parse_subcommand::<DiffCmd>(bad).is_err(), "{bad:?}");
+            let error = crate::parse_subcommand::<DiffCmd>(bad).unwrap_err();
+            assert_eq!(error.exit_code(), 2, "{bad:?}");
         }
         // A bad glob is the run's error, a filter that matches nothing too.
         assert!(run(&diff("[", None, false)).is_err());

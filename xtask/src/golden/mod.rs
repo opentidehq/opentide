@@ -42,9 +42,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 /// `cargo xtask golden <command>`: records what the frozen Python CLI does, and
-/// checks an engine against the recordings. Exit status: 0 passed, 1 a
-/// difference or a failed case, 2 usage error or the run could not start.
+/// checks an engine against the recordings.
 #[derive(Subcommand, Debug)]
+#[command(
+    after_help = "Exit status: 0 passed, 1 a difference or a failed case, 2 usage error \
+    or the run could not start."
+)]
 pub enum Cmd {
     /// Run every case through the oracle and write tests/golden/cases/ and
     /// COVERAGE.md. --check-determinism runs every case twice and fails,

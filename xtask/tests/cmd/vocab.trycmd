@@ -2,12 +2,12 @@
 
 ```console
 $ xtask vocab help
-The vocabularies: sync, generate, compare and ingest (UC-1.6, #812); `vocab help` lists the options
+The vocabularies: sync, generate, compare and ingest (UC-1.6, #812); `vocab --help` lists the commands
 ...
 
 $ xtask vocab
 ? 2
-The vocabularies: sync, generate, compare and ingest (UC-1.6, #812); `vocab help` lists the options
+The vocabularies: sync, generate, compare and ingest (UC-1.6, #812); `vocab --help` lists the commands
 ...
 
 $ xtask vocab frobnicate
