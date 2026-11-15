@@ -716,6 +716,7 @@ pub fn configuration_hover(
 /// Completion in the configuration file at `path`: keys of the table at the
 /// cursor (not those already set), table names in a header, and allowed
 /// values after `=`.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn configuration_completions(
     schemas: &ConfigurationSchemas,
     path: &str,
