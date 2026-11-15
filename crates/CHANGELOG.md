@@ -17,6 +17,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - If you called `opentide_connectors::defender::strip_kql_literals_and_comments` or `opentide_kql::defender_required_column_groups`, use `opentide_connectors::connector::kql_code` to mask a query and `opentide_connectors::defender::missing_required_column_groups` to check its columns.
 - If you pass or read the YAML values of `opentide-tide` (`IndexedObject::body`, `IndexedObject::from_body`, `index_value`, `object_refs`, `TideObject`), use `Arc<opentide_core::node::Node>` where you used `serde_yaml::Value`, and read a document with `opentide_core::node::load` (or `TideObject::parse`) where you called `serde_yaml::from_str`.
 
+- If you build `opentide-schema` with `--features wasm`, drop the flag: the crate builds for `wasm32-unknown-unknown` without it.
 - If you build the engine crates from source, use Rust 1.95 or later: `rust-version` is 1.95, which the YARA parser crates (`yara-x-parser`, `yara-x-fmt`) need.
 
 ### Breaking
@@ -32,6 +33,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **`opentide_analysis::QueryReport` has a public `placeholder` field** ([opentide#820](https://github.com/opentidehq/opentide/issues/820)). `analyze_queries` says which query is still the stand-in `opentide new` wrote, so a host need not read the file again to skip it. A struct literal of `QueryReport` without the field no longer compiles.
 
 - **Two copies of the Defender KQL masker are removed.** `opentide_connectors::defender::strip_kql_literals_and_comments` and `opentide_kql::defender_required_column_groups` (an unused copy of Defender's column check) are gone; both masked `//` before strings. Nothing in the workspace called them outside their own tests. Use `opentide_connectors::connector::kql_code` and `opentide_connectors::defender::missing_required_column_groups`.
+
+- **`opentide-schema` has no `wasm` feature.** It enabled nothing: the crate builds for `wasm32-unknown-unknown` as it is, and the `schema` workflow builds it so. Unused dependencies are gone too (`gix-fs` from `opentide-compile`, `opentide-kql` and `opentide-spl` from `opentide-lsp`, `tree-sitter` from `opentide-exabeam`, `serde` from `opentide-analysis` and `opentide-wasm`, `thiserror` from `opentide-cassette`), with no change to any API.
 
 ### Added
 

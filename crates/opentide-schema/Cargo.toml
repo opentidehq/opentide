@@ -23,10 +23,6 @@ python = ["dep:pyo3"]
 # The classes' type hints for the generated stubs (`cargo xtask stubs`, UC-1.9):
 # PyO3's introspection data, which only the stub build compiles in.
 stubs = ["python", "pyo3/experimental-inspect"]
-# The wasm32-unknown-unknown hosts. The skeleton adds no code behind it yet:
-# the TypeScript types arrive with UC-5.3 (#838). CI builds the crate for
-# wasm32 with it so that no dependency of the model stops compiling there.
-wasm = []
 
 [dependencies]
 opentide-core.workspace = true
