@@ -9,7 +9,9 @@ use crate::syntax::SyntaxKind as K;
 pub(super) fn tabular_expression(p: &mut P<'_>) {
     let m = p.start();
     if p.enter() {
+        let s = p.start();
         source(p);
+        p.done(s, K::TABULAR_SOURCE);
         while p.at(K::PIPE) {
             p.bump();
             operator(p);

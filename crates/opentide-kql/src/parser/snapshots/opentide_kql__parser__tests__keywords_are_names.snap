@@ -5,8 +5,9 @@ expression: "show(\"T | where by == on and has != count and kind has_any (1)\")"
 SOURCE_FILE@0..56
   QUERY@0..56
     TABULAR_EXPRESSION@0..56
-      TABLE_REF@0..1
-        IDENT@0..1 "T"
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
       WHITESPACE@1..2 " "
       PIPE@2..3 "|"
       WHITESPACE@3..4 " "
