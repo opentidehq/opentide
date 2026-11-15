@@ -43,6 +43,8 @@ opentide-compile.workspace = true
 jiff.workspace = true
 regex.workspace = true
 percent-encoding = "2"
+# Splunk's XML: the error body's message and the Atom feed of saved searches.
+roxmltree = { version = "0.21", default-features = false, features = ["std"] }
 shlex = "2.0"
 # Sentinel (UC-4.3): the request ids MSAL and azure-core stamp their requests with.
 uuid = { workspace = true, features = ["v4"] }
