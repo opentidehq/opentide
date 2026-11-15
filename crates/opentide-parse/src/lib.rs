@@ -51,7 +51,8 @@
 //! assert_eq!(parse.green.to_string(), source);
 //! ```
 
-// Track D adds its `ast` and `conformance` modules on the next lines.
+pub mod ast;
+pub mod conformance;
 
 #[cfg(feature = "differential")]
 pub mod differential;

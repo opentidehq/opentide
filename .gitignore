@@ -141,6 +141,15 @@ highlights/test/node_modules
 !/crates/*/assets/data/catalogs/tide/generated/
 !/crates/*/assets/highlights/generated/
 
+# The typed AST `cargo xtask codegen` writes from a language's .ungram
+# (src/generated/ast.rs), and the toolkit's test language's.
+!/crates/*/src/generated/
+/crates/*/src/generated/*
+!/crates/*/src/generated/ast.rs
+!/crates/opentide-parse/tests/ast_fixture/generated/
+/crates/opentide-parse/tests/ast_fixture/generated/*
+!/crates/opentide-parse/tests/ast_fixture/generated/ast.rs
+
 # insta writes a pending snapshot next to the committed one; `cargo insta review`
 # accepts or rejects it. Never commit one.
 *.snap.new

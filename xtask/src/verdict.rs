@@ -397,31 +397,55 @@ pub fn verdicts<'a>(
         .collect())
 }
 
-/// An approved verdict difference: the instance `label`, which the oracle's
-/// schema `schema` (a document's file name) refuses at `at` and Rust's
-/// accepts. Each is an entry of `tests/golden/APPROVED_DIFFS.toml`, named by
-/// `ledger`, and must still occur: an allowance no comparison uses is stale.
+/// Which schema of a verdict difference refuses the instance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refuser {
+    /// The oracle's refuses it and Rust's accepts it.
+    Oracle,
+    /// Rust's refuses it and the oracle's accepts it.
+    Rust,
+}
+
+/// An approved verdict difference: the instance `label`, which one schema
+/// `schema` (a document's file name), `refused_by`, refuses at `at` and the
+/// other accepts. Each is an entry of `tests/golden/APPROVED_DIFFS.toml`,
+/// named by `ledger`, and must still occur: an allowance no comparison uses
+/// is stale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Allowance {
     /// The instance's label (`<source>:<path or case>`).
     pub label: &'static str,
     /// The file name of the document it applies to.
     pub schema: &'static str,
-    /// Where the oracle's schema refuses it.
+    /// The schema that refuses it.
+    pub refused_by: Refuser,
+    /// Where that schema refuses it.
     pub at: &'static str,
     /// The ledger entry that records the difference.
     pub ledger: &'static str,
 }
 
 /// The approved verdict differences.
-pub const ALLOWANCES: [Allowance; 1] = [Allowance {
-    // `references: null` (objects_cases.toml `rule-configurations-null`):
-    // the model accepts it, the oracle's inlined definition refused it.
-    label: "object-case:rule-configurations-null",
-    schema: "rule.1.1.schema.json",
-    at: "/references",
-    ledger: "schema-references-null",
-}];
+pub const ALLOWANCES: [Allowance; 2] = [
+    Allowance {
+        // `references: null` (objects_cases.toml `rule-configurations-null`):
+        // the model accepts it, the oracle's inlined definition refused it.
+        label: "object-case:rule-configurations-null",
+        schema: "rule.1.1.schema.json",
+        refused_by: Refuser::Oracle,
+        at: "/references",
+        ledger: "schema-references-null",
+    },
+    Allowance {
+        // `schedule_offset = "$OFF"` (config_cases.toml `splunk-valid`):
+        // `deploy` never resolves the placeholder, so the model refuses it.
+        label: "config-case:splunk-valid:.opentide/configurations/platforms/splunk.toml",
+        schema: "platforms.splunk.schema.json",
+        refused_by: Refuser::Rust,
+        at: "/tenants/0/setup/schedule_offset",
+        ledger: "schema-splunk-offset-integer",
+    },
+];
 
 /// What one comparison found.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -462,18 +486,30 @@ pub fn compare(
         match (oracle, rust) {
             (None, None) => tally.accepted += 1,
             (Some(_), Some(_)) => tally.refused += 1,
-            (None, Some(reason)) => problems.push(format!(
-                "{name}: {}: the oracle's schema accepts it, Rust's refuses it ({reason})",
-                instance.label
-            )),
+            (None, Some(reason)) => {
+                if !approved(
+                    allowances,
+                    instance,
+                    file_name,
+                    Refuser::Rust,
+                    &reason,
+                    &mut tally,
+                ) {
+                    problems.push(format!(
+                        "{name}: {}: the oracle's schema accepts it, Rust's refuses it ({reason})",
+                        instance.label
+                    ));
+                }
+            }
             (Some(reason), None) => {
-                if let Some(allowance) = allowances.iter().find(|allowance| {
-                    allowance.label == instance.label
-                        && allowance.schema == file_name
-                        && allowance.at == reason.at
-                }) {
-                    tally.allowed.push(*allowance);
-                } else {
+                if !approved(
+                    allowances,
+                    instance,
+                    file_name,
+                    Refuser::Oracle,
+                    &reason,
+                    &mut tally,
+                ) {
                     problems.push(format!(
                         "{name}: {}: the oracle's schema refuses it ({reason}), Rust's accepts it",
                         instance.label
@@ -493,6 +529,27 @@ pub fn compare(
         ));
     }
     Ok(tally)
+}
+
+/// Whether one of *allowances* approves *refuser*'s refusal of *instance* in
+/// *schema* for *reason*, recording it in *tally*.
+fn approved(
+    allowances: &[Allowance],
+    instance: &Instance,
+    schema: &str,
+    refuser: Refuser,
+    reason: &Refusal,
+    tally: &mut Tally,
+) -> bool {
+    let found = allowances.iter().find(|allowance| {
+        allowance.label == instance.label
+            && allowance.schema == schema
+            && allowance.refused_by == refuser
+            && allowance.at == reason.at
+    });
+    found
+        .inspect(|allowance| tally.allowed.push(**allowance))
+        .is_some()
 }
 
 /// A problem for each allowance no comparison used.
@@ -605,6 +662,7 @@ mod tests {
         let allowance = Allowance {
             label: "object-case:n",
             schema: "rule.1.1.schema.json",
+            refused_by: Refuser::Oracle,
             at: "/r",
             ledger: "x",
         };
@@ -648,6 +706,60 @@ mod tests {
                 ]
             );
         }
+    }
+
+    #[test]
+    fn an_allowance_approves_a_refusal_only_by_its_own_schema() {
+        // Rust's schema is stricter: `r` is an integer there, any value in the oracle's.
+        let oracle = json!({"type": "object", "properties": {"r": {}}});
+        let rust = json!({"type": "object", "properties": {"r": {"type": "integer"}}});
+        let base = [instance(json!({"r": 1})), instance(json!({"r": 1, "s": 2}))];
+        let text = Instance {
+            label: "config-case:c".to_owned(),
+            value: json!({"r": "$X"}),
+        };
+        // A second refusal of both so that the comparison is not vacuous.
+        let both = Instance {
+            label: "config-case:both".to_owned(),
+            value: json!([]),
+        };
+        let allowance = Allowance {
+            label: "config-case:c",
+            schema: "platforms.x.schema.json",
+            refused_by: Refuser::Rust,
+            at: "/r",
+            ledger: "x",
+        };
+        let all = [&base[0], &both, &text];
+        let name = "case: .opentide/schemas/platforms.x.schema.json";
+        let mut problems = Vec::new();
+        let tally = compare(name, &oracle, &rust, &all, &[allowance], &mut problems).unwrap();
+        assert!(problems.is_empty(), "{problems:#?}");
+        assert_eq!(tally.allowed, [allowance]);
+        assert!(stale_allowances(&[allowance], &tally.allowed).is_empty());
+        // Without the allowance the refusal is a problem naming its direction.
+        let mut problems = Vec::new();
+        compare(name, &oracle, &rust, &all, &[], &mut problems).unwrap();
+        assert_eq!(problems.len(), 1, "{problems:#?}");
+        assert!(
+            problems[0].contains("the oracle's schema accepts it, Rust's refuses it"),
+            "{problems:#?}"
+        );
+        // The allowance for the other direction does not approve it, and is stale.
+        let wrong = Allowance {
+            refused_by: Refuser::Oracle,
+            ..allowance
+        };
+        let mut problems = Vec::new();
+        let tally = compare(name, &oracle, &rust, &all, &[wrong], &mut problems).unwrap();
+        assert_eq!(problems.len(), 1, "{problems:#?}");
+        assert!(tally.allowed.is_empty());
+        assert_eq!(stale_allowances(&[wrong], &tally.allowed).len(), 1);
+        // The allowance is stale once the schemas agree again.
+        let mut problems = Vec::new();
+        let tally = compare(name, &oracle, &oracle, &all, &[allowance], &mut problems).unwrap();
+        assert!(tally.allowed.is_empty());
+        assert_eq!(stale_allowances(&[allowance], &tally.allowed).len(), 1);
     }
 
     #[test]
