@@ -96,7 +96,7 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 | `OPENTIDE_DEBUG` | `1` for debug logging, like `--debug` |
 | `NO_COLOR` | Any non-empty value turns colour off, like `--no-color`; an empty one is ignored |
 | `FORCE_COLOR` | `0`, `false`, `no` or `off` turns colour off; any other non-blank value forces it on a pipe, in CI and under `TERM=dumb`, in `human` and `plain` modes and in `--help` (`--json`, MCP and coding-agent output never take colour) |
-| `CLICOLOR_FORCE` | Any non-blank value but `0` forces colour, like `FORCE_COLOR=1`; `FORCE_COLOR` wins over it, so `FORCE_COLOR=0` beats `CLICOLOR_FORCE=1` |
+| `CLICOLOR_FORCE` | Any non-blank value but `0` forces colour, like `FORCE_COLOR=1`: only `0` counts as off, so `false` and `no` force colour too; `FORCE_COLOR` wins over it, so `FORCE_COLOR=0` beats `CLICOLOR_FORCE=1` |
 | `OPENTIDE_JSON_INDENT` | `0` prints every `--json` document on one line, `2` indents it; default: indented at a terminal, one line otherwise |
 | `OPENTIDE_REPO_ROOT` | Repository root, like `--repo` |
 | `OPENTIDE_DATA_ROOT` | Bundled data root, like `--data` |
@@ -117,7 +117,7 @@ The CLI context calls `apply_environment()` before engine work, pushing flags in
 
 ## Terminal output
 
-Interactive terminals receive Rich colours. Redirected or captured streams, CI logs and coding agents get plain text that is never wrapped, so a path stays on one line. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it, in `--help` too (`--no-color` and `NO_COLOR` win over it). `OPENTIDE_OUTPUT=human` is explicit and keeps colour at a terminal even with `--no-color`. `OPENTIDE_OUTPUT` (`human`, `plain`, `agent`, `json`) overrides the choice; see [Output modes](./json-output.md#output-modes).
+Interactive terminals receive Rich colours. Redirected or captured streams, CI logs and coding agents get plain text that is never wrapped, so a path stays on one line. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it, in `--help` too (`--no-color` and `NO_COLOR` win over it). `OPENTIDE_OUTPUT=human` is explicit and keeps colour at a terminal even with `--no-color` or `NO_COLOR`. `OPENTIDE_OUTPUT` (`human`, `plain`, `agent`, `json`) overrides the choice; see [Output modes](./json-output.md#output-modes).
 
 Routine commands do not print an ASCII banner. The interactive setup wizard uses a compact branded heading.
 

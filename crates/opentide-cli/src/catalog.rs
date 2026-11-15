@@ -36,6 +36,16 @@ pub fn environment() -> Vec<(String, String)> {
             "Any non-empty value turns colour off, like --no-color".into(),
         ),
         (
+            "FORCE_COLOR",
+            "0, false, no or off turns colour off; any other value forces it in human and \
+             plain output; NO_COLOR and --no-color win"
+                .into(),
+        ),
+        (
+            "CLICOLOR_FORCE",
+            "Any value but 0 forces colour, like FORCE_COLOR=1; FORCE_COLOR wins".into(),
+        ),
+        (
             "OPENTIDE_JSON_INDENT",
             "0 for one-line JSON, 2 for indented; default: indented on a terminal".into(),
         ),

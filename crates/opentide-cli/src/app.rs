@@ -3939,6 +3939,12 @@ mod tests {
         // even with --no-color (documented in global-options.md).
         let human = dispatched("deploy --no-color", &[("OPENTIDE_OUTPUT", "human")], true);
         assert!(human.stderr.contains('\u{1b}'), "{}", human.stderr);
+        let human = dispatched(
+            "deploy",
+            &[("OPENTIDE_OUTPUT", "human"), ("NO_COLOR", "1")],
+            true,
+        );
+        assert!(human.stderr.contains('\u{1b}'), "{}", human.stderr);
         // An explicit --no-color wins over FORCE_COLOR and CLICOLOR_FORCE, as
         // NO_COLOR does, on a pipe and at a terminal.
         let flagged = |pairs: &[(&str, &str)], tty: bool| {

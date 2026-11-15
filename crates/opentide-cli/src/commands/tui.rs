@@ -222,6 +222,16 @@ mod tests {
             ),
             (
                 false,
+                &[("FORCE_COLOR", "no")],
+                "FORCE_COLOR turns colour off",
+            ),
+            (
+                false,
+                &[("FORCE_COLOR", "off")],
+                "FORCE_COLOR turns colour off",
+            ),
+            (
+                false,
                 &[("GITLAB_CI", "true")],
                 "a CI environment was detected",
             ),
