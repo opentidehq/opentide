@@ -4,7 +4,7 @@
 //! `crates/opentide-<lang>/src/generated/ast.rs`, committed and checked by
 //! `codegen --check`.
 //!
-//! The generated file holds, over [`rowan`] trees through
+//! The generated file holds, over `rowan` trees through
 //! `opentide_parse::ast`:
 //!
 //! - a struct per node and an enum per `A = B | C` choice of nodes, each an
