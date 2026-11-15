@@ -354,15 +354,14 @@ done
         crate::script::write_executable(&server, &STUB_SERVER.replace("{prelude}", prelude))
             .unwrap();
         let run = RunDir::prepare(&dir.join("run"), Some(&source)).unwrap();
-        let result = first_diagnostics_with(
+        first_diagnostics_with(
             &server,
             &[],
             &run,
             Path::new("objects/rules/a.yaml"),
             None,
             before_spawn,
-        );
-        result
+        )
     }
 
     // The floor reads /proc (VmHWM, clear_refs): Linux only.
