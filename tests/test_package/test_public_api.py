@@ -7,7 +7,6 @@ from __future__ import annotations
 import importlib
 import sys
 from importlib.metadata import entry_points
-from importlib.resources import files
 from pathlib import Path
 
 import pytest
@@ -103,12 +102,15 @@ def test_importing_the_package_loads_neither_the_engine_nor_pydantic() -> None:
     assert result.stdout.strip() == "[]"
 
 
-def test_bundled_data_ships_with_the_package() -> None:
-    data_path = Path(str(files("opentide.data")))
-    assert data_path.is_dir()
-    platforms = list((data_path / "configurations" / "platforms").glob("*.toml"))
-    assert len(platforms) == 13
-    assert (data_path / "diagnostics" / "engine_unavailable.md").is_file()
+def test_the_engine_serves_its_bundled_data_from_the_binary() -> None:
+    """The binary compiles ``src/opentide/data`` and ``src/opentide/schemas`` in; the
+    package reads neither. An installed wheel carries no copy (a checkout's
+    editable install still has the tree), and the SDK answers all the same."""
+    assert len(importlib.import_module("opentide.sdk").platforms()) == 13
+    package = Path(opentide.__file__).parent
+    if "site-packages" in package.parts:
+        assert not (package / "data").exists()
+        assert not (package / "schemas").exists()
 
 
 def test_no_builtin_platform_is_an_entry_point() -> None:

@@ -171,12 +171,15 @@ fn settings(tenant: &Json) -> Result<Settings, CompileError> {
         mode: timerange_mode(deploy::setup(tenant, "frequency_scheduling")).to_owned(),
         skew,
         offset,
-        // `true`, `false`, or a `$NAME` placeholder, which leaves it on.
-        enterprise_security: !matches!(
-            deploy::setup(tenant, "enterprise_security"),
-            None | Some(Json::Bool(false))
-        ),
+        enterprise_security: enterprise_security(tenant)?,
     })
+}
+
+/// Whether the tenant runs Splunk Enterprise Security: `enterprise_security`
+/// is `true`, or unset and off. Any other value, a `$NAME` placeholder
+/// included, is an error that names the key.
+pub fn enterprise_security(tenant: &Json) -> Result<bool, CompileError> {
+    deploy::setup_switch(tenant, "enterprise_security", false).map_err(|message| invalid(&message))
 }
 
 /// A value the block sets: not `null` and not an empty string, list or
@@ -707,21 +710,48 @@ mod tests {
         now: (4, 3),
     };
 
+    fn es_tenant(setup: &str) -> Json {
+        serde_json::from_str(&format!(r#"{{"setup":{{{setup}}}}}"#)).unwrap()
+    }
+
     /// `enterprise_security` is a switch: `true` turns it on, `false` or
-    /// no setting leaves it off, and a `$NAME` placeholder, which the
-    /// compile step does not resolve, leaves it on as before.
+    /// no setting leaves it off.
     #[test]
     fn enterprise_security_is_read_as_a_switch() {
-        let on = |setup: &str| -> bool {
-            let tenant: Json =
-                serde_json::from_str(&format!(r#"{{"setup":{{{setup}}}}}"#)).unwrap();
-            settings(&tenant).unwrap().enterprise_security
-        };
+        let on = |setup: &str| settings(&es_tenant(setup)).unwrap().enterprise_security;
         assert!(on(r#""enterprise_security": true"#));
-        assert!(on(r#""enterprise_security": "$SPLUNK_ES""#));
         assert!(!on(r#""enterprise_security": false"#));
         assert!(!on(r#""enterprise_security": null"#));
         assert!(!on(""));
+    }
+
+    /// Nothing but a boolean is a switch: `0`, `""`, `"no"` and `"true"` are
+    /// refused, naming the key, and so is a `$NAME` placeholder, which the
+    /// compile step does not resolve.
+    #[test]
+    fn enterprise_security_refuses_what_is_not_a_boolean() {
+        for value in ["0", "1", r#""""#, r#""no""#, r#""true""#, "[]", "1.5"] {
+            let error = settings(&es_tenant(&format!(r#""enterprise_security": {value}"#)))
+                .err()
+                .unwrap_or_else(|| panic!("{value} was accepted"));
+            assert!(
+                error
+                    .reason
+                    .contains("enterprise_security must be true or false, got"),
+                "{value}: {}",
+                error.reason
+            );
+        }
+        let error =
+            enterprise_security(&es_tenant(r#""enterprise_security": "$SPLUNK_ES""#)).unwrap_err();
+        assert!(
+            error.reason.contains(
+                "enterprise_security is the placeholder \"$SPLUNK_ES\", \
+                 which is not resolved for this setting: write true or false"
+            ),
+            "{}",
+            error.reason
+        );
     }
 
     #[test]

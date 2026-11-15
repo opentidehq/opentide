@@ -594,6 +594,19 @@ mod tests {
     }
 
     #[test]
+    fn an_integer_beyond_i64_is_the_nearest_float_in_a_node() {
+        // The node has no integer beyond i64: u64::MAX is 2^64 as the nearest float.
+        let Value::Float(float) = node_of(&Json::UInt(u64::MAX)).value else {
+            panic!("a UInt is a node float");
+        };
+        assert_eq!(float.to_bits(), 2f64.powi(64).to_bits());
+        assert!(matches!(
+            node_of(&Json::Int(i64::MAX)).value,
+            Value::Int(i64::MAX)
+        ));
+    }
+
+    #[test]
     fn run_state_by_strategy() {
         let block = json(r#"{"run_frequency": "LIVE"}"#);
         let preview = run_state(&block, StatusStrategy::Preview);

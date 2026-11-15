@@ -261,3 +261,23 @@ fn ssl(value: &toml::Value, env: &Environment, mode: Mode) -> Result<bool, Strin
         other => Err(format!("ssl must be true or false, got {other}")),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_integer_beyond_i64_is_the_nearest_float_in_a_setup_value() {
+        use opentide_compile::Json as J;
+        // TOML integers are signed 64-bit: u64::MAX is 2^64 as the nearest float.
+        let Some(toml::Value::Float(float)) = toml_value(&J::UInt(u64::MAX)) else {
+            panic!("a UInt is a TOML float");
+        };
+        assert_eq!(float.to_bits(), 2f64.powi(64).to_bits());
+        // An integer that fits keeps its digits.
+        assert_eq!(
+            toml_value(&J::Int(i64::MAX)),
+            Some(toml::Value::Integer(i64::MAX))
+        );
+    }
+}
