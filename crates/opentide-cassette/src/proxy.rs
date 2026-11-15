@@ -295,6 +295,7 @@ fn failure(status: u16, message: &str) -> hyper::Response<Full<Bytes>> {
 }
 
 /// One request: forwarded, recorded or replayed.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 async fn handle(
     request: hyper::Request<hyper::body::Incoming>,
     shared: &Shared,

@@ -201,6 +201,7 @@ pub fn validate_query(check: &QueryCheck, context: &Context<'_>) -> Result<Json,
     Ok(offline(check, context))
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
     let QueryCheck {
         query,
@@ -382,6 +383,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
 
 /// `run_query`: refused without `live`, with the call that runs it; with
 /// `live`, the command line's `query` on the tenants.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn run_query(run: &QueryRun, context: &Context<'_>) -> Result<Json, String> {
     let platform = run.platform.as_str();
     let tenants = names(&run.tenant);
