@@ -269,7 +269,7 @@ impl SentinelOne {
         match answer.status {
             200 => Ok(QueryValidation::Ran),
             400 => {
-                let body = answer.json().unwrap_or(Json::Null);
+                let body = answer.quotable_json().unwrap_or(Json::Null);
                 let detail = body
                     .get("errors")
                     .and_then(|errors| match errors {
@@ -277,18 +277,14 @@ impl SentinelOne {
                         _ => None,
                     })
                     .and_then(|error| error.get("detail"))
-                    .map_or_else(
-                        || answer.credentials.mask_text(&json_text(&body)),
-                        json_text,
-                    );
+                    .map_or_else(|| json_text(&body), json_text);
                 Ok(QueryValidation::Refused(detail))
             }
             status => Err(SentinelOneError::Unforeseen {
                 status,
-                context: answer.json().map_or_else(
-                    || answer.text(),
-                    |b| answer.credentials.mask_text(&json_text(&b)),
-                ),
+                context: answer
+                    .quotable_json()
+                    .map_or_else(|| answer.text(), |b| json_text(&b)),
             }),
         }
     }
@@ -455,9 +451,9 @@ fn http_error(answer: &Answer) -> SentinelOneError {
         404 => SentinelOneError::NotFound { detail },
         status => SentinelOneError::Unforeseen {
             status,
-            context: answer.json().map_or(detail, |body| {
-                answer.credentials.mask_text(&json_text(&body))
-            }),
+            context: answer
+                .quotable_json()
+                .map_or(detail, |body| json_text(&body)),
         },
     }
 }
@@ -677,6 +673,22 @@ impl Platform for SentinelOne {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_unforeseen_answer_does_not_quote_the_bearer() {
+        use crate::answer::{TEST_BEARER, answer_to_bearer};
+        let mut answer = answer_to_bearer(&format!(
+            r#"{{"errors":[{{"detail":"bad {TEST_BEARER}"}}]}}"#
+        ));
+        answer.status = 500;
+        let SentinelOneError::Unforeseen { context, .. } = http_error(&answer) else {
+            panic!("a 500 is unforeseen");
+        };
+        assert!(
+            context.contains("bad ***") && !context.contains(TEST_BEARER),
+            "{context}"
+        );
+    }
 
     #[test]
     fn the_limit_stage_is_read_past_strings_and_comments() {

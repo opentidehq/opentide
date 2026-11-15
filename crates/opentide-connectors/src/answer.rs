@@ -163,6 +163,27 @@ impl Credentials {
         })
     }
 
+    /// Every string and key of *json* with each credential it holds
+    /// replaced by `***`.
+    fn mask_json(&self, json: &mut Json) {
+        match json {
+            Json::Str(text) => {
+                if self.echoed(text) {
+                    *text = self.mask_text(text);
+                }
+            }
+            Json::Array(items) => items.iter_mut().for_each(|item| self.mask_json(item)),
+            Json::Object(object) => {
+                let members = std::mem::take(object);
+                for (key, mut value) in members {
+                    self.mask_json(&mut value);
+                    object.insert(self.mask_text(&key), value);
+                }
+            }
+            Json::Null | Json::Bool(_) | Json::Int(_) | Json::UInt(_) | Json::Float(_) => {}
+        }
+    }
+
     fn echoed(&self, text: &str) -> bool {
         self.0
             .iter()
@@ -214,9 +235,26 @@ impl Answer {
     }
 
     /// The body as JSON, keys in order; `None` when it is not JSON
-    /// (`response.json()` raising).
+    /// (`response.json()` raising). The data a client reads (a token
+    /// endpoint's `access_token`, which may hold the request's credential):
+    /// it is read as it came. Whatever an error quotes comes from
+    /// [`Answer::quotable_json`] instead.
     pub fn json(&self) -> Option<Json> {
         serde_json::from_slice(&self.body).ok()
+    }
+
+    /// The body as JSON for a field an error or a message copies out of it:
+    /// each string and key that holds one of the request's credentials has
+    /// it replaced by `***`, as [`Answer::text`] masks the text.
+    pub fn quotable_json(&self) -> Option<Json> {
+        let mut json = self.json()?;
+        if self
+            .credentials
+            .echoed(&String::from_utf8_lossy(&self.body))
+        {
+            self.credentials.mask_json(&mut json);
+        }
+        Some(json)
     }
 
     /// The body as text, invalid UTF-8 replaced (`response.text`), the
@@ -301,7 +339,9 @@ pub fn page_title(body: &[u8]) -> Option<String> {
 }
 
 /// One line on an answer that is not the API's JSON: its status, its body
-/// and a gateway's reading (`describe_answer`).
+/// and a gateway's reading (`describe_answer`). It quotes *body* as given:
+/// a caller passes the masked text ([`Answer::not_json_detail`] does), never
+/// the raw bytes of an answer to a request that sent a credential.
 pub fn describe_answer(
     status: u16,
     body: &[u8],
@@ -336,6 +376,31 @@ pub fn describe_answer(
         None => text,
     }
 }
+
+/// A `400` JSON answer *body* to a request that sent the bearer
+/// [`TEST_BEARER`], for the tests of what an error quotes from an answer.
+#[cfg(test)]
+pub(crate) fn answer_to_bearer(body: &str) -> Answer {
+    let mut request = crate::transport::Request::new(
+        crate::transport::Method::GET,
+        "https://example.test/".parse().unwrap(),
+    );
+    request.headers_mut().insert(
+        "authorization",
+        format!("Bearer {TEST_BEARER}").parse().unwrap(),
+    );
+    Answer::new(
+        400,
+        Some("application/json".into()),
+        body.as_bytes().to_vec(),
+        Duration::ZERO,
+        &Credentials::of(&request),
+    )
+}
+
+/// The bearer [`answer_to_bearer`] sends.
+#[cfg(test)]
+pub(crate) const TEST_BEARER: &str = "abcdefgh12345678";
 
 #[cfg(test)]
 mod tests {
@@ -394,6 +459,42 @@ mod tests {
         let credentials = Credentials::of(&request_with("authorization", &format!("Basic {pair}")));
         let masked = credentials.mask(b"pass:word-1234 a-user-name".to_vec());
         assert_eq!(String::from_utf8(masked).unwrap(), "*** ***");
+    }
+
+    /// A field an error copies out of the JSON (a message, a list entry, a
+    /// key) is masked as the text is, and an answer echoing nothing is read
+    /// as it came.
+    #[test]
+    fn quotable_json_is_masked_like_the_text() {
+        let credentials =
+            Credentials::of(&request_with("authorization", "Bearer abcdefgh12345678"));
+        let answer = |body: &str| {
+            Answer::new(
+                401,
+                Some("application/json".into()),
+                body.as_bytes().to_vec(),
+                Duration::ZERO,
+                &credentials,
+            )
+        };
+        let echoed = answer(
+            r#"{"error":{"message":"bad Bearer abcdefgh12345678","list":["abcdefgh12345678",7]},"abcdefgh12345678":true}"#,
+        );
+        assert_eq!(
+            echoed.quotable_json().unwrap().to_compact(),
+            r#"{"error":{"message":"bad Bearer ***","list":["***",7]},"***":true}"#
+        );
+        assert!(!echoed.text().contains("abcdefgh12345678"));
+        // The data a client reads is as it came.
+        assert!(
+            echoed
+                .json()
+                .unwrap()
+                .to_compact()
+                .contains("abcdefgh12345678")
+        );
+        let plain = r#"{"b":[1,{"a":"x"}],"a":null}"#;
+        assert_eq!(answer(plain).quotable_json().unwrap().to_compact(), plain);
     }
 
     #[test]

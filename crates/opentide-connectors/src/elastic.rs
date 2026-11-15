@@ -1314,7 +1314,7 @@ fn write_failed(
 
 /// `_kibana_error`: Kibana's `message`, else the body's text.
 fn kibana_error(answer: &Answer) -> String {
-    match answer.json() {
+    match answer.quotable_json() {
         Some(body) => match body.get("message").filter(|m| m.is_filled()) {
             Some(message) if body.as_object().is_some() => json_text(message),
             _ => answer.text(),
@@ -2222,6 +2222,13 @@ pub fn advisories(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn kibana_errors_do_not_quote_the_bearer() {
+        use crate::answer::{TEST_BEARER, answer_to_bearer};
+        let answer = answer_to_bearer(&format!(r#"{{"message":"no access for {TEST_BEARER}"}}"#));
+        assert_eq!(kibana_error(&answer), "no access for ***");
+    }
 
     #[test]
     fn query_text_is_read_past_comments_and_strings() {
