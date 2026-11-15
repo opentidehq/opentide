@@ -164,7 +164,8 @@ impl Credentials {
     }
 
     /// Every string and key of *json* with each credential it holds
-    /// replaced by `***`.
+    /// replaced by `***`. Keys that mask to the same text are kept apart:
+    /// the second is `***#2`, the third `***#3`, so no member is lost.
     fn mask_json(&self, json: &mut Json) {
         match json {
             Json::Str(text) => {
@@ -177,7 +178,14 @@ impl Credentials {
                 let members = std::mem::take(object);
                 for (key, mut value) in members {
                     self.mask_json(&mut value);
-                    object.insert(self.mask_text(&key), value);
+                    let masked = self.mask_text(&key);
+                    let mut name = masked.clone();
+                    let mut copy = 1;
+                    while object.contains_key(name.as_str()) {
+                        copy += 1;
+                        name = format!("{masked}#{copy}");
+                    }
+                    object.insert(name, value);
                 }
             }
             Json::Null | Json::Bool(_) | Json::Int(_) | Json::UInt(_) | Json::Float(_) => {}
@@ -248,13 +256,17 @@ impl Answer {
     /// it replaced by `***`, as [`Answer::text`] masks the text.
     pub fn quotable_json(&self) -> Option<Json> {
         let mut json = self.json()?;
-        if self
-            .credentials
-            .echoed(&String::from_utf8_lossy(&self.body))
-        {
-            self.credentials.mask_json(&mut json);
-        }
+        self.credentials.mask_json(&mut json);
         Some(json)
+    }
+
+    /// *part* of the body (read with [`Answer::json`]) as
+    /// [`Answer::quotable_json`] would give it, for a field copied out of an
+    /// answer whose other fields are the data the caller returns as it came.
+    pub fn quoted(&self, part: &Json) -> Json {
+        let mut part = part.clone();
+        self.credentials.mask_json(&mut part);
+        part
     }
 
     /// The body as text, invalid UTF-8 replaced (`response.text`), the
@@ -495,6 +507,35 @@ mod tests {
         );
         let plain = r#"{"b":[1,{"a":"x"}],"a":null}"#;
         assert_eq!(answer(plain).quotable_json().unwrap().to_compact(), plain);
+    }
+
+    /// A credential the API writes with JSON escapes is not in the raw
+    /// bytes, but is in the string they decode to: it is masked there, and
+    /// two keys that mask alike are both kept.
+    #[test]
+    fn quotable_json_masks_escaped_credentials_and_keeps_every_key() {
+        let credentials =
+            Credentials::of(&request_with("authorization", "Bearer abcd/efgh12345678"));
+        let answer = |body: &str| {
+            Answer::new(
+                400,
+                Some("application/json".into()),
+                body.as_bytes().to_vec(),
+                Duration::ZERO,
+                &credentials,
+            )
+        };
+        let escaped = answer(r#"{"message":"bad abcd\/efgh12345678 or \u0061bcd/efgh12345678"}"#);
+        assert!(!escaped.body.windows(9).any(|w| w == b"abcd/efgh"));
+        assert_eq!(
+            escaped.quotable_json().unwrap().to_compact(),
+            r#"{"message":"bad *** or ***"}"#
+        );
+        let keys = answer(r#"{"abcd/efgh12345678":1,"x":2,"***":3}"#);
+        assert_eq!(
+            keys.quotable_json().unwrap().to_compact(),
+            r#"{"***":1,"x":2,"***#2":3}"#
+        );
     }
 
     #[test]

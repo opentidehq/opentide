@@ -268,18 +268,7 @@ impl SentinelOne {
         .await?;
         match answer.status {
             200 => Ok(QueryValidation::Ran),
-            400 => {
-                let body = answer.quotable_json().unwrap_or(Json::Null);
-                let detail = body
-                    .get("errors")
-                    .and_then(|errors| match errors {
-                        Json::Array(items) => items.first(),
-                        _ => None,
-                    })
-                    .and_then(|error| error.get("detail"))
-                    .map_or_else(|| json_text(&body), json_text);
-                Ok(QueryValidation::Refused(detail))
-            }
+            400 => Ok(QueryValidation::Refused(refusal_detail(&answer))),
             status => Err(SentinelOneError::Unforeseen {
                 status,
                 context: answer
@@ -442,6 +431,19 @@ fn write(cx: TenantContext<'_>, value: &Json) -> Result<Vec<u8>, ConnectorError>
     })
 }
 
+/// The first error's `detail` of a `400` to a PowerQuery check, else the
+/// whole body.
+fn refusal_detail(answer: &Answer) -> String {
+    let body = answer.quotable_json().unwrap_or(Json::Null);
+    body.get("errors")
+        .and_then(|errors| match errors {
+            Json::Array(items) => items.first(),
+            _ => None,
+        })
+        .and_then(|error| error.get("detail"))
+        .map_or_else(|| json_text(&body), json_text)
+}
+
 /// The error of a STAR rule call that did not answer 200 (`_http_errors`).
 fn http_error(answer: &Answer) -> SentinelOneError {
     let detail = answer.text();
@@ -509,6 +511,7 @@ fn data(answer: &Answer, tenant: &str) -> Result<Json, ConnectorError> {
         ));
     };
     if answer.status != 200 {
+        let body = answer.quotable_json().unwrap_or(body);
         let detail = body
             .get("errors")
             .and_then(|errors| match errors {
@@ -536,7 +539,16 @@ fn data(answer: &Answer, tenant: &str) -> Result<Json, ConnectorError> {
         ));
     }
     Ok(match body.get("data") {
-        Some(data @ Json::Object(_)) => data.clone(),
+        Some(Json::Object(members)) => {
+            // `finished` copies these two into the refusal it raises.
+            let mut members = members.clone();
+            for key in ["responseError", "error"] {
+                if let Some(value) = members.get_mut(key) {
+                    *value = answer.quoted(value);
+                }
+            }
+            Json::Object(members)
+        }
         _ => Json::Object(Object::new()),
     })
 }
@@ -673,6 +685,46 @@ impl Platform for SentinelOne {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::answer::{TEST_BEARER, answer_to_bearer};
+
+    #[test]
+    fn a_validate_400_gives_the_detail_and_never_the_bearer() {
+        let detail = |body: &str| refusal_detail(&answer_to_bearer(body));
+        assert_eq!(
+            detail(&format!(
+                r#"{{"errors":[{{"detail":"bad {TEST_BEARER}"}}]}}"#
+            )),
+            "bad ***"
+        );
+        assert_eq!(
+            detail(&format!(r#"{{"errors":[],"note":"{TEST_BEARER}"}}"#)),
+            r#"{"errors":[],"note":"***"}"#
+        );
+    }
+
+    #[test]
+    fn a_refused_powerquery_does_not_quote_the_bearer() {
+        let mut answer = answer_to_bearer(&format!(
+            r#"{{"errors":[{{"detail":"bad {TEST_BEARER}","title":"t"}}]}}"#
+        ));
+        let refused = |answer: &Answer| match data(answer, "t").unwrap_err() {
+            ConnectorError::Refused { detail, .. } => detail.unwrap(),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(refused(&answer), "bad ***");
+        // A finished-with-failure answer copies `responseError`; rows stay as sent.
+        answer.status = 200;
+        answer.body = format!(
+            r#"{{"data":{{"status":"FAILED","responseError":"no {TEST_BEARER}","data":[["{TEST_BEARER}"]]}}}}"#
+        )
+        .into_bytes();
+        let data = data(&answer, "t").unwrap();
+        let ConnectorError::Refused { detail, .. } = finished(&data, "t").unwrap_err() else {
+            panic!("a failed query is a refusal");
+        };
+        assert_eq!(detail.as_deref(), Some("no ***"));
+        assert!(data.to_compact().contains(TEST_BEARER), "rows are data");
+    }
 
     #[test]
     fn an_unforeseen_answer_does_not_quote_the_bearer() {

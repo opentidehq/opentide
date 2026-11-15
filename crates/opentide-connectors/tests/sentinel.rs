@@ -78,7 +78,8 @@ fn sentinel_deploy_sends_what_the_python_client_sent() {
     })
     .unwrap();
     assert_eq!(tenant.verify(), Vec::new());
-    // ARM's error code is redacted in the cassette ("code" names a secret).
+    // ARM's error code is redacted in the cassette ("code" names a secret): the
+    // recorder wrote the bearer's own replay value, so the error masks it.
     assert_eq!(
         seen,
         [
@@ -89,7 +90,7 @@ fn sentinel_deploy_sends_what_the_python_client_sent() {
             "404 | DELETE https://management.azure.com/subscriptions/sub-0001/resourceGroups/soc-rg/\
              providers/Microsoft.OperationalInsights/workspaces/soc%20workspace/providers/\
              Microsoft.SecurityInsights/alertRules/00000000-0000-4000-8003-000000000001 failed \
-             with HTTP 404 REDACTED: Alert rule with id '00000000-0000-4000-8003-000000000001' was \
+             with HTTP 404 ***: Alert rule with id '00000000-0000-4000-8003-000000000001' was \
              not found.",
         ]
     );
@@ -209,13 +210,14 @@ fn sentinel_query_sends_what_the_python_runner_sent() {
             other => panic!("{other:?}"),
         })
         .collect();
-    // The 403's code is redacted in the cassette ("code" names a secret).
+    // The 403's code is redacted in the cassette ("code" names a secret): the
+    // recorder wrote the bearer's own replay value, so the error masks it.
     assert_eq!(
         refusals,
         [
             "Log Analytics refused the query on replayed: Query could not be parsed at 'whre' on \
              line [1,22]",
-            "Log Analytics refused the query on replayed: REDACTED: The provided credentials \
+            "Log Analytics refused the query on replayed: ***: The provided credentials \
              have insufficient access to perform the requested operation",
         ]
     );
