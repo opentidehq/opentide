@@ -914,13 +914,7 @@ pub fn run(command: &DiffCmd) -> Result<u8> {
     if cases.is_empty() {
         bail!("no recorded validate case matches");
     }
-    let scratch = Scratch {
-        path: keep.clone().unwrap_or_else(|| {
-            std::env::temp_dir().join(format!("xtask-validate-{}", std::process::id()))
-        }),
-        keep: keep.is_some(),
-    };
-    std::fs::create_dir_all(&scratch.path)?;
+    let scratch = Scratch::reusing("xtask-validate-", keep.as_deref())?;
     let mut laid_out: BTreeMap<String, PathBuf> = BTreeMap::new();
     let mut differences = Vec::new();
     for (number, (case, recorded, files)) in cases.iter().enumerate() {

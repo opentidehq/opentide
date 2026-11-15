@@ -765,19 +765,21 @@ fn run(options: &Options) -> Result<()> {
     }
     let (root, target) = cargo_paths()?;
     let base = target.join("xtask-bench");
-    // One work directory per process: two runs at once never share a copy.
-    let work = base.join(format!(
-        "work-{}-{}-{}",
-        options.engine.name(),
-        options.scale,
-        std::process::id()
-    ));
-    let outcome = run_in(options, &root, &base, &work);
+    // One work directory per run: two runs at once never share a copy.
+    std::fs::create_dir_all(&base).with_context(|| format!("create {}", base.display()))?;
+    let work = tempfile::Builder::new()
+        .prefix(&format!(
+            "work-{}-{}-",
+            options.engine.name(),
+            options.scale
+        ))
+        .tempdir_in(&base)
+        .with_context(|| format!("create a work directory in {}", base.display()))?;
+    let outcome = run_in(options, &root, &base, work.path());
     drop(ballast);
-    if work.exists()
-        && let Err(err) = std::fs::remove_dir_all(&work)
-    {
-        eprintln!("bench: could not remove {}: {err}", work.display());
+    let path = work.path().to_path_buf();
+    if let Err(err) = work.close() {
+        eprintln!("bench: could not remove {}: {err}", path.display());
     }
     outcome
 }
