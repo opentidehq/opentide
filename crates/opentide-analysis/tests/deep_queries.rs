@@ -37,9 +37,10 @@ const CHAIN_CAP: usize = 20_000;
 
 // Chain floors. Measured edge (the largest size that finished within 60 s, or
 // the cap), in a debug build under a host load average of 15 to 25.
-/// kql: 2,000 terms took 21 s, 3,000 took 41 s, 4,000 took 72 s (quadratic).
-/// Set below the edge so that load cannot flip the test.
-const KQL_CHAIN_FLOOR: usize = 2_000;
+/// kql: 2,000 terms took 21 s locally but 63 s on a CI runner, 3,000 took 41 s,
+/// 4,000 took 72 s (quadratic). Set at 1,000 (about a quarter of the 2,000 time)
+/// so that a loaded runner cannot flip the test.
+const KQL_CHAIN_FLOOR: usize = 1_000;
 /// yaral: 1,000 terms took 6 s, 1,500 took 20 s, 2,000 took 44 s, 2,500 took 87 s
 /// (quadratic); 1,500 took 71 s on a CI runner. Set well below the edge so that
 /// load cannot flip the test.
