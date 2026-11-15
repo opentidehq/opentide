@@ -239,26 +239,15 @@ pub fn utc_now_iso() -> Result<String> {
     Ok(format_utc(since.as_secs(), since.subsec_millis()))
 }
 
-/// `YYYY-MM-DDTHH:MM:SS.mmmZ` for `seconds` after the epoch.
+/// `YYYY-MM-DDTHH:MM:SS.mmmZ` for `seconds` after the epoch (a moment past
+/// the end of jiff's range, year 9999, reads as the end of it).
 pub fn format_utc(seconds: u64, millis: u32) -> String {
-    let days = i64::try_from(seconds / 86_400).unwrap_or(i64::MAX);
-    let rest = seconds % 86_400;
-    // Howard Hinnant's civil_from_days.
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    format!(
-        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{millis:03}Z",
-        rest / 3600,
-        rest % 3600 / 60,
-        rest % 60
-    )
+    let nanos = i32::try_from(millis.min(999) * 1_000_000).unwrap_or(0);
+    let at = i64::try_from(seconds)
+        .ok()
+        .and_then(|seconds| jiff::Timestamp::new(seconds, nanos).ok())
+        .unwrap_or(jiff::Timestamp::MAX);
+    at.strftime("%Y-%m-%dT%H:%M:%S.%3fZ").to_string()
 }
 
 /// curl's options: HTTPS only, redirects followed, TLS 1.2 or later, failing

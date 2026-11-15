@@ -569,23 +569,18 @@ pub fn opentide_version_in_run(run: &mut Run, version: &str) {
     }
 }
 
-/// The UTC date of a moment, `YYYY-MM-DD` (Howard Hinnant's `civil_from_days`).
+/// The UTC date of a moment, `YYYY-MM-DD`; a moment before 1970 reads as
+/// 1970-01-01, and one past the end of jiff's range as `9999-12-30`.
 pub fn utc_date(time: std::time::SystemTime) -> String {
     let secs = time
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let days = i64::try_from(secs / 86_400).unwrap_or(0);
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    format!("{year:04}-{month:02}-{day:02}")
+    let at = i64::try_from(secs)
+        .ok()
+        .and_then(|secs| jiff::Timestamp::from_second(secs).ok())
+        .unwrap_or(jiff::Timestamp::MAX);
+    at.strftime("%Y-%m-%d").to_string()
 }
 
 #[cfg(test)]
@@ -1051,5 +1046,25 @@ mod tests {
             utc_date(UNIX_EPOCH + Duration::from_hours(264_384)),
             "2000-02-29"
         );
+    }
+
+    /// The dates the hand-written calendar gave (checked against Python's
+    /// `datetime`) where a calendar goes wrong.
+    #[test]
+    fn utc_dates_at_calendar_edges() {
+        let at = |secs: u64| utc_date(UNIX_EPOCH + Duration::from_secs(secs));
+        assert_eq!(at(4_107_542_399), "2100-02-28");
+        assert_eq!(at(4_107_542_400), "2100-03-01");
+        assert_eq!(at(1_709_210_096), "2024-02-29");
+        assert_eq!(at(1_798_761_599), "2026-12-31");
+        assert_eq!(at(1_798_761_600), "2027-01-01");
+        // Before 1970 reads as the epoch, as it always did.
+        assert_eq!(
+            utc_date(UNIX_EPOCH - Duration::from_hours(612_216)),
+            "1970-01-01"
+        );
+        // The end of jiff's range, and a second past it.
+        assert_eq!(at(253_402_207_200), "9999-12-30");
+        assert_eq!(at(253_402_207_201), "9999-12-30");
     }
 }
