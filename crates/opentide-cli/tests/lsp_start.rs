@@ -1,6 +1,6 @@
-//! `opentide lsp start` on the Rust CLI (UC-3.6b, #947): the editor contract
-//! `tests/test_lsp/e2e/test_lsp_stdio_e2e.py` holds the Python host to, held
-//! here against the `opentide` binary. An editor spawns the command and
+//! `opentide lsp start` on the Rust CLI (UC-3.6b, #947): the editor contract,
+//! held here against the `opentide` binary (the Python suite's stdio tests,
+//! which held the same, were removed in #1139). An editor spawns the command and
 //! speaks `Content-Length` framed JSON-RPC on its stdio: stdout carries
 //! nothing else, and the exit code is LSP's.
 //!

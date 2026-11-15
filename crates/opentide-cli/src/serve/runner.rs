@@ -11,7 +11,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use crate::envelope::{Failure, INTERRUPTED_EXIT_CODE, Outcome, USAGE_EXIT_CODE, code};
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// `failure.code` of a run that never started (a missing `cwd`) or printed nothing.
 pub const COMMAND_FAILED: &str = "command_failed";
@@ -416,13 +416,13 @@ fn envelope(
     payload.push(("command".into(), Json::str(words.join(" "))));
     payload.push(("duration_ms".into(), Json::Int(0)));
     payload.push(("exit_code".into(), Json::Int(i64::from(exit_code))));
-    payload.push(("summary".into(), Json::Object(Vec::new())));
+    payload.push(("summary".into(), Json::Object(Object::new())));
     payload.push(("next_actions".into(), Json::Array(Vec::new())));
     payload.push((
         "failure".into(),
         failure.as_ref().map_or(Json::Null, Failure::to_json),
     ));
-    Json::Object(payload)
+    Json::object(payload)
 }
 
 fn text_document(words: &[String], text: &str, exit_code: i32) -> RunOutcome {

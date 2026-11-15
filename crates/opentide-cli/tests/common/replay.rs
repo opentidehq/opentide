@@ -59,18 +59,34 @@ pub fn generated(name: &str) -> Option<PathBuf> {
 /// The replay reads the root by its canonical path, so where `/tmp` is a
 /// link (macOS: `/private/tmp`) the name is shortened to keep the canonical
 /// root as long as the recordings' `/tmp/golden-XXXXXX`.
+///
+/// `OPENTIDE_CASE_ROOT` names another folder to put the roots in, for a
+/// host whose `/tmp` is case-insensitive (macOS): the `tide-corpus` fixtures
+/// hold `Objects/` and `objects/` side by side, which are one folder there
+/// (the snapshot harness refuses to record on one). A short mount point
+/// keeps the root's length (a long one is cut as above, to the room it
+/// leaves); see tests/golden/README.md, "Snapshots".
 pub fn case_root() -> tempfile::TempDir {
-    let parent = if Path::new("/tmp").is_dir() {
-        PathBuf::from("/tmp")
-    } else {
-        std::env::temp_dir()
-    };
+    let parent = case_root_parent();
     let (prefix, random) = root_name(&std::fs::canonicalize(&parent).unwrap_or(parent.clone()));
     tempfile::Builder::new()
         .prefix(prefix)
         .rand_bytes(random)
         .tempdir_in(parent)
         .unwrap()
+}
+
+/// The folder the case roots are made in: `OPENTIDE_CASE_ROOT`, else `/tmp`
+/// (the recordings' place), else the host's temporary directory.
+pub fn case_root_parent() -> PathBuf {
+    if let Some(dir) = std::env::var_os("OPENTIDE_CASE_ROOT").filter(|dir| !dir.is_empty()) {
+        return PathBuf::from(dir);
+    }
+    if Path::new("/tmp").is_dir() {
+        PathBuf::from("/tmp")
+    } else {
+        std::env::temp_dir()
+    }
 }
 
 /// The prefix and the count of random characters of a case root's name in
@@ -257,6 +273,11 @@ pub fn fixture(name: &str, ws: &Path) {
         "deploy-push-no-target" | "deploy-push-key" | "deploy-push-unreadable" => {
             pushed_from_cases(name, ws);
         }
+        // #1139: the vscode workspace with the edits cases.toml declares.
+        "vscode-unscoped" | "vscode-ambiguous" => {
+            fixture("vscode", ws);
+            apply_edits(name, ws);
+        }
         "vscode-docs-folder" => {
             fixture("vscode", ws);
             let path = ws.join(".opentide/configurations/paths.toml");
@@ -357,7 +378,7 @@ fn pushed_from_cases(name: &str, ws: &Path) {
 /// `xtask/src/golden/fixture.rs`'s `fix_modes` does: a checkout's modes follow
 /// the umask of whoever cloned, and status promotion keeps a rule file's mode
 /// (#987), which the recordings name.
-fn fix_modes(dir: &Path) {
+pub fn fix_modes(dir: &Path) {
     use std::os::unix::fs::PermissionsExt;
     for entry in std::fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
@@ -532,7 +553,7 @@ pub fn ledger() -> Ledger {
 
 /// The UUIDs in the package's data (`src/opentide`), which no run mints:
 /// `cargo xtask compare`'s `package_uuids`.
-fn package_uuids() -> &'static std::collections::BTreeSet<String> {
+pub fn package_uuids() -> &'static std::collections::BTreeSet<String> {
     static CELL: std::sync::OnceLock<std::collections::BTreeSet<String>> =
         std::sync::OnceLock::new();
     CELL.get_or_init(|| {

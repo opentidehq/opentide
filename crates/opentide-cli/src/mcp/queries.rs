@@ -125,14 +125,18 @@ fn command_result(argv: &[String], context: &Context<'_>) -> Result<(Json, i32),
     let cwd = context
         .cwd
         .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
-    let run = crate::embed::run_captured(&full, context.env, &cwd, context.version, false);
+    let run = crate::embed::run_interruptible(
+        &full,
+        context.env,
+        &cwd,
+        context.version,
+        false,
+        context.interrupt.cloned().unwrap_or_default(),
+    );
     let text = String::from_utf8_lossy(&run.stdout);
     match Json::parse(text.trim()) {
         Ok(Json::Object(members)) => {
-            let message = members
-                .iter()
-                .find(|(key, _)| key == "message")
-                .map(|(_, value)| value.clone());
+            let message = members.get("message").cloned();
             let added_error = |key: &str, value: &Json| {
                 key == "error" && run.exit_code != 0 && Some(value) == message.as_ref()
             };
@@ -190,7 +194,7 @@ pub fn validate_query(check: &QueryCheck, context: &Context<'_>) -> Result<Json,
             return Ok(result);
         };
         if exit_code != 0 {
-            members.push(("_exit_code".to_owned(), Json::Int(i64::from(exit_code))));
+            members.insert("_exit_code".to_owned(), Json::Int(i64::from(exit_code)));
         }
         return Ok(Json::Object(members));
     }
@@ -239,10 +243,10 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         );
         payload.push(("query_preview".to_owned(), Json::Str(preview(query))));
         payload.push(("next_actions".to_owned(), Json::Array(vec![live_step])));
-        return Json::Object(payload);
+        return Json::object(payload);
     };
     if query.trim().is_empty() {
-        return Json::Object(failed(
+        return Json::object(failed(
             payload,
             "query is empty: pass the query text to check".to_owned(),
         ));
@@ -256,7 +260,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         .then(|| opentide_analysis::LanguageId::from_extension(&chosen))
         .flatten()
     else {
-        return Json::Object(failed(
+        return Json::object(failed(
             payload,
             format!(
                 "{platform} queries are in {}, not {chosen:?}; pass one of those as language",
@@ -373,7 +377,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         ("query_preview".to_owned(), Json::Str(preview(query))),
         ("next_actions".to_owned(), Json::Array(actions)),
     ]);
-    Json::Object(payload)
+    Json::object(payload)
 }
 
 /// `run_query`: refused without `live`, with the call that runs it; with
@@ -451,8 +455,8 @@ pub fn run_query(run: &QueryRun, context: &Context<'_>) -> Result<Json, String> 
         let (Json::Object(mut result), _) = command_result(&command, context)? else {
             return Err("command_failed: query wrote no result".into());
         };
-        result.retain(|(key, _)| key != "supported");
-        result.push(("supported".to_owned(), Json::Bool(true)));
+        result.shift_remove("supported");
+        result.insert("supported".to_owned(), Json::Bool(true));
         return Ok(Json::Object(result));
     }
     let shown = std::iter::once("opentide".to_owned())
@@ -474,7 +478,7 @@ pub fn run_query(run: &QueryRun, context: &Context<'_>) -> Result<Json, String> 
             "next_actions",
             Json::Array(vec![next_action(
                 "run_query",
-                Json::Object(arguments),
+                Json::object(arguments),
                 &shown,
                 &format!(
                     "run it on {platform}: this contacts the tenant with the configured \
@@ -497,6 +501,7 @@ mod tests {
             repo: None,
             version: "1",
             workspace_problem: None,
+            interrupt: None,
         }
     }
 

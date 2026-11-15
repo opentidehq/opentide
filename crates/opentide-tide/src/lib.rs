@@ -904,8 +904,8 @@ fn remap_diagnostic(
     inj: &InjectedQuery,
     mut d: Diagnostic,
 ) -> Diagnostic {
-    let start = inner_offset(&inj.inner, d.range.start);
-    let mut end = inner_offset(&inj.inner, d.range.end).max(start + 1);
+    let start = opentide_core::position_to_offset(&inj.inner, d.range.start);
+    let mut end = opentide_core::position_to_offset(&inj.inner, d.range.end).max(start + 1);
     // A finding stays inside the part it starts in.
     if let Some(part) = inj.part_at(start) {
         end = end.min(part.end).max(start + 1);
@@ -919,31 +919,6 @@ fn remap_diagnostic(
         d.field_path = Some(inj.field_path.clone());
     }
     d
-}
-
-/// Byte offset of an LSP position (UTF-16 columns) inside an injected query.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "a char is one or two UTF-16 units"
-)]
-fn inner_offset(inner: &str, position: opentide_core::Position) -> usize {
-    let mut line = 0u32;
-    let mut col = 0u32;
-    for (idx, ch) in inner.char_indices() {
-        if line == position.line && col >= position.character {
-            return idx;
-        }
-        if ch == '\n' {
-            if line == position.line {
-                return idx;
-            }
-            line += 1;
-            col = 0;
-        } else {
-            col += ch.len_utf16() as u32;
-        }
-    }
-    inner.len()
 }
 
 fn remap_token(
@@ -1449,14 +1424,6 @@ pub fn find_refs<'a>(workspace: &'a [IndexedObject], uuid: &str) -> Vec<&'a Inde
 
 pub fn definition<'a>(workspace: &'a [IndexedObject], uuid: &str) -> Option<&'a IndexedObject> {
     workspace.iter().find(|o| o.uuid == uuid)
-}
-
-pub fn completions_for(workspace: &[IndexedObject], object_type: &str) -> Vec<(String, String)> {
-    workspace
-        .iter()
-        .filter(|o| o.object_type == object_type)
-        .map(|o| (o.name.clone(), o.uuid.clone()))
-        .collect()
 }
 
 pub fn workspace_symbols<'a>(

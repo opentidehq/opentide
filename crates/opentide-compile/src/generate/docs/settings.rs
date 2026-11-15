@@ -418,6 +418,7 @@ fn stringify(value: &Json) -> String {
         Json::Null => String::new(),
         Json::Bool(flag) => if *flag { "true" } else { "false" }.to_owned(),
         Json::Int(number) => number.to_string(),
+        Json::UInt(number) => number.to_string(),
         Json::Str(text) => text.clone(),
         Json::Array(items) => items
             .iter()

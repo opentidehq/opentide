@@ -336,14 +336,15 @@ impl TokenCache {
                  permissions",
                 label.tenant
             );
-            // What the API said, any token it echoes masked.
-            let said = [&first.token, &second.token]
+            // What the API said, any token it echoes masked in the whole body
+            // first: cutting first would leave the head of a token that
+            // straddles the cut.
+            let masked = [&first.token, &second.token]
                 .iter()
                 .map(|token| token.expose())
                 .filter(|token| !token.is_empty())
-                .fold(answer.text_head(DETAIL_CHARS), |text, token| {
-                    text.replace(token, "***")
-                });
+                .fold(answer.text(), |text, token| text.replace(token, "***"));
+            let said: String = masked.chars().take(DETAIL_CHARS).collect();
             let said = said.trim();
             return Err(ConnectorError::Authentication {
                 platform: label.platform.clone(),

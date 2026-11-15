@@ -142,6 +142,27 @@ pub fn setup_text(tenant: &Json, key: &str) -> String {
     setup(tenant, key).map(text).unwrap_or_default()
 }
 
+/// A tenant's on-or-off setup value at `key`: `default` when it is unset,
+/// else the boolean it holds. Nothing else is on or off: `0`, `""`, `"no"`
+/// and `"true"` are refused, and so is a `$NAME` placeholder, which a deploy
+/// never resolves for these settings (only `ssl` is resolved, by the
+/// connectors). The error names the key; callers wrap it in their platform's
+/// [`CompileError`].
+pub fn setup_switch(tenant: &Json, key: &str, default: bool) -> Result<bool, String> {
+    match setup(tenant, key) {
+        None => Ok(default),
+        Some(Json::Bool(on)) => Ok(*on),
+        Some(Json::Str(name)) if name.starts_with('$') => Err(format!(
+            "{key} is the placeholder {name:?}, which is not resolved for this setting: \
+             write true or false"
+        )),
+        Some(other) => Err(format!(
+            "{key} must be true or false, got {:?}",
+            text(other)
+        )),
+    }
+}
+
 /// The platform's configuration (`platforms.<platform>` of the resolved
 /// configuration).
 pub fn platform_config<'c>(cx: &'c Context<'_>, platform: &str) -> Option<&'c Json> {
@@ -162,7 +183,7 @@ pub fn tenant<'c>(cx: &'c Context<'_>, platform: &str, name: &str) -> Option<&'c
         .find(|tenant| tenant_name(tenant) == name)
 }
 
-/// A string of the rule at `path` (`metadata.author`), Python-truthy.
+/// A string of the rule at `path` (`metadata.author`), not empty.
 pub fn rule_text<'r>(rule: &'r Rule, path: &[&str]) -> Option<&'r str> {
     let mut value = &rule.data;
     for key in path {

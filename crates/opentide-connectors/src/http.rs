@@ -169,39 +169,43 @@ impl HttpClient {
             permit = self.permits.acquire() => permit.map_err(|_| ConnectorError::Cancelled)?,
         };
         let url = request.url().clone();
+        let idempotent = request.is_idempotent();
         let retry = &self.settings.retry;
-        let mut retried = 0;
-        loop {
-            let outcome = tokio::select! {
-                biased;
-                () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
-                outcome = self.transport.execute(request.clone(), cancel) => outcome,
-            };
-            let attempt = match &outcome {
-                Ok(response) => Outcome::Answer {
-                    status: response.status(),
-                    retry_after: response
-                        .headers()
-                        .get(http::header::RETRY_AFTER)
-                        .and_then(|value| value.to_str().ok()),
-                },
-                Err(TransportFailure::Connect { .. }) => Outcome::NotSent,
-                Err(_) => Outcome::Failed,
-            };
+        // A request is cloned only for an attempt a retry may follow; the
+        // last attempt takes it.
+        for retried in 0..retry.max_retries {
+            let outcome = self.attempt(request.clone(), cancel).await?;
             let Some(delay) = retry.wait_for(
-                request.is_idempotent(),
-                attempt,
+                idempotent,
+                retry_outcome(&outcome),
                 retried,
                 jiff::Timestamp::now(),
             ) else {
                 return outcome.map_err(|failure| self.error(failure, &url));
             };
-            retried += 1;
             tokio::select! {
                 biased;
                 () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
                 () = tokio::time::sleep(delay) => {}
             }
+        }
+        self.attempt(request, cancel)
+            .await?
+            .map_err(|failure| self.error(failure, &url))
+    }
+
+    /// One attempt at *request*, stopped with [`ConnectorError::Cancelled`]
+    /// when *cancel* fires.
+    async fn attempt(
+        &self,
+        request: Request,
+        cancel: &CancellationToken,
+    ) -> Result<Result<Response, TransportFailure>, ConnectorError> {
+        // `biased`: see `send`.
+        tokio::select! {
+            biased;
+            () = cancel.cancelled() => Err(ConnectorError::Cancelled),
+            outcome = self.transport.execute(request, cancel) => Ok(outcome),
         }
     }
 
@@ -226,5 +230,20 @@ impl HttpClient {
         response
             .into_body()
             .map_err(|failure| self.error(failure, &url))
+    }
+}
+
+/// What a retry policy reads of an attempt.
+fn retry_outcome(outcome: &Result<Response, TransportFailure>) -> Outcome<'_> {
+    match outcome {
+        Ok(response) => Outcome::Answer {
+            status: response.status(),
+            retry_after: response
+                .headers()
+                .get(http::header::RETRY_AFTER)
+                .and_then(|value| value.to_str().ok()),
+        },
+        Err(TransportFailure::Connect { .. }) => Outcome::NotSent,
+        Err(_) => Outcome::Failed,
     }
 }

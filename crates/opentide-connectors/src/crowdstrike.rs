@@ -344,7 +344,7 @@ impl<'a> Session<'a> {
         let job = self.object(&started, "start the search")?;
         let job_id = job
             .get("id")
-            .filter(|id| id.truthy())
+            .filter(|id| id.is_filled())
             .map(opentide_compile::deploy::text)
             .unwrap_or_default();
         let tenant = &self.cx.tenant.label.tenant;
@@ -407,14 +407,14 @@ impl<'a> Session<'a> {
                 .call(crate::transport::Method::GET, url, None, self.cx.cancel)
                 .await?;
             let status = self.object(&answer, "read the search")?;
-            if status.get("cancelled").is_some_and(Json::truthy) {
+            if status.get("cancelled").is_some_and(Json::is_true) {
                 return Err(refused(
                     self.cx,
                     format!("the search was cancelled on {tenant}"),
                     None,
                 ));
             }
-            if status.get("done").is_some_and(Json::truthy) {
+            if status.get("done").is_some_and(Json::is_true) {
                 return Ok(status);
             }
             if tokio::time::Instant::now() >= deadline {

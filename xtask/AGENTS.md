@@ -86,7 +86,13 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   (time or RSS) that a `time_waiver` / `rss_waiver` names an issue for (`"#123, why"`, refused
   without one) is reported as waived, not failed, up to its measured `waived_s` /
   `waived_rss_mib` + 10%; past that, or against the last result, it fails, and the budget
-  itself stays. With `--require-reference`
+  itself stays. A change of one engine's numbers made on purpose is `accepted` (`"#123, why"`)
+  with `accepted_engine`, `accepted_unix` (its merge time: not before 2020, and a run older
+  than it fails) and `accepted_s` / `accepted_rss_mib` (what it was measured at). A last
+  result measured before then is not compared with for that command; the run is held to
+  the accepted numbers + 10% and to its absolute budget instead, and the next run on the
+  base branch becomes its reference. Record it with the profile that explains the change,
+  as `[commands.lint]` does. With `--require-reference`
   (CI), a measured command that no baseline, target or comparable previous result applies to
   fails, and so does a report without a CPU model. It prints, and with `--summary` appends, a
   Markdown table per command.
@@ -121,7 +127,10 @@ of it): a command that failed early would measure nothing, so the bench stops wi
 - CI: [`bench.yml`](../.github/workflows/bench.yml). "The last result" (`--previous`, named after the branch in the messages)
   is the last result of the workflow's comparison base, `BASE_BRANCH`: `integration/unified-core`
   (its pushes, nightly and manual runs) while development has no Rust command line, and
-  development again once the Unified Core merges there. Re-record the baseline only from a CI run
+  development again once the Unified Core merges there. Only the rust engine is given a last result:
+  the python engine is a fixed PyPI wheel no change here touches, so a 10% rule against its last
+  result measured the runner (one CPU model's runs differed by up to 27%, every command together)
+  and it is held to the oracle baseline of its CPU alone. Re-record the baseline only from a CI run
   on its runner class, in a change of its own.
 
 ## Invariants

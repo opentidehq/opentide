@@ -82,7 +82,7 @@ pub fn unsupported_fields(definition: &Object, version: Version) -> Vec<String> 
     let mut found: Vec<String> = FIELDS_SINCE
         .iter()
         .filter(|(name, _)| !takes(version, name))
-        .filter(|(name, _)| definition.get(*name).is_some_and(Json::truthy))
+        .filter(|(name, _)| definition.get(*name).is_some_and(Json::is_filled))
         .map(|(name, _)| (*name).to_owned())
         .collect();
     if version < INFORMATIONAL_SINCE && definition.get("priority") == Some(&Json::Int(0)) {
@@ -661,7 +661,7 @@ pub fn compile_definition(
             strings(derive_tags(rule, block, &tenant_tags)),
         );
         definition.insert("tactics_techniques".into(), strings(ids.clone()));
-    } else if block.get("tags").is_some_and(Json::truthy) {
+    } else if block.get("tags").is_some_and(Json::is_filled) {
         warnings.push((
             "graylog_field_unsupported_version",
             format!("tags are left out: Graylog {version} has no definition tags (7.2 and later)"),

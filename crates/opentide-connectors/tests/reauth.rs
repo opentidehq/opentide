@@ -176,6 +176,44 @@ fn sentinel_arm_signs_in_again_once_after_a_401() {
     assert_eq!(sent(&tenant).len(), 4, "no third sign-in, no loop");
 }
 
+/// An API that answers `401` twice and echoes the bearer token it was sent
+/// at the end of a long body: the token starts before the 300th character
+/// of the answer and ends after it.
+#[test]
+fn a_token_echoed_across_the_cut_of_the_401_detail_is_masked_whole() {
+    const TOKEN: &str = "REDACTED";
+    let (rule_id, rule) = sentinel_rule();
+    let mut replay = refused_once("sentinel/deploy", 1, 2, true);
+    let signed_in = &replay.interactions[0].response.body.bytes();
+    assert!(
+        String::from_utf8_lossy(signed_in).contains(TOKEN),
+        "the recorded sign-in no longer issues the token this test looks for"
+    );
+    let echo = format!("{}{TOKEN} and more after it", "x".repeat(296));
+    for interaction in &mut replay.interactions {
+        if interaction.response.status == 401 {
+            interaction.response.body = Body::Text(echo.clone());
+        }
+    }
+    let tenant = sentinel_tenant(replay);
+    let answer = block_on(async {
+        Sentinel::new()
+            .create_or_update(tenant.cx(), &rule_id, &rule)
+            .await
+    })
+    .unwrap();
+    let error = answer.unwrap_err();
+    let ConnectorError::Authentication { detail, .. } = &error else {
+        panic!("not an authentication failure: {error:?}");
+    };
+    let detail = detail.as_deref().unwrap_or_default();
+    assert!(
+        !detail.contains("RED") && !detail.contains("DACTED"),
+        "a part of the token is in the detail: {detail}"
+    );
+    assert_eq!(detail, format!("{}***", "x".repeat(296)));
+}
+
 fn sentinel_query() -> QueryRequest {
     let inputs = fixture("sentinel");
     let query = inputs.get("query").unwrap();

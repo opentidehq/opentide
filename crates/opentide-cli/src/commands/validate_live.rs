@@ -41,7 +41,7 @@ use super::validate_query::{Args, COMMAND};
 use super::{Report, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction, Outcome, code};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::progress::{Progress, Step, StepStatus};
 
 /// Queries in a row on one tenant that get no answer in time before the
@@ -112,7 +112,7 @@ impl Live {
 
     /// The result as one JSON object (the CI job summary reads it).
     pub fn result_json(&self) -> Json {
-        Json::Object(self.result.clone())
+        Json::object(self.result.clone())
     }
 
     /// The report the command prints in *env*: the step's progress event
@@ -160,7 +160,7 @@ pub fn report_of(command: &str, result: &[(String, Json)]) -> Report {
         _ => Vec::new(),
     };
     let summary = match take("_summary") {
-        Some(Json::Object(members)) => members.clone(),
+        Some(Json::Object(members)) => members.clone().into_iter().collect(),
         _ => Vec::new(),
     };
     let next_actions = match take("_next_actions") {
@@ -633,7 +633,7 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
             ("supported".into(), Json::Bool(true)),
             ("strategies".into(), strategy_names),
             ("queries_validated".into(), Json::Int(0)),
-            ("queries_per_tenant".into(), Json::Object(Vec::new())),
+            ("queries_per_tenant".into(), Json::Object(Object::new())),
         ];
         if reaches_any {
             let joined: Vec<&str> = runs.iter().map(|run| run.name()).collect();
@@ -666,7 +666,7 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
         .and_then(|platforms| platforms.get(platform))
         .and_then(|table| table.get("platform"))
         .and_then(|block| block.get("name"))
-        .filter(|name| name.truthy())
+        .filter(|name| name.is_filled())
         .map_or_else(|| platform.to_owned(), opentide_compile::deploy::text);
     let timeout = check_timeout(args, cx.env);
     let mut step = Step::new(&format!("{system_name} queries"));
@@ -957,7 +957,7 @@ impl RuleCheck {
         if let Some(code) = self.code {
             members.push(("code".to_owned(), Json::str(code)));
         }
-        Json::Object(members)
+        Json::object(members)
     }
 }
 
@@ -1215,7 +1215,7 @@ fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<Rul
             if kind == "Single Event"
                 && let Some(single) = condition
                     .and_then(|condition| condition.get("single_event"))
-                    .filter(|single| single.truthy())
+                    .filter(|single| single.is_filled())
             {
                 return Ok(vec![RuleQuery::plain(required(
                     single, "query", name, platform,
@@ -1224,7 +1224,7 @@ fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<Rul
             if kind == "Correlation"
                 && let Some(correlation) = condition
                     .and_then(|condition| condition.get("correlation"))
-                    .filter(|correlation| correlation.truthy())
+                    .filter(|correlation| correlation.is_filled())
             {
                 let subs = match correlation.get("sub_queries") {
                     Some(CJson::Array(items)) if !items.is_empty() => items,
@@ -1810,7 +1810,7 @@ fn timed_out(
 
 /// One advisory's log line (`warn_advisory`, `_emit_rule_advisories`).
 fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str, severity: &str) {
-    let scheduling = block.get("scheduling").filter(|s| s.truthy());
+    let scheduling = block.get("scheduling").filter(|s| s.is_filled());
     let text = |key: &str, default: &str| {
         scheduling
             .and_then(|s| s.get(key))

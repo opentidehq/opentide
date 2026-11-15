@@ -97,17 +97,8 @@ pub(crate) fn default_host(platform: &str) -> &'static str {
     }
 }
 
-/// How rows are written when `--json` is off.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum RowFormat {
-    /// A table per tenant.
-    #[default]
-    Table,
-    /// One JSON object per row.
-    Jsonl,
-    /// CSV, one header.
-    Csv,
-}
+/// How rows are written when `--json` is off: `--format`, as clap parses it.
+pub use crate::tree::RowFormat;
 
 /// `query`'s options.
 #[derive(Clone, Debug, Default)]
@@ -142,6 +133,28 @@ pub struct Args {
     pub columns: Option<String>,
     /// `--format`.
     pub format: RowFormat,
+}
+
+impl From<&crate::tree::QueryArgs> for Args {
+    fn from(args: &crate::tree::QueryArgs) -> Self {
+        Self {
+            query: args.query.clone(),
+            platform: args.platform.0.clone(),
+            tenants: args.tenant.clone(),
+            rule: args.rule.clone(),
+            file: args.file.clone(),
+            query_file: args.query_file.clone(),
+            since: args.since.clone(),
+            start: args.start.clone(),
+            end: args.end.clone(),
+            limit: args.limit,
+            language: args.language.clone(),
+            index: args.index.clone(),
+            timeout: args.timeout,
+            columns: args.columns.clone(),
+            format: args.row_format,
+        }
+    }
 }
 
 /// What a run reads besides its options.
@@ -420,7 +433,7 @@ impl TenantResult {
         }
         members.push(("warnings".into(), Json::Array(warnings)));
         members.push(("elapsed_ms".into(), Json::Int(self.elapsed_ms)));
-        Json::Object(members)
+        Json::object(members)
     }
 }
 
@@ -545,6 +558,10 @@ pub(crate) fn toml_value(value: &opentide_compile::Json) -> Option<toml::Value> 
     Some(match value {
         J::Str(text) => toml::Value::String(text.clone()),
         J::Int(number) => toml::Value::Integer(*number),
+        // TOML integers are signed 64-bit: a larger one is the nearest float,
+        // as it was read before `Json` kept it exact.
+        #[expect(clippy::cast_precision_loss, reason = "the nearest float, as before")]
+        J::UInt(number) => toml::Value::Float(*number as f64),
         J::Float(number) => toml::Value::Float(*number),
         J::Bool(flag) => toml::Value::Boolean(*flag),
         J::Array(items) => toml::Value::Array(items.iter().filter_map(toml_value).collect()),
@@ -1225,7 +1242,7 @@ fn body(
             for outcome in outcomes {
                 if let Some(result) = &outcome.result {
                     for row in rows(result) {
-                        text.push_str(&compact(&Json::Object(labelled(outcome, &row))));
+                        text.push_str(&compact(&Json::object(labelled(outcome, &row))));
                         text.push('\n');
                     }
                 }
@@ -1426,6 +1443,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn an_integer_beyond_i64_is_the_nearest_float_in_a_setup_value() {
+        use opentide_compile::Json as J;
+        // TOML integers are signed 64-bit: u64::MAX is 2^64 as the nearest float.
+        let Some(toml::Value::Float(float)) = toml_value(&J::UInt(u64::MAX)) else {
+            panic!("a UInt is a TOML float");
+        };
+        assert_eq!(float.to_bits(), 2f64.powi(64).to_bits());
+        assert_eq!(
+            toml_value(&J::Int(i64::MAX)),
+            Some(toml::Value::Integer(i64::MAX))
+        );
+    }
+
+    #[test]
     fn every_platform_mounts_the_connectors_http_settings() {
         // A platform the command line listed apart drifted: Google SecOps
         // left --timeout unread, Exabeam waited 120 s for 30 s.
@@ -1519,12 +1550,12 @@ mod tests {
         let row = Json::parse(r#"{"a": "x  y", "b": [1, "é"], "c": null, "d": 1.5}"#).unwrap();
         let mut lab = failed("lab", "e", None);
         assert_eq!(
-            compact(&Json::Object(labelled(&lab, &row))),
+            compact(&Json::object(labelled(&lab, &row))),
             r#"{"_tenant":"lab","a":"x  y","b":[1,"é"],"c":null,"d":1.5}"#
         );
         lab.label = Some("sub-query 1".into());
         assert_eq!(
-            compact(&Json::Object(labelled(&lab, &row)))[..40],
+            compact(&Json::object(labelled(&lab, &row)))[..40],
             *r#"{"_tenant":"lab","_label":"sub-query 1","#
         );
         assert_eq!(cell(row.get("a")), "x y");
@@ -2033,7 +2064,7 @@ mod tests {
         let choices = vec!["esql".to_owned(), "eql".to_owned()];
         let report = usage_with("elastic", "no", "--language", Some("eql".into()), &choices);
         assert_eq!(
-            compact_of(&Json::Object(report.outcome.data.clone())),
+            compact_of(&Json::object(report.outcome.data.clone())),
             r#"{"platform":"elastic","choices":["esql","eql"]}"#
         );
         let failure = report.outcome.failure.unwrap();
@@ -2042,7 +2073,7 @@ mod tests {
         assert_eq!(suggest("esq", &choices).as_deref(), Some("esql"));
         let refused = no_runner("sysdig");
         assert_eq!(
-            compact_of(&Json::Object(refused.outcome.data.clone())),
+            compact_of(&Json::object(refused.outcome.data.clone())),
             r#"{"platform":"sysdig","choices":["sentinel","defender_for_endpoint","splunk","sentinel_one","crowdstrike","harfanglab","carbon_black_cloud","elastic","graylog","exabeam","google_secops"]}"#
         );
         assert_eq!(refused.outcome.exit_code, 2);

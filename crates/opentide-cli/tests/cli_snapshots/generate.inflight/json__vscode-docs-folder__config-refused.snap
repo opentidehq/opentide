@@ -1,0 +1,30 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.inflight/json/vscode-docs-folder/config-refused
+---
+args: opentide --json generate inflight
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "generate inflight",
+  "duration_ms": 0,
+  "error": "inflight: paths.toml: paths.core: Extra inputs are not permitted",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "inflight: paths.toml: paths.core: Extra inputs are not permitted",
+    "suggestion": null
+  },
+  "message": "inflight: paths.toml: paths.core: Extra inputs are not permitted",
+  "next_actions": [],
+  "ok": false,
+  "phase": "inflight",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

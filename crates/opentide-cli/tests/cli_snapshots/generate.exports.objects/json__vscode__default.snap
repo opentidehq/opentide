@@ -1,0 +1,31 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.exports.objects/json/vscode/default
+---
+args: opentide --json generate exports objects
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "generate exports objects",
+  "duration_ms": 0,
+  "error": "exports: missing key `version` while rendering 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "exports: missing key `version` while rendering 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f",
+    "suggestion": null
+  },
+  "message": "exports: missing key `version` while rendering 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f",
+  "next_actions": [],
+  "ok": false,
+  "phase": "exports",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "target": "objects"
+}
+
+━━━ stderr · empty

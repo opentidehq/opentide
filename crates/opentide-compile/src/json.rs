@@ -20,8 +20,11 @@ pub enum Json {
     Null,
     /// `true` or `false`.
     Bool(bool),
-    /// An integer.
+    /// An integer that fits `i64`.
     Int(i64),
+    /// A non-negative integer beyond `i64::MAX`, kept exact (serde reads one
+    /// as `u64`); every integer `i64` holds is an [`Json::Int`].
+    UInt(u64),
     /// A float.
     Float(f64),
     /// A string.
@@ -80,17 +83,32 @@ impl Json {
         matches!(self, Self::Null)
     }
 
-    /// Python's truthiness: `null`, `false`, `0`, `0.0`, `""`, `[]` and `{}`
-    /// are false.
-    pub fn truthy(&self) -> bool {
+    /// Whether the value is `true`.
+    pub fn is_true(&self) -> bool {
+        matches!(self, Self::Bool(true))
+    }
+
+    /// Whether the value holds something: it is not `null` and not an empty
+    /// string, array or object. A boolean or a number is a value, `false`
+    /// and `0` included.
+    pub fn is_filled(&self) -> bool {
         match self {
             Self::Null => false,
-            Self::Bool(flag) => *flag,
-            Self::Int(integer) => *integer != 0,
-            Self::Float(float) => *float != 0.0,
             Self::Str(text) => !text.is_empty(),
             Self::Array(items) => !items.is_empty(),
             Self::Object(object) => !object.is_empty(),
+            Self::Bool(_) | Self::Int(_) | Self::UInt(_) | Self::Float(_) => true,
+        }
+    }
+
+    /// Whether the value names something (a UUID, a reference, a
+    /// relation): a non-empty string or a number. `null`, a boolean, an
+    /// array and an object name nothing.
+    pub fn is_name(&self) -> bool {
+        match self {
+            Self::Str(text) => !text.is_empty(),
+            Self::Int(_) | Self::UInt(_) | Self::Float(_) => true,
+            Self::Null | Self::Bool(_) | Self::Array(_) | Self::Object(_) => false,
         }
     }
 
@@ -133,6 +151,7 @@ impl Serialize for Json {
             Self::Null => serializer.serialize_unit(),
             Self::Bool(flag) => serializer.serialize_bool(*flag),
             Self::Int(integer) => serializer.serialize_i64(*integer),
+            Self::UInt(integer) => serializer.serialize_u64(*integer),
             Self::Float(float) => serializer.serialize_f64(*float),
             Self::Str(text) => serializer.serialize_str(text),
             Self::Array(items) => {
@@ -191,12 +210,8 @@ impl<'de> Visitor<'de> for JsonVisitor {
     }
 
     fn visit_u64<E>(self, value: u64) -> Result<Json, E> {
-        // An integer beyond i64 is a float, as JSON carries it.
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "only an integer beyond i64, which no model holds, is approximated"
-        )]
-        Ok(i64::try_from(value).map_or(Json::Float(value as f64), Json::Int))
+        // An integer beyond i64 stays exact, as JSON carries it.
+        Ok(i64::try_from(value).map_or(Json::UInt(value), Json::Int))
     }
 
     fn visit_f64<E>(self, value: f64) -> Result<Json, E> {
@@ -317,18 +332,58 @@ mod tests {
         .unwrap();
         assert_eq!(
             json.to_compact(),
-            r#"{"zeta":1,"alpha":null,"nested":[0.5],"big":1.8446744073709552e+19}"#
+            r#"{"zeta":1,"alpha":null,"nested":[0.5],"big":18446744073709551615}"#
         );
         let back: Json = serde_json::from_str(r#"{"b":[true,"x"],"a":{}}"#).unwrap();
         assert_eq!(back.to_compact(), r#"{"b":[true,"x"],"a":{}}"#);
     }
 
     #[test]
-    fn truthiness_is_pythons() {
-        assert!(!Json::Str(String::new()).truthy());
-        assert!(!Json::Array(vec![]).truthy());
-        assert!(!Json::Int(0).truthy());
-        assert!(Json::Str("x".into()).truthy());
+    fn an_integer_beyond_i64_stays_exact() {
+        let text = r#"[9223372036854775807,9223372036854775808,18446744073709551615]"#;
+        let json: Json = serde_json::from_str(text).unwrap();
+        assert_eq!(
+            json,
+            Json::Array(vec![
+                Json::Int(i64::MAX),
+                Json::UInt(1 << 63),
+                Json::UInt(u64::MAX),
+            ])
+        );
+        assert_eq!(json.to_compact(), text);
+        assert!(Json::UInt(u64::MAX).is_filled() && Json::UInt(u64::MAX).is_name());
+    }
+
+    /// A value is read by its type: `false` and `0` are values, not empty
+    /// ones; only `true` is true; a name is text or a number.
+    #[test]
+    fn values_are_read_by_their_type() {
+        assert!(!Json::Null.is_filled());
+        assert!(!Json::Str(String::new()).is_filled());
+        assert!(!Json::Array(vec![]).is_filled());
+        assert!(!Json::Object(Object::new()).is_filled());
+        for value in [
+            Json::Bool(false),
+            Json::Int(0),
+            Json::Float(0.0),
+            Json::Str("x".into()),
+        ] {
+            assert!(value.is_filled(), "{value:?}");
+        }
+        assert!(Json::Bool(true).is_true());
+        for value in [Json::Bool(false), Json::Int(1), Json::Str("true".into())] {
+            assert!(!value.is_true(), "{value:?}");
+        }
+        assert!(Json::Int(0).is_name());
+        assert!(Json::Str("u-1".into()).is_name());
+        for value in [
+            Json::Null,
+            Json::Bool(true),
+            Json::Str(String::new()),
+            Json::Array(vec![Json::Int(1)]),
+        ] {
+            assert!(!value.is_name(), "{value:?}");
+        }
     }
 
     #[test]

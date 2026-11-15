@@ -130,27 +130,21 @@ impl DryRun {
         let error = if had_error {
             None
         } else {
-            members
-                .iter()
-                .position(|(key, _)| key == "error")
-                .map(|at| members.remove(at))
+            members.shift_remove("error")
         };
         let mut at = members
-            .iter()
-            .position(|(key, _)| key == "message")
+            .get_index_of("message")
             .map_or(members.len(), |at| at + 1);
         if !self.warnings.is_empty() {
-            members.insert(
+            members.shift_insert(
                 at,
-                (
-                    "warnings".into(),
-                    Json::Array(self.warnings.iter().map(Json::str).collect()),
-                ),
+                "warnings".into(),
+                Json::Array(self.warnings.iter().map(Json::str).collect()),
             );
             at += 1;
         }
         if let Some(error) = error {
-            members.insert(at, error);
+            members.shift_insert(at, "error".into(), error);
         }
         Json::Object(members)
     }
@@ -275,6 +269,7 @@ pub fn convert(value: &opentide_compile::Json) -> Json {
         From::Null => Json::Null,
         From::Bool(flag) => Json::Bool(*flag),
         From::Int(integer) => Json::Int(*integer),
+        From::UInt(integer) => Json::UInt(*integer),
         From::Float(float) => Json::Float(*float),
         From::Str(text) => Json::Str(text.clone()),
         From::Array(items) => Json::Array(items.iter().map(convert).collect()),
@@ -346,7 +341,7 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
         next_actions.push(NextAction::new(NO_WORKSPACE_STEP.0, NO_WORKSPACE_STEP.1));
     }
     let summary = match outcome.summary.as_ref().map(convert) {
-        Some(Json::Object(members)) => members,
+        Some(Json::Object(members)) => members.into_iter().collect(),
         _ => Vec::new(),
     };
     let diagnostics = result

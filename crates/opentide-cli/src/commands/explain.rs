@@ -63,9 +63,9 @@ fn list(terminal: &Terminal) -> Report {
         pages
             .iter()
             .map(|page| {
-                Json::Object(vec![
-                    ("code".into(), Json::str(&page.code)),
-                    ("meaning".into(), Json::str(&page.summary)),
+                Json::object([
+                    ("code", Json::str(&page.code)),
+                    ("meaning", Json::str(&page.summary)),
                 ])
             })
             .collect(),

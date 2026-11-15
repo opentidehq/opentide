@@ -184,28 +184,17 @@ impl Source {
 /// The rule files under `rules_dir`, `*.yaml` and `*.yml` at any depth, in
 /// path order; a linked folder is not entered (`Path.rglob`).
 fn rule_files(rules_dir: &Path) -> Vec<PathBuf> {
-    let mut found = Vec::new();
-    let mut pending = vec![rules_dir.to_path_buf()];
-    while let Some(dir) = pending.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.filter_map(Result::ok) {
-            let path = entry.path();
-            let linked = entry.file_type().is_ok_and(|kind| kind.is_symlink());
-            if path.is_dir() {
-                if !linked {
-                    pending.push(path);
-                }
-                continue;
-            }
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if (name.ends_with(".yaml") || name.ends_with(".yml")) && path.is_file() {
-                found.push(path);
-            }
-        }
-    }
+    let mut found: Vec<PathBuf> = walkdir::WalkDir::new(rules_dir)
+        .min_depth(1)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            let name = entry.file_name().to_string_lossy();
+            name.ends_with(".yaml") || name.ends_with(".yml")
+        })
+        .map(walkdir::DirEntry::into_path)
+        .filter(|path| path.is_file())
+        .collect();
     found.sort();
     found
 }
@@ -613,7 +602,7 @@ pub fn migrate(workspace: &Path, rules_dir: &Path) -> Report {
                 members.extend(binding);
             }
             unused.push((
-                Json::Object(members),
+                Json::object(members),
                 format!(
                     "external_id_unused: {} tenant {} id {} removed from {relative} (never read \
                      by its deployer; not stored)",
@@ -995,8 +984,16 @@ mod tests {
             let Json::Object(first) = &errors[0] else {
                 panic!("an error is an object")
             };
-            assert_eq!(first[0].1, Json::str(code), "{configurations}");
-            assert_eq!(first[3].1, Json::str(message), "{configurations}");
+            assert_eq!(
+                first.get_index(0).unwrap().1,
+                &Json::str(code),
+                "{configurations}"
+            );
+            assert_eq!(
+                first.get_index(3).unwrap().1,
+                &Json::str(message),
+                "{configurations}"
+            );
         }
     }
 
@@ -1027,7 +1024,7 @@ mod tests {
         let Json::Object(first) = &unused[0] else {
             panic!("an object")
         };
-        assert_eq!(first[1].1, Json::str("7"));
+        assert_eq!(first.get_index(1).unwrap().1, &Json::str("7"));
         assert_eq!(data(&report, "shards_written"), &Json::Int(0));
     }
 

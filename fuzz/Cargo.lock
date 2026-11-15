@@ -2665,7 +2665,6 @@ dependencies = [
  "opentide-yara",
  "opentide-yaral",
  "regex",
- "serde",
  "serde_json",
  "toml_edit",
 ]
@@ -2682,6 +2681,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "ctrlc",
+ "dunce",
  "form_urlencoded",
  "humantime",
  "indexmap",
@@ -2719,11 +2719,13 @@ dependencies = [
  "tokio",
  "tokio-util",
  "toml",
+ "toml_edit",
  "tracing",
  "tracing-subscriber",
  "unicode-width",
  "url",
  "uuid",
+ "walkdir",
  "which",
 ]
 
@@ -2742,7 +2744,6 @@ dependencies = [
  "gix-discover",
  "gix-error",
  "gix-filter",
- "gix-fs",
  "gix-hash",
  "gix-ignore",
  "gix-index",
@@ -2807,10 +2808,12 @@ dependencies = [
 name = "opentide-core"
 version = "0.12.0"
 dependencies = [
+ "indexmap",
  "regex",
  "saphyr",
  "saphyr-parser",
  "serde",
+ "serde_json",
  "strsim",
  "thiserror 2.0.21",
  "toml",
@@ -2876,7 +2879,6 @@ dependencies = [
  "regex-syntax",
  "serde",
  "toml",
- "tree-sitter",
 ]
 
 [[package]]
@@ -2955,11 +2957,10 @@ dependencies = [
  "opentide-analysis",
  "opentide-core",
  "opentide-highlight",
- "opentide-kql",
  "opentide-schema",
- "opentide-spl",
  "opentide-tide",
  "opentide-workspace",
+ "percent-encoding",
  "rayon",
  "regex",
  "serde",

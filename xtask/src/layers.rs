@@ -707,6 +707,7 @@ mod tests {
     const WORKSPACE: &Graph<'static> = &[
         ("opentide-core", &[]),
         ("opentide-syntax", &[("opentide-core", None)]),
+        ("opentide-parse", &[]),
         ("opentide-highlight", &[("opentide-core", None)]),
         ("opentide-ecs", &[("opentide-core", None)]),
         (
@@ -919,7 +920,7 @@ mod tests {
     fn the_repository_table_places_todays_workspace() {
         let report = check(&table(REPOSITORY_TABLE), &metadata(WORKSPACE));
         assert_eq!(report.violations, []);
-        assert_eq!(report.crates, 31);
+        assert_eq!(report.crates, 32);
     }
 
     #[test]

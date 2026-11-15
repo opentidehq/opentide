@@ -408,6 +408,14 @@ fn block_targets(block: &BitdefenderConfig) -> Option<Json> {
     Some(Json::Object(out))
 }
 
+/// Whether the tenant's GravityZone accepts the rules' automatic actions:
+/// `automatic_actions` is `true` or unset. Any other value, text such as
+/// `"true"` included, is an error that names the key, not an off switch.
+pub fn automatic_actions_on(tenant: &Json) -> Result<bool, CompileError> {
+    crate::deploy::setup_switch(tenant, "automatic_actions", true)
+        .map_err(|message| CompileError::failed(DISPLAY, &message))
+}
+
 /// What `rule` deploys under `strategy` on `tenant` (`compile_rule`). Without
 /// a tenant (an offline preview) there are no tenant tags, default targets
 /// or `companyId`, and `targets` is left out: its aliases resolve only
@@ -420,14 +428,12 @@ pub fn compile_rule(
     tenant: Option<&Json>,
 ) -> Result<GravityZoneRule, CompileError> {
     let block = block_of(rule)?;
-    let automatic = tenant
-        .and_then(|tenant| setup(tenant, "automatic_actions"))
-        .is_none_or(Json::truthy);
+    let automatic = tenant.map_or(Ok(true), automatic_actions_on)?;
     let mut targets = None;
     let mut tenant_tags = Vec::new();
     let mut company_id = None;
     if let Some(tenant) = tenant {
-        let authored = block_targets(&block).filter(Json::truthy);
+        let authored = block_targets(&block).filter(Json::is_filled);
         let chosen = authored.as_ref().or_else(|| setup(tenant, "targets"));
         targets = resolve_targets(
             chosen,
@@ -471,7 +477,11 @@ pub fn create_params(compiled: &GravityZoneRule) -> Json {
     params.insert("description".into(), compiled.description.clone().into());
     params.insert("tags".into(), compiled.tags.clone().into());
     params.insert("settings".into(), Json::Object(compiled.settings.clone()));
-    if let Some(targets) = compiled.targets.as_ref().filter(|targets| targets.truthy()) {
+    if let Some(targets) = compiled
+        .targets
+        .as_ref()
+        .filter(|targets| targets.is_filled())
+    {
         params.insert("targets".into(), targets.clone());
     }
     if let Some(company) = compiled.company_id.as_deref().filter(|id| !id.is_empty()) {
@@ -515,7 +525,7 @@ pub fn update_params(compiled: &GravityZoneRule, rule_id: &str) -> Json {
         compiled
             .targets
             .clone()
-            .filter(Json::truthy)
+            .filter(Json::is_filled)
             .unwrap_or_else(|| Json::Object(Object::new())),
     );
     Json::Object(params)

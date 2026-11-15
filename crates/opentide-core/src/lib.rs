@@ -229,10 +229,7 @@ pub fn strip_bom_at(text: &str, offset: usize) -> (&str, usize) {
 /// multi-byte character counts from that character's start: a span that ends
 /// mid-character gives a slightly short range, never a panic.
 pub fn offset_to_position(source: &str, offset: usize) -> Position {
-    let mut offset = offset.min(source.len());
-    while !source.is_char_boundary(offset) {
-        offset -= 1;
-    }
+    let offset = source.floor_char_boundary(offset);
     let mut line = 0u32;
     let mut last_line_start = 0usize;
     for (idx, ch) in source.char_indices() {
@@ -315,10 +312,7 @@ impl<'a> LineIndex<'a> {
         reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
     )]
     pub fn position(&self, offset: usize) -> Position {
-        let mut offset = offset.min(self.source.len());
-        while !self.source.is_char_boundary(offset) {
-            offset -= 1;
-        }
+        let offset = self.source.floor_char_boundary(offset);
         let line = self.starts.partition_point(|&start| start <= offset) - 1;
         let start = self.starts[line];
         let character = if self.ascii[line] {
@@ -371,10 +365,13 @@ impl<'a> LineIndex<'a> {
     }
 }
 
-fn utf16_len(s: &str) -> u32 {
-    s.chars()
-        .map(|c| if c.len_utf16() == 2 { 2 } else { 1 })
-        .sum()
+/// The length of `text` in UTF-16 code units, the unit of an LSP column.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a char is one or two UTF-16 units"
+)]
+pub fn utf16_len(text: &str) -> u32 {
+    text.chars().map(|c| c.len_utf16() as u32).sum()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -532,6 +529,7 @@ impl Diagnostic {
 pub mod datasets;
 pub mod duration;
 pub mod falco;
+pub mod json;
 pub mod node;
 pub mod suggest;
 

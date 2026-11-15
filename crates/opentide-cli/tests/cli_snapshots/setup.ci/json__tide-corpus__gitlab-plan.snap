@@ -1,0 +1,42 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.ci/json/tide-corpus/gitlab-plan
+---
+args: opentide --json setup ci gitlab --plan
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup ci",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Plan: 1 file to write (1 new, 0 changed) · nothing written",
+  "next_actions": [],
+  "ok": true,
+  "path": "<WS>",
+  "plan": true,
+  "schema_version": 1,
+  "status": "completed",
+  "steps": [
+    {
+      "files": [
+        {
+          "action": "create",
+          "path": ".gitlab-ci.yml"
+        }
+      ],
+      "step": "ci",
+      "warnings": []
+    }
+  ],
+  "summary": {
+    "create": 1,
+    "delete": 0,
+    "merge": 0,
+    "skip": 0,
+    "steps": 1
+  }
+}
+
+━━━ stderr · empty

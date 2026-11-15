@@ -243,22 +243,17 @@ fn migrate(root: &Path, fields: &[&ScopedField], apply: bool) -> Result<Migratio
     Ok(migration)
 }
 
-/// Every `*.yaml` file under `dir`, at any depth.
+/// Every `*.yaml` file under `dir`, at any depth; a link to a folder is not
+/// entered.
 fn collect_yaml(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Ok(kind) = entry.file_type() else {
-            continue;
-        };
-        if kind.is_dir() {
-            collect_yaml(&path, out);
-        } else if path.extension().is_some_and(|ext| ext == "yaml") && path.is_file() {
-            out.push(path);
-        }
-    }
+    out.extend(
+        walkdir::WalkDir::new(dir)
+            .min_depth(1)
+            .into_iter()
+            .filter_map(Result::ok)
+            .map(walkdir::DirEntry::into_path)
+            .filter(|path| path.extension().is_some_and(|ext| ext == "yaml") && path.is_file()),
+    );
 }
 
 fn relative(path: &Path, root: &Path) -> String {
@@ -406,6 +401,7 @@ fn issues(report: &mut Report, message: String, exit_code: i32, code: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::json::Object;
 
     fn workspace(files: &[(&str, &str)]) -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
@@ -545,7 +541,7 @@ objective:
         let Json::Object(failed) = data(&report, "failed_files") else {
             panic!("failed_files is an object");
         };
-        assert_eq!(failed[0].0, "objects/a.yaml");
+        assert_eq!(failed.get_index(0).unwrap().0, "objects/a.yaml");
         assert_eq!(data(&report, "scanned"), &Json::Int(1));
     }
 
@@ -569,8 +565,8 @@ objective:
             panic!("failed_files is an object");
         };
         assert_eq!(failed.len(), 1);
-        assert_eq!(failed[0].0, "objects/o.yaml");
-        let Json::Str(reason) = &failed[0].1 else {
+        assert_eq!(failed.get_index(0).unwrap().0, "objects/o.yaml");
+        let Json::Str(reason) = failed.get_index(0).unwrap().1 else {
             panic!("a reason is a string");
         };
         assert!(
@@ -599,31 +595,24 @@ objective:
             panic!("fields is an object");
         };
         let field = |name: &str| {
-            let Json::Object(field) = &fields.iter().find(|(key, _)| key == name).unwrap().1 else {
+            let Json::Object(field) = &fields[name] else {
                 panic!("a field is an object");
             };
             field.clone()
         };
-        let member = |field: &[(String, Json)], key: &str| {
-            field
-                .iter()
-                .find(|(name, _)| name == key)
-                .unwrap()
-                .1
-                .clone()
-        };
+        let member = |field: &Object, key: &str| field[key].clone();
         let entities = field("entities");
-        assert_eq!(member(&entities, "blocked"), Json::Object(Vec::new()));
-        assert_eq!(member(&entities, "rewrites"), Json::Object(Vec::new()));
+        assert_eq!(member(&entities, "blocked"), Json::Object(Object::new()));
+        assert_eq!(member(&entities, "rewrites"), Json::Object(Object::new()));
         assert_eq!(
             member(&entities, "by_status"),
-            Json::Object(vec![("scoped".to_owned(), Json::Int(3))])
+            Json::object(vec![("scoped".to_owned(), Json::Int(3))])
         );
         let surface = field("surface");
-        assert_eq!(member(&surface, "blocked"), Json::Object(Vec::new()));
+        assert_eq!(member(&surface, "blocked"), Json::Object(Object::new()));
         assert_eq!(
             member(&surface, "by_status"),
-            Json::Object(vec![("scoped".to_owned(), Json::Int(1))])
+            Json::object(vec![("scoped".to_owned(), Json::Int(1))])
         );
     }
 
@@ -644,7 +633,7 @@ objective:
         );
         assert_eq!(report.outcome.exit_code, 0, "{}", report.outcome.message);
         assert!(report.outcome.failure.is_none());
-        assert_eq!(data(&report, "failed_files"), &Json::Object(Vec::new()));
+        assert_eq!(data(&report, "failed_files"), &Json::Object(Object::new()));
         assert_eq!(data(&report, "scanned"), &Json::Int(1));
         assert_eq!(
             data(&report, "changed_files"),
@@ -682,7 +671,7 @@ objective:
             panic!("fields is an object");
         };
         assert_eq!(fields.len(), 1);
-        assert_eq!(fields[0].0, "surface");
+        assert_eq!(fields.get_index(0).unwrap().0, "surface");
     }
 
     #[test]

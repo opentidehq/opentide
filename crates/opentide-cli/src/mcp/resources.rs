@@ -12,7 +12,7 @@ use serde_json::json;
 use super::catalog::{PLATFORMS, get_object, node_json, require, workspace};
 use super::server::Answer;
 use super::tools::Context;
-use crate::json::{Json, document_text};
+use crate::json::{Json, Object, document_text};
 
 /// The resources with a fixed URI, and whether each needs the workspace.
 const FIXED: [(&str, bool); 6] = [
@@ -370,8 +370,8 @@ fn templates(workspace: &Workspace) -> Vec<(String, Json)> {
         }
     }
     match out.iter_mut().find(|(key, _)| key == "systems") {
-        Some((_, existing)) => *existing = Json::Object(systems),
-        None => out.push(("systems".to_owned(), Json::Object(systems))),
+        Some((_, existing)) => *existing = Json::object(systems),
+        None => out.push(("systems".to_owned(), Json::object(systems))),
     }
     out
 }
@@ -453,7 +453,7 @@ fn index_vocabulary(vocabulary: &Vocabulary) -> Json {
                     members.push((key.to_owned(), Json::str(value)));
                 }
             }
-            Json::Object(members)
+            Json::object(members)
         })
         .collect();
     let mut meta = vec![
@@ -491,11 +491,11 @@ fn index_vocabulary(vocabulary: &Vocabulary) -> Json {
             for (name, value) in &entry.extra {
                 members.push((name.clone(), toml_json(value)));
             }
-            (key.clone(), Json::Object(members))
+            (key.clone(), Json::object(members))
         })
         .collect();
     Json::object([
-        ("metadata", Json::Object(meta)),
+        ("metadata", Json::object(meta)),
         ("entries", Json::Object(entries)),
     ])
 }
@@ -544,18 +544,14 @@ fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
         let mut entries: Vec<(String, Json)> = Vec::new();
         for (uuid, body) in opentide_workspace::coverage::bucket(index, family) {
             let object_name = body.get("name").map(AsRef::as_ref);
-            let truthy_name = match object_name.map(|node| &node.value) {
-                None | Some(Value::Null | Value::Bool(false)) => false,
-                Some(Value::Str(text)) => !text.is_empty(),
-                Some(_) => true,
-            };
+            let named = object_name.is_some_and(opentide_workspace::index::holds_name);
             let Some(meta) = body
                 .get("metadata")
                 .filter(|m| matches!(m.value, Value::Map(_)))
             else {
                 continue;
             };
-            if !truthy_name {
+            if !named {
                 continue;
             }
             let mut entry: Vec<(String, Json)> = vec![
@@ -601,7 +597,7 @@ fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
             if description != Json::Null {
                 entry.push(("description".to_owned(), description));
             }
-            entries.push((uuid.to_owned(), Json::Object(entry)));
+            entries.push((uuid.to_owned(), Json::object(entry)));
             if family != "objective" {
                 continue;
             }
@@ -644,12 +640,12 @@ fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
                         entry.push((key.to_owned(), value));
                     }
                 }
-                entries.push((signal_uuid, Json::Object(entry)));
+                entries.push((signal_uuid, Json::object(entry)));
             }
         }
         out.push((
             family.to_owned(),
-            Json::object([("metadata", metadata), ("entries", Json::Object(entries))]),
+            Json::object([("metadata", metadata), ("entries", Json::object(entries))]),
         ));
     }
     out
@@ -677,12 +673,8 @@ fn index_vocabularies(objects: Option<&Workspace>) -> Vec<(String, Json)> {
     out
 }
 
-fn text_member(members: &[(String, Json)], key: &str) -> String {
-    match members
-        .iter()
-        .find(|(name, _)| name == key)
-        .map(|(_, value)| value)
-    {
+fn text_member(members: &Object, key: &str) -> String {
+    match members.get(key) {
         Some(Json::Str(text)) => text.clone(),
         Some(Json::Null) | None => String::new(),
         Some(other) => document_text(other, false).trim_end().to_owned(),
@@ -695,28 +687,17 @@ fn text_member(members: &[(String, Json)], key: &str) -> String {
 fn definition(vocabulary: &Json) -> Json {
     let members = |key: &str| match vocabulary.get(key) {
         Some(Json::Object(members)) => members.clone(),
-        _ => Vec::new(),
+        _ => Object::new(),
     };
     let meta = members("metadata");
-    let key = match meta
-        .iter()
-        .find(|(name, _)| name == "key")
-        .map(|(_, value)| value)
-    {
+    let key = match meta.get("key") {
         Some(Json::Str(key)) if key == "id" || key == "name" => key.clone(),
         _ => {
-            let model = matches!(
-                meta.iter().find(|(name, _)| name == "model"),
-                Some((_, Json::Bool(true)))
-            );
+            let model = matches!(meta.get("model"), Some(Json::Bool(true)));
             if model { "id" } else { "name" }.to_owned()
         }
     };
-    let stages = match meta
-        .iter()
-        .find(|(name, _)| name == "stages")
-        .map(|(_, value)| value)
-    {
+    let stages = match meta.get("stages") {
         Some(Json::Array(stages)) => stages
             .iter()
             .filter_map(|stage| match stage {
@@ -728,10 +709,10 @@ fn definition(vocabulary: &Json) -> Json {
         _ => Vec::new(),
     };
     const META_KNOWN: [&str; 6] = ["name", "description", "icon", "model", "key", "stages"];
-    let extra: Vec<(String, Json)> = meta
+    let extra: Object = meta
         .iter()
         .filter(|(name, _)| !META_KNOWN.contains(&name.as_str()))
-        .cloned()
+        .map(|(name, value)| (name.clone(), value.clone()))
         .collect();
     let metadata = Json::object([
         ("name", Json::Str(text_member(&meta, "name"))),
@@ -760,19 +741,15 @@ fn definition(vocabulary: &Json) -> Json {
             };
             let removed = text_member(&fields, "removed");
             let version = text_member(&fields, "version");
-            let stages = match fields
-                .iter()
-                .find(|(name, _)| name == "tide.vocab.stages")
-                .map(|(_, v)| v)
-            {
+            let stages = match fields.get("tide.vocab.stages") {
                 Some(Json::Array(items)) => items.clone(),
                 Some(Json::Str(stage)) => vec![Json::str(stage)],
                 _ => Vec::new(),
             };
-            let extra: Vec<(String, Json)> = fields
+            let extra: Object = fields
                 .iter()
                 .filter(|(name, _)| !ENTRY_RESERVED.contains(&name.as_str()))
-                .cloned()
+                .map(|(name, value)| (name.clone(), value.clone()))
                 .collect();
             (
                 key,
@@ -993,7 +970,7 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
                     .collect(),
             ),
         ),
-        ("tide".to_owned(), Json::Object(tide.clone())),
+        ("tide".to_owned(), Json::object(tide.clone())),
     ]);
     let _ = context;
     let schemas = json_schemas(workspace);
@@ -1024,10 +1001,10 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
                 .map(|signal| {
                     let mut body = node_json(&signal.node);
                     if let Json::Object(members) = &mut body {
-                        members.push((
+                        members.insert(
                             opentide_workspace::index::SIGNAL_OWNER_FIELD.to_owned(),
                             Json::str(&signal.owner),
-                        ));
+                        );
                     }
                     (signal.uuid.clone(), body)
                 })
@@ -1036,9 +1013,9 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
     ));
     let object_vocab = object_vocabularies(workspace);
     Json::object([
-        ("paths", Json::Object(paths)),
+        ("paths", Json::object(paths)),
         ("configurations", node_json(config)),
-        ("vocabs", Json::Object(index_vocabularies(Some(workspace)))),
+        ("vocabs", Json::object(index_vocabularies(Some(workspace)))),
         (
             "framework_schemas",
             Json::Object(
@@ -1057,7 +1034,7 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
                     .collect(),
             ),
         ),
-        ("templates", Json::Object(templates(workspace))),
+        ("templates", Json::object(templates(workspace))),
         (
             "parse_errors",
             Json::Array(
@@ -1108,7 +1085,7 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
                     .collect(),
             ),
         ),
-        ("objects", Json::Object(families)),
+        ("objects", Json::object(families)),
         (
             "files",
             Json::Object(
@@ -1131,7 +1108,7 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
         ),
         (
             "indexes",
-            Json::object([("objects", Json::Object(object_vocab))]),
+            Json::object([("objects", Json::object(object_vocab))]),
         ),
     ])
 }
@@ -1190,7 +1167,7 @@ mod tests {
         let Some(Json::Object(entries)) = dumped.get("entries") else {
             panic!("no entries");
         };
-        let (_, first) = &entries[0];
+        let (_, first) = entries.get_index(0).unwrap();
         assert_eq!(first.get("removed"), Some(&Json::Null));
         assert!(first.get("extra").is_some());
     }

@@ -33,6 +33,12 @@ pub fn node_of(value: &Json) -> Node {
         Json::Null => Value::Null,
         Json::Bool(flag) => Value::Bool(*flag),
         Json::Int(integer) => Value::Int(*integer),
+        // The node has no integer beyond i64: the nearest float, as before.
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "only an integer beyond i64 is approximated"
+        )]
+        Json::UInt(integer) => Value::Float(*integer as f64),
         Json::Float(float) => Value::Float(*float),
         Json::Str(text) => Value::Str(text.clone()),
         Json::Array(items) => Value::Seq(items.iter().map(|item| node_of(item).into()).collect()),
@@ -164,7 +170,7 @@ fn settled_schedule(custom: Option<&Json>) -> (bool, f64) {
     (
         custom
             .get("ensureEnrichmentCompleteness")
-            .is_some_and(Json::truthy),
+            .is_some_and(Json::is_true),
         protobuf_seconds(custom.get("lateArrivingDataAdjustment")).unwrap_or(0.0),
     )
 }
@@ -212,7 +218,7 @@ impl RunState {
                 if remote.get(key) != Some(value) || wanted != current {
                     changed.push(key);
                 }
-            } else if remote.get(key).is_some_and(Json::truthy) != value.truthy() {
+            } else if remote.get(key).is_some_and(Json::is_true) != value.is_true() {
                 changed.push(key);
             }
         }
@@ -526,7 +532,7 @@ pub fn compile(
     tenant: &Json,
     known: Option<&str>,
 ) -> Result<Vec<Write>, CompileError> {
-    let Some(block) = rule.block(PLATFORM).filter(|block| block.truthy()) else {
+    let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Ok(Vec::new());
     };
     let status = block
@@ -585,6 +591,19 @@ mod tests {
 
     fn json(text: &str) -> Json {
         serde_json::from_str(text).unwrap_or_else(|error| panic!("{error}"))
+    }
+
+    #[test]
+    fn an_integer_beyond_i64_is_the_nearest_float_in_a_node() {
+        // The node has no integer beyond i64: u64::MAX is 2^64 as the nearest float.
+        let Value::Float(float) = node_of(&Json::UInt(u64::MAX)).value else {
+            panic!("a UInt is a node float");
+        };
+        assert_eq!(float.to_bits(), 2f64.powi(64).to_bits());
+        assert!(matches!(
+            node_of(&Json::Int(i64::MAX)).value,
+            Value::Int(i64::MAX)
+        ));
     }
 
     #[test]

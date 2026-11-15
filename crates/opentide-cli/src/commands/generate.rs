@@ -325,6 +325,45 @@ pub struct DocsArgs {
     pub changed: bool,
 }
 
+impl From<&crate::tree::GenerateDocsArgs> for DocsArgs {
+    fn from(args: &crate::tree::GenerateDocsArgs) -> Self {
+        use crate::tree::GenerateDocsCommand as Command;
+        // A subcommand takes its own `--output` and `--flavor`; the group's
+        // `--rules`, `--threats`, `--objectives` and `--changed` belong to the
+        // group alone.
+        let (scope, pages) = match &args.command {
+            None => (None, &args.pages),
+            Some(Command::Rules(leaf)) => (Some(DocsScope::Objects(Scope::Rules)), &leaf.pages),
+            Some(Command::Objectives(leaf)) => {
+                (Some(DocsScope::Objects(Scope::Objectives)), &leaf.pages)
+            }
+            Some(Command::Threats(leaf)) => (Some(DocsScope::Objects(Scope::Threats)), &leaf.pages),
+            Some(Command::Index(leaf)) => (Some(DocsScope::Index), &leaf.pages),
+        };
+        let group = args.command.is_none();
+        Self {
+            scope,
+            output: pages.output.clone(),
+            flavor: pages.flavor.clone(),
+            rules: group && args.rules,
+            threats: group && args.threats,
+            objectives: group && args.objectives,
+            changed: group && args.changed,
+        }
+    }
+}
+
+impl From<&crate::tree::GenerateExportsArgs> for Option<Target> {
+    fn from(args: &crate::tree::GenerateExportsArgs) -> Self {
+        use crate::tree::GenerateExportsCommand as Command;
+        args.command.as_ref().map(|command| match command {
+            Command::Navigator(_) => Target::Navigator,
+            Command::Objects(_) => Target::Objects,
+            Command::Revisions(_) => Target::Revisions,
+        })
+    }
+}
+
 /// What a docs run did, for its result.
 #[derive(Default)]
 struct DocsRun {
@@ -682,6 +721,18 @@ pub struct ExplorerOptions {
     pub include_visibility: bool,
     /// `--visibility-tlp`, as typed; `None` when not given.
     pub visibility_tlp: Option<String>,
+}
+
+impl ExplorerOptions {
+    /// The options as typed; `tlp_typed` is whether `--visibility-tlp` came
+    /// from the command line (its default is `amber`, and a typed one needs
+    /// `--include-visibility`).
+    pub fn new(args: &crate::tree::GenerateExplorerArgs, tlp_typed: bool) -> Self {
+        Self {
+            include_visibility: args.include_visibility,
+            visibility_tlp: tlp_typed.then(|| args.visibility_tlp.clone()),
+        }
+    }
 }
 
 /// The visibility probe: one placeholder log source per system whose names
@@ -1360,6 +1411,80 @@ fn named_phases(names: &[String], cx: &Context<'_>, version: &str) -> Report {
 mod tests {
     use super::*;
 
+    fn typed(line: &str) -> crate::tree::GenerateCommand {
+        use clap::{CommandFactory as _, FromArgMatches as _};
+        let argv = std::iter::once("opentide").chain(line.split_whitespace());
+        let matches = crate::tree::Cli::command()
+            .try_get_matches_from(argv)
+            .unwrap();
+        match crate::tree::Cli::from_arg_matches(&matches)
+            .unwrap()
+            .command
+        {
+            Some(crate::tree::RootCommand::Generate(crate::tree::GenerateArgs {
+                command: Some(command),
+            })) => command,
+            other => panic!("not a generate subcommand: {other:?}"),
+        }
+    }
+
+    fn docs_of(line: &str) -> DocsArgs {
+        match typed(line) {
+            crate::tree::GenerateCommand::Docs(docs) => DocsArgs::from(&docs),
+            other => panic!("not docs: {other:?}"),
+        }
+    }
+
+    fn target_of(line: &str) -> Option<Target> {
+        match typed(line) {
+            crate::tree::GenerateCommand::Exports(exports) => Option::<Target>::from(&exports),
+            other => panic!("not exports: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn generate_docs_options_map_from_the_group_or_the_subcommand() {
+        let group = docs_of("generate docs --rules --changed --output out --flavor gitlab");
+        assert_eq!(group.scope, None);
+        assert_eq!(group.output.as_deref(), Some("out"));
+        assert_eq!(group.flavor.as_deref(), Some("gitlab"));
+        assert!(group.rules && group.changed && !group.threats && !group.objectives);
+        let leaf = docs_of("generate docs threats --output t");
+        assert_eq!(leaf.scope, Some(DocsScope::Objects(Scope::Threats)));
+        assert_eq!(leaf.output.as_deref(), Some("t"));
+        assert_eq!(leaf.flavor, None);
+        let index = docs_of("generate docs index --flavor azure_devops");
+        assert_eq!(index.scope, Some(DocsScope::Index));
+        assert_eq!(index.flavor.as_deref(), Some("azure_devops"));
+        // The group's options are the group's alone, as they were.
+        let ignored = docs_of("generate docs --output out rules");
+        assert_eq!(ignored.scope, Some(DocsScope::Objects(Scope::Rules)));
+        assert_eq!(ignored.output, None);
+    }
+
+    #[test]
+    fn generate_exports_target_and_explorer_options_map_from_the_tree() {
+        assert_eq!(target_of("generate exports"), None);
+        assert_eq!(
+            target_of("generate exports navigator"),
+            Some(Target::Navigator)
+        );
+        assert_eq!(target_of("generate exports objects"), Some(Target::Objects));
+        assert_eq!(
+            target_of("generate exports revisions"),
+            Some(Target::Revisions)
+        );
+        let crate::tree::GenerateCommand::Explorer(explorer) =
+            typed("generate explorer --include-visibility")
+        else {
+            panic!("not explorer")
+        };
+        let given = ExplorerOptions::new(&explorer, true);
+        assert!(given.include_visibility);
+        assert_eq!(given.visibility_tlp.as_deref(), Some("amber"));
+        assert_eq!(ExplorerOptions::new(&explorer, false).visibility_tlp, None);
+    }
+
     /// The WASI build's reading of the work tree (gix) finds what the `git`
     /// program finds: a changed, a new and an untracked object file on a
     /// branch, not a deleted one or a file outside the object folders.
@@ -1671,12 +1796,12 @@ mod tests {
 
     /// The files under `dir`, at any depth.
     fn walk(dir: &Path) -> usize {
-        std::fs::read_dir(dir)
-            .unwrap()
-            .map(|entry| {
-                let path = entry.unwrap().path();
-                if path.is_dir() { walk(&path) } else { 1 }
-            })
-            .sum()
+        walkdir::WalkDir::new(dir)
+            .min_depth(1)
+            .follow_links(true)
+            .into_iter()
+            .map(Result::unwrap)
+            .filter(|entry| !entry.file_type().is_dir())
+            .count()
     }
 }
