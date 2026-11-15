@@ -84,7 +84,7 @@ use crate::verdict::{self, Instances};
 /// The arguments of `cargo xtask codegen`. With no option it writes the
 /// committed artifacts generated from the Rust model:
 /// src/opentide/schemas/data/platform_templates/*.template.yaml,
-/// data/catalogs/tide/schemas/<revision>.schema.json and the router beside them
+/// data/catalogs/tide/schemas/`<revision>.schema.json` and the router beside them
 /// (opentide.schema.json), the language server's catalogs
 /// (data/catalogs/tide/generated/), the key lists of
 /// highlights/queries/tide/highlights.scm and the diagnostics reference
