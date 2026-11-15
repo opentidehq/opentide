@@ -22,6 +22,7 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+use super::interrupt::watched;
 use indexmap::IndexMap;
 use opentide_compile::Json as CJson;
 use opentide_compile::plan::{SelectOptions, Tenant as PlanTenant};
@@ -1314,25 +1315,6 @@ fn connect(
 /// A read timeout: the request was sent to *address* and got no answer.
 fn read_timeout_text(address: &str, seconds: u64) -> String {
     format!("no answer from {address} within {seconds}s")
-}
-
-/// Runs *work* with Ctrl-C watched: a press cancels it.
-async fn watched<T>(
-    work: impl std::future::Future<Output = Result<T, ConnectorError>>,
-    cancel: &CancellationToken,
-    interrupted: &(dyn Fn() -> bool + Sync),
-) -> Result<T, ConnectorError> {
-    let watch = async {
-        while !interrupted() {
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-        cancel.cancel();
-        std::future::pending::<()>().await;
-    };
-    tokio::select! {
-        result = work => result,
-        () = watch => Err(ConnectorError::Cancelled),
-    }
 }
 
 /// Runs the checks on every batch, on a thread of its own with this
