@@ -16,6 +16,8 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+# `parallel::in_order`: the cases of a comparison on every core, in order.
+rayon.workspace = true
 # Workspace paths without Windows' verbatim prefix (`\\?\`): a path joined
 # with `/` does not resolve under it, and the oracle names no such path.
 dunce = "1"
@@ -43,6 +45,7 @@ schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
+ungrammar.workspace = true
 wait4.workspace = true
 regex.workspace = true
 # xtask golden (src/golden/): only the tooling uses these, at the versions

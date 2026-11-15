@@ -33,21 +33,9 @@ use std::process::ExitCode;
 use std::sync::OnceLock;
 
 use anyhow::{Context, Result, bail};
+use clap::Args;
 use regex::Regex;
 use serde_json::Value;
-
-/// The usage.
-pub const USAGE: &str = "\
-usage: cargo xtask spec-fields [--specifications DIR] [--list]
-
-Checks every model field's description against its row in the field tables of
-the specifications checkout (DIR, else $OPENTIDE_SPECIFICATIONS_ROOT, else
-../specifications): specs/platforms/*.md, specs/objects/*-1.0.md and
-specs/metadata.md. --list prints each row it matched with a model field.
-
-exit status: 0 no drift, 1 drift (or fewer rows matched than the floor),
-2 usage error or no checkout
-";
 
 /// The spec pages whose tables describe the models, under `specs/`.
 pub const SPEC_FILES: [&str; 3] = ["platforms/*.md", "objects/*-1.0.md", "metadata.md"];
@@ -380,36 +368,34 @@ pub fn run(specifications: &Path, list: bool, out: &mut String) -> Result<bool> 
     Ok(false)
 }
 
+/// The arguments of `cargo xtask spec-fields`: checks every model field's
+/// description against its row in the field tables of the specifications
+/// checkout (specs/platforms/*.md, specs/objects/*-1.0.md and
+/// specs/metadata.md). Exit status: 0 no drift, 1 drift (or fewer rows matched
+/// than the floor), 2 usage error or no checkout.
+#[derive(Args)]
+pub struct SpecFieldsArgs {
+    /// The checkout: DIR, else $OPENTIDE_SPECIFICATIONS_ROOT, else
+    /// ../specifications
+    #[arg(long, value_name = "DIR")]
+    pub specifications: Option<PathBuf>,
+    /// Print each row matched with a model field
+    #[arg(long)]
+    pub list: bool,
+}
+
 /// `cargo xtask spec-fields ARGS`.
-pub fn main(args: &[String]) -> ExitCode {
-    let mut specifications = None;
-    let mut list = false;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--specifications" => match args.next() {
-                Some(dir) => specifications = Some(PathBuf::from(dir)),
-                None => {
-                    eprint!("xtask spec-fields: --specifications needs a directory\n\n{USAGE}");
-                    return ExitCode::from(2);
-                }
-            },
-            "--list" => list = true,
-            "help" | "--help" | "-h" => {
-                print!("{USAGE}");
-                return ExitCode::SUCCESS;
-            }
-            other => {
-                eprint!("xtask spec-fields: unknown option `{other}`\n\n{USAGE}");
-                return ExitCode::from(2);
-            }
-        }
-    }
+pub fn main(args: &SpecFieldsArgs) -> ExitCode {
+    let SpecFieldsArgs {
+        specifications,
+        list,
+    } = args;
     let specifications = specifications
+        .clone()
         .or_else(|| std::env::var_os(crate::vocab::sync::SPECIFICATIONS_ENV).map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("../specifications"));
     let mut out = String::new();
-    let result = run(&specifications, list, &mut out);
+    let result = run(&specifications, *list, &mut out);
     print!("{out}");
     match result {
         Ok(true) => ExitCode::SUCCESS,
