@@ -51,6 +51,8 @@
 //! assert_eq!(parse.green.to_string(), source);
 //! ```
 
+pub mod ast;
+pub mod conformance;
 mod debug;
 mod input;
 mod parser;

@@ -10,6 +10,8 @@ names the few the toolkit needs in a `Grammar`. I/O-free, no `unsafe`, no worksp
 | `input.rs` | `Grammar`, `Lexeme`, `lex` (a logos token source that resumes one character after an error), `Input` (trivia kept, skipped for lookahead) |
 | `parser.rs` | `Parser` (`nth`/`at`/`eat`/`expect`/`bump_as`/`err_*`/`enter`/`exit`), `Marker`/`CompletedMarker::precede`, `Event`, `ErrorKind` |
 | `tree.rs` | `build`: events to a lossless rowan `GreenNode` and `SyntaxError`s, iteratively, no deeper than `MAX_TREE_DEPTH` |
+| `ast.rs` | `AstNode` and `support`: the runtime of the typed AST `cargo xtask codegen` generates from a language's `.ungram` (below) |
+| `conformance.rs` | `check`/`assert_conforms`: every node's children against its `.ungram` rule (`NodeRule`s, data the generated `RULES` holds), every mismatch reported with its range |
 | `debug.rs` | `debug_tree`/`debug_errors` for insta snapshots, `describe_expected` for messages |
 
 ## Place
@@ -54,6 +56,20 @@ on no workspace crate, and the query engines (tier 2 and up) build on it. Publis
   (what its tree-sitter engine accepted).
 - Messages: the language maps `SyntaxError::kind` to its diagnostic codes and renders
   `SyntaxError::expected` with `describe_expected`.
+
+## The typed AST (`.ungram`)
+
+A language that navigates its tree writes `src/<lang>.ungram` (rust-analyzer's grammar DSL: the
+readable spec of the tree, beside the vendor grammar) and runs `cargo xtask codegen`, which writes
+`src/generated/ast.rs` (`codegen --check` fails when it is stale; `xtask/src/astgen.rs`): a struct
+per node, an enum per `A = B | C`, an accessor per child (nodes, `<token>_token`, or the label's
+name), and `RULES`. The crate supplies `Lang` (its `rowan::Language`), `SyntaxKind` (a variant per
+node, `UPPER_SNAKE` of its name), `SyntaxNode`, `SyntaxToken` and a `T!` macro (`T![where]`,
+`T!['(']`) for the grammar's tokens. A corpus test then runs
+`assert_conforms(&root, RULES, GRAMMAR)` on every tree it parses. The generator refuses a node
+type twice in one rule outside a repetition unless every occurrence is labeled, required and not
+repeated: label them or write the accessor by hand. The toolkit's own test language
+(`tests/ast_fixture/`) shows the whole loop.
 
 ## Test
 
