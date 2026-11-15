@@ -7,10 +7,10 @@
 //! workspace builds `serde_json` and `toml` without `preserve_order`, so a
 //! table is a sorted map and the files come out the same on every run.
 //!
-//! What is left of the old Python ingest's semantics decides data, not
-//! layout: truthiness for its `x or default` and merge rules ([`truthy`]),
-//! `str()` of an identifier or version ([`text`]) and `str.title()` on
-//! tactic names ([`title`]).
+//! A value is read by its type: a text or list field is set when it holds
+//! something ([`filled`]), an identifier, a version or a removal when it
+//! names one ([`named`]); `str()` of an identifier or version ([`text`]) and
+//! `str.title()` on tactic names ([`title`]) remain.
 
 use anyhow::{Context, Result, bail};
 pub use serde_json::Value;
@@ -18,16 +18,26 @@ pub use serde_json::Value;
 /// A table or JSON object.
 pub type Table = serde_json::Map<String, Value>;
 
-/// Whether a value counts as set, as Python's `bool(value)` decides it: the
-/// ingest's `x or default` and `removed`/`version` rules hang on it.
-pub fn truthy(value: &Value) -> bool {
+/// Whether a value holds something: it is not null and not an empty
+/// string, list or table. A boolean or a number is a value.
+pub fn filled(value: &Value) -> bool {
     match value {
         Value::Null => false,
-        Value::Bool(flag) => *flag,
-        Value::Number(number) => number.as_f64().is_some_and(|n| n != 0.0),
         Value::String(text) => !text.is_empty(),
         Value::Array(items) => !items.is_empty(),
         Value::Object(table) => !table.is_empty(),
+        Value::Bool(_) | Value::Number(_) => true,
+    }
+}
+
+/// Whether a value names something (an identifier, a version, the version
+/// a key was removed in): a non-empty string or a number. `false`, null, a
+/// list and a table name nothing.
+pub fn named(value: &Value) -> bool {
+    match value {
+        Value::String(text) => !text.is_empty(),
+        Value::Number(_) => true,
+        Value::Null | Value::Bool(_) | Value::Array(_) | Value::Object(_) => false,
     }
 }
 
@@ -117,27 +127,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn truthiness_is_pythons() {
-        for value in [
-            json!(null),
-            json!(false),
-            json!(0),
-            json!(0.0),
-            json!(""),
-            json!([]),
-            json!({}),
-        ] {
-            assert!(!truthy(&value), "{value}");
+    fn values_are_read_by_their_type() {
+        for value in [json!(null), json!(""), json!([]), json!({})] {
+            assert!(!filled(&value), "{value}");
         }
         for value in [
-            json!(true),
-            json!(-1),
-            json!(0.5),
+            json!(false),
+            json!(0),
             json!(" "),
             json!([0]),
             json!({"a": null}),
         ] {
-            assert!(truthy(&value), "{value}");
+            assert!(filled(&value), "{value}");
+        }
+        for value in [
+            json!(null),
+            json!(false),
+            json!(true),
+            json!(""),
+            json!(["1.0"]),
+        ] {
+            assert!(!named(&value), "{value}");
+        }
+        for value in [json!("2.0"), json!(0), json!(1.5)] {
+            assert!(named(&value), "{value}");
         }
     }
 

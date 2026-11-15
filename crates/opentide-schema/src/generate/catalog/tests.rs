@@ -126,11 +126,12 @@ fn a_union_of_unions_is_flattened() {
 }
 
 /// `deprecations.json`: one `rule` row per platform property extra whose
-/// `tide.meta.deprecation` is truthy, at `configurations.{platform}.{name}`,
-/// with its message, sorted by path; falsy markers and platforms without
-/// property extras give none.
+/// `tide.meta.deprecation` is a message (a non-empty string), at
+/// `configurations.{platform}.{name}`, with that message, sorted by path; an
+/// empty message, a value that is not a string (`false`, `0`, `2`, `[]`)
+/// and platforms without property extras give none.
 #[test]
-fn deprecations_are_the_truthy_platform_extras_sorted_by_path() {
+fn deprecations_are_the_platform_extras_with_a_message_sorted_by_path() {
     let rows = deprecation_rows([
         (
             "sentinel",
@@ -156,7 +157,6 @@ fn deprecations_are_the_truthy_platform_extras_sorted_by_path() {
         Json::Array(
             [
                 ("configurations.elastic.query", "Gone in 2.0"),
-                ("configurations.sentinel.gamma", "2"),
                 ("configurations.sentinel.zeta", "Use `query` instead."),
             ]
             .into_iter()

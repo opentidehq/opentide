@@ -51,13 +51,29 @@ pub fn apart<T: Send>(work: impl FnOnce() -> T + Send) -> Option<T> {
 }
 
 /// Runs *work* to completion on a runtime of its own.
+///
+/// # Errors
+///
+/// The runtime cannot start; or, on WASI, the caller is inside a runtime
+/// (the MCP server's): tokio refuses to start one there (it panics), and
+/// WASI has no other thread to hand the work to (`apart` runs it on this
+/// one).
 pub fn block_on<F: Future>(work: F) -> Result<F::Output, String> {
+    #[cfg(target_os = "wasi")]
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return Err(INSIDE_A_RUNTIME.into());
+    }
     let runtime = builder()
         .enable_all()
         .build()
         .map_err(|error| format!("cannot start the network runtime: {error}"))?;
     Ok(runtime.block_on(work))
 }
+
+/// [`block_on`]'s refusal inside a runtime on WASI.
+#[cfg(target_os = "wasi")]
+const INSIDE_A_RUNTIME: &str =
+    "cannot start the network runtime inside another on a target without threads";
 
 /// Cancels *token* once *requested* returns true, checking every 50 ms
 /// until the token is cancelled. For the CLI's Ctrl-C flag.
@@ -215,5 +231,15 @@ fn panic_message(failure: tokio::task::JoinError) -> String {
         text.clone()
     } else {
         "a panic".to_owned()
+    }
+}
+
+#[cfg(all(test, target_os = "wasi"))]
+mod tests {
+    use super::*;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn block_on_inside_a_runtime_is_refused_not_a_panic() {
+        assert_eq!(block_on(async { 7 }), Err(INSIDE_A_RUNTIME.to_owned()));
     }
 }

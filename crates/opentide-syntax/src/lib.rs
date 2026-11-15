@@ -160,6 +160,27 @@ pub fn first_error(node: Node<'_>) -> Option<Node<'_>> {
     }
 }
 
+/// Pre-order walk of `root` and every node under it, named or not. Iterative,
+/// so a query thousands of levels deep (a long `OR` chain) cannot exhaust the
+/// stack, notably in WASM.
+pub fn walk<'t>(root: Node<'t>, mut f: impl FnMut(Node<'t>)) {
+    let mut cursor = root.walk();
+    loop {
+        f(cursor.node());
+        if cursor.goto_first_child() {
+            continue;
+        }
+        loop {
+            if cursor.goto_next_sibling() {
+                break;
+            }
+            if !cursor.goto_parent() {
+                return;
+            }
+        }
+    }
+}
+
 /// Pre-order walk that hands each node its ancestors, root first. Iterative,
 /// so a query thousands of levels deep cannot exhaust the stack. Checks that
 /// look upward read `ancestors` instead of calling [`Node::parent`], which
@@ -305,6 +326,24 @@ pub fn query_captures_in(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn walk_is_pre_order_and_stays_under_its_root() {
+        let tree = parse(LanguageId::Kql, "T | where a == 1 | take 1").expect("parse");
+        let root = tree.root_node();
+        let mut seen = Vec::new();
+        walk(root, |node| seen.push(node.id()));
+        let mut expected = Vec::new();
+        walk_with_ancestors(root, |node, _| expected.push(node.id()));
+        assert_eq!(seen, expected);
+        assert_eq!(seen.len(), root.descendant_count());
+
+        let sub = root.named_child(0).expect("a child");
+        let mut under = Vec::new();
+        walk(sub, |node| under.push(node.id()));
+        assert_eq!(under.first(), Some(&sub.id()));
+        assert_eq!(under.len(), sub.descendant_count());
+    }
 
     #[test]
     fn parses_kql_pipeline() {
