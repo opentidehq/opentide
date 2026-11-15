@@ -15,6 +15,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - If you called `opentide_lsp::server::install_workspace_catalog` or read `opentide_lsp::WORKSPACE_CATALOGS`, drop it: the server installs the catalogs it generates for each root.
 - If you pinned an `opentide-lsp-*-unknown-linux-musl` binary, build `opentide-lsp` with `cargo install opentide-lsp` instead: no musl binary ships.
 - If you called `opentide_connectors::defender::strip_kql_literals_and_comments` or `opentide_kql::defender_required_column_groups`, use `opentide_connectors::connector::kql_code` to mask a query and `opentide_connectors::defender::missing_required_column_groups` to check its columns.
+- If you called `opentide_tide::completions_for` or `opentide_highlight::generated_artifacts_stale`, drop the call: both are removed. Filter `IndexedObject`s by `object_type` where you listed completions, and call `opentide_highlight::generated_artifacts_stale_for(spec, LanguageId::Kql, tm, monaco, helix)` where you checked the generated artifacts.
 - If you pass or read the YAML values of `opentide-tide` (`IndexedObject::body`, `IndexedObject::from_body`, `index_value`, `object_refs`, `TideObject`), use `Arc<opentide_core::node::Node>` where you used `serde_yaml::Value`, and read a document with `opentide_core::node::load` (or `TideObject::parse`) where you called `serde_yaml::from_str`.
 
 - If you build `opentide-schema` with `--features wasm`, drop the flag: the crate builds for `wasm32-unknown-unknown` without it.
@@ -31,6 +32,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **No musl `opentide-lsp` binary** ([opentide#840](https://github.com/opentidehq/opentide/issues/840)). The `x86_64` and `aarch64` `unknown-linux-musl` builds no longer ship; on Alpine and other musl distributions, build `opentide-lsp` with `cargo install`. glibc Linux, macOS and Windows keep their binaries.
 
 - **`opentide_analysis::QueryReport` has a public `placeholder` field** ([opentide#820](https://github.com/opentidehq/opentide/issues/820)). `analyze_queries` says which query is still the stand-in `opentide new` wrote, so a host need not read the file again to skip it. A struct literal of `QueryReport` without the field no longer compiles.
+
+- **Two unused public functions are removed.** `opentide_tide::completions_for` (the names and UUIDs of a workspace's objects of one type) and `opentide_highlight::generated_artifacts_stale` (`generated_artifacts_stale_for` with the KQL language) had no caller in the workspace, the bindings or the editors.
 
 - **Two copies of the Defender KQL masker are removed.** `opentide_connectors::defender::strip_kql_literals_and_comments` and `opentide_kql::defender_required_column_groups` (an unused copy of Defender's column check) are gone; both masked `//` before strings. Nothing in the workspace called them outside their own tests. Use `opentide_connectors::connector::kql_code` and `opentide_connectors::defender::missing_required_column_groups`.
 

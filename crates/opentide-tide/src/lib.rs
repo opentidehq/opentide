@@ -1426,14 +1426,6 @@ pub fn definition<'a>(workspace: &'a [IndexedObject], uuid: &str) -> Option<&'a 
     workspace.iter().find(|o| o.uuid == uuid)
 }
 
-pub fn completions_for(workspace: &[IndexedObject], object_type: &str) -> Vec<(String, String)> {
-    workspace
-        .iter()
-        .filter(|o| o.object_type == object_type)
-        .map(|o| (o.name.clone(), o.uuid.clone()))
-        .collect()
-}
-
 pub fn workspace_symbols<'a>(
     workspace: &'a [IndexedObject],
     query: &str,
