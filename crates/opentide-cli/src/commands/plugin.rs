@@ -15,6 +15,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+use super::interrupt::watched;
 use opentide_compile::Json as Compiled;
 use opentide_connectors::connector::{LiveCheck, QueryRequest, TenantContext, TimeWindow};
 use opentide_connectors::credentials::Mode as Resolve;
@@ -37,7 +38,7 @@ pub struct Context<'a> {
     /// `--proxy`.
     pub proxy: Option<&'a str>,
     /// Whether Ctrl-C was pressed.
-    pub interrupted: &'a dyn Fn() -> bool,
+    pub interrupted: &'a (dyn Fn() -> bool + Sync),
     /// Now, for a live check's window.
     pub now: jiff::Timestamp,
 }
@@ -173,22 +174,10 @@ fn connect(
 fn on_tenant<T: Send>(
     tenant: &Tenant,
     cancel: &CancellationToken,
-    interrupted: &dyn Fn() -> bool,
+    interrupted: &(dyn Fn() -> bool + Sync),
     work: opentide_connectors::connector::BoxFuture<'_, Result<T, ConnectorError>>,
 ) -> Result<T, ConnectorError> {
-    let ran = opentide_connectors::runtime::block_on(async {
-        let watch = async {
-            while !interrupted() {
-                tokio::time::sleep(Duration::from_millis(50)).await;
-            }
-            cancel.cancel();
-            std::future::pending::<()>().await;
-        };
-        tokio::select! {
-            result = work => result,
-            () = watch => Err(ConnectorError::Cancelled),
-        }
-    });
+    let ran = opentide_connectors::runtime::block_on(watched(work, cancel, interrupted));
     ran.map_err(|message| ConnectorError::Crashed {
         platform: tenant.label.platform.clone(),
         tenant: tenant.label.tenant.clone(),
