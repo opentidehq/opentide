@@ -55,8 +55,11 @@ Byte-for-byte parity with Python is not what they check; what the Rust CLI does 
 - **Needs the generated workspaces**: the cases on `fault`, `fault-lint` and `heavy-small` run in
   three tests (`generated_fault`, `generated_fault_lint`, `generated_heavy_small`) when
   `OPENTIDE_REPLAY_FIXTURES` names the workspaces `cargo xtask corpus` writes, which a crate test
-  cannot build; without it they print "skipped". The CI jobs write them and set
-  `OPENTIDE_SNAPSHOT_REQUIRE_GENERATED`, so a gate cannot pass by skipping them. To run or record
+  cannot build; without it they print "skipped". The Linux PR gate and the Coverage workflow
+  write them and set `OPENTIDE_SNAPSHOT_REQUIRE_GENERATED`, so a gate cannot pass by skipping
+  them. The nightly `engine-test-os` (macOS, Windows) and `mutants.yml` do not write them, by
+  design (minutes of debug-build CPU per OS for output the Linux snapshots already hold): the 101
+  cases are a Linux-gate check. To run or record
   them (about 4 minutes of CPU in a debug build):
 
   ```sh
