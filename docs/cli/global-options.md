@@ -94,7 +94,7 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 |----------|--------|
 | `OPENTIDE_OUTPUT` | Output mode: `human`, `plain`, `agent` or `json`; see [Output modes](./json-output.md#output-modes) |
 | `OPENTIDE_DEBUG` | `1` for debug logging, like `--debug` |
-| `NO_COLOR` | Any value turns colour off, like `--no-color` |
+| `NO_COLOR` | Any non-empty value turns colour off, like `--no-color`; an empty one is ignored |
 | `OPENTIDE_JSON_INDENT` | `0` prints every `--json` document on one line, `2` indents it; default: indented at a terminal, one line otherwise |
 | `OPENTIDE_REPO_ROOT` | Repository root, like `--repo` |
 | `OPENTIDE_DATA_ROOT` | Bundled data root, like `--data` |
@@ -115,7 +115,7 @@ The CLI context calls `apply_environment()` before engine work, pushing flags in
 
 ## Terminal output
 
-Interactive terminals receive Rich colours. Redirected or captured streams, CI logs and coding agents get plain text that is never wrapped, so a path stays on one line. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it. `OPENTIDE_OUTPUT` (`human`, `plain`, `agent`, `json`) overrides the choice; see [Output modes](./json-output.md#output-modes).
+Interactive terminals receive Rich colours. Redirected or captured streams, CI logs and coding agents get plain text that is never wrapped, so a path stays on one line. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it, in `--help` too (`--no-color` and `NO_COLOR` win over it). `OPENTIDE_OUTPUT` (`human`, `plain`, `agent`, `json`) overrides the choice; see [Output modes](./json-output.md#output-modes).
 
 Routine commands do not print an ASCII banner. The interactive setup wizard uses a compact branded heading.
 

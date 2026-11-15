@@ -316,7 +316,7 @@ impl Run<'_> {
     /// in `plain` mode, on a terminal that is not `TERM=dumb`; wrapped at its
     /// width there, whole on a pipe. `FORCE_COLOR` (or `CLICOLOR_FORCE`) asks
     /// for colour on a pipe, in CI and under `TERM=dumb` too, in `human` and
-    /// `plain` modes; the other modes stay free of it.
+    /// `plain` modes ([`Run::forced_colour`]); the other modes stay free of it.
     fn console(&self, tty: bool) -> Console {
         let dumb = self
             .env
@@ -324,9 +324,8 @@ impl Run<'_> {
             .unwrap_or_default()
             .trim()
             .eq_ignore_ascii_case("dumb");
-        let forced = self.env.colour_choice() == Some(true);
         let colour = match self.mode {
-            Mode::Human | Mode::Plain if forced => Colour::Full,
+            Mode::Human | Mode::Plain if self.forced_colour() => Colour::Full,
             _ if !tty || dumb => Colour::None,
             Mode::Human => Colour::Full,
             Mode::Plain => Colour::Mono,
@@ -338,9 +337,20 @@ impl Run<'_> {
         }
     }
 
-    /// The help of the command at `path` on `out`; `code`.
+    /// Whether the environment forces colour on this run: `FORCE_COLOR` or
+    /// `CLICOLOR_FORCE`, in `human` and `plain` modes. An explicit `--no-color`
+    /// wins over it, as `NO_COLOR` does (`Env::colour_choice`).
+    fn forced_colour(&self) -> bool {
+        matches!(self.mode, Mode::Human | Mode::Plain)
+            && !self.globals.no_color
+            && self.env.colour_choice() == Some(true)
+    }
+
+    /// The help of the command at `path` on `out`; `code`. Coloured in `human`
+    /// mode and where the environment forces colour.
     fn help(&self, path: &[String], code: i32, out: &mut dyn Write) -> std::io::Result<i32> {
-        let text = crate::help::render(&self.root, path, self.mode == Mode::Human);
+        let colour = self.mode == Mode::Human || self.forced_colour();
+        let text = crate::help::render(&self.root, path, colour);
         out.write_all(text.as_bytes())?;
         out.flush()?;
         Ok(code)
@@ -3906,6 +3916,35 @@ mod tests {
         assert!(!sgr(
             &[("FORCE_COLOR", "1"), ("OPENTIDE_OUTPUT", "agent")],
             false
+        ));
+        // An explicit --no-color wins over FORCE_COLOR and CLICOLOR_FORCE, as
+        // NO_COLOR does, on a pipe and at a terminal.
+        let flagged = |pairs: &[(&str, &str)], tty: bool| {
+            let ran = dispatched("deploy --no-color", pairs, tty);
+            assert_ne!(ran.stderr, "", "{pairs:?}");
+            ran.stderr.contains('\u{1b}')
+        };
+        assert!(!flagged(&[("FORCE_COLOR", "1")], false));
+        assert!(!flagged(&[("CLICOLOR_FORCE", "1")], false));
+        assert!(!flagged(&[("FORCE_COLOR", "1"), ("TERM", "dumb")], true));
+        // --help is coloured where colour is forced, and only there.
+        let helped = |line: &str, pairs: &[(&str, &str)]| {
+            let ran = dispatched(line, pairs, false);
+            assert_eq!(ran.code, 0, "{line} {pairs:?}");
+            ran.stdout.contains('\u{1b}')
+        };
+        assert!(!helped("--help", &[]));
+        assert!(helped("--help", &[("FORCE_COLOR", "1")]));
+        assert!(helped("validate --help", &[("CLICOLOR_FORCE", "1")]));
+        assert!(!helped("--help", &[("FORCE_COLOR", "0")]));
+        assert!(!helped(
+            "--help",
+            &[("FORCE_COLOR", "1"), ("NO_COLOR", "1")]
+        ));
+        assert!(!helped("--no-color --help", &[("FORCE_COLOR", "1")]));
+        assert!(!helped(
+            "--help",
+            &[("FORCE_COLOR", "1"), ("OPENTIDE_OUTPUT", "agent")]
         ));
         // A bare argv in machine mode is the usage error, not help.
         let bare = dispatched("--json", &[], false);
