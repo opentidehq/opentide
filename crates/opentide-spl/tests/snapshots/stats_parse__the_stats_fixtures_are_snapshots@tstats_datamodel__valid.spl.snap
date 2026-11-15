@@ -45,8 +45,9 @@ SOURCE_FILE@0..186
       WHITESPACE@97..98 " "
       SEARCH_EXPRESSION@98..152
         IN_CLAUSE@98..152
-          IDENTIFIER@98..120
-            IDENT@98..120 "Processes.process_name"
+          FIELD_REF@98..120
+            IDENTIFIER@98..120
+              IDENT@98..120 "Processes.process_name"
           WHITESPACE@120..121 " "
           IN_KW@121..123 "IN"
           WHITESPACE@123..124 " "
