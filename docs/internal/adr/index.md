@@ -24,6 +24,7 @@ The decisions D-1 to D-8 come from the unified-core plan, [§1 Decisions](https:
 | [0009](./0009-revision-registry.md) | UC-1.7 | The revision registry: dispatch on `metadata.schema`, unknown revisions checked against the newest of their family, forward migrations ([#813](https://github.com/opentidehq/opentide/issues/813)) | Proposed |
 | [0010](./0010-one-diagnostic-model.md) | UC-2.2 | One diagnostic model for `validate`, the SDK, MCP and the language server, and the decisions on the CLI/editor parity gaps ([#817](https://github.com/opentidehq/opentide/issues/817)) | Proposed |
 | [0011](./0011-python-models.md) | UC-1.9 | The Rust models in Python: frozen classes under their Pydantic names in `opentide._native.models`, the Pydantic methods SDK code calls, generated stubs, re-exported by `opentide.models` with deprecation shims and delegation helpers; the CLI keeps Pydantic in `opentide._models` ([#815](https://github.com/opentidehq/opentide/issues/815)) | Proposed |
+| [0012](./0012-pure-rust-parsing.md) | Epic #1219 | Pure-Rust parsing replaces tree-sitter: logos, rowan and hand-written parsers on `opentide-parse`, ungrammar typed ASTs, YARA-X's CST for YARA, a depth contract, the differential harness as the gate ([#1219](https://github.com/opentidehq/opentide/issues/1219)) | Accepted |
 
 No work item has an ADR to come. A work item that makes a decision adds one, taking the number after the highest one in the index when it is written.
 
