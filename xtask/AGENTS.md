@@ -127,7 +127,10 @@ of it): a command that failed early would measure nothing, so the bench stops wi
 - CI: [`bench.yml`](../.github/workflows/bench.yml). "The last result" (`--previous`, named after the branch in the messages)
   is the last result of the workflow's comparison base, `BASE_BRANCH`: `integration/unified-core`
   (its pushes, nightly and manual runs) while development has no Rust command line, and
-  development again once the Unified Core merges there. Re-record the baseline only from a CI run
+  development again once the Unified Core merges there. Only the rust engine is given a last result:
+  the python engine is a fixed PyPI wheel no change here touches, so a 10% rule against its last
+  result measured the runner (one CPU model's runs differed by up to 27%, every command together)
+  and it is held to the oracle baseline of its CPU alone. Re-record the baseline only from a CI run
   on its runner class, in a change of its own.
 
 ## Invariants
