@@ -654,6 +654,7 @@ fn set_value(file: &mut File, path: &str, node: Yaml) -> Result<()> {
 /// Applies `kind` to the files at `targets` (indexes into `workspace`).
 /// Returns the targets' paths after the kind (a renamed target under its
 /// new path; a deleted one left out).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn apply(workspace: &mut Workspace, kind: &Kind, targets: &[usize]) -> Result<Vec<String>> {
     // `copy_from_partner` reads the targets as they were before the kind.
     let before: Vec<File> = targets

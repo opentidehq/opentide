@@ -584,6 +584,7 @@ pub enum StaleCheck<'a> {
     clippy::too_many_arguments,
     reason = "the run's paths, results and counts, each read by `golden check` once"
 )]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn golden(
     repo: &Path,
     cases: &Path,

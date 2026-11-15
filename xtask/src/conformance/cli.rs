@@ -129,6 +129,7 @@ fn parse(args: &[String]) -> Result<Args> {
 /// # Errors
 ///
 /// A usage error, or a corpus or runner that could not be set up (status 2).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn run(args: &[String]) -> Result<u8> {
     let args = match parse(args) {
         Ok(args) => args,

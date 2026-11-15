@@ -934,6 +934,7 @@ impl Elastic {
     /// deletes and creates it. A prebuilt rule is never modified. A 401 or
     /// 403 fails the tenant ([`ElasticError::Tenant`]); any other refusal
     /// fails the rule ([`Deployed::Failed`]).
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     pub async fn deploy_rule(
         &self,
         cx: TenantContext<'_>,
@@ -1691,6 +1692,7 @@ async fn lucene(
     })
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 async fn kuery_preview(
     client: &Client,
     cx: TenantContext<'_>,

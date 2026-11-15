@@ -50,6 +50,7 @@ fn stalling_tenant(arrived: mpsc::Sender<String>) -> String {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn ctrl_c_during_a_tenant_query_stops_the_run_with_interrupted_and_130() {
     let (arrived, requests) = mpsc::channel();
     let address = stalling_tenant(arrived);

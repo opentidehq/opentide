@@ -350,6 +350,7 @@ fn settle(
 
 impl Budgets {
     /// Parses `budgets.toml` and checks its version and its numbers.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     pub fn parse(text: &str) -> Result<Self> {
         let budgets: Self = toml::from_str(text)?;
         if budgets.schema_version != BUDGETS_SCHEMA_VERSION {
@@ -716,6 +717,7 @@ pub fn check_with(
     outcome
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn check_against(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> Outcome {
     let policy = &budgets.policy;
     let mut notes = Vec::new();
@@ -936,6 +938,7 @@ struct Applies {
     oracle_time: Option<(f64, bool)>,
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn check_one(
     report: &Report,
     result: &CommandResult,

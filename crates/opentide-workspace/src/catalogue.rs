@@ -623,6 +623,7 @@ pub fn build(workspace: &Workspace) -> Catalogue {
 /// The catalogue of an index: `deployment` is the resolved
 /// `deployment.toml`, `root` the workspace folder (paths are shown from it,
 /// and the deployment state is read under it).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn build_from(
     fs: &dyn FileSystem,
     index: &Index,
