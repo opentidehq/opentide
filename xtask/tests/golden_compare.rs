@@ -319,7 +319,14 @@ fn the_oracle_and_its_requirements_agree() {
 /// refuses a missing value or an unknown option for `cassettes record`).
 #[test]
 fn cassettes_and_mcp_record_take_an_oracle_file() {
-    let args = |list: &[&str]| -> Vec<String> { list.iter().map(|a| (*a).to_owned()).collect() };
+    use clap::{Command, FromArgMatches, Subcommand};
+    let parse_mcp = |list: &[&str]| -> Result<xtask::mcp::Cmd, clap::Error> {
+        let command =
+            xtask::mcp::Cmd::augment_subcommands(Command::new("mcp").subcommand_required(true));
+        let matches =
+            command.try_get_matches_from(std::iter::once("mcp").chain(list.iter().copied()))?;
+        xtask::mcp::Cmd::from_arg_matches(&matches)
+    };
     let missing = tempfile::tempdir().unwrap();
     let missing = missing.path().join("ORACLE.none");
     let missing = missing.to_string_lossy();
@@ -333,14 +340,10 @@ fn cassettes_and_mcp_record_take_an_oracle_file() {
     .to_string();
     assert!(error.contains("ORACLE.none"), "{error}");
 
-    let error = xtask::mcp::run(&args(&["record", "--python", "py", "--oracle", &missing]))
-        .unwrap_err()
-        .to_string();
-    assert!(error.contains("not both"), "{error}");
-    let error = xtask::mcp::run(&args(&["record"])).unwrap_err().to_string();
-    assert!(error.contains("--oracle FILE"), "{error}");
-    let error = xtask::mcp::run(&args(&["record", "--oracle", &missing]))
-        .unwrap_err()
-        .to_string();
+    // `mcp record` takes one of --python and --oracle, never both, never none.
+    assert!(parse_mcp(&["record", "--python", "py", "--oracle", &missing]).is_err());
+    assert!(parse_mcp(&["record"]).is_err());
+    let command = parse_mcp(&["record", "--oracle", &missing]).unwrap();
+    let error = xtask::mcp::run(&command).unwrap_err().to_string();
     assert!(error.contains("ORACLE.none"), "{error}");
 }

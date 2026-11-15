@@ -51,7 +51,7 @@ enum Cmd {
     /// Run every operation of tests/conformance/manifest.json on every corpus
     /// through the Rust, Python and Node SDKs and require byte-identical
     /// documents (UC-5.4, #839)
-    Conformance(Passthrough),
+    Conformance(xtask::conformance::cli::ConformanceArgs),
     /// Generate the heavy workspace, run the fault catalogue against the
     /// oracle, report coverage (UC-0.6, #804); `corpus help` lists its commands
     Corpus(Passthrough),
@@ -75,16 +75,25 @@ enum Cmd {
     },
     /// Run opentide-workspace's validate on every recorded `validate --json`
     /// case and compare it with the recording (UC-2.2, #817; UC-2.3, #818)
-    Validate(Passthrough),
+    Validate {
+        #[command(subcommand)]
+        command: xtask::diff_args::DiffCmd,
+    },
     /// Run opentide-workspace's lint on every recorded `lint --json` case and
     /// compare it with the recording (UC-2.3, #818)
-    Lint(Passthrough),
+    Lint {
+        #[command(subcommand)]
+        command: xtask::diff_args::DiffCmd,
+    },
     /// Write the artifacts generated from the Rust model (the platform
     /// templates); `--check` compares them (UC-1.8, #814)
     Codegen(xtask::codegen::CodegenArgs),
     /// Record the MCP sessions from the Python server and replay them against
     /// the Rust server (UC-3.7, #829)
-    Mcp(Passthrough),
+    Mcp {
+        #[command(subcommand)]
+        command: xtask::mcp::Cmd,
+    },
     /// The recorded-HTTP cassettes of tests/cassettes (UC-4.1, #831)
     Cassettes {
         #[command(subcommand)]
@@ -213,15 +222,15 @@ fn main() -> ExitCode {
         Cmd::Coverage { command } => verdict("coverage", coverage_command(&command)),
         Cmd::Mutants { command } => verdict("mutants", mutants_command(&command).map(|()| true)),
         Cmd::Compare(args) => verdict("compare", run_compare(&args)),
-        Cmd::Conformance(p) => status("conformance", xtask::conformance::cli::run(&p.args)),
+        Cmd::Conformance(args) => status("conformance", xtask::conformance::cli::run(&args)),
         Cmd::Corpus(p) => status("corpus", xtask::corpus::cli::run(&p.args)),
         Cmd::Config { command } => status("config", xtask::config::run(&command)),
         Cmd::Registry { command } => status("registry", xtask::registry::run(&command)),
         Cmd::Lsp { command } => status("lsp", xtask::lsp::run(&command)),
-        Cmd::Validate(p) => status("validate", xtask::validate::run(&p.args)),
-        Cmd::Lint(p) => status("lint", xtask::lint::run(&p.args)),
+        Cmd::Validate { command } => status("validate", xtask::validate::run(&command)),
+        Cmd::Lint { command } => status("lint", xtask::lint::run(&command)),
         Cmd::Codegen(args) => status("codegen", xtask::codegen::run(&args)),
-        Cmd::Mcp(p) => status("mcp", xtask::mcp::run(&p.args)),
+        Cmd::Mcp { command } => status("mcp", xtask::mcp::run(&command)),
         Cmd::Cassettes { command } => status("cassettes", xtask::cassettes::run(&command)),
         Cmd::Golden(p) => xtask::golden::main(&p.args),
         Cmd::Bench(p) => xtask::bench::main(&p.args),

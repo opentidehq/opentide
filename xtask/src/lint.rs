@@ -27,22 +27,12 @@ use indexmap::IndexMap;
 use serde_json::{Value as Json, json};
 
 use crate::corpus::cli::{Scratch, repo_root};
+use crate::diff_args::{DiffArgs, DiffCmd};
 use crate::golden::case::Spec;
 use crate::golden::recording::Recording;
 use crate::golden::snapshot::Snapshot;
 use opentide_workspace::lint::{Changed, LintCheck, LintOptions, LintReport};
 use opentide_workspace::{FileSystem as _, OsFs, RootOptions, Workspace};
-
-/// The usage of `cargo xtask lint`.
-pub const USAGE: &str = "\
-usage: cargo xtask lint diff [--filter GLOB] [--keep DIR] [--show-approved]
-
-  run opentide-workspace's lint on every recorded `lint --json` case
-  (no --format) and compare its findings, counts, verdict, next steps
-  and the files it renamed with the oracle's recording. GLOB filters the
-  case ids (lint/json/<fixture>/<variant>). --show-approved prints each
-  approved difference too.
-";
 
 /// An approved class of difference.
 pub struct Approved {
@@ -612,27 +602,12 @@ fn show(value: Option<&Json>) -> String {
 ///
 /// A recording or a fixture cannot be read or laid out.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-pub fn run(args: &[String]) -> Result<u8> {
-    let mut filter = None;
-    let mut keep = None;
-    let mut show_approved = false;
-    let mut rest = args.iter();
-    match rest.next().map(String::as_str) {
-        Some("diff") => {}
-        Some("help" | "--help") | None => {
-            print!("{USAGE}");
-            return Ok(0);
-        }
-        Some(other) => bail!("unknown subcommand `{other}`\n{USAGE}"),
-    }
-    while let Some(arg) = rest.next() {
-        match arg.as_str() {
-            "--filter" => filter = Some(rest.next().context("--filter needs a glob")?.clone()),
-            "--keep" => keep = Some(PathBuf::from(rest.next().context("--keep needs a dir")?)),
-            "--show-approved" => show_approved = true,
-            other => bail!("unknown option `{other}`\n{USAGE}"),
-        }
-    }
+pub fn run(command: &DiffCmd) -> Result<u8> {
+    let DiffCmd::Diff(DiffArgs {
+        filter,
+        keep,
+        show_approved,
+    }) = command;
     let repo = repo_root();
     let spec = Spec::parse(&std::fs::read_to_string(
         repo.join("tests/golden/cases.toml"),
@@ -721,7 +696,7 @@ pub fn run(args: &[String]) -> Result<u8> {
     for difference in &differences {
         if let Some(index) = crash_of(difference) {
             crash_used[index] += 1;
-            if show_approved {
+            if *show_approved {
                 println!(
                     "approved (oracle crash): {} {}",
                     difference.case, difference.what
@@ -747,7 +722,7 @@ pub fn run(args: &[String]) -> Result<u8> {
                 used[index] += 1;
                 APPROVED[index].id
             });
-            if !show_approved {
+            if !*show_approved {
                 continue;
             }
             println!("approved ({id}): {} {}", difference.case, difference.what);
@@ -1235,24 +1210,28 @@ mod tests {
         assert!(run_case(&recording, &ws).unwrap().is_empty());
     }
 
-    fn strings(args: &[&str]) -> Vec<String> {
-        args.iter().map(|s| (*s).to_owned()).collect()
+    fn diff(filter: &str, keep: Option<PathBuf>, show_approved: bool) -> DiffCmd {
+        DiffCmd::Diff(DiffArgs {
+            filter: Some(filter.to_owned()),
+            keep,
+            show_approved,
+        })
     }
 
     #[test]
     fn the_command_line_is_checked() {
-        assert_eq!(run(&[]).unwrap(), 0);
-        assert_eq!(run(&strings(&["help"])).unwrap(), 0);
         for bad in [
-            &["check"][..],
+            &[][..],
+            &["check"],
             &["diff", "--nope"],
             &["diff", "--filter"],
             &["diff", "--keep"],
-            &["diff", "--filter", "["],
         ] {
-            assert!(run(&strings(bad)).is_err(), "{bad:?}");
+            assert!(crate::parse_subcommand::<DiffCmd>(bad).is_err(), "{bad:?}");
         }
-        let error = run(&strings(&["diff", "--filter", "lint/json/nowhere/*"])).unwrap_err();
+        // A bad glob is the run's error, a filter that matches nothing too.
+        assert!(run(&diff("[", None, false)).is_err());
+        let error = run(&diff("lint/json/nowhere/*", None, false)).unwrap_err();
         assert!(error.to_string().contains("no recorded lint case matches"));
     }
 
@@ -1260,15 +1239,7 @@ mod tests {
     fn a_kept_filtered_run_passes_and_keeps_its_cases() {
         let dir = tempfile::tempdir().unwrap();
         let keep = dir.path().join("kept");
-        let code = run(&strings(&[
-            "diff",
-            "--filter",
-            "lint/json/fault/*",
-            "--show-approved",
-            "--keep",
-            keep.to_str().unwrap(),
-        ]))
-        .unwrap();
+        let code = run(&diff("lint/json/fault/*", Some(keep.clone()), true)).unwrap();
         assert_eq!(code, 0);
         assert!(keep.join("fixtures/fault").is_dir());
         assert!(keep.join("cases/0/ws").is_dir());
@@ -1279,6 +1250,6 @@ mod tests {
     /// rule explains something.
     #[test]
     fn every_recorded_case_agrees_with_the_oracle() {
-        assert_eq!(run(&strings(&["diff"])).unwrap(), 0);
+        assert_eq!(run(&DiffCmd::Diff(DiffArgs::default())).unwrap(), 0);
     }
 }
