@@ -195,9 +195,15 @@ mod tests {
 
     #[test]
     fn keyword_tables_name_spec_captures() {
+        // The tables are static data in this crate, so this test is their
+        // guard: it runs on every change to the crate, and a table that
+        // names a capture the spec lacks (which the generator would skip,
+        // as it skips one from a `.scm`) or an empty token (which would
+        // generate an empty pattern) fails it.
         let spec = HighlightSpec::load().expect("spec");
         for language in ALL {
             for (token, capture) in keywords(language).unwrap_or_default() {
+                assert!(!token.is_empty(), "{language}: an empty token");
                 assert!(
                     spec.contains_capture(capture.name()),
                     "{language}: `{token}` names {}, which highlights/spec.toml does not have",
