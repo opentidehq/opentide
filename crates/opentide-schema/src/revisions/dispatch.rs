@@ -4,7 +4,7 @@
 //!
 //! | `metadata.schema` | Result |
 //! | --- | --- |
-//! | absent, `null` or empty (Python's falsy values) | [`Rejection::SchemaMissing`] |
+//! | absent, `null` or an empty string, or `metadata` absent or `null` | [`Rejection::SchemaMissing`] |
 //! | a registered revision of the expected family | [`Selection::Registered`]: that revision's model |
 //! | another family's registered object revision | [`Rejection::OtherFamily`] |
 //! | an unregistered revision of the expected family (`rule::7.0`, `Rule::1.1`) | [`Selection::Unknown`]: the family's newest model without the unknown-key check, and an error at `metadata.schema` |
@@ -144,20 +144,6 @@ pub struct Read {
     pub result: Result<TideObject, Vec<SchemaError>>,
 }
 
-/// Python's truthiness of a YAML value (`body.get("metadata") or {}`,
-/// `if not schema_id`).
-fn falsy(node: &Node) -> bool {
-    match &node.value {
-        Value::Null => true,
-        Value::Bool(flag) => !flag,
-        Value::Int(integer) => *integer == 0,
-        Value::Float(float) => *float == 0.0,
-        Value::Str(text) | Value::Datetime(text) => text.is_empty(),
-        Value::Seq(items) => items.is_empty(),
-        Value::Map(entries) => entries.is_empty(),
-    }
-}
-
 /// The revision `metadata.schema` selects for an object of `family`
 /// (`rule`, `threat`, `objective`).
 pub fn select(document: &Document, family: &str) -> Result<Selection, Rejection> {
@@ -168,7 +154,7 @@ pub fn select(document: &Document, family: &str) -> Result<Selection, Rejection>
     let metadata = document
         .root()
         .and_then(|root| root.get("metadata"))
-        .filter(|metadata| !falsy(metadata));
+        .filter(|metadata| !matches!(metadata.value, Value::Null));
     let Some(metadata) = metadata else {
         return Err(Rejection::SchemaMissing);
     };
@@ -177,7 +163,9 @@ pub fn select(document: &Document, family: &str) -> Result<Selection, Rejection>
             document, metadata,
         ))));
     }
-    let Some(schema) = metadata.get("schema").filter(|schema| !falsy(schema)) else {
+    let Some(schema) = metadata.get("schema").filter(|schema| {
+        !matches!(&schema.value, Value::Null) && schema.value.as_str() != Some("")
+    }) else {
         return Err(Rejection::SchemaMissing);
     };
     let written = match &schema.value {

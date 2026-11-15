@@ -581,7 +581,7 @@ fn equals(line: &str) -> Option<usize> {
 }
 
 fn cursor(text: &str, offset: usize) -> Cursor {
-    let offset = floor_char_boundary(text, offset);
+    let offset = text.floor_char_boundary(offset);
     let line_start = text[..offset].rfind('\n').map_or(0, |index| index + 1);
     let prefix = &text[line_start..offset];
     if prefix.trim_start().starts_with('[') {
@@ -653,14 +653,6 @@ fn cursor(text: &str, offset: usize) -> Cursor {
     }
 }
 
-fn floor_char_boundary(text: &str, offset: usize) -> usize {
-    let mut offset = offset.min(text.len());
-    while !text.is_char_boundary(offset) {
-        offset -= 1;
-    }
-    offset
-}
-
 /// Keys already set in the table whose body starts at `body_start`.
 fn present_keys(text: &str, body_start: usize) -> Vec<String> {
     let mut keys = Vec::new();
@@ -691,7 +683,7 @@ pub fn configuration_hover(
     let walker = Walker {
         root: schemas.for_file(&relative)?,
     };
-    let offset = floor_char_boundary(text, offset);
+    let offset = text.floor_char_boundary(offset);
     let line_start = text[..offset].rfind('\n').map_or(0, |index| index + 1);
     let line_end = text[offset..]
         .find('\n')
@@ -766,7 +758,7 @@ pub fn configuration_completions(
                 .collect()
         }
         Cursor::Key { table, parent } => {
-            let line_start = text[..floor_char_boundary(text, offset)]
+            let line_start = text[..text.floor_char_boundary(offset)]
                 .rfind('\n')
                 .map_or(0, |index| index + 1);
             let (_, body_start) = table_at(text, line_start);

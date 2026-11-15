@@ -518,38 +518,24 @@ fn replace_tree(stage: &mut Stage, dest: &Path, files: &[(String, Vec<u8>)]) -> 
 
 /// Every folder under `dir` on disk, links to folders not followed.
 fn folders_below(dir: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let mut pending = vec![dir.to_path_buf()];
-    while let Some(folder) = pending.pop() {
-        let Ok(entries) = std::fs::read_dir(&folder) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() && !path.is_symlink() {
-                out.push(path.clone());
-                pending.push(path);
-            }
-        }
-    }
-    out
+    walkdir::WalkDir::new(dir)
+        .min_depth(1)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_dir())
+        .map(walkdir::DirEntry::into_path)
+        .collect()
 }
 
 /// Removes every link under `dir`, links to folders included, unfollowed.
 fn unlink_below(stage: &mut Stage, dir: &Path) {
-    let mut pending = vec![dir.to_path_buf()];
-    while let Some(folder) = pending.pop() {
-        let Ok(entries) = std::fs::read_dir(&folder) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_symlink() {
-                stage.unlink(&path);
-            } else if path.is_dir() {
-                pending.push(path);
-            }
-        }
+    for entry in walkdir::WalkDir::new(dir)
+        .min_depth(1)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(walkdir::DirEntry::path_is_symlink)
+    {
+        stage.unlink(entry.path());
     }
 }
 
@@ -680,16 +666,13 @@ impl Entrypoints {
     }
 }
 
-/// A template with the run's values (`render_agent_entrypoint`): each
-/// `{key}` replaced in turn, `deploy` first.
+/// A template with the run's values and `{deploy}` (`render_agent_entrypoint`),
+/// in one pass: a value that holds `{org}` is written as it is.
 fn render(template: &str, context: &[(&str, String)]) -> String {
-    let mut text = template.to_owned();
-    for (key, value) in std::iter::once(("deploy", DEPLOY.to_owned()))
-        .chain(context.iter().map(|(key, value)| (*key, value.clone())))
-    {
-        text = text.replace(&format!("{{{key}}}"), &value);
-    }
-    text
+    let values: Vec<(&str, &str)> = std::iter::once(("deploy", DEPLOY))
+        .chain(context.iter().map(|(key, value)| (*key, value.as_str())))
+        .collect();
+    crate::commands::template::fill(template, &values)
 }
 
 /// The plugin's settings, as the template merged into `.claude/settings.json`.
@@ -938,15 +921,21 @@ mod tests {
     }
 
     #[test]
-    fn templates_take_each_value_in_turn_deploy_first() {
+    fn templates_take_each_value_as_it_is() {
+        // A name or description that holds a placeholder is not filled in
+        // again: `{org}` stays `{org}`, `{deploy}` stays `{deploy}`.
         let context = [
             ("name", "{org}".to_owned()),
             ("org", "Acme".to_owned()),
-            ("description", String::new()),
+            ("description", "Run {deploy} {unknown}".to_owned()),
         ];
         assert_eq!(
-            render("# {name} / {description} / {deploy}", &context),
-            "# Acme /  / opentide deploy --dry-run --strategy PREVIEW --all"
+            render(
+                "# {name} / {org} / {description} / {deploy} / {other}",
+                &context
+            ),
+            "# {org} / Acme / Run {deploy} {unknown} / \
+             opentide deploy --dry-run --strategy PREVIEW --all / {other}"
         );
     }
 

@@ -162,7 +162,7 @@ pub fn tenant<'c>(cx: &'c Context<'_>, platform: &str, name: &str) -> Option<&'c
         .find(|tenant| tenant_name(tenant) == name)
 }
 
-/// A string of the rule at `path` (`metadata.author`), Python-truthy.
+/// A string of the rule at `path` (`metadata.author`), not empty.
 pub fn rule_text<'r>(rule: &'r Rule, path: &[&str]) -> Option<&'r str> {
     let mut value = &rule.data;
     for key in path {

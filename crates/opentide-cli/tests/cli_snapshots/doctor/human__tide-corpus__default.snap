@@ -46,7 +46,7 @@ exit: 1
 ␛[1m␛[33m!␛[0m sysdig/staging: 1 of 1 variables unset: SYSDIG_SECURE_API_TOKEN␛[2m · credentials␛[0m
   ␛[1m␛[36m→ ␛[0mset SYSDIG_SECURE_API_TOKEN in the environment (or a .env file you load)
 ␛[1m␛[31m✗␛[0m Cannot connect to proxy http://127.0.0.1:9 (Connection refused (os error <ECONNREFUSED>))␛[2m · proxy␛[0m
-  ␛[1m␛[36m→ ␛[0mcheck --proxy, OPENTIDE_PROXY or HTTPS_PROXY, and that the proxy is up
+  ␛[1m␛[36m→ ␛[0mcheck --proxy, OPENTIDE_PROXY, https_proxy or all_proxy, and that the proxy is up
 ␛[1m␛[2m○␛[0m No .vscode/extensions.json: VS Code does not suggest opentidehq.opentide␛[2m · vscode_settings␛[0m
   ␛[1m␛[36m→ ␛[0m␛[2mopentide setup vscode␛[0m
 ␛[1m␛[2m○␛[0m No snippets at .vscode/model-templates.code-snippets␛[2m · vscode_snippets␛[0m

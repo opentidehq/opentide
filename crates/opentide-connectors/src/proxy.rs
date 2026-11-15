@@ -60,13 +60,7 @@ impl ProxySettings {
         if self.bypassed(url) {
             return None;
         }
-        let shown = if proxy.contains("://") {
-            proxy.to_owned()
-        } else {
-            format!("http://{proxy}")
-        };
-        let parsed = url::Url::parse(&shown).ok()?;
-        Some(crate::error::origin(&parsed))
+        redact(proxy)
     }
 
     /// The proxy *url* goes through, as configured (its credentials
@@ -118,6 +112,9 @@ impl ProxySettings {
                 .and_then(reqwest::NoProxy::from_string)
         };
         let mut proxies = Vec::new();
+        for url in [&self.https, &self.http].into_iter().flatten() {
+            parse(url).map_err(|_| invalid(url))?;
+        }
         if let Some(url) = &self.https {
             proxies.push(
                 reqwest::Proxy::https(url.as_str())
@@ -154,10 +151,48 @@ fn destination(url: &url::Url) -> Option<http::Uri> {
 #[cfg(not(target_os = "wasi"))]
 /// The message for a proxy URL that is not one, without its credentials.
 fn invalid(url: &str) -> String {
-    let shown = url::Url::parse(url)
+    match parse(url) {
+        Ok(parsed) => format!("{} is not a proxy URL", crate::error::origin(&parsed)),
+        Err(reason) => format!("the proxy is not a proxy URL: {reason}"),
+    }
+}
+
+/// A proxy URL as the transport reads it: one written without a scheme
+/// (`proxy.internal:8080`) is an HTTP proxy.
+///
+/// A URL whose text after its host holds an `@` is refused: its user or
+/// password has an unencoded `/`, `?`, `#` or `\`, so a URL parser ends
+/// the host there and reads part of the password as the host
+/// (`http://user:p@ss/w#rd@proxy:8080` would name the host `ss`). Reading it
+/// any other way would be a guess, and sending the request would hand that
+/// piece of the password to the wrong host.
+///
+/// # Errors
+///
+/// Why the text is not a proxy URL, in words that never repeat any part of
+/// it.
+pub fn parse(proxy: &str) -> Result<url::Url, String> {
+    let proxy = proxy.trim();
+    let (scheme, rest) = proxy.split_once("://").unwrap_or(("http", proxy));
+    // The URL standard ends the authority at the first of these; any `@`
+    // after it is a user or password that was not percent-encoded.
+    let end = rest.find(['/', '?', '#', '\\']).unwrap_or(rest.len());
+    if rest[end..].contains('@') {
+        return Err(
+            "its user or password holds an unencoded `/`, `?`, `#` or `\\`: \
+             percent-encode them (`%2F`, `%3F`, `%23`, `%5C`, and `%40` for `@`)"
+                .to_owned(),
+        );
+    }
+    url::Url::parse(&format!("{scheme}://{rest}")).map_err(|error| error.to_string())
+}
+
+/// *proxy* as `scheme://host[:port]`, without its user and password; `None`
+/// when it is not a proxy URL ([`parse`]), so that no part of it is shown.
+pub fn redact(proxy: &str) -> Option<String> {
+    parse(proxy)
+        .ok()
         .map(|parsed| crate::error::origin(&parsed))
-        .unwrap_or_else(|_| "the proxy".to_owned());
-    format!("{shown} is not a proxy URL")
 }
 
 #[cfg(test)]
@@ -208,6 +243,45 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn a_proxy_whose_password_would_be_read_as_its_host_is_refused_unshown() {
+        // The last `@` ends the user info; encoded characters are fine.
+        for (proxy, shown) in [
+            ("http://al1ce:Qz7k@Wm4r@proxy:8080", "http://proxy:8080"),
+            ("http://al1ce:Qz7k%2FWm4r@proxy:8080", "http://proxy:8080"),
+            ("http://al1ce:Qz7k:Wm4r@proxy:8080/", "http://proxy:8080"),
+            ("al1ce:Qz7k%40Wm4r@proxy:3128", "http://proxy:3128"),
+        ] {
+            assert_eq!(redact(proxy).as_deref(), Some(shown), "{proxy}");
+        }
+        // An unencoded `/`, `?`, `#` or `\` would end the host inside the
+        // password: refused, in words that repeat none of it.
+        for proxy in [
+            "http://al1ce:Qz7k@ss/Wm4r#x@proxy:8080",
+            "http://al1ce:Qz7k/Wm4r@proxy:8080",
+            "http://al1ce:Qz7k?Wm4r@proxy:8080",
+            "http://al1ce:Qz7k#Wm4r@proxy:8080",
+            "http://al1ce:Qz7k\\Wm4r@proxy:8080",
+            "al1ce:Qz7k/Wm4r@proxy:8080",
+        ] {
+            assert_eq!(redact(proxy), None, "{proxy}");
+            let reason = parse(proxy).unwrap_err();
+            for fragment in ["al1ce", "Qz7k", "Wm4r", "proxy"] {
+                assert!(!reason.contains(fragment), "{reason}");
+            }
+            let proxies = settings(Some(proxy), None, None);
+            assert_eq!(route(&proxies, "https://a.example.com"), None);
+            #[cfg(not(target_os = "wasi"))]
+            {
+                let refused = proxies.proxies().unwrap_err();
+                assert!(
+                    refused.starts_with("the proxy is not a proxy URL: its user or password"),
+                    "{refused}"
+                );
+            }
+        }
     }
 
     #[test]

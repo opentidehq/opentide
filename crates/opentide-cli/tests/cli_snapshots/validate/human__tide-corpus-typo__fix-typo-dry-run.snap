@@ -20,5 +20,5 @@ exit: 1
 
 
 ━━━ stderr
-␛[?25l<LIVE>␛[1m␛[36m<SPIN>␛[0m Validating objects</LIVE>␛[?25h␛[1m␛[31m✗␛[0m 1 error in 1 file · would fix 1 value in 1 file · 12 objects checked · 8 queries · <SECONDS>
+␛[1m␛[31m✗␛[0m 1 error in 1 file · would fix 1 value in 1 file · 12 objects checked · 8 queries · <SECONDS>
 ␛[1m␛[36m→␛[0m ␛[1mopentide validate --fix␛[0m␛[2m · apply 1 safe fix␛[0m

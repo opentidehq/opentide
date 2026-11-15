@@ -35,7 +35,7 @@ pub struct Clock {
 /// The frequency mode (`correct_timerange_mode`): unset is `random`, an
 /// unknown value `current`.
 fn timerange_mode(value: Option<&Json>) -> &str {
-    match value.filter(|value| value.truthy()) {
+    match value.filter(|value| value.is_filled()) {
         None => "random",
         Some(Json::Str(mode)) if matches!(mode.as_str(), "random" | "current" | "custom") => mode,
         Some(_) => "current",
@@ -142,7 +142,7 @@ fn strings(value: Option<&Json>) -> Vec<String> {
 }
 
 fn settings(tenant: &Json) -> Result<Settings, CompileError> {
-    let skew = match deploy::setup(tenant, "allow_skew").filter(|value| value.truthy()) {
+    let skew = match deploy::setup(tenant, "allow_skew").filter(|value| value.is_filled()) {
         Some(value) => deploy::text(value)
             .replace('%', "e-2")
             .trim()
@@ -171,15 +171,20 @@ fn settings(tenant: &Json) -> Result<Settings, CompileError> {
         mode: timerange_mode(deploy::setup(tenant, "frequency_scheduling")).to_owned(),
         skew,
         offset,
-        enterprise_security: deploy::setup(tenant, "enterprise_security").is_some_and(Json::truthy),
+        // `true`, `false`, or a `$NAME` placeholder, which leaves it on.
+        enterprise_security: !matches!(
+            deploy::setup(tenant, "enterprise_security"),
+            None | Some(Json::Bool(false))
+        ),
     })
 }
 
-/// A value the block sets, Python-truthy.
-fn truthy<'j>(value: Option<&'j Json>, key: &str) -> Option<&'j Json> {
+/// A value the block sets: not `null` and not an empty string, list or
+/// mapping.
+fn filled<'j>(value: Option<&'j Json>, key: &str) -> Option<&'j Json> {
     value
         .and_then(|value| value.get(key))
-        .filter(|value| value.truthy())
+        .filter(|value| value.is_filled())
 }
 
 /// A value the block sets, not `null`.
@@ -189,8 +194,9 @@ fn present<'j>(value: Option<&'j Json>, key: &str) -> Option<&'j Json> {
         .filter(|value| !value.is_null())
 }
 
+/// A switch as Splunk's `1` or `0`.
 fn flag(value: &Json) -> Json {
-    Json::Int(i64::from(value.truthy()))
+    Json::Int(i64::from(value.is_true()))
 }
 
 /// The search a rule deploys (`create_query`): its query and the macro that
@@ -244,24 +250,24 @@ fn config_mdr(
 ) -> Result<Object, CompileError> {
     let mut config = Object::new();
     let name = rule.name.trim();
-    if let Some(scheduling) = truthy(Some(block), "scheduling") {
-        let kind = truthy(Some(scheduling), "type").map(deploy::text);
-        let schedule = truthy(Some(scheduling), "schedule");
+    if let Some(scheduling) = filled(Some(block), "scheduling") {
+        let kind = filled(Some(scheduling), "type").map(deploy::text);
+        let schedule = filled(Some(scheduling), "schedule");
         if kind.as_deref().map(str::to_lowercase).as_deref() == Some("real time") {
             config.insert("dispatch.earliest_time".into(), "rt".into());
             config.insert("dispatch.latest_time".into(), "rt".into());
         } else if kind.is_some() || schedule.is_some() {
             config.insert("is_scheduled".into(), Json::Int(1));
         }
-        if let Some(expires) = truthy(Some(scheduling), "expires") {
+        if let Some(expires) = filled(Some(scheduling), "expires") {
             config.insert("alert.expires".into(), expires.clone());
         }
         if let Some(schedule) = schedule {
-            if let Some(cron) = truthy(Some(schedule), "cron") {
+            if let Some(cron) = filled(Some(schedule), "cron") {
                 config.insert("cron_schedule".into(), cron.clone());
-            } else if let Some(frequency) = truthy(Some(schedule), "frequency") {
+            } else if let Some(frequency) = filled(Some(schedule), "frequency") {
                 let frequency = deploy::text(frequency);
-                let cron = match truthy(Some(schedule), "custom_time") {
+                let cron = match filled(Some(schedule), "custom_time") {
                     Some(custom) => {
                         cron_to_timeframe(&frequency, "custom", Some(&deploy::text(custom)), clock)?
                     }
@@ -270,28 +276,28 @@ fn config_mdr(
                 config.insert("cron_schedule".into(), cron.into());
             }
         }
-        if let Some(timerange) = truthy(Some(scheduling), "timerange") {
-            if let Some(lookback) = truthy(Some(timerange), "lookback") {
+        if let Some(timerange) = filled(Some(scheduling), "timerange") {
+            if let Some(lookback) = filled(Some(timerange), "lookback") {
                 config.insert(
                     "dispatch.earliest_time".into(),
                     splunk_timerange(&deploy::text(lookback), settings.skew, settings.offset)?
                         .into(),
                 );
             }
-            if let Some(earliest) = truthy(Some(timerange), "earliest") {
+            if let Some(earliest) = filled(Some(timerange), "earliest") {
                 config.insert("dispatch.earliest_time".into(), earliest.clone());
             }
-            if let Some(latest) = truthy(Some(timerange), "latest") {
+            if let Some(latest) = filled(Some(timerange), "latest") {
                 config.insert("dispatch.latest_time".into(), latest.clone());
             }
         }
     }
-    if let Some(trigger) = truthy(Some(block), "trigger") {
+    if let Some(trigger) = filled(Some(block), "trigger") {
         for (key, setting) in [
             ("condition", "alert_type"),
             ("comparator", "alert_comparator"),
         ] {
-            if let Some(value) = truthy(Some(trigger), key) {
+            if let Some(value) = filled(Some(trigger), key) {
                 config.insert(setting.into(), value.clone());
             }
         }
@@ -303,28 +309,28 @@ fn config_mdr(
                 config.insert(setting.into(), value.clone());
             }
         }
-        if let Some(value) = truthy(Some(trigger), "custom_condition") {
+        if let Some(value) = filled(Some(trigger), "custom_condition") {
             config.insert("alert_condition".into(), value.clone());
         }
-        if let Some(kind) = truthy(Some(trigger), "type") {
+        if let Some(kind) = filled(Some(trigger), "type") {
             let once = deploy::text(kind).to_lowercase() == "once";
             config.insert(
                 "alert.digest_mode".into(),
                 if once { "true" } else { "false" }.into(),
             );
         }
-        if let Some(throttling) = truthy(Some(trigger), "throttling") {
-            if let Some(duration) = truthy(Some(throttling), "duration") {
+        if let Some(throttling) = filled(Some(trigger), "throttling") {
+            if let Some(duration) = filled(Some(throttling), "duration") {
                 config.insert("alert.suppress.period".into(), duration.clone());
                 config.insert("alert.suppress".into(), "true".into());
             }
-            if let Some(fields) = truthy(Some(throttling), "fields") {
+            if let Some(fields) = filled(Some(throttling), "fields") {
                 config.insert(
                     "alert.suppress.fields".into(),
                     strings(Some(fields)).join(", ").into(),
                 );
             }
-            if let Some(group) = truthy(Some(throttling), "group_name") {
+            if let Some(group) = filled(Some(throttling), "group_name") {
                 config.insert("alert.suppress.group_name".into(), group.clone());
             }
         }
@@ -369,42 +375,42 @@ fn config_mdr(
             );
         }
     }
-    if let Some(actions) = truthy(Some(block), "actions") {
-        if let Some(notable) = truthy(Some(actions), "notable")
+    if let Some(actions) = filled(Some(block), "actions") {
+        if let Some(notable) = filled(Some(actions), "notable")
             && settings.enterprise_security
         {
-            if let Some(event) = truthy(Some(notable), "event") {
+            if let Some(event) = filled(Some(notable), "event") {
                 for (key, setting) in [
                     ("title", "action.notable.param.rule_title"),
                     ("description", "action.notable.param.rule_description"),
                 ] {
-                    if let Some(value) = truthy(Some(event), key) {
+                    if let Some(value) = filled(Some(event), key) {
                         config.insert(setting.into(), value.clone());
                     }
                 }
             }
-            if let Some(drilldown) = truthy(Some(notable), "drilldown") {
+            if let Some(drilldown) = filled(Some(notable), "drilldown") {
                 for (key, setting) in [
                     ("name", "action.notable.param.drilldown_name"),
                     ("search", "action.notable.param.drilldown_search"),
                 ] {
-                    if let Some(value) = truthy(Some(drilldown), key) {
+                    if let Some(value) = filled(Some(drilldown), key) {
                         config.insert(setting.into(), value.clone());
                     }
                 }
             }
-            if let Some(domain) = truthy(Some(notable), "security_domain") {
+            if let Some(domain) = filled(Some(notable), "security_domain") {
                 config.insert(
                     "action.notable.param.security_domain".into(),
                     deploy::text(domain).to_lowercase().into(),
                 );
             }
         }
-        if let Some(risk) = truthy(Some(actions), "risk")
+        if let Some(risk) = filled(Some(actions), "risk")
             && settings.enterprise_security
         {
             let mut entries: Vec<Json> = Vec::new();
-            if let Some(Json::Array(objects)) = truthy(Some(risk), "risk_objects") {
+            if let Some(Json::Array(objects)) = filled(Some(risk), "risk_objects") {
                 for object in objects {
                     let mut entry = Object::new();
                     entry.insert("risk_object_field".into(), member(object, "field"));
@@ -413,7 +419,7 @@ fn config_mdr(
                     entries.push(Json::Object(entry));
                 }
             }
-            if let Some(Json::Array(objects)) = truthy(Some(risk), "threat_objects") {
+            if let Some(Json::Array(objects)) = filled(Some(risk), "threat_objects") {
                 for object in objects {
                     let mut entry = Object::new();
                     entry.insert("threat_object_field".into(), member(object, "field"));
@@ -429,11 +435,11 @@ fn config_mdr(
                     Json::Array(entries).to_compact().into(),
                 );
             }
-            if let Some(message) = truthy(Some(risk), "message") {
+            if let Some(message) = filled(Some(risk), "message") {
                 config.insert("action.risk.param._risk_message".into(), message.clone());
             }
         }
-        if let Some(email) = truthy(Some(actions), "email") {
+        if let Some(email) = filled(Some(actions), "email") {
             for (key, setting) in [
                 ("to", "action.email.to"),
                 ("cc", "action.email.cc"),
@@ -443,7 +449,7 @@ fn config_mdr(
                 ("message", "action.email.message.alert"),
                 ("content_type", "action.email.content_type"),
             ] {
-                if let Some(value) = truthy(Some(email), key) {
+                if let Some(value) = filled(Some(email), key) {
                     config.insert(setting.into(), value.clone());
                 }
             }
@@ -456,7 +462,7 @@ fn config_mdr(
                     config.insert(setting.into(), flag(value));
                 }
             }
-            if let Some(include) = truthy(Some(email), "include") {
+            if let Some(include) = filled(Some(email), "include") {
                 for (key, setting) in [
                     ("results_link", "action.email.include.results_link"),
                     ("search_string", "action.email.include.search"),
@@ -516,15 +522,15 @@ fn apply_modifiers(
             Some(Json::Bool(true))
         );
         let mut matched = default;
-        if let Some(statuses) = truthy(conditions, "status")
+        if let Some(statuses) = filled(conditions, "status")
             && strings(Some(statuses)).iter().any(|name| name == status)
         {
             matched = true;
         }
-        if let Some(tenants) = truthy(conditions, "tenants") {
+        if let Some(tenants) = filled(conditions, "tenants") {
             matched = strings(Some(tenants)).iter().any(|name| name == tenant);
         }
-        if let Some(wanted) = truthy(conditions, "flags") {
+        if let Some(wanted) = filled(conditions, "flags") {
             let wanted = strings(Some(wanted));
             matched = flags.iter().any(|flag| wanted.contains(flag));
         }
@@ -609,7 +615,7 @@ fn actions_config(
         }
         if let Some(domain) = config
             .get("action.notable.param.security_domain")
-            .filter(|value| value.truthy())
+            .filter(|value| value.is_filled())
             .map(deploy::text)
         {
             config.insert(
@@ -634,7 +640,7 @@ pub fn compile(
     tenant: &Json,
     clock: Clock,
 ) -> Result<Vec<Write>, CompileError> {
-    let Some(block) = rule.block(PLATFORM).filter(|block| block.truthy()) else {
+    let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Ok(Vec::new());
     };
     let settings = settings(tenant)?;
@@ -700,6 +706,23 @@ mod tests {
         random: (7, 7),
         now: (4, 3),
     };
+
+    /// `enterprise_security` is a switch: `true` turns it on, `false` or
+    /// no setting leaves it off, and a `$NAME` placeholder, which the
+    /// compile step does not resolve, leaves it on as before.
+    #[test]
+    fn enterprise_security_is_read_as_a_switch() {
+        let on = |setup: &str| -> bool {
+            let tenant: Json =
+                serde_json::from_str(&format!(r#"{{"setup":{{{setup}}}}}"#)).unwrap();
+            settings(&tenant).unwrap().enterprise_security
+        };
+        assert!(on(r#""enterprise_security": true"#));
+        assert!(on(r#""enterprise_security": "$SPLUNK_ES""#));
+        assert!(!on(r#""enterprise_security": false"#));
+        assert!(!on(r#""enterprise_security": null"#));
+        assert!(!on(""));
+    }
 
     #[test]
     fn frequencies_become_crons() {

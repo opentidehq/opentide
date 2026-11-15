@@ -51,11 +51,12 @@ pub fn fix_datetime(timestamp: &str) -> String {
     format!("{head}Z")
 }
 
-/// A value the block sets, Python-truthy.
-fn truthy<'j>(value: Option<&'j Json>, key: &str) -> Option<&'j Json> {
+/// A value the block sets: not `null` and not an empty string, list or
+/// mapping.
+fn filled<'j>(value: Option<&'j Json>, key: &str) -> Option<&'j Json> {
     value
         .and_then(|value| value.get(key))
-        .filter(|value| value.truthy())
+        .filter(|value| value.is_filled())
 }
 
 fn string<'j>(value: Option<&'j Json>, key: &str) -> &'j str {
@@ -75,15 +76,15 @@ fn member(value: Option<&Json>, key: &str) -> Json {
 /// The correlation rule body `rule` deploys to `tenant`, `null` values left
 /// out.
 pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, CompileError> {
-    let Some(block) = rule.block(PLATFORM).filter(|block| block.truthy()) else {
+    let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Err(CompileError::failed(DISPLAY, "Missing Crowdstrike Section"));
     };
     let details = block.get("details");
     let schedule = block.get("schedule");
-    let name = truthy(details, "name")
+    let name = filled(details, "name")
         .cloned()
         .unwrap_or_else(|| rule.name.clone().into());
-    let description = truthy(details, "description")
+    let description = filled(details, "description")
         .cloned()
         .unwrap_or_else(|| rule.description().into());
     let customer_id = deploy::setup_text(tenant, "customer_id")
@@ -101,7 +102,7 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
         "active"
     };
     let severity = severity(
-        truthy(details, "severity")
+        filled(details, "severity")
             .and_then(Json::as_str)
             .unwrap_or(rule.alert_severity()),
     )?;
@@ -138,15 +139,15 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
     for (from, to) in [("start", "start_on"), ("end", "stop_on")] {
         operation.insert(
             to.into(),
-            truthy(schedule, from).map_or(Json::Null, |value| {
+            filled(schedule, from).map_or(Json::Null, |value| {
                 fix_datetime(&deploy::text(value)).into()
             }),
         );
     }
-    let authors: Vec<String> = match truthy(Some(block), "contributors") {
+    let authors: Vec<String> = match filled(Some(block), "contributors") {
         Some(Json::Array(items)) => items
             .iter()
-            .filter(|item| item.truthy())
+            .filter(|item| item.is_filled())
             .map(deploy::text)
             .collect(),
         _ => deploy::rule_text(rule, &["metadata", "author"])
