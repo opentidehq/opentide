@@ -312,6 +312,36 @@ fn a_created_rule_is_recorded_even_when_its_run_state_fails() {
 }
 
 #[test]
+fn an_answer_that_echoes_the_bearer_token_is_quoted_without_it() {
+    runtime().block_on(async {
+        let api = server().await;
+        let echo = |request: &wiremock::Request| {
+            let seen = request
+                .headers
+                .get("authorization")
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default();
+            ResponseTemplate::new(502)
+                .insert_header("content-type", "text/plain")
+                .set_body_string(format!("bad gateway, you sent {seen}"))
+        };
+        on("POST", VERIFY)
+            .respond_with(echo)
+            .expect(1..)
+            .mount(&api)
+            .await;
+        serve(&api, on("POST", "/rules"), ok(), 0).await;
+        let outcome = deploy(&api, &rule(Action::Create)).await;
+        let shown = format!("{:?}", outcome.failures);
+        assert!(
+            shown.contains("bad gateway") && shown.contains("***"),
+            "{shown}"
+        );
+        assert!(!shown.contains(TOKEN), "{TOKEN} leaked: {shown}");
+    });
+}
+
+#[test]
 fn credentials_the_instance_refuses_stop_the_tenant_without_the_token() {
     runtime().block_on(async {
         let api = server().await;
