@@ -6,7 +6,8 @@
 //! Gates: a query tree-sitter parses without an error gives identical
 //! diagnostics, highlight tokens, ECS diagnostics, fields, hover and
 //! completions (at sampled offsets); a broken one keeps its verdict.
-//! `OPENTIDE_KUERY_DIFF=<file>` writes the JSON report.
+//! `OPENTIDE_KUERY_DIFF=<file>` writes the JSON report; `OPENTIDE_KUERY_SEED=<n>`
+//! picks another seed (default 1).
 
 #![expect(
     clippy::expect_used,
@@ -388,6 +389,13 @@ fn pure_rust_parser_matches_tree_sitter() {
     config.mutations_per_input = 20;
     config.max_prefixes = 40;
     config.max_offsets = 32;
+    // `OPENTIDE_KUERY_SEED=<n>` runs another round (the default is the committed seed 1).
+    if let Some(seed) = std::env::var("OPENTIDE_KUERY_SEED")
+        .ok()
+        .and_then(|s| s.parse().ok())
+    {
+        config.seed = seed;
+    }
     let report = run(&Old, &New, &files, &config);
     eprintln!(
         "kuery differential: {} inputs, {} valid, {} broken; valid differences {}, verdict changes {}, broken-input changes {}",
@@ -406,4 +414,47 @@ fn pure_rust_parser_matches_tree_sitter() {
         std::fs::write(path, report.to_json_string()).expect("the report file");
     }
     assert_gates(&report);
+}
+
+/// The highlight golden (`crates/testdata/highlight/kuery/query.json`, the
+/// query of `goldens.rs`' `kuery_golden`): both engines give its tokens,
+/// span and capture, and the query is among the differential's sources.
+#[test]
+fn the_highlight_golden_is_covered() {
+    let root = repo();
+    let goldens = std::fs::read_to_string(root.join("crates/opentide-analysis/tests/goldens.rs"))
+        .expect("goldens.rs");
+    let block = &goldens[goldens.find("fn kuery_golden").expect("kuery_golden")..];
+    let query = rust_strings(&block[..block.find("\n}").expect("its end")])
+        .into_iter()
+        .last()
+        .expect("the golden query");
+    let golden = std::fs::read_to_string(root.join("crates/testdata/highlight/kuery/query.json"))
+        .expect("the golden");
+    // `"start": n, "end": m` of each span, then its capture, in order.
+    let numbers = regex::Regex::new(
+        r#""span":\s*\{\s*"start":\s*(\d+),\s*"end":\s*(\d+)[\s\S]*?"capture":\s*"([^"]+)""#,
+    )
+    .expect("regex");
+    let expected = numbers
+        .captures_iter(&golden)
+        .fold(String::new(), |mut out, c| {
+            let _ = write!(out, "{}..{}={} ", &c[1], &c[2], &c[3]);
+            out
+        });
+    assert!(!expected.is_empty());
+    assert_eq!(
+        tokens(&legacy::analyze(&query).tokens),
+        expected,
+        "old engine"
+    );
+    assert_eq!(
+        tokens(&opentide_kuery::analyze(&query).tokens),
+        expected,
+        "new engine"
+    );
+    assert!(
+        sources().iter().any(|s| s.text == query),
+        "the golden query is a source"
+    );
 }

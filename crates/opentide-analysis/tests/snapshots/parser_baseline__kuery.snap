@@ -39,9 +39,6 @@ kuery_parse_error error 0:23-0:26 Kibana needs whitespace around `and`
 38..43 string
 == corpus/kuery/field__invalid.kuery
 kuery_parse_error error 0:7-0:8 KQL syntax error near `\`; expected `or`, `and`, `:`, a range operator, or end of input
-kuery_free_text hint 0:0-0:7 `process` has no field, so Kibana searches it in every field (`index.query.default_field`); name the field (`field:process`)
-kuery_lucene_syntax warning 0:8-0:13 `+`, `-`, and `!` prefixes are Lucene; KQL reads them as part of the field name. Use `not field:value`
-kuery_looks_like_lucene warning 0:0-0:21 this query reads like Lucene (`+`/`-` prefixes, text only Lucene parses); if it is an Elastic rule, set `language: lucene`
 0..7 string
 8..13 property
 13..14 operator
@@ -111,7 +108,7 @@ kuery_parse_error error 0:18-0:18 KQL syntax error: a nested query `field:{` is 
 28..33 string
 34..35 punctuation.bracket
 == corpus/kuery/not_list__invalid.kuery
-kuery_parse_error error 0:18-0:19 KQL syntax error near `)`; expected a value, or `(`
+kuery_parse_error error 0:17-0:18 KQL syntax error: a query is missing after `not`
 0..12 property
 12..13 operator
 13..14 punctuation.bracket
