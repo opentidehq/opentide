@@ -21,6 +21,33 @@ mod perf;
 pub mod schema;
 pub mod tables;
 
+// The pure-Rust parser (#1230, ADR 0012) grows beside the tree-sitter path,
+// which serves until the last PR of the series switches production to it.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the new parser is reached from tests until the switch"
+    )
+)]
+mod keywords;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the new parser is reached from tests until the switch"
+    )
+)]
+mod lexer;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the new parser is reached from tests until the switch"
+    )
+)]
+mod syntax;
+
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
