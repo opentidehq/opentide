@@ -282,6 +282,23 @@ fn change<'a>(
     })
 }
 
+/// Stops a run whose case root folds case (macOS's default volume): the
+/// `tide-corpus` fixtures hold `Objects/` and `objects/` side by side, which
+/// would be one folder there, so a snapshot recorded on it is not Linux's.
+fn assert_case_sensitive(root: &Path) {
+    let probe = root.join("Case-Probe");
+    std::fs::write(&probe, "").unwrap();
+    let folds = root.join("case-probe").exists();
+    std::fs::remove_file(&probe).unwrap();
+    assert!(
+        !folds,
+        "{} is on a case-insensitive volume, where `Objects/` and `objects/` are one folder: \
+         set OPENTIDE_CASE_ROOT to a folder on a case-sensitive volume \
+         (tests/golden/README.md, \"Snapshots\")",
+        root.display()
+    );
+}
+
 /// Runs `case` and renders what it did as the snapshot's text.
 pub fn run_case(case: &Case) -> String {
     let scratch = replay::case_root();
@@ -292,6 +309,9 @@ pub fn run_case(case: &Case) -> String {
     for folder in [&home, &tmp, &ws] {
         std::fs::create_dir_all(folder).unwrap();
     }
+    if case.fixture.starts_with("tide-corpus") {
+        assert_case_sensitive(&root);
+    }
     replay::fixture(&case.fixture, &ws);
     replay::fix_modes(&ws);
     let roots = [
@@ -300,13 +320,14 @@ pub fn run_case(case: &Case) -> String {
         ("home", home.clone()),
     ];
     let before: Vec<_> = roots.iter().map(|(_, root)| entries(root)).collect();
-    let proxy = case.cassette.as_ref().map(|name| {
-        let text =
-            std::fs::read_to_string(replay::repo().join(format!("tests/cassettes/{name}.json")))
-                .unwrap();
+    let cassette_text = case.cassette.as_ref().map(|name| {
+        std::fs::read_to_string(replay::repo().join(format!("tests/cassettes/{name}.json")))
+            .unwrap()
+    });
+    let proxy = cassette_text.as_ref().map(|text| {
         let proxy = opentide_cassette::Proxy::start(
             opentide_cassette::Mode::Replay {
-                cassette: opentide_cassette::Cassette::parse(&text).unwrap(),
+                cassette: opentide_cassette::Cassette::parse(text).unwrap(),
             },
             opentide_cassette::Redaction::default(),
         )
@@ -350,7 +371,7 @@ pub fn run_case(case: &Case) -> String {
         (home.display().to_string(), "<HOME>"),
         (root.display().to_string(), "<TMP>"),
     ];
-    let mut normaliser = normaliser(case, &before, &literals, started);
+    let mut normaliser = normaliser(case, &before, &literals, started, cassette_text.as_deref());
     let stdout = normaliser.text(&String::from_utf8_lossy(&out));
     let stderr = normaliser.text(&String::from_utf8_lossy(&stderr.0.lock().unwrap()));
 
@@ -392,25 +413,21 @@ pub fn run_case(case: &Case) -> String {
 /// dates the run spans and, for `query`'s default window, the week before),
 /// and the case's own rules, with the UUIDs no run mints (the fixture's, the
 /// arguments', the package's data).
+///
+/// A date the case's own inputs hold (its cassette's, its fixture's) is
+/// content, never the clock: the cassettes carry `2026-10-27` results, and
+/// masking them for the week after that day would make a snapshot depend on
+/// the day it is run.
 fn normaliser(
     case: &Case,
     before: &[BTreeMap<String, Entry>],
     literals: &[(String, &str)],
     started: std::time::SystemTime,
+    cassette: Option<&str>,
 ) -> Normaliser {
     let day = |at: std::time::SystemTime, days: u64| {
         opentide_compare::normalise::utc_date(at - std::time::Duration::from_secs(days * 86_400))
     };
-    let mut dates = vec![day(started, 0), day(std::time::SystemTime::now(), 0)];
-    dates.dedup();
-    let windowed = matches!(case.command_dir.as_str(), "query" | "validate.query");
-    let mut known_uuids = std::collections::BTreeSet::new();
-    if case.normalise.contains(&Rule::FreshUuids) {
-        for arg in &case.args {
-            known_uuids.extend(opentide_compare::normalise::uuids_in(arg));
-        }
-        known_uuids.extend(replay::package_uuids().iter().cloned());
-    }
     let fixture_text: Vec<String> = before
         .iter()
         .flat_map(BTreeMap::values)
@@ -419,23 +436,48 @@ fn normaliser(
             _ => None,
         })
         .collect();
+    let held: Vec<&str> = fixture_text
+        .iter()
+        .map(String::as_str)
+        .chain(cassette)
+        .collect();
+    let clock = |dates: Vec<String>| clock_dates(dates, &held);
+    let mut dates = vec![day(started, 0), day(std::time::SystemTime::now(), 0)];
+    dates.dedup();
+    let dates = clock(dates);
+    let windowed = matches!(case.command_dir.as_str(), "query" | "validate.query");
+    let mut known_uuids = std::collections::BTreeSet::new();
+    if case.normalise.contains(&Rule::FreshUuids) {
+        for arg in &case.args {
+            known_uuids.extend(opentide_compare::normalise::uuids_in(arg));
+        }
+        known_uuids.extend(replay::package_uuids().iter().cloned());
+    }
     Normaliser::new(
         &Volatile {
             // The case's paths, and a refused connection's errno, which is
-            // the host's (111 on Linux, 61 on macOS).
+            // the host's (111 on Linux, 61 on macOS). A message wrapped
+            // inside `(os error N)` leaves `error N)` at the start of a line,
+            // so that tail is masked on its own too.
             literals: literals
                 .iter()
                 .map(|(literal, placeholder)| (literal.clone(), (*placeholder).to_owned()))
-                .chain(["111", "61"].map(|errno| {
-                    (
-                        format!("Connection refused (os error {errno})"),
-                        "Connection refused (os error <ECONNREFUSED>)".to_owned(),
-                    )
+                .chain(REFUSED_ERRNOS.iter().flat_map(|errno| {
+                    [
+                        (
+                            format!("Connection refused (os error {errno})"),
+                            "Connection refused (os error <ECONNREFUSED>)".to_owned(),
+                        ),
+                        (
+                            format!(" error {errno})"),
+                            " error <ECONNREFUSED>)".to_owned(),
+                        ),
+                    ]
                 }))
                 .collect(),
             dates,
             recent_dates: if windowed {
-                (1..=7).map(|days| day(started, days)).collect()
+                clock((1..=7).map(|days| day(started, days)).collect())
             } else {
                 Vec::new()
             },
@@ -447,8 +489,22 @@ fn normaliser(
     )
 }
 
-/// This host's `git --version` number, which `doctor` reports (the case's
-/// `host-git` rule replaces it).
+/// What a refused connection's `errno` is on the hosts the snapshots run
+/// on: `ECONNREFUSED` is 111 on Linux and 61 on macOS.
+const REFUSED_ERRNOS: [&str; 2] = ["111", "61"];
+
+/// The dates of `candidates` that no text of `held` contains: the ones that
+/// can only be the clock.
+pub fn clock_dates(candidates: Vec<String>, held: &[&str]) -> Vec<String> {
+    candidates
+        .into_iter()
+        .filter(|date| !held.iter().any(|text| text.contains(date.as_str())))
+        .collect()
+}
+
+/// What `git --version` says after `git version `, which `doctor` reports
+/// whole (the case's `host-git` rule replaces it): `2.43.0` on Linux, `2.54.0
+/// (Apple Git-157)` on macOS, so the vendor's suffix goes with the number.
 fn git_version() -> Option<String> {
     static VERSION: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
     VERSION
@@ -457,10 +513,15 @@ fn git_version() -> Option<String> {
                 .arg("--version")
                 .output()
                 .ok()?;
-            let text = String::from_utf8(out.stdout).ok()?;
-            text.split_whitespace().nth(2).map(str::to_owned)
+            git_version_in(&String::from_utf8(out.stdout).ok()?)
         })
         .clone()
+}
+
+/// The version in `git --version`'s `text`, with the vendor's suffix.
+pub fn git_version_in(text: &str) -> Option<String> {
+    let version = text.trim().strip_prefix("git version ")?;
+    (!version.is_empty()).then(|| version.to_owned())
 }
 
 /// The arguments as a person would type them.

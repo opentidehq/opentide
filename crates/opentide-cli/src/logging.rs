@@ -238,7 +238,7 @@ impl LogLayer {
                 ("level".to_owned(), Json::str(level)),
                 ("timestamp".to_owned(), Json::Str((self.clock)())),
             ]);
-            return document_text(&Json::Object(members), false);
+            return document_text(&Json::object(members), false);
         }
         let mut line = String::new();
         if self.config.debug {

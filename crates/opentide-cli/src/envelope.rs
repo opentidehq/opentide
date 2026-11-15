@@ -167,7 +167,7 @@ impl Outcome {
         members.push(("command".into(), Json::str(&self.command)));
         members.push(("duration_ms".into(), Json::Int(duration_ms)));
         members.push(("exit_code".into(), Json::Int(i64::from(self.exit_code))));
-        members.push(("summary".into(), Json::Object(self.summary.clone())));
+        members.push(("summary".into(), Json::object(self.summary.clone())));
         members.push((
             "next_actions".into(),
             Json::Array(
@@ -186,7 +186,7 @@ impl Outcome {
             "failure".into(),
             self.failure.as_ref().map_or(Json::Null, Failure::to_json),
         ));
-        Json::Object(members)
+        Json::object(members)
     }
 }
 

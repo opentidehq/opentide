@@ -433,7 +433,7 @@ impl TenantResult {
         }
         members.push(("warnings".into(), Json::Array(warnings)));
         members.push(("elapsed_ms".into(), Json::Int(self.elapsed_ms)));
-        Json::Object(members)
+        Json::object(members)
     }
 }
 
@@ -1238,7 +1238,7 @@ fn body(
             for outcome in outcomes {
                 if let Some(result) = &outcome.result {
                     for row in rows(result) {
-                        text.push_str(&compact(&Json::Object(labelled(outcome, &row))));
+                        text.push_str(&compact(&Json::object(labelled(outcome, &row))));
                         text.push('\n');
                     }
                 }
@@ -1532,12 +1532,12 @@ mod tests {
         let row = Json::parse(r#"{"a": "x  y", "b": [1, "é"], "c": null, "d": 1.5}"#).unwrap();
         let mut lab = failed("lab", "e", None);
         assert_eq!(
-            compact(&Json::Object(labelled(&lab, &row))),
+            compact(&Json::object(labelled(&lab, &row))),
             r#"{"_tenant":"lab","a":"x  y","b":[1,"é"],"c":null,"d":1.5}"#
         );
         lab.label = Some("sub-query 1".into());
         assert_eq!(
-            compact(&Json::Object(labelled(&lab, &row)))[..40],
+            compact(&Json::object(labelled(&lab, &row)))[..40],
             *r#"{"_tenant":"lab","_label":"sub-query 1","#
         );
         assert_eq!(cell(row.get("a")), "x y");
@@ -2046,7 +2046,7 @@ mod tests {
         let choices = vec!["esql".to_owned(), "eql".to_owned()];
         let report = usage_with("elastic", "no", "--language", Some("eql".into()), &choices);
         assert_eq!(
-            compact_of(&Json::Object(report.outcome.data.clone())),
+            compact_of(&Json::object(report.outcome.data.clone())),
             r#"{"platform":"elastic","choices":["esql","eql"]}"#
         );
         let failure = report.outcome.failure.unwrap();
@@ -2055,7 +2055,7 @@ mod tests {
         assert_eq!(suggest("esq", &choices).as_deref(), Some("esql"));
         let refused = no_runner("sysdig");
         assert_eq!(
-            compact_of(&Json::Object(refused.outcome.data.clone())),
+            compact_of(&Json::object(refused.outcome.data.clone())),
             r#"{"platform":"sysdig","choices":["sentinel","defender_for_endpoint","splunk","sentinel_one","crowdstrike","harfanglab","carbon_black_cloud","elastic","graylog","exabeam","google_secops"]}"#
         );
         assert_eq!(refused.outcome.exit_code, 2);

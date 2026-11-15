@@ -18,7 +18,7 @@ use super::findings::{self, diagnostic};
 use super::{Block, ISSUES_FOUND, Report, Terminal, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE, code};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::mode::Mode;
 use crate::queries::EngineQueries;
 use crate::render::codeframe::{FixedValue, render_diff, render_fixed};
@@ -536,7 +536,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     }
     let mut summary_json = match super::json(&summary) {
         Json::Object(members) => members,
-        _ => Vec::new(),
+        _ => Object::new(),
     };
     let mut fix_phrase_text = None;
     let mut unwritten_lines = Vec::new();
@@ -562,7 +562,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 warnings.push(warning.clone());
                 unwritten_lines.push(warning);
             }
-            summary_json.push(("fixed".into(), Json::from(fix.changes.len())));
+            summary_json.insert("fixed".into(), Json::from(fix.changes.len()));
             data.push(("fixed".into(), changes));
         }
         if !fix.changes.is_empty() || fix.unwritten_fixes > 0 || failed {
@@ -579,7 +579,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     report.outcome.status = if failed { "failed" } else { "passed" }.into();
     report.outcome.message.clone_from(&message);
     report.outcome.exit_code = exit_code;
-    report.outcome.summary = summary_json;
+    report.outcome.summary = summary_json.into_iter().collect();
     report.outcome.next_actions = next;
     if failed {
         report.outcome.failure = Some(Failure::new(ISSUES_FOUND, message.clone()));

@@ -41,7 +41,7 @@ use super::validate_query::{Args, COMMAND};
 use super::{Report, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction, Outcome, code};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::progress::{Progress, Step, StepStatus};
 
 /// Queries in a row on one tenant that get no answer in time before the
@@ -112,7 +112,7 @@ impl Live {
 
     /// The result as one JSON object (the CI job summary reads it).
     pub fn result_json(&self) -> Json {
-        Json::Object(self.result.clone())
+        Json::object(self.result.clone())
     }
 
     /// The report the command prints in *env*: the step's progress event
@@ -160,7 +160,7 @@ pub fn report_of(command: &str, result: &[(String, Json)]) -> Report {
         _ => Vec::new(),
     };
     let summary = match take("_summary") {
-        Some(Json::Object(members)) => members.clone(),
+        Some(Json::Object(members)) => members.clone().into_iter().collect(),
         _ => Vec::new(),
     };
     let next_actions = match take("_next_actions") {
@@ -633,7 +633,7 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
             ("supported".into(), Json::Bool(true)),
             ("strategies".into(), strategy_names),
             ("queries_validated".into(), Json::Int(0)),
-            ("queries_per_tenant".into(), Json::Object(Vec::new())),
+            ("queries_per_tenant".into(), Json::Object(Object::new())),
         ];
         if reaches_any {
             let joined: Vec<&str> = runs.iter().map(|run| run.name()).collect();
@@ -957,7 +957,7 @@ impl RuleCheck {
         if let Some(code) = self.code {
             members.push(("code".to_owned(), Json::str(code)));
         }
-        Json::Object(members)
+        Json::object(members)
     }
 }
 

@@ -258,13 +258,13 @@ impl Terminal {
 
 impl Report {
     /// A successful report.
-    pub fn completed(command: &str, data: Vec<(String, Json)>) -> Report {
+    pub fn completed(command: &str, data: impl IntoIterator<Item = (String, Json)>) -> Report {
         Report {
             outcome: Outcome {
                 command: command.to_owned(),
                 status: "completed".into(),
                 message: "Completed successfully".into(),
-                data,
+                data: data.into_iter().collect(),
                 exit_code: 0,
                 summary: Vec::new(),
                 next_actions: Vec::new(),
