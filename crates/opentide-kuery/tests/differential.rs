@@ -6,7 +6,8 @@
 //! Gates: a query tree-sitter parses without an error gives identical
 //! diagnostics, highlight tokens, ECS diagnostics, fields, hover and
 //! completions (at sampled offsets); a broken one keeps its verdict.
-//! `OPENTIDE_KUERY_DIFF=<file>` writes the JSON report.
+//! `OPENTIDE_KUERY_DIFF=<file>` writes the JSON report; `OPENTIDE_KUERY_SEED=<n>`
+//! picks another seed (default 1).
 
 #![expect(
     clippy::expect_used,
@@ -388,6 +389,13 @@ fn pure_rust_parser_matches_tree_sitter() {
     config.mutations_per_input = 20;
     config.max_prefixes = 40;
     config.max_offsets = 32;
+    // `OPENTIDE_KUERY_SEED=<n>` runs another round (the default is the committed seed 1).
+    if let Some(seed) = std::env::var("OPENTIDE_KUERY_SEED")
+        .ok()
+        .and_then(|s| s.parse().ok())
+    {
+        config.seed = seed;
+    }
     let report = run(&Old, &New, &files, &config);
     eprintln!(
         "kuery differential: {} inputs, {} valid, {} broken; valid differences {}, verdict changes {}, broken-input changes {}",

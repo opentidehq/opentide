@@ -40,19 +40,52 @@ impl Capture {
 /// A language's keywords and punctuation, each with its capture.
 pub type Keywords = &'static [(&'static str, Capture)];
 
+const OPERATOR: Capture = Capture::new("operator");
+const BRACKET: Capture = Capture::new("punctuation.bracket");
+const KEYWORD: Capture = Capture::new("keyword");
+
+/// Kibana KQL: the operators and brackets its lexer cuts as tokens. `or`,
+/// `and` and `not` are keywords only by position (a trailing one is a
+/// value, which the parser decides), so the TextMate grammar does not list
+/// them, as it never did; the analysis colours them from the tree.
+const KUERY: Keywords = &[
+    (":", OPERATOR),
+    ("<", OPERATOR),
+    ("<=", OPERATOR),
+    (">", OPERATOR),
+    (">=", OPERATOR),
+    ("(", BRACKET),
+    (")", BRACKET),
+    ("{", BRACKET),
+    ("}", BRACKET),
+];
+
+/// Lucene query syntax: `TO` in a range, the field separator and the
+/// brackets. `AND`, `OR` and `NOT` are not listed, for kuery's reason.
+const LUCENE: Keywords = &[
+    ("TO", KEYWORD),
+    (":", OPERATOR),
+    ("(", BRACKET),
+    (")", BRACKET),
+    ("[", BRACKET),
+    ("]", BRACKET),
+    ("{", BRACKET),
+    ("}", BRACKET),
+];
+
 /// The `KEYWORDS` table of `language`, or `None` while it is generated from
-/// its `highlights.scm`. No language has a table yet: each one adds an arm
-/// when its engine moves to `opentide-parse`.
+/// its `highlights.scm`. A language adds an arm when its engine
+/// moves to `opentide-parse`.
 #[must_use]
 pub const fn keywords(language: LanguageId) -> Option<Keywords> {
     match language {
+        LanguageId::Kuery => Some(KUERY),
+        LanguageId::Lucene => Some(LUCENE),
         LanguageId::Kql
         | LanguageId::Spl
         | LanguageId::TideYaml
         | LanguageId::Esql
         | LanguageId::Eql
-        | LanguageId::Kuery
-        | LanguageId::Lucene
         | LanguageId::Config
         | LanguageId::Falco
         | LanguageId::Cql
