@@ -82,7 +82,7 @@ pub enum DefenderError {
     /// `DetectionRuleUpdateFailed`, `DetectionRuleDeletionFailed`).
     #[error("{message}")]
     Refused {
-        /// The call and the tenant, as the Python client logs it.
+        /// The call and the tenant.
         message: String,
         /// Graph's answer (`str(_error_body(response))`).
         context: Option<String>,

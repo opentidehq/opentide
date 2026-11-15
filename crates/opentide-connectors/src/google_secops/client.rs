@@ -4,7 +4,7 @@
 //! Every request goes to `<endpoint>/v1/projects/<project>/locations/
 //! <location>/instances/<instance>` with an access token ([`super::auth`]).
 //! HTTP 401 and 403 stop the tenant. HTTP 429, and 503 on any call but a
-//! create, are waited out: `Retry-After` (at most 300 seconds), else the
+//! create, are waited out: `Retry-After` (at most 120 seconds), else the
 //! `RetryInfo.retryDelay` of `error.details`, else 5, 15 and 60 seconds, and
 //! the same request is sent again, at most three times; then the call
 //! fails. Any other error is an [`ApiError`] with Google's `error.status` and

@@ -241,7 +241,7 @@ fn errors_of(body: Option<&Json>) -> Vec<(String, Vec<String>)> {
     found
 }
 
-/// A JSON value as Python's `str()` writes it: a string as itself.
+/// A JSON value as text: a string as itself.
 fn text_of(value: &Json) -> String {
     match value {
         Json::Str(text) => text.clone(),

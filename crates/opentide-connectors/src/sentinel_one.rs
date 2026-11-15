@@ -646,8 +646,7 @@ impl QueryRunner for SentinelOne {
 }
 
 impl LiveValidator for SentinelOne {
-    /// The runner's check: one row over the request's window, as Python's
-    /// `LiveQueryValidator` asks it.
+    /// The runner's check: one row over the request's window.
     fn validate<'a>(
         &'a self,
         cx: TenantContext<'a>,
