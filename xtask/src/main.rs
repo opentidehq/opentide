@@ -127,6 +127,7 @@ exit status: 0 passed, 1 check failed or not implemented yet,
 2 usage error or the check could not run
 ";
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let Some((command, rest)) = args.split_first() else {
@@ -254,6 +255,7 @@ fn main() -> ExitCode {
 }
 
 /// `compare`: whether the runs are equal, or the ledger is valid.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn run_compare(args: &[String]) -> Result<bool> {
     let mut options: std::collections::BTreeMap<&str, PathBuf> = std::collections::BTreeMap::new();
     let mut check_ledger = false;
@@ -513,6 +515,7 @@ fn coverage_command(args: &[String]) -> Result<bool> {
 
 /// `mutants crates` and `mutants report`. Surviving mutants are not a
 /// failure here: the weekly job files them as issues.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn mutants_command(args: &[String]) -> Result<()> {
     let Some((sub, args)) = args.split_first() else {
         bail!("expected `mutants crates` or `mutants report`\n\n{USAGE}");

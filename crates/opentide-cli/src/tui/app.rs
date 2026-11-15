@@ -497,6 +497,7 @@ impl App {
         }
     }
 
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn fill_tree(&mut self) {
         let Some(catalogue) = self.catalogue.clone() else {
             return;

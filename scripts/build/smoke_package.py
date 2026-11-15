@@ -7,7 +7,7 @@ Run it with the interpreter of the environment opentide was just installed
 into (`pip install` of a wheel or the sdist), from a checkout: publish.yml's
 smoke jobs and the Windows on Arm wheel check (build-packages.yml) do, on
 Linux, macOS and Windows. Since UC-6.2 the package is the Rust core and a thin
-Python layer over it, with pydantic its only dependency. It checks:
+Python layer over it, with no dependency; the `plugins` extra adds pydantic. It checks:
 
 - `opentide --version`, the console script beside this interpreter, prints
   VERSION;
@@ -65,12 +65,21 @@ def console_script() -> Path:
 
 
 def _requirement(text: str) -> str:
-    return re.sub(r"\s+", "", text).lower()
+    return re.sub(r"\s+", "", text).lower().replace("'", '"')
 
 
 def check_requirements() -> list[str]:
     declared = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    wanted = sorted(_requirement(r) for r in declared["project"]["dependencies"])
+    project = declared["project"]
+    # An extra's requirement is installed metadata with its marker: pydantic>=2.0;extra=="plugins".
+    wanted = sorted(
+        [_requirement(r) for r in project["dependencies"]]
+        + [
+            _requirement(f'{r}; extra == "{extra}"')
+            for extra, requirements in project.get("optional-dependencies", {}).items()
+            for r in requirements
+        ]
+    )
     installed = sorted(_requirement(r) for r in importlib.metadata.requires("opentide") or [])
     if installed != wanted:
         fail(f"opentide requires {installed}, but pyproject.toml declares {wanted}")

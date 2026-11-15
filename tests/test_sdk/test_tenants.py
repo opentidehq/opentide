@@ -210,6 +210,18 @@ def test_a_deploy_creates_the_rule(connection: Connection) -> None:
     assert outcome.remote_id.startswith("19000000000000000")
 
 
+@pytest.mark.parametrize("policies", [["Default policy"], []])
+def test_a_deploy_takes_the_rules_policies(connection: Connection, policies: list[str]) -> None:
+    """``policies`` is Sysdig's: another platform's deploy takes it and sends it nowhere."""
+    body = json.dumps({"data": {"name": "Example", "queryType": "events"}}).encode()
+    outcome = run(
+        connection.deploy("22222222-2222-4222-8222-222222222222", "create", body, policies=policies)
+    )
+    assert isinstance(outcome, DeployOutcome)
+    assert outcome.operation == "create"
+    assert outcome.remote_id is not None
+
+
 def test_a_deploy_takes_only_the_four_operations(connection: Connection) -> None:
     with pytest.raises(OpentideError) as raised:
         run(connection.deploy("x", "upsert", b"{}"))  # the refusal under test

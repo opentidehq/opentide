@@ -765,10 +765,6 @@ fn bool_true() -> BoolOrPlaceholder {
     BoolOrPlaceholder::Bool(true)
 }
 
-fn bool_false() -> BoolOrPlaceholder {
-    BoolOrPlaceholder::Bool(false)
-}
-
 /// `[tenants.setup]` for Splunk.
 #[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -804,9 +800,10 @@ pub struct SplunkSetup {
     /// Alert actions enabled when a rule names none.
     #[serde(default)]
     pub default_actions: Option<Vec<String>>,
-    /// The instance runs Splunk Enterprise Security.
-    #[serde(default = "bool_false")]
-    pub enterprise_security: BoolOrPlaceholder,
+    /// The instance runs Splunk Enterprise Security: `true` or `false`, not
+    /// a `$NAME` placeholder, which `deploy` does not resolve for it.
+    #[serde(default)]
+    pub enterprise_security: bool,
 }
 tenant!(
     /// `[[tenants]]` for Splunk.

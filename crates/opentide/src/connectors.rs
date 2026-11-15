@@ -587,6 +587,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn every_connector_error_has_its_code_and_keeps_its_tenant() {
         let (platform, tenant) = who();
         let cases = [
@@ -714,6 +715,27 @@ mod tests {
                 "{platform}'s queries"
             );
         }
+    }
+
+    #[test]
+    fn a_tenant_with_ssl_false_deploys_without_verifying_too() {
+        let tenant = TenantConfig::new(
+            "splunk",
+            "t",
+            [("url", "https://t.invalid"), ("ssl", "false")],
+        );
+        let connection = Connection::open(&tenant, &ConnectOptions::default())
+            .unwrap_or_else(|error| panic!("{error}"));
+        assert!(!connection.tenant.http.tls.verify, "queries");
+        assert!(!connection.deploy.0.http.tls.verify, "a deploy");
+
+        let verified = TenantConfig::new("splunk", "t", [("url", "https://t.invalid")]);
+        let connection = Connection::open(&verified, &ConnectOptions::default())
+            .unwrap_or_else(|error| panic!("{error}"));
+        assert!(
+            connection.deploy.0.http.tls.verify,
+            "a deploy verifies by default"
+        );
     }
 
     #[test]

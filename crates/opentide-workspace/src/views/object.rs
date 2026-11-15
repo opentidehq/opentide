@@ -518,6 +518,7 @@ fn unset(root: &Node, fields: &BTreeMap<String, FieldNode>) -> Vec<UnsetField> {
 
 /// The [`ObjectView`] of `root`, an object of `kind`. `links` maps each
 /// UUID of the catalogue (objects and signals) to what it names.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn build_object_view(
     root: &Node,
     kind: &str,
