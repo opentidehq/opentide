@@ -40,14 +40,110 @@ impl Capture {
 /// A language's keywords and punctuation, each with its capture.
 pub type Keywords = &'static [(&'static str, Capture)];
 
+/// SPL's keywords and punctuation (epic #1219, #1229): what
+/// `grammars/tree-sitter-opentide-spl/queries/highlights.scm` names, held
+/// equal to it by a test until the `.scm` goes.
+const SPL: Keywords = &[
+    ("search", Capture::new("keyword")),
+    ("where", Capture::new("keyword")),
+    ("eval", Capture::new("keyword")),
+    ("stats", Capture::new("keyword")),
+    ("rex", Capture::new("keyword")),
+    ("table", Capture::new("keyword")),
+    ("rename", Capture::new("keyword")),
+    ("fields", Capture::new("keyword")),
+    ("dedup", Capture::new("keyword")),
+    ("sort", Capture::new("keyword")),
+    ("head", Capture::new("keyword")),
+    ("tail", Capture::new("keyword")),
+    ("join", Capture::new("keyword")),
+    ("lookup", Capture::new("keyword")),
+    ("makemv", Capture::new("keyword")),
+    ("mvexpand", Capture::new("keyword")),
+    ("tstats", Capture::new("keyword")),
+    ("summariesonly", Capture::new("keyword")),
+    ("prestats", Capture::new("keyword")),
+    ("datamodel", Capture::new("keyword")),
+    ("TERM", Capture::new("function.builtin")),
+    ("CASE", Capture::new("function.builtin")),
+    ("PREFIX", Capture::new("function.builtin")),
+    ("IN", Capture::new("operator")),
+    ("|", Capture::new("operator.pipe")),
+    ("AND", Capture::new("operator")),
+    ("OR", Capture::new("operator")),
+    ("NOT", Capture::new("operator")),
+    ("and", Capture::new("operator")),
+    ("or", Capture::new("operator")),
+    ("not", Capture::new("operator")),
+    ("as", Capture::new("keyword")),
+    ("by", Capture::new("keyword")),
+    ("over", Capture::new("keyword")),
+    ("output", Capture::new("keyword")),
+    ("outputnew", Capture::new("keyword")),
+    ("desc", Capture::new("keyword")),
+    ("in", Capture::new("keyword")),
+    ("notin", Capture::new("keyword")),
+    ("d", Capture::new("keyword")),
+    ("from", Capture::new("keyword")),
+    ("sortby", Capture::new("keyword")),
+    ("keepevents", Capture::new("keyword")),
+    ("keepempty", Capture::new("keyword")),
+    ("consecutive", Capture::new("keyword")),
+    ("<", Capture::new("operator")),
+    (">", Capture::new("operator")),
+    ("<=", Capture::new("operator")),
+    (">=", Capture::new("operator")),
+    ("allow_old_summaries", Capture::new("keyword")),
+    ("fillnull_value", Capture::new("keyword")),
+    ("(", Capture::new("punctuation.bracket")),
+    (")", Capture::new("punctuation.bracket")),
+    ("[", Capture::new("punctuation.bracket")),
+    ("]", Capture::new("punctuation.bracket")),
+    (",", Capture::new("punctuation.delimiter")),
+    ("=", Capture::new("operator")),
+    ("==", Capture::new("operator")),
+    ("!=", Capture::new("operator")),
+    ("LIKE", Capture::new("operator")),
+    ("like", Capture::new("operator")),
+    ("timechart", Capture::new("keyword")),
+    ("chart", Capture::new("keyword")),
+    ("eventstats", Capture::new("keyword")),
+    ("streamstats", Capture::new("keyword")),
+    ("transaction", Capture::new("keyword")),
+    ("spath", Capture::new("keyword")),
+    ("regex", Capture::new("keyword")),
+    ("fillnull", Capture::new("keyword")),
+    ("bin", Capture::new("keyword")),
+    ("append", Capture::new("keyword")),
+    ("inputlookup", Capture::new("keyword")),
+    ("makeresults", Capture::new("keyword")),
+    ("outputlookup", Capture::new("keyword")),
+    ("foreach", Capture::new("keyword")),
+    ("top", Capture::new("keyword")),
+    ("rare", Capture::new("keyword")),
+    ("extract", Capture::new("keyword")),
+    ("convert", Capture::new("keyword")),
+    ("strcat", Capture::new("keyword")),
+    ("metadata", Capture::new("keyword")),
+    ("rest", Capture::new("keyword")),
+    ("union", Capture::new("keyword")),
+    ("map", Capture::new("keyword")),
+    ("reverse", Capture::new("keyword")),
+    ("tojson", Capture::new("keyword")),
+    ("sistats", Capture::new("keyword")),
+    ("sichart", Capture::new("keyword")),
+    ("sitimechart", Capture::new("keyword")),
+    ("geostats", Capture::new("keyword")),
+];
+
 /// The `KEYWORDS` table of `language`, or `None` while it is generated from
-/// its `highlights.scm`. No language has a table yet: each one adds an arm
-/// when its engine moves to `opentide-parse`.
+/// its `highlights.scm`. Each language adds an arm when its engine moves to
+/// `opentide-parse`.
 #[must_use]
 pub const fn keywords(language: LanguageId) -> Option<Keywords> {
     match language {
+        LanguageId::Spl => Some(SPL),
         LanguageId::Kql
-        | LanguageId::Spl
         | LanguageId::TideYaml
         | LanguageId::Esql
         | LanguageId::Eql
@@ -191,6 +287,19 @@ mod tests {
                 "{language}"
             );
         }
+    }
+
+    #[test]
+    fn the_spl_table_spells_out_its_scm() {
+        let table: std::collections::BTreeSet<_> = SPL
+            .iter()
+            .map(|(token, capture)| ((*token).to_string(), capture.name().to_string()))
+            .collect();
+        let scm: std::collections::BTreeSet<_> = scm_pairs(crate::highlights_scm(LanguageId::Spl))
+            .into_iter()
+            .collect();
+        assert_eq!(table, scm);
+        assert_eq!(table.len(), SPL.len(), "no row twice");
     }
 
     #[test]
