@@ -9,7 +9,7 @@
 //! whole; at a terminal narrower than a line it is broken between words, never
 //! inside one, and continued under its text.
 
-use super::text::{Colour, Text, cell_len, char_width};
+use super::text::{Colour, Text, cell_len};
 use super::{brand, glyphs};
 use crate::envelope::NextAction;
 use crate::mode::Mode;
@@ -302,7 +302,7 @@ impl textwrap::core::Fragment for Word {
 /// label and the first word of the message together, its indent with them.
 pub fn word_wrap(line: &Text, width: usize, hang: usize) -> Vec<Text> {
     let plain: Vec<char> = line.as_plain().chars().collect();
-    let cells = |a: usize, b: usize| -> usize { plain[a..b].iter().copied().map(char_width).sum() };
+    let cells = |a: usize, b: usize| -> usize { cell_len(&plain[a..b].iter().collect::<String>()) };
     // The words, as runs of characters between whitespace.
     let mut spans: Vec<(usize, usize)> = Vec::new();
     let mut index = 0;
