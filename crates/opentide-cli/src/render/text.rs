@@ -8,17 +8,20 @@
 //! columns.
 
 use anstyle::Style;
-use unicode_width::UnicodeWidthChar;
+use textwrap::core::Fragment;
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
-/// The cells `text` takes in a terminal: a wide character two, a combining one none.
+/// The cells `text` takes in a terminal, as unicode-width measures a string
+/// (an emoji sequence joined by ZWJ, or with VS16, as one glyph), each
+/// character [`shown`] as a [`Text`] holds it; tabs and line breaks take none.
 pub fn cell_len(text: &str) -> usize {
-    text.chars().map(char_width).sum()
-}
-
-/// The cells one character takes as a [`Text`] shows it: a control character
-/// it drops none, one it shows as a picture ([`shown`]) one.
-pub fn char_width(ch: char) -> usize {
-    shown(ch).map_or(0, |ch| ch.width().unwrap_or(0))
+    let shown: String = text
+        .chars()
+        .filter_map(shown)
+        .filter(|ch| !matches!(ch, '\t' | '\n'))
+        .collect();
+    shown.width()
 }
 
 /// How a [`Text`] holds `ch`: `None` for the controls a terminal would act on
@@ -53,6 +56,98 @@ pub fn layer(base: Style, top: Style) -> Style {
     base.effects(base.get_effects() | top.get_effects())
         .fg_color(top.get_fg_color().or(base.get_fg_color()))
         .bg_color(top.get_bg_color().or(base.get_bg_color()))
+}
+
+/// A piece of a line for [`Text::wrap`]: characters `start..end`, the spaces
+/// after them up to the next piece, measured in terminal cells. A width is
+/// that of the whole string ([`cell_len`]), never a sum over characters, so an
+/// emoji sequence is as wide as the terminal draws it.
+#[derive(Debug)]
+struct Piece {
+    start: usize,
+    end: usize,
+    cells: usize,
+    space: usize,
+}
+
+impl Fragment for Piece {
+    #[expect(clippy::cast_precision_loss, reason = "a line's cells, far below 2^52")]
+    fn width(&self) -> f64 {
+        self.cells as f64
+    }
+
+    #[expect(clippy::cast_precision_loss, reason = "a line's cells, far below 2^52")]
+    fn whitespace_width(&self) -> f64 {
+        self.space as f64
+    }
+
+    fn penalty_width(&self) -> f64 {
+        0.0
+    }
+}
+
+/// The cells the characters `chars` take, as [`cell_len`] measures their string.
+fn cells_of(chars: &[char]) -> usize {
+    cell_len(&chars.iter().collect::<String>())
+}
+
+/// The pieces of `chars` for [`Text::wrap`]: each run up to a space (the spaces
+/// its whitespace), cut again after a `/`, so a long path breaks between
+/// folders. A run wider than a row is cut at grapheme boundaries, never inside
+/// one: the text's first run into `width` cells for its first piece, every
+/// other piece into `rest` cells (a grapheme wider than that takes a piece of
+/// its own).
+fn pieces(chars: &[char], width: usize, rest: usize) -> Vec<Piece> {
+    let mut cuts = vec![0];
+    for (at, ch) in chars.iter().enumerate() {
+        if matches!(ch, ' ' | '/') && chars.get(at + 1).is_some_and(|after| *after != ' ') {
+            cuts.push(at + 1);
+        }
+    }
+    cuts.push(chars.len());
+    let mut found: Vec<Piece> = Vec::new();
+    for bounds in cuts.windows(2) {
+        let (start, next) = (bounds[0], bounds[1]);
+        let end = chars[start..next]
+            .iter()
+            .rposition(|ch| *ch != ' ')
+            .map_or(start, |last| start + last + 1);
+        let space = cells_of(&chars[end..next]);
+        let mut limit = if found.is_empty() { width } else { rest };
+        let cells = cells_of(&chars[start..end]);
+        if cells <= limit {
+            found.push(Piece {
+                start,
+                end,
+                cells,
+                space,
+            });
+            continue;
+        }
+        let text: String = chars[start..end].iter().collect();
+        let (mut from, mut taken, mut count) = (start, 0, 0);
+        for grapheme in text.graphemes(true) {
+            let size = cell_len(grapheme);
+            if count > 0 && taken + size > limit {
+                found.push(Piece {
+                    start: from,
+                    end: from + count,
+                    cells: taken,
+                    space: 0,
+                });
+                (from, taken, count, limit) = (from + count, 0, 0, rest);
+            }
+            taken += size;
+            count += grapheme.chars().count();
+        }
+        found.push(Piece {
+            start: from,
+            end,
+            cells: taken,
+            space,
+        });
+    }
+    found
 }
 
 /// A styled span: characters `start..end` of a [`Text`].
@@ -109,7 +204,36 @@ impl Text {
 
     /// The cells it takes in a terminal.
     pub fn cell_len(&self) -> usize {
-        self.chars.iter().copied().map(char_width).sum()
+        cell_len(&self.as_plain())
+    }
+
+    /// The text in rows of at most `width` cells (textwrap's first fit), each
+    /// row after the first led by `indent`: broken at a space, or after a `/`
+    /// (a path), and a word wider than a row cut into pieces at grapheme
+    /// boundaries; styles carry over. A row is never wider than `width` unless
+    /// one grapheme is.
+    pub fn wrap(&self, width: usize, indent: &Text) -> Vec<Text> {
+        if width == 0 || self.cell_len() <= width {
+            return vec![self.clone()];
+        }
+        let rest = width.saturating_sub(indent.cell_len()).max(1);
+        let pieces = pieces(&self.chars, width, rest);
+        #[expect(clippy::cast_precision_loss, reason = "a terminal's columns")]
+        let widths = [width as f64, rest as f64];
+        textwrap::wrap_algorithms::wrap_first_fit(&pieces, &widths)
+            .iter()
+            .enumerate()
+            .filter_map(|(index, row)| {
+                let (first, last) = (row.first()?, row.last()?);
+                let mut line = if index == 0 {
+                    Text::default()
+                } else {
+                    indent.clone()
+                };
+                line.append_text(&self.slice(first.start, last.end));
+                Some(line)
+            })
+            .collect()
     }
 
     /// Adds `text` in `style` (none when `style` is plain) at the end.
@@ -225,15 +349,16 @@ impl Text {
         }
         let room = width - 1;
         let mut cells = 0;
-        let mut kept = Vec::new();
-        for ch in &self.chars {
-            let next = cells + char_width(*ch);
+        let mut kept = 0;
+        for grapheme in self.as_plain().graphemes(true) {
+            let next = cells + cell_len(grapheme);
             if next > room {
                 break;
             }
             cells = next;
-            kept.push(*ch);
+            kept += grapheme.chars().count();
         }
+        let mut kept: Vec<char> = self.chars[..kept].to_vec();
         kept.extend(std::iter::repeat_n(' ', room - cells));
         kept.push('…');
         let length = kept.len();
@@ -413,8 +538,8 @@ mod tests {
             hostile.render(Colour::Full, false),
             "\u{1b}[31m␛[2J␛]8;;x␀␡\u{fffd}\u{1b}[0m"
         );
-        assert_eq!(char_width('\u{1b}'), 1);
-        assert_eq!(char_width('\u{7}'), 0);
+        assert_eq!(cell_len("\u{1b}"), 1);
+        assert_eq!(cell_len("\u{7}"), 0);
         assert_eq!(cell_len("\u{1b}[1m"), 4);
         let parts = Text::styled("a\nb", &RED).split_lines();
         assert_eq!(parts.len(), 2);
@@ -466,8 +591,100 @@ mod tests {
         text.rstrip();
         assert_eq!(text.render(Colour::Full, false), "\u{1b}[31mab\u{1b}[0m");
         assert_eq!(cell_len("名前x"), 5);
+        // A ZWJ sequence and a VS16 emoji are one glyph each, two cells wide.
+        assert_eq!(cell_len("\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}"), 2);
+        assert_eq!(cell_len("\u{2764}\u{fe0f}"), 2);
+        assert_eq!(Text::plain("a\u{1f468}\u{200d}\u{1f469}").cell_len(), 3);
         assert_eq!(Text::plain("abc").slice(1, 9).as_plain(), "bc");
         assert!(Text::default().is_empty());
         assert_eq!(Text::plain("ab").len(), 2);
+    }
+
+    /// Every row of `text` wrapped at `width`, as plain strings.
+    fn wrapped(text: &str, width: usize, indent: &str) -> Vec<String> {
+        Text::plain(text)
+            .wrap(width, &Text::plain(indent))
+            .iter()
+            .map(Text::as_plain)
+            .collect()
+    }
+
+    #[test]
+    fn wrap_measures_and_cuts_by_grapheme() {
+        let family = "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}";
+        let heart = "\u{2764}\u{fe0f}";
+        let samples = [
+            format!("{family}{family}{family}{family}"),
+            format!("ab {family}{family} cd {heart}{heart}{heart}{heart}"),
+            heart.repeat(7),
+            format!("x{}", heart.repeat(5)),
+            "名前名前名前名前名前 x 名前/名前".to_owned(),
+            format!("{family} {heart} 名 {family}{heart}名/{heart}"),
+        ];
+        for text in &samples {
+            for width in 4..=11 {
+                // The widest grapheme is two cells: a row holds one at least.
+                for indent in ["", " ", "  "] {
+                    let rows = wrapped(text, width, indent);
+                    for row in &rows {
+                        assert!(
+                            cell_len(row) <= width,
+                            "{row:?} is wider than {width} (indent {indent:?}) in {rows:?}"
+                        );
+                    }
+                    // No grapheme is cut, and no character is lost.
+                    let kept: String = rows
+                        .iter()
+                        .enumerate()
+                        .map(|(at, row)| {
+                            if at == 0 {
+                                row.as_str()
+                            } else {
+                                &row[indent.len()..]
+                            }
+                        })
+                        .collect();
+                    assert_eq!(
+                        kept.replace(' ', ""),
+                        text.replace(' ', ""),
+                        "{rows:?} at {width}"
+                    );
+                    for row in &rows {
+                        assert!(!row.ends_with('\u{200d}'), "{row:?} ends inside a sequence");
+                        assert!(!row.starts_with('\u{fe0f}'), "{row:?} starts at a selector");
+                    }
+                }
+            }
+        }
+        // A family is one glyph two cells wide: three fit a row of six.
+        assert_eq!(
+            wrapped(&format!("{family}{family}{family}{family}"), 6, ""),
+            [family.repeat(3), family.to_owned()]
+        );
+        // A VS16 emoji is two cells: three fit in six, not four.
+        assert_eq!(
+            wrapped(&heart.repeat(4), 6, ""),
+            [heart.repeat(3), heart.to_owned()]
+        );
+        // A grapheme wider than the row still moves on, one to a row.
+        assert_eq!(wrapped("名名", 1, ""), ["名", "名"]);
+    }
+
+    #[test]
+    fn wrap_breaks_the_first_row_at_the_full_width() {
+        assert_eq!(wrapped("abcdefghij", 4, " "), ["abcd", " efg", " hij"]);
+        assert_eq!(
+            wrapped("aaa bbb/ccc/ddd", 6, "  "),
+            ["aaa", "  bbb/", "  ccc/", "  ddd"]
+        );
+    }
+
+    #[test]
+    fn truncate_ellipsis_keeps_graphemes_whole() {
+        let family = "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}";
+        let mut text = Text::plain(&format!("a{family}{family}"));
+        text.truncate_ellipsis(4);
+        assert_eq!(text.as_plain(), format!("a{family}…"));
+        assert!(text.cell_len() <= 4);
     }
 }
