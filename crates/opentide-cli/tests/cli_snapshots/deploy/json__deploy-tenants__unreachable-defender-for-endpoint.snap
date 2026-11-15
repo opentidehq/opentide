@@ -1,0 +1,123 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-tenants/unreachable-defender-for-endpoint
+---
+args: opentide --json deploy --platform defender_for_endpoint --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "create",
+      "name": "Defender create rule",
+      "platform": "defender_for_endpoint",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000001"
+    },
+    {
+      "action": "update",
+      "name": "Defender update rule",
+      "platform": "defender_for_endpoint",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000002"
+    },
+    {
+      "action": "delete",
+      "name": "Defender retire rule",
+      "platform": "defender_for_endpoint",
+      "status": "REMOVED",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000003"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": false,
+  "duration_ms": 0,
+  "error": "Deployment to defender_for_endpoint failed: Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "Deployment to defender_for_endpoint failed: Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+    "suggestion": null
+  },
+  "message": "Deployment to defender_for_endpoint failed: Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "next_actions": [],
+  "ok": false,
+  "plan": {
+    "defender_for_endpoint": [
+      "00000000-0000-4000-8047-000000000001",
+      "00000000-0000-4000-8047-000000000002",
+      "00000000-0000-4000-8047-000000000003"
+    ]
+  },
+  "results": [
+    {
+      "action": "create",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000001",
+      "name": "Defender create rule",
+      "platform": "defender_for_endpoint",
+      "reason": "not attempted after a failure",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "update",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000002",
+      "name": "Defender update rule",
+      "platform": "defender_for_endpoint",
+      "reason": "not attempted after a failure",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "delete",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000003",
+      "name": "Defender retire rule",
+      "platform": "defender_for_endpoint",
+      "reason": "not attempted after a failure",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    }
+  ],
+  "schema_version": 1,
+  "status": "failed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "create": 0,
+    "delete": 0,
+    "disable": 0,
+    "failed": 0,
+    "not_attempted": 3,
+    "platforms": 1,
+    "seconds": 0.0,
+    "skipped": 0,
+    "tenants": 1,
+    "update": 0,
+    "upsert": 0
+  }
+}
+
+━━━ stderr · json, 1 lines
+{
+  "detail": "Cannot reach defender_for_endpoint tenant '***' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "event": "platform_deployment_failed",
+  "level": "error",
+  "logger": "opentide.cli.services.deploy",
+  "system": "defender_for_endpoint",
+  "timestamp": "0000-00-00 00:00:00"
+}

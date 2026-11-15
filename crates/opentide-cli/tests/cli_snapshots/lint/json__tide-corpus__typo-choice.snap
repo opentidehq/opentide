@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lint/json/tide-corpus/typo-choice
+---
+args: opentide --json lint --check filenamez
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "lint",
+  "duration_ms": 0,
+  "error": "invalid value 'filenamez' for '--check <CHECK>' [possible values: filenames, metadata, recommended, placeholders, queries]",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--check",
+    "code": "usage_invalid_choice",
+    "crash_log": null,
+    "message": "invalid value 'filenamez' for '--check <CHECK>' [possible values: filenames, metadata, recommended, placeholders, queries]",
+    "suggestion": "filenames"
+  },
+  "message": "invalid value 'filenamez' for '--check <CHECK>' [possible values: filenames, metadata, recommended, placeholders, queries]",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty
