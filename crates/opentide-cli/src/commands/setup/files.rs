@@ -8,13 +8,13 @@ use std::path::{Path, PathBuf};
 
 use super::jsonc;
 use super::stage::Stage;
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// A step's result: its members, in order.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct StepResult {
     /// The members.
-    pub fields: Vec<(String, Json)>,
+    pub fields: Object,
 }
 
 impl StepResult {
@@ -27,7 +27,7 @@ impl StepResult {
 
     /// The value of `key`.
     pub fn get(&self, key: &str) -> Option<&Json> {
-        self.fields.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+        self.fields.get(key)
     }
 
     /// The strings of the list `key` (empty when there is none).
@@ -54,16 +54,12 @@ impl StepResult {
 
     /// Sets `key`, in its place when it is there, else last.
     pub fn set(&mut self, key: &str, value: Json) {
-        match self.fields.iter_mut().find(|(k, _)| k == key) {
-            Some((_, slot)) => *slot = value,
-            None => self.fields.push((key.to_owned(), value)),
-        }
+        self.fields.insert(key.to_owned(), value);
     }
 
     /// Removes `key`, returning its value.
     pub fn take(&mut self, key: &str) -> Option<Json> {
-        let at = self.fields.iter().position(|(k, _)| k == key)?;
-        Some(self.fields.remove(at).1)
+        self.fields.shift_remove(key)
     }
 }
 

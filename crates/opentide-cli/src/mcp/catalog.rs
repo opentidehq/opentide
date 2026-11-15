@@ -428,12 +428,12 @@ pub fn get_chaining(index: &Index, uuid: &str) -> Json {
         ("found".to_owned(), Json::Bool(true)),
         ("type".to_owned(), Json::str(node.family)),
         ("graph".to_owned(), graph),
-        ("chaining_index".to_owned(), Json::Object(chaining_index)),
+        ("chaining_index".to_owned(), Json::object(chaining_index)),
     ];
     if let Some(lineage) = lineage {
         payload.push(("lineage".to_owned(), lineage_json(lineage)));
     }
-    Json::Object(payload)
+    Json::object(payload)
 }
 
 fn strings(items: impl IntoIterator<Item = String>) -> Json {
@@ -522,7 +522,7 @@ fn platform_state(block: Option<&Node>, external_ids: Option<&IndexMap<String, S
             Json::Bool(!ids.is_empty() || !tenants.is_empty()),
         ),
         ("rule_id", rule_id),
-        ("external_ids", Json::Object(ids)),
+        ("external_ids", Json::object(ids)),
         ("tenants", Json::Array(tenants)),
     ])
 }
@@ -579,14 +579,14 @@ pub fn deployment_status(workspace: &Workspace, uuid: &str) -> Json {
         }
     }
     let mut payload = vec![
-        ("platforms".to_owned(), Json::Object(platforms)),
+        ("platforms".to_owned(), Json::object(platforms)),
         ("uuid".to_owned(), Json::str(uuid)),
         ("found".to_owned(), Json::Bool(true)),
     ];
     if let Some(error) = state_error {
         payload.push(("state_error".to_owned(), error));
     }
-    Json::Object(payload)
+    Json::object(payload)
 }
 
 /// The platforms opentide knows (`Opentide.Platforms`), in the platform table's order.

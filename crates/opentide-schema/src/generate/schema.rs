@@ -142,7 +142,7 @@ pub fn visibility_schema() -> Schema {
 pub fn editor_text(schema: &Schema) -> String {
     let mut json = Json::from(schema.as_value());
     annotate_editor_schema(&mut json);
-    json.to_text()
+    super::json::to_text(&json)
 }
 
 // --- the transforms -----------------------------------------------------------------------
