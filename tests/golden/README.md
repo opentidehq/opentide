@@ -51,7 +51,6 @@ Byte-for-byte parity with Python is not what they check; what the Rust CLI does 
   `VERSION`), so a release changes nothing. Every case runs under umask 022 with `/dev/null` as
   standard input, and the fixtures get fixed modes.
 - **Fails, never snapshotted**: a request a case's cassette does not hold, and a panic.
-- **Left out**: `serve`'s session, which feeds standard input (`tests/serve.rs` drives it).
 - **Needs the generated workspaces**: the cases on `fault`, `fault-lint` and `heavy-small` run in
   three tests (`generated_fault`, `generated_fault_lint`, `generated_heavy_small`) when
   `OPENTIDE_REPLAY_FIXTURES` names the workspaces `cargo xtask corpus` writes, which a crate test
