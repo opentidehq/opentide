@@ -464,7 +464,8 @@ jobs:
       # binaries carry opentide's package data, as the wheel does: its
       # `platform_sdk` explain page names the Splunk client's Python module
       # (license-scan.sh --product). Every product asset is scanned, the
-      # wheel's SBOM included: the wheel has no Python dependency, and its SBOM lists the `plugins` extra's pydantic.
+      # wheel's SBOM included: the wheel has no Python dependency, and its SBOM
+      # lists the `plugins` extra's pydantic.
       - name: license scan (no oracle references)
         run: |
           set -euo pipefail
