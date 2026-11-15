@@ -5,3 +5,6 @@
 mod keywords;
 mod kind;
 mod lexer;
+
+pub use kind::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
+pub use lexer::lex;
