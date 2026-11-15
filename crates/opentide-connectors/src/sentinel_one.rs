@@ -291,6 +291,7 @@ impl SentinelOne {
 
     /// Runs a PowerQuery over the request's window and polls it until it
     /// finishes (`SentinelOneQueryRunner.run`).
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     pub async fn run(
         &self,
         cx: TenantContext<'_>,

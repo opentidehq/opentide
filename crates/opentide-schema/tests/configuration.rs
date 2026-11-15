@@ -222,6 +222,21 @@ fn sharing_case(case: &toml::Value) -> Json {
     )
 }
 
+/// A finding's `field_path`, its parts joined by `/`.
+fn field_path(finding: &Json) -> String {
+    match finding.get("field_path") {
+        Some(Json::Array(parts)) => parts
+            .iter()
+            .map(|part| match part {
+                Json::String(text) => text.clone(),
+                other => other.to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join("/"),
+        _ => String::new(),
+    }
+}
+
 /// The paths at which `rust` differs from `oracle`, apart from the members
 /// named in `allowed` (at any depth). An array of another length differs as
 /// a whole.
@@ -298,15 +313,21 @@ fn compare(
 fn configuration_cases_match_the_oracle_or_name_their_difference() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
     let cases: toml::Value = toml::from_str(CASES).unwrap();
-    let differences: BTreeMap<String, BTreeSet<String>> = cases["difference"]
+    // Each difference: the finding members it may change, and the field
+    // paths (`a/0/b`) of the findings Rust adds.
+    let differences: BTreeMap<String, (BTreeSet<String>, Vec<String>)> = cases["difference"]
         .as_array()
         .unwrap()
         .iter()
         .map(|difference| {
             let fields: BTreeSet<String> = strings(difference.get("fields")).into_iter().collect();
+            let added = strings(difference.get("added"));
             let id = difference["id"].as_str().unwrap().to_owned();
-            assert!(!fields.is_empty(), "difference `{id}` lists no `fields`");
-            (id, fields)
+            assert!(
+                !fields.is_empty() || !added.is_empty(),
+                "difference `{id}` lists no `fields` and no `added`"
+            );
+            (id, (fields, added))
         })
         .collect();
     let mut used = BTreeSet::new();
@@ -330,15 +351,25 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
             _ => Vec::new(),
         };
         let mut fields = BTreeSet::new();
+        let mut added = Vec::new();
         for name in &names {
-            fields.extend(
-                differences
-                    .get(*name)
-                    .unwrap_or_else(|| panic!("{id}: unknown difference {name}"))
-                    .iter()
-                    .cloned(),
-            );
+            let (more, adds) = differences
+                .get(*name)
+                .unwrap_or_else(|| panic!("{id}: unknown difference {name}"));
+            fields.extend(more.iter().cloned());
+            added.extend(adds.iter().cloned());
             used.insert((*name).to_owned());
+        }
+        let mut rust = rust;
+        for path in &added {
+            let Json::Array(findings) = &mut rust else {
+                panic!("{id}: `added` names a finding of a case that has none");
+            };
+            let before = findings.len();
+            findings.retain(|finding| field_path(finding) != *path);
+            if findings.len() == before {
+                failures.push(format!("{id}: Rust adds no finding at {path}"));
+            }
         }
         let joined = names.join(" + ");
         let difference = (!names.is_empty()).then_some((joined.as_str(), &fields));
@@ -592,5 +623,29 @@ mod configuration_never_panics {
                 let _ = parse_lint_config(resolved.get("lint"));
             }
         }
+    }
+}
+
+#[test]
+fn splunk_enterprise_security_is_a_boolean_and_never_a_placeholder() {
+    // `deploy` refuses a `$NAME` placeholder in `enterprise_security` (it
+    // resolves placeholders in credentials and `ssl` only), so `validate`
+    // refuses it too, at the key's path.
+    let path = "/w/.opentide/configurations/platforms/splunk.toml";
+    let splunk = |value: &str| {
+        format!(
+            "[[tenants]]\nname = \"a\"\n[tenants.setup]\nurl = \"u\"\nport = 8089\n\
+             app = \"search\"\nenterprise_security = {value}\n"
+        )
+    };
+    for value in ["true", "false"] {
+        let issues = checks::buffer_issues(path, &splunk(value), &checks::BufferContext::default());
+        assert!(issues.is_empty(), "{value}: {issues:?}");
+    }
+    for value in ["\"$SPLUNK_ES\"", "\"yes\"", "0"] {
+        let issues = checks::buffer_issues(path, &splunk(value), &checks::BufferContext::default());
+        assert_eq!(issues.len(), 1, "{value}: {issues:?}");
+        let shown = format!("{:?}", issues[0]);
+        assert!(shown.contains("enterprise_security"), "{value}: {shown}");
     }
 }

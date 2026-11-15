@@ -1074,6 +1074,7 @@ fn retract_block(
         .collect()
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn retract_one(
     uuid: &str,
     document: Option<&TideDocument>,

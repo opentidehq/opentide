@@ -251,6 +251,7 @@ pub fn reconcile_invalid_dates(oracle: &mut Json, rust: &mut Json) -> usize {
 }
 
 /// Runs `registry <args>`; the process exit status.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn run(args: &[String]) -> Result<u8> {
     let Some((command, options)) = args.split_first() else {
         bail!("missing command\n\n{USAGE}");
