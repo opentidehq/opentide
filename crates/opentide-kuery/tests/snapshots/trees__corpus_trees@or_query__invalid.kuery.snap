@@ -1,0 +1,34 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/kuery/or_query__invalid.kuery
+---
+SourceFile@0..50
+  FieldValueExpression@0..36
+    Field@0..6
+      UnquotedLiteral@0..6
+        Word@0..1 "#"
+        Whitespace@1..2 " "
+        Word@2..6 "prod"
+    Colon@6..7 ":"
+    UnquotedLiteral@7..36
+      Word@7..15 "or_query"
+      Whitespace@15..16 " "
+      Word@16..23 "invalid"
+      Whitespace@23..24 "\n"
+      Word@24..36 "process.name"
+  Error@36..37
+    Colon@36..37 ":"
+  OrQuery@37..47
+    ValueExpression@37..44
+      UnquotedLiteral@37..44
+        Word@37..44 "cmd.exe"
+    Whitespace@44..45 " "
+    OrKw@45..47 "or"
+  Whitespace@47..48 " "
+  Error@48..49
+    RParen@48..49 ")"
+  Whitespace@49..50 "\n"
+36..36: unexpected (expected `or`, `and`, end of input)
+47..48: missing a value (expected a value, a value, `not`, `(`)
+47..48: unexpected (expected a value, a value, `or`, `and`, `not`, `(`)

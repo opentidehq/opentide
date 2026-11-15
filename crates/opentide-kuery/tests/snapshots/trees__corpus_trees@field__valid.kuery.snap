@@ -1,0 +1,39 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/kuery/field__valid.kuery
+---
+SourceFile@0..63
+  FieldValueExpression@0..18
+    Field@0..6
+      UnquotedLiteral@0..6
+        Word@0..1 "#"
+        Whitespace@1..2 " "
+        Word@2..6 "prod"
+    Colon@6..7 ":"
+    UnquotedLiteral@7..18
+      Word@7..12 "field"
+      Whitespace@12..13 " "
+      Word@13..18 "valid"
+  Whitespace@18..19 "\n"
+  Error@19..33
+    QuotedString@19..33 "\"process.name\""
+  Error@33..34
+    Colon@33..34 ":"
+  AndQuery@34..62
+    ValueExpression@34..41
+      UnquotedLiteral@34..41
+        Word@34..41 "cmd.exe"
+    Whitespace@41..42 " "
+    AndKw@42..45 "and"
+    Whitespace@45..46 " "
+    FieldValueExpression@46..62
+      Field@46..57
+        UnquotedLiteral@46..57
+          Word@46..57 "machine.os*"
+      Colon@57..58 ":"
+      UnquotedLiteral@58..62
+        Word@58..62 "win*"
+  Whitespace@62..63 "\n"
+18..19: unexpected (expected `or`, `and`, end of input)
+33..33: unexpected

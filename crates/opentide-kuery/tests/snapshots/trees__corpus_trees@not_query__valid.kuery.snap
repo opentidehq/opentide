@@ -1,0 +1,28 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/kuery/not_query__valid.kuery
+---
+SourceFile@0..44
+  FieldValueExpression@0..36
+    Field@0..6
+      UnquotedLiteral@0..6
+        Word@0..1 "#"
+        Whitespace@1..2 " "
+        Word@2..6 "prod"
+    Colon@6..7 ":"
+    UnquotedLiteral@7..36
+      Word@7..16 "not_query"
+      Whitespace@16..17 " "
+      Word@17..22 "valid"
+      Whitespace@22..23 "\n"
+      Word@23..26 "not"
+      Whitespace@26..27 " "
+      Word@27..36 "user.name"
+  Error@36..37
+    Colon@36..37 ":"
+  ValueExpression@37..43
+    UnquotedLiteral@37..43
+      Word@37..43 "SYSTEM"
+  Whitespace@43..44 "\n"
+36..36: unexpected (expected `or`, `and`, end of input)

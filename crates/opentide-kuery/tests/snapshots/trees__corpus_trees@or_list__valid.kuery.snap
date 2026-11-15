@@ -1,0 +1,36 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/kuery/or_list__valid.kuery
+---
+SourceFile@0..53
+  FieldValueExpression@0..33
+    Field@0..6
+      UnquotedLiteral@0..6
+        Word@0..1 "#"
+        Whitespace@1..2 " "
+        Word@2..6 "prod"
+    Colon@6..7 ":"
+    UnquotedLiteral@7..33
+      Word@7..14 "or_list"
+      Whitespace@14..15 " "
+      Word@15..20 "valid"
+      Whitespace@20..21 "\n"
+      Word@21..33 "host.os.type"
+  Error@33..34
+    Colon@33..34 ":"
+  Group@34..52
+    LParen@34..35 "("
+    OrQuery@35..51
+      ValueExpression@35..42
+        UnquotedLiteral@35..42
+          Word@35..42 "windows"
+      Whitespace@42..43 " "
+      OrKw@43..45 "or"
+      Whitespace@45..46 " "
+      ValueExpression@46..51
+        UnquotedLiteral@46..51
+          Word@46..51 "linux"
+    RParen@51..52 ")"
+  Whitespace@52..53 "\n"
+33..33: unexpected (expected `or`, `and`, end of input)

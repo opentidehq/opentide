@@ -1,0 +1,39 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/kuery/and_query__invalid.kuery
+---
+SourceFile@0..70
+  FieldValueExpression@0..39
+    Field@0..6
+      UnquotedLiteral@0..6
+        Word@0..1 "#"
+        Whitespace@1..2 " "
+        Word@2..6 "prod"
+    Colon@6..7 ":"
+    UnquotedLiteral@7..39
+      Word@7..16 "and_query"
+      Whitespace@16..17 " "
+      Word@17..24 "invalid"
+      Whitespace@24..25 "\n"
+      Word@25..39 "event.category"
+  Error@39..40
+    Colon@39..40 ":"
+  AndQuery@40..69
+    ValueExpression@40..47
+      UnquotedLiteral@40..47
+        Word@40..47 "process"
+    Whitespace@47..48 " "
+    AndKw@48..51 "and"
+    Group@51..69
+      LParen@51..52 "("
+      FieldValueExpression@52..68
+        Field@52..62
+          UnquotedLiteral@52..62
+            Word@52..62 "event.type"
+        Colon@62..63 ":"
+        UnquotedLiteral@63..68
+          Word@63..68 "start"
+      RParen@68..69 ")"
+  Whitespace@69..70 "\n"
+39..39: unexpected (expected `or`, `and`, end of input)

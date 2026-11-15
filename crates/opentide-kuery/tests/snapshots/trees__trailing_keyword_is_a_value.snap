@@ -1,0 +1,17 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: "debug_parse(\"f:(a or)\")"
+---
+SourceFile@0..8
+  FieldValueExpression@0..8
+    Field@0..1
+      UnquotedLiteral@0..1
+        Word@0..1 "f"
+    Colon@1..2 ":"
+    ValueList@2..8
+      LParen@2..3 "("
+      UnquotedLiteral@3..7
+        Word@3..4 "a"
+        Whitespace@4..5 " "
+        Word@5..7 "or"
+      RParen@7..8 ")"
