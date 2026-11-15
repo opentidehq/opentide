@@ -73,12 +73,12 @@ impl From<&crate::tree::ValidateArgs> for Args {
         Self {
             check: args.check.map(Check::from),
             selection: Selection {
-                files: args.file.clone(),
-                uuids: args.uuid.clone(),
+                files: args.select.file.clone(),
+                uuids: args.select.uuid.clone(),
                 types: args.object_type.clone(),
             },
-            strict: args.strict,
-            queries: args.queries.map(QueriesMode::from),
+            strict: args.strictness.strict,
+            queries: args.strictness.queries.map(QueriesMode::from),
             fix: args.fix,
             dry_run: args.dry_run,
             watch: args.watch,

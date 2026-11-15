@@ -663,7 +663,7 @@ impl Run<'_> {
                     ..
                 },
             )) => {
-                let report = self.validate_query(validate, query, &matches);
+                let report = self.validate_query(validate, query);
                 return self.emit_report(&report, out, err);
             }
             Some(RootCommand::Migrate(crate::tree::MigrateArgs {
@@ -1211,75 +1211,13 @@ impl Run<'_> {
         &self,
         validate: &crate::tree::ValidateArgs,
         query: &crate::tree::ValidateQueryArgs,
-        matches: &clap::ArgMatches,
     ) -> crate::commands::Report {
-        use crate::commands::validate_query::{Args, COMMAND, Context, HandDown, plugin_live, run};
-        // Both are there: this is `validate query`. (`typed` of the root's own
-        // matches would read nothing, were they not.)
-        let group = matches.subcommand_matches("validate").unwrap_or(matches);
-        let args = group.subcommand_matches("query").unwrap_or(group);
-        let typed =
-            |on: &clap::ArgMatches, id: &str| on.value_source(id) == Some(ValueSource::CommandLine);
-        // `validate`'s options `query` does not take are refused, in
-        // `validate`'s order; one both take, typed on both, is refused too.
-        let own = self
-            .root
-            .find_subcommand("validate")
-            .and_then(|validate| validate.find_subcommand("query"));
-        let mut refused: Vec<String> = Vec::new();
-        let mut twice: Vec<String> = Vec::new();
-        for arg in self
-            .root
-            .find_subcommand("validate")
-            .into_iter()
-            .flat_map(clap::Command::get_arguments)
-        {
-            let id = arg.get_id().as_str();
-            let (Some(long), true) = (arg.get_long(), typed(group, id)) else {
-                continue;
-            };
-            let flag = format!("--{long}");
-            if !own.is_some_and(|own| own.get_arguments().any(|other| other.get_id() == id)) {
-                refused.push(flag);
-            } else if typed(args, id) {
-                twice.push(flag);
-            }
-        }
-        let problem = if !refused.is_empty() {
-            let verb = if refused.len() == 1 {
-                "configures"
-            } else {
-                "configure"
-            };
-            Some(format!(
-                "{} {verb} `opentide validate` itself and would be ignored by `opentide \
-                 validate query`.",
-                refused.join(", ")
-            ))
-        } else if !twice.is_empty() {
-            Some(format!(
-                "Pass {} once, before or after `query`, not both: `opentide validate \
-                 query` would use only the second.",
-                twice.join(", ")
-            ))
-        } else {
-            None
-        };
-        if let Some(problem) = problem {
+        use crate::commands::validate_query::{Args, COMMAND, Context, plugin_live, refusal, run};
+        if let Some(problem) = refusal(validate, query) {
             let failure = Failure::new(code::USAGE_INVALID_VALUE, problem);
             return crate::commands::Report::failed(COMMAND, USAGE_EXIT_CODE, failure);
         }
-        let handed = |id: &str| typed(group, id) && !typed(args, id);
-        let parsed = Args::from_cli(
-            validate,
-            query,
-            HandDown {
-                file: handed("file"),
-                uuid: handed("uuid"),
-                strict: handed("strict"),
-                queries: handed("queries"),
-            },
-        );
+        let parsed = Args::from_cli(validate, query);
         let cwd = self.host.cwd.clone().unwrap_or_default();
         let plugin = parsed
             .platform

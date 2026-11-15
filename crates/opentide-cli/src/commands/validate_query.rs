@@ -88,32 +88,104 @@ pub struct Args {
     pub check_timeout: Option<String>,
 }
 
-/// Which of the options `validate` and `validate query` share were typed on
-/// `validate`, before `query`: those are `query`'s.
-#[derive(Clone, Copy, Debug, Default)]
+/// Why `validate <options> query` is refused, if it is: an option of
+/// `validate` that `query` does not take (`refuse_dropped`), or one both
+/// take typed on both sides. `validate`'s options are read off its struct:
+/// one that differs from its default was typed before `query` (a
+/// `--format text`, the default, asks for nothing and is let through).
+pub fn refusal(
+    validate: &crate::tree::ValidateArgs,
+    query: &crate::tree::ValidateQueryArgs,
+) -> Option<String> {
+    // `validate`'s own options, in its order.
+    let refused: Vec<&str> = [
+        ("--check", validate.check.is_some()),
+        ("--type", !validate.object_type.is_empty()),
+        ("--fix", validate.fix),
+        ("--dry-run", validate.dry_run),
+        ("--watch", validate.watch),
+        (
+            "--format",
+            validate.report_format != crate::tree::ReportFormat::Text,
+        ),
+        ("--output", validate.output.is_some()),
+    ]
+    .into_iter()
+    .filter_map(|(flag, typed)| typed.then_some(flag))
+    .collect();
+    if !refused.is_empty() {
+        let verb = if refused.len() == 1 {
+            "configures"
+        } else {
+            "configure"
+        };
+        return Some(format!(
+            "{} {verb} `opentide validate` itself and would be ignored by `opentide validate \
+             query`.",
+            refused.join(", ")
+        ));
+    }
+    let (group, own) = (Typed::of(validate), Typed::of_query(query));
+    let twice: Vec<&str> = [
+        ("--file", group.file && own.file),
+        ("--uuid", group.uuid && own.uuid),
+        ("--strict", group.strict && own.strict),
+        ("--queries", group.queries && own.queries),
+    ]
+    .into_iter()
+    .filter_map(|(flag, both)| both.then_some(flag))
+    .collect();
+    (!twice.is_empty()).then(|| {
+        format!(
+            "Pass {} once, before or after `query`, not both: `opentide validate query` would \
+             use only the second.",
+            twice.join(", ")
+        )
+    })
+}
+
+/// Which of the options `validate` and `validate query` share a side holds.
+#[derive(Clone, Copy)]
 #[expect(clippy::struct_excessive_bools, reason = "one flag per shared option")]
-pub struct HandDown {
-    /// `--file`.
-    pub file: bool,
-    /// `--uuid`.
-    pub uuid: bool,
-    /// `--strict`.
-    pub strict: bool,
-    /// `--queries`.
-    pub queries: bool,
+struct Typed {
+    file: bool,
+    uuid: bool,
+    strict: bool,
+    queries: bool,
+}
+
+impl Typed {
+    fn shared(
+        select: &crate::tree::QuerySelect,
+        strictness: &crate::tree::QueryStrictness,
+    ) -> Self {
+        Self {
+            file: !select.file.is_empty(),
+            uuid: !select.uuid.is_empty(),
+            strict: strictness.strict,
+            queries: strictness.queries.is_some(),
+        }
+    }
+
+    fn of(validate: &crate::tree::ValidateArgs) -> Self {
+        Self::shared(&validate.select, &validate.strictness)
+    }
+
+    fn of_query(query: &crate::tree::ValidateQueryArgs) -> Self {
+        Self::shared(&query.select, &query.strictness)
+    }
 }
 
 impl Args {
-    /// `validate query`'s run: each shared option is `validate`'s where it
-    /// was typed there (`hand_down`), else `query`'s own.
+    /// `validate query`'s run: a shared option typed on `validate`, before
+    /// `query`, is `query`'s (`hand_down`). [`refusal`] has refused one typed
+    /// on both sides, so each comes from the one side that holds it.
     pub fn from_cli(
         validate: &crate::tree::ValidateArgs,
         query: &crate::tree::ValidateQueryArgs,
-        hand_down: HandDown,
     ) -> Self {
-        let pick = |handed: bool, group: &Vec<String>, own: &Vec<String>| {
-            if handed { group } else { own }.clone()
-        };
+        let group = Typed::of(validate);
+        let (select, strictness) = (&query.select, &query.strictness);
         Self {
             platform: query.platform.as_ref().map(|platform| platform.0.clone()),
             strategies: query.strategy.clone(),
@@ -121,19 +193,24 @@ impl Args {
             wide: query.wide,
             live: query.live,
             changed: query.changed,
-            files: pick(hand_down.file, &validate.file, &query.file),
-            uuids: pick(hand_down.uuid, &validate.uuid, &query.uuid),
-            strict: if hand_down.strict {
-                validate.strict
+            files: if group.file {
+                &validate.select.file
             } else {
-                query.strict
-            },
-            queries: if hand_down.queries {
-                validate.queries
-            } else {
-                query.queries
+                &select.file
             }
-            .map(QueriesMode::from),
+            .clone(),
+            uuids: if group.uuid {
+                &validate.select.uuid
+            } else {
+                &select.uuid
+            }
+            .clone(),
+            strict: validate.strictness.strict || strictness.strict,
+            queries: validate
+                .strictness
+                .queries
+                .or(strictness.queries)
+                .map(QueriesMode::from),
             check_timeout: query.check_timeout.clone(),
         }
     }
@@ -1359,22 +1436,18 @@ mod from_cli_tests {
     use clap::Parser as _;
     use opentide_workspace::validate::QueriesMode;
 
-    use super::{Args, HandDown};
+    use super::{Args, refusal};
     use crate::tree::{Cli, RootCommand, ValidateCommand};
 
-    /// `args` as `Args::from_cli` reads them; `group` names the options
-    /// typed on `validate` itself, before `query`.
-    fn parse(words: &[&str], group: &[&str]) -> Args {
-        let hand_down = HandDown {
-            file: group.contains(&"file"),
-            uuid: group.contains(&"uuid"),
-            strict: group.contains(&"strict"),
-            queries: group.contains(&"queries"),
-        };
+    /// `validate … query …`: its refusal, else its run.
+    fn parse(words: &[&str]) -> Result<Args, String> {
         let words = std::iter::once("opentide").chain(words.iter().copied());
         match Cli::try_parse_from(words).map(|cli| cli.command) {
             Ok(Some(RootCommand::Validate(validate))) => match &validate.command {
-                Some(ValidateCommand::Query(query)) => Args::from_cli(&validate, query, hand_down),
+                Some(ValidateCommand::Query(query)) => match refusal(&validate, query) {
+                    Some(problem) => Err(problem),
+                    None => Ok(Args::from_cli(&validate, query)),
+                },
                 None => panic!("not validate query"),
             },
             other => panic!("not a validate command: {other:?}"),
@@ -1383,18 +1456,16 @@ mod from_cli_tests {
 
     #[test]
     fn an_option_typed_before_query_is_querys() {
-        let args = parse(
-            &[
-                "validate",
-                "--strict",
-                "--queries",
-                "warn",
-                "--file",
-                "a.kql",
-                "query",
-            ],
-            &["strict", "queries", "file"],
-        );
+        let args = parse(&[
+            "validate",
+            "--strict",
+            "--queries",
+            "warn",
+            "--file",
+            "a.kql",
+            "query",
+        ])
+        .unwrap_or_else(|problem| panic!("{problem}"));
         assert!(args.strict);
         assert_eq!(args.queries, Some(QueriesMode::Warn));
         assert_eq!(args.files, ["a.kql"]);
@@ -1402,25 +1473,68 @@ mod from_cli_tests {
 
     #[test]
     fn query_takes_its_own_options_when_the_group_was_not_given_them() {
-        let args = parse(
-            &[
-                "validate",
-                "query",
-                "--strict",
-                "--uuid",
-                "u",
-                "--platform",
-                "splunk",
-                "--live",
-                "--check-timeout",
-                "9",
-            ],
-            &[],
-        );
+        let args = parse(&[
+            "validate",
+            "query",
+            "--strict",
+            "--uuid",
+            "u",
+            "--platform",
+            "splunk",
+            "--live",
+            "--check-timeout",
+            "9",
+        ])
+        .unwrap_or_else(|problem| panic!("{problem}"));
         assert!(args.strict && args.live);
         assert_eq!(args.uuids, ["u"]);
         assert_eq!(args.platform.as_deref(), Some("splunk"));
         assert_eq!(args.check_timeout.as_deref(), Some("9"));
         assert_eq!(args.queries, None);
+    }
+
+    #[test]
+    fn validates_own_options_are_refused_in_its_order() {
+        let problem = parse(&[
+            "validate", "--output", "x", "--fix", "--check", "cve", "query",
+        ])
+        .err()
+        .unwrap_or_default();
+        assert_eq!(
+            problem,
+            "--check, --fix, --output configure `opentide validate` itself and would be \
+             ignored by `opentide validate query`."
+        );
+    }
+
+    /// `--format` has a default: a report format other than it is refused,
+    /// the default itself asks for nothing.
+    #[test]
+    fn a_format_before_query_is_refused_unless_it_is_the_default() {
+        let problem = parse(&["validate", "--format", "sarif", "query"])
+            .err()
+            .unwrap_or_default();
+        assert!(problem.starts_with("--format configures"), "{problem}");
+        assert!(parse(&["validate", "--format", "text", "query"]).is_ok());
+    }
+
+    #[test]
+    fn a_shared_option_on_both_sides_is_refused() {
+        let problem = parse(&[
+            "validate", "--strict", "--uuid", "a", "query", "--uuid", "b", "--strict",
+        ])
+        .err()
+        .unwrap_or_default();
+        assert!(
+            problem.starts_with("Pass --uuid, --strict once, before or after `query`"),
+            "{problem}"
+        );
+    }
+
+    /// A global option is the root's, wherever it is typed: never refused.
+    #[test]
+    fn a_global_option_typed_between_validate_and_query_is_not_refused() {
+        assert!(parse(&["validate", "--json", "query"]).is_ok());
+        assert!(parse(&["validate", "--quiet", "query", "--strict"]).is_ok());
     }
 }
