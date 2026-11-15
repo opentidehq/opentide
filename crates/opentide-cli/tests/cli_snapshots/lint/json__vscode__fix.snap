@@ -1,0 +1,98 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lint/json/vscode/fix
+---
+args: opentide --json lint --fix
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "checks": [
+    "filenames",
+    "metadata",
+    "recommended",
+    "placeholders",
+    "queries"
+  ],
+  "command": "lint",
+  "count": 3,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "findings": [
+    {
+      "check": "metadata",
+      "code": "metadata_recommended",
+      "column": 1,
+      "end_column": 9,
+      "end_line": 2,
+      "explain": "opentide explain metadata_recommended",
+      "field_path": [
+        "metadata"
+      ],
+      "fix": null,
+      "help": "add the missing keys under metadata",
+      "line": 2,
+      "message": "Recommended metadata missing: author, organisation",
+      "path": "objects/objectives/detect-lsass-access.yaml",
+      "severity": "info",
+      "uuid": "04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f",
+      "yaml_line": 1
+    },
+    {
+      "check": "metadata",
+      "code": "metadata_recommended",
+      "column": 1,
+      "end_column": 9,
+      "end_line": 2,
+      "explain": "opentide explain metadata_recommended",
+      "field_path": [
+        "metadata"
+      ],
+      "fix": null,
+      "help": "add the missing keys under metadata",
+      "line": 2,
+      "message": "Recommended metadata missing: author, organisation",
+      "path": "objects/rules/suspicious-lsass-access.yaml",
+      "severity": "info",
+      "uuid": "ff8bf67e-64dc-460d-b5df-48db643f3560",
+      "yaml_line": 1
+    },
+    {
+      "check": "recommended",
+      "code": "recommended_field_missing",
+      "column": 1,
+      "end_column": 2,
+      "end_line": 1,
+      "explain": "opentide explain recommended_field_missing",
+      "field_path": [
+        "response"
+      ],
+      "fix": null,
+      "help": null,
+      "line": 1,
+      "message": "Recommended field missing: response",
+      "path": "objects/rules/suspicious-lsass-access.yaml",
+      "severity": "info",
+      "uuid": "ff8bf67e-64dc-460d-b5df-48db643f3560",
+      "yaml_line": 0
+    }
+  ],
+  "fixed": 0,
+  "message": "Catalogue lint found issues",
+  "next_actions": [],
+  "ok": true,
+  "path": "<WS>",
+  "schema_version": 1,
+  "status": "issues",
+  "summary": {
+    "errors": 0,
+    "files": 2,
+    "findings": 3,
+    "fixed": 0,
+    "notes": 3,
+    "warnings": 0
+  }
+}
+
+━━━ stderr · empty

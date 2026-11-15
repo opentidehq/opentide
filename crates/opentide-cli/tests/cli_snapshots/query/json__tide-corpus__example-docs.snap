@@ -1,0 +1,30 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/json/tide-corpus/example-docs
+---
+args: opentide --json query --platform sentinel 'SecurityEvent | where EventID == 4688 | take 20'
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "query",
+  "duration_ms": 0,
+  "error": "sentinel has no tenants configured: add a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--tenant",
+    "code": "usage_invalid_value",
+    "crash_log": null,
+    "message": "sentinel has no tenants configured: add a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml",
+    "suggestion": null
+  },
+  "message": "sentinel has no tenants configured: add a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml",
+  "next_actions": [],
+  "ok": false,
+  "platform": "sentinel",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

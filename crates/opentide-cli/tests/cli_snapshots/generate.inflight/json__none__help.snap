@@ -1,0 +1,23 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.inflight/json/none/help
+---
+args: opentide --json generate inflight --help
+exit: 0
+
+━━━ stdout
+Inflight preview shard generation and prune
+
+Usage: opentide generate inflight [COMMAND]
+
+Commands:
+  prune  Remove inflight shards already on the default branch
+
+Options:
+      --help
+          Print help
+
+Examples:
+  $ opentide generate inflight
+
+━━━ stderr · empty

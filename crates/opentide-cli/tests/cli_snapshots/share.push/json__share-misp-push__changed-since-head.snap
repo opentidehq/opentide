@@ -1,0 +1,26 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.push/json/share-misp-push/changed-since-head
+---
+args: opentide --json share push --changed --since HEAD
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share push",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "No changed objects to share",
+  "next_actions": [],
+  "ok": true,
+  "records": [],
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {},
+  "warnings": [
+    "[[misp]] block \"misp-lab\" api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED]."
+  ]
+}
+
+━━━ stderr · empty

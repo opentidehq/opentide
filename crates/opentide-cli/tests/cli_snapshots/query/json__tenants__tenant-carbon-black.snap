@@ -1,0 +1,120 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/json/tenants/tenant-carbon-black
+---
+args: opentide --json query --platform carbon_black_cloud --from 2099-01-01T00:00:00Z --to 2099-01-01T01:00:00Z --limit 2 process_name:cmd.exe
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "query",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "limit": 2,
+  "message": "2 rows from 1 carbon_black_cloud tenant (limited to 2 per tenant)",
+  "next_actions": [],
+  "ok": true,
+  "platform": "carbon_black_cloud",
+  "query": "process_name:cmd.exe",
+  "results": [
+    {
+      "columns": [
+        {
+          "name": "process_name",
+          "type": null
+        },
+        {
+          "name": "process_pid",
+          "type": null
+        },
+        {
+          "name": "device_name",
+          "type": null
+        },
+        {
+          "name": "device_timestamp",
+          "type": null
+        },
+        {
+          "name": "process_guid",
+          "type": null
+        },
+        {
+          "name": "backend_timestamp",
+          "type": null
+        },
+        {
+          "name": "process_hash",
+          "type": null
+        },
+        {
+          "name": "parent.name",
+          "type": null
+        },
+        {
+          "name": "parent.pid",
+          "type": null
+        }
+      ],
+      "elapsed_ms": 0,
+      "language": "lucene",
+      "partial": false,
+      "row_count": 2,
+      "rows": [
+        {
+          "backend_timestamp": "2026-10-27T07:51:01.000Z",
+          "device_name": "ws-1",
+          "device_timestamp": "2026-10-27T07:51:00.000Z",
+          "parent.name": "explorer.exe",
+          "parent.pid": 101,
+          "process_guid": "ORGKEY01-00000001-00000fa0-00000000-1dc0000000000000",
+          "process_hash": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ],
+          "process_name": "c:\\windows\\system32\\cmd.exe",
+          "process_pid": [
+            4001
+          ]
+        },
+        {
+          "backend_timestamp": "2026-10-27T07:52:01.000Z",
+          "device_name": "ws-2",
+          "device_timestamp": "2026-10-27T07:52:00.000Z",
+          "parent.name": "explorer.exe",
+          "parent.pid": 102,
+          "process_guid": "ORGKEY01-00000002-00000fa0-00000000-1dc0000000000000",
+          "process_hash": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ],
+          "process_name": "c:\\windows\\system32\\cmd.exe",
+          "process_pid": [
+            4002
+          ]
+        }
+      ],
+      "status": "ok",
+      "tenant": "lab",
+      "truncated": true,
+      "warnings": []
+    }
+  ],
+  "row_count": 2,
+  "schema_version": 1,
+  "source": "query",
+  "status": "completed",
+  "summary": {
+    "failed": 0,
+    "rows": 2,
+    "tenants": 1
+  },
+  "tenants": [
+    "lab"
+  ],
+  "window": {
+    "from": "2099-01-01T00:00:00.000Z",
+    "to": "2099-01-01T01:00:00.000Z"
+  }
+}
+
+━━━ stderr · empty
