@@ -509,7 +509,7 @@ impl Shard {
 }
 
 /// The shard's platforms and tenants in the file's order (serde_json's map
-/// sorts its keys; Python's dictionary keeps them as written).
+/// sorts its keys; a shard keeps them as written).
 fn ordered_platforms(path: &Path) -> Option<IndexMap<String, IndexMap<String, serde_json::Value>>> {
     #[derive(serde::Deserialize)]
     struct Ordered {
@@ -685,7 +685,7 @@ mod tests {
 
     #[test]
     fn a_patterned_platforms_id_is_text_of_its_shape() {
-        // The oracle refuses a number outright, before its sign.
+        // A number is refused outright, whatever its sign.
         for number in [12, -1] {
             let error = normalise_external_id(PATTERNED, &ExternalId::Int(number)).unwrap_err();
             assert_eq!(error.code, "external_id_shape");
