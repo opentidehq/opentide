@@ -210,7 +210,16 @@ mod tests {
                 "NO_COLOR is set",
             ),
             (false, &[("NO_COLOR", ""), ("TERM", "dumb")], "TERM is dumb"),
-            (false, &[("FORCE_COLOR", "0")], "FORCE_COLOR is 0"),
+            (
+                false,
+                &[("FORCE_COLOR", "0")],
+                "FORCE_COLOR turns colour off",
+            ),
+            (
+                false,
+                &[("FORCE_COLOR", "false")],
+                "FORCE_COLOR turns colour off",
+            ),
             (
                 false,
                 &[("GITLAB_CI", "true")],

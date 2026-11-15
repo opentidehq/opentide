@@ -232,7 +232,7 @@ One new runtime dependency, `textual`, for `opentide tui`.
 | questionary (kept) | Wizard prompts, restyled to the brand |
 | orjson (kept) | JSON output |
 | stdlib | `difflib` (did you mean), `importlib` (lazy loading) |
-| syrupy, pexpect (dev, kept) | Snapshot tests of every renderer at fixed width; the wizard on a real PTY |
+| insta, portable-pty (Rust dev-dependencies) | Snapshot tests of every renderer at fixed width (`crates/opentide-cli/tests/render.rs`); the wizards on a real pseudo-terminal, ConPTY on Windows (`crates/opentide-cli/tests/setup_wizard.rs`) |
 | textual (new) | `opentide tui` only, imported lazily so it never affects start-up |
 | Analysis engine (new, #332) | The Rust analysis engine and language server, compiled from `bindings/python/` into the package as `opentide._native`; imported only through `opentide.analysis` when a command needs it, so start-up and `--help` never load it |
 | Not added | `agent-detector` (a dozen env checks), `sarif-om` (SARIF is a small dict), `trogon` (early-stage; the TUI is built on Textual directly), `watchfiles` (`--watch` polls modification times) |
