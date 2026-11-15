@@ -165,13 +165,27 @@ fn an_injected_slowdown_fails_the_budget_check_and_the_same_run_without_it_passe
         String::from_utf8_lossy(&output.stderr)
     );
 
-    // 300 ms more on a command of a few milliseconds: far over 10% and the
-    // 30 ms noise floor.
+    // The slowdown is a function of the baseline, not a constant: the
+    // baseline is this machine's own measurement, so on a loaded one it can
+    // be seconds, and a fixed 300 ms on top of a run that happened to be
+    // fast would pass the check. Twice the baseline median plus 300 ms puts
+    // the slowed median over `baseline + max(10% of baseline, noise floor)`
+    // whatever the baseline was and however fast the slowed run's own work
+    // is, because the sleep alone is inside the timed window.
+    let baseline_median = report["results"][0]["median_s"].as_f64().unwrap();
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a test duration of seconds, in whole milliseconds"
+    )]
+    let slowdown_ms = (baseline_median * 2000.0).ceil() as u64 + 300;
     let slowed = dir.join("slowed.json");
-    let report = bench(&opentide, &slowed, Some(300));
+    let report = bench(&opentide, &slowed, Some(slowdown_ms));
     let median = report["results"][0]["median_s"].as_f64().unwrap();
+    #[expect(clippy::cast_precision_loss, reason = "a test duration")]
+    let slept = slowdown_ms as f64 / 1000.0;
     assert!(
-        median >= 0.3,
+        median >= slept,
         "the injected sleep is not in the timed window: {median}"
     );
     assert!(
