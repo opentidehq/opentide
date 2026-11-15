@@ -11,55 +11,57 @@ SOURCE_FILE@0..74
     EQ@6..7 "="
     WHITESPACE@7..8 " "
     TABULAR_EXPRESSION@8..48
-      DATATABLE_EXPRESSION@8..48
-        DATATABLE_KW@8..17 "datatable"
-        WHITESPACE@17..18 " "
-        L_PAREN@18..19 "("
-        DATATABLE_COLUMN@19..28
-          IDENT@19..20 "a"
-          COLON@20..21 ":"
-          WHITESPACE@21..22 " "
-          TYPE@22..28
-            IDENT@22..28 "string"
-        COMMA@28..29 ","
-        WHITESPACE@29..30 " "
-        DATATABLE_COLUMN@30..36
-          IDENT@30..31 "b"
-          COLON@31..32 ":"
-          WHITESPACE@32..33 " "
-          TYPE@33..36
-            IDENT@33..36 "int"
-        R_PAREN@36..37 ")"
-        WHITESPACE@37..38 " "
-        L_BRACKET@38..39 "["
-        LITERAL@39..42
-          STRING@39..42 "\"x\""
-        COMMA@42..43 ","
-        WHITESPACE@43..44 " "
-        LITERAL@44..45
-          NUMBER@44..45 "1"
-        COMMA@45..46 ","
-        WHITESPACE@46..47 " "
-        R_BRACKET@47..48 "]"
+      TABULAR_SOURCE@8..48
+        DATATABLE_EXPRESSION@8..48
+          DATATABLE_KW@8..17 "datatable"
+          WHITESPACE@17..18 " "
+          L_PAREN@18..19 "("
+          DATATABLE_COLUMN@19..28
+            IDENT@19..20 "a"
+            COLON@20..21 ":"
+            WHITESPACE@21..22 " "
+            TYPE@22..28
+              IDENT@22..28 "string"
+          COMMA@28..29 ","
+          WHITESPACE@29..30 " "
+          DATATABLE_COLUMN@30..36
+            IDENT@30..31 "b"
+            COLON@31..32 ":"
+            WHITESPACE@32..33 " "
+            TYPE@33..36
+              IDENT@33..36 "int"
+          R_PAREN@36..37 ")"
+          WHITESPACE@37..38 " "
+          L_BRACKET@38..39 "["
+          LITERAL@39..42
+            STRING@39..42 "\"x\""
+          COMMA@42..43 ","
+          WHITESPACE@43..44 " "
+          LITERAL@44..45
+            NUMBER@44..45 "1"
+          COMMA@45..46 ","
+          WHITESPACE@46..47 " "
+          R_BRACKET@47..48 "]"
     SEMICOLON@48..49 ";"
   WHITESPACE@49..50 "\n"
   QUERY@50..74
     TABULAR_EXPRESSION@50..74
-      PRINT_OPERATOR@50..64
-        PRINT_KW@50..55 "print"
-        WHITESPACE@55..56 " "
-        ASSIGNMENT@56..61
-          NAME_REF@56..57
-            IDENT@56..57 "a"
-          WHITESPACE@57..58 " "
-          EQ@58..59 "="
-          WHITESPACE@59..60 " "
-          LITERAL@60..61
-            NUMBER@60..61 "1"
-        COMMA@61..62 ","
-        WHITESPACE@62..63 " "
-        LITERAL@63..64
-          NUMBER@63..64 "2"
+      TABULAR_SOURCE@50..64
+        PRINT_OPERATOR@50..64
+          PRINT_KW@50..55 "print"
+          WHITESPACE@55..56 " "
+          ASSIGNMENT@56..61
+            NAME_REF@56..57
+              IDENT@56..57 "a"
+            WHITESPACE@57..58 " "
+            EQ@58..59 "="
+            WHITESPACE@59..60 " "
+            LITERAL@60..61
+              NUMBER@60..61 "1"
+          COMMA@61..62 ","
+          WHITESPACE@62..63 " "
+          LITERAL@63..64
+            NUMBER@63..64 "2"
       WHITESPACE@64..65 " "
       PIPE@65..66 "|"
       WHITESPACE@66..67 " "

@@ -441,6 +441,7 @@ fn read_caps(caps: &lsp::ClientCapabilities, raw: &Value) -> crate::session::Cli
     }
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn initialize(
     session: &mut Session,
     params: lsp::InitializeParams,

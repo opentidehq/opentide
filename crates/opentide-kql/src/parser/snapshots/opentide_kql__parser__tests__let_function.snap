@@ -74,8 +74,9 @@ SOURCE_FILE@0..91
         SEMICOLON@68..69 ";"
       WHITESPACE@69..70 " "
       TABULAR_EXPRESSION@70..80
-        TABLE_REF@70..71
-          IDENT@70..71 "T"
+        TABULAR_SOURCE@70..71
+          TABLE_REF@70..71
+            IDENT@70..71 "T"
         WHITESPACE@71..72 " "
         PIPE@72..73 "|"
         WHITESPACE@73..74 " "
@@ -89,13 +90,14 @@ SOURCE_FILE@0..91
   WHITESPACE@83..84 "\n"
   QUERY@84..91
     TABULAR_EXPRESSION@84..91
-      FUNCTION_CALL@84..91
-        IDENT@84..85 "f"
-        L_PAREN@85..86 "("
-        LITERAL@86..87
-          NUMBER@86..87 "1"
-        COMMA@87..88 ","
-        WHITESPACE@88..89 " "
-        LITERAL@89..90
-          NUMBER@89..90 "2"
-        R_PAREN@90..91 ")"
+      TABULAR_SOURCE@84..91
+        FUNCTION_CALL@84..91
+          IDENT@84..85 "f"
+          L_PAREN@85..86 "("
+          LITERAL@86..87
+            NUMBER@86..87 "1"
+          COMMA@87..88 ","
+          WHITESPACE@88..89 " "
+          LITERAL@89..90
+            NUMBER@89..90 "2"
+          R_PAREN@90..91 ")"

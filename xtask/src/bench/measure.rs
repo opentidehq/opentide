@@ -471,8 +471,28 @@ pub fn reap_by(mut child: Child, deadline: Instant) -> Result<(u64, Option<i32>)
 mod tests {
     use super::*;
 
-    fn scratch(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("xtask-bench-measure-{name}-{}", std::process::id()))
+    /// A temporary directory removed with the test, read as its path.
+    struct TestDir(tempfile::TempDir);
+
+    impl std::ops::Deref for TestDir {
+        type Target = Path;
+
+        fn deref(&self) -> &Path {
+            self.0.path()
+        }
+    }
+
+    #[expect(
+        clippy::unwrap_used,
+        reason = "a test helper: this module is cfg(all(test, unix)), outside clippy's test exemption"
+    )]
+    fn scratch(name: &str) -> TestDir {
+        TestDir(
+            tempfile::Builder::new()
+                .prefix(&format!("xtask-bench-measure-{name}-"))
+                .tempdir()
+                .unwrap(),
+        )
     }
 
     #[test]
@@ -528,7 +548,6 @@ mod tests {
         assert!(measured.sample.wall_s > 0.0);
         assert!(measured.sample.peak_rss_bytes > 0, "wait4 reported no RSS");
         assert_eq!(run_dir.read_stdout().unwrap(), "hi\n");
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     // Reads /proc (VmHWM, clear_refs) and Linux's ru_maxrss semantics.
@@ -553,7 +572,6 @@ mod tests {
         .unwrap();
         let big = run(&mut big, None).unwrap().sample.peak_rss_bytes;
         assert!(big > mib * 1024 * 1024, "big child: {big} bytes, own {own}");
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     // Reads /proc (VmHWM, clear_refs) and Linux's ru_maxrss semantics.
@@ -577,7 +595,6 @@ mod tests {
         assert!(distinct_from_own(10, Some(5)).is_ok());
         assert!(distinct_from_own(5, Some(5)).is_err());
         assert!(distinct_from_own(5, None).is_ok());
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     // Reads /proc (VmHWM, clear_refs) and Linux's ru_maxrss semantics.
@@ -607,7 +624,6 @@ mod tests {
             .to_string();
         assert!(error.contains("does not exceed xtask's own"), "{error}");
         drop(late);
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     // Reads /proc (VmHWM, clear_refs) and Linux's ru_maxrss semantics.
@@ -654,7 +670,6 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("does not exceed xtask's own"), "{error}");
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     // Reads /proc (VmHWM, clear_refs) and Linux's ru_maxrss semantics.
@@ -695,7 +710,6 @@ mod tests {
             "the child reported {peak} bytes"
         );
         distinct_from_own(peak, spawned.own_peak_rss).unwrap();
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -711,7 +725,6 @@ mod tests {
         );
         assert!(env.contains(&format!("HTTPS_PROXY={DEAD_PROXY}")), "{env}");
         assert!(!env.contains("CARGO_"), "{env}");
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -728,7 +741,6 @@ mod tests {
         .unwrap();
         let measured = run(&mut command, Some(Duration::from_millis(300))).unwrap();
         assert!(measured.sample.wall_s >= 0.6, "{}", measured.sample.wall_s);
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     // Reads /proc (VmHWM, clear_refs) and Linux's ru_maxrss semantics.
@@ -765,7 +777,6 @@ mod tests {
             "the child reported {peak} bytes: the parent's freed peak"
         );
         distinct_from_own(peak, measured.own_peak_rss).unwrap();
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -783,7 +794,6 @@ mod tests {
             "{:?}",
             started.elapsed()
         );
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -801,6 +811,5 @@ mod tests {
             std::fs::read_to_string(second.workspace.join("objects/rules/a.yaml")).unwrap(),
             "a: 1\n"
         );
-        std::fs::remove_dir_all(root).unwrap();
     }
 }

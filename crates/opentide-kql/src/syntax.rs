@@ -167,6 +167,7 @@ pub enum SyntaxKind {
     QUERY,
     CONTROL_COMMAND,
     TABULAR_EXPRESSION,
+    TABULAR_SOURCE,
     TABLE_REF,
     PAREN_TABULAR,
     SEARCH_SOURCE,
@@ -192,6 +193,7 @@ pub enum SyntaxKind {
     EXTEND_OPERATOR,
     SUMMARIZE_OPERATOR,
     ASSIGNMENT,
+    TUPLE_ASSIGNMENT,
     NAME_TUPLE,
     JOIN_OPERATOR,
     LOOKUP_OPERATOR,
@@ -212,6 +214,7 @@ pub enum SyntaxKind {
     MV_APPLY_OPERATOR,
     MAKE_SERIES_OPERATOR,
     SERIES_AGGREGATE,
+    SERIES_DEFAULT,
     EVALUATE_OPERATOR,
     DISTINCT_OPERATOR,
     RENDER_OPERATOR,
@@ -219,6 +222,9 @@ pub enum SyntaxKind {
     RANGE_OPERATOR,
     TOP_NESTED_OPERATOR,
     TOP_NESTED_CLAUSE,
+    TOP_NESTED_OF,
+    TOP_NESTED_OTHERS,
+    TOP_NESTED_BY,
     SAMPLE_DISTINCT_OPERATOR,
     FORK_OPERATOR,
     FORK_BRANCH,
@@ -282,19 +288,20 @@ const ALL: &[SyntaxKind] = &[
     K::GRAPH_MARK_COMPONENTS_KW, K::TOP_HITTERS_KW, K::AND_KW, K::OR_KW, K::NOT_KW, K::MATCHES_KW,
     K::REGEX_KW, K::ERROR, K::SOURCE_FILE, K::LET_STATEMENT, K::FUNCTION_DEFINITION, K::PARAMETER,
     K::TYPE, K::TABLE_TYPE, K::TABLE_COLUMN, K::QUERY, K::CONTROL_COMMAND, K::TABULAR_EXPRESSION,
+    K::TABULAR_SOURCE,
     K::TABLE_REF, K::PAREN_TABULAR, K::SEARCH_SOURCE, K::MATERIALIZE_EXPRESSION,
     K::DATATABLE_EXPRESSION, K::DATATABLE_COLUMN, K::EXTERNALDATA_EXPRESSION, K::OPERATOR_OPTION,
     K::OPTION_VALUE, K::MV_OPTION, K::HINT_OPTION, K::SUBQUERY, K::WHERE_OPERATOR,
     K::FILTER_OPERATOR, K::PROJECT_OPERATOR, K::PROJECT_AWAY_OPERATOR, K::PROJECT_KEEP_OPERATOR,
     K::PROJECT_REORDER_OPERATOR, K::REORDER_ITEM, K::PROJECT_RENAME_OPERATOR, K::RENAME_ITEM,
-    K::COLUMN_PATTERN, K::EXTEND_OPERATOR, K::SUMMARIZE_OPERATOR, K::ASSIGNMENT, K::NAME_TUPLE,
+    K::COLUMN_PATTERN, K::EXTEND_OPERATOR, K::SUMMARIZE_OPERATOR, K::ASSIGNMENT, K::TUPLE_ASSIGNMENT, K::NAME_TUPLE,
     K::JOIN_OPERATOR, K::LOOKUP_OPERATOR, K::UNION_OPERATOR, K::PARSE_OPERATOR,
     K::PARSE_WHERE_OPERATOR, K::PARSE_PIECE, K::PARSE_COLUMN, K::PARSE_KV_OPERATOR,
     K::TAKE_OPERATOR, K::LIMIT_OPERATOR, K::TOP_OPERATOR, K::COUNT_OPERATOR, K::SORT_OPERATOR,
     K::SORT_ITEM, K::MV_EXPAND_OPERATOR, K::MV_EXPAND_ITEM, K::MV_APPLY_OPERATOR,
-    K::MAKE_SERIES_OPERATOR, K::SERIES_AGGREGATE, K::EVALUATE_OPERATOR, K::DISTINCT_OPERATOR,
+    K::MAKE_SERIES_OPERATOR, K::SERIES_AGGREGATE, K::SERIES_DEFAULT, K::EVALUATE_OPERATOR, K::DISTINCT_OPERATOR,
     K::RENDER_OPERATOR, K::PRINT_OPERATOR, K::RANGE_OPERATOR, K::TOP_NESTED_OPERATOR,
-    K::TOP_NESTED_CLAUSE, K::SAMPLE_DISTINCT_OPERATOR, K::FORK_OPERATOR, K::FORK_BRANCH,
+    K::TOP_NESTED_CLAUSE, K::TOP_NESTED_OF, K::TOP_NESTED_OTHERS, K::TOP_NESTED_BY, K::SAMPLE_DISTINCT_OPERATOR, K::FORK_OPERATOR, K::FORK_BRANCH,
     K::FACET_OPERATOR, K::PARTITION_OPERATOR, K::SCAN_OPERATOR, K::SCAN_STEP, K::KEYWORD_OPERATOR,
     K::UNKNOWN_OPERATOR, K::OR_EXPR, K::AND_EXPR, K::NOT_EXPR, K::COMPARISON_EXPR, K::IN_EXPR,
     K::BETWEEN_EXPR, K::ADDITIVE_EXPR, K::MULTIPLICATIVE_EXPR, K::UNARY_EXPR, K::EXPRESSION_LIST,
@@ -582,7 +589,7 @@ macro_rules! T {
     [with] => { $crate::syntax::SyntaxKind::WITH_KW };
     [with_itemindex] => { $crate::syntax::SyntaxKind::WITH_ITEMINDEX_KW };
     ['{'] => { $crate::syntax::SyntaxKind::L_BRACE };
-    ['|'] => { $crate::syntax::SyntaxKind::PIPE };
+    [|] => { $crate::syntax::SyntaxKind::PIPE };
     ['}'] => { $crate::syntax::SyntaxKind::R_BRACE };
 }
 
@@ -667,10 +674,12 @@ mod tests {
             }
         }
         for (name, rule) in &rules {
-            let choice = rule.split('|').all(|alt| {
-                let alt = alt.trim();
-                !alt.is_empty() && alt.chars().all(|c| c.is_ascii_alphanumeric())
-            }) && rule.chars().any(char::is_uppercase);
+            let choice = rule.contains('|')
+                && rule.split('|').all(|alt| {
+                    let alt = alt.trim();
+                    !alt.is_empty() && alt.chars().all(|c| c.is_ascii_alphanumeric())
+                })
+                && rule.chars().any(char::is_uppercase);
             if !choice {
                 nodes.insert(upper_snake(name));
             }

@@ -5,47 +5,48 @@ expression: "show(\"externaldata (c: string, d: dynamic,) [@\\\"https://e/x.csv\
 SOURCE_FILE@0..94
   QUERY@0..94
     TABULAR_EXPRESSION@0..94
-      EXTERNALDATA_EXPRESSION@0..85
-        EXTERNALDATA_KW@0..12 "externaldata"
-        WHITESPACE@12..13 " "
-        L_PAREN@13..14 "("
-        DATATABLE_COLUMN@14..23
-          IDENT@14..15 "c"
-          COLON@15..16 ":"
-          WHITESPACE@16..17 " "
-          TYPE@17..23
-            IDENT@17..23 "string"
-        COMMA@23..24 ","
-        WHITESPACE@24..25 " "
-        DATATABLE_COLUMN@25..35
-          IDENT@25..26 "d"
-          COLON@26..27 ":"
-          WHITESPACE@27..28 " "
-          TYPE@28..35
-            DYNAMIC_KW@28..35 "dynamic"
-        COMMA@35..36 ","
-        R_PAREN@36..37 ")"
-        WHITESPACE@37..38 " "
-        L_BRACKET@38..39 "["
-        LITERAL@39..57
-          STRING@39..57 "@\"https://e/x.csv\""
-        COMMA@57..58 ","
-        WHITESPACE@58..59 " "
-        LITERAL@59..62
-          STRING@59..62 "\"b\""
-        R_BRACKET@62..63 "]"
-        WHITESPACE@63..64 " "
-        WITH_KW@64..68 "with"
-        WHITESPACE@68..69 " "
-        L_PAREN@69..70 "("
-        OPERATOR_OPTION@70..84
-          IDENT@70..76 "format"
-          WHITESPACE@76..77 " "
-          EQ@77..78 "="
-          WHITESPACE@78..79 " "
-          OPTION_VALUE@79..84
-            STRING@79..84 "\"csv\""
-        R_PAREN@84..85 ")"
+      TABULAR_SOURCE@0..85
+        EXTERNALDATA_EXPRESSION@0..85
+          EXTERNALDATA_KW@0..12 "externaldata"
+          WHITESPACE@12..13 " "
+          L_PAREN@13..14 "("
+          DATATABLE_COLUMN@14..23
+            IDENT@14..15 "c"
+            COLON@15..16 ":"
+            WHITESPACE@16..17 " "
+            TYPE@17..23
+              IDENT@17..23 "string"
+          COMMA@23..24 ","
+          WHITESPACE@24..25 " "
+          DATATABLE_COLUMN@25..35
+            IDENT@25..26 "d"
+            COLON@26..27 ":"
+            WHITESPACE@27..28 " "
+            TYPE@28..35
+              DYNAMIC_KW@28..35 "dynamic"
+          COMMA@35..36 ","
+          R_PAREN@36..37 ")"
+          WHITESPACE@37..38 " "
+          L_BRACKET@38..39 "["
+          LITERAL@39..57
+            STRING@39..57 "@\"https://e/x.csv\""
+          COMMA@57..58 ","
+          WHITESPACE@58..59 " "
+          LITERAL@59..62
+            STRING@59..62 "\"b\""
+          R_BRACKET@62..63 "]"
+          WHITESPACE@63..64 " "
+          WITH_KW@64..68 "with"
+          WHITESPACE@68..69 " "
+          L_PAREN@69..70 "("
+          OPERATOR_OPTION@70..84
+            IDENT@70..76 "format"
+            WHITESPACE@76..77 " "
+            EQ@77..78 "="
+            WHITESPACE@78..79 " "
+            OPTION_VALUE@79..84
+              STRING@79..84 "\"csv\""
+          R_PAREN@84..85 ")"
       WHITESPACE@85..86 " "
       PIPE@86..87 "|"
       WHITESPACE@87..88 " "

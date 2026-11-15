@@ -5,8 +5,9 @@ expression: "show(\"T | make-series c = count() on t\")"
 SOURCE_FILE@0..32
   QUERY@0..32
     TABULAR_EXPRESSION@0..32
-      TABLE_REF@0..1
-        IDENT@0..1 "T"
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
       WHITESPACE@1..2 " "
       PIPE@2..3 "|"
       WHITESPACE@3..4 " "

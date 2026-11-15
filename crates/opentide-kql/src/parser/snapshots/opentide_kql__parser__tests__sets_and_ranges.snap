@@ -5,8 +5,9 @@ expression: "show(\"T | where a in (1, 2) and b !in~ (\\\"x\\\") and c between (
 SOURCE_FILE@0..111
   QUERY@0..111
     TABULAR_EXPRESSION@0..111
-      TABLE_REF@0..1
-        IDENT@0..1 "T"
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
       WHITESPACE@1..2 " "
       PIPE@2..3 "|"
       WHITESPACE@3..4 " "
@@ -87,8 +88,9 @@ SOURCE_FILE@0..111
             EXPRESSION_LIST@95..111
               L_PAREN@95..96 "("
               TABULAR_EXPRESSION@96..110
-                TABLE_REF@96..98
-                  IDENT@96..98 "T2"
+                TABULAR_SOURCE@96..98
+                  TABLE_REF@96..98
+                    IDENT@96..98 "T2"
                 WHITESPACE@98..99 " "
                 PIPE@99..100 "|"
                 WHITESPACE@100..101 " "

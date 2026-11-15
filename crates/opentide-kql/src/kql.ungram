@@ -46,7 +46,10 @@ ControlCommand = '.' name:'ident' 'ident'*
 
 // ---------------------------------------------------------------- tabular
 
-TabularExpression = source:TabularPrimary ('|' operator:TabularOperator)*
+// The source is wrapped (TabularSource) because a union, a range and a print
+// are both a source and an operator: the typed AST must tell them apart.
+TabularExpression = TabularSource ('|' TabularOperator)*
+TabularSource = TabularPrimary
 
 TabularPrimary =
   TableRef
@@ -79,7 +82,7 @@ DatatableColumn = name:'ident' ':' Type
 ExternaldataExpression =
   name:('externaldata' | 'external_data') OperatorOption*
   '(' DatatableColumn (',' DatatableColumn)* ','? ')'
-  '[' uris:Expr (',' uris:Expr)* ','? ']'
+  '[' Expr (',' Expr)* ','? ']'
   ('with' '(' OperatorOption (',' OperatorOption)* ')')?
 
 // `kind=inner`, `isfuzzy=true`, `hint.strategy=shuffle`.
@@ -129,18 +132,17 @@ TabularOperator =
 
 // The operators after `mv-apply ... on (` and in `fork`, `partition`, `facet`
 // branches have no source table.
-Subquery = operator:TabularOperator ('|' operator:TabularOperator)*
+Subquery = TabularOperator ('|' TabularOperator)*
 
 WhereOperator = 'where' predicate:Expr
 FilterOperator = 'filter' predicate:Expr
-ProjectOperator = 'project' ProjectItem (',' ProjectItem)*
-ProjectItem = Assignment | Expr
-ProjectAwayOperator = 'project-away' ColumnRef (',' ColumnRef)*
-ProjectKeepOperator = 'project-keep' ColumnRef (',' ColumnRef)*
+ProjectOperator = 'project' ColumnItem (',' ColumnItem)*
+ProjectAwayOperator = keyword:'project-away' ColumnRef (',' ColumnRef)*
+ProjectKeepOperator = keyword:'project-keep' ColumnRef (',' ColumnRef)*
 // `project-reorder a, b desc`, `project-reorder *, a`.
-ProjectReorderOperator = 'project-reorder' ReorderItem (',' ReorderItem)*
+ProjectReorderOperator = keyword:'project-reorder' ReorderItem (',' ReorderItem)*
 ReorderItem = ColumnRef order:('asc' | 'desc' | 'granny-asc' | 'granny-desc')?
-ProjectRenameOperator = 'project-rename' RenameItem (',' RenameItem)*
+ProjectRenameOperator = keyword:'project-rename' RenameItem (',' RenameItem)*
 RenameItem = new:ColumnRef '=' old:ColumnRef
 
 // `Foo`, `['Foo bar']`, `User*`, `*Id`: a name, or a glob over the columns.
@@ -149,22 +151,23 @@ ColumnRef = NameRef | ColumnPattern
 ColumnPattern = pieces:('ident' | 'number' | 'timespan' | '*')*
 
 ExtendOperator = 'extend' ColumnItem (',' ColumnItem)*
-ColumnItem = Assignment | Expr
+ColumnItem = Assignment | TupleAssignment | Expr
 
+// The aggregates, then the `by` columns: one list of items, split at `by`.
 SummarizeOperator =
   'summarize' HintOption*
-  (aggregates:ColumnItem (',' aggregates:ColumnItem)*)?
-  ('by' by:ColumnItem (',' by:ColumnItem)*)?
+  (ColumnItem (',' ColumnItem)*)?
+  ('by' ColumnItem (',' ColumnItem)*)?
 
 // `Name = expr`, or `(A, B, C) = f(...)` for a function with several results.
-Assignment = target:AssignTarget '=' value:Expr
-AssignTarget = NameRef | NameTuple
+Assignment = name:NameRef '=' value:Expr
+TupleAssignment = NameTuple '=' value:Expr
 NameTuple = '(' NameRef (',' NameRef)* ')'
 
 JoinOperator =
-  'join' OperatorOption* right:TabularPrimary 'on' condition:Expr (',' condition:Expr)*
+  'join' OperatorOption* TabularSource 'on' Expr (',' Expr)*
 LookupOperator =
-  'lookup' OperatorOption* table:TabularPrimary 'on' condition:Expr (',' condition:Expr)*
+  'lookup' OperatorOption* TabularSource 'on' Expr (',' Expr)*
 
 // `union T1, (T2 | where x), f("a")`.
 UnionOperator = 'union' OperatorOption* UnionLeg (',' UnionLeg)*
@@ -172,36 +175,41 @@ UnionLeg = TableRef | FunctionCall | ParenTabular
 
 // `parse col with "a" x:long * "b"`.
 ParseOperator =
-  'parse' OperatorOption* column:Expr 'with' ParsePiece ParsePiece*
+  'parse' OperatorOption* column:Expr 'with' ParsePart ParsePart*
 ParseWhereOperator =
-  'parse-where' OperatorOption* column:Expr 'with' ParsePiece ParsePiece*
-ParsePiece = pattern:'string' | star:'*' | ParseColumn
+  keyword:'parse-where' OperatorOption* column:Expr 'with' ParsePart ParsePart*
+// A literal piece (`"id="`, `*`) or a typed column (`id:long`).
+ParsePart = ParsePiece | ParseColumn
+ParsePiece = piece:('string' | '*')
 ParseColumn = name:'ident' (':' Type)?
-ParseKvOperator = 'parse-kv' args:Expr?
+ParseKvOperator = keyword:'parse-kv' args:Expr?
 
 TakeOperator = 'take' count:'number'
 LimitOperator = 'limit' count:'number'
 TopOperator = 'top' count:'number' ('by' SortItem (',' SortItem)*)?
 CountOperator = 'count'
 
-SortOperator = ('sort' | 'order') 'by'? SortItem (',' SortItem)*
-SortItem = Expr ('asc' | 'desc')? ('nulls' ('first' | 'last'))?
+SortOperator = name:('sort' | 'order') 'by'? SortItem (',' SortItem)*
+SortItem = Expr order:('asc' | 'desc')? ('nulls' nulls:('first' | 'last'))?
 
 MvExpandOperator =
-  ('mv-expand' | 'mvexpand') MvOption* MvExpandItem (',' MvExpandItem)*
+  name:('mv-expand' | 'mvexpand') MvOption* MvExpandItem (',' MvExpandItem)*
   ('limit' limit:Expr)?
-MvExpandItem = (Assignment | Expr) ('to' 'typeof' '(' Type ')')?
+MvExpandItem = ColumnItem ('to' 'typeof' '(' Type ')')?
 MvApplyOperator =
-  'mv-apply' MvOption* MvExpandItem (',' MvExpandItem)*
+  keyword:'mv-apply' MvOption* MvExpandItem (',' MvExpandItem)*
   ('limit' limit:Expr)?
   'on' '(' subquery:Subquery ')'
 
+// The axis, its bounds and step (or `in range(...)`), then the `by` columns:
+// one list of items, read by the keyword before each.
 MakeSeriesOperator =
-  'make-series' MvOption* SeriesAggregate (',' SeriesAggregate)*
-  'on' axis:Expr
-  (('from' from:Expr)? ('to' to:Expr)? 'step' step:Expr | 'in' range:FunctionCall)
-  ('by' by:ColumnItem (',' by:ColumnItem)*)?
-SeriesAggregate = ColumnItem ('default' '=' default:Expr)?
+  keyword:'make-series' MvOption* SeriesAggregate (',' SeriesAggregate)*
+  'on' ColumnItem
+  (('from' ColumnItem)? ('to' ColumnItem)? 'step' ColumnItem | 'in' ColumnItem)
+  ('by' ColumnItem (',' ColumnItem)*)?
+SeriesAggregate = ColumnItem SeriesDefault?
+SeriesDefault = 'default' '=' Expr
 
 EvaluateOperator = 'evaluate' HintOption* plugin:FunctionCall
 DistinctOperator = 'distinct' HintOption* (StarArg | ColumnItem (',' ColumnItem)*)?
@@ -215,11 +223,12 @@ RangeOperator =
 // `top-nested 3 of x with others = "other" by count() desc, top-nested 2 of y by count()`.
 TopNestedOperator = TopNestedClause (',' TopNestedClause)*
 TopNestedClause =
-  'top-nested' count:Expr? 'of' of:ColumnItem
-  ('with' 'others' '=' others:Expr)?
-  'by' by:ColumnItem ('asc' | 'desc')? ('nulls' ('first' | 'last'))?
+  keyword:'top-nested' count:Expr? TopNestedOf TopNestedOthers? TopNestedBy
+TopNestedOf = 'of' ColumnItem
+TopNestedOthers = 'with' 'others' '=' Expr
+TopNestedBy = 'by' ColumnItem order:('asc' | 'desc')? ('nulls' nulls:('first' | 'last'))?
 
-SampleDistinctOperator = 'sample-distinct' HintOption* count:Expr 'of' column:Expr
+SampleDistinctOperator = keyword:'sample-distinct' HintOption* count:Expr 'of' column:Expr
 
 // `fork (where a > 1 | take 5) b = (count)`.
 ForkOperator = 'fork' ForkBranch ForkBranch*
@@ -234,18 +243,18 @@ FacetOperator =
 // legacy `partition by Account { T | ... }`.
 PartitionOperator =
   'partition' HintOption* 'by' column:'ident'
-  ('in' scope:(FunctionCall | DynamicLiteral))?
-  ('(' subquery:Subquery ')' | '{' body:TabularExpression '}')
+  ('in' Expr)?
+  ('(' Subquery ')' | '{' TabularExpression '}')
 
 // `scan declare (n: long = 0) with (step s output=last: x == 1 => n = s.n + 1;)`.
 ScanOperator =
   'scan' OperatorOption*
-  ('order' 'by' order:SortItem (',' order:SortItem)*)?
-  ('partition' 'by' partition:Expr (',' partition:Expr)*)?
+  ('order' 'by' SortItem (',' SortItem)*)?
+  ('partition' 'by' Expr (',' Expr)*)?
   ('declare' '(' (Parameter (',' Parameter)*)? ')')?
   'with' '(' ScanStep ScanStep* ')'
 ScanStep =
-  'step' name:'ident' 'optional'? ('output' '=' ('all' | 'last' | 'none'))?
+  'step' name:'ident' 'optional'? ('output' '=' output:('all' | 'last' | 'none'))?
   ':' predicate:Expr ('=>' Assignment (',' Assignment)*)? ';'
 
 // `invoke`, `serialize`, `as`, `getschema`, `sample`, `consume`, `reduce`,
@@ -285,12 +294,12 @@ OrExpr = Expr ('or' Expr)*
 AndExpr = Expr ('and' Expr)*
 NotExpr = 'not' operand:Expr
 // `a == b`, `a has "x"`, `a matches regex "x"`, `a !~ b`.
-ComparisonExpr = lhs:Expr op:('cmp_op' | 'matches' 'regex') rhs:Expr
+ComparisonExpr = lhs:Expr (op:'cmp_op' | 'matches' 'regex') rhs:Expr
 // `a in (1, 2)`, `a !in~ (T | project x)`, `a has_any (...)`.
 InExpr = lhs:Expr op:('in' | 'set_op') set:ExpressionList
 BetweenExpr = lhs:Expr op:'between_op' range:Range
-AdditiveExpr = Expr (('+' | '-') Expr)*
-MultiplicativeExpr = Expr (('*' | '/' | '%') Expr)*
+AdditiveExpr = Expr (op:('+' | '-') Expr)*
+MultiplicativeExpr = Expr (op:('*' | '/' | '%') Expr)*
 UnaryExpr = op:('-' | '+') operand:Expr
 
 // `(a, b, ...)`, or `(T | project x)` for a tabular subquery.

@@ -5,8 +5,9 @@ expression: "show(\"T | scan order by t partition by k declare (n: long = 0) wit
 SOURCE_FILE@0..133
   QUERY@0..133
     TABULAR_EXPRESSION@0..133
-      TABLE_REF@0..1
-        IDENT@0..1 "T"
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
       WHITESPACE@1..2 " "
       PIPE@2..3 "|"
       WHITESPACE@3..4 " "

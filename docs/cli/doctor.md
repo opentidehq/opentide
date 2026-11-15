@@ -56,7 +56,7 @@ A check that raises an unexpected error fails under its own codes with `The chec
 
 ### Secrets
 
-`doctor` never prints a secret. `credentials` names the variables a tenant's setup refers to and whether each is set, never a value, and never a value written into the TOML. A proxy is shown as `scheme://host:port`, without its user and password, even when the password holds an unencoded `@` or `:`. A password with an unencoded `/`, `#`, `?` or `\` cannot be told apart from the host (a URL parser would read part of it as the host), so such a URL is not shown at all: it is `<unparseable proxy URL>`, the `proxy` check fails with `The proxy URL cannot be parsed: its user or password holds an unencoded …`, and every command refuses it. Percent-encode those characters (`%2F`, `%23`, `%3F`, `%5C`, `%40` for `@`).
+`doctor` never prints a secret. `credentials` names the variables a tenant's setup refers to and whether each is set, never a value, and never a value written into the TOML. A proxy is shown as `scheme://host:port`, without its user and password, even when the password holds an unencoded `@` or `:`. A password with an unencoded `/`, `#`, `?` or `\` cannot be told apart from the host (a URL parser would read part of it as the host), so such a URL is not shown at all: it is `<unparseable proxy URL>`, the `proxy` check fails with ``The proxy URL cannot be parsed: an `@` follows a `/`, `?`, `#` or `\` …``, and every command refuses it. Percent-encode those characters (`%2F`, `%23`, `%3F`, `%5C`, `%40` for `@`).
 
 ### In the VS Code extension
 

@@ -79,3 +79,14 @@ pub const NEW_CODES: &[&str] = &[
     opentide_core::codes::KQL_UNKNOWN_TABLE,
     opentide_core::codes::KQL_TABLE_NOT_DECLARED,
 ];
+
+/// The places the tree of `source` does not conform to `kql.ungram`, one line
+/// each (`opentide_parse::conformance`); empty when it conforms.
+#[must_use]
+pub fn conformance(source: &str) -> Vec<String> {
+    let root = SyntaxNode::new_root(parse(source).green);
+    opentide_parse::conformance::check(&root, crate::ast::RULES, crate::parser::GRAMMAR)
+        .iter()
+        .map(ToString::to_string)
+        .collect()
+}
