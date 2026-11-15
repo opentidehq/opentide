@@ -88,7 +88,8 @@ use crate::verdict::{self, Instances};
 /// (opentide.schema.json), the language server's catalogs
 /// (data/catalogs/tide/generated/), the key lists of
 /// highlights/queries/tide/highlights.scm and the diagnostics reference
-/// (docs/cli/diagnostics.md).
+/// (docs/cli/diagnostics.md), and the typed AST of every .ungram grammar
+/// (src/generated/ast.rs of its crate).
 #[derive(Args)]
 pub struct CodegenArgs {
     /// Compare them instead of writing, and the language server's catalogs with
@@ -146,6 +147,7 @@ pub fn run(args: &CodegenArgs) -> Result<u8> {
     let root = repo_root();
     let mut problems = committed(&root, check)?;
     problems.extend(engine_catalog(&root, check)?);
+    problems.extend(crate::astgen::sync(&root, check)?);
     let mut compared = 0;
     let mut judged = 0;
     let mut differences = Vec::new();
