@@ -410,7 +410,7 @@ pub fn run_query(run: &QueryRun, context: &Context<'_>) -> Result<Json, String> 
         command.extend(["--rule".to_owned(), run.rule.clone()]);
     }
     // The live call keeps every choice the agent made, so it runs what was
-    // asked; a live run always passes the window and the limit.
+    // asked; a live run passes the limit, and the window when it has one.
     let since_named = !run.since.is_empty() && run.since != "24h";
     if since_named {
         arguments.push(("since".to_owned(), Json::str(&run.since)));

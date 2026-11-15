@@ -685,7 +685,7 @@ mod tests {
 
     #[test]
     fn a_patterned_platforms_id_is_text_of_its_shape() {
-        // A number is refused outright, whatever its sign.
+        // A number is refused outright, before its sign is looked at.
         for number in [12, -1] {
             let error = normalise_external_id(PATTERNED, &ExternalId::Int(number)).unwrap_err();
             assert_eq!(error.code, "external_id_shape");

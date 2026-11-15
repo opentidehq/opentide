@@ -835,7 +835,9 @@ mod tests {
             digest("{\"duration_ms\":9,\"a\":1}")
         );
         assert_ne!(digest("{\"a\":1}"), digest("{\"a\":2}"));
-        // Compact JSON with the keys sorted, non-ASCII characters as written.
+        // Compact JSON with the keys sorted, non-ASCII characters as written: the
+        // digest must match the one computed outside Rust, the other implementation's
+        // `json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=False)`.
         assert_eq!(
             digest("{\"b\":{\"z\":1,\"é\":[2]},\"a\":\"x\"}"),
             "dca7015199a10e069c267f7485ce26dac9e49b1e989dedd6db2c5e58add16e5f"
