@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
+use clap::{Args, Subcommand, ValueEnum};
 use serde_json::{Value as Json, json};
 
 use crate::corpus::cli::{
@@ -30,58 +31,57 @@ use crate::corpus::cli::{
 use crate::corpus::generate::{self, Counts, Layout, Options};
 use opentide_schema::configuration::resolve::{Instance, ResolveError, resolve};
 
-/// The usage of `cargo xtask config`.
-pub const USAGE: &str = "\
-usage: cargo xtask config diff --against python [--oracle BIN]
-                               [--corpus all|fixtures|generated] [--keep DIR]
+/// `config` commands.
+#[derive(Subcommand)]
+pub enum Cmd {
+    /// Compare each workspace's resolved configuration (as JSON) and its
+    /// `validate --check configuration` findings with the oracle's; a
+    /// workspace whose resolution stops compares the error's code and message
+    /// (the code only for `config_parse`, whose message is the TOML crate's)
+    Diff(DiffArgs),
+}
 
-  compare each workspace's resolved configuration (as JSON) and its
-  `validate --check configuration` findings with the oracle's; a
-  workspace whose resolution stops compares the error's code and message
-  (the code only for `config_parse`, whose message is the TOML crate's).
-  The oracle is BIN, else $OPENTIDE_ORACLE, else `opentide` on PATH; its
-  interpreter is the `python` beside it.
-";
+/// The workspaces compared.
+#[derive(Clone, Copy, ValueEnum)]
+pub enum Corpus {
+    /// The fixtures and the generated workspaces
+    All,
+    /// The golden fixtures
+    Fixtures,
+    /// The generated workspaces
+    Generated,
+}
 
-/// Runs `config <args>`; the process exit status.
-pub fn run(args: &[String]) -> Result<u8> {
-    let Some((command, options)) = args.split_first() else {
-        bail!("missing command\n\n{USAGE}");
-    };
-    if command == "help" || command == "--help" {
-        print!("{USAGE}");
-        return Ok(0);
-    }
-    if command != "diff" {
-        bail!("unknown command `{command}`\n\n{USAGE}");
-    }
-    let mut against = None;
-    let mut oracle = None;
-    let mut corpus = "all".to_owned();
-    let mut keep = None;
-    let mut args = options.iter();
-    while let Some(arg) = args.next() {
-        let next = |args: &mut std::slice::Iter<'_, String>| {
-            args.next()
-                .cloned()
-                .with_context(|| format!("{arg} needs a value"))
-        };
-        match arg.as_str() {
-            "--against" => against = Some(next(&mut args)?),
-            "--oracle" => oracle = Some(next(&mut args)?),
-            "--corpus" => corpus = next(&mut args)?,
-            "--keep" => keep = Some(PathBuf::from(next(&mut args)?)),
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        }
-    }
-    if against.as_deref() != Some("python") {
-        bail!("--against python is required\n\n{USAGE}");
-    }
-    let (fixtures, generated) = match corpus.as_str() {
-        "all" => (true, true),
-        "fixtures" => (true, false),
-        "generated" => (false, true),
-        other => bail!("--corpus `{other}` is not all, fixtures or generated"),
+/// The options of `diff`.
+#[derive(Args)]
+pub struct DiffArgs {
+    /// What to compare with
+    #[arg(long, value_enum)]
+    pub against: crate::diff_args::Against,
+    /// The oracle: BIN, else $OPENTIDE_ORACLE, else `opentide` on PATH; its
+    /// interpreter is the `python` beside it
+    #[arg(long, value_name = "BIN")]
+    pub oracle: Option<String>,
+    /// The workspaces to compare
+    #[arg(long, value_enum, default_value = "all")]
+    pub corpus: Corpus,
+    /// Keep the workspaces in DIR, which must not exist
+    #[arg(long, value_name = "DIR")]
+    pub keep: Option<PathBuf>,
+}
+
+/// Runs `config <command>`; the process exit status.
+pub fn run(command: &Cmd) -> Result<u8> {
+    let Cmd::Diff(DiffArgs {
+        oracle,
+        corpus,
+        keep,
+        ..
+    }) = command;
+    let (fixtures, generated) = match corpus {
+        Corpus::All => (true, true),
+        Corpus::Fixtures => (true, false),
+        Corpus::Generated => (false, true),
     };
     let bin = oracle_bin(oracle.as_deref());
     let catalogue = load_catalogue(&repo_root().join("tests/corpora/faults.toml"))?;
@@ -344,29 +344,32 @@ fn generated_workspaces(
 mod tests {
     use super::*;
 
-    fn args(words: &[&str]) -> Vec<String> {
-        words.iter().map(|word| (*word).to_owned()).collect()
+    fn parse(argv: &[&str]) -> Result<Cmd, clap::Error> {
+        crate::parse_subcommand(argv)
     }
 
     #[test]
     fn usage_errors_are_refused() {
-        assert!(run(&[]).is_err());
-        assert!(run(&args(&["bogus"])).is_err());
-        assert!(run(&args(&["diff"])).is_err(), "no --against");
-        assert!(run(&args(&["diff", "--against", "rust"])).is_err());
-        assert!(run(&args(&["diff", "--against", "python", "--corpus", "x"])).is_err());
-        assert!(run(&args(&["diff", "--against", "python", "--bogus"])).is_err());
-        assert!(
-            run(&args(&[
-                "diff",
-                "--against",
-                "python",
-                "--oracle",
-                "/nonexistent/opentide"
-            ]))
-            .is_err()
-        );
-        assert_eq!(run(&args(&["help"])).unwrap(), 0);
+        assert!(parse(&[]).is_err());
+        assert!(parse(&["bogus"]).is_err());
+        assert!(parse(&["diff"]).is_err(), "no --against");
+        assert!(parse(&["diff", "--against", "rust"]).is_err());
+        assert!(parse(&["diff", "--against", "python", "--corpus", "x"]).is_err());
+        assert!(parse(&["diff", "--against", "python", "--bogus"]).is_err());
+        assert!(parse(&["diff", "--against", "python"]).is_ok());
+    }
+
+    #[test]
+    fn a_missing_oracle_stops_the_run() {
+        let command = parse(&[
+            "diff",
+            "--against",
+            "python",
+            "--oracle",
+            "/nonexistent/opentide",
+        ])
+        .unwrap();
+        assert!(run(&command).is_err());
     }
 
     #[test]

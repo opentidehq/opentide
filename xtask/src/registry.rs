@@ -24,6 +24,7 @@ use std::process::Command;
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
+use clap::{Args, Subcommand, ValueEnum};
 use serde_json::{Value as Json, json};
 
 use crate::corpus::cli::{
@@ -36,20 +37,6 @@ use opentide_workspace::{OsFs, RootOptions, Workspace};
 /// The index as JSON, shared with opentide-workspace's loading tests.
 #[path = "../../crates/opentide-workspace/tests/support/export.rs"]
 mod export;
-
-/// The usage of `cargo xtask registry`.
-pub const USAGE: &str = "\
-usage: cargo xtask registry diff --against python [--oracle BIN]
-                                 [--corpus all|fixtures|generated|faults]
-                                 [--keep DIR] [--show-approved]
-
-  load every corpus with opentide-workspace and compare its index, as
-  JSON (objects, UUIDs, types, paths, bodies, signals, load errors,
-  duplicates, nested files, references, chaining), with the Python
-  registry's. The oracle is BIN, else $OPENTIDE_ORACLE, else `opentide`
-  on PATH; its interpreter is the `python` beside it. --show-approved
-  prints each approved difference too.
-";
 
 /// The seed of the heavy workspace (`corpus generate`, `bench`).
 const HEAVY_SEED: u64 = 20_261_107;
@@ -250,49 +237,65 @@ pub fn reconcile_invalid_dates(oracle: &mut Json, rust: &mut Json) -> usize {
     reconciled
 }
 
-/// Runs `registry <args>`; the process exit status.
+/// `registry` commands.
+#[derive(Subcommand)]
+pub enum Cmd {
+    /// Load every corpus with opentide-workspace and compare its index, as
+    /// JSON (objects, UUIDs, types, paths, bodies, signals, load errors,
+    /// duplicates, nested files, references, chaining), with the Python
+    /// registry's
+    Diff(DiffArgs),
+}
+
+/// The workspaces compared.
+#[derive(Clone, Copy, ValueEnum)]
+pub enum Corpus {
+    /// The fixtures and the generated workspaces
+    All,
+    /// The golden fixtures
+    Fixtures,
+    /// The generated workspaces
+    Generated,
+    /// Each fault kind alone
+    Faults,
+}
+
+/// The options of `diff`.
+#[derive(Args)]
+pub struct DiffArgs {
+    /// What to compare with
+    #[arg(long, value_enum)]
+    pub against: crate::diff_args::Against,
+    /// The oracle: BIN, else $OPENTIDE_ORACLE, else `opentide` on PATH; its
+    /// interpreter is the `python` beside it
+    #[arg(long, value_name = "BIN")]
+    pub oracle: Option<String>,
+    /// The workspaces to compare
+    #[arg(long, value_enum, default_value = "all")]
+    pub corpus: Corpus,
+    /// Keep the workspaces in DIR, which must not exist
+    #[arg(long, value_name = "DIR")]
+    pub keep: Option<PathBuf>,
+    /// Print each approved difference too
+    #[arg(long)]
+    pub show_approved: bool,
+}
+
+/// Runs `registry <command>`; the process exit status.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-pub fn run(args: &[String]) -> Result<u8> {
-    let Some((command, options)) = args.split_first() else {
-        bail!("missing command\n\n{USAGE}");
-    };
-    if command == "help" || command == "--help" {
-        print!("{USAGE}");
-        return Ok(0);
-    }
-    if command != "diff" {
-        bail!("unknown command `{command}`\n\n{USAGE}");
-    }
-    let mut against = None;
-    let mut oracle = None;
-    let mut corpus = "all".to_owned();
-    let mut keep = None;
-    let mut show_approved = false;
-    let mut args = options.iter();
-    while let Some(arg) = args.next() {
-        let next = |args: &mut std::slice::Iter<'_, String>| {
-            args.next()
-                .cloned()
-                .with_context(|| format!("{arg} needs a value"))
-        };
-        match arg.as_str() {
-            "--against" => against = Some(next(&mut args)?),
-            "--oracle" => oracle = Some(next(&mut args)?),
-            "--corpus" => corpus = next(&mut args)?,
-            "--keep" => keep = Some(PathBuf::from(next(&mut args)?)),
-            "--show-approved" => show_approved = true,
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        }
-    }
-    if against.as_deref() != Some("python") {
-        bail!("--against python is required\n\n{USAGE}");
-    }
-    let (fixtures, generated, fault_kinds) = match corpus.as_str() {
-        "all" => (true, true, true),
-        "fixtures" => (true, false, false),
-        "generated" => (false, true, false),
-        "faults" => (false, false, true),
-        other => bail!("--corpus `{other}` is not all, fixtures, generated or faults"),
+pub fn run(command: &Cmd) -> Result<u8> {
+    let Cmd::Diff(DiffArgs {
+        oracle,
+        corpus,
+        keep,
+        show_approved,
+        ..
+    }) = command;
+    let (fixtures, generated, fault_kinds) = match corpus {
+        Corpus::All => (true, true, true),
+        Corpus::Fixtures => (true, false, false),
+        Corpus::Generated => (false, true, false),
+        Corpus::Faults => (false, false, true),
     };
     let bin = oracle_bin(oracle.as_deref());
     let catalogue = load_catalogue(&repo_root().join("tests/corpora/faults.toml"))?;
@@ -349,7 +352,7 @@ pub fn run(args: &[String]) -> Result<u8> {
             {
                 Some(rule) => {
                     *used.entry(rule.id).or_default() += 1;
-                    if show_approved {
+                    if *show_approved {
                         println!(
                             "     approved {} at {} {pointer}\n         oracle: {oracle}\n         rust:   {rust}",
                             rule.id,
@@ -416,7 +419,7 @@ pub fn run(args: &[String]) -> Result<u8> {
         .chain([INVALID_DATES.0])
         .filter(|id| !used.contains_key(id))
         .collect();
-    if corpus == "all" && !stale.is_empty() {
+    if matches!(corpus, Corpus::All) && !stale.is_empty() {
         println!(
             "stale approved rule(s), explaining nothing: {}",
             stale.join(", ")
@@ -647,20 +650,20 @@ fn fault_workspaces(scratch: &Path, catalogue: &faults::Catalogue) -> Result<Vec
 mod tests {
     use super::*;
 
-    fn args(words: &[&str]) -> Vec<String> {
-        words.iter().map(|word| (*word).to_owned()).collect()
+    fn parse(argv: &[&str]) -> Result<Cmd, clap::Error> {
+        crate::parse_subcommand(argv)
     }
 
     #[test]
     fn usage_errors_are_refused() {
-        assert!(run(&[]).is_err());
-        assert!(run(&args(&["bogus"])).is_err());
-        assert!(run(&args(&["diff"])).is_err(), "no --against");
-        assert!(run(&args(&["diff", "--against", "rust"])).is_err());
-        assert!(run(&args(&["diff", "--against", "python", "--corpus", "x"])).is_err());
-        assert!(run(&args(&["diff", "--against", "python", "--bogus"])).is_err());
-        assert!(run(&args(&["diff", "--keep"])).is_err());
-        assert_eq!(run(&args(&["help"])).unwrap(), 0);
+        assert!(parse(&[]).is_err());
+        assert!(parse(&["bogus"]).is_err());
+        assert!(parse(&["diff"]).is_err(), "no --against");
+        assert!(parse(&["diff", "--against", "rust"]).is_err());
+        assert!(parse(&["diff", "--against", "python", "--corpus", "x"]).is_err());
+        assert!(parse(&["diff", "--against", "python", "--bogus"]).is_err());
+        assert!(parse(&["diff", "--against", "python", "--keep"]).is_err());
+        assert!(parse(&["diff", "--against", "python", "--corpus", "faults"]).is_ok());
     }
 
     #[test]
