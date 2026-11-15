@@ -1,0 +1,20 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: mcp.start/json/none/help
+---
+args: opentide --json mcp start --help
+exit: 0
+
+━━━ stdout
+Block on stdio until the host closes stdin. stdout is JSON-RPC only.
+
+Usage: opentide mcp start
+
+Options:
+      --help
+          Print help
+
+Examples:
+  $ opentide mcp start
+
+━━━ stderr · empty

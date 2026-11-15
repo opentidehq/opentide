@@ -1,0 +1,43 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lint/json/tide-corpus/file-missing
+---
+args: opentide --json lint --file objects/rules/example.yaml
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "checks": [
+    "filenames",
+    "metadata",
+    "recommended",
+    "placeholders",
+    "queries"
+  ],
+  "command": "lint",
+  "count": 0,
+  "duration_ms": 0,
+  "error": "No object file directly in objects/threats, objects/objectives, objects/rules matched: objects/rules/example.yaml",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "No object file directly in objects/threats, objects/objectives, objects/rules matched: objects/rules/example.yaml",
+    "suggestion": null
+  },
+  "findings": [],
+  "fixed": 0,
+  "message": "No object file directly in objects/threats, objects/objectives, objects/rules matched: objects/rules/example.yaml",
+  "next_actions": [],
+  "ok": false,
+  "path": "<WS>",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "unmatched": [
+    "objects/rules/example.yaml"
+  ]
+}
+
+━━━ stderr · empty

@@ -1,0 +1,33 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.skills.show/json/tide-corpus/catalogue
+---
+args: opentide --json setup skills show opentide-detection-rule
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup skills show",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "install_hint": "opentide setup skills --install opentide-detection-rule --generic --yes",
+  "manifest_refreshed": false,
+  "manifest_source": "remote",
+  "message": "Completed successfully",
+  "next_actions": [],
+  "ok": true,
+  "schema_version": 1,
+  "skill": {
+    "description": "Author rules as rule::1.1 YAML under objects/rules/.",
+    "installed": false,
+    "name": "Detection rules",
+    "path": ".agents/skills/opentide-detection-rule/",
+    "slug": "opentide-detection-rule"
+  },
+  "source": "opentidehq/skills@main",
+  "status": "completed",
+  "summary": {}
+}
+
+━━━ stderr · empty

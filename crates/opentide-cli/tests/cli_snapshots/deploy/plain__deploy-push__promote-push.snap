@@ -1,0 +1,35 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/plain/deploy-push/promote-push
+---
+args: opentide deploy --platform splunk --strategy RELEASE
+exit: 0
+
+━━━ stdout
+✓ Deployed 1 rule to 0 tenants · 1 created or updated · 0 failed, 0 not attempted · <SECONDS>
+
+━━━ stderr
+✓ status promotion · 1 rule · <SECONDS>
+Deploy plan · strategy RELEASE · 1 platform, 0 tenants
+Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
+✓ splunk · 1 deployed, 0 failed, 0 not attempted · <SECONDS>
+
+━━━ ws/objects/rules/splunk-a-create.yaml · modified 0644
+name: Splunk create rule
+metadata:
+  uuid: 00000000-0000-4000-8047-000000000041
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A changed rule the splunk stand-in tenant receives in a deploy that sends.
+response:
+  alert_severity: High
+configurations:
+  splunk:
+    status: PRODUCTION
+    query: index=main EventCode=4688
+    scheduling:
+      schedule:
+        cron: "0 * * * *"

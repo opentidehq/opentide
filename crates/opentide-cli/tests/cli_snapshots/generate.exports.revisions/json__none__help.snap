@@ -1,0 +1,19 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.exports.revisions/json/none/help
+---
+args: opentide --json generate exports revisions --help
+exit: 0
+
+━━━ stdout
+
+Usage: opentide generate exports revisions
+
+Options:
+      --help
+          Print help
+
+Examples:
+  $ opentide generate exports revisions
+
+━━━ stderr · empty
