@@ -34,12 +34,12 @@ crate = "opentide-compile"
 lines = 90
 item = "UC-3.1 (#823)"
 
-# 86, not 90, for now: the oracle replays are #[ignore]d (#1121), and they
-# drove much of the command line's code. Rust-native behaviour tests restore
-# it (#1139); the gate goes back to 90 when they land.
+# 90 again: the oracle replays are #[ignore]d (#1121) and drove much of the
+# command line's code; the Rust-owned snapshot and end-to-end tests (#1139)
+# restored it (90.84% at Coverage run 43739348896).
 [[gate]]
 crate = "opentide-cli"
-lines = 86
+lines = 90
 item = "UC-3.3 (#825)"
 
 # 88: the connectors' error paths are tested against stand-in tenants (#1139).
