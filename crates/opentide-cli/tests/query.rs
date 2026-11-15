@@ -2,7 +2,7 @@
 //! that cannot run, and runs on Elastic tenants served by a stand-in
 //! Elasticsearch on the loopback (one that answers, one that refuses the
 //! query, one that is not listening, one that never answers). The recorded
-//! tenants' runs are `command_goldens.rs`'s; two are replayed here with one
+//! tenants' runs are `cli_snapshots.rs`'; two are replayed here with one
 //! answer changed (a gateway's page in front of Splunk, Carbon Black Cloud
 //! refusing the token).
 
@@ -182,6 +182,7 @@ fn elastic<'a>(words: &[&'a str]) -> Vec<&'a str> {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn calls_that_cannot_run_are_refused_with_the_value_at_fault() {
     let (_scratch, ws) = workspace(&tenant("soc", "http://127.0.0.1:9"));
     let cases: &[(&[&str], &str, &str, &str)] = &[

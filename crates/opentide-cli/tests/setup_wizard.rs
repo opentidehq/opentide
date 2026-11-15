@@ -121,6 +121,8 @@ impl Drop for Session {
     /// outlive the test.
     fn drop(&mut self) {
         let _ = self.child.kill();
+        // Reaped, not left a zombie until the test binary exits.
+        let _ = self.child.wait();
     }
 }
 
@@ -158,6 +160,7 @@ impl Session {
             }
             if started.elapsed() > TIMEOUT {
                 let _ = self.child.kill();
+                let _ = self.child.wait();
                 panic!(
                     "the run did not exit in {TIMEOUT:?}; printed:\n{}",
                     String::from_utf8_lossy(&self.printed.lock().unwrap())
@@ -615,32 +618,52 @@ fn setup_without_a_terminal_refuses() {
         .current_dir(dir.path())
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
         .spawn()
         .unwrap();
     let mut stdout = child.stdout.take().unwrap();
-    let reader = std::thread::spawn(move || {
+    let mut stderr = child.stderr.take().unwrap();
+    let out = std::thread::spawn(move || {
         let mut bytes = Vec::new();
         let _ = stdout.read_to_end(&mut bytes);
         bytes
     });
+    let err = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = stderr.read_to_end(&mut bytes);
+        bytes
+    });
     // A run that waits for an answer is a failure, not a hung test.
     let started = Instant::now();
+    let mut timed_out = false;
     let status = loop {
         if let Some(status) = child.try_wait().unwrap() {
             break status;
         }
         if started.elapsed() > TIMEOUT {
+            timed_out = true;
             let _ = child.kill();
-            let _ = child.wait();
-            panic!("the run did not exit in {TIMEOUT:?}");
+            break child.wait().unwrap();
         }
         std::thread::sleep(Duration::from_millis(20));
     };
-    let output = (status, reader.join().unwrap());
-    assert_ne!(output.0.code(), Some(0), "{output:?}");
-    let document: serde_json::Value = serde_json::from_slice(&output.1).unwrap();
-    assert_eq!(document["ok"], false, "{document}");
+    let (stdout, stderr) = (out.join().unwrap(), err.join().unwrap());
+    let (stdout, stderr) = (
+        String::from_utf8_lossy(&stdout),
+        String::from_utf8_lossy(&stderr),
+    );
+    assert!(
+        !timed_out,
+        "the run did not exit in {TIMEOUT:?}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    assert_ne!(
+        status.code(),
+        Some(0),
+        "exit {status}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    let document: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|error| panic!("{error}\nstdout:\n{stdout}\nstderr:\n{stderr}"));
+    assert_eq!(document["ok"], false, "{document}\nstderr:\n{stderr}");
     assert!(!repo.join("objects").exists());
 }
 

@@ -254,6 +254,7 @@ fn shown(value: &Json) -> String {
 }
 
 /// One shard file, checked (`DeploymentState.from_file`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn read_shard(fs: &dyn FileSystem, path: &Path, expected: Option<&str>) -> Result<(), StateError> {
     let name = path
         .file_name()

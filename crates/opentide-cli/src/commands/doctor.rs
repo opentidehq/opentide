@@ -1049,6 +1049,7 @@ impl Doctor<'_> {
             })
     }
 
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn vscode(&self) -> Vec<Check> {
         let mut checks = Vec::new();
         let settings = self.workspace.join(".vscode").join("settings.json");

@@ -395,13 +395,20 @@ pub struct ExportObjectsArgs {}
 #[derive(Debug, Args)]
 pub struct ExportNavigatorArgs {}
 
-/// `opentide document`.
+/// The options `opentide document` and each of its subcommands take.
 #[derive(Debug, Args)]
-pub struct DocumentArgs {
+pub struct DocumentOptions {
     #[arg(long = "output")]
     pub output: Option<String>,
     #[arg(long = "flavor")]
     pub flavor: Option<String>,
+}
+
+/// `opentide document`.
+#[derive(Debug, Args)]
+pub struct DocumentArgs {
+    #[command(flatten)]
+    pub options: DocumentOptions,
     #[command(subcommand)]
     pub command: Option<DocumentCommand>,
 }
@@ -409,37 +416,29 @@ pub struct DocumentArgs {
 /// `opentide document index`.
 #[derive(Debug, Args)]
 pub struct DocumentIndexArgs {
-    #[arg(long = "output")]
-    pub output: Option<String>,
-    #[arg(long = "flavor")]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub options: DocumentOptions,
 }
 
 /// `opentide document threats`.
 #[derive(Debug, Args)]
 pub struct DocumentThreatsArgs {
-    #[arg(long = "output")]
-    pub output: Option<String>,
-    #[arg(long = "flavor")]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub options: DocumentOptions,
 }
 
 /// `opentide document objectives`.
 #[derive(Debug, Args)]
 pub struct DocumentObjectivesArgs {
-    #[arg(long = "output")]
-    pub output: Option<String>,
-    #[arg(long = "flavor")]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub options: DocumentOptions,
 }
 
 /// `opentide document rules`.
 #[derive(Debug, Args)]
 pub struct DocumentRulesArgs {
-    #[arg(long = "output")]
-    pub output: Option<String>,
-    #[arg(long = "flavor")]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub options: DocumentOptions,
 }
 
 /// `opentide serve`.
@@ -1156,6 +1155,16 @@ pub struct SetupRepoArgs {
 /// `opentide share`.
 #[derive(Debug, Args)]
 pub struct ShareArgs {
+    #[command(flatten)]
+    pub push: SharePushArgs,
+    #[command(subcommand)]
+    pub command: Option<ShareCommand>,
+}
+
+/// The objects a `share` command selects: the destinations, and what to
+/// limit the run to.
+#[derive(Clone, Debug, Args)]
+pub struct ShareSelection {
     #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
     pub target: Vec<String>,
     #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
@@ -1164,42 +1173,17 @@ pub struct ShareArgs {
     pub object_type: Vec<String>,
     #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
     pub file: Vec<String>,
-    #[arg(
-        long = "dry-run",
-        help = "Resolve the run locally and make no request."
-    )]
-    pub dry_run: bool,
-    #[arg(
-        long = "publish",
-        help = "Override the block publish flag.",
-        overrides_with = "no_publish"
-    )]
-    pub publish: bool,
-    #[arg(
-        long = "no-publish",
-        overrides_with = "publish",
-        help = "Turn --publish off"
-    )]
-    pub no_publish: bool,
+}
+
+/// `--workers`, as `share push`, `preview` and `retract` take it.
+#[derive(Clone, Debug, Args)]
+pub struct ShareWorkers {
     #[arg(
         long = "workers",
         help = "Parallel object workers for one destination.",
         default_value = "1"
     )]
     pub workers: i64,
-    #[arg(
-        long = "changed",
-        help = "Share only objects the default-branch CI diff changed."
-    )]
-    pub changed: bool,
-    #[arg(
-        long = "since",
-        help = "With --changed: diff from this commit SHA or ref to HEAD.",
-        value_name = "COMMIT"
-    )]
-    pub since: Option<String>,
-    #[command(subcommand)]
-    pub command: Option<ShareCommand>,
 }
 
 /// `opentide share targets`.
@@ -1209,14 +1193,8 @@ pub struct ShareTargetsArgs {}
 /// `opentide share retract`.
 #[derive(Debug, Args)]
 pub struct ShareRetractArgs {
-    #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
-    pub target: Vec<String>,
-    #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
-    #[arg(long = "type", help = "Limit to threat, objective, or rule.", action = clap::ArgAction::Append)]
-    pub object_type: Vec<String>,
-    #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
+    #[command(flatten)]
+    pub selection: ShareSelection,
     #[arg(
         long = "delete",
         help = "Delete the remote event instead of unpublishing it."
@@ -1224,57 +1202,31 @@ pub struct ShareRetractArgs {
     pub delete: bool,
     #[arg(long = "yes", help = "Confirm --delete.")]
     pub yes: bool,
-    #[arg(
-        long = "workers",
-        help = "Parallel object workers for one destination.",
-        default_value = "1"
-    )]
-    pub workers: i64,
+    #[command(flatten)]
+    pub workers: ShareWorkers,
 }
 
 /// `opentide share status`.
 #[derive(Debug, Args)]
 pub struct ShareStatusArgs {
-    #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
-    pub target: Vec<String>,
-    #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
-    #[arg(long = "type", help = "Limit to threat, objective, or rule.", action = clap::ArgAction::Append)]
-    pub object_type: Vec<String>,
-    #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
+    #[command(flatten)]
+    pub selection: ShareSelection,
 }
 
 /// `opentide share preview`.
 #[derive(Debug, Args)]
 pub struct SharePreviewArgs {
-    #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
-    pub target: Vec<String>,
-    #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
-    #[arg(long = "type", help = "Limit to threat, objective, or rule.", action = clap::ArgAction::Append)]
-    pub object_type: Vec<String>,
-    #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
-    #[arg(
-        long = "workers",
-        help = "Parallel object workers for one destination.",
-        default_value = "1"
-    )]
-    pub workers: i64,
+    #[command(flatten)]
+    pub selection: ShareSelection,
+    #[command(flatten)]
+    pub workers: ShareWorkers,
 }
 
-/// `opentide share push`.
-#[derive(Debug, Args)]
+/// `opentide share push`, and the options `opentide share` takes for it.
+#[derive(Clone, Debug, Args)]
 pub struct SharePushArgs {
-    #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
-    pub target: Vec<String>,
-    #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
-    #[arg(long = "type", help = "Limit to threat, objective, or rule.", action = clap::ArgAction::Append)]
-    pub object_type: Vec<String>,
-    #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
+    #[command(flatten)]
+    pub selection: ShareSelection,
     #[arg(
         long = "dry-run",
         help = "Resolve the run locally and make no request."
@@ -1292,12 +1244,8 @@ pub struct SharePushArgs {
         help = "Turn --publish off"
     )]
     pub no_publish: bool,
-    #[arg(
-        long = "workers",
-        help = "Parallel object workers for one destination.",
-        default_value = "1"
-    )]
-    pub workers: i64,
+    #[command(flatten)]
+    pub workers: ShareWorkers,
     #[arg(
         long = "changed",
         help = "Share only objects the default-branch CI diff changed."
@@ -2034,7 +1982,7 @@ pub enum RootCommand {
     #[command(
         name = "serve",
         about = "Run CLI commands in one warm process, for editors",
-        long_about = "Run CLI commands in one warm process, for editors\n\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\ncommand as opentide --json would and answers with its document and exit\ncode, without starting Python and rebuilding the registry each time. The\neditor owns the process: it ends on exit or when stdin closes. stdout\ncarries the protocol only; logs go to stderr.",
+        long_about = "Run CLI commands in one warm process, for editors\n\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\ncommand as opentide --json would and answers with its document and exit\ncode, without starting a new process each time; the read-only commands\nkeep the workspace loaded between runs. The editor owns the process: it\nends on exit or when stdin closes. stdout carries the protocol only; logs\ngo to stderr.",
         after_help = "Examples:\n  $ opentide serve"
     )]
     Serve(ServeArgs),
@@ -2266,7 +2214,7 @@ pub enum DeployCommand {
     #[command(
         name = "replay-state",
         about = "Replay one commit's deployment-state changes onto the checkout (CI write-back).",
-        long_about = "Replay one commit's deployment-state changes onto the checkout (CI write-back).\n\nUsed by the generated production write-back when its rule files conflict\nwith a concurrent merge. A subcommand rather than ``python -m`` so it runs\nin the interpreter that has opentide, whatever ``python`` is on PATH.",
+        long_about = "Replay one commit's deployment-state changes onto the checkout (CI write-back).\n\nUsed by the generated production write-back when its rule files conflict\nwith a concurrent merge. A subcommand rather than a script, so it needs\nnothing but opentide.",
         hide = true
     )]
     ReplayState(DeployReplayStateArgs),

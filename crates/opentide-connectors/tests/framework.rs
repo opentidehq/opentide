@@ -243,6 +243,7 @@ fn framework_tls_and_ca_per_tenant_in_one_run() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn framework_proxy_per_tenant_no_proxy_and_explicit_proxy() {
     let (_runtime, upstream) = wiremock();
     let rt = tokio::runtime::Runtime::new().unwrap();

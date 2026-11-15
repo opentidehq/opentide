@@ -506,6 +506,7 @@ pub fn defender(cx: &Context<'_>) -> Report {
     report("defender", started, written, outcome)
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
     let (tenants, root) = configured(cx, DEFENDER)?;
     super::query::log_unset(&tenants, cx.env);
@@ -900,24 +901,12 @@ const VALID_FIELD_TYPES: [&str; 25] = [
     "nested",
 ];
 
-/// `uuid.uuid5(namespace, name)`.
-fn uuid5(namespace: &uuid::Uuid, name: &str) -> uuid::Uuid {
-    use sha1::Digest as _;
-    let mut hasher = sha1::Sha1::new();
-    hasher.update(namespace.as_bytes());
-    hasher.update(name.as_bytes());
-    let digest = hasher.finalize();
-    let mut bytes = [0u8; 16];
-    bytes.copy_from_slice(&digest[..16]);
-    uuid::Builder::from_sha1_bytes(bytes).into_uuid()
-}
-
 /// The namespace of the UUIDs derived from prebuilt rules' ids
 /// (`OPENTIDE_MIGRATION_NS`).
 fn migration_namespace() -> uuid::Uuid {
-    uuid5(
+    uuid::Uuid::new_v5(
         &uuid::Uuid::NAMESPACE_URL,
-        "https://opentide.org/ns/elastic-rule-migration",
+        b"https://opentide.org/ns/elastic-rule-migration",
     )
 }
 
@@ -1107,7 +1096,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         .map(py)
         .unwrap_or_default();
     let rule_id = if make_custom && prebuilt {
-        uuid5(&migration_namespace(), &raw_rule_id).to_string()
+        uuid::Uuid::new_v5(&migration_namespace(), raw_rule_id.as_bytes()).to_string()
     } else {
         raw_rule_id
     };
@@ -1845,6 +1834,7 @@ pub fn elastic(cx: &Context<'_>, space: &str, include_prebuilt: bool) -> Report 
     report(ELASTIC, started, written, outcome)
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn elastic_run(
     cx: &Context<'_>,
     space: &str,
@@ -2009,7 +1999,32 @@ mod elastic_tests {
         assert!(is_uuid("{11111111-1111-4111-8111-111111111111}"));
         assert!(!is_uuid("rule-1"));
         assert_eq!(elastic_filename("a:  b"), "a b");
-        assert_eq!(uuid5(&migration_namespace(), "x").get_version_num(), 5);
+        assert_eq!(
+            uuid::Uuid::new_v5(&migration_namespace(), b"x").get_version_num(),
+            5
+        );
+    }
+
+    /// The derived ids are those of Python's `uuid.uuid5`, which the
+    /// importer this ports used: the values below come from it.
+    #[test]
+    fn prebuilt_rule_ids_match_python_uuid5() {
+        assert_eq!(
+            migration_namespace().to_string(),
+            "5da6e36a-e8d0-548e-a5c9-ab00fc1064b8"
+        );
+        for (name, expected) in [
+            ("x", "87858671-b9f3-579e-a900-1c7acaec5523"),
+            ("", "8e1ed917-1a18-579e-957c-390d0c182e8b"),
+            (
+                "12345678-1234-4234-8234-123456789abc",
+                "fb9030c2-1585-514d-8db1-df2329fa9d42",
+            ),
+            ("é rule", "e1d30b5a-aa28-528d-a62e-a4e46d6a3e42"),
+        ] {
+            let id = uuid::Uuid::new_v5(&migration_namespace(), name.as_bytes());
+            assert_eq!(id.to_string(), expected, "{name:?}");
+        }
     }
 
     /// A field Kibana holds as one string where it usually holds a list is a

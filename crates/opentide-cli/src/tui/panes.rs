@@ -209,6 +209,7 @@ pub fn visibility_cells(row: VisibilityRow<'_>) -> [Line<'static>; 6] {
 }
 
 /// The highlighted row drilled into.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn visibility_detail(
     row: Option<VisibilityRow<'_>>,
     catalogue: &Catalogue,
@@ -421,6 +422,7 @@ fn rule_names(uuids: &[String], catalogue: Option<&Catalogue>) -> String {
 
 /// A platform as a card: enabled or not, its tenants, and what reaches each
 /// (`platform_card`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn platform_card(card: &PlatformCard, catalogue: Option<&Catalogue>) -> Vec<Line<'static>> {
     let border = if card.enabled {
         Style::new().fg(Color::Green)
@@ -560,6 +562,7 @@ fn take_findings<'a>(
 
 /// One configuration file, read: its card, its settings by section, what it
 /// leaves unset (`file_view`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn file_view(
     item: &ConfigFile,
     card: Option<&PlatformCard>,

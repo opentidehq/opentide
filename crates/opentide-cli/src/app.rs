@@ -489,6 +489,7 @@ impl Run<'_> {
         self.emit(&outcome, &[], out, err)
     }
 
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn dispatch(&self, out: &mut dyn Write, err: &mut dyn Write) -> std::io::Result<i32> {
         if self.globals.version {
             writeln!(out, "{} {}", catalog::PROGRAM, self.host.version)?;
@@ -656,6 +657,57 @@ impl Run<'_> {
                 let report = self.generate(args, &generate_phases, &matches);
                 return self.emit_report(&report, out, err);
             }
+            Some(RootCommand::Mcp(crate::tree::McpArgs {
+                command: Some(crate::tree::McpCommand::Start(_)),
+            })) => {
+                // The server never polls the interrupt and serves stdio until
+                // its client closes stdin: after a Ctrl-C it does not start
+                // ([`run`] reports the interrupt).
+                if self.interrupted() {
+                    return Ok(INTERRUPTED_EXIT_CODE);
+                }
+                // stdout is JSON-RPC's: nothing is emitted around the server.
+                let places = self.server_places();
+                let launch = crate::mcp::Launch {
+                    cwd: places.cwd,
+                    repo: places.repo,
+                    data: places.data,
+                    proxy: places.proxy,
+                    debug: places.debug,
+                };
+                return crate::mcp::serve(&launch, &self.host.version);
+            }
+            Some(RootCommand::Serve(_)) => {
+                // As `mcp start`: it does not start after a Ctrl-C.
+                if self.interrupted() {
+                    return Ok(INTERRUPTED_EXIT_CODE);
+                }
+                let places = self.server_places();
+                let launch = crate::serve::Launch {
+                    cwd: places.cwd,
+                    repo: places.repo,
+                    data: places.data,
+                    proxy: places.proxy,
+                    debug: places.debug,
+                };
+                return crate::serve::serve(&launch, &self.host.version, &self.host.interrupt);
+            }
+            Some(RootCommand::Tui(_)) => return self.run_tui(out, err),
+            Some(RootCommand::Lsp(crate::tree::LspArgs {
+                command: Some(crate::tree::LspCommand::Start(_)),
+            })) => {
+                // The server blocks on stdin and polls no interrupt: Ctrl-C
+                // ends it at once, with 130, as it ends the Python host.
+                self.host.interrupt.stop_at_once();
+                // stdout is the protocol's: nothing is emitted around the server.
+                return crate::commands::lsp::start_stdio(&self.host.version, err);
+            }
+            Some(RootCommand::Share(share)) => {
+                return match self.share(share, &matches, &words.join(" ")) {
+                    Ok(report) => self.emit_report(&report, out, err),
+                    Err(failure) => self.refuse(&words, *failure, out, err),
+                };
+            }
             Some(RootCommand::Doctor(args)) => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
                 let report = crate::commands::doctor::run(
@@ -693,11 +745,6 @@ impl Run<'_> {
                 let report = self.validate_query(&matches);
                 self.emit_report(&report, out, err)
             }
-            "share" | "share push" | "share preview" | "share status" | "share retract"
-            | "share targets" => match self.share(&matches, &path) {
-                Ok(report) => self.emit_report(&report, out, err),
-                Err(failure) => self.refuse(&words, *failure, out, err),
-            },
             "deploy replay-state" => {
                 let cwd = self.host.cwd.clone().unwrap_or_default();
                 let commit = leaf(&matches)
@@ -754,82 +801,6 @@ impl Run<'_> {
                 );
                 self.emit_report(&report, out, err)
             }
-            "mcp start" => {
-                // The server never polls the interrupt and serves stdio until
-                // its client closes stdin: after a Ctrl-C it does not start
-                // ([`run`] reports the interrupt).
-                if self.interrupted() {
-                    return Ok(INTERRUPTED_EXIT_CODE);
-                }
-                // stdout is JSON-RPC's: nothing is emitted around the server.
-                let resolved =
-                    |path: Option<&str>| path.map(|path| self.resolve(path).display().to_string());
-                let launch = crate::mcp::Launch {
-                    cwd: self.host.cwd.clone(),
-                    repo: resolved(self.globals.repo.as_deref()),
-                    data: resolved(self.globals.data.as_deref()),
-                    proxy: self.globals.proxy.clone(),
-                    debug: self.globals.debug || self.env.debug_requested(),
-                };
-                crate::mcp::serve(&launch, &self.host.version)
-            }
-            "serve" => {
-                // The server never polls the interrupt and serves stdio until
-                // its client closes stdin: after a Ctrl-C it does not start
-                // ([`run`] reports the interrupt).
-                if self.interrupted() {
-                    return Ok(INTERRUPTED_EXIT_CODE);
-                }
-                // stdout is JSON-RPC's: nothing is emitted around the server.
-                let resolved =
-                    |path: Option<&str>| path.map(|path| self.resolve(path).display().to_string());
-                let launch = crate::serve::Launch {
-                    cwd: self.host.cwd.clone(),
-                    repo: resolved(self.globals.repo.as_deref()),
-                    data: resolved(self.globals.data.as_deref()),
-                    proxy: self.globals.proxy.clone(),
-                    debug: self.globals.debug || self.env.debug_requested(),
-                };
-                crate::serve::serve(&launch, &self.host.version, &self.host.interrupt)
-            }
-            "tui" => {
-                use std::io::IsTerminal as _;
-                let place = crate::commands::tui::Place {
-                    mode: self.mode,
-                    interactive: std::io::stdin().is_terminal() && self.host.stdout_tty,
-                    no_color: self.globals.no_color,
-                    env: self.env,
-                };
-                if let Some(report) = crate::commands::tui::gate(&place) {
-                    return self.emit_report(&report, out, err);
-                }
-                // A person at a terminal: the UI (UC-3.6d), which owns the
-                // terminal until it quits.
-                #[cfg(feature = "terminal")]
-                {
-                    let launch = crate::tui::Launch {
-                        repo: self.globals.repo.clone(),
-                        env: self.env.clone(),
-                        cwd: self.host.cwd.clone().unwrap_or_default(),
-                        version: self.host.version.clone(),
-                    };
-                    crate::tui::open(&launch)
-                }
-                // A build without the terminal UI (the WASI build) refuses
-                // it, as a run without a terminal is refused above.
-                #[cfg(not(feature = "terminal"))]
-                {
-                    let report = crate::commands::tui::unavailable();
-                    self.emit_report(&report, out, err)
-                }
-            }
-            "lsp start" => {
-                // The server blocks on stdin and polls no interrupt: Ctrl-C
-                // ends it at once, with 130, as it ends the Python host.
-                self.host.interrupt.stop_at_once();
-                // stdout is the protocol's: nothing is emitted around the server.
-                crate::commands::lsp::start_stdio(&self.host.version, err)
-            }
             "setup ci" => {
                 let report = self.setup_ci(&matches);
                 self.emit_report(&report, out, err)
@@ -870,6 +841,54 @@ impl Run<'_> {
                 self.emit_report(&report, out, err)
             }
             _ => self.emit(&unhandled(&path), &[], out, err),
+        }
+    }
+
+    /// Where the stdio servers (`mcp start`, `serve`) run: the working
+    /// directory and the global options, as the server reads them.
+    fn server_places(&self) -> ServerPlaces {
+        let resolved =
+            |path: Option<&str>| path.map(|path| self.resolve(path).display().to_string());
+        ServerPlaces {
+            cwd: self.host.cwd.clone(),
+            repo: resolved(self.globals.repo.as_deref()),
+            data: resolved(self.globals.data.as_deref()),
+            proxy: self.globals.proxy.clone(),
+            debug: self.globals.debug || self.env.debug_requested(),
+        }
+    }
+
+    /// `opentide tui`: the terminal UI for a person at a terminal, else the
+    /// refusal.
+    fn run_tui(&self, out: &mut dyn Write, err: &mut dyn Write) -> std::io::Result<i32> {
+        use std::io::IsTerminal as _;
+        let place = crate::commands::tui::Place {
+            mode: self.mode,
+            interactive: std::io::stdin().is_terminal() && self.host.stdout_tty,
+            no_color: self.globals.no_color,
+            env: self.env,
+        };
+        if let Some(report) = crate::commands::tui::gate(&place) {
+            return self.emit_report(&report, out, err);
+        }
+        // A person at a terminal: the UI (UC-3.6d), which owns the
+        // terminal until it quits.
+        #[cfg(feature = "terminal")]
+        {
+            let launch = crate::tui::Launch {
+                repo: self.globals.repo.clone(),
+                env: self.env.clone(),
+                cwd: self.host.cwd.clone().unwrap_or_default(),
+                version: self.host.version.clone(),
+            };
+            crate::tui::open(&launch)
+        }
+        // A build without the terminal UI (the WASI build) refuses
+        // it, as a run without a terminal is refused above.
+        #[cfg(not(feature = "terminal"))]
+        {
+            let report = crate::commands::tui::unavailable();
+            self.emit_report(&report, out, err)
         }
     }
 
@@ -1375,6 +1394,7 @@ impl Run<'_> {
     /// `opentide validate query`, from its parsed arguments. The options of
     /// `validate` it also takes, typed before `query`, are its own
     /// (`hand_down`); the others are refused, as is one typed on both.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn validate_query(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
         use crate::commands::validate_query::{Args, COMMAND, Context, plugin_live, run};
         let args = leaf(matches);
@@ -1849,6 +1869,7 @@ impl Run<'_> {
     }
 
     /// Prints `report` in this run's mode; its exit code.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn emit_report(
         &self,
         report: &crate::commands::Report,
@@ -2087,6 +2108,7 @@ impl Run<'_> {
     /// (`hand_down`, `refuse_dropped`), then the run.
     fn share(
         &self,
+        share: &crate::tree::ShareArgs,
         matches: &clap::ArgMatches,
         path: &str,
     ) -> Result<crate::commands::Report, Box<Failure>> {
@@ -2111,20 +2133,16 @@ impl Run<'_> {
             ("changed", "--changed"),
             ("since", "--since"),
         ];
-        let sub = group.subcommand();
-        let (mode, args) = match sub {
-            None => (Mode::Push, group),
-            Some((name, args)) => (
-                match name {
-                    "preview" => Mode::Preview,
-                    "status" => Mode::Status,
-                    "retract" => Mode::Retract,
-                    "targets" => Mode::Targets,
-                    _ => Mode::Push,
-                },
-                args,
-            ),
+        use crate::tree::ShareCommand as Command;
+        let mode = match &share.command {
+            None | Some(Command::Push(_)) => Mode::Push,
+            Some(Command::Preview(_)) => Mode::Preview,
+            Some(Command::Status(_)) => Mode::Status,
+            Some(Command::Retract(_)) => Mode::Retract,
+            Some(Command::Targets(_)) => Mode::Targets,
         };
+        let sub = group.subcommand();
+        let args = sub.map_or(group, |(_, own)| own);
         let accepts = |id: &str| match mode {
             Mode::Push => true,
             Mode::Preview => matches!(id, "target" | "uuid" | "object_type" | "file" | "workers"),
@@ -2173,41 +2191,7 @@ impl Run<'_> {
                 return Err(Box::new(failure));
             }
         }
-        // An option typed on `share` alone is the subcommand's.
-        let pick = |id: &str| -> Option<&clap::ArgMatches> {
-            if typed(group, id) && sub.is_some() {
-                return Some(group);
-            }
-            args.try_contains_id(id).unwrap_or(false).then_some(args)
-        };
-        let strings = |id: &str| -> Vec<String> {
-            pick(id)
-                .and_then(|m| m.get_many::<String>(id))
-                .map(|values| values.cloned().collect())
-                .unwrap_or_default()
-        };
-        let flag = |id: &str| pick(id).is_some_and(|m| m.get_flag(id));
-        let publish = match (pick("publish"), pick("no_publish")) {
-            (Some(m), _) if m.get_flag("publish") => Some(true),
-            (_, Some(m)) if m.get_flag("no_publish") => Some(false),
-            _ => None,
-        };
-        let parsed = Args {
-            mode,
-            targets: strings("target"),
-            uuids: strings("uuid"),
-            types: strings("object_type"),
-            files: strings("file"),
-            dry_run: flag("dry_run"),
-            publish,
-            workers: pick("workers")
-                .and_then(|m| m.get_one::<i64>("workers").copied())
-                .unwrap_or(1),
-            delete: flag("delete"),
-            yes: flag("yes"),
-            changed: flag("changed"),
-            since: pick("since").and_then(|m| m.get_one::<String>("since").cloned()),
-        };
+        let parsed = Args::from_cli(share, |id| typed(group, id));
         let cwd = self.host.cwd.clone().unwrap_or_default();
         Ok(run(
             &parsed,
@@ -2224,6 +2208,7 @@ impl Run<'_> {
 
     /// `setup skills discover` and `setup skills show` (UC-4.1, #831): the
     /// target the command and its groups name, then the catalogue.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn setup_skills_catalogue(
         &self,
         matches: &clap::ArgMatches,
@@ -2386,6 +2371,15 @@ impl Run<'_> {
         report.warnings.splice(0..0, warnings);
         report
     }
+}
+
+/// Where a stdio server runs, as its launch takes it.
+struct ServerPlaces {
+    cwd: Option<PathBuf>,
+    repo: Option<String>,
+    data: Option<String>,
+    proxy: Option<String>,
+    debug: bool,
 }
 
 /// The matches of the subcommand `matches` ran.
@@ -3880,6 +3874,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn framework_small_behaviours() {
         // TERM=DUMB in any case: no SGR, even in human mode on a terminal.
         let dumb = dispatched(
