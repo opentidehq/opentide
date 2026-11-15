@@ -1,9 +1,10 @@
-//! The command line of the `diff` commands that compare recorded cases with
-//! this repository's engine (`validate diff`, `lint diff`).
+//! The command-line pieces the `diff` commands share: the options of
+//! `validate diff` and `lint diff` (recorded cases against this repository's
+//! engine) and `--against`.
 
 use std::path::PathBuf;
 
-use clap::{Args, Subcommand};
+use clap::{Args, Subcommand, ValueEnum};
 
 /// The subcommands of `validate` and `lint`.
 #[derive(Subcommand, Debug)]
@@ -27,4 +28,12 @@ pub struct DiffArgs {
     /// Print each approved difference too
     #[arg(long)]
     pub show_approved: bool,
+}
+
+/// What an oracle comparison runs against: the frozen Python oracle is the
+/// only reference there is.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum Against {
+    /// The frozen Python oracle
+    Python,
 }
