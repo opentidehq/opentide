@@ -251,6 +251,7 @@ fn scalar_end(source: &str, start: usize, end: usize) -> usize {
 /// [`Error::Unreadable`] for a target or a promoted text that does not
 /// read as YAML, and [`Error::NonStringKey`] for a promoted block whose key
 /// is not a string: the target first, then the keys, then the promoted text.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn promote_block_statuses(
     document: &Document,
     statuses: &[String],

@@ -26,7 +26,10 @@
     missing_docs,
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
-
+#![expect(
+    clippy::too_many_lines,
+    reason = "engine dispatchers match every node kind in one function"
+)]
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, Range, Severity, codes, span_to_range,
 };

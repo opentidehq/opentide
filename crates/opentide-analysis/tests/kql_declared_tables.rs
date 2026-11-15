@@ -95,6 +95,7 @@ ResultType = { type = "int", description = "Declared as a number." }
 "#;
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn declared_tables_are_known_and_undeclared_ones_warn_once_a_workspace_declares_any() {
     let warning = |code: &str| vec![(code.to_string(), "Warning".to_string())];
     let error = |code: &str| vec![(code.to_string(), "Error".to_string())];

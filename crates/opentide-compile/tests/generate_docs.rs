@@ -238,6 +238,7 @@ fn an_invalid_documentation_toml_names_the_file() {
 /// then GitHub, then GitLab), then the host of the `origin` remote, then
 /// `documentation.toml`; `--flavor` before all of them.
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn the_flavour_comes_from_ci_then_origin_then_the_configuration() {
     use opentide_compile::generate::docs::flavor::Flavor;
     let (_dir, workspace) = open_edited("tide-corpus", |ws| {

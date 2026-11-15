@@ -725,6 +725,7 @@ fn planned(stage: &mut Stage, root: &Path, name: &str, result: &StepResult) -> P
 }
 
 /// The `--plan` document: each step's files, the counts and the outcome line.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn plan_report(
     command: &str,
     root: &Path,
@@ -1355,6 +1356,7 @@ fn execute(
     finish(COMMAND, StepResult::new(fields), name, root, cx)
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn run_steps(
     recorder: &mut Recorder<'_>,
     args: &GroupArgs,
