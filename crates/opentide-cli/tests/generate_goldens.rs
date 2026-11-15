@@ -1,10 +1,8 @@
-//! `generate` and `setup ci` against the oracle's recordings (UC-3.2, #824;
-//! UC-3.2c, #916): every recorded case of the ported commands, run in-process through
-//! [`opentide_cli::run`] on a fresh copy of its fixture, with the goldens'
-//! normalisation (`opentide-compare`), compared with the recording by the
-//! goldens' comparator (`opentide_compare::compare`, as `cargo xtask golden
-//! check --engine compare` compares them) under `APPROVED_DIFFS.toml`: exit
-//! code, stdout, stderr, and every file written.
+//! Behaviour of `generate` and `setup ci` (UC-3.2, #824; UC-3.2c, #916)
+//! beyond what the snapshot suite (`cli_snapshots.rs`) records: runs in
+//! process through [`opentide_cli::run`] on a copy of a fixture, for the
+//! cases that need their own setup (a failure part-way, a branch, a renamed
+//! rule, a refused configuration).
 
 #![cfg(unix)]
 #![expect(
@@ -22,31 +20,6 @@ use opentide_cli::{Host, run};
 #[path = "common/replay.rs"]
 mod replay;
 use replay::{Buffer, fixture};
-
-/// The commands whose recordings this test replays.
-const COMMANDS: &[&str] = &[
-    "generate.exports",
-    "generate.exports.navigator",
-    "generate.exports.objects",
-    "generate.exports.revisions",
-    "generate.docs",
-    "generate.docs.rules",
-    "generate.docs.objectives",
-    "generate.docs.threats",
-    "generate.docs.index",
-    "generate.explorer",
-    "generate.inflight",
-    "generate.inflight.prune",
-    "setup.ci",
-];
-
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn generate_cases_are_the_oracles() {
-    let (problems, ran) = replay::replay_commands(COMMANDS, true);
-    assert!(ran >= 32, "only {ran} cases found");
-    assert!(problems.is_empty(), "{}", problems.join("\n\n"));
-}
 
 /// The exports that rendered before one failed are on disk, as the oracle,
 /// which writes them one after another, leaves them: a threat without

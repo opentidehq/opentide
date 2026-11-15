@@ -217,8 +217,6 @@ dunce.workspace = true
 # wezterm's portable-pty: a pty on Unix, ConPTY on Windows. The one crate
 # that drives a run at a terminal.
 portable-pty = "0.9"
-# The goldens' case.toml and outcome.toml (tests/framework_goldens.rs).
-
-# The renderers' snapshots, written by the oracle (tests/render.rs).
+# The renderers' snapshots (tests/render.rs, tests/cli_snapshots.rs).
 insta.workspace = true
 trycmd.workspace = true

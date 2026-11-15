@@ -1,9 +1,7 @@
-//! The commands of UC-3.5 (#827) against the oracle's recordings: every
-//! recorded case on the static fixtures, replayed in-process
-//! (`common/replay.rs`) and compared under `APPROVED_DIFFS.toml`. The
-//! generated fixtures (`fault`, `heavy-small`) are `cargo xtask golden check
-//! --engine compare`'s. `OPENTIDE_REPLAY_FILTER=<part of a case id>` narrows a
-//! run while debugging.
+//! Behaviour of the commands of UC-3.5 (#827) that the snapshot suite
+//! (`cli_snapshots.rs`) does not hold: `--watch`, the dry-run filter, `new`'s
+//! references, and the length of a case root. What each command prints and
+//! writes is held by `cli_snapshots`.
 
 #![cfg(unix)]
 #![expect(
@@ -13,19 +11,6 @@
 
 #[path = "common/replay.rs"]
 mod replay;
-
-fn check(commands: &[&str], at_least: usize) {
-    let (problems, ran) = replay::replay_commands(commands, true);
-    if std::env::var_os("OPENTIDE_REPLAY_FILTER").is_none() {
-        assert!(ran >= at_least, "only {ran} cases found");
-    }
-    assert!(
-        problems.is_empty(),
-        "{} problem(s):\n\n{}",
-        problems.len(),
-        problems.join("\n\n")
-    );
-}
 
 /// A replayed case's root is named and placed as `cargo xtask golden
 /// check` places it (`/tmp/golden-XXXXXX`): a frame wraps a message by the
@@ -54,102 +39,6 @@ fn a_case_root_is_as_long_as_the_golden_checks() {
             canonical.display()
         );
     }
-}
-
-/// `setup skills discover` and `setup skills show` (UC-4.1, #831): the
-/// network refused, and the catalogue served from its cassette
-/// (`tests/cassettes/skills/manifest.json`), the requests checked against it.
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn skills_catalogue_cases_are_the_oracles() {
-    check(&["setup.skills.discover", "setup.skills.show"], 20);
-}
-
-/// `setup skills` (the install), `setup --skills` and `--plugin` (UC-4.4d,
-/// #834): a fresh install, one over the repository's own agent files and
-/// settings, the plugin, a remote skill and a failed download, each tree
-/// served from its cassette (`tests/cassettes/skills/`), and the files
-/// written compared with the oracle's.
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn skills_install_cases_are_the_oracles() {
-    check(&["setup.skills"], 40);
-}
-
-/// The root's own runs (UC-6.0b, #841): `--version`, a mistyped command or
-/// root option, a `--repo` that is not a folder, `--debug info`, the home
-/// screen of a bare `opentide` at a terminal and its help elsewhere; and the
-/// bare groups, which print their help to a person and a usage error to a
-/// program.
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn root_and_group_cases_are_the_oracles() {
-    check(
-        &[
-            "_root",
-            "generate.extract",
-            "lsp",
-            "mcp",
-            "migrate",
-            "new",
-            "rules",
-        ],
-        60,
-    );
-}
-
-/// `--help` on every command path, in every mode (#841): clap's help, held
-/// to the oracle's by what it says (the ledger's `help` entries).
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn help_cases_are_the_oracles() {
-    let (problems, ran) = replay::replay_variant("help");
-    assert!(ran >= 236, "only {ran} help cases found");
-    assert!(
-        problems.is_empty(),
-        "{} problem(s):\n\n{}",
-        problems.len(),
-        problems.join("\n\n")
-    );
-}
-
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn explain_cases_are_the_oracles() {
-    check(&["explain"], 12);
-}
-
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn validate_cases_are_the_oracles() {
-    check(&["validate"], 100);
-}
-
-/// `tui`'s refusals (UC-3.6b, #947): `usage_tui_needs_tty` wherever nobody
-/// can use the UI, and its help. The UI itself is recorded nowhere (a
-/// full-screen app redraws on a timer).
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn tui_cases_are_the_oracles() {
-    check(&["tui"], 6);
-}
-
-/// `deploy` (UC-3.1c, #896; UC-4.6, #979): the dry runs, and the deploys
-/// that send, each platform's tenant served from its cassette and the
-/// deployment state it writes compared with the oracle's.
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn deploy_cases_are_the_oracles() {
-    check(&["deploy"], 60);
-}
-
-/// `validate query` offline (UC-3.5b, #927) and `--live` (UC-4.2c, #832;
-/// UC-4.6, #979): Splunk's, Carbon Black Cloud's and Elastic's tenants served
-/// from their cassettes.
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn validate_query_cases_are_the_oracles() {
-    check(&["validate.query"], 20);
 }
 
 /// `validate --watch` in `plain` mode: one pass's frames and outcome line,
@@ -194,129 +83,6 @@ fn a_watch_shows_a_pass_and_ctrl_c_exits_0() {
         "{stdout}"
     );
     assert!(err.0.lock().unwrap().is_empty());
-}
-
-/// `query` (UC-4.2c, #832): its refusals and usage errors, the unset
-/// credentials of each platform, and the runs on the stand-in tenants
-/// (`tenants`) answered by their cassettes (`tests/cassettes/golden/`), as
-/// a table, JSON lines, CSV and the JSON document, the requests checked
-/// against each cassette.
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn query_cases_are_the_oracles() {
-    check(&["query"], 60);
-}
-
-/// `deploy migrate-state` (UC-4.4, #834): ids moved into shards, a rule
-/// refused, a clean run.
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn deploy_migrate_state_cases_are_the_oracles() {
-    check(&["deploy.migrate-state"], 16);
-}
-
-/// `share` and its subcommands (UC-4.4b, #834): the MISP stand-in's
-/// cassettes for a push and a retract, and the runs that stop before any
-/// request; `share push --changed` on the git checkouts of a push (UC-4.4e).
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn share_cases_are_the_oracles() {
-    check(
-        &[
-            "share",
-            "share.push",
-            "share.preview",
-            "share.status",
-            "share.retract",
-            "share.targets",
-        ],
-        120,
-    );
-}
-
-/// `generate extract defender` and `generate extract elastic` (UC-4.4b,
-/// #834): the stand-in tenants' cassettes, the files written under
-/// `Imported/` and Defender's deployment state; `generate extract sentinel`'s
-/// runs without a tenant (UC-4.4e; its tenant's run is
-/// `tests/extract_sentinel.rs`').
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn generate_extract_cases_are_the_oracles() {
-    check(
-        &[
-            "generate.extract.defender",
-            "generate.extract.elastic",
-            "generate.extract.sentinel",
-        ],
-        30,
-    );
-}
-
-/// The rules `generate extract elastic` writes (#834) are serde-saphyr's
-/// YAML, formatted differently from PyYAML's (`APPROVED_DIFFS.toml`): each
-/// file a stand-in tenant's case writes loads to the oracle's data, every
-/// value and every key in the oracle's order.
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn extracted_elastic_rules_load_as_the_oracles_data() {
-    use opentide_compare::FileState;
-    let as_data = |path: &str, bytes: &[u8]| {
-        let text = std::str::from_utf8(bytes).unwrap();
-        let loaded = opentide_schema::node::load(text)
-            .unwrap_or_else(|error| panic!("{path}: {error:?}\n{text}"));
-        opentide_compile::json::Json::from_node(loaded.root().unwrap()).to_compact()
-    };
-    let cases = replay::repo().join("tests/golden/cases/generate.extract.elastic");
-    let ledger = replay::ledger();
-    let mut usage = opentide_compare::ledger::Usage::default();
-    let mut compared = 0;
-    for mode in std::fs::read_dir(&cases).unwrap() {
-        let mode = mode.unwrap().path();
-        let Ok(variants) = std::fs::read_dir(mode.join("tenants")) else {
-            continue;
-        };
-        for dir in variants {
-            let dir = dir.unwrap().path();
-            let id = dir.strip_prefix(&cases).unwrap().display().to_string();
-            // The comparison under the ledger is `generate_extract_cases_are_the_oracles`'.
-            let _ = replay::replay(&id, &dir, &ledger, &mut usage);
-            let outcome: toml::Table = std::fs::read_to_string(dir.join("outcome.toml"))
-                .unwrap()
-                .parse()
-                .unwrap();
-            let candidate = replay::last_files();
-            for (path, state) in replay::recorded_files(&dir, &outcome) {
-                let FileState::Written { bytes, .. } = state else {
-                    continue;
-                };
-                if !path.starts_with("ws/Imported/") {
-                    continue;
-                }
-                let Some(FileState::Written { bytes: written, .. }) = candidate.get(&path) else {
-                    panic!("{id}: Rust did not write {path}");
-                };
-                assert_eq!(
-                    as_data(&path, written),
-                    as_data(&path, &bytes),
-                    "{id}: {path} loads to other data than the oracle's"
-                );
-                compared += 1;
-            }
-        }
-    }
-    assert!(compared >= 12, "only {compared} files compared");
-}
-
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn lint_cases_are_the_oracles() {
-    check(&["lint"], 50);
-}
-
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn commands_cases_are_the_oracles() {
-    check(&["commands"], 10);
 }
 
 /// Runs `words` in-process at `ws` (not a terminal); the exit code and
@@ -414,27 +180,6 @@ fn a_scoped_run_that_matches_nothing_is_not_an_empty_workspace() {
     );
 }
 
-/// `new threat|objective|rule` (UC-3.5d, #933): the object written, the
-/// templates and schemas generated first, the failures. One test per family,
-/// so nextest runs them side by side: each case generates the schemas.
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn new_threat_cases_are_the_oracles() {
-    check(&["new.threat"], 23);
-}
-
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn new_objective_cases_are_the_oracles() {
-    check(&["new.objective"], 8);
-}
-
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn new_rule_cases_are_the_oracles() {
-    check(&["new.rule"], 11);
-}
-
 /// `new rule --objective` takes the UUID of an existing objective in any
 /// case: the catalogue's UUIDs are compared in lower case, so an upper-case
 /// one is the same object, not `reference_not_found`.
@@ -517,34 +262,6 @@ fn new_warns_when_the_file_breaks_the_lint_filename_pattern() {
             .unwrap()
             .contains("does not match lint.toml")),
         "{stdout}"
-    );
-}
-
-/// `generate <phase>...` (UC-3.5d, #933): the `schemas`, `templates`,
-/// `vocabs` and `snippets` phases; and a bare `generate`, the full pipeline
-/// (UC-6.0, #841).
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn generate_phase_cases_are_the_oracles() {
-    check(&["generate"], 12);
-}
-
-/// `setup` and its file-writing subcommands (UC-3.6, #828): plan mode and
-/// non-interactive runs with the files written, and the wizard's refusals.
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn setup_cases_are_the_oracles() {
-    check(
-        &[
-            "setup",
-            "setup.env",
-            "setup.hooks",
-            "setup.mcp",
-            "setup.platforms",
-            "setup.repo",
-            "setup.vscode",
-        ],
-        48,
     );
 }
 
