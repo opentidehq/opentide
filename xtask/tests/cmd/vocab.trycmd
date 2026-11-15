@@ -77,9 +77,7 @@ For more information, try '--help'.
 
 $ xtask vocab malapi --delay -1
 ? 2
-error: unexpected argument '-1' found
-
-Usage: cargo xtask vocab malapi [OPTIONS]
+error: invalid value '-1' for '--delay <SECS>': `-1` is not a number of seconds
 
 For more information, try '--help'.
 

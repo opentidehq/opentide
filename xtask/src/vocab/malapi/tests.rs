@@ -388,7 +388,9 @@ fn the_options_are_checked() {
     assert!(parse(&words(&["--html-dir"])).is_err());
     assert!(parse(&words(&["--frobnicate"])).is_err());
     for delay in ["-1", "NaN", "inf", "soon", "1e300"] {
-        assert!(parse(&words(&["--delay", delay])).is_err(), "{delay}");
+        let error = parse(&words(&["--delay", delay])).unwrap_err().to_string();
+        assert!(error.contains("invalid value"), "{delay}: {error}");
+        assert!(error.contains(&format!("`{delay}`")), "{delay}: {error}");
     }
     let defaults = parse(&[]).unwrap();
     assert!(!defaults.check && !defaults.apply);
