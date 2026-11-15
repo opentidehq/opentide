@@ -15238,7 +15238,7 @@ exit: 0
       "deprecated": false,
       "example": "opentide serve",
       "group": false,
-      "help": "Run CLI commands in one warm process, for editors\n\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\ncommand as opentide --json would and answers with its document and exit\ncode, without starting Python and rebuilding the registry each time. The\neditor owns the process: it ends on exit or when stdin closes. stdout\ncarries the protocol only; logs go to stderr.",
+      "help": "Run CLI commands in one warm process, for editors\n\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\ncommand as opentide --json would and answers with its document and exit\ncode, without starting a new process each time; the read-only commands\nkeep the workspace loaded between runs. The editor owns the process: it\nends on exit or when stdin closes. stdout carries the protocol only; logs\ngo to stderr.",
       "name": "serve",
       "options": [],
       "output_schema": null,

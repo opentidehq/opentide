@@ -432,6 +432,7 @@ pub fn match_keyword(kind: &str) -> Option<&'static str> {
 }
 
 /// `yaral_match_shape` and `yaral_match_window` (yara-l-1.0, YaraLMatch).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn match_findings(node: &Node) -> Vec<Finding> {
     if !matches!(node.value, Value::Map(_)) {
         return vec![Finding::new(

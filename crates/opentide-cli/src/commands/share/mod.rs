@@ -435,6 +435,7 @@ fn payload(args: &Args, cx: &Context<'_>) -> Payload {
     shared(args, cx, &workspace, &sharing).redacted(&secrets)
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn shared(args: &Args, cx: &Context<'_>, workspace: &Workspace, sharing: &Sharing) -> Payload {
     if !sharing.errors().is_empty() {
         let mut payload = Payload::result(

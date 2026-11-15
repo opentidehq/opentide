@@ -1983,7 +1983,7 @@ pub enum RootCommand {
     #[command(
         name = "serve",
         about = "Run CLI commands in one warm process, for editors",
-        long_about = "Run CLI commands in one warm process, for editors\n\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\ncommand as opentide --json would and answers with its document and exit\ncode, without starting Python and rebuilding the registry each time. The\neditor owns the process: it ends on exit or when stdin closes. stdout\ncarries the protocol only; logs go to stderr.",
+        long_about = "Run CLI commands in one warm process, for editors\n\nJSON-RPC 2.0 on stdio, one message per line. Each run request executes a\ncommand as opentide --json would and answers with its document and exit\ncode, without starting a new process each time; the read-only commands\nkeep the workspace loaded between runs. The editor owns the process: it\nends on exit or when stdin closes. stdout carries the protocol only; logs\ngo to stderr.",
         after_help = "Examples:\n  $ opentide serve"
     )]
     Serve(ServeArgs),
@@ -2215,7 +2215,7 @@ pub enum DeployCommand {
     #[command(
         name = "replay-state",
         about = "Replay one commit's deployment-state changes onto the checkout (CI write-back).",
-        long_about = "Replay one commit's deployment-state changes onto the checkout (CI write-back).\n\nUsed by the generated production write-back when its rule files conflict\nwith a concurrent merge. A subcommand rather than ``python -m`` so it runs\nin the interpreter that has opentide, whatever ``python`` is on PATH.",
+        long_about = "Replay one commit's deployment-state changes onto the checkout (CI write-back).\n\nUsed by the generated production write-back when its rule files conflict\nwith a concurrent merge. A subcommand rather than a script, so it needs\nnothing but opentide.",
         hide = true
     )]
     ReplayState(DeployReplayStateArgs),

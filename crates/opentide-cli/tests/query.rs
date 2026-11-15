@@ -182,6 +182,7 @@ fn elastic<'a>(words: &[&'a str]) -> Vec<&'a str> {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn calls_that_cannot_run_are_refused_with_the_value_at_fault() {
     let (_scratch, ws) = workspace(&tenant("soc", "http://127.0.0.1:9"));
     let cases: &[(&[&str], &str, &str, &str)] = &[

@@ -288,6 +288,7 @@ fn config_path(fs: &dyn FileSystem, workspace: &Workspace, platform: &str) -> St
 
 /// Runs a dry run. `changed` answers the rule files the run changed;
 /// `is_set` whether an environment variable is set.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn run(
     workspace: &Workspace,
     owned: &Owned,

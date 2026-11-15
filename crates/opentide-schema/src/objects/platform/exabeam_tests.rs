@@ -156,6 +156,7 @@ fn the_advanced_query_fixture_is_the_engines() {
 /// (`CheckerTests.test_block_codes`), without the language and unknown-key
 /// ones, which are not this module's.
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn block_codes_table() {
     let two = json!([{"query": "vendor:\"a\""}, {"query": "vendor:\"b\""}]);
     let cases: Vec<(Json, &[&str])> = vec![

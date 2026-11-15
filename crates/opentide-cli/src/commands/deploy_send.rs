@@ -367,6 +367,7 @@ fn run_deploy(args: &Args, cx: &Context<'_>) -> Vec<(String, Json)> {
 }
 
 /// Counts the blocks a status kept out of the plan (`_report_skipped`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn report_skipped(
     result: &mut Vec<(String, Json)>,
     skipped: &[plan::Skipped],
@@ -1878,6 +1879,7 @@ impl Sender<'_, '_> {
             .ok_or_else(|| Raised::new(format!("Cannot find a deployment engine for {platform}")))
     }
 
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn by_uuid_rule(
         &mut self,
         platform: &str,
@@ -2438,6 +2440,7 @@ impl Sender<'_, '_> {
         clippy::too_many_arguments,
         reason = "one rule's send, as deploy_mdr takes it"
     )]
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn state_rule(
         &mut self,
         platform: &str,
@@ -2669,6 +2672,7 @@ impl Sender<'_, '_> {
 
     /// Elastic: each rule deleted, or checked then created or updated; a
     /// tenant that refuses the key stops its batch (`ElasticDeploy`).
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn elastic(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         use opentide_connectors::elastic::{
             Deployed, Elastic, ElasticError, ElasticRule, Strategy,
@@ -2868,6 +2872,7 @@ impl Sender<'_, '_> {
     /// Sysdig: each rule planned from deployment state, then created and
     /// added to its runtime policies, updated, disabled or deleted
     /// (`SysdigDeploy`).
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn sysdig(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         use opentide_connectors::sysdig::{Action, RuleDeploy, StateChange, deploy_rule};
         let logger = "opentide.platforms.sysdig.deployer";
@@ -3024,6 +3029,7 @@ impl Sender<'_, '_> {
     /// compiled for the tenant (its targets resolved), then created (its id
     /// recorded), updated or disabled with the whole payload, or deleted
     /// (its id forgotten) (`BitdefenderDeploy.deploy_tenant`).
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn bitdefender(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         use opentide_compile::bitdefender::{GravityZoneRule, compile_rule};
         use opentide_connectors::bitdefender::{
@@ -3202,6 +3208,7 @@ impl Sender<'_, '_> {
     /// disabled, archived or deleted by the id deployment state records
     /// (`GoogleSecopsDeploy`). Credentials that cannot be loaded, refused
     /// credentials or an instance that cannot be reached stop the tenant.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn google_secops(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         use opentide_connectors::google_secops::deploy::{
             Action, RuleDeploy, StateChange, deploy_rule,
@@ -3395,6 +3402,7 @@ impl Sender<'_, '_> {
     /// Graylog: the version is read once per tenant (a vulnerable one warned
     /// about), then each rule's event definition is created, updated,
     /// unscheduled or deleted (`GraylogDeploy`).
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn graylog(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         use opentide_connectors::graylog::{Action, Client, RuleDeploy, StateChange, deploy_rule};
         let logger = "opentide.platforms.graylog.deployer";
@@ -3632,6 +3640,7 @@ impl Sender<'_, '_> {
     /// deployment state, then created after a name check, updated (or
     /// disabled) by the recorded id, or deleted. A refused key, a tenant
     /// without the licence or with no answer stops its batch.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn exabeam(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         use opentide_connectors::exabeam::{Action, Exabeam, RuleDeploy, StateChange, deploy_rule};
         let logger = "opentide.platforms.exabeam.deployer";

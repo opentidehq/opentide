@@ -64,6 +64,7 @@ fn missing_tenants(workspace: &Workspace, uuid: &str, platform: &str) -> Option<
 }
 
 /// `deploy_rule`.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn deploy_rule(
     uuid: &str,
     platform: &str,
