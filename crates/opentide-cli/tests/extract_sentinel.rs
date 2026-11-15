@@ -151,9 +151,8 @@ fn as_data(path: &str, bytes: &[u8]) -> String {
 }
 
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-fn sentinel_rules_are_extracted_as_the_oracle_extracted_them() {
+fn sentinel_rules_are_extracted_as_the_recorded_run_extracted_them() {
     let (_scratch, ws, report) = extract();
 
     // The document: the oracle's keys, message and counts.

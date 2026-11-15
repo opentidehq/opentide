@@ -476,6 +476,7 @@ impl<'a> Session<'a> {
             tenant: self.tenant().to_owned(),
             message: error.describe(),
         })?;
+        let credentials = crate::answer::Credentials::of(&request);
         let started = std::time::Instant::now();
         let response = self.cx.http.send(request, self.cx.cancel).await?;
         let elapsed = started.elapsed();
@@ -492,12 +493,7 @@ impl<'a> Session<'a> {
         let status = response.status().as_u16();
         let body = self.cx.http.bytes(response, self.cx.cancel).await?;
         Ok(Reply {
-            answer: Answer {
-                status,
-                content_type,
-                body,
-                elapsed,
-            },
+            answer: Answer::new(status, content_type, body, elapsed, &credentials),
             retry_after,
             challenge,
         })
