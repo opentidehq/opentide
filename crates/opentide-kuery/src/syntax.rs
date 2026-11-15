@@ -154,9 +154,12 @@ pub(crate) type SyntaxElement = rowan::SyntaxElement<Kuery>;
 enum Token {
     #[regex(r"[ \t\r\n\u{00A0}]+")]
     Whitespace,
-    #[regex(r#""([^"\\]|\\[^\n])*""#)]
+    #[token("\"", quoted)]
     QuotedString,
-    #[regex(r#"([^ \t\r\n\u{00A0}\\():<>"{}]|\\[\\():<>"*{}trn]|\\u[0-9a-fA-F]{4}|\\[aA][nN][dD]|\\[oO][rR]|\\[nN][oO][tT])+"#)]
+    #[regex(
+        r#"[^ \t\r\n\u{00A0}\\():<>"{}]|\\[\\():<>"*{}trn]|\\u[0-9a-fA-F]{4}|\\[aA][nN][dD]|\\[oO][rR]|\\[nN][oO][tT]"#,
+        word
+    )]
     Word,
     #[token(":")]
     Colon,
@@ -176,6 +179,86 @@ enum Token {
     LBrace,
     #[token("}")]
     RBrace,
+}
+
+/// The length of the word unit at the start of `rest` (one character, or
+/// one of Kibana's escapes), or 0 when none starts there.
+fn word_unit(rest: &str) -> usize {
+    let mut chars = rest.chars();
+    let Some(c) = chars.next() else { return 0 };
+    if !matches!(
+        c,
+        ' ' | '\t' | '\r' | '\n' | '\u{a0}' | '\\' | '(' | ')' | ':' | '<' | '>' | '"' | '{' | '}'
+    ) {
+        return c.len_utf8();
+    }
+    if c != '\\' {
+        return 0;
+    }
+    let after = &rest[1..];
+    let Some(e) = after.chars().next() else {
+        return 0;
+    };
+    if matches!(
+        e,
+        '\\' | '(' | ')' | ':' | '<' | '>' | '"' | '*' | '{' | '}' | 't' | 'r' | 'n'
+    ) {
+        return 1 + e.len_utf8();
+    }
+    let bytes = after.as_bytes();
+    if e == 'u'
+        && bytes
+            .get(1..5)
+            .is_some_and(|h| h.iter().all(u8::is_ascii_hexdigit))
+    {
+        return 6;
+    }
+    for word in ["and", "or", "not"] {
+        if after
+            .get(..word.len())
+            .is_some_and(|w| w.eq_ignore_ascii_case(word))
+        {
+            return 1 + word.len();
+        }
+    }
+    0
+}
+
+/// A word is a run of units. Scanned by a loop: a repeated regex group
+/// makes logos recurse once per unit and overflows the stack on a long run
+/// of escapes (`\:` x 3000).
+fn word(lex: &mut logos::Lexer<'_, Token>) {
+    // The first unit is already matched; take the longest run after it.
+    let mut taken = 0;
+    loop {
+        let n = word_unit(&lex.remainder()[taken..]);
+        if n == 0 {
+            break;
+        }
+        taken += n;
+    }
+    lex.bump(taken);
+}
+
+/// The rest of a quoted string after its `"`: any character but `"` and
+/// `\\`, or `\\` and one character but a newline, then `"`. Unclosed, the
+/// `"` alone is an error. Scanned by a loop for the reason of [`word`].
+fn quoted(lex: &mut logos::Lexer<'_, Token>) -> bool {
+    let mut chars = lex.remainder().char_indices();
+    while let Some((i, c)) = chars.next() {
+        match c {
+            '"' => {
+                lex.bump(i + 1);
+                return true;
+            }
+            '\\' => match chars.next() {
+                Some((_, '\n')) | None => return false,
+                Some(_) => {}
+            },
+            _ => {}
+        }
+    }
+    false
 }
 
 /// Lexes `source`. A word spelled `or`, `and` or `not` (any case) becomes
