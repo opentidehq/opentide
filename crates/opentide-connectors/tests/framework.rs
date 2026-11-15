@@ -306,6 +306,21 @@ fn framework_proxy_per_tenant_no_proxy_and_explicit_proxy() {
         1,
         "tenant B went through the proxy"
     );
+    // An entry with the tenant's port sends it direct; with another port,
+    // through the proxy (curl's and Go's reading of `host:port`).
+    let port = url::Url::parse(&upstream.uri()).unwrap().port().unwrap();
+    for (entry, proxied) in [
+        (format!("127.0.0.1:{port}"), 1),
+        ("127.0.0.1:9".to_owned(), 2),
+    ] {
+        let env = through
+            .clone()
+            .with("HTTP_PROXY", &proxy.url())
+            .with("no_proxy", &entry);
+        let ping = format!("{}/ping", upstream.uri());
+        assert_eq!(get("b", &settings, &env, None, &ping).unwrap(), 200);
+        assert_eq!(proxy.interactions().len(), proxied, "no_proxy={entry}");
+    }
     // The same request without no_proxy is proxied (plain HTTP, absolute form).
     let proxied = Environment::from_pairs([("http_proxy", proxy.url().as_str())]);
     assert_eq!(
@@ -319,7 +334,7 @@ fn framework_proxy_per_tenant_no_proxy_and_explicit_proxy() {
         .unwrap(),
         200
     );
-    assert_eq!(proxy.interactions().len(), 2);
+    assert_eq!(proxy.interactions().len(), 3);
     // --proxy (or OPENTIDE_PROXY) wins over the variables, which name a
     // proxy that refuses every connection.
     let refusing = Environment::from_pairs([
@@ -359,7 +374,7 @@ fn framework_proxy_per_tenant_no_proxy_and_explicit_proxy() {
         .unwrap(),
         200
     );
-    assert_eq!(proxy.interactions().len(), 4);
+    assert_eq!(proxy.interactions().len(), 5);
 }
 
 /// A proxy that answers every `CONNECT` with *reply* (or, when `None`, takes

@@ -631,6 +631,77 @@ fn a_rust_run_cancelled_before_it_started_answers_130_unrun() {
     assert!(!job.cancel(), "a cancel after the run changes nothing");
 }
 
+/// `tests/golden/cases.toml`'s `serve` session (`initialize`, two runs, a
+/// refused run, protocol errors, `shutdown`, `exit`) on each of its
+/// fixtures, held to `tests/cli_snapshots/serve/plain__<fixture>__session.snap`
+/// (`cargo insta review` to change one): every line the server wrote, in
+/// order, with the run's folder as `<WS>` and the commands digest masked (and
+/// checked against the digest of today's `commands` document).
+#[test]
+fn the_serve_session_is_held_to_its_snapshots() {
+    let _session = session();
+    let manifest: toml::Table = toml::from_str(
+        &std::fs::read_to_string(replay::repo().join("tests/golden/cases.toml")).unwrap(),
+    )
+    .unwrap();
+    let case = manifest["case"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["command"].as_str() == Some("serve") && case.get("input").is_some())
+        .unwrap();
+    let input = case["input"].as_str().unwrap();
+    let fixtures: Vec<&str> = case["fixtures"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|fixture| fixture.as_str().unwrap())
+        .collect();
+    assert_eq!(fixtures, ["tide-corpus", "vscode"]);
+    for fixture in fixtures {
+        let (_root, ws) = workspace(fixture);
+        let (sender, lines) = channel();
+        let sender = Mutex::new(sender);
+        let write: Writer = Box::new(move |line: &str| {
+            let _ignored = sender.lock().unwrap().send(format!("{line}\n"));
+            Ok(())
+        });
+        let base = vec![("HOME".to_owned(), ws.display().to_string())];
+        let server = Server::new(
+            write,
+            Arc::new(HostRunner::new(base, ws.clone(), "0.28.1")),
+            "0.28.1",
+        );
+        // The reading thread takes every line before the first run starts.
+        opentide_cli::serve::read_lines(input.as_bytes(), &server);
+        assert!(server.serve(&|| false));
+        drop(server);
+        let output: String = lines.try_iter().collect();
+        let output = output.replace(&ws.display().to_string(), "<WS>");
+        // The digest changes with every help edit: the snapshot masks it, and
+        // the test holds it to the digest of the `commands` document today.
+        let today = commands_digest(
+            host(&ws)
+                .run("{\"argv\":[\"commands\"]}")
+                .get("document")
+                .unwrap(),
+        );
+        let digest = format!("\"commands_digest\":\"{today}\"");
+        assert_eq!(output.matches(&digest).count(), 1, "{fixture}: {output}");
+        let output = output.replace(&digest, "\"commands_digest\":\"<COMMANDS_DIGEST>\"");
+        let mut settings = insta::Settings::clone_current();
+        settings.set_snapshot_path(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/cli_snapshots/serve"),
+        );
+        settings.set_prepend_module_to_snapshot(false);
+        settings.set_omit_expression(true);
+        settings.set_description(format!("serve/plain/{fixture}/session"));
+        settings.bind(|| {
+            insta::assert_snapshot!(format!("plain__{fixture}__session"), output);
+        });
+    }
+}
+
 /// The `serve` fuzz target's seeds and saved crashes (`fuzz/seeds/serve`,
 /// `fuzz/regressions/serve`), replayed on stable Rust: each is a client's
 /// stdin, served to its end with runs that run nothing. The loop is
