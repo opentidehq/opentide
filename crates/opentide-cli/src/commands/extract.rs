@@ -1185,7 +1185,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         (Ok(total), Some(Ok(every))) => {
             if total < every {
                 tracing::warn!(
-                    rule = rule.get("name").map(py).as_deref().unwrap_or("None"),
+                    rule = rule.get("name").map(py).as_deref(),
                     interval = py(&interval).as_str(),
                     from = py(&from).as_str(),
                     "elastic_import_window_widened"
@@ -1195,7 +1195,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         }
         _ => {
             tracing::warn!(
-                rule = rule.get("name").map(py).as_deref().unwrap_or("None"),
+                rule = rule.get("name").map(py).as_deref(),
                 interval = py(&interval).as_str(),
                 from = py(&from).as_str(),
                 "elastic_import_schedule_defaulted"
@@ -1306,9 +1306,9 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                 .is_some_and(|kind| VALID_FIELD_TYPES.contains(&kind))
             {
                 tracing::warn!(
-                    rule = rule.get("name").map(py).as_deref().unwrap_or("None"),
+                    rule = rule.get("name").map(py).as_deref(),
                     field = py(name).as_str(),
-                    r#type = kind.map_or_else(|| "None".to_owned(), py).as_str(),
+                    r#type = kind.map(py).as_deref(),
                     "elastic_import_required_field_dropped"
                 );
                 continue;
@@ -1413,7 +1413,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                     if !known {
                         tracing::warn!(
                             rule = rule_name.as_str(),
-                            command = command.map_or_else(|| "None".to_owned(), py).as_str(),
+                            command = command.map(py).as_deref(),
                             "skipping_unsupported_endpoint_response_action"
                         );
                         continue;

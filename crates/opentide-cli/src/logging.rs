@@ -351,6 +351,20 @@ mod tests {
     }
 
     #[test]
+    fn a_missing_value_is_no_field() {
+        let emit = || {
+            let rule: Option<&str> = None;
+            let status: Option<u16> = None;
+            tracing::warn!(rule, status_code = status, "elastic_import_window_widened");
+            tracing::warn!(rule = Some("R"), status_code = Some(503u16), "x");
+        };
+        assert_eq!(
+            capture(config(false, false, false), emit),
+            "warning: Elastic import window widened\nwarning: X · rule: R · status_code: 503\n"
+        );
+    }
+
+    #[test]
     fn framework_logging_json_lines_and_redaction() {
         let text = capture(config(false, false, true), || {
             tracing::warn!(token = "hunter22", count = 3, "proxy_failed");

@@ -2922,22 +2922,13 @@ impl Sender<'_, '_> {
                                     result.fail(&refusal.message);
                                 }
                                 None => {
-                                    match failure.status {
-                                        Some(status) => tracing::error!(
-                                            uuid = rule.uuid.as_str(),
-                                            tenant = tenant.as_str(),
-                                            status_code = status,
-                                            error = failure.message.as_str(),
-                                            "sysdig_request_failed"
-                                        ),
-                                        None => tracing::error!(
-                                            uuid = rule.uuid.as_str(),
-                                            tenant = tenant.as_str(),
-                                            status_code = "None",
-                                            error = failure.message.as_str(),
-                                            "sysdig_request_failed"
-                                        ),
-                                    }
+                                    tracing::error!(
+                                        uuid = rule.uuid.as_str(),
+                                        tenant = tenant.as_str(),
+                                        status_code = failure.status,
+                                        error = failure.message.as_str(),
+                                        "sysdig_request_failed"
+                                    );
                                     self.rule_error(&mut result, &failure.message);
                                 }
                             }
