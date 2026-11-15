@@ -247,6 +247,7 @@ def test_only_the_rust_benchmark_is_held_to_a_last_result() -> None:
     assert find["if"] == "matrix.engine == 'rust'"
     check = next(s for s in steps if s.get("name") == "Check against the budgets")
     assert "--previous" in check["run"]  # still given to rust, only when a reference exists
+    assert "--require-reference" in check["run"]  # python stays held to its oracle baseline
 
 
 def test_no_workflow_runs_on_a_tag() -> None:

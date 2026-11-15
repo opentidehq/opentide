@@ -1,6 +1,6 @@
 # The plan section 11 benchmarks with their budgets (UC-0.8, #806): `cargo xtask bench`
 # (xtask/src/bench/) on the heavy workspace, held by `cargo xtask bench --check` to
-# tests/bench/budgets.toml and to the last result of the comparison base.
+# tests/bench/budgets.toml and, for the rust engine, to the last result of the comparison base.
 #
 # When: in the nightly (ci.yml's `benchmarks` job calls this workflow; the schedule
 # runs on the default branch, and Run workflow on ci.yml with scope `nightly` runs it
