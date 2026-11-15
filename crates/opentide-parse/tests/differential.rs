@@ -5,6 +5,8 @@
 use opentide_parse::differential::{
     Class, Config, Engine, Report, Source, Surfaces, assert_gates, run,
 };
+use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::ops::Range;
 
 /// A toy engine: valid means balanced parentheses. The `tweak` makes the
@@ -181,9 +183,105 @@ fn offset_surfaces_are_compared_at_char_boundaries_and_sampled_above_the_cap() {
 fn a_run_is_deterministic_and_the_seed_changes_the_inputs() {
     let one = go(Tweak::BrokenMessage, |_| {});
     assert_eq!(one, go(Tweak::BrokenMessage, |_| {}));
-    let other = go(Tweak::BrokenMessage, |c| c.seed = 99);
     assert_ne!(one.inputs, 0);
-    assert_ne!(one, other);
+    let files = files();
+    let seen = |seed| inputs(&files, &["(", ")", "a", "é", "(b)"], seed);
+    assert_eq!(seen(2), seen(2), "the same seed gives the same inputs");
+    // Adjacent seeds too: a seed is mixed, not used as the state.
+    for (a, b) in [(1, 99), (2, 3), (4, 5)] {
+        assert_ne!(seen(a), seen(b), "seeds {a} and {b} give the same inputs");
+    }
+}
+
+/// An engine that records every input it is shown, and reports nothing.
+struct Recorder(RefCell<BTreeSet<String>>);
+
+impl Engine for Recorder {
+    fn observe(&self, input: &str) -> Surfaces {
+        self.0.borrow_mut().insert(input.to_owned());
+        Vec::new()
+    }
+}
+
+/// The inputs a run generates from `files` and `samples` with `seed`.
+fn inputs(files: &[Source], samples: &[&str], seed: u64) -> BTreeSet<String> {
+    let verdict = |_: &Surfaces| true;
+    let mut config = Config::new(&verdict, &tokens, samples);
+    config.seed = seed;
+    let recorder = Recorder(RefCell::default());
+    let _ = run(&recorder, &recorder, files, &config);
+    recorder.0.into_inner()
+}
+
+#[test]
+fn mutations_unbalance_brackets_both_ways() {
+    // No bracket in the file nor in the samples: any bracket in an input
+    // was inserted by the bracket mutation.
+    let plain = [Source {
+        name: "p".into(),
+        text: "a b c d".into(),
+    }];
+    let mut generated = BTreeSet::new();
+    for seed in 1..=5 {
+        generated.extend(inputs(&plain, &["x"], seed));
+    }
+    assert!(
+        generated
+            .iter()
+            .any(|i| i.contains(['(', ')', '[', ']', '{', '}'])),
+        "no stray bracket inserted: {generated:?}"
+    );
+    // And a bracket of a balanced file is removed alone: its brackets sit
+    // inside word tokens, so only the bracket mutation leaves three of four.
+    let balanced = [Source {
+        name: "b".into(),
+        text: "[a] [b]".into(),
+    }];
+    let mut removed = BTreeSet::new();
+    for seed in 1..=5 {
+        removed.extend(inputs(&balanced, &["x"], seed));
+    }
+    assert!(
+        removed.iter().any(|i| i.matches(['[', ']']).count() == 3),
+        "no bracket removed: {removed:?}"
+    );
+}
+
+/// An engine that reports the surface `a` twice, the second value its own.
+struct Twice(&'static str);
+
+impl Engine for Twice {
+    fn observe(&self, _: &str) -> Surfaces {
+        vec![
+            ("a".to_owned(), "same".to_owned()),
+            ("a".to_owned(), self.0.to_owned()),
+        ]
+    }
+}
+
+#[test]
+fn a_surface_reported_twice_is_compared_on_every_value() {
+    let verdict = |_: &Surfaces| true;
+    let config = Config::new(&verdict, &tokens, &[]);
+    let one = [Source {
+        name: "one".into(),
+        text: "a".into(),
+    }];
+    let report = run(&Twice("old"), &Twice("new"), &one, &config);
+    let entry = &report.entries[&("a".to_owned(), Class::Valid)];
+    assert!(entry.count > 0);
+    assert_eq!(
+        (
+            entry.examples[0].old.as_str(),
+            entry.examples[0].new.as_str()
+        ),
+        ("same\nold", "same\nnew")
+    );
+    assert!(
+        run(&Twice("x"), &Twice("x"), &one, &config)
+            .entries
+            .is_empty()
+    );
 }
 
 #[test]
@@ -202,14 +300,9 @@ fn the_json_report_has_totals_and_examples_and_has_a_string_form_to_write() {
             .is_some_and(|m| m.contains("expected"))
     );
 
-    let dir = std::env::temp_dir().join(format!("opentide-parse-diff-{}", std::process::id()));
-    let path = dir.join("nested").join("report.json");
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(&path, report.to_json_string()).unwrap();
-    let back: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let back: serde_json::Value = serde_json::from_str(&report.to_json_string()).unwrap();
     assert_eq!(back, json);
-    std::fs::remove_file(&path).unwrap();
+    assert!(report.to_json_string().ends_with("}\n"));
 }
 
 #[test]

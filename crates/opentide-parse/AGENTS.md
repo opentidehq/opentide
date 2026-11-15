@@ -61,23 +61,28 @@ on no workspace crate, and the query engines (tier 2 and up) build on it. Publis
 `differential::run(old, new, files, &config)` compares two `Engine`s (`observe` for whole-input
 surfaces, `observe_at` for offset-indexed ones: hover, completions) over each file, its prefixes,
 seeded token mutations (delete, duplicate, swap, insert a sample, duplicate a line, drop a
-bracket, drop a quote) and random sentences. It knows no language: the caller's `Config` carries
-the `verdict` (valid, judged from an observation), the lexer's token ranges and the token samples.
+bracket or insert a stray one, drop a quote) and random sentences. It knows no language: the
+caller's `Config` carries the `verdict` (valid, judged from an observation), the lexer's token
+ranges and the token samples.
 
 - Gates (`assert_gates`): valid input, zero differences on every surface (`Class::Valid`); broken
   input, the same verdict (`Class::Verdict`). Message and range changes on broken input
   (`Class::Broken`) are counted and listed, never failed: review them as snapshot diffs.
 - Every difference is counted; `max_examples` caps only the listed examples per (surface, class).
+  A surface an engine reports more than once is compared as the ordered list of its values.
 - Offsets: every char boundary up to `max_offsets` per input, else an even stride (always with `0`
   and the end), so the sample is the same on every run. Prefixes are sampled the same way.
-- Deterministic from `Config::seed`. `Report::to_json`/`to_json_string` render the report; the caller writes the file (the crate is I/O-free).
+- Deterministic from `Config::seed`, which is mixed (splitmix64), so nearby seeds give unrelated
+  inputs. `Report::to_json`/`to_json_string` render the report; the caller writes the file (the
+  crate is I/O-free).
 - Only dev-dependencies enable the feature (`opentide-parse = { workspace = true, features =
-  ["differential"] }`): production code never links both engines. Its test file is `cfg`-gated on the
-  feature, so run `cargo nextest run -p opentide-parse --all-features`.
+  ["differential"] }`): production code never links both engines. The crate's own tests turn it
+  on through a dev-dependency on itself, so a plain `cargo test -p opentide-parse` (what CI runs)
+  includes them; `cargo xtask check-layers` does not count that self-edge.
 
 ## Test
 
 ```bash
-cargo nextest run --profile fast -p opentide-parse --all-features
+cargo nextest run --profile fast -p opentide-parse
 cargo test -p opentide-parse --doc
 ```

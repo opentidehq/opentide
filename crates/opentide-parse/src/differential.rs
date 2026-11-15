@@ -318,15 +318,23 @@ fn diff_surfaces(
     old: &Surfaces,
     new: &Surfaces,
 ) {
-    let find = |s: &'_ Surfaces, name: &str| {
-        s.iter()
-            .find(|(n, _)| n == name)
-            .map_or("<absent>", |(_, v)| v.as_str())
-            .to_owned()
+    let values = |s: &'_ Surfaces, name: &str| {
+        let all: Vec<&str> = s
+            .iter()
+            .filter(|(n, _)| n == name)
+            .map(|(_, v)| v.as_str())
+            .collect();
+        if all.is_empty() {
+            "<absent>".to_owned()
+        } else {
+            all.join("\n")
+        }
     };
+    // A name an engine reports more than once is compared as the ordered
+    // list of its values, so no copy hides a difference.
     let names: BTreeSet<&str> = old.iter().chain(new).map(|(n, _)| n.as_str()).collect();
     for name in names {
-        let (ov, nv) = (find(old, name), find(new, name));
+        let (ov, nv) = (values(old, name), values(new, name));
         if ov != nv {
             report.record((name, class), cap, || example(at.0, at.1, at.2, &ov, &nv));
         }
@@ -370,6 +378,17 @@ fn sample_offsets(text: &str, cap: usize) -> Vec<usize> {
 struct Rng(u64);
 
 impl Rng {
+    /// The generator of `seed`, mixed by splitmix64 so that nearby seeds
+    /// (2 and 3) give unrelated streams; never the all-zero state xorshift
+    /// cannot leave.
+    fn new(seed: u64) -> Self {
+        let mut z = seed.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        z ^= z >> 31;
+        Self(if z == 0 { 0x2545_f491_4f6c_dd1d } else { z })
+    }
+
     fn below(&mut self, n: usize) -> usize {
         self.0 ^= self.0 << 13;
         self.0 ^= self.0 >> 7;
@@ -380,7 +399,7 @@ impl Rng {
 
 /// Files, their prefixes, mutations and random sentences, as `(origin, text)`.
 fn generate(files: &[Source], config: &Config<'_>) -> Vec<(String, String)> {
-    let mut rng = Rng(config.seed.max(1) | 1);
+    let mut rng = Rng::new(config.seed);
     let mut out = Vec::new();
     for file in files {
         out.push((file.name.clone(), file.text.clone()));
@@ -425,8 +444,9 @@ fn clean_ranges(text: &str, mut ranges: Vec<Range<usize>>) -> Vec<Range<usize>> 
 }
 
 /// One mutation: delete, duplicate or swap a token, insert a sample,
-/// duplicate a line, unbalance a bracket, strip a quote. `None` when the
-/// chosen mutation does not apply to this text.
+/// duplicate a line, unbalance brackets (remove one, or insert a stray one
+/// before a token or at the end), strip a quote. `None` when the chosen
+/// mutation does not apply to this text.
 fn mutate(text: &str, tokens: &[Range<usize>], samples: &[&str], rng: &mut Rng) -> Option<String> {
     let token = |i: usize| &text[tokens[i].clone()];
     let splice = |range: Range<usize>, with: &str| {
@@ -471,8 +491,19 @@ fn mutate(text: &str, tokens: &[Range<usize>], samples: &[&str], rng: &mut Rng) 
             let start: usize = lines[..i].iter().map(|l| l.len()).sum();
             Some(splice(start..start, &format!("{line}{sep}")))
         }
-        5 | 6 => {
-            let hits = char_at(if rng.below(2) == 0 { "()[]{}" } else { "\"'`" })?;
+        5 if rng.below(2) == 0 => {
+            let hits = char_at("()[]{}")?;
+            let (at, c) = hits[rng.below(hits.len())];
+            Some(splice(at..at + c.len_utf8(), ""))
+        }
+        5 => {
+            let at = tokens
+                .get(rng.below(tokens.len() + 1))
+                .map_or(text.len(), |r| r.start);
+            Some(splice(at..at, ["(", ")", "[", "]", "{", "}"][rng.below(6)]))
+        }
+        6 => {
+            let hits = char_at("\"'`")?;
             let (at, c) = hits[rng.below(hits.len())];
             Some(splice(at..at + c.len_utf8(), ""))
         }
