@@ -12,9 +12,13 @@
 
 SourceFile = SetCommand* Query?
 
-SetCommand = 'set' name:Identifier '=' value:(Constant | MapExpression) ';'
+SetCommand = 'set' name:Identifier '=' value:MapValue ';'
 
-Query = source:SourceCommand ('|' command:ProcessingCommand)*
+// The first command is the source command: it and the processing commands share
+// the unknown command, so the accessor lists them as one.
+Query = Command ('|' Command)*
+
+Command = SourceCommand | ProcessingCommand
 
 // ---- Source commands -------------------------------------------------------
 
@@ -22,9 +26,9 @@ SourceCommand =
   FromCommand | TsCommand | RowCommand | ShowCommand | PromqlCommand
 | ExplainCommand | UnknownCommand
 
-FromCommand = 'from' index:Source (',' Source)* metadata:Metadata?
+FromCommand = 'from' Source (',' Source)* metadata:Metadata?
 
-TsCommand = 'ts' index:Source (',' Source)* metadata:Metadata?
+TsCommand = 'ts' Source (',' Source)* metadata:Metadata?
 
 Source = IndexPattern | SourceSubquery
 
@@ -34,15 +38,15 @@ Cluster = 'source_text'
 
 Selector = 'source_text'
 
-IndexName = 'source_text' | 'string_lit'
+IndexName = 'source_text' | String
 
 SourceSubquery =
-  '(' source:SubquerySource ('|' command:ProcessingCommand)* ')'
+  '(' source:SubquerySource ('|' ProcessingCommand)* ')'
 
 SubquerySource = FromCommand | TsCommand | RowCommand
 
 Metadata =
-  '['? 'metadata' field:MetadataField (',' MetadataField)* ']'?
+  '['? 'metadata' MetadataField (',' MetadataField)* ']'?
 
 MetadataField = 'source_text'
 
@@ -78,42 +82,39 @@ DropCommand = 'drop' NamePattern (',' NamePattern)*
 
 RenameCommand = 'rename' RenameClause (',' RenameClause)*
 
-RenameClause =
-  old:NamePattern 'as' new:NamePattern
-| new:NamePattern '=' old:NamePattern
+RenameClause = NamePattern (('as' | '=') NamePattern)*
 
 SortCommand = 'sort' OrderExpression (',' OrderExpression)*
 
 OrderExpression =
   key:BooleanExpression direction:('asc' | 'desc')? ('nulls' nulls:('first' | 'last'))?
 
-LimitCommand =
-  'limit' count:Constant ('by' by:BooleanExpression (',' BooleanExpression)*)?
+LimitCommand = 'limit' BooleanExpression ('by' BooleanExpression (',' BooleanExpression)*)?
 
 StatsCommand =
-  'stats' (aggregate:AggregateField (',' AggregateField)*)?
-  ('by' by:FieldAssignmentOrExpression (',' FieldAssignmentOrExpression)*)?
+  'stats' (AggregateField (',' AggregateField)*)?
+  ('by' FieldAssignmentOrExpression (',' FieldAssignmentOrExpression)*)?
 
 InlineStatsCommand =
-  ('inline' 'stats' | 'inlinestats') aggregate:AggregateField (',' AggregateField)*
-  ('by' by:FieldAssignmentOrExpression (',' FieldAssignmentOrExpression)*)?
+  ('inline' 'stats' | 'inlinestats') AggregateField (',' AggregateField)*
+  ('by' FieldAssignmentOrExpression (',' FieldAssignmentOrExpression)*)?
 
-AggregateField =
-  (name:QualifiedName '=')? value:BooleanExpression ('where' filter:BooleanExpression)?
+// The name, the value and the filter are all expressions by type: the first is the name when an `=` follows.
+AggregateField = BooleanExpression (('=' | 'where') BooleanExpression)*
 
-FieldAssignmentOrExpression = (name:QualifiedName '=')? value:BooleanExpression
+// The first expression is the name when an `=` follows (a name is an expression by type).
+FieldAssignmentOrExpression = BooleanExpression ('=' BooleanExpression)*
 
 DissectCommand =
-  'dissect' input:PrimaryExpression pattern:String
-  (CommandOption (',' CommandOption)*)?
+  'dissect' PrimaryExpression PrimaryExpression* (CommandOption (',' CommandOption)*)?
 
 CommandOption = name:Identifier '=' value:Constant
 
-GrokCommand = 'grok' input:PrimaryExpression pattern:String (',' String)*
+GrokCommand = 'grok' PrimaryExpression (','? PrimaryExpression)*
 
 EnrichCommand =
   'enrich' policy:EnrichPolicy ('on' match_field:NamePattern)?
-  ('with' with:EnrichWithClause (',' EnrichWithClause)*)?
+  ('with' EnrichWithClause (',' EnrichWithClause)*)?
 
 EnrichPolicy = String | (mode:EnrichMode ':')? name:PolicyName
 
@@ -121,24 +122,20 @@ EnrichMode = 'policy_part'
 
 PolicyName = 'policy_part'
 
-EnrichWithClause = (new:NamePattern '=')? field:NamePattern
+EnrichWithClause = NamePattern ('=' NamePattern)*
 
 MvExpandCommand = 'mv_expand' field:QualifiedName
 
 JoinCommand =
   kind:('lookup' | 'left' | 'right' | 'full') 'join' target:IndexPattern
-  ('as'? qualifier:JoinQualifier)? 'on' condition:BooleanExpression (',' BooleanExpression)*
+  ('as'? qualifier:JoinQualifier)? 'on' BooleanExpression (',' BooleanExpression)*
 
 JoinQualifier = 'source_text'
 
-ChangePointCommand =
-  'change_point' value:QualifiedName ('on' key:QualifiedName)?
-  ('as' type_name:QualifiedName ',' pvalue_name:QualifiedName)?
-  ('by' by:BooleanExpression (',' BooleanExpression)*)?
+ChangePointCommand = 'change_point' BooleanExpression (('on' | 'as' | ',' | 'by') BooleanExpression)*
 
 CompletionCommand =
-  'completion' (target:QualifiedName '=')? prompt:PrimaryExpression
-  (NamedParameters | 'with' inference_id:(Identifier | QuotedIdentifier | Parameter))?
+  'completion' PrimaryExpression (('=' | 'with') (PrimaryExpression | Identifier | QuotedIdentifier))* NamedParameters?
 
 NamedParameters = 'with' options:MapExpression
 
@@ -148,16 +145,12 @@ RerankCommand =
 
 SampleCommand = 'sample' probability:Constant
 
-ForkCommand = 'fork' ForkBranch+
+ForkCommand = 'fork' ForkBranch*
 
 ForkBranch = '(' ProcessingCommand ('|' ProcessingCommand)* ')'
 
 FuseCommand =
-  'fuse' method:Identifier?
-  ('score' 'by' score:QualifiedName
-  | 'key' 'by' key:QualifiedName (',' QualifiedName)*
-  | 'group' 'by' group:QualifiedName
-  | NamedParameters)*
+  'fuse' Identifier? (('score' | 'key' | 'group' | 'by' | ',')* QualifiedName | NamedParameters)*
 
 UriPartsCommand = 'uri_parts' target:QualifiedName '=' input:PrimaryExpression
 
@@ -177,16 +170,12 @@ TsCollapseCommand = 'ts_collapse'
 
 DedupCommand = 'dedup'
 
-MmrCommand =
-  'mmr' query_vector:PrimaryExpression? 'on' field:QualifiedName 'limit' limit:Constant
-  NamedParameters?
+MmrCommand = 'mmr' PrimaryExpression? (('on' | 'limit') PrimaryExpression)* NamedParameters?
 
 HighlightCommand =
   'highlight' query:BooleanExpression? ('on' NamePattern (',' NamePattern)*)? NamedParameters?
 
-DenseVectorCommand =
-  'dense_vector' (target:QualifiedName '=')? (field:PrimaryExpression (',' PrimaryExpression)*)?
-  NamedParameters?
+DenseVectorCommand = 'dense_vector' PrimaryExpression? (('=' | ',') PrimaryExpression)* NamedParameters?
 
 FillNullCommand = 'fillnull' value:Constant 'on' NamePattern (',' NamePattern)*
 
@@ -209,18 +198,17 @@ AndExpression = BooleanExpression ('and' BooleanExpression)*
 OrExpression = BooleanExpression ('or' BooleanExpression)*
 
 InExpression =
-  left:(ValueExpression | InTuple) negated:'not'? 'in'
-  ('(' value:ValueExpression (',' ValueExpression)* ')' | subquery:SourceSubquery)
+  (ValueExpression | InTuple) 'not'? 'in'
+  ('(' ValueExpression (',' ValueExpression)* ')' | SourceSubquery)
 
 InTuple = '(' ValueExpression (',' ValueExpression)* ')'
 
 IsNullExpression = operand:ValueExpression 'is' negated:'not'? 'null'
 
 LikeExpression =
-  left:ValueExpression negated:'not'? operator:('like' | 'rlike')
-  (pattern:PrimaryExpression | '(' pattern:(String | Parameter) (',' (String | Parameter))* ')')
+  ValueExpression 'not'? ('like' | 'rlike') '('? ValueExpression (',' ValueExpression)* ')'?
 
-MatchExpression = field:PrimaryExpression ':' query:Constant
+MatchExpression = PrimaryExpression (':' PrimaryExpression)*
 
 ValueExpression = Comparison | OperatorExpression
 
@@ -244,15 +232,15 @@ InlineCast = value:PrimaryExpression '::' type_name:TypeName
 TypeName = Identifier
 
 FunctionCall =
-  name:(Identifier | Parameter) '('
-  (arguments:Star | BooleanExpression (',' BooleanExpression)* (',' options:MapExpression)?)?
+  (Identifier | BooleanExpression) '('
+  (Star | BooleanExpression (',' BooleanExpression)* (',' MapExpression)?)?
   ')'
 
 Star = '*'
 
 MapExpression = '{' (MapEntry (',' MapEntry)*)? '}'
 
-MapEntry = key:String ':' value:(Constant | MapExpression)
+MapEntry = key:String ':' value:MapValue
 
 Constant = Null | QualifiedInterval | Number | Boolean | Parameter | String | Array
 
@@ -269,6 +257,16 @@ Number = 'number_lit'
 Array = '[' ('+' | '-')? (Number | Boolean | String) (',' ('+' | '-')? (Number | Boolean | String))* ']'
 
 String = 'string_lit'
+
+// Choices that are no node of their own in the tree.
+MapValue = Constant | MapExpression
+
+InferenceId = Identifier | QuotedIdentifier | Parameter
+
+InLeft = ValueExpression | InTuple
+
+LikeListItem = String | Parameter
+
 
 // ---- Names -----------------------------------------------------------------
 
