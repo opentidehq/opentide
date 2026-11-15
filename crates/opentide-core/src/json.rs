@@ -14,6 +14,7 @@
 //! repeated key gives.
 
 use std::fmt;
+use std::ops::{Deref, DerefMut};
 
 use indexmap::IndexMap;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
@@ -21,7 +22,102 @@ use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
 use serde_json::ser::PrettyFormatter;
 
 /// An object: its members in insertion order.
-pub type Object = IndexMap<String, Json>;
+///
+/// An [`IndexMap`] behind a pointer. A [`Json`] is as large as its largest
+/// variant, and an `IndexMap` held inline is 72 bytes: every number, string and
+/// `null` of a document would take that, 2.5 times the 32 bytes the other
+/// variants need (`info catalog`'s peak memory grew by 10 MiB with it). The map's
+/// own methods are the object's, through `Deref`.
+#[derive(Clone, Default, PartialEq)]
+pub struct Object(Box<IndexMap<String, Json>>);
+
+impl Object {
+    /// An empty object.
+    pub fn new() -> Object {
+        Object::default()
+    }
+
+    /// An empty object with room for `capacity` members.
+    pub fn with_capacity(capacity: usize) -> Object {
+        Object(Box::new(IndexMap::with_capacity(capacity)))
+    }
+
+    /// The members as the map that holds them.
+    pub fn into_map(self) -> IndexMap<String, Json> {
+        *self.0
+    }
+}
+
+impl Deref for Object {
+    type Target = IndexMap<String, Json>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Object {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl fmt::Debug for Object {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl From<IndexMap<String, Json>> for Object {
+    fn from(map: IndexMap<String, Json>) -> Object {
+        Object(Box::new(map))
+    }
+}
+
+impl<const N: usize> From<[(String, Json); N]> for Object {
+    fn from(members: [(String, Json); N]) -> Object {
+        members.into_iter().collect()
+    }
+}
+
+impl FromIterator<(String, Json)> for Object {
+    fn from_iter<I: IntoIterator<Item = (String, Json)>>(members: I) -> Object {
+        Object(Box::new(members.into_iter().collect()))
+    }
+}
+
+impl Extend<(String, Json)> for Object {
+    fn extend<I: IntoIterator<Item = (String, Json)>>(&mut self, members: I) {
+        self.0.extend(members);
+    }
+}
+
+impl IntoIterator for Object {
+    type Item = (String, Json);
+    type IntoIter = indexmap::map::IntoIter<String, Json>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.into_map().into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Object {
+    type Item = (&'a String, &'a Json);
+    type IntoIter = indexmap::map::Iter<'a, String, Json>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut Object {
+    type Item = (&'a String, &'a mut Json);
+    type IntoIter = indexmap::map::IterMut<'a, String, Json>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter_mut()
+    }
+}
 
 /// A JSON value.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -368,6 +464,25 @@ impl<'de> Visitor<'de> for JsonVisitor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A document holds a `Json` per value: an object must not make every
+    /// number and string as large as an `IndexMap`.
+    #[test]
+    fn a_value_is_as_large_as_a_string() {
+        assert_eq!(size_of::<Json>(), size_of::<String>() + size_of::<usize>());
+    }
+
+    #[test]
+    fn an_object_is_built_and_read_like_its_map() {
+        let mut object = Object::from([("b".to_owned(), Json::Int(1))]);
+        object.insert("a".to_owned(), Json::Int(2));
+        object.extend([("c".to_owned(), Json::Int(3))]);
+        let keys: Vec<&str> = (&object).into_iter().map(|(key, _)| key.as_str()).collect();
+        assert_eq!(keys, ["b", "a", "c"]);
+        let owned: Vec<String> = object.clone().into_iter().map(|(key, _)| key).collect();
+        assert_eq!(owned, ["b", "a", "c"]);
+        assert_eq!(object.into_map().len(), 3);
+    }
 
     #[test]
     fn objects_keep_their_key_order_through_a_round_trip() {

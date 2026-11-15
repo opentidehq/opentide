@@ -724,9 +724,7 @@ fn query_and_deploy_refuse_a_proxy_whose_password_would_name_its_host() {
                 let printed = format!("{}\n{}", ran.stdout, ran.stderr);
                 assert_ne!(ran.code, 0, "{command} {name}={proxy}: {printed}");
                 assert!(
-                    printed.contains(
-                        "the proxy is not a proxy URL: its user or password holds an unencoded"
-                    ),
+                    printed.contains("the proxy is not a proxy URL: an `@` follows a `/`"),
                     "{command} {name}={proxy}: {printed}"
                 );
                 for fragment in ["al1ceU", "Qz7k", "Wm4r", "Jx9v", "127.0.0.1", port.as_str()] {
