@@ -57,7 +57,7 @@ impl Settings {
         Self {
             enabled: promotion
                 .and_then(|p| p.get("enabled"))
-                .is_some_and(Json::truthy),
+                .is_some_and(Json::is_true),
             target: promotion
                 .and_then(|p| p.get("promotion_target"))
                 .and_then(Json::as_str)

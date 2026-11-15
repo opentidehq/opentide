@@ -202,13 +202,21 @@ export interface ConnectOptions {
   timeout?: number
 }
 
-/** `deploy`'s options: the signal that aborts it. */
+/**
+ * `deploy`'s options: the signal that aborts it, and a Sysdig rule's
+ * runtime policies.
+ */
 export interface DeployOptions {
   /**
    * Aborts this deploy alone, as `QueryOptions.signal` does a query. A
    * deploy aborted after the tenant received it may have been applied.
    */
   signal?: AbortSignal
+  /**
+   * A Sysdig rule's runtime policies (a plan entry's `policies`); unset,
+   * the tenant's, as `opentide deploy` takes them.
+   */
+  policies?: Array<string>
 }
 
 /** What `deploy` resolves to. */

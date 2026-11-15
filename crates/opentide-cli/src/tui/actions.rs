@@ -227,17 +227,10 @@ fn said(output: &str, document: Option<&serde_json::Value>) -> String {
 }
 
 /// `text` without what only a terminal reads: OSC 8 links (their text
-/// stays), the status line a run draws and clears, cursor switches.
+/// stays), cursor switches and line clears.
 pub fn clean(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    // `validate`'s status line: drawn with the cursor hidden, cleared before
-    // the result.
-    if let Some(after) = rest.strip_prefix("\x1b[?25l")
-        && let Some(end) = after.find("\x1b[?25h")
-    {
-        rest = &after[end + "\x1b[?25h".len()..];
-    }
     while let Some(start) = rest.find("\x1b]8;") {
         out.push_str(&rest[..start]);
         let after = &rest[start..];
@@ -288,8 +281,8 @@ mod tests {
     }
 
     #[test]
-    fn links_and_the_status_line_are_left_out_and_their_text_kept() {
-        let text = "\x1b[?25l\x1b[1;36m⠋\x1b[0m Validating objects\r\x1b[2K\x1b[?25h\
+    fn links_and_cursor_switches_are_left_out_and_their_text_kept() {
+        let text = "\x1b[?25l\r\x1b[2K\x1b[?25h\
                     \x1b]8;;file:///x.yaml\x1b\\x.yaml\x1b]8;;\x1b\\:8\n";
         assert_eq!(clean(text), "x.yaml:8\n");
         assert_eq!(strip_sgr("\x1b[1;31merror\x1b[0m: x"), "error: x");

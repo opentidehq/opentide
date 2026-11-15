@@ -134,6 +134,7 @@ fn crowdstrike_deploys_as_the_python_client_does() {
             rule_id: rule_id.to_owned(),
             operation,
             body,
+            policies: None,
         };
         block_on(async { deployer.deploy(cx, &request).await }).unwrap()
     };
@@ -207,6 +208,7 @@ fn crowdstrike_a_body_one_byte_off_fails_the_replay() {
         rule_id: String::new(),
         operation: Operation::Create,
         body: create("Encoded PowerShelL"),
+        policies: None,
     };
     let platform = Crowdstrike::new();
     let _ = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await });

@@ -245,6 +245,44 @@ pub struct CommandBudget {
     pub rss_waiver: Option<String>,
     /// The peak RSS the miss was measured at, in MiB.
     pub waived_rss_mib: Option<f64>,
+    /// A change of the command's numbers accepted on purpose: `"#123, why"`.
+    /// For `accepted_engine`'s runs only, a last result of the base branch
+    /// measured before `accepted_unix` is not compared with for this
+    /// command; the run is held to `accepted_s` and `accepted_rss_mib` (the
+    /// numbers the change was measured at) + `policy.regression` instead,
+    /// and its absolute budget still holds. The first run after it records
+    /// the new reference. Older results expire on their own: keep it until a
+    /// later change needs a new one.
+    pub accepted: Option<String>,
+    /// The engine whose numbers changed: `python` or `rust`.
+    pub accepted_engine: Option<String>,
+    /// When the change was accepted, in seconds since the Unix epoch: the
+    /// merge of the change that moved the numbers. Never after the run
+    /// checked, and not before 2020.
+    pub accepted_unix: Option<u64>,
+    /// The median the change was measured at, in seconds.
+    pub accepted_s: Option<f64>,
+    /// The peak RSS the change was measured at, in MiB.
+    pub accepted_rss_mib: Option<f64>,
+}
+
+/// 2020-01-01T00:00:00Z: an `accepted_unix` before it is a typo.
+const ACCEPTED_FLOOR_UNIX: u64 = 1_577_836_800;
+
+impl CommandBudget {
+    /// Whether an accepted change of `engine`'s numbers is recorded.
+    fn accepts(&self, engine: &str) -> bool {
+        self.accepted.is_some() && self.accepted_engine.as_deref() == Some(engine)
+    }
+
+    /// Whether `previous` was measured before the accepted change of
+    /// `engine`'s numbers.
+    fn predates_acceptance(&self, engine: &str, previous: &Report) -> bool {
+        self.accepts(engine)
+            && self
+                .accepted_unix
+                .is_some_and(|accepted| previous.created_unix < accepted)
+    }
 }
 
 /// Whether a waiver names the issue that closes it (`#123`).
@@ -359,6 +397,7 @@ impl Budgets {
                 ("target_waiver", &budget.target_waiver),
                 ("time_waiver", &budget.time_waiver),
                 ("rss_waiver", &budget.rss_waiver),
+                ("accepted", &budget.accepted),
             ] {
                 if let Some(waiver) = waiver
                     && !names_an_issue(waiver)
@@ -383,6 +422,42 @@ impl Budgets {
             ] {
                 if waiver.is_some() != waived.is_some() {
                     bail!("commands.{id}: {names} go together");
+                }
+            }
+            let acceptance = [
+                budget.accepted.is_some(),
+                budget.accepted_engine.is_some(),
+                budget.accepted_unix.is_some(),
+                budget.accepted_s.is_some(),
+                budget.accepted_rss_mib.is_some(),
+            ];
+            if acceptance.contains(&true) && acceptance.contains(&false) {
+                bail!(
+                    "commands.{id}: accepted, accepted_engine, accepted_unix, accepted_s and \
+                     accepted_rss_mib go together"
+                );
+            }
+            if let Some(engine) = &budget.accepted_engine
+                && !matches!(engine.as_str(), "python" | "rust")
+            {
+                bail!("commands.{id}.accepted_engine is python or rust, not {engine}");
+            }
+            if let Some(unix) = budget.accepted_unix
+                && unix < ACCEPTED_FLOOR_UNIX
+            {
+                bail!(
+                    "commands.{id}.accepted_unix {unix} is before 2020: seconds since the \
+                     Unix epoch, the change's merge"
+                );
+            }
+            for (name, value) in [
+                ("accepted_s", budget.accepted_s),
+                ("accepted_rss_mib", budget.accepted_rss_mib),
+            ] {
+                if let Some(value) = value
+                    && !(value.is_finite() && value > 0.0)
+                {
+                    bail!("commands.{id}.{name} must be a number > 0, not {value}");
                 }
             }
             if budget.target_waiver.is_some()
@@ -735,8 +810,33 @@ fn check_against(budgets: &Budgets, report: &Report, previous: Option<&Report>) 
     let mut rows = Vec::new();
     for result in &report.results {
         let budget = budgets.commands.get(&result.id);
-        let prior = previous.and_then(|p| p.results.iter().find(|r| r.id == result.id));
-        let row = check_one(
+        if let Some(budget) = budget
+            && budget.accepts(&report.engine)
+            && let Some(unix) = budget.accepted_unix
+            && unix > report.created_unix
+        {
+            // A typo'd or future time would turn the relative gate off for
+            // as long as it stays.
+            failures.push(format!(
+                "{}: accepted_unix {unix} is after this run ({}): refused",
+                result.id, report.created_unix
+            ));
+        }
+        let accepted = budget.filter(|budget| {
+            previous.is_some_and(|previous| budget.predates_acceptance(&report.engine, previous))
+        });
+        if let Some(budget) = accepted {
+            notes.push(format!(
+                "{}: {} predates an accepted change ({}); held to the accepted numbers",
+                result.id,
+                last_result(),
+                budget.accepted.as_deref().unwrap_or_default()
+            ));
+        }
+        let prior = previous
+            .filter(|_| accepted.is_none())
+            .and_then(|p| p.results.iter().find(|r| r.id == result.id));
+        let mut row = check_one(
             report,
             result,
             budget,
@@ -749,6 +849,9 @@ fn check_against(budgets: &Budgets, report: &Report, previous: Option<&Report>) 
             },
             &mut failures,
         );
+        if let Some(budget) = accepted {
+            hold_to_accepted(budget, result, policy, &mut row, &mut failures);
+        }
         rows.push(row);
     }
     for (id, budget) in &budgets.commands {
@@ -776,6 +879,46 @@ fn check_against(budgets: &Budgets, report: &Report, previous: Option<&Report>) 
         failures,
         reference,
         previous: previous_label,
+    }
+}
+
+/// While a stale last result is skipped ([`CommandBudget::accepted`]), the
+/// run is held to the numbers the change was accepted at: more than
+/// `policy.regression` over them (and the noise floor) fails.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "peak RSS in bytes, far below 2^52"
+)]
+fn hold_to_accepted(
+    budget: &CommandBudget,
+    result: &CommandResult,
+    policy: &Policy,
+    row: &mut Row,
+    failures: &mut Vec<String>,
+) {
+    let mut fail = |why: String| {
+        failures.push(format!("{}: {why}", result.id));
+        row.reasons.push(why);
+        row.verdict = Verdict::Fail;
+    };
+    if let (Some(median), Some(accepted)) = (result.median_s, budget.accepted_s)
+        && regressed(median, accepted, policy.regression, policy.noise_floor_s)
+    {
+        fail(format!(
+            "median {median:.3} s is more than {:.0}% over the {accepted:.3} s the change \
+             was accepted at",
+            policy.regression * 100.0
+        ));
+    }
+    if let (Some(rss), Some(accepted)) = (result.peak_rss_bytes, budget.accepted_rss_mib) {
+        let rss = rss as f64 / MIB;
+        if regressed(rss, accepted, policy.regression, policy.noise_floor_rss_mib) {
+            fail(format!(
+                "peak RSS {rss:.1} MiB is more than {:.0}% over the {accepted:.1} MiB the \
+                 change was accepted at",
+                policy.regression * 100.0
+            ));
+        }
     }
 }
 
@@ -1373,6 +1516,165 @@ target_s = 0.03
             "{:?}",
             outcome.failures
         );
+    }
+
+    /// `validate_clean`'s change of the rust numbers, accepted at 2026-11-14.
+    const ACCEPTED: &str = "[commands.validate_clean]\n\
+        accepted = \"#1, more checks\"\n\
+        accepted_engine = \"rust\"\n\
+        accepted_unix = 1794680173\n\
+        accepted_s = 0.6\n\
+        accepted_rss_mib = 90.0\n";
+
+    fn accepted_budgets() -> Budgets {
+        Budgets::parse(&BUDGETS.replace("[commands.validate_clean]\n", ACCEPTED)).unwrap()
+    }
+
+    /// A rust run of `validate_clean` at `seconds` and `mib`, measured at `unix`.
+    fn rust_at(seconds: f64, mib: f64, unix: u64) -> Report {
+        let mut r = report(
+            "rust",
+            vec![
+                measured("validate_clean", seconds, mib),
+                measured("explain", 0.02, 20.0),
+            ],
+        );
+        r.created_unix = unix;
+        r
+    }
+
+    const AFTER: u64 = 1_794_700_000;
+    const BEFORE: u64 = 1_794_600_000;
+
+    /// An accepted change is not held to a last result measured before it,
+    /// but to the numbers it was accepted at; one measured after it is.
+    #[test]
+    fn an_accepted_change_is_not_held_to_an_older_last_result() {
+        let budgets = accepted_budgets();
+        let previous = rust_at(0.4, 80.0, BEFORE);
+        let outcome = check(&budgets, &rust_at(0.6, 90.0, AFTER), Some(&previous));
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(outcome.rows[0].delta_previous.is_none());
+        assert!(
+            outcome
+                .notes
+                .iter()
+                .any(|n| n.contains("validate_clean") && n.contains("#1, more checks")),
+            "{:?}",
+            outcome.notes
+        );
+        let newer = rust_at(0.4, 80.0, AFTER - 1);
+        let outcome = check(&budgets, &rust_at(0.6, 90.0, AFTER), Some(&newer));
+        assert!(!outcome.passed());
+        assert!(
+            outcome.failures[0].contains(&last_result()),
+            "{:?}",
+            outcome.failures
+        );
+    }
+
+    /// While the stale result is skipped, the run is held to the accepted
+    /// numbers + policy.regression, and to its absolute budget.
+    #[test]
+    fn an_accepted_change_holds_to_its_numbers_and_the_budget() {
+        let budgets = accepted_budgets();
+        let previous = rust_at(0.4, 80.0, BEFORE);
+        // 0.65 s is within 10% of 0.6 s, 0.67 s is not.
+        assert!(check(&budgets, &rust_at(0.65, 90.0, AFTER), Some(&previous)).passed());
+        let slower = check(&budgets, &rust_at(0.67, 90.0, AFTER), Some(&previous));
+        assert!(
+            slower
+                .failures
+                .iter()
+                .any(|f| f.contains("0.600 s the change was accepted at")),
+            "{:?}",
+            slower.failures
+        );
+        let bigger = check(&budgets, &rust_at(0.6, 100.0, AFTER), Some(&previous));
+        assert!(
+            bigger
+                .failures
+                .iter()
+                .any(|f| f.contains("90.0 MiB the change was accepted at")),
+            "{:?}",
+            bigger.failures
+        );
+        // Accepted at 0.8 s, the run is still held to the 0.7 s target.
+        let generous = Budgets::parse(&BUDGETS.replace(
+            "[commands.validate_clean]\n",
+            &ACCEPTED.replace("accepted_s = 0.6", "accepted_s = 0.8"),
+        ))
+        .unwrap();
+        let over = check(&generous, &rust_at(0.75, 90.0, AFTER), Some(&previous));
+        assert!(!over.passed());
+        assert!(
+            over.failures.iter().all(|f| !f.contains("accepted at")),
+            "{:?}",
+            over.failures
+        );
+    }
+
+    /// The acceptance is the rust engine's: a python run is still held to
+    /// its last result.
+    #[test]
+    fn an_accepted_change_applies_to_its_engine_only() {
+        let budgets = accepted_budgets();
+        let mut previous = report(
+            "python",
+            vec![
+                measured("validate_clean", 2.5, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        previous.created_unix = BEFORE;
+        let mut current = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        current.created_unix = AFTER;
+        let outcome = check(&budgets, &current, Some(&previous));
+        assert!(!outcome.passed());
+        assert!(
+            outcome.failures[0].contains(&last_result()),
+            "{:?}",
+            outcome.failures
+        );
+    }
+
+    /// An acceptance after the run checked is refused: a typo'd or future
+    /// time would turn the relative gate off for as long as it stays.
+    #[test]
+    fn an_acceptance_after_the_run_is_refused() {
+        let outcome = check(&accepted_budgets(), &rust_at(0.6, 90.0, BEFORE), None);
+        assert!(
+            outcome
+                .failures
+                .iter()
+                .any(|f| f.contains("accepted_unix 1794680173 is after")),
+            "{:?}",
+            outcome.failures
+        );
+    }
+
+    #[test]
+    fn an_acceptance_needs_all_its_keys_an_issue_an_engine_and_a_plausible_time() {
+        let with = |from: &str, to: &str| {
+            Budgets::parse(
+                &BUDGETS.replace("[commands.validate_clean]\n", &ACCEPTED.replace(from, to)),
+            )
+        };
+        assert!(with("accepted_unix = 1794680173\n", "").is_err());
+        assert!(with("accepted_s = 0.6\n", "").is_err());
+        assert!(with("accepted_rss_mib = 90.0\n", "").is_err());
+        assert!(with("accepted_engine = \"rust\"\n", "").is_err());
+        assert!(with("#1, more checks", "more checks").is_err());
+        assert!(with("\"rust\"", "\"go\"").is_err());
+        assert!(with("1794680173", "100").is_err());
+        assert!(with("accepted_s = 0.6", "accepted_s = 0.0").is_err());
+        assert!(with("", "").is_ok());
     }
 
     #[test]

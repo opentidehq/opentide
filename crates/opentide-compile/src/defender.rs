@@ -28,7 +28,7 @@ fn lower_first(string: &str) -> String {
     }
 }
 
-/// A string the block sets, Python-truthy.
+/// A string the block sets, not empty.
 fn text<'j>(value: Option<&'j Json>, key: &str) -> Option<&'j str> {
     value
         .and_then(|value| value.get(key))
@@ -36,11 +36,11 @@ fn text<'j>(value: Option<&'j Json>, key: &str) -> Option<&'j str> {
         .filter(|text| !text.is_empty())
 }
 
-/// Whether the block sets `key` to a Python-truthy value.
+/// Whether the block sets the switch `key` to `true`.
 fn set(value: Option<&Json>, key: &str) -> bool {
     value
         .and_then(|value| value.get(key))
-        .is_some_and(Json::truthy)
+        .is_some_and(Json::is_true)
 }
 
 /// A response action (`ResponseAction`): `@odata.type` and `identifier`.
@@ -58,11 +58,11 @@ fn graph(kind: &str) -> String {
 /// The response actions of the block's `actions`, in the deployer's order.
 fn response_actions(actions: Option<&Json>) -> Vec<Json> {
     let mut out: Vec<Json> = Vec::new();
-    let Some(actions) = actions.filter(|actions| actions.truthy()) else {
+    let Some(actions) = actions.filter(|actions| actions.is_filled()) else {
         return out;
     };
     let device = || Json::Str("deviceId".into());
-    if let Some(devices) = actions.get("devices").filter(|value| value.truthy()) {
+    if let Some(devices) = actions.get("devices").filter(|value| value.is_filled()) {
         if let Some(isolation) = text(Some(devices), "isolate_device") {
             let mut action = response_action(&graph("isolateDeviceResponseAction"), device());
             action.insert("isolationType".into(), lower_first(isolation).into());
@@ -88,14 +88,14 @@ fn response_actions(actions: Option<&Json>) -> Vec<Json> {
             }
         }
     }
-    if let Some(files) = actions.get("files").filter(|value| value.truthy()) {
-        if let Some(allow_block) = files.get("allow_block").filter(|value| value.truthy()) {
+    if let Some(files) = actions.get("files").filter(|value| value.is_filled()) {
+        if let Some(allow_block) = files.get("allow_block").filter(|value| value.is_filled()) {
             let identifier = allow_block
                 .get("identifier")
                 .and_then(Json::as_str)
                 .unwrap_or_default();
             let mut scope = Json::Array(Vec::new());
-            if let Some(groups) = allow_block.get("groups").filter(|value| value.truthy())
+            if let Some(groups) = allow_block.get("groups").filter(|value| value.is_filled())
                 && groups.get("selection").and_then(Json::as_str) == Some("Specific")
             {
                 scope = groups.get("device_groups").cloned().unwrap_or(Json::Null);
@@ -111,14 +111,17 @@ fn response_actions(actions: Option<&Json>) -> Vec<Json> {
                 out.push(Json::Object(action));
             }
         }
-        if let Some(identifier) = files.get("quarantine_file").filter(|value| value.truthy()) {
+        if let Some(identifier) = files
+            .get("quarantine_file")
+            .filter(|value| value.is_filled())
+        {
             out.push(Json::Object(response_action(
                 &graph("stopAndQuarantineFileResponseAction"),
                 identifier.clone(),
             )));
         }
     }
-    if let Some(users) = actions.get("users").filter(|value| value.truthy()) {
+    if let Some(users) = actions.get("users").filter(|value| value.is_filled()) {
         for (key, kind) in [
             ("mark_as_compromised", "markUserAsCompromisedResponseAction"),
             ("disable_user", "disableUserResponseAction"),
@@ -171,7 +174,7 @@ fn severity(name: &str) -> Result<&'static str, CompileError> {
 /// The detection rule body `rule` deploys to `tenant` (`DetectionRule`, as
 /// the client sends it: `@odata.type` for `odata_type`).
 pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, CompileError> {
-    let Some(block) = rule.block(PLATFORM).filter(|block| block.truthy()) else {
+    let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Err(CompileError::invalid_rule(format!(
             "Rule {} ({}): configurations.{PLATFORM} is missing",
             rule.uuid, rule.name

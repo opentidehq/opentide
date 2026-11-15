@@ -147,9 +147,9 @@ pub fn error_of(answer: &Answer) -> (String, String) {
     }
 }
 
-/// Python's `str(value or "")`.
+/// A value as text; an empty or `null` one as nothing.
 fn text(value: &Json) -> String {
-    if value.truthy() {
+    if value.is_filled() {
         opentide_compile::deploy::text(value)
     } else {
         String::new()

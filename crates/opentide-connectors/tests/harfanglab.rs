@@ -122,6 +122,7 @@ fn harfanglab_deploys_as_the_python_client_does() {
             rule_id: rule_id.to_owned(),
             operation,
             body,
+            policies: None,
         };
         block_on(async { deployer.deploy(cx, &request).await })
             .unwrap()

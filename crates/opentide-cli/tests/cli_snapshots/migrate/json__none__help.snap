@@ -1,0 +1,24 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: migrate/json/none/help
+---
+args: opentide --json migrate --help
+exit: 0
+
+━━━ stdout
+Rewrite objects for a newer opentide model
+
+Usage: opentide migrate <COMMAND>
+
+Commands:
+  vocab-scope  Re-prefix stage-scoped vocabulary values
+
+Options:
+      --help
+          Print help
+
+Examples:
+  $ opentide migrate vocab-scope
+  $ opentide migrate vocab-scope --apply
+
+━━━ stderr · empty

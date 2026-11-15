@@ -392,6 +392,52 @@ fn elastic_rejects_with_a_code_not_a_crash() {
     }
 }
 
+/// The block's constraints read a value by its type, not by Python's
+/// truthiness: `false` and `0` are values a key is set to, an osquery
+/// action's `query` and a `group_by` field are names (non-empty strings),
+/// and only a sequence's items are judged (the field's type refuses any
+/// other value).
+#[test]
+fn elastic_block_codes_read_values_by_type() {
+    let codes = |overrides: Json| {
+        elastic::block_codes(&json_node(&merged(
+            &json!({"status": "STAGING", "type": "query", "query": "x"}),
+            &overrides,
+        )))
+    };
+    for (overrides, code) in [
+        (json!({"type": "eql", "language": false}), "language"),
+        (json!({"type": "esql", "index": 0}), "esql_source"),
+        (
+            json!({"index": ["a"], "data_view_id": 0}),
+            "index_xor_data_view",
+        ),
+        (json!({"query": ""}), "type_block"),
+        (
+            json!({"actions": {"respond": [{"osquery": {"query": 1}}]}}),
+            "response_action",
+        ),
+        (
+            json!({"suppression": {"group_by": [1], "duration": "1h"}}),
+            "suppression_shape",
+        ),
+    ] {
+        assert!(
+            codes(overrides.clone()).contains(code),
+            "{code}: {overrides}"
+        );
+    }
+    for overrides in [
+        json!({"query": 0}),
+        json!({"query": false}),
+        json!({"actions": {"respond": [{"osquery": {"query": "select 1"}}]}}),
+        json!({"exceptions": {"lists": "ab"}}),
+        json!({"actions": {"respond": {"endpoint": "isolate"}}}),
+    ] {
+        assert!(codes(overrides.clone()).is_empty(), "{overrides}");
+    }
+}
+
 #[test]
 fn elastic_accepts_the_alert_severity_vocabulary() {
     for severity in [

@@ -767,7 +767,7 @@ fn cluster(node: &Json, galaxy: &str) -> Option<GalaxyCluster> {
     if let Some(galaxy_node) = galaxy_node {
         let kind = galaxy_node
             .get("type")
-            .filter(|kind| kind.truthy())
+            .filter(|kind| kind.is_filled())
             .or_else(|| galaxy_node.get("name"));
         if let Some(Json::Str(kind)) = kind
             && kind != galaxy
@@ -781,8 +781,8 @@ fn cluster(node: &Json, galaxy: &str) -> Option<GalaxyCluster> {
     };
     let meta = raw
         .get("meta")
-        .filter(|meta| meta.truthy())
-        .or_else(|| raw.get("meta_fields").filter(|meta| meta.truthy()));
+        .filter(|meta| meta.is_filled())
+        .or_else(|| raw.get("meta_fields").filter(|meta| meta.is_filled()));
     let meta = match meta {
         Some(Json::Str(text)) => serde_json::from_str::<Json>(text).ok(),
         other => other.cloned(),
@@ -841,7 +841,9 @@ fn integer(value: Option<&Json>) -> Option<i64> {
 fn flag(value: Option<&Json>) -> bool {
     match value {
         Some(Json::Str(text)) => text == "1" || text.to_lowercase() == "true",
-        Some(other) => other.truthy(),
+        Some(Json::Bool(flag)) => *flag,
+        Some(Json::Int(number)) => *number == 1,
+        Some(_) => false,
         None => false,
     }
 }
@@ -966,10 +968,17 @@ mod tests {
     }
 
     #[test]
-    fn flags_and_integers_follow_python() {
+    fn flags_and_integers_are_read_by_type() {
         assert!(flag(Some(&json(r#""True""#))));
         assert!(!flag(Some(&json(r#""0""#))));
         assert!(flag(Some(&json("1"))));
+        assert!(flag(Some(&json("true"))));
+        assert!(!flag(Some(&json("false"))));
+        assert!(!flag(Some(&json("0"))));
+        // Only "1", "true" and 1 are on: 2, "yes" or a list are not flags.
+        assert!(!flag(Some(&json("2"))));
+        assert!(!flag(Some(&json(r#""yes""#))));
+        assert!(!flag(Some(&json("[1]"))));
         assert!(!flag(None));
         assert_eq!(integer(Some(&json(r#""42""#))), Some(42));
         assert_eq!(integer(Some(&json(r#""-1""#))), None);
