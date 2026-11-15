@@ -109,6 +109,7 @@ pub const FIXTURES: &[&str] = &[
     "none",
     "empty",
     "tide-corpus",
+    "tide-corpus-folders",
     "tide-corpus-typo",
     "tide-corpus-cve",
     "tide-corpus-legacy-ids",
@@ -184,6 +185,20 @@ pub fn fixture(name: &str, ws: &Path) {
         "fault-lint" => {
             fixture("fault", ws);
             apply_edits(name, ws);
+        }
+        // `objects/<family>` as real folders: a walk of `objects/` enters
+        // no link to a folder (`migrate vocab-scope`'s does not).
+        "tide-corpus-folders" => {
+            fixture("tide-corpus", ws);
+            for (family, legacy) in [
+                ("threats", "Objects/Threat Vectors"),
+                ("objectives", "Objects/Detection Objectives"),
+                ("rules", "Objects/Detection Rules"),
+            ] {
+                let folder = ws.join("objects").join(family);
+                std::fs::remove_file(&folder).unwrap();
+                copy_tree(&ws.join(legacy), &folder);
+            }
         }
         "tide-corpus-typo" => {
             fixture("tide-corpus", ws);

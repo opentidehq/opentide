@@ -116,6 +116,14 @@ fn spawn_with(cwd: &Path, args: &[&str], env: &[(String, String)]) -> Session {
     }
 }
 
+impl Drop for Session {
+    /// A failed expectation panics with the run still going: it must not
+    /// outlive the test.
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+    }
+}
+
 impl Session {
     /// Waits until the run prints `text` after what was last expected;
     /// everything it printed up to there.
@@ -596,7 +604,7 @@ fn setup_without_a_terminal_refuses() {
             command.env_remove(name);
         }
     }
-    let output = command
+    let mut child = command
         .args([
             "--json",
             "--no-color",
@@ -606,10 +614,32 @@ fn setup_without_a_terminal_refuses() {
         ])
         .current_dir(dir.path())
         .stdin(std::process::Stdio::null())
-        .output()
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
         .unwrap();
-    assert_ne!(output.status.code(), Some(0), "{output:?}");
-    let document: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let mut stdout = child.stdout.take().unwrap();
+    let reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = stdout.read_to_end(&mut bytes);
+        bytes
+    });
+    // A run that waits for an answer is a failure, not a hung test.
+    let started = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if started.elapsed() > TIMEOUT {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("the run did not exit in {TIMEOUT:?}");
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    let output = (status, reader.join().unwrap());
+    assert_ne!(output.0.code(), Some(0), "{output:?}");
+    let document: serde_json::Value = serde_json::from_slice(&output.1).unwrap();
     assert_eq!(document["ok"], false, "{document}");
     assert!(!repo.join("objects").exists());
 }
