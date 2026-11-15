@@ -293,8 +293,13 @@ fn golden_refuses_the_preview_flags_where_they_do_not_belong() {
         // A preview's recordings carry their oracle: DIR/ORACLE.
         vec!["check", "--recordings", &out],
     ] {
-        let args: Vec<String> = args.iter().map(|a| (*a).to_owned()).collect();
-        assert_eq!(xtask::golden::main(&args), usage, "{args:?}");
+        // clap refuses an option the verb does not take; the rest stop in the
+        // command, before it reads the repository.
+        let status = match parse_golden(&args) {
+            Ok(command) => xtask::golden::main(command),
+            Err(_) => usage,
+        };
+        assert_eq!(status, usage, "{args:?}");
     }
 }
 
@@ -346,4 +351,14 @@ fn cassettes_and_mcp_record_take_an_oracle_file() {
     let command = parse_mcp(&["record", "--oracle", &missing]).unwrap();
     let error = xtask::mcp::run(&command).unwrap_err().to_string();
     assert!(error.contains("ORACLE.none"), "{error}");
+}
+
+/// `cargo xtask golden <args>`, parsed as the command line does.
+fn parse_golden(argv: &[&str]) -> Result<xtask::golden::Cmd, clap::Error> {
+    use clap::{Command, FromArgMatches, Subcommand};
+    let command =
+        xtask::golden::Cmd::augment_subcommands(Command::new("golden").subcommand_required(true));
+    let matches =
+        command.try_get_matches_from(std::iter::once("golden").chain(argv.iter().copied()))?;
+    xtask::golden::Cmd::from_arg_matches(&matches)
 }
