@@ -76,13 +76,20 @@ jobs:
 
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
-          tool: cargo-llvm-cov@0.9.1,cargo-nextest@0.9.148
+          # maturin as in ci.yml's `native` job: the version pyproject.toml's
+          # build-system pins.
+          tool: cargo-llvm-cov@0.9.1,cargo-nextest@0.9.148,maturin@1.16.0
 
       # One instrumented build, measured by two suites. cargo-llvm-cov's
       # show-env exports the instrumentation (a rustc wrapper that instruments
       # the workspace's crates only) and where each process writes its profile;
-      # `uv sync` then builds `opentide._native` with it in the `dev` profile, so
-      # the binding the Python package loads writes counters too.
+      # `maturin develop` then builds `opentide._native` with it in the `dev`
+      # profile, where the report looks for the objects, so the binding the
+      # Python package loads writes counters too. Not `uv sync`'s build: uv
+      # adds a `build-args` given on its command line to pyproject.toml's
+      # (`--profile develop`), and maturin's backend passes each entry of that
+      # list as one argument, so the build refused `--profile dev` and the
+      # job failed in 30 s.
       #
       # - Every Rust test of the workspace, as nextest's `ci` profile runs them.
       #   Doctests are not measured (cargo-llvm-cov needs nightly for them);
@@ -96,7 +103,8 @@ jobs:
         run: |
           eval "$(cargo llvm-cov show-env --sh)"
           cargo llvm-cov clean --workspace
-          uv sync --group dev --reinstall-package opentide --config-settings-package "opentide:build-args=--profile dev"
+          uv sync --group dev --no-install-project
+          VIRTUAL_ENV="$PWD/.venv" maturin develop --uv --locked --profile dev
           cargo nextest run --workspace --locked --profile ci
           uv run --no-sync pytest tests/ -q --no-cov -p no:cacheprovider -n 4 \
             -m "not gitlab_ci_lint"
