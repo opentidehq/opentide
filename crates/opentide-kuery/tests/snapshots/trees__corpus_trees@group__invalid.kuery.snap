@@ -1,0 +1,51 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/kuery/group__invalid.kuery
+---
+SourceFile@0..41
+  FieldValueExpression@0..20
+    Field@0..6
+      UnquotedLiteral@0..6
+        Word@0..1 "#"
+        Whitespace@1..2 " "
+        Word@2..6 "prod"
+    Colon@6..7 ":"
+    UnquotedLiteral@7..20
+      Word@7..12 "group"
+      Whitespace@12..13 " "
+      Word@13..20 "invalid"
+  Whitespace@20..21 "\n"
+  Error@21..22
+    LParen@21..22 "("
+  OrQuery@22..40
+    FieldValueExpression@22..25
+      Field@22..23
+        UnquotedLiteral@22..23
+          Word@22..23 "a"
+      Colon@23..24 ":"
+      UnquotedLiteral@24..25
+        Word@24..25 "1"
+    Whitespace@25..26 " "
+    OrKw@26..28 "or"
+    Whitespace@28..29 " "
+    AndQuery@29..40
+      FieldValueExpression@29..32
+        Field@29..30
+          UnquotedLiteral@29..30
+            Word@29..30 "b"
+        Colon@30..31 ":"
+        UnquotedLiteral@31..32
+          Word@31..32 "2"
+      Whitespace@32..33 " "
+      AndKw@33..36 "and"
+      Whitespace@36..37 " "
+      FieldValueExpression@37..40
+        Field@37..38
+          UnquotedLiteral@37..38
+            Word@37..38 "c"
+        Colon@38..39 ":"
+        UnquotedLiteral@39..40
+          Word@39..40 "3"
+  Whitespace@40..41 "\n"
+20..21: unexpected (expected `or`, `and`, end of input)

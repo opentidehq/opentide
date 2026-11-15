@@ -1,0 +1,34 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/kuery/and_list__invalid.kuery
+---
+SourceFile@0..38
+  FieldValueExpression@0..28
+    Field@0..6
+      UnquotedLiteral@0..6
+        Word@0..1 "#"
+        Whitespace@1..2 " "
+        Word@2..6 "prod"
+    Colon@6..7 ":"
+    UnquotedLiteral@7..28
+      Word@7..15 "and_list"
+      Whitespace@15..16 " "
+      Word@16..23 "invalid"
+      Whitespace@23..24 "\n"
+      Word@24..28 "tags"
+  Error@28..29
+    Colon@28..29 ":"
+  Group@29..37
+    LParen@29..30 "("
+    AndQuery@30..35
+      ValueExpression@30..31
+        UnquotedLiteral@30..31
+          Word@30..31 "a"
+      Whitespace@31..32 " "
+      AndKw@32..35 "and"
+    Whitespace@35..36 " "
+    RParen@36..37 ")"
+  Whitespace@37..38 "\n"
+28..28: unexpected (expected `or`, `and`, end of input)
+35..36: missing a value (expected a value, a value, `not`, `(`)

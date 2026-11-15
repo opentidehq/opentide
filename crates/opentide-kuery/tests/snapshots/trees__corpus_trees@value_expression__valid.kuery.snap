@@ -1,0 +1,20 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/kuery/value_expression__valid.kuery
+---
+SourceFile@0..41
+  FieldValueExpression@0..40
+    Field@0..6
+      UnquotedLiteral@0..6
+        Word@0..1 "#"
+        Whitespace@1..2 " "
+        Word@2..6 "prod"
+    Colon@6..7 ":"
+    UnquotedLiteral@7..40
+      Word@7..23 "value_expression"
+      Whitespace@23..24 " "
+      Word@24..29 "valid"
+      Whitespace@29..30 "\n"
+      Word@30..40 "powershell"
+  Whitespace@40..41 "\n"

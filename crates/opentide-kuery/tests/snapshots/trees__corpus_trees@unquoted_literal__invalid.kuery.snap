@@ -1,0 +1,28 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/kuery/unquoted_literal__invalid.kuery
+---
+SourceFile@0..51
+  FieldValueExpression@0..39
+    Field@0..6
+      UnquotedLiteral@0..6
+        Word@0..1 "#"
+        Whitespace@1..2 " "
+        Word@2..6 "prod"
+    Colon@6..7 ":"
+    UnquotedLiteral@7..39
+      Word@7..23 "unquoted_literal"
+      Whitespace@23..24 " "
+      Word@24..31 "invalid"
+      Whitespace@31..32 "\n"
+      Word@32..39 "message"
+  Error@39..40
+    Colon@39..40 ":"
+  ValueExpression@40..50
+    UnquotedLiteral@40..50
+      Word@40..46 "cannot"
+      Whitespace@46..47 " "
+      Word@47..50 "run"
+  Whitespace@50..51 "\n"
+39..39: unexpected (expected `or`, `and`, end of input)

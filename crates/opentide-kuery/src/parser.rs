@@ -4,7 +4,7 @@
 //! flat node, so a 20 000-term chain is not 20 000 levels deep.
 
 use crate::syntax::{SyntaxKind as K, SyntaxNode, lex};
-use opentide_parse::{Grammar, Input, Parse, Parser, TokenSet, build};
+use opentide_parse::{Grammar, Input, Parse, Parser, TokenSet, build, debug_errors, debug_tree};
 
 /// Nesting (`(`, `field:(`, `field:{`) deeper than this is one error. The
 /// tree-sitter engine took 10 000 levels; the floor every language keeps is
@@ -224,47 +224,36 @@ fn list_unary(p: &mut Parser<'_>) {
     }
 }
 
+/// The tree of `source` and its errors as indented text, for the snapshot
+/// tests (`tests/trees.rs`).
+pub(crate) fn debug(source: &str) -> String {
+    let (root, parse) = parse(source, true);
+    let mut out = debug_tree(&root, |k| format!("{k:?}"));
+    out.push_str(&debug_errors(&parse.errors, |k| {
+        K::from_raw(k).describe().to_owned()
+    }));
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::syntax::Kuery;
-    use opentide_parse::{ErrorKind, MAX_TREE_DEPTH, debug_errors, debug_tree};
-
-    /// The tree of `source` and its errors, as the snapshots show them.
-    fn tree(source: &str) -> String {
-        let (root, parse) = parse(source, true);
-        assert_eq!(root.text(), source, "the tree is lossless");
-        let mut out = debug_tree(&root, |k| format!("{k:?}"));
-        out.push_str(&debug_errors(&parse.errors, |k| {
-            K::from_raw(k).describe().to_owned()
-        }));
-        out
-    }
+    use opentide_parse::{ErrorKind, MAX_TREE_DEPTH};
 
     #[test]
-    fn trees() {
-        insta::assert_snapshot!(
-            "detection",
-            tree(
-                "event.category:process and not process.name:(\"cmd.exe\" or power shell) and source.port >= 1024"
-            )
-        );
-        insta::assert_snapshot!(
-            "nested_and_group",
-            tree("(user:{ name:x or id:1 }) or a:1 and b:2 or not c")
-        );
-        insta::assert_snapshot!("trailing_keyword_is_a_value", tree("f:(a or)"));
-        insta::assert_snapshot!("unclosed", tree("a:(b or c"));
-        insta::assert_snapshot!("stray_paren", tree("a:1) and b"));
-    }
-
-    /// One tree snapshot per corpus file, valid and invalid alike.
-    #[test]
-    fn corpus_trees() {
-        insta::glob!("../../testdata/corpus/kuery", "*.kuery", |path| {
-            let source = std::fs::read_to_string(path).expect("a corpus file");
-            insta::assert_snapshot!(tree(&source));
-        });
+    fn every_tree_is_lossless() {
+        for source in [
+            "a:1 and (b or c",
+            "\\ \"x y:\u{e9}\u{a0}and\n\tor",
+            "f:{ a:(b or",
+            ")(}{:<<=",
+            "",
+            "   ",
+        ] {
+            let (root, _) = parse(source, true);
+            assert_eq!(root.text(), source, "{source:?}");
+        }
     }
 
     #[test]
