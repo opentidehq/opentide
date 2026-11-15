@@ -143,6 +143,10 @@ impl rowan::Language for Kuery {
 
 /// A node of the tree.
 pub(crate) type SyntaxNode = rowan::SyntaxNode<Kuery>;
+/// A token of the tree.
+pub(crate) type SyntaxToken = rowan::SyntaxToken<Kuery>;
+/// A node or a token.
+pub(crate) type SyntaxElement = rowan::SyntaxElement<Kuery>;
 
 /// The lexer: the grammar's `word` is a run of characters other than
 /// whitespace and `\():<>"{}`, or Kibana's escapes; whitespace includes NBSP.
