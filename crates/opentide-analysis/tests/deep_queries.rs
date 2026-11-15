@@ -16,9 +16,10 @@
 //!
 //! A replacement parser must keep every floor (its `max_depth` sits at or
 //! above it). A floor equal to the cap means the engine passed at the cap, so
-//! the true limit is higher. Two chain floors are set below the measured edge
-//! on purpose: kql and yaral are quadratic in the chain length on tree-sitter,
-//! so the edge sits near the time budget and a test there would be flaky.
+//! the true limit is higher. Three floors are set below the measured edge on
+//! purpose: kql and yaral are quadratic in the chain length on tree-sitter (and
+//! yaral in the nesting depth), so the edge sits near the time budget and a
+//! test there would be flaky.
 
 #![expect(
     clippy::unwrap_used,
@@ -40,9 +41,10 @@ const NEST_CAP: usize = 10_000;
 /// kql: 2,000 terms took 21 s, 3,000 took 41 s, 4,000 took 72 s (quadratic).
 /// Set below the edge so that load cannot flip the test.
 const KQL_CHAIN_FLOOR: usize = 2_000;
-/// yaral: 1,500 terms took 20 s, 2,000 took 44 s, 2,500 took 87 s (quadratic).
-/// Set below the edge so that load cannot flip the test.
-const YARAL_CHAIN_FLOOR: usize = 1_500;
+/// yaral: 1,000 terms took 6 s, 1,500 took 20 s, 2,000 took 44 s, 2,500 took 87 s
+/// (quadratic); 1,500 took 71 s on a CI runner. Set well below the edge so that
+/// load cannot flip the test.
+const YARAL_CHAIN_FLOOR: usize = 1_000;
 /// spl passed the cap in 0.9 s.
 const SPL_CHAIN_FLOOR: usize = CHAIN_CAP;
 /// cql passed the cap in 0.3 s.
@@ -69,8 +71,9 @@ const KQL_NEST_FLOOR: usize = 35;
 const SPL_NEST_FLOOR: usize = NEST_CAP;
 /// cql passed the cap in 0.1 s.
 const CQL_NEST_FLOOR: usize = NEST_CAP;
-/// yaral passed the cap in 19 s.
-const YARAL_NEST_FLOOR: usize = NEST_CAP;
+/// yaral passed the cap in 19 s (33 s on a CI runner; quadratic: 5,000 took
+/// 6 s). Set at 5,000 so that load cannot push the test over the time budget.
+const YARAL_NEST_FLOOR: usize = 5_000;
 /// yara: 495 levels passed; 496 gives `yara_parse_error`.
 const YARA_NEST_FLOOR: usize = 495;
 /// exabeam: 199 levels passed; 200 gives `exabeam_parse_error`.
