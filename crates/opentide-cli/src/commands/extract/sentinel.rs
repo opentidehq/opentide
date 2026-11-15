@@ -147,7 +147,7 @@ fn given<'j>(object: &'j Object, key: &str) -> Option<&'j CJson> {
         CJson::Str(text) => !text.is_empty(),
         CJson::Array(items) => !items.is_empty(),
         CJson::Object(members) => !members.is_empty(),
-        CJson::Bool(true) | CJson::Int(_) | CJson::Float(_) => true,
+        CJson::Bool(true) | CJson::Int(_) | CJson::UInt(_) | CJson::Float(_) => true,
     })
 }
 
