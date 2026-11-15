@@ -18,6 +18,11 @@ source = "tests/fixtures/tide_corpus/current"
 about = "tests/fixtures/tide_corpus, in the .opentide/ layout the Python suite gives it"
 vars = { threat = "00000000-0000-4000-8001-000000000001", objective = "00000000-0000-4000-8002-000000000001", rule = "00000000-0000-4000-8003-000000000001", rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
 
+[fixtures.tide-corpus-folders]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with `objects/threats`, `objects/objectives` and `objects/rules` real folders (copies of `Objects/`), not links to them: `migrate vocab-scope` enters no link to a folder, so over the links it scans no file"
+
 [fixtures.tide-corpus-legacy-ids]
 kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
@@ -2519,13 +2524,13 @@ fixtures = ["tide-corpus", "vscode"]
 command = "migrate vocab-scope"
 variant = "default"
 args = ["migrate", "vocab-scope"]
-fixtures = ["tide-corpus", "vscode", "fault"]
+fixtures = ["tide-corpus-folders", "vscode", "fault"]
 
 [[case]]
 command = "migrate vocab-scope"
 variant = "apply"
 args = ["migrate", "vocab-scope", "--apply"]
-fixtures = ["tide-corpus"]
+fixtures = ["tide-corpus-folders"]
 
 # Values to rewrite: a dry run, the files --apply writes, and a value left
 # for a person (exit 2, --force to accept), so the rewrite path is recorded.
