@@ -44,10 +44,11 @@ WRITES = {
     ("publish.yml", "npm"): {"id-token"},
 }
 
-#: The Python oracle's byte-level comparisons run by hand only.
+#: The Python oracle's byte-level comparisons run by hand only. `corpus
+#: generate` and `corpus faults --out` write workspaces and run no oracle.
 ORACLE = re.compile(
-    r"xtask (?:golden|compare|mcp)\b|xtask corpus (?!generate\b)|--oracle\b|--check-determinism|"
-    r"golden (?:check|record|diff)\b|--runner (?:node|wasi)\b"
+    r"xtask (?:golden|compare|mcp)\b|xtask corpus (?!generate\b|faults --out\b)|--oracle\b|"
+    r"--check-determinism|golden (?:check|record|diff)\b|--runner (?:node|wasi)\b"
 )
 
 

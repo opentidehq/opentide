@@ -80,6 +80,16 @@ jobs:
           # build-system pins.
           tool: cargo-llvm-cov@0.9.1,cargo-nextest@0.9.148,maturin@1.16.0
 
+      # The CLI's snapshot cases on the generated workspaces (UC-0.6), which
+      # xtask writes: the tests below read where from the environment.
+      - name: Generated workspaces for the CLI snapshots
+        run: |
+          out="$RUNNER_TEMP/generated-workspaces"
+          cargo xtask corpus faults --out "$out/fault"
+          cargo xtask corpus generate --seed 1 --threats 30 --objectives 30 --rules 50 --out "$out/heavy-small"
+          echo "OPENTIDE_REPLAY_FIXTURES=fault=$out/fault,heavy-small=$out/heavy-small" >> "$GITHUB_ENV"
+          echo "OPENTIDE_SNAPSHOT_REQUIRE_GENERATED=1" >> "$GITHUB_ENV"
+
       # One instrumented build, measured by two suites. cargo-llvm-cov's
       # show-env exports the instrumentation (a rustc wrapper that instruments
       # the workspace's crates only) and where each process writes its profile;

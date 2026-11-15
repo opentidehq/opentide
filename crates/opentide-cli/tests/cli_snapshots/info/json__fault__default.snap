@@ -1,0 +1,312 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: info/json/fault/default
+---
+args: opentide --json info
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "info",
+  "counts": {
+    "objectives": 60,
+    "rules": 693,
+    "threats": 119
+  },
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Completed successfully",
+  "next_actions": [
+    {
+      "command": "opentide --json validate",
+      "reason": "show where each object failed to load"
+    }
+  ],
+  "ok": true,
+  "parse_error_count": 7,
+  "platforms": [
+    {
+      "can_deploy": true,
+      "can_query": true,
+      "can_validate": true,
+      "enabled": true,
+      "name": "sentinel",
+      "tenants": [
+        {
+          "description": "Generated tenant sentinel-staging",
+          "manual": false,
+          "name": "sentinel-staging",
+          "strategies": [
+            "PREVIEW"
+          ],
+          "variables": [
+            {
+              "name": "SENTINEL_STAGING_CLIENT_ID",
+              "set": false
+            },
+            {
+              "name": "SENTINEL_STAGING_CLIENT_SECRET",
+              "set": false
+            },
+            {
+              "name": "SENTINEL_STAGING_SUBSCRIPTION_ID",
+              "set": false
+            },
+            {
+              "name": "SENTINEL_STAGING_TENANT_ID",
+              "set": false
+            },
+            {
+              "name": "SENTINEL_STAGING_WORKSPACE_ID",
+              "set": false
+            }
+          ]
+        },
+        {
+          "description": "Generated tenant sentinel-production",
+          "manual": false,
+          "name": "sentinel-production",
+          "strategies": [
+            "RELEASE"
+          ],
+          "variables": [
+            {
+              "name": "SENTINEL_PRODUCTION_CLIENT_ID",
+              "set": false
+            },
+            {
+              "name": "SENTINEL_PRODUCTION_CLIENT_SECRET",
+              "set": false
+            },
+            {
+              "name": "SENTINEL_PRODUCTION_SUBSCRIPTION_ID",
+              "set": false
+            },
+            {
+              "name": "SENTINEL_PRODUCTION_TENANT_ID",
+              "set": false
+            },
+            {
+              "name": "SENTINEL_PRODUCTION_WORKSPACE_ID",
+              "set": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "can_deploy": true,
+      "can_query": true,
+      "can_validate": true,
+      "enabled": true,
+      "name": "defender_for_endpoint",
+      "tenants": [
+        {
+          "description": "Generated tenant mde-production",
+          "manual": false,
+          "name": "tenant 1",
+          "strategies": [
+            "PREVIEW",
+            "RELEASE"
+          ],
+          "variables": [
+            {
+              "name": "MDE_PRODUCTION_CLIENT_ID",
+              "set": false
+            },
+            {
+              "name": "MDE_PRODUCTION_CLIENT_SECRET",
+              "set": false
+            },
+            {
+              "name": "MDE_PRODUCTION_TENANT_ID",
+              "set": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "can_deploy": true,
+      "can_query": true,
+      "can_validate": true,
+      "enabled": true,
+      "name": "splunk",
+      "tenants": [
+        {
+          "description": "Generated tenant splunk-es",
+          "manual": false,
+          "name": "splunk-es",
+          "strategies": [
+            "PREVIEW",
+            "RELEASE"
+          ],
+          "variables": [
+            {
+              "name": "SPLUNK_ES_TOKEN",
+              "set": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "can_deploy": true,
+      "can_query": true,
+      "can_validate": true,
+      "enabled": true,
+      "name": "sentinel_one",
+      "tenants": []
+    },
+    {
+      "can_deploy": true,
+      "can_query": true,
+      "can_validate": false,
+      "enabled": true,
+      "name": "crowdstrike",
+      "tenants": []
+    },
+    {
+      "can_deploy": true,
+      "can_query": true,
+      "can_validate": false,
+      "enabled": true,
+      "name": "harfanglab",
+      "tenants": []
+    },
+    {
+      "can_deploy": true,
+      "can_query": true,
+      "can_validate": true,
+      "enabled": true,
+      "name": "carbon_black_cloud",
+      "tenants": []
+    },
+    {
+      "can_deploy": true,
+      "can_query": true,
+      "can_validate": true,
+      "enabled": true,
+      "name": "elastic",
+      "tenants": [
+        {
+          "description": "Generated tenant elastic-staging",
+          "manual": false,
+          "name": "elastic-staging",
+          "strategies": [
+            "PREVIEW"
+          ],
+          "variables": [
+            {
+              "name": "ELASTIC_STAGING_API_KEY",
+              "set": false
+            }
+          ]
+        },
+        {
+          "description": "Generated tenant elastic-production",
+          "manual": false,
+          "name": "elastic-production",
+          "strategies": [
+            "RELEASE"
+          ],
+          "variables": [
+            {
+              "name": "ELASTIC_PRODUCTION_API_KEY",
+              "set": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "can_deploy": true,
+      "can_query": false,
+      "can_validate": false,
+      "enabled": true,
+      "name": "sysdig",
+      "tenants": [
+        {
+          "description": "Generated tenant sysdig-production",
+          "manual": false,
+          "name": "sysdig-production",
+          "strategies": [
+            "PREVIEW",
+            "RELEASE"
+          ],
+          "variables": [
+            {
+              "name": "SYSDIG_PRODUCTION_API_TOKEN",
+              "set": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "can_deploy": true,
+      "can_query": false,
+      "can_validate": false,
+      "enabled": true,
+      "name": "bitdefender",
+      "tenants": []
+    },
+    {
+      "can_deploy": true,
+      "can_query": true,
+      "can_validate": true,
+      "enabled": true,
+      "name": "graylog",
+      "tenants": []
+    },
+    {
+      "can_deploy": true,
+      "can_query": true,
+      "can_validate": true,
+      "enabled": true,
+      "name": "exabeam",
+      "tenants": [
+        {
+          "description": "Generated tenant exabeam-production",
+          "manual": false,
+          "name": "exabeam-production",
+          "strategies": [
+            "PREVIEW",
+            "RELEASE"
+          ],
+          "variables": [
+            {
+              "name": "EXABEAM_PRODUCTION_CLIENT_ID",
+              "set": false
+            },
+            {
+              "name": "EXABEAM_PRODUCTION_CLIENT_SECRET",
+              "set": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "can_deploy": true,
+      "can_query": true,
+      "can_validate": true,
+      "enabled": true,
+      "name": "google_secops",
+      "tenants": []
+    }
+  ],
+  "repo": "<WS>",
+  "schema_version": 1,
+  "status": "issues",
+  "summary": {
+    "load_errors": 7,
+    "objectives": 60,
+    "rules": 693,
+    "threats": 119
+  },
+  "version": "0.28.1"
+}
+
+━━━ stderr · empty
