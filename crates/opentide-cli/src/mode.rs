@@ -7,7 +7,7 @@
 //! 2. `--json`: `json`;
 //! 3. `OPENTIDE_OUTPUT` is `json`, `agent`, `plain` or `human`: that mode;
 //! 4. a coding agent is detected: `agent`;
-//! 5. stdout is not a terminal, `NO_COLOR` or `--no-color`, `TERM=dumb`, or CI: `plain`;
+//! 5. stdout is not a terminal, `NO_COLOR`, `FORCE_COLOR=0` or `--no-color`, `TERM=dumb`, or CI: `plain`;
 //! 6. otherwise `human`.
 
 use crate::env::Env;
@@ -144,7 +144,7 @@ pub fn resolve(inputs: Inputs<'_>, env: &Env) -> Mode {
     }
     if inputs.no_color
         || !inputs.stdout_tty
-        || env.get("NO_COLOR").is_some_and(|value| !value.is_empty())
+        || env.colour_choice() == Some(false)
         || env
             .get("TERM")
             .unwrap_or_default()
@@ -256,6 +256,8 @@ mod tests {
         assert_eq!(mode(false, "x", false, &[]), Mode::Plain);
         assert_eq!(mode(false, "x", true, &[("NO_COLOR", "1")]), Mode::Plain);
         assert_eq!(mode(false, "x", true, &[("NO_COLOR", "")]), Mode::Human);
+        assert_eq!(mode(false, "x", true, &[("FORCE_COLOR", "0")]), Mode::Plain);
+        assert_eq!(mode(false, "x", true, &[("FORCE_COLOR", "1")]), Mode::Human);
         assert_eq!(mode(false, "x", true, &[("TERM", "dumb")]), Mode::Plain);
         assert_eq!(mode(false, "x", true, &[("CI", "true")]), Mode::Plain);
         assert_eq!(

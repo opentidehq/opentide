@@ -15259,8 +15259,16 @@ exit: 0
       "name": "OPENTIDE_DEBUG"
     },
     {
-      "meaning": "Any value turns colour off, like --no-color",
+      "meaning": "Any non-empty value turns colour off, like --no-color",
       "name": "NO_COLOR"
+    },
+    {
+      "meaning": "0, false, no or off turns colour off; any other value forces it in human and plain output; NO_COLOR and --no-color win",
+      "name": "FORCE_COLOR"
+    },
+    {
+      "meaning": "Any value but 0 forces colour, like FORCE_COLOR=1; FORCE_COLOR wins",
+      "name": "CLICOLOR_FORCE"
     },
     {
       "meaning": "0 for one-line JSON, 2 for indented; default: indented on a terminal",
