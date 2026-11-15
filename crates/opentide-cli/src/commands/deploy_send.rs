@@ -1941,11 +1941,8 @@ impl Sender<'_, '_> {
                     .and_then(|block| block.get("correlation_search"))
                 {
                     Some(CJson::Bool(set)) => *set,
-                    // `true`, `false`, or a `$NAME` placeholder, which leaves it on.
-                    _ => !matches!(
-                        opentide_compile::deploy::setup(&batch.table, "enterprise_security"),
-                        None | Some(CJson::Bool(false))
-                    ),
+                    _ => opentide_compile::splunk::enterprise_security(&batch.table)
+                        .map_err(compile_error)?,
                 };
                 if correlation {
                     name.push_str(" - Rule");
@@ -3041,8 +3038,10 @@ impl Sender<'_, '_> {
                 continue;
             }
             let connection = self.connect(PLATFORM, batch)?;
-            let automatic = opentide_compile::deploy::setup(&batch.table, "automatic_actions")
-                .is_none_or(CJson::is_true);
+            // A value that is not a boolean fails each rule `compile_rule` compiles,
+            // naming the key; a deletion compiles nothing and sends no actions.
+            let automatic =
+                opentide_compile::bitdefender::automatic_actions_on(&batch.table).unwrap_or(true);
             for (rule, action) in planned {
                 let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
                 let strategy = match self.strategy_of(rule, PLATFORM) {
