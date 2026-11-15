@@ -1,6 +1,6 @@
 ---
 source: crates/opentide-cli/tests/render.rs
-expression: validate_fault_sarif
+expression: candidate
 ---
 {
   "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
@@ -7686,7 +7686,7 @@ expression: validate_fault_sarif
           "fixes": [
             {
               "description": {
-                "text": "Replace with 'Host::File'"
+                "text": "Replace with \"Host::File\""
               },
               "artifactChanges": [
                 {
@@ -8534,7 +8534,7 @@ expression: validate_fault_sarif
           "fixes": [
             {
               "description": {
-                "text": "Replace with 'clear'"
+                "text": "Replace with \"clear\""
               },
               "artifactChanges": [
                 {
@@ -10150,7 +10150,7 @@ expression: validate_fault_sarif
           "fixes": [
             {
               "description": {
-                "text": "Replace with 'amber'"
+                "text": "Replace with \"amber\""
               },
               "artifactChanges": [
                 {
@@ -10508,7 +10508,7 @@ expression: validate_fault_sarif
           "fixes": [
             {
               "description": {
-                "text": "Replace with 'Substantial incident'"
+                "text": "Replace with \"Substantial incident\""
               },
               "artifactChanges": [
                 {

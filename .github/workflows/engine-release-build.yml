@@ -377,9 +377,9 @@ jobs:
   # opentide-lsp binaries and WASI build, the browser build with the wasi-libc
   # it links, the lsp npm packages (engine assets); the `opentide` binaries and
   # crate, @opentide/opentide, and the PyPI wheel built from the same commit
-  # (its Python dependencies and the crates in opentide._native), which are the
-  # product's. Since UC-6.2 the wheel depends on pydantic alone, so its SBOM
-  # is scanned like the rest of the product's. Each SBOM is checked against the
+  # (its extras' Python dependencies, pydantic of `plugins`, and the crates in
+  # opentide._native), which are the product's. Its SBOM is scanned like the
+  # rest of the product's. Each SBOM is checked against the
   # CycloneDX 1.5 schema. SOURCE_DATE_EPOCH (the commit's time) fixes their
   # timestamps.
   sbom:
@@ -464,7 +464,7 @@ jobs:
       # binaries carry opentide's package data, as the wheel does: its
       # `platform_sdk` explain page names the Splunk client's Python module
       # (license-scan.sh --product). Every product asset is scanned, the
-      # wheel's SBOM included: the wheel depends on pydantic alone (UC-6.2).
+      # wheel's SBOM included: the wheel has no Python dependency, and its SBOM lists the `plugins` extra's pydantic.
       - name: license scan (no oracle references)
         run: |
           set -euo pipefail

@@ -600,6 +600,7 @@ fn json<T: serde::Serialize>(value: &T) -> Json {
 /// preview), stream and notification aliases are left out and listed in
 /// [`CompiledDefinition::unresolved`]. An alias the tenant does not define is
 /// `graylog_alias_unknown`.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn compile_definition(
     cx: &Context<'_>,
     rule: &Rule,

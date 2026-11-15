@@ -1049,6 +1049,7 @@ impl Doctor<'_> {
             })
     }
 
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn vscode(&self) -> Vec<Check> {
         let mut checks = Vec::new();
         let settings = self.workspace.join(".vscode").join("settings.json");
@@ -1880,7 +1881,7 @@ mod tests {
         assert!(
             check
                 .message
-                .starts_with("The proxy URL cannot be parsed: its user or password"),
+                .starts_with("The proxy URL cannot be parsed: an `@` follows a `/`"),
             "{}",
             check.message
         );

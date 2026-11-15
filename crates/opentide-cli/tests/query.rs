@@ -2,7 +2,7 @@
 //! that cannot run, and runs on Elastic tenants served by a stand-in
 //! Elasticsearch on the loopback (one that answers, one that refuses the
 //! query, one that is not listening, one that never answers). The recorded
-//! tenants' runs are `command_goldens.rs`'s; two are replayed here with one
+//! tenants' runs are `cli_snapshots.rs`'; two are replayed here with one
 //! answer changed (a gateway's page in front of Splunk, Carbon Black Cloud
 //! refusing the token).
 
@@ -182,6 +182,7 @@ fn elastic<'a>(words: &[&'a str]) -> Vec<&'a str> {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn calls_that_cannot_run_are_refused_with_the_value_at_fault() {
     let (_scratch, ws) = workspace(&tenant("soc", "http://127.0.0.1:9"));
     let cases: &[(&[&str], &str, &str, &str)] = &[
@@ -422,6 +423,29 @@ fn an_unset_key_fails_its_tenant_without_a_request() {
         ran.stderr
     );
     assert!(ran.stderr.contains("$GOLDEN_ES_KEY"), "{}", ran.stderr);
+}
+
+/// With `OPENTIDE_PROGRESS=json`, a tenant's event goes to the host's log
+/// sink, the run's stderr, as every other command's events do: not to the
+/// process's stderr, where an embedder or a test cannot see it.
+#[test]
+fn a_tenants_progress_event_goes_to_the_hosts_stderr() {
+    let (_scratch, ws) = workspace(&tenant("down", &nobody()));
+    let ran = run_at(
+        &ws,
+        &elastic(&["--tenant", "down", "FROM logs-* | KEEP host.name"]),
+        &[("OPENTIDE_PROGRESS", "json")],
+    );
+    assert_eq!(ran.code, 1, "{}", ran.stdout);
+    let event = ran
+        .stderr
+        .lines()
+        .find(|line| line.starts_with(r#"{"event":"tenant""#))
+        .unwrap_or_else(|| panic!("no tenant event on stderr:\n{}", ran.stderr));
+    let event: serde_json::Value = serde_json::from_str(event).unwrap();
+    assert_eq!(event["platform"], "elastic");
+    assert_eq!(event["tenant"], "down");
+    assert_eq!(event["status"], "failed");
 }
 
 /// Three tenants: one answers, one refuses the query, one cannot be

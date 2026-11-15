@@ -15,7 +15,6 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use serde::Deserialize as _;
-use sha2::{Digest, Sha256};
 
 use super::runner::{EventSink, Job, RunOutcome, RunRequest, Runner, compact, failure};
 use crate::envelope::INTERRUPTED_EXIT_CODE;
@@ -246,14 +245,7 @@ pub fn commands_digest(document: &Json) -> String {
         ),
         other => other.clone(),
     };
-    let digest = Sha256::digest(compact(&sorted(&stable)).as_bytes());
-    digest
-        .iter()
-        .fold(String::with_capacity(64), |mut hex, byte| {
-            use std::fmt::Write;
-            let _infallible = write!(hex, "{byte:02x}");
-            hex
-        })
+    crate::digest::sha256_hex(compact(&sorted(&stable)).as_bytes())
 }
 
 impl Server {

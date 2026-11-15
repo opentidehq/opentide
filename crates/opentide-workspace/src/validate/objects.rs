@@ -335,6 +335,7 @@ pub struct Subject<'d> {
 }
 
 /// Every check of one object.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn check_object(
     subject: &Subject<'_>,
     graph: &Graph<'_>,

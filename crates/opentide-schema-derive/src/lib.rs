@@ -219,6 +219,7 @@ fn expand(input: &DeriveInput) -> syn::Result<TokenStream2> {
     }
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn expand_struct(
     input: &DeriveInput,
     data: &syn::DataStruct,

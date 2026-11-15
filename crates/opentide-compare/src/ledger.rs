@@ -482,6 +482,7 @@ fn location(text: &str, span: Option<std::ops::Range<usize>>) -> String {
     }
 }
 
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn check_entry(raw: RawEntry) -> Result<Entry, Vec<String>> {
     let mut problems = Vec::new();
     // The root's command path is empty: `command = ""`.

@@ -124,6 +124,7 @@ jobs:
       docs: ${{ steps.plan.outputs.docs }}
       node: ${{ steps.plan.outputs.node }}
       wasi: ${{ steps.plan.outputs.wasi }}
+      wasm: ${{ steps.plan.outputs.wasm }}
       grammars: ${{ steps.plan.outputs.grammars }}
       textmate: ${{ steps.plan.outputs.textmate }}
       gitlab: ${{ steps.plan.outputs.gitlab }}
@@ -559,6 +560,21 @@ jobs:
       # specifications' checkout.
       - name: Note the checkout's state
         run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
+
+      # The CLI's snapshot cases on the generated workspaces (`fault`,
+      # `heavy-small`, UC-0.6): xtask writes them, which the crate's tests
+      # cannot; the tests fail without them when the variable is set.
+      - name: Generated workspaces for the CLI snapshots
+        run: |
+          read -ra pkg_args <<< "${PACKAGES}"
+          if [[ " ${pkg_args[*]} " == *" opentide-cli "* || " ${pkg_args[*]} " == *" --workspace "* ]]; then
+            [[ -x target/debug/xtask ]] || cargo build --locked -p xtask
+            out="$RUNNER_TEMP/generated-workspaces"
+            target/debug/xtask corpus faults --out "$out/fault"
+            target/debug/xtask corpus generate --seed 1 --threats 30 --objectives 30 --rules 50 --out "$out/heavy-small"
+            echo "OPENTIDE_REPLAY_FIXTURES=fault=$out/fault,heavy-small=$out/heavy-small" >> "$GITHUB_ENV"
+            echo "OPENTIDE_SNAPSHOT_REQUIRE_GENERATED=1" >> "$GITHUB_ENV"
+          fi
 
       # The compile-fail cases run below, when their inputs change.
       - name: cargo nextest (profile ci)
@@ -1853,10 +1869,14 @@ jobs:
   # and WASI servers.
   engine-wasm:
     name: Engine WebAssembly and npm packages
-    # The full set (the workflow's header); the release dry run builds the
+    # The nightly; a push to a base branch, Run workflow (scope `full`) and a
+    # release pull request, which turn every area on; and a pull request that
+    # touches the parser layer or a query-language crate (the `wasm` area of
+    # changes.py): the browser build is where a C dependency gained or lost and
+    # the stack a deep parse needs show. The release dry run builds the
     # WebAssembly assets too.
     needs: changes
-    if: needs.changes.outputs.mode == 'nightly'
+    if: needs.changes.outputs.mode == 'nightly' || needs.changes.outputs.wasm == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -2368,6 +2388,7 @@ jobs:
       - facade
       - node
       - wasi
+      - engine-wasm
       - grammars
       - textmate
       - deny

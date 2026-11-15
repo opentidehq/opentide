@@ -9,6 +9,7 @@
 //! terminal, and anything that cannot answer (`--json`, an agent, no
 //! terminal) is refused with `usage_needs_input`.
 
+pub mod args;
 pub mod files;
 pub mod hooks;
 pub mod jsonc;
@@ -308,6 +309,7 @@ const PROMOTION_TARGET_FLAG: &str = "--promotion-target";
 
 /// What `.opentide/configurations/deployment.toml` needs so `deploy`
 /// promotes as asked (`plan_promotion_override`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub(crate) fn promotion_override(
     root: &Path,
     promotion: Option<bool>,
@@ -721,6 +723,7 @@ fn strings(items: &[String]) -> Json {
 }
 
 /// `opentide setup ci <provider>`.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn ci(args: &CiArgs, cx: &Context<'_>) -> Report {
     if let Some(branch) = &args.default_branch
         && !is_valid_branch_name(branch)

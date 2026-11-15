@@ -277,20 +277,25 @@ impl SentinelOne {
                         _ => None,
                     })
                     .and_then(|error| error.get("detail"))
-                    .map_or_else(|| json_text(&body), json_text);
+                    .map_or_else(
+                        || answer.credentials.mask_text(&json_text(&body)),
+                        json_text,
+                    );
                 Ok(QueryValidation::Refused(detail))
             }
             status => Err(SentinelOneError::Unforeseen {
                 status,
-                context: answer
-                    .json()
-                    .map_or_else(|| answer.text(), |b| json_text(&b)),
+                context: answer.json().map_or_else(
+                    || answer.text(),
+                    |b| answer.credentials.mask_text(&json_text(&b)),
+                ),
             }),
         }
     }
 
     /// Runs a PowerQuery over the request's window and polls it until it
     /// finishes (`SentinelOneQueryRunner.run`).
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     pub async fn run(
         &self,
         cx: TenantContext<'_>,
@@ -450,7 +455,9 @@ fn http_error(answer: &Answer) -> SentinelOneError {
         404 => SentinelOneError::NotFound { detail },
         status => SentinelOneError::Unforeseen {
             status,
-            context: answer.json().map_or(detail, |body| json_text(&body)),
+            context: answer.json().map_or(detail, |body| {
+                answer.credentials.mask_text(&json_text(&body))
+            }),
         },
     }
 }

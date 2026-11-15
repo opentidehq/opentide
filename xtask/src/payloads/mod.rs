@@ -733,6 +733,7 @@ pub fn oracle_python(python: Option<&Path>) -> Result<PathBuf> {
 }
 
 /// Runs the comparison. Whether it passed.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn run(options: &DiffOptions) -> Result<bool> {
     let (repo, _target) = crate::vocab::diff::workspace()?;
     let golden = repo.join("tests/golden");

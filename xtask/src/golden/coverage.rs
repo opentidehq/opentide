@@ -74,6 +74,7 @@ pub struct Report {
 }
 
 /// Builds the report.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn report(
     oracle: &Oracle,
     paths: &[String],
