@@ -345,6 +345,12 @@ pub fn check(table: &LayerTable, metadata: &Metadata) -> Report {
             if !members.contains_key(dependency.name.as_str()) {
                 continue;
             }
+            // A dev-dependency of a crate on itself turns a feature on for its
+            // own tests (opentide-parse's `differential`): no edge between
+            // two crates, so nothing to place.
+            if dependency.name == *name && DepKind::of(dependency) == DepKind::Dev {
+                continue;
+            }
             report.edges += 1;
             // An unplaced crate is reported once, above, not per edge.
             let (Some(from_place), Some(to_place)) =
@@ -448,6 +454,28 @@ mod tests {
         assert_eq!(report.violations, []);
         assert!(report.passed());
         assert_eq!((report.crates, report.layers, report.edges), (4, 2, 5));
+    }
+
+    #[test]
+    fn a_dev_dependency_on_itself_is_not_an_edge_and_a_normal_one_fails() {
+        let crates: &Graph<'_> = &[
+            ("core", &[]),
+            ("syntax", &[("core", None), ("syntax", Some("dev"))]),
+            ("highlight", &[]),
+            ("lsp", &[]),
+        ];
+        let report = check(&table(SMALL), &metadata(crates));
+        assert_eq!(report.violations, []);
+        assert_eq!(report.edges, 1);
+
+        let crates: &Graph<'_> = &[
+            ("core", &[]),
+            ("syntax", &[("syntax", None)]),
+            ("highlight", &[("highlight", Some("build"))]),
+            ("lsp", &[]),
+        ];
+        let report = check(&table(SMALL), &metadata(crates));
+        assert_eq!(report.violations.len(), 2, "{:?}", report.violations);
     }
 
     #[test]
@@ -707,7 +735,7 @@ mod tests {
     const WORKSPACE: &Graph<'static> = &[
         ("opentide-core", &[]),
         ("opentide-syntax", &[("opentide-core", None)]),
-        ("opentide-parse", &[]),
+        ("opentide-parse", &[("opentide-parse", Some("dev"))]),
         ("opentide-highlight", &[("opentide-core", None)]),
         ("opentide-ecs", &[("opentide-core", None)]),
         (

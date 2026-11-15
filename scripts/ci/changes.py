@@ -49,6 +49,7 @@ AREAS = (
     "docs",  # docs validation
     "node",  # the Node package
     "wasi",  # the WASI command line
+    "wasm",  # the browser WebAssembly build (engine-wasm)
     "grammars",  # grammars regenerate
     "textmate",  # TextMate grammars
     "gitlab",  # GitLab CI lint
@@ -114,16 +115,16 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("scripts/validate-docs.sh", ("docs",), ()),
     ("scripts/engine/check-grammars.sh", ("grammars",), ()),
     # The engine's scripts (the invariants, the WASI build, the release).
-    ("scripts/engine/build-wasm.sh", ("wasi",), ()),
+    ("scripts/engine/build-wasm.sh", ("wasi", "wasm"), ()),
     ("scripts/engine/*.py", ("pylint",), ALL),
     ("scripts/engine/*", (), ALL),
     ("scripts/build/*", ("python", "pylint"), ()),
     ("scripts/*.py", ("python", "pylint"), ()),
     ("scripts/*.sh", ("ci",), ()),
     # What the engine compiles in, and its hosts.
-    ("grammars/*", ("grammars",), ("opentide-syntax",)),
+    ("grammars/*", ("grammars", "wasi", "wasm"), ("opentide-syntax",)),
     ("highlights/test/*", ("textmate",), ()),
-    ("highlights/*", ("textmate",), ALL),
+    ("highlights/*", ("textmate", "wasi", "wasm"), ALL),
     ("editors/*", ("textmate",), ()),
     ("packages/*", ("wasi",), ()),
     ("data/*", (), ALL),
@@ -145,6 +146,29 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     (".github/*", ("ci",), ()),
 )
 
+#: The parser layer and the query-language crates. A change to one runs the
+#: WASI build and the browser WebAssembly build (CRATE_PATHS), where a C
+#: dependency gained or lost and the stack a deep parse needs show: the native
+#: build sees neither. Not the reverse
+#: closure of opentide-wasm: the facade it depends on lists every crate, so
+#: that would run it on every pull request. opentide-parse is ADR 0012's
+#: pure-Rust parser, before it lands.
+PARSER_CRATES = (
+    "opentide-syntax",
+    "opentide-parse",
+    "opentide-cql",
+    "opentide-eql",
+    "opentide-esql",
+    "opentide-exabeam",
+    "opentide-falco",
+    "opentide-kql",
+    "opentide-kuery",
+    "opentide-lucene",
+    "opentide-spl",
+    "opentide-yara",
+    "opentide-yaral",
+)
+
 #: Paths inside crates that run a specialised job. Only the paths a job is
 #: about run it (a change below a crate runs that crate's reverse
 #: dependencies' tests, not every job that builds it): the push to the base
@@ -161,9 +185,13 @@ CRATE_PATHS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("crates/opentide/*", ("facade",)),
     # The Node package.
     ("bindings/node/*", ("node",)),
-    # The WASI crate and the WASI shims of the crates that have one.
-    ("crates/opentide-wasm/*", ("wasi",)),
+    # The WebAssembly crate (the WASI and the browser build) and the WASI shims
+    # of the crates that have one.
+    ("crates/opentide-wasm/*", ("wasi", "wasm")),
     ("crates/*wasi*", ("wasi",)),
+    # The parser layer and the query languages: their C (or its absence) and
+    # their stack depth show only in the WebAssembly builds (ADR 0012).
+    *((f"crates/{crate}/*", ("wasi", "wasm")) for crate in PARSER_CRATES),
     ("crates/opentide-cli/src/render/ci.rs", ("gitlab",)),
     ("crates/opentide-cli/src/commands/setup/*", ("gitlab",)),
     ("crates/*/Cargo.toml", ("deny",)),

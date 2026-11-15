@@ -8,8 +8,8 @@
 `generate` writes one SBOM per artifact, CycloneDX 1.5 JSON:
 
 - `opentide-wheel.cdx.json`: the PyPI wheel. The Python dependencies
-  (`uv export`) and the Rust crates compiled into `opentide._native`
-  (`bindings/python/`, every target).
+  (`uv export`, the `plugins` extra's pydantic included) and the Rust crates
+  compiled into `opentide._native` (`bindings/python/`, every target).
 - `opentide-lsp.cdx.json`: the `opentide-lsp` binaries and its WASI build
   (the crate, every target).
 - `opentide-wasm.cdx.json`: the browser build (the `opentide-wasm-web` zip):
@@ -331,6 +331,8 @@ def generate(out: Path, version: str | None = None, npm_version: str | None = No
                     "cyclonedx1.5",
                     "--frozen",
                     "--no-dev",
+                    # The wheel's `plugins` extra (pydantic) is part of the product.
+                    "--all-extras",
                     "--no-emit-project",
                     "--quiet",
                 ]
