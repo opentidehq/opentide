@@ -301,21 +301,8 @@ pub fn run(command: &Cmd) -> Result<u8> {
     let catalogue = load_catalogue(&repo_root().join("tests/corpora/faults.toml"))?;
     check_oracle_version(&bin, &catalogue.oracle)?;
     let python = bin.with_file_name("python");
-    let scratch = keep.clone().unwrap_or_else(|| {
-        std::env::temp_dir().join(format!("opentide-registry-diff-{}", std::process::id()))
-    });
-    let scratch = std::path::absolute(&scratch)?;
-    if scratch.exists() {
-        bail!(
-            "{} exists; remove it or name another --keep",
-            scratch.display()
-        );
-    }
-    std::fs::create_dir_all(&scratch)?;
-    let guard = Scratch {
-        path: scratch.clone(),
-        keep: keep.is_some(),
-    };
+    let guard = Scratch::new("opentide-registry-diff-", keep.as_deref())?;
+    let scratch = guard.path.clone();
     let mut workspaces = Vec::new();
     if fixtures {
         workspaces.extend(fixture_workspaces(&scratch)?);

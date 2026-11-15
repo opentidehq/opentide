@@ -61,9 +61,12 @@ pub const CORPORA: [&str; 6] = [
     "fault",
 ];
 
-/// `cargo xtask payloads <command>`. Exit status: 0 passed, 1 a body differs,
-/// 2 usage error or the check could not run.
+/// `cargo xtask payloads <command>`.
 #[derive(clap::Subcommand, Debug)]
+#[command(
+    after_help = "Exit status: 0 passed, 1 a body differs, 2 usage error or the check \
+    could not run."
+)]
 pub enum Cmd {
     /// Compile every platform block of every rule of each corpus (the fixtures
     /// of tests/golden/cases.toml) with the oracle and with opentide-compile:

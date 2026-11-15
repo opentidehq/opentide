@@ -248,6 +248,10 @@ fn check_writes_nothing_apply_writes_and_syncs_and_then_check_passes() {
 #[test]
 fn the_options_are_checked() {
     let words = |args: &[&str]| args.iter().map(|a| (*a).to_owned()).collect::<Vec<_>>();
+    let parse = |args: &[String]| {
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        crate::parse_args::<Options>(&args)
+    };
     assert!(parse(&words(&["--check", "--apply"])).is_err());
     assert!(parse(&words(&["--stix-dir"])).is_err());
     assert!(parse(&words(&["--frobnicate"])).is_err());

@@ -49,10 +49,11 @@ const INTERNAL_GENERATE: &str = "--internal-generate";
 /// --previous, to the last result of the base branch: a median or peak RSS more
 /// than 10% over its reference fails. It prints a Markdown table per command
 /// (median, RSS, budget, deltas), and appends it to FILE with --summary.
-///
-/// Exit status: 0 done or passed, 1 a budget or regression check failed, 2
-/// usage error or the benchmark could not run.
 #[derive(clap::Args, Debug)]
+#[command(
+    after_help = "Exit status: 0 done or passed, 1 a budget or regression check \
+    failed, 2 usage error or the benchmark could not run."
+)]
 pub struct BenchArgs {
     /// Hold BENCH.json to BUDGETS instead of running the benchmarks
     #[arg(long, num_args = 2, value_names = ["BUDGETS", "BENCH.json"])]
@@ -765,19 +766,21 @@ fn run(options: &Options) -> Result<()> {
     }
     let (root, target) = cargo_paths()?;
     let base = target.join("xtask-bench");
-    // One work directory per process: two runs at once never share a copy.
-    let work = base.join(format!(
-        "work-{}-{}-{}",
-        options.engine.name(),
-        options.scale,
-        std::process::id()
-    ));
-    let outcome = run_in(options, &root, &base, &work);
+    // One work directory per run: two runs at once never share a copy.
+    std::fs::create_dir_all(&base).with_context(|| format!("create {}", base.display()))?;
+    let work = tempfile::Builder::new()
+        .prefix(&format!(
+            "work-{}-{}-",
+            options.engine.name(),
+            options.scale
+        ))
+        .tempdir_in(&base)
+        .with_context(|| format!("create a work directory in {}", base.display()))?;
+    let outcome = run_in(options, &root, &base, work.path());
     drop(ballast);
-    if work.exists()
-        && let Err(err) = std::fs::remove_dir_all(&work)
-    {
-        eprintln!("bench: could not remove {}: {err}", work.display());
+    let path = work.path().to_path_buf();
+    if let Err(err) = work.close() {
+        eprintln!("bench: could not remove {}: {err}", path.display());
     }
     outcome
 }

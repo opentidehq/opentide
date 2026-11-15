@@ -38,14 +38,16 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 /// `cargo xtask golden <command>`: records what the frozen Python CLI does, and
-/// checks an engine against the recordings. Exit status: 0 passed, 1 a
-/// difference or a failed case, 2 usage error or the run could not start.
+/// checks an engine against the recordings.
 #[derive(Subcommand, Debug)]
+#[command(
+    after_help = "Exit status: 0 passed, 1 a difference or a failed case, 2 usage error \
+    or the run could not start."
+)]
 pub enum Cmd {
     /// Run every case through the oracle and write tests/golden/cases/ and
     /// COVERAGE.md. --check-determinism runs every case twice and fails,
@@ -878,39 +880,20 @@ pub fn run_all(
     jobs: usize,
     label: &str,
 ) -> Vec<Result<Recording>> {
-    let next = AtomicUsize::new(0);
     let done = AtomicUsize::new(0);
-    let results: Mutex<Vec<Option<Result<Recording>>>> =
-        Mutex::new((0..cases.len()).map(|_| None).collect());
     let started = Instant::now();
-    std::thread::scope(|scope| {
-        for _ in 0..jobs.min(cases.len().max(1)) {
-            scope.spawn(|| {
-                loop {
-                    let i = next.fetch_add(1, Ordering::SeqCst);
-                    let Some(case) = cases.get(i) else { break };
-                    let result = run::run_case(case, ctx);
-                    results
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)[i] = Some(result);
-                    let n = done.fetch_add(1, Ordering::SeqCst) + 1;
-                    if n.is_multiple_of(100) || n == cases.len() {
-                        eprintln!(
-                            "golden {label}: {n}/{} case(s), {:.0}s",
-                            cases.len(),
-                            started.elapsed().as_secs_f64()
-                        );
-                    }
-                }
-            });
+    crate::parallel::in_order_on(jobs, cases, |case| {
+        let result = run::run_case(case, ctx);
+        let n = done.fetch_add(1, Ordering::SeqCst) + 1;
+        if n.is_multiple_of(100) || n == cases.len() {
+            eprintln!(
+                "golden {label}: {n}/{} case(s), {:.0}s",
+                cases.len(),
+                started.elapsed().as_secs_f64()
+            );
         }
-    });
-    results
-        .into_inner()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .into_iter()
-        .map(|slot| slot.unwrap_or_else(|| Err(anyhow::anyhow!("the case did not run"))))
-        .collect()
+        result
+    })
 }
 
 fn report_errors(results: &[Result<Recording>]) -> usize {
