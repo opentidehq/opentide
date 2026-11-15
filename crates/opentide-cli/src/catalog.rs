@@ -116,9 +116,11 @@ pub const HELP_FLAG_HELP: &str = "Print help";
 /// - an option or flag given twice keeps the last value (`--json commands
 ///   --json`, `--repo a --repo b`), as it always has; a repeatable option
 ///   (`--strategy`) still collects every value;
-/// - an option's value may start with `-` (`--query --json` searches for
-///   `--json`, `--limit -1` is a number out of range): the word after an
-///   option that takes a value is its value;
+/// - a negative number is a value (`--limit -1` is a number out of range);
+///   any other word that starts with `-` is an option, so `--query --json`
+///   is missing its value (`--query=--json` searches for `--json`);
+/// - `--json`, `--no-color`, `--debug`, `--quiet` and `--verbose` are
+///   global: they may follow the command (`validate --json`);
 /// - `--help` is the one help option, on every command, and there is no
 ///   `help` subcommand (`opentide validate help` is no command) and no `-h`,
 ///   as the command tree has always been (#841);
@@ -135,14 +137,8 @@ pub fn parse_settings(command: Command) -> Command {
                 .help(HELP_FLAG_HELP),
         )
         .args_override_self(true)
-        .mut_args(|arg| {
-            let arg = arg.hide_env_values(true);
-            if !arg.is_positional() && crate::hoist::takes_value(&arg) {
-                arg.allow_hyphen_values(true)
-            } else {
-                arg
-            }
-        })
+        .allow_negative_numbers(true)
+        .mut_args(|arg| arg.hide_env_values(true))
         .mut_subcommands(parse_settings)
 }
 
@@ -500,4 +496,115 @@ pub fn tree_lines() -> Vec<String> {
             format!("{label}{}  {summary}", " ".repeat(pad))
         })
         .collect()
+}
+
+/// [`parse_settings`]: how every command line parses.
+#[cfg(test)]
+mod parse_settings_tests {
+    use super::root;
+
+    fn args(text: &str) -> Vec<String> {
+        text.split_whitespace().map(str::to_owned).collect()
+    }
+
+    fn matches(text: &str) -> Result<clap::ArgMatches, clap::Error> {
+        root().try_get_matches_from(std::iter::once("opentide".to_owned()).chain(args(text)))
+    }
+
+    fn value<'a>(matches: &'a clap::ArgMatches, path: &[&str], id: &str) -> Option<&'a String> {
+        let mut current = matches;
+        for word in path {
+            current = current.subcommand_matches(word).unwrap();
+        }
+        current.get_one::<String>(id)
+    }
+
+    #[test]
+    fn framework_parse_a_repeated_flag_or_option_keeps_the_last() {
+        for line in [
+            "--json --json commands",
+            "--quiet --quiet commands",
+            "--debug --debug commands",
+            "--no-color --no-color commands",
+            "validate --strict --strict",
+            "-V -V commands",
+        ] {
+            assert!(matches(line).is_ok(), "{line}");
+        }
+        let repo = matches("--repo a --repo b commands").unwrap();
+        assert_eq!(
+            repo.get_one::<String>("repo").map(String::as_str),
+            Some("b")
+        );
+        let platform = matches("query --platform sentinel --platform=splunk x").unwrap();
+        assert_eq!(
+            platform
+                .subcommand_matches("query")
+                .unwrap()
+                .get_one::<crate::tree::PlatformValue>("platform")
+                .map(|platform| platform.0.as_str()),
+            Some("splunk")
+        );
+        // A repeatable option (`validate --file`) collects every value.
+        let files = matches("validate --file a --file=b").unwrap();
+        let all: Vec<&String> = files
+            .subcommand_matches("validate")
+            .unwrap()
+            .get_many::<String>("file")
+            .unwrap()
+            .collect();
+        assert_eq!(all, ["a", "b"]);
+        // A repeatable option still collects every value.
+        let strategies = matches("deploy --strategy PREVIEW --strategy RELEASE").unwrap();
+        let all: Vec<&String> = strategies
+            .subcommand_matches("deploy")
+            .unwrap()
+            .get_many::<String>("strategy")
+            .unwrap()
+            .collect();
+        assert_eq!(all, ["PREVIEW", "RELEASE"]);
+    }
+
+    #[test]
+    fn framework_parse_an_option_value_starts_with_a_dash_only_after_an_equals_sign() {
+        let query = matches("setup skills discover --query=--json").unwrap();
+        assert_eq!(
+            value(&query, &["setup", "skills", "discover"], "query").map(String::as_str),
+            Some("--json")
+        );
+        // A negative number is a value.
+        let limit = matches("query --platform sentinel --limit -1 x").unwrap();
+        assert_eq!(
+            limit
+                .subcommand_matches("query")
+                .unwrap()
+                .get_one::<i64>("limit"),
+            Some(&-1)
+        );
+        // An option followed by an option is missing its value, a choice
+        // or a path alike.
+        for line in [
+            "setup skills discover --query --json",
+            "query --platform --json x",
+            "validate --file --strict",
+        ] {
+            let error = matches(line).unwrap_err();
+            assert_eq!(error.kind(), clap::error::ErrorKind::InvalidValue, "{line}");
+        }
+    }
+
+    #[test]
+    fn framework_parse_a_number_is_checked_as_a_number() {
+        for line in [
+            "query --platform sentinel --limit many x",
+            "query --platform sentinel --timeout soon x",
+        ] {
+            let error = matches(line).unwrap_err();
+            assert_eq!(
+                error.kind(),
+                clap::error::ErrorKind::ValueValidation,
+                "{line}"
+            );
+        }
+    }
 }

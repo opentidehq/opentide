@@ -19,7 +19,8 @@ use crate::commands::{Block, Report};
 use crate::env::Env;
 use crate::envelope::NextAction;
 use crate::json::Json;
-use crate::render::text::{Style, Text};
+use crate::render::text::Text;
+use anstyle::{AnsiColor, Style};
 
 /// The only catalogue opentide reads.
 pub const DEFAULT_SOURCE: &str = "opentidehq/skills";
@@ -156,16 +157,11 @@ fn text_of(value: &serde_json::Value) -> String {
     }
 }
 
-/// Python's truthiness of a manifest value.
-fn truthy(value: Option<&serde_json::Value>) -> bool {
-    match value {
-        None | Some(serde_json::Value::Null | serde_json::Value::Bool(false)) => false,
-        Some(serde_json::Value::String(text)) => !text.is_empty(),
-        Some(serde_json::Value::Number(number)) => number.as_f64() != Some(0.0),
-        Some(serde_json::Value::Array(items)) => !items.is_empty(),
-        Some(serde_json::Value::Object(map)) => !map.is_empty(),
-        Some(serde_json::Value::Bool(true)) => true,
-    }
+/// Whether a manifest value is non-empty text (a source, a ref, a slug).
+fn written(value: Option<&serde_json::Value>) -> bool {
+    value
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|text| !text.is_empty())
 }
 
 /// The catalogue a manifest document describes (`_parse_manifest`), the
@@ -176,7 +172,7 @@ pub fn parse_manifest(
 ) -> Manifest {
     let source = data
         .get("source")
-        .filter(|value| truthy(Some(value)))
+        .filter(|value| written(Some(value)))
         .map_or_else(|| DEFAULT_SOURCE.to_owned(), text_of);
     if source.trim().to_lowercase() != DEFAULT_SOURCE {
         tracing::warn!(
@@ -187,7 +183,7 @@ pub fn parse_manifest(
     }
     let raw_ref = data
         .get("ref")
-        .filter(|value| truthy(Some(value)))
+        .filter(|value| written(Some(value)))
         .map_or_else(|| DEFAULT_REF.to_owned(), text_of);
     let trimmed = raw_ref.trim();
     let git_ref = if trimmed.is_empty() {
@@ -212,7 +208,7 @@ pub fn parse_manifest(
         let Some(item) = item.as_object() else {
             continue;
         };
-        let raw = if truthy(item.get("slug")) {
+        let raw = if written(item.get("slug")) {
             item.get("slug").map(text_of).unwrap_or_default()
         } else {
             item.get("name").map(text_of).unwrap_or_default()
@@ -523,15 +519,15 @@ pub fn discover(args: &DiscoverArgs, network: Network<'_>, width: usize) -> Repo
             .iter()
             .map(|entry| {
                 vec![
-                    Text::styled(&entry.slug, &Style::new("bold")),
+                    Text::styled(&entry.slug, &Style::new().bold()),
                     if installed.contains(&entry.slug) {
-                        Text::styled("installed", &Style::new("green"))
+                        Text::styled("installed", &AnsiColor::Green.on_default())
                     } else {
                         Text::default()
                     },
                     Text::styled(
                         &shorten(&entry.description, column, "…"),
-                        &Style::new("dim"),
+                        &Style::new().dimmed(),
                     ),
                 ]
             })
@@ -585,10 +581,10 @@ pub fn show(name: &str, repo: &Path, refresh: bool, network: Network<'_>, json: 
             ("install_hint".into(), Json::str(&hint)),
         ],
     );
-    let mut title = Text::styled(&entry.slug, &Style::new("bold"));
+    let mut title = Text::styled(&entry.slug, &Style::new().bold());
     if entry.name != entry.slug {
         // Rich lays the title's bold under the appended dim.
-        title.append(&format!("  {}", entry.name), &Style::new("bold dim"));
+        title.append(&format!("  {}", entry.name), &Style::new().bold().dimmed());
     }
     let lines = vec![
         title,
@@ -605,7 +601,7 @@ pub fn show(name: &str, repo: &Path, refresh: bool, network: Network<'_>, json: 
             } else {
                 "not installed"
             },
-            &Style::new("dim"),
+            &Style::new().dimmed(),
         ),
     ];
     report.body.push(Block::Lines(lines));

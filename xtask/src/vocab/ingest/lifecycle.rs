@@ -14,7 +14,7 @@ use std::collections::BTreeSet;
 use anyhow::{Context, Result};
 use indexmap::IndexMap;
 
-use super::value::{Table, Value, text, truthy};
+use super::value::{Table, Value, named, text};
 
 /// The version of a key that names none.
 pub const DEFAULT_VERSION: &str = "1.0";
@@ -99,7 +99,7 @@ pub fn parse_version(version: &str) -> Result<(i64, i64)> {
 
 /// A key's `(major, minor)`, `1.0` when it names none.
 fn entry_version(entry: &Table) -> Result<(i64, i64)> {
-    let raw = match entry.get("version").filter(|value| truthy(value)) {
+    let raw = match entry.get("version").filter(|value| named(value)) {
         Some(value) => text(value)?,
         None => DEFAULT_VERSION.to_owned(),
     };
@@ -166,7 +166,7 @@ pub fn merge(existing: &[Table], upstream: &[Table], key_field: &str) -> Result<
 
     for (identity, old) in &existing_index {
         let mut merged = old.clone();
-        let version = match old.get("version").filter(|value| truthy(value)) {
+        let version = match old.get("version").filter(|value| named(value)) {
             Some(value) => text(value)?,
             None => {
                 backfilled.push(identity.clone());
@@ -178,7 +178,7 @@ pub fn merge(existing: &[Table], upstream: &[Table], key_field: &str) -> Result<
         if let Some(incoming) = upstream_index.get(identity) {
             let mut incoming = incoming.clone();
             incoming.insert("version".to_owned(), Value::from(version));
-            let revived = old.get("removed").is_some_and(truthy);
+            let revived = old.get("removed").is_some_and(named);
             incoming.remove("removed");
             if revived || payload(&incoming) != payload(old) {
                 updated.push(identity.clone());
@@ -187,7 +187,7 @@ pub fn merge(existing: &[Table], upstream: &[Table], key_field: &str) -> Result<
             continue;
         }
 
-        if !merged.get("removed").is_some_and(truthy) {
+        if !merged.get("removed").is_some_and(named) {
             merged.insert("removed".to_owned(), Value::from(removal_version.clone()));
             removed.push(identity.clone());
         }

@@ -1,0 +1,14 @@
+bin.name = "opentide"
+args = ["--", "commands"]
+env.inherit = false
+status.code = 2
+stdout = ""
+stderr = """
+error: unexpected argument 'commands' found
+
+  tip: subcommand 'commands' exists; to use it, remove the '--' before it
+
+Usage: opentide [OPTIONS] <COMMAND>
+
+For more information, try '--help'.
+"""

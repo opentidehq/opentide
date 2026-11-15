@@ -29,7 +29,7 @@ use opentide_core::{
     SignatureHelp, SignatureInformation, codes, span_to_range, suggest,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
-use opentide_syntax::{first_error, node_span, parse as ts_parse};
+use opentide_syntax::{first_error, node_span, parse as ts_parse, walk};
 use serde::Deserialize;
 use std::sync::OnceLock;
 use tree_sitter::Node;
@@ -985,26 +985,6 @@ fn keyword_span(node: Node) -> ByteSpan {
     node_span(first)
 }
 
-/// Pre-order traversal without recursion, so deeply nested input cannot
-/// exhaust the stack.
-fn walk<'t>(node: Node<'t>, f: &mut impl FnMut(Node<'t>)) {
-    let mut cursor = node.walk();
-    loop {
-        f(cursor.node());
-        if cursor.goto_first_child() {
-            continue;
-        }
-        loop {
-            if cursor.goto_next_sibling() {
-                break;
-            }
-            if !cursor.goto_parent() || cursor.node().id() == node.id() {
-                return;
-            }
-        }
-    }
-}
-
 fn range(source: &str, span: ByteSpan) -> Range {
     span_to_range(source, span)
 }
@@ -1061,7 +1041,7 @@ pub fn sequences(source: &str) -> Vec<SequenceInfo> {
         return Vec::new();
     };
     let mut out = Vec::new();
-    walk(tree.root_node(), &mut |node| {
+    walk(tree.root_node(), |node| {
         if node.kind() != "sequence" || !node.is_named() {
             return;
         }
@@ -1291,7 +1271,7 @@ fn fields_in(source: &str) -> Vec<String> {
         return Vec::new();
     };
     let mut names = std::collections::BTreeSet::new();
-    walk(tree.root_node(), &mut |node| {
+    walk(tree.root_node(), |node| {
         if node.kind() == "field" && !node.has_error() {
             names.insert(text(node, source).trim_start_matches('?').to_string());
         }

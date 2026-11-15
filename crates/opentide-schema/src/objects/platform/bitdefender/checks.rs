@@ -471,7 +471,7 @@ fn detection_findings<'n>(
             catalogue,
             target,
             &shaped,
-            crate::objects::platform::truthy(get(detection, "alert")),
+            crate::objects::platform::non_empty_str(get(detection, "alert")).is_some(),
         )
     {
         found.push(Finding::new(CRITERIA_COMBINATION, criteria_path()));
