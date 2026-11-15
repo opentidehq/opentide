@@ -20,6 +20,24 @@ use std::sync::OnceLock;
 use tree_sitter::Node;
 
 mod ecs;
+// The pure-Rust parser, reachable from its own tests only until the series
+// switches the analysis to it (#1222); production still parses with tree-sitter.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the parser is wired in by the analysis switch (#1222)"
+    )
+)]
+mod parser;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the parser is wired in by the analysis switch (#1222)"
+    )
+)]
+mod syntax;
 
 pub use ecs::ecs_diagnostics;
 
