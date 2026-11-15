@@ -244,7 +244,7 @@ fn argument(p: &mut P<'_>) {
 /// `(a, b)`, or `(T | project x)`.
 fn expression_list(p: &mut P<'_>) {
     let m = p.start();
-    let tabular = p.pipe_in_group(0) || starts_tabular_source(p);
+    let tabular = p.paren_is_tabular(0);
     if p.expect(K::L_PAREN) {
         if tabular {
             if p.enter() {
@@ -262,19 +262,6 @@ fn expression_list(p: &mut P<'_>) {
         p.expect(K::R_PAREN);
     }
     p.done(m, K::EXPRESSION_LIST);
-}
-
-/// Whether the list that opens here holds a tabular source with no pipe:
-/// `(externaldata ...)`, `((print 1))`.
-fn starts_tabular_source(p: &P<'_>) -> bool {
-    let mut at = 1;
-    while p.nth(at) == K::L_PAREN {
-        at += 1;
-    }
-    matches!(
-        p.nth(at),
-        K::PRINT_KW | K::UNION_KW | K::DATATABLE_KW | K::EXTERNALDATA_KW | K::EXTERNAL_DATA_KW
-    )
 }
 
 /// `(from .. to)`

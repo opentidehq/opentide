@@ -53,16 +53,15 @@ enum Token {
     /// `"a\"b"`, `'a'`, `@"a""b"`, `@'a''b'`, and the multi-line
     /// ```` ```a``` ```` and `~~~a~~~`, which hold anything but their own
     /// closing fence.
-    #[regex(r#""([^"\\]|\\[^\n])*""#)]
-    #[regex(r#"'([^'\\]|\\[^\n])*'"#)]
-    #[regex(r#"@"([^"]|"")*""#)]
-    #[regex(r"@'([^']|'')*'")]
-    #[regex(r"```([^`]|`[^`]|``[^`])*```")]
-    #[regex(r"~~~([^~]|~[^~]|~~[^~])*~~~")]
-    String,
-    /// `['Display Name']`, `["c"]`.
-    #[regex(r#"\[('([^'\\\r\n]|\\[^\n])*'|"([^"\\\r\n]|\\[^\n])*")\]"#)]
-    QuotedIdent,
+    /// `false` when it never closes: the rest of the input is one error
+    /// token, so that a broken string costs one scan, not one per character.
+    #[token("\"", |lex| quoted(lex, b'"'))]
+    #[token("'", |lex| quoted(lex, b'\''))]
+    #[token("@\"", |lex| verbatim(lex, b'"'))]
+    #[token("@'", |lex| verbatim(lex, b'\''))]
+    #[token("```", |lex| fenced(lex, b'`'))]
+    #[token("~~~", |lex| fenced(lex, b'~'))]
+    String(bool),
     #[regex(r"==|!=|<>|<=|>=|<|>|=~|!~")]
     CmpOp,
     #[token("in~")]
@@ -107,6 +106,68 @@ enum Token {
     Percent,
 }
 
+/// The rest of `"..."` or `'...'` after the opening quote: a backslash takes the
+/// next character (not a line feed), and the quote ends it. Scanned by a loop:
+/// a regex with a repeated group makes logos' generated code recurse per
+/// repetition, which a long string turns into a stack overflow. An unclosed
+/// string takes the rest of the input (`false`).
+fn quoted(lex: &mut logos::Lexer<'_, Token>, quote: u8) -> bool {
+    let bytes = lex.remainder().as_bytes();
+    let mut i = 0;
+    while let Some(&byte) = bytes.get(i) {
+        if byte == quote {
+            lex.bump(i + 1);
+            return true;
+        }
+        // An escaped character is skipped whole: the bytes of a multi-byte one
+        // are never a quote or a backslash. `\` before a line feed ends the string.
+        if byte == b'\\' && bytes.get(i + 1).is_some_and(|&b| b != b'\n') {
+            i += 2;
+        } else if byte == b'\\' {
+            break;
+        } else {
+            i += 1;
+        }
+    }
+    lex.bump(bytes.len());
+    false
+}
+
+/// The rest of `@"..."` or `@'...'`: a doubled quote is one quote.
+fn verbatim(lex: &mut logos::Lexer<'_, Token>, quote: u8) -> bool {
+    let bytes = lex.remainder().as_bytes();
+    let mut i = 0;
+    while let Some(&byte) = bytes.get(i) {
+        if byte == quote {
+            if bytes.get(i + 1) == Some(&quote) {
+                i += 2;
+                continue;
+            }
+            lex.bump(i + 1);
+            return true;
+        }
+        i += 1;
+    }
+    lex.bump(bytes.len());
+    false
+}
+
+/// The rest of a multi-line string: up to the first three of the fence's
+/// character in a row.
+fn fenced(lex: &mut logos::Lexer<'_, Token>, fence: u8) -> bool {
+    let bytes = lex.remainder().as_bytes();
+    let mut run = 0;
+    for (i, &byte) in bytes.iter().enumerate() {
+        run = if byte == fence { run + 1 } else { 0 };
+        if run == 3 {
+            lex.bump(i + 1);
+            return true;
+        }
+    }
+    lex.bump(bytes.len());
+    false
+}
+
 /// The kind of a logos token and its text.
 fn kind_of(token: Result<Token, ()>, text: &str) -> K {
     let Ok(token) = token else {
@@ -121,8 +182,8 @@ fn kind_of(token: Result<Token, ()>, text: &str) -> K {
         Token::Number => K::NUMBER,
         Token::Timespan => K::TIMESPAN,
         Token::TypedLiteral => K::TYPED_LITERAL,
-        Token::String => K::STRING,
-        Token::QuotedIdent => K::QUOTED_IDENT,
+        Token::String(true) => K::STRING,
+        Token::String(false) => K::ERROR_TOKEN,
         Token::CmpOp => K::CMP_OP,
         Token::InTilde => K::SET_OP,
         Token::Eq => K::EQ,
@@ -174,17 +235,30 @@ const BEFORE_AN_OPERATOR: [K; 4] = [K::PIPE, K::L_PAREN, K::COMMA, K::WITH_KW];
 ///
 /// - a hyphen keyword (`parse-where`) that does not start an operator is a
 ///   subtraction of names (`a - b`), so it is split;
-/// - `hint.strategy` is a hint only where an `=` follows, else it is a
-///   member access, split in three;
 /// - `['k']` after a value (`d['k']`, `d.['k']`) is an index, not a quoted
 ///   name: split into `[`, the string and `]`.
 fn fix_up(source: &str, lexemes: Vec<Lexeme>) -> Vec<Lexeme> {
     let mut out: Vec<Lexeme> = Vec::with_capacity(lexemes.len());
     let mut previous = None;
-    for (i, lexeme) in lexemes.iter().enumerate() {
+    let mut i = 0;
+    while let Some(lexeme) = lexemes.get(i) {
+        i += 1;
         let kind = K::from_raw(lexeme.kind);
         if kind == K::WHITESPACE || kind == K::COMMENT {
             out.push(*lexeme);
+            continue;
+        }
+        if kind == K::L_BRACKET
+            && !previous.is_some_and(|p| ENDS_A_VALUE.contains(&p))
+            && let Some(range) = quoted_name(source, &lexemes[i - 1..])
+        {
+            // `['Display Name']`: three tokens that touch, a name.
+            out.push(Lexeme {
+                kind: K::QUOTED_IDENT.raw(),
+                range,
+            });
+            previous = Some(K::QUOTED_IDENT);
+            i += 2;
             continue;
         }
         let text = &source[lexeme.range];
@@ -196,21 +270,6 @@ fn fix_up(source: &str, lexemes: Vec<Lexeme>) -> Vec<Lexeme> {
                 } else {
                     text.match_indices('-').map(|(at, _)| at).collect()
                 }
-            }
-            K::HINT_NAME => {
-                let next = lexemes[i + 1..]
-                    .iter()
-                    .find(|l| !matches!(K::from_raw(l.kind), K::WHITESPACE | K::COMMENT));
-                if next.is_some_and(|l| K::from_raw(l.kind) == K::EQ) {
-                    Vec::new()
-                } else {
-                    vec![text.find('.').unwrap_or(0)]
-                }
-            }
-            K::QUOTED_IDENT if previous.is_some_and(|p| ENDS_A_VALUE.contains(&p)) => {
-                out.extend(split_index(lexeme.range));
-                previous = Some(K::R_BRACKET);
-                continue;
             }
             _ => Vec::new(),
         };
@@ -224,24 +283,21 @@ fn fix_up(source: &str, lexemes: Vec<Lexeme>) -> Vec<Lexeme> {
     out
 }
 
-/// `['k']` as `[`, `'k'`, `]`.
-fn split_index(range: TextRange) -> [Lexeme; 3] {
-    let (start, end) = (range.start(), range.end());
-    let one = TextSize::from(1);
-    [
-        Lexeme {
-            kind: K::L_BRACKET.raw(),
-            range: TextRange::new(start, start + one),
-        },
-        Lexeme {
-            kind: K::STRING.raw(),
-            range: TextRange::new(start + one, end - one),
-        },
-        Lexeme {
-            kind: K::R_BRACKET.raw(),
-            range: TextRange::new(end - one, end),
-        },
-    ]
+/// The range of `['Display Name']` or `["c"]` when `lexemes` starts with its
+/// three touching tokens: `[`, a quoted string with no line break in it (not
+/// a verbatim or multi-line one), `]`.
+fn quoted_name(source: &str, lexemes: &[Lexeme]) -> Option<TextRange> {
+    let [open, string, close, ..] = lexemes else {
+        return None;
+    };
+    let text = &source[string.range];
+    let plain = K::from_raw(string.kind) == K::STRING
+        && text.starts_with(['"', '\''])
+        && !text.contains(['\r', '\n']);
+    let touching =
+        open.range.end() == string.range.start() && string.range.end() == close.range.start();
+    (plain && touching && K::from_raw(close.kind) == K::R_BRACKET)
+        .then(|| TextRange::new(open.range.start(), close.range.end()))
 }
 
 /// Cuts the word at `range` at the separators `at` (byte offsets of a `-` or
@@ -347,9 +403,13 @@ pub(crate) mod tests {
             kinds("```a````"),
             vec![(K::STRING, "```a```"), (K::ERROR_TOKEN, "`")]
         );
-        // Unclosed: one character is an error, the rest is read again.
-        assert_eq!(kinds("\"a")[0], (K::ERROR_TOKEN, "\""));
-        assert_eq!(kinds("```a")[0], (K::ERROR_TOKEN, "`"));
+        // Unclosed: the rest of the input is one error token.
+        assert_eq!(
+            kinds("x \"a\nb"),
+            vec![(K::IDENT, "x"), (K::ERROR_TOKEN, "\"a\nb")]
+        );
+        assert_eq!(kinds("```a`` b"), vec![(K::ERROR_TOKEN, "```a`` b")]);
+        assert_eq!(kinds("@'a''"), vec![(K::ERROR_TOKEN, "@'a''")]);
     }
 
     #[test]
@@ -429,15 +489,15 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn hints_are_names_unless_an_option() {
+    fn a_hint_is_one_token_wherever_it_stands() {
+        // As tree-sitter lexed it: `hint.x` is a hint name, so a member `x` of
+        // a column `hint` is a syntax error there (and here).
         assert_eq!(
             kinds("summarize hint.strategy = shuffle")[1],
             (K::HINT_NAME, "hint.strategy")
         );
-        assert_eq!(
-            kinds("hint.x == 1")[..3],
-            [(K::IDENT, "hint"), (K::DOT, "."), (K::IDENT, "x")]
-        );
+        assert_eq!(kinds("hint.x == 1")[0], (K::HINT_NAME, "hint.x"));
+        assert_eq!(kinds("hint .x")[0], (K::IDENT, "hint"));
     }
 
     #[test]

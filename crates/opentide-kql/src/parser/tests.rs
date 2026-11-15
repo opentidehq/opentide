@@ -130,6 +130,48 @@ fn a_long_pipeline_is_not_deep() {
     assert!(parsed.depth < 20, "{} levels", parsed.depth);
 }
 
+/// Found by the differential: a lone name, call or group in a list is a
+/// table, as tree-sitter read it; a member, index or literal is a value.
+#[test]
+fn a_lone_name_in_a_list_is_a_table() {
+    let tabular = |source: &str| {
+        let tree = SyntaxNode::new_root(parse(source).green);
+        tree.descendants()
+            .find(|n| n.kind() == K::EXPRESSION_LIST)
+            .is_some_and(|list| list.children().any(|c| c.kind() == K::TABULAR_EXPRESSION))
+    };
+    for source in [
+        "T | where a in (b)",
+        "T | where a in (f(1))",
+        "T | where a in ((b))",
+    ] {
+        assert!(tabular(source), "{source}");
+    }
+    for source in [
+        "T | where a in (b.c)",
+        "T | where a in (b[0])",
+        "T | where a in (1)",
+    ] {
+        assert!(!tabular(source), "{source}");
+    }
+}
+
+/// Found by the differential: a source keyword with nothing after it, and a
+/// hint that is not an option, are errors (tree-sitter took the keyword and
+/// the `hint.` token whatever followed).
+#[test]
+fn a_bare_source_keyword_is_an_error() {
+    for source in [
+        "range",
+        "range ",
+        "datatable",
+        "materialize",
+        "T | summarize hint.shuffle",
+    ] {
+        assert!(!errors(source).is_empty(), "{source}");
+    }
+}
+
 #[test]
 fn an_empty_source_and_a_comment_are_valid() {
     assert!(errors("").is_empty());

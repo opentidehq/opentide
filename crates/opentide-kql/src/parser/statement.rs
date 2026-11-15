@@ -56,10 +56,7 @@ fn is_tabular(p: &P<'_>) -> bool {
         )
     };
     match p.nth(0) {
-        K::L_PAREN => {
-            let end = p.after_group(0);
-            p.pipe_in_group(0) || (p.name_at(1) && is_name_or_call(p, 1, end - 1))
-        }
+        K::L_PAREN => p.paren_is_tabular(0),
         K::PRINT_KW
         | K::UNION_KW
         | K::DATATABLE_KW
@@ -81,15 +78,6 @@ fn is_tabular(p: &P<'_>) -> bool {
         }
         _ => false,
     }
-}
-
-/// Whether the tokens `from..end` are one name, or one name and its call.
-fn is_name_or_call(p: &P<'_>, from: usize, end: usize) -> bool {
-    let after_name = from + 1;
-    if after_name == end {
-        return true;
-    }
-    p.nth(after_name) == K::L_PAREN && p.after_group(after_name) == end
 }
 
 /// `(a: int, t: (*)) { let y = 1; body }`

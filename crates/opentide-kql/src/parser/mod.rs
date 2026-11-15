@@ -172,4 +172,40 @@ impl P<'_> {
         }
         false
     }
+
+    /// Whether the group that opens at `n` (a `(`) is `( tabular_expression )`
+    /// rather than `( expression )`. Both read `(b)`, `(f(1))` and `((b))`,
+    /// and the grammar this one replaces took them as tabular: a pipe in the
+    /// group, a source operator, or exactly one lone name, call or such group.
+    pub(crate) fn paren_is_tabular(&self, n: usize) -> bool {
+        if self.nth(n) != K::L_PAREN {
+            return false;
+        }
+        let close = self.after_group(n).saturating_sub(1);
+        self.pipe_in_group(n) || self.tabular_item(n + 1, close)
+    }
+
+    /// Whether the tokens `from..close` are one tabular source: a name, a
+    /// call, a group that is tabular, or a source operator.
+    fn tabular_item(&self, from: usize, close: usize) -> bool {
+        match self.nth(from) {
+            K::PRINT_KW
+            | K::UNION_KW
+            | K::DATATABLE_KW
+            | K::EXTERNALDATA_KW
+            | K::EXTERNAL_DATA_KW
+            | K::SEARCH_KW
+            | K::FIND_KW => true,
+            K::MATERIALIZE_KW => self.nth(from + 1) == K::L_PAREN,
+            K::RANGE_KW if self.name_at(from + 1) && self.nth(from + 2) == K::FROM_KW => true,
+            K::L_PAREN => self.after_group(from) == close && self.paren_is_tabular(from),
+            K::DYNAMIC_KW | K::TOSCALAR_KW if self.nth(from + 1) == K::L_PAREN => false,
+            K::BOOLEAN | K::NULL_KW => false,
+            _ if self.name_at(from) => {
+                from + 1 == close
+                    || (self.nth(from + 1) == K::L_PAREN && self.after_group(from + 1) == close)
+            }
+            _ => false,
+        }
+    }
 }

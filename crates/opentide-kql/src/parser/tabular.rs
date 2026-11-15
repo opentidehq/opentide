@@ -74,13 +74,13 @@ fn source(p: &mut P<'_>) {
         }
         K::PRINT_KW => print_operator(p),
         K::UNION_KW => union_operator(p),
-        K::DATATABLE_KW if next == K::L_PAREN => datatable(p),
+        K::DATATABLE_KW => datatable(p),
         K::EXTERNALDATA_KW | K::EXTERNAL_DATA_KW => externaldata(p),
-        K::RANGE_KW if p.name_at(1) && p.nth(2) == K::FROM_KW => range_operator(p),
-        K::MATERIALIZE_KW if next == K::L_PAREN => {
+        K::RANGE_KW if next != K::L_PAREN => range_operator(p),
+        K::MATERIALIZE_KW => {
             let m = p.start();
             p.bump();
-            p.bump();
+            p.expect(K::L_PAREN);
             tabular_expression(p);
             p.expect(K::R_PAREN);
             p.done(m, K::MATERIALIZE_EXPRESSION);
@@ -103,7 +103,7 @@ fn operator(p: &mut P<'_>) {
     if p.current() == K::UNION_KW {
         return union_operator(p);
     }
-    if p.current() == K::RANGE_KW && p.name_at(1) && p.nth(2) == K::FROM_KW {
+    if p.current() == K::RANGE_KW {
         return range_operator(p);
     }
     let m = p.start();
