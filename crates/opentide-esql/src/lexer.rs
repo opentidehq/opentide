@@ -411,7 +411,12 @@ impl Driver<'_> {
                         c.is_ascii_alphanumeric() || c == '_' || c == '*'
                     });
                 }
-                (tok.kind(), len)
+                let kind = if self.frame.mode == Mode::Names && tok == Tok::Star {
+                    K::WORD
+                } else {
+                    tok.kind()
+                };
+                (kind, len)
             }
             _ => (
                 K::ERROR_TOKEN,

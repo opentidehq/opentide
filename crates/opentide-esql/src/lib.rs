@@ -53,6 +53,14 @@ mod lexer;
     not(test),
     expect(
         dead_code,
+        reason = "the pure-Rust parser is reached from tests until the last PR of #1228 switches production to it"
+    )
+)]
+mod parser;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
         reason = "the pure-Rust tree's kinds are reached from tests until the last PR of #1228 switches production to it"
     )
 )]

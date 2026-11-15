@@ -5,6 +5,8 @@
 //! ones its grammar expects as keywords ([`SyntaxKind::from_keyword`]), or as
 //! an identifier, because ES|QL's keywords are contextual.
 
+use opentide_parse::TokenSet;
+
 macro_rules! kinds {
     (
         keywords: [$($text:literal => $kw:ident),* $(,)?],
@@ -21,6 +23,16 @@ macro_rules! kinds {
 
         /// Every kind, in declaration order.
         const ALL: &[SyntaxKind] = &[$(SyntaxKind::$kw,)* $(SyntaxKind::$token,)* $(SyntaxKind::$node,)*];
+
+        impl SyntaxKind {
+            /// The lower-case text of a keyword kind.
+            pub const fn keyword_text(self) -> Option<&'static str> {
+                match self {
+                    $(Self::$kw => Some($text),)*
+                    _ => None,
+                }
+            }
+        }
 
         /// The keywords: lower-case text and kind.
         pub(crate) const KEYWORD_KINDS: &[(&str, SyntaxKind)] = &[$(($text, SyntaxKind::$kw)),*];
@@ -90,6 +102,17 @@ impl SyntaxKind {
     /// The raw rowan kind.
     pub const fn raw(self) -> rowan::SyntaxKind {
         rowan::SyntaxKind(self as u16)
+    }
+
+    /// A set of token kinds.
+    pub const fn set(kinds: &[Self]) -> TokenSet {
+        let mut set = TokenSet::EMPTY;
+        let mut i = 0;
+        while i < kinds.len() {
+            set = set.with(kinds[i].raw());
+            i += 1;
+        }
+        set
     }
 
     /// The keyword spelled `word` in any case.
