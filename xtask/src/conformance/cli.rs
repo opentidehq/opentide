@@ -83,9 +83,6 @@ pub struct ConformanceArgs {
 fn check_runners(parsed: &ConformanceArgs) -> Result<()> {
     let mut seen = BTreeSet::new();
     for runner in &parsed.runners {
-        if !RUNNERS.contains(&runner.as_str()) {
-            bail!("--runners: unknown runner `{runner}` (rust, python, node)");
-        }
         if !seen.insert(runner) {
             bail!("--runners: `{runner}` is named twice");
         }

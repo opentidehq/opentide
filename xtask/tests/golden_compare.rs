@@ -9,6 +9,7 @@
     reason = "helpers outside #[test] functions; a panic fails the test"
 )]
 
+use clap::error::ErrorKind;
 use std::collections::BTreeMap;
 use std::path::Path;
 use xtask::golden::case::{Case, Mode, Stdin, StdinKind};
@@ -297,7 +298,10 @@ fn golden_refuses_the_preview_flags_where_they_do_not_belong() {
         // command, before it reads the repository.
         let status = match parse_golden(&args) {
             Ok(command) => xtask::golden::main(command),
-            Err(_) => usage,
+            Err(error) => {
+                assert_eq!(error.kind(), ErrorKind::UnknownArgument, "{args:?}");
+                usage
+            }
         };
         assert_eq!(status, usage, "{args:?}");
     }
@@ -359,8 +363,14 @@ fn cassettes_and_mcp_record_take_an_oracle_file() {
     assert!(error.contains("ORACLE.none"), "{error}");
 
     // `mcp record` takes one of --python and --oracle, never both, never none.
-    assert!(parse_mcp(&["record", "--python", "py", "--oracle", &missing]).is_err());
-    assert!(parse_mcp(&["record"]).is_err());
+    let both = parse_mcp(&["record", "--python", "py", "--oracle", &missing])
+        .err()
+        .expect("a usage error");
+    assert_eq!(both.kind(), ErrorKind::ArgumentConflict);
+    assert_eq!(both.exit_code(), 2);
+    let neither = parse_mcp(&["record"]).err().expect("a usage error");
+    assert_eq!(neither.kind(), ErrorKind::MissingRequiredArgument);
+    assert_eq!(neither.exit_code(), 2);
     let command = parse_mcp(&["record", "--oracle", &missing]).unwrap();
     let error = xtask::mcp::run(&command).unwrap_err().to_string();
     assert!(error.contains("ORACLE.none"), "{error}");

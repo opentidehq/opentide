@@ -4,7 +4,7 @@ commands; the library's unit tests cover their parts.
 
 ```console
 $ xtask golden help
-Record what the frozen Python CLI does, and check an engine against the recordings (tests/golden/README.md); `golden help` lists the options
+Record what the frozen Python CLI does, and check an engine against the recordings (tests/golden/README.md); `golden --help` lists the commands
 
 Usage: cargo xtask golden <COMMAND>
 
@@ -19,9 +19,11 @@ Commands:
 Options:
   -h, --help  Print help
 
+Exit status: 0 passed, 1 a difference or a failed case, 2 usage error or the run could not start.
+
 $ xtask golden
 ? 2
-Record what the frozen Python CLI does, and check an engine against the recordings (tests/golden/README.md); `golden help` lists the options
+Record what the frozen Python CLI does, and check an engine against the recordings (tests/golden/README.md); `golden --help` lists the commands
 
 Usage: cargo xtask golden <COMMAND>
 ...

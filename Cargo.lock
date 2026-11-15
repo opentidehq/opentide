@@ -6586,6 +6586,7 @@ dependencies = [
  "opentide-schema",
  "opentide-workspace",
  "pyo3-introspection",
+ "rayon",
  "regex",
  "rustix",
  "schemars",

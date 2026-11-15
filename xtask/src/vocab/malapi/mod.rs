@@ -44,20 +44,34 @@ pub const DEFAULT_DELAY: Duration = Duration::from_secs(60);
 pub const SOURCE: &str = "malapi.io";
 
 /// What a run does.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, clap::Args)]
 pub struct Options {
-    /// Compute without writing; dirty is a failure (also the default).
+    /// Compute without writing; dirty is a failure (also the default)
+    #[arg(long, conflicts_with = "apply")]
     pub check: bool,
-    /// Write the vocabulary and sync the bundle.
+    /// Write the vocabulary and sync the bundle
+    #[arg(long)]
     pub apply: bool,
-    /// The specifications checkout; else `$OPENTIDE_SPECIFICATIONS_ROOT`,
-    /// else `../specifications`.
+    /// The specifications checkout; else `$OPENTIDE_SPECIFICATIONS_ROOT`, else
+    /// `../specifications`
+    #[arg(long, value_name = "DIR")]
     pub specifications: Option<PathBuf>,
-    /// Saved pages to read instead of fetching.
+    /// Saved pages to read instead of fetching: DIR/index.html and
+    /// `DIR/winapi/<API>.html`
+    #[arg(long, value_name = "DIR")]
     pub html_dir: Option<PathBuf>,
-    /// The pause before each API page fetched.
+    /// The pause before each API page fetched, in seconds (the site serves
+    /// about a page a minute)
+    #[arg(
+        long,
+        value_name = "SECS",
+        default_value = "60",
+        allow_negative_numbers = true,
+        value_parser = parse_delay_arg
+    )]
     pub delay: Duration,
-    /// The time to record as `source_fetched_at`, for a reproducible run.
+    /// The time to record as `source_fetched_at`, for a reproducible run
+    #[arg(long, value_name = "TIMESTAMP")]
     pub now: Option<String>,
 }
 
@@ -74,43 +88,15 @@ impl Default for Options {
     }
 }
 
-/// Parses `vocab malapi`'s options.
-pub fn parse(args: &[String]) -> Result<Options> {
-    let mut options = Options::default();
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let mut value = |name: &str| {
-            args.next()
-                .cloned()
-                .with_context(|| format!("{name} needs a value"))
-        };
-        match arg.as_str() {
-            "--check" => options.check = true,
-            "--apply" => options.apply = true,
-            "--specifications" => {
-                options.specifications = Some(PathBuf::from(value("--specifications")?));
-            }
-            "--html-dir" => options.html_dir = Some(PathBuf::from(value("--html-dir")?)),
-            "--delay" => options.delay = parse_delay(&value("--delay")?)?,
-            "--now" => options.now = Some(value("--now")?),
-            other => bail!("unknown option `{other}`\n\n{}", super::USAGE),
-        }
-    }
-    ensure!(
-        !(options.check && options.apply),
-        "use either --check or --apply, not both"
-    );
-    Ok(options)
-}
-
-/// `--delay`'s seconds: a non-negative number, fractions allowed.
-fn parse_delay(seconds: &str) -> Result<Duration> {
+/// `--delay`'s seconds as clap reads them: a non-negative number, fractions
+/// allowed.
+fn parse_delay_arg(seconds: &str) -> Result<Duration, String> {
     let parsed: f64 = seconds
         .parse()
         .ok()
         .filter(|value: &f64| value.is_finite() && *value >= 0.0)
-        .with_context(|| format!("--delay {seconds}: expected a number of seconds"))?;
-    Duration::try_from_secs_f64(parsed).with_context(|| format!("--delay {seconds}"))
+        .ok_or_else(|| format!("`{seconds}` is not a number of seconds"))?;
+    Duration::try_from_secs_f64(parsed).map_err(|error| format!("`{seconds}`: {error}"))
 }
 
 /// Where the pages come from.
