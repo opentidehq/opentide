@@ -65,7 +65,7 @@ domain, tier 1 (`xtask/layers.toml`), beside `opentide-analysis`: it reads the i
 
 ```bash
 cargo nextest run -p opentide-compile
-cargo nextest run -p opentide-cli generate_goldens         # every recorded generate case, in-process
+cargo nextest run -p opentide-cli --test cli_snapshots generate   # every generate case, as snapshots
 cargo nextest run -p opentide-compile generate_docs         # every page of the tide corpus, generic and GitHub
 cargo xtask payloads diff --against python --corpus all   # every body, every corpus
 cargo xtask payloads plan                                  # the dry run's plan against the recordings

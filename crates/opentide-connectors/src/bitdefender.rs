@@ -339,8 +339,14 @@ impl<'a> Client<'a> {
         })
     }
 
-    async fn post(&self, body: &Json) -> Result<(u16, Option<String>, Vec<u8>), CallError> {
+    /// Sends *body*: its status, `Retry-After`, bytes, and the credentials
+    /// the request sent, to mask in whatever the answer is quoted in.
+    async fn post(
+        &self,
+        body: &Json,
+    ) -> Result<(u16, Option<String>, Vec<u8>, crate::answer::Credentials), CallError> {
         let request = self.build(body)?;
+        let credentials = crate::answer::Credentials::of(&request);
         let classify = |error: ConnectorError| match error {
             ConnectorError::Cancelled => CallError::Tenant(error),
             other => CallError::NoAnswer(other),
@@ -363,7 +369,7 @@ impl<'a> Client<'a> {
             .bytes(response, self.cx.cancel)
             .await
             .map_err(classify)?;
-        Ok((status, retry_after, bytes))
+        Ok((status, retry_after, bytes, credentials))
     }
 
     /// Sends one JSON-RPC request and returns its `result` (`call`).
@@ -410,7 +416,7 @@ impl<'a> Client<'a> {
         if PACED_METHODS.contains(&method) {
             self.pacer.wait(key, self.cx.cancel).await?;
         }
-        let (status, retry_after, bytes) = self.post(body).await?;
+        let (status, retry_after, bytes, credentials) = self.post(body).await?;
         if matches!(status, 401 | 403) {
             return Err(self.refused(
                 TENANT_UNAUTHORIZED,
@@ -439,7 +445,7 @@ impl<'a> Client<'a> {
             let message = error
                 .get("message")
                 .filter(|message| message.is_filled())
-                .map(crate::text::json_text)
+                .map(|message| credentials.mask_text(&crate::text::json_text(message)))
                 .unwrap_or_default();
             return match code {
                 Some(TOO_MANY_REQUESTS) => Ok(Attempt::RateLimited(retry_after)),
@@ -457,7 +463,8 @@ impl<'a> Client<'a> {
                 )),
                 _ => {
                     let mut failure = ApiError::new(method, code, message);
-                    failure.details = details(error.get("data"));
+                    failure.details =
+                        details(error.get("data")).map(|details| credentials.mask_text(&details));
                     Err(failure.into())
                 }
             };
