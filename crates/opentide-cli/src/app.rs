@@ -2089,7 +2089,6 @@ impl Run<'_> {
     /// `share` and its subcommands (UC-4.4b, #834): the group's options
     /// handed down to the subcommand that takes them too, or refused
     /// (`hand_down`, `refuse_dropped`), then the run.
-    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn share(
         &self,
         share: &crate::tree::ShareArgs,
