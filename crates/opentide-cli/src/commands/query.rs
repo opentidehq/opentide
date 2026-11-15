@@ -28,7 +28,8 @@ use crate::env::Env;
 use crate::envelope::{Failure, Outcome, USAGE_EXIT_CODE, code};
 use crate::json::Json;
 use crate::render::progress::{Progress, TenantEvent};
-use crate::render::text::{Style, Text};
+use crate::render::text::Text;
+use anstyle::{AnsiColor, Style};
 
 /// The command's name in the envelope.
 pub const COMMAND: &str = "query";
@@ -96,17 +97,8 @@ pub(crate) fn default_host(platform: &str) -> &'static str {
     }
 }
 
-/// How rows are written when `--json` is off.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum RowFormat {
-    /// A table per tenant.
-    #[default]
-    Table,
-    /// One JSON object per row.
-    Jsonl,
-    /// CSV, one header.
-    Csv,
-}
+/// How rows are written when `--json` is off: `--format`, as clap parses it.
+pub use crate::tree::RowFormat;
 
 /// `query`'s options.
 #[derive(Clone, Debug, Default)]
@@ -141,6 +133,28 @@ pub struct Args {
     pub columns: Option<String>,
     /// `--format`.
     pub format: RowFormat,
+}
+
+impl From<&crate::tree::QueryArgs> for Args {
+    fn from(args: &crate::tree::QueryArgs) -> Self {
+        Self {
+            query: args.query.clone(),
+            platform: args.platform.0.clone(),
+            tenants: args.tenant.clone(),
+            rule: args.rule.clone(),
+            file: args.file.clone(),
+            query_file: args.query_file.clone(),
+            since: args.since.clone(),
+            start: args.start.clone(),
+            end: args.end.clone(),
+            limit: args.limit,
+            language: args.language.clone(),
+            index: args.index.clone(),
+            timeout: args.timeout,
+            columns: args.columns.clone(),
+            format: args.row_format,
+        }
+    }
 }
 
 /// What a run reads besides its options.
@@ -1304,8 +1318,8 @@ fn tables(args: &Args, outcomes: &[TenantResult], terminal: &Terminal) -> Vec<Bl
                 .collect()
         })
         .unwrap_or_default();
-    let bold = Style::new("bold");
-    let dim = Style::new("dim");
+    let bold = Style::new().bold();
+    let dim = Style::new().dimmed();
     let mut blocks: Vec<Block> = Vec::new();
     for outcome in outcomes {
         let mut title = outcome.tenant.clone();
@@ -1320,7 +1334,7 @@ fn tables(args: &Args, outcomes: &[TenantResult], terminal: &Terminal) -> Vec<Bl
                         "  failed: {}",
                         outcome.error.as_deref().unwrap_or("unknown error")
                     ),
-                    &Style::new("red"),
+                    &AnsiColor::Red.on_default(),
                 );
                 blocks.push(Block::Stderr(terminal.stderr.line(&line)));
             }
@@ -1366,7 +1380,7 @@ fn tables(args: &Args, outcomes: &[TenantResult], terminal: &Terminal) -> Vec<Bl
         if !terminal.quiet {
             let mut warnings = String::new();
             for warning in outcome.warnings.iter().chain(&result.warnings) {
-                let mut line = Text::styled("warning", &Style::new("yellow bold"));
+                let mut line = Text::styled("warning", &AnsiColor::Yellow.on_default().bold());
                 line.push_str(&format!(": {warning}"));
                 warnings.push_str(&terminal.stderr.line(&line));
             }
@@ -1413,9 +1427,9 @@ fn table(headers: &[String], rows: &[Vec<String>], width: Option<usize>) -> Vec<
         }
         line
     };
-    let plain = Style::new("");
+    let plain = Style::new();
     let rule: Vec<String> = widths.iter().map(|width| "-".repeat(*width)).collect();
-    let mut lines = vec![line(headers, &Style::new("bold")), line(&rule, &plain)];
+    let mut lines = vec![line(headers, &Style::new().bold()), line(&rule, &plain)];
     lines.extend(rows.iter().map(|row| line(row, &plain)));
     lines
 }

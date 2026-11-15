@@ -69,6 +69,66 @@ fn the_most_common_organisation_wins_and_ties_go_to_the_first_in_path_order() {
 }
 
 #[test]
+fn object_files_are_in_path_order() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("a/b")).unwrap();
+    for name in ["a.yaml", "a/b/c.yml", "a/z.yaml", "a/note.txt", "b.yml"] {
+        std::fs::write(dir.path().join(name), "").unwrap();
+    }
+    let found: Vec<PathBuf> = object_files(dir.path())
+        .into_iter()
+        .map(|path| path.strip_prefix(dir.path()).unwrap().to_path_buf())
+        .collect();
+    let expected: Vec<PathBuf> = ["a/b/c.yml", "a/z.yaml", "a.yaml", "b.yml"]
+        .iter()
+        .map(PathBuf::from)
+        .collect();
+    assert_eq!(found, expected);
+}
+
+/// A link to a folder above it is not entered: each object is read once,
+/// where following the link read it again at every level until the system
+/// refused the path.
+#[cfg(unix)]
+#[test]
+fn a_link_back_up_the_catalogue_is_not_followed() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join("rules")).unwrap();
+    std::fs::write(
+        dir.path().join("rules/r.yaml"),
+        "metadata:\n  uuid: x\n  organisation:\n    uuid: u\n    name: N\n",
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(dir.path(), dir.path().join("rules/up")).unwrap();
+    assert_eq!(object_files(dir.path()), [dir.path().join("rules/r.yaml")]);
+    assert_eq!(catalogue_uuids(dir.path()), HashSet::from(["x".to_owned()]));
+}
+
+/// The path `new` prints and writes has no `\\?\` prefix on Windows.
+#[cfg(windows)]
+#[test]
+fn a_resolved_path_has_no_verbatim_prefix() {
+    let dir = tempfile::tempdir().unwrap();
+    let resolved = dunce_canonical(dir.path());
+    assert!(resolved.is_absolute());
+    assert!(
+        !resolved.to_string_lossy().starts_with(r"\\?\"),
+        "{}",
+        resolved.display()
+    );
+}
+
+#[test]
+fn a_resolved_path_is_absolute_and_a_missing_one_is_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let resolved = dunce_canonical(dir.path());
+    assert!(resolved.is_absolute());
+    assert_eq!(dunce_canonical(&resolved), resolved);
+    let missing = dir.path().join("missing");
+    assert_eq!(dunce_canonical(&missing), missing);
+}
+
+#[test]
 fn the_first_inert_status_is_where_a_block_starts() {
     let config = opentide_schema::configuration::toml::parse(
         "[deployment]\nstatuses = [{name = \"LIVE\", strategy = \"RELEASE\"}, {name = \"DRAFT\", strategy = \"inert\"}, {name = \"X\", strategy = \"INERT\"}]\n",

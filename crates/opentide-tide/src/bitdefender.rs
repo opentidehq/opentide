@@ -693,11 +693,8 @@ pub(crate) fn hover(source: &str, offset: usize, cursor: &YamlCursor) -> Option<
 /// The value word under the cursor (letters, digits, `_`, `/`).
 fn word_at(source: &str, offset: usize) -> Option<String> {
     let ok = |c: char| c.is_ascii_alphanumeric() || matches!(c, '_' | '/');
-    let mut offset = offset.min(source.len());
     // A host converts positions to char boundaries; stay safe if one did not.
-    while !source.is_char_boundary(offset) {
-        offset -= 1;
-    }
+    let offset = source.floor_char_boundary(offset);
     let start = source[..offset]
         .char_indices()
         .rev()

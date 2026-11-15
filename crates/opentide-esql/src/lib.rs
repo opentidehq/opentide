@@ -50,7 +50,7 @@ use opentide_core::{
     SignatureHelp, SignatureInformation, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
-use opentide_syntax::{first_error, node_span, parse as ts_parse};
+use opentide_syntax::{first_error, node_span, parse as ts_parse, walk};
 use tree_sitter::Node;
 
 pub struct AnalyzeResult {
@@ -113,7 +113,7 @@ pub fn analyze_for(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
         ));
     }
     let to_range = |span: ByteSpan| range(source, span);
-    walk(root, &mut |node| {
+    walk(root, |node| {
         for gate in gates::syntax_gates(node, source) {
             diagnostics.extend(gate.diagnostic(target, to_range));
         }
@@ -444,26 +444,6 @@ fn parse_error_message(err: Node, source: &str) -> String {
         "ES|QL syntax error".to_string()
     } else {
         format!("ES|QL syntax error near `{first}`")
-    }
-}
-
-/// Pre-order walk. Iterative: a query thousands of levels deep (a long
-/// `OR` chain) must not overflow the stack, notably in WASM.
-fn walk<'t>(node: Node<'t>, f: &mut impl FnMut(Node<'t>)) {
-    let mut cursor = node.walk();
-    loop {
-        f(cursor.node());
-        if cursor.goto_first_child() {
-            continue;
-        }
-        loop {
-            if cursor.goto_next_sibling() {
-                break;
-            }
-            if !cursor.goto_parent() {
-                return;
-            }
-        }
     }
 }
 
@@ -1039,7 +1019,7 @@ fn columns_in(source: &str) -> Vec<String> {
         return Vec::new();
     };
     let mut names = std::collections::BTreeSet::new();
-    walk(tree.root_node(), &mut |node| {
+    walk(tree.root_node(), |node| {
         if matches!(node.kind(), "qualified_name" | "name_pattern") && !node.has_error() {
             let name = text(node, source);
             if !name.contains('*') && !name.is_empty() {

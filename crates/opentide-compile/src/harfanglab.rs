@@ -139,7 +139,7 @@ fn sigma(
         document.insert("author".into(), author.into());
     }
     document.insert("status".into(), settings.status.into());
-    if let Some(tags) = block.get("tags").filter(|tags| tags.truthy()) {
+    if let Some(tags) = block.get("tags").filter(|tags| tags.is_filled()) {
         document.insert("tags".into(), tags.clone());
     }
     let logsource = sigma.get("logsource");
@@ -188,7 +188,10 @@ fn sigma(
         sigma.get("condition").cloned().unwrap_or(Json::Null),
     );
     document.insert("detection".into(), Json::Object(detection));
-    if let Some(positives) = sigma.get("false_positives").filter(|value| value.truthy()) {
+    if let Some(positives) = sigma
+        .get("false_positives")
+        .filter(|value| value.is_filled())
+    {
         document.insert("falsepositives".into(), positives.clone());
     }
     document.insert("level".into(), settings.level.into());
@@ -318,7 +321,8 @@ fn assembled(rule: &Rule, block: &Json, yara: &Json) -> String {
     ));
     lines.push(format!("        author = \"{}\"", escape(author)));
     for (key, field) in [("created", "date"), ("modified", "modified")] {
-        if let Some(value) = deploy::rule_value(rule, &["metadata", key]).filter(|v| v.truthy()) {
+        if let Some(value) = deploy::rule_value(rule, &["metadata", key]).filter(|v| v.is_filled())
+        {
             lines.push(format!("        {field} = \"{}\"", deploy::text(value)));
         }
     }
@@ -398,7 +402,7 @@ fn assembled(rule: &Rule, block: &Json, yara: &Json) -> String {
 /// delete for a DELETION status, or none when the rule's kind is not the
 /// tenant's `type`.
 pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Vec<Write>, CompileError> {
-    let Some(block) = rule.block(PLATFORM).filter(|block| block.truthy()) else {
+    let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Ok(Vec::new());
     };
     let sigma_block = block.get("sigma").filter(|value| !value.is_null());

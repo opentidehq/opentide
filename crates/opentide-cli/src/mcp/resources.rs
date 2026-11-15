@@ -544,18 +544,14 @@ fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
         let mut entries: Vec<(String, Json)> = Vec::new();
         for (uuid, body) in opentide_workspace::coverage::bucket(index, family) {
             let object_name = body.get("name").map(AsRef::as_ref);
-            let truthy_name = match object_name.map(|node| &node.value) {
-                None | Some(Value::Null | Value::Bool(false)) => false,
-                Some(Value::Str(text)) => !text.is_empty(),
-                Some(_) => true,
-            };
+            let named = object_name.is_some_and(opentide_workspace::index::holds_name);
             let Some(meta) = body
                 .get("metadata")
                 .filter(|m| matches!(m.value, Value::Map(_)))
             else {
                 continue;
             };
-            if !truthy_name {
+            if !named {
                 continue;
             }
             let mut entry: Vec<(String, Json)> = vec![

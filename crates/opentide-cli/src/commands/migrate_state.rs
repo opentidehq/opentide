@@ -184,28 +184,17 @@ impl Source {
 /// The rule files under `rules_dir`, `*.yaml` and `*.yml` at any depth, in
 /// path order; a linked folder is not entered (`Path.rglob`).
 fn rule_files(rules_dir: &Path) -> Vec<PathBuf> {
-    let mut found = Vec::new();
-    let mut pending = vec![rules_dir.to_path_buf()];
-    while let Some(dir) = pending.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.filter_map(Result::ok) {
-            let path = entry.path();
-            let linked = entry.file_type().is_ok_and(|kind| kind.is_symlink());
-            if path.is_dir() {
-                if !linked {
-                    pending.push(path);
-                }
-                continue;
-            }
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if (name.ends_with(".yaml") || name.ends_with(".yml")) && path.is_file() {
-                found.push(path);
-            }
-        }
-    }
+    let mut found: Vec<PathBuf> = walkdir::WalkDir::new(rules_dir)
+        .min_depth(1)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            let name = entry.file_name().to_string_lossy();
+            name.ends_with(".yaml") || name.ends_with(".yml")
+        })
+        .map(walkdir::DirEntry::into_path)
+        .filter(|path| path.is_file())
+        .collect();
     found.sort();
     found
 }

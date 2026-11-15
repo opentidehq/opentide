@@ -58,7 +58,7 @@ pub fn ecs_diagnostics(source: &str) -> Vec<Diagnostic> {
         return Vec::new();
     }
     let mut out = Vec::new();
-    crate::walk(root, &mut |node| {
+    opentide_syntax::walk(root, |node| {
         if node.kind() == "field_query" {
             check_field_query(node, source, &mut out);
         }

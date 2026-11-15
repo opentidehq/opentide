@@ -1,0 +1,121 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/tide-corpus-compile-hidden/compile-check
+---
+args: opentide --json validate
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "checks": {
+    "configuration": {
+      "check": "configuration",
+      "status": "passed"
+    },
+    "id-uniqueness": {
+      "check": "id-uniqueness",
+      "status": "passed"
+    },
+    "queries": {
+      "check": "queries",
+      "status": "passed"
+    },
+    "schema": {
+      "check": "schema",
+      "status": "failed"
+    },
+    "uuid-format": {
+      "check": "uuid-format",
+      "status": "passed"
+    }
+  },
+  "command": "validate",
+  "duration_ms": 0,
+  "error": "Validation failed",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Validation failed",
+    "suggestion": null
+  },
+  "message": "Validation failed",
+  "next_actions": [
+    {
+      "command": "opentide --json explain vocab_unknown",
+      "reason": "how to fix it"
+    },
+    {
+      "command": "opentide --json validate",
+      "reason": "check again"
+    }
+  ],
+  "ok": false,
+  "report": {
+    "issues": [
+      {
+        "code": "vocab_unknown",
+        "column": 8,
+        "context": {
+          "value": "clearr",
+          "vocab": "tlp::1.0"
+        },
+        "end_column": 14,
+        "end_line": 9,
+        "explain": "opentide explain vocab_unknown",
+        "field_path": [
+          "metadata",
+          "tlp"
+        ],
+        "file_path": "<WS>/Objects/Detection Rules/rule-0002-defender-kql.yaml",
+        "fix": {
+          "edits": [
+            {
+              "column": 8,
+              "end_column": 14,
+              "end_line": 9,
+              "line": 9,
+              "replacement": "clear"
+            }
+          ],
+          "safe": false
+        },
+        "help": "did you mean \"clear\"?",
+        "line": 9,
+        "message": "Value \"clearr\" is not a valid \"tlp::1.0\" vocabulary entry",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8003-000000000002",
+        "path": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
+        "severity": "error",
+        "suggestion": "clear",
+        "yaml_line": 8
+      }
+    ],
+    "ok": false,
+    "stats": {
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
+      "objects_checked": 12,
+      "parallel": "<CORES>",
+      "queries_checked": 8,
+      "wall_ms": 0.0,
+      "workers": "<CORES>"
+    },
+    "warnings": []
+  },
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {
+    "errors": 1,
+    "files": 1,
+    "fixable": 0,
+    "objects": 12,
+    "queries": 8,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "workspace": "<WS>"
+}
+
+━━━ stderr · empty

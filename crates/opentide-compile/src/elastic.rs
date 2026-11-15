@@ -229,7 +229,7 @@ fn compile_filter(entry: &Json, fields: Option<Fields>) -> Json {
         get(&entry, "query"),
     ) {
         let value = entry.get("value").cloned().unwrap_or(Json::Null);
-        let negate = entry.get("negate").is_some_and(Json::truthy);
+        let negate = entry.get("negate").is_some_and(Json::is_true);
         return phrase(field, &value, negate);
     }
     entry
@@ -240,10 +240,10 @@ fn compile_response(action: &Json) -> Json {
     if let Some(command) = action.get("endpoint") {
         let mut params = Object::new();
         params.insert("command".into(), command.clone());
-        if let Some(comment) = action.get("comment").filter(|value| value.truthy()) {
+        if let Some(comment) = action.get("comment").filter(|value| value.is_filled()) {
             params.insert("comment".into(), comment.clone());
         }
-        if let Some(field) = action.get("field").filter(|value| value.truthy()) {
+        if let Some(field) = action.get("field").filter(|value| value.is_filled()) {
             let mut config = Object::new();
             config.insert("field".into(), field.clone());
             config.insert("overwrite".into(), Json::Bool(false));
@@ -428,8 +428,8 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
             .saturating_add(duration::elastic_seconds(lookback, true).map_err(failed)?),
     );
     let name = get(block, "name")
-        .filter(|name| name.truthy())
-        .or_else(|| rule.data.get("name").filter(|name| name.truthy()))
+        .filter(|name| name.is_filled())
+        .or_else(|| rule.data.get("name").filter(|name| name.is_filled()))
         .cloned()
         .unwrap_or_else(|| "".into());
     let description = rule.description().trim_end().to_owned();
@@ -461,7 +461,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
         "machine_learning" => {}
         _ => {
             let language = get(block, "language")
-                .filter(|language| language.truthy())
+                .filter(|language| language.is_filled())
                 .cloned()
                 .unwrap_or_else(|| "kuery".into());
             body.insert("language".into(), language);
@@ -475,10 +475,10 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
             .ok_or_else(|| failed("'query' is not a string".to_owned()))?;
         body.insert("query".into(), query.trim_end().into());
     }
-    if let Some(view) = get(block, "data_view_id").filter(|view| view.truthy()) {
+    if let Some(view) = get(block, "data_view_id").filter(|view| view.is_filled()) {
         body.insert("data_view_id".into(), view.clone());
     } else if rule_type != "esql" && rule_type != "machine_learning" {
-        let index = match get(block, "index").filter(|index| index.truthy()) {
+        let index = match get(block, "index").filter(|index| index.is_filled()) {
             Some(index) => Some(index.clone()),
             None => setup.index.clone().map(Json::from),
         };
@@ -513,7 +513,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
             "value".into(),
             threshold.get("value").cloned().unwrap_or(Json::Null),
         );
-        if let Some(cardinality) = threshold.get("cardinality").filter(|c| c.truthy()) {
+        if let Some(cardinality) = threshold.get("cardinality").filter(|c| c.is_filled()) {
             out.insert(
                 "cardinality".into(),
                 Json::Array(vec![model_order(cardinality, CARDINALITY)]),
@@ -559,7 +559,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
             "threat_query".into(),
             threat.get("query").cloned().unwrap_or(Json::Null),
         );
-        if let Some(language) = get(threat, "language").filter(|value| value.truthy()) {
+        if let Some(language) = get(threat, "language").filter(|value| value.is_filled()) {
             body.insert("threat_language".into(), language.clone());
         }
         if let Some(Json::Array(filters)) = get(threat, "filters") {
@@ -690,7 +690,10 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
                 .ok_or_else(|| missing("suppression.group_by"))?;
             out.insert("group_by".into(), group_by.clone());
         }
-        if let Some(window) = suppression.get("duration").filter(|value| value.truthy()) {
+        if let Some(window) = suppression
+            .get("duration")
+            .filter(|value| value.is_filled())
+        {
             let window = text_of(window, "suppression.duration")?;
             let (amount, unit) = duration::elastic_amount(window, "hms").map_err(failed)?;
             let mut duration = Object::new();
@@ -712,7 +715,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
         }
         body.insert("alert_suppression".into(), Json::Object(out));
     }
-    if let Some(fields) = get(block, "highlighted_fields").filter(|value| value.truthy()) {
+    if let Some(fields) = get(block, "highlighted_fields").filter(|value| value.is_filled()) {
         let mut investigation = Object::new();
         investigation.insert("field_names".into(), fields.clone());
         body.insert("investigation_fields".into(), Json::Object(investigation));
@@ -759,10 +762,10 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
     {
         body.insert("setup".into(), setup_text.trim_end().into());
     }
-    if let Some(positives) = get(block, "false_positives").filter(|value| value.truthy()) {
+    if let Some(positives) = get(block, "false_positives").filter(|value| value.is_filled()) {
         body.insert("false_positives".into(), positives.clone());
     }
-    if get(block, "building_block").is_some_and(Json::truthy) {
+    if get(block, "building_block").is_some_and(Json::is_true) {
         body.insert("building_block_type".into(), "default".into());
     }
     if let Some(exceptions) = get(block, "exceptions") {
@@ -773,7 +776,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
         endpoint.insert("namespace_type".into(), "agnostic".into());
         endpoint.insert("type".into(), "endpoint".into());
         let endpoint = Json::Object(endpoint);
-        if get(exceptions, "endpoint").is_some_and(Json::truthy) && !lists.contains(&endpoint) {
+        if get(exceptions, "endpoint").is_some_and(Json::is_true) && !lists.contains(&endpoint) {
             lists.push(endpoint);
         }
         if !lists.is_empty() {
@@ -822,10 +825,10 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
         .response()
         .and_then(|response| response.get("procedure"))
         .and_then(|procedure| procedure.get("analysis"))
-        .filter(|value| value.truthy());
+        .filter(|value| value.is_filled());
     let note = guide
         .and_then(|guide| guide.get("investigation"))
-        .filter(|value| value.truthy())
+        .filter(|value| value.is_filled())
         .or(analysis);
     if let Some(note) = note {
         let text = match note {
@@ -845,7 +848,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
 /// The rule's techniques, its own and those it inherits, de-duplicated.
 pub fn rule_techniques(cx: &Context<'_>, rule: &Rule) -> Vec<String> {
     let mut raw = strings(rule.data.get("techniques"));
-    if rule.data.get("detection_model").is_some_and(Json::truthy)
+    if rule.data.get("detection_model").is_some_and(Json::is_name)
         && !rule.uuid.is_empty()
         && let Ok(inherited) = techniques(cx.index, &rule.uuid)
     {

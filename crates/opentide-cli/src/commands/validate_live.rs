@@ -666,7 +666,7 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
         .and_then(|platforms| platforms.get(platform))
         .and_then(|table| table.get("platform"))
         .and_then(|block| block.get("name"))
-        .filter(|name| name.truthy())
+        .filter(|name| name.is_filled())
         .map_or_else(|| platform.to_owned(), opentide_compile::deploy::text);
     let timeout = check_timeout(args, cx.env);
     let mut step = Step::new(&format!("{system_name} queries"));
@@ -1215,7 +1215,7 @@ fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<Rul
             if kind == "Single Event"
                 && let Some(single) = condition
                     .and_then(|condition| condition.get("single_event"))
-                    .filter(|single| single.truthy())
+                    .filter(|single| single.is_filled())
             {
                 return Ok(vec![RuleQuery::plain(required(
                     single, "query", name, platform,
@@ -1224,7 +1224,7 @@ fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<Rul
             if kind == "Correlation"
                 && let Some(correlation) = condition
                     .and_then(|condition| condition.get("correlation"))
-                    .filter(|correlation| correlation.truthy())
+                    .filter(|correlation| correlation.is_filled())
             {
                 let subs = match correlation.get("sub_queries") {
                     Some(CJson::Array(items)) if !items.is_empty() => items,
@@ -1810,7 +1810,7 @@ fn timed_out(
 
 /// One advisory's log line (`warn_advisory`, `_emit_rule_advisories`).
 fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str, severity: &str) {
-    let scheduling = block.get("scheduling").filter(|s| s.truthy());
+    let scheduling = block.get("scheduling").filter(|s| s.is_filled());
     let text = |key: &str, default: &str| {
         scheduling
             .and_then(|s| s.get(key))

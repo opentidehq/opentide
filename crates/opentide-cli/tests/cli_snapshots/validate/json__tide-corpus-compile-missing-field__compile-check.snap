@@ -1,0 +1,111 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/tide-corpus-compile-missing-field/compile-check
+---
+args: opentide --json validate
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "checks": {
+    "configuration": {
+      "check": "configuration",
+      "status": "passed"
+    },
+    "id-uniqueness": {
+      "check": "id-uniqueness",
+      "status": "passed"
+    },
+    "queries": {
+      "check": "queries",
+      "status": "passed"
+    },
+    "schema": {
+      "check": "schema",
+      "status": "passed"
+    },
+    "uuid-format": {
+      "check": "uuid-format",
+      "status": "passed"
+    }
+  },
+  "command": "validate",
+  "duration_ms": 0,
+  "error": "Validation failed",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Validation failed",
+    "suggestion": null
+  },
+  "message": "Validation failed",
+  "next_actions": [
+    {
+      "command": "opentide --json explain compile_missing_field",
+      "reason": "how to fix it"
+    },
+    {
+      "command": "opentide --json validate",
+      "reason": "check again"
+    }
+  ],
+  "ok": false,
+  "report": {
+    "issues": [
+      {
+        "code": "compile_missing_field",
+        "column": 5,
+        "context": {
+          "platform": "sentinel"
+        },
+        "end_column": 13,
+        "end_line": 37,
+        "explain": "opentide explain compile_missing_field",
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "grouping",
+          "alert"
+        ],
+        "file_path": "<WS>/Objects/Detection Rules/rule-0001-sentinel-kql.yaml",
+        "fix": null,
+        "help": "Sentinel deploy requires incident grouping (grouping.alert.enabled)",
+        "line": 37,
+        "message": "configurations.sentinel.grouping.alert is missing",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8003-000000000001",
+        "path": "Objects/Detection Rules/rule-0001-sentinel-kql.yaml",
+        "severity": "error",
+        "suggestion": "Sentinel deploy requires incident grouping (grouping.alert.enabled)",
+        "yaml_line": 36
+      }
+    ],
+    "ok": false,
+    "stats": {
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
+      "objects_checked": 12,
+      "parallel": "<CORES>",
+      "queries_checked": 8,
+      "wall_ms": 0.0,
+      "workers": "<CORES>"
+    },
+    "warnings": []
+  },
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {
+    "errors": 1,
+    "files": 1,
+    "fixable": 0,
+    "objects": 12,
+    "queries": 8,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "workspace": "<WS>"
+}
+
+━━━ stderr · empty

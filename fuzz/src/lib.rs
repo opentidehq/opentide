@@ -5,16 +5,6 @@
 
 use opentide_analysis::{AnalyzeRequest, LanguageId, MemoryWorkspace};
 
-/// The largest byte offset at or below `offset` that starts a character: a
-/// host always passes one (`opentide_core::position_to_offset`).
-pub fn boundary(text: &str, offset: usize) -> usize {
-    let mut offset = offset.min(text.len());
-    while !text.is_char_boundary(offset) {
-        offset -= 1;
-    }
-    offset
-}
-
 /// Everything an editor asks of a document: analysis, hover, completion and
 /// signature help at a few offsets, and for Tide its index, outline, links,
 /// lens and inlay hints. A panic or a run past the fuzzer's `-timeout` is
@@ -41,7 +31,7 @@ pub fn exercise(language: LanguageId, text: &str) {
         assert!(d.range.start.line < lines.max(1), "{d:?}");
     }
     for offset in [0, text.len() / 3, text.len() / 2, text.len()] {
-        let offset = boundary(text, offset);
+        let offset = text.floor_char_boundary(offset);
         let _ = opentide_analysis::hover(&host, language, text, offset);
         let _ = opentide_analysis::completions(&host, language, text, offset);
         let _ = opentide_analysis::signature_help(&host, language, text, offset);
@@ -220,7 +210,7 @@ pub fn configuration(data: &[u8]) {
         );
     }
     for offset in [0, text.len() / 3, text.len() / 2, text.len()] {
-        let offset = boundary(text, offset);
+        let offset = text.floor_char_boundary(offset);
         let _ = opentide_analysis::configuration_hover(schemas, &path, text, offset);
         let _ = opentide_analysis::configuration_completions(schemas, &path, text, offset);
     }

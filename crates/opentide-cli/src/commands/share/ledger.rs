@@ -153,7 +153,9 @@ impl Ledger {
         self.entries.len() != before
     }
 
-    /// Rewrites the file through a temporary one (`save`).
+    /// Rewrites the file through a temporary one of its own (`save`), so a
+    /// run that fails, or another run saving at the same time, never leaves
+    /// a half-written ledger.
     ///
     /// # Errors
     ///
@@ -178,11 +180,7 @@ impl Ledger {
                 }
             }
         }
-        let mut temporary = self.path.clone().into_os_string();
-        temporary.push(".tmp");
-        let temporary = PathBuf::from(temporary);
-        std::fs::write(&temporary, payload.as_bytes())?;
-        std::fs::rename(&temporary, &self.path)
+        opentide_workspace::fs::write_atomically(&self.path, payload.as_bytes())
     }
 }
 
@@ -235,5 +233,29 @@ mod tests {
         assert_eq!(Ledger::load(&file).records().len(), 1);
         std::fs::remove_dir_all(&dir).unwrap();
         assert!(Ledger::load(&file).records().is_empty());
+    }
+
+    #[test]
+    fn two_runs_saving_the_ledger_at_once_do_not_share_a_temporary_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = path(dir.path());
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        // `<ledger>.tmp`, the one temporary name every run used, is taken.
+        let mut taken = file.clone().into_os_string();
+        taken.push(".tmp");
+        std::fs::create_dir(PathBuf::from(taken)).unwrap();
+        std::thread::scope(|scope| {
+            for run in 0..4 {
+                let file = &file;
+                scope.spawn(move || {
+                    for _ in 0..10 {
+                        let mut ledger = Ledger::load(file);
+                        ledger.put(record(&format!("r{run}"), "synced"));
+                        ledger.save().unwrap();
+                    }
+                });
+            }
+        });
+        assert!(!Ledger::load(&file).records().is_empty());
     }
 }

@@ -20,7 +20,8 @@ use crate::json::{Json, Object};
 use crate::render::diagnostic::{Diagnostic, Severity};
 use crate::render::glyphs;
 use crate::render::progress::{columns, plural};
-use crate::render::text::{Style, Text};
+use crate::render::text::Text;
+use anstyle::{AnsiColor, Style};
 
 /// The command path.
 pub const COMMAND: &str = "deploy";
@@ -444,13 +445,21 @@ pub fn short_uuid(uuid: &str) -> String {
 
 /// A row's glyph, label and style by action (`_ROWS`); an unknown action is
 /// a create or update.
-fn row_style(action: &str) -> (&'static str, &'static str, &'static str) {
+fn row_style(action: &str) -> (&'static str, &'static str, Style) {
     match action {
-        "create" => ("+", "create", "bold green"),
-        "update" => ("~", "update", "bold yellow"),
-        "disable" => (glyphs::DISABLE, "disable", "bold magenta"),
-        "delete" => ("×", "delete", "bold red"),
-        _ => ("+", "create or update", "bold green"),
+        "create" => ("+", "create", AnsiColor::Green.on_default().bold()),
+        "update" => ("~", "update", AnsiColor::Yellow.on_default().bold()),
+        "disable" => (
+            glyphs::DISABLE,
+            "disable",
+            AnsiColor::Magenta.on_default().bold(),
+        ),
+        "delete" => ("×", "delete", AnsiColor::Red.on_default().bold()),
+        _ => (
+            "+",
+            "create or update",
+            AnsiColor::Green.on_default().bold(),
+        ),
     }
 }
 
@@ -490,9 +499,9 @@ fn plan_view(result: &Json, summary: &[(String, Json)]) -> Vec<(Text, Option<usi
         _ => None,
     };
     let separator = format!(" {} ", glyphs::SEPARATOR);
-    let (bold, dim) = (Style::new("bold"), Style::new("dim"));
+    let (bold, dim) = (Style::new().bold(), Style::new().dimmed());
     // The header is bold throughout, its labels bold and dim.
-    let bold_dim = bold.combine(&dim);
+    let bold_dim = bold.dimmed();
     let mut header = Text::styled("Deploy plan", &bold);
     let strategies: Vec<String> = match result.get("strategies") {
         Some(Json::Array(items)) => items.iter().map(|item| json_text(Some(item))).collect(),
@@ -561,7 +570,11 @@ fn plan_view(result: &Json, summary: &[(String, Json)]) -> Vec<(Text, Option<usi
                         row_style(&json_text(row.get("action")));
                     if row.get("fails") == Some(&Json::Bool(true)) {
                         // Its frame prints below; the row must not promise a create.
-                        (glyph, label, style) = (glyphs::FAILED, "would fail", "bold red");
+                        (glyph, label, style) = (
+                            glyphs::FAILED,
+                            "would fail",
+                            AnsiColor::Red.on_default().bold(),
+                        );
                     }
                     let uuid = json_text(row.get("uuid"));
                     let name = match row.get("name") {
@@ -575,7 +588,7 @@ fn plan_view(result: &Json, summary: &[(String, Json)]) -> Vec<(Text, Option<usi
                         _ => String::new(),
                     };
                     vec![
-                        Text::styled(&format!("{glyph} {label}"), &Style::new(style)),
+                        Text::styled(&format!("{glyph} {label}"), &style),
                         Text::styled(&name, &bold),
                         Text::styled(&short_uuid(&uuid), &dim),
                         Text::styled(&status, &dim),
@@ -647,10 +660,23 @@ mod tests {
     #[test]
     fn every_action_has_its_glyph_and_label() {
         assert_eq!(row_style("create").1, "create");
-        assert_eq!(row_style("update"), ("~", "update", "bold yellow"));
+        assert_eq!(
+            row_style("update"),
+            ("~", "update", AnsiColor::Yellow.on_default().bold())
+        );
         assert_eq!(row_style("disable").1, "disable");
-        assert_eq!(row_style("delete"), ("×", "delete", "bold red"));
-        assert_eq!(row_style("upsert"), ("+", "create or update", "bold green"));
+        assert_eq!(
+            row_style("delete"),
+            ("×", "delete", AnsiColor::Red.on_default().bold())
+        );
+        assert_eq!(
+            row_style("upsert"),
+            (
+                "+",
+                "create or update",
+                AnsiColor::Green.on_default().bold()
+            )
+        );
     }
 
     #[test]
