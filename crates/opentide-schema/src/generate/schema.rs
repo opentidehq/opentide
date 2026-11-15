@@ -636,18 +636,14 @@ impl Offer {
     }
 }
 
-fn truthy(value: Option<&Value>) -> bool {
-    match value {
-        None | Some(Value::Null | Value::Bool(false)) => false,
-        Some(Value::String(text)) => !text.is_empty(),
-        Some(Value::Array(items)) => !items.is_empty(),
-        Some(_) => true,
-    }
+/// Whether a schema flag (`tide.config.statuses`, ...) is `true`.
+fn flag(value: Option<&Value>) -> bool {
+    value.and_then(Value::as_bool) == Some(true)
 }
 
 fn resolve_field(map: &mut Map<String, Value>, key: Option<&str>, sources: &Sources) {
     let config = &sources.config;
-    if truthy(map.get(keys::CONFIG_VISIBILITY_LOGSOURCE_NAMES))
+    if flag(map.get(keys::CONFIG_VISIBILITY_LOGSOURCE_NAMES))
         && let Some(offer) = logsources(config)
     {
         let mut items = offer.keywords(false);
@@ -660,11 +656,11 @@ fn resolve_field(map: &mut Map<String, Value>, key: Option<&str>, sources: &Sour
             apply_enum(map, &offer.keywords(false));
         }
     }
-    if truthy(map.get(keys::CONFIG_STATUSES)) {
+    if flag(map.get(keys::CONFIG_STATUSES)) {
         let offer = statuses(config);
         set_typed(map, &offer.keywords(false));
     }
-    if truthy(map.get(keys::CONFIG_RESPONDERS)) {
+    if flag(map.get(keys::CONFIG_RESPONDERS)) {
         let offer = responders(config);
         if !offer.values.is_empty() {
             apply_enum(map, &offer.keywords(false));
@@ -686,8 +682,8 @@ fn resolve_field(map: &mut Map<String, Value>, key: Option<&str>, sources: &Sour
     if references.is_empty() {
         return;
     }
-    let scoped = truthy(map.get(keys::VOCAB_SCOPED));
-    let no_wrap = truthy(map.get(keys::VOCAB_HINTS_NO_WRAP));
+    let scoped = flag(map.get(keys::VOCAB_SCOPED));
+    let no_wrap = flag(map.get(keys::VOCAB_HINTS_NO_WRAP));
     let mut offer = Offer::default();
     for reference in &references {
         let one = vocabulary_offer(
@@ -1240,8 +1236,8 @@ fn logsources(config: &Node) -> Option<Offer> {
 
 /// An object property that does not allow other keys takes none: every
 /// `type: object` node reached through property maps and subschema
-/// keywords (not union branches) without a truthy `additionalProperties`
-/// gets `additionalProperties: false`, so a misspelled or misindented key is
+/// keywords (not union branches) whose `additionalProperties` is neither
+/// `true` nor a schema gets `additionalProperties: false`, so a misspelled or misindented key is
 /// flagged.
 #[derive(Debug, Clone, Copy)]
 pub struct CloseObjects;
@@ -1261,7 +1257,10 @@ fn close(node: &mut Value) {
         return;
     };
     if map.get("type").is_some_and(|kind| kind == "object")
-        && !truthy(map.get("additionalProperties"))
+        && !matches!(
+            map.get("additionalProperties"),
+            Some(Value::Bool(true) | Value::Object(_))
+        )
     {
         map.insert("additionalProperties".to_owned(), false.into());
     }

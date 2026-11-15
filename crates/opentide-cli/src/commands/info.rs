@@ -22,7 +22,8 @@ use crate::envelope::Failure;
 use crate::json::Json;
 use crate::render::glyphs::SEPARATOR;
 use crate::render::table::{Column, Table, columns};
-use crate::render::text::{Style, Text};
+use crate::render::text::Text;
+use anstyle::{AnsiColor, Style};
 
 /// The sections, in the order the usage error lists them.
 pub const SECTIONS: [&str; 6] = [
@@ -47,6 +48,18 @@ pub struct Args {
     pub technique: Option<String>,
     /// `--strict`.
     pub strict: bool,
+}
+
+impl From<&crate::tree::InfoArgs> for Args {
+    fn from(args: &crate::tree::InfoArgs) -> Self {
+        Self {
+            platform: args.platform.as_ref().map(crate::tree::spelled),
+            section: args.section.clone(),
+            name: args.name.clone(),
+            technique: args.technique.clone(),
+            strict: args.strict,
+        }
+    }
 }
 
 /// What the run knows about where it is.
@@ -309,8 +322,8 @@ fn outcome_line(rules: usize, threats: usize, objectives: usize, load_errors: us
 /// column.
 fn summary_lines(version: &str, platforms: &[PlatformInfo]) -> Vec<Text> {
     const GAP: usize = 2;
-    let label = Style::new("bold dim");
-    let dim = Style::new("dim");
+    let label = Style::new().bold().dimmed();
+    let dim = Style::new().dimmed();
     let mut rows = vec![vec![Text::styled("version", &label)]];
     let mut ordered: Vec<&PlatformInfo> = platforms.iter().collect();
     ordered.sort_by_key(|platform| !platform.enabled);
@@ -327,7 +340,7 @@ fn summary_lines(version: &str, platforms: &[PlatformInfo]) -> Vec<Text> {
         }
         let mut detail = Text::default();
         if platform.enabled {
-            detail.append("enabled", &Style::new("green"));
+            detail.append("enabled", &AnsiColor::Green.on_default());
         } else {
             detail.append("disabled", &dim);
         }
@@ -342,7 +355,11 @@ fn summary_lines(version: &str, platforms: &[PlatformInfo]) -> Vec<Text> {
             Text::styled(if number == 0 { "platforms" } else { "" }, &label),
             Text::styled(
                 data::label(&platform.name),
-                &Style::new(if platform.enabled { "bold" } else { "dim" }),
+                &if platform.enabled {
+                    Style::new().bold()
+                } else {
+                    Style::new().dimmed()
+                },
             ),
             detail,
         ]);
@@ -405,8 +422,8 @@ fn objects_table(index: &Index, section: &str, uuids: &[String]) -> Table {
 
 /// The catalogue in a few lines: objects, signals, edges by kind, ATT&CK.
 fn catalogue_lines(catalogue: &catalogue::Catalogue) -> Vec<Text> {
-    let label = Style::new("bold dim");
-    let dim = Style::new("dim");
+    let label = Style::new().bold().dimmed();
+    let dim = Style::new().dimmed();
     let row = |name: &str, value: String, detail: String| {
         vec![
             Text::styled(name, &label),
