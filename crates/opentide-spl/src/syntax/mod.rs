@@ -3,6 +3,7 @@
 //! the kinds, the lexer and the grammar of the pipeline
 //! and of search terms so far.
 
+mod expr;
 mod kind;
 mod lexer;
 mod parser;

@@ -187,7 +187,9 @@ fn term(p: &mut Parser<'_>) -> bool {
     }
     match p.current() {
         k if k == K::L_PAREN.raw() => group(p),
-        k if k == K::L_BRACKET.raw() => subsearch(p),
+        k if k == K::L_BRACKET.raw() => {
+            subsearch(p);
+        }
         k if k == K::MACRO_TOKEN.raw() => macro_call(p),
         k if LOOSE.contains(k) => {
             // A comparison with no field: `==1`.
@@ -282,7 +284,7 @@ fn optional_value(p: &mut Parser<'_>) {
 }
 
 /// `( a, "b" c )`: values, with commas or without.
-fn value_list(p: &mut Parser<'_>) {
+pub(super) fn value_list(p: &mut Parser<'_>) {
     let m = p.start();
     p.bump();
     let mut any = false;
@@ -322,16 +324,17 @@ fn group(p: &mut Parser<'_>) {
 }
 
 /// `[ pipeline ]`.
-pub(super) fn subsearch(p: &mut Parser<'_>) {
+pub(super) fn subsearch(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     if !p.enter() {
-        return;
+        return None;
     }
     let m = p.start();
     p.bump();
     pipeline(p, Context::Subsearch);
     close(p, K::R_BRACKET, "missing `]`");
-    m.complete(p, K::SUBSEARCH.raw());
+    let done = m.complete(p, K::SUBSEARCH.raw());
     p.exit();
+    Some(done)
 }
 
 pub(super) fn macro_call(p: &mut Parser<'_>) {

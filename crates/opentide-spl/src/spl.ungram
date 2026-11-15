@@ -236,10 +236,9 @@ Comparison = field:Identifier operator:('!=' | '<' | '>' | '<=' | '>=') value:Op
 
 Expr = BinExpr | UnaryExpr | ParenExpr | FunctionCall | MacroCall | Subsearch | Identifier | Str | Number | Boolean
 
-// `or`, `and`, comparisons, `IN (...)`, `+ - .`, `* / %`, by precedence.
-BinExpr = lhs:Expr operator:('or' | 'and' | '==' | '!=' | '<' | '>' | '<=' | '>=' | '=' | 'LIKE' | 'IN' | '+' | '-' | '.' | '*' | '/' | '%') rhs:ExprRhs
-
-ExprRhs = Expr | ValueList
+// `or`, `and`, comparisons, `IN (...)`, `+ - .`, `* / %`, by precedence. A run
+// of one level is one node: `a or b or c` is three operands and two `or`s.
+BinExpr = (Expr | ValueList | 'or' | 'and' | '==' | '!=' | '<' | '>' | '<=' | '>=' | '=' | 'LIKE' | 'IN' | '+' | '-' | '.' | '*' | '/' | '%')*
 
 UnaryExpr = operator:('NOT' | '!' | '-' | '+') Expr
 
