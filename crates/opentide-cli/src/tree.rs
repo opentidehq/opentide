@@ -33,6 +33,32 @@ pub fn spelled<T: ValueEnum>(value: &T) -> String {
         .unwrap_or_default()
 }
 
+impl From<Check> for opentide_workspace::validate::Check {
+    fn from(check: Check) -> Self {
+        match check {
+            Check::IdUniqueness => Self::IdUniqueness,
+            Check::UuidFormat => Self::UuidFormat,
+            Check::Schema => Self::Schema,
+            Check::Cve => Self::Cve,
+            Check::SharingConfig => Self::SharingConfig,
+            Check::Configuration => Self::Configuration,
+            Check::Queries => Self::Queries,
+        }
+    }
+}
+
+impl From<Check2> for opentide_workspace::lint::LintCheck {
+    fn from(check: Check2) -> Self {
+        match check {
+            Check2::Filenames => Self::Filenames,
+            Check2::Metadata => Self::Metadata,
+            Check2::Recommended => Self::Recommended,
+            Check2::Placeholders => Self::Placeholders,
+            Check2::Queries => Self::Queries,
+        }
+    }
+}
+
 impl From<ReportFormat> for crate::render::report::ReportFormat {
     fn from(format: ReportFormat) -> Self {
         match format {
