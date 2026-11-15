@@ -1,0 +1,19 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.exports.navigator/json/none/help
+---
+args: opentide --json generate exports navigator --help
+exit: 0
+
+━━━ stdout
+
+Usage: opentide generate exports navigator
+
+Options:
+      --help
+          Print help
+
+Examples:
+  $ opentide generate exports navigator
+
+━━━ stderr · empty

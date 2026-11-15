@@ -1,0 +1,28 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.explorer/json/none/help
+---
+args: opentide --json generate explorer --help
+exit: 0
+
+━━━ stdout
+Write explorer.bundle.json and explorer.search.json under .opentide/exports/.
+
+Usage: opentide generate explorer [OPTIONS]
+
+Options:
+      --include-visibility
+          Also write explorer.visibility.json: the log sources visibility.toml declares and the rules that use them. Off by default: it shows what you cannot see. A run without it removes the file
+
+      --visibility-tlp <VISIBILITY_TLP>
+          The TLP the explorer shows on the Visibility view: clear, green, amber, amber+strict or red
+          
+          [default: amber]
+
+      --help
+          Print help
+
+Examples:
+  $ opentide generate explorer
+
+━━━ stderr · empty

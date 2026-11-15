@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup/json/none/prompt
+---
+args: opentide --json setup
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup",
+  "duration_ms": 0,
+  "error": "--json cannot drive the interactive wizard. Run 'opentide setup' with --yes and explicit flags (--platform, --ci). Or drop --json to use the wizard.",
+  "exit_code": 2,
+  "failure": {
+    "argument": null,
+    "code": "usage_needs_input",
+    "crash_log": null,
+    "message": "--json cannot drive the interactive wizard. Run 'opentide setup' with --yes and explicit flags (--platform, --ci). Or drop --json to use the wizard.",
+    "suggestion": null
+  },
+  "message": "--json cannot drive the interactive wizard. Run 'opentide setup' with --yes and explicit flags (--platform, --ci). Or drop --json to use the wizard.",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

@@ -1,0 +1,695 @@
+//! The `opentide` binary on real folders and git repositories (#1139): the
+//! workspace each command finds from where it starts (#294), the changed
+//! objects `generate docs --changed` and `generate inflight` read from git
+//! (#241, #251, #268), and the chain a first user runs. Each test starts the
+//! binary as a person's shell does, with no `OPENTIDE_*`, CI or agent
+//! variable but those it sets.
+
+#![expect(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "a test: a folder, a git command or a run that fails is a failure"
+)]
+
+#[path = "common/tutorial.rs"]
+mod tutorial;
+
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+use serde_json::Value;
+
+/// The variables a test's own environment could leak into a run.
+const LEAKED: [&str; 9] = [
+    "DEPLOYMENT_PLAN",
+    "CI",
+    "GITHUB_ACTIONS",
+    "TF_BUILD",
+    "INFLIGHT_PATHS",
+    "CLAUDECODE",
+    "AI_AGENT",
+    "NO_COLOR",
+    "CLAUDE_PROJECT_DIR",
+];
+
+/// What a run printed and how it ended.
+#[derive(Debug)]
+struct Run {
+    code: Option<i32>,
+    stdout: String,
+    stderr: String,
+}
+
+impl Run {
+    /// The JSON document on stdout.
+    fn document(&self) -> Value {
+        serde_json::from_str(self.stdout.trim()).unwrap_or_else(|error| panic!("{error}: {self:?}"))
+    }
+
+    /// The document of a run that succeeded (exit 0, and `ok` when it says).
+    fn ok(&self) -> Value {
+        assert_eq!(self.code, Some(0), "{self:?}");
+        assert!(!self.stderr.contains("panicked"), "{self:?}");
+        let document = self.document();
+        if let Some(ok) = document.get("ok") {
+            assert_eq!(ok, true, "{self:?}");
+        }
+        document
+    }
+}
+
+/// `opentide --json <args>` in `cwd`, with the variables `env` added.
+fn opentide(cwd: &Path, args: &[&str], env: &[(&str, &Path)]) -> Run {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_opentide-cli"));
+    command.arg("--json").args(args).current_dir(cwd);
+    for (name, _) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with("OPENTIDE_") {
+            command.env_remove(name);
+        }
+    }
+    for name in LEAKED {
+        command.env_remove(name);
+    }
+    isolate_git(&mut command);
+    for (name, value) in env {
+        command.env(name, value);
+    }
+    let output = command.output().unwrap();
+    Run {
+        code: output.status.code(),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    }
+}
+
+/// `git <args>` in `dir`, which must succeed.
+fn git(dir: &Path, args: &[&str]) {
+    let mut command = Command::new("git");
+    command
+        .args(["-c", "user.email=e2e@opentide.test", "-c", "user.name=e2e"])
+        .args(["-c", "commit.gpgsign=false"])
+        .args(args)
+        .current_dir(dir);
+    isolate_git(&mut command);
+    let output = command.output().unwrap();
+    assert!(output.status.success(), "git {args:?}: {output:?}");
+}
+
+/// Keeps git, run by a test or by the binary, to the scratch folders: no
+/// repository above the temporary directory (a checkout the tests run in),
+/// no system configuration, and none of the variables that point git at
+/// another repository (a hook running the tests sets them).
+fn isolate_git(command: &mut Command) {
+    let temp = dunce::canonicalize(std::env::temp_dir()).unwrap();
+    command.env("GIT_CEILING_DIRECTORIES", temp);
+    command.env("GIT_CONFIG_NOSYSTEM", "1");
+    for name in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"] {
+        command.env_remove(name);
+    }
+}
+
+/// A fresh folder, its path canonical (macOS's `/var` is `/private/var`)
+/// and, on Windows, without the `\\?\` prefix `std::fs::canonicalize` adds:
+/// git and the binary print the plain form, and the paths are compared.
+fn scratch() -> (tempfile::TempDir, PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    (dir, root)
+}
+
+/// `opentide setup --yes` for Sentinel at `workspace`, run from its parent,
+/// then the tutorial's three objects written into it.
+fn scaffold(workspace: &Path) {
+    let parent = workspace.parent().unwrap();
+    std::fs::create_dir_all(parent).unwrap();
+    let path = workspace.to_str().unwrap();
+    let setup = ["setup", "--yes", "--name", "Baseline", "--platform"];
+    opentide(
+        parent,
+        &[&setup[..], &["sentinel", "--path", path]].concat(),
+        &[],
+    )
+    .ok();
+    tutorial::write_objects(workspace);
+}
+
+/// `opentide --json --repo <ws> <args>` in `ws`, the workspace variables
+/// naming it too.
+fn in_workspace(ws: &Path, args: &[&str]) -> Run {
+    let repo = ["--repo", ws.to_str().unwrap()];
+    let env = [("OPENTIDE_REPO_ROOT", ws), ("OPENTIDE_TIDE_WORKSPACE", ws)];
+    opentide(ws, &[&repo[..], args].concat(), &env)
+}
+
+/// [`scaffold`], then `generate`: the catalogue a pull request changes.
+fn catalogue(ws: &Path) {
+    scaffold(ws);
+    in_workspace(ws, &["generate"]).ok();
+}
+
+/// `checkout` made a git repository on `branch`, everything committed, and
+/// a `feature` branch checked out.
+fn on_a_feature_branch(checkout: &Path, branch: &str) {
+    git(checkout, &["init", "-q", "-b", branch, "."]);
+    git(checkout, &["add", "-A"]);
+    git(checkout, &["commit", "-qm", "initial catalogue"]);
+    git(checkout, &["checkout", "-qb", "feature"]);
+}
+
+/// The tutorial rule's version raised: a change to it.
+fn bump_rule(ws: &Path) {
+    tutorial::edit(ws, tutorial::RULE_FILE, "version: 1", "version: 2");
+}
+
+/// The tutorial rule copied to `objects/rules/<name>` as another rule.
+fn copy_rule(ws: &Path, name: &std::ffi::OsStr, uuid: &str) -> std::io::Result<()> {
+    let text = std::fs::read_to_string(ws.join(tutorial::RULE_FILE)).unwrap();
+    let text = text
+        .replace(tutorial::RULE, uuid)
+        .replace("Sentinel KQL Rule", "Another Sentinel Rule");
+    std::fs::write(ws.join("objects/rules").join(name), text)
+}
+
+fn changed_paths(document: &Value) -> Vec<&str> {
+    let paths = document["changed_paths"].as_array().expect("changed_paths");
+    paths.iter().map(|path| path.as_str().unwrap()).collect()
+}
+
+/// The inflight shards `generate inflight` wrote, by file name.
+fn shards(ws: &Path) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(ws.join(".opentide/inflight")) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = entries
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| Path::new(name).extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    names.sort();
+    names
+}
+
+fn the_rule_shard() -> Vec<String> {
+    vec![format!("{}.json", tutorial::RULE)]
+}
+
+#[test]
+fn docs_changed_without_git_is_a_structured_failure() {
+    let (_dir, root) = scratch();
+    let ws = root.join("no-git");
+    catalogue(&ws);
+    let run = in_workspace(&ws, &["generate", "docs", "--changed"]);
+    assert_eq!(run.code, Some(1), "{run:?}");
+    assert!(!run.stderr.contains("panicked"), "{run:?}");
+    let document = run.document();
+    assert_eq!(document["ok"], false, "{run:?}");
+    assert_eq!(document["status"], "failed", "{run:?}");
+    let message = document["message"].as_str().unwrap();
+    assert!(message.contains("git repository"), "{message}");
+}
+
+#[test]
+fn inflight_without_git_succeeds() {
+    let (_dir, root) = scratch();
+    let ws = root.join("no-git-inflight");
+    catalogue(&ws);
+    let document = in_workspace(&ws, &["generate", "inflight"]).ok();
+    assert_eq!(document["phase"], "inflight", "{document}");
+}
+
+/// A feature branch off `master`: docs and inflight see the committed diff.
+#[test]
+fn changed_objects_resolve_against_a_master_default_branch() {
+    let (_dir, root) = scratch();
+    let ws = root.join("master-repo");
+    catalogue(&ws);
+    on_a_feature_branch(&ws, "master");
+    bump_rule(&ws);
+    git(&ws, &["commit", "-qam", "bump rule version"]);
+
+    let docs = in_workspace(&ws, &["generate", "docs", "--changed"]).ok();
+    assert_eq!(changed_paths(&docs), [tutorial::RULE_FILE], "{docs}");
+    assert!(docs["counts"]["rules"].as_u64() >= Some(1), "{docs}");
+    in_workspace(&ws, &["generate", "inflight"]).ok();
+    assert_eq!(shards(&ws), the_rule_shard());
+}
+
+#[test]
+fn an_untracked_object_counts_as_changed() {
+    let (_dir, root) = scratch();
+    let ws = root.join("untracked-repo");
+    catalogue(&ws);
+    on_a_feature_branch(&ws, "development");
+    let uuid = "00000000-0000-4000-8003-000000000099";
+    copy_rule(&ws, "second-rule.yaml".as_ref(), uuid).unwrap();
+
+    let docs = in_workspace(&ws, &["generate", "docs", "--changed"]).ok();
+    assert!(
+        changed_paths(&docs).contains(&"objects/rules/second-rule.yaml"),
+        "{docs}"
+    );
+}
+
+/// git prints `detections/objects/...` for a workspace kept in a folder of
+/// the checkout: joined onto the workspace, or matched against `^objects/`,
+/// every change was lost.
+#[test]
+fn a_workspace_nested_in_the_checkout_still_sees_its_changes() {
+    let (_dir, root) = scratch();
+    let checkout = root.join("checkout");
+    let ws = checkout.join("detections");
+    catalogue(&ws);
+    on_a_feature_branch(&checkout, "main");
+    bump_rule(&ws);
+
+    let docs = in_workspace(&ws, &["generate", "docs", "--changed"]).ok();
+    assert!(docs["counts"]["rules"].as_u64() >= Some(1), "{docs}");
+    let names: Vec<_> = changed_paths(&docs)
+        .into_iter()
+        .map(|path| path.rsplit('/').next().unwrap())
+        .collect();
+    assert_eq!(names, ["sentinel-kql-rule.yaml"], "{docs}");
+    in_workspace(&ws, &["generate", "inflight"]).ok();
+    assert_eq!(shards(&ws), the_rule_shard());
+}
+
+/// #294: with no `--repo` or `OPENTIDE_*`, the checkout's root won over the
+/// workspace in it. `start` is where the run starts, under the checkout.
+fn nested_workspace_found_from(start: &str) {
+    let (_dir, root) = scratch();
+    let checkout = root.join("checkout");
+    let ws = checkout.join("detections");
+    catalogue(&ws);
+    on_a_feature_branch(&checkout, "main");
+    bump_rule(&ws);
+    git(&checkout, &["commit", "-qam", "bump rule version"]);
+
+    let cwd = checkout.join(start);
+    let docs = opentide(&cwd, &["generate", "docs", "--changed"], &[]).ok();
+    let changed = format!("detections/{}", tutorial::RULE_FILE);
+    assert_eq!(changed_paths(&docs), [changed.as_str()], "{start}: {docs}");
+    assert!(
+        docs["counts"]["rules"].as_u64() >= Some(1),
+        "{start}: {docs}"
+    );
+    let output = Path::new(docs["output"].as_str().unwrap());
+    assert_eq!(output, ws.join("docs"), "{start}: {docs}");
+    opentide(&cwd, &["generate", "inflight"], &[]).ok();
+    assert_eq!(shards(&ws), the_rule_shard(), "{start}");
+}
+
+#[test]
+fn a_nested_workspace_is_found_from_its_root_for_changed_objects() {
+    nested_workspace_found_from("detections");
+}
+
+#[test]
+fn a_nested_workspace_is_found_from_a_subfolder_for_changed_objects() {
+    nested_workspace_found_from("detections/objects/rules");
+}
+
+/// A repository whose `feature` branch is pushed with `-u`, so that it
+/// tracks itself: the bare origin and the clone.
+fn published_feature_branch(root: &Path) -> (PathBuf, PathBuf) {
+    let origin = root.join("origin.git");
+    git(root, &["init", "-q", "--bare", "-b", "main", "origin.git"]);
+    let ws = root.join("pushed");
+    catalogue(&ws);
+    git(&ws, &["init", "-q", "-b", "main", "."]);
+    git(&ws, &["add", "-A"]);
+    git(&ws, &["commit", "-qm", "initial catalogue"]);
+    git(&ws, &["remote", "add", "origin", origin.to_str().unwrap()]);
+    git(&ws, &["push", "-q", "-u", "origin", "main"]);
+    git(&ws, &["checkout", "-qb", "feature"]);
+    bump_rule(&ws);
+    git(&ws, &["commit", "-qam", "bump rule version"]);
+    git(&ws, &["push", "-q", "-u", "origin", "feature"]);
+    (origin, ws)
+}
+
+/// After `push -u` the upstream is the branch itself: `merge-base HEAD
+/// origin/feature` is `HEAD`, and every committed change vanished.
+#[test]
+fn a_pushed_feature_branch_still_compares_against_the_default_branch() {
+    let (_dir, root) = scratch();
+    let (_, ws) = published_feature_branch(&root);
+    let docs = in_workspace(&ws, &["generate", "docs", "--changed"]).ok();
+    assert_eq!(changed_paths(&docs), [tutorial::RULE_FILE], "{docs}");
+    in_workspace(&ws, &["generate", "inflight"]).ok();
+    assert_eq!(shards(&ws), the_rule_shard());
+}
+
+/// `actions/checkout` runs `checkout -B <branch> refs/remotes/origin/<branch>`,
+/// which sets the branch's upstream to its own remote copy.
+#[test]
+fn a_ci_checkout_of_the_pr_branch_finds_its_changes() {
+    let (_dir, root) = scratch();
+    let (origin, _) = published_feature_branch(&root);
+    let ci = root.join("ci");
+    std::fs::create_dir(&ci).unwrap();
+    git(&ci, &["init", "-q", "."]);
+    git(&ci, &["remote", "add", "origin", origin.to_str().unwrap()]);
+    let refspec = "+refs/heads/*:refs/remotes/origin/*";
+    git(&ci, &["fetch", "-q", "origin", refspec]);
+    let remote = "refs/remotes/origin/feature";
+    git(&ci, &["checkout", "-q", "--force", "-B", "feature", remote]);
+
+    in_workspace(&ci, &["generate", "inflight"]).ok();
+    assert_eq!(shards(&ci), the_rule_shard(), "the PR job found no changes");
+}
+
+/// git C-quotes a path that is not ASCII (`"d\303\251tection.yaml"`) unless
+/// asked not to.
+#[test]
+fn non_ascii_object_file_names_are_kept() {
+    let (_dir, root) = scratch();
+    let ws = root.join("unicode-repo");
+    catalogue(&ws);
+    on_a_feature_branch(&ws, "main");
+    let uuid = "00000000-0000-4000-8003-000000000077";
+    copy_rule(&ws, "détection-règle.yaml".as_ref(), uuid).unwrap();
+
+    let docs = in_workspace(&ws, &["generate", "docs", "--changed"]).ok();
+    assert_eq!(
+        changed_paths(&docs),
+        ["objects/rules/détection-règle.yaml"],
+        "{docs}"
+    );
+    git(&ws, &["add", "-A"]);
+    git(&ws, &["commit", "-qm", "add a rule with a French name"]);
+    in_workspace(&ws, &["generate", "inflight"]).ok();
+    assert!(
+        shards(&ws).contains(&format!("{uuid}.json")),
+        "{:?}",
+        shards(&ws)
+    );
+}
+
+/// A Latin-1 file name is no UTF-8: it is reported and left out, and the
+/// JSON document still prints.
+#[cfg(unix)]
+#[test]
+fn a_non_utf8_object_file_name_does_not_break_json_output() {
+    use std::os::unix::ffi::OsStrExt as _;
+    let (_dir, root) = scratch();
+    let ws = root.join("latin1-repo");
+    catalogue(&ws);
+    on_a_feature_branch(&ws, "main");
+    let name = std::ffi::OsStr::from_bytes(b"r\xe8gle.yaml");
+    let uuid = "00000000-0000-4000-8003-000000000066";
+    if copy_rule(&ws, name, uuid).is_err() {
+        // macOS (APFS) refuses a file name that is not UTF-8.
+        return;
+    }
+    bump_rule(&ws);
+
+    let run = in_workspace(&ws, &["generate", "docs", "--changed"]);
+    let docs = run.ok();
+    assert_eq!(changed_paths(&docs), [tutorial::RULE_FILE], "{docs}");
+    assert!(run.stderr.contains("git_path_not_utf8"), "{run:?}");
+}
+
+// Workspace discovery (#294): no `OPENTIDE_*`, so the cwd alone decides.
+
+/// The tutorial's objects, by family.
+fn tutorial_counts() -> Value {
+    serde_json::json!({"rules": 1, "threats": 1, "objectives": 1})
+}
+
+/// `(top, workspace)`: a scaffold of its own (`standalone`), or a
+/// workspace in `detections/` of a git checkout that has a `tools/` too.
+fn layout(root: &Path, kind: &str) -> (PathBuf, PathBuf) {
+    if kind == "standalone" {
+        let ws = root.join("scaffold");
+        scaffold(&ws);
+        return (ws.clone(), ws);
+    }
+    let checkout = root.join("monorepo");
+    let ws = checkout.join("detections");
+    scaffold(&ws);
+    std::fs::create_dir(checkout.join("tools")).unwrap();
+    git(&checkout, &["init", "-q", "-b", "main", "."]);
+    (checkout, ws)
+}
+
+fn listing(path: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(path)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+fn path_of<'a>(document: &'a Value, key: &str) -> &'a Path {
+    Path::new(
+        document[key]
+            .as_str()
+            .unwrap_or_else(|| panic!("{key}: {document}")),
+    )
+}
+
+/// `info`, `validate`, `lint` and `generate` run from `start` under the top
+/// of a `kind` layout ([`layout`]) all find its workspace, and write nothing
+/// outside it.
+fn first_commands_agree_from(kind: &str, start: &str) {
+    let (_dir, root) = scratch();
+    let (top, ws) = layout(&root, kind);
+    let cwd = top.join(start);
+    let mut bystanders = vec![(top.clone(), listing(&top))];
+    bystanders.push((cwd.clone(), listing(&cwd)));
+    bystanders.retain(|(path, _)| *path != ws);
+
+    let info = opentide(&cwd, &["info"], &[]).ok();
+    assert_eq!(path_of(&info, "repo"), ws, "{kind} {start}: {info}");
+    assert_eq!(info["counts"], tutorial_counts(), "{kind} {start}: {info}");
+    let enabled: Vec<&Value> = info["platforms"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|platform| platform["enabled"] == true)
+        .map(|platform| &platform["name"])
+        .collect();
+    assert_eq!(enabled, ["sentinel"], "{kind} {start}: {info}");
+
+    let validate = opentide(&cwd, &["validate", "--strict"], &[]).ok();
+    assert_eq!(
+        path_of(&validate, "workspace"),
+        ws,
+        "{kind} {start}: {validate}"
+    );
+    assert_eq!(
+        validate["message"], "Validation passed",
+        "{kind} {start}: {validate}"
+    );
+    let checked = &validate["report"]["stats"]["objects_checked"];
+    assert_eq!(checked, 3, "{kind} {start}: {validate}");
+
+    let lint = opentide(&cwd, &["lint", "--strict"], &[]).ok();
+    assert_eq!(path_of(&lint, "path"), ws, "{kind} {start}: {lint}");
+    assert_eq!(lint["count"], 0, "{kind} {start}: {lint}");
+
+    let docs = opentide(&cwd, &["generate", "docs"], &[]).ok();
+    assert_eq!(
+        path_of(&docs, "output"),
+        ws.join("docs"),
+        "{kind} {start}: {docs}"
+    );
+    assert_eq!(docs["counts"], tutorial_counts(), "{kind} {start}: {docs}");
+
+    opentide(&cwd, &["generate"], &[]).ok();
+    let exported = ws.join(".opentide/exports/objects.export.json");
+    let exported: Value =
+        serde_json::from_str(&std::fs::read_to_string(exported).unwrap()).unwrap();
+    assert_eq!(exported.as_array().map(Vec::len), Some(3), "{kind} {start}");
+    let page = ws.join("docs/rules/sentinel-kql-rule.md");
+    assert!(page.is_file(), "{kind} {start}: no {}", page.display());
+
+    for (path, before) in bystanders {
+        assert_eq!(
+            listing(&path),
+            before,
+            "{kind} {start}: output leaked into {}",
+            path.display()
+        );
+    }
+}
+
+#[test]
+fn first_commands_agree_from_a_scaffold_root() {
+    first_commands_agree_from("standalone", ".");
+}
+
+#[test]
+fn first_commands_agree_from_a_scaffold_rules_folder() {
+    first_commands_agree_from("standalone", "objects/rules");
+}
+
+#[test]
+fn first_commands_agree_from_a_scaffold_configuration_folder() {
+    first_commands_agree_from("standalone", ".opentide/configurations/platforms");
+}
+
+#[test]
+fn first_commands_agree_from_a_nested_workspace_root() {
+    first_commands_agree_from("nested", "detections");
+}
+
+#[test]
+fn first_commands_agree_from_a_nested_workspace_rules_folder() {
+    first_commands_agree_from("nested", "detections/objects/rules");
+}
+
+/// Above the workspace nothing is marked: the checkout stays the root, run
+/// from `start` under it, which prints the checkout as `shown`.
+fn the_git_root_is_kept_from(start: &str, shown: &str) {
+    let (_dir, root) = scratch();
+    let (checkout, _) = layout(&root, "nested");
+    let cwd = checkout.join(start);
+
+    let info = opentide(&cwd, &["info"], &[]).ok();
+    assert_eq!(path_of(&info, "repo"), checkout, "{start}: {info}");
+    let none = serde_json::json!({"rules": 0, "threats": 0, "objectives": 0});
+    assert_eq!(info["counts"], none, "{start}: {info}");
+
+    let validate = opentide(&cwd, &["validate", "--strict"], &[]).ok();
+    let checked = &validate["report"]["stats"]["objects_checked"];
+    assert_eq!(checked, 0, "{start}: {validate}");
+    assert_eq!(
+        path_of(&validate, "workspace"),
+        checkout,
+        "{start}: {validate}"
+    );
+    // Relative to where it ran.
+    let message = format!("Validation passed, but no detection objects were found under {shown}");
+    assert_eq!(validate["message"], message, "{start}: {validate}");
+}
+
+#[test]
+fn a_checkout_without_markers_keeps_the_git_root_from_its_root() {
+    the_git_root_is_kept_from(".", "./");
+}
+
+#[test]
+fn a_checkout_without_markers_keeps_the_git_root_from_a_folder() {
+    the_git_root_is_kept_from("tools", "../");
+}
+
+/// The workspace `how` names (`--repo` or a variable) wins over the one the
+/// cwd is in.
+fn an_explicit_workspace_beats_discovery(how: &str) {
+    let (_dir, root) = scratch();
+    let (_, ws) = layout(&root, "nested");
+    // A workspace that holds a threat alone.
+    let other = root.join("other");
+    scaffold(&other);
+    for family in ["rules", "objectives"] {
+        for entry in std::fs::read_dir(other.join("objects").join(family)).unwrap() {
+            std::fs::remove_file(entry.unwrap().path()).unwrap();
+        }
+    }
+    let cwd = ws.join("objects/rules");
+    let run = |args: &[&str]| {
+        if how == "--repo" {
+            let repo = ["--repo", other.to_str().unwrap()];
+            opentide(&cwd, &[&repo[..], args].concat(), &[])
+        } else {
+            opentide(&cwd, args, &[(how, &other)])
+        }
+    };
+
+    let info = run(&["info"]).ok();
+    let threat = serde_json::json!({"rules": 0, "threats": 1, "objectives": 0});
+    assert_eq!(info["counts"], threat, "{how}: {info}");
+    let validate = run(&["validate", "--strict"]).ok();
+    assert_eq!(path_of(&validate, "workspace"), other, "{how}: {validate}");
+    let checked = &validate["report"]["stats"]["objects_checked"];
+    assert_eq!(checked, 1, "{how}: {validate}");
+}
+
+#[test]
+fn the_repo_flag_beats_discovery() {
+    an_explicit_workspace_beats_discovery("--repo");
+}
+
+#[test]
+fn opentide_repo_root_beats_discovery() {
+    an_explicit_workspace_beats_discovery("OPENTIDE_REPO_ROOT");
+}
+
+#[test]
+fn opentide_tide_workspace_beats_discovery() {
+    an_explicit_workspace_beats_discovery("OPENTIDE_TIDE_WORKSPACE");
+}
+
+/// The published first-user path, each step through the binary: setup,
+/// generate on the empty repository, the tutorial's objects, then generate,
+/// validate, lint and info, every one of them passing.
+#[test]
+fn the_first_user_workflow_passes_end_to_end() {
+    let (_dir, root) = scratch();
+    let parent = root.join("workspace");
+    std::fs::create_dir(&parent).unwrap();
+    let fresh = parent.join("tutorial-detections");
+    let (repo, path) = (parent.to_str().unwrap(), fresh.to_str().unwrap());
+    let env = [
+        ("OPENTIDE_REPO_ROOT", &*parent),
+        ("OPENTIDE_TIDE_WORKSPACE", &*parent),
+    ];
+    let args = [
+        "--repo",
+        repo,
+        "setup",
+        "--yes",
+        "--name",
+        "Tutorial Detections",
+    ];
+    let more = [
+        "--org",
+        "Example Corp",
+        "--platform",
+        "sentinel",
+        "--path",
+        path,
+    ];
+    opentide(&parent, &[&args[..], &more[..]].concat(), &env).ok();
+    assert!(fresh.join("objects/threats").is_dir());
+    let sentinel = fresh.join(".opentide/configurations/platforms/sentinel.toml");
+    assert!(
+        std::fs::read_to_string(sentinel)
+            .unwrap()
+            .contains("enabled = true")
+    );
+
+    in_workspace(&fresh, &["generate"]).ok();
+    assert!(
+        fresh
+            .join(".opentide/schemas/rule.1.0.schema.json")
+            .is_file()
+    );
+    let template = fresh.join(".opentide/templates/rule.1.0.template.yaml");
+    let template = std::fs::read_to_string(template).unwrap();
+    assert!(!template.contains("configurations: {}"), "{template}");
+    assert!(template.contains("#sentinel:"), "{template}");
+    assert!(!template.contains("null"), "{template}");
+
+    tutorial::write_objects(&fresh);
+    let threat = fresh.join("objects/threats/simulated-actor.yaml");
+    assert!(
+        std::fs::read_to_string(threat)
+            .unwrap()
+            .contains("name: att&ck::G0006")
+    );
+
+    in_workspace(&fresh, &["generate"]).ok();
+    let validate = in_workspace(&fresh, &["validate", "--strict"]).ok();
+    assert_eq!(validate["report"]["ok"], true, "{validate}");
+    let lint = in_workspace(&fresh, &["lint", "--strict"]).ok();
+    assert_eq!(lint["count"], 0, "{lint}");
+    let info = in_workspace(&fresh, &["info"]).ok();
+    assert_eq!(info["counts"], tutorial_counts(), "{info}");
+    let coverage = in_workspace(&fresh, &["info", "--technique", "T1059", "coverage"]).ok();
+    assert!(
+        coverage["coverage"]["count"].as_u64() >= Some(1),
+        "{coverage}"
+    );
+}

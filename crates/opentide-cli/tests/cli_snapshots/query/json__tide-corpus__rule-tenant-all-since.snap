@@ -1,0 +1,30 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/json/tide-corpus/rule-tenant-all-since
+---
+args: opentide --json query --platform splunk --rule 00000000-0000-4000-8003-000000000003 --tenant all --since 7d
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "query",
+  "duration_ms": 0,
+  "error": "splunk has no tenants configured: add a [[tenants]] entry in .opentide/configurations/platforms/splunk.toml",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--tenant",
+    "code": "usage_invalid_value",
+    "crash_log": null,
+    "message": "splunk has no tenants configured: add a [[tenants]] entry in .opentide/configurations/platforms/splunk.toml",
+    "suggestion": null
+  },
+  "message": "splunk has no tenants configured: add a [[tenants]] entry in .opentide/configurations/platforms/splunk.toml",
+  "next_actions": [],
+  "ok": false,
+  "platform": "splunk",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

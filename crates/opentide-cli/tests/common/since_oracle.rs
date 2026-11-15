@@ -58,11 +58,7 @@ fn query_languages(document: &mut Json) -> &mut Vec<Json> {
         let Json::Object(members) = node else {
             panic!("no object at {key}")
         };
-        node = members
-            .iter_mut()
-            .find(|(name, _)| name == key)
-            .map(|(_, member)| member)
-            .unwrap_or_else(|| panic!("no {key}"));
+        node = members.get_mut(key).unwrap_or_else(|| panic!("no {key}"));
     }
     let Json::Array(items) = node else {
         panic!("QueryChecked.language.enum is not an array")

@@ -1,0 +1,11 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/plain/tide-corpus/codequality
+---
+args: opentide validate --format codequality
+exit: 0
+
+━━━ stdout · json, 1 lines
+[]
+
+━━━ stderr · empty

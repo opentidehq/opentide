@@ -69,6 +69,23 @@ impl Write for Shared {
 pub fn run_captured(argv: &[String], env: &Env, cwd: &Path, version: &str, warm: bool) -> Captured {
     let interrupt = Interrupt::default();
     *CURRENT.lock().unwrap_or_else(PoisonError::into_inner) = Some(interrupt.clone());
+    let captured = run_interruptible(argv, env, cwd, version, warm, interrupt);
+    *CURRENT.lock().unwrap_or_else(PoisonError::into_inner) = None;
+    captured
+}
+
+/// [`run_captured`], stopped by `interrupt` alone, never by [`interrupt`]:
+/// for a host that runs several at once and stops each on its own (the MCP
+/// server's `notifications/cancelled`), so stopping one leaves the others,
+/// and every later run, uninterrupted.
+pub(crate) fn run_interruptible(
+    argv: &[String],
+    env: &Env,
+    cwd: &Path,
+    version: &str,
+    warm: bool,
+    interrupt: Interrupt,
+) -> Captured {
     let stderr = Arc::new(Mutex::new(Vec::new()));
     let sink: Sink = Arc::new(Mutex::new(Shared(Arc::clone(&stderr))));
     let host = Host {
@@ -86,7 +103,6 @@ pub fn run_captured(argv: &[String], env: &Env, cwd: &Path, version: &str, warm:
         let _active = warm.then(opentide_workspace::session::activate);
         crate::app::run(argv, env, &host, &mut out, &mut err)
     };
-    *CURRENT.lock().unwrap_or_else(PoisonError::into_inner) = None;
     let stderr = std::mem::take(&mut *stderr.lock().unwrap_or_else(PoisonError::into_inner));
     Captured {
         exit_code,

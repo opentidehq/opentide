@@ -64,7 +64,7 @@ pub fn compile_query(base: &str, exclusions: Option<&Json>, tenant: &str) -> Str
         for exclusion in exclusions {
             let applies = match exclusion.get("tenant") {
                 Some(Json::Str(name)) => name == tenant || name.is_empty(),
-                Some(value) => !value.truthy(),
+                Some(value) => value.is_null(),
                 None => true,
             };
             if !applies {
@@ -122,6 +122,18 @@ mod tests {
             "let x = true;\nlet z = 1.5;\nT\n| where B\n| where C"
         );
         assert_eq!(compile_query("T", None, "two"), "T");
+    }
+
+    /// An exclusion with no tenant, or a `null` one, applies to every
+    /// tenant; a tenant that is not text (`false`, `0`) names none.
+    #[test]
+    fn an_exclusion_whose_tenant_is_not_text_applies_to_no_tenant() {
+        let list = exclusions(
+            "- {query: '| where A', tenant: null}\n\
+             - {query: '| where B', tenant: false}\n\
+             - {query: '| where C', tenant: 0}\n",
+        );
+        assert_eq!(compile_query("T", Some(&list), "one"), "T\n| where A");
     }
 
     #[test]

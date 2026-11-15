@@ -1,0 +1,38 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-push/promote-skip
+---
+args: opentide --json deploy --platform splunk --strategy RELEASE --skip-promotion
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "advice": "no configured status deploys with this run",
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": false,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "No rules to deploy for this platform",
+  "next_actions": [],
+  "ok": true,
+  "plan": {},
+  "platform": "splunk",
+  "schema_version": 1,
+  "skipped": [
+    {
+      "platform": "splunk",
+      "rule": "Splunk create rule",
+      "status": "STAGING",
+      "strategy": "PREVIEW",
+      "uuid": "00000000-0000-4000-8047-000000000041"
+    }
+  ],
+  "status": "skipped",
+  "summary": {
+    "skipped": 1
+  }
+}
+
+━━━ stderr · empty

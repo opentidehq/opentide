@@ -8,7 +8,7 @@
     reason = "a test helper: an unreadable recording is a failure"
 )]
 
-use opentide_cli::json::{Json, document_text};
+use opentide_cli::json::{Json, Object, document_text};
 use std::path::Path;
 
 #[path = "common/since_oracle.rs"]
@@ -25,7 +25,7 @@ fn generated() -> String {
     let Some(Json::Array(commands)) = catalogue.get("commands") else {
         panic!("no commands in the recording")
     };
-    let schemas: Vec<(String, Json)> = commands
+    let schemas: Object = commands
         .iter()
         .map(|command| {
             let Some(Json::Str(path)) = command.get("path") else {

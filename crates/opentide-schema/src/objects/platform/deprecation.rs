@@ -102,14 +102,13 @@ fn walk(
         let value = Some(&entry.value);
         let set = !matches!(entry.value.value, NodeValue::Null);
         path.push(name.to_owned());
-        if let Some(deprecation) = field_schema.get(keys::META_DEPRECATION)
-            && truthy(deprecation)
+        if let Some(text) = field_schema
+            .get(keys::META_DEPRECATION)
+            .and_then(Value::as_str)
+            .filter(|text| !text.is_empty())
             && set
         {
-            let text = match deprecation {
-                Value::String(text) => text.clone(),
-                other => other.to_string(),
-            };
+            let text = text.to_owned();
             out.push(Deprecated {
                 field_path: path.clone(),
                 message: format!(
@@ -126,18 +125,6 @@ fn walk(
             walk(value, &field_schema, root, path, out);
         }
         path.pop();
-    }
-}
-
-/// Python's truthiness of a JSON value.
-fn truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(flag) => *flag,
-        Value::Number(number) => number.as_f64().is_some_and(|number| number != 0.0),
-        Value::String(text) => !text.is_empty(),
-        Value::Array(items) => !items.is_empty(),
-        Value::Object(map) => !map.is_empty(),
     }
 }
 

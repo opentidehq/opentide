@@ -117,7 +117,7 @@ impl Record {
                 OutJson::Array(self.notes.iter().map(OutJson::str).collect()),
             ));
         }
-        OutJson::Object(members)
+        OutJson::object(members)
     }
 }
 

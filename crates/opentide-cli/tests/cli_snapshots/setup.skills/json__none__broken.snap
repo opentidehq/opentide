@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.skills/json/none/broken
+---
+args: opentide --json setup skills --generic --install broken-skill --yes
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup skills",
+  "duration_ms": 0,
+  "error": "Could not download skill 'broken-skill' from opentidehq/skills@main. Check network access and that the skills repository is publicly reachable.",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "Could not download skill 'broken-skill' from opentidehq/skills@main. Check network access and that the skills repository is publicly reachable.",
+    "suggestion": null
+  },
+  "message": "Could not download skill 'broken-skill' from opentidehq/skills@main. Check network access and that the skills repository is publicly reachable.",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

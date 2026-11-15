@@ -57,14 +57,6 @@ fn schemas() -> ConfigurationSchemas {
     ConfigurationSchemas::parse(&router.expect("the router"), &schemas).expect("schemas")
 }
 
-fn boundary(text: &str, offset: usize) -> usize {
-    let mut offset = offset.min(text.len());
-    while !text.is_char_boundary(offset) {
-        offset -= 1;
-    }
-    offset
-}
-
 /// `fuzz/src/lib.rs::configuration`, with the same input format.
 fn exercise(schemas: &ConfigurationSchemas, data: &[u8]) {
     let Some((&pick, rest)) = data.split_first() else {
@@ -115,7 +107,7 @@ fn exercise(schemas: &ConfigurationSchemas, data: &[u8]) {
         );
     }
     for offset in [0, text.len() / 3, text.len() / 2, text.len()] {
-        let offset = boundary(text, offset);
+        let offset = text.floor_char_boundary(offset);
         let _ = configuration_hover(schemas, &path, text, offset);
         let _ = configuration_completions(schemas, &path, text, offset);
     }

@@ -26,6 +26,7 @@ use opentide_connectors::{Environment, HttpClient, Tenant};
 use tokio_util::sync::CancellationToken;
 
 use super::query::{Configured, http_settings, toml_value};
+use super::template::fill;
 use super::{Report, open, placement};
 use crate::env::Env;
 use crate::json::Json;
@@ -108,14 +109,15 @@ fn block_on<T: Send>(work: impl std::future::Future<Output = T> + Send) -> Resul
 }
 
 /// `Imported/<file>` under the working directory, written as `write_text`
-/// writes it (the platform's line ends).
+/// writes it (the platform's line ends), whole or not at all.
 fn write_text(path: &Path, text: &str) -> Result<(), String> {
     let text = if cfg!(windows) {
         text.replace('\n', "\r\n")
     } else {
         text.to_owned()
     };
-    std::fs::write(path, text.as_bytes()).map_err(|error| format!("{}: {error}", path.display()))
+    opentide_workspace::fs::write_atomically(path, text.as_bytes())
+        .map_err(|error| format!("{}: {error}", path.display()))
 }
 
 /// The run as a report: one checklist step, then `Imported 3 rules from
@@ -187,31 +189,6 @@ const CONTRIBUTORS_TEMPLATE: &str = "\n    contributors:\n      - {contributor}\
 const NO_RECOMMENDATION_TEMPLATE: &str = "\n      #recommendation: |\n        #Type Here\n";
 const RECOMMENDATION_TEMPLATE: &str = "\n      recommendation: |\n{recommendation}\n";
 const TECHNIQUES_TEMPLATE: &str = "\n      techniques:\n        {techniques_list}\n";
-
-/// `template` with each `{name}` placeholder that `values` names replaced by
-/// its value, in one pass: a value is never read as a placeholder, and a
-/// placeholder `values` does not name is kept as it is.
-pub(crate) fn fill(template: &str, values: &[(&str, &str)]) -> String {
-    let mut out = String::with_capacity(template.len());
-    let mut rest = template;
-    while let Some(start) = rest.find('{') {
-        out.push_str(&rest[..start]);
-        let after = &rest[start + 1..];
-        let Some(end) = after.find('}') else {
-            out.push_str(&rest[start..]);
-            rest = "";
-            break;
-        };
-        let name = &after[..end];
-        match values.iter().find(|(key, _)| *key == name) {
-            Some((_, value)) => out.push_str(value),
-            None => out.push_str(&rest[start..start + end + 2]),
-        }
-        rest = &after[end + 1..];
-    }
-    out.push_str(rest);
-    out
-}
 
 /// Each non-blank line of `text`, without its surrounding whitespace, on
 /// its own line indented by `indentation` spaces.
@@ -692,13 +669,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn templates_fill_in_one_pass() {
-        assert_eq!(
-            fill("a {x} {y} {z}", &[("x", "{y}"), ("y", "2")]),
-            "a {y} 2 {z}"
-        );
-        assert_eq!(fill("a {", &[]), "a {");
-        assert_eq!(fill("{a}{b}", &[("b", "B")]), "{a}B");
+    fn multiline_text_is_trimmed_and_indented() {
         assert_eq!(fix_multiline("  a \n\n\tb\r\n", 2), "  a\n  b");
         assert_eq!(
             space_before_uppercase("SuspiciousActivity"),

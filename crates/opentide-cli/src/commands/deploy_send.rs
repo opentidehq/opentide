@@ -37,12 +37,13 @@ use super::validate_live::{Batch, batches};
 use super::{Report, placement};
 use crate::env::Env;
 use crate::envelope::code;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::logging::Sink;
 use crate::render::glyphs;
 use crate::render::outcome::Console;
 use crate::render::progress::{Step, StepStatus, plural, seconds_text};
-use crate::render::text::{Style, Text};
+use crate::render::text::Text;
+use anstyle::{AnsiColor, Style};
 
 /// The command path.
 pub const COMMAND: &str = "deploy";
@@ -431,12 +432,9 @@ fn report_skipped(
     ));
     let mut summary = match result.iter().find(|(key, _)| key == "_summary") {
         Some((_, Json::Object(members))) => members.clone(),
-        _ => Vec::new(),
+        _ => Object::new(),
     };
-    match summary.iter_mut().find(|(key, _)| key == "skipped") {
-        Some(entry) => entry.1 = Json::from(rules.len()),
-        None => summary.push(("skipped".into(), Json::from(rules.len()))),
-    }
+    summary.insert("skipped".into(), Json::from(rules.len()));
     set(result, "_summary", Json::Object(summary));
     let owned = opentide_compile::Owned::new(
         &Vocabularies::bundled(),
@@ -499,7 +497,7 @@ fn nothing(message: &str, refused: bool, field: (&str, Json)) -> Vec<(String, Js
         ),
         ("deployed".into(), Json::Array(Vec::new())),
         ("dry_run".into(), Json::Bool(false)),
-        ("plan".into(), Json::Object(Vec::new())),
+        ("plan".into(), Json::Object(Object::new())),
     ];
     if refused {
         result.push(("_exit_code".into(), Json::Int(1)));
@@ -814,11 +812,11 @@ fn deploy(
     let started = Instant::now();
     let separator = format!(" {} ", glyphs::SEPARATOR);
     // The header is bold throughout, its labels bold and dim.
-    let bold_dim = Style::new("bold dim");
-    let mut header = Text::styled("Deploy plan", &Style::new("bold"));
+    let bold_dim = Style::new().bold().dimmed();
+    let mut header = Text::styled("Deploy plan", &Style::new().bold());
     header.append(&format!("{separator}strategy "), &bold_dim);
     let strategy_names: Vec<&str> = runs.iter().map(|run| run.name()).collect();
-    header.append(&strategy_names.join(" "), &Style::new("bold"));
+    header.append(&strategy_names.join(" "), &Style::new().bold());
     header.append(
         &format!(
             "{separator}{}",
@@ -828,7 +826,7 @@ fn deploy(
     );
     cx.lines.line(&header, false);
     cx.lines.line(
-        &Text::styled(&plan::message(&changes), &Style::new("dim")),
+        &Text::styled(&plan::message(&changes), &Style::new().dimmed()),
         false,
     );
     let compile_cx = owned.context(index);
@@ -1129,21 +1127,21 @@ impl RuleResult {
     /// The row `results` carries (`to_dict`).
     fn to_json(&self) -> Json {
         let text = |value: &Option<String>| value.as_ref().map_or(Json::Null, Json::str);
-        Json::Object(vec![
-            ("platform".into(), Json::str(&self.platform)),
-            ("tenant".into(), text(&self.tenant)),
-            ("id".into(), Json::str(&self.id)),
-            ("name".into(), Json::str(&self.name)),
-            ("status".into(), Json::str(self.status)),
-            ("action".into(), text(&self.action)),
+        Json::object([
+            ("platform", Json::str(&self.platform)),
+            ("tenant", text(&self.tenant)),
+            ("id", Json::str(&self.id)),
+            ("name", Json::str(&self.name)),
+            ("status", Json::str(self.status)),
+            ("action", text(&self.action)),
             (
-                "seconds".into(),
+                "seconds",
                 self.seconds.map_or(Json::Null, |seconds| {
                     Json::Float((seconds * 1000.0).round() / 1000.0)
                 }),
             ),
-            ("error".into(), text(&self.error)),
-            ("reason".into(), text(&self.reason)),
+            ("error", text(&self.error)),
+            ("reason", text(&self.reason)),
         ])
     }
 }
@@ -1211,7 +1209,7 @@ fn run_summary(results: &[RuleResult], platforms: usize, tenants: usize, seconds
     ));
     members.push(("platforms".into(), Json::from(platforms)));
     members.push(("tenants".into(), Json::from(tenants)));
-    Json::Object(members)
+    Json::object(members)
 }
 
 /// The run's last line, for a pass and for a failure alike (`outcome_message`).
@@ -1478,13 +1476,13 @@ fn header_line(platform: &str, tenant: Option<&str>, rules: Option<usize>) -> Te
         Some(tenant) if !tenant.is_empty() => format!("{platform} / {tenant}"),
         _ => platform.to_owned(),
     };
-    let bold = Style::new("bold");
+    let bold = Style::new().bold();
     let mut line = Text::styled("Deploying to ", &bold);
     line.append(&place, &bold);
     if let Some(rules) = rules {
         line.append(
             &format!(" {} {}", glyphs::SEPARATOR, plural(rules, "rule", None)),
-            &Style::new("bold dim"),
+            &Style::new().bold().dimmed(),
         );
     }
     line
@@ -1521,20 +1519,23 @@ fn result_line(
         glyphs::OK
     };
     let style = if failed {
-        "bold red"
+        AnsiColor::Red.on_default().bold()
     } else if skipped {
-        "dim"
+        Style::new().dimmed()
     } else {
-        "green"
+        AnsiColor::Green.on_default()
     };
     let mut line = Text::plain("  ");
-    line.append(&format!("[{index:>digits$}/{total}]"), &Style::new("dim"));
+    line.append(
+        &format!("[{index:>digits$}/{total}]"),
+        &Style::new().dimmed(),
+    );
     line.push_str(" ");
-    line.append(&format!("{mark} {:<9} ", verb(result)), &Style::new(style));
+    line.append(&format!("{mark} {:<9} ", verb(result)), &style);
     let pad = name_width.saturating_sub(result.name.chars().count());
     let name = format!("{}{}", result.name, " ".repeat(pad));
     if failed {
-        line.append(&name, &Style::new("bold"));
+        line.append(&name, &Style::new().bold());
     } else {
         line.push_str(&name);
     }
@@ -1559,16 +1560,16 @@ fn result_line(
             }
             detail = pieces.join(&format!("\n{}", " ".repeat(lead)));
         }
-        line.append(&detail, &Style::new("red"));
+        line.append(&detail, &AnsiColor::Red.on_default());
     } else if skipped {
         line.append(
             result.reason.as_deref().unwrap_or_default(),
-            &Style::new("dim"),
+            &Style::new().dimmed(),
         );
     } else {
         line.append(
             &seconds_text(result.seconds.unwrap_or(0.0)),
-            &Style::new("dim"),
+            &Style::new().dimmed(),
         );
     }
     line
@@ -1904,6 +1905,7 @@ impl Sender<'_, '_> {
                         rule_id: rule.uuid.clone(),
                         operation: Operation::Delete,
                         body: Vec::new(),
+                        policies: None,
                     }
                 } else {
                     let body = opentide_compile::sentinel::compile(self.compile, rule, tenant)
@@ -1912,6 +1914,7 @@ impl Sender<'_, '_> {
                         rule_id: rule.uuid.clone(),
                         operation: Operation::Update,
                         body: body.to_compact().into_bytes(),
+                        policies: None,
                     }
                 };
                 let context = self.context(connection);
@@ -1938,8 +1941,11 @@ impl Sender<'_, '_> {
                     .and_then(|block| block.get("correlation_search"))
                 {
                     Some(CJson::Bool(set)) => *set,
-                    _ => opentide_compile::deploy::setup(&batch.table, "enterprise_security")
-                        .is_some_and(CJson::truthy),
+                    // `true`, `false`, or a `$NAME` placeholder, which leaves it on.
+                    _ => !matches!(
+                        opentide_compile::deploy::setup(&batch.table, "enterprise_security"),
+                        None | Some(CJson::Bool(false))
+                    ),
                 };
                 if correlation {
                     name.push_str(" - Rule");
@@ -2039,6 +2045,7 @@ impl Sender<'_, '_> {
                     } else {
                         serde_json::to_vec(&write.body).unwrap_or_default()
                     },
+                    policies: None,
                 };
                 let context = self.context(connection);
                 self.block(deployer.deploy(context, &request))
@@ -2399,6 +2406,7 @@ impl Sender<'_, '_> {
             body: plugin_body(rule, platform, stored)
                 .to_compact()
                 .into_bytes(),
+            policies: None,
         };
         let context = self.context(connection);
         let done = self
@@ -2682,7 +2690,7 @@ impl Sender<'_, '_> {
             for sent in &batch.rules {
                 let rule = &sent.rule;
                 let mut result = RuleResult::new("elastic", Some(&tenant), &rule.uuid, &rule.name);
-                let Some(raw) = rule.block("elastic").filter(|block| block.truthy()) else {
+                let Some(raw) = rule.block("elastic").filter(|block| block.is_filled()) else {
                     result.skip("no Elastic configuration");
                     log.finished(result);
                     continue;
@@ -2904,13 +2912,9 @@ impl Sender<'_, '_> {
                 let tuning = body
                     .get("details")
                     .and_then(|details| details.get("append"))
-                    .is_some_and(CJson::truthy);
-                let policies = match rule.block("sysdig").and_then(|block| block.get("policies")) {
-                    Some(CJson::Array(items)) => {
-                        items.iter().map(opentide_compile::deploy::text).collect()
-                    }
-                    _ => tenant_policies.clone(),
-                };
+                    .is_some_and(CJson::is_true);
+                let policies = opentide_compile::sysdig::block_policies(rule)
+                    .unwrap_or_else(|| tenant_policies.clone());
                 let root = self.workspace.root().to_path_buf();
                 let recreate_refusal = match opentide_compile::git::state_ignore(&root) {
                     Some(ignore) => Some(StateError {
@@ -3038,7 +3042,7 @@ impl Sender<'_, '_> {
             }
             let connection = self.connect(PLATFORM, batch)?;
             let automatic = opentide_compile::deploy::setup(&batch.table, "automatic_actions")
-                .is_none_or(CJson::truthy);
+                .is_none_or(CJson::is_true);
             for (rule, action) in planned {
                 let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
                 let strategy = match self.strategy_of(rule, PLATFORM) {

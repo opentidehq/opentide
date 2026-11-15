@@ -10,7 +10,7 @@ use anyhow::{Context, Result, bail};
 
 use super::lifecycle::{Lifecycle, merge};
 use super::stix;
-use super::value::{Table, Value, parse_json, parse_toml, text, to_toml, truthy};
+use super::value::{Table, Value, filled, named, parse_json, parse_toml, text, to_toml};
 
 /// The file name suffix of a vocabulary.
 pub const VOCAB_SUFFIX: &str = ".vocab.toml";
@@ -238,7 +238,7 @@ fn stamp_source(document: &mut Table, manifest: &Table, now: &str) {
         "source_fetched_at".to_owned(),
         manifest
             .get("fetched_at")
-            .filter(|value| truthy(value))
+            .filter(|value| named(value))
             .cloned()
             .unwrap_or_else(|| Value::from(now)),
     );
@@ -358,7 +358,7 @@ pub fn attack(vocab_dir: &Path, inputs: &Inputs) -> Result<Report> {
         Some(value) => text(value)?,
         None => "unknown".to_owned(),
     };
-    let previous = match previous_source.filter(truthy) {
+    let previous = match previous_source.filter(named) {
         Some(value) => text(&value)?,
         None => String::new(),
     };
@@ -397,7 +397,7 @@ fn misp_actors(url: &str, raw: &[u8]) -> Result<(Vec<Table>, Table)> {
             "description".to_owned(),
             actor
                 .get("description")
-                .filter(|value| truthy(value))
+                .filter(|value| filled(value))
                 .cloned()
                 .unwrap_or_else(|| Value::from("")),
         );
@@ -405,7 +405,7 @@ fn misp_actors(url: &str, raw: &[u8]) -> Result<(Vec<Table>, Table)> {
         if let Some(synonyms) = actor
             .get("meta")
             .and_then(|meta| meta.get("synonyms"))
-            .filter(|value| truthy(value))
+            .filter(|value| filled(value))
         {
             entry.insert("alias".to_owned(), synonyms.clone());
         }
@@ -484,7 +484,7 @@ pub fn actors(vocab_dir: &Path, inputs: &Inputs) -> Result<Report> {
     }
 
     let text_of = |value: Option<Value>| -> Result<String> {
-        match value.filter(truthy) {
+        match value.filter(named) {
             Some(value) => text(&value),
             None => Ok(String::new()),
         }

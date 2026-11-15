@@ -12,11 +12,12 @@ use super::stage::Stage;
 use super::{CiArgs, Context, bad_parameter, confirm_write, needs_input_for, resolved};
 use crate::commands::{Block, Report};
 use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE, code};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::mode::Mode;
 use crate::render::outcome::OutcomeKind;
 use crate::render::table::columns;
-use crate::render::text::{Style, Text};
+use crate::render::text::Text;
+use anstyle::Style;
 
 /// Where a subcommand writes, as the command line names it.
 #[derive(Clone, Debug, Default)]
@@ -812,12 +813,12 @@ fn plan_report(
     report.outcome_kind = Some(OutcomeKind::Plan);
     report.warnings = warnings;
     if cx.mode != Mode::Json {
-        let bold = Style::new("bold");
+        let bold = Style::new().bold();
         let mut lines = Vec::new();
         for step in &steps {
             lines.push(Text::styled(&step.step, &bold));
             if step.files.is_empty() {
-                lines.push(Text::styled("  nothing to write", &Style::new("dim")));
+                lines.push(Text::styled("  nothing to write", &Style::new().dimmed()));
                 continue;
             }
             let rows: Vec<Vec<Text>> = step
@@ -825,7 +826,7 @@ fn plan_report(
                 .iter()
                 .map(|(path, action)| {
                     let style = if *action == "skip" {
-                        Style::new("dim")
+                        Style::new().dimmed()
                     } else {
                         Style::default()
                     };
@@ -1008,8 +1009,8 @@ fn summary(result: &StepResult) -> Vec<Text> {
         .iter()
         .map(|(path, purpose)| {
             vec![
-                Text::styled(path, &Style::new("bold")),
-                Text::styled(purpose, &Style::new("dim")),
+                Text::styled(path, &Style::new().bold()),
+                Text::styled(purpose, &Style::new().dimmed()),
             ]
         })
         .collect();
@@ -1201,7 +1202,7 @@ impl Recorder<'_> {
                 self.warnings.push(warning);
             }
         }
-        let mut fields = vec![("step".to_owned(), Json::str(name))];
+        let mut fields = Object::from([("step".to_owned(), Json::str(name))]);
         fields.extend(result.fields);
         self.steps.push(StepResult { fields });
         Ok(())
@@ -1335,7 +1336,7 @@ fn execute(
                 recorder
                     .steps
                     .iter()
-                    .map(|step| Json::Object(step.fields.clone()))
+                    .map(|step| Json::object(step.fields.clone()))
                     .collect(),
             ),
         ),
@@ -1351,7 +1352,7 @@ fn execute(
     if run_repo && let Some(platforms) = platforms {
         fields.push(("platforms".to_owned(), platforms));
     }
-    finish(COMMAND, StepResult { fields }, name, root, cx)
+    finish(COMMAND, StepResult::new(fields), name, root, cx)
 }
 
 fn run_steps(

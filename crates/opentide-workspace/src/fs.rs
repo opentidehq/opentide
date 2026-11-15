@@ -261,35 +261,11 @@ impl FileSystem for OsFs {
 
 impl WriteFs for OsFs {
     fn replace(&self, path: &Path, before: &[u8], after: &[u8]) -> Result<(), WriteError> {
-        use std::io::Write as _;
         let target = std::fs::canonicalize(path).map(strip_verbatim)?;
         if std::fs::read(&target)? != before {
             return Err(WriteError::Changed);
         }
-        let folder = target.parent().unwrap_or_else(|| Path::new("."));
-        let name = target
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        // A folder the user cannot write refuses the temporary file itself.
-        let mut temporary = tempfile::Builder::new()
-            .prefix(&format!(".{name}."))
-            .suffix(".tmp")
-            .tempfile_in(folder)?;
-        temporary.write_all(after)?;
-        temporary.as_file().sync_all()?;
-        // The original's permissions; WASI has none to keep (its
-        // `set_permissions` is unsupported).
-        #[cfg(not(target_os = "wasi"))]
-        {
-            let permissions = std::fs::metadata(&target)?.permissions();
-            std::fs::set_permissions(temporary.path(), permissions)?;
-        }
-        // Dropped on an error, the temporary file is deleted.
-        temporary
-            .persist(&target)
-            .map_err(|error| WriteError::Io(error.error))?;
-        Ok(())
+        Ok(write_atomically(&target, after)?)
     }
 
     fn rename_file(&self, from: &Path, to: &Path) -> io::Result<()> {
@@ -322,6 +298,73 @@ impl WriteFs for OsFs {
             }
         }
     }
+}
+
+/// Writes `bytes` to the file `path` names, whole or not at all: they go to
+/// a temporary file of a unique name in the same folder, flushed to disk,
+/// which is then renamed over `path`. A write that fails partway leaves the
+/// file as it was and removes the temporary file, and two processes writing
+/// the same file never share a temporary file.
+///
+/// A symbolic link is followed, so it keeps pointing at the file it names.
+/// An existing file keeps its permissions; a new one gets the permissions
+/// [`std::fs::write`] would give it. A path that names something other than
+/// a regular file (`/dev/stdout`, a named pipe) is written in place, as it
+/// cannot be replaced. The folder must exist.
+///
+/// # Errors
+///
+/// The folder or the file cannot be written.
+pub fn write_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    use std::io::Write as _;
+    let target = match std::fs::canonicalize(path) {
+        Ok(target) => strip_verbatim(target),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => path.to_path_buf(),
+        Err(error) => return Err(error),
+    };
+    let existing = match std::fs::metadata(&target) {
+        Ok(metadata) => Some(metadata),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error),
+    };
+    if existing
+        .as_ref()
+        .is_some_and(|metadata| !metadata.is_file())
+    {
+        return std::fs::write(&target, bytes);
+    }
+    let folder = target
+        .parent()
+        .filter(|folder| !folder.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let prefix = format!(
+        ".{}.",
+        target
+            .file_name()
+            .map(|name| name.to_string_lossy())
+            .unwrap_or_default()
+    );
+    let mut builder = tempfile::Builder::new();
+    builder.prefix(&prefix).suffix(".tmp");
+    // A new file as `std::fs::write` creates it: 0666 less the umask, where
+    // a temporary file is created owner-only.
+    #[cfg(unix)]
+    if existing.is_none() {
+        builder.permissions(std::os::unix::fs::PermissionsExt::from_mode(0o666));
+    }
+    // A folder the user cannot write refuses the temporary file itself.
+    let mut temporary = builder.tempfile_in(folder)?;
+    temporary.write_all(bytes)?;
+    temporary.as_file().sync_all()?;
+    // The original's permissions; WASI has none to keep (its
+    // `set_permissions` is unsupported).
+    #[cfg(not(target_os = "wasi"))]
+    if let Some(metadata) = existing {
+        std::fs::set_permissions(temporary.path(), metadata.permissions())?;
+    }
+    // Dropped on an error, the temporary file is deleted.
+    temporary.persist(&target).map_err(|error| error.error)?;
+    Ok(())
 }
 
 /// `canonicalize` on Windows answers `\\?\C:\...`; the rest of the path, and
@@ -734,6 +777,92 @@ mod tests {
             fs.replace(&dir.path().join("none.yaml"), b"", b""),
             Err(WriteError::Io(_))
         ));
+    }
+
+    #[test]
+    fn an_atomic_write_replaces_the_file_and_leaves_no_temporary_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ledger.jsonl");
+        write_atomically(&path, b"one").unwrap();
+        write_atomically(&path, b"two").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"two");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+        // A missing folder is an error, and nothing is written.
+        assert!(write_atomically(&dir.path().join("none/x"), b"x").is_err());
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn an_atomic_write_takes_a_temporary_name_no_other_writer_has() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ledger.jsonl");
+        // The fixed names earlier writers used are taken (by folders, which a
+        // file cannot be written over): the write does not need them.
+        for taken in ["ledger.jsonl.tmp", ".ledger.jsonl.tmp"] {
+            std::fs::create_dir(dir.path().join(taken)).unwrap();
+        }
+        write_atomically(&path, b"x").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"x");
+        // Writers at once: each write lands whole, and none fails on
+        // another's temporary file.
+        std::thread::scope(|scope| {
+            for writer in 0..8u8 {
+                let path = &path;
+                scope.spawn(move || {
+                    for _ in 0..20 {
+                        write_atomically(path, &[writer; 64]).unwrap();
+                    }
+                });
+            }
+        });
+        let last = std::fs::read(&path).unwrap();
+        assert_eq!(last.len(), 64);
+        assert!(last.iter().all(|byte| *byte == last[0]));
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 3);
+    }
+
+    /// The temporary file is created owner-only: a rule committed as 0644
+    /// must not come back owner-only (#987), and a new file is created as
+    /// `std::fs::write` creates one.
+    #[cfg(unix)]
+    #[test]
+    fn an_atomic_write_keeps_the_permission_bits() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o7777;
+        for kept in [0o644, 0o640, 0o755] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("r.yaml");
+            std::fs::write(&path, "x").unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(kept)).unwrap();
+            write_atomically(&path, b"y").unwrap();
+            assert_eq!(mode(&path), kept, "{kept:o}");
+            assert_eq!(std::fs::read(&path).unwrap(), b"y");
+        }
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("plain"), "x").unwrap();
+        write_atomically(&dir.path().join("atomic"), b"x").unwrap();
+        assert_eq!(
+            mode(&dir.path().join("atomic")),
+            mode(&dir.path().join("plain"))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_atomic_write_through_a_link_replaces_the_file_it_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("target.md");
+        let link = dir.path().join("link.md");
+        std::fs::write(&target, "old").unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        write_atomically(&link, b"new").unwrap();
+        assert!(
+            std::fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(std::fs::read(&target).unwrap(), b"new");
     }
 
     #[test]

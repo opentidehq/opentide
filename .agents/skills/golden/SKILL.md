@@ -30,6 +30,24 @@ the fixtures and the normalisation rules. Where this skill and the README disagr
 right: fix this skill. Never use a flag that neither names (`cargo xtask golden help` prints the
 usage).
 
+## Snapshots first (#1139)
+
+The command line's regression net is no longer the oracle: it is the Rust-owned snapshots of
+`crates/opentide-cli/tests/cli_snapshots.rs`, one per case of `tests/golden/cases.toml`, with
+the Rust CLI's own output as the expected value (`tests/golden/README.md`, "Snapshots"). A change
+that alters what a command prints or writes updates its snapshots in the same pull request:
+
+1. Run `cargo nextest run -p opentide-cli --test cli_snapshots` (narrow it with
+   `OPENTIDE_SNAPSHOT_FILTER=<part of a case id>`).
+2. `cargo insta review`: read every diff; accept the ones the change means, fix the code for the
+   rest.
+3. Commit the `.snap` files with the change. The reviewer reads them as the user-visible diff:
+   each changed line follows from the change, and the information a user or an agent relies on
+   (exit code, error code, the fields of a JSON envelope, the files written) is still there.
+
+Never hand-edit a `.snap`, never commit a `.snap.new`, and never widen a normalisation rule to
+hide a difference. A new behaviour gets a `[[case]]` in `cases.toml`, and so a snapshot.
+
 ## The rules
 
 1. **The oracle is the Python CLI installed from a frozen tag**, recorded in `tests/golden/ORACLE`
