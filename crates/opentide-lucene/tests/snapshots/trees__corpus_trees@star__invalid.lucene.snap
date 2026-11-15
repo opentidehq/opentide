@@ -8,4 +8,4 @@ SourceFile@0..2
     FieldName@0..1
       Star@0..1 "*"
     Colon@1..2 ":"
-2..2: missing a clause (expected a term, a term, a term, a phrase, a regular expression, a term, `AND`, `OR`, `(`, `[`, `{`)
+2..2: missing a clause (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, AmpAmp, PipePipe, LParen, LBracket, LBrace)

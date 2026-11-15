@@ -12,4 +12,4 @@ SourceFile@0..12
       Term@6..11 "alert"
   Error@11..12
     ErrorToken@11..12 "^"
-11..11: unexpected (expected a term, a term, a term, a phrase, a regular expression, , , a term, `AND`, `OR`, `NOT`, `AND`, `OR`, `NOT`, `+`, `-`, `(`, `[`, `{`)
+11..11: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, Boost, Fuzzy, BareOperator, AndKw, OrKw, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)

@@ -251,8 +251,9 @@ fn bound(p: &mut Parser<'_>) {
 pub(crate) fn debug(source: &str) -> String {
     let (root, parse) = parse(source);
     let mut out = debug_tree(&root, |k| format!("{k:?}"));
+    // Kind names, not message spellings: several kinds read "a term".
     out.push_str(&debug_errors(&parse.errors, |k| {
-        K::from_raw(k).describe().to_owned()
+        format!("{:?}", K::from_raw(k))
     }));
     out
 }

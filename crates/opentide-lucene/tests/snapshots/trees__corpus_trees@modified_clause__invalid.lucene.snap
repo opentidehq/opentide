@@ -17,4 +17,4 @@ SourceFile@0..24
         Colon@16..17 ":"
         TermQuery@17..24
           Term@17..24 "process"
-1..1: missing a clause (expected a term, a term, a term, a phrase, a regular expression, a term, `AND`, `OR`, `(`, `[`, `{`)
+1..1: missing a clause (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, AmpAmp, PipePipe, LParen, LBracket, LBrace)

@@ -10,5 +10,5 @@ SourceFile@0..16
     Colon@12..13 ":"
   And@13..16
     AndKw@13..16 "AND"
-13..13: missing a clause (expected a term, a term, a term, a phrase, a regular expression, a term, `AND`, `OR`, `(`, `[`, `{`)
+13..13: missing a clause (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, AmpAmp, PipePipe, LParen, LBracket, LBrace)
 16..16: missing a clause

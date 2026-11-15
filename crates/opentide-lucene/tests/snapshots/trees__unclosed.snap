@@ -18,4 +18,4 @@ SourceFile@0..9
         Whitespace@7..8 " "
         TermQuery@8..9
           Term@8..9 "c"
-9..9: missing `)` (expected , , `)`)
+9..9: missing `)` (expected Boost, Fuzzy, RParen)

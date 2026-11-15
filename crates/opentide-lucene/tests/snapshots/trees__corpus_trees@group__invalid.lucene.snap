@@ -21,4 +21,4 @@ SourceFile@0..13
       Whitespace@11..12 " "
       TermQuery@12..13
         Term@12..13 "c"
-13..13: missing `)` (expected , , `)`)
+13..13: missing `)` (expected Boost, Fuzzy, RParen)

@@ -8,4 +8,4 @@ SourceFile@0..13
     FieldName@0..12
       Term@0..12 "process.name"
     Colon@12..13 ":"
-13..13: missing a clause (expected a term, a term, a term, a phrase, a regular expression, a term, `AND`, `OR`, `(`, `[`, `{`)
+13..13: missing a clause (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, AmpAmp, PipePipe, LParen, LBracket, LBrace)

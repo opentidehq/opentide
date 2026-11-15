@@ -16,5 +16,5 @@ SourceFile@0..21
     Whitespace@15..16 " "
     TermQuery@16..21
       Term@16..21 "login"
-8..8: missing a clause (expected a term, a term, a term, a phrase, a regular expression, a term, `AND`, `OR`, `(`, `[`, `{`)
-8..8: unexpected (expected a term, a term, a term, a phrase, a regular expression, a term, `AND`, `OR`, `NOT`, `AND`, `OR`, `NOT`, `+`, `-`, `(`, `[`, `{`)
+8..8: missing a clause (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, AmpAmp, PipePipe, LParen, LBracket, LBrace)
+8..8: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, AndKw, OrKw, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)

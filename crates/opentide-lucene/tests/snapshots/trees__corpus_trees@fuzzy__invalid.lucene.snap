@@ -14,4 +14,4 @@ SourceFile@0..11
   Whitespace@9..10 " "
   Error@10..11
     Fuzzy@10..11 "~"
-9..10: unexpected (expected a term, a term, a term, a phrase, a regular expression, , a term, `AND`, `OR`, `NOT`, `AND`, `OR`, `NOT`, `+`, `-`, `(`, `[`, `{`)
+9..10: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, Boost, BareOperator, AndKw, OrKw, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)

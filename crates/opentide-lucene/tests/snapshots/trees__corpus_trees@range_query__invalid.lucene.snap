@@ -14,4 +14,4 @@ SourceFile@0..14
       Whitespace@10..11 " "
       ToKw@11..13 "TO"
       RBracket@13..14 "]"
-13..13: missing a range bound (expected a phrase, a range bound)
+13..13: missing a range bound (expected Phrase, RangeTerm)

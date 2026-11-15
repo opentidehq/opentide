@@ -150,32 +150,6 @@ impl SyntaxKind {
     pub(crate) fn from_raw(raw: rowan::SyntaxKind) -> Self {
         ALL.get(usize::from(raw.0)).copied().unwrap_or(K::Error)
     }
-
-    /// How an error message spells a token the parser expected; `""` for a
-    /// kind a message never names.
-    pub(crate) fn describe(self) -> &'static str {
-        match self {
-            K::Term | K::WildcardTerm | K::Star | K::BareOperator => "a term",
-            K::Phrase => "a phrase",
-            K::Regexp => "a regular expression",
-            K::RangeTerm => "a range bound",
-            K::AndKw | K::AmpAmp => "`AND`",
-            K::OrKw | K::PipePipe => "`OR`",
-            K::NotKw | K::Bang => "`NOT`",
-            K::Plus => "`+`",
-            K::Minus => "`-`",
-            K::Colon => "`:`",
-            K::LParen => "`(`",
-            K::RParen => "`)`",
-            K::LBracket => "`[`",
-            K::RBracket => "`]`",
-            K::LBrace => "`{`",
-            K::RBrace => "`}`",
-            K::ToKw => "`TO`",
-            K::Eof => "end of input",
-            _ => "",
-        }
-    }
 }
 
 /// The rowan language of Lucene.
@@ -604,6 +578,37 @@ mod tests {
             assert_eq!(SyntaxKind::from_raw(kind.raw()), *kind);
         }
         assert!(usize::from(TokenSet::CAPACITY) > ALL.len());
+    }
+
+    #[test]
+    fn the_keywords_table_is_what_the_lexer_cuts() {
+        // Each token of `opentide_highlight::keywords(Lucene)` lexes as one
+        // token of a kind the highlighter colours with that capture.
+        let table = opentide_highlight::keywords(opentide_core::LanguageId::Lucene)
+            .expect("Lucene has a KEYWORDS table");
+        for (token, capture) in table {
+            let (source, kind) = match *token {
+                "TO" => ("[a TO b]", K::ToKw),
+                ":" => ("a:b", K::Colon),
+                "(" => ("(a)", K::LParen),
+                ")" => ("(a)", K::RParen),
+                "[" => ("[a TO b]", K::LBracket),
+                "]" => ("[a TO b]", K::RBracket),
+                "{" => ("{a TO b}", K::LBrace),
+                "}" => ("{a TO b}", K::RBrace),
+                other => panic!("no sample for `{other}`"),
+            };
+            assert!(
+                kinds(source).contains(&(kind, *token)),
+                "`{token}` in {source}"
+            );
+            let expected = match kind {
+                K::ToKw => "keyword",
+                K::Colon => "operator",
+                _ => "punctuation.bracket",
+            };
+            assert_eq!(capture.name(), expected, "`{token}`");
+        }
     }
 
     #[test]

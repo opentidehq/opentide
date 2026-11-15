@@ -28,5 +28,5 @@ SourceFile@0..19
       Colon@17..18 ":"
     TermQuery@18..19
       Term@18..19 "d"
-17..17: missing a clause (expected a term, a term, a term, a phrase, a regular expression, a term, `NOT`, `AND`, `OR`, `NOT`, `+`, `-`, `(`, `[`, `{`)
-17..17: unexpected (expected a term, a term, a term, a phrase, a regular expression, a term, `NOT`, `AND`, `OR`, `NOT`, `+`, `-`, `(`, `[`, `{`)
+17..17: missing a clause (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)
+17..17: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)
