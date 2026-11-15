@@ -51,9 +51,21 @@ Byte-for-byte parity with Python is not what they check; what the Rust CLI does 
   `VERSION`), so a release changes nothing. Every case runs under umask 022 with `/dev/null` as
   standard input, and the fixtures get fixed modes.
 - **Fails, never snapshotted**: a request a case's cassette does not hold, and a panic.
-- **Left out**: cases on the generated fixtures (`fault`, `fault-lint`, `heavy-small`: `cargo
-  xtask corpus` builds them, which a crate test cannot), and `serve`'s session, which feeds
-  standard input (`tests/serve.rs` drives it).
+- **Left out**: `serve`'s session, which feeds standard input (`tests/serve.rs` drives it).
+- **Needs the generated workspaces**: the cases on `fault`, `fault-lint` and `heavy-small` run in
+  three tests (`generated_fault`, `generated_fault_lint`, `generated_heavy_small`) when
+  `OPENTIDE_REPLAY_FIXTURES` names the workspaces `cargo xtask corpus` writes, which a crate test
+  cannot build; without it they print "skipped". The CI jobs write them and set
+  `OPENTIDE_SNAPSHOT_REQUIRE_GENERATED`, so a gate cannot pass by skipping them. To run or record
+  them (about 4 minutes of CPU in a debug build):
+
+  ```sh
+  out=$(mktemp -d)
+  cargo xtask corpus faults --out "$out/fault"
+  cargo xtask corpus generate --seed 1 --threats 30 --objectives 30 --rules 50 --out "$out/heavy-small"
+  OPENTIDE_REPLAY_FIXTURES="fault=$out/fault,heavy-small=$out/heavy-small" \
+    cargo nextest run -p opentide-cli --test cli_snapshots -E 'test(/^generated_/)'
+  ```
 
 They are ordinary nextest tests, one per command group, in the PR gate whenever `opentide-cli` or
 a crate below it changes. A change to what a command prints or writes fails them, by design:

@@ -180,6 +180,11 @@ pub fn fixture(name: &str, ws: &Path) {
     match name {
         "none" => {}
         "empty" => std::fs::create_dir_all(ws.join(".opentide")).unwrap(),
+        // `fault` with lint's recommended check off (`cases.toml`).
+        "fault-lint" => {
+            fixture("fault", ws);
+            apply_edits(name, ws);
+        }
         "tide-corpus-typo" => {
             fixture("tide-corpus", ws);
             let path = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");

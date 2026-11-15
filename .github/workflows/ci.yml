@@ -560,6 +560,21 @@ jobs:
       - name: Note the checkout's state
         run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
 
+      # The CLI's snapshot cases on the generated workspaces (`fault`,
+      # `heavy-small`, UC-0.6): xtask writes them, which the crate's tests
+      # cannot; the tests fail without them when the variable is set.
+      - name: Generated workspaces for the CLI snapshots
+        run: |
+          read -ra pkg_args <<< "${PACKAGES}"
+          if [[ " ${pkg_args[*]} " == *" opentide-cli "* || " ${pkg_args[*]} " == *" --workspace "* ]]; then
+            [[ -x target/debug/xtask ]] || cargo build --locked -p xtask
+            out="$RUNNER_TEMP/generated-workspaces"
+            target/debug/xtask corpus faults --out "$out/fault"
+            target/debug/xtask corpus generate --seed 1 --threats 30 --objectives 30 --rules 50 --out "$out/heavy-small"
+            echo "OPENTIDE_REPLAY_FIXTURES=fault=$out/fault,heavy-small=$out/heavy-small" >> "$GITHUB_ENV"
+            echo "OPENTIDE_SNAPSHOT_REQUIRE_GENERATED=1" >> "$GITHUB_ENV"
+          fi
+
       # The compile-fail cases run below, when their inputs change.
       - name: cargo nextest (profile ci)
         env:
