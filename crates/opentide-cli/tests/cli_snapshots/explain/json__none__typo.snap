@@ -9,16 +9,16 @@ exit: 2
 {
   "command": "explain",
   "duration_ms": 0,
-  "error": "No diagnostic code 'vocab_unknwn'. Run 'opentide explain' to list them.",
+  "error": "No diagnostic code \"vocab_unknwn\". Run 'opentide explain' to list them.",
   "exit_code": 2,
   "failure": {
     "argument": "code",
     "code": "usage_invalid_choice",
     "crash_log": null,
-    "message": "No diagnostic code 'vocab_unknwn'. Run 'opentide explain' to list them.",
+    "message": "No diagnostic code \"vocab_unknwn\". Run 'opentide explain' to list them.",
     "suggestion": "vocab_unknown"
   },
-  "message": "No diagnostic code 'vocab_unknwn'. Run 'opentide explain' to list them.",
+  "message": "No diagnostic code \"vocab_unknwn\". Run 'opentide explain' to list them.",
   "next_actions": [],
   "ok": false,
   "schema_version": 1,

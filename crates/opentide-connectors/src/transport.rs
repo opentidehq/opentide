@@ -120,21 +120,6 @@ impl Request {
     }
 
     #[cfg(not(target_os = "wasi"))]
-    fn from_reqwest(request: &reqwest::Request) -> Self {
-        Self {
-            method: request.method().clone(),
-            url: request.url().clone(),
-            headers: request.headers().clone(),
-            body: request
-                .body()
-                .and_then(reqwest::Body::as_bytes)
-                .map(<[u8]>::to_vec),
-            timeout: request.timeout().copied(),
-            idempotent: None,
-        }
-    }
-
-    #[cfg(not(target_os = "wasi"))]
     fn into_reqwest(self) -> reqwest::Request {
         let mut request = reqwest::Request::new(self.method, self.url);
         *request.headers_mut() = self.headers;
@@ -144,98 +129,50 @@ impl Request {
     }
 }
 
-/// Why a request could not be built: its URL or a header does not parse.
+/// Why a request could not be built: its URL or a header does not parse. Its
+/// text never carries the request's URL (which may hold a credential).
 #[derive(Clone, Debug)]
 pub struct BuildError {
-    /// The error's text.
-    display: String,
-    /// The text of it and of the errors under it, without the URL.
-    described: String,
+    message: String,
 }
 
 impl BuildError {
-    fn message(message: String) -> Self {
-        Self {
-            display: message.clone(),
-            described: message,
-        }
-    }
-
-    #[cfg(not(target_os = "wasi"))]
-    fn reqwest(error: reqwest::Error) -> Self {
-        Self {
-            display: error.to_string(),
-            described: crate::error::describe(error),
-        }
-    }
-
-    /// Its text, without the request's URL (which may carry a credential),
-    /// as [`crate::error::describe`] gives a reqwest error's.
+    /// Its text, without the request's URL.
+    #[must_use]
     pub fn describe(self) -> String {
-        self.described
+        self.message
     }
 }
 
 impl fmt::Display for BuildError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.display)
+        f.write_str(&self.message)
     }
 }
 
 impl std::error::Error for BuildError {}
 
-/// A request being written ([`crate::http::HttpClient::request`]): reqwest's
-/// builder natively, so a URL or header that does not parse is refused in
-/// reqwest's words, as before the transport.
+/// A request being written ([`crate::http::HttpClient::request`]): a URL or
+/// header that does not parse is kept as the error [`build`](Self::build)
+/// answers with.
 #[derive(Debug)]
 pub struct RequestBuilder {
-    inner: Inner,
-}
-
-#[derive(Debug)]
-enum Inner {
-    #[cfg(not(target_os = "wasi"))]
-    Reqwest(reqwest::RequestBuilder),
-    Plain(Result<Request, String>),
-}
-
-/// The client that builds requests natively: it never sends one (the
-/// tenant's transport does), so it verifies nothing and trusts nothing.
-#[cfg(not(target_os = "wasi"))]
-fn builder_client() -> Result<&'static reqwest::Client, String> {
-    static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
-        std::sync::OnceLock::new();
-    CLIENT
-        .get_or_init(|| {
-            let settings = crate::tls::TlsSettings {
-                verify: false,
-                ca_bundle: None,
-            };
-            let tls = crate::tls::client_config(&settings, &Environment::default())?;
-            reqwest::Client::builder()
-                .tls_backend_preconfigured(tls)
-                .no_proxy()
-                .build()
-                .map_err(crate::error::describe)
-        })
-        .as_ref()
-        .map_err(Clone::clone)
+    request: Result<Request, String>,
 }
 
 impl RequestBuilder {
     pub(crate) fn new(method: Method, url: &str) -> Self {
-        #[cfg(not(target_os = "wasi"))]
-        if let Ok(client) = builder_client() {
-            return Self {
-                inner: Inner::Reqwest(client.request(method, url)),
-            };
-        }
         Self {
-            inner: Inner::Plain(
-                url::Url::parse(url)
-                    .map(|url| Request::new(method, url))
-                    .map_err(|error| format!("builder error: {error}")),
-            ),
+            request: url::Url::parse(url)
+                .map_err(|error| format!("builder error: {error}"))
+                // `mailto:x`, `file:///x` and `data:` name no host to ask.
+                .and_then(|url| {
+                    if url.has_host() {
+                        Ok(Request::new(method, url))
+                    } else {
+                        Err("builder error: URL scheme is not allowed".to_owned())
+                    }
+                }),
         }
     }
 
@@ -248,70 +185,59 @@ impl RequestBuilder {
         HeaderValue: TryFrom<V>,
         <HeaderValue as TryFrom<V>>::Error: Into<http::Error>,
     {
-        let inner = match self.inner {
-            #[cfg(not(target_os = "wasi"))]
-            Inner::Reqwest(builder) => Inner::Reqwest(builder.header(name, value)),
-            Inner::Plain(request) => Inner::Plain(request.and_then(|mut request| {
-                let name = HeaderName::try_from(name)
-                    .map_err(|error| format!("builder error: {}", error.into()))?;
-                let value = HeaderValue::try_from(value)
-                    .map_err(|error| format!("builder error: {}", error.into()))?;
-                request.headers.append(name, value);
-                Ok(request)
-            })),
-        };
-        Self { inner }
+        self.with(|request| {
+            let name = HeaderName::try_from(name)
+                .map_err(|error| format!("builder error: {}", error.into()))?;
+            let value = HeaderValue::try_from(value)
+                .map_err(|error| format!("builder error: {}", error.into()))?;
+            request.headers.append(name, value);
+            Ok(())
+        })
     }
 
     /// Sets `Authorization: Basic` for *username* and *password* (an absent
-    /// password is empty), as reqwest's `basic_auth` does: the value is
-    /// marked sensitive.
+    /// password is empty): the value is marked sensitive.
     #[must_use]
     pub fn basic_auth(self, username: &str, password: Option<&str>) -> Self {
-        let inner = match self.inner {
-            #[cfg(not(target_os = "wasi"))]
-            Inner::Reqwest(builder) => Inner::Reqwest(builder.basic_auth(username, password)),
-            Inner::Plain(request) => Inner::Plain(request.and_then(|mut request| {
-                use base64::Engine as _;
-                let pair = format!("{username}:{}", password.unwrap_or(""));
-                let encoded = base64::engine::general_purpose::STANDARD.encode(pair);
-                let mut value = HeaderValue::try_from(format!("Basic {encoded}"))
-                    .map_err(|error| format!("builder error: {error}"))?;
-                value.set_sensitive(true);
-                request.headers.insert(header::AUTHORIZATION, value);
-                Ok(request)
-            })),
-        };
-        Self { inner }
+        self.with(|request| {
+            use base64::Engine as _;
+            let pair = format!("{username}:{}", password.unwrap_or(""));
+            let encoded = base64::engine::general_purpose::STANDARD.encode(pair);
+            let mut value = HeaderValue::try_from(format!("Basic {encoded}"))
+                .map_err(|error| format!("builder error: {error}"))?;
+            value.set_sensitive(true);
+            request.headers.insert(header::AUTHORIZATION, value);
+            Ok(())
+        })
     }
 
     /// Sets the body.
     #[must_use]
     pub fn body(self, body: impl Into<Vec<u8>>) -> Self {
         let body: Vec<u8> = body.into();
-        let inner = match self.inner {
-            #[cfg(not(target_os = "wasi"))]
-            Inner::Reqwest(builder) => Inner::Reqwest(builder.body(body)),
-            Inner::Plain(request) => Inner::Plain(request.map(|mut request| {
-                request.body = Some(body);
-                request
-            })),
-        };
-        Self { inner }
+        self.with(|request| {
+            request.body = Some(body);
+            Ok(())
+        })
     }
 
     /// Sets this request's own timeout, in place of the tenant's read timeout.
     #[must_use]
     pub fn timeout(self, timeout: Duration) -> Self {
-        let inner = match self.inner {
-            #[cfg(not(target_os = "wasi"))]
-            Inner::Reqwest(builder) => Inner::Reqwest(builder.timeout(timeout)),
-            Inner::Plain(request) => Inner::Plain(request.map(|mut request| {
-                request.timeout = Some(timeout);
-                request
-            })),
-        };
-        Self { inner }
+        self.with(|request| {
+            request.timeout = Some(timeout);
+            Ok(())
+        })
+    }
+
+    /// Changes the request, unless an earlier step already failed.
+    fn with(self, change: impl FnOnce(&mut Request) -> Result<(), String>) -> Self {
+        Self {
+            request: self.request.and_then(|mut request| {
+                change(&mut request)?;
+                Ok(request)
+            }),
+        }
     }
 
     /// The request.
@@ -320,14 +246,7 @@ impl RequestBuilder {
     ///
     /// Its URL or a header does not parse.
     pub fn build(self) -> Result<Request, BuildError> {
-        match self.inner {
-            #[cfg(not(target_os = "wasi"))]
-            Inner::Reqwest(builder) => builder
-                .build()
-                .map(|request| Request::from_reqwest(&request))
-                .map_err(BuildError::reqwest),
-            Inner::Plain(request) => request.map_err(BuildError::message),
-        }
+        self.request.map_err(|message| BuildError { message })
     }
 }
 
@@ -707,6 +626,49 @@ impl Transport for ReqwestTransport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A URL or header that does not parse is refused in words, with no URL
+    /// in them, whichever step failed first.
+    #[test]
+    fn a_request_that_does_not_parse_says_why() {
+        let build = |url: &str| RequestBuilder::new(Method::GET, url);
+        let reasons = [
+            (build("not a url"), "relative URL without a base"),
+            (build("mailto:x@example.test"), "URL scheme is not allowed"),
+            (build("file:///etc/hosts"), "URL scheme is not allowed"),
+            (build("data:text/plain,x"), "URL scheme is not allowed"),
+            (
+                build("https://u:p@a.example/").header("bad name", "v"),
+                "invalid HTTP header name",
+            ),
+            (
+                build("https://a.example/").header("x", "a\nb"),
+                "failed to parse header value",
+            ),
+        ];
+        for (builder, reason) in reasons {
+            let error = builder.timeout(Duration::from_secs(1)).build().unwrap_err();
+            assert_eq!(error.to_string(), format!("builder error: {reason}"));
+            assert_eq!(error.describe(), format!("builder error: {reason}"));
+        }
+    }
+
+    #[test]
+    fn a_request_is_built_as_written() {
+        let request = RequestBuilder::new(Method::POST, "https://a.example/p?q=1")
+            .header("x-a", "1")
+            .header("x-a", "2")
+            .basic_auth("user", None)
+            .body("body")
+            .timeout(Duration::from_secs(3))
+            .build()
+            .unwrap();
+        assert_eq!(request.url().as_str(), "https://a.example/p?q=1");
+        assert_eq!(request.headers().get_all("x-a").iter().count(), 2);
+        let auth = request.headers().get(header::AUTHORIZATION).unwrap();
+        assert_eq!(auth, "Basic dXNlcjo=");
+        assert!(auth.is_sensitive());
+    }
 
     /// A transport that answers every request with 204 and names the tenant
     /// it was made for.

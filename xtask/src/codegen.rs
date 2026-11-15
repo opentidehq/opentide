@@ -58,7 +58,8 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
+use clap::Args;
 use opentide_schema::configuration::resolve::{Instance, resolve};
 use opentide_schema::generate::configuration::{
     ROUTER_NAME, configuration_schema_name, configuration_schemas, file_keys,
@@ -80,30 +81,32 @@ use crate::golden::recording::{Recording, recorded_ids};
 use crate::golden::snapshot::{ChangeKind, Kind};
 use crate::verdict::{self, Instances};
 
-/// The usage of `cargo xtask codegen`.
-pub const USAGE: &str = "usage: cargo xtask codegen [--check [--oracle]]
-
-  (no option)  write the committed artifacts generated from the Rust model:
-               src/opentide/schemas/data/platform_templates/*.template.yaml,
-               data/catalogs/tide/schemas/<revision>.schema.json and the
-               router beside them (opentide.schema.json), the language
-               server's catalogs (data/catalogs/tide/generated/), the key
-               lists of highlights/queries/tide/highlights.scm and the
-               diagnostics reference (docs/cli/diagnostics.md), and the typed
-               AST of every .ungram grammar (src/generated/ast.rs of its crate)
-  --check      compare them instead of writing, and the language server's
-               catalogs with data/catalogs/tide/generated; exit 1 on a
-               difference (CI's Engine lint)
-  --oracle     with --check, also compare with the frozen Python oracle (by
-               hand: no workflow runs it): what `opentide generate` writes
-               (templates, snippets, the router schema) with each golden
-               recording of an `opentide generate` that ran those phases and
-               exited 0, byte for byte; the JSON Schemas it writes (each
-               revision's, visibility.toml's) and the configuration schemas
-               with the oracle's by verdict on every corpus object,
-               configuration file and fault; and the language server's
-               catalogs with the recordings, byte for byte
-";
+/// The arguments of `cargo xtask codegen`. With no option it writes the
+/// committed artifacts generated from the Rust model:
+/// src/opentide/schemas/data/platform_templates/*.template.yaml,
+/// data/catalogs/tide/schemas/`<revision>.schema.json` and the router beside them
+/// (opentide.schema.json), the language server's catalogs
+/// (data/catalogs/tide/generated/), the key lists of
+/// highlights/queries/tide/highlights.scm and the diagnostics reference
+/// (docs/cli/diagnostics.md), and the typed AST of every .ungram grammar
+/// (src/generated/ast.rs of its crate).
+#[derive(Args)]
+pub struct CodegenArgs {
+    /// Compare them instead of writing, and the language server's catalogs with
+    /// data/catalogs/tide/generated; exit 1 on a difference (CI's Engine lint)
+    #[arg(long)]
+    pub check: bool,
+    /// With --check, also compare with the frozen Python oracle (by hand: no
+    /// workflow runs it): what `opentide generate` writes (templates,
+    /// snippets, the router schema) with each golden recording of an
+    /// `opentide generate` that ran those phases and exited 0, byte for byte;
+    /// the JSON Schemas it writes (each revision's, visibility.toml's) and the
+    /// configuration schemas with the oracle's by verdict on every corpus
+    /// object, configuration file and fault; and the language server's catalogs
+    /// with the recordings, byte for byte
+    #[arg(long, requires = "check")]
+    pub oracle: bool,
+}
 
 /// Where the committed editor schemas live, relative to the repository.
 pub const EDITOR_SCHEMAS: &str = "data/catalogs/tide/schemas";
@@ -139,23 +142,8 @@ pub const EDITOR_TEMPLATE_NAMES: [&str; 3] = [
 ];
 
 /// Runs `codegen`: `Ok(0)` passed, `Ok(1)` a difference.
-pub fn run(args: &[String]) -> Result<u8> {
-    let mut check = false;
-    let mut oracle = false;
-    for arg in args {
-        match arg.as_str() {
-            "--check" => check = true,
-            "--oracle" => oracle = true,
-            "help" | "--help" | "-h" => {
-                print!("{USAGE}");
-                return Ok(0);
-            }
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        }
-    }
-    if oracle && !check {
-        bail!("--oracle compares with the oracle: it needs --check\n\n{USAGE}");
-    }
+pub fn run(args: &CodegenArgs) -> Result<u8> {
+    let CodegenArgs { check, oracle } = *args;
     let root = repo_root();
     let mut problems = committed(&root, check)?;
     problems.extend(engine_catalog(&root, check)?);
@@ -1270,14 +1258,16 @@ mod tests {
 
     #[test]
     fn the_oracle_comparison_needs_check_and_unknown_options_fail() {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Cli {
+            #[command(flatten)]
+            args: CodegenArgs,
+        }
         // `--oracle` alone would write the committed artifacts, not compare.
-        let error = run(&["--oracle".to_owned()]).unwrap_err().to_string();
-        assert!(
-            error.contains("--oracle compares with the oracle"),
-            "{error}"
-        );
-        assert!(run(&["--orcale".to_owned()]).is_err());
-        assert!(USAGE.contains("--check [--oracle]"));
+        assert!(Cli::try_parse_from(["codegen", "--oracle"]).is_err());
+        assert!(Cli::try_parse_from(["codegen", "--check", "--oracle"]).is_ok());
+        assert!(Cli::try_parse_from(["codegen", "--orcale"]).is_err());
     }
 
     #[test]
@@ -1865,9 +1855,16 @@ mod tests {
     }
 
     #[test]
-    fn codegen_refuses_an_unknown_option_and_prints_its_usage() {
-        assert_eq!(run(&["--help".to_owned()]).unwrap(), 0);
-        let error = run(&["--write".to_owned()]).unwrap_err().to_string();
-        assert!(error.starts_with("unknown option `--write`"), "{error}");
+    fn codegen_help_succeeds_and_an_unknown_option_is_a_usage_error() {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Cli {
+            #[command(flatten)]
+            args: CodegenArgs,
+        }
+        let help = Cli::try_parse_from(["codegen", "--help"]).err().unwrap();
+        assert_eq!(help.exit_code(), 0);
+        let error = Cli::try_parse_from(["codegen", "--write"]).err().unwrap();
+        assert_eq!(error.exit_code(), 2);
     }
 }

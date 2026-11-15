@@ -15,7 +15,6 @@ readme = "../COMPONENT.md"
 workspace = true
 
 [dependencies]
-# "did you mean" for --strategy (strsim, clap's measure).
 opentide-core.workspace = true
 opentide-schema.workspace = true
 # generate docs: the catalogue checks each object against its model's constraints.

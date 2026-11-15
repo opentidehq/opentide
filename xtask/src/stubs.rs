@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
+use clap::Args;
 
 /// A generated stub: the submodule it describes and where it is written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,19 +72,21 @@ pub const STUBS: [Stub; 2] = [
     },
 ];
 
-const USAGE: &str = "\
-usage: cargo xtask stubs [--check] [--library FILE]
-
-Writes src/opentide/_native/models.pyi and src/opentide/_native/sdk.pyi from the
-extension's introspection data.
-  --check          fail (exit 1) when a file differs from what is generated
-  --library FILE   introspect FILE, an extension built with
-                   `cargo build -p opentide-native --lib --features stubs`,
-                   instead of building it
-";
+/// The arguments of `cargo xtask stubs`: writes src/opentide/_native/models.pyi
+/// and src/opentide/_native/sdk.pyi from the extension's introspection data.
+#[derive(Args)]
+pub struct StubsArgs {
+    /// Fail (exit 1) when a file differs from what is generated
+    #[arg(long)]
+    pub check: bool,
+    /// Introspect FILE, an extension built with `cargo build -p
+    /// opentide-native --lib --features stubs`, instead of building it
+    #[arg(long, value_name = "FILE")]
+    pub library: Option<PathBuf>,
+}
 
 /// Runs the command; the exit code.
-pub fn main(args: &[String]) -> std::process::ExitCode {
+pub fn main(args: &StubsArgs) -> std::process::ExitCode {
     match run(args) {
         Ok(true) => std::process::ExitCode::SUCCESS,
         Ok(false) => std::process::ExitCode::FAILURE,
@@ -94,35 +97,18 @@ pub fn main(args: &[String]) -> std::process::ExitCode {
     }
 }
 
-fn run(args: &[String]) -> Result<bool> {
-    let mut check = false;
-    let mut library = None;
-    let mut rest = args.iter();
-    while let Some(arg) = rest.next() {
-        match arg.as_str() {
-            "--check" => check = true,
-            "--library" => {
-                library = Some(PathBuf::from(
-                    rest.next().context("--library takes a file")?,
-                ));
-            }
-            "help" | "--help" | "-h" => {
-                print!("{USAGE}");
-                return Ok(true);
-            }
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        }
-    }
+fn run(args: &StubsArgs) -> Result<bool> {
+    let StubsArgs { check, library } = args;
     let root = workspace_root();
     let library = match library {
-        Some(library) => library,
+        Some(library) => library.clone(),
         None => build(&root)?,
     };
     let generated = generate(&library)?;
     let mut fresh = true;
     for (stub, text) in STUBS.iter().zip(generated) {
         let path = root.join(stub.path);
-        if check {
+        if *check {
             let current = match fs::read_to_string(&path) {
                 Ok(text) => Some(text),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
@@ -316,27 +302,26 @@ not json
         assert!(library_in(rlib_only).is_err());
     }
 
-    fn words(words: &[&str]) -> Vec<String> {
-        words.iter().map(|word| (*word).to_owned()).collect()
+    fn parse(argv: &[&str]) -> Result<StubsArgs, clap::Error> {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Cli {
+            #[command(flatten)]
+            args: StubsArgs,
+        }
+        Cli::try_parse_from(std::iter::once("stubs").chain(argv.iter().copied()))
+            .map(|cli| cli.args)
     }
 
     #[test]
     fn options_are_checked_before_anything_is_built() {
-        assert_eq!(main(&words(&["--help"])), std::process::ExitCode::SUCCESS);
-        assert_eq!(
-            main(&words(&["--frobnicate"])),
-            std::process::ExitCode::from(2)
-        );
-        let error = run(&words(&["--library"])).unwrap_err();
-        assert!(
-            format!("{error:#}").contains("--library takes a file"),
-            "{error:#}"
-        );
-        let error = run(&words(&["--check", "--bogus"])).unwrap_err();
-        assert!(
-            format!("{error:#}").starts_with("unknown option `--bogus`"),
-            "{error:#}"
-        );
+        assert_eq!(parse(&["--help"]).err().unwrap().exit_code(), 0);
+        assert_eq!(parse(&["--frobnicate"]).err().unwrap().exit_code(), 2);
+        assert!(parse(&["--library"]).is_err(), "--library takes a file");
+        assert!(parse(&["--check", "--bogus"]).is_err());
+        let args = parse(&["--check", "--library", "x.so"]).unwrap();
+        assert!(args.check);
+        assert_eq!(args.library.as_deref(), Some(Path::new("x.so")));
     }
 
     #[test]
@@ -351,10 +336,10 @@ not json
         // Neither with --check nor without is anything written: the stub on
         // disk is left as it is when there is nothing to introspect.
         for check in [true, false] {
-            let mut args = words(&["--library", &missing.to_string_lossy()]);
-            if check {
-                args.push("--check".into());
-            }
+            let args = StubsArgs {
+                check,
+                library: Some(missing.clone()),
+            };
             let error = run(&args).unwrap_err();
             assert!(
                 format!("{error:#}").starts_with(&format!("introspecting {}", missing.display())),
@@ -364,11 +349,10 @@ not json
         std::fs::write(&missing, "not a shared library").unwrap();
         assert!(generate(&missing).is_err());
         assert_eq!(
-            main(&words(&[
-                "--check",
-                "--library",
-                &missing.to_string_lossy()
-            ])),
+            main(&StubsArgs {
+                check: true,
+                library: Some(missing.clone()),
+            }),
             std::process::ExitCode::from(2)
         );
         let after: Vec<Option<Vec<u8>>> = stubs.iter().map(|stub| fs::read(stub).ok()).collect();
