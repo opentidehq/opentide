@@ -21,6 +21,8 @@ use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
 use serde_json::ser::PrettyFormatter;
 
+use crate::node::{Node, Value as NodeValue};
+
 /// An object: its members in insertion order.
 ///
 /// An [`IndexMap`] behind a pointer. A [`Json`] is as large as its largest
@@ -249,6 +251,56 @@ impl Json {
         serde_json::from_str(&serde_json::to_string(value)?)
     }
 
+    /// The value of a YAML node, keys in the document's order. A key that is
+    /// not a string is written as JSON writes a dict key of that type.
+    pub fn from_node(node: &Node) -> Json {
+        match &node.value {
+            NodeValue::Null => Json::Null,
+            NodeValue::Bool(flag) => Json::Bool(*flag),
+            NodeValue::Int(integer) => Json::Int(*integer),
+            NodeValue::Float(float) => Json::Float(*float),
+            NodeValue::Str(text) | NodeValue::Datetime(text) => Json::Str(text.clone()),
+            NodeValue::Seq(items) => {
+                Json::Array(items.iter().map(|item| Json::from_node(item)).collect())
+            }
+            NodeValue::Map(entries) => Json::Object(
+                entries
+                    .iter()
+                    .map(|entry| (key_text(&entry.key), Json::from_node(&entry.value)))
+                    .collect(),
+            ),
+        }
+    }
+
+    /// Whether the value is `true`.
+    pub fn is_true(&self) -> bool {
+        matches!(self, Json::Bool(true))
+    }
+
+    /// Whether the value holds something: it is not `null` and not an empty
+    /// string, array or object. A boolean or a number is a value, `false`
+    /// and `0` included.
+    pub fn is_filled(&self) -> bool {
+        match self {
+            Json::Null => false,
+            Json::Str(text) => !text.is_empty(),
+            Json::Array(items) => !items.is_empty(),
+            Json::Object(object) => !object.is_empty(),
+            Json::Bool(_) | Json::Int(_) | Json::UInt(_) | Json::Float(_) => true,
+        }
+    }
+
+    /// Whether the value names something (a UUID, a reference, a
+    /// relation): a non-empty string or a number. `null`, a boolean, an
+    /// array and an object name nothing.
+    pub fn is_name(&self) -> bool {
+        match self {
+            Json::Str(text) => !text.is_empty(),
+            Json::Int(_) | Json::UInt(_) | Json::Float(_) => true,
+            Json::Null | Json::Bool(_) | Json::Array(_) | Json::Object(_) => false,
+        }
+    }
+
     /// The value as serde_json writes it on one line, UTF-8 as is.
     pub fn to_compact(&self) -> String {
         // Writing into memory cannot fail: every key is a string, and a float
@@ -270,6 +322,27 @@ impl Json {
         // serde_json writes UTF-8.
         String::from_utf8(bytes).unwrap_or_default()
     }
+}
+
+/// A mapping key as JSON writes a dict key: a string as is, a number or a
+/// boolean as its text.
+fn key_text(node: &Node) -> String {
+    match &node.value {
+        NodeValue::Str(text) | NodeValue::Datetime(text) => text.clone(),
+        NodeValue::Int(integer) => integer.to_string(),
+        NodeValue::Float(float) => float_key(*float),
+        NodeValue::Bool(flag) => if *flag { "true" } else { "false" }.to_owned(),
+        NodeValue::Null => "null".to_owned(),
+        // A collection cannot key a Python dict; the oracle could not load it.
+        NodeValue::Seq(_) | NodeValue::Map(_) => Json::from_node(node).to_compact(),
+    }
+}
+
+/// A float key as JSON writes the number (`1.0`, `1e+16`), and NaN and the
+/// infinities, which JSON has no number for, as Rust prints them.
+fn float_key(value: f64) -> String {
+    serde_json::Number::from_f64(value)
+        .map_or_else(|| value.to_string(), |number| number.to_string())
 }
 
 impl From<bool> for Json {
@@ -362,6 +435,40 @@ impl From<&serde_json::Number> for Json {
             // A number that is neither i64 nor u64 is an f64 in serde_json.
             Json::Float(number.as_f64().unwrap_or(f64::NAN))
         }
+    }
+}
+
+impl Serialize for Object {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(Some(self.len()))?;
+        for (key, value) in self {
+            map.serialize_entry(key, value)?;
+        }
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Object {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Object, D::Error> {
+        struct ObjectVisitor;
+
+        impl<'de> Visitor<'de> for ObjectVisitor {
+            type Value = Object;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("a JSON object")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Object, A::Error> {
+                let mut members = Object::with_capacity(map.size_hint().unwrap_or(0));
+                while let Some((key, value)) = map.next_entry::<String, Json>()? {
+                    members.insert(key, value);
+                }
+                Ok(members)
+            }
+        }
+
+        deserializer.deserialize_map(ObjectVisitor)
     }
 }
 
@@ -596,5 +703,75 @@ mod tests {
         assert_eq!(json.to_compact(), r#"{"a":["p"],"b":true}"#);
         assert_eq!(json.as_array(), None);
         assert_eq!(Json::default(), Json::Null);
+    }
+
+    /// A node becomes its JSON, keys in the document's order, a non-string
+    /// key as JSON writes it.
+    #[test]
+    fn a_node_becomes_its_json() {
+        let document = crate::node::load("b: 1\na: [x, 2.5, true, ~]\n1: k\n").unwrap();
+        let json = Json::from_node(document.root().unwrap());
+        assert_eq!(
+            json.to_compact(),
+            r#"{"b":1,"a":["x",2.5,true,null],"1":"k"}"#
+        );
+    }
+
+    /// A value is read by its type: `false` and `0` are values, not empty
+    /// ones; only `true` is true; a name is text or a number.
+    #[test]
+    fn values_are_read_by_their_type() {
+        assert!(!Json::Null.is_filled());
+        assert!(!Json::Str(String::new()).is_filled());
+        assert!(!Json::Array(vec![]).is_filled());
+        assert!(!Json::Object(Object::new()).is_filled());
+        for value in [
+            Json::Bool(false),
+            Json::Int(0),
+            Json::Float(0.0),
+            Json::UInt(u64::MAX),
+            Json::Str("x".into()),
+        ] {
+            assert!(value.is_filled(), "{value:?}");
+        }
+        assert!(Json::Bool(true).is_true());
+        for value in [Json::Bool(false), Json::Int(1), Json::Str("true".into())] {
+            assert!(!value.is_true(), "{value:?}");
+        }
+        assert!(Json::Int(0).is_name());
+        assert!(Json::UInt(u64::MAX).is_name());
+        assert!(Json::Str("u-1".into()).is_name());
+        for value in [
+            Json::Null,
+            Json::Bool(true),
+            Json::Str(String::new()),
+            Json::Array(vec![Json::Int(1)]),
+        ] {
+            assert!(!value.is_name(), "{value:?}");
+        }
+    }
+
+    #[test]
+    fn float_keys_are_written_as_json_writes_the_number() {
+        assert_eq!(float_key(1.0), "1.0");
+        assert_eq!(float_key(2.5), "2.5");
+        assert_eq!(float_key(1e16), "1e+16");
+        assert_eq!(float_key(1e-5), "0.00001");
+        assert_eq!(float_key(f64::NAN), "NaN");
+        assert_eq!(float_key(f64::NEG_INFINITY), "-inf");
+    }
+
+    /// An object is read and written alone, its keys in order.
+    #[test]
+    fn an_object_alone_round_trips_in_order() {
+        let object: Object = serde_json::from_str(r#"{"z":1,"a":[true]}"#).unwrap();
+        assert_eq!(
+            serde_json::to_string(&object).unwrap(),
+            r#"{"z":1,"a":[true]}"#
+        );
+        let refused = serde_json::from_str::<Object>("[1]")
+            .unwrap_err()
+            .to_string();
+        assert!(refused.contains("a JSON object"), "{refused}");
     }
 }
