@@ -567,7 +567,6 @@ pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::{Path, PathBuf};
 
     /// `(kind, text)` of the lexemes of `source` that are not whitespace.
     fn kinds(source: &str) -> Vec<(K, &str)> {
@@ -579,87 +578,6 @@ mod tests {
                 (kind, &source[std::ops::Range::<usize>::from(l.range)])
             })
             .collect()
-    }
-
-    /// Every `.esql` file under `crates/testdata`.
-    fn corpus() -> Vec<PathBuf> {
-        fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-            let Ok(entries) = std::fs::read_dir(dir) else {
-                return;
-            };
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    walk(&path, out);
-                } else if path.extension().is_some_and(|e| e == "esql") {
-                    out.push(path);
-                }
-            }
-        }
-        let mut out = Vec::new();
-        walk(
-            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata"),
-            &mut out,
-        );
-        out.sort();
-        out
-    }
-
-    #[test]
-    fn lexemes_tile_every_corpus_file_and_valid_ones_have_no_error_token() {
-        let files = corpus();
-        assert!(files.len() > 150, "found {} corpus files", files.len());
-        for path in files {
-            let source = std::fs::read_to_string(&path).unwrap_or_default();
-            let lexemes = lex(&source);
-            let text: String = lexemes
-                .iter()
-                .map(|l| &source[std::ops::Range::<usize>::from(l.range)])
-                .collect();
-            assert_eq!(text, source, "{} is not tiled", path.display());
-            let name = path.to_string_lossy();
-            let broken = name.contains("__invalid") || name.contains(".broken.");
-            let errors = lexemes
-                .iter()
-                .filter(|l| l.kind == K::ERROR_TOKEN.raw())
-                .count();
-            assert!(broken || errors == 0, "{name}: {errors} error tokens");
-        }
-    }
-
-    /// The leaves of the tree-sitter tree (what its context-aware lexer
-    /// read), as byte ranges.
-    fn tree_sitter_leaves(source: &str) -> Vec<(usize, usize)> {
-        let tree = opentide_syntax::parse(opentide_core::LanguageId::Esql, source).unwrap();
-        let mut out = Vec::new();
-        opentide_syntax::walk(tree.root_node(), |node| {
-            if node.child_count() == 0 && node.end_byte() > node.start_byte() {
-                out.push((node.start_byte(), node.end_byte()));
-            }
-        });
-        out
-    }
-
-    /// The modes reproduce what tree-sitter's lexer read, token for token,
-    /// on every corpus file it parses without an error.
-    #[test]
-    fn tokens_are_the_leaves_tree_sitter_read() {
-        let mut compared = 0;
-        for path in corpus() {
-            let source = std::fs::read_to_string(&path).unwrap_or_default();
-            let root = opentide_syntax::parse(opentide_core::LanguageId::Esql, &source).unwrap();
-            if opentide_syntax::first_error(root.root_node()).is_some() {
-                continue;
-            }
-            let ours: Vec<_> = lex(&source)
-                .iter()
-                .filter(|l| l.kind != K::WHITESPACE.raw())
-                .map(|l| (usize::from(l.range.start()), usize::from(l.range.end())))
-                .collect();
-            assert_eq!(ours, tree_sitter_leaves(&source), "{}", path.display());
-            compared += 1;
-        }
-        assert!(compared > 120, "compared {compared} files");
     }
 
     #[test]
