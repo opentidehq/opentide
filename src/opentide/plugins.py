@@ -51,6 +51,9 @@ __all__ = [
     "Tenant",
 ]
 
+#: What a missing pydantic is told: the plugin API's dependency is the `plugins` extra.
+_PYDANTIC_HINT = "the plugin API needs pydantic: pip install 'opentide[plugins]'"
+
 #: The entry-point group plugins register in.
 ENTRY_POINT_GROUP = "opentide.platforms"
 
@@ -209,7 +212,8 @@ class PlatformPlugin:
     """A detection platform added by a package. Override what the platform supports.
 
     ``configuration_model`` is a pydantic model of the platform's block of a
-    rule's ``configurations``: :meth:`check_configuration` validates the block
+    rule's ``configurations`` (pydantic comes with ``pip install
+    'opentide[plugins]'``): :meth:`check_configuration` validates the block
     with it, and ``opentide validate`` reports each error at its position in
     the rule file. Override :meth:`check_configuration` to check it another way.
     """
@@ -233,7 +237,10 @@ class PlatformPlugin:
         model = self.configuration_model
         if model is None:
             return []
-        from pydantic import ValidationError
+        try:
+            from pydantic import ValidationError
+        except ImportError as error:
+            raise ImportError(_PYDANTIC_HINT, name="pydantic") from error
 
         try:
             model.model_validate(dict(block))
@@ -273,6 +280,12 @@ def _instance(loaded: object) -> PlatformPlugin:
     raise TypeError(f"{loaded!r} is not an opentide.plugins.PlatformPlugin")
 
 
+def _is_pydantic_missing(error: Exception) -> bool:
+    """Whether *error* is the import of pydantic failing, in a plugin's own module or here."""
+    name = error.name if isinstance(error, ImportError) else None
+    return name is not None and name.partition(".")[0] == "pydantic"
+
+
 def _discover() -> list[dict[str, Any]]:
     """Every plugin entry point, loaded: its identifier and plugin or why it failed."""
     from importlib.metadata import entry_points
@@ -293,7 +306,10 @@ def _discover() -> list[dict[str, Any]]:
         try:
             plugin = _instance(point.load())
         except Exception as error:
-            found.append({"id": point.name, "error": f"{type(error).__name__}: {error}"})
+            message = f"{type(error).__name__}: {error}"
+            if _is_pydantic_missing(error):
+                message = f"{message} ({_PYDANTIC_HINT})"
+            found.append({"id": point.name, "error": message})
             continue
         found.append({"id": point.name, "plugin": plugin, "error": None, **capabilities(plugin)})
     return found

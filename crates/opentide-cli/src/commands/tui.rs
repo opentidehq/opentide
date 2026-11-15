@@ -103,8 +103,14 @@ fn plain_reason(place: &Place<'_>) -> Option<&'static str> {
     if place.no_color {
         return Some("--no-color was passed");
     }
-    if env.get("NO_COLOR").is_some_and(|value| !value.is_empty()) {
-        return Some("NO_COLOR is set");
+    if env.colour_choice() == Some(false) {
+        return Some(
+            if env.get("NO_COLOR").is_some_and(|value| !value.is_empty()) {
+                "NO_COLOR is set"
+            } else {
+                "FORCE_COLOR turns colour off"
+            },
+        );
     }
     if env
         .get("TERM")
@@ -204,6 +210,26 @@ mod tests {
                 "NO_COLOR is set",
             ),
             (false, &[("NO_COLOR", ""), ("TERM", "dumb")], "TERM is dumb"),
+            (
+                false,
+                &[("FORCE_COLOR", "0")],
+                "FORCE_COLOR turns colour off",
+            ),
+            (
+                false,
+                &[("FORCE_COLOR", "false")],
+                "FORCE_COLOR turns colour off",
+            ),
+            (
+                false,
+                &[("FORCE_COLOR", "no")],
+                "FORCE_COLOR turns colour off",
+            ),
+            (
+                false,
+                &[("FORCE_COLOR", "off")],
+                "FORCE_COLOR turns colour off",
+            ),
             (
                 false,
                 &[("GITLAB_CI", "true")],

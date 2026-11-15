@@ -65,7 +65,12 @@ closed). Then:
   the pages and runs the docs tests that need no wheel;
 - each specialised job runs only when its own paths change: `node` (`bindings/node/`), `wasi`
   (`crates/opentide-wasm/`, the WASI shims: `crates/*wasi*`, `vendor/`, `packages/`,
-  `build-wasm.sh`), `grammars` (`grammars/`), `textmate` (`highlights/`, `editors/`),
+  `build-wasm.sh`; the parser layer, where a C dependency and a parse's stack show only in
+  WebAssembly: `crates/opentide-syntax/`, `crates/opentide-parse/`, the eleven query-language
+  crates (`PARSER_CRATES` in `scripts/ci/changes.py`), `grammars/`, `highlights/`), `wasm` (the
+  browser build, `engine-wasm`: the same parser-layer paths, `crates/opentide-wasm/` and
+  `build-wasm.sh`; a push, a `full` run, a release PR and the nightly run it too), `grammars` (`grammars/`), `textmate` (`highlights/`,
+  `editors/`),
   `gitlab-ci-lint` (opentide-cli's CI renderer and `setup` commands, the linters' installer, its
   test), `facade` (`crates/opentide/`: the public API), `deny` (`Cargo.lock`, `deny.toml`, a
   manifest, `vendor/`, `fuzz/`, `publishing/`), `docs` (`docs/`, the root guides);
@@ -89,6 +94,7 @@ checked before the next pull request builds on it.
 | `facade` | The `opentide` facade with every feature: tests and doctests, rustdoc as docs.rs builds it, `cargo semver-checks` (0.51.0) against the first parent |
 | `node` | `@opentide/opentide` (`bindings/node`): the napi-rs addon for linux-x64-gnu, the generated `index.js` and `index.d.ts` against the committed ones, and `npm test`; it compiles its own addon, so it starts beside `build`. Node's parity with the Python and Rust SDKs, byte for byte, is the conformance suite's (nightly and release pull requests) |
 | `wasi` | The WASI command line the VS Code extension runs: `build-wasm.sh cli`, its size held to the .vsix's 15 MiB, tenant commands through `@opentide/wasi-host` |
+| `engine-wasm` | The browser WebAssembly module and the npm packages: `build-wasm.sh` (both artifacts, smoke-tested), clippy on the WebAssembly targets, `npm` packs, the TypeScript client against the native, worker and WASI servers. The nightly, a push to a base branch, a `full` run, a release pull request, and a pull request that changes the parser layer, a query-language crate, `opentide-wasm` or `build-wasm.sh` |
 | `grammars`, `textmate` | Every vendored `parser.c` is what tree-sitter-cli 0.25.10 generates; the TextMate grammars as VS Code reads them |
 | `deny` | `cargo deny check` against [`deny.toml`](../deny.toml) for the workspace, `fuzz/` and the `publishing/` placeholder crate ([`docs/internal/supply-chain.md`](../docs/internal/supply-chain.md)) |
 | `gate` (**`PR gate`**) | The one required check (below) |
@@ -112,7 +118,7 @@ Windows, built there), `test-full` (Python 3.10 to 3.13 on the build's abi3 exte
 (the `full_set` E2E tests), `coverage` ([`coverage.yml`](workflows/coverage.yml)), `benchmarks`
 ([`bench.yml`](workflows/bench.yml)), `oracle` ([`oracle.yml`](workflows/oracle.yml): the
 vendor-parser oracles), `schema` ([`schema.yml`](workflows/schema.yml)), `conformance` (the
-cross-SDK suite on three OSes), `engine-wasm`, `npm-install`, `elastic-sweep`, `fuzz-smoke`,
+cross-SDK suite on three OSes), `npm-install`, `elastic-sweep`, `fuzz-smoke`,
 `clients` and `bench` (informational), `cli-windows-smoke`, `engine-release-consumers`, plus the
 packaging jobs above; `nightly-report` opens or comments on the one open issue labelled
 `nightly-failure` with the failing jobs. coverage.yml, bench.yml, oracle.yml, schema.yml and
