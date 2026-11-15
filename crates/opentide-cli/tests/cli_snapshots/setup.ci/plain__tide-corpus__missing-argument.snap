@@ -8,6 +8,9 @@ exit: 2
 ━━━ stdout · empty
 
 ━━━ stderr
-error: Missing argument ci_platform: choose from github, gitlab, azure.
-  usage: opentide setup ci [OPTIONS] <ci_platform>
-  help: run 'opentide setup ci --help'
+error: the following required arguments were not provided:
+  <ci_platform>
+
+Usage: opentide setup ci --yes <ci_platform>
+
+For more information, try '--help'.
