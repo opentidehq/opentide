@@ -247,13 +247,6 @@ pub enum Cmd {
     Diff(DiffArgs),
 }
 
-/// What the comparison runs against.
-#[derive(Clone, Copy, ValueEnum)]
-pub enum Against {
-    /// The frozen Python oracle
-    Python,
-}
-
 /// The workspaces compared.
 #[derive(Clone, Copy, ValueEnum)]
 pub enum Corpus {
@@ -272,7 +265,7 @@ pub enum Corpus {
 pub struct DiffArgs {
     /// What to compare with
     #[arg(long, value_enum)]
-    pub against: Against,
+    pub against: crate::diff_args::Against,
     /// The oracle: BIN, else $OPENTIDE_ORACLE, else `opentide` on PATH; its
     /// interpreter is the `python` beside it
     #[arg(long, value_name = "BIN")]

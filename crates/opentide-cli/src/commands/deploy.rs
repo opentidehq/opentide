@@ -64,6 +64,27 @@ pub struct Args {
     pub keep_deprecated: Option<bool>,
 }
 
+impl From<&crate::tree::DeployArgs> for Args {
+    fn from(args: &crate::tree::DeployArgs) -> Self {
+        Self {
+            strategies: args.strategy.clone(),
+            all: args.all_files,
+            uuids: args.uuids.clone(),
+            files: args.files.clone(),
+            platform: args.platform.as_ref().map(|platform| platform.0.clone()),
+            plan: args.plan.clone(),
+            wide: args.wide,
+            keep_deprecated: if args.keep_deprecated {
+                Some(true)
+            } else if args.drop_deprecated {
+                Some(false)
+            } else {
+                None
+            },
+        }
+    }
+}
+
 /// What the run knows about where it is.
 pub struct Context<'a> {
     /// `--repo`, as typed.
@@ -685,5 +706,66 @@ mod tests {
             .map(|strategy| strategy.name())
             .collect();
         assert_eq!(names, STRATEGIES);
+    }
+}
+
+#[cfg(test)]
+mod from_cli_tests {
+    use clap::Parser as _;
+
+    use super::Args;
+    use crate::tree::{Cli, RootCommand};
+
+    fn parse(words: &[&str]) -> Args {
+        let words = std::iter::once("opentide").chain(words.iter().copied());
+        match Cli::try_parse_from(words).map(|cli| cli.command) {
+            Ok(Some(RootCommand::Deploy(deploy))) => Args::from(&deploy),
+            other => panic!("not a deploy command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_options_are_read_as_typed() {
+        let args = parse(&[
+            "deploy",
+            "--platform",
+            "splunk",
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--uuid",
+            "u",
+            "--file",
+            "f.yml",
+            "--wide",
+        ]);
+        assert_eq!(args.platform.as_deref(), Some("splunk"));
+        assert_eq!(args.strategies, ["PREVIEW", "RELEASE"]);
+        assert!(args.all && args.wide);
+        assert_eq!(args.uuids, ["u"]);
+        assert_eq!(args.files, ["f.yml"]);
+    }
+
+    #[test]
+    fn keep_and_drop_deprecated_are_a_tri_state_the_last_one_typed_wins() {
+        assert_eq!(parse(&["deploy"]).keep_deprecated, None);
+        assert_eq!(
+            parse(&["deploy", "--keep-deprecated"]).keep_deprecated,
+            Some(true)
+        );
+        assert_eq!(
+            parse(&["deploy", "--drop-deprecated"]).keep_deprecated,
+            Some(false)
+        );
+        assert_eq!(
+            parse(&["deploy", "--keep-deprecated", "--drop-deprecated"]).keep_deprecated,
+            Some(false)
+        );
+        assert_eq!(
+            parse(&["deploy", "--drop-deprecated", "--keep-deprecated"]).keep_deprecated,
+            Some(true)
+        );
     }
 }

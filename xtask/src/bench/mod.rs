@@ -37,43 +37,143 @@ use std::time::Duration;
 /// The hidden mode in which a child xtask generates the heavy workspace.
 const INTERNAL_GENERATE: &str = "--internal-generate";
 
-/// The usage of `cargo xtask bench`.
-pub const USAGE: &str = "\
-usage: cargo xtask bench [--engine python|rust] [--scale 1|10] [--json] [--out FILE]
-                         [--runs N] [--warmup N] [--only ID,...] [--workspace DIR]
-                         [--opentide PATH] [--lsp PATH] [--launcher PATH]
-       cargo xtask bench --check BUDGETS BENCH.json [--previous LAST.json] [--summary FILE]
+/// The arguments of `cargo xtask bench`.
+///
+/// Runs the plan section 11 benchmarks on the heavy workspace (seed 20261107):
+/// each command as fresh processes, one warm-up and then --runs (5) measured
+/// runs, each in a fresh copy of the workspace; reports the median wall time
+/// and the median peak RSS (wait4) per command. --json prints the report as
+/// JSON on stdout (progress goes to stderr); --out writes it to FILE as well.
+///
+/// --check holds BENCH.json to BUDGETS (tests/bench/budgets.toml) and, with
+/// --previous, to the last result of the base branch: a median or peak RSS more
+/// than 10% over its reference fails. It prints a Markdown table per command
+/// (median, RSS, budget, deltas), and appends it to FILE with --summary.
+///
+/// Exit status: 0 done or passed, 1 a budget or regression check failed, 2
+/// usage error or the benchmark could not run.
+#[derive(clap::Args, Debug)]
+pub struct BenchArgs {
+    /// Hold BENCH.json to BUDGETS instead of running the benchmarks
+    #[arg(long, num_args = 2, value_names = ["BUDGETS", "BENCH.json"])]
+    check: Option<Vec<PathBuf>>,
+    /// With --check: also hold the report to the base branch's last result
+    #[arg(long, value_name = "LAST.json", requires = "check")]
+    previous: Option<PathBuf>,
+    /// With --check: append the Markdown table to FILE
+    #[arg(long, value_name = "FILE", requires = "check")]
+    summary: Option<PathBuf>,
+    /// With --check: fail every measured command no reference applies to (CI)
+    #[arg(long, requires = "check")]
+    require_reference: bool,
+    /// The implementation to run: the oracle, opentide 0.23.0 from its PyPI
+    /// wheel (tests/bench/oracle-requirements.txt, hashes verified), installed
+    /// with uv under the target directory (python, the default); or the Rust
+    /// implementations, built --release: the Rust CLI's opentide binary for
+    /// every command, the language server, and `load`, with startup and explain
+    /// through the console script, opentide._cli:main
+    #[arg(long, value_enum, default_value = "python", conflicts_with = "check")]
+    engine: EngineArg,
+    /// The heavy workspace's size
+    #[arg(long, value_enum, default_value = "1", conflicts_with = "check")]
+    scale: Scale,
+    /// Print the report as JSON on stdout (progress goes to stderr)
+    #[arg(long, conflicts_with = "check")]
+    json: bool,
+    /// Write the report to FILE as well
+    #[arg(long, value_name = "FILE", value_parser = absolute, conflicts_with = "check")]
+    out: Option<PathBuf>,
+    /// Measured runs per command
+    #[arg(
+        long,
+        value_name = "N",
+        default_value_t = 5,
+        value_parser = clap::value_parser!(u32).range(1..),
+        conflicts_with = "check"
+    )]
+    runs: u32,
+    /// Unmeasured runs per command before them
+    #[arg(long, value_name = "N", default_value_t = 1, conflicts_with = "check")]
+    warmup: u32,
+    /// Run only these commands (ids as in the report)
+    #[arg(
+        long,
+        value_name = "ID",
+        value_delimiter = ',',
+        value_parser = clap::builder::PossibleValuesParser::new(SCENARIOS.iter().map(|s| s.id)),
+        conflicts_with = "check"
+    )]
+    only: Option<Vec<String>>,
+    /// Benchmark this workspace instead of generating one
+    #[arg(long, value_name = "DIR", value_parser = absolute, conflicts_with = "check")]
+    workspace: Option<PathBuf>,
+    /// Run this opentide instead of installing the oracle
+    #[arg(long, value_name = "PATH", value_parser = absolute, conflicts_with = "check")]
+    opentide: Option<PathBuf>,
+    /// Run this language server for --engine rust
+    #[arg(long, value_name = "PATH", value_parser = absolute, conflicts_with = "check")]
+    lsp: Option<PathBuf>,
+    /// Run this console script for --engine rust's startup and explain
+    /// (default: .venv/bin/opentide, from uv sync)
+    #[arg(long, value_name = "PATH", value_parser = absolute, conflicts_with = "check")]
+    launcher: Option<PathBuf>,
+}
 
-Runs the plan section 11 benchmarks on the heavy workspace (seed 20261107):
-each command as fresh processes, one warm-up and then --runs (5) measured runs,
-each in a fresh copy of the workspace; reports the median wall time and the
-median peak RSS (wait4) per command. --json prints the report as JSON on
-stdout (progress goes to stderr); --out writes it to FILE as well.
+/// `--engine`.
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+enum EngineArg {
+    /// The oracle
+    Python,
+    /// The Rust implementations of this workspace
+    Rust,
+}
 
-  --engine python   the oracle: opentide 0.23.0 from its PyPI wheel
-                    (tests/bench/oracle-requirements.txt, hashes verified),
-                    installed with uv under the target directory (default)
-  --engine rust     the Rust implementations, built --release: the Rust
-                    CLI's opentide binary for every command, the language
-                    server, and `load` (opentide-workspace's load example);
-                    startup (opentide --version) and explain through the
-                    console script, opentide._cli:main
-  --scale 1|10      the heavy workspace's size (default 1)
-  --only ID,...     run only these commands (ids as in the report)
-  --workspace DIR   benchmark this workspace instead of generating one
-  --opentide PATH   run this opentide instead of installing the oracle
-  --lsp PATH        run this language server for --engine rust
-  --launcher PATH   run this console script for --engine rust's startup and
-                    explain (default: .venv/bin/opentide, from uv sync)
+/// `--scale`.
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+enum Scale {
+    /// The heavy workspace as generated
+    #[value(name = "1")]
+    One,
+    /// Ten times its size
+    #[value(name = "10")]
+    Ten,
+}
 
---check holds BENCH.json to BUDGETS (tests/bench/budgets.toml) and, with
---previous, to the last result of the base branch (BASE_BRANCH): a median or
-peak RSS more than 10% over its reference fails. It prints a Markdown table per command
-(median, RSS, budget, deltas), and appends it to FILE with --summary.
-
-exit status: 0 done or passed, 1 a budget or regression check failed,
-2 usage error or the benchmark could not run
-";
+impl BenchArgs {
+    /// What the arguments ask for.
+    fn mode(self) -> Mode {
+        if let Some(files) = self.check
+            && let [budgets, report] = files.as_slice()
+        {
+            return Mode::Check(CheckOptions {
+                budgets: budgets.clone(),
+                report: report.clone(),
+                previous: self.previous,
+                summary: self.summary,
+                require_reference: self.require_reference,
+            });
+        }
+        Mode::Run(Options {
+            engine: match self.engine {
+                EngineArg::Python => Engine::Python,
+                EngineArg::Rust => Engine::Rust,
+            },
+            scale: match self.scale {
+                Scale::One => 1,
+                Scale::Ten => 10,
+            },
+            json: self.json,
+            out: self.out,
+            runs: self.runs,
+            warmup: self.warmup,
+            only: self.only,
+            workspace: self.workspace,
+            opentide: self.opentide,
+            lsp: self.lsp,
+            launcher: self.launcher,
+        })
+    }
+}
 
 /// Which implementation runs the commands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -389,150 +489,19 @@ pub enum Mode {
     Run(Options),
     /// Check a report.
     Check(CheckOptions),
-    /// Print the usage.
-    Help,
 }
 
 /// A path argument made absolute against the working directory: the
 /// commands run in a workspace copy, where a relative path means nothing.
-fn absolute(text: &str) -> Result<PathBuf> {
-    std::path::absolute(text).with_context(|| format!("resolve {text}"))
+fn absolute(text: &str) -> Result<PathBuf, String> {
+    std::path::absolute(text).map_err(|error| format!("cannot resolve {text}: {error}"))
 }
 
-/// Parses the arguments after `bench`.
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-pub fn parse_args(args: &[String]) -> Result<Mode> {
-    let mut options = Options {
-        engine: Engine::Python,
-        scale: 1,
-        json: false,
-        out: None,
-        runs: 5,
-        warmup: 1,
-        only: None,
-        workspace: None,
-        opentide: None,
-        lsp: None,
-        launcher: None,
-    };
-    let mut check: Option<(PathBuf, PathBuf)> = None;
-    let mut previous = None;
-    let mut summary = None;
-    let mut require_reference = false;
-    let mut run_only = false;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let mut value = || {
-            args.next()
-                .cloned()
-                .with_context(|| format!("{arg} needs a value"))
-        };
-        match arg.as_str() {
-            "--help" | "-h" => return Ok(Mode::Help),
-            "--check" => {
-                let budgets = PathBuf::from(value()?);
-                let report = PathBuf::from(value()?);
-                check = Some((budgets, report));
-            }
-            "--previous" => previous = Some(PathBuf::from(value()?)),
-            "--summary" => summary = Some(PathBuf::from(value()?)),
-            "--require-reference" => require_reference = true,
-            "--engine" => {
-                options.engine = match value()?.as_str() {
-                    "python" => Engine::Python,
-                    "rust" => Engine::Rust,
-                    other => bail!("--engine is python or rust, not `{other}`"),
-                };
-                run_only = true;
-            }
-            "--scale" => {
-                options.scale = match value()?.as_str() {
-                    "1" => 1,
-                    "10" => 10,
-                    other => bail!("--scale is 1 or 10, not `{other}`"),
-                };
-                run_only = true;
-            }
-            "--json" => {
-                options.json = true;
-                run_only = true;
-            }
-            "--out" => {
-                options.out = Some(absolute(&value()?)?);
-                run_only = true;
-            }
-            "--runs" | "--warmup" => {
-                let text = value()?;
-                let n: u32 = text
-                    .parse()
-                    .with_context(|| format!("{arg} takes a count, not `{text}`"))?;
-                if arg == "--runs" {
-                    if n == 0 {
-                        bail!("--runs must be at least 1");
-                    }
-                    options.runs = n;
-                } else {
-                    options.warmup = n;
-                }
-                run_only = true;
-            }
-            "--only" => {
-                let ids: Vec<String> = value()?.split(',').map(str::to_owned).collect();
-                for id in &ids {
-                    if !SCENARIOS.iter().any(|s| s.id == id) {
-                        let known: Vec<&str> = SCENARIOS.iter().map(|s| s.id).collect();
-                        bail!(
-                            "--only: unknown command `{id}` (known: {})",
-                            known.join(", ")
-                        );
-                    }
-                }
-                options.only = Some(ids);
-                run_only = true;
-            }
-            "--workspace" => {
-                options.workspace = Some(absolute(&value()?)?);
-                run_only = true;
-            }
-            "--opentide" => {
-                options.opentide = Some(absolute(&value()?)?);
-                run_only = true;
-            }
-            "--lsp" => {
-                options.lsp = Some(absolute(&value()?)?);
-                run_only = true;
-            }
-            "--launcher" => {
-                options.launcher = Some(absolute(&value()?)?);
-                run_only = true;
-            }
-            other => bail!("unknown option `{other}`"),
-        }
-    }
-    match check {
-        Some((budgets, report)) => {
-            if run_only {
-                bail!("--check takes only --previous, --summary and --require-reference");
-            }
-            Ok(Mode::Check(CheckOptions {
-                budgets,
-                report,
-                previous,
-                summary,
-                require_reference,
-            }))
-        }
-        None => {
-            if previous.is_some() || summary.is_some() || require_reference {
-                bail!("--previous, --summary and --require-reference go with --check");
-            }
-            Ok(Mode::Run(options))
-        }
-    }
-}
-
-/// `cargo xtask bench`: parses, runs or checks, and prints.
-pub fn main(args: &[String]) -> ExitCode {
+/// The hidden modes in which a child xtask works for a benchmark
+/// (`--internal-generate`, `--internal-measure`): `Some` with the exit code
+/// when `args` (those after `bench`) name one. They are this binary calling
+/// itself, not part of the command line.
+pub fn internal(args: &[String]) -> Option<ExitCode> {
     if let [flag, scale, dir] = args
         && flag == INTERNAL_GENERATE
     {
@@ -540,7 +509,7 @@ pub fn main(args: &[String]) -> ExitCode {
             .parse::<u32>()
             .context("scale")
             .and_then(|scale| generate_here(scale, (dir != "-").then(|| Path::new(dir))));
-        return match outcome {
+        return Some(match outcome {
             Ok(generated) => {
                 println!("{} {}", generated.blocks, generated.digest);
                 ExitCode::SUCCESS
@@ -549,31 +518,27 @@ pub fn main(args: &[String]) -> ExitCode {
                 eprintln!("xtask bench {INTERNAL_GENERATE}: {err:#}");
                 ExitCode::from(2)
             }
-        };
+        });
     }
     if let [flag, result, program, rest @ ..] = args
         && flag == measure::INTERNAL_MEASURE
     {
-        return match measure::measure_here(Path::new(result), program, rest) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(err) => {
-                eprintln!("xtask bench {}: {err:#}", measure::INTERNAL_MEASURE);
-                ExitCode::from(2)
-            }
-        };
+        return Some(
+            match measure::measure_here(Path::new(result), program, rest) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(err) => {
+                    eprintln!("xtask bench {}: {err:#}", measure::INTERNAL_MEASURE);
+                    ExitCode::from(2)
+                }
+            },
+        );
     }
-    let mode = match parse_args(args) {
-        Ok(mode) => mode,
-        Err(err) => {
-            eprint!("xtask bench: {err:#}\n\n{USAGE}");
-            return ExitCode::from(2);
-        }
-    };
-    match mode {
-        Mode::Help => {
-            print!("{USAGE}");
-            ExitCode::SUCCESS
-        }
+    None
+}
+
+/// `cargo xtask bench`: runs or checks, and prints.
+pub fn main(args: BenchArgs) -> ExitCode {
+    match args.mode() {
         Mode::Check(options) => match run_check(&options) {
             Ok(true) => ExitCode::SUCCESS,
             Ok(false) => ExitCode::FAILURE,
@@ -1373,6 +1338,21 @@ mod tests {
 
     fn args(text: &str) -> Vec<String> {
         text.split_whitespace().map(str::to_owned).collect()
+    }
+
+    /// `bench <args>` as the command line parses it.
+    fn parse_args(args: &[String]) -> Result<Mode> {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Cli {
+            #[command(flatten)]
+            args: BenchArgs,
+        }
+        Ok(
+            Cli::try_parse_from(std::iter::once(&"bench".to_owned()).chain(args))?
+                .args
+                .mode(),
+        )
     }
 
     #[test]

@@ -54,7 +54,10 @@ enum Cmd {
     Conformance(xtask::conformance::cli::ConformanceArgs),
     /// Generate the heavy workspace, run the fault catalogue against the
     /// oracle, report coverage (UC-0.6, #804); `corpus help` lists its commands
-    Corpus(Passthrough),
+    Corpus {
+        #[command(subcommand)]
+        command: xtask::corpus::cli::Cmd,
+    },
     /// Resolve every fixture and generated workspace's configuration with
     /// opentide-schema and compare it with the oracle's (UC-1.5, #811)
     Config {
@@ -106,15 +109,21 @@ enum Cmd {
         command: xtask::golden::Cmd,
     },
     /// Run the benchmarks against their budgets (UC-0.8, #806)
-    Bench(Passthrough),
+    Bench(xtask::bench::BenchArgs),
     /// The deploy compile's request bodies against the oracle's (UC-3.1, #823)
-    Payloads(Passthrough),
+    Payloads {
+        #[command(subcommand)]
+        command: xtask::payloads::Cmd,
+    },
     /// The vocabularies: sync, generate, compare and ingest (UC-1.6, #812);
     /// `vocab help` lists the options
     Vocab(Passthrough),
     /// The object models against the oracle: their JSON Schemas, and their
     /// verdict on every object file of every corpus (UC-1.3, #809)
-    Schema(Passthrough),
+    Schema {
+        #[command(subcommand)]
+        command: xtask::schema::Cmd,
+    },
     /// Check every model field's description against its row in the field
     /// tables of the specifications checkout
     ///
@@ -226,6 +235,15 @@ struct CompareArgs {
 }
 
 fn main() -> ExitCode {
+    // The benchmarks call this binary for their child processes; those modes are
+    // not part of the command line.
+    let raw: Vec<String> = std::env::args().skip(1).collect();
+    if let [verb, rest @ ..] = raw.as_slice()
+        && verb == "bench"
+        && let Some(code) = xtask::bench::internal(rest)
+    {
+        return code;
+    }
     let command = Cli::parse().command;
     match command {
         Cmd::CheckLayers(args) => verdict("check-layers", check_layers(&args)),
@@ -233,7 +251,7 @@ fn main() -> ExitCode {
         Cmd::Mutants { command } => verdict("mutants", mutants_command(&command).map(|()| true)),
         Cmd::Compare(args) => verdict("compare", run_compare(&args)),
         Cmd::Conformance(args) => status("conformance", xtask::conformance::cli::run(&args)),
-        Cmd::Corpus(p) => status("corpus", xtask::corpus::cli::run(&p.args)),
+        Cmd::Corpus { command } => status("corpus", xtask::corpus::cli::run_command(&command)),
         Cmd::Config { command } => status("config", xtask::config::run(&command)),
         Cmd::Registry { command } => status("registry", xtask::registry::run(&command)),
         Cmd::Lsp { command } => status("lsp", xtask::lsp::run(&command)),
@@ -243,10 +261,10 @@ fn main() -> ExitCode {
         Cmd::Mcp { command } => status("mcp", xtask::mcp::run(&command)),
         Cmd::Cassettes { command } => status("cassettes", xtask::cassettes::run(&command)),
         Cmd::Golden { command } => xtask::golden::main(command),
-        Cmd::Bench(p) => xtask::bench::main(&p.args),
-        Cmd::Payloads(p) => xtask::payloads::main(&p.args),
+        Cmd::Bench(args) => xtask::bench::main(args),
+        Cmd::Payloads { command } => xtask::payloads::main(&command),
         Cmd::Vocab(p) => xtask::vocab::main(&p.args),
-        Cmd::Schema(p) => xtask::schema::main(&p.args),
+        Cmd::Schema { command } => xtask::schema::main(&command),
         Cmd::SpecFields(args) => xtask::spec_fields::main(&args),
         Cmd::Stubs(args) => xtask::stubs::main(&args),
     }
