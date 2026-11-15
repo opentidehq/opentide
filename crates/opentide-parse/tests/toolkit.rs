@@ -1,0 +1,295 @@
+//! The toolkit through its public API, on a toy language: `( … )` groups of
+//! words, lexed with logos.
+
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] functions: a panic fails the test"
+)]
+
+use logos::Logos;
+use opentide_parse::{
+    ErrorKind, Grammar, Input, Lexeme, Parser, SyntaxError, TokenSet, build, debug_errors,
+    debug_tree, lex,
+};
+use rowan::{SyntaxKind, TextRange, TextSize};
+use std::thread;
+
+#[derive(Logos, Clone, Copy, Debug, PartialEq, Eq)]
+enum Tok {
+    #[regex(r"[ \t\r\n]+")]
+    Ws,
+    #[regex(r"[a-z]+")]
+    Word,
+    #[token("(")]
+    L,
+    #[token(")")]
+    R,
+}
+
+const WS: SyntaxKind = SyntaxKind(0);
+const WORD: SyntaxKind = SyntaxKind(1);
+const L: SyntaxKind = SyntaxKind(2);
+const R: SyntaxKind = SyntaxKind(3);
+const JUNK: SyntaxKind = SyntaxKind(4);
+const EOF: SyntaxKind = SyntaxKind(5);
+const ERROR: SyntaxKind = SyntaxKind(6);
+const ROOT: SyntaxKind = SyntaxKind(7);
+const GROUP: SyntaxKind = SyntaxKind(8);
+const NAMES: [&str; 9] = [
+    "WS", "WORD", "L", "R", "JUNK", "EOF", "ERROR", "ROOT", "GROUP",
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Toy {}
+
+impl rowan::Language for Toy {
+    type Kind = SyntaxKind;
+    fn kind_from_raw(raw: SyntaxKind) -> SyntaxKind {
+        raw
+    }
+    fn kind_to_raw(kind: SyntaxKind) -> SyntaxKind {
+        kind
+    }
+}
+
+fn name(kind: SyntaxKind) -> &'static str {
+    NAMES[usize::from(kind.0)]
+}
+
+fn toy_lex(source: &str) -> Vec<Lexeme> {
+    lex::<Tok>(source, |token, _| match token {
+        Ok(Tok::Ws) => WS,
+        Ok(Tok::Word) => WORD,
+        Ok(Tok::L) => L,
+        Ok(Tok::R) => R,
+        Err(()) => JUNK,
+    })
+}
+
+fn grammar(max_depth: u32) -> Grammar {
+    Grammar {
+        eof: EOF,
+        error: ERROR,
+        trivia: TokenSet::new(&[WS]),
+        max_depth,
+    }
+}
+
+/// Parses `source`; checks the tree is lossless; returns it as text.
+fn parse(source: &str, max_depth: u32) -> (String, Vec<SyntaxError>) {
+    let input = Input::new(source, toy_lex(source), grammar(max_depth));
+    let mut p = Parser::new(&input);
+    let root = p.start();
+    loop {
+        items(&mut p);
+        if p.at_eof() {
+            break;
+        }
+        p.err_and_bump("unexpected");
+    }
+    root.complete(&mut p, ROOT);
+    let parse = build(&input, p.finish());
+    let node = rowan::SyntaxNode::<Toy>::new_root(parse.green);
+    assert_eq!(node.to_string(), source, "lossless");
+    (debug_tree(&node, name), parse.errors)
+}
+
+fn items(p: &mut Parser<'_>) {
+    loop {
+        if p.at(WORD) {
+            p.bump();
+        } else if p.at(L) {
+            if !p.enter() {
+                return;
+            }
+            let m = p.start();
+            p.bump();
+            items(p);
+            if !p.at(R) {
+                p.err_recover("missing `)`", TokenSet::new(&[R]));
+            }
+            p.eat(R);
+            m.complete(p, GROUP);
+            p.exit();
+        } else {
+            return;
+        }
+    }
+}
+
+fn on_small_stack(run: impl FnOnce() + Send + 'static) {
+    thread::Builder::new()
+        .stack_size(1 << 20)
+        .spawn(run)
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+fn at(start: u32, end: u32) -> TextRange {
+    TextRange::new(TextSize::from(start), TextSize::from(end))
+}
+
+#[test]
+fn the_lexer_is_lossless_and_an_error_is_one_character() {
+    let source = "ab é😀(x)\n ?";
+    let lexemes = toy_lex(source);
+    let kinds: Vec<_> = lexemes
+        .iter()
+        .map(|l| {
+            (
+                name(l.kind),
+                &source[std::ops::Range::<usize>::from(l.range)],
+            )
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            ("WORD", "ab"),
+            ("WS", " "),
+            ("JUNK", "é"),
+            ("JUNK", "😀"),
+            ("L", "("),
+            ("WORD", "x"),
+            ("R", ")"),
+            ("WS", "\n "),
+            ("JUNK", "?"),
+        ]
+    );
+    let mut end = TextSize::from(0);
+    for l in &lexemes {
+        assert_eq!(l.range.start(), end, "contiguous");
+        end = l.range.end();
+    }
+    assert_eq!(end, TextSize::of(source));
+}
+
+#[test]
+fn trivia_goes_to_the_parent_and_errors_carry_the_expected_set() {
+    let (tree, errors) = parse(" a (b c ", 8);
+    insta::assert_snapshot!(tree, @r#"
+    ROOT@0..8
+      WS@0..1 " "
+      WORD@1..2 "a"
+      WS@2..3 " "
+      GROUP@3..7
+        L@3..4 "("
+        WORD@4..5 "b"
+        WS@5..6 " "
+        WORD@6..7 "c"
+      WS@7..8 " "
+    "#);
+    assert_eq!(
+        debug_errors(&errors, name),
+        "7..8: missing `)` (expected WORD, L, R)\n"
+    );
+    assert_eq!(errors[0].gap, at(7, 8));
+    assert_eq!(errors[0].kind, ErrorKind::Syntax);
+}
+
+#[test]
+fn unexpected_tokens_are_error_nodes_and_parsing_goes_on() {
+    let (tree, errors) = parse("a ) (b ?) c", 8);
+    insta::assert_snapshot!(tree, @r#"
+    ROOT@0..11
+      WORD@0..1 "a"
+      WS@1..2 " "
+      ERROR@2..3
+        R@2..3 ")"
+      WS@3..4 " "
+      GROUP@4..9
+        L@4..5 "("
+        WORD@5..6 "b"
+        WS@6..7 " "
+        ERROR@7..8
+          JUNK@7..8 "?"
+        R@8..9 ")"
+      WS@9..10 " "
+      WORD@10..11 "c"
+    "#);
+    assert_eq!(
+        debug_errors(&errors, name),
+        "1..2: unexpected (expected WORD, L)\n6..7: missing `)` (expected WORD, L, R)\n"
+    );
+}
+
+#[test]
+fn nesting_up_to_the_limit_parses_and_one_past_it_is_one_error() {
+    let deep = |n: usize| format!("{}a{}", "(".repeat(n), ")".repeat(n));
+    on_small_stack(move || {
+        let (_, errors) = parse(&deep(64), 64);
+        assert_eq!(errors, []);
+        let (tree, errors) = parse(&deep(65), 64);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert_eq!(errors[0].kind, ErrorKind::TooDeep { limit: 64 });
+        assert_eq!(errors[0].message, "nesting deeper than 64 levels");
+        // The 65th `(` and everything after it is one error node.
+        assert!(tree.contains("ERROR@64..131"), "{tree}");
+    });
+}
+
+#[test]
+fn a_hundred_thousand_open_parens_are_one_diagnostic_on_a_small_stack() {
+    on_small_stack(|| {
+        let (_, errors) = parse(&"(".repeat(100_000), 200);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert_eq!(errors[0].kind, ErrorKind::TooDeep { limit: 200 });
+    });
+}
+
+/// `build` never recurses; rowan drops a green tree recursively, which on a
+/// 1 MB stack holds about 10 000 levels in a debug build (measured on
+/// aarch64 macOS: 8 000 drop, 12 000 overflow). A language's own recursive
+/// descent costs more stack per level than that, so its `max_depth` binds
+/// first. This keeps half the measured margin.
+#[test]
+fn a_tree_four_thousand_nodes_deep_builds_and_drops_on_a_small_stack() {
+    const N: usize = 4_000;
+    on_small_stack(|| {
+        let source = "(".repeat(N);
+        let input = Input::new(&source, toy_lex(&source), grammar(u32::MAX));
+        let mut p = Parser::new(&input);
+        let open: Vec<_> = (0..N)
+            .map(|_| {
+                let m = p.start();
+                p.bump();
+                m
+            })
+            .collect();
+        for m in open.into_iter().rev() {
+            m.complete(&mut p, GROUP);
+        }
+        let parse = build(&input, p.finish());
+        assert_eq!(parse.depth, N);
+        let node = rowan::SyntaxNode::<Toy>::new_root(parse.green);
+        assert_eq!(node.to_string(), source);
+    });
+}
+
+#[test]
+fn random_inputs_never_panic_hang_or_lose_a_byte() {
+    // xorshift: deterministic, so a failure reproduces.
+    let mut state = 0x2545_f491_4f6c_dd1d_u64;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    let pieces = [
+        "a", "bc", " ", "\n", "(", ")", "((", "))", "?", "é", "😀", "",
+    ];
+    for _ in 0..3_000 {
+        let len = next() % 40;
+        let source: String = (0..len)
+            .map(|_| pieces[usize::try_from(next() % 12).unwrap()])
+            .collect();
+        let depth = u32::try_from(next() % 6).unwrap();
+        let (_, errors) = parse(&source, depth);
+        for e in &errors {
+            assert!(e.gap.end() <= TextSize::of(source.as_str()), "{source:?}");
+            assert!(source.is_char_boundary(usize::from(e.gap.start())));
+        }
+    }
+}
