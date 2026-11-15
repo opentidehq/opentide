@@ -99,6 +99,28 @@ def test_the_sdist_carries_what_the_crates_compile_in() -> None:
         assert _glob("vendor/**/*").fullmatch(f"{spec['path']}/Cargo.toml"), spec
 
 
+def test_the_wheel_leaves_out_the_data_the_binary_compiles_in() -> None:
+    """build.rs and ``include_str!`` read src/opentide/data and src/opentide/schemas
+    at build time and nothing reads them at run time: the wheel excludes them, the
+    sdist (which the build needs them in) does not."""
+    entries = _maturin()["exclude"]
+    wheel = [_glob(entry["path"]) for entry in entries if entry["format"] == "wheel"]
+    sdist = [_glob(entry["path"]) for entry in entries if entry["format"] == "sdist"]
+    for file in (
+        "src/opentide/data/diagnostics/analysis_engine.md",
+        "src/opentide/data/configurations/platforms/splunk.toml",
+        "src/opentide/schemas/data/platform_templates/splunk.json",
+    ):
+        assert any(pattern.fullmatch(file) for pattern in wheel), file
+        assert not any(pattern.fullmatch(file) for pattern in sdist), file
+    for kept in (
+        "src/opentide/__init__.py",
+        "src/opentide/py.typed",
+        "src/opentide/_native/sdk.pyi",
+    ):
+        assert not any(pattern.fullmatch(kept) for pattern in wheel), kept
+
+
 def test_the_engine_crate_is_a_member_of_the_root_workspace() -> None:
     """``bindings/python/`` builds the engine crates of this repository by path, in the one Cargo
     workspace and lock at the root (#800): a ``[workspace]`` table or a lock of its own
