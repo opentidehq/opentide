@@ -1,0 +1,44 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/dissect_command__valid.esql
+---
+SOURCE_FILE@0..115
+  COMMENT@0..29 "// prod:dissect_command valid"
+  WHITESPACE@29..30 "\n"
+  QUERY@30..114
+    FROM_COMMAND@30..54
+      FROM_KW@30..34 "FROM"
+      WHITESPACE@34..35 " "
+      INDEX_PATTERN@35..41
+        INDEX_NAME@35..41
+          SOURCE_TEXT@35..41 "logs-*"
+      WHITESPACE@41..42 " "
+      METADATA@42..54
+        METADATA_KW@42..50 "METADATA"
+        WHITESPACE@50..51 " "
+        METADATA_FIELD@51..54
+          SOURCE_TEXT@51..54 "_id"
+    WHITESPACE@54..55 "\n"
+    PIPE@55..56 "|"
+    WHITESPACE@56..57 " "
+    DISSECT_COMMAND@57..114
+      DISSECT_KW@57..64 "DISSECT"
+      WHITESPACE@64..65 " "
+      QUALIFIED_NAME@65..72
+        IDENTIFIER@65..72
+          IDENT@65..72 "message"
+      WHITESPACE@72..73 " "
+      STRING@73..91
+        STRING_LIT@73..91 "\"%{date} - %{msg}\""
+      WHITESPACE@91..92 " "
+      COMMAND_OPTION@92..114
+        IDENTIFIER@92..108
+          IDENT@92..108 "APPEND_SEPARATOR"
+        WHITESPACE@108..109 " "
+        EQ@109..110 "="
+        WHITESPACE@110..111 " "
+        STRING@111..114
+          STRING_LIT@111..114 "\" \""
+  WHITESPACE@114..115 "\n"
+--- errors

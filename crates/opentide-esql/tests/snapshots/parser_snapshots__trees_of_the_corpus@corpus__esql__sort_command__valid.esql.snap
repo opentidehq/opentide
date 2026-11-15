@@ -1,0 +1,48 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/sort_command__valid.esql
+---
+SOURCE_FILE@0..97
+  COMMENT@0..26 "// prod:sort_command valid"
+  WHITESPACE@26..27 "\n"
+  QUERY@27..96
+    FROM_COMMAND@27..51
+      FROM_KW@27..31 "FROM"
+      WHITESPACE@31..32 " "
+      INDEX_PATTERN@32..38
+        INDEX_NAME@32..38
+          SOURCE_TEXT@32..38 "logs-*"
+      WHITESPACE@38..39 " "
+      METADATA@39..51
+        METADATA_KW@39..47 "METADATA"
+        WHITESPACE@47..48 " "
+        METADATA_FIELD@48..51
+          SOURCE_TEXT@48..51 "_id"
+    WHITESPACE@51..52 "\n"
+    PIPE@52..53 "|"
+    WHITESPACE@53..54 " "
+    SORT_COMMAND@54..96
+      SORT_KW@54..58 "SORT"
+      WHITESPACE@58..59 " "
+      ORDER_EXPRESSION@59..85
+        QUALIFIED_NAME@59..69
+          IDENTIFIER@59..69
+            IDENT@59..69 "@timestamp"
+        WHITESPACE@69..70 " "
+        DESC_KW@70..74 "DESC"
+        WHITESPACE@74..75 " "
+        NULLS_KW@75..80 "NULLS"
+        WHITESPACE@80..81 " "
+        LAST_KW@81..85 "LAST"
+      COMMA@85..86 ","
+      WHITESPACE@86..87 " "
+      ORDER_EXPRESSION@87..96
+        QUALIFIED_NAME@87..96
+          IDENTIFIER@87..91
+            IDENT@87..91 "host"
+          DOT@91..92 "."
+          IDENTIFIER@92..96
+            IDENT@92..96 "name"
+  WHITESPACE@96..97 "\n"
+--- errors

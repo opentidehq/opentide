@@ -1,0 +1,29 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/sample_command__invalid.esql
+---
+SOURCE_FILE@0..65
+  COMMENT@0..30 "// prod:sample_command invalid"
+  WHITESPACE@30..31 "\n"
+  QUERY@31..64
+    FROM_COMMAND@31..55
+      FROM_KW@31..35 "FROM"
+      WHITESPACE@35..36 " "
+      INDEX_PATTERN@36..42
+        INDEX_NAME@36..42
+          SOURCE_TEXT@36..42 "logs-*"
+      WHITESPACE@42..43 " "
+      METADATA@43..55
+        METADATA_KW@43..51 "METADATA"
+        WHITESPACE@51..52 " "
+        METADATA_FIELD@52..55
+          SOURCE_TEXT@52..55 "_id"
+    WHITESPACE@55..56 "\n"
+    PIPE@56..57 "|"
+    WHITESPACE@57..58 " "
+    SAMPLE_COMMAND@58..64
+      SAMPLE_KW@58..64 "SAMPLE"
+  WHITESPACE@64..65 "\n"
+--- errors
+64..65: expected a constant

@@ -1,0 +1,76 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/dns_query_win_cloudflared_communication.broken.esql
+---
+SOURCE_FILE@0..242
+  QUERY@0..241
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    UNKNOWN_COMMAND@40..241
+      COMMAND_NAME@40..50
+        COMMAND_WORD@40..50 "frobnicate"
+      WHITESPACE@50..51 " "
+      UNKNOWN_TEXT@51..71
+        UNKNOWN_WORD@51..71 "ends_with(QueryName,"
+      WHITESPACE@71..72 " "
+      STRING@72..92
+        STRING_LIT@72..92 "\".v2.argotunnel.com\""
+      UNKNOWN_TEXT@92..93
+        UNKNOWN_WORD@92..93 ")"
+      WHITESPACE@93..94 " "
+      UNKNOWN_TEXT@94..96
+        UNKNOWN_WORD@94..96 "or"
+      WHITESPACE@96..97 " "
+      UNKNOWN_TEXT@97..117
+        UNKNOWN_WORD@97..117 "ends_with(QueryName,"
+      WHITESPACE@117..118 " "
+      STRING@118..146
+        STRING_LIT@118..146 "\"protocol-v2.argotunnel.com\""
+      UNKNOWN_TEXT@146..147
+        UNKNOWN_WORD@146..147 ")"
+      WHITESPACE@147..148 " "
+      UNKNOWN_TEXT@148..150
+        UNKNOWN_WORD@148..150 "or"
+      WHITESPACE@150..151 " "
+      UNKNOWN_TEXT@151..171
+        UNKNOWN_WORD@151..171 "ends_with(QueryName,"
+      WHITESPACE@171..172 " "
+      STRING@172..191
+        STRING_LIT@172..191 "\"trycloudflare.com\""
+      UNKNOWN_TEXT@191..192
+        UNKNOWN_WORD@191..192 ")"
+      WHITESPACE@192..193 " "
+      UNKNOWN_TEXT@193..195
+        UNKNOWN_WORD@193..195 "or"
+      WHITESPACE@195..196 " "
+      UNKNOWN_TEXT@196..216
+        UNKNOWN_WORD@196..216 "ends_with(QueryName,"
+      WHITESPACE@216..217 " "
+      STRING@217..240
+        STRING_LIT@217..240 "\"update.argotunnel.com\""
+      UNKNOWN_TEXT@240..241
+        UNKNOWN_WORD@240..241 ")"
+  WHITESPACE@241..242 "\n"
+--- errors

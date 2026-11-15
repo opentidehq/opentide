@@ -1,0 +1,68 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/fork_command__valid.esql
+---
+SOURCE_FILE@0..99
+  COMMENT@0..26 "// prod:fork_command valid"
+  WHITESPACE@26..27 "\n"
+  QUERY@27..98
+    FROM_COMMAND@27..51
+      FROM_KW@27..31 "FROM"
+      WHITESPACE@31..32 " "
+      INDEX_PATTERN@32..38
+        INDEX_NAME@32..38
+          SOURCE_TEXT@32..38 "logs-*"
+      WHITESPACE@38..39 " "
+      METADATA@39..51
+        METADATA_KW@39..47 "METADATA"
+        WHITESPACE@47..48 " "
+        METADATA_FIELD@48..51
+          SOURCE_TEXT@48..51 "_id"
+    WHITESPACE@51..52 "\n"
+    PIPE@52..53 "|"
+    WHITESPACE@53..54 " "
+    FORK_COMMAND@54..98
+      FORK_KW@54..58 "FORK"
+      WHITESPACE@58..59 " "
+      FORK_BRANCH@59..73
+        L_PAREN@59..60 "("
+        WHERE_COMMAND@60..72
+          WHERE_KW@60..65 "WHERE"
+          WHITESPACE@65..66 " "
+          COMPARISON@66..72
+            QUALIFIED_NAME@66..67
+              IDENTIFIER@66..67
+                IDENT@66..67 "a"
+            WHITESPACE@67..68 " "
+            EQ_EQ@68..70 "=="
+            WHITESPACE@70..71 " "
+            NUMBER@71..72
+              NUMBER_LIT@71..72 "1"
+        R_PAREN@72..73 ")"
+      WHITESPACE@73..74 " "
+      FORK_BRANCH@74..98
+        L_PAREN@74..75 "("
+        WHERE_COMMAND@75..87
+          WHERE_KW@75..80 "WHERE"
+          WHITESPACE@80..81 " "
+          COMPARISON@81..87
+            QUALIFIED_NAME@81..82
+              IDENTIFIER@81..82
+                IDENT@81..82 "b"
+            WHITESPACE@82..83 " "
+            EQ_EQ@83..85 "=="
+            WHITESPACE@85..86 " "
+            NUMBER@86..87
+              NUMBER_LIT@86..87 "2"
+        WHITESPACE@87..88 " "
+        PIPE@88..89 "|"
+        WHITESPACE@89..90 " "
+        LIMIT_COMMAND@90..97
+          LIMIT_KW@90..95 "LIMIT"
+          WHITESPACE@95..96 " "
+          NUMBER@96..97
+            NUMBER_LIT@96..97 "5"
+        R_PAREN@97..98 ")"
+  WHITESPACE@98..99 "\n"
+--- errors

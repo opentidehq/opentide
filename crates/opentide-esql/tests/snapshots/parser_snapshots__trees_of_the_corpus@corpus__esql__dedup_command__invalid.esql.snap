@@ -1,0 +1,32 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/dedup_command__invalid.esql
+---
+SOURCE_FILE@0..65
+  COMMENT@0..29 "// prod:dedup_command invalid"
+  WHITESPACE@29..30 "\n"
+  QUERY@30..64
+    FROM_COMMAND@30..54
+      FROM_KW@30..34 "FROM"
+      WHITESPACE@34..35 " "
+      INDEX_PATTERN@35..41
+        INDEX_NAME@35..41
+          SOURCE_TEXT@35..41 "logs-*"
+      WHITESPACE@41..42 " "
+      METADATA@42..54
+        METADATA_KW@42..50 "METADATA"
+        WHITESPACE@50..51 " "
+        METADATA_FIELD@51..54
+          SOURCE_TEXT@51..54 "_id"
+    WHITESPACE@54..55 "\n"
+    PIPE@55..56 "|"
+    WHITESPACE@56..57 " "
+    DEDUP_COMMAND@57..62
+      DEDUP_KW@57..62 "DEDUP"
+    WHITESPACE@62..63 " "
+    ERROR@63..64
+      L_PAREN@63..64 "("
+  WHITESPACE@64..65 "\n"
+--- errors
+62..63: expected `|` or the end of the query (expected PIPE, R_PAREN)

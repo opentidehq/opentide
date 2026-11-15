@@ -1,0 +1,35 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/mv_expand_command__valid.esql
+---
+SOURCE_FILE@0..82
+  COMMENT@0..31 "// prod:mv_expand_command valid"
+  WHITESPACE@31..32 "\n"
+  QUERY@32..81
+    FROM_COMMAND@32..56
+      FROM_KW@32..36 "FROM"
+      WHITESPACE@36..37 " "
+      INDEX_PATTERN@37..43
+        INDEX_NAME@37..43
+          SOURCE_TEXT@37..43 "logs-*"
+      WHITESPACE@43..44 " "
+      METADATA@44..56
+        METADATA_KW@44..52 "METADATA"
+        WHITESPACE@52..53 " "
+        METADATA_FIELD@53..56
+          SOURCE_TEXT@53..56 "_id"
+    WHITESPACE@56..57 "\n"
+    PIPE@57..58 "|"
+    WHITESPACE@58..59 " "
+    MV_EXPAND_COMMAND@59..81
+      MV_EXPAND_KW@59..68 "MV_EXPAND"
+      WHITESPACE@68..69 " "
+      QUALIFIED_NAME@69..81
+        IDENTIFIER@69..76
+          IDENT@69..76 "process"
+        DOT@76..77 "."
+        IDENTIFIER@77..81
+          IDENT@77..81 "args"
+  WHITESPACE@81..82 "\n"
+--- errors

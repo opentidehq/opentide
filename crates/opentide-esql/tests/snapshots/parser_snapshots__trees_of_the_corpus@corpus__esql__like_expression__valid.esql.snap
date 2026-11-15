@@ -1,0 +1,57 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/like_expression__valid.esql
+---
+SOURCE_FILE@0..119
+  COMMENT@0..29 "// prod:like_expression valid"
+  WHITESPACE@29..30 "\n"
+  QUERY@30..118
+    FROM_COMMAND@30..54
+      FROM_KW@30..34 "FROM"
+      WHITESPACE@34..35 " "
+      INDEX_PATTERN@35..41
+        INDEX_NAME@35..41
+          SOURCE_TEXT@35..41 "logs-*"
+      WHITESPACE@41..42 " "
+      METADATA@42..54
+        METADATA_KW@42..50 "METADATA"
+        WHITESPACE@50..51 " "
+        METADATA_FIELD@51..54
+          SOURCE_TEXT@51..54 "_id"
+    WHITESPACE@54..55 "\n"
+    PIPE@55..56 "|"
+    WHITESPACE@56..57 " "
+    WHERE_COMMAND@57..118
+      WHERE_KW@57..62 "WHERE"
+      WHITESPACE@62..63 " "
+      OR_EXPRESSION@63..118
+        LIKE_EXPRESSION@63..88
+          QUALIFIED_NAME@63..75
+            IDENTIFIER@63..70
+              IDENT@63..70 "process"
+            DOT@70..71 "."
+            IDENTIFIER@71..75
+              IDENT@71..75 "name"
+          WHITESPACE@75..76 " "
+          LIKE_KW@76..80 "LIKE"
+          WHITESPACE@80..81 " "
+          STRING@81..88
+            STRING_LIT@81..88 "\"*.exe\""
+        WHITESPACE@88..89 " "
+        OR_KW@89..91 "OR"
+        WHITESPACE@91..92 " "
+        LIKE_EXPRESSION@92..118
+          QUALIFIED_NAME@92..104
+            IDENTIFIER@92..99
+              IDENT@92..99 "process"
+            DOT@99..100 "."
+            IDENTIFIER@100..104
+              IDENT@100..104 "name"
+          WHITESPACE@104..105 " "
+          RLIKE_KW@105..110 "RLIKE"
+          WHITESPACE@110..111 " "
+          STRING@111..118
+            STRING_LIT@111..118 "\"cmd.*\""
+  WHITESPACE@118..119 "\n"
+--- errors

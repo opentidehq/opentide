@@ -1,0 +1,66 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/proc_creation_lnx_apt_shell_execution.broken.esql
+---
+SOURCE_FILE@0..162
+  QUERY@0..161
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    UNKNOWN_COMMAND@40..161
+      COMMAND_NAME@40..50
+        COMMAND_WORD@40..50 "frobnicate"
+      WHITESPACE@50..51 " "
+      UNKNOWN_TEXT@51..68
+        UNKNOWN_WORD@51..68 "(ends_with(Image,"
+      WHITESPACE@68..69 " "
+      STRING@69..75
+        STRING_LIT@69..75 "\"/apt\""
+      UNKNOWN_TEXT@75..76
+        UNKNOWN_WORD@75..76 ")"
+      WHITESPACE@76..77 " "
+      UNKNOWN_TEXT@77..79
+        UNKNOWN_WORD@77..79 "or"
+      WHITESPACE@79..80 " "
+      UNKNOWN_TEXT@80..96
+        UNKNOWN_WORD@80..96 "ends_with(Image,"
+      WHITESPACE@96..97 " "
+      STRING@97..107
+        STRING_LIT@97..107 "\"/apt-get\""
+      UNKNOWN_TEXT@107..109
+        UNKNOWN_WORD@107..109 "))"
+      WHITESPACE@109..110 " "
+      UNKNOWN_TEXT@110..113
+        UNKNOWN_WORD@110..113 "and"
+      WHITESPACE@113..114 " "
+      UNKNOWN_TEXT@114..125
+        UNKNOWN_WORD@114..125 "CommandLine"
+      WHITESPACE@125..126 " "
+      UNKNOWN_TEXT@126..130
+        UNKNOWN_WORD@126..130 "like"
+      WHITESPACE@130..131 " "
+      STRING@131..161
+        STRING_LIT@131..161 "\"*APT::Update::Pre-Invoke::=*\""
+  WHITESPACE@161..162 "\n"
+--- errors

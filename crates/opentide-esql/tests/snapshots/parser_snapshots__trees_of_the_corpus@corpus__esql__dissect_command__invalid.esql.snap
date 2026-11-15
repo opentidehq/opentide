@@ -1,0 +1,33 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/dissect_command__invalid.esql
+---
+SOURCE_FILE@0..75
+  COMMENT@0..31 "// prod:dissect_command invalid"
+  WHITESPACE@31..32 "\n"
+  QUERY@32..74
+    FROM_COMMAND@32..56
+      FROM_KW@32..36 "FROM"
+      WHITESPACE@36..37 " "
+      INDEX_PATTERN@37..43
+        INDEX_NAME@37..43
+          SOURCE_TEXT@37..43 "logs-*"
+      WHITESPACE@43..44 " "
+      METADATA@44..56
+        METADATA_KW@44..52 "METADATA"
+        WHITESPACE@52..53 " "
+        METADATA_FIELD@53..56
+          SOURCE_TEXT@53..56 "_id"
+    WHITESPACE@56..57 "\n"
+    PIPE@57..58 "|"
+    WHITESPACE@58..59 " "
+    DISSECT_COMMAND@59..74
+      DISSECT_KW@59..66 "DISSECT"
+      WHITESPACE@66..67 " "
+      QUALIFIED_NAME@67..74
+        IDENTIFIER@67..74
+          IDENT@67..74 "message"
+  WHITESPACE@74..75 "\n"
+--- errors
+74..75: expected a string (expected STRING_LIT, DOT, COLON_COLON)

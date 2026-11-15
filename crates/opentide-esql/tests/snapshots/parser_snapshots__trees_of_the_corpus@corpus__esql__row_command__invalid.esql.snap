@@ -1,0 +1,21 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/row_command__invalid.esql
+---
+SOURCE_FILE@0..37
+  COMMENT@0..27 "// prod:row_command invalid"
+  WHITESPACE@27..28 "\n"
+  QUERY@28..35
+    ROW_COMMAND@28..35
+      ROW_KW@28..31 "ROW"
+      WHITESPACE@31..32 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@32..35
+        QUALIFIED_NAME@32..33
+          IDENTIFIER@32..33
+            IDENT@32..33 "a"
+        WHITESPACE@33..34 " "
+        EQ@34..35 "="
+  WHITESPACE@35..37 " \n"
+--- errors
+35..37: expected an expression (expected NOT_KW, PLUS, MINUS)

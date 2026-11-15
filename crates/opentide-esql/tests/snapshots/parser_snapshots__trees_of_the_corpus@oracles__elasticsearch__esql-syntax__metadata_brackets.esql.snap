@@ -1,0 +1,31 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-syntax/metadata_brackets.esql
+---
+SOURCE_FILE@0..37
+  QUERY@0..36
+    FROM_COMMAND@0..26
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..11
+        INDEX_NAME@5..11
+          SOURCE_TEXT@5..11 "logs-*"
+      WHITESPACE@11..12 " "
+      METADATA@12..26
+        L_BRACK@12..13 "["
+        METADATA_KW@13..21 "METADATA"
+        WHITESPACE@21..22 " "
+        METADATA_FIELD@22..25
+          SOURCE_TEXT@22..25 "_id"
+        R_BRACK@25..26 "]"
+    WHITESPACE@26..27 " "
+    PIPE@27..28 "|"
+    WHITESPACE@28..29 " "
+    LIMIT_COMMAND@29..36
+      LIMIT_KW@29..34 "LIMIT"
+      WHITESPACE@34..35 " "
+      NUMBER@35..36
+        NUMBER_LIT@35..36 "1"
+  WHITESPACE@36..37 "\n"
+--- errors

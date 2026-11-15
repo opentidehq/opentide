@@ -1,0 +1,52 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/row_command__valid.esql
+---
+SOURCE_FILE@0..59
+  COMMENT@0..25 "// prod:row_command valid"
+  WHITESPACE@25..26 "\n"
+  QUERY@26..58
+    ROW_COMMAND@26..58
+      ROW_KW@26..29 "ROW"
+      WHITESPACE@29..30 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@30..35
+        QUALIFIED_NAME@30..31
+          IDENTIFIER@30..31
+            IDENT@30..31 "a"
+        WHITESPACE@31..32 " "
+        EQ@32..33 "="
+        WHITESPACE@33..34 " "
+        NUMBER@34..35
+          NUMBER_LIT@34..35 "1"
+      COMMA@35..36 ","
+      WHITESPACE@36..37 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@37..46
+        QUALIFIED_NAME@37..38
+          IDENTIFIER@37..38
+            IDENT@37..38 "b"
+        WHITESPACE@38..39 " "
+        EQ@39..40 "="
+        WHITESPACE@40..41 " "
+        STRING@41..46
+          STRING_LIT@41..46 "\"two\""
+      COMMA@46..47 ","
+      WHITESPACE@47..48 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@48..58
+        QUALIFIED_NAME@48..49
+          IDENTIFIER@48..49
+            IDENT@48..49 "c"
+        WHITESPACE@49..50 " "
+        EQ@50..51 "="
+        WHITESPACE@51..52 " "
+        ARRAY@52..58
+          L_BRACK@52..53 "["
+          NUMBER@53..54
+            NUMBER_LIT@53..54 "1"
+          COMMA@54..55 ","
+          WHITESPACE@55..56 " "
+          NUMBER@56..57
+            NUMBER_LIT@56..57 "2"
+          R_BRACK@57..58 "]"
+  WHITESPACE@58..59 "\n"
+--- errors

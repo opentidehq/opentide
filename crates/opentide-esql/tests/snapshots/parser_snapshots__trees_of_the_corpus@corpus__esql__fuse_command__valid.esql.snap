@@ -1,0 +1,84 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/fuse_command__valid.esql
+---
+SOURCE_FILE@0..133
+  COMMENT@0..26 "// prod:fuse_command valid"
+  WHITESPACE@26..27 "\n"
+  QUERY@27..132
+    FROM_COMMAND@27..65
+      FROM_KW@27..31 "FROM"
+      WHITESPACE@31..32 " "
+      INDEX_PATTERN@32..36
+        INDEX_NAME@32..36
+          SOURCE_TEXT@32..36 "docs"
+      WHITESPACE@36..37 " "
+      METADATA@37..65
+        METADATA_KW@37..45 "METADATA"
+        WHITESPACE@45..46 " "
+        METADATA_FIELD@46..49
+          SOURCE_TEXT@46..49 "_id"
+        COMMA@49..50 ","
+        WHITESPACE@50..51 " "
+        METADATA_FIELD@51..57
+          SOURCE_TEXT@51..57 "_index"
+        COMMA@57..58 ","
+        WHITESPACE@58..59 " "
+        METADATA_FIELD@59..65
+          SOURCE_TEXT@59..65 "_score"
+    WHITESPACE@65..66 "\n"
+    PIPE@66..67 "|"
+    WHITESPACE@67..68 " "
+    FORK_COMMAND@68..102
+      FORK_KW@68..72 "FORK"
+      WHITESPACE@72..73 " "
+      FORK_BRANCH@73..87
+        L_PAREN@73..74 "("
+        WHERE_COMMAND@74..86
+          WHERE_KW@74..79 "WHERE"
+          WHITESPACE@79..80 " "
+          COMPARISON@80..86
+            QUALIFIED_NAME@80..81
+              IDENTIFIER@80..81
+                IDENT@80..81 "a"
+            WHITESPACE@81..82 " "
+            EQ_EQ@82..84 "=="
+            WHITESPACE@84..85 " "
+            NUMBER@85..86
+              NUMBER_LIT@85..86 "1"
+        R_PAREN@86..87 ")"
+      WHITESPACE@87..88 " "
+      FORK_BRANCH@88..102
+        L_PAREN@88..89 "("
+        WHERE_COMMAND@89..101
+          WHERE_KW@89..94 "WHERE"
+          WHITESPACE@94..95 " "
+          COMPARISON@95..101
+            QUALIFIED_NAME@95..96
+              IDENTIFIER@95..96
+                IDENT@95..96 "b"
+            WHITESPACE@96..97 " "
+            EQ_EQ@97..99 "=="
+            WHITESPACE@99..100 " "
+            NUMBER@100..101
+              NUMBER_LIT@100..101 "2"
+        R_PAREN@101..102 ")"
+    WHITESPACE@102..103 "\n"
+    PIPE@103..104 "|"
+    WHITESPACE@104..105 " "
+    FUSE_COMMAND@105..132
+      FUSE_KW@105..109 "FUSE"
+      WHITESPACE@109..110 " "
+      IDENTIFIER@110..116
+        IDENT@110..116 "linear"
+      WHITESPACE@116..117 " "
+      SCORE_KW@117..122 "SCORE"
+      WHITESPACE@122..123 " "
+      BY_KW@123..125 "BY"
+      WHITESPACE@125..126 " "
+      QUALIFIED_NAME@126..132
+        IDENTIFIER@126..132
+          IDENT@126..132 "_score"
+  WHITESPACE@132..133 "\n"
+--- errors

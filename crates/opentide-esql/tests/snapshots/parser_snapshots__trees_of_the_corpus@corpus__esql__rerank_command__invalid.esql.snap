@@ -1,0 +1,32 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/rerank_command__invalid.esql
+---
+SOURCE_FILE@0..59
+  COMMENT@0..30 "// prod:rerank_command invalid"
+  WHITESPACE@30..31 "\n"
+  QUERY@31..58
+    FROM_COMMAND@31..40
+      FROM_KW@31..35 "FROM"
+      WHITESPACE@35..36 " "
+      INDEX_PATTERN@36..40
+        INDEX_NAME@36..40
+          SOURCE_TEXT@36..40 "docs"
+    WHITESPACE@40..41 "\n"
+    PIPE@41..42 "|"
+    WHITESPACE@42..43 " "
+    RERANK_COMMAND@43..58
+      RERANK_KW@43..49 "RERANK"
+      WHITESPACE@49..50 " "
+      ERROR@50..52
+        WORD@50..52 "ON"
+      WHITESPACE@52..53 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@53..58
+        QUALIFIED_NAME@53..58
+          IDENTIFIER@53..58
+            IDENT@53..58 "title"
+  WHITESPACE@58..59 "\n"
+--- errors
+49..50: expected a constant
+52..53: expected `on` (expected ON_KW)

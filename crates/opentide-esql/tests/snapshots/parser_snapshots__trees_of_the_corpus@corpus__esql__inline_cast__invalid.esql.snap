@@ -1,0 +1,46 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/inline_cast__invalid.esql
+---
+SOURCE_FILE@0..86
+  COMMENT@0..27 "// prod:inline_cast invalid"
+  WHITESPACE@27..28 "\n"
+  QUERY@28..86
+    FROM_COMMAND@28..52
+      FROM_KW@28..32 "FROM"
+      WHITESPACE@32..33 " "
+      INDEX_PATTERN@33..39
+        INDEX_NAME@33..39
+          SOURCE_TEXT@33..39 "logs-*"
+      WHITESPACE@39..40 " "
+      METADATA@40..52
+        METADATA_KW@40..48 "METADATA"
+        WHITESPACE@48..49 " "
+        METADATA_FIELD@49..52
+          SOURCE_TEXT@49..52 "_id"
+    WHITESPACE@52..53 "\n"
+    PIPE@53..54 "|"
+    WHITESPACE@54..55 " "
+    EVAL_COMMAND@55..86
+      EVAL_KW@55..59 "EVAL"
+      WHITESPACE@59..60 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@60..86
+        QUALIFIED_NAME@60..64
+          IDENTIFIER@60..64
+            IDENT@60..64 "port"
+        WHITESPACE@64..65 " "
+        EQ@65..66 "="
+        WHITESPACE@66..67 " "
+        INLINE_CAST@67..86
+          QUALIFIED_NAME@67..83
+            IDENTIFIER@67..78
+              IDENT@67..78 "destination"
+            DOT@78..79 "."
+            IDENTIFIER@79..83
+              IDENT@79..83 "port"
+          COLON_COLON@83..85 "::"
+          WHITESPACE@85..86 "\n"
+          TYPE_NAME@86..86
+--- errors
+85..86: expected a type name after `::` (expected IDENT)

@@ -1,0 +1,24 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/change_point_command__invalid.esql
+---
+SOURCE_FILE@0..67
+  COMMENT@0..36 "// prod:change_point_command invalid"
+  WHITESPACE@36..37 "\n"
+  QUERY@37..67
+    FROM_COMMAND@37..51
+      FROM_KW@37..41 "FROM"
+      WHITESPACE@41..42 " "
+      INDEX_PATTERN@42..51
+        INDEX_NAME@42..51
+          SOURCE_TEXT@42..51 "metrics-*"
+    WHITESPACE@51..52 "\n"
+    PIPE@52..53 "|"
+    WHITESPACE@53..54 " "
+    CHANGE_POINT_COMMAND@54..67
+      CHANGE_POINT_KW@54..66 "CHANGE_POINT"
+      WHITESPACE@66..67 "\n"
+      QUALIFIED_NAME@67..67
+--- errors
+66..67: expected a name (expected IDENT)

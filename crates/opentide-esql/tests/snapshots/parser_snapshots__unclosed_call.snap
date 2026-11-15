@@ -1,0 +1,46 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{source}\\n{tree}--- errors\\n{errors}\")"
+---
+FROM a | EVAL x = f(1, 2 | LIMIT 1
+SOURCE_FILE@0..34
+  QUERY@0..34
+    FROM_COMMAND@0..6
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "a"
+    WHITESPACE@6..7 " "
+    PIPE@7..8 "|"
+    WHITESPACE@8..9 " "
+    EVAL_COMMAND@9..24
+      EVAL_KW@9..13 "EVAL"
+      WHITESPACE@13..14 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@14..24
+        QUALIFIED_NAME@14..15
+          IDENTIFIER@14..15
+            IDENT@14..15 "x"
+        WHITESPACE@15..16 " "
+        EQ@16..17 "="
+        WHITESPACE@17..18 " "
+        FUNCTION_CALL@18..24
+          IDENTIFIER@18..19
+            IDENT@18..19 "f"
+          L_PAREN@19..20 "("
+          NUMBER@20..21
+            NUMBER_LIT@20..21 "1"
+          COMMA@21..22 ","
+          WHITESPACE@22..23 " "
+          NUMBER@23..24
+            NUMBER_LIT@23..24 "2"
+    WHITESPACE@24..25 " "
+    PIPE@25..26 "|"
+    WHITESPACE@26..27 " "
+    LIMIT_COMMAND@27..34
+      LIMIT_KW@27..32 "LIMIT"
+      WHITESPACE@32..33 " "
+      NUMBER@33..34
+        NUMBER_LIT@33..34 "1"
+--- errors
+24..25: expected `)` after the arguments (expected AND_KW, OR_KW, COMMA, R_PAREN)

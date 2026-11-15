@@ -1,0 +1,28 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/fuse_command__invalid.esql
+---
+SOURCE_FILE@0..55
+  COMMENT@0..28 "// prod:fuse_command invalid"
+  WHITESPACE@28..29 "\n"
+  QUERY@29..55
+    FROM_COMMAND@29..38
+      FROM_KW@29..33 "FROM"
+      WHITESPACE@33..34 " "
+      INDEX_PATTERN@34..38
+        INDEX_NAME@34..38
+          SOURCE_TEXT@34..38 "docs"
+    WHITESPACE@38..39 "\n"
+    PIPE@39..40 "|"
+    WHITESPACE@40..41 " "
+    FUSE_COMMAND@41..55
+      FUSE_KW@41..45 "FUSE"
+      WHITESPACE@45..46 " "
+      SCORE_KW@46..51 "SCORE"
+      WHITESPACE@51..52 " "
+      BY_KW@52..54 "BY"
+      WHITESPACE@54..55 "\n"
+      QUALIFIED_NAME@55..55
+--- errors
+54..55: expected a name (expected IDENT)

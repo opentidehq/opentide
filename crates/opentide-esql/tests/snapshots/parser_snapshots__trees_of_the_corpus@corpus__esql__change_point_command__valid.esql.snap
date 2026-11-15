@@ -1,0 +1,89 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/change_point_command__valid.esql
+---
+SOURCE_FILE@0..143
+  COMMENT@0..34 "// prod:change_point_command valid"
+  WHITESPACE@34..35 "\n"
+  QUERY@35..142
+    FROM_COMMAND@35..49
+      FROM_KW@35..39 "FROM"
+      WHITESPACE@39..40 " "
+      INDEX_PATTERN@40..49
+        INDEX_NAME@40..49
+          SOURCE_TEXT@40..49 "metrics-*"
+    WHITESPACE@49..50 "\n"
+    PIPE@50..51 "|"
+    WHITESPACE@51..52 " "
+    STATS_COMMAND@52..104
+      STATS_KW@52..57 "STATS"
+      WHITESPACE@57..58 " "
+      AGGREGATE_FIELD@58..70
+        QUALIFIED_NAME@58..59
+          IDENTIFIER@58..59
+            IDENT@58..59 "c"
+        WHITESPACE@59..60 " "
+        EQ@60..61 "="
+        WHITESPACE@61..62 " "
+        FUNCTION_CALL@62..70
+          IDENTIFIER@62..67
+            IDENT@62..67 "COUNT"
+          L_PAREN@67..68 "("
+          STAR@68..69
+            STAR_TOKEN@68..69 "*"
+          R_PAREN@69..70 ")"
+      WHITESPACE@70..71 " "
+      BY_KW@71..73 "BY"
+      WHITESPACE@73..74 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@74..104
+        QUALIFIED_NAME@74..75
+          IDENTIFIER@74..75
+            IDENT@74..75 "t"
+        WHITESPACE@75..76 " "
+        EQ@76..77 "="
+        WHITESPACE@77..78 " "
+        FUNCTION_CALL@78..104
+          IDENTIFIER@78..84
+            IDENT@78..84 "BUCKET"
+          L_PAREN@84..85 "("
+          QUALIFIED_NAME@85..95
+            IDENTIFIER@85..95
+              IDENT@85..95 "@timestamp"
+          COMMA@95..96 ","
+          WHITESPACE@96..97 " "
+          QUALIFIED_INTERVAL@97..103
+            NUMBER@97..98
+              NUMBER_LIT@97..98 "1"
+            WHITESPACE@98..99 " "
+            TIME_UNIT@99..103
+              IDENT@99..103 "hour"
+          R_PAREN@103..104 ")"
+    WHITESPACE@104..105 "\n"
+    PIPE@105..106 "|"
+    WHITESPACE@106..107 " "
+    CHANGE_POINT_COMMAND@107..142
+      CHANGE_POINT_KW@107..119 "CHANGE_POINT"
+      WHITESPACE@119..120 " "
+      QUALIFIED_NAME@120..121
+        IDENTIFIER@120..121
+          IDENT@120..121 "c"
+      WHITESPACE@121..122 " "
+      ON_KW@122..124 "ON"
+      WHITESPACE@124..125 " "
+      QUALIFIED_NAME@125..126
+        IDENTIFIER@125..126
+          IDENT@125..126 "t"
+      WHITESPACE@126..127 " "
+      AS_KW@127..129 "AS"
+      WHITESPACE@129..130 " "
+      QUALIFIED_NAME@130..134
+        IDENTIFIER@130..134
+          IDENT@130..134 "type"
+      COMMA@134..135 ","
+      WHITESPACE@135..136 " "
+      QUALIFIED_NAME@136..142
+        IDENTIFIER@136..142
+          IDENT@136..142 "pvalue"
+  WHITESPACE@142..143 "\n"
+--- errors

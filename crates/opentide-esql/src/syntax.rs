@@ -124,103 +124,6 @@ impl SyntaxKind {
     }
 }
 
-/// The keywords and punctuation the TextMate, Monaco and Helix generators
-/// list, each with its `HighlightSpec` capture (`highlights/spec.toml`; the
-/// names are a frozen contract). The same pairs the grammar's
-/// `highlights.scm` gives (a test holds them equal) until the table moves to
-/// `opentide-highlight`, where the generator reads it.
-pub(crate) const KEYWORDS: &[(&str, &str)] = &[
-    ("|", "operator.pipe"),
-    ("from", "keyword"),
-    ("ts", "keyword"),
-    ("row", "keyword"),
-    ("show", "keyword"),
-    ("info", "keyword"),
-    ("explain", "keyword"),
-    ("promql", "keyword"),
-    ("set", "keyword"),
-    ("metadata", "keyword"),
-    ("where", "keyword"),
-    ("eval", "keyword"),
-    ("keep", "keyword"),
-    ("drop", "keyword"),
-    ("rename", "keyword"),
-    ("as", "keyword"),
-    ("sort", "keyword"),
-    ("asc", "keyword"),
-    ("desc", "keyword"),
-    ("nulls", "keyword"),
-    ("first", "keyword"),
-    ("last", "keyword"),
-    ("limit", "keyword"),
-    ("stats", "keyword"),
-    ("inline", "keyword"),
-    ("inlinestats", "keyword"),
-    ("by", "keyword"),
-    ("dissect", "keyword"),
-    ("grok", "keyword"),
-    ("enrich", "keyword"),
-    ("on", "keyword"),
-    ("with", "keyword"),
-    ("mv_expand", "keyword"),
-    ("lookup", "keyword"),
-    ("left", "keyword"),
-    ("right", "keyword"),
-    ("full", "keyword"),
-    ("join", "keyword"),
-    ("change_point", "keyword"),
-    ("completion", "keyword"),
-    ("rerank", "keyword"),
-    ("sample", "keyword"),
-    ("fork", "keyword"),
-    ("fuse", "keyword"),
-    ("score", "keyword"),
-    ("key", "keyword"),
-    ("group", "keyword"),
-    ("uri_parts", "keyword"),
-    ("registered_domain", "keyword"),
-    ("user_agent", "keyword"),
-    ("ip_location", "keyword"),
-    ("metrics_info", "keyword"),
-    ("ts_info", "keyword"),
-    ("ts_collapse", "keyword"),
-    ("dedup", "keyword"),
-    ("mmr", "keyword"),
-    ("highlight", "keyword"),
-    ("dense_vector", "keyword"),
-    ("fillnull", "keyword"),
-    ("and", "keyword"),
-    ("or", "keyword"),
-    ("not", "keyword"),
-    ("in", "keyword"),
-    ("is", "keyword"),
-    ("like", "keyword"),
-    ("rlike", "keyword"),
-    ("==", "operator"),
-    ("!=", "operator"),
-    ("<", "operator"),
-    ("<=", "operator"),
-    (">", "operator"),
-    (">=", "operator"),
-    ("+", "operator"),
-    ("-", "operator"),
-    ("*", "operator"),
-    ("/", "operator"),
-    ("%", "operator"),
-    ("=", "operator"),
-    ("::", "operator"),
-    (":", "operator"),
-    ("(", "punctuation.bracket"),
-    (")", "punctuation.bracket"),
-    ("[", "punctuation.bracket"),
-    ("]", "punctuation.bracket"),
-    ("{", "punctuation.bracket"),
-    ("}", "punctuation.bracket"),
-    (",", "punctuation.delimiter"),
-    (".", "punctuation.delimiter"),
-    (";", "punctuation.delimiter"),
-];
-
 /// The rowan language of ES|QL.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Lang {}
@@ -241,27 +144,21 @@ impl rowan::Language for Lang {
 mod tests {
     use super::*;
 
-    /// The table is what the TextMate generator scrapes from the grammar's
-    /// `highlights.scm` today: the same pairs in the same order.
-    #[test]
-    fn keywords_are_the_pairs_of_the_highlight_queries() {
-        let scm =
-            include_str!("../../../grammars/tree-sitter-opentide-esql/queries/highlights.scm");
-        let mut pairs = Vec::new();
-        for line in scm.lines() {
-            if let Some((token, capture)) =
-                line.strip_prefix('"').and_then(|l| l.split_once("\" @"))
-            {
-                pairs.push((token, capture));
-            }
-        }
-        assert_eq!(KEYWORDS, pairs.as_slice());
-    }
-
     #[test]
     fn every_keyword_kind_is_a_word_the_table_colours() {
+        let table =
+            opentide_highlight::keywords(opentide_core::LanguageId::Esql).unwrap_or_default();
         for &(text, kind) in KEYWORD_KINDS {
             assert_eq!(SyntaxKind::from_keyword(&text.to_uppercase()), Some(kind));
+            // Every keyword but the literals has a row in the generators' table.
+            if !["null", "true", "false"].contains(&text) {
+                assert!(
+                    table
+                        .iter()
+                        .any(|&(token, capture)| token == text && capture.name() == "keyword"),
+                    "{text}"
+                );
+            }
         }
         assert!(
             usize::from(SyntaxKind::ERROR.raw().0)

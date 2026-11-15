@@ -1,0 +1,52 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-syntax/from_subquery.esql
+---
+SOURCE_FILE@0..61
+  QUERY@0..60
+    FROM_COMMAND@0..50
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..11
+        INDEX_NAME@5..11
+          SOURCE_TEXT@5..11 "logs-*"
+      COMMA@11..12 ","
+      WHITESPACE@12..13 " "
+      SOURCE_SUBQUERY@13..50
+        L_PAREN@13..14 "("
+        FROM_COMMAND@14..25
+          FROM_KW@14..18 "FROM"
+          WHITESPACE@18..19 " "
+          INDEX_PATTERN@19..25
+            INDEX_NAME@19..25
+              SOURCE_TEXT@19..25 "logs-*"
+        WHITESPACE@25..26 " "
+        PIPE@26..27 "|"
+        WHITESPACE@27..28 " "
+        WHERE_COMMAND@28..49
+          WHERE_KW@28..33 "WHERE"
+          WHITESPACE@33..34 " "
+          COMPARISON@34..49
+            QUALIFIED_NAME@34..45
+              IDENTIFIER@34..41
+                IDENT@34..41 "process"
+              DOT@41..42 "."
+              IDENTIFIER@42..45
+                IDENT@42..45 "pid"
+            WHITESPACE@45..46 " "
+            GT@46..47 ">"
+            WHITESPACE@47..48 " "
+            NUMBER@48..49
+              NUMBER_LIT@48..49 "1"
+        R_PAREN@49..50 ")"
+    WHITESPACE@50..51 " "
+    PIPE@51..52 "|"
+    WHITESPACE@52..53 " "
+    LIMIT_COMMAND@53..60
+      LIMIT_KW@53..58 "LIMIT"
+      WHITESPACE@58..59 " "
+      NUMBER@59..60
+        NUMBER_LIT@59..60 "1"
+  WHITESPACE@60..61 "\n"
+--- errors

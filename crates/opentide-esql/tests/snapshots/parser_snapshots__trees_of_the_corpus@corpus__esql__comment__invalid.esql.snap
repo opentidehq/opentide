@@ -1,0 +1,38 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/comment__invalid.esql
+---
+SOURCE_FILE@0..75
+  COMMENT@0..23 "// prod:comment invalid"
+  WHITESPACE@23..24 "\n"
+  QUERY@24..74
+    FROM_COMMAND@24..48
+      FROM_KW@24..28 "FROM"
+      WHITESPACE@28..29 " "
+      INDEX_PATTERN@29..35
+        INDEX_NAME@29..35
+          SOURCE_TEXT@29..35 "logs-*"
+      WHITESPACE@35..36 " "
+      METADATA@36..48
+        METADATA_KW@36..44 "METADATA"
+        WHITESPACE@44..45 " "
+        METADATA_FIELD@45..48
+          SOURCE_TEXT@45..48 "_id"
+    WHITESPACE@48..49 " "
+    ERROR@49..64
+      SLASH@49..50 "/"
+      SOURCE_TEXT@50..51 "*"
+      WHITESPACE@51..52 " "
+      SOURCE_TEXT@52..64 "unterminated"
+    WHITESPACE@64..65 "\n"
+    PIPE@65..66 "|"
+    WHITESPACE@66..67 " "
+    LIMIT_COMMAND@67..74
+      LIMIT_KW@67..72 "LIMIT"
+      WHITESPACE@72..73 " "
+      NUMBER@73..74
+        NUMBER_LIT@73..74 "1"
+  WHITESPACE@74..75 "\n"
+--- errors
+48..49: expected `|` or the end of the query (expected PIPE, COMMA, R_PAREN)

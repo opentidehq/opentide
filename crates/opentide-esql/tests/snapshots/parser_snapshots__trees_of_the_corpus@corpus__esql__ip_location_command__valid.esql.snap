@@ -1,0 +1,41 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/ip_location_command__valid.esql
+---
+SOURCE_FILE@0..89
+  COMMENT@0..33 "// prod:ip_location_command valid"
+  WHITESPACE@33..34 "\n"
+  QUERY@34..88
+    FROM_COMMAND@34..58
+      FROM_KW@34..38 "FROM"
+      WHITESPACE@38..39 " "
+      INDEX_PATTERN@39..45
+        INDEX_NAME@39..45
+          SOURCE_TEXT@39..45 "logs-*"
+      WHITESPACE@45..46 " "
+      METADATA@46..58
+        METADATA_KW@46..54 "METADATA"
+        WHITESPACE@54..55 " "
+        METADATA_FIELD@55..58
+          SOURCE_TEXT@55..58 "_id"
+    WHITESPACE@58..59 "\n"
+    PIPE@59..60 "|"
+    WHITESPACE@60..61 " "
+    IP_LOCATION_COMMAND@61..88
+      IP_LOCATION_KW@61..72 "IP_LOCATION"
+      WHITESPACE@72..73 " "
+      QUALIFIED_NAME@73..76
+        IDENTIFIER@73..76
+          IDENT@73..76 "geo"
+      WHITESPACE@76..77 " "
+      EQ@77..78 "="
+      WHITESPACE@78..79 " "
+      QUALIFIED_NAME@79..88
+        IDENTIFIER@79..85
+          IDENT@79..85 "source"
+        DOT@85..86 "."
+        IDENTIFIER@86..88
+          IDENT@86..88 "ip"
+  WHITESPACE@88..89 "\n"
+--- errors

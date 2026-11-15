@@ -1,0 +1,44 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/fork_command__invalid.esql
+---
+SOURCE_FILE@0..75
+  COMMENT@0..28 "// prod:fork_command invalid"
+  WHITESPACE@28..29 "\n"
+  QUERY@29..74
+    FROM_COMMAND@29..53
+      FROM_KW@29..33 "FROM"
+      WHITESPACE@33..34 " "
+      INDEX_PATTERN@34..40
+        INDEX_NAME@34..40
+          SOURCE_TEXT@34..40 "logs-*"
+      WHITESPACE@40..41 " "
+      METADATA@41..53
+        METADATA_KW@41..49 "METADATA"
+        WHITESPACE@49..50 " "
+        METADATA_FIELD@50..53
+          SOURCE_TEXT@50..53 "_id"
+    WHITESPACE@53..54 "\n"
+    PIPE@54..55 "|"
+    WHITESPACE@55..56 " "
+    FORK_COMMAND@56..74
+      FORK_KW@56..60 "FORK"
+      WHITESPACE@60..61 " "
+      FORK_BRANCH@61..74
+        L_PAREN@61..62 "("
+        WHERE_COMMAND@62..74
+          WHERE_KW@62..67 "WHERE"
+          WHITESPACE@67..68 " "
+          COMPARISON@68..74
+            QUALIFIED_NAME@68..69
+              IDENTIFIER@68..69
+                IDENT@68..69 "a"
+            WHITESPACE@69..70 " "
+            EQ_EQ@70..72 "=="
+            WHITESPACE@72..73 " "
+            NUMBER@73..74
+              NUMBER_LIT@73..74 "1"
+  WHITESPACE@74..75 "\n"
+--- errors
+74..75: expected `)` (expected AND_KW, OR_KW, PIPE, R_PAREN)

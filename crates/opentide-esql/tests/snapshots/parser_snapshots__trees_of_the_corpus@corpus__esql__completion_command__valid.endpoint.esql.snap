@@ -1,0 +1,43 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/completion_command__valid.endpoint.esql
+---
+SOURCE_FILE@0..134
+  COMMENT@0..65 "// prod:completion_command valid (the 8.19 and 9.1 endpoint form)"
+  WHITESPACE@65..66 "\n"
+  QUERY@66..133
+    FROM_COMMAND@66..90
+      FROM_KW@66..70 "FROM"
+      WHITESPACE@70..71 " "
+      INDEX_PATTERN@71..77
+        INDEX_NAME@71..77
+          SOURCE_TEXT@71..77 "logs-*"
+      WHITESPACE@77..78 " "
+      METADATA@78..90
+        METADATA_KW@78..86 "METADATA"
+        WHITESPACE@86..87 " "
+        METADATA_FIELD@87..90
+          SOURCE_TEXT@87..90 "_id"
+    WHITESPACE@90..91 "\n"
+    PIPE@91..92 "|"
+    WHITESPACE@92..93 " "
+    COMPLETION_COMMAND@93..133
+      COMPLETION_KW@93..103 "COMPLETION"
+      WHITESPACE@103..104 " "
+      QUALIFIED_NAME@104..111
+        IDENTIFIER@104..111
+          IDENT@104..111 "summary"
+      WHITESPACE@111..112 " "
+      EQ@112..113 "="
+      WHITESPACE@113..114 " "
+      QUALIFIED_NAME@114..121
+        IDENTIFIER@114..121
+          IDENT@114..121 "message"
+      WHITESPACE@121..122 " "
+      WITH_KW@122..126 "WITH"
+      WHITESPACE@126..127 " "
+      IDENTIFIER@127..133
+        IDENT@127..133 "my_llm"
+  WHITESPACE@133..134 "\n"
+--- errors

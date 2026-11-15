@@ -1,0 +1,35 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/grok_command__valid.esql
+---
+SOURCE_FILE@0..97
+  COMMENT@0..26 "// prod:grok_command valid"
+  WHITESPACE@26..27 "\n"
+  QUERY@27..96
+    FROM_COMMAND@27..51
+      FROM_KW@27..31 "FROM"
+      WHITESPACE@31..32 " "
+      INDEX_PATTERN@32..38
+        INDEX_NAME@32..38
+          SOURCE_TEXT@32..38 "logs-*"
+      WHITESPACE@38..39 " "
+      METADATA@39..51
+        METADATA_KW@39..47 "METADATA"
+        WHITESPACE@47..48 " "
+        METADATA_FIELD@48..51
+          SOURCE_TEXT@48..51 "_id"
+    WHITESPACE@51..52 "\n"
+    PIPE@52..53 "|"
+    WHITESPACE@53..54 " "
+    GROK_COMMAND@54..96
+      GROK_KW@54..58 "GROK"
+      WHITESPACE@58..59 " "
+      QUALIFIED_NAME@59..66
+        IDENTIFIER@59..66
+          IDENT@59..66 "message"
+      WHITESPACE@66..67 " "
+      STRING@67..96
+        STRING_LIT@67..96 "\"%{IP:client} %{WORD:method}\""
+  WHITESPACE@96..97 "\n"
+--- errors

@@ -1,0 +1,31 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/explain_command__invalid.esql
+---
+SOURCE_FILE@0..63
+  COMMENT@0..31 "// prod:explain_command invalid"
+  WHITESPACE@31..32 "\n"
+  QUERY@32..62
+    EXPLAIN_COMMAND@32..62
+      EXPLAIN_KW@32..39 "EXPLAIN"
+      WHITESPACE@39..40 " "
+      L_PAREN@40..41 "("
+      QUERY@41..62
+        FROM_COMMAND@41..52
+          FROM_KW@41..45 "FROM"
+          WHITESPACE@45..46 " "
+          INDEX_PATTERN@46..52
+            INDEX_NAME@46..52
+              SOURCE_TEXT@46..52 "logs-*"
+        WHITESPACE@52..53 " "
+        PIPE@53..54 "|"
+        WHITESPACE@54..55 " "
+        LIMIT_COMMAND@55..62
+          LIMIT_KW@55..60 "LIMIT"
+          WHITESPACE@60..61 " "
+          NUMBER@61..62
+            NUMBER_LIT@61..62 "1"
+  WHITESPACE@62..63 "\n"
+--- errors
+62..63: expected `)` (expected BY_KW, PIPE, R_PAREN)

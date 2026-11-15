@@ -1,0 +1,70 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/eval_command__valid.esql
+---
+SOURCE_FILE@0..110
+  COMMENT@0..26 "// prod:eval_command valid"
+  WHITESPACE@26..27 "\n"
+  QUERY@27..109
+    FROM_COMMAND@27..51
+      FROM_KW@27..31 "FROM"
+      WHITESPACE@31..32 " "
+      INDEX_PATTERN@32..38
+        INDEX_NAME@32..38
+          SOURCE_TEXT@32..38 "logs-*"
+      WHITESPACE@38..39 " "
+      METADATA@39..51
+        METADATA_KW@39..47 "METADATA"
+        WHITESPACE@47..48 " "
+        METADATA_FIELD@48..51
+          SOURCE_TEXT@48..51 "_id"
+    WHITESPACE@51..52 "\n"
+    PIPE@52..53 "|"
+    WHITESPACE@53..54 " "
+    EVAL_COMMAND@54..109
+      EVAL_KW@54..58 "EVAL"
+      WHITESPACE@58..59 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@59..94
+        QUALIFIED_NAME@59..69
+          IDENTIFIER@59..69
+            IDENT@59..69 "lower_name"
+        WHITESPACE@69..70 " "
+        EQ@70..71 "="
+        WHITESPACE@71..72 " "
+        FUNCTION_CALL@72..94
+          IDENTIFIER@72..80
+            IDENT@72..80 "TO_LOWER"
+          L_PAREN@80..81 "("
+          QUALIFIED_NAME@81..93
+            IDENTIFIER@81..88
+              IDENT@81..88 "process"
+            DOT@88..89 "."
+            IDENTIFIER@89..93
+              IDENT@89..93 "name"
+          R_PAREN@93..94 ")"
+      COMMA@94..95 ","
+      WHITESPACE@95..96 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@96..109
+        QUALIFIED_NAME@96..97
+          IDENTIFIER@96..97
+            IDENT@96..97 "n"
+        WHITESPACE@97..98 " "
+        EQ@98..99 "="
+        WHITESPACE@99..100 " "
+        BINARY_EXPRESSION@100..109
+          NUMBER@100..101
+            NUMBER_LIT@100..101 "1"
+          WHITESPACE@101..102 " "
+          PLUS@102..103 "+"
+          WHITESPACE@103..104 " "
+          BINARY_EXPRESSION@104..109
+            NUMBER@104..105
+              NUMBER_LIT@104..105 "2"
+            WHITESPACE@105..106 " "
+            STAR_TOKEN@106..107 "*"
+            WHITESPACE@107..108 " "
+            NUMBER@108..109
+              NUMBER_LIT@108..109 "3"
+  WHITESPACE@109..110 "\n"
+--- errors

@@ -1,0 +1,107 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/stats_command__valid.esql
+---
+SOURCE_FILE@0..170
+  COMMENT@0..27 "// prod:stats_command valid"
+  WHITESPACE@27..28 "\n"
+  QUERY@28..169
+    FROM_COMMAND@28..39
+      FROM_KW@28..32 "FROM"
+      WHITESPACE@32..33 " "
+      INDEX_PATTERN@33..39
+        INDEX_NAME@33..39
+          SOURCE_TEXT@33..39 "logs-*"
+    WHITESPACE@39..40 "\n"
+    PIPE@40..41 "|"
+    WHITESPACE@41..42 " "
+    STATS_COMMAND@42..169
+      STATS_KW@42..47 "STATS"
+      WHITESPACE@47..48 " "
+      AGGREGATE_FIELD@48..60
+        QUALIFIED_NAME@48..49
+          IDENTIFIER@48..49
+            IDENT@48..49 "c"
+        WHITESPACE@49..50 " "
+        EQ@50..51 "="
+        WHITESPACE@51..52 " "
+        FUNCTION_CALL@52..60
+          IDENTIFIER@52..57
+            IDENT@52..57 "COUNT"
+          L_PAREN@57..58 "("
+          STAR@58..59
+            STAR_TOKEN@58..59 "*"
+          R_PAREN@59..60 ")"
+      COMMA@60..61 ","
+      WHITESPACE@61..62 " "
+      AGGREGATE_FIELD@62..124
+        QUALIFIED_NAME@62..63
+          IDENTIFIER@62..63
+            IDENT@62..63 "u"
+        WHITESPACE@63..64 " "
+        EQ@64..65 "="
+        WHITESPACE@65..66 " "
+        FUNCTION_CALL@66..91
+          IDENTIFIER@66..80
+            IDENT@66..80 "COUNT_DISTINCT"
+          L_PAREN@80..81 "("
+          QUALIFIED_NAME@81..90
+            IDENTIFIER@81..85
+              IDENT@81..85 "user"
+            DOT@85..86 "."
+            IDENTIFIER@86..90
+              IDENT@86..90 "name"
+          R_PAREN@90..91 ")"
+        WHITESPACE@91..92 " "
+        WHERE_KW@92..97 "WHERE"
+        WHITESPACE@97..98 " "
+        COMPARISON@98..124
+          QUALIFIED_NAME@98..111
+            IDENTIFIER@98..103
+              IDENT@98..103 "event"
+            DOT@103..104 "."
+            IDENTIFIER@104..111
+              IDENT@104..111 "outcome"
+          WHITESPACE@111..112 " "
+          EQ_EQ@112..114 "=="
+          WHITESPACE@114..115 " "
+          STRING@115..124
+            STRING_LIT@115..124 "\"failure\""
+      WHITESPACE@124..125 " "
+      BY_KW@125..127 "BY"
+      WHITESPACE@127..128 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@128..137
+        QUALIFIED_NAME@128..137
+          IDENTIFIER@128..132
+            IDENT@128..132 "host"
+          DOT@132..133 "."
+          IDENTIFIER@133..137
+            IDENT@133..137 "name"
+      COMMA@137..138 ","
+      WHITESPACE@138..139 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@139..169
+        QUALIFIED_NAME@139..140
+          IDENTIFIER@139..140
+            IDENT@139..140 "b"
+        WHITESPACE@140..141 " "
+        EQ@141..142 "="
+        WHITESPACE@142..143 " "
+        FUNCTION_CALL@143..169
+          IDENTIFIER@143..149
+            IDENT@143..149 "BUCKET"
+          L_PAREN@149..150 "("
+          QUALIFIED_NAME@150..160
+            IDENTIFIER@150..160
+              IDENT@150..160 "@timestamp"
+          COMMA@160..161 ","
+          WHITESPACE@161..162 " "
+          QUALIFIED_INTERVAL@162..168
+            NUMBER@162..163
+              NUMBER_LIT@162..163 "1"
+            WHITESPACE@163..164 " "
+            TIME_UNIT@164..168
+              IDENT@164..168 "hour"
+          R_PAREN@168..169 ")"
+  WHITESPACE@169..170 "\n"
+--- errors

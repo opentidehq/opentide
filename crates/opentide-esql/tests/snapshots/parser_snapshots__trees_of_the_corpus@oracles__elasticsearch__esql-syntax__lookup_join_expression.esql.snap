@@ -1,0 +1,42 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-syntax/lookup_join_expression.esql
+---
+SOURCE_FILE@0..58
+  QUERY@0..57
+    FROM_COMMAND@0..11
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..11
+        INDEX_NAME@5..11
+          SOURCE_TEXT@5..11 "logs-*"
+    WHITESPACE@11..12 " "
+    PIPE@12..13 "|"
+    WHITESPACE@13..14 " "
+    JOIN_COMMAND@14..57
+      LOOKUP_KW@14..20 "LOOKUP"
+      WHITESPACE@20..21 " "
+      JOIN_KW@21..25 "JOIN"
+      WHITESPACE@25..26 " "
+      INDEX_PATTERN@26..36
+        INDEX_NAME@26..36
+          SOURCE_TEXT@26..36 "lookup_idx"
+      WHITESPACE@36..37 " "
+      ON_KW@37..39 "ON"
+      WHITESPACE@39..40 " "
+      COMPARISON@40..57
+        QUALIFIED_NAME@40..49
+          IDENTIFIER@40..44
+            IDENT@40..44 "host"
+          DOT@44..45 "."
+          IDENTIFIER@45..49
+            IDENT@45..49 "name"
+        WHITESPACE@49..50 " "
+        EQ_EQ@50..52 "=="
+        WHITESPACE@52..53 " "
+        QUALIFIED_NAME@53..57
+          IDENTIFIER@53..57
+            IDENT@53..57 "name"
+  WHITESPACE@57..58 "\n"
+--- errors

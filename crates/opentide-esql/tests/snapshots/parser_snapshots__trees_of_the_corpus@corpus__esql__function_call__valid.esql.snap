@@ -1,0 +1,73 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/function_call__valid.esql
+---
+SOURCE_FILE@0..115
+  COMMENT@0..27 "// prod:function_call valid"
+  WHITESPACE@27..28 "\n"
+  QUERY@28..114
+    FROM_COMMAND@28..52
+      FROM_KW@28..32 "FROM"
+      WHITESPACE@32..33 " "
+      INDEX_PATTERN@33..39
+        INDEX_NAME@33..39
+          SOURCE_TEXT@33..39 "logs-*"
+      WHITESPACE@39..40 " "
+      METADATA@40..52
+        METADATA_KW@40..48 "METADATA"
+        WHITESPACE@48..49 " "
+        METADATA_FIELD@49..52
+          SOURCE_TEXT@49..52 "_id"
+    WHITESPACE@52..53 "\n"
+    PIPE@53..54 "|"
+    WHITESPACE@54..55 " "
+    EVAL_COMMAND@55..114
+      EVAL_KW@55..59 "EVAL"
+      WHITESPACE@59..60 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@60..78
+        QUALIFIED_NAME@60..61
+          IDENTIFIER@60..61
+            IDENT@60..61 "c"
+        WHITESPACE@61..62 " "
+        EQ@62..63 "="
+        WHITESPACE@63..64 " "
+        FUNCTION_CALL@64..78
+          IDENTIFIER@64..72
+            IDENT@64..72 "COALESCE"
+          L_PAREN@72..73 "("
+          QUALIFIED_NAME@73..74
+            IDENTIFIER@73..74
+              IDENT@73..74 "a"
+          COMMA@74..75 ","
+          WHITESPACE@75..76 " "
+          QUALIFIED_NAME@76..77
+            IDENTIFIER@76..77
+              IDENT@76..77 "b"
+          R_PAREN@77..78 ")"
+      COMMA@78..79 ","
+      WHITESPACE@79..80 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@80..114
+        QUALIFIED_NAME@80..81
+          IDENTIFIER@80..81
+            IDENT@80..81 "s"
+        WHITESPACE@81..82 " "
+        EQ@82..83 "="
+        WHITESPACE@83..84 " "
+        FUNCTION_CALL@84..114
+          IDENTIFIER@84..95
+            IDENT@84..95 "STARTS_WITH"
+          L_PAREN@95..96 "("
+          QUALIFIED_NAME@96..108
+            IDENTIFIER@96..103
+              IDENT@96..103 "process"
+            DOT@103..104 "."
+            IDENTIFIER@104..108
+              IDENT@104..108 "name"
+          COMMA@108..109 ","
+          WHITESPACE@109..110 " "
+          STRING@110..113
+            STRING_LIT@110..113 "\"x\""
+          R_PAREN@113..114 ")"
+  WHITESPACE@114..115 "\n"
+--- errors

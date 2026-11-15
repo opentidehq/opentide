@@ -1,0 +1,110 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/lnx_auditd_audio_capture.esql
+---
+SOURCE_FILE@0..188
+  QUERY@0..187
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    WHERE_COMMAND@40..187
+      WHERE_KW@40..45 "where"
+      WHITESPACE@45..46 " "
+      OR_EXPRESSION@46..187
+        AND_EXPRESSION@46..108
+          COMPARISON@46..60
+            QUALIFIED_NAME@46..50
+              IDENTIFIER@46..50
+                IDENT@46..50 "type"
+            EQ_EQ@50..52 "=="
+            STRING@52..60
+              STRING_LIT@52..60 "\"EXECVE\""
+          WHITESPACE@60..61 " "
+          AND_KW@61..64 "and"
+          WHITESPACE@64..65 " "
+          COMPARISON@65..78
+            QUALIFIED_NAME@65..67
+              IDENTIFIER@65..67
+                IDENT@65..67 "a0"
+            EQ_EQ@67..69 "=="
+            STRING@69..78
+              STRING_LIT@69..78 "\"arecord\""
+          WHITESPACE@78..79 " "
+          AND_KW@79..82 "and"
+          WHITESPACE@82..83 " "
+          COMPARISON@83..92
+            QUALIFIED_NAME@83..85
+              IDENTIFIER@83..85
+                IDENT@83..85 "a1"
+            EQ_EQ@85..87 "=="
+            STRING@87..92
+              STRING_LIT@87..92 "\"-vv\""
+          WHITESPACE@92..93 " "
+          AND_KW@93..96 "and"
+          WHITESPACE@96..97 " "
+          COMPARISON@97..108
+            QUALIFIED_NAME@97..99
+              IDENTIFIER@97..99
+                IDENT@97..99 "a2"
+            EQ_EQ@99..101 "=="
+            STRING@101..108
+              STRING_LIT@101..108 "\"-fdat\""
+        WHITESPACE@108..109 " "
+        OR_KW@109..111 "or"
+        WHITESPACE@111..112 " "
+        AND_EXPRESSION@112..187
+          COMPARISON@112..127
+            QUALIFIED_NAME@112..116
+              IDENTIFIER@112..116
+                IDENT@112..116 "type"
+            EQ_EQ@116..118 "=="
+            STRING@118..127
+              STRING_LIT@118..127 "\"SYSCALL\""
+          WHITESPACE@127..128 " "
+          AND_KW@128..131 "and"
+          WHITESPACE@131..132 " "
+          FUNCTION_CALL@132..159
+            IDENTIFIER@132..141
+              IDENT@132..141 "ends_with"
+            L_PAREN@141..142 "("
+            QUALIFIED_NAME@142..145
+              IDENTIFIER@142..145
+                IDENT@142..145 "exe"
+            COMMA@145..146 ","
+            WHITESPACE@146..147 " "
+            STRING@147..158
+              STRING_LIT@147..158 "\"/ecasound\""
+            R_PAREN@158..159 ")"
+          WHITESPACE@159..160 " "
+          AND_KW@160..163 "and"
+          WHITESPACE@163..164 " "
+          COMPARISON@164..187
+            QUALIFIED_NAME@164..171
+              IDENTIFIER@164..171
+                IDENT@164..171 "SYSCALL"
+            EQ_EQ@171..173 "=="
+            STRING@173..187
+              STRING_LIT@173..187 "\"memfd_create\""
+  WHITESPACE@187..188 "\n"
+--- errors

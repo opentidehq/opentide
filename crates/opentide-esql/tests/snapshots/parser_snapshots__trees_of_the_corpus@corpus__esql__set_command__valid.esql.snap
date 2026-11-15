@@ -1,0 +1,37 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/set_command__valid.esql
+---
+SOURCE_FILE@0..74
+  COMMENT@0..25 "// prod:set_command valid"
+  WHITESPACE@25..26 "\n"
+  SET_COMMAND@26..51
+    SET_KW@26..29 "SET"
+    WHITESPACE@29..30 " "
+    IDENTIFIER@30..39
+      IDENT@30..39 "time_zone"
+    WHITESPACE@39..40 " "
+    EQ@40..41 "="
+    WHITESPACE@41..42 " "
+    STRING@42..50
+      STRING_LIT@42..50 "\"+01:00\""
+    SEMI@50..51 ";"
+  WHITESPACE@51..52 "\n"
+  QUERY@52..73
+    FROM_COMMAND@52..63
+      FROM_KW@52..56 "FROM"
+      WHITESPACE@56..57 " "
+      INDEX_PATTERN@57..63
+        INDEX_NAME@57..63
+          SOURCE_TEXT@57..63 "logs-*"
+    WHITESPACE@63..64 " "
+    PIPE@64..65 "|"
+    WHITESPACE@65..66 " "
+    LIMIT_COMMAND@66..73
+      LIMIT_KW@66..71 "LIMIT"
+      WHITESPACE@71..72 " "
+      NUMBER@72..73
+        NUMBER_LIT@72..73 "1"
+  WHITESPACE@73..74 "\n"
+--- errors

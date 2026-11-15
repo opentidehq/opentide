@@ -1,0 +1,46 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/in_expression__invalid.subquery.esql
+---
+SOURCE_FILE@0..111
+  COMMENT@0..57 "// prod:in_expression invalid (a subquery needs a source)"
+  WHITESPACE@57..58 "\n"
+  QUERY@58..110
+    FROM_COMMAND@58..82
+      FROM_KW@58..62 "FROM"
+      WHITESPACE@62..63 " "
+      INDEX_PATTERN@63..69
+        INDEX_NAME@63..69
+          SOURCE_TEXT@63..69 "logs-*"
+      WHITESPACE@69..70 " "
+      METADATA@70..82
+        METADATA_KW@70..78 "METADATA"
+        WHITESPACE@78..79 " "
+        METADATA_FIELD@79..82
+          SOURCE_TEXT@79..82 "_id"
+    WHITESPACE@82..83 "\n"
+    PIPE@83..84 "|"
+    WHITESPACE@84..85 " "
+    WHERE_COMMAND@85..110
+      WHERE_KW@85..90 "WHERE"
+      WHITESPACE@90..91 " "
+      IN_EXPRESSION@91..110
+        QUALIFIED_NAME@91..100
+          IDENTIFIER@91..95
+            IDENT@91..95 "user"
+          DOT@95..96 "."
+          IDENTIFIER@96..100
+            IDENT@96..100 "name"
+        WHITESPACE@100..101 " "
+        IN_KW@101..103 "IN"
+        WHITESPACE@103..104 " "
+        SOURCE_SUBQUERY@104..110
+          L_PAREN@104..105 "("
+          FROM_COMMAND@105..109
+            FROM_KW@105..109 "FROM"
+            INDEX_PATTERN@109..109
+          R_PAREN@109..110 ")"
+  WHITESPACE@110..111 "\n"
+--- errors
+109..109: expected an index pattern (expected SOURCE_TEXT, STRING_LIT, L_PAREN)

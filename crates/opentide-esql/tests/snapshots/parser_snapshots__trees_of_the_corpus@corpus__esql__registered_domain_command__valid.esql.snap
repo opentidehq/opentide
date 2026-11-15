@@ -1,0 +1,44 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/registered_domain_command__valid.esql
+---
+SOURCE_FILE@0..107
+  COMMENT@0..39 "// prod:registered_domain_command valid"
+  WHITESPACE@39..40 "\n"
+  QUERY@40..106
+    FROM_COMMAND@40..64
+      FROM_KW@40..44 "FROM"
+      WHITESPACE@44..45 " "
+      INDEX_PATTERN@45..51
+        INDEX_NAME@45..51
+          SOURCE_TEXT@45..51 "logs-*"
+      WHITESPACE@51..52 " "
+      METADATA@52..64
+        METADATA_KW@52..60 "METADATA"
+        WHITESPACE@60..61 " "
+        METADATA_FIELD@61..64
+          SOURCE_TEXT@61..64 "_id"
+    WHITESPACE@64..65 "\n"
+    PIPE@65..66 "|"
+    WHITESPACE@66..67 " "
+    REGISTERED_DOMAIN_COMMAND@67..106
+      REGISTERED_DOMAIN_KW@67..84 "REGISTERED_DOMAIN"
+      WHITESPACE@84..85 " "
+      QUALIFIED_NAME@85..86
+        IDENTIFIER@85..86
+          IDENT@85..86 "d"
+      WHITESPACE@86..87 " "
+      EQ@87..88 "="
+      WHITESPACE@88..89 " "
+      QUALIFIED_NAME@89..106
+        IDENTIFIER@89..92
+          IDENT@89..92 "dns"
+        DOT@92..93 "."
+        IDENTIFIER@93..101
+          IDENT@93..101 "question"
+        DOT@101..102 "."
+        IDENTIFIER@102..106
+          IDENT@102..106 "name"
+  WHITESPACE@106..107 "\n"
+--- errors

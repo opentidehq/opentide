@@ -1,0 +1,38 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/unknown_command__valid.esql
+---
+SOURCE_FILE@0..74
+  COMMENT@0..29 "// prod:unknown_command valid"
+  WHITESPACE@29..30 "\n"
+  QUERY@30..73
+    FROM_COMMAND@30..54
+      FROM_KW@30..34 "FROM"
+      WHITESPACE@34..35 " "
+      INDEX_PATTERN@35..41
+        INDEX_NAME@35..41
+          SOURCE_TEXT@35..41 "logs-*"
+      WHITESPACE@41..42 " "
+      METADATA@42..54
+        METADATA_KW@42..50 "METADATA"
+        WHITESPACE@50..51 " "
+        METADATA_FIELD@51..54
+          SOURCE_TEXT@51..54 "_id"
+    WHITESPACE@54..55 "\n"
+    PIPE@55..56 "|"
+    WHITESPACE@56..57 " "
+    UNKNOWN_COMMAND@57..73
+      COMMAND_NAME@57..67
+        COMMAND_WORD@57..67 "FROBNICATE"
+      WHITESPACE@67..68 " "
+      UNKNOWN_TEXT@68..69
+        UNKNOWN_WORD@68..69 "x"
+      WHITESPACE@69..70 " "
+      UNKNOWN_TEXT@70..71
+        UNKNOWN_WORD@70..71 "="
+      WHITESPACE@71..72 " "
+      UNKNOWN_TEXT@72..73
+        UNKNOWN_WORD@72..73 "1"
+  WHITESPACE@73..74 "\n"
+--- errors

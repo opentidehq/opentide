@@ -1,0 +1,49 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/function_call__invalid.esql
+---
+SOURCE_FILE@0..80
+  COMMENT@0..29 "// prod:function_call invalid"
+  WHITESPACE@29..30 "\n"
+  QUERY@30..79
+    FROM_COMMAND@30..54
+      FROM_KW@30..34 "FROM"
+      WHITESPACE@34..35 " "
+      INDEX_PATTERN@35..41
+        INDEX_NAME@35..41
+          SOURCE_TEXT@35..41 "logs-*"
+      WHITESPACE@41..42 " "
+      METADATA@42..54
+        METADATA_KW@42..50 "METADATA"
+        WHITESPACE@50..51 " "
+        METADATA_FIELD@51..54
+          SOURCE_TEXT@51..54 "_id"
+    WHITESPACE@54..55 "\n"
+    PIPE@55..56 "|"
+    WHITESPACE@56..57 " "
+    EVAL_COMMAND@57..79
+      EVAL_KW@57..61 "EVAL"
+      WHITESPACE@61..62 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@62..79
+        QUALIFIED_NAME@62..63
+          IDENTIFIER@62..63
+            IDENT@62..63 "c"
+        WHITESPACE@63..64 " "
+        EQ@64..65 "="
+        WHITESPACE@65..66 " "
+        FUNCTION_CALL@66..79
+          IDENTIFIER@66..74
+            IDENT@66..74 "COALESCE"
+          L_PAREN@74..75 "("
+          QUALIFIED_NAME@75..76
+            IDENTIFIER@75..76
+              IDENT@75..76 "a"
+          COMMA@76..77 ","
+          WHITESPACE@77..78 " "
+          QUALIFIED_NAME@78..79
+            IDENTIFIER@78..79
+              IDENT@78..79 "b"
+  WHITESPACE@79..80 "\n"
+--- errors
+79..80: expected `)` after the arguments (expected AND_KW, OR_KW, COMMA, DOT, R_PAREN)

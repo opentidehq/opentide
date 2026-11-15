@@ -1,0 +1,26 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/ts_info_command__invalid.esql
+---
+SOURCE_FILE@0..57
+  COMMENT@0..31 "// prod:ts_info_command invalid"
+  WHITESPACE@31..32 "\n"
+  QUERY@32..56
+    TS_COMMAND@32..44
+      TS_KW@32..34 "TS"
+      WHITESPACE@34..35 " "
+      INDEX_PATTERN@35..44
+        INDEX_NAME@35..44
+          SOURCE_TEXT@35..44 "metrics-*"
+    WHITESPACE@44..45 "\n"
+    PIPE@45..46 "|"
+    WHITESPACE@46..47 " "
+    TS_INFO_COMMAND@47..54
+      TS_INFO_KW@47..54 "TS_INFO"
+    WHITESPACE@54..55 " "
+    ERROR@55..56
+      L_PAREN@55..56 "("
+  WHITESPACE@56..57 "\n"
+--- errors
+54..55: expected `|` or the end of the query (expected PIPE, R_PAREN)

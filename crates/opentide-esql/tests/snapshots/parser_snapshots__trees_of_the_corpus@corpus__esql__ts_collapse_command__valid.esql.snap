@@ -1,0 +1,26 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/ts_collapse_command__valid.esql
+---
+SOURCE_FILE@0..76
+  COMMENT@0..33 "// prod:ts_collapse_command valid"
+  WHITESPACE@33..34 "\n"
+  QUERY@34..75
+    PROMQL_COMMAND@34..61
+      PROMQL_KW@34..40 "PROMQL"
+      WHITESPACE@40..41 " "
+      PROMQL_TEXT@41..56
+        PROMQL_WORD@41..56 "index=metrics-*"
+      WHITESPACE@56..57 " "
+      L_PAREN@57..58 "("
+      PROMQL_TEXT@58..60
+        PROMQL_WORD@58..60 "up"
+      R_PAREN@60..61 ")"
+    WHITESPACE@61..62 "\n"
+    PIPE@62..63 "|"
+    WHITESPACE@63..64 " "
+    TS_COLLAPSE_COMMAND@64..75
+      TS_COLLAPSE_KW@64..75 "TS_COLLAPSE"
+  WHITESPACE@75..76 "\n"
+--- errors

@@ -1,0 +1,41 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/uri_parts_command__valid.esql
+---
+SOURCE_FILE@0..86
+  COMMENT@0..31 "// prod:uri_parts_command valid"
+  WHITESPACE@31..32 "\n"
+  QUERY@32..85
+    FROM_COMMAND@32..56
+      FROM_KW@32..36 "FROM"
+      WHITESPACE@36..37 " "
+      INDEX_PATTERN@37..43
+        INDEX_NAME@37..43
+          SOURCE_TEXT@37..43 "logs-*"
+      WHITESPACE@43..44 " "
+      METADATA@44..56
+        METADATA_KW@44..52 "METADATA"
+        WHITESPACE@52..53 " "
+        METADATA_FIELD@53..56
+          SOURCE_TEXT@53..56 "_id"
+    WHITESPACE@56..57 "\n"
+    PIPE@57..58 "|"
+    WHITESPACE@58..59 " "
+    URI_PARTS_COMMAND@59..85
+      URI_PARTS_KW@59..68 "URI_PARTS"
+      WHITESPACE@68..69 " "
+      QUALIFIED_NAME@69..70
+        IDENTIFIER@69..70
+          IDENT@69..70 "u"
+      WHITESPACE@70..71 " "
+      EQ@71..72 "="
+      WHITESPACE@72..73 " "
+      QUALIFIED_NAME@73..85
+        IDENTIFIER@73..76
+          IDENT@73..76 "url"
+        DOT@76..77 "."
+        IDENTIFIER@77..85
+          IDENT@77..85 "original"
+  WHITESPACE@85..86 "\n"
+--- errors

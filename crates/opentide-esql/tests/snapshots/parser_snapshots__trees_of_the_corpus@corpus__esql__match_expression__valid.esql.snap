@@ -1,0 +1,36 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/match_expression__valid.esql
+---
+SOURCE_FILE@0..87
+  COMMENT@0..30 "// prod:match_expression valid"
+  WHITESPACE@30..31 "\n"
+  QUERY@31..86
+    FROM_COMMAND@31..55
+      FROM_KW@31..35 "FROM"
+      WHITESPACE@35..36 " "
+      INDEX_PATTERN@36..42
+        INDEX_NAME@36..42
+          SOURCE_TEXT@36..42 "logs-*"
+      WHITESPACE@42..43 " "
+      METADATA@43..55
+        METADATA_KW@43..51 "METADATA"
+        WHITESPACE@51..52 " "
+        METADATA_FIELD@52..55
+          SOURCE_TEXT@52..55 "_id"
+    WHITESPACE@55..56 "\n"
+    PIPE@56..57 "|"
+    WHITESPACE@57..58 " "
+    WHERE_COMMAND@58..86
+      WHERE_KW@58..63 "WHERE"
+      WHITESPACE@63..64 " "
+      MATCH_EXPRESSION@64..86
+        QUALIFIED_NAME@64..71
+          IDENTIFIER@64..71
+            IDENT@64..71 "message"
+        COLON@71..72 ":"
+        STRING@72..86
+          STRING_LIT@72..86 "\"failed login\""
+  WHITESPACE@86..87 "\n"
+--- errors

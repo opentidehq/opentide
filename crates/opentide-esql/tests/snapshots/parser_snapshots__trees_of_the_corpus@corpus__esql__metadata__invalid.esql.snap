@@ -1,0 +1,29 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/metadata__invalid.esql
+---
+SOURCE_FILE@0..56
+  COMMENT@0..24 "// prod:metadata invalid"
+  WHITESPACE@24..25 "\n"
+  QUERY@25..55
+    FROM_COMMAND@25..45
+      FROM_KW@25..29 "FROM"
+      WHITESPACE@29..30 " "
+      INDEX_PATTERN@30..36
+        INDEX_NAME@30..36
+          SOURCE_TEXT@30..36 "logs-*"
+      WHITESPACE@36..37 " "
+      METADATA@37..45
+        METADATA_KW@37..45 "METADATA"
+    WHITESPACE@45..46 "\n"
+    PIPE@46..47 "|"
+    WHITESPACE@47..48 " "
+    LIMIT_COMMAND@48..55
+      LIMIT_KW@48..53 "LIMIT"
+      WHITESPACE@53..54 " "
+      NUMBER@54..55
+        NUMBER_LIT@54..55 "1"
+  WHITESPACE@55..56 "\n"
+--- errors
+45..46: expected a metadata field (expected SOURCE_TEXT)

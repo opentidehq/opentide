@@ -25,3 +25,6 @@ toml.workspace = true
 tree-sitter.workspace = true
 logos.workspace = true
 rowan.workspace = true
+
+[dev-dependencies]
+insta.workspace = true

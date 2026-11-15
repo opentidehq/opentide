@@ -1,0 +1,32 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/grok_command__invalid.esql
+---
+SOURCE_FILE@0..76
+  COMMENT@0..28 "// prod:grok_command invalid"
+  WHITESPACE@28..29 "\n"
+  QUERY@29..75
+    FROM_COMMAND@29..53
+      FROM_KW@29..33 "FROM"
+      WHITESPACE@33..34 " "
+      INDEX_PATTERN@34..40
+        INDEX_NAME@34..40
+          SOURCE_TEXT@34..40 "logs-*"
+      WHITESPACE@40..41 " "
+      METADATA@41..53
+        METADATA_KW@41..49 "METADATA"
+        WHITESPACE@49..50 " "
+        METADATA_FIELD@50..53
+          SOURCE_TEXT@50..53 "_id"
+    WHITESPACE@53..54 "\n"
+    PIPE@54..55 "|"
+    WHITESPACE@55..56 " "
+    GROK_COMMAND@56..75
+      GROK_KW@56..60 "GROK"
+      WHITESPACE@60..61 " "
+      STRING@61..75
+        STRING_LIT@61..75 "\"%{IP:client}\""
+  WHITESPACE@75..76 "\n"
+--- errors
+75..76: expected a string (expected STRING_LIT, COLON_COLON)

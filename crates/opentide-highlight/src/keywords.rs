@@ -40,16 +40,109 @@ impl Capture {
 /// A language's keywords and punctuation, each with its capture.
 pub type Keywords = &'static [(&'static str, Capture)];
 
+/// ES|QL's keywords and punctuation: the pairs of its `highlights.scm`, in
+/// its order (the generator groups them).
+const ESQL: Keywords = &[
+    ("|", Capture::new("operator.pipe")),
+    ("from", Capture::new("keyword")),
+    ("ts", Capture::new("keyword")),
+    ("row", Capture::new("keyword")),
+    ("show", Capture::new("keyword")),
+    ("info", Capture::new("keyword")),
+    ("explain", Capture::new("keyword")),
+    ("promql", Capture::new("keyword")),
+    ("set", Capture::new("keyword")),
+    ("metadata", Capture::new("keyword")),
+    ("where", Capture::new("keyword")),
+    ("eval", Capture::new("keyword")),
+    ("keep", Capture::new("keyword")),
+    ("drop", Capture::new("keyword")),
+    ("rename", Capture::new("keyword")),
+    ("as", Capture::new("keyword")),
+    ("sort", Capture::new("keyword")),
+    ("asc", Capture::new("keyword")),
+    ("desc", Capture::new("keyword")),
+    ("nulls", Capture::new("keyword")),
+    ("first", Capture::new("keyword")),
+    ("last", Capture::new("keyword")),
+    ("limit", Capture::new("keyword")),
+    ("stats", Capture::new("keyword")),
+    ("inline", Capture::new("keyword")),
+    ("inlinestats", Capture::new("keyword")),
+    ("by", Capture::new("keyword")),
+    ("dissect", Capture::new("keyword")),
+    ("grok", Capture::new("keyword")),
+    ("enrich", Capture::new("keyword")),
+    ("on", Capture::new("keyword")),
+    ("with", Capture::new("keyword")),
+    ("mv_expand", Capture::new("keyword")),
+    ("lookup", Capture::new("keyword")),
+    ("left", Capture::new("keyword")),
+    ("right", Capture::new("keyword")),
+    ("full", Capture::new("keyword")),
+    ("join", Capture::new("keyword")),
+    ("change_point", Capture::new("keyword")),
+    ("completion", Capture::new("keyword")),
+    ("rerank", Capture::new("keyword")),
+    ("sample", Capture::new("keyword")),
+    ("fork", Capture::new("keyword")),
+    ("fuse", Capture::new("keyword")),
+    ("score", Capture::new("keyword")),
+    ("key", Capture::new("keyword")),
+    ("group", Capture::new("keyword")),
+    ("uri_parts", Capture::new("keyword")),
+    ("registered_domain", Capture::new("keyword")),
+    ("user_agent", Capture::new("keyword")),
+    ("ip_location", Capture::new("keyword")),
+    ("metrics_info", Capture::new("keyword")),
+    ("ts_info", Capture::new("keyword")),
+    ("ts_collapse", Capture::new("keyword")),
+    ("dedup", Capture::new("keyword")),
+    ("mmr", Capture::new("keyword")),
+    ("highlight", Capture::new("keyword")),
+    ("dense_vector", Capture::new("keyword")),
+    ("fillnull", Capture::new("keyword")),
+    ("and", Capture::new("keyword")),
+    ("or", Capture::new("keyword")),
+    ("not", Capture::new("keyword")),
+    ("in", Capture::new("keyword")),
+    ("is", Capture::new("keyword")),
+    ("like", Capture::new("keyword")),
+    ("rlike", Capture::new("keyword")),
+    ("==", Capture::new("operator")),
+    ("!=", Capture::new("operator")),
+    ("<", Capture::new("operator")),
+    ("<=", Capture::new("operator")),
+    (">", Capture::new("operator")),
+    (">=", Capture::new("operator")),
+    ("+", Capture::new("operator")),
+    ("-", Capture::new("operator")),
+    ("*", Capture::new("operator")),
+    ("/", Capture::new("operator")),
+    ("%", Capture::new("operator")),
+    ("=", Capture::new("operator")),
+    ("::", Capture::new("operator")),
+    (":", Capture::new("operator")),
+    ("(", Capture::new("punctuation.bracket")),
+    (")", Capture::new("punctuation.bracket")),
+    ("[", Capture::new("punctuation.bracket")),
+    ("]", Capture::new("punctuation.bracket")),
+    ("{", Capture::new("punctuation.bracket")),
+    ("}", Capture::new("punctuation.bracket")),
+    (",", Capture::new("punctuation.delimiter")),
+    (".", Capture::new("punctuation.delimiter")),
+    (";", Capture::new("punctuation.delimiter")),
+];
+
 /// The `KEYWORDS` table of `language`, or `None` while it is generated from
-/// its `highlights.scm`. No language has a table yet: each one adds an arm
-/// when its engine moves to `opentide-parse`.
+/// its `highlights.scm`. A language adds an arm when its
+/// engine moves to `opentide-parse`.
 #[must_use]
 pub const fn keywords(language: LanguageId) -> Option<Keywords> {
     match language {
         LanguageId::Kql
         | LanguageId::Spl
         | LanguageId::TideYaml
-        | LanguageId::Esql
         | LanguageId::Eql
         | LanguageId::Kuery
         | LanguageId::Lucene
@@ -59,6 +152,7 @@ pub const fn keywords(language: LanguageId) -> Option<Keywords> {
         | LanguageId::Yara
         | LanguageId::Exabeam
         | LanguageId::Yaral => None,
+        LanguageId::Esql => Some(ESQL),
     }
 }
 
@@ -188,6 +282,29 @@ mod tests {
                     &spec,
                     scm_pairs(crate::highlights_scm(language))
                 ),
+                "{language}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_table_says_what_the_scm_it_replaces_says() {
+        // Until a language's grammar directory is deleted, its table and its
+        // `.scm` must not drift: the generated bytes are the same either way.
+        let spec = HighlightSpec::load().expect("spec");
+        for language in ALL {
+            let Some(table) = keywords(language) else {
+                continue;
+            };
+            let scm = crate::highlights_scm(language);
+            assert_eq!(
+                by_capture(table_pairs(table)),
+                by_capture(scm_pairs(scm)),
+                "{language}"
+            );
+            assert_eq!(
+                generate_tm_language(language, &spec),
+                generate_tm_language_from(language, &spec, scm_pairs(scm)),
                 "{language}"
             );
         }

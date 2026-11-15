@@ -1,0 +1,29 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-syntax/metadata_control.esql
+---
+SOURCE_FILE@0..35
+  QUERY@0..34
+    FROM_COMMAND@0..24
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..11
+        INDEX_NAME@5..11
+          SOURCE_TEXT@5..11 "logs-*"
+      WHITESPACE@11..12 " "
+      METADATA@12..24
+        METADATA_KW@12..20 "METADATA"
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..24
+          SOURCE_TEXT@21..24 "_id"
+    WHITESPACE@24..25 " "
+    PIPE@25..26 "|"
+    WHITESPACE@26..27 " "
+    LIMIT_COMMAND@27..34
+      LIMIT_KW@27..32 "LIMIT"
+      WHITESPACE@32..33 " "
+      NUMBER@33..34
+        NUMBER_LIT@33..34 "1"
+  WHITESPACE@34..35 "\n"
+--- errors

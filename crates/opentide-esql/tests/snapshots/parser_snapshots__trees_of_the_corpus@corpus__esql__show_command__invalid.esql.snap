@@ -1,0 +1,14 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/show_command__invalid.esql
+---
+SOURCE_FILE@0..34
+  COMMENT@0..28 "// prod:show_command invalid"
+  WHITESPACE@28..29 "\n"
+  QUERY@29..33
+    SHOW_COMMAND@29..33
+      SHOW_KW@29..33 "SHOW"
+  WHITESPACE@33..34 "\n"
+--- errors
+33..34: expected `info` (expected INFO_KW)

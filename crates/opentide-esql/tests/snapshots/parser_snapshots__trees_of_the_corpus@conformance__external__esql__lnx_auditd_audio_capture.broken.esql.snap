@@ -1,0 +1,91 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/lnx_auditd_audio_capture.broken.esql
+---
+SOURCE_FILE@0..193
+  QUERY@0..192
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    UNKNOWN_COMMAND@40..192
+      COMMAND_NAME@40..50
+        COMMAND_WORD@40..50 "frobnicate"
+      WHITESPACE@50..51 " "
+      UNKNOWN_TEXT@51..57
+        UNKNOWN_WORD@51..57 "type=="
+      STRING@57..65
+        STRING_LIT@57..65 "\"EXECVE\""
+      WHITESPACE@65..66 " "
+      UNKNOWN_TEXT@66..69
+        UNKNOWN_WORD@66..69 "and"
+      WHITESPACE@69..70 " "
+      UNKNOWN_TEXT@70..74
+        UNKNOWN_WORD@70..74 "a0=="
+      STRING@74..83
+        STRING_LIT@74..83 "\"arecord\""
+      WHITESPACE@83..84 " "
+      UNKNOWN_TEXT@84..87
+        UNKNOWN_WORD@84..87 "and"
+      WHITESPACE@87..88 " "
+      UNKNOWN_TEXT@88..92
+        UNKNOWN_WORD@88..92 "a1=="
+      STRING@92..97
+        STRING_LIT@92..97 "\"-vv\""
+      WHITESPACE@97..98 " "
+      UNKNOWN_TEXT@98..101
+        UNKNOWN_WORD@98..101 "and"
+      WHITESPACE@101..102 " "
+      UNKNOWN_TEXT@102..106
+        UNKNOWN_WORD@102..106 "a2=="
+      STRING@106..113
+        STRING_LIT@106..113 "\"-fdat\""
+      WHITESPACE@113..114 " "
+      UNKNOWN_TEXT@114..116
+        UNKNOWN_WORD@114..116 "or"
+      WHITESPACE@116..117 " "
+      UNKNOWN_TEXT@117..123
+        UNKNOWN_WORD@117..123 "type=="
+      STRING@123..132
+        STRING_LIT@123..132 "\"SYSCALL\""
+      WHITESPACE@132..133 " "
+      UNKNOWN_TEXT@133..136
+        UNKNOWN_WORD@133..136 "and"
+      WHITESPACE@136..137 " "
+      UNKNOWN_TEXT@137..151
+        UNKNOWN_WORD@137..151 "ends_with(exe,"
+      WHITESPACE@151..152 " "
+      STRING@152..163
+        STRING_LIT@152..163 "\"/ecasound\""
+      UNKNOWN_TEXT@163..164
+        UNKNOWN_WORD@163..164 ")"
+      WHITESPACE@164..165 " "
+      UNKNOWN_TEXT@165..168
+        UNKNOWN_WORD@165..168 "and"
+      WHITESPACE@168..169 " "
+      UNKNOWN_TEXT@169..178
+        UNKNOWN_WORD@169..178 "SYSCALL=="
+      STRING@178..192
+        STRING_LIT@178..192 "\"memfd_create\""
+  WHITESPACE@192..193 "\n"
+--- errors

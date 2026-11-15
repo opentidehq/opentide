@@ -1,0 +1,35 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-syntax/where_no_space.esql
+---
+SOURCE_FILE@0..37
+  QUERY@0..36
+    FROM_COMMAND@0..11
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..11
+        INDEX_NAME@5..11
+          SOURCE_TEXT@5..11 "logs-*"
+    WHITESPACE@11..12 " "
+    PIPE@12..13 "|"
+    WHITESPACE@13..14 " "
+    WHERE_COMMAND@14..36
+      WHERE_KW@14..19 "where"
+      PARENTHESIZED_EXPRESSION@19..36
+        L_PAREN@19..20 "("
+        COMPARISON@20..35
+          QUALIFIED_NAME@20..31
+            IDENTIFIER@20..27
+              IDENT@20..27 "process"
+            DOT@27..28 "."
+            IDENTIFIER@28..31
+              IDENT@28..31 "pid"
+          WHITESPACE@31..32 " "
+          GT@32..33 ">"
+          WHITESPACE@33..34 " "
+          NUMBER@34..35
+            NUMBER_LIT@34..35 "1"
+        R_PAREN@35..36 ")"
+  WHITESPACE@36..37 "\n"
+--- errors

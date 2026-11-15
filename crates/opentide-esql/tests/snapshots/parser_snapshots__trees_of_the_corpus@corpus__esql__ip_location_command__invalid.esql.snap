@@ -1,0 +1,34 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/ip_location_command__invalid.esql
+---
+SOURCE_FILE@0..79
+  COMMENT@0..35 "// prod:ip_location_command invalid"
+  WHITESPACE@35..36 "\n"
+  QUERY@36..78
+    FROM_COMMAND@36..60
+      FROM_KW@36..40 "FROM"
+      WHITESPACE@40..41 " "
+      INDEX_PATTERN@41..47
+        INDEX_NAME@41..47
+          SOURCE_TEXT@41..47 "logs-*"
+      WHITESPACE@47..48 " "
+      METADATA@48..60
+        METADATA_KW@48..56 "METADATA"
+        WHITESPACE@56..57 " "
+        METADATA_FIELD@57..60
+          SOURCE_TEXT@57..60 "_id"
+    WHITESPACE@60..61 "\n"
+    PIPE@61..62 "|"
+    WHITESPACE@62..63 " "
+    IP_LOCATION_COMMAND@63..78
+      IP_LOCATION_KW@63..74 "IP_LOCATION"
+      WHITESPACE@74..75 " "
+      QUALIFIED_NAME@75..78
+        IDENTIFIER@75..78
+          IDENT@75..78 "geo"
+  WHITESPACE@78..79 "\n"
+--- errors
+78..79: expected `=` (expected DOT, EQ)
+78..79: expected an expression (expected DOT, EQ)

@@ -1,0 +1,28 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/set_command__invalid.esql
+---
+SOURCE_FILE@0..58
+  COMMENT@0..27 "// prod:set_command invalid"
+  WHITESPACE@27..28 "\n"
+  SET_COMMAND@28..45
+    SET_KW@28..31 "SET"
+    WHITESPACE@31..32 " "
+    IDENTIFIER@32..41
+      IDENT@32..41 "time_zone"
+    WHITESPACE@41..42 " "
+    EQ@42..43 "="
+    WHITESPACE@43..44 " "
+    SEMI@44..45 ";"
+  WHITESPACE@45..46 "\n"
+  QUERY@46..57
+    FROM_COMMAND@46..57
+      FROM_KW@46..50 "FROM"
+      WHITESPACE@50..51 " "
+      INDEX_PATTERN@51..57
+        INDEX_NAME@51..57
+          SOURCE_TEXT@51..57 "logs-*"
+  WHITESPACE@57..58 "\n"
+--- errors
+43..44: expected a constant (expected L_BRACE)

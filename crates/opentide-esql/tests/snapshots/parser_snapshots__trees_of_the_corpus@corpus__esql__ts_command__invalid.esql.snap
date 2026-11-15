@@ -1,0 +1,23 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/ts_command__invalid.esql
+---
+SOURCE_FILE@0..40
+  COMMENT@0..26 "// prod:ts_command invalid"
+  WHITESPACE@26..27 "\n"
+  QUERY@27..39
+    TS_COMMAND@27..30
+      TS_KW@27..29 "TS"
+      WHITESPACE@29..30 "\n"
+      INDEX_PATTERN@30..30
+    PIPE@30..31 "|"
+    WHITESPACE@31..32 " "
+    LIMIT_COMMAND@32..39
+      LIMIT_KW@32..37 "LIMIT"
+      WHITESPACE@37..38 " "
+      NUMBER@38..39
+        NUMBER_LIT@38..39 "1"
+  WHITESPACE@39..40 "\n"
+--- errors
+29..30: expected an index pattern (expected SOURCE_TEXT, STRING_LIT, L_PAREN)

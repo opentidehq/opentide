@@ -1,0 +1,37 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/fill_null_command__invalid.esql
+---
+SOURCE_FILE@0..79
+  COMMENT@0..33 "// prod:fill_null_command invalid"
+  WHITESPACE@33..34 "\n"
+  QUERY@34..78
+    FROM_COMMAND@34..58
+      FROM_KW@34..38 "FROM"
+      WHITESPACE@38..39 " "
+      INDEX_PATTERN@39..45
+        INDEX_NAME@39..45
+          SOURCE_TEXT@39..45 "logs-*"
+      WHITESPACE@45..46 " "
+      METADATA@46..58
+        METADATA_KW@46..54 "METADATA"
+        WHITESPACE@54..55 " "
+        METADATA_FIELD@55..58
+          SOURCE_TEXT@55..58 "_id"
+    WHITESPACE@58..59 "\n"
+    PIPE@59..60 "|"
+    WHITESPACE@60..61 " "
+    FILL_NULL_COMMAND@61..78
+      FILLNULL_KW@61..69 "FILLNULL"
+      WHITESPACE@69..70 " "
+      ERROR@70..72
+        WORD@70..72 "ON"
+      WHITESPACE@72..73 " "
+      NAME_PATTERN@73..78
+        ID_PATTERN@73..78
+          ID_PATTERN_TEXT@73..78 "bytes"
+  WHITESPACE@78..79 "\n"
+--- errors
+69..70: expected a constant
+72..73: expected `on` (expected ON_KW)

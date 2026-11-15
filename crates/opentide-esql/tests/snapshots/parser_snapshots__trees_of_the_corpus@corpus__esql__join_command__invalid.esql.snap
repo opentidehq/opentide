@@ -1,0 +1,39 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/join_command__invalid.esql
+---
+SOURCE_FILE@0..81
+  COMMENT@0..28 "// prod:join_command invalid"
+  WHITESPACE@28..29 "\n"
+  QUERY@29..80
+    FROM_COMMAND@29..53
+      FROM_KW@29..33 "FROM"
+      WHITESPACE@33..34 " "
+      INDEX_PATTERN@34..40
+        INDEX_NAME@34..40
+          SOURCE_TEXT@34..40 "logs-*"
+      WHITESPACE@40..41 " "
+      METADATA@41..53
+        METADATA_KW@41..49 "METADATA"
+        WHITESPACE@49..50 " "
+        METADATA_FIELD@50..53
+          SOURCE_TEXT@50..53 "_id"
+    WHITESPACE@53..54 "\n"
+    PIPE@54..55 "|"
+    WHITESPACE@55..56 " "
+    JOIN_COMMAND@56..80
+      LOOKUP_KW@56..62 "LOOKUP"
+      WHITESPACE@62..63 " "
+      JOIN_KW@63..67 "JOIN"
+      WHITESPACE@67..68 " "
+      INDEX_PATTERN@68..70
+        INDEX_NAME@68..70
+          SOURCE_TEXT@68..70 "ON"
+      WHITESPACE@70..71 " "
+      JOIN_QUALIFIER@71..80
+        SOURCE_TEXT@71..80 "source.ip"
+  WHITESPACE@80..81 "\n"
+--- errors
+80..81: expected `on` (expected ON_KW)
+80..81: expected an expression (expected ON_KW, NOT_KW, PLUS, MINUS)

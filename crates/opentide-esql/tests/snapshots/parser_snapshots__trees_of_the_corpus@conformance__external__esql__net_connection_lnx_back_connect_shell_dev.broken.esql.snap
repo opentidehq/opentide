@@ -1,0 +1,67 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/net_connection_lnx_back_connect_shell_dev.broken.esql
+---
+SOURCE_FILE@0..133
+  QUERY@0..132
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    UNKNOWN_COMMAND@40..132
+      COMMAND_NAME@40..50
+        COMMAND_WORD@40..50 "frobnicate"
+      WHITESPACE@50..51 " "
+      UNKNOWN_TEXT@51..67
+        UNKNOWN_WORD@51..67 "ends_with(Image,"
+      WHITESPACE@67..68 " "
+      STRING@68..79
+        STRING_LIT@68..79 "\"/bin/bash\""
+      UNKNOWN_TEXT@79..80
+        UNKNOWN_WORD@79..80 ")"
+      WHITESPACE@80..81 " "
+      UNKNOWN_TEXT@81..84
+        UNKNOWN_WORD@81..84 "and"
+      WHITESPACE@84..85 " "
+      UNKNOWN_TEXT@85..88
+        UNKNOWN_WORD@85..88 "not"
+      WHITESPACE@88..89 " "
+      UNKNOWN_TEXT@89..103
+        UNKNOWN_WORD@89..103 "(DestinationIp"
+      WHITESPACE@103..104 " "
+      UNKNOWN_TEXT@104..106
+        UNKNOWN_WORD@104..106 "in"
+      WHITESPACE@106..107 " "
+      UNKNOWN_TEXT@107..108
+        UNKNOWN_WORD@107..108 "("
+      STRING@108..119
+        STRING_LIT@108..119 "\"127.0.0.1\""
+      UNKNOWN_TEXT@119..120
+        UNKNOWN_WORD@119..120 ","
+      WHITESPACE@120..121 " "
+      STRING@121..130
+        STRING_LIT@121..130 "\"0.0.0.0\""
+      UNKNOWN_TEXT@130..132
+        UNKNOWN_WORD@130..132 "))"
+  WHITESPACE@132..133 "\n"
+--- errors

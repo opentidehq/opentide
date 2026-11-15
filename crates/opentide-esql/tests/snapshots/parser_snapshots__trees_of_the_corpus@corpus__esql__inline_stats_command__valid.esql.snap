@@ -1,0 +1,70 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/inline_stats_command__valid.esql
+---
+SOURCE_FILE@0..116
+  COMMENT@0..34 "// prod:inline_stats_command valid"
+  WHITESPACE@34..35 "\n"
+  QUERY@35..115
+    FROM_COMMAND@35..59
+      FROM_KW@35..39 "FROM"
+      WHITESPACE@39..40 " "
+      INDEX_PATTERN@40..46
+        INDEX_NAME@40..46
+          SOURCE_TEXT@40..46 "logs-*"
+      WHITESPACE@46..47 " "
+      METADATA@47..59
+        METADATA_KW@47..55 "METADATA"
+        WHITESPACE@55..56 " "
+        METADATA_FIELD@56..59
+          SOURCE_TEXT@56..59 "_id"
+    WHITESPACE@59..60 "\n"
+    PIPE@60..61 "|"
+    WHITESPACE@61..62 " "
+    INLINE_STATS_COMMAND@62..100
+      INLINE_KW@62..68 "INLINE"
+      WHITESPACE@68..69 " "
+      STATS_KW@69..74 "STATS"
+      WHITESPACE@74..75 " "
+      AGGREGATE_FIELD@75..87
+        QUALIFIED_NAME@75..76
+          IDENTIFIER@75..76
+            IDENT@75..76 "c"
+        WHITESPACE@76..77 " "
+        EQ@77..78 "="
+        WHITESPACE@78..79 " "
+        FUNCTION_CALL@79..87
+          IDENTIFIER@79..84
+            IDENT@79..84 "COUNT"
+          L_PAREN@84..85 "("
+          STAR@85..86
+            STAR_TOKEN@85..86 "*"
+          R_PAREN@86..87 ")"
+      WHITESPACE@87..88 " "
+      BY_KW@88..90 "BY"
+      WHITESPACE@90..91 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@91..100
+        QUALIFIED_NAME@91..100
+          IDENTIFIER@91..95
+            IDENT@91..95 "host"
+          DOT@95..96 "."
+          IDENTIFIER@96..100
+            IDENT@96..100 "name"
+    WHITESPACE@100..101 "\n"
+    PIPE@101..102 "|"
+    WHITESPACE@102..103 " "
+    WHERE_COMMAND@103..115
+      WHERE_KW@103..108 "WHERE"
+      WHITESPACE@108..109 " "
+      COMPARISON@109..115
+        QUALIFIED_NAME@109..110
+          IDENTIFIER@109..110
+            IDENT@109..110 "c"
+        WHITESPACE@110..111 " "
+        GT@111..112 ">"
+        WHITESPACE@112..113 " "
+        NUMBER@113..115
+          NUMBER_LIT@113..115 "10"
+  WHITESPACE@115..116 "\n"
+--- errors

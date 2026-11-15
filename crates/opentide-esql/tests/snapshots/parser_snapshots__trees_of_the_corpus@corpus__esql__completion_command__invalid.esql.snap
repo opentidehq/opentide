@@ -1,0 +1,35 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/completion_command__invalid.esql
+---
+SOURCE_FILE@0..83
+  COMMENT@0..34 "// prod:completion_command invalid"
+  WHITESPACE@34..35 "\n"
+  QUERY@35..82
+    FROM_COMMAND@35..59
+      FROM_KW@35..39 "FROM"
+      WHITESPACE@39..40 " "
+      INDEX_PATTERN@40..46
+        INDEX_NAME@40..46
+          SOURCE_TEXT@40..46 "logs-*"
+      WHITESPACE@46..47 " "
+      METADATA@47..59
+        METADATA_KW@47..55 "METADATA"
+        WHITESPACE@55..56 " "
+        METADATA_FIELD@56..59
+          SOURCE_TEXT@56..59 "_id"
+    WHITESPACE@59..60 "\n"
+    PIPE@60..61 "|"
+    WHITESPACE@61..62 " "
+    COMPLETION_COMMAND@62..82
+      COMPLETION_KW@62..72 "COMPLETION"
+      WHITESPACE@72..73 " "
+      QUALIFIED_NAME@73..80
+        IDENTIFIER@73..80
+          IDENT@73..80 "summary"
+      WHITESPACE@80..81 " "
+      EQ@81..82 "="
+  WHITESPACE@82..83 "\n"
+--- errors
+82..83: expected an expression

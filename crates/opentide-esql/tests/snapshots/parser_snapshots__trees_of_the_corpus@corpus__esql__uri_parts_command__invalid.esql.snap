@@ -1,0 +1,35 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/uri_parts_command__invalid.esql
+---
+SOURCE_FILE@0..75
+  COMMENT@0..33 "// prod:uri_parts_command invalid"
+  WHITESPACE@33..34 "\n"
+  QUERY@34..74
+    FROM_COMMAND@34..58
+      FROM_KW@34..38 "FROM"
+      WHITESPACE@38..39 " "
+      INDEX_PATTERN@39..45
+        INDEX_NAME@39..45
+          SOURCE_TEXT@39..45 "logs-*"
+      WHITESPACE@45..46 " "
+      METADATA@46..58
+        METADATA_KW@46..54 "METADATA"
+        WHITESPACE@54..55 " "
+        METADATA_FIELD@55..58
+          SOURCE_TEXT@55..58 "_id"
+    WHITESPACE@58..59 "\n"
+    PIPE@59..60 "|"
+    WHITESPACE@60..61 " "
+    URI_PARTS_COMMAND@61..74
+      URI_PARTS_KW@61..70 "URI_PARTS"
+      WHITESPACE@70..71 " "
+      QUALIFIED_NAME@71..72
+        IDENTIFIER@71..72
+          IDENT@71..72 "u"
+      WHITESPACE@72..73 " "
+      EQ@73..74 "="
+  WHITESPACE@74..75 "\n"
+--- errors
+74..75: expected an expression

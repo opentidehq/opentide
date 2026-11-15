@@ -1,0 +1,22 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/metrics_info_command__valid.esql
+---
+SOURCE_FILE@0..63
+  COMMENT@0..34 "// prod:metrics_info_command valid"
+  WHITESPACE@34..35 "\n"
+  QUERY@35..62
+    TS_COMMAND@35..47
+      TS_KW@35..37 "TS"
+      WHITESPACE@37..38 " "
+      INDEX_PATTERN@38..47
+        INDEX_NAME@38..47
+          SOURCE_TEXT@38..47 "metrics-*"
+    WHITESPACE@47..48 "\n"
+    PIPE@48..49 "|"
+    WHITESPACE@49..50 " "
+    METRICS_INFO_COMMAND@50..62
+      METRICS_INFO_KW@50..62 "METRICS_INFO"
+  WHITESPACE@62..63 "\n"
+--- errors

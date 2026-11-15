@@ -1,0 +1,37 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/fill_null_command__valid.esql
+---
+SOURCE_FILE@0..79
+  COMMENT@0..31 "// prod:fill_null_command valid"
+  WHITESPACE@31..32 "\n"
+  QUERY@32..78
+    FROM_COMMAND@32..56
+      FROM_KW@32..36 "FROM"
+      WHITESPACE@36..37 " "
+      INDEX_PATTERN@37..43
+        INDEX_NAME@37..43
+          SOURCE_TEXT@37..43 "logs-*"
+      WHITESPACE@43..44 " "
+      METADATA@44..56
+        METADATA_KW@44..52 "METADATA"
+        WHITESPACE@52..53 " "
+        METADATA_FIELD@53..56
+          SOURCE_TEXT@53..56 "_id"
+    WHITESPACE@56..57 "\n"
+    PIPE@57..58 "|"
+    WHITESPACE@58..59 " "
+    FILL_NULL_COMMAND@59..78
+      FILLNULL_KW@59..67 "FILLNULL"
+      WHITESPACE@67..68 " "
+      NUMBER@68..69
+        NUMBER_LIT@68..69 "0"
+      WHITESPACE@69..70 " "
+      ON_KW@70..72 "ON"
+      WHITESPACE@72..73 " "
+      NAME_PATTERN@73..78
+        ID_PATTERN@73..78
+          ID_PATTERN_TEXT@73..78 "bytes"
+  WHITESPACE@78..79 "\n"
+--- errors

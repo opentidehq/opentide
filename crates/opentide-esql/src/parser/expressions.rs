@@ -144,79 +144,88 @@ fn operators(p: &mut Parser<'_>, min: u8) -> Option<CompletedMarker> {
         if bp < min || !ok {
             break;
         }
-        let m = lhs.precede(p);
-        lhs = match op {
-            Infix::Or | Infix::And => {
-                let (kw, node, rhs_bp) = if op == Infix::Or {
-                    (K::OR_KW, K::OR_EXPRESSION, 2)
-                } else {
-                    (K::AND_KW, K::AND_EXPRESSION, 3)
-                };
-                while eat_kw(p, kw) {
-                    expr_bp(p, rhs_bp);
-                }
-                m.complete(p, node.raw())
-            }
-            Infix::In { not } => {
-                if not {
-                    p.bump_as(K::NOT_KW.raw());
-                }
-                p.bump_as(K::IN_KW.raw());
-                in_values(p, lhs_kind == K::IN_TUPLE.raw());
-                m.complete(p, K::IN_EXPRESSION.raw())
-            }
-            Infix::IsNull => {
-                p.bump_as(K::IS_KW.raw());
-                eat_kw(p, K::NOT_KW);
-                expect_kw(p, K::NULL_KW);
-                m.complete(p, K::IS_NULL_EXPRESSION.raw())
-            }
-            Infix::Like { not } => {
-                if not {
-                    p.bump_as(K::NOT_KW.raw());
-                }
-                if !eat_kw(p, K::LIKE_KW) {
-                    eat_kw(p, K::RLIKE_KW);
-                }
-                patterns(p);
-                m.complete(p, K::LIKE_EXPRESSION.raw())
-            }
-            Infix::Match => {
-                p.bump();
-                constant(p);
-                m.complete(p, K::MATCH_EXPRESSION.raw())
-            }
-            Infix::Comparison => {
-                p.bump();
-                expr_bp(p, 6);
-                m.complete(p, K::COMPARISON.raw())
-            }
-            Infix::Additive | Infix::Multiplicative => {
-                let (ops, rhs_bp): (&[K], u8) = if op == Infix::Additive {
-                    (&[K::PLUS, K::MINUS], 7)
-                } else {
-                    (&[K::STAR_TOKEN, K::SLASH, K::PERCENT], 8)
-                };
-                while ops.iter().any(|k| k.raw() == p.current()) {
-                    p.bump();
-                    expr_bp(p, rhs_bp);
-                }
-                m.complete(p, K::BINARY_EXPRESSION.raw())
-            }
-            Infix::Cast => {
-                p.bump();
-                let t = p.start();
-                if p.at(K::IDENT.raw()) || p.current() == K::WORD.raw() {
-                    token_node(p, K::IDENT, K::IDENTIFIER);
-                } else {
-                    p.error("expected a type name after `::`");
-                }
-                t.complete(p, K::TYPE_NAME.raw());
-                m.complete(p, K::INLINE_CAST.raw())
-            }
-        };
+        lhs = rest(p, lhs, op);
     }
     Some(lhs)
+}
+
+/// The node of the infix operator `op` the parser is at, over `lhs`: a
+/// function of its own so that the frame of the recursion (`expr_bp`,
+/// `operators`, `prefix`, `atom`) stays small on a 1 MB stack.
+#[inline(never)]
+fn rest(p: &mut Parser<'_>, lhs: CompletedMarker, op: Infix) -> CompletedMarker {
+    let lhs_kind = lhs.kind();
+    let m = lhs.precede(p);
+    match op {
+        Infix::Or | Infix::And => {
+            let (kw, node, rhs_bp) = if op == Infix::Or {
+                (K::OR_KW, K::OR_EXPRESSION, 2)
+            } else {
+                (K::AND_KW, K::AND_EXPRESSION, 3)
+            };
+            while eat_kw(p, kw) {
+                expr_bp(p, rhs_bp);
+            }
+            m.complete(p, node.raw())
+        }
+        Infix::In { not } => {
+            if not {
+                p.bump_as(K::NOT_KW.raw());
+            }
+            p.bump_as(K::IN_KW.raw());
+            in_values(p, lhs_kind == K::IN_TUPLE.raw());
+            m.complete(p, K::IN_EXPRESSION.raw())
+        }
+        Infix::IsNull => {
+            p.bump_as(K::IS_KW.raw());
+            eat_kw(p, K::NOT_KW);
+            expect_kw(p, K::NULL_KW);
+            m.complete(p, K::IS_NULL_EXPRESSION.raw())
+        }
+        Infix::Like { not } => {
+            if not {
+                p.bump_as(K::NOT_KW.raw());
+            }
+            if !eat_kw(p, K::LIKE_KW) {
+                eat_kw(p, K::RLIKE_KW);
+            }
+            patterns(p);
+            m.complete(p, K::LIKE_EXPRESSION.raw())
+        }
+        Infix::Match => {
+            p.bump();
+            constant(p);
+            m.complete(p, K::MATCH_EXPRESSION.raw())
+        }
+        Infix::Comparison => {
+            p.bump();
+            expr_bp(p, 6);
+            m.complete(p, K::COMPARISON.raw())
+        }
+        Infix::Additive | Infix::Multiplicative => {
+            let (ops, rhs_bp): (&[K], u8) = if op == Infix::Additive {
+                (&[K::PLUS, K::MINUS], 7)
+            } else {
+                (&[K::STAR_TOKEN, K::SLASH, K::PERCENT], 8)
+            };
+            while ops.iter().any(|k| k.raw() == p.current()) {
+                p.bump();
+                expr_bp(p, rhs_bp);
+            }
+            m.complete(p, K::BINARY_EXPRESSION.raw())
+        }
+        Infix::Cast => {
+            p.bump();
+            let t = p.start();
+            if p.at(K::IDENT.raw()) || p.current() == K::WORD.raw() {
+                token_node(p, K::IDENT, K::IDENTIFIER);
+            } else {
+                p.error("expected a type name after `::`");
+            }
+            t.complete(p, K::TYPE_NAME.raw());
+            m.complete(p, K::INLINE_CAST.raw())
+        }
+    }
 }
 
 /// `not x`, `-x`, `+x`, or an atom.
@@ -239,36 +248,14 @@ fn prefix(p: &mut Parser<'_>) -> Option<CompletedMarker> {
 /// `_primary_expression`.
 fn atom(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     let kind = p.current();
-    if kind == K::WORD.raw() {
-        let text = p.current_text();
-        let is = |w: &str| text.eq_ignore_ascii_case(w);
-        if is("null") || is("true") || is("false") {
-            constant(p)
-        } else if p.nth(1) == K::L_PAREN.raw() {
-            Some(function_call(p))
-        } else if is("first") || is("last") {
-            // A keyword here, as in tree-sitter's lexer: only a function name.
-            p.err_recover(
-                "`first` and `last` name functions: quote a field of that name",
-                RECOVERY,
-            );
-            None
-        } else {
-            Some(qualified_name(p))
-        }
+    if kind == K::L_PAREN.raw() {
+        Some(parenthesized(p))
+    } else if kind == K::WORD.raw() {
+        word_atom(p)
     } else if kind == K::QUOTED_IDENT.raw() {
         Some(qualified_name(p))
     } else if kind == K::PARAM.raw() {
-        let next = p.nth(1);
-        if next == K::DOT.raw() {
-            Some(qualified_name(p))
-        } else if next == K::L_PAREN.raw() {
-            Some(function_call(p))
-        } else {
-            constant(p)
-        }
-    } else if kind == K::L_PAREN.raw() {
-        Some(parenthesized(p))
+        param_atom(p)
     } else if [K::NUMBER_LIT, K::STRING_LIT, K::L_BRACK]
         .map(K::raw)
         .contains(&kind)
@@ -277,6 +264,38 @@ fn atom(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     } else {
         p.err_recover("expected an expression", RECOVERY);
         None
+    }
+}
+
+#[inline(never)]
+fn word_atom(p: &mut Parser<'_>) -> Option<CompletedMarker> {
+    let text = p.current_text();
+    let is = |w: &str| text.eq_ignore_ascii_case(w);
+    if is("null") || is("true") || is("false") {
+        constant(p)
+    } else if p.nth(1) == K::L_PAREN.raw() {
+        Some(function_call(p))
+    } else if is("first") || is("last") {
+        // A keyword here, as in tree-sitter's lexer: only a function name.
+        p.err_recover(
+            "`first` and `last` name functions: quote a field of that name",
+            RECOVERY,
+        );
+        None
+    } else {
+        Some(qualified_name(p))
+    }
+}
+
+#[inline(never)]
+fn param_atom(p: &mut Parser<'_>) -> Option<CompletedMarker> {
+    let next = p.nth(1);
+    if next == K::DOT.raw() {
+        Some(qualified_name(p))
+    } else if next == K::L_PAREN.raw() {
+        Some(function_call(p))
+    } else {
+        constant(p)
     }
 }
 
@@ -362,6 +381,7 @@ fn cast_chain(p: &mut Parser<'_>, mut lhs: CompletedMarker) {
 }
 
 /// `name(args)`, `?param(args)`.
+#[inline(never)]
 fn function_call(p: &mut Parser<'_>) -> CompletedMarker {
     let m = p.start();
     if p.current() == K::PARAM.raw() {

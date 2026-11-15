@@ -1,0 +1,41 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/user_agent_command__valid.esql
+---
+SOURCE_FILE@0..96
+  COMMENT@0..32 "// prod:user_agent_command valid"
+  WHITESPACE@32..33 "\n"
+  QUERY@33..95
+    FROM_COMMAND@33..57
+      FROM_KW@33..37 "FROM"
+      WHITESPACE@37..38 " "
+      INDEX_PATTERN@38..44
+        INDEX_NAME@38..44
+          SOURCE_TEXT@38..44 "logs-*"
+      WHITESPACE@44..45 " "
+      METADATA@45..57
+        METADATA_KW@45..53 "METADATA"
+        WHITESPACE@53..54 " "
+        METADATA_FIELD@54..57
+          SOURCE_TEXT@54..57 "_id"
+    WHITESPACE@57..58 "\n"
+    PIPE@58..59 "|"
+    WHITESPACE@59..60 " "
+    USER_AGENT_COMMAND@60..95
+      USER_AGENT_KW@60..70 "USER_AGENT"
+      WHITESPACE@70..71 " "
+      QUALIFIED_NAME@71..73
+        IDENTIFIER@71..73
+          IDENT@71..73 "ua"
+      WHITESPACE@73..74 " "
+      EQ@74..75 "="
+      WHITESPACE@75..76 " "
+      QUALIFIED_NAME@76..95
+        IDENTIFIER@76..86
+          IDENT@76..86 "user_agent"
+        DOT@86..87 "."
+        IDENTIFIER@87..95
+          IDENT@87..95 "original"
+  WHITESPACE@95..96 "\n"
+--- errors

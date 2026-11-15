@@ -1,0 +1,102 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/aws_cloudtrail_bucket_block_public_access_weakened.broken.esql
+---
+SOURCE_FILE@0..495
+  QUERY@0..494
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    UNKNOWN_COMMAND@40..494
+      COMMAND_NAME@40..50
+        COMMAND_WORD@40..50 "frobnicate"
+      WHITESPACE@50..51 " "
+      UNKNOWN_TEXT@51..64
+        UNKNOWN_WORD@51..64 "eventSource=="
+      STRING@64..82
+        STRING_LIT@64..82 "\"s3.amazonaws.com\""
+      WHITESPACE@82..83 " "
+      UNKNOWN_TEXT@83..86
+        UNKNOWN_WORD@83..86 "and"
+      WHITESPACE@86..87 " "
+      UNKNOWN_TEXT@87..98
+        UNKNOWN_WORD@87..98 "eventName=="
+      STRING@98..126
+        STRING_LIT@98..126 "\"PutBucketPublicAccessBlock\""
+      WHITESPACE@126..127 " "
+      UNKNOWN_TEXT@127..130
+        UNKNOWN_WORD@127..130 "and"
+      WHITESPACE@130..131 " "
+      UNKNOWN_TEXT@131..204
+        UNKNOWN_WORD@131..204 "(requestParameters.PublicAccessBlockConfiguration.RestrictPublicBuckets=="
+      STRING@204..211
+        STRING_LIT@204..211 "\"false\""
+      WHITESPACE@211..212 " "
+      UNKNOWN_TEXT@212..214
+        UNKNOWN_WORD@212..214 "or"
+      WHITESPACE@214..215 " "
+      UNKNOWN_TEXT@215..281
+        UNKNOWN_WORD@215..281 "requestParameters.PublicAccessBlockConfiguration.BlockPublicAcls=="
+      STRING@281..288
+        STRING_LIT@281..288 "\"false\""
+      WHITESPACE@288..289 " "
+      UNKNOWN_TEXT@289..291
+        UNKNOWN_WORD@289..291 "or"
+      WHITESPACE@291..292 " "
+      UNKNOWN_TEXT@292..360
+        UNKNOWN_WORD@292..360 "requestParameters.PublicAccessBlockConfiguration.BlockPublicPolicy=="
+      STRING@360..367
+        STRING_LIT@360..367 "\"false\""
+      WHITESPACE@367..368 " "
+      UNKNOWN_TEXT@368..370
+        UNKNOWN_WORD@368..370 "or"
+      WHITESPACE@370..371 " "
+      UNKNOWN_TEXT@371..438
+        UNKNOWN_WORD@371..438 "requestParameters.PublicAccessBlockConfiguration.IgnorePublicAcls=="
+      STRING@438..445
+        STRING_LIT@438..445 "\"false\""
+      UNKNOWN_TEXT@445..446
+        UNKNOWN_WORD@445..446 ")"
+      WHITESPACE@446..447 " "
+      UNKNOWN_TEXT@447..450
+        UNKNOWN_WORD@447..450 "and"
+      WHITESPACE@450..451 " "
+      UNKNOWN_TEXT@451..463
+        UNKNOWN_WORD@451..463 "(errorCode=="
+      STRING@463..472
+        STRING_LIT@463..472 "\"Success\""
+      WHITESPACE@472..473 " "
+      UNKNOWN_TEXT@473..475
+        UNKNOWN_WORD@473..475 "or"
+      WHITESPACE@475..476 " "
+      UNKNOWN_TEXT@476..485
+        UNKNOWN_WORD@476..485 "errorCode"
+      WHITESPACE@485..486 " "
+      UNKNOWN_TEXT@486..488
+        UNKNOWN_WORD@486..488 "is"
+      WHITESPACE@488..489 " "
+      UNKNOWN_TEXT@489..494
+        UNKNOWN_WORD@489..494 "null)"
+  WHITESPACE@494..495 "\n"
+--- errors

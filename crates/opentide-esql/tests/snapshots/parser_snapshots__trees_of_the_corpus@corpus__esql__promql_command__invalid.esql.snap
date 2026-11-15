@@ -1,0 +1,22 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/promql_command__invalid.esql
+---
+SOURCE_FILE@0..69
+  COMMENT@0..30 "// prod:promql_command invalid"
+  WHITESPACE@30..31 "\n"
+  QUERY@31..68
+    PROMQL_COMMAND@31..68
+      PROMQL_KW@31..37 "PROMQL"
+      WHITESPACE@37..38 " "
+      L_PAREN@38..39 "("
+      PROMQL_TEXT@39..43
+        PROMQL_WORD@39..43 "rate"
+      L_PAREN@43..44 "("
+      PROMQL_TEXT@44..67
+        PROMQL_WORD@44..67 "http_requests_total[5m]"
+      R_PAREN@67..68 ")"
+  WHITESPACE@68..69 "\n"
+--- errors
+68..69: expected `)`

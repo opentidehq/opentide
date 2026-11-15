@@ -1,0 +1,35 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/match_expression__invalid.esql
+---
+SOURCE_FILE@0..75
+  COMMENT@0..32 "// prod:match_expression invalid"
+  WHITESPACE@32..33 "\n"
+  QUERY@33..74
+    FROM_COMMAND@33..57
+      FROM_KW@33..37 "FROM"
+      WHITESPACE@37..38 " "
+      INDEX_PATTERN@38..44
+        INDEX_NAME@38..44
+          SOURCE_TEXT@38..44 "logs-*"
+      WHITESPACE@44..45 " "
+      METADATA@45..57
+        METADATA_KW@45..53 "METADATA"
+        WHITESPACE@53..54 " "
+        METADATA_FIELD@54..57
+          SOURCE_TEXT@54..57 "_id"
+    WHITESPACE@57..58 "\n"
+    PIPE@58..59 "|"
+    WHITESPACE@59..60 " "
+    WHERE_COMMAND@60..74
+      WHERE_KW@60..65 "WHERE"
+      WHITESPACE@65..66 " "
+      MATCH_EXPRESSION@66..74
+        QUALIFIED_NAME@66..73
+          IDENTIFIER@66..73
+            IDENT@66..73 "message"
+        COLON@73..74 ":"
+  WHITESPACE@74..75 "\n"
+--- errors
+74..75: expected a constant

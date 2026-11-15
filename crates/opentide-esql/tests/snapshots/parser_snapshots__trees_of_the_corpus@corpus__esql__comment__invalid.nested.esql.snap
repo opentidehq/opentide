@@ -1,0 +1,38 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/comment__invalid.nested.esql
+---
+SOURCE_FILE@0..110
+  COMMENT@0..61 "// prod:comment invalid (a stray close after a block comment)"
+  WHITESPACE@61..62 "\n"
+  QUERY@62..109
+    FROM_COMMAND@62..86
+      FROM_KW@62..66 "FROM"
+      WHITESPACE@66..67 " "
+      INDEX_PATTERN@67..73
+        INDEX_NAME@67..73
+          SOURCE_TEXT@67..73 "logs-*"
+      WHITESPACE@73..74 " "
+      METADATA@74..86
+        METADATA_KW@74..82 "METADATA"
+        WHITESPACE@82..83 " "
+        METADATA_FIELD@83..86
+          SOURCE_TEXT@83..86 "_id"
+    WHITESPACE@86..87 " "
+    COMMENT@87..96 "/* one */"
+    WHITESPACE@96..97 " "
+    ERROR@97..99
+      SOURCE_TEXT@97..98 "*"
+      SLASH@98..99 "/"
+    WHITESPACE@99..100 "\n"
+    PIPE@100..101 "|"
+    WHITESPACE@101..102 " "
+    LIMIT_COMMAND@102..109
+      LIMIT_KW@102..107 "LIMIT"
+      WHITESPACE@107..108 " "
+      NUMBER@108..109
+        NUMBER_LIT@108..109 "1"
+  WHITESPACE@109..110 "\n"
+--- errors
+86..97: expected `|` or the end of the query (expected PIPE, COMMA, R_PAREN)

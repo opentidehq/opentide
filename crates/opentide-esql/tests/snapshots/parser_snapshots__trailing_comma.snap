@@ -1,0 +1,31 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{source}\\n{tree}--- errors\\n{errors}\")"
+---
+FROM a | KEEP a, b,
+SOURCE_FILE@0..19
+  QUERY@0..19
+    FROM_COMMAND@0..6
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "a"
+    WHITESPACE@6..7 " "
+    PIPE@7..8 "|"
+    WHITESPACE@8..9 " "
+    KEEP_COMMAND@9..19
+      KEEP_KW@9..13 "KEEP"
+      WHITESPACE@13..14 " "
+      NAME_PATTERN@14..15
+        ID_PATTERN@14..15
+          ID_PATTERN_TEXT@14..15 "a"
+      COMMA@15..16 ","
+      WHITESPACE@16..17 " "
+      NAME_PATTERN@17..18
+        ID_PATTERN@17..18
+          ID_PATTERN_TEXT@17..18 "b"
+      COMMA@18..19 ","
+      NAME_PATTERN@19..19
+--- errors
+19..19: expected a name pattern (expected ID_PATTERN_TEXT)

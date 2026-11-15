@@ -1,0 +1,79 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/in_tuple__valid.esql
+---
+SOURCE_FILE@0..124
+  COMMENT@0..22 "// prod:in_tuple valid"
+  WHITESPACE@22..23 "\n"
+  QUERY@23..123
+    FROM_COMMAND@23..47
+      FROM_KW@23..27 "FROM"
+      WHITESPACE@27..28 " "
+      INDEX_PATTERN@28..34
+        INDEX_NAME@28..34
+          SOURCE_TEXT@28..34 "logs-*"
+      WHITESPACE@34..35 " "
+      METADATA@35..47
+        METADATA_KW@35..43 "METADATA"
+        WHITESPACE@43..44 " "
+        METADATA_FIELD@44..47
+          SOURCE_TEXT@44..47 "_id"
+    WHITESPACE@47..48 "\n"
+    PIPE@48..49 "|"
+    WHITESPACE@49..50 " "
+    WHERE_COMMAND@50..123
+      WHERE_KW@50..55 "WHERE"
+      WHITESPACE@55..56 " "
+      IN_EXPRESSION@56..123
+        IN_TUPLE@56..78
+          L_PAREN@56..57 "("
+          QUALIFIED_NAME@57..66
+            IDENTIFIER@57..61
+              IDENT@57..61 "host"
+            DOT@61..62 "."
+            IDENTIFIER@62..66
+              IDENT@62..66 "name"
+          COMMA@66..67 ","
+          WHITESPACE@67..68 " "
+          QUALIFIED_NAME@68..77
+            IDENTIFIER@68..72
+              IDENT@68..72 "user"
+            DOT@72..73 "."
+            IDENTIFIER@73..77
+              IDENT@73..77 "name"
+          R_PAREN@77..78 ")"
+        WHITESPACE@78..79 " "
+        IN_KW@79..81 "IN"
+        WHITESPACE@81..82 " "
+        SOURCE_SUBQUERY@82..123
+          L_PAREN@82..83 "("
+          FROM_COMMAND@83..94
+            FROM_KW@83..87 "FROM"
+            WHITESPACE@87..88 " "
+            INDEX_PATTERN@88..94
+              INDEX_NAME@88..94
+                SOURCE_TEXT@88..94 "admins"
+          WHITESPACE@94..95 " "
+          PIPE@95..96 "|"
+          WHITESPACE@96..97 " "
+          KEEP_COMMAND@97..122
+            KEEP_KW@97..101 "KEEP"
+            WHITESPACE@101..102 " "
+            NAME_PATTERN@102..111
+              ID_PATTERN@102..106
+                ID_PATTERN_TEXT@102..106 "host"
+              DOT@106..107 "."
+              ID_PATTERN@107..111
+                ID_PATTERN_TEXT@107..111 "name"
+            COMMA@111..112 ","
+            WHITESPACE@112..113 " "
+            NAME_PATTERN@113..122
+              ID_PATTERN@113..117
+                ID_PATTERN_TEXT@113..117 "user"
+              DOT@117..118 "."
+              ID_PATTERN@118..122
+                ID_PATTERN_TEXT@118..122 "name"
+          R_PAREN@122..123 ")"
+  WHITESPACE@123..124 "\n"
+--- errors

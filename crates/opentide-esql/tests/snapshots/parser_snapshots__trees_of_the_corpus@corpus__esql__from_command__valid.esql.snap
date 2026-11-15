@@ -1,0 +1,47 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/from_command__valid.esql
+---
+SOURCE_FILE@0..120
+  COMMENT@0..26 "// prod:from_command valid"
+  WHITESPACE@26..27 "\n"
+  QUERY@27..119
+    FROM_COMMAND@27..108
+      FROM_KW@27..31 "FROM"
+      WHITESPACE@31..32 " "
+      INDEX_PATTERN@32..62
+        INDEX_NAME@32..62
+          SOURCE_TEXT@32..62 "logs-endpoint.events.process-*"
+      COMMA@62..63 ","
+      WHITESPACE@63..64 " "
+      INDEX_PATTERN@64..77
+        CLUSTER@64..70
+          SOURCE_TEXT@64..70 "remote"
+        COLON@70..71 ":"
+        INDEX_NAME@71..77
+          SOURCE_TEXT@71..77 "logs-*"
+      WHITESPACE@77..78 " "
+      METADATA@78..108
+        METADATA_KW@78..86 "METADATA"
+        WHITESPACE@86..87 " "
+        METADATA_FIELD@87..90
+          SOURCE_TEXT@87..90 "_id"
+        COMMA@90..91 ","
+        WHITESPACE@91..92 " "
+        METADATA_FIELD@92..100
+          SOURCE_TEXT@92..100 "_version"
+        COMMA@100..101 ","
+        WHITESPACE@101..102 " "
+        METADATA_FIELD@102..108
+          SOURCE_TEXT@102..108 "_index"
+    WHITESPACE@108..109 "\n"
+    PIPE@109..110 "|"
+    WHITESPACE@110..111 " "
+    LIMIT_COMMAND@111..119
+      LIMIT_KW@111..116 "LIMIT"
+      WHITESPACE@116..117 " "
+      NUMBER@117..119
+        NUMBER_LIT@117..119 "10"
+  WHITESPACE@119..120 "\n"
+--- errors

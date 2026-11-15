@@ -1,0 +1,39 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/like_expression__invalid.esql
+---
+SOURCE_FILE@0..83
+  COMMENT@0..31 "// prod:like_expression invalid"
+  WHITESPACE@31..32 "\n"
+  QUERY@32..82
+    FROM_COMMAND@32..56
+      FROM_KW@32..36 "FROM"
+      WHITESPACE@36..37 " "
+      INDEX_PATTERN@37..43
+        INDEX_NAME@37..43
+          SOURCE_TEXT@37..43 "logs-*"
+      WHITESPACE@43..44 " "
+      METADATA@44..56
+        METADATA_KW@44..52 "METADATA"
+        WHITESPACE@52..53 " "
+        METADATA_FIELD@53..56
+          SOURCE_TEXT@53..56 "_id"
+    WHITESPACE@56..57 "\n"
+    PIPE@57..58 "|"
+    WHITESPACE@58..59 " "
+    WHERE_COMMAND@59..82
+      WHERE_KW@59..64 "WHERE"
+      WHITESPACE@64..65 " "
+      LIKE_EXPRESSION@65..82
+        QUALIFIED_NAME@65..77
+          IDENTIFIER@65..72
+            IDENT@65..72 "process"
+          DOT@72..73 "."
+          IDENTIFIER@73..77
+            IDENT@73..77 "name"
+        WHITESPACE@77..78 " "
+        LIKE_KW@78..82 "LIKE"
+  WHITESPACE@82..83 "\n"
+--- errors
+82..83: expected an expression (expected L_PAREN)

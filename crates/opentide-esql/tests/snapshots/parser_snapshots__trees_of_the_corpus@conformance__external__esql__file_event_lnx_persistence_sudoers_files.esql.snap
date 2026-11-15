@@ -1,0 +1,94 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/file_event_lnx_persistence_sudoers_files.esql
+---
+SOURCE_FILE@0..226
+  QUERY@0..225
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    WHERE_COMMAND@40..225
+      WHERE_KW@40..45 "where"
+      WHITESPACE@45..46 " "
+      AND_EXPRESSION@46..225
+        PARENTHESIZED_EXPRESSION@46..128
+          L_PAREN@46..47 "("
+          OR_EXPRESSION@47..127
+            COMPARISON@47..77
+              QUALIFIED_NAME@47..61
+                IDENTIFIER@47..61
+                  IDENT@47..61 "TargetFilename"
+              EQ_EQ@61..63 "=="
+              STRING@63..77
+                STRING_LIT@63..77 "\"/etc/sudoers\""
+            WHITESPACE@77..78 " "
+            OR_KW@78..80 "or"
+            WHITESPACE@80..81 " "
+            FUNCTION_CALL@81..127
+              IDENTIFIER@81..92
+                IDENT@81..92 "starts_with"
+              L_PAREN@92..93 "("
+              QUALIFIED_NAME@93..107
+                IDENTIFIER@93..107
+                  IDENT@93..107 "TargetFilename"
+              COMMA@107..108 ","
+              WHITESPACE@108..109 " "
+              STRING@109..126
+                STRING_LIT@109..126 "\"/etc/sudoers.d/\""
+              R_PAREN@126..127 ")"
+          R_PAREN@127..128 ")"
+        WHITESPACE@128..129 " "
+        AND_KW@129..132 "and"
+        WHITESPACE@132..133 " "
+        NOT_EXPRESSION@133..225
+          NOT_KW@133..136 "not"
+          WHITESPACE@136..137 " "
+          PARENTHESIZED_EXPRESSION@137..225
+            L_PAREN@137..138 "("
+            AND_EXPRESSION@138..224
+              FUNCTION_CALL@138..171
+                IDENTIFIER@138..147
+                  IDENT@138..147 "ends_with"
+                L_PAREN@147..148 "("
+                QUALIFIED_NAME@148..153
+                  IDENTIFIER@148..153
+                    IDENT@148..153 "Image"
+                COMMA@153..154 ","
+                WHITESPACE@154..155 " "
+                STRING@155..170
+                  STRING_LIT@155..170 "\"/usr/bin/dpkg\""
+                R_PAREN@170..171 ")"
+              WHITESPACE@171..172 " "
+              AND_KW@172..175 "and"
+              WHITESPACE@175..176 " "
+              COMPARISON@176..224
+                QUALIFIED_NAME@176..190
+                  IDENTIFIER@176..190
+                    IDENT@176..190 "TargetFilename"
+                EQ_EQ@190..192 "=="
+                STRING@192..224
+                  STRING_LIT@192..224 "\"/etc/sudoers.d/README.dpkg-new\""
+            R_PAREN@224..225 ")"
+  WHITESPACE@225..226 "\n"
+--- errors

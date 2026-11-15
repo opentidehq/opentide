@@ -1,0 +1,60 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-syntax/in_subquery.esql
+---
+SOURCE_FILE@0..80
+  QUERY@0..79
+    FROM_COMMAND@0..11
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..11
+        INDEX_NAME@5..11
+          SOURCE_TEXT@5..11 "logs-*"
+    WHITESPACE@11..12 " "
+    PIPE@12..13 "|"
+    WHITESPACE@13..14 " "
+    WHERE_COMMAND@14..69
+      WHERE_KW@14..19 "WHERE"
+      WHITESPACE@19..20 " "
+      IN_EXPRESSION@20..69
+        QUALIFIED_NAME@20..32
+          IDENTIFIER@20..27
+            IDENT@20..27 "process"
+          DOT@27..28 "."
+          IDENTIFIER@28..32
+            IDENT@28..32 "name"
+        WHITESPACE@32..33 " "
+        IN_KW@33..35 "IN"
+        WHITESPACE@35..36 " "
+        SOURCE_SUBQUERY@36..69
+          L_PAREN@36..37 "("
+          FROM_COMMAND@37..48
+            FROM_KW@37..41 "FROM"
+            WHITESPACE@41..42 " "
+            INDEX_PATTERN@42..48
+              INDEX_NAME@42..48
+                SOURCE_TEXT@42..48 "logs-*"
+          WHITESPACE@48..49 " "
+          PIPE@49..50 "|"
+          WHITESPACE@50..51 " "
+          KEEP_COMMAND@51..68
+            KEEP_KW@51..55 "KEEP"
+            WHITESPACE@55..56 " "
+            NAME_PATTERN@56..68
+              ID_PATTERN@56..63
+                ID_PATTERN_TEXT@56..63 "process"
+              DOT@63..64 "."
+              ID_PATTERN@64..68
+                ID_PATTERN_TEXT@64..68 "name"
+          R_PAREN@68..69 ")"
+    WHITESPACE@69..70 " "
+    PIPE@70..71 "|"
+    WHITESPACE@71..72 " "
+    LIMIT_COMMAND@72..79
+      LIMIT_KW@72..77 "LIMIT"
+      WHITESPACE@77..78 " "
+      NUMBER@78..79
+        NUMBER_LIT@78..79 "1"
+  WHITESPACE@79..80 "\n"
+--- errors

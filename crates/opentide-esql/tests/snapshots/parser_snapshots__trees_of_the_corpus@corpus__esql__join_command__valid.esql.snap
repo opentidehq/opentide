@@ -1,0 +1,43 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/join_command__valid.esql
+---
+SOURCE_FILE@0..92
+  COMMENT@0..26 "// prod:join_command valid"
+  WHITESPACE@26..27 "\n"
+  QUERY@27..91
+    FROM_COMMAND@27..51
+      FROM_KW@27..31 "FROM"
+      WHITESPACE@31..32 " "
+      INDEX_PATTERN@32..38
+        INDEX_NAME@32..38
+          SOURCE_TEXT@32..38 "logs-*"
+      WHITESPACE@38..39 " "
+      METADATA@39..51
+        METADATA_KW@39..47 "METADATA"
+        WHITESPACE@47..48 " "
+        METADATA_FIELD@48..51
+          SOURCE_TEXT@48..51 "_id"
+    WHITESPACE@51..52 "\n"
+    PIPE@52..53 "|"
+    WHITESPACE@53..54 " "
+    JOIN_COMMAND@54..91
+      LOOKUP_KW@54..60 "LOOKUP"
+      WHITESPACE@60..61 " "
+      JOIN_KW@61..65 "JOIN"
+      WHITESPACE@65..66 " "
+      INDEX_PATTERN@66..78
+        INDEX_NAME@66..78
+          SOURCE_TEXT@66..78 "threat-intel"
+      WHITESPACE@78..79 " "
+      ON_KW@79..81 "ON"
+      WHITESPACE@81..82 " "
+      QUALIFIED_NAME@82..91
+        IDENTIFIER@82..88
+          IDENT@82..88 "source"
+        DOT@88..89 "."
+        IDENTIFIER@89..91
+          IDENT@89..91 "ip"
+  WHITESPACE@91..92 "\n"
+--- errors

@@ -1,0 +1,116 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/proc_creation_win_auditpol_nt_resource_kit_usage.broken.esql
+---
+SOURCE_FILE@0..307
+  QUERY@0..306
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    UNKNOWN_COMMAND@40..306
+      COMMAND_NAME@40..50
+        COMMAND_WORD@40..50 "frobnicate"
+      WHITESPACE@50..51 " "
+      UNKNOWN_TEXT@51..62
+        UNKNOWN_WORD@51..62 "CommandLine"
+      WHITESPACE@62..63 " "
+      UNKNOWN_TEXT@63..67
+        UNKNOWN_WORD@63..67 "like"
+      WHITESPACE@67..68 " "
+      STRING@68..83
+        STRING_LIT@68..83 "\"*/logon:none*\""
+      WHITESPACE@83..84 " "
+      UNKNOWN_TEXT@84..86
+        UNKNOWN_WORD@84..86 "or"
+      WHITESPACE@86..87 " "
+      UNKNOWN_TEXT@87..98
+        UNKNOWN_WORD@87..98 "CommandLine"
+      WHITESPACE@98..99 " "
+      UNKNOWN_TEXT@99..103
+        UNKNOWN_WORD@99..103 "like"
+      WHITESPACE@103..104 " "
+      STRING@104..120
+        STRING_LIT@104..120 "\"*/system:none*\""
+      WHITESPACE@120..121 " "
+      UNKNOWN_TEXT@121..123
+        UNKNOWN_WORD@121..123 "or"
+      WHITESPACE@123..124 " "
+      UNKNOWN_TEXT@124..135
+        UNKNOWN_WORD@124..135 "CommandLine"
+      WHITESPACE@135..136 " "
+      UNKNOWN_TEXT@136..140
+        UNKNOWN_WORD@136..140 "like"
+      WHITESPACE@140..141 " "
+      STRING@141..154
+        STRING_LIT@141..154 "\"*/sam:none*\""
+      WHITESPACE@154..155 " "
+      UNKNOWN_TEXT@155..157
+        UNKNOWN_WORD@155..157 "or"
+      WHITESPACE@157..158 " "
+      UNKNOWN_TEXT@158..169
+        UNKNOWN_WORD@158..169 "CommandLine"
+      WHITESPACE@169..170 " "
+      UNKNOWN_TEXT@170..174
+        UNKNOWN_WORD@170..174 "like"
+      WHITESPACE@174..175 " "
+      STRING@175..194
+        STRING_LIT@175..194 "\"*/privilege:none*\""
+      WHITESPACE@194..195 " "
+      UNKNOWN_TEXT@195..197
+        UNKNOWN_WORD@195..197 "or"
+      WHITESPACE@197..198 " "
+      UNKNOWN_TEXT@198..209
+        UNKNOWN_WORD@198..209 "CommandLine"
+      WHITESPACE@209..210 " "
+      UNKNOWN_TEXT@210..214
+        UNKNOWN_WORD@210..214 "like"
+      WHITESPACE@214..215 " "
+      STRING@215..231
+        STRING_LIT@215..231 "\"*/object:none*\""
+      WHITESPACE@231..232 " "
+      UNKNOWN_TEXT@232..234
+        UNKNOWN_WORD@232..234 "or"
+      WHITESPACE@234..235 " "
+      UNKNOWN_TEXT@235..246
+        UNKNOWN_WORD@235..246 "CommandLine"
+      WHITESPACE@246..247 " "
+      UNKNOWN_TEXT@247..251
+        UNKNOWN_WORD@247..251 "like"
+      WHITESPACE@251..252 " "
+      STRING@252..269
+        STRING_LIT@252..269 "\"*/process:none*\""
+      WHITESPACE@269..270 " "
+      UNKNOWN_TEXT@270..272
+        UNKNOWN_WORD@270..272 "or"
+      WHITESPACE@272..273 " "
+      UNKNOWN_TEXT@273..284
+        UNKNOWN_WORD@273..284 "CommandLine"
+      WHITESPACE@284..285 " "
+      UNKNOWN_TEXT@285..289
+        UNKNOWN_WORD@285..289 "like"
+      WHITESPACE@289..290 " "
+      STRING@290..306
+        STRING_LIT@290..306 "\"*/policy:none*\""
+  WHITESPACE@306..307 "\n"
+--- errors

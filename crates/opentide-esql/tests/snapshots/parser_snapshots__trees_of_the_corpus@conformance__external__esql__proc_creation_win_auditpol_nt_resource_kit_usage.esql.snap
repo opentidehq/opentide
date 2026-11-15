@@ -1,0 +1,117 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/proc_creation_win_auditpol_nt_resource_kit_usage.esql
+---
+SOURCE_FILE@0..302
+  QUERY@0..301
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    WHERE_COMMAND@40..301
+      WHERE_KW@40..45 "where"
+      WHITESPACE@45..46 " "
+      OR_EXPRESSION@46..301
+        LIKE_EXPRESSION@46..78
+          QUALIFIED_NAME@46..57
+            IDENTIFIER@46..57
+              IDENT@46..57 "CommandLine"
+          WHITESPACE@57..58 " "
+          LIKE_KW@58..62 "like"
+          WHITESPACE@62..63 " "
+          STRING@63..78
+            STRING_LIT@63..78 "\"*/logon:none*\""
+        WHITESPACE@78..79 " "
+        OR_KW@79..81 "or"
+        WHITESPACE@81..82 " "
+        LIKE_EXPRESSION@82..115
+          QUALIFIED_NAME@82..93
+            IDENTIFIER@82..93
+              IDENT@82..93 "CommandLine"
+          WHITESPACE@93..94 " "
+          LIKE_KW@94..98 "like"
+          WHITESPACE@98..99 " "
+          STRING@99..115
+            STRING_LIT@99..115 "\"*/system:none*\""
+        WHITESPACE@115..116 " "
+        OR_KW@116..118 "or"
+        WHITESPACE@118..119 " "
+        LIKE_EXPRESSION@119..149
+          QUALIFIED_NAME@119..130
+            IDENTIFIER@119..130
+              IDENT@119..130 "CommandLine"
+          WHITESPACE@130..131 " "
+          LIKE_KW@131..135 "like"
+          WHITESPACE@135..136 " "
+          STRING@136..149
+            STRING_LIT@136..149 "\"*/sam:none*\""
+        WHITESPACE@149..150 " "
+        OR_KW@150..152 "or"
+        WHITESPACE@152..153 " "
+        LIKE_EXPRESSION@153..189
+          QUALIFIED_NAME@153..164
+            IDENTIFIER@153..164
+              IDENT@153..164 "CommandLine"
+          WHITESPACE@164..165 " "
+          LIKE_KW@165..169 "like"
+          WHITESPACE@169..170 " "
+          STRING@170..189
+            STRING_LIT@170..189 "\"*/privilege:none*\""
+        WHITESPACE@189..190 " "
+        OR_KW@190..192 "or"
+        WHITESPACE@192..193 " "
+        LIKE_EXPRESSION@193..226
+          QUALIFIED_NAME@193..204
+            IDENTIFIER@193..204
+              IDENT@193..204 "CommandLine"
+          WHITESPACE@204..205 " "
+          LIKE_KW@205..209 "like"
+          WHITESPACE@209..210 " "
+          STRING@210..226
+            STRING_LIT@210..226 "\"*/object:none*\""
+        WHITESPACE@226..227 " "
+        OR_KW@227..229 "or"
+        WHITESPACE@229..230 " "
+        LIKE_EXPRESSION@230..264
+          QUALIFIED_NAME@230..241
+            IDENTIFIER@230..241
+              IDENT@230..241 "CommandLine"
+          WHITESPACE@241..242 " "
+          LIKE_KW@242..246 "like"
+          WHITESPACE@246..247 " "
+          STRING@247..264
+            STRING_LIT@247..264 "\"*/process:none*\""
+        WHITESPACE@264..265 " "
+        OR_KW@265..267 "or"
+        WHITESPACE@267..268 " "
+        LIKE_EXPRESSION@268..301
+          QUALIFIED_NAME@268..279
+            IDENTIFIER@268..279
+              IDENT@268..279 "CommandLine"
+          WHITESPACE@279..280 " "
+          LIKE_KW@280..284 "like"
+          WHITESPACE@284..285 " "
+          STRING@285..301
+            STRING_LIT@285..301 "\"*/policy:none*\""
+  WHITESPACE@301..302 "\n"
+--- errors
