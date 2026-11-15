@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import shutil
 import sys
 from importlib import metadata
+from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
+from tests.corpus_support import materialise_corpus
+from tests.test_platforms.test_plugin_hook import FIXTURE, _env, _run
 
 from opentide import plugins
 
@@ -56,3 +60,60 @@ def test_a_plugin_that_cannot_import_pydantic_is_reported_with_the_extra(
     assert "pip install 'opentide[plugins]'" in found["acme"]
     assert found["acme"].startswith("ModuleNotFoundError: No module named 'pydantic'")
     assert found["other"] == "ModuleNotFoundError: No module named 'acme_sdk'"
+
+
+_BARE_PLUGIN = '''\
+"""A platform plugin with a configuration model and no import of pydantic."""
+
+from typing import Any, ClassVar
+
+from opentide.plugins import PlatformPlugin
+
+
+class Bare(PlatformPlugin):
+    configuration_model: ClassVar[Any] = object
+'''
+
+
+def test_the_rust_host_carries_the_extra_hint_of_a_plugin_check_that_needs_pydantic(
+    tmp_path: Path,
+) -> None:
+    # The Rust plugin host calls ``check_configuration`` through
+    # ``opentide.plugins._invoke``: the ImportError naming the extra reaches
+    # ``opentide validate`` as the finding of the block, not as a crash.
+    site = tmp_path / "site"
+    (site / "bare_acme").mkdir(parents=True)
+    (site / "bare_acme" / "__init__.py").write_text(_BARE_PLUGIN, encoding="utf-8")
+    # An install without the extra: ``import pydantic`` fails in every child.
+    (site / "sitecustomize.py").write_text(
+        "import sys\nsys.modules['pydantic'] = None\n", encoding="utf-8"
+    )
+    info = site / "bare_acme-0.1.0.dist-info"
+    info.mkdir()
+    info.joinpath("METADATA").write_text(
+        "Metadata-Version: 2.1\nName: bare-acme\nVersion: 0.1.0\n", encoding="utf-8"
+    )
+    info.joinpath("entry_points.txt").write_text(
+        "[opentide.platforms]\nacme = bare_acme:Bare\n", encoding="utf-8"
+    )
+    repo = materialise_corpus(tmp_path / "workspace")
+    shutil.copy(
+        FIXTURE / "workspace" / "acme.toml",
+        repo / ".opentide" / "configurations" / "platforms" / "acme.toml",
+    )
+    shutil.copy(
+        FIXTURE / "workspace" / "rule-acme-process.yaml",
+        repo / "Objects" / "Detection Rules" / "rule-acme-process.yaml",
+    )
+
+    _, document = _run(["validate"], _env(site, repo), repo)
+
+    messages = [
+        issue["message"]
+        for issue in document["report"]["issues"]
+        if issue["field_path"] == ["configurations", "acme"]
+    ]
+    assert messages == [
+        "acme: the plugin could not check this block: "
+        "ImportError: the plugin API needs pydantic: pip install 'opentide[plugins]'"
+    ]
