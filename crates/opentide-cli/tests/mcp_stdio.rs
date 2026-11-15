@@ -425,3 +425,95 @@ fn the_validation_report_carries_the_diagnostic_fields() {
     assert_eq!(report["next_actions"][0]["tool"], "explain", "{report}");
     client.close();
 }
+
+/// MCP stdio is newline-delimited: LSP's `Content-Length` header is no
+/// frame, and the body on its own line is still answered.
+#[test]
+fn content_length_headers_are_skipped_and_the_body_is_answered() {
+    let (_dir, ws, mut client) = on_the_corpus();
+    let client_info = json!({"name": "lsp-style", "version": "1"});
+    let params =
+        json!({"protocolVersion": PROTOCOL_VERSION, "capabilities": {}, "clientInfo": client_info});
+    let body = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": params});
+    let body = body.to_string();
+    let stdin = client.stdin.as_mut().unwrap();
+    write!(stdin, "Content-Length: {}\r\n\r\n{body}\n", body.len()).unwrap();
+    stdin.flush().unwrap();
+    let line = client
+        .lines
+        .recv_timeout(PATIENCE)
+        .unwrap()
+        .expect("an answer");
+    let answer = frame(&client.text(line));
+    assert_eq!(answer["id"], 1, "{answer}");
+    assert_eq!(answer["result"]["serverInfo"]["name"], "opentide");
+    client.close();
+    drop(ws);
+}
+
+/// `opentide --repo <ws> mcp start` from another folder serves `<ws>`.
+#[test]
+fn repo_names_the_workspace_from_outside_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws = corpus(dir.path());
+    let outside = dir.path().join("outside");
+    std::fs::create_dir(&outside).unwrap();
+    let mut client = start(&outside, &["--repo", ws.to_str().unwrap()], &[]);
+    client.handshake();
+    let hits = client.call("search", json!({"query": "Rule", "platform": "sentinel"}));
+    assert!(uuids(&hits).contains(&SENTINEL_RULE), "{hits}");
+    let report = client.call("validation_report", json!({"file": RULE_FILE}));
+    assert_eq!(report["ok"], true, "{report}");
+    assert_eq!(report["stats"]["objects_checked"], 1, "{report}");
+    let rules = client.read("opentide://rules");
+    assert!(rules.to_string().contains(SENTINEL_RULE), "{rules}");
+    client.close();
+}
+
+/// An Agent Plugin root (#431): what a plugin host starts the server in.
+fn plugin_root(path: &Path) -> PathBuf {
+    std::fs::create_dir_all(path.join("skills")).unwrap();
+    std::fs::create_dir_all(path.join(".git")).unwrap();
+    let manifest = json!({
+        "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+        "name": "opentide",
+    });
+    std::fs::write(path.join("plugin.json"), manifest.to_string()).unwrap();
+    path.to_path_buf()
+}
+
+#[test]
+fn a_plugin_launch_serves_the_host_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws = corpus(dir.path());
+    let plugin = plugin_root(&dir.path().join("skills"));
+    let mut client = start(&plugin, &[], &[("CLAUDE_PROJECT_DIR", &ws)]);
+    client.handshake();
+    assert_eq!(
+        uuids(&client.call("search", json!({"query": SENTINEL_RULE}))),
+        [SENTINEL_RULE]
+    );
+    client.close();
+}
+
+#[test]
+fn a_plugin_launch_without_a_workspace_says_how_to_name_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let plugin = plugin_root(&dir.path().join("skills"));
+    let mut client = start(&plugin, &[], &[]);
+    client.handshake();
+    let response = client.request(
+        "tools/call",
+        json!({"name": "search", "arguments": {"query": ""}}),
+    );
+    assert_eq!(response["result"]["isError"], true, "{response}");
+    let text = response["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.contains("workspace_not_found") && text.contains("OPENTIDE_REPO_ROOT"),
+        "{text}"
+    );
+    // A tool that needs no catalogue still works.
+    let explained = client.call("explain", json!({"code": "workspace_not_found"}));
+    assert!(explained.is_object(), "{explained}");
+    client.close();
+}
