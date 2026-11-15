@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
@@ -205,7 +205,21 @@ impl Client {
                 frame(&line);
             }
         }
-        assert!(self.child.wait().unwrap().success(), "{}", self.stderr());
+        // Stdout is closed, so the server has exited or is about to: a
+        // server that does not is a failure, not a hung test.
+        let started = Instant::now();
+        let status = loop {
+            if let Some(status) = self.child.try_wait().unwrap() {
+                break status;
+            }
+            assert!(
+                started.elapsed() < PATIENCE,
+                "the server did not exit; stderr:\n{}",
+                self.stderr()
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        assert!(status.success(), "{}", self.stderr());
     }
 }
 
