@@ -15,9 +15,6 @@ use opentide_workspace::validate::{CveCheck, CveLookup};
 
 use crate::env::Env;
 
-/// The Python module whose events this port logs.
-const LOGGER: &str = "opentide.validation.cve_check";
-
 /// The `[cve]` settings of `documentation.toml`: each one that is missing
 /// takes its default, and one of the wrong type is refused.
 #[derive(Clone, Debug, PartialEq)]
@@ -133,7 +130,6 @@ impl CveCheck for OnlineCve {
                 tracing::debug!(
                     cve = id,
                     url = record.page_url.as_str(),
-                    logger = LOGGER,
                     "cve_found_in_vulnerability_lookup"
                 );
                 CveLookup::Found
@@ -143,7 +139,6 @@ impl CveCheck for OnlineCve {
                     cve = id,
                     threat,
                     url = self.links.page_url(id).as_str(),
-                    logger = LOGGER,
                     "cve_not_found_in_vulnerability_lookup"
                 );
                 CveLookup::NotFound
@@ -153,7 +148,6 @@ impl CveCheck for OnlineCve {
                     cve = id,
                     threat,
                     detail = error.0.as_str(),
-                    logger = LOGGER,
                     "cve_lookup_unavailable"
                 );
                 CveLookup::Unavailable(error.0)

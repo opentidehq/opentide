@@ -180,8 +180,6 @@ fn under(path: &Path, root: &Path) -> bool {
 // ---------------------------------------------------------------- Defender
 
 const DEFENDER: &str = "defender_for_endpoint";
-/// The importer's logger, as its log lines name it.
-const DEFENDER_LOGGER: &str = "opentide.extraction.mde_importer";
 
 const TEMPLATE: &str = "\nname: {name}\n#references:\n  #public:\n    #1: \n  #internal:\n    #a: \n\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.0\n  version: 1\n  created: {created}\n  modified: {modified}\n  tlp: amber+strict\n  author: {author}\n  #contributors:\n    #-\n\ndescription: |\n{description}\n#detection_model: \n\nresponse:\n  alert_severity: {alert_severity}\n  #playbook: https://\n  #responders: \n  #procedure:\n\nconfigurations:\n  defender_for_endpoint: \n    schema: platform::defender_for_endpoint::1.0\n    status: {status}\n    {contributors}\n    tenants:\n      - {tenants}\n    #flags:\n      #-\n    \n    scheduling: {schedule}\n    \n    alert:\n      #title: \n      category: {category}{techniques}\n      #severity: \n      {alert_recommendation}\n    \n    {impacted_entities_flag}impacted_entities:\n      {impacted_device}\n      #mailbox: \n      {impacted_user} \n    \n    #actions:\n    \n      #devices:\n        #isolate_device: \n        #collect_investigation_package: true\n        #run_antivirus_scan: true\n        #initiate_investigation: true\n        #restrict_app_execution: true\n    \n      #files:\n        #allow_block:\n          #action: \n          #column: \n          #groups:\n            #selection: \n            #device_groups:\n              #-\n        #quarantine_file: \n    \n    scope:\n      selection: All\n      #device_groups:\n        #-\n    \n    query: |\n{query}\n";
 const NO_CONTRIBUTORS_TEMPLATE: &str = "\n    #contributors:\n      #-\n";
@@ -514,7 +512,6 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
         tracing::error!(
             detail = "You must first have Defender for Endpoint tenants configured to initiate the import",
             advice = "run 'opentide setup platforms --defender-for-endpoint'",
-            logger = DEFENDER_LOGGER,
             critical = true,
             "defender_tenants_not_configured"
         );
@@ -526,7 +523,7 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
         .map_err(|error| format!("{}: {error}", destination.display()))?;
     let connector = opentide_connectors::defender::Defender::new();
     let mut listed: Vec<(String, Vec<(String, CJson)>)> = Vec::new();
-    let mut skipped = Skipped::new(DEFENDER_LOGGER, "defender_import_rule_skipped");
+    let mut skipped = Skipped::new("defender_import_rule_skipped");
     for configured in &tenants {
         let (tenant, http) = tenant(
             DEFENDER,
@@ -548,7 +545,6 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
             opentide_connectors::defender::DefenderError::Authentication { .. } => {
                 tracing::error!(
                     detail = format!("Cannot authenticate against {}", configured.name).as_str(),
-                    logger = "opentide.platforms.defender_for_endpoint.client",
                     critical = true,
                     "fatal_error"
                 );
@@ -607,7 +603,6 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
             tracing::warn!(
                 rule = shown,
                 uuid = detector.as_str(),
-                logger = DEFENDER_LOGGER,
                 detail = format!(
                     "Imported from {}; the copies in {} differ",
                     names[0],
@@ -641,15 +636,13 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
 /// The rules an import left out, each logged as it is skipped and listed
 /// under `skipped` in the result, with the reason.
 pub(crate) struct Skipped {
-    logger: &'static str,
     event: &'static str,
     rules: Vec<Json>,
 }
 
 impl Skipped {
-    pub(crate) fn new(logger: &'static str, event: &'static str) -> Self {
+    pub(crate) fn new(event: &'static str) -> Self {
         Self {
-            logger,
             event,
             rules: Vec::new(),
         }
@@ -657,13 +650,7 @@ impl Skipped {
 
     /// Logs and lists the rule `name`, left out for `reason`.
     pub(crate) fn push(&mut self, name: &str, reason: &str) {
-        tracing::warn!(
-            rule = name,
-            reason = reason,
-            logger = self.logger,
-            "{}",
-            self.event
-        );
+        tracing::warn!(rule = name, reason = reason, "{}", self.event);
         self.rules.push(Json::object([
             ("name", Json::str(name)),
             ("reason", Json::str(reason)),
@@ -869,8 +856,6 @@ mod tests {
 // ----------------------------------------------------------------- Elastic
 
 const ELASTIC: &str = "elastic";
-/// The importer's logger, as its log lines name it.
-const ELASTIC_LOGGER: &str = "opentide.extraction.elastic_importer";
 
 /// The field types RFC 0007's `FieldType` takes (`_VALID_FIELD_TYPES`).
 const VALID_FIELD_TYPES: [&str; 25] = [
@@ -1203,7 +1188,6 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                     rule = rule.get("name").map(py).as_deref().unwrap_or("None"),
                     interval = py(&interval).as_str(),
                     from = py(&from).as_str(),
-                    logger = ELASTIC_LOGGER,
                     "elastic_import_window_widened"
                 );
             }
@@ -1214,7 +1198,6 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                 rule = rule.get("name").map(py).as_deref().unwrap_or("None"),
                 interval = py(&interval).as_str(),
                 from = py(&from).as_str(),
-                logger = ELASTIC_LOGGER,
                 "elastic_import_schedule_defaulted"
             );
             "1m".to_owned()
@@ -1326,7 +1309,6 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                     rule = rule.get("name").map(py).as_deref().unwrap_or("None"),
                     field = py(name).as_str(),
                     r#type = kind.map_or_else(|| "None".to_owned(), py).as_str(),
-                    logger = ELASTIC_LOGGER,
                     "elastic_import_required_field_dropped"
                 );
                 continue;
@@ -1432,7 +1414,6 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                         tracing::warn!(
                             rule = rule_name.as_str(),
                             command = command.map_or_else(|| "None".to_owned(), py).as_str(),
-                            logger = ELASTIC_LOGGER,
                             "skipping_unsupported_endpoint_response_action"
                         );
                         continue;
@@ -1457,7 +1438,6 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                             rule = rule_name.as_str(),
                             reason =
                                 "osquery response action has no inline query (pack/saved query)",
-                            logger = ELASTIC_LOGGER,
                             "skipping_unsupported_osquery_response_action"
                         );
                     }
@@ -1906,7 +1886,6 @@ fn elastic_run(
                 tracing::warn!(
                     rule = name.as_str(),
                     reason = reason.as_str(),
-                    logger = ELASTIC_LOGGER,
                     "elastic_import_rule_skipped"
                 );
                 skipped.push(Json::object([
