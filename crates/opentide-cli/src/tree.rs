@@ -1463,9 +1463,11 @@ pub struct GenerateExportsObjectsArgs {}
 #[derive(Debug, Args)]
 pub struct GenerateExportsNavigatorArgs {}
 
-/// `opentide generate docs`.
+// The options `generate docs` and each of its subcommands share, flattened
+// into every one of them (a plain comment: a doc comment would become the
+// command's `about`).
 #[derive(Debug, Args)]
-pub struct GenerateDocsArgs {
+pub struct DocsPages {
     #[arg(
         long = "output",
         help = "Write the pages here instead of the configured docs folder"
@@ -1476,6 +1478,13 @@ pub struct GenerateDocsArgs {
         help = "Markdown flavour: github, gitlab, azure_devops or generic"
     )]
     pub flavor: Option<String>,
+}
+
+/// `opentide generate docs`.
+#[derive(Debug, Args)]
+pub struct GenerateDocsArgs {
+    #[command(flatten)]
+    pub pages: DocsPages,
     #[arg(
         long = "rules",
         help = "Only rule pages; combine with --threats, --objectives"
@@ -1503,61 +1512,29 @@ pub struct GenerateDocsArgs {
 /// `opentide generate docs index`.
 #[derive(Debug, Args)]
 pub struct GenerateDocsIndexArgs {
-    #[arg(
-        long = "output",
-        help = "Write the pages here instead of the configured docs folder"
-    )]
-    pub output: Option<String>,
-    #[arg(
-        long = "flavor",
-        help = "Markdown flavour: github, gitlab, azure_devops or generic"
-    )]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub pages: DocsPages,
 }
 
 /// `opentide generate docs threats`.
 #[derive(Debug, Args)]
 pub struct GenerateDocsThreatsArgs {
-    #[arg(
-        long = "output",
-        help = "Write the pages here instead of the configured docs folder"
-    )]
-    pub output: Option<String>,
-    #[arg(
-        long = "flavor",
-        help = "Markdown flavour: github, gitlab, azure_devops or generic"
-    )]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub pages: DocsPages,
 }
 
 /// `opentide generate docs objectives`.
 #[derive(Debug, Args)]
 pub struct GenerateDocsObjectivesArgs {
-    #[arg(
-        long = "output",
-        help = "Write the pages here instead of the configured docs folder"
-    )]
-    pub output: Option<String>,
-    #[arg(
-        long = "flavor",
-        help = "Markdown flavour: github, gitlab, azure_devops or generic"
-    )]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub pages: DocsPages,
 }
 
 /// `opentide generate docs rules`.
 #[derive(Debug, Args)]
 pub struct GenerateDocsRulesArgs {
-    #[arg(
-        long = "output",
-        help = "Write the pages here instead of the configured docs folder"
-    )]
-    pub output: Option<String>,
-    #[arg(
-        long = "flavor",
-        help = "Markdown flavour: github, gitlab, azure_devops or generic"
-    )]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub pages: DocsPages,
 }
 
 /// `opentide generate explorer`.
