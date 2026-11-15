@@ -74,6 +74,7 @@ fn deploy(
         rule_id: rule_id.to_owned(),
         operation,
         body: body.to_vec(),
+        policies: None,
     };
     with_tenant(api, |cx| wait(SentinelOne.deploy(cx, &request))).map(|outcome| outcome.remote_id)
 }

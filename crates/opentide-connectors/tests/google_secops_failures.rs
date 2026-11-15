@@ -563,6 +563,7 @@ fn the_framework_traits_turn_a_refusal_into_an_error_with_googles_words() {
             rule_id: String::new(),
             operation: Operation::Create,
             body: serde_json::to_vec(&json!({"text": TEXT})).unwrap(),
+            policies: None,
         };
         let settings = HttpSettings::default();
         let [check, search, deploy] = with_tenant(&api, "", &settings, async |cx, connector| {
@@ -626,6 +627,7 @@ fn the_deployer_trait_records_the_created_id_and_forgets_a_retired_one() {
             rule_id: rule_id.to_owned(),
             operation,
             body: serde_json::to_vec(&json!({"text": TEXT})).unwrap(),
+            policies: None,
         };
         let settings = HttpSettings::default();
         let scoped = "data_access_scope = \"soc\"";
