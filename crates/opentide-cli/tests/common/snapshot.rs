@@ -82,6 +82,30 @@ impl Case {
     }
 }
 
+/// The snapshot files (`<command dir>/<name>.snap`) of the cases that feed
+/// standard input, which `tests/serve.rs` writes: the completeness test
+/// counts them as cases'.
+pub fn session_snapshots() -> Vec<String> {
+    let text = std::fs::read_to_string(replay::repo().join("tests/golden/cases.toml")).unwrap();
+    let spec: Spec = toml::from_str(&text).unwrap();
+    let mut out = Vec::new();
+    for case in spec.case.iter().filter(|case| !case.input.is_empty()) {
+        let modes = case.modes.as_ref().unwrap_or(&spec.defaults.modes);
+        let fixtures = case.fixtures.as_ref().unwrap_or(&spec.defaults.fixtures);
+        for (mode, fixture) in modes
+            .iter()
+            .flat_map(|mode| fixtures.iter().map(move |fixture| (mode, fixture)))
+        {
+            out.push(format!(
+                "{}/{mode}__{fixture}__{}.snap",
+                case.command.replace(' ', "."),
+                case.variant
+            ));
+        }
+    }
+    out
+}
+
 /// Every case of `tests/golden/cases.toml` this harness runs, in the
 /// manifest's order: each `[[case]]` over its modes and fixtures, a fixture
 /// lacking a `{variable}` the arguments use left out, as `cargo xtask golden
