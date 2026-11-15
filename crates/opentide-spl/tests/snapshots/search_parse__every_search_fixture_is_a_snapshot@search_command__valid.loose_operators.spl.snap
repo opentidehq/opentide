@@ -45,9 +45,10 @@ SOURCE_FILE@0..68
     WHITESPACE@54..55 " "
     PIPE@55..56 "|"
     WHITESPACE@56..57 " "
-    UNKNOWN_COMMAND@57..68
-      IDENT@57..62 "stats"
+    STATS_COMMAND@57..68
+      STATS_KW@57..62 "stats"
       WHITESPACE@62..63 " "
-      ARGUMENT_LIST@63..68
-        IDENT@63..68 "count"
+      AGGREGATE_ITEM@63..68
+        IDENTIFIER@63..68
+          IDENT@63..68 "count"
 --

@@ -6,7 +6,7 @@
 
 use super::kind::{SyntaxKind as K, SyntaxNode};
 use super::lexer::lex;
-use super::{expr, search};
+use super::{expr, search, stats};
 use opentide_parse::{Grammar, Input, Parse, Parser, TokenSet, build};
 
 /// Nesting (groups, subsearches) deeper than this is one error: the floor
@@ -135,6 +135,19 @@ fn first_stage(p: &mut Parser<'_>, ctx: Context, piped: bool) {
     }
 }
 
+/// The commands of the stats family.
+const STATS_COMMANDS: [&str; 9] = [
+    "stats",
+    "eventstats",
+    "streamstats",
+    "sistats",
+    "chart",
+    "timechart",
+    "sichart",
+    "sitimechart",
+    "geostats",
+];
+
 /// A stage after a pipe: a command, or a macro that stands for one.
 fn command_stage(p: &mut Parser<'_>) {
     if at(p, K::MACRO_TOKEN) {
@@ -145,6 +158,10 @@ fn command_stage(p: &mut Parser<'_>) {
         expr::where_command(p);
     } else if at_name(p, "eval") {
         expr::eval_command(p);
+    } else if STATS_COMMANDS.contains(&p.current_text()) && at(p, K::IDENT) {
+        stats::stats_command(p);
+    } else if at_name(p, "tstats") {
+        stats::tstats_command(p);
     } else if at(p, K::IDENT) {
         generic_command(p);
     } else {

@@ -184,7 +184,7 @@ fn leaf_marker(p: &mut Parser<'_>, node: K, token: K) -> CompletedMarker {
 }
 
 /// A name, a boolean, or a call (`f(`, `true()`).
-fn name_or_call(p: &mut Parser<'_>) -> Option<CompletedMarker> {
+pub(super) fn name_or_call(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     let boolean = matches!(p.current_text(), "true" | "false" | "TRUE" | "FALSE");
     let call = p.nth(1) == K::L_PAREN.raw();
     let name_node = if boolean && !call {

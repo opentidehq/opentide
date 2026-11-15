@@ -8,6 +8,7 @@ mod kind;
 mod lexer;
 mod parser;
 mod search;
+mod stats;
 
 pub use kind::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 pub use lexer::lex;

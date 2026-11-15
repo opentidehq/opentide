@@ -114,7 +114,7 @@ pub(super) fn search_command(p: &mut Parser<'_>) {
     let m = p.start();
     p.bump_as(K::SEARCH_KW.raw());
     if starts_term(p) || boolean(p).is_some() {
-        search_expression(p, K::SEARCH_EXPRESSION);
+        search_expression(p, K::SEARCH_EXPRESSION, false);
     }
     m.complete(p, K::SEARCH_COMMAND.raw());
 }
@@ -123,15 +123,20 @@ pub(super) fn search_command(p: &mut Parser<'_>) {
 /// bare word (`error`, `tstats count`); a subsearch's may not.
 pub(super) fn bare_search(p: &mut Parser<'_>, leading_word: bool) {
     let _ = leading_word;
-    search_expression(p, K::BARE_SEARCH);
+    search_expression(p, K::BARE_SEARCH, false);
 }
 
 /// `NOT`s and terms, `AND` and `OR` between them, as the children of one
 /// node of `kind`.
-fn search_expression(p: &mut Parser<'_>, kind: K) {
+fn search_expression(p: &mut Parser<'_>, kind: K, stop_by: bool) {
     let m = p.start();
     let mut first = true;
     loop {
+        // `by` is a term when nothing precedes it (`where by x` searches for
+        // the word), and ends the terms otherwise.
+        if stop_by && !first && at_by(p) {
+            break;
+        }
         let operator = boolean(p);
         match operator {
             Some(K::NOT_KW) => {
@@ -165,11 +170,21 @@ fn search_expression(p: &mut Parser<'_>, kind: K) {
             break;
         }
         first = false;
-        if !(starts_term(p) || boolean(p).is_some()) {
+        if !(starts_term(p) || boolean(p).is_some()) || (stop_by && at_by(p)) {
             break;
         }
     }
     m.complete(p, kind.raw());
+}
+
+/// `by`, which ends the `where` of a `tstats` (any case).
+fn at_by(p: &Parser<'_>) -> bool {
+    p.current() == K::IDENT.raw() && p.current_text().eq_ignore_ascii_case("by")
+}
+
+/// A search expression that stops at `by` (tstats's `where`).
+pub(super) fn search_expression_before_by(p: &mut Parser<'_>) {
+    search_expression(p, K::SEARCH_EXPRESSION, true);
 }
 
 fn boolean_node(p: &mut Parser<'_>, kind: K) {
@@ -314,7 +329,7 @@ fn group(p: &mut Parser<'_>) {
     let m = p.start();
     p.bump();
     if starts_term(p) || boolean(p).is_some() {
-        search_expression(p, K::SEARCH_EXPRESSION);
+        search_expression(p, K::SEARCH_EXPRESSION, false);
     } else {
         p.error("expected a search term");
     }

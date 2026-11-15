@@ -16,10 +16,11 @@ SOURCE_FILE@0..24
     WHITESPACE@10..11 " "
     PIPE@11..12 "|"
     WHITESPACE@12..13 " "
-    UNKNOWN_COMMAND@13..24
-      IDENT@13..18 "stats"
+    STATS_COMMAND@13..24
+      STATS_KW@13..18 "stats"
       WHITESPACE@18..19 " "
-      ARGUMENT_LIST@19..24
-        IDENT@19..24 "count"
+      AGGREGATE_ITEM@19..24
+        IDENTIFIER@19..24
+          IDENT@19..24 "count"
 --
 10..11: expected a command (expected IDENT, MACRO_TOKEN)
