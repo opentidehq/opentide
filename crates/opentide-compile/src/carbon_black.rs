@@ -62,7 +62,7 @@ pub fn report(
     rule: &Rule,
     tenant: &Json,
 ) -> Result<Option<Report>, CompileError> {
-    let Some(block) = rule.block(PLATFORM).filter(|block| block.truthy()) else {
+    let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Ok(None);
     };
     let query = block
@@ -78,7 +78,7 @@ pub fn report(
         .unwrap_or_default();
     let strategy = deploy::strategy(cx, DISPLAY, status)?;
     let mut tags: Vec<String> = vec![status.to_owned()];
-    if let Some(model) = deploy::rule_value(rule, &["detection_model"]).filter(|m| m.truthy()) {
+    if let Some(model) = deploy::rule_value(rule, &["detection_model"]).filter(|m| m.is_name()) {
         let techniques = deploy::inherited_techniques(cx, DISPLAY, rule)?;
         tags.push(deploy::text(model));
         tags.extend(techniques);
@@ -103,14 +103,14 @@ pub fn report(
         severity: severity(alert_severity)?,
         watchlist: block
             .get("watchlist")
-            .filter(|value| value.truthy())
+            .filter(|value| value.is_filled())
             .or_else(|| deploy::setup(tenant, "watchlist"))
-            .filter(|value| value.truthy())
+            .filter(|value| value.is_filled())
             .map(deploy::text)
             .unwrap_or_default(),
         report: block
             .get("report")
-            .filter(|value| value.truthy())
+            .filter(|value| value.is_filled())
             .map_or_else(|| name.clone(), deploy::text),
         name,
     }))
@@ -125,7 +125,7 @@ pub fn compile(
     tenant: &Json,
     timestamp: i64,
 ) -> Result<Vec<Write>, CompileError> {
-    let Some(block) = rule.block(PLATFORM).filter(|block| block.truthy()) else {
+    let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Ok(Vec::new());
     };
     let query = block
@@ -148,7 +148,7 @@ pub fn compile(
         StatusStrategy::Disablement | StatusStrategy::Deletion
     );
     let mut tags: Vec<String> = vec![status.to_owned()];
-    if let Some(model) = deploy::rule_value(rule, &["detection_model"]).filter(|m| m.truthy()) {
+    if let Some(model) = deploy::rule_value(rule, &["detection_model"]).filter(|m| m.is_name()) {
         let techniques = deploy::inherited_techniques(cx, DISPLAY, rule)?;
         tags.push(deploy::text(model));
         tags.extend(techniques);
@@ -164,14 +164,14 @@ pub fn compile(
     let severity = severity(alert_severity)?;
     let watchlist = block
         .get("watchlist")
-        .filter(|value| value.truthy())
+        .filter(|value| value.is_filled())
         .or_else(|| deploy::setup(tenant, "watchlist"))
-        .filter(|value| value.truthy())
+        .filter(|value| value.is_filled())
         .map(deploy::text)
         .unwrap_or_default();
     let report = block
         .get("report")
-        .filter(|value| value.truthy())
+        .filter(|value| value.is_filled())
         .map_or_else(|| name.to_owned(), deploy::text);
     if watchlist.is_empty() {
         return Err(CompileError::failed(

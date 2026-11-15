@@ -4,7 +4,7 @@
 //! `elastic_dataset_not_declared`. The host reads and writes the file; this
 //! module only computes the text edit.
 
-use opentide_core::{Position, Range};
+use opentide_core::{Position, Range, utf16_len};
 
 /// Workspace-relative path of the visibility configuration.
 pub const VISIBILITY_CONFIGURATION: &str = ".opentide/configurations/visibility.toml";
@@ -65,14 +65,6 @@ fn quote(text: &str) -> String {
     }
     out.push('"');
     out
-}
-
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
-)]
-fn utf16_len(text: &str) -> u32 {
-    text.chars().map(|c| c.len_utf16() as u32).sum()
 }
 
 #[expect(

@@ -39,7 +39,7 @@ Every check has a code that keeps its meaning. A check that repeats per platform
 | `platform_sdk` | Each enabled platform's SDK imports | It does not | | |
 | `analysis_engine` | The analysis engine compiled into opentide loads, and the language-server version it was built from: what `validate`, `validate query`, `lint` and `opentide lsp` run | It does not | | |
 | `credentials` | Per configured tenant of an enabled platform, whether every `$VARIABLE` its setup names is set | | A variable is unset or empty | The platform has no tenant |
-| `proxy` | The proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts a connection | It does not | | No proxy is set, or `--offline` |
+| `proxy` | The proxy opentide's requests go through accepts a connection: the one an `https://` request uses, chosen as every command chooses it ([proxy precedence](../usage/configuration.md#proxy)), else the `http://` one | It does not | | No proxy is set, or `--offline` |
 | `vscode_settings` | `.vscode/extensions.json` recommends the opentide VS Code extension (`opentidehq.opentide`), and `.vscode/settings.json` maps no object files to opentide's schemas in `yaml.schemas` | | `settings.json` maps objects to opentide's schemas (a YAML extension would report them a second time), `extensions.json` does not recommend the extension, or either is not valid JSON | No `.vscode/extensions.json`, or it lists the extension under `unwantedRecommendations` |
 | `vscode_snippets` | The snippet file `opentide generate snippets` writes exists | | | It does not |
 | `mcp_config` | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`, with the command on `PATH`; or `.vscode/extensions.json` recommends the opentide extension, which provides the server to VS Code (with both, the message says so) | | No file has such a server, or the command is not on `PATH` | No configuration, and the extension is not recommended |
@@ -56,7 +56,7 @@ A check that raises an unexpected error fails under its own codes with `The chec
 
 ### Secrets
 
-`doctor` never prints a secret. `credentials` names the variables a tenant's setup refers to and whether each is set, never a value, and never a value written into the TOML. A proxy is shown as `scheme://host:port`, without its user and password, even when the password holds an unencoded `/`, `#`, `?` or `@`; a URL that cannot be parsed is shown as `<unparseable proxy URL>`.
+`doctor` never prints a secret. `credentials` names the variables a tenant's setup refers to and whether each is set, never a value, and never a value written into the TOML. A proxy is shown as `scheme://host:port`, without its user and password, even when the password holds an unencoded `@` or `:`. A password with an unencoded `/`, `#`, `?` or `\` cannot be told apart from the host (a URL parser would read part of it as the host), so such a URL is not shown at all: it is `<unparseable proxy URL>`, the `proxy` check fails with `The proxy URL cannot be parsed: its user or password holds an unencoded …`, and every command refuses it. Percent-encode those characters (`%2F`, `%23`, `%3F`, `%5C`, `%40` for `@`).
 
 ### In the VS Code extension
 
@@ -64,7 +64,7 @@ The extension runs the WASI build of opentide, which cannot start another progra
 
 ### Network
 
-`opentide_latest` asks `https://pypi.org/pypi/opentide/json`, and `proxy` opens a TCP connection to the proxy, each with a 3-second timeout. Both go through `--proxy` and honour `NO_PROXY`. Offline, `opentide_latest` is a warning, not a failure; `--offline` skips both.
+`opentide_latest` asks `https://pypi.org/pypi/opentide/json`, and `proxy` opens a TCP connection to the proxy, each with a 3-second timeout. Both use the proxy every command would use, and honour `no_proxy` (else `NO_PROXY`); when it sends PyPI direct the `proxy` check says `pypi.org bypasses it (NO_PROXY)`. Offline, `opentide_latest` is a warning, not a failure; `--offline` skips both.
 
 A failed check says what went wrong: for `opentide_latest`, the HTTP client's error (`Cannot reach pypi tenant 'pypi.org' at …: …`), PyPI's status (`PyPI answered HTTP 503`) or an answer without a version; for `proxy`, the operating system's error (`Connection refused (os error 111)`) or `cannot resolve <host>: …`. Versions are ordered as PEP 440 orders them.
 
@@ -94,7 +94,7 @@ One line per check, its fix under it, then the outcome line. `✓` is a pass, `!
 ✓ sentinel: azure.identity, azure.monitor.query, requests import · platform_sdk
 ○ sentinel: no tenant configured · credentials
   → add a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
-○ No proxy set (--proxy, HTTPS_PROXY) · proxy
+○ No proxy set (--proxy, OPENTIDE_PROXY, https_proxy, http_proxy, all_proxy) · proxy
 ○ No .vscode/extensions.json: VS Code does not suggest opentidehq.opentide · vscode_settings
   → opentide setup vscode
 ○ No snippets at .vscode/model-templates.code-snippets · vscode_snippets

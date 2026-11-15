@@ -19,8 +19,5 @@ exit: 0
 ␛[1m␛[32m✓␛[0m Validation passed · <SECONDS>
 
 ━━━ stderr
-␛[?25l<LIVE></LIVE>␛[1m␛[36m⠋␛[0m Validating objects
 warning: Cve lookup unavailable · cve: CVE-2024-3094 · threat: 00000000-0000-4000-8001-000000000001 · detail: Vulnerability-Lookup request failed for CVE-2024-3094
 warning: Cve lookup unavailable · cve: GHSA-rxwq-x6h5-qc8m · threat: 00000000-0000-4000-8001-000000000001 · detail: Vulnerability-Lookup request failed for GHSA-rxwq-x6h5-qc8m
-␛[?25h
-⏎ no final newline

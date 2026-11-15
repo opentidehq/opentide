@@ -8,7 +8,4 @@ exit: 0
 ━━━ stdout
 ␛[1m␛[32m✓␛[0m Validation passed · <SECONDS>
 
-━━━ stderr
-␛[?25l<LIVE></LIVE>␛[1m␛[36m⠋␛[0m Validating objects
-␛[?25h
-⏎ no final newline
+━━━ stderr · empty

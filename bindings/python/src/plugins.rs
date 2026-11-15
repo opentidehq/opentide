@@ -142,19 +142,20 @@ fn call(entry: &Entry, method: &str, arguments: &[String]) -> Result<String, Str
     .map_err(|error| error.to_string())
 }
 
-/// The plugin's answer: its `ok` value, or the error it maps to.
-fn answer(text: &str, platform: &str, tenant: &str) -> Result<Value, ConnectorError> {
+/// The plugin's answer: its `ok` value, keys in the order the plugin wrote
+/// them (a query's columns), or the error it maps to.
+fn answer(text: &str, platform: &str, tenant: &str) -> Result<Json, ConnectorError> {
     let crashed = |message: String| ConnectorError::Crashed {
         platform: platform.to_owned(),
         tenant: tenant.to_owned(),
         message,
     };
-    let document: Value = serde_json::from_str(text)
+    let document: Json = serde_json::from_str(text)
         .map_err(|error| crashed(format!("the plugin answered no JSON: {error}")))?;
     if let Some(ok) = document.get("ok") {
         return Ok(ok.clone());
     }
-    let error = document.get("error").cloned().unwrap_or(Value::Null);
+    let error = document.get("error").map_or(Value::Null, plain);
     let field = |name: &str| error.get(name).and_then(Value::as_str).map(str::to_owned);
     let message = field("message").unwrap_or_else(|| "the plugin failed".to_owned());
     let detail = field("detail");
@@ -181,7 +182,7 @@ fn invoke(
     method: &'static str,
     arguments: Vec<String>,
     tenant: String,
-) -> BoxFuture<'static, Result<Value, ConnectorError>> {
+) -> BoxFuture<'static, Result<Json, ConnectorError>> {
     let entry = Arc::clone(entry);
     Box::pin(async move {
         let platform = entry.id.clone();
@@ -288,27 +289,28 @@ fn strings(value: Option<&Value>) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// An ordered value as a `serde_json::Value`, whose map sorts its keys: for
+/// the fields whose order does not matter.
+fn plain(value: &Json) -> Value {
+    // A `Json` always serialises: a float JSON cannot carry becomes `null`.
+    serde_json::to_value(value).unwrap_or(Value::Null)
+}
+
 /// A query result as the plugin wrote it, its rows in their columns' order.
-fn outcome_of(value: &Value) -> Result<QueryOutcome, String> {
-    let text = |name: &str| value.get(name).and_then(Value::as_str).map(str::to_owned);
-    let rows = match value.get("rows") {
-        None | Some(Value::Null) => Vec::new(),
-        Some(rows) => {
-            // Re-read in order: serde_json's map sorts its keys.
-            let ordered: Json = serde_json::from_str(&rows.to_string())
-                .map_err(|error| format!("rows: {error}"))?;
-            match ordered {
-                Json::Array(items) => items
-                    .into_iter()
-                    .map(|item| match item {
-                        Json::Object(row) => Ok(row),
-                        _ => Err("rows: a row is not an object".to_owned()),
-                    })
-                    .collect::<Result<Vec<_>, _>>()?,
-                _ => return Err("rows: not a list".to_owned()),
-            }
-        }
+fn outcome_of(ordered: &Json) -> Result<QueryOutcome, String> {
+    let rows = match ordered.get("rows") {
+        None | Some(Json::Null) => Vec::new(),
+        Some(Json::Array(items)) => items
+            .iter()
+            .map(|item| match item {
+                Json::Object(row) => Ok(row.clone()),
+                _ => Err("rows: a row is not an object".to_owned()),
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        Some(_) => return Err("rows: not a list".to_owned()),
     };
+    let value = &plain(ordered);
+    let text = |name: &str| value.get(name).and_then(Value::as_str).map(str::to_owned);
     let columns = match value.get("columns").and_then(Value::as_array) {
         Some(columns) => columns
             .iter()
@@ -354,7 +356,7 @@ impl Deployer for PythonPlatform {
             tenant,
         );
         Box::pin(async move {
-            let value = work.await?;
+            let value = plain(&work.await?);
             Ok(DeployOutcome {
                 remote_id: value
                     .get("remote_id")
@@ -406,9 +408,9 @@ impl LiveValidator for PythonPlatform {
             tenant.clone(),
         );
         Box::pin(async move {
-            let value = work.await?;
-            let result = match value.get("result") {
-                None | Some(Value::Null) => None,
+            let ordered = work.await?;
+            let result = match ordered.get("result") {
+                None | Some(Json::Null) => None,
                 Some(result) => {
                     Some(
                         outcome_of(result).map_err(|message| ConnectorError::Crashed {
@@ -419,6 +421,7 @@ impl LiveValidator for PythonPlatform {
                     )
                 }
             };
+            let value = plain(&ordered);
             Ok(LiveCheck {
                 result,
                 errors: strings(value.get("errors")),
@@ -438,7 +441,7 @@ impl ConfigurationCheck for PythonPlatform {
                     message,
                 }
             })?;
-        let value = answer(&text, &self.0.id, "")?;
+        let value = plain(&answer(&text, &self.0.id, "")?);
         Ok(value
             .get("findings")
             .and_then(Value::as_array)
@@ -467,9 +470,17 @@ impl ConfigurationCheck for PythonPlatform {
 mod tests {
     use super::*;
 
+    /// A value whose key order does not matter to the test, as `Json`.
+    fn ordered(value: &Value) -> Json {
+        Json::from_serialize(value).expect("json")
+    }
+
     #[test]
     fn answers_map_to_connector_errors() {
-        assert_eq!(answer(r#"{"ok": 1}"#, "acme", "t").expect("ok"), json!(1));
+        assert_eq!(
+            answer(r#"{"ok": 1}"#, "acme", "t").expect("ok"),
+            Json::Int(1)
+        );
         let refused = answer(
             r#"{"error": {"kind": "refused", "message": "no", "detail": "why"}}"#,
             "acme",
@@ -502,26 +513,37 @@ mod tests {
 
     #[test]
     fn query_results_keep_their_column_order() {
-        let outcome = outcome_of(&json!({
-            "rows": [{"z": 1, "a": 2}],
-            "truncated": true,
-            "warnings": ["w", 3],
-            "language": "acmeql",
-        }))
-        .expect("read");
+        // As the plugin's JSON text reaches the host: the columns come in the
+        // order the plugin wrote them, first seen first, as Python keeps them.
+        let ok = answer(
+            r#"{"ok": {"rows": [{"z": 1, "a": 2}, {"m": 3, "a": 4}],
+                "truncated": true, "warnings": ["w", 3], "language": "acmeql"}}"#,
+            "acme",
+            "t",
+        )
+        .expect("ok");
+        let outcome = outcome_of(&ok).expect("read");
         assert_eq!(
             outcome.columns,
-            [QueryColumn::named("a"), QueryColumn::named("z")]
+            [
+                QueryColumn::named("z"),
+                QueryColumn::named("a"),
+                QueryColumn::named("m")
+            ]
         );
+        let keys: Vec<&str> = outcome.rows[0].keys().map(String::as_str).collect();
+        assert_eq!(keys, ["z", "a"]);
         assert!(outcome.truncated && !outcome.partial);
         assert_eq!(outcome.warnings, ["w", "3"]);
         assert_eq!(outcome.language.as_deref(), Some("acmeql"));
-        let typed = outcome_of(&json!({"columns": [{"name": "n", "type": "long"}], "rows": null}))
-            .expect("read");
+        let typed = outcome_of(&ordered(
+            &json!({"columns": [{"name": "n", "type": "long"}], "rows": null}),
+        ))
+        .expect("read");
         assert_eq!(typed.columns[0].kind.as_deref(), Some("long"));
         assert!(typed.rows.is_empty());
-        assert!(outcome_of(&json!({"rows": {}})).is_err());
-        assert!(outcome_of(&json!({"rows": [1]})).is_err());
+        assert!(outcome_of(&ordered(&json!({"rows": {}}))).is_err());
+        assert!(outcome_of(&ordered(&json!({"rows": [1]}))).is_err());
     }
 
     #[test]

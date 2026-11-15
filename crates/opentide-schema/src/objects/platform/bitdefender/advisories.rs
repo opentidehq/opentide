@@ -163,15 +163,6 @@ fn criteria_advisories(detection: &Node) -> Vec<Advisory> {
     found
 }
 
-/// `alert_severity` as text: a string as it is, any other value as YAML
-/// writes it (`true`, `1.5`, `null`), as every message writes a value.
-fn text(node: &Node) -> String {
-    match &node.value {
-        Value::Str(text) | Value::Datetime(text) => text.clone(),
-        _ => crate::configuration::repr::node(node),
-    }
-}
-
 /// Every advisory the rule's `bitdefender` block, as authored, earns
 /// (`bitdefender_advisories`), on the rule's document.
 pub fn advisories(rule: &Node) -> Vec<Advisory> {
@@ -204,11 +195,10 @@ pub fn advisories(rule: &Node) -> Vec<Advisory> {
                 }),
         );
     }
-    let severity = get(rule, "response")
-        .and_then(|response| get(response, "alert_severity"))
-        .filter(|severity| crate::objects::platform::truthy(Some(severity)));
-    if let Some(severity) = severity {
-        let written = text(severity);
+    let severity = crate::objects::platform::non_empty_str(
+        get(rule, "response").and_then(|response| get(response, "alert_severity")),
+    );
+    if let Some(written) = severity {
         let level = written.trim().to_lowercase();
         if let Some(collapsed) = collapsed(&level)
             && get(block, "severity").is_none_or(|value| matches!(value.value, Value::Null))

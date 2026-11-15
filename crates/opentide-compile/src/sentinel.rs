@@ -102,7 +102,7 @@ fn iso(value: &str) -> Result<String, CompileError> {
     duration::sentinel(value).map_err(CompileError::invalid_rule)
 }
 
-/// A string the block sets, Python-truthy.
+/// A string the block sets, not empty.
 fn text<'j>(object: Option<&'j Json>, key: &str) -> Option<&'j str> {
     object
         .and_then(|object| object.get(key))
@@ -132,20 +132,22 @@ fn strings(value: Option<&Json>) -> Vec<String> {
 
 /// The alert-rule body `rule` deploys to `tenant`.
 pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, CompileError> {
-    let Some(block) = rule.block("sentinel").filter(|block| block.truthy()) else {
+    let Some(block) = rule.block("sentinel").filter(|block| block.is_filled()) else {
         return Err(CompileError::invalid_rule(format!(
             "Rule {} ({}): configurations.sentinel is missing",
             rule.uuid, rule.name
         )));
     };
-    let grouping = block.get("grouping").filter(|grouping| grouping.truthy());
+    let grouping = block
+        .get("grouping")
+        .filter(|grouping| grouping.is_filled());
     let Some(grouping) = grouping else {
         return Err(missing(
             "grouping",
             "Sentinel deploy requires grouping.event and grouping.alert",
         ));
     };
-    let Some(alert_grouping) = grouping.get("alert").filter(|alert| alert.truthy()) else {
+    let Some(alert_grouping) = grouping.get("alert").filter(|alert| alert.is_filled()) else {
         return Err(missing(
             "grouping.alert",
             "Sentinel deploy requires incident grouping (grouping.alert.enabled)",
@@ -173,7 +175,10 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
     if strategy == StatusStrategy::Disablement {
         properties.insert("enabled".into(), Json::Bool(false));
     }
-    if let Some(template) = block.get("template").filter(|template| template.truthy()) {
+    if let Some(template) = block
+        .get("template")
+        .filter(|template| template.is_filled())
+    {
         properties.insert(
             "alertRuleTemplateName".into(),
             template.get("uuid").cloned().unwrap_or(Json::Null),
@@ -212,7 +217,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
     } else {
         let frequency = scheduling
             .and_then(|scheduling| scheduling.get("frequency"))
-            .filter(|value| value.truthy());
+            .filter(|value| value.is_filled());
         let Some(frequency) = frequency else {
             return Err(missing(
                 "scheduling.frequency",
@@ -221,7 +226,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
         };
         let lookback = scheduling
             .and_then(|scheduling| scheduling.get("lookback"))
-            .filter(|value| value.truthy());
+            .filter(|value| value.is_filled());
         let Some(lookback) = lookback else {
             return Err(missing(
                 "scheduling.lookback",
@@ -236,7 +241,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
             "queryPeriod".into(),
             Json::Str(iso(&duration_text(lookback))?),
         );
-        if let Some(trigger) = block.get("trigger").filter(|trigger| trigger.truthy()) {
+        if let Some(trigger) = block.get("trigger").filter(|trigger| trigger.is_filled()) {
             properties.insert(
                 "triggerThreshold".into(),
                 trigger.get("threshold").cloned().unwrap_or(Json::Null),
@@ -292,7 +297,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
     }
     if let Some(tactics) = alert
         .and_then(|alert| alert.get("tactics"))
-        .filter(|tactics| tactics.truthy())
+        .filter(|tactics| tactics.is_filled())
     {
         properties.insert("tactics".into(), tactics.clone());
     }
@@ -323,8 +328,8 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
     let enabled = alert_grouping.get("enabled").cloned().unwrap_or(Json::Null);
     let lookback = alert_grouping
         .get("grouping_lookback")
-        .filter(|value| value.truthy());
-    if enabled.truthy() && lookback.is_none() {
+        .filter(|value| value.is_filled());
+    if enabled.is_true() && lookback.is_none() {
         return Err(missing(
             "grouping.alert.grouping_lookback",
             "required when grouping.alert.enabled is true",
@@ -342,7 +347,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
         "reopenClosedIncident".into(),
         alert_grouping
             .get("reopen_closed_incidents")
-            .filter(|value| value.truthy())
+            .filter(|value| value.is_true())
             .cloned()
             .unwrap_or(Json::Bool(false)),
     );
@@ -350,7 +355,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
         "matchingMethod".into(),
         alert_grouping
             .get("matching")
-            .filter(|value| value.truthy())
+            .filter(|value| value.is_filled())
             .cloned()
             .unwrap_or_else(|| "AllEntities".into()),
     );

@@ -42,6 +42,24 @@ pub struct Args {
     pub output: Option<PathBuf>,
 }
 
+impl From<&crate::tree::LintArgs> for Args {
+    fn from(args: &crate::tree::LintArgs) -> Self {
+        Self {
+            fix: args.fix,
+            strict: args.strict,
+            checks: args
+                .check
+                .iter()
+                .filter_map(|check| LintCheck::parse(&crate::tree::spelled(check)))
+                .collect(),
+            changed: args.changed,
+            files: args.file.clone(),
+            format: Some(args.report_format.into()),
+            output: args.output.clone(),
+        }
+    }
+}
+
 /// What a run reads besides its options.
 #[derive(Clone, Copy, Debug)]
 pub struct Context<'a> {

@@ -262,7 +262,7 @@ fn relations(document: &TideDocument, family: &str) -> Result<Vec<String>, &'sta
                 .get("objective")
                 .and_then(Json::as_object)
                 .and_then(|objective| objective.get("threats"))
-                .filter(|threats| threats.truthy());
+                .filter(|threats| threats.is_filled());
             let items = match threats {
                 None => return Ok(Vec::new()),
                 Some(Json::Array(items)) => items,
