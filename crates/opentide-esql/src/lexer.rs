@@ -114,8 +114,10 @@ impl Tok {
 /// How the operands of a command are lexed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Mode {
-    /// Where a command starts: its first word is read whole.
-    Start,
+    /// Where a query starts (a source command): its first word is read whole.
+    StartQuery,
+    /// After `|` (a processing command): its first word is read whole.
+    StartCommand,
     /// Expressions.
     Expr,
     /// Name patterns: a word may hold `*`.
@@ -144,8 +146,10 @@ enum Cmd {
     Highlight,
     /// `FILLNULL value ON names`.
     FillNull,
-    /// `FORK` and `EXPLAIN`: every `(` opens a query.
-    Branching,
+    /// `FORK`: every `(` opens a branch of processing commands.
+    Fork,
+    /// `EXPLAIN`: its `(` opens a query.
+    Explain,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -154,29 +158,44 @@ struct Frame {
     cmd: Cmd,
 }
 
-const START: Frame = Frame {
-    mode: Mode::Start,
+const START_QUERY: Frame = Frame {
+    mode: Mode::StartQuery,
+    cmd: Cmd::Other,
+};
+
+const START_COMMAND: Frame = Frame {
+    mode: Mode::StartCommand,
     cmd: Cmd::Other,
 };
 
 /// The mode and flavour of the operands of the command that starts with
-/// `word` (lower case); `None` for a command the grammar does not know.
-fn mode_of(word: &str) -> Option<Frame> {
+/// `word` (lower case), at the start of a query (`query`, and `top` when it
+/// is the file's, where `SET` may precede it) or after a pipe; `None` for a
+/// command the grammar does not know there.
+fn mode_of(word: &str, query: bool, top: bool) -> Option<Frame> {
     let frame = |mode, cmd| Some(Frame { mode, cmd });
+    let expr = |cmd| frame(Mode::Expr, cmd);
+    if query {
+        return match word {
+            "from" | "ts" => frame(Mode::Source, Cmd::Other),
+            "promql" => frame(Mode::Promql, Cmd::Other),
+            "explain" => expr(Cmd::Explain),
+            "row" | "show" => expr(Cmd::Other),
+            "set" if top => expr(Cmd::Other),
+            _ => None,
+        };
+    }
     match word {
-        "from" | "ts" => frame(Mode::Source, Cmd::Other),
         "keep" | "drop" | "rename" => frame(Mode::Names, Cmd::Other),
         "enrich" => frame(Mode::Policy, Cmd::Enrich),
         "lookup" | "left" | "right" | "full" => frame(Mode::JoinKw, Cmd::Other),
-        "promql" => frame(Mode::Promql, Cmd::Other),
-        "fork" | "explain" => frame(Mode::Expr, Cmd::Branching),
-        "highlight" => frame(Mode::Expr, Cmd::Highlight),
-        "fillnull" => frame(Mode::Expr, Cmd::FillNull),
-        "row" | "show" | "set" | "where" | "eval" | "sort" | "limit" | "stats" | "inline"
-        | "inlinestats" | "dissect" | "grok" | "mv_expand" | "change_point" | "completion"
-        | "rerank" | "sample" | "fuse" | "uri_parts" | "registered_domain" | "user_agent"
-        | "ip_location" | "metrics_info" | "ts_info" | "ts_collapse" | "dedup" | "mmr"
-        | "dense_vector" => frame(Mode::Expr, Cmd::Other),
+        "fork" => expr(Cmd::Fork),
+        "highlight" => expr(Cmd::Highlight),
+        "fillnull" => expr(Cmd::FillNull),
+        "where" | "eval" | "sort" | "limit" | "stats" | "inline" | "inlinestats" | "dissect"
+        | "grok" | "mv_expand" | "change_point" | "completion" | "rerank" | "sample" | "fuse"
+        | "uri_parts" | "registered_domain" | "user_agent" | "ip_location" | "metrics_info"
+        | "ts_info" | "ts_collapse" | "dedup" | "mmr" | "dense_vector" => expr(Cmd::Other),
         _ => None,
     }
 }
@@ -356,7 +375,7 @@ impl Driver<'_> {
             return (K::STRING_LIT, len);
         }
         let (text_kind, len) = match self.frame.mode {
-            Mode::Start => (
+            Mode::StartQuery | Mode::StartCommand => (
                 K::COMMAND_WORD,
                 take(rest, |c| !c.is_whitespace() && !"[]()/|\"".contains(c)),
             ),
@@ -413,24 +432,30 @@ impl Driver<'_> {
         let (mode, cmd) = (self.frame.mode, self.frame.cmd);
         let mut kind = kind;
         match kind {
-            K::PIPE => self.set(START),
-            K::SEMI if self.stack.is_empty() => self.set(START),
+            K::PIPE => self.set(START_COMMAND),
+            K::SEMI if self.stack.is_empty() => self.set(START_QUERY),
             K::L_PAREN => self.open(was_in),
             K::R_PAREN => {
                 if let Some(frame) = self.stack.pop() {
                     self.set(frame);
                 }
             }
-            K::COMMAND_WORD if mode == Mode::Start => match mode_of(&text.to_ascii_lowercase()) {
-                Some(frame) => {
-                    kind = K::WORD;
-                    self.set(frame);
+            K::COMMAND_WORD if matches!(mode, Mode::StartQuery | Mode::StartCommand) => {
+                match mode_of(
+                    &text.to_ascii_lowercase(),
+                    mode == Mode::StartQuery,
+                    self.stack.is_empty(),
+                ) {
+                    Some(frame) => {
+                        kind = K::WORD;
+                        self.set(frame);
+                    }
+                    None => self.set(Frame {
+                        mode: Mode::Unknown,
+                        cmd: Cmd::Other,
+                    }),
                 }
-                None => self.set(Frame {
-                    mode: Mode::Unknown,
-                    cmd: Cmd::Other,
-                }),
-            },
+            }
             K::UNKNOWN_WORD if text == ")" && !self.stack.is_empty() => {
                 kind = K::R_PAREN;
                 if let Some(frame) = self.stack.pop() {
@@ -490,7 +515,12 @@ impl Driver<'_> {
     /// `EXPLAIN`) starts a command; any other parenthesis keeps the mode.
     fn open(&mut self, after_in: bool) {
         let query = match (self.frame.mode, self.frame.cmd) {
-            (Mode::Source, _) | (_, Cmd::Branching) => true,
+            (Mode::Source, _) | (_, Cmd::Explain) => true,
+            (_, Cmd::Fork) => {
+                self.stack.push(self.frame);
+                self.set(START_COMMAND);
+                return;
+            }
             (Mode::Expr, _) if after_in => {
                 let rest = self.source[self.pos..].trim_start();
                 let word = &rest[..take(rest, |c| c.is_ascii_alphanumeric() || c == '_')];
@@ -502,7 +532,7 @@ impl Driver<'_> {
         };
         self.stack.push(self.frame);
         if query {
-            self.set(START);
+            self.set(START_QUERY);
         }
     }
 }
@@ -512,7 +542,7 @@ pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
     let mut driver = Driver {
         source,
         pos: 0,
-        frame: START,
+        frame: START_QUERY,
         stack: Vec::new(),
         seen: 0,
         after_in: false,
@@ -643,15 +673,18 @@ mod tests {
             assert_eq!(kinds(source)[0], (K::COMMENT, comment), "{source}");
         }
         // Never closed: the `/` is an operator and the comment's text is lexed on.
-        assert_eq!(kinds("EVAL /* a /* b")[1], (K::SLASH, "/"));
-        assert_eq!(kinds("EVAL /* a */ */").last(), Some(&(K::SLASH, "/")));
+        assert_eq!(kinds("FROM a | EVAL /* a /* b")[4], (K::SLASH, "/"));
+        assert_eq!(
+            kinds("FROM a | EVAL /* a */ */").last(),
+            Some(&(K::SLASH, "/"))
+        );
     }
 
     #[test]
     fn strings_and_quoted_identifiers() {
         let k = |s: &str| {
-            let source = format!("EVAL {s}");
-            let (kind, text) = kinds(&source)[1];
+            let source = format!("FROM a | EVAL {s}");
+            let (kind, text) = kinds(&source)[4];
             (kind, text.to_owned())
         };
         for (text, kind) in [
@@ -670,11 +703,14 @@ mod tests {
     #[test]
     fn numbers_and_parameters() {
         for text in ["1", "1.", "1.5e+3", ".5", "2e10"] {
-            assert_eq!(kinds(&format!("eval {text}"))[1], (K::NUMBER_LIT, text));
+            assert_eq!(
+                kinds(&format!("FROM a | eval {text}"))[4],
+                (K::NUMBER_LIT, text)
+            );
         }
-        let parts = kinds("eval 1e");
-        assert_eq!((parts[1], parts[2]), ((K::NUMBER_LIT, "1"), (K::WORD, "e")));
-        assert_eq!(kinds("eval ??a, ?1, ?")[1].0, K::PARAM);
+        let parts = kinds("FROM a | eval 1e");
+        assert_eq!((parts[4], parts[5]), ((K::NUMBER_LIT, "1"), (K::WORD, "e")));
+        assert_eq!(kinds("FROM a | eval ??a, ?1, ?")[4].0, K::PARAM);
     }
 
     #[test]
@@ -700,7 +736,7 @@ mod tests {
         // A name pattern may hold `*`; in an expression it is an operator.
         assert!(k.contains(&(K::WORD, "a*b")) && k.contains(&(K::WORD, "d*")));
         assert_eq!(
-            kinds("EVAL a*b")[1..]
+            kinds("FROM a | EVAL a*b")[4..]
                 .iter()
                 .map(|k| k.0)
                 .collect::<Vec<_>>(),
@@ -726,19 +762,32 @@ mod tests {
     }
 
     #[test]
+    fn a_command_is_known_only_where_the_grammar_expects_it() {
+        // `WHERE` starts no query, and `FROM` is no processing command: both are unknown text.
+        let k = kinds("WHERE x==1");
+        assert_eq!((k[0].0, k[1]), (K::COMMAND_WORD, (K::UNKNOWN_WORD, "x==1")));
+        assert_eq!(kinds("FROM a | FROM b")[3].0, K::COMMAND_WORD);
+        assert_eq!(kinds("SET a = 1; FROM a")[0].0, K::WORD);
+        assert_eq!(kinds("FROM a, (SET b)")[4].0, K::COMMAND_WORD);
+    }
+
+    #[test]
     fn modes_follow_subqueries_policies_and_joins() {
         // A subquery is a query again, then the list goes on.
         let k = kinds("FROM a, (FROM b | WHERE x) METADATA _id");
         assert_eq!(k.last(), Some(&(K::SOURCE_TEXT, "_id")));
         assert_eq!(k[7], (K::WORD, "WHERE"));
         // `IN (FROM ...)` is a subquery; `IN (a, b)` is not.
-        assert_eq!(kinds("EVAL x IN (FROM b)")[4], (K::WORD, "FROM"));
-        assert_eq!(kinds("EVAL x IN (a, from)")[4], (K::WORD, "a"));
-        assert_eq!(kinds("WHERE x IN (from_a)")[4], (K::WORD, "from_a"));
-        // ENRICH reads a policy name, then name patterns.
-        let k = kinds("ENRICH ctx:on_policy ON a* WITH n = f*");
+        assert_eq!(kinds("FROM a | EVAL x IN (FROM b)")[7], (K::WORD, "FROM"));
+        assert_eq!(kinds("FROM a | EVAL x IN (a, from)")[7], (K::WORD, "a"));
         assert_eq!(
-            (k[1].0, k[3].0, k[4].0, k[5].0),
+            kinds("FROM a | WHERE x IN (from_a)")[7],
+            (K::WORD, "from_a")
+        );
+        // ENRICH reads a policy name, then name patterns.
+        let k = kinds("FROM a | ENRICH ctx:on_policy ON a* WITH n = f*");
+        assert_eq!(
+            (k[4].0, k[6].0, k[7].0, k[8].0),
             (K::POLICY_PART, K::POLICY_PART, K::WORD, K::WORD)
         );
         assert_eq!(k.last(), Some(&(K::WORD, "f*")));
