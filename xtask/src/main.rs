@@ -103,7 +103,7 @@ enum Cmd {
         command: xtask::cassettes::Cmd,
     },
     /// Record what the frozen Python CLI does, and check an engine against the
-    /// recordings (tests/golden/README.md); `golden help` lists the options
+    /// recordings (tests/golden/README.md); `golden --help` lists the commands
     Golden {
         #[command(subcommand)]
         command: xtask::golden::Cmd,
@@ -116,7 +116,7 @@ enum Cmd {
         command: xtask::payloads::Cmd,
     },
     /// The vocabularies: sync, generate, compare and ingest (UC-1.6, #812);
-    /// `vocab help` lists the options
+    /// `vocab --help` lists the commands
     Vocab {
         #[command(subcommand)]
         command: xtask::vocab::Cmd,

@@ -23,9 +23,12 @@ use std::process::ExitCode;
 
 use anyhow::{Context, Result};
 
-/// `cargo xtask vocab <command>`: the vocabularies. Exit status: 0 passed, 1 a
-/// check failed, 2 usage error or the check could not run.
+/// `cargo xtask vocab <command>`: the vocabularies.
 #[derive(clap::Subcommand, Debug)]
+#[command(
+    after_help = "Exit status: 0 passed, 1 a check failed, 2 usage error or the check \
+    could not run."
+)]
 pub enum Cmd {
     /// Copy the vocabularies and schema pins of opentidehq/specifications over
     /// the bundled ones and rewrite data/specifications.lock.json; --check fails

@@ -49,10 +49,11 @@ const INTERNAL_GENERATE: &str = "--internal-generate";
 /// --previous, to the last result of the base branch: a median or peak RSS more
 /// than 10% over its reference fails. It prints a Markdown table per command
 /// (median, RSS, budget, deltas), and appends it to FILE with --summary.
-///
-/// Exit status: 0 done or passed, 1 a budget or regression check failed, 2
-/// usage error or the benchmark could not run.
 #[derive(clap::Args, Debug)]
+#[command(
+    after_help = "Exit status: 0 done or passed, 1 a budget or regression check \
+    failed, 2 usage error or the benchmark could not run."
+)]
 pub struct BenchArgs {
     /// Hold BENCH.json to BUDGETS instead of running the benchmarks
     #[arg(long, num_args = 2, value_names = ["BUDGETS", "BENCH.json"])]
