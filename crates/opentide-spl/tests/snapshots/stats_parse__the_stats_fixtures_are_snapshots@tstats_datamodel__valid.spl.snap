@@ -1,0 +1,72 @@
+---
+source: crates/opentide-spl/tests/stats_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/tstats_datamodel__valid.spl
+---
+SOURCE_FILE@0..186
+  PIPELINE@0..186
+    PIPE@0..1 "|"
+    WHITESPACE@1..2 " "
+    TSTATS_COMMAND@2..186
+      TSTATS_KW@2..8 "tstats"
+      WHITESPACE@8..9 " "
+      TSTATS_OPTION@9..27
+        SUMMARIESONLY_KW@9..22 "summariesonly"
+        EQ@22..23 "="
+        BOOLEAN@23..27
+          BOOL_KW@23..27 "true"
+      WHITESPACE@27..28 " "
+      AGGREGATE_ITEM@28..33
+        IDENTIFIER@28..33
+          IDENT@28..33 "count"
+      WHITESPACE@33..34 " "
+      AGGREGATE_ITEM@34..57
+        FUNCTION_CALL@34..44
+          IDENTIFIER@34..37
+            IDENT@34..37 "min"
+          L_PAREN@37..38 "("
+          IDENTIFIER@38..43
+            IDENT@38..43 "_time"
+          R_PAREN@43..44 ")"
+        WHITESPACE@44..45 " "
+        AS_KW@45..47 "as"
+        WHITESPACE@47..48 " "
+        IDENTIFIER@48..57
+          IDENT@48..57 "firstTime"
+      WHITESPACE@57..58 " "
+      FROM_KW@58..62 "from"
+      WHITESPACE@62..63 " "
+      DATAMODEL_KW@63..72 "datamodel"
+      EQ@72..73 "="
+      IDENTIFIER@73..91
+        IDENT@73..91 "Endpoint.Processes"
+      WHITESPACE@91..92 " "
+      WHERE_KW@92..97 "where"
+      WHITESPACE@97..98 " "
+      SEARCH_EXPRESSION@98..152
+        IN_CLAUSE@98..152
+          FIELD_REF@98..120
+            IDENTIFIER@98..120
+              IDENT@98..120 "Processes.process_name"
+          WHITESPACE@120..121 " "
+          IN_KW@121..123 "IN"
+          WHITESPACE@123..124 " "
+          VALUE_LIST@124..152
+            L_PAREN@124..125 "("
+            STR@125..134
+              STRING_TOKEN@125..134 "\"cmd.exe\""
+            COMMA@134..135 ","
+            STR@135..151
+              STRING_TOKEN@135..151 "\"powershell.exe\""
+            R_PAREN@151..152 ")"
+      WHITESPACE@152..153 " "
+      BY_CLAUSE@153..186
+        BY_KW@153..155 "by"
+        WHITESPACE@155..156 " "
+        IDENTIFIER@156..170
+          IDENT@156..170 "Processes.dest"
+        COMMA@170..171 ","
+        WHITESPACE@171..172 " "
+        IDENTIFIER@172..186
+          IDENT@172..186 "Processes.user"
+--
