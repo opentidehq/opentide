@@ -1,6 +1,6 @@
 //! The Exabeam Query Language's concrete syntax tree: a parser over
 //! [`opentide_parse`] that accepts what `grammars/tree-sitter-opentide-exabeam`
-//! accepts.
+//! accepts, and the highlight captures read from the tree.
 //!
 //! Diagnostics do not come from here: [`crate::check`] is the port of the
 //! specification's reference checker, and its verdicts decide what is an
@@ -12,9 +12,14 @@
 //! pattern, then the token the grammar defines first. A run of `AND` (or `OR`)
 //! is one flat node, so a 20,000-term chain is not 20,000 levels deep.
 
-use crate::syntax::{SyntaxKind as K, SyntaxNode, lex};
+use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken, lex};
+use opentide_core::ByteSpan;
 use opentide_parse::{Grammar, Input, Parse, Parser, build, debug_errors, debug_tree};
-use rowan::TextSize;
+use regex::Regex;
+use rowan::{NodeOrToken, TextSize, WalkEvent};
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::OnceLock;
 
 /// Nesting deeper than this is one error. The analysis' own limit is 200
 /// levels ([`crate::check`]); the floor every language keeps is
@@ -285,6 +290,30 @@ fn name(p: &mut Parser<'_>, kind: K, message: &str) {
 
 /// A tree and its parse.
 pub(crate) type Parsed = (SyntaxNode, Parse);
+
+/// The parse of `source`, shared by the queries on one text: the last parse
+/// on this thread is kept.
+pub(crate) fn parse_memo(source: &str) -> Rc<Parsed> {
+    thread_local! {
+        static LAST: RefCell<Option<(String, Rc<Parsed>)>> = const { RefCell::new(None) };
+    }
+    LAST.with(|last| {
+        let mut last = last.borrow_mut();
+        if let Some((text, parsed)) = last.as_ref()
+            && text == source
+        {
+            return Rc::clone(parsed);
+        }
+        let parsed = Rc::new(parse(source));
+        // A text past the cap is not kept: an idle thread would hold it and
+        // its tree until its next query.
+        *last = (source.len() <= MEMO_MAX).then(|| (source.to_owned(), Rc::clone(&parsed)));
+        parsed
+    })
+}
+
+/// The largest text [`parse_memo`] keeps, in bytes.
+const MEMO_MAX: usize = 64 * 1024;
 
 /// Parses `source`.
 pub(crate) fn parse(source: &str) -> Parsed {
@@ -700,4 +729,170 @@ fn context_table(p: &mut Parser<'_>, top: bool) {
     if table(p) && eat(p, &after_term(top, &[DOT]), DOT) {
         table(p);
     }
+}
+
+// ---------------------------------------------------------------------------
+// What the editor reads from the tree.
+
+fn span(range: rowan::TextRange) -> ByteSpan {
+    ByteSpan::new(usize::from(range.start()), usize::from(range.end()))
+}
+
+/// An IPv4 or IPv6 address, as `highlights.scm` matches one.
+fn is_address(text: &str) -> bool {
+    static ADDRESS: OnceLock<Regex> = OnceLock::new();
+    #[expect(
+        clippy::expect_used,
+        reason = "a regex literal: an invalid pattern fails every test that reaches it"
+    )]
+    let address = ADDRESS.get_or_init(|| {
+        Regex::new(r"^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3}|([0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f.]*(%[^%]+)?)$")
+            .expect("regex")
+    });
+    address.is_match(text)
+}
+
+/// A value that is a name: `true`, `false`, `null`, or a string.
+fn name_value(text: &str) -> &'static str {
+    if text.eq_ignore_ascii_case("true") || text.eq_ignore_ascii_case("false") {
+        "boolean"
+    } else if text.eq_ignore_ascii_case("null") {
+        "constant"
+    } else {
+        "string"
+    }
+}
+
+/// A bare value: `@field`, an address, or a string.
+fn bare_value(text: &str) -> &'static str {
+    if text.starts_with('@') {
+        "variable"
+    } else if is_address(text) {
+        "constant"
+    } else {
+        "string"
+    }
+}
+
+fn is_one_of(text: &str, names: &[&str]) -> bool {
+    names.iter().any(|n| text.eq_ignore_ascii_case(n))
+}
+
+/// What to do with a node: one capture for all of it, none for any of it,
+/// or look inside.
+enum Read {
+    Capture(&'static str),
+    Skip,
+    Inside,
+}
+
+fn node_read(node: &SyntaxNode) -> Read {
+    let parent = node.parent().map(|p| p.kind());
+    let text = || node.text().to_string();
+    Read::Capture(match node.kind() {
+        K::Keyword => "keyword",
+        K::EqEq | K::LtEq | K::GtEq => "operator",
+        K::NotEqual => "error",
+        K::FieldName => "property",
+        K::TableName | K::ContextTable => "type",
+        K::Alias => "variable",
+        // `highlights.scm` marks a free-text `*` as an error, but the
+        // free text's own capture, on the same span, comes first.
+        K::FreeText => "string",
+        K::Identifier => match parent {
+            Some(K::Call) if node.prev_sibling().is_none() => {
+                if is_one_of(&text(), &["rgx", "rgxi", "wld", "wldi"]) {
+                    "function.builtin"
+                } else {
+                    "error"
+                }
+            }
+            Some(K::Aggregate) => {
+                if is_one_of(
+                    &text(),
+                    &["count", "min", "max", "sum", "avg", "rgx_extract"],
+                ) {
+                    "function.builtin"
+                } else {
+                    "error"
+                }
+            }
+            Some(K::Call) => "error",
+            Some(K::FieldTerm | K::List) => name_value(&text()),
+            _ => return Read::Skip,
+        },
+        K::Number => {
+            if parent == Some(K::Call) {
+                "error"
+            } else {
+                "number"
+            }
+        }
+        K::BareWord => match parent {
+            Some(K::FieldTerm | K::List) => bare_value(&text()),
+            Some(K::Call) => "error",
+            _ => return Read::Skip,
+        },
+        K::Bound => {
+            let t = text();
+            if number_len(t.as_bytes()) == t.len() {
+                "number"
+            } else {
+                "constant"
+            }
+        }
+        K::TextWord => return Read::Skip,
+        _ => return Read::Inside,
+    })
+}
+
+fn token_capture(token: &SyntaxToken) -> Option<&'static str> {
+    Some(match token.kind() {
+        K::String => "string",
+        K::Colon | K::Eq | K::Lt | K::Gt | K::Star => "operator",
+        K::Pipe => "operator.pipe",
+        K::LParen | K::RParen | K::LBracket | K::RBracket | K::LBrace | K::RBrace => {
+            "punctuation.bracket"
+        }
+        K::Comma | K::Dot => "punctuation.delimiter",
+        _ => return None,
+    })
+}
+
+fn captures_of(root: &SyntaxNode) -> Vec<(ByteSpan, &'static str)> {
+    let mut out = Vec::new();
+    let mut walk = root.preorder_with_tokens();
+    while let Some(event) = walk.next() {
+        match event {
+            WalkEvent::Enter(NodeOrToken::Node(node)) => match node_read(&node) {
+                Read::Capture(capture) => {
+                    out.push((span(node.text_range()), capture));
+                    walk.skip_subtree();
+                }
+                Read::Skip => walk.skip_subtree(),
+                Read::Inside => {}
+            },
+            WalkEvent::Enter(NodeOrToken::Token(token)) => {
+                if let Some(capture) = token_capture(&token) {
+                    out.push((span(token.text_range()), capture));
+                }
+            }
+            WalkEvent::Leave(_) => {}
+        }
+    }
+    out
+}
+
+/// The highlight spans of `source`'s tree, in source order and not
+/// overlapping: `(span, HighlightSpec capture)`.
+#[must_use]
+pub fn highlight_captures(source: &str) -> Vec<(ByteSpan, &'static str)> {
+    captures_of(&parse_memo(source).0)
+}
+
+/// Whether the parser found a syntax error in `source`. Not the verdict of
+/// the analysis (that is [`crate::check`]): whether the tree is clean.
+#[must_use]
+pub fn tree_has_error(source: &str) -> bool {
+    !parse_memo(source).1.errors.is_empty()
 }
