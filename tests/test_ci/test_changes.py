@@ -273,7 +273,7 @@ def test_pushes_and_the_nightly_check_everything(event: str, scope: str, mode: s
         ("crates/opentide-schema-derive/src/lib.rs", {"schema_ui", "stubs"}),
         # Not their inputs: another crate, another xtask command.
         ("crates/opentide-kql/src/lib.rs", set()),
-        ("xtask/src/main.rs", set()),
+        ("xtask/src/codegen.rs", set()),
         ("src/opentide/data/vocabulary/README.md", set()),
         # Shared configuration runs every check, as a push does.
         ("Cargo.lock", {"vocab", "fields", "schema_ui", "stubs"}),
@@ -291,11 +291,11 @@ def test_a_push_runs_every_check() -> None:
     assert {full[check] for check in changes.CHECKS} == {"true"}
 
 
-def test_a_stubs_input_builds_the_wheel_job_without_the_python_tests() -> None:
-    """`native` runs the stubs check: an opentide-schema change runs it, not pytest."""
+def test_a_stubs_input_runs_the_stubs_job_alone() -> None:
+    """An opentide-schema change runs `stubs`, not the wheel job nor pytest."""
     outputs = plan("crates/opentide-schema/src/python.rs")
     assert outputs["stubs"] == "true"
-    assert outputs["native"] == "true"
+    assert outputs["native"] == "false"
     assert outputs["python"] == "false"
 
 
