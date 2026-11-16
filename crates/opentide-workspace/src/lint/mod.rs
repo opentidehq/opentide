@@ -45,7 +45,10 @@ use crate::validate::Selection;
 use crate::validate::annotate::Sources;
 use crate::validate::scope::Scope;
 
-pub use stems::{expected_stem, object_stem, slugify, split_object_name, with_object_stem};
+pub use stems::{
+    device_safe, expected_stem, is_windows_device, object_stem, slugify, split_object_name,
+    with_object_stem,
+};
 
 /// The object folders lint reads, under `objects/`, in its order.
 pub const OBJECT_FAMILIES: [&str; 3] = ["threats", "objectives", "rules"];

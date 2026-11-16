@@ -233,23 +233,7 @@ fn sanitize_filename(name: &str) -> String {
         })
         .collect();
     stem.truncate(stem.floor_char_boundary(STEM_LIMIT));
-    if is_windows_device(&stem) {
-        stem.insert(0, '_');
-    }
-    stem
-}
-
-/// Whether Windows takes `stem` for a device, not a file: its base (up to
-/// the first `.`, trimmed) is `CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9` or
-/// `LPT1`-`LPT9`, in any case.
-fn is_windows_device(stem: &str) -> bool {
-    let base = stem.split('.').next().unwrap_or_default().trim();
-    let upper = base.to_ascii_uppercase();
-    matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        || upper
-            .strip_prefix("COM")
-            .or_else(|| upper.strip_prefix("LPT"))
-            .is_some_and(|digit| matches!(digit.as_bytes(), [b'1'..=b'9']))
+    opentide_workspace::lint::device_safe(&stem)
 }
 
 /// `text` as a JSON string.

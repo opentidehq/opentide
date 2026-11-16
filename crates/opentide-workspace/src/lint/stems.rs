@@ -26,7 +26,32 @@ pub fn slugify(name: &str) -> String {
     if slug.is_empty() {
         "object".to_owned()
     } else {
-        slug.to_owned()
+        device_safe(slug)
+    }
+}
+
+/// Whether Windows takes `stem` for a device, not a file: its base (up to
+/// the first `.`, trimmed of spaces) is `CON`, `PRN`, `AUX`, `NUL`,
+/// `COM1`-`COM9` or `LPT1`-`LPT9`, in any case. `con.yaml` or `con.md`
+/// cannot be made there, nor checked out.
+pub fn is_windows_device(stem: &str) -> bool {
+    let base = stem.split('.').next().unwrap_or_default().trim();
+    let upper = base.to_ascii_uppercase();
+    matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || upper
+            .strip_prefix("COM")
+            .or_else(|| upper.strip_prefix("LPT"))
+            .is_some_and(|digit| matches!(digit.as_bytes(), [b'1'..=b'9']))
+}
+
+/// `stem`, or `_` and `stem` when it names a Windows device
+/// ([`is_windows_device`]): every file name opentide derives from an
+/// object's name goes through it (`new`, `generate docs`, the importers).
+pub fn device_safe(stem: &str) -> String {
+    if is_windows_device(stem) {
+        format!("_{stem}")
+    } else {
+        stem.to_owned()
     }
 }
 
@@ -52,7 +77,7 @@ pub fn expected_stem(name: &str, style: &str) -> Option<String> {
             while let Some(rest) = stem.strip_suffix(".debug") {
                 stem = rest.trim_matches([' ', '.']);
             }
-            (!stem.is_empty()).then(|| stem.to_owned())
+            (!stem.is_empty()).then(|| device_safe(stem))
         }
     }
 }
@@ -137,6 +162,33 @@ mod tests {
         assert_eq!(expected_stem("...", "name"), None);
         assert_eq!(expected_stem("x", "none"), None);
         assert_eq!(expected_stem("X y", "slug").as_deref(), Some("x-y"));
+    }
+
+    #[test]
+    fn a_windows_device_name_gets_an_underscore() {
+        for name in [
+            "CON", "PRN", "AUX", "NUL", "COM1", "LPT1", "con", "Con", "nUl", "com9", "lpt5",
+        ] {
+            let lower = name.to_ascii_lowercase();
+            assert_eq!(slugify(name), format!("_{lower}"), "{name}");
+            assert_eq!(
+                expected_stem(name, "name").as_deref(),
+                Some(format!("_{name}").as_str()),
+                "{name}"
+            );
+        }
+        // An extension does not make it a file to Windows.
+        assert_eq!(
+            expected_stem("con.txt", "name").as_deref(),
+            Some("_con.txt")
+        );
+        assert_eq!(expected_stem("NUL .x", "name").as_deref(), Some("_NUL .x"));
+        // Not devices: a slug joins the parts, and these are other names.
+        assert_eq!(slugify("con.txt"), "con-txt");
+        for name in ["COM0", "COM10", "CONSOLE", "LPT", "conn", "a con"] {
+            assert!(!is_windows_device(&slugify(name)), "{name}");
+            assert_eq!(expected_stem(name, "name").as_deref(), Some(name), "{name}");
+        }
     }
 
     #[test]

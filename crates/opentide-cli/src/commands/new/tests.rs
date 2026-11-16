@@ -24,6 +24,34 @@ fn a_taken_stem_gets_the_uuid_prefix() {
     assert_eq!(named, dir.path().join("My Rule-1234abcd.yaml"));
 }
 
+/// `new rule --name CON` cannot write `con.yaml`: Windows takes it for the
+/// console. Any style, any case, with or without an extension.
+#[test]
+fn a_windows_device_name_gets_an_underscore() {
+    let dir = tempfile::tempdir().unwrap();
+    let uuid = "1234abcd-0000-4000-8000-000000000000";
+    for (name, slug, named) in [
+        ("CON", "_con", "_CON"),
+        ("PRN", "_prn", "_PRN"),
+        ("AUX", "_aux", "_AUX"),
+        ("nul", "_nul", "_nul"),
+        ("Com1", "_com1", "_Com1"),
+        ("LPT1", "_lpt1", "_LPT1"),
+        ("con.txt", "con-txt", "_con.txt"),
+    ] {
+        assert_eq!(
+            target_path(dir.path(), name, uuid, None, "slug"),
+            dir.path().join(format!("{slug}.yaml")),
+            "{name}"
+        );
+        assert_eq!(
+            target_path(dir.path(), name, uuid, None, "name"),
+            dir.path().join(format!("{named}.yaml")),
+            "{name}"
+        );
+    }
+}
+
 #[test]
 fn a_path_names_the_file_or_its_folder() {
     let dir = tempfile::tempdir().unwrap();
