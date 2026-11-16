@@ -10,7 +10,11 @@ Reads two checkouts, both BSD-3-Clause:
   each ``lib/src/compiler/tests/testdata/{errors,warnings}/*.in``;
 - VirusTotal/yara at the pinned tag: every ``assert_true_rule*``,
   ``assert_false_rule*``, ``assert_error`` and ``assert_warning*`` of
-  ``tests/test-rules.c`` whose rule is a C string literal.
+  ``tests/test-rules.c`` whose rule is a C string literal;
+
+and opentide's own cases (``OPENTIDE_CASES``, origin ``opentide:...``): what
+a choice of opentide's rests on, such as the module set (#1225), recorded
+with both engines' live verdicts like the others,
 
 and writes ``crates/testdata/conformance/yara/cases.json``: one row per case with
 its source, where it comes from, and the verdict of `yara-python` 4.5.4
@@ -33,7 +37,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "testdata" / "conformance" / "yara" / "cases.json"
+OUT = ROOT / "crates" / "testdata" / "conformance" / "yara" / "cases.json"
 
 YARA_X_TAG = "v1.23.0"
 LIBYARA_TAG = "v4.5.4"
@@ -249,6 +253,24 @@ def verdicts(source: str) -> dict:
         return {"libyara": "crash", "yara_x": "crash"}
 
 
+# opentide's own cases: the module set follows YARA-X's default modules less
+# `vt` (#1225). YARA-X refuses `magic` (not built by default) and compiles
+# `vt`, `crx` and `zip`; opentide refuses `vt` on purpose (exceptions.toml).
+OPENTIDE_CASES = [
+    ("modules/magic", 'import "magic"\nrule t { condition: true }'),
+    ("modules/vt", 'import "vt"\nrule t { condition: true }'),
+    ("modules/crx", 'import "crx"\nrule t { condition: crx.is_crx or true }'),
+    ("modules/zip", 'import "zip"\nrule t { condition: zip.is_zip or true }'),
+]
+
+
+def opentide_cases() -> list[dict]:
+    return [
+        {"origin": f"opentide:{origin}", "kind": "opentide", "source": source}
+        for origin, source in OPENTIDE_CASES
+    ]
+
+
 def tags(path: Path) -> list[str]:
     """The tags on the checkout's commit (YARA-X tags `v1.23.0` and `go/v1.23.0` alike)."""
     return subprocess.run(
@@ -279,7 +301,7 @@ def main() -> int:
         if want not in tags(path):
             print(f"{path} is not at {want}", file=sys.stderr)
             return 2
-    cases = yara_x_cases(args.yara_x) + libyara_cases(args.libyara)
+    cases = yara_x_cases(args.yara_x) + libyara_cases(args.libyara) + opentide_cases()
     seen, rows = set(), []
     for case in cases:
         if case["source"] in seen:

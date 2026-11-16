@@ -57,6 +57,7 @@ use opentide_core::{
     SignatureInformation, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use std::collections::HashMap;
 use tree::{Node, node_span, walk};
 
 pub struct AnalyzeResult {
@@ -118,6 +119,7 @@ pub fn analyze_for(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
 fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let catalog = Catalog::cached();
+    let mut suggestions = Suggestions::new(catalog);
     let Some(tree) = tree::parse_tree(source) else {
         return AnalyzeResult {
             diagnostics: vec![Diagnostic::error(
@@ -146,7 +148,7 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
             }
         }
         if node.kind() == "unknown_command" {
-            diagnostics.push(unknown_command(node, source, catalog));
+            diagnostics.push(unknown_command(node, source, &mut suggestions));
         } else if let Some(name) = command_name(node, source) {
             if let Some(row) = catalog.command(&name)
                 && let Some(d) = availability(
@@ -163,11 +165,11 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
                 diagnostics.push(d);
             }
         } else if node.kind() == "function_call" {
-            if let Some(d) = function_diagnostic(target, node, source, catalog) {
+            if let Some(d) = function_diagnostic(target, node, source, catalog, &mut suggestions) {
                 diagnostics.push(d);
             }
         } else if node.kind() == "inline_cast" {
-            if let Some(d) = cast_diagnostic(target, node, source, catalog) {
+            if let Some(d) = cast_diagnostic(target, node, source, catalog, &mut suggestions) {
                 diagnostics.push(d);
             }
         } else if node.kind() == "qualified_name" {
@@ -653,7 +655,57 @@ pub(crate) fn keyword_span(node: Node) -> ByteSpan {
     ByteSpan::new(start, end.max(start + 1))
 }
 
-fn unknown_command(node: Node, source: &str, catalog: &Catalog) -> Diagnostic {
+/// The catalog's "did you mean" answers within one analysis, by name. Each
+/// is a scan of the whole catalog, and a query can repeat one unknown name
+/// thousands of times (`EVAL f(x), f(x), …`): asking once per name keeps a
+/// query with many findings linear with a small constant.
+struct Suggestions {
+    catalog: &'static Catalog,
+    commands: HashMap<String, Option<String>>,
+    functions: HashMap<String, Option<String>>,
+    types: HashMap<String, Option<String>>,
+}
+
+impl Suggestions {
+    fn new(catalog: &'static Catalog) -> Self {
+        Suggestions {
+            catalog,
+            commands: HashMap::new(),
+            functions: HashMap::new(),
+            types: HashMap::new(),
+        }
+    }
+
+    fn command(&mut self, name: &str) -> Option<String> {
+        let catalog = self.catalog;
+        Self::memo(&mut self.commands, name, |n| catalog.suggest_command(n))
+    }
+
+    fn function(&mut self, name: &str) -> Option<String> {
+        let catalog = self.catalog;
+        Self::memo(&mut self.functions, name, |n| catalog.suggest_function(n))
+    }
+
+    fn cast_type(&mut self, name: &str) -> Option<String> {
+        let catalog = self.catalog;
+        Self::memo(&mut self.types, name, |n| catalog.suggest_type(n))
+    }
+
+    fn memo(
+        seen: &mut HashMap<String, Option<String>>,
+        name: &str,
+        suggest: impl FnOnce(&str) -> Option<String>,
+    ) -> Option<String> {
+        if let Some(known) = seen.get(name) {
+            return known.clone();
+        }
+        let answer = suggest(name);
+        seen.insert(name.to_string(), answer.clone());
+        answer
+    }
+}
+
+fn unknown_command(node: Node, source: &str, suggestions: &mut Suggestions) -> Diagnostic {
     let name_node = node.child_by_field_name("name").unwrap_or(node);
     let name = text(name_node, source);
     let mut d = Diagnostic::error(
@@ -663,7 +715,7 @@ fn unknown_command(node: Node, source: &str, catalog: &Catalog) -> Diagnostic {
         ),
         range(source, node_span(name_node)),
     );
-    if let Some(s) = catalog.suggest_command(name) {
+    if let Some(s) = suggestions.command(name) {
         d = d.with_suggestion(display_name(&s));
     }
     d
@@ -674,6 +726,7 @@ fn function_diagnostic(
     node: Node,
     source: &str,
     catalog: &Catalog,
+    suggestions: &mut Suggestions,
 ) -> Option<Diagnostic> {
     let name_node = node.child_by_field_name("name")?;
     if name_node.kind() == "parameter" {
@@ -707,7 +760,7 @@ fn function_diagnostic(
                 format!("unknown ES|QL function `{name}`"),
                 range(source, span),
             );
-            if let Some(s) = catalog.suggest_function(name) {
+            if let Some(s) = suggestions.function(name) {
                 d = d.with_suggestion(s.to_ascii_uppercase());
             }
             Some(d)
@@ -723,6 +776,7 @@ fn cast_diagnostic(
     node: Node,
     source: &str,
     catalog: &Catalog,
+    suggestions: &mut Suggestions,
 ) -> Option<Diagnostic> {
     let type_node = node.child_by_field_name("type")?;
     let name = text(type_node, source);
@@ -749,7 +803,7 @@ fn cast_diagnostic(
                 ),
                 range(source, span),
             );
-            if let Some(s) = catalog.suggest_type(name) {
+            if let Some(s) = suggestions.cast_type(name) {
                 d = d.with_suggestion(s);
             }
             Some(d)

@@ -482,13 +482,12 @@ fn member_hover(module: &str, m: &Member) -> String {
         let sigs: Vec<String> = m
             .overloads
             .iter()
-            .filter(|o| o.yara_x || !m.yara_x)
             .map(|o| {
                 format!(
                     "{}({}) -> {}",
                     leaf_name(&m.path),
                     arg_names(&o.args).join(", "),
-                    o.yara_x_ret.as_deref().unwrap_or(&o.ret)
+                    o.ret
                 )
             })
             .collect();
@@ -496,9 +495,6 @@ fn member_hover(module: &str, m: &Member) -> String {
     } else {
         format!("`{shown}`: {}", kind_name(m))
     };
-    if !m.yara_x {
-        out.push_str(" (YARA-X does not have it: `yara_unknown_module_member`)");
-    }
     let doc = m
         .doc
         .as_deref()
@@ -720,12 +716,7 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
 
 fn module_hover(module: &str) -> String {
     let catalog = Catalog::cached();
-    let count = catalog.children(module, "").filter(|m| m.yara_x).count();
-    if count == 0 {
-        return format!(
-            "YARA module `{module}`: YARA-X has none of its members, so using one is `yara_unknown_module_member`."
-        );
-    }
+    let count = catalog.children(module, "").count();
     format!("YARA module `{module}`: {count} top-level members. Needs `import \"{module}\"`.")
 }
 
@@ -838,7 +829,6 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
             };
             return catalog
                 .children(&module, &parent_path)
-                .filter(|m| m.yara_x)
                 .map(|m| {
                     let label = leaf_name(&m.path).to_string();
                     let kind = if m.kind == Kind::Function {
@@ -943,16 +933,10 @@ pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
         }
         m.overloads
             .iter()
-            .filter(|o| o.yara_x)
             .map(|o| {
                 let args = arg_names(&o.args);
                 SignatureInformation {
-                    label: format!(
-                        "{}({}) -> {}",
-                        leaf_name(&m.path),
-                        args.join(", "),
-                        o.yara_x_ret.as_deref().unwrap_or(&o.ret)
-                    ),
+                    label: format!("{}({}) -> {}", leaf_name(&m.path), args.join(", "), o.ret),
                     documentation: o.doc.clone().or_else(|| m.doc.clone()),
                     parameters: args
                         .iter()

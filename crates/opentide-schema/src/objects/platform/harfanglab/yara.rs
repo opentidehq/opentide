@@ -22,10 +22,12 @@ use regex::Regex;
 use crate::node::{Node, Value};
 use crate::vocab::quote;
 
-/// The modules the YARA language knows (yara-1.0, Modules).
+/// The modules the YARA language knows: YARA-X's default modules, less `vt`
+/// (#1225; `opentide-yara`'s generated catalogue, which `opentide-tide`'s
+/// tests compare).
 pub const YARA_MODULES: &[&str] = &[
-    "console", "cuckoo", "dex", "dotnet", "elf", "hash", "lnk", "macho", "magic", "math", "pe",
-    "string", "time",
+    "console", "crx", "cuckoo", "dex", "dotnet", "elf", "hash", "lnk", "macho", "math", "pe",
+    "string", "time", "zip",
 ];
 
 /// libyara 4.5's reserved words: none of them can name a rule.
