@@ -43,10 +43,16 @@ fn parse_on_small_stack(name: &'static str, source: String) -> (Vec<ErrorKind>, 
     out
 }
 
-/// Each recursive construct, nested `n` deep around `core`.
+/// Each recursive construct, nested `n` levels deep around `core`, as a valid query. One
+/// level is one `enter`: a call, a subquery and a named subquery are a level each, so the
+/// pairs (`f({ ... })`) are `n / 2` deep.
 fn constructs(n: usize) -> Vec<(&'static str, String)> {
     let rep = |open: &str, core: &str, close: &str| {
         format!("{}{core}{}", open.repeat(n), close.repeat(n))
+    };
+    let pairs = n / 2;
+    let pair = |open: &str, core: &str, close: &str| {
+        format!("{}{core}{}", open.repeat(pairs), close.repeat(pairs))
     };
     vec![
         ("filter parentheses", rep("(", "a=1", ")")),
@@ -56,39 +62,32 @@ fn constructs(n: usize) -> Vec<(&'static str, String)> {
             "expression parentheses",
             format!("x := {}", rep("(", "a", ")")),
         ),
+        (
+            "expression parentheses with operators",
+            format!("x := {}", rep("(a + b * ", "c", ") - 1")),
+        ),
         ("function calls", rep("f(", "a", ")")),
-        ("subqueries", format!("f({})", rep("{ ", "a=1", " }"))),
-        ("arrays", format!("f({})", rep("[", "a", "]"))),
+        ("function calls with operators", rep("f(a + ", "b", ")")),
+        ("named arguments", rep("f(a=", "b", ")")),
+        ("arrays", format!("x := {}", rep("[", "a", "]"))),
+        (
+            "array elements with assignments",
+            format!("f({})", rep("[a := ", "b", "]")),
+        ),
+        ("subqueries", rep("x := { ", "a=1", " }")),
+        ("subqueries in calls", pair("f({ ", "a=1", " })")),
+        ("named subqueries", pair("f(a: { ", "a=1", " })")),
         ("case statements", rep("case { ", "a=1", " }")),
         ("match statements", rep("x match { * => ", "a=1", " }")),
-        ("saved query arguments", rep("$q(a=[", "b", "])")),
-        (
-            "named subqueries",
-            format!("f({})", rep("a: { f(", "b", ") }")),
-        ),
-        ("attributes", format!("f({})", rep("{ f(", "b", ") } a: 1"))),
+        ("attributes", pair("f({ f(a=1) } a: ", "b", ")")),
     ]
 }
 
 #[test]
 fn every_construct_parses_at_the_nesting_floor() {
     for (name, source) in constructs(FLOOR) {
-        // The floor is for parentheses of filters (deep_queries). Calls, expressions and
-        // bodies cost about 1.5 KB of stack per level in a debug build, so they are charged
-        // two levels (about 512 deep): past that, one error and no overflow.
         let (errors, _) = parse_on_small_stack(name, source);
-        let parens = name == "filter parentheses";
-        if parens {
-            assert!(errors.is_empty(), "{name}: {errors:?}");
-        } else {
-            assert!(
-                errors.iter().all(|k| matches!(
-                    k,
-                    ErrorKind::Syntax | ErrorKind::TreeTooDeep { .. } | ErrorKind::TooDeep { .. }
-                )),
-                "{name}: {errors:?}"
-            );
-        }
+        assert!(errors.is_empty(), "{name}: {errors:?}");
     }
 }
 
@@ -96,12 +95,20 @@ fn every_construct_parses_at_the_nesting_floor() {
 fn past_max_depth_it_is_one_error_and_no_overflow() {
     for (name, source) in constructs(parser::MAX_DEPTH as usize * 3) {
         let (errors, _) = parse_on_small_stack(name, source);
-        let guards = errors
+        let too_deep: Vec<_> = errors
             .iter()
             .filter(|k| matches!(k, ErrorKind::TooDeep { .. }))
-            .count();
-        assert!(guards <= 1, "{name}: {errors:?}");
+            .collect();
+        assert_eq!(too_deep.len(), 1, "{name}: {errors:?}");
+        assert_eq!(
+            too_deep[0],
+            &ErrorKind::TooDeep {
+                limit: parser::MAX_DEPTH
+            },
+            "{name}: the error names the limit that was hit"
+        );
     }
+    // Far past it: still one error, and no time spent on the rest.
     let (errors, _) = parse_on_small_stack(
         "filter parentheses",
         format!("{}a=1{}", "(".repeat(100_000), ")".repeat(100_000)),
@@ -114,6 +121,18 @@ fn past_max_depth_it_is_one_error_and_no_overflow() {
         1,
         "{errors:?}"
     );
+}
+
+#[test]
+fn the_limit_is_what_the_message_says() {
+    let (_, parse) = parser::parse(&"(".repeat(2_000));
+    let message = parse
+        .errors
+        .iter()
+        .find(|e| matches!(e.kind, ErrorKind::TooDeep { .. }))
+        .map(|e| e.message.clone())
+        .unwrap_or_default();
+    assert_eq!(message, "nesting deeper than 1024 levels");
 }
 
 #[test]
