@@ -159,3 +159,61 @@ fn an_unknown_name_is_suggested_once_per_query() {
         0
     );
 }
+
+/// Every entry point parses the query once: each parse of a long query costs
+/// as much as the rest of the call (`highlight` parsed it a second time, and
+/// the million-character tokens above came within a second of their bound on
+/// CI). Counted per thread, not timed.
+#[test]
+fn every_entry_point_parses_once() {
+    let source = "FROM logs-* | WHERE a.b == \"x\" | EVAL c = TO_LOWER(a.b) | KEEP a.*, c";
+    let parses = |run: &dyn Fn()| {
+        let before = opentide_esql::parses();
+        run();
+        opentide_esql::parses() - before
+    };
+    let entry_points: [(&str, &dyn Fn()); 8] = [
+        ("analyze", &|| drop(analyze(source))),
+        ("analyze_for", &|| {
+            drop(analyze_for(
+                source,
+                opentide_esql::StackTarget::parse("9.1"),
+            ));
+        }),
+        ("output_columns", &|| drop(output_columns(source))),
+        ("source_indices", &|| drop(source_indices(source))),
+        ("ecs_diagnostics", &|| drop(ecs_diagnostics(source))),
+        ("hover", &|| drop(hover(source, 35))),
+        ("completions", &|| drop(completions(source, source.len()))),
+        ("signature_help", &|| drop(signature_help(source, 40))),
+    ];
+    for (name, run) in entry_points {
+        assert!(
+            parses(run) <= 1,
+            "{name} parsed the query {} times",
+            parses(run)
+        );
+    }
+}
+
+/// The entry points share one parse of a text (an editor asks for the
+/// analysis, hover and completions of the same text in a row); another text
+/// is parsed afresh and read as itself.
+#[test]
+fn one_text_is_parsed_once_across_entry_points() {
+    let source = "FROM logs-* | WHERE host.name == \"a\" | KEEP host.*";
+    let before = opentide_esql::parses();
+    analyze(source);
+    output_columns(source);
+    ecs_diagnostics(source);
+    hover(source, 25);
+    completions(source, source.len());
+    assert_eq!(opentide_esql::parses() - before, 1);
+    // A different text: its own tree, never the last one's.
+    assert_eq!(
+        source_indices("FROM other-index"),
+        Some(vec!["other-index".to_string()])
+    );
+    assert_eq!(opentide_esql::parses() - before, 2);
+    assert_eq!(source_indices(source), Some(vec!["logs-*".to_string()]));
+}

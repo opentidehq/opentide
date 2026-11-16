@@ -95,6 +95,13 @@ pub fn debug_kinds(source: &str) -> (bool, Vec<&'static str>) {
     tree::named_kinds(source)
 }
 
+/// How many times this thread has parsed an ES|QL query: one per call of an
+/// entry point (`tests/entry_points.rs`). Not API.
+#[doc(hidden)]
+pub fn parses() -> usize {
+    tree::parses()
+}
+
 /// Analyze against every supported stack (8.19 and 9.x). Same as
 /// `analyze_for(source, None)`.
 pub fn analyze(source: &str) -> AnalyzeResult {
@@ -236,7 +243,8 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
     // The indices `FROM` reads: undeclared ones, and ECS field checks when
     // every one holds ECS documents.
     opentide_ecs::merge(&mut diagnostics, ecs::dataset_diagnostics(root, source));
-    let tokens = highlight(&spec, source, catalog);
+    // The tree the checks read: a second parse doubled the cost of a long query.
+    let tokens = highlight(&spec, &tree, source, catalog);
     AnalyzeResult {
         diagnostics,
         tokens,
@@ -972,10 +980,10 @@ fn named_child_of_kind<'t>(node: Node<'t>, kind: &str) -> Option<Node<'t>> {
 
 pub(crate) fn highlight(
     spec: &HighlightSpec,
+    tree: &tree::Tree,
     source: &str,
     catalog: &Catalog,
 ) -> Vec<HighlightToken> {
-    let tree = tree::parse(source);
     let mut spans: Vec<(ByteSpan, String)> = Vec::new();
     walk(tree.root_node(), |node| {
         if node.child_count() > 0 || node.end_byte() <= node.start_byte() {
