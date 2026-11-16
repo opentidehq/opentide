@@ -27,8 +27,11 @@ use super::{
 };
 
 const SENTINEL: &str = "sentinel";
-/// Every line holding it is left out of a file (`OPENTIDE::REMOVE`).
-const REMOVE: &str = "OPENTIDE::REMOVE";
+/// A line that is only this is left out of a file (`OPENTIDE::REMOVE`).
+/// The control characters around it are ones no value can bring in: a
+/// scalar escapes them and [`block_text`] refuses them, so a rule whose
+/// text says `OPENTIDE::REMOVE` loses no line.
+const REMOVE: &str = "\u{1}OPENTIDE::REMOVE\u{1}";
 
 const GROUPING_CONFIGURATION: &str = "      grouping_lookback: {grouping_lookback}\n      matching: {grouping_matching_method}\n      {group_by_entities}\n      {group_by_alert_details}\n      {group_by_custom_details}";
 const DYNAMIC_PROPERTIES_TEMPLATE: &str = "      #- property: \n        #column: ";
@@ -192,6 +195,26 @@ pub(crate) fn scalar(value: &CJson) -> String {
         }
     }
     json_string(&text)
+}
+
+/// `text` as the content of a YAML block scalar (`|`): every line break
+/// YAML knows (CR, CRLF, NEL, U+2028, U+2029) an LF, so a lone `\r` cannot
+/// end the block and start a key of its own. A character YAML does not
+/// allow in a file (a control character, U+FFFE) cannot be written in a
+/// block: the rule is not imported, and `field` names why.
+pub(crate) fn block_text(text: &str, field: &str) -> Result<String, FieldError> {
+    let text = text
+        .replace("\r\n", "\n")
+        .replace(['\r', '\u{85}', '\u{2028}', '\u{2029}'], "\n");
+    let printable = |c: char| {
+        matches!(c, '\t' | '\n' | '\u{20}'..='\u{7e}' | '\u{a0}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}')
+            || c >= '\u{10000}'
+    };
+    if text.chars().all(printable) {
+        Ok(text)
+    } else {
+        Err(FieldError::not(field, "text without control characters"))
+    }
 }
 
 /// A boolean or a number as YAML writes it; any other value as [`scalar`]
@@ -412,6 +435,10 @@ pub(crate) fn render(
                         "a string",
                     ));
                 };
+                let description = &block_text(
+                    description,
+                    "alert_details_override.alert_description_format",
+                )?;
                 alert_description_commented = "";
                 alert_description_style = block_style(description);
                 alert_description_override = indent_lines(description, "      ");
@@ -559,7 +586,7 @@ pub(crate) fn render(
         None => ("#", ENTITIES_TEMPLATE.to_owned()),
     };
 
-    let query = required_text(rule, "query")?;
+    let query = &block_text(required_text(rule, "query")?, "query")?;
     let block = fill(
         BLOCK,
         &[
@@ -598,7 +625,7 @@ pub(crate) fn render(
     let block = block.trim_matches('\n');
 
     let display_name = format!("{} - {tenant_name}", required_text(rule, "display_name")?);
-    let description = required_text(rule, "description")?;
+    let description = &block_text(required_text(rule, "description")?, "description")?;
     let created = required_text(rule, "last_modified_utc")?
         .split('T')
         .next()
@@ -607,7 +634,10 @@ pub(crate) fn render(
     let text = fill(
         MDR,
         &[
-            ("rule_name", &json_string(&display_name)),
+            (
+                "rule_name",
+                &opentide_schema::node::double_quoted(&display_name),
+            ),
             ("rule_uuid", &scalar(required(rule, "name")?)),
             ("rule_creation", &date_scalar(&created)),
             ("rule_modified", &date_scalar(&created)),
@@ -621,7 +651,7 @@ pub(crate) fn render(
     let text = text
         .trim_matches('\n')
         .split('\n')
-        .filter(|line| !line.contains(REMOVE))
+        .filter(|line| line.trim() != REMOVE)
         .collect::<Vec<_>>()
         .join("\n");
     Ok(Some((display_name, text)))
@@ -883,6 +913,43 @@ mod tests {
             block(&["alert", "create_incident"]).as_deref(),
             Some("yes: no"),
             "{text}"
+        );
+    }
+
+    /// A lone CR in a query or description stays in its block, and a value
+    /// that says `OPENTIDE::REMOVE` loses no line.
+    #[test]
+    fn tenant_text_cannot_end_a_block_or_remove_a_line() {
+        let rule = RULE
+            .replace(r#""query": "T""#, r#""query": "T\rname: INJECTED""#)
+            .replace(
+                r#""description": "D""#,
+                r#""description": "D\u2028status: X""#,
+            )
+            .replace(
+                r#""displayName": "Rule""#,
+                r#""displayName": "Rule OPENTIDE::REMOVE""#,
+            );
+        let (_, text) = render(&object(&rule), "soc").unwrap().unwrap();
+        let document =
+            opentide_schema::node::load(&text).unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+        let root = document.root().unwrap();
+        assert_eq!(
+            root.get("name").unwrap().value.as_str(),
+            Some("Rule OPENTIDE::REMOVE - soc"),
+            "{text}"
+        );
+        assert!(root.get("status").is_none(), "{text}");
+        let query = root
+            .get("configurations")
+            .and_then(|block| block.get("sentinel"))
+            .and_then(|block| block.get("query"))
+            .unwrap();
+        assert_eq!(query.value.as_str(), Some("T\nname: INJECTED\n"), "{text}");
+        let refused = RULE.replace(r#""query": "T""#, r#""query": "T\u0001""#);
+        assert_eq!(
+            render(&object(&refused), "soc").unwrap_err().to_string(),
+            "field `query` is not text without control characters"
         );
     }
 
