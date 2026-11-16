@@ -16,8 +16,15 @@ workspace = true
 [dependencies]
 opentide-core.workspace = true
 opentide-highlight.workspace = true
+opentide-parse.workspace = true
 opentide-syntax.workspace = true
 tree-sitter.workspace = true
 serde.workspace = true
 toml.workspace = true
 regex-syntax.workspace = true
+logos.workspace = true
+rowan.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+opentide-parse = { workspace = true, features = ["differential"] }

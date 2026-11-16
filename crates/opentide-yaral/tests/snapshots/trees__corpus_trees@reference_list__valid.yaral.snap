@@ -1,0 +1,26 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/reference_list__valid.yaral
+---
+SOURCE_FILE@0..63
+  COMMENT@0..28 "// prod:reference_list valid"
+  WHITESPACE@28..29 "\n"
+  SEARCH_QUERY@29..62
+    SEARCH_EVENTS@29..62
+      IN_EXPR@29..62
+        UDM_FIELD@29..50
+          VARIABLE@29..31
+            VAR_TOKEN@29..31 "$e"
+          MEMBER@31..41
+            ACCESS_DOT@31..32 "."
+            FIELD_NAME@32..41 "principal"
+          MEMBER@41..50
+            ACCESS_DOT@41..42 "."
+            FIELD_NAME@42..50 "hostname"
+        WHITESPACE@50..51 " "
+        IN_KW@51..53 "in"
+        WHITESPACE@53..54 " "
+        REFERENCE_LIST@54..62
+          REF_LIST_TOKEN@54..62 "%servers"
+  WHITESPACE@62..63 "\n"

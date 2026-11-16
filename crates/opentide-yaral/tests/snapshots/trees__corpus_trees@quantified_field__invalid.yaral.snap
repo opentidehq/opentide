@@ -1,0 +1,21 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/quantified_field__invalid.yaral
+---
+SOURCE_FILE@0..50
+  COMMENT@0..32 "// prod:quantified_field invalid"
+  WHITESPACE@32..33 "\n"
+  SEARCH_QUERY@33..49
+    SEARCH_EVENTS@33..49
+      COMPARISON@33..49
+        QUANTIFIED_FIELD@33..36
+          ANY_KW@33..36 "any"
+        WHITESPACE@36..37 " "
+        EQ@37..38 "="
+        WHITESPACE@38..39 " "
+        LITERAL@39..49
+          STRING@39..49 "\"10.0.0.1\""
+  WHITESPACE@49..50 "\n"
+errors:
+36..37: expected a field such as `$e.field`

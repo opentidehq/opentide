@@ -1,0 +1,26 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"f($e.a: 1)\")"
+---
+SOURCE_FILE@0..10
+  SEARCH_QUERY@0..10
+    SEARCH_EVENTS@0..6
+      FUNCTION_CALL@0..6
+        FUNCTION_NAME@0..1
+          IDENT@0..1 "f"
+        L_PAREN@1..2 "("
+        ARGUMENTS@2..6
+          UDM_FIELD@2..6
+            VARIABLE@2..4
+              VAR_TOKEN@2..4 "$e"
+            MEMBER@4..6
+              ACCESS_DOT@4..5 "."
+              FIELD_NAME@5..6 "a"
+    ERROR@6..10
+      COLON@6..7 ":"
+      WHITESPACE@7..8 " "
+      INTEGER@8..9 "1"
+      R_PAREN@9..10 ")"
+errors:
+6..6: expected `)` (expected `)`, `,`)
+6..6: expected a section such as `events:` (expected `nocase`, `)`, `,`)

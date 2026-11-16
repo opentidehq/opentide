@@ -1,0 +1,38 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/export_section__invalid.yaral
+---
+SOURCE_FILE@0..82
+  COMMENT@0..30 "// prod:export_section invalid"
+  WHITESPACE@30..31 "\n"
+  RULE_DECLARATION@31..81
+    RULE_KW@31..35 "rule"
+    WHITESPACE@35..36 " "
+    RULE_NAME@36..37
+      IDENT@36..37 "r"
+    WHITESPACE@37..38 " "
+    L_BRACE@38..39 "{"
+    WHITESPACE@39..42 "\n  "
+    EXPORT_SECTION@42..79
+      EXPORT_KW@42..48 "export"
+      COLON@48..49 ":"
+      WHITESPACE@49..54 "\n    "
+      TABLE_CALL@54..79
+        REFERENCE_LIST@54..61
+          REF_LIST_TOKEN@54..61 "%logins"
+        DOT@61..62 "."
+        IDENT@62..71 "write_row"
+        L_PAREN@71..72 "("
+        ARGUMENTS@72..77
+          NAMED_ARGUMENT@72..77
+            ARGUMENT_NAME@72..76
+              IDENT@72..76 "user"
+            COLON@76..77 ":"
+        WHITESPACE@77..78 " "
+        R_PAREN@78..79 ")"
+    WHITESPACE@79..80 "\n"
+    R_BRACE@80..81 "}"
+  WHITESPACE@81..82 "\n"
+errors:
+77..78: expected an expression (expected `*`)

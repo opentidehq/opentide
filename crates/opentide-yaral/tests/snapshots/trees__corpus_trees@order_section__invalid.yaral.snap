@@ -1,0 +1,35 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/order_section__invalid.yaral
+---
+SOURCE_FILE@0..84
+  COMMENT@0..29 "// prod:order_section invalid"
+  WHITESPACE@29..30 "\n"
+  SEARCH_QUERY@30..83
+    SEARCH_EVENTS@30..64
+      COMPARISON@30..64
+        BARE_FIELD@30..49
+          IDENT@30..38 "metadata"
+          MEMBER@38..49
+            ACCESS_DOT@38..39 "."
+            FIELD_NAME@39..49 "event_type"
+        WHITESPACE@49..50 " "
+        EQ@50..51 "="
+        WHITESPACE@51..52 " "
+        LITERAL@52..64
+          STRING@52..64 "\"USER_LOGIN\""
+    WHITESPACE@64..65 "\n"
+    ORDER_SECTION@65..71
+      ORDER_KW@65..70 "order"
+      COLON@70..71 ":"
+    WHITESPACE@71..74 "\n  "
+    ERROR@74..83
+      COMMA@74..75 ","
+      WHITESPACE@75..76 " "
+      VAR_TOKEN@76..78 "$n"
+      WHITESPACE@78..79 " "
+      DESC_KW@79..83 "desc"
+  WHITESPACE@83..84 "\n"
+errors:
+71..74: expected a section such as `events:`

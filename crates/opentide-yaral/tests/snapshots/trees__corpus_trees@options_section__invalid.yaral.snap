@@ -1,0 +1,31 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/options_section__invalid.yaral
+---
+SOURCE_FILE@0..81
+  COMMENT@0..31 "// prod:options_section invalid"
+  WHITESPACE@31..32 "\n"
+  RULE_DECLARATION@32..80
+    RULE_KW@32..36 "rule"
+    WHITESPACE@36..37 " "
+    RULE_NAME@37..38
+      IDENT@37..38 "r"
+    WHITESPACE@38..39 " "
+    L_BRACE@39..40 "{"
+    WHITESPACE@40..43 "\n  "
+    OPTIONS_SECTION@43..78
+      OPTIONS_KW@43..50 "options"
+      COLON@50..51 ":"
+      WHITESPACE@51..56 "\n    "
+      OPTION_ENTRY@56..78
+        OPTION_KEY@56..73
+          IDENT@56..73 "allow_zero_values"
+        WHITESPACE@73..74 " "
+        LITERAL@74..78
+          TRUE_KW@74..78 "true"
+    WHITESPACE@78..79 "\n"
+    R_BRACE@79..80 "}"
+  WHITESPACE@80..81 "\n"
+errors:
+73..74: expected `=` (expected `=`)

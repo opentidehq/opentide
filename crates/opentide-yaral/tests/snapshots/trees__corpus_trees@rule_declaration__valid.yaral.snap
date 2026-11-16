@@ -1,0 +1,58 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/rule_declaration__valid.yaral
+---
+SOURCE_FILE@0..139
+  COMMENT@0..30 "// prod:rule_declaration valid"
+  WHITESPACE@30..31 "\n"
+  RULE_DECLARATION@31..138
+    RULE_KW@31..35 "rule"
+    WHITESPACE@35..36 " "
+    RULE_NAME@36..37
+      IDENT@36..37 "r"
+    WHITESPACE@37..38 " "
+    L_BRACE@38..39 "{"
+    WHITESPACE@39..42 "\n  "
+    META_SECTION@42..64
+      META_KW@42..46 "meta"
+      COLON@46..47 ":"
+      WHITESPACE@47..52 "\n    "
+      META_ENTRY@52..64
+        META_KEY@52..58
+          IDENT@52..58 "author"
+        WHITESPACE@58..59 " "
+        EQ@59..60 "="
+        WHITESPACE@60..61 " "
+        LITERAL@61..64
+          STRING@61..64 "\"a\""
+    WHITESPACE@64..67 "\n  "
+    EVENTS_SECTION@67..116
+      EVENTS_KW@67..73 "events"
+      COLON@73..74 ":"
+      WHITESPACE@74..79 "\n    "
+      COMPARISON@79..116
+        UDM_FIELD@79..101
+          VARIABLE@79..81
+            VAR_TOKEN@79..81 "$e"
+          MEMBER@81..90
+            ACCESS_DOT@81..82 "."
+            FIELD_NAME@82..90 "metadata"
+          MEMBER@90..101
+            ACCESS_DOT@90..91 "."
+            FIELD_NAME@91..101 "event_type"
+        WHITESPACE@101..102 " "
+        EQ@102..103 "="
+        WHITESPACE@103..104 " "
+        LITERAL@104..116
+          STRING@104..116 "\"USER_LOGIN\""
+    WHITESPACE@116..119 "\n  "
+    CONDITION_SECTION@119..136
+      CONDITION_KW@119..128 "condition"
+      COLON@128..129 ":"
+      WHITESPACE@129..134 "\n    "
+      VARIABLE@134..136
+        VAR_TOKEN@134..136 "$e"
+    WHITESPACE@136..137 "\n"
+    R_BRACE@137..138 "}"
+  WHITESPACE@138..139 "\n"
