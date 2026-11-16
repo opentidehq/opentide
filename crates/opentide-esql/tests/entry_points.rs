@@ -127,3 +127,55 @@ fn many_problems_and_many_findings() {
     every_entry_point(format!("FROM a | EVAL {}", vec!["f(x)"; n].join(", ")));
     every_entry_point(format!("FROM a | EVAL {}", vec!["f(x)"; n].join(",\n")));
 }
+
+/// The shortest of three runs of `run`, in seconds: a ratio of two such
+/// times is the machine's speed cancelled out, and the minimum drops the
+/// runs a loaded CI runner slowed down.
+fn best_of_three(run: &dyn Fn()) -> f64 {
+    (0..3)
+        .map(|_| {
+            let started = Instant::now();
+            run();
+            started.elapsed().as_secs_f64()
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
+/// One entry point, run on a query.
+type EntryPoint = dyn Fn(&str);
+
+/// Every entry point grows linearly with the findings: four times the input
+/// takes about four times as long (a quadratic pass takes sixteen).
+#[test]
+fn findings_grow_linearly() {
+    let query = |n: usize| format!("FROM a | EVAL {}", vec!["f(x)"; n].join(", "));
+    let entry_points: [(&str, &EntryPoint); 5] = [
+        ("analyze", &|s| drop(analyze(s))),
+        ("ecs_diagnostics", &|s| drop(ecs_diagnostics(s))),
+        ("output_columns", &|s| drop(output_columns(s))),
+        ("hover", &|s| drop(hover(s, s.len() / 2))),
+        ("completions", &|s| drop(completions(s, s.len()))),
+    ];
+    for (name, run) in entry_points {
+        let (small, large) = (query(2_000), query(8_000));
+        let ratio = best_of_three(&|| run(&large)) / best_of_three(&|| run(&small));
+        assert!(ratio < 8.0, "{name}: 4x the input took {ratio:.1}x as long");
+    }
+}
+
+/// An unknown name's "did you mean" scans the whole catalog. A query that
+/// repeats one unknown function costs about what one with a known function
+/// does: the scan runs once per name, not once per call. It ran per call,
+/// and 20,000 calls took 11 s in a debug build, past the 60 s bound of
+/// `many_problems_and_many_findings` on a slow CI runner.
+#[test]
+fn a_repeated_unknown_name_is_suggested_once() {
+    let query = |name: &str| format!("FROM a | EVAL {}", vec![name; 4_000].join(", "));
+    let (unknown, known) = (query("f(x)"), query("abs(x)"));
+    let ratio =
+        best_of_three(&|| drop(analyze(&unknown))) / best_of_three(&|| drop(analyze(&known)));
+    assert!(
+        ratio < 3.0,
+        "unknown names took {ratio:.1}x as long as known ones"
+    );
+}

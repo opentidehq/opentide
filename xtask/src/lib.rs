@@ -32,6 +32,7 @@ pub mod stubs;
 pub mod validate;
 pub mod verdict;
 pub mod vocab;
+pub mod yara_modules;
 
 /// Parses `argv` (without the program name) as the subcommands `C`, as
 /// `cargo xtask` does, for the command modules' tests.
