@@ -106,6 +106,10 @@ impl SyntaxKind {
     }
 
     /// Whether this is a token kind: the kinds below `ERROR`.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "used by tests until the switch of #1227")
+    )]
     pub const fn is_token(self) -> bool {
         (self as u16) < K::ERROR as u16
     }
@@ -132,6 +136,10 @@ impl SyntaxKind {
     }
 
     /// The reserved word spelled `word` in any case.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "used by tests until the switch of #1227")
+    )]
     pub fn from_keyword(word: &str) -> Option<Self> {
         KEYWORDS
             .iter()
@@ -140,6 +148,10 @@ impl SyntaxKind {
     }
 
     /// The contextual keyword spelled `word` in any case.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "used by tests until the switch of #1227")
+    )]
     pub fn from_contextual(word: &str) -> Option<Self> {
         CONTEXTUAL
             .iter()

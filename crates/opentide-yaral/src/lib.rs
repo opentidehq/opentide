@@ -30,6 +30,7 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+mod analysis;
 pub mod catalog;
 mod check;
 pub mod editor;
@@ -44,10 +45,6 @@ pub mod editor;
 )]
 mod lexer;
 mod parser;
-#[expect(
-    dead_code,
-    reason = "the pure-Rust tree's kinds are reached from tests until the last PR of #1227 switches production to it"
-)]
 mod syntax;
 #[doc(hidden)]
 pub mod testing;

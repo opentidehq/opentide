@@ -27,3 +27,4 @@ rowan.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
+opentide-parse = { workspace = true, features = ["differential"] }

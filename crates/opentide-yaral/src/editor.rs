@@ -189,6 +189,84 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
     }
 }
 
+/// Hover at byte `offset`, read from the pure-Rust tree.
+pub(crate) fn hover_in_tree(source: &str, offset: usize) -> Option<String> {
+    use crate::syntax::{SyntaxKind as K, SyntaxNode};
+    // An offset inside a character (a decoded escape) has nothing to show.
+    if !source.is_char_boundary(offset.min(source.len())) || offset >= source.len() {
+        return None;
+    }
+    let root = SyntaxNode::new_root(crate::parser::parse(source).green);
+    let at = rowan::TextSize::try_from(offset).ok()?;
+    let token = root.token_at_offset(at).right_biased()?;
+    let parent = token.parent()?;
+    match (token.kind(), parent.kind()) {
+        (K::FIELD_NAME | K::IDENT, K::MEMBER | K::BARE_FIELD) => {
+            let field = if parent.kind() == K::MEMBER {
+                parent.parent()?
+            } else {
+                parent
+            };
+            if !matches!(field.kind(), K::UDM_FIELD | K::BARE_FIELD) {
+                return None;
+            }
+            let start = usize::from(token.text_range().start());
+            let mut segs = Vec::new();
+            for (i, s) in crate::analysis::field_segments(&field)
+                .into_iter()
+                .enumerate()
+            {
+                let past = match &s {
+                    Segment::Name(_, at) | Segment::Key(at) | Segment::Position(at) => at.0 > start,
+                };
+                if past && (i > 0 || field.kind() == K::UDM_FIELD) {
+                    break;
+                }
+                segs.push(s);
+            }
+            let udm = Udm::cached();
+            let path: Vec<&str> = segs
+                .iter()
+                .filter_map(|s| match s {
+                    Segment::Name(n, _) => Some(n.as_str()),
+                    _ => None,
+                })
+                .collect();
+            if path.len() == 1
+                && let Some((name, doc)) = Udm::SOURCES.iter().find(|(n, _)| *n == path[0])
+            {
+                return Some(format!("**{name}**: {doc}"));
+            }
+            let resolution = udm.resolve(&segs);
+            let field_row = resolution.field?;
+            if resolution.unknown.is_some() {
+                return None;
+            }
+            Some(field_markdown(udm, &path.join("."), field_row))
+        }
+        (K::IDENT | K::FIELD_NAME | K::ACCESS_DOT, K::FUNCTION_NAME) => {
+            let name: String = parent.text().to_string().split_whitespace().collect();
+            Functions::cached().get(&name).map(function_markdown)
+        }
+        (K::VAR_TOKEN, _) => {
+            let name = token.text();
+            PLATFORM_OUTCOMES
+                .iter()
+                .find(|(n, _)| {
+                    *n == name
+                        || (name.starts_with("$risk_entity_to_score_")
+                            && *n == "$risk_entity_to_score")
+                })
+                .map(|(n, doc)| format!("**{n}**: {doc}"))
+        }
+        (K::REF_LIST_TOKEN, _) => Some(format!(
+            "**{}**: a reference list. Google retires reference lists in 2027: use a data table (`%table.column`). Its contents live in the tenant.",
+            token.text()
+        )),
+        _ => None,
+    }
+}
+
 /// The path being typed before `offset`: its root and its complete
 /// segments, and the partial last segment.
 struct Typed {

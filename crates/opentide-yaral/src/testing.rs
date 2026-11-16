@@ -59,3 +59,26 @@ pub fn debug_parse(source: &str) -> String {
     }
     out
 }
+
+/// The analysis on the pure-Rust parser: the diagnostics and the highlight
+/// tokens (production still runs tree-sitter).
+#[must_use]
+pub fn analyze_new(source: &str, ctx: &crate::Context) -> crate::AnalyzeResult {
+    let root = SyntaxNode::new_root(parse(source).green);
+    crate::AnalyzeResult {
+        diagnostics: crate::analysis::diagnostics(source, *ctx),
+        tokens: crate::analysis::highlight(&root, source),
+    }
+}
+
+/// Hover at a byte offset, read from the pure-Rust tree.
+#[must_use]
+pub fn hover_new(source: &str, offset: usize) -> Option<String> {
+    crate::editor::hover_in_tree(source, offset)
+}
+
+/// The profile of `source` as the pure-Rust parser reads it.
+#[must_use]
+pub fn infer_profile_new(source: &str) -> crate::Profile {
+    crate::analysis::infer_profile(source)
+}
