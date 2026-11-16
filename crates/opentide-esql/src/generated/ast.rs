@@ -2812,7 +2812,7 @@ impl OrderExpression {
     }
     /// The token child.
     pub fn direction(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![asc])
+        support::token_in(&self.syntax, &[T![asc], T![desc]])
     }
     /// The token child.
     pub fn nulls_token(&self) -> Option<SyntaxToken> {
@@ -3912,9 +3912,9 @@ impl BinaryExpression {
     pub fn operator_expressions(&self) -> AstChildren<OperatorExpression> {
         support::children(&self.syntax)
     }
-    /// The token child.
-    pub fn operator(&self) -> Option<SyntaxToken> {
-        support::token_in(&self.syntax, &[T![*], T![/], T![%], T![+], T![-]])
+    /// The token children, in order.
+    pub fn operator(&self) -> Vec<SyntaxToken> {
+        support::tokens_in(&self.syntax, &[T![*], T![/], T![%], T![+], T![-]])
     }
 }
 

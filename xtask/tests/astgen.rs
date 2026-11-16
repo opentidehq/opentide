@@ -105,6 +105,74 @@ fn accessors_are_named_by_labels_nodes_and_tokens() -> TestResult {
     Ok(())
 }
 
+/// A labelled choice of tokens under `?` or `*` reads every token of the
+/// choice (#1454: `direction:('asc' | 'desc')?` read `asc` only).
+#[test]
+fn an_optional_labelled_choice_reads_every_token() -> TestResult {
+    let text = generate(
+        "Root = 'r' dir:('asc' | 'desc')? kind:('regex' | 'cidr' | 'net')* last:('z')?\n",
+        "toy.ungram",
+    )?;
+    for expected in [
+        "pub fn dir(&self) -> Option<SyntaxToken> { support::token_in(&self.syntax, &[T![asc], T![desc]])",
+        "pub fn kind(&self) -> Vec<SyntaxToken> { support::tokens_in(&self.syntax, &[T![regex], T![cidr], T![net]])",
+        "pub fn last(&self) -> Option<SyntaxToken> { support::token(&self.syntax, T![z])",
+    ] {
+        assert!(text.contains(expected), "{expected}\n{text}");
+    }
+    assert!(!text.contains("pub fn asc_token"), "{text}");
+    Ok(())
+}
+
+/// Two tokens that one accessor name stands for are one accessor that reads
+/// both (#1454: SPL's `'LIKE' | 'like'` dropped the second); a repeated
+/// single token keeps its first-token accessor.
+#[test]
+fn tokens_of_one_name_share_their_accessor() -> TestResult {
+    let text = generate(
+        "Root = ('LIKE' | 'like' | Item)* (',' Item)*\nItem = 'i'\n",
+        "toy.ungram",
+    )?;
+    for expected in [
+        "pub fn like_token(&self) -> Vec<SyntaxToken> { support::tokens_in(&self.syntax, &[T![LIKE], T![like]])",
+        "pub fn comma_token(&self) -> Option<SyntaxToken> { support::token(&self.syntax, T![,])",
+    ] {
+        assert!(text.contains(expected), "{expected}\n{text}");
+    }
+    Ok(())
+}
+
+/// What one accessor could not read whole is refused, under `?` and `*` as
+/// without them; a `*` under a `?` still reads every token (#1454 review).
+#[test]
+fn optional_labels_one_accessor_cannot_read_are_refused() -> TestResult {
+    for (grammar, refusal) in [
+        ("Root = 'r' d:('a' 'b')?\n", "label `d` names"),
+        (
+            "Root = 'r' d:('a' | Item)*\nItem = 'i'\n",
+            "label `d` names",
+        ),
+        (
+            "Root = d:('a' | 'b')? d:'c'\n",
+            "two children are named `d`",
+        ),
+    ] {
+        let error = generate(grammar, "toy.ungram")
+            .err()
+            .map(|e| format!("{e:#}"));
+        assert!(
+            error.as_deref().is_some_and(|e| e.contains(refusal)),
+            "{grammar}: {error:?}"
+        );
+    }
+    let text = generate("Root = 'r' d:(('a' | 'b')*)?\n", "toy.ungram")?;
+    assert!(
+        text.contains("pub fn d(&self) -> Vec<SyntaxToken> { support::tokens_in(&self.syntax, &[T![a], T![b]])"),
+        "{text}"
+    );
+    Ok(())
+}
+
 #[test]
 fn a_choice_of_choices_casts_through_the_inner_one() -> TestResult {
     let text = generate(

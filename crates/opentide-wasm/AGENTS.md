@@ -25,8 +25,9 @@ bash scripts/engine/build-wasm.sh clippy                 # clippy for wasm32 (an
 ```
 
 Code under `cfg(target_arch = "wasm32")` is linted only by clippy for that target: `build-wasm.sh
-clippy` runs it (and the wasip1 language server and command line; wasi-sdk only for the command line's `ring`). CI's `wasm` job runs it, builds the artifact with `-Dwarnings` and
-smoke-tests it in Node.
+clippy` runs it (and the wasip1 language server and command line; wasi-sdk only for the command
+line's `ring`). CI's `engine-lint` job runs it, and the `wasm` job builds the artifact with
+`-Dwarnings` and smoke-tests it in Node.
 
 ## Do not
 

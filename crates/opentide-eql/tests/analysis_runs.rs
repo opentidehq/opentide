@@ -44,16 +44,36 @@ fn a_long_arithmetic_run_is_analysed_on_a_small_stack() {
     }
 }
 
+/// Fails unless `run(4 * n)` takes less than 8 times `run(n)`: linear work
+/// takes 4 times as long, quadratic 16 times. Each is the best of three runs,
+/// the sizes alternated, so a busy machine slows both alike; a run under 50 ms passes whatever the
+/// ratio, its noise being larger than it.
+fn assert_linear(name: &str, n: usize, run: impl Fn(usize)) {
+    let time = |k: usize| {
+        let started = Instant::now();
+        run(k);
+        started.elapsed()
+    };
+    // Alternated, so that a busy spell slows both sizes alike.
+    let (mut small, mut large) = (Duration::MAX, Duration::MAX);
+    for _ in 0..3 {
+        small = small.min(time(n));
+        large = large.min(time(4 * n));
+    }
+    assert!(
+        large < Duration::from_millis(50) || large < small * 8,
+        "{name}: {small:?} for {n}, {large:?} for {}: not linear",
+        4 * n
+    );
+}
+
 /// Comments are placed in their nodes in one pass: 40,000 of them took about 8 s when each was
 /// inserted on its own (quadratic).
 #[test]
 fn many_comments_are_placed_in_linear_time() {
-    let source = format!(
-        "process where a == 1 and {}b == 2",
-        "/* c */ ".repeat(40_000)
-    );
-    let started = Instant::now();
-    let result = on_small_stack(move || analyze(&source));
+    let source = |n: usize| format!("process where a == 1 and {}b == 2", "/* c */ ".repeat(n));
+    let full = source(40_000);
+    let result = on_small_stack(move || analyze(&full));
     assert!(
         !result
             .diagnostics
@@ -62,11 +82,10 @@ fn many_comments_are_placed_in_linear_time() {
         "{:?}",
         result.diagnostics.first()
     );
-    assert!(
-        started.elapsed() < Duration::from_secs(3),
-        "{:?}",
-        started.elapsed()
-    );
+    assert_linear("comments", 10_000, |n| {
+        let text = source(n);
+        let _ = on_small_stack(move || analyze(&text));
+    });
 }
 
 /// An unfinished call is its syntax error alone: no arity or argument-type finding for the
