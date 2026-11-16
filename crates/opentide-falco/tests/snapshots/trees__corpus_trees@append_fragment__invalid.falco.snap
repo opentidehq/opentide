@@ -1,0 +1,23 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/append_fragment__invalid.falco
+---
+source_file@0..24
+  append_fragment@0..7
+    and@0..3 "and"
+    whitespace@3..4 " "
+    macro_reference@4..7
+      identifier@4..7 "and"
+  whitespace@7..8 " "
+  ERROR@8..17
+    field_name@8..17 "proc.name"
+  whitespace@17..18 " "
+  ERROR@18..19
+    =@18..19 "="
+  whitespace@19..20 " "
+  macro_reference@20..24
+    identifier@20..24 "bash"
+errors:
+7..8: unexpected
+17..18: unexpected (expected field_name, identifier, transformer_name, ()

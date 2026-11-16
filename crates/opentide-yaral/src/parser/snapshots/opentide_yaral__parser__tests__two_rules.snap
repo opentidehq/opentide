@@ -1,0 +1,38 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"rule a { events: $e } rule b { events: $f }\")"
+---
+SOURCE_FILE@0..43
+  RULE_DECLARATION@0..21
+    RULE_KW@0..4 "rule"
+    WHITESPACE@4..5 " "
+    RULE_NAME@5..6
+      IDENT@5..6 "a"
+    WHITESPACE@6..7 " "
+    L_BRACE@7..8 "{"
+    WHITESPACE@8..9 " "
+    EVENTS_SECTION@9..19
+      EVENTS_KW@9..15 "events"
+      COLON@15..16 ":"
+      WHITESPACE@16..17 " "
+      VARIABLE@17..19
+        VAR_TOKEN@17..19 "$e"
+    WHITESPACE@19..20 " "
+    R_BRACE@20..21 "}"
+  WHITESPACE@21..22 " "
+  RULE_DECLARATION@22..43
+    RULE_KW@22..26 "rule"
+    WHITESPACE@26..27 " "
+    RULE_NAME@27..28
+      IDENT@27..28 "b"
+    WHITESPACE@28..29 " "
+    L_BRACE@29..30 "{"
+    WHITESPACE@30..31 " "
+    EVENTS_SECTION@31..41
+      EVENTS_KW@31..37 "events"
+      COLON@37..38 ":"
+      WHITESPACE@38..39 " "
+      VARIABLE@39..41
+        VAR_TOKEN@39..41 "$f"
+    WHITESPACE@41..42 " "
+    R_BRACE@42..43 "}"

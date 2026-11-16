@@ -1,6 +1,47 @@
-//! Event Query Language (EQL).
+//! Event Query Language (EQL): its keywords, the operators, the brackets and the
+//! delimiters. The names of fields, functions and pipes, the numbers, the strings and `?`,
+//! `![` are nodes of the tree, which the analysis colours; they are not in the TextMate
+//! grammar.
 
-use super::Keywords;
+use super::{Capture, Keywords};
 
-/// `None` until the engine moves to `opentide-parse`.
-pub(super) const KEYWORDS: Option<Keywords> = None;
+pub(super) const KEYWORDS: Option<Keywords> = Some(&[
+    ("|", Capture::PIPE),
+    ("sequence", Capture::KEYWORD),
+    ("sample", Capture::KEYWORD),
+    ("join", Capture::KEYWORD),
+    ("by", Capture::KEYWORD),
+    ("with", Capture::KEYWORD),
+    ("maxspan", Capture::KEYWORD),
+    ("until", Capture::KEYWORD),
+    ("where", Capture::KEYWORD),
+    ("of", Capture::KEYWORD),
+    ("and", Capture::KEYWORD),
+    ("or", Capture::KEYWORD),
+    ("not", Capture::KEYWORD),
+    ("in", Capture::OPERATOR),
+    ("in~", Capture::OPERATOR),
+    ("like", Capture::OPERATOR),
+    ("like~", Capture::OPERATOR),
+    ("regex", Capture::OPERATOR),
+    ("regex~", Capture::OPERATOR),
+    (":", Capture::OPERATOR),
+    ("==", Capture::OPERATOR),
+    ("!=", Capture::OPERATOR),
+    ("<", Capture::OPERATOR),
+    ("<=", Capture::OPERATOR),
+    (">", Capture::OPERATOR),
+    (">=", Capture::OPERATOR),
+    ("+", Capture::OPERATOR),
+    ("-", Capture::OPERATOR),
+    ("*", Capture::OPERATOR),
+    ("/", Capture::OPERATOR),
+    ("%", Capture::OPERATOR),
+    ("=", Capture::OPERATOR),
+    ("(", Capture::BRACKET),
+    (")", Capture::BRACKET),
+    ("[", Capture::BRACKET),
+    ("]", Capture::BRACKET),
+    (",", Capture::DELIMITER),
+    (".", Capture::DELIMITER),
+]);

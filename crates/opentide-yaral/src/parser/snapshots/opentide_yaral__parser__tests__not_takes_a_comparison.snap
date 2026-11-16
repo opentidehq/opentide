@@ -1,0 +1,34 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"not $e.a = 1 and not not $b\")"
+---
+SOURCE_FILE@0..27
+  SEARCH_QUERY@0..27
+    SEARCH_EVENTS@0..27
+      AND_EXPR@0..27
+        NOT_EXPR@0..12
+          NOT_KW@0..3 "not"
+          WHITESPACE@3..4 " "
+          COMPARISON@4..12
+            UDM_FIELD@4..8
+              VARIABLE@4..6
+                VAR_TOKEN@4..6 "$e"
+              MEMBER@6..8
+                ACCESS_DOT@6..7 "."
+                FIELD_NAME@7..8 "a"
+            WHITESPACE@8..9 " "
+            EQ@9..10 "="
+            WHITESPACE@10..11 " "
+            LITERAL@11..12
+              INTEGER@11..12 "1"
+        WHITESPACE@12..13 " "
+        AND_KW@13..16 "and"
+        WHITESPACE@16..17 " "
+        NOT_EXPR@17..27
+          NOT_KW@17..20 "not"
+          WHITESPACE@20..21 " "
+          NOT_EXPR@21..27
+            NOT_KW@21..24 "not"
+            WHITESPACE@24..25 " "
+            VARIABLE@25..27
+              VAR_TOKEN@25..27 "$b"

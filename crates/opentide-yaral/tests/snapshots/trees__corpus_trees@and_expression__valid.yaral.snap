@@ -1,0 +1,63 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/and_expression__valid.yaral
+---
+SOURCE_FILE@0..130
+  COMMENT@0..28 "// prod:and_expression valid"
+  WHITESPACE@28..29 "\n"
+  SEARCH_QUERY@29..129
+    SEARCH_EVENTS@29..129
+      AND_EXPR@29..129
+        COMPARISON@29..66
+          UDM_FIELD@29..51
+            VARIABLE@29..31
+              VAR_TOKEN@29..31 "$e"
+            MEMBER@31..40
+              ACCESS_DOT@31..32 "."
+              FIELD_NAME@32..40 "metadata"
+            MEMBER@40..51
+              ACCESS_DOT@40..41 "."
+              FIELD_NAME@41..51 "event_type"
+          WHITESPACE@51..52 " "
+          EQ@52..53 "="
+          WHITESPACE@53..54 " "
+          LITERAL@54..66
+            STRING@54..66 "\"USER_LOGIN\""
+        WHITESPACE@66..67 " "
+        AND_KW@67..70 "AND"
+        WHITESPACE@70..71 " "
+        COMPARISON@71..106
+          UDM_FIELD@71..96
+            VARIABLE@71..73
+              VAR_TOKEN@71..73 "$e"
+            MEMBER@73..89
+              ACCESS_DOT@73..74 "."
+              FIELD_NAME@74..89 "security_result"
+            MEMBER@89..96
+              ACCESS_DOT@89..90 "."
+              FIELD_NAME@90..96 "action"
+          WHITESPACE@96..97 " "
+          EQ@97..98 "="
+          WHITESPACE@98..99 " "
+          LITERAL@99..106
+            STRING@99..106 "\"BLOCK\""
+        WHITESPACE@106..107 " "
+        AND_KW@107..110 "aNd"
+        WHITESPACE@110..111 " "
+        COMPARISON@111..129
+          UDM_FIELD@111..125
+            VARIABLE@111..113
+              VAR_TOKEN@111..113 "$e"
+            MEMBER@113..120
+              ACCESS_DOT@113..114 "."
+              FIELD_NAME@114..120 "target"
+            MEMBER@120..125
+              ACCESS_DOT@120..121 "."
+              FIELD_NAME@121..125 "port"
+          WHITESPACE@125..126 " "
+          GT@126..127 ">"
+          WHITESPACE@127..128 " "
+          LITERAL@128..129
+            INTEGER@128..129 "0"
+  WHITESPACE@129..130 "\n"

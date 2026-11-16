@@ -1,0 +1,40 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/search_events__valid.yaral
+---
+SOURCE_FILE@0..107
+  COMMENT@0..27 "// prod:search_events valid"
+  WHITESPACE@27..28 "\n"
+  SEARCH_QUERY@28..106
+    SEARCH_EVENTS@28..106
+      COMPARISON@28..63
+        BARE_FIELD@28..47
+          IDENT@28..36 "metadata"
+          MEMBER@36..47
+            ACCESS_DOT@36..37 "."
+            FIELD_NAME@37..47 "event_type"
+        WHITESPACE@47..48 " "
+        EQ@48..49 "="
+        WHITESPACE@49..50 " "
+        LITERAL@50..63
+          STRING@50..63 "\"NETWORK_DNS\""
+      WHITESPACE@63..64 "\n"
+      COMPARISON@64..106
+        BARE_FIELD@64..90
+          IDENT@64..71 "network"
+          MEMBER@71..75
+            ACCESS_DOT@71..72 "."
+            FIELD_NAME@72..75 "dns"
+          MEMBER@75..85
+            ACCESS_DOT@75..76 "."
+            FIELD_NAME@76..85 "questions"
+          MEMBER@85..90
+            ACCESS_DOT@85..86 "."
+            FIELD_NAME@86..90 "name"
+        WHITESPACE@90..91 " "
+        EQ@91..92 "="
+        WHITESPACE@92..93 " "
+        LITERAL@93..106
+          STRING@93..106 "\"example.com\""
+  WHITESPACE@106..107 "\n"

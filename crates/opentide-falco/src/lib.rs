@@ -38,12 +38,17 @@ use opentide_syntax::parse as ts_parse;
 use std::collections::{BTreeMap, BTreeSet};
 use tree_sitter::Node;
 
+mod cst;
+mod syntax;
+
 pub mod catalog;
 pub mod compile;
 pub mod exceptions;
 pub mod parser;
 
 pub use catalog::{Catalog, DEFAULT_SOURCE, Field, Kind, Lookup};
+#[doc(hidden)]
+pub use cst::{debug_parse, highlight_captures, tree_fields, tree_has_error};
 
 /// The operators a modifier (`oneof`, `anyof`, `allof`) can follow: Falco's
 /// `cmpop_supports_modifier`.

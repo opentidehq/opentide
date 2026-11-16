@@ -1,0 +1,87 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/outcome_section__valid.yaral
+---
+SOURCE_FILE@0..204
+  COMMENT@0..29 "// prod:outcome_section valid"
+  WHITESPACE@29..30 "\n"
+  RULE_DECLARATION@30..203
+    RULE_KW@30..34 "rule"
+    WHITESPACE@34..35 " "
+    RULE_NAME@35..36
+      IDENT@35..36 "r"
+    WHITESPACE@36..37 " "
+    L_BRACE@37..38 "{"
+    WHITESPACE@38..41 "\n  "
+    META_SECTION@41..63
+      META_KW@41..45 "meta"
+      COLON@45..46 ":"
+      WHITESPACE@46..51 "\n    "
+      META_ENTRY@51..63
+        META_KEY@51..57
+          IDENT@51..57 "author"
+        WHITESPACE@57..58 " "
+        EQ@58..59 "="
+        WHITESPACE@59..60 " "
+        LITERAL@60..63
+          STRING@60..63 "\"a\""
+    WHITESPACE@63..66 "\n  "
+    EVENTS_SECTION@66..115
+      EVENTS_KW@66..72 "events"
+      COLON@72..73 ":"
+      WHITESPACE@73..78 "\n    "
+      COMPARISON@78..115
+        UDM_FIELD@78..100
+          VARIABLE@78..80
+            VAR_TOKEN@78..80 "$e"
+          MEMBER@80..89
+            ACCESS_DOT@80..81 "."
+            FIELD_NAME@81..89 "metadata"
+          MEMBER@89..100
+            ACCESS_DOT@89..90 "."
+            FIELD_NAME@90..100 "event_type"
+        WHITESPACE@100..101 " "
+        EQ@101..102 "="
+        WHITESPACE@102..103 " "
+        LITERAL@103..115
+          STRING@103..115 "\"USER_LOGIN\""
+    WHITESPACE@115..118 "\n  "
+    OUTCOME_SECTION@118..181
+      OUTCOME_KW@118..125 "outcome"
+      COLON@125..126 ":"
+      WHITESPACE@126..131 "\n    "
+      COMPARISON@131..147
+        VARIABLE@131..142
+          VAR_TOKEN@131..142 "$risk_score"
+        WHITESPACE@142..143 " "
+        EQ@143..144 "="
+        WHITESPACE@144..145 " "
+        LITERAL@145..147
+          INTEGER@145..147 "40"
+      WHITESPACE@147..152 "\n    "
+      COMPARISON@152..181
+        VARIABLE@152..157
+          VAR_TOKEN@152..157 "$host"
+        WHITESPACE@157..158 " "
+        EQ@158..159 "="
+        WHITESPACE@159..160 " "
+        UDM_FIELD@160..181
+          VARIABLE@160..162
+            VAR_TOKEN@160..162 "$e"
+          MEMBER@162..172
+            ACCESS_DOT@162..163 "."
+            FIELD_NAME@163..172 "principal"
+          MEMBER@172..181
+            ACCESS_DOT@172..173 "."
+            FIELD_NAME@173..181 "hostname"
+    WHITESPACE@181..184 "\n  "
+    CONDITION_SECTION@184..201
+      CONDITION_KW@184..193 "condition"
+      COLON@193..194 ":"
+      WHITESPACE@194..199 "\n    "
+      VARIABLE@199..201
+        VAR_TOKEN@199..201 "$e"
+    WHITESPACE@201..202 "\n"
+    R_BRACE@202..203 "}"
+  WHITESPACE@203..204 "\n"

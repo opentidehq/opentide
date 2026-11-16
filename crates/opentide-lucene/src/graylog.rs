@@ -22,8 +22,10 @@
 //!
 //! Verified on Graylog 7.2.2 and 6.3.5 (`crates/testdata/oracles/graylog/`).
 
-use opentide_core::{ByteSpan, CompletionItem, Diagnostic, codes, span_to_range};
-use tree_sitter::Node;
+use crate::Cx;
+use crate::syntax::SyntaxKind as K;
+use crate::tree::Node;
+use opentide_core::{ByteSpan, CompletionItem, Diagnostic, codes};
 
 /// Graylog's built-in message fields, with what each holds.
 pub const MESSAGE_FIELDS: [(&str, &str); 8] = [
@@ -62,32 +64,29 @@ const ANALYZED: [&str; 2] = ["message", "full_message"];
 const DOCS: &str =
     "https://go2docs.graylog.org/current/making_sense_of_your_log_data/writing_search_queries.html";
 
-fn text<'a>(node: Node, source: &'a str) -> &'a str {
-    source.get(node.start_byte()..node.end_byte()).unwrap_or("")
-}
-
-fn range(source: &str, start: usize, end: usize) -> opentide_core::Range {
-    span_to_range(source, ByteSpan::new(start, end))
+fn range(cx: Cx<'_>, start: usize, end: usize) -> opentide_core::Range {
+    cx.range(ByteSpan::new(start, end))
 }
 
 /// `graylog_leading_wildcard` on a `term_query` whose term starts with `*`
 /// or `?`.
-pub(crate) fn leading_wildcard(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let Some(term) = node.child_by_field_name("term") else {
+pub(crate) fn leading_wildcard(node: &Node, cx: Cx<'_>, out: &mut Vec<Diagnostic>) {
+    let source = cx.source;
+    let Some(term) = node.term() else {
         return;
     };
-    if !matches!(term.kind(), "star" | "wildcard_term") {
+    if !matches!(term.kind(), K::Star | K::WildcardTerm) {
         return;
     }
-    let word = text(term, source);
+    let word = term.text(source);
     let Some(first) = word.chars().next().filter(|c| matches!(c, '*' | '?')) else {
         return;
     };
     let field = node
         .parent()
-        .filter(|p| p.kind() == "field_query")
-        .and_then(|p| p.child_by_field_name("field"))
-        .map(|f| text(f, source));
+        .filter(|p| p.kind() == K::FieldQuery)
+        .and_then(|p| p.field())
+        .map(|f| f.text(source));
     let advice = match field {
         Some("*") | None if word == "*" => {
             "to match messages that have a field, write `_exists_:<field>`".to_string()
@@ -104,26 +103,31 @@ pub(crate) fn leading_wildcard(node: Node, source: &str, out: &mut Vec<Diagnosti
         format!(
             "`{word}` starts with `{first}`: Graylog refuses a leading wildcard (\"'*' or '?' not allowed as first character\") unless the server sets `allow_leading_wildcard_searches`; {advice}"
         ),
-        range(source, term.start_byte(), term.end_byte()),
+        range(cx, term.start(), term.end()),
     ));
 }
 
 /// `graylog_open_range` on each `*` bound of a `range_query`: Graylog's
 /// validator refuses it, so deploy cannot save the definition.
-pub(crate) fn open_range(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
+pub(crate) fn open_range(node: &Node, cx: Cx<'_>, out: &mut Vec<Diagnostic>) {
+    let source = cx.source;
     let field = node
         .parent()
-        .filter(|p| p.kind() == "field_query")
-        .and_then(|p| p.child_by_field_name("field"))
-        .map_or("field", |f| text(f, source));
-    let token = |name: &str| node.child_by_field_name(name).map(|n| text(n, source));
-    let (Some(lower), Some(upper)) = (
-        node.child_by_field_name("lower"),
-        node.child_by_field_name("upper"),
-    ) else {
+        .filter(|p| p.kind() == K::FieldQuery)
+        .and_then(|p| p.field())
+        .map_or("field", |f| f.text(source));
+    let token = |name: &str| {
+        let kinds = if name == "open" {
+            [K::LBracket, K::LBrace]
+        } else {
+            [K::RBracket, K::RBrace]
+        };
+        node.token(&kinds).map(|n| n.text(source))
+    };
+    let (Some(lower), Some(upper)) = (node.bound(false), node.bound(true)) else {
         return;
     };
-    let advice = match (text(lower, source), text(upper, source)) {
+    let advice = match (lower.text(source), upper.text(source)) {
         ("*", "*") => format!("to match any value, write `_exists_:{field}`"),
         ("*", value) => {
             let op = if token("close") == Some("]") {
@@ -143,16 +147,13 @@ pub(crate) fn open_range(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
         }
         _ => return,
     };
-    for star in [lower, upper]
-        .into_iter()
-        .filter(|b| text(*b, source) == "*")
-    {
+    for star in [lower, upper].into_iter().filter(|b| b.text(source) == "*") {
         out.push(Diagnostic::error(
             codes::GRAYLOG_OPEN_RANGE,
             format!(
                 "Graylog's query validator refuses `*` as a range bound, so deploy cannot save the definition; {advice}"
             ),
-            range(source, star.start_byte(), star.end_byte()),
+            range(cx, star.start(), star.end()),
         ));
     }
 }
@@ -187,20 +188,21 @@ fn push_literal(out: &mut String, c: char) {
 /// `message:` or `full_message:`. `node` is a `regexp_query`, `term_query`,
 /// or `range_query`.
 pub(crate) fn analyzed_field(
-    node: Node,
+    node: &Node,
     ancestors: &[Node],
-    source: &str,
+    cx: Cx<'_>,
     out: &mut Vec<Diagnostic>,
 ) {
+    let source = cx.source;
     let what = match node.kind() {
-        "regexp_query" => "a regex",
-        "range_query" => "a range",
-        "term_query" => {
-            let Some(term) = node.child_by_field_name("term") else {
+        K::RegexpQuery => "a regex",
+        K::RangeQuery => "a range",
+        K::TermQuery => {
+            let Some(term) = node.term() else {
                 return;
             };
-            let word = text(term, source);
-            if matches!(term.kind(), "star" | "wildcard_term") {
+            let word = term.text(source);
+            if matches!(term.kind(), K::Star | K::WildcardTerm) {
                 "a wildcard"
             } else if word.len() > 1 && word.starts_with(['<', '>']) {
                 "a range"
@@ -213,9 +215,9 @@ pub(crate) fn analyzed_field(
     let Some(field) = ancestors
         .iter()
         .rev()
-        .find(|n| n.kind() == "field_query")
-        .and_then(|n| n.child_by_field_name("field"))
-        .map(|f| text(f, source))
+        .find(|n| n.kind() == K::FieldQuery)
+        .and_then(Node::field)
+        .map(|f| f.text(source))
     else {
         return;
     };
@@ -227,12 +229,13 @@ pub(crate) fn analyzed_field(
         format!(
             "`{field}` is analysed (tokenised and lower-cased), so {what} on it matches single tokens, never the whole value; match a keyword field, or a lower-cased copy a pipeline writes"
         ),
-        range(source, node.start_byte(), node.end_byte()),
+        range(cx, node.start(), node.end()),
     ));
 }
 
 /// `graylog_double_backslash`: each run of four or more backslashes.
-pub(crate) fn double_backslash(source: &str, out: &mut Vec<Diagnostic>) {
+pub(crate) fn double_backslash(cx: Cx<'_>, out: &mut Vec<Diagnostic>) {
+    let source = cx.source;
     let bytes = source.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
@@ -248,7 +251,7 @@ pub(crate) fn double_backslash(source: &str, out: &mut Vec<Diagnostic>) {
             out.push(Diagnostic::warning(
                 codes::GRAYLOG_DOUBLE_BACKSLASH,
                 "`\\\\` is already one literal backslash in a Graylog query, so four backslashes match two; write `\\\\` for one",
-                range(source, start, i),
+                range(cx, start, i),
             ));
         }
     }

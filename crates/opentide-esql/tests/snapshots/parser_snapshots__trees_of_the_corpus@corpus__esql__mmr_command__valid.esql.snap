@@ -1,0 +1,39 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/mmr_command__valid.esql
+---
+SOURCE_FILE@0..77
+  COMMENT@0..25 "// prod:mmr_command valid"
+  WHITESPACE@25..26 "\n"
+  QUERY@26..76
+    FROM_COMMAND@26..48
+      FROM_KW@26..30 "FROM"
+      WHITESPACE@30..31 " "
+      INDEX_PATTERN@31..35
+        INDEX_NAME@31..35
+          SOURCE_TEXT@31..35 "docs"
+      WHITESPACE@35..36 " "
+      METADATA@36..48
+        METADATA_KW@36..44 "METADATA"
+        WHITESPACE@44..45 " "
+        METADATA_FIELD@45..48
+          SOURCE_TEXT@45..48 "_id"
+    WHITESPACE@48..49 "\n"
+    PIPE@49..50 "|"
+    WHITESPACE@50..51 " "
+    MMR_COMMAND@51..76
+      MMR_KW@51..54 "MMR"
+      WHITESPACE@54..55 " "
+      ON_KW@55..57 "ON"
+      WHITESPACE@57..58 " "
+      QUALIFIED_NAME@58..67
+        IDENTIFIER@58..67
+          IDENT@58..67 "embedding"
+      WHITESPACE@67..68 " "
+      LIMIT_KW@68..73 "LIMIT"
+      WHITESPACE@73..74 " "
+      NUMBER@74..76
+        NUMBER_LIT@74..76 "10"
+  WHITESPACE@76..77 "\n"
+--- errors

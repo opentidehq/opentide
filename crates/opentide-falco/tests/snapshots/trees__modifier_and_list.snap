@@ -1,0 +1,46 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(\"proc.name = anyof (bash, sh) and evt.type in shell_events and proc.pname exists\")"
+---
+source_file@0..79
+  and_expression@0..79
+    comparison@0..28
+      field@0..9
+        field_name@0..9 "proc.name"
+      whitespace@9..10 " "
+      comparison_operator@10..11
+        =@10..11 "="
+      whitespace@11..12 " "
+      operator_modifier@12..17
+        identifier@12..17 "anyof"
+      whitespace@17..18 " "
+      value_list@18..28
+        (@18..19 "("
+        bare_string@19..23
+          identifier@19..23 "bash"
+        ,@23..24 ","
+        whitespace@24..25 " "
+        bare_string@25..27
+          identifier@25..27 "sh"
+        )@27..28 ")"
+    whitespace@28..29 " "
+    and@29..32 "and"
+    whitespace@32..33 " "
+    comparison@33..57
+      field@33..41
+        field_name@33..41 "evt.type"
+      whitespace@41..42 " "
+      list_operator@42..44
+        identifier@42..44 "in"
+      whitespace@44..45 " "
+      list_reference@45..57
+        identifier@45..57 "shell_events"
+    whitespace@57..58 " "
+    and@58..61 "and"
+    whitespace@61..62 " "
+    comparison@62..79
+      field@62..72
+        field_name@62..72 "proc.pname"
+      whitespace@72..73 " "
+      unary_operator@73..79
+        identifier@73..79 "exists"

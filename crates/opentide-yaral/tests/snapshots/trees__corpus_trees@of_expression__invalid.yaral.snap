@@ -1,0 +1,36 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/of_expression__invalid.yaral
+---
+SOURCE_FILE@0..70
+  COMMENT@0..29 "// prod:of_expression invalid"
+  WHITESPACE@29..30 "\n"
+  RULE_DECLARATION@30..69
+    RULE_KW@30..34 "rule"
+    WHITESPACE@34..35 " "
+    RULE_NAME@35..36
+      IDENT@35..36 "r"
+    WHITESPACE@36..37 " "
+    L_BRACE@37..38 "{"
+    WHITESPACE@38..41 "\n  "
+    CONDITION_SECTION@41..67
+      CONDITION_KW@41..50 "condition"
+      COLON@50..51 ":"
+      WHITESPACE@51..56 "\n    "
+      OF_EXPR@56..67
+        ANY_KW@56..59 "any"
+        WHITESPACE@59..60 " "
+        OF_KW@60..62 "of"
+        WHITESPACE@62..63 " "
+        ARRAY_EXPR@63..67
+          L_BRACK@63..64 "["
+          VARIABLE@64..66
+            VAR_TOKEN@64..66 "$a"
+          COMMA@66..67 ","
+    WHITESPACE@67..68 "\n"
+    R_BRACE@68..69 "}"
+  WHITESPACE@69..70 "\n"
+errors:
+67..68: expected an expression (expected `]`)
+67..68: expected `]` (expected `]`)

@@ -1,0 +1,35 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/value_list__valid.falco
+---
+source_file@0..78
+  comparison@0..78
+    field@0..9
+      field_name@0..9 "proc.name"
+    whitespace@9..10 " "
+    list_operator@10..12
+      identifier@10..12 "in"
+    whitespace@12..13 " "
+    value_list@13..78
+      (@13..14 "("
+      bare_string@14..18
+        identifier@14..18 "bash"
+      ,@18..19 ","
+      whitespace@19..20 " "
+      quoted_string@20..24 "\"sh\""
+      ,@24..25 ","
+      whitespace@25..26 " "
+      quoted_string@26..31 "'zsh'"
+      ,@31..32 ","
+      whitespace@32..33 " "
+      bare_string@33..34
+        number@33..34 "1"
+      ,@34..35 ","
+      whitespace@35..36 " "
+      bare_string@36..46
+        field_name@36..46 "in.proftpd"
+      ,@46..47 ","
+      whitespace@47..48 " "
+      quoted_string@48..77 "\"sh -c uname -p 2> /dev/null\""
+      )@77..78 ")"

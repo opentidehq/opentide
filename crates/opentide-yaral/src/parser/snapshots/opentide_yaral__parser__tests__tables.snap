@@ -1,0 +1,31 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"%t %t.col %t.write_row(a: $v)\")"
+---
+SOURCE_FILE@0..29
+  SEARCH_QUERY@0..29
+    SEARCH_EVENTS@0..29
+      REFERENCE_LIST@0..2
+        REF_LIST_TOKEN@0..2 "%t"
+      WHITESPACE@2..3 " "
+      DATA_TABLE_COLUMN@3..9
+        REFERENCE_LIST@3..5
+          REF_LIST_TOKEN@3..5 "%t"
+        DOT@5..6 "."
+        IDENT@6..9 "col"
+      WHITESPACE@9..10 " "
+      TABLE_CALL@10..29
+        REFERENCE_LIST@10..12
+          REF_LIST_TOKEN@10..12 "%t"
+        DOT@12..13 "."
+        IDENT@13..22 "write_row"
+        L_PAREN@22..23 "("
+        ARGUMENTS@23..28
+          NAMED_ARGUMENT@23..28
+            ARGUMENT_NAME@23..24
+              IDENT@23..24 "a"
+            COLON@24..25 ":"
+            WHITESPACE@25..26 " "
+            VARIABLE@26..28
+              VAR_TOKEN@26..28 "$v"
+        R_PAREN@28..29 ")"

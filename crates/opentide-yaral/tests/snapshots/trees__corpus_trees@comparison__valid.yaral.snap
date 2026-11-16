@@ -1,0 +1,44 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/comparison__valid.yaral
+---
+SOURCE_FILE@0..88
+  COMMENT@0..24 "// prod:comparison valid"
+  WHITESPACE@24..25 "\n"
+  SEARCH_QUERY@25..87
+    SEARCH_EVENTS@25..87
+      COMPARISON@25..47
+        UDM_FIELD@25..39
+          VARIABLE@25..27
+            VAR_TOKEN@25..27 "$e"
+          MEMBER@27..34
+            ACCESS_DOT@27..28 "."
+            FIELD_NAME@28..34 "target"
+          MEMBER@34..39
+            ACCESS_DOT@34..35 "."
+            FIELD_NAME@35..39 "port"
+        WHITESPACE@39..40 " "
+        GT_EQ@40..42 ">="
+        WHITESPACE@42..43 " "
+        LITERAL@43..47
+          INTEGER@43..47 "1024"
+      WHITESPACE@47..48 "\n"
+      COMPARISON@48..87
+        UDM_FIELD@48..69
+          VARIABLE@48..50
+            VAR_TOKEN@48..50 "$e"
+          MEMBER@50..60
+            ACCESS_DOT@50..51 "."
+            FIELD_NAME@51..60 "principal"
+          MEMBER@60..69
+            ACCESS_DOT@60..61 "."
+            FIELD_NAME@61..69 "hostname"
+        WHITESPACE@69..70 " "
+        NOT_EQ@70..72 "!="
+        WHITESPACE@72..73 " "
+        LITERAL@73..80
+          STRING@73..80 "\"web01\""
+        WHITESPACE@80..81 " "
+        NOCASE_KW@81..87 "nocase"
+  WHITESPACE@87..88 "\n"

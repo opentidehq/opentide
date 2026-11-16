@@ -1,0 +1,34 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/regex__valid.yaral
+---
+SOURCE_FILE@0..83
+  COMMENT@0..19 "// prod:regex valid"
+  WHITESPACE@19..20 "\n"
+  SEARCH_QUERY@20..82
+    SEARCH_EVENTS@20..82
+      COMPARISON@20..82
+        UDM_FIELD@20..52
+          VARIABLE@20..22
+            VAR_TOKEN@20..22 "$e"
+          MEMBER@22..29
+            ACCESS_DOT@22..23 "."
+            FIELD_NAME@23..29 "target"
+          MEMBER@29..37
+            ACCESS_DOT@29..30 "."
+            FIELD_NAME@30..37 "process"
+          MEMBER@37..42
+            ACCESS_DOT@37..38 "."
+            FIELD_NAME@38..42 "file"
+          MEMBER@42..52
+            ACCESS_DOT@42..43 "."
+            FIELD_NAME@43..52 "full_path"
+        WHITESPACE@52..53 " "
+        EQ@53..54 "="
+        WHITESPACE@54..55 " "
+        LITERAL@55..75
+          REGEX_LIT@55..75 "/\\\\powershell\\.exe$/"
+        WHITESPACE@75..76 " "
+        NOCASE_KW@76..82 "nocase"
+  WHITESPACE@82..83 "\n"

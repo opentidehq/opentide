@@ -1,0 +1,18 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"f(a,)\")"
+---
+SOURCE_FILE@0..5
+  SEARCH_QUERY@0..5
+    SEARCH_EVENTS@0..5
+      FUNCTION_CALL@0..5
+        FUNCTION_NAME@0..1
+          IDENT@0..1 "f"
+        L_PAREN@1..2 "("
+        ARGUMENTS@2..4
+          NAME_REF@2..3
+            IDENT@2..3 "a"
+          COMMA@3..4 ","
+        R_PAREN@4..5 ")"
+errors:
+4..4: expected an expression

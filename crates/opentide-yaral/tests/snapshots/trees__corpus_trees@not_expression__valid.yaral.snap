@@ -1,0 +1,29 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/not_expression__valid.yaral
+---
+SOURCE_FILE@0..65
+  COMMENT@0..28 "// prod:not_expression valid"
+  WHITESPACE@28..29 "\n"
+  SEARCH_QUERY@29..64
+    SEARCH_EVENTS@29..64
+      NOT_EXPR@29..64
+        NOT_KW@29..32 "not"
+        WHITESPACE@32..33 " "
+        COMPARISON@33..64
+          UDM_FIELD@33..54
+            VARIABLE@33..35
+              VAR_TOKEN@33..35 "$e"
+            MEMBER@35..45
+              ACCESS_DOT@35..36 "."
+              FIELD_NAME@36..45 "principal"
+            MEMBER@45..54
+              ACCESS_DOT@45..46 "."
+              FIELD_NAME@46..54 "hostname"
+          WHITESPACE@54..55 " "
+          EQ@55..56 "="
+          WHITESPACE@56..57 " "
+          LITERAL@57..64
+            STRING@57..64 "\"web01\""
+  WHITESPACE@64..65 "\n"

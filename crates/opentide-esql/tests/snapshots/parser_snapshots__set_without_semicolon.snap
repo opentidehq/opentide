@@ -1,0 +1,27 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{source}\\n{tree}--- errors\\n{errors}\")"
+---
+SET a = 1 FROM a
+SOURCE_FILE@0..16
+  SET_COMMAND@0..14
+    SET_KW@0..3 "SET"
+    WHITESPACE@3..4 " "
+    IDENTIFIER@4..5
+      IDENT@4..5 "a"
+    WHITESPACE@5..6 " "
+    EQ@6..7 "="
+    WHITESPACE@7..8 " "
+    QUALIFIED_INTERVAL@8..14
+      NUMBER@8..9
+        NUMBER_LIT@8..9 "1"
+      WHITESPACE@9..10 " "
+      TIME_UNIT@10..14
+        IDENT@10..14 "FROM"
+  WHITESPACE@14..15 " "
+  QUERY@15..16
+    ERROR@15..16
+      WORD@15..16 "a"
+--- errors
+14..15: expected `;` after the setting (expected SEMI)
+14..15: expected a source command (expected FROM_KW, TS_KW, ROW_KW, SHOW_KW, EXPLAIN_KW, SET_KW, SEMI)

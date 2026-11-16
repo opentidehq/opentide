@@ -1,0 +1,74 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/field_argument__valid.falco
+---
+source_file@0..124
+  and_expression@0..124
+    comparison@0..20
+      field@0..13
+        field_name@0..10 "proc.aname"
+        field_argument@10..13
+          [@10..11 "["
+          argument_value@11..12
+            number@11..12 "2"
+          ]@12..13 "]"
+      whitespace@13..14 " "
+      comparison_operator@14..15
+        =@14..15 "="
+      whitespace@15..16 " "
+      bare_string@16..20
+        identifier@16..20 "sshd"
+    whitespace@20..21 " "
+    and@21..24 "and"
+    whitespace@24..25 " "
+    comparison@25..56
+      field@25..39
+        field_name@25..33 "proc.env"
+        field_argument@33..39
+          [@33..34 "["
+          argument_value@34..38
+            identifier@34..38 "HOME"
+          ]@38..39 "]"
+      whitespace@39..40 " "
+      comparison_operator@40..50
+        identifier@40..50 "startswith"
+      whitespace@50..51 " "
+      bare_string@51..56
+        other@51..52 "/"
+        identifier@52..56 "root"
+    whitespace@56..57 " "
+    and@57..60 "and"
+    whitespace@60..61 " "
+    comparison@61..93
+      field@61..83
+        field_name@61..71 "json.value"
+        field_argument@71..83
+          [@71..72 "["
+          argument_value@72..82
+            other@72..73 "/"
+            identifier@73..77 "user"
+            other@77..78 "/"
+            identifier@78..82 "name"
+          ]@82..83 "]"
+      whitespace@83..84 " "
+      comparison_operator@84..85
+        =@84..85 "="
+      whitespace@85..86 " "
+      quoted_string@86..93 "\"admin\""
+    whitespace@93..94 " "
+    and@94..97 "and"
+    whitespace@97..98 " "
+    comparison@98..124
+      field@98..118
+        field_name@98..111 "k8s.pod.label"
+        field_argument@111..118
+          [@111..112 "["
+          quoted_string@112..117 "'app'"
+          ]@117..118 "]"
+      whitespace@118..119 " "
+      comparison_operator@119..120
+        =@119..120 "="
+      whitespace@120..121 " "
+      bare_string@121..124
+        identifier@121..124 "web"

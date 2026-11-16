@@ -1,0 +1,31 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/and_expression__invalid.yaral
+---
+SOURCE_FILE@0..73
+  COMMENT@0..30 "// prod:and_expression invalid"
+  WHITESPACE@30..31 "\n"
+  SEARCH_QUERY@31..72
+    SEARCH_EVENTS@31..72
+      AND_EXPR@31..72
+        COMPARISON@31..68
+          UDM_FIELD@31..53
+            VARIABLE@31..33
+              VAR_TOKEN@31..33 "$e"
+            MEMBER@33..42
+              ACCESS_DOT@33..34 "."
+              FIELD_NAME@34..42 "metadata"
+            MEMBER@42..53
+              ACCESS_DOT@42..43 "."
+              FIELD_NAME@43..53 "event_type"
+          WHITESPACE@53..54 " "
+          EQ@54..55 "="
+          WHITESPACE@55..56 " "
+          LITERAL@56..68
+            STRING@56..68 "\"USER_LOGIN\""
+        WHITESPACE@68..69 " "
+        AND_KW@69..72 "and"
+  WHITESPACE@72..73 "\n"
+errors:
+72..73: expected an expression
