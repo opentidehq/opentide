@@ -6,7 +6,7 @@
 //! It reports every language code of the spec, and the catalogue codes the
 //! reference checker cannot (`exabeam_unknown_field`,
 //! `exabeam_string_field_number`, `exabeam_unknown_value`). Its tokens are the
-//! spec's highlight table; the tree-sitter grammar's highlighting is checked
+//! spec's highlight table; the tree's highlighting ([`crate::highlight`]) is checked
 //! against them.
 //!
 //! Offsets are bytes into the query. Python's checker counts characters; the

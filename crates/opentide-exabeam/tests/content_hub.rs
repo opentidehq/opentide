@@ -46,7 +46,7 @@ fn published_correlation_rules() {
     let mut results = Vec::new();
     let mut totals: BTreeMap<String, usize> = BTreeMap::new();
     let mut with_errors: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
-    let mut tree_sitter_errors = 0;
+    let mut tree_errors = 0;
     let mut token_disagreements = 0;
     let spec = opentide_highlight::HighlightSpec::load().unwrap();
     for path in &paths {
@@ -80,12 +80,13 @@ fn published_correlation_rules() {
             for f in &checked.findings {
                 *totals.entry(f.code.to_string()).or_default() += 1;
             }
-            let tree = opentide_syntax::parse(opentide_core::LanguageId::Exabeam, query).unwrap();
             // A query the verdict parser finds no error in must parse, and
-            // highlight as the verdict parser tokenizes it.
+            // highlight as the verdict parser tokenizes it: the tree that
+            // highlights (`src/cst.rs`).
+            let tree_error = opentide_exabeam::tree_has_error(query);
             let clean = errors == 0;
-            if tree.root_node().has_error() && clean {
-                tree_sitter_errors += 1;
+            if tree_error && clean {
+                tree_errors += 1;
             }
             let highlighted: Vec<(usize, usize, String)> =
                 opentide_exabeam::highlight(&spec, query)
@@ -106,7 +107,7 @@ fn published_correlation_rules() {
                 "findings": checked.findings.iter().map(|f| serde_json::json!({
                     "code": f.code, "start": f.start, "end": f.end, "message": f.message,
                 })).collect::<Vec<_>>(),
-                "tree_sitter_error": tree.root_node().has_error(),
+                "tree_error": tree_error,
                 "tokens_agree": tokens_agree,
                 "tokens": verdict,
             }));
@@ -115,7 +116,7 @@ fn published_correlation_rules() {
     eprintln!("rules: {}", paths.len());
     eprintln!("queries with errors (group: queries, with errors): {with_errors:?}");
     eprintln!("findings by code: {totals:#?}");
-    eprintln!("error-free queries with a tree-sitter error: {tree_sitter_errors}");
+    eprintln!("error-free queries with a tree error: {tree_errors}");
     eprintln!("error-free queries whose highlighting differs: {token_disagreements}");
     if let Ok(out) = std::env::var("EXABEAM_RESULTS") {
         std::fs::write(out, serde_json::to_string(&results).unwrap()).unwrap();

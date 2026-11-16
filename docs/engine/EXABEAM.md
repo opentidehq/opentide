@@ -14,7 +14,7 @@ The contract is opentidehq/specifications [`specs/languages/exabeam-1.0.md`](htt
 | Syntax, profiles, every language code | exabeam-1.0 and its reference checker | `src/check.rs`: a step-for-step port of the reference checker |
 | Regular expressions (`RGX`, `RGXi`, `RGX_EXTRACT`) | RE2 | the `regex` crate's syntax parser (RE2 syntax), after RE2's own rules and refusals (below) |
 | Fields, subjects, activity types, outcomes | Exabeam's Common Information Model, ExabeamLabs/CIMLibrary@e72bfa2 (Apache-2.0) | `data/catalogs/exabeam/` (`scripts/engine/sync_exabeam_catalog.py`), `src/catalog.rs` |
-| Highlighting | the spec's highlight table (existing HighlightSpec captures only) | `grammars/tree-sitter-opentide-exabeam`, `highlights/queries/exabeam/highlights.scm` |
+| Highlighting | the spec's highlight table (existing HighlightSpec captures only) | `crates/opentide-exabeam/src/cst.rs` (the tree, on `opentide-parse`; it accepts what `grammars/tree-sitter-opentide-exabeam` accepts and highlights as `highlights/queries/exabeam/highlights.scm` did) |
 | Block constraints and advisories | exabeam-1.0 platform "Constraints", "Advisories" and `validate_exabeam_block` | `crates/opentide-tide/src/exabeam.rs` |
 
 ## The SQL-like layer
@@ -32,9 +32,9 @@ The repository's rule that "SQL is out of scope" is about a generic SQL dialect:
 
 | Suite | Queries | Agreement | Harness |
 |-------|---------|-----------|---------|
-| The spec's fixtures (`crates/testdata/conformance/exabeam/{valid,invalid,highlight}/`) | 9 valid, 32 invalid (one per catalogue-free code), 3 highlight goldens | every valid query clean (the catalogue warnings included), every invalid one exactly its code, every golden token for token (the verdict parser and the tree-sitter highlighting) | `crates/opentide-exabeam/tests/conformance.rs` |
+| The spec's fixtures (`crates/testdata/conformance/exabeam/{valid,invalid,highlight}/`) | 9 valid, 32 invalid (one per catalogue-free code), 3 highlight goldens | every valid query clean (the catalogue warnings included), every invalid one exactly its code, every golden token for token (the verdict parser and the tree's highlighting) | `crates/opentide-exabeam/tests/conformance.rs` |
 | The reference checker's recorded verdicts (`reference.json`): the fixtures above, `crates/testdata/conformance/external/exabeam/` and 255 probes (`probes.tsv`) | 331 | codes, ranges and highlight tokens identical, but for the narrowed ranges of two codes (below) | `crates/opentide-exabeam/tests/reference.rs` |
-| Tree-sitter highlighting against the reference's tokens | every error-free query of `reference.json` | identical | `tests/reference.rs` |
+| The tree's highlighting against the reference's tokens | every error-free query of `reference.json` | identical | `tests/reference.rs` |
 | Queries written for opentide (`crates/testdata/conformance/external/exabeam/`) | 16 (12 rule, 4 search), each with a `.broken.` twin | 16 / 16 clean under their profile; every twin reports the code `FAULTS.toml` names (16 fault kinds) | `crates/opentide-analysis/tests/external_exabeam.rs` |
 | The block checker's recorded verdicts: 51 block cases written for opentide and the spec's 8 object fixtures | 59 | every error, code and field path, identical, but for the block without `status` (below) | `crates/opentide-tide/tests/exabeam_spec.rs` |
 | Grammar productions | 21 rules, one valid and one invalid fixture each | 21 / 21 | `crates/opentide-syntax/tests/corpus_gate.rs` |
@@ -64,7 +64,7 @@ The repository's rule that "SQL is out of scope" is about a generic SQL dialect:
 - Every error in the Sigma conversions is a defect of the conversion: broken escaping (`\\"` closing a string early, which leaves the rest of the pattern as bare arguments), Sigma modifiers left unconverted, and Python-only regular expressions.
 - `exabeam_unknown_field` and `exabeam_string_field_number` fire on Sigma conversions only, never on Exabeam's 77 own rules: the conversions keep Sysmon and Windows field names the CIM does not have (`ScriptBlockText`, `ImageLoaded`, `OriginalFileName` as `process_original_file_name`, `c-useragent`) and compare `event_code` with unquoted numbers (`event_code:7045`).
 - `exabeam_unknown_value` fires on four of Exabeam's own Linux rules, each `activity_type:"process_create"`, which the CIM spells `process-create` (the warning suggests it). The other 37 values in the published rules are the CIM's; the Sigma conversions compare none of the three fields.
-- Highlight tokens of the verdict parser equal the reference's on all 2,371 queries. The tree-sitter grammar parses all 2,296 error-free queries without an error node and gives the same tokens; on the 75 with errors, the verdict parser still recovers where the grammar has an `ERROR` node (50 of them), so only highlighting degrades there.
+- Highlight tokens of the verdict parser equal the reference's on all 2,371 queries. The tree-sitter grammar parsed all 2,296 error-free queries without an error node and gave the same tokens (measured on 2026-11-12, when it highlighted); on the 75 with errors, the verdict parser still recovers where the grammar has an `ERROR` node (50 of them), so only highlighting degrades there. `tests/content_hub.rs` now counts the errors of the tree that highlights (`src/cst.rs`).
 - No disagreement with the reference checker: two rules use `$?` (an optional end-of-text assertion), which RE2 accepts, and one escapes U+00A0 (`\ ` with a non-breaking space), which RE2 refuses (it escapes ASCII punctuation only). The reference checker now rewrites and refuses these as RE2 does, and both forms are probes in `reference.json`.
 
 ## Regular expressions
@@ -83,7 +83,7 @@ The catalogue is Exabeam's CIM: the 1,130 typed fields of `Fields_Descriptions.m
 
 ## Highlighting
 
-`highlights/queries/exabeam/highlights.scm` uses the spec's table and only existing HighlightSpec captures. Filter operators are any case; clause keywords are recognised in any case so a mixed-case one still highlights while the engine reports `exabeam_keyword_case`, and clauses parse in any order while the engine reports `exabeam_clause_order`. Function names, values (booleans, `null`, IP addresses, `@field`) and range bounds are told apart with `#match?` predicates. Sequence queries are nested in a list, so the Tide TextMate grammar gives them no embedded region: semantic tokens colour them.
+The tree (`src/cst.rs`) gives the captures `highlights/queries/exabeam/highlights.scm` gave, which remains the oracle of `tests/differential.rs` and the source of `opentide-highlight`'s `KEYWORDS` table; it uses the spec's table and only existing HighlightSpec captures. Filter operators are any case; clause keywords are recognised in any case so a mixed-case one still highlights while the engine reports `exabeam_keyword_case`, and clauses parse in any order while the engine reports `exabeam_clause_order`. Function names, values (booleans, `null`, IP addresses, `@field`) and range bounds are told apart by their text, as the query's `#match?` predicates did. Sequence queries are nested in a list, so the Tide TextMate grammar gives them no embedded region: semantic tokens colour them.
 
 ## Block constraints
 
@@ -94,7 +94,7 @@ The catalogue is Exabeam's CIM: the 1,130 typed fields of `Fields_Descriptions.m
 | Where | Reference | Engine | Why |
 |-------|-----------|--------|-----|
 | RE2's program-size limit (`(a{100}){100}`), `[a--b]`, a leading-zero count (`a{01}`) | as Python's `re` reads them | as the `regex` crate reads them | rare; neither is RE2's own parser |
-| tree-sitter highlighting (editors only) of a Unicode space other than U+0020, a lone `AS` or `LIMIT`, a `WHERE` inside a filter, an IPv6-looking word that is not an address | — | the grammar's tokens; the verdict parser's semantic tokens are the reference's | highlighting only, never a diagnostic |
+| the tree's highlighting (editors only) of a Unicode space other than U+0020, a lone `AS` or `LIMIT`, a `WHERE` inside a filter, an IPv6-looking word that is not an address | — | the grammar's tokens; the verdict parser's semantic tokens are the reference's | highlighting only, never a diagnostic |
 | a bad threshold or outcome value in the editor | — | `vocab_unknown` from the Tide catalogue and the `exabeam_*` code, as on Bitdefender blocks | the opentide CLI reports the `exabeam_*` code only |
 | `exabeam_group_by_column`, `exabeam_group_by_select_star` ranges | from the start of the query to the end of the statement | the column, or the `*` | a usable range; the codes are the same |
 | unknown fields, numbers on string fields, unknown `activity_type`, `subject` and `outcome` values | not reported (no catalogue) | the catalogue warnings | exabeam-1.0 "Field catalogue" |
