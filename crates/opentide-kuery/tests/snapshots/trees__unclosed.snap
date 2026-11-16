@@ -1,0 +1,21 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: "debug_parse(\"a:(b or c\")"
+---
+SourceFile@0..9
+  FieldValueExpression@0..9
+    Field@0..1
+      UnquotedLiteral@0..1
+        Word@0..1 "a"
+    Colon@1..2 ":"
+    ValueList@2..9
+      LParen@2..3 "("
+      OrList@3..9
+        UnquotedLiteral@3..4
+          Word@3..4 "b"
+        Whitespace@4..5 " "
+        OrKw@5..7 "or"
+        Whitespace@7..8 " "
+        UnquotedLiteral@8..9
+          Word@8..9 "c"
+9..9: missing `)` (expected `or`, `and`, `)`)
