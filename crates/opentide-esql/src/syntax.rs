@@ -16,7 +16,8 @@ macro_rules! kinds {
         /// A token or node kind. Tokens come first (below `TokenSet::CAPACITY`).
         #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
         #[repr(u16)]
-        #[expect(non_camel_case_types, clippy::upper_case_acronyms, reason = "the kinds are written as rust-analyzer's are, and named by the ungram")]
+        #[expect(non_camel_case_types, reason = "the kinds are written as rust-analyzer's are, and named by the ungram")]
+        #[allow(clippy::upper_case_acronyms, reason = "fires where a test includes this file privately, not where the crate exports the kinds: an expect cannot hold in both")]
         pub enum SyntaxKind {
             $($kw,)* $($token,)* $($node,)*
         }
@@ -138,6 +139,120 @@ impl rowan::Language for Lang {
     fn kind_to_raw(kind: SyntaxKind) -> rowan::SyntaxKind {
         kind.raw()
     }
+}
+
+/// A node of the ES|QL tree.
+pub type SyntaxNode = rowan::SyntaxNode<Lang>;
+/// A token of the ES|QL tree.
+pub type SyntaxToken = rowan::SyntaxToken<Lang>;
+
+/// The kind of each token of `esql.ungram`, for the typed AST.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! T {
+    [from] => { $crate::SyntaxKind::FROM_KW };
+    [ts] => { $crate::SyntaxKind::TS_KW };
+    [row] => { $crate::SyntaxKind::ROW_KW };
+    [show] => { $crate::SyntaxKind::SHOW_KW };
+    [info] => { $crate::SyntaxKind::INFO_KW };
+    [explain] => { $crate::SyntaxKind::EXPLAIN_KW };
+    [promql] => { $crate::SyntaxKind::PROMQL_KW };
+    [set] => { $crate::SyntaxKind::SET_KW };
+    [metadata] => { $crate::SyntaxKind::METADATA_KW };
+    [where] => { $crate::SyntaxKind::WHERE_KW };
+    [eval] => { $crate::SyntaxKind::EVAL_KW };
+    [keep] => { $crate::SyntaxKind::KEEP_KW };
+    [drop] => { $crate::SyntaxKind::DROP_KW };
+    [rename] => { $crate::SyntaxKind::RENAME_KW };
+    [as] => { $crate::SyntaxKind::AS_KW };
+    [sort] => { $crate::SyntaxKind::SORT_KW };
+    [asc] => { $crate::SyntaxKind::ASC_KW };
+    [desc] => { $crate::SyntaxKind::DESC_KW };
+    [nulls] => { $crate::SyntaxKind::NULLS_KW };
+    [first] => { $crate::SyntaxKind::FIRST_KW };
+    [last] => { $crate::SyntaxKind::LAST_KW };
+    [limit] => { $crate::SyntaxKind::LIMIT_KW };
+    [stats] => { $crate::SyntaxKind::STATS_KW };
+    [inline] => { $crate::SyntaxKind::INLINE_KW };
+    [inlinestats] => { $crate::SyntaxKind::INLINESTATS_KW };
+    [by] => { $crate::SyntaxKind::BY_KW };
+    [dissect] => { $crate::SyntaxKind::DISSECT_KW };
+    [grok] => { $crate::SyntaxKind::GROK_KW };
+    [enrich] => { $crate::SyntaxKind::ENRICH_KW };
+    [on] => { $crate::SyntaxKind::ON_KW };
+    [with] => { $crate::SyntaxKind::WITH_KW };
+    [mv_expand] => { $crate::SyntaxKind::MV_EXPAND_KW };
+    [lookup] => { $crate::SyntaxKind::LOOKUP_KW };
+    [left] => { $crate::SyntaxKind::LEFT_KW };
+    [right] => { $crate::SyntaxKind::RIGHT_KW };
+    [full] => { $crate::SyntaxKind::FULL_KW };
+    [join] => { $crate::SyntaxKind::JOIN_KW };
+    [change_point] => { $crate::SyntaxKind::CHANGE_POINT_KW };
+    [completion] => { $crate::SyntaxKind::COMPLETION_KW };
+    [rerank] => { $crate::SyntaxKind::RERANK_KW };
+    [sample] => { $crate::SyntaxKind::SAMPLE_KW };
+    [fork] => { $crate::SyntaxKind::FORK_KW };
+    [fuse] => { $crate::SyntaxKind::FUSE_KW };
+    [score] => { $crate::SyntaxKind::SCORE_KW };
+    [key] => { $crate::SyntaxKind::KEY_KW };
+    [group] => { $crate::SyntaxKind::GROUP_KW };
+    [uri_parts] => { $crate::SyntaxKind::URI_PARTS_KW };
+    [registered_domain] => { $crate::SyntaxKind::REGISTERED_DOMAIN_KW };
+    [user_agent] => { $crate::SyntaxKind::USER_AGENT_KW };
+    [ip_location] => { $crate::SyntaxKind::IP_LOCATION_KW };
+    [metrics_info] => { $crate::SyntaxKind::METRICS_INFO_KW };
+    [ts_info] => { $crate::SyntaxKind::TS_INFO_KW };
+    [ts_collapse] => { $crate::SyntaxKind::TS_COLLAPSE_KW };
+    [dedup] => { $crate::SyntaxKind::DEDUP_KW };
+    [mmr] => { $crate::SyntaxKind::MMR_KW };
+    [highlight] => { $crate::SyntaxKind::HIGHLIGHT_KW };
+    [dense_vector] => { $crate::SyntaxKind::DENSE_VECTOR_KW };
+    [fillnull] => { $crate::SyntaxKind::FILLNULL_KW };
+    [and] => { $crate::SyntaxKind::AND_KW };
+    [or] => { $crate::SyntaxKind::OR_KW };
+    [not] => { $crate::SyntaxKind::NOT_KW };
+    [in] => { $crate::SyntaxKind::IN_KW };
+    [is] => { $crate::SyntaxKind::IS_KW };
+    [like] => { $crate::SyntaxKind::LIKE_KW };
+    [rlike] => { $crate::SyntaxKind::RLIKE_KW };
+    [null] => { $crate::SyntaxKind::NULL_KW };
+    [true] => { $crate::SyntaxKind::TRUE_KW };
+    [false] => { $crate::SyntaxKind::FALSE_KW };
+    [ident] => { $crate::SyntaxKind::IDENT };
+    [id_pattern] => { $crate::SyntaxKind::ID_PATTERN_TEXT };
+    [quoted_ident] => { $crate::SyntaxKind::QUOTED_IDENT };
+    [param] => { $crate::SyntaxKind::PARAM };
+    [number_lit] => { $crate::SyntaxKind::NUMBER_LIT };
+    [string_lit] => { $crate::SyntaxKind::STRING_LIT };
+    [source_text] => { $crate::SyntaxKind::SOURCE_TEXT };
+    [policy_part] => { $crate::SyntaxKind::POLICY_PART };
+    [promql_word] => { $crate::SyntaxKind::PROMQL_WORD };
+    [unknown_word] => { $crate::SyntaxKind::UNKNOWN_WORD };
+    [command_word] => { $crate::SyntaxKind::COMMAND_WORD };
+    [|] => { $crate::SyntaxKind::PIPE };
+    [,] => { $crate::SyntaxKind::COMMA };
+    [;] => { $crate::SyntaxKind::SEMI };
+    [.] => { $crate::SyntaxKind::DOT };
+    [:] => { $crate::SyntaxKind::COLON };
+    [::] => { $crate::SyntaxKind::COLON_COLON };
+    [=] => { $crate::SyntaxKind::EQ };
+    [==] => { $crate::SyntaxKind::EQ_EQ };
+    [!=] => { $crate::SyntaxKind::NOT_EQ };
+    [<] => { $crate::SyntaxKind::LT };
+    [<=] => { $crate::SyntaxKind::LT_EQ };
+    [>] => { $crate::SyntaxKind::GT };
+    [>=] => { $crate::SyntaxKind::GT_EQ };
+    [+] => { $crate::SyntaxKind::PLUS };
+    [-] => { $crate::SyntaxKind::MINUS };
+    [*] => { $crate::SyntaxKind::STAR_TOKEN };
+    [/] => { $crate::SyntaxKind::SLASH };
+    [%] => { $crate::SyntaxKind::PERCENT };
+    ['('] => { $crate::SyntaxKind::L_PAREN };
+    [')'] => { $crate::SyntaxKind::R_PAREN };
+    ['['] => { $crate::SyntaxKind::L_BRACK };
+    [']'] => { $crate::SyntaxKind::R_BRACK };
+    ['{'] => { $crate::SyntaxKind::L_BRACE };
+    ['}'] => { $crate::SyntaxKind::R_BRACE };
 }
 
 #[cfg(test)]
