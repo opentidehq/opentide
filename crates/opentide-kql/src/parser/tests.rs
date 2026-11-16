@@ -225,6 +225,42 @@ fn nested_function_definitions_stop_at_the_limit() {
     assert!(matches!(errors[0].kind, ErrorKind::TooDeep { .. }));
 }
 
+/// Found by review (#1361): deciding whether `((...(T)...))` is a table read
+/// the group once per level and recursed once per level, so 3,000 balanced
+/// levels in a `let` or an `in` list burnt the fuel (a `Stalled` panic in a
+/// debug build) instead of reaching the nesting limit. One scan now: one
+/// `TooDeep`, on a 1 MB stack.
+#[test]
+fn a_deep_balanced_group_is_one_nesting_error() {
+    for n in [3_000, 50_000] {
+        for source in [
+            format!("let x = {}T{};\nx", "(".repeat(n), ")".repeat(n)),
+            format!("T | where a in {}b{}", "(".repeat(n), ")".repeat(n)),
+        ] {
+            let errors = on_small_stack(move || parse(&source).errors);
+            assert_eq!(errors.len(), 1, "{n}: {:?}", &errors[..errors.len().min(3)]);
+            assert!(matches!(errors[0].kind, ErrorKind::TooDeep { .. }), "{n}");
+        }
+    }
+    // Read through, level by level, as before.
+    let tabular = |source: &str| {
+        let tree = SyntaxNode::new_root(parse(source).green);
+        tree.descendants()
+            .find(|n| n.kind() == K::EXPRESSION_LIST)
+            .is_some_and(|list| list.children().any(|c| c.kind() == K::TABULAR_EXPRESSION))
+    };
+    for (source, is_tabular) in [
+        ("T | where a in (((b)))", true),
+        ("T | where a in (((b) | take 1))", true),
+        ("T | where a in (((b), c))", false),
+        ("T | where a in (((b) + 1))", false),
+        ("T | where a in ((((f(1)))))", true),
+        ("T | where a in (((1)))", false),
+    ] {
+        assert_eq!(tabular(source), is_tabular, "{source}");
+    }
+}
+
 /// Found by review (#1314): a long run of unexpected tokens is one error, not
 /// one per token (`-` x200,000 then `a` gave 100,000).
 #[test]
