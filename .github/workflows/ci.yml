@@ -88,6 +88,7 @@ env:
 #
 #   build           `build`: the tests, xtask and the language server
 #   native          `native`: the `_native` extension
+#   stubs           `stubs`: the extension with PyO3's introspection, xtask
 #   engine-check    `engine-lint`: clippy (native and wasm32) and rustdoc
 #   wasm            `wasm`: the browser module, the WASI server and command line
 #   full-set-Linux  `node`, `facade` and the nightly's Linux Rust jobs:
@@ -338,7 +339,7 @@ jobs:
       PYO3_PYTHON: /usr/bin/python3
       RUSTC_WRAPPER: sccache
       SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 3G
+      SCCACHE_CACHE_SIZE: 2G
       SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -371,22 +372,64 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-      # The stubs of opentide._native.models and opentide._native.sdk, which
-      # `lint`'s ty reads, are generated from the extension (UC-1.9, ADR 0011;
-      # UC-5.2b): xtask builds it with PyO3's introspection data, as Python
-      # 3.10 (the abi3 floor) sees it, and fails when a committed stub
-      # differs. When the binding, opentide-schema, the facade, the stubs or
-      # the generator change (`stubs`: scripts/ci/changes.py), and on every
-      # push and nightly.
-      - name: Python 3.10 for the stubs
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
+  # The stubs of opentide._native.models and opentide._native.sdk, which
+  # `lint`'s ty reads, are generated from the extension (UC-1.9, ADR 0011;
+  # UC-5.2b): xtask builds it with PyO3's introspection data, as Python 3.10
+  # (the abi3 floor) sees it, and fails when a committed stub differs. When
+  # the binding, opentide-schema, the facade, the stubs or the generator
+  # change (`stubs`: scripts/ci/changes.py), and on every push and nightly.
+  # A job of its own, not a step of `native`: the Python jobs wait for
+  # `native`, and this build (xtask, then the extension in the develop
+  # profile) took 8 minutes cold (#1141's regression). Its own compiler cache:
+  # neither the profile nor PYO3_PYTHON is another job's.
+  stubs:
+    name: Generated stubs (_native)
+    needs: changes
+    if: needs.changes.outputs.stubs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_STRIP: debuginfo
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: stubs
+
+      - name: Install mold
+        run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
+
+      - name: Python 3.10
         id: python310
-        if: needs.changes.outputs.stubs == 'true'
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.10"
 
       - name: Generated stubs are up to date
-        if: needs.changes.outputs.stubs == 'true'
         env:
           PYO3_PYTHON: ${{ steps.python310.outputs.python-path }}
         run: cargo xtask stubs --check
@@ -2166,6 +2209,7 @@ jobs:
   gate:
     name: PR gate
     needs:
+      - stubs
       - changes
       - lint
       - engine-lint

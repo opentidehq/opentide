@@ -220,7 +220,7 @@ CHECKS: Mapping[str, tuple[str, ...]] = {
         "crates/opentide-schema/src/objects/*",
         "xtask/src/spec_fields.rs",
     ),
-    # `cargo xtask stubs --check` (in `native`): the committed stubs of
+    # `cargo xtask stubs --check` (the `stubs` job): the committed stubs of
     # opentide._native against the extension's introspection, generated from
     # the binding and opentide-schema's classes (through the facade).
     "stubs": (
@@ -230,6 +230,8 @@ CHECKS: Mapping[str, tuple[str, ...]] = {
         "crates/opentide/*",
         "src/opentide/_native/*.pyi",
         "xtask/src/stubs.rs",
+        "xtask/src/main.rs",
+        "xtask/Cargo.toml",
     ),
     # opentide-schema's compile-fail cases (trybuild): the derive, the crate,
     # the cases (the lockfile and the toolchain are in EVERYTHING).
@@ -296,9 +298,8 @@ class Plan:
             else " | ".join(f"package(={c})" for c in crates) or "none()",
             "rust": _bool(rust),
             "python": _bool(python),
-            # The `_native` extension's build, for the Python jobs, and the
-            # stubs check beside it.
-            "native": _bool(python or "gitlab" in self.areas or "stubs" in self.checks),
+            # The `_native` extension's build, for the Python jobs.
+            "native": _bool(python or "gitlab" in self.areas),
             # The lint job: its steps read pylint, ci, skills and rust.
             "lint": _bool(rust or bool(self.areas & {"pylint", "ci", "skills"})),
         }
