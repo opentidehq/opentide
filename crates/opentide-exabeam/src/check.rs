@@ -361,8 +361,8 @@ fn is_ident_char(c: u8) -> bool {
     c.is_ascii_alphanumeric() || c == b'_'
 }
 
-/// Python's `str.isupper()` / `str.islower()` on a keyword: one case for every
-/// cased character, and at least one cased character.
+/// Whether a keyword is written in one case: every letter upper case, or
+/// every letter lower case, and at least one letter.
 fn one_case(word: &str) -> bool {
     let cased: Vec<char> = word.chars().filter(|c| c.is_alphabetic()).collect();
     !cased.is_empty()
@@ -547,8 +547,8 @@ fn is_datetime(text: &str) -> bool {
     }
 }
 
-/// Python's `ipaddress.ip_address`: an IPv4 or IPv6 address, an IPv6 one
-/// with an optional `%scope`.
+/// An IP address: an IPv4 or IPv6 address, an IPv6 one with an optional,
+/// non-empty `%scope`.
 pub fn parse_ip(text: &str) -> Option<IpAddr> {
     if let Ok(v4) = text.parse::<Ipv4Addr>() {
         return Some(IpAddr::V4(v4));
@@ -2549,8 +2549,7 @@ fn cidr_at(text: &str, at: usize) -> Option<(usize, usize)> {
     (b.get(close) == Some(&b']')).then_some((start, j))
 }
 
-/// Python's `ipaddress.ip_network(net, strict=False)`: the IP version of a
-/// valid `address/prefix`, or `None`.
+/// The IP version of a valid `address/prefix`, host bits allowed, or `None`.
 fn cidr_version(net: &str) -> Option<u8> {
     let (addr, prefix) = net.split_once('/')?;
     let prefix: u32 = prefix.parse().ok()?;

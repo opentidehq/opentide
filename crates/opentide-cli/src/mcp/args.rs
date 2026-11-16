@@ -1,10 +1,9 @@
-//! A tool's arguments, read as the Python server's argument model reads them
-//! (MCPServer builds it from the tool's signature, in Pydantic's lax mode):
-//! a string is only a string; a boolean is `true`/`false`, `0`/`1` or one of
-//! the words Pydantic reads as one; an integer is a whole number, written as
-//! a number or as text. Unknown arguments are ignored. A missing required
-//! argument or a value of the wrong type refuses the call, worded by opentide
-//! rather than as Pydantic's validation error (`tests/golden/APPROVED_DIFFS.toml`).
+//! A tool's arguments, read leniently: a string is only a string; a boolean
+//! is `true`/`false`, `0`/`1` or one of the words that name one (`yes`,
+//! `off`, ...); an integer is a whole number, written as a number or as
+//! text. Unknown arguments are ignored. A missing required argument or a
+//! value of the wrong type refuses the call, worded by opentide
+//! (`tests/golden/APPROVED_DIFFS.toml`).
 
 use serde_json::{Map, Value};
 

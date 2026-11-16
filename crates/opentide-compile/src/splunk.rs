@@ -96,7 +96,7 @@ pub fn cron_to_timeframe(
 
 /// The earliest time of a lookback (`splunk_timerange`): `-<minutes>m@m`,
 /// the minutes stretched by `skew` (0.1 for 10 %) and moved by `offset`,
-/// rounded half to even as Python's `round`.
+/// rounded half to even.
 pub fn splunk_timerange(time: &str, skew: f64, offset: i64) -> Result<String, CompileError> {
     let mut chars = time.chars();
     let unit = chars.next_back();

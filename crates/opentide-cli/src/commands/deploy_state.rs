@@ -218,6 +218,21 @@ fn shard_entries(dir: &Path) -> Vec<String> {
         .collect()
 }
 
+/// The objects whose shard records an id for *platform* and *tenant*, by
+/// their canonical uuid. A shard that does not read is left out: the rules a
+/// run deploys report it when they are planned.
+pub fn recorded(workspace: &Path, platform: &str, tenant: &str) -> Vec<String> {
+    let dir = state_dir(workspace);
+    shard_entries(&dir)
+        .into_iter()
+        .filter_map(|name| {
+            let uuid = canonical(json_stem(&name))?;
+            let shard = Shard::from_file(&dir.join(&name), None).ok()?;
+            shard.get(platform, tenant).is_some().then_some(uuid)
+        })
+        .collect()
+}
+
 /// The stem of a `*.json` name, whatever the extension's case.
 fn json_stem(name: &str) -> &str {
     let cut = name.len().saturating_sub(".json".len());

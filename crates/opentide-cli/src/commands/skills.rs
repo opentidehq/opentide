@@ -3,11 +3,10 @@
 //!
 //! The catalogue is `manifest.json` on the skills repository's `main`
 //! branch, read from raw.githubusercontent.com through the proxy and CA
-//! bundle the environment names, as the Python CLI's `skills_registry` reads
-//! it with `urllib`. It is never taken from anywhere else: a manifest that
-//! names another repository or a ref that would climb out of it is read as
-//! the default. The four authoring skills that ship with opentide are listed
-//! whatever the remote catalogue says.
+//! bundle the environment names. It is never taken from anywhere else: a
+//! manifest that names another repository or a ref that would climb out of
+//! it is read as the default. The four authoring skills that ship with
+//! opentide are listed whatever the remote catalogue says.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
