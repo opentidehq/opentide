@@ -295,6 +295,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 - **`opentide serve` names a run's missing working directory in the system's words** ([#1140](https://github.com/opentidehq/opentide/issues/1140)). A `run` whose `cwd` is not a directory fails with `cannot run in the working directory <path>: No such file or directory (os error 2)`, or `… <path>: not a directory`, not `[Errno 2] No such file or directory: '<path>'`.
 
 ### Fixed
+- **An EQL, CQL or Falco query with thousands of findings is checked in linear time** ([#1231](https://github.com/opentidehq/opentide/issues/1231)). Each finding's position was found by reading the query from its start, so the time grew with the square of its length: 10,000 `a[1]` terms in an EQL query took about a second, and take 20 ms now. A CQL or Falco query's time now grows in step with its findings. Findings on a `.opentide/configurations/` file are placed the same way.
 - **`parse-kv` takes its keys and options** ([#1230](https://github.com/opentidehq/opentide/issues/1230)). A KQL query with `parse-kv Message as (Level: string) with (pair_delimiter = " ")`, Kusto's documented form, was a `kql_parse_error`: only `parse-kv Message` parsed.
 
 - **`--json` log lines no longer carry a `logger` field** ([#1140](https://github.com/opentidehq/opentide/issues/1140)). The notes above already said so; the lines still ended with the name of a Python module (`"logger":"opentide.cli.services.deploy"`) after the event. They hold the event's fields, `event`, `level` and `timestamp`, as documented.

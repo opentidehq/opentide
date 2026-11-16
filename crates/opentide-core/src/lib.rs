@@ -228,6 +228,9 @@ pub fn strip_bom_at(text: &str, offset: usize) -> (&str, usize) {
 /// multi-byte character counts from that character's start: a span that ends
 /// mid-character gives a slightly short range, never a panic.
 pub fn offset_to_position(source: &str, offset: usize) -> Position {
+    if let Some(position) = scoped::position(source, offset) {
+        return position;
+    }
     let offset = source.floor_char_boundary(offset);
     let mut line = 0u32;
     let mut last_line_start = 0usize;
@@ -271,6 +274,10 @@ pub fn position_to_offset(source: &str, position: Position) -> usize {
     source.len()
 }
 
+/// The LSP range of `span` in `source`. Each call scans `source` from its
+/// start, unless [`with_line_index`] has installed the line table of this very
+/// `source`: an engine that reports many findings runs its analysis inside
+/// [`with_line_index`], so that converting them all stays linear.
 pub fn span_to_range(source: &str, span: ByteSpan) -> Range {
     Range {
         start: offset_to_position(source, span.start),
@@ -283,6 +290,12 @@ pub fn span_to_range(source: &str, span: ByteSpan) -> Range {
 /// converting every token of a large query stays linear.
 pub struct LineIndex<'a> {
     source: &'a str,
+    table: LineTable,
+}
+
+/// The line starts and UTF-16 corrections of a text, owned: what
+/// [`LineIndex`] and [`with_line_index`] search.
+struct LineTable {
     starts: Vec<usize>,
     /// Lines that are pure ASCII, where a column is a byte distance.
     ascii: Vec<bool>,
@@ -293,8 +306,8 @@ pub struct LineIndex<'a> {
     wide: Vec<(usize, usize)>,
 }
 
-impl<'a> LineIndex<'a> {
-    pub fn new(source: &'a str) -> Self {
+impl LineTable {
+    fn new(source: &str) -> Self {
         let mut starts = vec![0];
         starts.extend(source.match_indices('\n').map(|(i, _)| i + 1));
         let ascii = (0..starts.len())
@@ -313,7 +326,6 @@ impl<'a> LineIndex<'a> {
             })
             .collect();
         Self {
-            source,
             starts,
             ascii,
             wide,
@@ -329,13 +341,14 @@ impl<'a> LineIndex<'a> {
         }
     }
 
-    /// Same result as [`offset_to_position`].
+    /// The position of `offset` in `source`, the text the table was built
+    /// from: the same result as [`offset_to_position`].
     #[expect(
         clippy::cast_possible_truncation,
         reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
     )]
-    pub fn position(&self, offset: usize) -> Position {
-        let offset = self.source.floor_char_boundary(offset);
+    fn position(&self, source: &str, offset: usize) -> Position {
+        let offset = source.floor_char_boundary(offset);
         let line = self.starts.partition_point(|&start| start <= offset) - 1;
         let start = self.starts[line];
         let character = if self.ascii[line] {
@@ -348,6 +361,20 @@ impl<'a> LineIndex<'a> {
             character,
         }
     }
+}
+
+impl<'a> LineIndex<'a> {
+    pub fn new(source: &'a str) -> Self {
+        Self {
+            source,
+            table: LineTable::new(source),
+        }
+    }
+
+    /// Same result as [`offset_to_position`].
+    pub fn position(&self, offset: usize) -> Position {
+        self.table.position(self.source, offset)
+    }
 
     /// Same result as [`position_to_offset`]: the byte offset of an LSP
     /// position (UTF-16 columns), a column past its line's end clamping to
@@ -358,15 +385,16 @@ impl<'a> LineIndex<'a> {
     )]
     pub fn offset(&self, position: Position) -> usize {
         let line = position.line as usize;
-        let Some(&start) = self.starts.get(line) else {
+        let Some(&start) = self.table.starts.get(line) else {
             return self.source.len();
         };
         // The line's end: its `\n`, or the end of the text.
         let end = self
+            .table
             .starts
             .get(line + 1)
             .map_or(self.source.len(), |next| next - 1);
-        if self.ascii[line] {
+        if self.table.ascii[line] {
             return (start + position.character as usize).min(end);
         }
         let mut col = 0u32;
@@ -385,6 +413,91 @@ impl<'a> LineIndex<'a> {
             start: self.position(span.start),
             end: self.position(span.end),
         }
+    }
+}
+
+/// Runs `run` with the line table of `source` installed, so that
+/// [`span_to_range`] and [`offset_to_position`] on this very `source` (the same
+/// bytes: the same address and length) search the table instead of scanning
+/// from the start. An engine wraps the analysis of a query in it, so that a
+/// query with many findings converts them in linear time. The table built
+/// before is put back afterwards, even on a panic; when `source`'s is already
+/// installed, nothing is built.
+pub fn with_line_index<T>(source: &str, run: impl FnOnce() -> T) -> T {
+    scoped::with(source, run)
+}
+
+/// How many times [`span_to_range`] and [`offset_to_position`] scanned a text
+/// from its start on this thread: no [`with_line_index`] table was installed
+/// for it. Tests read it to prove an analysis converts its findings through
+/// one table (a work count, not a wall clock).
+#[doc(hidden)]
+pub fn scans_from_the_start() -> usize {
+    scoped::SCANS.with(std::cell::Cell::get)
+}
+
+mod scoped {
+    use super::{LineTable, Position};
+    use std::cell::{Cell, RefCell};
+
+    /// The installed table and the text it is for, by address and length.
+    /// While [`with`] runs, that text is borrowed, so no other text can have
+    /// its address: a `&str` with the same address and length is the same
+    /// bytes.
+    struct Installed {
+        key: (usize, usize),
+        table: LineTable,
+    }
+
+    thread_local! {
+        static INSTALLED: RefCell<Option<Installed>> = const { RefCell::new(None) };
+        pub(super) static SCANS: Cell<usize> = const { Cell::new(0) };
+    }
+
+    fn key(source: &str) -> (usize, usize) {
+        (source.as_ptr() as usize, source.len())
+    }
+
+    pub(super) fn with<T>(source: &str, run: impl FnOnce() -> T) -> T {
+        struct Restore(Option<Installed>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                let previous = self.0.take();
+                INSTALLED.with(|installed| *installed.borrow_mut() = previous);
+            }
+        }
+        let current = INSTALLED.with(|installed| {
+            installed
+                .borrow()
+                .as_ref()
+                .is_some_and(|table| table.key == key(source))
+        });
+        if current {
+            return run();
+        }
+        let table = Installed {
+            key: key(source),
+            table: LineTable::new(source),
+        };
+        let previous = INSTALLED.with(|installed| installed.replace(Some(table)));
+        let _restore = Restore(previous);
+        run()
+    }
+
+    /// The position of `offset` from the installed table, if it is
+    /// `source`'s; otherwise `None`, counted as a scan from the start.
+    pub(super) fn position(source: &str, offset: usize) -> Option<Position> {
+        let found = INSTALLED.with(|installed| {
+            installed
+                .borrow()
+                .as_ref()
+                .filter(|table| table.key == key(source))
+                .map(|table| table.table.position(source, offset))
+        });
+        if found.is_none() {
+            SCANS.with(|scans| scans.set(scans.get() + 1));
+        }
+        found
     }
 }
 
@@ -2215,5 +2328,90 @@ mod tests {
         assert!(range.contains(Position::new(0, 1)));
         assert!(range.contains(Position::new(0, 4)));
         assert!(!range.contains(Position::new(0, 0)));
+    }
+
+    /// Inside [`with_line_index`], `span_to_range` and `offset_to_position`
+    /// on the installed text give what the scans give, everywhere, without
+    /// scanning; on another text (even with the same content) they scan.
+    #[test]
+    fn the_installed_table_gives_what_the_scans_give() {
+        for text in [
+            "",
+            "ascii only\nsecond line\n",
+            "ab\n\u{1F600}c\r\n\nd \u{e9}",
+            "\tkey:\t\u{65e5}\u{672c}\r\n\t- \u{e9}t\u{e9} \u{1F600} x\r\n\r\nend",
+        ] {
+            let scanned: Vec<Range> = (0..=text.len() + 2)
+                .map(|start| span_to_range(text, ByteSpan::new(start, start + 2)))
+                .collect();
+            let before = scans_from_the_start();
+            let installed: Vec<Range> = with_line_index(text, || {
+                (0..=text.len() + 2)
+                    .map(|start| span_to_range(text, ByteSpan::new(start, start + 2)))
+                    .collect()
+            });
+            assert_eq!(installed, scanned, "{text:?}");
+            assert_eq!(
+                scans_from_the_start(),
+                before,
+                "{text:?}: scanned inside the scope"
+            );
+
+            // An empty text's address may be shared (a dangling pointer):
+            // the same key then means the same, empty, content.
+            if text.is_empty() {
+                continue;
+            }
+            let copy = text.to_string();
+            let before = scans_from_the_start();
+            let other = with_line_index(text, || offset_to_position(&copy, copy.len()));
+            assert_eq!(other, offset_to_position(text, text.len()));
+            assert_eq!(
+                scans_from_the_start(),
+                before + 2,
+                "another text is scanned"
+            );
+        }
+    }
+
+    /// A slice of the installed text is another text: its offsets count from
+    /// its own start.
+    #[test]
+    fn a_slice_of_the_installed_text_is_scanned() {
+        let text = "one\ntwo\nthree";
+        let tail = &text[4..];
+        let inside = with_line_index(text, || offset_to_position(tail, 4));
+        assert_eq!(inside, Position::new(1, 0));
+    }
+
+    /// Scopes nest: the inner text's table is installed for the inner run,
+    /// the outer's is back after it, also when the inner run panics, and
+    /// nothing is installed after the outer scope.
+    #[test]
+    fn scopes_nest_and_restore_even_on_a_panic() {
+        let outer = "a\nb";
+        let inner = "x\ny\nz";
+        with_line_index(outer, || {
+            let before = scans_from_the_start();
+            with_line_index(inner, || {
+                assert_eq!(offset_to_position(inner, 4), Position::new(2, 0));
+                // The same text again: nothing rebuilt, still installed.
+                with_line_index(inner, || {
+                    assert_eq!(offset_to_position(inner, 2), Position::new(1, 0));
+                });
+            });
+            assert_eq!(offset_to_position(outer, 2), Position::new(1, 0));
+            assert_eq!(scans_from_the_start(), before, "the tables were installed");
+            let panicked = std::panic::catch_unwind(|| {
+                with_line_index(inner, || panic!("inside"));
+            });
+            assert!(panicked.is_err());
+            let before = scans_from_the_start();
+            assert_eq!(offset_to_position(outer, 2), Position::new(1, 0));
+            assert_eq!(scans_from_the_start(), before, "the outer table is back");
+        });
+        let before = scans_from_the_start();
+        assert_eq!(offset_to_position(outer, 2), Position::new(1, 0));
+        assert_eq!(scans_from_the_start(), before + 1, "nothing is installed");
     }
 }

@@ -68,8 +68,13 @@ fn mismatch(want: Want, name: &str) -> Option<&'static str> {
 }
 
 /// `ecs_type_mismatch` and `ecs_unknown_field` for a query whose indices hold
-/// ECS documents. A query that does not parse gets none.
+/// ECS documents. A query that does not parse gets none. The findings'
+/// ranges come from one line table ([`opentide_core::with_line_index`]).
 pub fn ecs_diagnostics(source: &str) -> Vec<Diagnostic> {
+    opentide_core::with_line_index(source, || ecs_diagnostics_lines(source))
+}
+
+fn ecs_diagnostics_lines(source: &str) -> Vec<Diagnostic> {
     let Some((tree, _prepared)) = parse_prepared(source) else {
         return Vec::new();
     };
