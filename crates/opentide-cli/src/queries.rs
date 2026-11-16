@@ -476,7 +476,44 @@ impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
         uuid: Option<&str>,
         text: &str,
     ) -> Result<Vec<opentide_workspace::lint::LintFinding>, String> {
+        Ok(self.findings(file, relative, uuid, text, None))
+    }
+
+    fn check_parsed(
+        &self,
+        file: &Path,
+        relative: &str,
+        uuid: Option<&str>,
+        text: &str,
+        document: &opentide_schema::node::Document,
+    ) -> Result<Vec<opentide_workspace::lint::LintFinding>, String> {
+        Ok(self.findings(file, relative, uuid, text, Some(document)))
+    }
+}
+
+impl EngineLintQueries {
+    /// The queries check's findings on `text`, reading its YAML tree from
+    /// `parsed` when lint already parsed it (#1233).
+    fn findings(
+        &self,
+        file: &Path,
+        relative: &str,
+        uuid: Option<&str>,
+        text: &str,
+        parsed: Option<&opentide_schema::node::Document>,
+    ) -> Vec<opentide_workspace::lint::LintFinding> {
         let text = universal_newlines(text);
+        // The tree is `text`'s as the checks read it only when no line ending
+        // was rewritten; otherwise they parse the rewritten text, as before.
+        let parsed = parsed.filter(|_| matches!(text, Cow::Borrowed(_)));
+        let loaded;
+        let document = match parsed {
+            Some(document) => Some(document),
+            None => {
+                loaded = opentide_schema::node::load(&text).ok();
+                loaded.as_ref()
+            }
+        };
         let lines: Vec<&str> = text.lines().collect();
         let marked: Vec<usize> = lines
             .iter()
@@ -485,7 +522,7 @@ impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
             .map(|(number, _)| number + 1)
             .collect();
         let mut out = Vec::new();
-        let harfanglab = HarfangLabAdvisories::of(&text);
+        let harfanglab = HarfangLabAdvisories::of(&text, document);
         for item in self.profiles.check_file(file, &text) {
             if item.severity == EngineSeverity::Error || in_placeholder(&item, &lines, &marked) {
                 continue;
@@ -507,15 +544,17 @@ impl opentide_workspace::lint::LintQueryCheck for EngineLintQueries {
                 relative, uuid, diagnostic,
             ));
         }
-        out.extend(block_advisories(
-            file,
-            relative,
-            uuid,
-            &text,
-            &self.profiles.graylog_tenants,
-        ));
+        out.extend(document.map_or_else(Vec::new, |document| {
+            block_advisories(
+                file,
+                relative,
+                uuid,
+                document,
+                &self.profiles.graylog_tenants,
+            )
+        }));
         out.extend(harfanglab.findings(file, relative, uuid));
-        Ok(out)
+        out
     }
 }
 
@@ -537,7 +576,9 @@ struct HarfangLabAdvisories {
 }
 
 impl HarfangLabAdvisories {
-    fn of(text: &str) -> Self {
+    /// The advisories on `text`, whose parse is `document` (`None`: it does
+    /// not parse).
+    fn of(text: &str, document: Option<&opentide_schema::node::Document>) -> Self {
         let none = Self {
             found: Vec::new(),
             rules: None,
@@ -545,7 +586,7 @@ impl HarfangLabAdvisories {
         if !text.contains("harfanglab") {
             return none;
         }
-        let Ok(document) = opentide_schema::node::load(text) else {
+        let Some(document) = document else {
             return none;
         };
         let Some(root) = document.root() else {
@@ -693,12 +734,9 @@ fn block_advisories(
     file: &Path,
     relative: &str,
     uuid: Option<&str>,
-    text: &str,
+    document: &opentide_schema::node::Document,
     graylog_tenants: &[ConfiguredTenant],
 ) -> Vec<opentide_workspace::lint::LintFinding> {
-    let Ok(document) = opentide_schema::node::load(text) else {
-        return Vec::new();
-    };
     let Some(root) = document.root() else {
         return Vec::new();
     };

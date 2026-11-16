@@ -177,6 +177,25 @@ pub trait LintQueryCheck: Sync {
         uuid: Option<&str>,
         text: &str,
     ) -> Result<Vec<LintFinding>, String>;
+
+    /// [`check`](Self::check) on a file lint has already parsed: `document`
+    /// is `text`'s parse, so a check that reads the YAML tree need not parse
+    /// the file again (#1233). The default ignores it.
+    ///
+    /// # Errors
+    ///
+    /// As [`check`](Self::check).
+    fn check_parsed(
+        &self,
+        file: &Path,
+        relative: &str,
+        uuid: Option<&str>,
+        text: &str,
+        document: &node::Document,
+    ) -> Result<Vec<LintFinding>, String> {
+        let _ = document;
+        self.check(file, relative, uuid, text)
+    }
 }
 
 /// `lint`'s options.
@@ -478,6 +497,9 @@ struct Record {
     key_lines: IndexMap<String, usize>,
     placeholders: Vec<Marked>,
     text: Option<String>,
+    /// `text`'s parse, kept for the queries check only (#1233): lint drops it
+    /// as soon as the record is loaded otherwise, and after the check.
+    document: Option<std::sync::Arc<node::Document>>,
 }
 
 /// Runs `lint` on the workspace at `root` with its resolved `config`.
@@ -528,6 +550,7 @@ fn lint_with(
     let nested: Vec<PathBuf> = nested.into_iter().filter(|p| in_scope(p)).collect();
     let every = reported.is_none() || selected.contains(&LintCheck::Filenames);
     let recommended = selected.contains(&LintCheck::Recommended);
+    let queries = selected.contains(&LintCheck::Queries) && options.query_check.is_some();
     let mut recommended_fields = RecommendedFields::default();
     let mut missing: Vec<Draft> = Vec::new();
     let mut records: Vec<Record> = object_files
@@ -543,6 +566,9 @@ fn lint_with(
                 && in_scope(&record.path)
             {
                 missing.extend(recommended_fields.findings(&record, &root));
+            }
+            if !(queries && in_scope(&record.path)) {
+                record.document = None;
             }
             record
         })
@@ -574,9 +600,19 @@ fn lint_with(
                 let (None, Some(text)) = (&record.parse_error, &record.text) else {
                     return None;
                 };
-                Some(check.check(&record.path, &record.relative, record.uuid.as_deref(), text))
+                let uuid = record.uuid.as_deref();
+                Some(match &record.document {
+                    Some(document) => {
+                        check.check_parsed(&record.path, &record.relative, uuid, text, document)
+                    }
+                    None => check.check(&record.path, &record.relative, uuid, text),
+                })
             })
             .collect();
+        // The trees were kept for the check alone.
+        for record in &mut records {
+            record.document = None;
+        }
         for one in checked {
             match one {
                 Ok(found) => engine.extend(found),
@@ -885,7 +921,7 @@ fn load_record(
         }
     };
     let document = match node::load(&text) {
-        Ok(document) => document,
+        Ok(document) => std::sync::Arc::new(document),
         Err(error) => {
             let mut problem = error.problem.clone();
             if let Some(mark) = error.mark {
@@ -900,7 +936,11 @@ fn load_record(
 }
 
 /// The record of a file whose `text` parsed to `document`.
-fn read_document(mut record: Record, text: String, document: &node::Document) -> Record {
+fn read_document(
+    mut record: Record,
+    text: String,
+    document: &std::sync::Arc<node::Document>,
+) -> Record {
     record.key_lines = top_level_key_lines(&text);
     record.placeholders = placeholder_lines(&text);
     record.text = Some(text);
@@ -908,6 +948,7 @@ fn read_document(mut record: Record, text: String, document: &node::Document) ->
         record.parse_error = Some(problem);
         return record;
     }
+    record.document = Some(std::sync::Arc::clone(document));
     let Some(root_node) = document.root() else {
         return record;
     };

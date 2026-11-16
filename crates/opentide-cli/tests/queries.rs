@@ -379,14 +379,17 @@ fn lint_check(text: &str) -> Vec<(String, String, usize)> {
     let fs = MemoryFs::new();
     fs.create_dir("/ws/.opentide/configurations");
     let check = EngineLintQueries::install(&fs, std::path::Path::new("/ws"));
-    check
-        .check(
-            std::path::Path::new(FILE),
-            "objects/rules/a.yaml",
-            Some(UUID),
-            text,
-        )
-        .unwrap()
+    let file = std::path::Path::new(FILE);
+    let found = check
+        .check(file, "objects/rules/a.yaml", Some(UUID), text)
+        .unwrap();
+    // Given lint's parse of the file (#1233), the check finds the same.
+    let document = opentide_schema::node::load(text).unwrap();
+    let parsed = check
+        .check_parsed(file, "objects/rules/a.yaml", Some(UUID), text, &document)
+        .unwrap();
+    assert_eq!(parsed, found);
+    found
         .into_iter()
         .map(|finding| {
             assert_eq!(
