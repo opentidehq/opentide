@@ -416,6 +416,32 @@ fn pinned_regressions() {
             "{query}"
         );
     }
+    // The cast of a primary expression (a `LIKE` pattern, the input of
+    // `GROK`, `DISSECT` and the extract commands) names a type: on valid
+    // input the type is coloured `type` and checked (`text` is not a cast
+    // type), and a missing type is an error, as in the old engine.
+    for query in [
+        "FROM a | WHERE x LIKE \"a\"::keyword::text\n",
+        "FROM a | DISSECT a.b::keyword \"%{x}\"\n",
+        "FROM a | DENSE_VECTOR t::keyword\n",
+    ] {
+        assert_eq!(old.observe(query), new.observe(query), "{query}");
+    }
+    for query in [
+        "FROM a | WHERE x LIKE \"a\"::\n",
+        "FROM a | WHERE x LIKE \"a\"::\"b\"\n",
+        "FROM a | URI_PARTS p = x::\n",
+    ] {
+        for side in [&old, &new] {
+            assert!(
+                (side.analyze)(query, None)
+                    .0
+                    .iter()
+                    .any(|d| d.message.contains("ES|QL syntax error")),
+                "{query}"
+            );
+        }
+    }
 }
 
 /// The reviewer's mutation scheme (it found what the corpus-heavy run missed):
