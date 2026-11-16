@@ -1,0 +1,38 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/where_clause__valid.exabeam
+---
+source_file@0..62
+  statement@0..62
+    select_clause@0..11
+      keyword@0..6
+        letters@0..6 "SELECT"
+      whitespace@6..7 " "
+      column@7..11
+        field_name@7..11
+          identifier@7..11
+            letters@7..11 "user"
+    whitespace@11..12 " "
+    where_clause@12..62
+      keyword@12..17
+        letters@12..17 "WHERE"
+      whitespace@17..18 " "
+      filter@18..62
+        and_expression@18..62
+          field_term@18..43
+            field_name@18..31
+              identifier@18..31
+                letters@18..31 "activity_type"
+            :@31..32 ":"
+            string@32..43 "\"app-login\""
+          whitespace@43..44 " "
+          keyword@44..47
+            letters@44..47 "AND"
+          whitespace@47..48 " "
+          field_term@48..62
+            field_name@48..55
+              identifier@48..55
+                letters@48..55 "outcome"
+            :@55..56 ":"
+            string@56..62 "\"fail\""

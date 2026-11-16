@@ -220,6 +220,12 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
   - **A missing piece is named**: `expected a field before '|'`, where the message said `missing 'identifier'` or named the next token.
   - **No hint inside a broken stage after its error**; the stages after it are checked as written.
   - **Nesting deeper than 1,024 groups (256 subsearches) is one syntax error**, where tree-sitter accepted any depth.
+- **A CQL syntax error says what was expected** ([#1226](https://github.com/opentidehq/opentide/issues/1226)). CrowdStrike queries are parsed in Rust instead of with a tree-sitter grammar. Valid queries get the same findings, highlighting, hover and completion, and a broken query is still broken, with these differences:
+  - `cql_parse_error` names what the parser looked for: ``CQL syntax error near `|`: expected a filter``, ``near `)`: expected an argument``, ``missing `]` ``, where it said ``near `|` `` or quoted the rest of the line.
+  - It says when a string, a regular expression or a block comment is never closed, and names the stray token (``near `and` ``, ``near `include` ``) where a `)` would be the wrong fix.
+  - Its range is the token that does not fit, not the start of the line before it; a `missing …` error is an empty range where the closer was due.
+  - A check finding inside the broken part is no longer reported after the syntax error: `foo(( | bar` gives the syntax error alone, not also `cql_unknown_function`.
+  - Nesting deeper than 1,000 levels is one `cql_parse_error` (`nesting deeper than 1000 levels`), where tree-sitter took 10,000. A parenthesis, a call, a subquery, a `case` and a `match` are a level each, so `join({` is two: 500 nested `join({…}, field=x)` are the most a query holds.
 
 #### Deploy, query and sharing
 - **Tenants are reached through opentide's own connectors, not the vendor SDKs** ([#832](https://github.com/opentidehq/opentide/issues/832), [#833](https://github.com/opentidehq/opentide/issues/833), [#834](https://github.com/opentidehq/opentide/issues/834), [#979](https://github.com/opentidehq/opentide/issues/979)). `deploy`, `query`, `validate query --live`, `share`, `generate extract`, `setup skills` and `doctor` make the requests `azure-identity`, `azure-monitor-query`, `splunk-sdk`, `carbon-black-cloud-sdk`, PyMISP and `requests` made, through the proxy and CA bundles the environment names, and trust the system's certificate store too. A tenant that cannot be reached is described in the HTTP client's words. Beside that:

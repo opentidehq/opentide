@@ -1,0 +1,30 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/order_by_clause__invalid.exabeam
+---
+source_file@0..27
+  statement@0..27
+    select_clause@0..11
+      keyword@0..6
+        letters@0..6 "SELECT"
+      whitespace@6..7 " "
+      column@7..11
+        field_name@7..11
+          identifier@7..11
+            letters@7..11 "user"
+    whitespace@11..12 " "
+    order_by_clause@12..27
+      keyword@12..20
+        letters@12..14 "OR"
+        letters@14..17 "DER"
+        -@17..18 "-"
+        letters@18..20 "BY"
+      whitespace@20..21 " "
+      ,@21..22 ","
+      whitespace@22..23 " "
+      field_name@23..27
+        identifier@23..27
+          letters@23..27 "user"
+errors:
+20..21: expected a field

@@ -8,6 +8,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Upgrade
 
+- If you called `opentide_cql::check::diagnostics`, call `opentide_cql::analyze_with` and keep the diagnostics after its `cql_parse_error`.
 - If you build an `opentide_workspace::validate::Options` with a struct literal, set its new `compile_check` field: `Some(&opentide_compile::validate::Compilers)` to compile rules as `opentide validate` does, or `None`.
 - If you build an `opentide_analysis::QueryReport` with a struct literal, set its new `placeholder` field (`false` for a query you checked).
 - If you called `opentide_analysis::install_configuration_schemas`, build an `opentide_analysis::ConfigurationSchemas` (`ConfigurationSchemas::parse(router, &schemas)`) and pass it to `configuration_hover` and `configuration_completions`.
@@ -24,6 +25,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - If you build the engine crates from source, use Rust 1.95 or later: `rust-version` is 1.95, which the YARA parser crates (`yara-x-parser`, `yara-x-fmt`) need.
 
 ### Breaking
+
+- **`opentide_cql::check::diagnostics` is crate-private** ([opentide#1226](https://github.com/opentidehq/opentide/issues/1226)). It took a tree-sitter `Node`, and the crate no longer parses with tree-sitter. Call `opentide_cql::analyze` or `analyze_with`, which report the syntax error and then the checks.
 
 - **`opentide-schema`'s Splunk switches are plain types** ([opentide#1140](https://github.com/opentidehq/opentide/issues/1140)). `SplunkSetup::enterprise_security` is a `bool` and `SplunkSetup::schedule_offset` an `i64` (both default to `false` and `0`), where they were `BoolOrPlaceholder` and `IntOrPlaceholder`: `deploy` never resolves a `$NAME` placeholder in either, so the model refuses one as `deploy` does. `IntOrPlaceholder` is removed; match on the plain value.
 
@@ -88,6 +91,11 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **Each release carries CycloneDX SBOMs** ([#843](https://github.com/opentidehq/opentide/issues/843)). `opentide-lsp.cdx.json` (the binaries and the WASI build), `opentide-wasm.cdx.json` (the browser build, with the wasi-libc it links), `opentide-lsp-client.cdx.json` and `opentide-lsp-worker.cdx.json` (the npm packages) are release assets, listed in `SHA256SUMS` and checked against the CycloneDX 1.5 schema before they ship. The other assets keep their names.
 
 ### Changed
+
+- **`opentide-cql` parses CQL in Rust** ([opentide#1226](https://github.com/opentidehq/opentide/issues/1226), ADR 0012). A logos lexer and a hand-written parser on `opentide-parse` build a lossless rowan tree. `analyze`, `hover`, `completions`, `signature_help` and the highlight tokens read it, and `tree-sitter` and `opentide-syntax` are dev-dependencies only, for the differential against the old engine (`tests/differential.rs`, `OPENTIDE_DIFF_SCALE=full`).
+  - On valid input every surface is the same: diagnostics as a hunt and as a correlation rule, highlight tokens, hover, completions and signature help.
+  - On broken input `cql_parse_error` says what was expected (``near `|`: expected a filter``) or what is never closed (a string, a regular expression, a block comment), its range is the token that does not fit (empty where a `missing …` closer was due), and a check finding inside the broken construct is not reported.
+  - Nesting past 1,000 parser levels (a parenthesis, call, subquery, `case` or `match` each; `join({` is two) is one `cql_parse_error`, where tree-sitter took 10,000; deep queries are checked and highlighted in linear time.
 
 - **language-server 0.12.1 to 0.16.1 are in these crates, without their Tide block checks** ([opentide#790](https://github.com/opentidehq/opentide/issues/790)). The YARA (`opentide-yara`), YARA-L (`opentide-yaral`) and Exabeam Query Language (`opentide-exabeam`) engines, the Lucene Graylog dialect (`--platform graylog`), their codes, grammars, catalogs and highlighting, and `.yar`/`.yara`, `.yaral`/`.yl2` and `.exabeam` files with rename, formatting and signature help came in with their history (`docs/engine/IMPORT.md`). The checks, completion and hover of `configurations.{harfanglab,bitdefender,graylog,exabeam,google_secops}` blocks and of Exabeam, Graylog and Google SecOps hunts were written on `serde_yaml`, which these crates no longer use (#850): they are not in this release, and come back on `opentide_core::node`. 0.16.1's information severity for `missing_author`, `missing_organisation` and `recommended_field_missing` does not apply: these crates retired those codes for `opentide lint`'s `metadata_recommended` and `filename_mismatch` (#926).
 
