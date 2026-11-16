@@ -28,8 +28,11 @@ use opentide_parse::Lexeme;
 #[derive(Logos, Clone, Copy, Debug, PartialEq, Eq)]
 #[logos(extras = Context)]
 enum Tok {
+    // One blank, and the scanner takes the rest: a repeated class of
+    // multi-byte characters recurses in logos once per repetition.
     #[regex(
-        r"[ \t\n\x0B\x0C\r\u{85}\u{a0}\u{1680}\u{2000}-\u{200a}\u{2028}\u{2029}\u{202f}\u{205f}\u{3000}]+"
+        r"[ \t\n\x0B\x0C\r\u{85}\u{a0}\u{1680}\u{2000}-\u{200a}\u{2028}\u{2029}\u{202f}\u{205f}\u{3000}]",
+        whitespace
     )]
     Whitespace,
     #[token("//", line_comment)]
@@ -250,6 +253,22 @@ impl Tok {
             Self::Bang => K::BANG,
         }
     }
+}
+
+/// The blanks the tree-sitter grammar skipped (`\s`, as its lexer read it).
+fn is_blank(c: char) -> bool {
+    matches!(
+        c,
+        ' ' | '\t' | '\n' | '\x0B' | '\x0C' | '\r' | '\u{85}' | '\u{a0}' | '\u{1680}' | '\u{2000}'
+            ..='\u{200a}' | '\u{2028}' | '\u{2029}' | '\u{202f}' | '\u{205f}' | '\u{3000}'
+    )
+}
+
+/// Past the first blank: the run of blanks after it.
+fn whitespace(lex: &mut logos::Lexer<'_, Tok>) {
+    let rest = lex.remainder();
+    let n = rest.find(|c: char| !is_blank(c)).unwrap_or(rest.len());
+    lex.bump(n);
 }
 
 /// Past the `"`: the length of the string's rest, closing quote included.
@@ -600,6 +619,18 @@ mod tests {
             "a".repeat(n),
             "$a".repeat(n),
             " ".repeat(n),
+            // Multi-byte blanks: a repeated class of them recursed in logos.
+            "\u{a0}".repeat(n),
+            "\u{3000}\u{2028}\r\n".repeat(n / 4),
+            "1".repeat(n),
+            format!("1.{}", "1".repeat(n)),
+            format!("1{}", "a".repeat(n)),
+            format!("${}", "a".repeat(n)),
+            format!("#{}", "a".repeat(n)),
+            format!("%{}", "a".repeat(n)),
+            format!("\"{}\"", "é".repeat(n)),
+            format!("/{}/", "é".repeat(n)),
+            "é".repeat(n),
         ];
         std::thread::Builder::new()
             .stack_size(1 << 20)
