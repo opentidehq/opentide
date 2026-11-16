@@ -2946,7 +2946,6 @@ dependencies = [
  "opentide-syntax",
  "regex",
  "rowan",
- "tree-sitter",
 ]
 
 [[package]]

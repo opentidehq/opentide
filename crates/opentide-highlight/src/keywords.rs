@@ -48,6 +48,35 @@ const BRACKET: Capture = Capture::new("punctuation.bracket");
 const DELIMITER: Capture = Capture::new("punctuation.delimiter");
 const KEYWORD: Capture = Capture::new("keyword");
 
+/// Kibana KQL: the operators and brackets its lexer cuts as tokens. `or`,
+/// `and` and `not` are keywords only by position (a trailing one is a
+/// value, which the parser decides), so the TextMate grammar does not list
+/// them, as it never did; the analysis colours them from the tree.
+const KUERY: Keywords = &[
+    (":", OPERATOR),
+    ("<", OPERATOR),
+    ("<=", OPERATOR),
+    (">", OPERATOR),
+    (">=", OPERATOR),
+    ("(", BRACKET),
+    (")", BRACKET),
+    ("{", BRACKET),
+    ("}", BRACKET),
+];
+
+/// Lucene query syntax: `TO` in a range, the field separator and the
+/// brackets. `AND`, `OR` and `NOT` are not listed, for kuery's reason.
+const LUCENE: Keywords = &[
+    ("TO", KEYWORD),
+    (":", OPERATOR),
+    ("(", BRACKET),
+    (")", BRACKET),
+    ("[", BRACKET),
+    ("]", BRACKET),
+    ("{", BRACKET),
+    ("}", BRACKET),
+];
+
 /// CrowdStrike Query Language: the contextual keywords, the operators, the brackets and the
 /// delimiters, and the sigils of saved queries and parameters. `/` is both the division and
 /// the delimiter of a regex, which is a string. `and`, `or` and `not` are node patterns in the
@@ -90,19 +119,19 @@ const CQL: Keywords = &[
 ];
 
 /// The `KEYWORDS` table of `language`, or `None` while it is generated from
-/// its `highlights.scm`. No language has a table yet: each one adds an arm
-/// when its engine moves to `opentide-parse`.
+/// its `highlights.scm`. A language adds an arm when its engine
+/// moves to `opentide-parse`.
 #[must_use]
 pub const fn keywords(language: LanguageId) -> Option<Keywords> {
     match language {
         LanguageId::Eql => Some(eql::KEYWORDS),
+        LanguageId::Kuery => Some(KUERY),
+        LanguageId::Lucene => Some(LUCENE),
         LanguageId::Cql => Some(CQL),
         LanguageId::Kql
         | LanguageId::Spl
         | LanguageId::TideYaml
         | LanguageId::Esql
-        | LanguageId::Kuery
-        | LanguageId::Lucene
         | LanguageId::Config
         | LanguageId::Falco
         | LanguageId::Yara
