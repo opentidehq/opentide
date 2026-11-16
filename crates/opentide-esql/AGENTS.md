@@ -7,10 +7,11 @@ highlighting, hover, completion and signature help.
 
 ## Place
 
-foundation, tier 3: depends on opentide-core, -ecs, -lucene, -syntax, -highlight. Used by opentide-tide and -analysis.
+foundation, tier 3: depends on opentide-core, -ecs, -lucene, -highlight, -parse. Used by opentide-tide and -analysis.
 
 ## Invariants
 
+- Analysis runs on the pure-Rust parser (`src/lexer.rs`, `src/parser/`, read through the arena of `src/tree.rs`); the tree-sitter engine lives on only in `tests/legacy`, the old side of `tests/differential.rs`, until stage 2 of #1219 (#1231).
 - I/O-free: no `std::fs` in `src/`; the catalogs are compiled in (`include_str!`) and parsed once (`OnceLock`).
 - ES|QL findings are `opentide_core::Diagnostic`s with codes from `opentide_core::codes`; no error enum of its own.
 - A name the catalog does not know is a diagnostic, not a parse error (Kibana drops an unknown command and runs the rest).
@@ -21,6 +22,10 @@ foundation, tier 3: depends on opentide-core, -ecs, -lucene, -syntax, -highlight
 ```bash
 cargo nextest run --profile fast -p opentide-esql
 ```
+
+The full differential before a push: `OPENTIDE_DIFF_SEEDS=1,2,3 OPENTIDE_DIFF_SCALE=4 OPENTIDE_MUT_SEEDS=21,22,23
+OPENTIDE_MUT_PER_FILE=40 cargo test -p opentide-esql --test differential` (its doc comment has the knobs).
+`tests/entry_points.rs` runs every public entry point on a 1 MB stack over million-character tokens and deep input.
 
 The engine's ES|QL corpus tests are in `opentide-analysis` (`elastic_corpus`, `external_elastic`,
 `live_elasticsearch_probes`).

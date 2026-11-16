@@ -37,6 +37,8 @@ struct Data {
 pub(crate) struct Tree {
     data: Vec<Data>,
     pub(crate) problems: Vec<Problem>,
+    /// Where the problems are, sorted: [`Node::has_error`] searches it.
+    error_at: Vec<usize>,
 }
 
 /// Stands where tree-sitter's cursor stood: iteration needs none.
@@ -140,7 +142,7 @@ fn token_name(kind: K, text: &str) -> &'static str {
 /// Parses `source` into the arena.
 pub(crate) fn parse(source: &str) -> Tree {
     let parse = parser::parse(source);
-    let problems = parse
+    let problems: Vec<Problem> = parse
         .errors
         .iter()
         .map(|e| Problem {
@@ -222,7 +224,13 @@ pub(crate) fn parse(source: &str) -> Tree {
             WalkEvent::Leave(NodeOrToken::Token(_)) => {}
         }
     }
-    Tree { data, problems }
+    let mut error_at: Vec<usize> = problems.iter().map(|p| p.at).collect();
+    error_at.sort_unstable();
+    Tree {
+        data,
+        problems,
+        error_at,
+    }
 }
 
 fn push(
@@ -729,11 +737,6 @@ impl Tree {
     pub(crate) fn root_node(&self) -> Node<'_> {
         Node { tree: self, id: 0 }
     }
-
-    /// Whether the parser reported anything.
-    pub(crate) fn has_error(&self) -> bool {
-        !self.problems.is_empty()
-    }
 }
 
 impl<'t> Node<'t> {
@@ -756,10 +759,6 @@ impl<'t> Node<'t> {
         self.d().named
     }
 
-    pub(crate) fn is_missing(&self) -> bool {
-        false
-    }
-
     pub(crate) fn field_name(&self) -> Option<&'static str> {
         self.d().field
     }
@@ -776,13 +775,17 @@ impl<'t> Node<'t> {
         self.d().end
     }
 
-    /// Whether the parser reported a problem inside this node.
+    /// Whether the parser reported a problem inside this node: at or after
+    /// its start and before its end (a problem at the token right after it,
+    /// `foo)`, is not in it, as `foo )` is not); a node recovery left empty
+    /// holds a problem at its place. A binary search: a name check per node
+    /// over every problem made completions quadratic on broken input.
     pub(crate) fn has_error(&self) -> bool {
         let d = self.d();
-        self.tree
-            .problems
-            .iter()
-            .any(|p| p.at >= d.start && p.at <= d.end)
+        let end = d.end.max(d.start + 1);
+        let errors = &self.tree.error_at;
+        let first = errors.partition_point(|&at| at < d.start);
+        errors.get(first).is_some_and(|&at| at < end)
     }
 
     pub(crate) fn parent(&self) -> Option<Node<'t>> {
@@ -929,4 +932,28 @@ pub(crate) fn walk<'t>(root: Node<'t>, mut f: impl FnMut(Node<'t>)) {
 /// The parse of `source`, as the analysis asks for it.
 pub(crate) fn parse_tree(source: &str) -> Option<Tree> {
     Some(parse(source))
+}
+
+/// The production names of the tree's named nodes (`from_command`): the
+/// names the corpus's `prod:` tags use. `NAMED_PARAMETERS` is hidden and
+/// `JOIN_QUALIFIER` reads as an `identifier`, as in [`parse`].
+pub(crate) fn production_names() -> Vec<&'static str> {
+    (K::SOURCE_FILE as u16..=K::PARAMETER as u16)
+        .map(|raw| <Lang as rowan::Language>::kind_from_raw(rowan::SyntaxKind(raw)))
+        .filter(|kind| !matches!(kind, K::NAMED_PARAMETERS | K::JOIN_QUALIFIER))
+        .map(node_name)
+        .collect()
+}
+
+/// Whether the parser reported a problem in `source`, and the names of the
+/// named nodes of its tree in preorder.
+pub(crate) fn named_kinds(source: &str) -> (bool, Vec<&'static str>) {
+    let tree = parse(source);
+    let mut kinds = Vec::new();
+    walk(tree.root_node(), |node| {
+        if node.is_named() {
+            kinds.push(node.kind());
+        }
+    });
+    (!tree.problems.is_empty(), kinds)
 }

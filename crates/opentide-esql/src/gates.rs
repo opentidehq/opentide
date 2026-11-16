@@ -9,10 +9,9 @@
 //! noted, its Java builder.
 
 use crate::text;
+use crate::tree::{Node, node_span};
 use crate::version::{Availability, StackTarget};
 use opentide_core::{ByteSpan, Diagnostic, Range, Severity, codes};
-use opentide_syntax::node_span;
-use tree_sitter::Node;
 
 /// One version-gated construct found in the query.
 pub(crate) struct Gate {
@@ -257,7 +256,9 @@ pub(crate) fn syntax_gates(node: Node, source: &str) -> Vec<Gate> {
                 ));
             }
         }
-        "map_expression" => {
+        // A map recovery made up where `{` is missing (`WITH` at the end) is
+        // not one the query wrote: no gate on it.
+        "map_expression" if span.start < span.end => {
             let nested = node.parent().is_some_and(|p| p.kind() == "map_entry");
             let mut cursor = node.walk();
             let entries: Vec<Node> = node
