@@ -8,8 +8,8 @@
 //! plain character, and a `<` that does not start `<n-m>` fails to compile.
 //! There are no inline flags: `(?i)` matches the text `?i`.
 
+use crate::tree::Node;
 use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
-use tree_sitter::Node;
 
 /// The value of an EQL string literal, or `None` for forms the lexer
 /// rejects (those are reported elsewhere).

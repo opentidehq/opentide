@@ -110,11 +110,10 @@ const OPENS: TokenSet = K::set(&[K::L_BRACK, K::BANG_L_BRACK]);
 const CATEGORY_NAMES: TokenSet = K::set(&[K::WORD, K::STRING_TOKEN]);
 const SUBQUERY_STOP: TokenSet = K::set(&[K::R_BRACK, K::PIPE]);
 
-/// The operator levels, from the loosest. `not` and lineage are prefixes at [`NOT`]; their
-/// operand is a comparison or tighter.
+/// The operator levels, from the loosest. `not` and lineage are prefixes between `and` and a
+/// comparison; their operand is a comparison or tighter.
 const OR: u8 = 1;
 const AND: u8 = 2;
-const NOT: u8 = 3;
 const COMPARISON: u8 = 4;
 const ADDITIVE: u8 = 5;
 const MULTIPLICATIVE: u8 = 6;
@@ -160,6 +159,10 @@ pub(crate) fn parse(source: &str) -> Parse {
 }
 
 /// The tree of `source` and its errors as indented text, for the snapshot tests.
+#[allow(
+    dead_code,
+    reason = "the snapshot tests include this file by path and call it; the crate does not"
+)]
 pub(crate) fn debug(source: &str) -> String {
     let parse = parse(source);
     let root = SyntaxNode::new_root(parse.green.clone());
@@ -411,10 +414,6 @@ fn pipe_stage(p: &mut Parser<'_>) {
 }
 
 // ---- Expressions --------------------------------------------------------------------------
-
-pub(crate) fn expr(p: &mut Parser<'_>) {
-    expr_bp(p, OR);
-}
 
 /// The infix level of the current token.
 fn infix(p: &mut Parser<'_>) -> Option<u8> {

@@ -70,6 +70,14 @@ impl SyntaxKind {
         rowan::SyntaxKind(self as u16)
     }
 
+    /// Whitespace or a comment.
+    pub const fn is_trivia(self) -> bool {
+        matches!(
+            self,
+            Self::WHITESPACE | Self::LINE_COMMENT | Self::BLOCK_COMMENT
+        )
+    }
+
     /// The kind of a raw rowan kind (`ERROR` for one that is none of ours).
     pub fn from_raw(raw: rowan::SyntaxKind) -> Self {
         ALL.get(usize::from(raw.0)).copied().unwrap_or(Self::ERROR)
@@ -164,6 +172,10 @@ impl rowan::Language for Lang {
 pub type SyntaxNode = rowan::SyntaxNode<Lang>;
 
 /// A token of an EQL tree.
+#[allow(
+    dead_code,
+    reason = "the typed AST (src/generated/ast.rs) uses it; the analysis does not yet"
+)]
 pub type SyntaxToken = rowan::SyntaxToken<Lang>;
 
 /// The kind of each token of `eql.ungram`.
