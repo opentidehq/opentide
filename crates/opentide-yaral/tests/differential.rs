@@ -569,3 +569,29 @@ fn differential_seeds() {
         differential(seed);
     }
 }
+
+/// A byte order mark before a rule or a search is blank, as tree-sitter read
+/// it: the same diagnostics, tokens and hover as the old engine, and none of
+/// them a syntax error (#1227 review: the new lexer refused it).
+#[test]
+fn a_byte_order_mark_is_blank() {
+    let spray = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../testdata/conformance/specifications-google-secops/rule-google-secops-spray-1.0.yaral"
+    ));
+    for text in [
+        format!("\u{feff}{spray}"),
+        "\u{feff}principal.hostname = \"x\"".to_owned(),
+    ] {
+        let (old, new) = (Old.observe(&text), New.observe(&text));
+        assert_eq!(old, new, "{text:.40}");
+        assert!(verdict(&new), "{new:?}");
+        for offset in 0..=text.len() {
+            assert_eq!(
+                Old.observe_at(&text, offset),
+                New.observe_at(&text, offset),
+                "{text:.40} @ {offset}"
+            );
+        }
+    }
+}

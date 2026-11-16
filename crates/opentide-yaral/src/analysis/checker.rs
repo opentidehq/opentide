@@ -816,7 +816,9 @@ impl<'s> Checker<'s> {
     /// `yaral_outcome_aggregation` on an outcome's value, in a rule or search
     /// with `match`: event fields, and placeholders that are not `match`
     /// variables, are read through an aggregation (outcome-syntax,
-    /// "Aggregations").
+    /// "Aggregations"). A loop over the value's nodes in source order, with
+    /// whether each sits inside an aggregation: never a frame per tree level,
+    /// since a run of comparisons nests thousands deep.
     fn aggregation(
         &mut self,
         node: &SyntaxNode,
@@ -824,17 +826,39 @@ impl<'s> Checker<'s> {
         matched: &BTreeSet<String>,
         inside: bool,
     ) {
+        let mut stack = vec![(node.clone(), inside)];
+        while let Some((node, inside)) = stack.pop() {
+            self.aggregation_at(&node, scope, matched, inside, &mut stack);
+        }
+    }
+
+    /// [`Checker::aggregation`] on one node; what it holds goes on `stack`,
+    /// the first child on top.
+    fn aggregation_at(
+        &mut self,
+        node: &SyntaxNode,
+        scope: &Scope,
+        matched: &BTreeSet<String>,
+        inside: bool,
+        stack: &mut Vec<(SyntaxNode, bool)>,
+    ) {
         match node.kind() {
             K::FUNCTION_CALL => {
                 let name = self.function_name(node);
                 let aggregate = Functions::cached()
                     .get(&name)
                     .is_some_and(|f| f.aggregation || name.starts_with("window."));
-                for child in node.children().filter(|c| c.kind() == K::ARGUMENTS) {
-                    for argument in child.children() {
-                        self.aggregation(&argument, scope, matched, inside || aggregate);
-                    }
-                }
+                let arguments: Vec<SyntaxNode> = node
+                    .children()
+                    .filter(|c| c.kind() == K::ARGUMENTS)
+                    .flat_map(|c| c.children())
+                    .collect();
+                stack.extend(
+                    arguments
+                        .into_iter()
+                        .rev()
+                        .map(|a| (a, inside || aggregate)),
+                );
             }
             K::UDM_FIELD | K::BARE_FIELD if !inside => {
                 let root = root_variable(node).map(|v| self.text(&v).to_string());
@@ -879,9 +903,8 @@ impl<'s> Checker<'s> {
             }
             K::NAMED_ARGUMENT => {}
             _ => {
-                for child in node.children() {
-                    self.aggregation(&child, scope, matched, inside);
-                }
+                let children: Vec<SyntaxNode> = node.children().collect();
+                stack.extend(children.into_iter().rev().map(|c| (c, inside)));
             }
         }
     }
@@ -987,15 +1010,18 @@ impl<'s> Checker<'s> {
         }
     }
 
-    /// The operands of an `or` chain, through parentheses that hold an `or`.
+    /// The operands of an `or` chain, through parentheses that hold an `or`,
+    /// in source order; a loop, not a frame per level.
     fn or_operands(node: &SyntaxNode, out: &mut Vec<SyntaxNode>) {
-        let inner = unparen(node.clone());
-        if inner.kind() == K::OR_EXPR {
-            for child in inner.children() {
-                Self::or_operands(&child, out);
+        let mut stack = vec![node.clone()];
+        while let Some(node) = stack.pop() {
+            let inner = unparen(node.clone());
+            if inner.kind() == K::OR_EXPR {
+                let children: Vec<SyntaxNode> = inner.children().collect();
+                stack.extend(children.into_iter().rev());
+            } else {
+                out.push(node);
             }
-        } else {
-            out.push(node.clone());
         }
     }
 

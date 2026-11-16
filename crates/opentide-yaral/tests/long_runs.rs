@@ -132,6 +132,29 @@ fn deep_valid_input_is_clean() {
     }
 }
 
+/// An outcome's value in a rule with `match` is checked for aggregations
+/// over every node: a run of 4,000 comparisons (4,000 tree levels) inside
+/// `max(...)`, `if(...)` or parentheses overflowed a 1 MB stack when the
+/// check recursed per level (#1227 review).
+#[test]
+fn deep_outcome_values_with_match_are_clean() {
+    let chain = vec!["$e.principal.ip"; 4_000].join(" = ");
+    for value in [
+        format!("max({chain})"),
+        format!("max(if({chain}, 1, 0))"),
+        format!("max(({chain}))"),
+    ] {
+        let source = format!(
+            "rule r {{\n  meta:\n    author = \"x\"\n  events:\n    $e.principal.hostname = $h\n  match:\n    $h over 5m\n  outcome:\n    $x = {value}\n  condition:\n    $e\n}}\n"
+        );
+        let found = every_entry_point(source);
+        assert!(
+            !found.iter().any(|d| d.code == "yaral_parse_error"),
+            "{found:?}"
+        );
+    }
+}
+
 /// Past the limits, one syntax error each and no overflow: 1,100 levels of
 /// nesting, and the toolkit's 4,096 tree levels (a run of comparisons).
 #[test]
