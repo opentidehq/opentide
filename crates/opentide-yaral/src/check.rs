@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use tree_sitter::{Node, Tree};
 
 /// Section order of yara-l-1.0 "Sections"; `select` and `unselect` share 12.
-fn section_rank(name: &str) -> u8 {
+pub(crate) fn section_rank(name: &str) -> u8 {
     match name {
         "meta" => 1,
         "setup" => 2,
@@ -26,7 +26,7 @@ fn section_rank(name: &str) -> u8 {
     }
 }
 
-fn in_profile(name: &str, profile: Profile) -> bool {
+pub(crate) fn in_profile(name: &str, profile: Profile) -> bool {
     match profile {
         Profile::Rule => matches!(
             name,
@@ -38,18 +38,18 @@ fn in_profile(name: &str, profile: Profile) -> bool {
 }
 
 /// The most `in` statements of each kind (total, regex, cidr).
-fn reference_limits(profile: Profile) -> (usize, usize, usize) {
+pub(crate) fn reference_limits(profile: Profile) -> (usize, usize, usize) {
     match profile {
         Profile::Rule => (10, 5, 5),
         Profile::Search => (7, 4, 2),
     }
 }
 
-const MAX_OUTCOMES: usize = 20;
+pub(crate) const MAX_OUTCOMES: usize = 20;
 
 /// A search's grouped fields: aliases for groups of UDM fields
 /// (search-syntax-reference, "Search grouped fields").
-const GROUPED_FIELDS: &[&str] = &[
+pub(crate) const GROUPED_FIELDS: &[&str] = &[
     "domain",
     "email",
     "file_path",
@@ -60,7 +60,7 @@ const GROUPED_FIELDS: &[&str] = &[
     "process_id",
     "user",
 ];
-const DAY: u64 = 24 * 60;
+pub(crate) const DAY: u64 = 24 * 60;
 
 #[derive(Clone, Copy)]
 struct Section<'t> {
@@ -141,7 +141,7 @@ fn named_children(node: Node<'_>) -> Vec<Node<'_>> {
 }
 
 /// A duration's minutes, and its unit.
-fn duration(text: &str) -> Option<(u64, &str)> {
+pub(crate) fn duration(text: &str) -> Option<(u64, &str)> {
     let digits = text.chars().take_while(char::is_ascii_digit).count();
     let amount: u64 = text[..digits].parse().ok()?;
     let unit = &text[digits..];
@@ -157,7 +157,7 @@ fn duration(text: &str) -> Option<(u64, &str)> {
     Some((amount.saturating_mul(per), unit))
 }
 
-fn format_minutes(minutes: u64) -> String {
+pub(crate) fn format_minutes(minutes: u64) -> String {
     if minutes.is_multiple_of(DAY) && minutes >= 7 * DAY {
         format!("{}d", minutes / DAY)
     } else if minutes.is_multiple_of(60) {
@@ -332,7 +332,7 @@ pub(crate) fn regex_problem(pattern: &str) -> Option<String> {
 }
 
 /// A pattern that starts with `.*` and has no anchor.
-fn leading_wildcard(pattern: &str) -> bool {
+pub(crate) fn leading_wildcard(pattern: &str) -> bool {
     let mut p = pattern;
     // Inline flags first: `(?i).*x`.
     while let Some(rest) = p.strip_prefix("(?") {
@@ -2064,7 +2064,7 @@ impl<'s> Checker<'s> {
 }
 
 impl Profile {
-    fn noun(self) -> &'static str {
+    pub(crate) fn noun(self) -> &'static str {
         match self {
             Profile::Rule => "rule",
             Profile::Search => "search",

@@ -1,0 +1,54 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(\"a.b <= 1 and a.c != x and a.d == y and a.e > z\")"
+---
+source_file@0..46
+  and_expression@0..46
+    comparison@0..8
+      field@0..3
+        field_name@0..3 "a.b"
+      whitespace@3..4 " "
+      comparison_operator@4..6
+        other@4..5 "<"
+        =@5..6 "="
+      whitespace@6..7 " "
+      bare_string@7..8
+        number@7..8 "1"
+    whitespace@8..9 " "
+    and@9..12 "and"
+    whitespace@12..13 " "
+    comparison@13..21
+      field@13..16
+        field_name@13..16 "a.c"
+      whitespace@16..17 " "
+      comparison_operator@17..19
+        other@17..18 "!"
+        =@18..19 "="
+      whitespace@19..20 " "
+      bare_string@20..21
+        identifier@20..21 "x"
+    whitespace@21..22 " "
+    and@22..25 "and"
+    whitespace@25..26 " "
+    comparison@26..34
+      field@26..29
+        field_name@26..29 "a.d"
+      whitespace@29..30 " "
+      comparison_operator@30..32
+        =@30..31 "="
+        =@31..32 "="
+      whitespace@32..33 " "
+      bare_string@33..34
+        identifier@33..34 "y"
+    whitespace@34..35 " "
+    and@35..38 "and"
+    whitespace@38..39 " "
+    comparison@39..46
+      field@39..42
+        field_name@39..42 "a.e"
+      whitespace@42..43 " "
+      comparison_operator@43..44
+        other@43..44 ">"
+      whitespace@44..45 " "
+      bare_string@45..46
+        identifier@45..46 "z"

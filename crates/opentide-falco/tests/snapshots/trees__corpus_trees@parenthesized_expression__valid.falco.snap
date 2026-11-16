@@ -1,0 +1,42 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/parenthesized_expression__valid.falco
+---
+source_file@0..66
+  parenthesized_expression@0..66
+    (@0..1 "("
+    and_expression@1..65
+      comparison@1..36
+        field@1..9
+          field_name@1..9 "evt.type"
+        whitespace@9..10 " "
+        list_operator@10..12
+          identifier@10..12 "in"
+        whitespace@12..13 " "
+        value_list@13..36
+          (@13..14 "("
+          bare_string@14..18
+            identifier@14..18 "open"
+          ,@18..19 ","
+          whitespace@19..20 " "
+          bare_string@20..26
+            identifier@20..26 "openat"
+          ,@26..27 ","
+          whitespace@27..28 " "
+          bare_string@28..35
+            identifier@28..35 "openat2"
+          )@35..36 ")"
+      whitespace@36..37 " "
+      and@37..40 "and"
+      whitespace@40..41 " "
+      comparison@41..65
+        field@41..58
+          field_name@41..58 "evt.is_open_write"
+        whitespace@58..59 " "
+        comparison_operator@59..60
+          =@59..60 "="
+        whitespace@60..61 " "
+        bare_string@61..65
+          identifier@61..65 "true"
+    )@65..66 ")"

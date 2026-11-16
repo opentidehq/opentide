@@ -1,0 +1,20 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/phrase_query__invalid.lucene
+---
+SourceFile@0..21
+  BooleanQuery@0..21
+    FieldQuery@0..8
+      FieldName@0..7
+        Term@0..7 "message"
+      Colon@7..8 ":"
+    Error@8..9
+      ErrorToken@8..9 "\""
+    TermQuery@9..15
+      Term@9..15 "failed"
+    Whitespace@15..16 " "
+    TermQuery@16..21
+      Term@16..21 "login"
+8..8: missing a clause (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, AmpAmp, PipePipe, LParen, LBracket, LBrace)
+8..8: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, AndKw, OrKw, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)

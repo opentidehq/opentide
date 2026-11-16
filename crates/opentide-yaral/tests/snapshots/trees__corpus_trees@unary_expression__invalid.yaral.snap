@@ -1,0 +1,15 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/unary_expression__invalid.yaral
+---
+SOURCE_FILE@0..35
+  COMMENT@0..32 "// prod:unary_expression invalid"
+  WHITESPACE@32..33 "\n"
+  SEARCH_QUERY@33..34
+    SEARCH_EVENTS@33..34
+      UNARY_EXPR@33..34
+        BANG@33..34 "!"
+  WHITESPACE@34..35 "\n"
+errors:
+34..35: expected an expression

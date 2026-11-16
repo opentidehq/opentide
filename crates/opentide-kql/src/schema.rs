@@ -27,6 +27,8 @@ use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
 use std::collections::{BTreeSet, HashMap};
 use tree_sitter::Node;
 
+pub(crate) mod new_tree;
+
 /// The operator that made a column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MadeBy {
@@ -510,82 +512,11 @@ impl<'a> Pass<'a> {
 
     /// A table, `let`-bound tabular value or ASIM parser named by `word`.
     fn named_source(&self, word: &str, scope: &Scope) -> Option<Schema> {
-        if let Some(schema) = scope.tabular.get(word) {
-            return Some(schema.clone());
-        }
-        if scope.binds(word) {
-            return None;
-        }
-        self.table_schema(word).or_else(|| self.asim_schema(word))
-    }
-
-    fn table_schema(&self, name: &str) -> Option<Schema> {
-        let table = self.catalog.table(name)?;
-        let columns: Vec<Column> = self
-            .catalog
-            .columns_for_table(name)
-            .into_iter()
-            .filter(|c| c.table == name)
-            .map(|c| {
-                Column::new(c.name.clone(), c.type_name.clone())
-                    .with_origin(Origin::Table(name.to_string()))
-            })
-            .collect();
-        // The documented columns are reliable but not complete: tables gain
-        // columns before the reference lists them. A near miss of one is a
-        // typo; any other name is left alone.
-        let known = if table.documented {
-            Known::Typos
-        } else {
-            Known::Open
-        };
-        let mut schema = Schema {
-            columns,
-            known,
-            source: Source::Table(name.to_string()),
-            custom_columns: true,
-            citation: table.citation.clone(),
-            ..Schema::open()
-        };
-        // Every Log Analytics table has the standard columns.
-        if self.catalog.profile == Profile::Sentinel && table.documented {
-            for (column, type_name) in tables::STANDARD_COLUMNS {
-                if !schema.has(column) {
-                    schema.columns.push(
-                        Column::new(*column, Some((*type_name).to_string()))
-                            .with_origin(Origin::Table(name.to_string())),
-                    );
-                }
-            }
-        }
-        Some(schema)
+        source_schema(self.catalog, word, &scope.tabular, scope.binds(word))
     }
 
     fn asim_schema(&self, name: &str) -> Option<Schema> {
-        let parser = self.catalog.asim_parser(name)?;
-        let asim = tables::asim();
-        let schema = asim.schemas.get(&parser.schema)?;
-        Some(Schema {
-            columns: schema
-                .columns
-                .iter()
-                .map(|c| {
-                    Column::new(c.name.clone(), Some(c.type_name.clone())).with_origin(
-                        Origin::Asim {
-                            schema: parser.schema.clone(),
-                            class: c.class.clone(),
-                        },
-                    )
-                })
-                .collect(),
-            known: Known::Typos,
-            source: Source::Asim {
-                parser: parser.name.clone(),
-                schema: parser.schema.clone(),
-            },
-            citation: schema.citation.clone(),
-            ..Schema::open()
-        })
+        asim_schema(self.catalog, name)
     }
 
     // --- tabular expressions ---------------------------------------------
@@ -794,54 +725,7 @@ impl<'a> Pass<'a> {
                 _ => {}
             }
         }
-        let mut out = Schema::closed(Vec::new(), Source::Union);
-        let mut types: HashMap<String, Option<String>> = HashMap::new();
-        let mut conflicts = BTreeSet::new();
-        for leg in &legs {
-            out.weaken(leg.known);
-            out.custom_columns |= leg.custom_columns;
-            for column in &leg.columns {
-                match types.get(&column.name) {
-                    None => {
-                        types.insert(column.name.clone(), column.type_name.clone());
-                        out.columns.push(column.clone());
-                    }
-                    Some(t) if *t != column.type_name => {
-                        conflicts.insert(column.name.clone());
-                    }
-                    Some(_) => {}
-                }
-            }
-        }
-        // A name with two types becomes one column per type (`A_string`,
-        // `A_long`); with a type the pass does not know, it cannot name them.
-        for name in conflicts {
-            let mut kinds: Vec<Option<String>> = legs
-                .iter()
-                .filter_map(|leg| leg.column(&name).map(|c| c.type_name.clone()))
-                .collect();
-            kinds.dedup();
-            out.columns.retain(|c| c.name != name);
-            if kinds.iter().any(Option::is_none) {
-                out.make_open();
-                continue;
-            }
-            for kind in kinds.into_iter().flatten() {
-                let renamed = format!("{name}_{kind}");
-                if !out.has(&renamed) {
-                    out.columns.push(Column::new(renamed, Some(kind)));
-                }
-            }
-        }
-        if let Some(name) = withsource {
-            out.set(Column::new(name, Some("string".into())));
-        }
-        // A union of narrowed legs (`let`s that end in project or summarize) is narrow.
-        out.narrowed = !legs.is_empty() && legs.iter().all(|leg| leg.narrowed);
-        if legs.is_empty() {
-            out.make_open();
-        }
-        out
+        merge_union(&legs, withsource)
     }
 
     // --- operators --------------------------------------------------------
@@ -1366,59 +1250,18 @@ impl<'a> Pass<'a> {
             .children_by_field_name("arguments", &mut cursor)
             .filter(|n| n.is_named())
             .collect();
-        let first = || {
-            args.first()
-                .copied()
-                .and_then(simple_ident)
-                .map(|n| self.text(n).to_string())
-        };
-        let typed = |column: &str| input.column(column).and_then(|c| c.type_name.clone());
-        let one =
-            |name: String, type_name: Option<String>| Some(vec![Column::new(name, type_name)]);
-        match name.as_str() {
-            "count" => one("count_".into(), Some("long".into())),
-            "countif" => one("countif_".into(), Some("long".into())),
-            "make_bag" | "make_bag_if" => one("bag_".into(), Some("dynamic".into())),
-            "dcount" | "dcountif" => one(format!("{name}_{}", first()?), Some("long".into())),
-            "sum" | "sumif" | "min" | "max" | "minif" | "maxif" => {
-                let column = first()?;
-                let type_name = typed(&column);
-                one(format!("{name}_{column}"), type_name)
-            }
-            "avg" | "avgif" | "stdev" | "stdevif" | "variance" | "varianceif" => {
-                one(format!("{name}_{}", first()?), Some("real".into()))
-            }
-            "make_set" | "make_set_if" => one(format!("set_{}", first()?), Some("dynamic".into())),
-            "make_list" | "make_list_if" => {
-                one(format!("list_{}", first()?), Some("dynamic".into()))
-            }
-            "take_any" => {
-                let column = first()?;
-                let type_name = typed(&column);
-                one(column, type_name)
-            }
-            "arg_max" | "arg_min" => {
-                let mut out = Vec::new();
-                for arg in &args {
-                    if arg.kind() == "star" {
-                        for column in &input.columns {
-                            if !out.iter().any(|c: &Column| c.name == column.name) {
-                                out.push(Column::new(
-                                    column.name.clone(),
-                                    column.type_name.clone(),
-                                ));
-                            }
-                        }
-                        continue;
-                    }
-                    let column = simple_ident(*arg).map(|n| self.text(n).to_string())?;
-                    let type_name = typed(&column);
-                    out.push(Column::new(column, type_name));
+        let args: Vec<AggArg> = args
+            .iter()
+            .map(|arg| {
+                if arg.kind() == "star" {
+                    AggArg::Star
+                } else {
+                    simple_ident(*arg)
+                        .map_or(AggArg::Other, |n| AggArg::Name(self.text(n).to_string()))
                 }
-                Some(out)
-            }
-            _ => None,
-        }
+            })
+            .collect();
+        aggregate_columns_for(&name, &args, input)
     }
 
     fn join(&mut self, op: Node, left: Schema, scope: &Scope, made_by: MadeBy) -> Schema {
@@ -1632,59 +1475,19 @@ impl<'a> Pass<'a> {
     /// The type of a simple expression, when it is plain.
     fn type_of(&self, expr: Node, input: &Schema) -> Option<String> {
         let node = simple_primary(expr)?;
-        match node.kind() {
-            "identifier" | "quoted_identifier" => input.column(self.text(node))?.type_name.clone(),
-            "string" => Some("string".into()),
-            "boolean" => Some("bool".into()),
-            "timespan" => Some("timespan".into()),
-            "dynamic_literal" => Some("dynamic".into()),
-            // `datetime(2024-01-01)`, `long(null)`: the literal's type.
-            "typed_literal" => {
-                let text = self.text(node);
-                let name = text[..text.find('(')?].trim().to_ascii_lowercase();
-                Some(match name.as_str() {
-                    "date" => "datetime".into(),
-                    "time" => "timespan".into(),
-                    "double" => "real".into(),
-                    "boolean" => "bool".into(),
-                    "uniqueid" => "guid".into(),
-                    other => other.to_string(),
-                })
-            }
-            "number" => Some(if self.text(node).contains(['.', 'e', 'E']) {
-                "real".into()
-            } else {
-                "long".into()
-            }),
-            "function_call" => {
-                let name = self
-                    .text(node.child_by_field_name("name")?)
-                    .to_ascii_lowercase();
-                let t = match name.as_str() {
-                    "tostring" | "tolower" | "toupper" | "strcat" | "trim" | "substring"
-                    | "replace_string" | "extract" | "strcat_delim" | "format_datetime" => "string",
-                    "toint" => "int",
-                    "tolong" | "strlen" | "array_length" => "long",
-                    "todouble" | "toreal" => "real",
-                    "tobool" | "toboolean" | "isempty" | "isnotempty" | "isnull" | "isnotnull" => {
-                        "bool"
-                    }
-                    "todatetime" | "now" | "ago" | "datetime" => "datetime",
-                    "count" | "countif" | "dcount" | "dcountif" => "long",
-                    "make_set" | "make_list" | "make_bag" | "make_set_if" | "make_list_if" => {
-                        "dynamic"
-                    }
-                    "avg" | "avgif" | "stdev" | "variance" => "real",
-                    "totimespan" => "timespan",
-                    "todynamic" | "parse_json" | "pack" | "bag_pack" | "pack_array" | "split" => {
-                        "dynamic"
-                    }
-                    _ => return None,
-                };
-                Some(t.into())
-            }
-            _ => None,
-        }
+        let text = self.text(node);
+        let primary = match node.kind() {
+            "identifier" | "quoted_identifier" => Primary::Name(text),
+            "string" => Primary::String,
+            "boolean" => Primary::Boolean,
+            "timespan" => Primary::Timespan,
+            "dynamic_literal" => Primary::Dynamic,
+            "typed_literal" => Primary::Typed(text),
+            "number" => Primary::Number(text),
+            "function_call" => Primary::Call(self.text(node.child_by_field_name("name")?)),
+            _ => return None,
+        };
+        primary_type(&primary, input)
     }
 
     fn expression(&mut self, node: Node, ctx: Ctx, scope: &Scope, op: ByteSpan, extra: &[&str]) {
@@ -1781,15 +1584,7 @@ impl<'a> Pass<'a> {
             Ctx::One(s) => vec![s],
             Ctx::Join(l, r) => vec![l, r],
         };
-        // A join key (`on Key`) must be on both sides.
-        let found = if schemas
-            .iter()
-            .all(|s| s.has(name) || s.known == Known::Open)
-        {
-            schemas.iter().find_map(|s| s.column(name)).cloned()
-        } else {
-            None
-        };
+        let found = resolve_column(name, &schemas);
         if self.quiet == 0 {
             self.out.references.push(Reference {
                 name: name.to_string(),
@@ -1801,60 +1596,9 @@ impl<'a> Pass<'a> {
         if found.is_some() || self.quiet > 0 || !self.diagnose {
             return;
         }
-        // A join key must be on both sides; report against the first that lacks it.
-        let Some(schema) = schemas
-            .into_iter()
-            .find(|s| !s.has(name) && s.known != Known::Open)
-        else {
-            return;
-        };
-        if schema.custom_columns && tables::is_custom_column(name) {
-            return;
+        if let Some(d) = unknown_column(name, &schemas, span_to_range(self.source, span)) {
+            self.out.diagnostics.push(d);
         }
-        // A column an operator removed is gone, whatever the source documents.
-        if let Some(op) = schema.removed.get(name) {
-            self.out.diagnostics.push(Diagnostic::error(
-                codes::KQL_UNKNOWN_COLUMN,
-                format!("'{name}' is not a column after `{}`", operator_keyword(op)),
-                span_to_range(self.source, span),
-            ));
-            return;
-        }
-        // A near miss is within two edits (strsim's Levenshtein distance,
-        // ignoring case) and less than half the name: the threshold decides
-        // whether a documented table reports the column at all
-        // (`Known::Typos`). Among the columns within it, the shared rule
-        // chooses ([`opentide_core::suggest::best`]).
-        let lower = name.to_ascii_lowercase();
-        let suggestion = opentide_core::suggest::best(
-            name,
-            schema.columns.iter().map(|c| c.name.as_str()).filter(|c| {
-                let d = strsim::levenshtein(&c.to_ascii_lowercase(), &lower);
-                d <= 2 && d * 2 < name.len()
-            }),
-        )
-        .map(str::to_string);
-        let report = match schema.known {
-            Known::Closed => true,
-            Known::Typos => suggestion.is_some(),
-            Known::Open => false,
-        };
-        if !report {
-            return;
-        }
-        let message = match schema.reshaped_by {
-            Some(op) => format!("'{name}' is not a column after `{}`", operator_keyword(op)),
-            None => format!("'{name}' is not a column of {}", schema.describe_source()),
-        };
-        let mut d = Diagnostic::error(
-            codes::KQL_UNKNOWN_COLUMN,
-            message,
-            span_to_range(self.source, span),
-        );
-        if let Some(s) = suggestion {
-            d = d.with_suggestion(s);
-        }
-        self.out.diagnostics.push(d);
     }
 
     fn define(&mut self, node: Node, column: &Column) {
@@ -1922,53 +1666,19 @@ impl<'a> Pass<'a> {
             }
         };
         let op = operator.as_str();
-        let mut found: Option<(String, String)> = None;
-        if STRING_OPERATORS.contains(&op) || STRING_SET_OPERATORS.contains(&op) {
-            if let Some((column, kind)) = column_of(self, left)
-                && (NUMERIC.contains(&kind.as_str())
-                    || matches!(kind.as_str(), "datetime" | "timespan" | "bool"))
-            {
-                found = Some((column, kind));
-            }
-        } else if op == "between" || op == "!between" {
-            if let Some((column, kind)) = column_of(self, left)
-                && matches!(kind.as_str(), "string" | "bool" | "guid")
-            {
-                found = Some((column, kind));
-            }
-        } else if ORDERING.contains(&op)
-            && let Some(right) = right
-        {
-            let pairs = [(left, right), (right, left)];
-            for (c, l) in pairs {
-                let (Some((column, kind)), Some(lit)) = (column_of(self, c), literal(self, l))
-                else {
-                    continue;
-                };
-                let bad = match kind.as_str() {
-                    "string" | "guid" | "datetime" | "timespan" => true,
-                    k if NUMERIC.contains(&k) => lit == "string",
-                    _ => false,
-                };
-                if bad {
-                    found = Some((column, kind));
-                    break;
-                }
-            }
-        }
+        let found = type_mismatch(
+            op,
+            column_of(self, left),
+            right.and_then(|r| column_of(self, r)),
+            literal(self, left),
+            right.and_then(|r| literal(self, r)),
+        );
         let Some((column, kind)) = found else {
             return;
         };
         self.out.diagnostics.push(Diagnostic::error(
             codes::KQL_TYPE_MISMATCH,
-            format!(
-                "`{op}` is not defined for `{column}`, {} {kind} column; Kusto rejects the query",
-                if kind.starts_with(['a', 'e', 'i', 'o', 'u']) {
-                    "an"
-                } else {
-                    "a"
-                }
-            ),
+            mismatch_message(op, &column, &kind),
             span_to_range(self.source, op_span),
         ));
     }
@@ -2096,6 +1806,398 @@ pub(crate) fn unquote_name(text: &str) -> &str {
 /// The call an expression is, if it is a bare call.
 pub(crate) fn simple_call(node: Node) -> Option<Node> {
     simple_primary(node).filter(|n| n.kind() == "function_call")
+}
+
+/// A table, `let`-bound tabular value or ASIM parser named by `word`; `binds`
+/// when a scope binds the word to something else.
+pub(crate) fn source_schema(
+    catalog: &Catalog,
+    word: &str,
+    tabular: &HashMap<String, Schema>,
+    binds: bool,
+) -> Option<Schema> {
+    if let Some(schema) = tabular.get(word) {
+        return Some(schema.clone());
+    }
+    if binds {
+        return None;
+    }
+    table_schema(catalog, word).or_else(|| asim_schema(catalog, word))
+}
+
+fn table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
+    let table = catalog.table(name)?;
+    let columns: Vec<Column> = catalog
+        .columns_for_table(name)
+        .into_iter()
+        .filter(|c| c.table == name)
+        .map(|c| {
+            Column::new(c.name.clone(), c.type_name.clone())
+                .with_origin(Origin::Table(name.to_string()))
+        })
+        .collect();
+    // The documented columns are reliable but not complete: tables gain
+    // columns before the reference lists them. A near miss of one is a
+    // typo; any other name is left alone.
+    let known = if table.documented {
+        Known::Typos
+    } else {
+        Known::Open
+    };
+    let mut schema = Schema {
+        columns,
+        known,
+        source: Source::Table(name.to_string()),
+        custom_columns: true,
+        citation: table.citation.clone(),
+        ..Schema::open()
+    };
+    // Every Log Analytics table has the standard columns.
+    if catalog.profile == Profile::Sentinel && table.documented {
+        for (column, type_name) in tables::STANDARD_COLUMNS {
+            if !schema.has(column) {
+                schema.columns.push(
+                    Column::new(*column, Some((*type_name).to_string()))
+                        .with_origin(Origin::Table(name.to_string())),
+                );
+            }
+        }
+    }
+    Some(schema)
+}
+
+pub(crate) fn asim_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
+    let parser = catalog.asim_parser(name)?;
+    let asim = tables::asim();
+    let schema = asim.schemas.get(&parser.schema)?;
+    Some(Schema {
+        columns: schema
+            .columns
+            .iter()
+            .map(|c| {
+                Column::new(c.name.clone(), Some(c.type_name.clone())).with_origin(Origin::Asim {
+                    schema: parser.schema.clone(),
+                    class: c.class.clone(),
+                })
+            })
+            .collect(),
+        known: Known::Typos,
+        source: Source::Asim {
+            parser: parser.name.clone(),
+            schema: parser.schema.clone(),
+        },
+        citation: schema.citation.clone(),
+        ..Schema::open()
+    })
+}
+
+/// The schema of a `union` of `legs`, with the `withsource` column.
+pub(crate) fn merge_union(legs: &[Schema], withsource: Option<String>) -> Schema {
+    let mut out = Schema::closed(Vec::new(), Source::Union);
+    let mut types: HashMap<String, Option<String>> = HashMap::new();
+    let mut conflicts = BTreeSet::new();
+    for leg in legs {
+        out.weaken(leg.known);
+        out.custom_columns |= leg.custom_columns;
+        for column in &leg.columns {
+            match types.get(&column.name) {
+                None => {
+                    types.insert(column.name.clone(), column.type_name.clone());
+                    out.columns.push(column.clone());
+                }
+                Some(t) if *t != column.type_name => {
+                    conflicts.insert(column.name.clone());
+                }
+                Some(_) => {}
+            }
+        }
+    }
+    // A name with two types becomes one column per type (`A_string`,
+    // `A_long`); with a type the pass does not know, it cannot name them.
+    for name in conflicts {
+        let mut kinds: Vec<Option<String>> = legs
+            .iter()
+            .filter_map(|leg| leg.column(&name).map(|c| c.type_name.clone()))
+            .collect();
+        kinds.dedup();
+        out.columns.retain(|c| c.name != name);
+        if kinds.iter().any(Option::is_none) {
+            out.make_open();
+            continue;
+        }
+        for kind in kinds.into_iter().flatten() {
+            let renamed = format!("{name}_{kind}");
+            if !out.has(&renamed) {
+                out.columns.push(Column::new(renamed, Some(kind)));
+            }
+        }
+    }
+    if let Some(name) = withsource {
+        out.set(Column::new(name, Some("string".into())));
+    }
+    // A union of narrowed legs (`let`s that end in project or summarize) is narrow.
+    out.narrowed = !legs.is_empty() && legs.iter().all(|leg| leg.narrowed);
+    if legs.is_empty() {
+        out.make_open();
+    }
+    out
+}
+
+/// An argument of an aggregate call, as its naming reads it.
+pub(crate) enum AggArg {
+    /// `*`
+    Star,
+    /// A bare column.
+    Name(String),
+    /// Anything else.
+    Other,
+}
+
+/// The columns an unnamed aggregate `name(args)` makes (lower-case `name`), as
+/// Kusto names them; `None` when the naming is not modelled.
+pub(crate) fn aggregate_columns_for(
+    name: &str,
+    args: &[AggArg],
+    input: &Schema,
+) -> Option<Vec<Column>> {
+    let first = || match args.first() {
+        Some(AggArg::Name(name)) => Some(name.clone()),
+        _ => None,
+    };
+    let typed = |column: &str| input.column(column).and_then(|c| c.type_name.clone());
+    let one = |name: String, type_name: Option<String>| Some(vec![Column::new(name, type_name)]);
+    match name {
+        "count" => one("count_".into(), Some("long".into())),
+        "countif" => one("countif_".into(), Some("long".into())),
+        "make_bag" | "make_bag_if" => one("bag_".into(), Some("dynamic".into())),
+        "dcount" | "dcountif" => one(format!("{name}_{}", first()?), Some("long".into())),
+        "sum" | "sumif" | "min" | "max" | "minif" | "maxif" => {
+            let column = first()?;
+            let type_name = typed(&column);
+            one(format!("{name}_{column}"), type_name)
+        }
+        "avg" | "avgif" | "stdev" | "stdevif" | "variance" | "varianceif" => {
+            one(format!("{name}_{}", first()?), Some("real".into()))
+        }
+        "make_set" | "make_set_if" => one(format!("set_{}", first()?), Some("dynamic".into())),
+        "make_list" | "make_list_if" => one(format!("list_{}", first()?), Some("dynamic".into())),
+        "take_any" => {
+            let column = first()?;
+            let type_name = typed(&column);
+            one(column, type_name)
+        }
+        "arg_max" | "arg_min" => {
+            let mut out = Vec::new();
+            for arg in args {
+                let column = match arg {
+                    AggArg::Star => {
+                        for column in &input.columns {
+                            if !out.iter().any(|c: &Column| c.name == column.name) {
+                                out.push(Column::new(
+                                    column.name.clone(),
+                                    column.type_name.clone(),
+                                ));
+                            }
+                        }
+                        continue;
+                    }
+                    AggArg::Name(name) => name.clone(),
+                    AggArg::Other => return None,
+                };
+                let type_name = typed(&column);
+                out.push(Column::new(column, type_name));
+            }
+            Some(out)
+        }
+        _ => None,
+    }
+}
+
+/// A plain expression, as [`primary_type`] reads it.
+pub(crate) enum Primary<'s> {
+    /// A column (unquoted).
+    Name(&'s str),
+    String,
+    Boolean,
+    Timespan,
+    Dynamic,
+    /// `datetime(2024-01-01)`: the literal's text.
+    Typed(&'s str),
+    /// The number's text.
+    Number(&'s str),
+    /// A call: the function's name.
+    Call(&'s str),
+}
+
+/// The type of a plain expression, when the pass knows it.
+pub(crate) fn primary_type(primary: &Primary<'_>, input: &Schema) -> Option<String> {
+    match primary {
+        Primary::Name(name) => input.column(name)?.type_name.clone(),
+        Primary::String => Some("string".into()),
+        Primary::Boolean => Some("bool".into()),
+        Primary::Timespan => Some("timespan".into()),
+        Primary::Dynamic => Some("dynamic".into()),
+        // `datetime(2024-01-01)`, `long(null)`: the literal's type.
+        Primary::Typed(text) => {
+            let name = text[..text.find('(')?].trim().to_ascii_lowercase();
+            Some(match name.as_str() {
+                "date" => "datetime".into(),
+                "time" => "timespan".into(),
+                "double" => "real".into(),
+                "boolean" => "bool".into(),
+                "uniqueid" => "guid".into(),
+                other => other.to_string(),
+            })
+        }
+        Primary::Number(text) => Some(if text.contains(['.', 'e', 'E']) {
+            "real".into()
+        } else {
+            "long".into()
+        }),
+        Primary::Call(name) => {
+            let name = name.to_ascii_lowercase();
+            let t = match name.as_str() {
+                "tostring" | "tolower" | "toupper" | "strcat" | "trim" | "substring"
+                | "replace_string" | "extract" | "strcat_delim" | "format_datetime" => "string",
+                "toint" => "int",
+                "tolong" | "strlen" | "array_length" => "long",
+                "todouble" | "toreal" => "real",
+                "tobool" | "toboolean" | "isempty" | "isnotempty" | "isnull" | "isnotnull" => {
+                    "bool"
+                }
+                "todatetime" | "now" | "ago" | "datetime" => "datetime",
+                "count" | "countif" | "dcount" | "dcountif" => "long",
+                "make_set" | "make_list" | "make_bag" | "make_set_if" | "make_list_if" => "dynamic",
+                "avg" | "avgif" | "stdev" | "variance" => "real",
+                "totimespan" => "timespan",
+                "todynamic" | "parse_json" | "pack" | "bag_pack" | "pack_array" | "split" => {
+                    "dynamic"
+                }
+                _ => return None,
+            };
+            Some(t.into())
+        }
+    }
+}
+
+/// The column and type a comparison `left op right` uses wrongly
+/// (`kql_type_mismatch`), from the column each side is and the literal each
+/// side is.
+pub(crate) fn type_mismatch(
+    op: &str,
+    left_column: Option<(String, String)>,
+    right_column: Option<(String, String)>,
+    left_literal: Option<&'static str>,
+    right_literal: Option<&'static str>,
+) -> Option<(String, String)> {
+    if STRING_OPERATORS.contains(&op) || STRING_SET_OPERATORS.contains(&op) {
+        let (column, kind) = left_column?;
+        return (NUMERIC.contains(&kind.as_str())
+            || matches!(kind.as_str(), "datetime" | "timespan" | "bool"))
+        .then_some((column, kind));
+    }
+    if op == "between" || op == "!between" {
+        let (column, kind) = left_column?;
+        return matches!(kind.as_str(), "string" | "bool" | "guid").then_some((column, kind));
+    }
+    if !ORDERING.contains(&op) {
+        return None;
+    }
+    for (column, literal) in [(left_column, right_literal), (right_column, left_literal)] {
+        let (Some((column, kind)), Some(lit)) = (column, literal) else {
+            continue;
+        };
+        let bad = match kind.as_str() {
+            "string" | "guid" | "datetime" | "timespan" => true,
+            k if NUMERIC.contains(&k) => lit == "string",
+            _ => false,
+        };
+        if bad {
+            return Some((column, kind));
+        }
+    }
+    None
+}
+
+/// The message of `kql_type_mismatch`.
+pub(crate) fn mismatch_message(op: &str, column: &str, kind: &str) -> String {
+    format!(
+        "`{op}` is not defined for `{column}`, {} {kind} column; Kusto rejects the query",
+        if kind.starts_with(['a', 'e', 'i', 'o', 'u']) {
+            "an"
+        } else {
+            "a"
+        }
+    )
+}
+
+/// The column `name` is in `schemas` (one, or both sides of a join), when the
+/// pass knows it: a join key (`on Key`) must be on both sides.
+pub(crate) fn resolve_column(name: &str, schemas: &[&Schema]) -> Option<Column> {
+    if schemas
+        .iter()
+        .all(|s| s.has(name) || s.known == Known::Open)
+    {
+        schemas.iter().find_map(|s| s.column(name)).cloned()
+    } else {
+        None
+    }
+}
+
+/// `kql_unknown_column` at `range` for a name [`resolve_column`] did not find;
+/// `None` where the pass cannot say it is not a column.
+pub(crate) fn unknown_column(
+    name: &str,
+    schemas: &[&Schema],
+    range: opentide_core::Range,
+) -> Option<Diagnostic> {
+    // A join key must be on both sides; report against the first that lacks it.
+    let schema = schemas
+        .iter()
+        .copied()
+        .find(|s| !s.has(name) && s.known != Known::Open)?;
+    if schema.custom_columns && tables::is_custom_column(name) {
+        return None;
+    }
+    // A column an operator removed is gone, whatever the source documents.
+    if let Some(op) = schema.removed.get(name) {
+        return Some(Diagnostic::error(
+            codes::KQL_UNKNOWN_COLUMN,
+            format!("'{name}' is not a column after `{}`", operator_keyword(op)),
+            range,
+        ));
+    }
+    // A near miss is within two edits (strsim's Levenshtein distance,
+    // ignoring case) and less than half the name: the threshold decides
+    // whether a documented table reports the column at all
+    // (`Known::Typos`). Among the columns within it, the shared rule
+    // chooses ([`opentide_core::suggest::best`]).
+    let lower = name.to_ascii_lowercase();
+    let suggestion = opentide_core::suggest::best(
+        name,
+        schema.columns.iter().map(|c| c.name.as_str()).filter(|c| {
+            let d = strsim::levenshtein(&c.to_ascii_lowercase(), &lower);
+            d <= 2 && d * 2 < name.len()
+        }),
+    )
+    .map(str::to_string);
+    let report = match schema.known {
+        Known::Closed => true,
+        Known::Typos => suggestion.is_some(),
+        Known::Open => false,
+    };
+    if !report {
+        return None;
+    }
+    let message = match schema.reshaped_by {
+        Some(op) => format!("'{name}' is not a column after `{}`", operator_keyword(op)),
+        None => format!("'{name}' is not a column of {}", schema.describe_source()),
+    };
+    let mut d = Diagnostic::error(codes::KQL_UNKNOWN_COLUMN, message, range);
+    if let Some(s) = suggestion {
+        d = d.with_suggestion(s);
+    }
+    Some(d)
 }
 
 #[cfg(test)]

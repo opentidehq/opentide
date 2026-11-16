@@ -1,0 +1,17 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/range_query__invalid.lucene
+---
+SourceFile@0..14
+  FieldQuery@0..14
+    FieldName@0..5
+      Term@0..5 "bytes"
+    Colon@5..6 ":"
+    RangeQuery@6..14
+      LBracket@6..7 "["
+      RangeTerm@7..10 "100"
+      Whitespace@10..11 " "
+      ToKw@11..13 "TO"
+      RBracket@13..14 "]"
+13..13: missing a range bound (expected Phrase, RangeTerm)

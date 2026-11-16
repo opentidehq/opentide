@@ -1,0 +1,20 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/macro_reference__invalid.falco
+---
+source_file@0..29
+  and_expression@0..23
+    macro_reference@0..9
+      identifier@0..9 "open_read"
+    whitespace@9..10 " "
+    and@10..13 "and"
+    whitespace@13..14 " "
+    macro_reference@14..23
+      identifier@14..23 "sensitive"
+  ERROR@23..24
+    other@23..24 "-"
+  macro_reference@24..29
+    identifier@24..29 "files"
+errors:
+23..23: unexpected

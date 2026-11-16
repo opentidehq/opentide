@@ -1,0 +1,39 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"$a or $b or $c\\n$a and $b and $c and $d\")"
+---
+SOURCE_FILE@0..38
+  SEARCH_QUERY@0..38
+    SEARCH_EVENTS@0..38
+      OR_EXPR@0..14
+        VARIABLE@0..2
+          VAR_TOKEN@0..2 "$a"
+        WHITESPACE@2..3 " "
+        OR_KW@3..5 "or"
+        WHITESPACE@5..6 " "
+        VARIABLE@6..8
+          VAR_TOKEN@6..8 "$b"
+        WHITESPACE@8..9 " "
+        OR_KW@9..11 "or"
+        WHITESPACE@11..12 " "
+        VARIABLE@12..14
+          VAR_TOKEN@12..14 "$c"
+      WHITESPACE@14..15 "\n"
+      AND_EXPR@15..38
+        VARIABLE@15..17
+          VAR_TOKEN@15..17 "$a"
+        WHITESPACE@17..18 " "
+        AND_KW@18..21 "and"
+        WHITESPACE@21..22 " "
+        VARIABLE@22..24
+          VAR_TOKEN@22..24 "$b"
+        WHITESPACE@24..25 " "
+        AND_KW@25..28 "and"
+        WHITESPACE@28..29 " "
+        VARIABLE@29..31
+          VAR_TOKEN@29..31 "$c"
+        WHITESPACE@31..32 " "
+        AND_KW@32..35 "and"
+        WHITESPACE@35..36 " "
+        VARIABLE@36..38
+          VAR_TOKEN@36..38 "$d"

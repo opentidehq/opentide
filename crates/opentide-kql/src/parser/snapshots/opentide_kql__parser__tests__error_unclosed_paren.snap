@@ -1,0 +1,22 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | where (a\")"
+---
+SOURCE_FILE@0..12
+  QUERY@0..12
+    TABULAR_EXPRESSION@0..12
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      WHERE_OPERATOR@4..12
+        WHERE_KW@4..9 "where"
+        WHITESPACE@9..10 " "
+        PAREN_EXPR@10..12
+          L_PAREN@10..11 "("
+          NAME_REF@11..12
+            IDENT@11..12 "a"
+errors:
+12..12: expected `)` (expected `)`, `+`, `-`, `*`, `/`, `%`, `and`, `or`)

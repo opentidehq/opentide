@@ -8025,7 +8025,7 @@ lucene_parse_error error 0:127-1:0 Lucene syntax error: missing `)`
 119..120 operator
 120..126 string
 == corpus/lucene/boolean_query__invalid.lucene
-lucene_parse_error error 0:23-0:26 Lucene syntax error near `AND`
+lucene_parse_error error 0:26-0:26 Lucene syntax error: a clause is missing after `AND`
 0..14 property
 14..15 operator
 15..22 string
@@ -8049,7 +8049,7 @@ lucene_parse_error error 0:11-0:12 Lucene syntax error near `^`
 6..11 string
 11..13 number
 == corpus/lucene/field_query__invalid.lucene
-lucene_parse_error error 0:13-0:13 Lucene syntax error: missing `term`
+lucene_parse_error error 0:13-0:13 Lucene syntax error: a clause is missing after `process.name:`
 0..12 property
 12..13 operator
 == corpus/lucene/field_query__valid.lucene
@@ -8057,7 +8057,7 @@ lucene_parse_error error 0:13-0:13 Lucene syntax error: missing `term`
 12..13 operator
 13..20 string
 == corpus/lucene/fuzzy__invalid.lucene
-lucene_parse_error error 0:8-0:9 Lucene syntax error near `~`
+lucene_parse_error error 0:10-0:11 Lucene syntax error near `~`
 0..4 property
 4..5 operator
 5..8 string
@@ -8091,7 +8091,7 @@ lucene_mixed_operators warning 0:3-0:5 Lucene has no AND/OR precedence (`a OR b 
 9..12 keyword
 13..14 string
 == corpus/lucene/modified_clause__invalid.lucene
-lucene_parse_error error 0:0-0:1 Lucene syntax error near `+`
+lucene_parse_error error 0:1-0:2 Lucene syntax error: a clause is missing after `+`
 0..1 operator
 1..2 operator
 2..16 property
@@ -8111,19 +8111,22 @@ lucene_parse_error error 0:0-0:1 Lucene syntax error near `+`
 52..53 operator
 53..54 string
 == corpus/lucene/phrase_query__invalid.lucene
-lucene_parse_error error 0:0-0:21 Lucene syntax error near `message:"failed`
+lucene_parse_error error 0:8-0:21 Lucene syntax error: a quoted phrase is never closed
 0..7 property
 7..8 operator
+9..15 string
+16..21 string
 == corpus/lucene/phrase_query__valid.lucene
 0..7 property
 7..8 operator
 8..22 string
 22..24 number
 == corpus/lucene/range_query__invalid.lucene
-lucene_parse_error error 0:0-0:14 Lucene syntax error near `bytes:[100`
+lucene_parse_error error 0:13-0:14 Lucene syntax error: a range bound is missing (`[a TO b]`; `*` for an open end)
 0..5 property
 5..6 operator
 6..7 punctuation.bracket
+7..10 number
 11..13 keyword
 13..14 punctuation.bracket
 == corpus/lucene/range_query__valid.lucene
@@ -8143,23 +8146,25 @@ lucene_parse_error error 0:0-0:14 Lucene syntax error near `bytes:[100`
 47..50 number
 50..51 punctuation.bracket
 == corpus/lucene/regexp_query__invalid.lucene
-lucene_parse_error error 0:0-0:22 Lucene syntax error near `process.name:/cmd\.exe`
+lucene_parse_error error 0:13-0:22 `/` starts a Lucene regular expression that is never closed (`/cmd\.exe`); escape it as `\/` or quote the value
 0..12 property
 12..13 operator
+14..22 string
 == corpus/lucene/regexp_query__valid.lucene
 0..12 property
 12..13 operator
 13..23 string
 == corpus/lucene/star__invalid.lucene
-lucene_parse_error error 0:2-0:2 Lucene syntax error: missing `term`
+lucene_parse_error error 0:2-0:2 Lucene syntax error: a clause is missing after `*:`
 0..1 property
 1..2 operator
 == corpus/lucene/star__valid.lucene
 0..1 operator
 == corpus/lucene/term_query__invalid.lucene
-lucene_parse_error error 0:0-0:16 Lucene syntax error near `process.name:AND`
+lucene_parse_error error 0:13-0:16 Lucene syntax error: `AND` is an operator, so a clause is missing after `process.name:`; quote it (`"AND"`) to search the word
 0..12 property
 12..13 operator
+13..16 keyword
 == corpus/lucene/term_query__valid.lucene
 0..12 property
 12..13 operator
@@ -8361,7 +8366,7 @@ lucene_regexp error 0:13-0:17 invalid Lucene regular expression: expected `]` to
 lucene_regexp warning 0:0-0:4 invalid Lucene regular expression: expected `]` to close the character class; with no field, Elasticsearch searches every field leniently, so this term silently matches nothing
 0..4 string
 == oracles/elasticsearch/lucene/syntax_unbalanced.lucene
-lucene_parse_error error 0:0-0:18 Lucene syntax error near `process.name:(a`
+lucene_parse_error error 0:18-1:0 Lucene syntax error: a clause is missing after `OR`
 0..12 property
 12..13 operator
 13..14 punctuation.bracket
@@ -8490,9 +8495,10 @@ lucene_lowercase_operator warning 0:4-0:7 `and` is a search term in Lucene, not 
 1..2 operator
 2..3 operator
 == oracles/graylog/operator_as_value.lucene
-lucene_parse_error error 0:0-0:7 Lucene syntax error near `foo:AND`
+lucene_parse_error error 0:4-0:7 Lucene syntax error: `AND` is an operator, so a clause is missing after `foo:`; quote it (`"AND"`) to search the word
 0..3 property
 3..4 operator
+4..7 keyword
 == oracles/graylog/phrase_with_star.lucene
 0..1 property
 1..2 operator

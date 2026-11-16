@@ -1,0 +1,71 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | where x == -1 and y == 5m and z == datetime(2024-01-01) and w == null and v == True\")"
+---
+SOURCE_FILE@0..87
+  QUERY@0..87
+    TABULAR_EXPRESSION@0..87
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      WHERE_OPERATOR@4..87
+        WHERE_KW@4..9 "where"
+        WHITESPACE@9..10 " "
+        AND_EXPR@10..87
+          COMPARISON_EXPR@10..17
+            NAME_REF@10..11
+              IDENT@10..11 "x"
+            WHITESPACE@11..12 " "
+            CMP_OP@12..14 "=="
+            WHITESPACE@14..15 " "
+            UNARY_EXPR@15..17
+              MINUS@15..16 "-"
+              LITERAL@16..17
+                NUMBER@16..17 "1"
+          WHITESPACE@17..18 " "
+          AND_KW@18..21 "and"
+          WHITESPACE@21..22 " "
+          COMPARISON_EXPR@22..29
+            NAME_REF@22..23
+              IDENT@22..23 "y"
+            WHITESPACE@23..24 " "
+            CMP_OP@24..26 "=="
+            WHITESPACE@26..27 " "
+            LITERAL@27..29
+              TIMESPAN@27..29 "5m"
+          WHITESPACE@29..30 " "
+          AND_KW@30..33 "and"
+          WHITESPACE@33..34 " "
+          COMPARISON_EXPR@34..59
+            NAME_REF@34..35
+              IDENT@34..35 "z"
+            WHITESPACE@35..36 " "
+            CMP_OP@36..38 "=="
+            WHITESPACE@38..39 " "
+            LITERAL@39..59
+              TYPED_LITERAL@39..59 "datetime(2024-01-01)"
+          WHITESPACE@59..60 " "
+          AND_KW@60..63 "and"
+          WHITESPACE@63..64 " "
+          COMPARISON_EXPR@64..73
+            NAME_REF@64..65
+              IDENT@64..65 "w"
+            WHITESPACE@65..66 " "
+            CMP_OP@66..68 "=="
+            WHITESPACE@68..69 " "
+            LITERAL@69..73
+              NULL_KW@69..73 "null"
+          WHITESPACE@73..74 " "
+          AND_KW@74..77 "and"
+          WHITESPACE@77..78 " "
+          COMPARISON_EXPR@78..87
+            NAME_REF@78..79
+              IDENT@78..79 "v"
+            WHITESPACE@79..80 " "
+            CMP_OP@80..82 "=="
+            WHITESPACE@82..83 " "
+            LITERAL@83..87
+              BOOLEAN@83..87 "True"

@@ -1,0 +1,28 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/or_expression__valid.falco
+---
+source_file@0..34
+  or_expression@0..34
+    comparison@0..16
+      field@0..9
+        field_name@0..9 "proc.name"
+      whitespace@9..10 " "
+      comparison_operator@10..11
+        =@10..11 "="
+      whitespace@11..12 " "
+      bare_string@12..16
+        identifier@12..16 "bash"
+    whitespace@16..17 " "
+    or@17..19 "or"
+    whitespace@19..20 " "
+    comparison@20..34
+      field@20..29
+        field_name@20..29 "proc.name"
+      whitespace@29..30 " "
+      comparison_operator@30..31
+        =@30..31 "="
+      whitespace@31..32 " "
+      bare_string@32..34
+        identifier@32..34 "sh"

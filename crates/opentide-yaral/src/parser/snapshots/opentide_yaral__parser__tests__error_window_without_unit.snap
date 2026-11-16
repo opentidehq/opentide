@@ -1,0 +1,29 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"rule r { match: $a over 5 }\")"
+---
+SOURCE_FILE@0..27
+  RULE_DECLARATION@0..27
+    RULE_KW@0..4 "rule"
+    WHITESPACE@4..5 " "
+    RULE_NAME@5..6
+      IDENT@5..6 "r"
+    WHITESPACE@6..7 " "
+    L_BRACE@7..8 "{"
+    WHITESPACE@8..9 " "
+    MATCH_SECTION@9..25
+      MATCH_KW@9..14 "match"
+      COLON@14..15 ":"
+      WHITESPACE@15..16 " "
+      MATCH_CLAUSE@16..25
+        VARIABLE@16..18
+          VAR_TOKEN@16..18 "$a"
+        WHITESPACE@18..19 " "
+        MATCH_WINDOW@19..25
+          OVER_KW@19..23 "over"
+          WHITESPACE@23..24 " "
+          INTEGER@24..25 "5"
+    WHITESPACE@25..26 " "
+    R_BRACE@26..27 "}"
+errors:
+25..26: expected a duration such as `5m` (expected a name)

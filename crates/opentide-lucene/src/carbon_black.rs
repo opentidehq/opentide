@@ -2,10 +2,11 @@
 //! Black dialect checks fields against and documents them from
 //! (`data/catalogs/carbon_black/fields.toml`, with its sources).
 
-use opentide_core::{ByteSpan, CompletionItem, Diagnostic, codes, span_to_range};
+use crate::Cx;
+use crate::tree::Node;
+use opentide_core::{CompletionItem, Diagnostic, codes};
 use serde::Deserialize;
 use std::sync::OnceLock;
-use tree_sitter::Node;
 
 const FIELDS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
@@ -67,8 +68,8 @@ pub fn near_miss(name: &str) -> Option<&'static Field> {
 }
 
 /// `cbc_unknown_field` on a `field_name` node that misspells a catalog field.
-pub fn check_field(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let name = source.get(node.start_byte()..node.end_byte()).unwrap_or("");
+pub(crate) fn check_field(node: &Node, cx: Cx<'_>, out: &mut Vec<Diagnostic>) {
+    let name = node.text(cx.source);
     let Some(f) = near_miss(name) else {
         return;
     };
@@ -79,7 +80,7 @@ pub fn check_field(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
                 "`{name}` is not a Carbon Black Cloud process search field; did you mean `{}`?",
                 f.name
             ),
-            span_to_range(source, ByteSpan::new(node.start_byte(), node.end_byte())),
+            cx.range(opentide_core::ByteSpan::new(node.start(), node.end())),
         )
         .with_suggestion(f.name.clone()),
     );

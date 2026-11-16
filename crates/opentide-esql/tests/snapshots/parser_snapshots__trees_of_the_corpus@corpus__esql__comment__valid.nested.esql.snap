@@ -1,0 +1,35 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/comment__valid.nested.esql
+---
+SOURCE_FILE@0..184
+  COMMENT@0..58 "// prod:comment valid (Elasticsearch nests block comments)"
+  WHITESPACE@58..59 "\n"
+  QUERY@59..129
+    FROM_COMMAND@59..119
+      FROM_KW@59..63 "FROM"
+      WHITESPACE@63..64 " "
+      INDEX_PATTERN@64..70
+        INDEX_NAME@64..70
+          SOURCE_TEXT@64..70 "logs-*"
+      WHITESPACE@70..71 " "
+      COMMENT@71..106 "/* outer /* inner */ still outer */"
+      WHITESPACE@106..107 " "
+      METADATA@107..119
+        METADATA_KW@107..115 "METADATA"
+        WHITESPACE@115..116 " "
+        METADATA_FIELD@116..119
+          SOURCE_TEXT@116..119 "_id"
+    WHITESPACE@119..120 "\n"
+    PIPE@120..121 "|"
+    WHITESPACE@121..122 " "
+    LIMIT_COMMAND@122..129
+      LIMIT_KW@122..127 "LIMIT"
+      WHITESPACE@127..128 " "
+      NUMBER@128..129
+        NUMBER_LIT@128..129 "1"
+  WHITESPACE@129..130 " "
+  COMMENT@130..183 "/* an unbalanced /* opener ends at the first close */"
+  WHITESPACE@183..184 "\n"
+--- errors

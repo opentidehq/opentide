@@ -1,0 +1,66 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"let r = range(1, 5, 1);\\nrange x from 1 to 3 step 1 | extend y = x\")"
+---
+SOURCE_FILE@0..65
+  LET_STATEMENT@0..23
+    LET_KW@0..3 "let"
+    WHITESPACE@3..4 " "
+    IDENT@4..5 "r"
+    WHITESPACE@5..6 " "
+    EQ@6..7 "="
+    WHITESPACE@7..8 " "
+    TABULAR_EXPRESSION@8..22
+      TABULAR_SOURCE@8..22
+        FUNCTION_CALL@8..22
+          IDENT@8..13 "range"
+          L_PAREN@13..14 "("
+          LITERAL@14..15
+            NUMBER@14..15 "1"
+          COMMA@15..16 ","
+          WHITESPACE@16..17 " "
+          LITERAL@17..18
+            NUMBER@17..18 "5"
+          COMMA@18..19 ","
+          WHITESPACE@19..20 " "
+          LITERAL@20..21
+            NUMBER@20..21 "1"
+          R_PAREN@21..22 ")"
+    SEMICOLON@22..23 ";"
+  WHITESPACE@23..24 "\n"
+  QUERY@24..65
+    TABULAR_EXPRESSION@24..65
+      TABULAR_SOURCE@24..50
+        RANGE_OPERATOR@24..50
+          RANGE_KW@24..29 "range"
+          WHITESPACE@29..30 " "
+          IDENT@30..31 "x"
+          WHITESPACE@31..32 " "
+          FROM_KW@32..36 "from"
+          WHITESPACE@36..37 " "
+          LITERAL@37..38
+            NUMBER@37..38 "1"
+          WHITESPACE@38..39 " "
+          TO_KW@39..41 "to"
+          WHITESPACE@41..42 " "
+          LITERAL@42..43
+            NUMBER@42..43 "3"
+          WHITESPACE@43..44 " "
+          STEP_KW@44..48 "step"
+          WHITESPACE@48..49 " "
+          LITERAL@49..50
+            NUMBER@49..50 "1"
+      WHITESPACE@50..51 " "
+      PIPE@51..52 "|"
+      WHITESPACE@52..53 " "
+      EXTEND_OPERATOR@53..65
+        EXTEND_KW@53..59 "extend"
+        WHITESPACE@59..60 " "
+        ASSIGNMENT@60..65
+          NAME_REF@60..61
+            IDENT@60..61 "y"
+          WHITESPACE@61..62 " "
+          EQ@62..63 "="
+          WHITESPACE@63..64 " "
+          NAME_REF@64..65
+            IDENT@64..65 "x"

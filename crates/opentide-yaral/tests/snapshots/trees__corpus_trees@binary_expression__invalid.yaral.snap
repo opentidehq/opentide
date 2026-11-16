@@ -1,0 +1,31 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/binary_expression__invalid.yaral
+---
+SOURCE_FILE@0..62
+  COMMENT@0..33 "// prod:binary_expression invalid"
+  WHITESPACE@33..34 "\n"
+  SEARCH_QUERY@34..61
+    SEARCH_EVENTS@34..61
+      COMPARISON@34..61
+        BINARY_EXPR@34..57
+          UDM_FIELD@34..55
+            VARIABLE@34..36
+              VAR_TOKEN@34..36 "$e"
+            MEMBER@36..44
+              ACCESS_DOT@36..37 "."
+              FIELD_NAME@37..44 "network"
+            MEMBER@44..55
+              ACCESS_DOT@44..45 "."
+              FIELD_NAME@45..55 "sent_bytes"
+          WHITESPACE@55..56 " "
+          PLUS@56..57 "+"
+        WHITESPACE@57..58 " "
+        GT@58..59 ">"
+        WHITESPACE@59..60 " "
+        LITERAL@60..61
+          INTEGER@60..61 "1"
+  WHITESPACE@61..62 "\n"
+errors:
+57..58: expected an expression

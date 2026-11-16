@@ -1,0 +1,23 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/comparison__invalid.falco
+---
+source_file@0..33
+  comparison@0..14
+    field@0..8
+      field_name@0..8 "fd.sport"
+    whitespace@8..9 " "
+    comparison_operator@9..10
+      other@9..10 ">"
+    whitespace@10..11 " "
+    bare_string@11..14
+      identifier@11..14 "and"
+  whitespace@14..15 " "
+  ERROR@15..22
+    field_name@15..22 "fd.name"
+  whitespace@22..23 " "
+  macro_reference@23..33
+    identifier@23..33 "startswith"
+errors:
+14..15: unexpected
