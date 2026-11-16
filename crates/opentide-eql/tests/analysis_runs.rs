@@ -155,3 +155,21 @@ fn a_broken_pipe_is_only_its_syntax_error() {
         assert_eq!(codes, ["eql_parse_error"], "{source}");
     }
 }
+
+/// Whether a comparison is translated to a query is decided once per run level, not by
+/// climbing a long `or` run again for each comparison in it: 40,000 of them stay linear.
+#[test]
+fn a_long_run_of_field_comparisons_is_linear() {
+    let source = format!(
+        "process where {} or true",
+        vec!["a == b"; 40_000].join(" or ")
+    );
+    let started = Instant::now();
+    let errors = on_small_stack(move || analyze(&source).diagnostics.len());
+    assert_eq!(errors, 0, "an `or` with `true` is folded away");
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "{:?}",
+        started.elapsed()
+    );
+}

@@ -8,7 +8,7 @@
 //! argument or arithmetic operand of the wrong type, and an object used as a
 //! value. `==` and `!=` convert their constant, so they are never reported.
 
-use crate::semantics::{Want, function_name, named_children, parameters, strip_parens};
+use crate::semantics::{Want, parameters};
 use crate::tree::{Node, node_span};
 use crate::{parse_prepared, range, text};
 use opentide_core::{Diagnostic, codes};
@@ -215,6 +215,34 @@ fn want_name(want: Want) -> &'static str {
         Want::Bool => "a boolean",
         Want::Ip => "an ip field",
     }
+}
+
+// The view's helpers, until this module reads the typed AST too.
+
+fn named_children<'t>(node: Node<'t>, field: &str) -> Vec<Node<'t>> {
+    let mut cursor = node.walk();
+    node.children_by_field_name(field, &mut cursor)
+        .filter(|n| n.is_named() && n.kind() != "comment")
+        .collect()
+}
+
+fn function_name(node: Node, source: &str) -> String {
+    node.child_by_field_name("name")
+        .map(|n| text(n, source).trim_end_matches('~').to_ascii_lowercase())
+        .unwrap_or_default()
+}
+
+fn strip_parens(mut node: Node) -> Node {
+    while node.kind() == "parenthesized_expression" {
+        match node
+            .named_children(&mut node.walk())
+            .find(|n| n.kind() != "comment")
+        {
+            Some(inner) => node = inner,
+            None => break,
+        }
+    }
+    node
 }
 
 #[cfg(test)]

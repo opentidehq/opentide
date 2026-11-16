@@ -48,6 +48,7 @@ use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_parse::ast::AstNode;
 use serde::Deserialize;
 use std::sync::OnceLock;
+use syntax::SyntaxKind as K;
 #[doc(hidden)]
 pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 use tree::{Node, node_span, walk};
@@ -309,24 +310,17 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
             range(source, span),
         ));
     }
-    let mut translated = std::collections::HashMap::new();
-    // The parser's tree in document order; a run of `or`, `and` or arithmetic is first checked
-    // at each level the view nests it in, the outermost first, as the view's own walk did.
+    let mut translated = semantics::Translated::default();
     for event in tree.syntax.preorder() {
-        let rowan::WalkEvent::Enter(syntax) = event else {
-            continue;
-        };
-        let Some(node) = tree.view(&syntax) else {
-            continue;
-        };
-        check_node(node, &mut translated, source, catalog, &mut out);
-        let mut level = node;
-        while let Some(inner) = level
-            .child(0)
-            .filter(|c| c.kind() == level.kind() && c.syntax().is_none())
-        {
-            check_node(inner, &mut translated, source, catalog, &mut out);
-            level = inner;
+        if let rowan::WalkEvent::Enter(node) = event {
+            check_node(
+                &node,
+                &tree.problems,
+                &mut translated,
+                source,
+                catalog,
+                &mut out,
+            );
         }
     }
     if let Some(root) = ast::SourceFile::cast(tree.syntax.clone()) {
@@ -398,92 +392,92 @@ fn parse_error_message(problem: &tree::Problem, source: &str) -> String {
     }
 }
 
-/// Runs `check` on the typed node of a view node, when it stands for one of that type.
-fn with_ast<N: AstNode<Language = Lang>>(syntax: Option<&SyntaxNode>, check: impl FnOnce(N)) {
-    if let Some(n) = syntax.cloned().and_then(N::cast) {
+/// Runs `check` on `node` as the typed node `N`.
+fn with_ast<N: AstNode<Language = Lang>>(node: &SyntaxNode, check: impl FnOnce(N)) {
+    if let Some(n) = N::cast(node.clone()) {
         check(n);
     }
 }
 
+/// Whether the parser reported a problem in `at`, or right after it: an expression it could
+/// not finish (`startsWith(a, `) is not checked further, as its arity and types are those of a
+/// fragment and the syntax error already says what is wrong.
+fn broken(problems: &[tree::Problem], at: ByteSpan) -> bool {
+    problems.iter().any(|p| {
+        (p.token.start >= at.start && p.token.start < at.end)
+            || (p.span.start > at.start && p.span.start <= at.end)
+    })
+}
+
 fn check_node(
-    node: Node,
-    translated: &mut std::collections::HashMap<usize, bool>,
+    node: &SyntaxNode,
+    problems: &[tree::Problem],
+    translated: &mut semantics::Translated,
     source: &str,
     catalog: &Catalog,
     out: &mut Vec<Diagnostic>,
 ) {
-    // Keyword tokens share their kind with the node (`sequence`, `join`).
-    if !node.is_named() {
-        return;
-    }
-    // An expression the parser could not finish (`startsWith(a, `) is not checked further: its
-    // arity and types are those of a fragment, and the syntax error already says what is wrong.
+    let kind = node.kind();
     let expression = matches!(
-        node.kind(),
-        "comparison"
-            | "predicate_expression"
-            | "binary_expression"
-            | "unary_expression"
-            | "and_expression"
-            | "or_expression"
-            | "not_expression"
-            | "function_call"
+        kind,
+        K::COMPARISON
+            | K::PREDICATE_EXPRESSION
+            | K::UNARY_EXPRESSION
+            | K::NOT_EXPRESSION
+            | K::FUNCTION_CALL
     );
-    if expression && node.has_error() {
+    if expression && broken(problems, nav::span(node)) {
         return;
     }
-    // The checks ported to the typed AST take the parser's node; a level of a re-nested run
-    // has none, and needs none of them.
-    let syntax = node.syntax();
-    match node.kind() {
-        "string" => with_ast(syntax.as_ref(), |n| builder::check_string(&n, source, out)),
-        "index" | "join" | "relationship" => {
-            if let Some(n) = &syntax {
-                builder::check_shape(n, source, out);
+    match kind {
+        K::STRING => with_ast(node, |n| builder::check_string(&n, source, out)),
+        K::INDEX | K::JOIN | K::RELATIONSHIP => builder::check_shape(node, source, out),
+        K::FIELD => with_ast(node, |n| builder::check_field_case(&n, source, out)),
+        K::EVENT_CATEGORY => with_ast(node, |n| builder::check_category_case(&n, source, out)),
+        K::COMPARISON => with_ast(node, |n: ast::Comparison| {
+            builder::check_comparison_wildcard(&n, source, out);
+            semantics::check_comparison_fields(&n, translated, source, out);
+        }),
+        K::PREDICATE_EXPRESSION => with_ast(node, |n: ast::PredicateExpression| {
+            builder::check_predicate_wildcard(&n, source, out);
+            regex::check_regex(&n, source, out);
+            semantics::check_predicate_types(&n, source, out);
+            semantics::check_predicate_fields(&n, translated, source, out);
+        }),
+        // A run is checked at each level Elasticsearch's builder nests it in, the outermost
+        // first; a level that holds a syntax error is not.
+        K::BINARY_EXPRESSION | K::AND_EXPRESSION | K::OR_EXPRESSION => {
+            let run = semantics::Run::of(node);
+            for level in (0..run.len()).rev() {
+                if broken(problems, run.span(level)) {
+                    continue;
+                }
+                if kind == K::BINARY_EXPRESSION {
+                    semantics::check_level_types(&run, level, source, out);
+                } else {
+                    semantics::check_level_conditions(&run, level, source, out);
+                }
             }
         }
-        "field" => with_ast(syntax.as_ref(), |n| {
-            builder::check_field_case(&n, source, out);
+        K::UNARY_EXPRESSION => with_ast(node, |n| semantics::check_unary_types(&n, source, out)),
+        K::NOT_EXPRESSION => with_ast(node, |n: ast::NotExpression| {
+            semantics::check_condition(n.operand(), source, out);
         }),
-        "event_category" => with_ast(syntax.as_ref(), |n| {
-            builder::check_category_case(&n, source, out);
+        K::EVENT_QUERY => with_ast(node, |n: ast::EventQuery| {
+            semantics::check_condition(n.condition(), source, out);
         }),
-        "comparison" => {
-            with_ast(syntax.as_ref(), |n| {
-                builder::check_comparison_wildcard(&n, source, out);
+        K::FUNCTION_CALL => with_ast(node, |n| {
+            if builder::check_function(&n, source, catalog, out) {
+                semantics::check_call_types(&n, source, out);
+            }
+        }),
+        K::SEQUENCE => with_ast(node, |n| builder::check_sequence(&n, source, out)),
+        K::SAMPLE => with_ast(node, |n| builder::check_sample(&n, source, out)),
+        K::SUBQUERY => {
+            with_ast(node, |n: ast::Subquery| {
+                semantics::check_condition(n.condition(), source, out);
             });
-            semantics::check_field_comparisons(node, translated, source, out);
-        }
-        "predicate_expression" => {
-            with_ast(syntax.as_ref(), |n| {
-                builder::check_predicate_wildcard(&n, source, out);
-            });
-            regex::check_regex(node, source, out);
-            semantics::check_types(node, source, out);
-            semantics::check_field_comparisons(node, translated, source, out);
-        }
-        "binary_expression" | "unary_expression" => semantics::check_types(node, source, out),
-        "and_expression" | "or_expression" | "not_expression" | "event_query" => {
-            semantics::check_conditions(node, source, out);
-        }
-        "function_call" => {
-            let resolves = syntax
-                .clone()
-                .and_then(ast::FunctionCall::cast)
-                .is_some_and(|n| builder::check_function(&n, source, catalog, out));
-            if resolves {
-                semantics::check_types(node, source, out);
-            }
-        }
-        "sequence" => with_ast(syntax.as_ref(), |n| {
-            builder::check_sequence(&n, source, out);
-        }),
-        "sample" => with_ast(syntax.as_ref(), |n| builder::check_sample(&n, source, out)),
-        "subquery" => {
-            semantics::check_conditions(node, source, out);
-            if let Some(n) = &syntax {
-                builder::check_shape(n, source, out);
-            }
+            builder::check_shape(node, source, out);
         }
         _ => {}
     }
