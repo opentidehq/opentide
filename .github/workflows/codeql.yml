@@ -93,6 +93,12 @@ jobs:
           value=false
           while IFS= read -r file; do
             [[ -n "${file}" ]] || continue
+            # A change to this workflow analyses every language: it can
+            # change how any of them is analysed.
+            if [[ "${file}" == .github/workflows/codeql.yml ]]; then
+              echo "codeql.yml changed: every language is analysed"
+              value=true
+            fi
             while IFS= read -r pattern; do
               # Unquoted on the right: a pattern, not a string.
               # shellcheck disable=SC2053
