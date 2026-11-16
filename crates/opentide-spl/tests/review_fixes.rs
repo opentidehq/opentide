@@ -126,3 +126,29 @@ fn a_run_of_equals_after_a_command_is_linear() {
         started.elapsed()
     );
 }
+
+#[test]
+fn second_review_comparisons_do_not_chain_after_and_or() {
+    same_verdict(&[
+        "| where a and b = c = d",
+        "| where a or b < c > d",
+        "| where a<b and c<d<e",
+        "| where a<b or c<d<e",
+        "| eval x=a and b == c != d",
+        "| where (a and b = c = d)",
+        "| where a<b and c<d",
+        "| where a + b = c and d",
+        "| where a * b = c or d = e",
+    ]);
+}
+
+#[test]
+fn second_review_a_dedup_option_takes_a_name_or_a_boolean() {
+    same_verdict(&[
+        "| dedup keepevents=1 a",
+        "| dedup keepevents=a-b a",
+        "| dedup keepevents=true() a",
+        "| dedup keepevents=true a",
+        "| dedup keepevents=x a",
+    ]);
+}
