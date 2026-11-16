@@ -51,12 +51,17 @@ Byte-for-byte parity with Python is not what they check; what the Rust CLI does 
   `VERSION`), so a release changes nothing. Every case runs under umask 022 with `/dev/null` as
   standard input, and the fixtures get fixed modes.
 - **Fails, never snapshotted**: a request a case's cassette does not hold, and a panic.
-- **Left out**: `serve`'s session, which feeds standard input (`tests/serve.rs` drives it).
+- **Left out**: `serve`'s session, which feeds standard input: `tests/serve.rs` holds it in its own
+  snapshots (#1285), while `cli_snapshots` still lists `serve` among its skipped commands.
 - **Needs the generated workspaces**: the cases on `fault`, `fault-lint` and `heavy-small` run in
   three tests (`generated_fault`, `generated_fault_lint`, `generated_heavy_small`) when
   `OPENTIDE_REPLAY_FIXTURES` names the workspaces `cargo xtask corpus` writes, which a crate test
-  cannot build; without it they print "skipped". The CI jobs write them and set
-  `OPENTIDE_SNAPSHOT_REQUIRE_GENERATED`, so a gate cannot pass by skipping them. To run or record
+  cannot build; without it they print "skipped". CI writes two workspaces, `fault` and `heavy-small`;
+  `fault-lint` is `fault` with lint's recommended check off, which the harness derives itself. The Linux PR gate and the Coverage workflow
+  write them and set `OPENTIDE_SNAPSHOT_REQUIRE_GENERATED`, so a gate cannot pass by skipping
+  them. The nightly `engine-test-os` (macOS, Windows) does not write them, by
+  design (minutes of debug-build CPU per OS for output the Linux snapshots already hold): the 101
+  cases are a Linux-gate check. To run or record
   them (about 4 minutes of CPU in a debug build):
 
   ```sh
