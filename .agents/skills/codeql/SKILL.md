@@ -22,8 +22,8 @@ Static analysis for Python, the Rust workspace and GitHub Actions workflows. One
 
 - **Action:** `github/codeql-action` **v4** (Node 24). Do not pin v3 — GitHub runners force Node 20 actions onto Node 24, and `analyze` then dies during SARIF upload with no `##[error]` line.
 - **Languages:** `python`, `rust` and `actions` in one matrix job (categories `/language:python`, `/language:rust` and `/language:actions`)
-- **Rust:** `build-mode: none` — CodeQL extracts the crates from source (GA since CodeQL 2.23.3), no cargo build or toolchain in the job. A pull request analyses Rust when it changes `crates/`, `bindings/`, `xtask/`, `Cargo.toml` or `Cargo.lock`
-- **Why both in the workflow:** PR code-scanning comparison requires the same `(codeql.yml) /language:python` category registered on `development`; Code Quality dynamic scans alone leave PR checks in a NEUTRAL "configuration not found" state
+- **Rust:** `build-mode: none` — CodeQL extracts the crates from source (GA since CodeQL 2.23.3), no cargo build or toolchain in the job. A pull request analyses Rust when it changes `crates/`, `bindings/`, `xtask/`, `vendor/` (patched in), `fuzz/`, `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml` or `.cargo/`
+- **Why Python is in the workflow:** PR code-scanning comparison requires the same `(codeql.yml) /language:python` category registered on `development`; Code Quality dynamic scans alone leave PR checks in a NEUTRAL "configuration not found" state
 - **Triggers:** push to `main`/`development`/`integration/unified-core`, PRs that change a language's files (each language analysed only when its files change), nightly schedule
 - **Queries:** `security-extended`
 - **Python deps:** `uv sync --group dev` before analyze

@@ -321,8 +321,8 @@ scripts/ci-local.sh --full     # + nextest ci, doctests, rustdoc, crate packages
 **CodeQL:** Python, Rust and Actions via [`workflows/codeql.yml`](workflows/codeql.yml)
 (`/language:python`, `/language:rust`, `/language:actions`, `security-extended`; Rust with
 `build-mode: none`, no cargo build): each language on a pull request that changes its files
-(Python sources; `crates/`, `bindings/`, `xtask/`, `Cargo.toml`, `Cargo.lock`; the workflows and
-actions), every language on every push to a base branch and nightly; not a required check. Code Quality may
+(Python sources; `crates/`, `bindings/`, `xtask/`, `vendor/`, `fuzz/`, `Cargo.toml`, `Cargo.lock`,
+`rust-toolchain.toml`, `.cargo/`; the workflows and actions; every language when `codeql.yml` changes), every language on every push to a base branch and nightly; not a required check. Code Quality may
 also run dynamic Python on push. Local Python: `scripts/codeql-local.sh`. Skill:
 [codeql](../.agents/skills/codeql/SKILL.md).
 

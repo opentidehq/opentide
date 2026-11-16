@@ -23,6 +23,10 @@ on:
       - "xtask/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "vendor/**"
+      - "fuzz/**"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
   schedule:
     - cron: "30 5 * * *"
 
@@ -59,7 +63,7 @@ jobs:
       # On a pull request, a language is analysed only when its files change:
       # Python (*.py, pyproject.toml, uv.lock), Rust (the workspace's crates,
       # bindings, xtask and its manifest and lockfile) or the workflows and actions.
-      # The job still starts, so its required check reports either way. Every
+      # The job still starts, so its check reports either way. Every
       # push and the nightly analyse every language;
       # so does a checkout that is not a pull request's merge commit (it fails
       # open). Bash patterns, one a line; `*` matches `/` too.
@@ -78,6 +82,10 @@ jobs:
             xtask/*
             Cargo.toml
             Cargo.lock
+            vendor/*
+            fuzz/*
+            rust-toolchain.toml
+            .cargo/*
           ACTIONS_PATHS: |
             .github/workflows/*
             .github/actions/*
@@ -109,7 +117,7 @@ jobs:
             done <<<"${patterns}"
           done <<<"$(git diff --no-renames --name-only HEAD^1 HEAD)"
           if [[ "${value}" != true ]]; then
-            echo "No ${LANGUAGE} file changed: the analysis runs on merge and weekly."
+            echo "No ${LANGUAGE} file changed: the analysis runs on merge and nightly."
           fi
           echo "analyse=${value}" >> "$GITHUB_OUTPUT"
 

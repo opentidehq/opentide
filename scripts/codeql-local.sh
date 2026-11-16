@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Optional local CodeQL — the Python half of .github/workflows/codeql.yml
-# (CI also analyses rust and actions).
-# (~15–25s) and evaluates all queries (~20–40s). No incremental analysis yet.
+# (CI also analyses rust and actions). It creates a database (~15–25s) and
+# evaluates all queries (~20–40s). No incremental analysis yet.
 #
 # Usage:
 #   scripts/codeql-local.sh              # create DB + analyze Python
@@ -18,7 +18,7 @@ QUERY_SUITE="codeql/python-queries:codeql-suites/python-security-extended.qls"
 INSTALL_ONLY=0
 
 usage() {
-  sed -n '2,12p' "$0"
+  sed -n '2,9p' "$0"
   echo
   echo "Environment:"
   echo "  CODEQL_DB_DIR   Database path (default: .codeql-db/)"
