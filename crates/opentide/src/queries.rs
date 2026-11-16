@@ -43,7 +43,8 @@ pub(crate) fn with_lint_check<T>(ws: &Workspace, run: impl FnOnce(&dyn LintQuery
         let _engine = opentide_analysis::queries::ENGINE
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let check = opentide_analysis::queries::EngineLintQueries::install(ws.fs().as_ref(), ws.root());
+        let check =
+            opentide_analysis::queries::EngineLintQueries::install(ws.fs().as_ref(), ws.root());
         run(&check)
     }
     #[cfg(not(feature = "queries"))]

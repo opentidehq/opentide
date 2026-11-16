@@ -6,8 +6,8 @@ UC-5.1, #836). Every binding is to wrap it and nothing else (UC-5.2, UC-5.3).
 
 ## Place
 
-facade (`xtask/layers.toml`), above the applications: its features reach opentide-cli (`queries`,
-`cli`), opentide-lsp (`lsp`) and opentide-connectors (`connectors`). Published with the crates it wraps by the release train
+facade (`xtask/layers.toml`), above the applications: its features reach opentide-cli (`cli`,
+`plugins`), opentide-lsp (`lsp`) and opentide-connectors (`connectors`). Published with the crates it wraps by the release train
 (`.github/workflows/publish.yml`, UC-5.5), at the product version: `cargo install opentide
 --features cli` is the command line. `cargo package` builds it from its package (`release-build.yml`
 `crate-packages`, on release pull requests, the nightly and the release; `scripts/ci-local.sh`). crates.io's `opentide`

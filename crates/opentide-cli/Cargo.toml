@@ -67,7 +67,7 @@ anstream.workspace = true
 clap_complete = { version = "~4.6.11", features = ["unstable-dynamic"] }
 # The boxed tables of `info` (the rows, columns and wrapping are the crate's).
 # The query lines of a code frame, coloured as the editor colours them.
-opentide-analysis = { workspace = true, features = ["workspace"] }
+opentide-analysis = { workspace = true, features = ["queries"] }
 # The commands ported onto the framework (UC-2.4): the workspace, its
 # catalogue, coverage, tenants and review dates, and the one suggestion rule;
 # the queries check of validate on the query engines (opentide-analysis's

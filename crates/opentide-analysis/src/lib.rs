@@ -23,7 +23,7 @@ mod position;
 pub use position::LineStarts;
 
 pub mod config;
-#[cfg(feature = "workspace")]
+#[cfg(feature = "queries")]
 pub mod queries;
 mod yara;
 pub use config::{

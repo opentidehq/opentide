@@ -29,8 +29,8 @@ use std::borrow::Cow;
 use std::path::Path;
 use std::sync::{Mutex, PoisonError};
 
-use indexmap::IndexMap;
 use crate::{LineStarts, MemoryWorkspace, Severity as EngineSeverity};
+use indexmap::IndexMap;
 use opentide_schema::objects::platform::graylog::{self, ConfiguredTenant};
 use opentide_workspace::diagnostic::ContextValue;
 use opentide_workspace::validate::annotate::relative_path;
@@ -745,11 +745,7 @@ pub fn universal_newlines(text: &str) -> Cow<'_, str> {
 
 /// An engine finding in the CLI's coordinates: lines and columns from 1,
 /// columns in code points (`opentide tui` places the language server's so).
-pub fn finding(
-    text: &str,
-    lines: &LineStarts,
-    diagnostic: crate::Diagnostic,
-) -> Finding {
+pub fn finding(text: &str, lines: &LineStarts, diagnostic: crate::Diagnostic) -> Finding {
     let (line, column, end_line, end_column) = lines.convert(text, diagnostic.range);
     let (end_line, end_column) = span_end(line, column, end_line, end_column, text);
     Finding {
