@@ -5,6 +5,8 @@
 
 use crate::syntax::{SyntaxKind as K, SyntaxNode, lex};
 use opentide_parse::{Grammar, Input, Parse, Parser, TokenSet, build, debug_errors, debug_tree};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// Nesting (`(`, `field:(`, `field:{`) deeper than this is one error. The
 /// tree-sitter engine took 10 000 levels; the floor every language keeps is
@@ -21,6 +23,30 @@ pub(crate) const UNEXPECTED: &str = "unexpected";
 const WORDISH: TokenSet = K::set(&[K::Word, K::OrKw, K::AndKw, K::NotKw]);
 const RANGE_OPS: TokenSet = K::set(&[K::Lt, K::Lte, K::Gt, K::Gte]);
 const LITERAL: TokenSet = K::set(&[K::Word, K::QuotedString]);
+
+/// A tree and its parse.
+pub(crate) type Parsed = (SyntaxNode, Parse);
+
+/// The masked parse of `source`, shared by [`crate::analyze`],
+/// [`crate::fields`] and [`crate::ecs_diagnostics`]: an editor asks all three
+/// for the same text, and the last parse on this thread is kept (one per
+/// text, epic #1219's one-parse memo).
+pub(crate) fn parse_memo(source: &str) -> Rc<Parsed> {
+    thread_local! {
+        static LAST: RefCell<Option<(String, Rc<Parsed>)>> = const { RefCell::new(None) };
+    }
+    LAST.with(|last| {
+        let mut last = last.borrow_mut();
+        if let Some((text, parsed)) = last.as_ref()
+            && text == source
+        {
+            return Rc::clone(parsed);
+        }
+        let parsed = Rc::new(parse(source, true));
+        *last = Some((source.to_owned(), Rc::clone(&parsed)));
+        parsed
+    })
+}
 
 /// Parses `source` (with Kibana's trailing-keyword masking when `mask`).
 pub(crate) fn parse(source: &str, mask: bool) -> (SyntaxNode, Parse) {
