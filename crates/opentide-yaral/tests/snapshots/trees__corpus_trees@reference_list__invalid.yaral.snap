@@ -1,0 +1,29 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/reference_list__invalid.yaral
+---
+SOURCE_FILE@0..58
+  COMMENT@0..30 "// prod:reference_list invalid"
+  WHITESPACE@30..31 "\n"
+  SEARCH_QUERY@31..57
+    SEARCH_EVENTS@31..57
+      BINARY_EXPR@31..57
+        IN_EXPR@31..55
+          UDM_FIELD@31..52
+            VARIABLE@31..33
+              VAR_TOKEN@31..33 "$e"
+            MEMBER@33..43
+              ACCESS_DOT@33..34 "."
+              FIELD_NAME@34..43 "principal"
+            MEMBER@43..52
+              ACCESS_DOT@43..44 "."
+              FIELD_NAME@44..52 "hostname"
+          WHITESPACE@52..53 " "
+          IN_KW@53..55 "in"
+        WHITESPACE@55..56 " "
+        PERCENT@56..57 "%"
+  WHITESPACE@57..58 "\n"
+errors:
+55..56: expected a reference list such as `%list` (expected `regex`, `cidr`, a reference list such as `%list`)
+57..58: expected an expression

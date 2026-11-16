@@ -1,0 +1,33 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/table_call__invalid.yaral
+---
+SOURCE_FILE@0..70
+  COMMENT@0..26 "// prod:table_call invalid"
+  WHITESPACE@26..27 "\n"
+  RULE_DECLARATION@27..69
+    RULE_KW@27..31 "rule"
+    WHITESPACE@31..32 " "
+    RULE_NAME@32..33
+      IDENT@32..33 "r"
+    WHITESPACE@33..34 " "
+    L_BRACE@34..35 "{"
+    WHITESPACE@35..38 "\n  "
+    EXPORT_SECTION@38..68
+      EXPORT_KW@38..44 "export"
+      COLON@44..45 ":"
+      WHITESPACE@45..50 "\n    "
+      TABLE_CALL@50..68
+        REFERENCE_LIST@50..56
+          REF_LIST_TOKEN@50..56 "%hosts"
+        DOT@56..57 "."
+        IDENT@57..66 "write_row"
+        L_PAREN@66..67 "("
+        WHITESPACE@67..68 "\n"
+        ARGUMENTS@68..68
+    R_BRACE@68..69 "}"
+  WHITESPACE@69..70 "\n"
+errors:
+67..68: expected an expression (expected `)`)
+67..68: expected `)` (expected `)`, `,`)

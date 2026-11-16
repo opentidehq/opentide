@@ -3117,10 +3117,13 @@ dependencies = [
 name = "opentide-yaral"
 version = "0.12.0"
 dependencies = [
+ "logos",
  "opentide-core",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
  "regex-syntax",
+ "rowan",
  "serde",
  "toml",
  "tree-sitter",

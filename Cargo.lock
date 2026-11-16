@@ -3750,10 +3750,14 @@ dependencies = [
 name = "opentide-yaral"
 version = "0.12.0"
 dependencies = [
+ "insta",
+ "logos",
  "opentide-core",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
  "regex-syntax",
+ "rowan",
  "serde",
  "toml 0.8.23",
  "tree-sitter",

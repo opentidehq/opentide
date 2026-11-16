@@ -1,0 +1,30 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/setup_section__invalid.yaral
+---
+SOURCE_FILE@0..71
+  COMMENT@0..29 "// prod:setup_section invalid"
+  WHITESPACE@29..30 "\n"
+  RULE_DECLARATION@30..70
+    RULE_KW@30..34 "rule"
+    WHITESPACE@34..35 " "
+    RULE_NAME@35..36
+      IDENT@35..36 "r"
+    WHITESPACE@36..37 " "
+    L_BRACE@37..38 "{"
+    WHITESPACE@38..41 "\n  "
+    SETUP_SECTION@41..68
+      SETUP_KW@41..46 "setup"
+      COLON@46..47 ":"
+      WHITESPACE@47..52 "\n    "
+      GRAPH_JOIN@52..68
+        GRAPH_OVERRIDE_KW@52..66 "graph_override"
+        WHITESPACE@66..67 " "
+        L_PAREN@67..68 "("
+    WHITESPACE@68..69 "\n"
+    R_BRACE@69..70 "}"
+  WHITESPACE@70..71 "\n"
+errors:
+68..69: expected an expression
+68..69: expected `)` (expected `)`)

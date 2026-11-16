@@ -1,0 +1,35 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/match_window__invalid.yaral
+---
+SOURCE_FILE@0..73
+  COMMENT@0..28 "// prod:match_window invalid"
+  WHITESPACE@28..29 "\n"
+  RULE_DECLARATION@29..72
+    RULE_KW@29..33 "rule"
+    WHITESPACE@33..34 " "
+    RULE_NAME@34..35
+      IDENT@34..35 "r"
+    WHITESPACE@35..36 " "
+    L_BRACE@36..37 "{"
+    WHITESPACE@37..40 "\n  "
+    MATCH_SECTION@40..70
+      MATCH_KW@40..45 "match"
+      COLON@45..46 ":"
+      WHITESPACE@46..51 "\n    "
+      MATCH_CLAUSE@51..70
+        VARIABLE@51..56
+          VAR_TOKEN@51..56 "$user"
+        WHITESPACE@56..57 " "
+        MATCH_WINDOW@57..70
+          OVER_KW@57..61 "over"
+          WHITESPACE@61..62 " "
+          DURATION@62..64 "5m"
+          WHITESPACE@64..65 " "
+          AFTER_KW@65..70 "after"
+    WHITESPACE@70..71 "\n"
+    R_BRACE@71..72 "}"
+  WHITESPACE@72..73 "\n"
+errors:
+70..71: expected a variable such as `$e` (expected a variable such as `$e`)

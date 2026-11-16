@@ -1,0 +1,45 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/search_query__valid.yaral
+---
+SOURCE_FILE@0..128
+  COMMENT@0..26 "// prod:search_query valid"
+  WHITESPACE@26..27 "\n"
+  SEARCH_QUERY@27..127
+    EVENTS_SECTION@27..127
+      EVENTS_KW@27..33 "events"
+      COLON@33..34 ":"
+      WHITESPACE@34..37 "\n  "
+      COMPARISON@37..72
+        BARE_FIELD@37..56
+          IDENT@37..45 "metadata"
+          MEMBER@45..56
+            ACCESS_DOT@45..46 "."
+            FIELD_NAME@46..56 "event_type"
+        WHITESPACE@56..57 " "
+        EQ@57..58 "="
+        WHITESPACE@58..59 " "
+        LITERAL@59..72
+          STRING@59..72 "\"NETWORK_DNS\""
+      WHITESPACE@72..75 "\n  "
+      COMPARISON@75..127
+        BARE_FIELD@75..101
+          IDENT@75..82 "network"
+          MEMBER@82..86
+            ACCESS_DOT@82..83 "."
+            FIELD_NAME@83..86 "dns"
+          MEMBER@86..96
+            ACCESS_DOT@86..87 "."
+            FIELD_NAME@87..96 "questions"
+          MEMBER@96..101
+            ACCESS_DOT@96..97 "."
+            FIELD_NAME@97..101 "name"
+        WHITESPACE@101..102 " "
+        EQ@102..103 "="
+        WHITESPACE@103..104 " "
+        LITERAL@104..120
+          REGEX_LIT@104..120 "/evil\\.example$/"
+        WHITESPACE@120..121 " "
+        NOCASE_KW@121..127 "nocase"
+  WHITESPACE@127..128 "\n"
