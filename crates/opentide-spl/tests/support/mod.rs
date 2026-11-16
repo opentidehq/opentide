@@ -4,6 +4,9 @@
     clippy::expect_used,
     reason = "test helpers outside #[test] functions; each test file uses some"
 )]
+// Each test binary compiles this module and uses a different subset of it,
+// so an expectation would be unfulfilled in some binaries (crates/AGENTS.md).
+#![allow(dead_code)]
 
 use opentide_core::LanguageId;
 use opentide_parse::{debug_errors, debug_tree};

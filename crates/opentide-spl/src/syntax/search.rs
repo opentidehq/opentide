@@ -4,7 +4,7 @@
 //! has to accept what Splunk accepts (`grammar.js`: `search_expression`).
 
 use super::kind::SyntaxKind as K;
-use super::parser::{Context, at, at_name, close, leaf, pipeline};
+use super::parser::{Context, SUBSEARCH_WEIGHT_LEVELS, at, at_name, close, leaf, pipeline};
 use opentide_parse::{CompletedMarker, Parser, TokenSet};
 
 /// A word that can name a field in a search comparison.
@@ -62,7 +62,7 @@ fn boolean(p: &Parser<'_>) -> Option<K> {
 
 /// A `TERM(`, `CASE(` or `PREFIX(`.
 fn directive(p: &Parser<'_>) -> Option<(K, K)> {
-    if p.current() != K::IDENT.raw() || p.nth(1) != K::L_PAREN.raw() {
+    if p.current() != K::IDENT.raw() {
         return None;
     }
     match p.current_text() {
@@ -96,17 +96,20 @@ pub(super) fn starts_bare_head(p: &Parser<'_>) -> bool {
     if boolean(p) == Some(K::NOT_KW) || directive(p).is_some() {
         return true;
     }
+    // A macro followed by more terms starts a search; alone it is a command.
+    if kind == K::MACRO_TOKEN.raw() && more_terms_after_macro(p) {
+        return true;
+    }
     if kind == K::IDENT.raw() {
+        if super::rest::is_known_command(p.current_text()) {
+            return false;
+        }
         let next = p.nth(1);
         return COMPARISONS.contains(next)
             || LOOSE.contains(next)
             || (next == K::IDENT.raw() && p.nth_text(1) == "IN" && p.nth(2) == K::L_PAREN.raw());
     }
-    kind != K::MACRO_TOKEN.raw() && starts_term(p) && !boolean_word(p)
-}
-
-fn boolean_word(p: &Parser<'_>) -> bool {
-    boolean(p).is_some()
+    kind != K::MACRO_TOKEN.raw() && starts_term(p) && boolean(p).is_none()
 }
 
 /// `search [expression]`.
@@ -121,8 +124,7 @@ pub(super) fn search_command(p: &mut Parser<'_>) {
 
 /// Terms with no `search` keyword. A query's first stage may start with a
 /// bare word (`error`, `tstats count`); a subsearch's may not.
-pub(super) fn bare_search(p: &mut Parser<'_>, leading_word: bool) {
-    let _ = leading_word;
+pub(super) fn bare_search(p: &mut Parser<'_>) {
     search_expression(p, K::BARE_SEARCH, false);
 }
 
@@ -131,10 +133,11 @@ pub(super) fn bare_search(p: &mut Parser<'_>, leading_word: bool) {
 fn search_expression(p: &mut Parser<'_>, kind: K, stop_by: bool) {
     let m = p.start();
     let mut first = true;
+    let mut after_operator = false;
     loop {
         // `by` is a term when nothing precedes it (`where by x` searches for
         // the word), and ends the terms otherwise.
-        if stop_by && !first && at_by(p) {
+        if stop_by && !first && !after_operator && at_by(p) {
             break;
         }
         let operator = boolean(p);
@@ -159,17 +162,19 @@ fn search_expression(p: &mut Parser<'_>, kind: K, stop_by: bool) {
                     p.error("expected a search term");
                     break;
                 }
+                after_operator = true;
                 continue;
             }
             None => {}
         }
-        if !term(p) {
+        if !term(p, stop_by) {
             if !first || boolean(p).is_some() {
                 p.error("expected a search term");
             }
             break;
         }
         first = false;
+        after_operator = false;
         if !(starts_term(p) || boolean(p).is_some()) || (stop_by && at_by(p)) {
             break;
         }
@@ -182,6 +187,16 @@ fn at_by(p: &Parser<'_>) -> bool {
     p.current() == K::IDENT.raw() && p.current_text().eq_ignore_ascii_case("by")
 }
 
+/// Whether a search expression can start at the current token.
+pub(super) fn starts_expression(p: &Parser<'_>) -> bool {
+    starts_term(p) || boolean(p).is_some()
+}
+
+/// A search expression: terms to the end of the stage.
+pub(super) fn search_expression_plain(p: &mut Parser<'_>) {
+    search_expression(p, K::SEARCH_EXPRESSION, false);
+}
+
 /// A search expression that stops at `by` (tstats's `where`).
 pub(super) fn search_expression_before_by(p: &mut Parser<'_>) {
     search_expression(p, K::SEARCH_EXPRESSION, true);
@@ -192,7 +207,7 @@ fn boolean_node(p: &mut Parser<'_>, kind: K) {
 }
 
 /// One search term; `false` when the current token starts none.
-fn term(p: &mut Parser<'_>) -> bool {
+fn term(p: &mut Parser<'_>, stop_by: bool) -> bool {
     if let Some((node, keyword)) = directive(p) {
         let m = p.start();
         p.bump_as(keyword.raw());
@@ -210,13 +225,13 @@ fn term(p: &mut Parser<'_>) -> bool {
             // A comparison with no field: `==1`.
             let m = p.start();
             p.bump();
-            optional_value(p);
+            optional_value(p, stop_by);
             m.complete(p, K::FIELD_VALUE.raw());
         }
         k if TERM_START.contains(k) => {
             let atom = atom(p);
             if FIELD_WORDS.contains(atom.kind_token) {
-                after_field(p, atom.node);
+                after_field(p, atom.node, stop_by);
             }
         }
         _ => return false,
@@ -265,7 +280,7 @@ fn value_atom(p: &mut Parser<'_>) -> CompletedMarker {
 
 /// After a word that can be a field: a comparison, `IN (...)`, or nothing
 /// (the word is a term).
-fn after_field(p: &mut Parser<'_>, field: CompletedMarker) {
+fn after_field(p: &mut Parser<'_>, field: CompletedMarker, stop_by: bool) {
     let next = p.current();
     if COMPARISONS.contains(next) {
         let field = wrap_field(p, field);
@@ -287,13 +302,18 @@ fn after_field(p: &mut Parser<'_>, field: CompletedMarker) {
         let field = wrap_field(p, field);
         let m = field.precede(p);
         p.bump();
-        optional_value(p);
+        optional_value(p, stop_by);
         m.complete(p, K::FIELD_VALUE.raw());
-    } else if at_name(p, "IN") && p.nth(1) == K::L_PAREN.raw() {
+    } else if at_name(p, "IN") {
+        // After a word that can be a field, `IN` is a keyword: it wants its list.
         let field = wrap_field(p, field);
         let m = field.precede(p);
         p.bump_as(K::IN_KW.raw());
-        value_list(p);
+        if at(p, K::L_PAREN) {
+            value_list(p);
+        } else {
+            p.error("expected `(` after `IN`");
+        }
         m.complete(p, K::IN_CLAUSE.raw());
     }
 }
@@ -304,27 +324,34 @@ fn wrap_field(p: &mut Parser<'_>, field: CompletedMarker) -> CompletedMarker {
 }
 
 /// A loose comparison's value, if there is one.
-fn optional_value(p: &mut Parser<'_>) {
-    if VALUE.contains(p.current()) && boolean(p).is_none() {
+fn optional_value(p: &mut Parser<'_>, stop_by: bool) {
+    // A directive after a loose operator is a term of its own, and so is the
+    // `by` that ends a tstats where.
+    if VALUE.contains(p.current())
+        && boolean(p).is_none()
+        && directive(p).is_none()
+        && !(stop_by && at_by(p))
+    {
         let rhs = p.start();
         value_atom(p);
         rhs.complete(p, K::FIELD_VALUE_RHS.raw());
     }
 }
 
-/// `( a, "b" c )`: values, with commas or without.
+/// `( a, "b" c )`: one or more values, one comma at most between two.
 pub(super) fn value_list(p: &mut Parser<'_>) {
     let m = p.start();
     p.bump();
     let mut any = false;
     loop {
-        if p.eat(K::COMMA.raw()) {
-            continue;
-        }
+        let comma = any && p.eat(K::COMMA.raw());
         if VALUE.contains(p.current()) && boolean(p).is_none() {
             value_atom(p);
             any = true;
         } else {
+            if comma {
+                p.error("expected a value after the comma");
+            }
             break;
         }
     }
@@ -353,16 +380,28 @@ fn group(p: &mut Parser<'_>) {
 }
 
 /// `[ pipeline ]`.
+/// How many levels of `max_depth` a subsearch costs: a level of it is
+/// a pipeline, a stage, a command and a term, a few KB of stack in a debug
+/// build, so a 1 MB stack holds fewer of them than of groups.
+const SUBSEARCH_WEIGHT: u32 = SUBSEARCH_WEIGHT_LEVELS;
+
 pub(super) fn subsearch(p: &mut Parser<'_>) -> Option<CompletedMarker> {
-    if !p.enter() {
-        return None;
+    for entered in 0..SUBSEARCH_WEIGHT {
+        if !p.enter() {
+            for _ in 0..entered {
+                p.exit();
+            }
+            return None;
+        }
     }
     let m = p.start();
     p.bump();
     pipeline(p, Context::Subsearch);
     close(p, K::R_BRACKET, "missing `]`");
     let done = m.complete(p, K::SUBSEARCH.raw());
-    p.exit();
+    for _ in 0..SUBSEARCH_WEIGHT {
+        p.exit();
+    }
     Some(done)
 }
 
@@ -373,7 +412,10 @@ pub(super) fn macro_call(p: &mut Parser<'_>) {
 /// The `(` and the raw text of a directive, and its `)` when it has one
 /// (`TERM(EventID=4688` before a pipe is accepted, as Splunk does).
 fn raw_arguments(p: &mut Parser<'_>) {
-    p.bump();
+    if !p.eat(K::L_PAREN.raw()) {
+        p.error("expected `(` after the directive");
+        return;
+    }
     if at(p, K::TERM_TEXT_TOKEN) {
         leaf(p, K::TERM_TEXT, K::TERM_TEXT_TOKEN);
     }

@@ -20,4 +20,4 @@ SOURCE_FILE@0..19
     RENAME_COMMAND@13..19
       RENAME_KW@13..19 "rename"
 --
-19..19: expected a field to rename (expected COMMA)
+19..19: expected a field to rename

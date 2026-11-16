@@ -14,6 +14,9 @@ use opentide_parse::{Grammar, Input, Parse, Parser, TokenSet, build};
 /// met and `NESTING_CEILING` caps.
 pub const MAX_DEPTH: u32 = 1_000;
 
+/// The cost of one subsearch in levels of [`MAX_DEPTH`] (see `search.rs`).
+pub(super) const SUBSEARCH_WEIGHT_LEVELS: u32 = 4;
+
 /// What the toolkit needs to know of SPL's kinds.
 pub const GRAMMAR: Grammar = Grammar {
     eof: K::EOF.raw(),
@@ -107,9 +110,9 @@ fn first_stage(p: &mut Parser<'_>, ctx: Context, piped: bool) {
         p.error("expected a command or a search");
         return;
     }
-    if piped {
+    if piped && ctx == Context::Query {
         if at(p, K::MACRO_TOKEN) && search::more_terms_after_macro(p) {
-            search::bare_search(p, true);
+            search::bare_search(p);
         } else {
             command_stage(p, true);
         }
@@ -122,12 +125,12 @@ fn first_stage(p: &mut Parser<'_>, ctx: Context, piped: bool) {
             } else if at(p, K::MACRO_TOKEN) && !search::more_terms_after_macro(p) {
                 search::macro_call(p);
             } else {
-                search::bare_search(p, true);
+                search::bare_search(p);
             }
         }
         Context::Subsearch => {
             if search::starts_bare_head(p) {
-                search::bare_search(p, false);
+                search::bare_search(p);
             } else {
                 command_stage(p, true);
             }
@@ -166,7 +169,7 @@ fn command_stage(p: &mut Parser<'_>, first: bool) {
         table::command(p);
     } else if at(p, K::IDENT) && rest::is_rest_command(p.current_text()) {
         rest::command(p, first);
-    } else if at(p, K::IDENT) {
+    } else if at(p, K::IDENT) && !stats::reserved(p) {
         rest::catalog_or_unknown(p);
     } else {
         let stop = K::set(&[K::PIPE, K::R_BRACKET]);

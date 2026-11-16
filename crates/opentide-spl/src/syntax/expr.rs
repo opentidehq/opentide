@@ -115,8 +115,9 @@ fn operand(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     let kind = p.current();
     let sign = [K::BANG, K::MINUS, K::PLUS].iter().any(|k| k.raw() == kind);
     let not = kind == K::IDENT.raw() && matches!(p.current_text(), "NOT" | "not");
-    // `not(x)` and `NOT` as a field name are calls and names, not negation.
-    if sign || (not && p.nth(1) != K::L_PAREN.raw()) {
+    // `NOT` is reserved: always negation. `not(x)` is a call.
+    let not = not && (p.current_text() == "NOT" || p.nth(1) != K::L_PAREN.raw());
+    if sign || not {
         let m = p.start();
         let kind = match p.current_text() {
             "NOT" => K::NOT_KW,
@@ -160,9 +161,9 @@ fn primary(p: &mut Parser<'_>) -> Option<CompletedMarker> {
         Some(leaf_marker(p, K::NUMBER, K::NUMBER_TOKEN))
     } else if is(K::STRING_TOKEN) {
         Some(leaf_marker(p, K::STR, K::STRING_TOKEN))
-    } else if is(K::DYNAMIC_NAME) || is(K::TOKEN_NAME) || is(K::TEMPLATE_NAME) {
+    } else if is(K::TOKEN_NAME) || is(K::TEMPLATE_NAME) {
         Some(leaf_marker(p, K::IDENTIFIER, kind_of(p)))
-    } else if is(K::IDENT) {
+    } else if is(K::IDENT) && !matches!(p.current_text(), "AND" | "OR" | "NOT") {
         name_or_call(p)
     } else {
         None

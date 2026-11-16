@@ -152,10 +152,23 @@ fn every_prefix_of_a_file_lexes_losslessly() {
         while end < source.len().min(600) {
             end = source.ceil_char_boundary(end + 3);
             let prefix = &source[..end.min(source.len())];
-            let covered: usize = lex(prefix)
-                .iter()
-                .map(|l| usize::from(l.range.end() - l.range.start()))
-                .sum();
+            // In order, contiguous, from 0 to the end, on character boundaries.
+            let mut at = 0usize;
+            for lexeme in lex(prefix) {
+                assert_eq!(
+                    usize::from(lexeme.range.start()),
+                    at,
+                    "{}: {prefix:?}",
+                    path.display()
+                );
+                at = usize::from(lexeme.range.end());
+                assert!(
+                    prefix.is_char_boundary(at),
+                    "{}: {prefix:?}",
+                    path.display()
+                );
+            }
+            let covered = at;
             assert_eq!(covered, prefix.len(), "{}: {prefix:?}", path.display());
         }
     }

@@ -10,4 +10,4 @@ SOURCE_FILE@0..8
     TSTATS_COMMAND@2..8
       TSTATS_KW@2..8 "tstats"
 --
-8..8: expected an aggregate (expected COMMA)
+8..8: expected an aggregate

@@ -87,3 +87,13 @@ fn other_long_tokens() {
     lex_on_small_stack(format!("| eval {}", "{f}".repeat(N)));
     lex_on_small_stack(format!("a {}", "*x".repeat(N)));
 }
+
+#[test]
+fn multibyte_words_and_spaces() {
+    lex_on_small_stack("é".repeat(N));
+    lex_on_small_stack(format!("a {}", "é".repeat(N)));
+    lex_on_small_stack(format!("| eval x={}", "é".repeat(N)));
+    lex_on_small_stack("\u{a0}".repeat(N));
+    lex_on_small_stack(format!("a{}b", "\u{3000}".repeat(N)));
+    lex_on_small_stack("😀".repeat(N));
+}

@@ -251,7 +251,7 @@ ParenExpr = '(' Expr ')'
 
 // ---- Leaves --------------------------------------------------------------
 
-Identifier = 'ident' | 'bool' | 'field_word' | 'dynamic_name' | 'token_name' | 'template_name' | 'prefix_field'
+Identifier = 'ident' | 'number' | 'bool' | 'field_word' | 'dynamic_name' | 'token_name' | 'template_name' | 'prefix_field'
 
 Number = 'number'
 

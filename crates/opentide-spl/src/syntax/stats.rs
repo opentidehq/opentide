@@ -23,22 +23,52 @@ pub(super) fn at_stage_end(p: &Parser<'_>) -> bool {
     p.at_eof() || kind == K::PIPE.raw() || kind == K::R_BRACKET.raw() || kind == K::R_PAREN.raw()
 }
 
-/// A field name: a name, or a field word (`a-b`, `{}.Id`).
-pub(super) fn at_field(p: &Parser<'_>) -> bool {
+/// `AND`, `OR` and `NOT` are reserved: they are no name, field or value.
+pub(super) fn reserved(p: &Parser<'_>) -> bool {
+    p.current() == K::IDENT.raw() && matches!(p.current_text(), "AND" | "OR" | "NOT")
+}
+
+/// A name that is no number: a name, or a field word (`a-b`, `{}.Id`).
+pub(super) fn at_name(p: &Parser<'_>) -> bool {
     let kind = p.current();
-    kind == K::IDENT.raw() || kind == K::FIELD_WORD.raw()
+    (kind == K::IDENT.raw() || kind == K::FIELD_WORD.raw()) && !reserved(p)
+}
+
+/// `true`, `false`, `TRUE` or `FALSE` with no `(`: where a call can start,
+/// the boolean keyword is only the name of one, so it wants its `(`.
+pub(super) fn at_bare_boolean(p: &Parser<'_>) -> bool {
+    p.current() == K::IDENT.raw()
+        && matches!(p.current_text(), "true" | "false" | "TRUE" | "FALSE")
+        && p.nth(1) != K::L_PAREN.raw()
+}
+
+/// A plain name (`identifier` in the grammar): no field word, no number.
+fn at_ident(p: &Parser<'_>) -> bool {
+    p.current() == K::IDENT.raw() && !reserved(p)
+}
+
+/// A field name, which Splunk lets start with a digit (`0=f`, `sort 0 a`).
+pub(super) fn at_field(p: &Parser<'_>) -> bool {
+    at_name(p) || p.current() == K::NUMBER_TOKEN.raw()
 }
 
 pub(super) fn at_option(p: &Parser<'_>) -> bool {
     at_field(p) && p.nth(1) == K::EQ.raw()
 }
 
+/// An option in a stats command, where `by`, `over`, `from` and `where` are
+/// keywords: `by=1` is not an option.
+fn at_stats_option(p: &Parser<'_>) -> bool {
+    at_option(p) && !(kw(p, "by") || kw(p, "over") || kw(p, "from") || kw(p, "where"))
+}
+
 pub(super) fn at_call(p: &Parser<'_>) -> bool {
     p.current() == K::IDENT.raw() && p.nth(1) == K::L_PAREN.raw()
 }
 
+/// The keyword `PREFIX`, which wants its `(`.
 fn at_prefix(p: &Parser<'_>) -> bool {
-    at_call(p) && p.current_text() == "PREFIX"
+    p.current() == K::IDENT.raw() && p.current_text() == "PREFIX"
 }
 
 pub(super) fn commas(p: &mut Parser<'_>) {
@@ -57,11 +87,14 @@ pub(super) fn name_leaf(p: &mut Parser<'_>) {
 pub(super) fn prefix_clause(p: &mut Parser<'_>) {
     let m = p.start();
     p.bump_as(K::PREFIX_KW.raw());
-    p.bump();
-    if p.current() == K::TERM_TEXT_TOKEN.raw() {
-        leaf(p, K::TERM_TEXT, K::TERM_TEXT_TOKEN);
+    if p.eat(K::L_PAREN.raw()) {
+        if p.current() == K::TERM_TEXT_TOKEN.raw() {
+            leaf(p, K::TERM_TEXT, K::TERM_TEXT_TOKEN);
+        }
+        p.eat(K::R_PAREN.raw());
+    } else {
+        p.error("expected `(` after `PREFIX`");
     }
-    p.eat(K::R_PAREN.raw());
     m.complete(p, K::PREFIX_CLAUSE.raw());
 }
 
@@ -74,6 +107,8 @@ pub(super) fn option_value(p: &mut Parser<'_>) -> bool {
         search::value_list(p);
     } else if is(K::MACRO_TOKEN) {
         search::macro_call(p);
+    } else if reserved(p) {
+        return false;
     } else if is(K::IDENT) {
         expr::name_or_call(p);
     } else if is(K::FIELD_WORD) {
@@ -154,7 +189,7 @@ fn aggregate_item(p: &mut Parser<'_>) -> bool {
             p.error("missing `)`");
         }
         call.complete(p, K::FUNCTION_CALL.raw());
-    } else if at_field(p) {
+    } else if at_ident(p) {
         name_leaf(p);
     } else {
         m.abandon(p);
@@ -212,7 +247,7 @@ fn by_clause(p: &mut Parser<'_>, chart: bool) {
         p.error("expected a field after `by`");
     }
     loop {
-        if at_option(p) {
+        if at_stats_option(p) {
             command_option(p);
         } else if p.current() == K::COMMA.raw() {
             commas(p);
@@ -230,7 +265,7 @@ fn by_clause(p: &mut Parser<'_>, chart: bool) {
 
 /// Options, then `over` and `by`, after the aggregates.
 fn tail(p: &mut Parser<'_>, chart: bool) {
-    while at_option(p) {
+    while at_stats_option(p) {
         command_option(p);
     }
     if kw(p, "over") {
@@ -239,7 +274,7 @@ fn tail(p: &mut Parser<'_>, chart: bool) {
         if !by_field(p) {
             p.error("expected a field after `over`");
         }
-        while at_option(p) {
+        while at_stats_option(p) {
             command_option(p);
         }
         m.complete(p, K::OVER_CLAUSE.raw());
@@ -293,12 +328,17 @@ fn chart_where(p: &mut Parser<'_>) {
 fn aggregates(p: &mut Parser<'_>, chart: bool) -> bool {
     let mut any = false;
     loop {
-        commas(p);
+        // A comma separates aggregates; one may not lead the list, and what
+        // follows one is an aggregate even if it is spelt `by` (as it is first).
+        if any {
+            commas(p);
+        }
+        // Once an aggregate precedes (a comma or not), `by`, `over` and a
+        // chart's `where` are the clauses, not more aggregates.
         if at_stage_end(p)
-            || at_option(p)
-            // `stats by x` reads `by` as the first aggregate, as Splunk does.
             || (any && (kw(p, "by") || kw(p, "over")))
-            || (chart && kw(p, "where"))
+            || at_stats_option(p)
+            || (any && chart && kw(p, "where"))
         {
             break;
         }
@@ -324,7 +364,7 @@ pub(super) fn stats_command(p: &mut Parser<'_>) {
     // `stats` with no arguments at all is accepted (it keeps every row).
     if !(word == Family::Stats && at_stage_end(p)) {
         let mut options = false;
-        while at_option(p) {
+        while at_stats_option(p) {
             command_option(p);
             options = true;
         }
@@ -348,30 +388,38 @@ enum Family {
     Geostats,
 }
 
+/// The options only tstats has: keywords, so they want their `=`.
+fn tstats_keyword(p: &Parser<'_>) -> Option<K> {
+    if p.current() != K::IDENT.raw() {
+        return None;
+    }
+    match p.current_text() {
+        "summariesonly" => Some(K::SUMMARIESONLY_KW),
+        "prestats" => Some(K::PRESTATS_KW),
+        "allow_old_summaries" => Some(K::ALLOW_OLD_SUMMARIES_KW),
+        "fillnull_value" => Some(K::FILLNULL_VALUE_KW),
+        _ => None,
+    }
+}
+
 /// Macros and options before or after tstats's aggregates.
 fn tstats_preamble(p: &mut Parser<'_>) {
     loop {
         if p.current() == K::MACRO_TOKEN.raw() {
             search::macro_call(p);
-        } else if at_option(p) {
-            let keyword = match p.current_text() {
-                "summariesonly" => Some(K::SUMMARIESONLY_KW),
-                "prestats" => Some(K::PRESTATS_KW),
-                "allow_old_summaries" => Some(K::ALLOW_OLD_SUMMARIES_KW),
-                "fillnull_value" => Some(K::FILLNULL_VALUE_KW),
-                _ => None,
-            };
-            let Some(keyword) = keyword else {
-                command_option(p);
-                continue;
-            };
+        } else if let Some(keyword) = tstats_keyword(p) {
             let m = p.start();
             p.bump_as(keyword.raw());
-            p.bump();
-            if !option_value(p) {
-                p.error("missing the value of the option");
+            if p.eat(K::EQ.raw()) {
+                if !option_value(p) {
+                    p.error("missing the value of the option");
+                }
+            } else {
+                p.error("expected `=`");
             }
             m.complete(p, K::TSTATS_OPTION.raw());
+        } else if at_stats_option(p) {
+            command_option(p);
         } else {
             break;
         }
@@ -385,17 +433,23 @@ pub(super) fn tstats_command(p: &mut Parser<'_>) {
     tstats_preamble(p);
     let mut any = false;
     loop {
-        p.eat(K::COMMA.raw());
+        // One comma at most between aggregates, none leading or trailing.
+        let comma = any && p.eat(K::COMMA.raw());
         if at_stage_end(p)
-            || at_option(p)
-            || kw(p, "from")
-            || kw(p, "where")
-            || kw(p, "by")
+            || at_stats_option(p)
+            || tstats_keyword(p).is_some()
+            || (any && !comma && (kw(p, "from") || kw(p, "where") || kw(p, "by")))
             || p.current() == K::MACRO_TOKEN.raw()
         {
+            if comma {
+                p.error("expected an aggregate after the comma");
+            }
             break;
         }
         if !aggregate_item(p) {
+            if comma {
+                p.error("expected an aggregate after the comma");
+            }
             break;
         }
         any = true;
@@ -406,9 +460,12 @@ pub(super) fn tstats_command(p: &mut Parser<'_>) {
     tstats_preamble(p);
     if kw(p, "from") {
         p.bump_as(K::FROM_KW.raw());
-        if kw(p, "datamodel") && p.nth(1) == K::EQ.raw() {
+        // `datamodel` is a keyword here, and wants its `=`.
+        if p.current() == K::IDENT.raw() && p.current_text() == "datamodel" {
             p.bump_as(K::DATAMODEL_KW.raw());
-            p.bump();
+            if !p.eat(K::EQ.raw()) {
+                p.error("expected `=`");
+            }
         }
         if at_field(p) {
             name_leaf(p);
@@ -420,6 +477,9 @@ pub(super) fn tstats_command(p: &mut Parser<'_>) {
     }
     if kw(p, "where") {
         p.bump_as(K::WHERE_KW.raw());
+        if !search::starts_expression(p) {
+            p.error("expected a search term");
+        }
         search::search_expression_before_by(p);
     }
     if kw(p, "by") {

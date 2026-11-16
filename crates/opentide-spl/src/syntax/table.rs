@@ -8,7 +8,8 @@ use super::kind::SyntaxKind as K;
 use super::parser::leaf;
 use super::search;
 use super::stats::{
-    at_call, at_field, at_option, at_stage_end, command_option, commas, kw, name_leaf,
+    at_bare_boolean, at_call, at_field, at_option, at_stage_end, command_option, commas, kw,
+    name_leaf,
 };
 use opentide_parse::Parser;
 
@@ -102,11 +103,14 @@ fn field_name(p: &mut Parser<'_>) -> bool {
     true
 }
 
-/// `a, b*, "c"`: one or more fields, commas anywhere between them.
+/// `a, b*, "c"`: one or more fields, a comma (or several, or a trailing
+/// one) between them but none leading.
 fn field_list(p: &mut Parser<'_>) -> bool {
     let mut any = false;
     loop {
-        commas(p);
+        if any {
+            commas(p);
+        }
         if at_stage_end(p) || !field_name(p) {
             break;
         }
@@ -119,7 +123,9 @@ fn field_list(p: &mut Parser<'_>) -> bool {
 fn rename(p: &mut Parser<'_>) {
     let mut any = false;
     loop {
-        commas(p);
+        if any {
+            commas(p);
+        }
         if at_stage_end(p) {
             break;
         }
@@ -127,14 +133,18 @@ fn rename(p: &mut Parser<'_>) {
         let kind = p.current();
         if p.current() == K::PREFIX_FIELD.raw() {
             name_leaf(p);
+        } else if at_bare_boolean(p) {
+            p.err_and_bump("expected `(` after the name");
         } else if at_call(p) {
             expr::name_or_call(p);
-        } else if !field_name(p) || kind == K::MACRO_TOKEN.raw() {
+        } else if kind == K::MACRO_TOKEN.raw() || !field_name(p) {
             if kind != K::MACRO_TOKEN.raw() {
                 item.abandon(p);
                 break;
             }
-            p.error("a macro cannot be renamed");
+            // A macro stands for a field in a list, not in a rename.
+            item.abandon(p);
+            break;
         }
         p.eat(K::COMMA.raw());
         if kw(p, "as") {
@@ -159,8 +169,9 @@ const DEDUP_OPTIONS: [(&str, K); 3] = [
     ("consecutive", K::CONSECUTIVE_KW),
 ];
 
+/// `keepevents`, `keepempty` and `consecutive` are keywords of `dedup`.
 fn at_dedup_option(p: &Parser<'_>) -> bool {
-    at_option(p) && DEDUP_OPTIONS.iter().any(|(n, _)| *n == p.current_text())
+    p.current() == K::IDENT.raw() && DEDUP_OPTIONS.iter().any(|(n, _)| *n == p.current_text())
 }
 
 fn dedup_option(p: &mut Parser<'_>) {
@@ -170,11 +181,14 @@ fn dedup_option(p: &mut Parser<'_>) {
         .find(|(n, _)| *n == p.current_text())
         .map_or(K::KEEPEVENTS_KW, |(_, k)| *k);
     p.bump_as(keyword.raw());
-    p.bump();
-    if at_field(p) {
-        expr::name_or_call(p);
+    if p.eat(K::EQ.raw()) {
+        if at_field(p) {
+            expr::name_or_call(p);
+        } else {
+            p.error("expected a value");
+        }
     } else {
-        p.error("expected a value");
+        p.error("expected `=`");
     }
     m.complete(p, K::DEDUP_OPTION.raw());
 }
@@ -187,27 +201,37 @@ fn dedup(p: &mut Parser<'_>) {
     }
     let mut any = false;
     loop {
-        commas_one(p);
-        if at_stage_end(p) || kw(p, "sortby") {
+        // One comma at most between fields, none leading or trailing.
+        let comma = any && p.eat(K::COMMA.raw());
+        if at_stage_end(p) || at_word(p, "sortby") || at_dedup_option(p) {
+            if comma {
+                p.error("expected a field after the comma");
+            }
             break;
         }
-        if at_dedup_option(p) {
-            dedup_option(p);
-        } else if field_name(p) {
-            any = true;
-        } else {
+        if !field_name(p) {
+            if comma {
+                p.error("expected a field after the comma");
+            }
             break;
         }
+        any = true;
     }
     if !any {
         p.error("expected a field");
     }
-    if kw(p, "sortby") {
+    while at_dedup_option(p) {
+        dedup_option(p);
+    }
+    if at_word(p, "sortby") {
         p.bump_as(K::SORTBY_KW.raw());
         let mut keys = false;
         loop {
-            commas_one(p);
-            if at_stage_end(p) || !sort_item(p) {
+            let comma = keys && p.eat(K::COMMA.raw());
+            if !sort_item(p) {
+                if comma {
+                    p.error("expected a sort key after the comma");
+                }
                 break;
             }
             keys = true;
@@ -218,21 +242,26 @@ fn dedup(p: &mut Parser<'_>) {
     }
 }
 
-/// One optional comma (a separator, not a list's repeated commas).
-fn commas_one(p: &mut Parser<'_>) {
-    p.eat(K::COMMA.raw());
+/// The case-sensitive word `word`.
+fn at_word(p: &Parser<'_>, word: &str) -> bool {
+    p.current() == K::IDENT.raw() && p.current_text() == word
 }
 
-/// `+x`, `-x`, `x`, `num(x)`.
+/// `+x`, `-x`, `x`, `num(x)`; a sign wants its key.
 fn sort_item(p: &mut Parser<'_>) -> bool {
     let m = p.start();
-    if p.current() == K::PLUS.raw() || p.current() == K::MINUS.raw() {
+    let signed = p.current() == K::PLUS.raw() || p.current() == K::MINUS.raw();
+    if signed {
         p.bump();
     }
-    if at_call(p) {
+    if at_bare_boolean(p) {
+        p.err_and_bump("expected `(` after the name");
+    } else if at_call(p) {
         expr::name_or_call(p);
     } else if at_field(p) {
         name_leaf(p);
+    } else if signed {
+        p.error("expected a field after the sign");
     } else {
         m.abandon(p);
         return false;
@@ -241,7 +270,8 @@ fn sort_item(p: &mut Parser<'_>) -> bool {
     true
 }
 
-/// `sort [n] options keys options [desc]`.
+/// `sort [n] options keys options [desc]`: the options come before or after
+/// the keys, not among them.
 fn sort(p: &mut Parser<'_>) {
     number(p);
     while at_option(p) {
@@ -249,22 +279,26 @@ fn sort(p: &mut Parser<'_>) {
     }
     let mut keys = 0;
     loop {
-        commas_one(p);
-        if at_stage_end(p) {
+        // One comma at most between keys, none leading or trailing.
+        let comma = keys > 0 && p.eat(K::COMMA.raw());
+        if at_stage_end(p)
+            || at_option(p)
+            // After a key, `desc` and `d` are the order, not more keys.
+            || (keys > 0 && (kw(p, "desc") || kw(p, "d")))
+            || !sort_item(p)
+        {
+            if comma {
+                p.error("expected a sort key after the comma");
+            }
             break;
         }
-        if at_option(p) {
-            command_option(p);
-        } else if keys > 0 && (kw(p, "desc") || kw(p, "d")) && is_last(p) {
-            break;
-        } else if sort_item(p) {
-            keys += 1;
-        } else {
-            break;
-        }
+        keys += 1;
     }
     if keys == 0 {
         p.error("expected a sort key");
+    }
+    while at_option(p) {
+        command_option(p);
     }
     if kw(p, "desc") {
         p.bump_as(K::DESC_KW.raw());
@@ -273,23 +307,28 @@ fn sort(p: &mut Parser<'_>) {
     }
 }
 
-/// Whether the current token is the last of its stage.
-fn is_last(p: &Parser<'_>) -> bool {
-    let next = p.nth(1);
-    next == K::PIPE.raw()
-        || next == K::R_BRACKET.raw()
-        || next == K::R_PAREN.raw()
-        || next == K::EOF.raw()
-}
-
 /// `rex [options] "pattern" [options]`.
 fn rex(p: &mut Parser<'_>) {
     let mut pattern = false;
     loop {
-        if p.eat(K::COMMA.raw()) {
+        // Options may be comma-separated before the pattern, not after it.
+        if !pattern && p.eat(K::COMMA.raw()) {
             continue;
         }
-        if at_option(p) {
+        if at_option(p) && p.current_text() == "field" {
+            // `field=` names a field: a name or a quoted name.
+            let m = p.start();
+            name_leaf(p);
+            p.bump();
+            if super::stats::at_name(p) {
+                name_leaf(p);
+            } else if p.current() == K::STRING_TOKEN.raw() {
+                leaf(p, K::STR, K::STRING_TOKEN);
+            } else {
+                p.error("expected a field name");
+            }
+            m.complete(p, K::COMMAND_OPTION.raw());
+        } else if at_option(p) {
             command_option(p);
         } else if !pattern && p.current() == K::STRING_TOKEN.raw() {
             leaf(p, K::STR, K::STRING_TOKEN);
@@ -340,10 +379,25 @@ fn mvexpand(p: &mut Parser<'_>) {
     }
 }
 
-/// `makemv [delim="x"] [options] field`.
+/// `makemv [delim="x"] [options] field`; `delim` is a keyword.
 fn makemv(p: &mut Parser<'_>) {
-    while at_option(p) {
-        command_option(p);
+    loop {
+        if at_word(p, "delim") {
+            p.bump_as(K::DELIM_KW.raw());
+            if p.eat(K::EQ.raw()) {
+                if p.current() == K::STRING_TOKEN.raw() {
+                    leaf(p, K::STR, K::STRING_TOKEN);
+                } else {
+                    p.error("expected a string");
+                }
+            } else {
+                p.error("expected `=`");
+            }
+        } else if at_option(p) {
+            command_option(p);
+        } else {
+            break;
+        }
     }
     if at_field(p) {
         name_leaf(p);

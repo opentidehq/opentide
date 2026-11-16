@@ -10,8 +10,8 @@ fn every_keyword_lexes_as_one_token() {
     let table = opentide_highlight::keywords(LanguageId::Spl).expect("SPL has a table");
     assert!(table.len() > 80, "{} rows", table.len());
     for (token, _) in table {
-        // After a pipe, so the word is a command or a keyword, not a term.
-        let source = format!("| stats count {token}");
+        // In a search, where every operator has its own token.
+        let source = format!("| search x {token}");
         let lexemes: Vec<_> = lex(&source)
             .into_iter()
             .filter(|l| l.kind != SyntaxKind::WHITESPACE.raw())

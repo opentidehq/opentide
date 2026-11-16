@@ -143,6 +143,37 @@ fn string_len(s: &str, in_search: bool, dead: &mut [bool; 2]) -> Option<usize> {
     Some(end)
 }
 
+/// The length of a call word (`now()`) at the start of `s`.
+fn callword_len(s: &str) -> Option<usize> {
+    let name = s
+        .bytes()
+        .take_while(|b| b.is_ascii_alphabetic() || *b == b'_')
+        .count();
+    (name > 0 && s[name..].starts_with("()")).then_some(name + 2)
+}
+
+/// The length of the identifier at the start of `s`: a name, then dotted
+/// segments (`alert.attack`), as `grammar.js` spells `identifier`.
+fn ident_len(s: &str) -> Option<usize> {
+    let name = |b: &u8| b.is_ascii_alphanumeric() || *b == b'_' || *b == b':';
+    let bytes = s.as_bytes();
+    if !bytes
+        .first()
+        .is_some_and(|b| b.is_ascii_alphabetic() || *b == b'_')
+    {
+        return None;
+    }
+    let mut i = bytes.iter().take_while(|b| name(b)).count();
+    while bytes.get(i) == Some(&b'.') {
+        let segment = bytes[i + 1..].iter().take_while(|b| name(b)).count();
+        if segment == 0 {
+            break;
+        }
+        i += 1 + segment;
+    }
+    Some(i)
+}
+
 /// The length of the `foreach` template at the start of `s`: name
 /// characters and `<<FIELD>>` markers, at least one marker.
 fn template_len(s: &str) -> Option<usize> {
@@ -169,16 +200,37 @@ fn template_len(s: &str) -> Option<usize> {
     seen.then_some(i)
 }
 
+/// The rest of a run of white space (a callback: logos' generated code for a
+/// repeated class recurses once per character of a multibyte run, and aborts
+/// the process on a long one).
+fn space_tail<'s, T: Logos<'s, Source = str>>(lex: &mut Lexer<'s, T>) {
+    let n = lex
+        .remainder()
+        .find(|c: char| !c.is_whitespace())
+        .unwrap_or(lex.remainder().len());
+    lex.bump(n);
+}
+
+/// The rest of a search word: characters up to white space or an operator,
+/// bracket, quote or backtick (a callback, as [`space_tail`]).
+fn word_tail<'s, T: Logos<'s, Source = str>>(lex: &mut Lexer<'s, T>) {
+    let n = lex
+        .remainder()
+        .find(|c: char| c.is_whitespace() || "\"()[]|=<>!,`".contains(c))
+        .unwrap_or(lex.remainder().len());
+    lex.bump(n);
+}
+
 /// Words, strings and operators of a search, a command's arguments, and a
 /// call's arguments in an aggregate. A word is the broad run of characters
 /// that break no term; [`classify`] tells what it is.
 #[derive(Logos, Clone, Copy, Debug, PartialEq, Eq)]
 enum Search {
-    #[regex(r"\s+")]
+    #[regex(r"\s", space_tail)]
     Whitespace,
     #[token("`", backtick)]
     Backtick(Tick),
-    #[regex(r#"[^\s"()\[\]|=<>!,`]+"#)]
+    #[regex(r#"[^\s"()\[\]|=<>!,`]"#, word_tail)]
     Word,
     #[regex(r"[A-Za-z_]+\(\)", priority = 5)]
     CallWord,
@@ -222,7 +274,7 @@ enum Search {
 /// aggregate: names, numbers and operators, each its own token.
 #[derive(Logos, Clone, Copy, Debug, PartialEq, Eq)]
 enum Expr {
-    #[regex(r"\s+")]
+    #[regex(r"\s", space_tail)]
     Whitespace,
     #[token("`", backtick)]
     Backtick(Tick),
@@ -363,9 +415,14 @@ fn term_text_len(s: &str) -> usize {
 /// (`reset_after="("x==\"y\"")"`): any run of quoted strings, escapes and
 /// characters that break no argument, with a quoted string or an escape
 /// that something follows.
-fn compound_len(s: &str) -> Option<usize> {
+///
+/// Returns the length (when there is a compound), how far the scan went, and
+/// whether it met a quoted part or an escape: with none, no start before the
+/// end of the scan can make a compound either, which lets the caller skip
+/// them (a run of `a=a=a=` stays linear).
+fn compound_len(s: &str) -> (Option<usize>, usize, bool) {
     let bytes = s.as_bytes();
-    let (mut i, mut previous_quoted, mut found) = (0, false, false);
+    let (mut i, mut previous_quoted, mut found, mut quoted_any) = (0, false, false, false);
     while i < bytes.len() {
         let (len, quoted) = match bytes[i] {
             b'"' => {
@@ -398,9 +455,10 @@ fn compound_len(s: &str) -> Option<usize> {
             found = true;
         }
         previous_quoted = quoted;
+        quoted_any |= quoted;
         i += len;
     }
-    found.then_some(i)
+    (found.then_some(i), i, quoted_any)
 }
 
 /// How a stage's tokens are lexed, from its command.
@@ -425,10 +483,16 @@ enum Paren {
     Search,
     /// The arguments of a call: expressions.
     Expr,
+    /// The list after `IN` in an expression: search values.
+    List,
 }
 
 /// A pipeline (the query, or one `[ ... ]`).
 #[derive(Debug)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent flags of the lexer's stage state, each read alone"
+)]
 struct Frame {
     /// The next significant token starts a stage.
     at_start: bool,
@@ -444,6 +508,18 @@ struct Frame {
     prev_word: &'static str,
     /// A `TERM(` was opened: the next `)` closes it, and no paren is open.
     directive: bool,
+    /// The last name followed a comparison operator (`a=TERM(`): then it is
+    /// a value, and its parenthesis a group, not a directive.
+    name_after_operator: bool,
+    /// The stage is a stats-family command: after `where`, `by` returns to
+    /// aggregate lexing.
+    agg: bool,
+    /// The `by` clause began: a later `where` is a name.
+    after_by: bool,
+    /// The token just before was the keyword `where` of a tstats.
+    after_where: bool,
+    /// Significant tokens since the command word (`by` is an aggregate first).
+    stage_tokens: u32,
 }
 
 impl Frame {
@@ -454,6 +530,11 @@ impl Frame {
             class: Class::Search,
             spelling: Spelling::default(),
             parens: Vec::new(),
+            name_after_operator: false,
+            agg: false,
+            after_by: false,
+            after_where: false,
+            stage_tokens: 0,
             prev: None,
             prev_word: "",
             directive: false,
@@ -462,10 +543,11 @@ impl Frame {
 
     /// How the next token is lexed.
     fn mode(&self) -> Paren {
-        if self.class == Class::Expr {
-            Paren::Expr
-        } else {
-            self.parens.last().copied().unwrap_or(Paren::Search)
+        match (self.class, self.parens.last()) {
+            // `x IN (a-b, c*)` in an expression lists search values.
+            (_, Some(Paren::List)) => Paren::Search,
+            (Class::Expr, _) => Paren::Expr,
+            (_, top) => top.copied().unwrap_or(Paren::Search),
         }
     }
 }
@@ -499,11 +581,19 @@ fn command_class(word: &str) -> (Class, Spelling) {
         "eval" | "where" => (Class::Expr, plain),
         "search" => (Class::Search, plain),
         "stats" | "eventstats" | "streamstats" | "sistats" | "chart" | "timechart" | "sichart"
-        | "sitimechart" | "geostats" | "tstats" => (Class::Agg, plain),
+        | "sitimechart" | "geostats" => (Class::Agg, plain),
+        "tstats" => (
+            Class::Agg,
+            Spelling {
+                search_where: true,
+                ..plain
+            },
+        ),
         "fields" | "sort" | "dedup" => (
             Class::Generic,
             Spelling {
                 signs: true,
+                narrow_words: true,
                 ..plain
             },
         ),
@@ -511,20 +601,53 @@ fn command_class(word: &str) -> (Class, Spelling) {
             Class::Generic,
             Spelling {
                 prefix_fields: true,
+                narrow_words: true,
                 ..plain
             },
         ),
-        _ => (Class::Generic, plain),
+        "inputlookup" => (
+            Class::Generic,
+            Spelling {
+                narrow_words: true,
+                search_where: true,
+                ..plain
+            },
+        ),
+        "table" | "rex" | "fillnull" | "mvexpand" | "makemv" | "join" | "lookup"
+        | "outputlookup" | "foreach" | "spath" | "tojson" | "head" | "tail" => (
+            Class::Generic,
+            Spelling {
+                narrow_words: true,
+                ..plain
+            },
+        ),
+        _ => (
+            Class::Generic,
+            Spelling {
+                call_words: true,
+                ..plain
+            },
+        ),
     }
 }
 
 /// How a command spells its words, beyond its class.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent flags of the lexer's stage state, each read alone"
+)]
 struct Spelling {
     /// `fields`, `sort` and `dedup` take `+` and `-` as signs.
     signs: bool,
     /// `rename` takes tstats's `dst=` as a field name.
     prefix_fields: bool,
+    /// A command with no rule of its own takes `now()` as one search word.
+    call_words: bool,
+    /// A command that takes names only: a word stops at a quote (`a'b'`).
+    narrow_words: bool,
+    /// `where` starts a search (tstats, inputlookup); elsewhere it is a name.
+    search_where: bool,
 }
 
 /// The length of a tstats prefix field (`dst=`, `*=`) at the start of `s`.
@@ -561,6 +684,8 @@ struct Driver<'s> {
     raw: bool,
     /// Whether an unclosed `"` or `'` was met: no later one closes.
     dead_quotes: [bool; 2],
+    /// No compound value starts before this offset (a scan found no quote).
+    no_compound_until: usize,
 }
 
 impl Driver<'_> {
@@ -573,20 +698,46 @@ impl Driver<'_> {
     fn next(&mut self, pos: usize) -> (K, usize) {
         let rest = &self.source[pos..];
         let first_char = rest.chars().next().map_or(1, char::len_utf8);
-        if self.raw && !rest.starts_with(char::is_whitespace) {
+        // A comment, or a macro no longer than the text, takes the place of
+        // the raw text of a directive (`TERM(`m(1)` x`).
+        let tick = scan_tick(rest);
+        let tick_wins = match tick {
+            Some((Tick::Comment, _)) => true,
+            Some((Tick::Macro, len)) => len >= term_text_len(rest),
+            None => false,
+        };
+        if self.raw && !rest.starts_with(char::is_whitespace) && !tick_wins {
             self.raw = false;
             let len = term_text_len(rest);
-            if len > 0 {
+            // `CASE(Admin()`: the call word `Admin()` is longer than the text.
+            let call = callword_len(rest).unwrap_or(0);
+            // `CASE((x)`: a lone `(` or `[` is the token, not the text.
+            let lone = len == 1
+                && (matches!(rest.as_bytes()[0], b'(' | b'[')
+                    || (rest.as_bytes()[0] == b']' && self.frames.len() > 1));
+            if len > 0 && call <= len && !lone {
                 return (K::TERM_TEXT_TOKEN, len);
             }
         }
-        let (mode, class, spelling, after_operator, after_equals) = {
+        let command_position = {
+            let f = self.frame();
+            f.at_start && !f.bare && f.prev.is_some_and(|(k, _)| k == K::PIPE)
+        };
+        if command_position && let Some(len) = ident_len(rest) {
+            // tree-sitter reads the command word as an identifier here, where
+            // only a command (or a macro) can start: `fields{` is `fields`
+            // then `{`, `a{}.b` is `a` then `{}.b`.
+            return (K::IDENT, len);
+        }
+        let (mode, class, spelling, after_operator, after_equals, at_start) = {
             let f = self.frame();
             let operator = f.prev.is_some_and(|(k, _)| {
                 matches!(k, K::EQ | K::EQ2 | K::NE | K::LT | K::GT | K::LE | K::GE)
             });
-            let equals = f.prev.is_some_and(|(k, _)| k == K::EQ);
-            (f.mode(), f.class, f.spelling, operator, equals)
+            let equals = f
+                .prev
+                .is_some_and(|(k, _)| matches!(k, K::EQ | K::NE | K::LT | K::GT | K::LE | K::GE));
+            (f.mode(), f.class, f.spelling, operator, equals, f.at_start)
         };
         match mode {
             Paren::Expr => {
@@ -599,26 +750,39 @@ impl Driver<'_> {
                         let len = lexer.span().end;
                         match template_len(rest) {
                             Some(t) if t >= len => (K::TEMPLATE_NAME, t),
-                            _ => (expr_kind(token, lexer.slice()), len),
+                            _ => (expr_kind(token), len),
                         }
                     }
                     _ => (K::ERROR_TOKEN, first_char),
                 }
             }
-            Paren::Search => {
+            Paren::Search | Paren::List => {
                 if spelling.prefix_fields
                     && let Some(len) = prefix_field_len(rest)
                 {
                     return (K::PREFIX_FIELD, len);
                 }
-                if after_equals
-                    && class != Class::Search
-                    && let Some(len) = compound_len(rest)
-                {
-                    return (K::STRING_TOKEN, len);
+                if after_equals && class != Class::Search && pos >= self.no_compound_until {
+                    let (found, scanned, quoted) = compound_len(rest);
+                    if let Some(len) = found {
+                        return (K::STRING_TOKEN, len);
+                    }
+                    if !quoted {
+                        self.no_compound_until = pos + scanned;
+                    }
                 }
                 if let Some(len) = string_len(rest, true, &mut self.dead_quotes) {
                     return (K::STRING_TOKEN, len);
+                }
+                if class != Class::Search && !at_start {
+                    // The loose comparisons are a search's: here `==` is `=` and
+                    // `=`, `<>` is `<` and `>`.
+                    if rest.starts_with("==") || rest.starts_with("=>") || rest.starts_with("=<") {
+                        return (K::EQ, 1);
+                    }
+                    if rest.starts_with("<>") {
+                        return (K::LT, 1);
+                    }
                 }
                 let mut lexer = Search::lexer(rest);
                 match lexer.next() {
@@ -626,11 +790,31 @@ impl Driver<'_> {
                         let slice = lexer.slice();
                         let len = lexer.span().end;
                         match token {
-                            Search::CallWord if class != Class::Search && !after_operator => {
+                            Search::CallWord
+                                if class != Class::Search
+                                    && !after_operator
+                                    && !spelling.call_words =>
+                            {
                                 // `count()` is a name, `(`, `)`: not a search word.
                                 (K::IDENT, len - 2)
                             }
                             Search::CallWord => (K::CALL_WORD, len),
+                            Search::Word
+                                if spelling.narrow_words
+                                    && slice.contains('\'')
+                                    && !slice.contains('*') =>
+                            {
+                                let cut = slice.find('\'').unwrap_or(slice.len()).max(1);
+                                (classify(&slice[..cut]), cut)
+                            }
+                            Search::Word
+                                if spelling.signs
+                                    && !starts_with_sign(slice)
+                                    && slice[1..].contains('+') =>
+                            {
+                                let cut = 1 + slice[1..].find('+').unwrap_or(0);
+                                (classify(&slice[..cut]), cut)
+                            }
                             Search::Word
                                 if spelling.signs && slice.len() > 1 && starts_with_sign(slice) =>
                             {
@@ -668,28 +852,59 @@ impl Driver<'_> {
                 kind,
                 K::IDENT | K::FIELD_WORD | K::NUMBER_TOKEN | K::GLOB_TOKEN | K::SEARCH_WORD_TOKEN
             );
-            let (class, spelling) = if f.bare || !named || operator_follows(rest) {
-                (Class::Search, Spelling::default())
-            } else if kind == K::IDENT {
-                command_class(text)
-            } else {
-                (Class::Generic, Spelling::default())
-            };
+            // A stage starts as a search unless a plain name begins a command: a
+            // directive (`TERM(`), a field word or a number can only begin terms.
+            let (class, spelling) =
+                if f.bare || !named || operator_follows(rest) || matches!(text, "TERM" | "CASE") {
+                    (Class::Search, Spelling::default())
+                } else if kind == K::IDENT {
+                    command_class(text)
+                } else {
+                    (Class::Search, Spelling::default())
+                };
             f.class = if kind == K::MACRO_TOKEN && !f.bare {
                 Class::Search
             } else {
                 class
             };
             f.spelling = spelling;
+            f.agg = class == Class::Agg;
+            f.stage_tokens = 0;
+            f.after_where = false;
+        } else if kind == K::IDENT
+            && text.eq_ignore_ascii_case("by")
+            && f.agg
+            && f.parens.is_empty()
+            // `by` is the clause once an aggregate precedes it, not a term after
+            // `where`, `AND`, `as` or an operator, nor an aggregate after a comma.
+            && f.stage_tokens >= 2
+            && !f.after_where
+            && !matches!(f.prev_word, "AND" | "OR" | "NOT")
+            && !(f.prev_word == "as" && f.class != Class::Search)
+            && !f.prev.is_some_and(|(k, _)| {
+                matches!(k, K::COMMA | K::EQ | K::NE | K::LT | K::GT | K::LE | K::GE)
+            })
+        {
+            f.class = Class::Agg;
+            f.after_by = true;
         } else if kind == K::IDENT
             && text.eq_ignore_ascii_case("where")
+            && f.spelling.search_where
+            && !f.after_by
             && matches!(f.class, Class::Agg | Class::Generic)
         {
             // `tstats ... where` and `inputlookup ... where` take a search.
             f.class = Class::Search;
+            f.spelling = Spelling::default();
+            f.after_where = true;
+            f.stage_tokens += 1;
+            f.prev = Some((kind, end));
+            f.prev_word = "where";
+            return;
         }
         match kind {
             K::PIPE => {
+                f.after_by = false;
                 f.at_start = true;
                 f.bare = false;
                 f.parens.clear();
@@ -714,25 +929,45 @@ impl Driver<'_> {
             }
             K::L_PAREN => {
                 let name = f.prev.is_some_and(|(k, _)| k == K::IDENT);
-                let adjacent_name = f.prev.is_some_and(|(k, e)| k == K::IDENT && e == start);
-                if name
-                    && matches!(f.prev_word, "TERM" | "CASE" | "PREFIX")
-                    && f.mode() != Paren::Expr
-                {
+                // In a search `a (b)` is a term and a group; elsewhere a name and
+                // its parenthesis are a call, space or not.
+                let adjacent_name = f.prev.is_some_and(|(k, e)| {
+                    k == K::IDENT && (e == start || f.class != Class::Search)
+                });
+                let searching = f.class == Class::Search;
+                let directive = match f.prev_word {
+                    "TERM" | "CASE" => searching,
+                    "PREFIX" => !searching,
+                    _ => false,
+                };
+                if name && directive && f.mode() != Paren::Expr && !f.name_after_operator {
                     f.directive = true;
                     raw = true;
                 } else {
-                    let paren = if f.mode() == Paren::Expr {
+                    let paren = if f.prev_word == "IN" && f.mode() == Paren::Expr {
+                        Paren::List
+                    } else if f.mode() == Paren::Expr {
                         Paren::Expr
-                    } else if adjacent_name && !NOT_CALLS.contains(&f.prev_word) {
+                    } else if adjacent_name
+                        && !(if f.class == Class::Generic {
+                            // Args of a command with no rule: only these are never calls.
+                            matches!(f.prev_word, "AND" | "OR" | "NOT" | "IN")
+                        } else {
+                            NOT_CALLS.contains(&f.prev_word)
+                        })
+                    {
                         match f.class {
-                            Class::Agg if f.parens.is_empty() => Paren::Search,
+                            // The call of an option value (`x=if(a, b)`) takes expressions.
+                            Class::Agg if f.parens.is_empty() && !f.name_after_operator => {
+                                Paren::Search
+                            }
                             Class::Search => Paren::Search,
                             _ => Paren::Expr,
                         }
                     } else {
                         Paren::Search
                     };
+                    f.directive = false;
                     f.parens.push(paren);
                 }
             }
@@ -745,6 +980,14 @@ impl Driver<'_> {
             }
             _ => f.directive = false,
         }
+        f.after_where = false;
+        // A macro stands for anything: it does not make `by` a clause.
+        if kind != K::MACRO_TOKEN {
+            f.stage_tokens += 1;
+        }
+        f.name_after_operator = kind == K::IDENT
+            && f.prev
+                .is_some_and(|(k, _)| matches!(k, K::EQ | K::NE | K::LT | K::GT | K::LE | K::GE));
         f.prev = Some((kind, end));
         f.prev_word = if kind == K::IDENT {
             remembered(text)
@@ -786,7 +1029,7 @@ fn search_kind(token: Search, text: &str) -> K {
     }
 }
 
-fn expr_kind(token: Expr, _text: &str) -> K {
+fn expr_kind(token: Expr) -> K {
     match token {
         Expr::Whitespace => K::WHITESPACE,
         Expr::Backtick(Tick::Comment) => K::COMMENT,
@@ -829,6 +1072,7 @@ pub fn lex(source: &str) -> Vec<Lexeme> {
         frames: vec![Frame::new(true)],
         raw: false,
         dead_quotes: [false; 2],
+        no_compound_until: 0,
     };
     let mut out = Vec::with_capacity(source.len() / 4 + 1);
     let mut pos = 0;

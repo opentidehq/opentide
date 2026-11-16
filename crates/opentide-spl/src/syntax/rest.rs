@@ -11,9 +11,35 @@ use super::kind::SyntaxKind as K;
 use super::parser::leaf;
 use super::search;
 use super::stats::{
-    at_call, at_field, at_option, at_stage_end, command_option, commas, kw, name_leaf, option_value,
+    at_bare_boolean, at_call, at_field, at_option, at_stage_end, command_option, commas, kw,
+    name_leaf, option_value,
 };
 use opentide_parse::Parser;
+
+/// Whether `word` is a command: one with a rule anywhere, or one the catalog
+/// knows. Such a word starts a command, not a field, where both could.
+pub(super) fn is_known_command(word: &str) -> bool {
+    is_rest_command(word)
+        || super::table::is_table_command(word)
+        || CATALOG.contains(&word)
+        || CATALOG_WITH_ARGUMENTS.contains(&word)
+        || matches!(
+            word,
+            "search"
+                | "where"
+                | "eval"
+                | "tstats"
+                | "stats"
+                | "eventstats"
+                | "streamstats"
+                | "sistats"
+                | "chart"
+                | "timechart"
+                | "sichart"
+                | "sitimechart"
+                | "geostats"
+        )
+}
 
 /// Whether `word` has a rule of its own in this module.
 pub(super) fn is_rest_command(word: &str) -> bool {
@@ -86,7 +112,7 @@ fn lookup(p: &mut Parser<'_>) {
         if !table_name(p) {
             p.error("expected a lookup table");
         }
-        if !lookup_fields(p) {
+        if !lookup_fields(p, false) {
             p.error("expected a lookup field");
         }
         if kw(p, "output") || kw(p, "outputnew") {
@@ -96,18 +122,22 @@ fn lookup(p: &mut Parser<'_>) {
                 K::OUTPUTNEW_KW
             };
             p.bump_as(word.raw());
-            lookup_fields(p);
+            lookup_fields(p, true);
         }
     }
     m.complete(p, K::LOOKUP_COMMAND.raw());
 }
 
 /// `a as b, c`: lookup fields with commas anywhere; stops at `output`.
-fn lookup_fields(p: &mut Parser<'_>) -> bool {
+fn lookup_fields(p: &mut Parser<'_>, outputs: bool) -> bool {
     let mut any = false;
     loop {
-        commas(p);
-        if at_stage_end(p) || kw(p, "output") || kw(p, "outputnew") {
+        // Commas between fields, never before the first.
+        if any {
+            commas(p);
+        }
+        // After `output` a field may be called `output`.
+        if at_stage_end(p) || (!outputs && (kw(p, "output") || kw(p, "outputnew"))) {
             break;
         }
         let kind = p.current();
@@ -144,12 +174,14 @@ fn lookup_fields(p: &mut Parser<'_>) -> bool {
 fn inputlookup(p: &mut Parser<'_>, first: bool) {
     let m = p.start();
     p.bump_as(K::INPUTLOOKUP_KW.raw());
+    // `inputlookup` alone, as the first stage, is the one form with no table.
+    let alone = at_stage_end(p);
     options(p);
-    if !table_name(p) && (!first || !at_stage_end(p)) {
+    if !(table_name(p) || alone && first) {
         p.error("expected a lookup table");
     }
     loop {
-        if at_option(p) {
+        if at_option(p) && !kw(p, "where") {
             command_option(p);
         } else if p.current() == K::L_BRACKET.raw() {
             search::subsearch(p);
@@ -159,7 +191,10 @@ fn inputlookup(p: &mut Parser<'_>, first: bool) {
     }
     if kw(p, "where") {
         p.bump_as(K::WHERE_KW.raw());
-        search::search_expression_before_by(p);
+        if !search::starts_expression(p) {
+            p.error("expected a search term");
+        }
+        search::search_expression_plain(p);
     }
     m.complete(p, K::INPUTLOOKUP_COMMAND.raw());
 }
@@ -225,6 +260,8 @@ fn tojson(p: &mut Parser<'_>) {
         if at_option(p) {
             command_option(p);
         } else if p.eat(K::COMMA.raw()) {
+        } else if at_bare_boolean(p) {
+            p.err_and_bump("expected `(` after the name");
         } else if at_call(p) {
             expr::name_or_call(p);
         } else if !field_entry(p) {
@@ -267,7 +304,7 @@ fn at_argument(p: &Parser<'_>) -> bool {
 }
 
 fn at_comparison(p: &Parser<'_>) -> bool {
-    at_field(p)
+    super::stats::at_name(p)
         && [K::NE, K::LT, K::GT, K::LE, K::GE]
             .iter()
             .any(|k| k.raw() == p.nth(1))
@@ -292,6 +329,8 @@ fn argument_list(p: &mut Parser<'_>) -> bool {
             command_option(p);
         } else if at_comparison(p) {
             comparison(p);
+        } else if at_bare_boolean(p) {
+            p.err_and_bump("expected `(` after the name");
         } else if at_call(p) {
             expr::name_or_call(p);
         } else if kind == K::STRING_TOKEN.raw() {

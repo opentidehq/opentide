@@ -28,4 +28,4 @@ SOURCE_FILE@0..27
           IDENT@26..27 "t"
 --
 27..27: expected a lookup table
-27..27: expected a lookup field (expected COMMA)
+27..27: expected a lookup field

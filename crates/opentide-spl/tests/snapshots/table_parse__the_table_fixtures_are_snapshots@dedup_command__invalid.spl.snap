@@ -20,4 +20,4 @@ SOURCE_FILE@0..18
     DEDUP_COMMAND@13..18
       DEDUP_KW@13..18 "dedup"
 --
-18..18: expected a field (expected COMMA)
+18..18: expected a field

@@ -1993,7 +1993,7 @@ impl Glob {
     }
 }
 
-/// `Identifier = 'ident' | 'bool' | 'field_word' | 'dynamic_name' | 'token_name' | 'template_name' | 'prefix_field'`
+/// `Identifier = 'ident' | 'number' | 'bool' | 'field_word' | 'dynamic_name' | 'token_name' | 'template_name' | 'prefix_field'`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Identifier {
     syntax: SyntaxNode,
@@ -2016,6 +2016,10 @@ impl Identifier {
     /// The token child.
     pub fn ident_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, T![ident])
+    }
+    /// The token child.
+    pub fn number_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![number])
     }
     /// The token child.
     pub fn bool_token(&self) -> Option<SyntaxToken> {
@@ -4529,9 +4533,10 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::IDENTIFIER as u16,
         name: "Identifier",
-        text: "'ident' | 'bool' | 'field_word' | 'dynamic_name' | 'token_name' | 'template_name' | 'prefix_field'",
+        text: "'ident' | 'number' | 'bool' | 'field_word' | 'dynamic_name' | 'token_name' | 'template_name' | 'prefix_field'",
         rule: Rule::Alt(&[
             Rule::Kind(T![ident] as u16),
+            Rule::Kind(T![number] as u16),
             Rule::Kind(T![bool] as u16),
             Rule::Kind(T![field_word] as u16),
             Rule::Kind(T![dynamic_name] as u16),
