@@ -6,14 +6,14 @@
 //! closed. It scans the text, not the tree, so it does not depend on how the
 //! parse errors are positioned.
 
-use opentide_core::{ByteSpan, Diagnostic, Range, codes, span_to_range};
+use opentide_core::{ByteSpan, Diagnostic, LineIndex, Range, codes};
 
 /// Rewrite the syntax error that a stray `)` or an unclosed `(` caused.
-pub(crate) fn refine(source: &str, diagnostics: &mut [Diagnostic]) {
+pub(crate) fn refine(source: &str, lines: &LineIndex<'_>, diagnostics: &mut [Diagnostic]) {
     let Some((span, message)) = unbalanced(source) else {
         return;
     };
-    let range = span_to_range(source, span);
+    let range = lines.range(span);
     let parse_errors = || {
         diagnostics
             .iter()

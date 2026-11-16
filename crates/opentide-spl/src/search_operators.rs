@@ -20,7 +20,8 @@
 //! `|`, not from grammar rule names.
 
 use super::Catalog;
-use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
+use super::scan::{Order, closing_bracket, count_nested_scan, walk_pipelines};
+use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
 
 /// Where a search clause sits, which decides what Splunk does with the
 /// operator.
@@ -61,21 +62,36 @@ fn replacement(op: &str) -> Option<&'static str> {
     }
 }
 
-pub(crate) fn collect(source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    walk(source, 0, source.len(), catalog, out);
+pub(crate) fn collect(
+    source: &str,
+    catalog: &Catalog,
+    lines: &LineIndex<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
+    walk(source, (0, source.len()), catalog, lines, out);
 }
 
-fn walk(source: &str, start: usize, end: usize, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    for (index, (seg_start, seg_end)) in split_segments(source, start, end).into_iter().enumerate()
-    {
-        if let Some((clause, from, to)) = clause_of(source, seg_start, seg_end, index == 0, catalog)
-        {
-            scan(source, from, to, clause, out);
-        }
-        for (inner_start, inner_end) in subsearches(source, seg_start, seg_end) {
-            walk(source, inner_start, inner_end, catalog, out);
-        }
-    }
+fn walk(
+    source: &str,
+    (start, end): (usize, usize),
+    catalog: &Catalog,
+    lines: &LineIndex<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
+    walk_pipelines(
+        source,
+        (start, end),
+        skip_hidden,
+        Order::StageFirst,
+        |_| (),
+        |(), index, (seg_start, seg_end)| {
+            if let Some((clause, from, to)) =
+                clause_of(source, seg_start, seg_end, index == 0, catalog)
+            {
+                scan(source, (from, to), clause, lines, out);
+            }
+        },
+    );
 }
 
 /// The search clause of one stage, if it has one. `first` is the stage
@@ -148,7 +164,14 @@ fn top_level_words(source: &str, start: usize, end: usize) -> Vec<(usize, usize)
             continue;
         }
         match bytes[i] {
+            // A subsearch is opaque: jump over it when the walk knows its end.
+            b'[' if let Some(close) = closing_bracket(source, i).filter(|&c| c < end) => {
+                i = close + 1;
+            }
             b'[' | b'(' => {
+                if bytes[i] == b'[' {
+                    count_nested_scan();
+                }
                 depth += 1;
                 i += 1;
             }
@@ -176,7 +199,13 @@ fn top_level_words(source: &str, start: usize, end: usize) -> Vec<(usize, usize)
 
 /// Reports every operator in `OPERATORS` used as a comparison in the search
 /// clause `start..end`.
-fn scan(source: &str, start: usize, end: usize, clause: Clause, out: &mut Vec<Diagnostic>) {
+fn scan(
+    source: &str,
+    (start, end): (usize, usize),
+    clause: Clause,
+    lines: &LineIndex<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
     let bytes = source.as_bytes();
     let mut i = start;
     // The previous bare term, when it can be the field of a spaced comparison
@@ -197,7 +226,16 @@ fn scan(source: &str, start: usize, end: usize, clause: Clause, out: &mut Vec<Di
             continue;
         }
         match c {
+            b'[' if brackets == 0
+                && let Some(close) = closing_bracket(source, i).filter(|&c| c < end) =>
+            {
+                // A subsearch is its own query; `walk` reads it.
+                i = close + 1;
+                field_before = false;
+                continue;
+            }
             b'[' => {
+                count_nested_scan();
                 brackets += 1;
                 i += 1;
                 field_before = false;
@@ -236,7 +274,14 @@ fn scan(source: &str, start: usize, end: usize, clause: Clause, out: &mut Vec<Di
             continue;
         }
         let term_end = i;
-        field_before = check_term(source, term_start, term_end, end, field_before, clause, out);
+        field_before = check_term(
+            source,
+            (term_start, term_end, end),
+            field_before,
+            clause,
+            lines,
+            out,
+        );
     }
 }
 
@@ -244,11 +289,10 @@ fn scan(source: &str, start: usize, end: usize, clause: Clause, out: &mut Vec<Di
 /// comparison that follows it.
 fn check_term(
     source: &str,
-    start: usize,
-    end: usize,
-    clause_end: usize,
+    (start, end, clause_end): (usize, usize, usize),
     field_before: bool,
     clause: Clause,
+    lines: &LineIndex<'_>,
     out: &mut Vec<Diagnostic>,
 ) -> bool {
     let bytes = source.as_bytes();
@@ -276,20 +320,20 @@ fn check_term(
         is_field_name(&source[start..op_start]) && has_value
     };
     if reported {
-        push(out, source, op, clause, op_start, op_end);
+        push(out, lines, op, clause, op_start, op_end);
     }
     false
 }
 
 fn push(
     out: &mut Vec<Diagnostic>,
-    source: &str,
+    lines: &LineIndex<'_>,
     op: &str,
     clause: Clause,
     start: usize,
     end: usize,
 ) {
-    let range = span_to_range(source, ByteSpan::new(start, end));
+    let range = lines.range(ByteSpan::new(start, end));
     let diagnostic = match (op, replacement(op)) {
         ("=~", _) => Diagnostic::warning(
             codes::SPL_SEARCH_OPERATOR,
@@ -361,65 +405,6 @@ fn command_word(source: &str, start: usize, end: usize) -> Option<(usize, usize)
 fn is_field(source: &str, at: usize, end: usize) -> bool {
     let i = skip_ws_and_comments(source, at, end);
     i < end && is_op_byte(source.as_bytes()[i])
-}
-
-/// Splits `start..end` on `|` outside quotes, comments, macros and brackets.
-/// Parentheses do not hide a pipe: Splunk splits
-/// `index=a TERM("x" | eval y=1` into two stages and runs it.
-fn split_segments(source: &str, start: usize, end: usize) -> Vec<(usize, usize)> {
-    let bytes = source.as_bytes();
-    let mut i = start;
-    let mut seg_start = start;
-    let mut depth = 0i32;
-    let mut segs = Vec::new();
-    while i < end {
-        if let Some(next) = skip_hidden(source, i, end) {
-            i = next;
-            continue;
-        }
-        match bytes[i] {
-            b'|' if depth == 0 => {
-                segs.push((seg_start, i));
-                seg_start = i + 1;
-            }
-            b'[' => depth += 1,
-            b']' => depth = (depth - 1).max(0),
-            _ => {}
-        }
-        i += 1;
-    }
-    if seg_start < end {
-        segs.push((seg_start, end));
-    }
-    segs
-}
-
-/// The insides of top-level `[ … ]` subsearches in `start..end`.
-fn subsearches(source: &str, start: usize, end: usize) -> Vec<(usize, usize)> {
-    let bytes = source.as_bytes();
-    let mut i = start;
-    let mut depth = 0i32;
-    let mut inner_start = 0;
-    let mut out = Vec::new();
-    while i < end {
-        if let Some(next) = skip_hidden(source, i, end) {
-            i = next;
-            continue;
-        }
-        if bytes[i] == b'[' {
-            if depth == 0 {
-                inner_start = i + 1;
-            }
-            depth += 1;
-        } else if bytes[i] == b']' && depth > 0 {
-            depth -= 1;
-            if depth == 0 {
-                out.push((inner_start, i));
-            }
-        }
-        i += 1;
-    }
-    out
 }
 
 /// The end of a comment, quoted string or macro starting at `i`.

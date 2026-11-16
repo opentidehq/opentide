@@ -496,16 +496,22 @@ pub struct DocumentSymbol {
 }
 
 /// Spans and ranges are in the text after a leading byte-order mark
-/// ([`opentide_core::strip_bom`]).
-#[expect(
-    clippy::expect_used,
-    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
-)]
+/// ([`opentide_core::strip_bom`]), converted through one line table
+/// ([`opentide_core::with_line_index`]): a block's findings (a Falco
+/// exception's, each at its key) are placed once each.
 pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     let input = AnalyzeInput {
         source: opentide_core::strip_bom(input.source),
         ..input
     };
+    opentide_core::with_line_index(input.source, || analyze_lines(input))
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
+fn analyze_lines(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     let spec = HighlightSpec::load().expect("spec");
     let mut diagnostics = Vec::new();
     // A file that is not YAML is `validate`'s `yaml_parse`: no finding here.
@@ -638,6 +644,10 @@ pub struct QueryAnalysis {
 /// placeholder (`...` under `# opentide:placeholder`) has no diagnostics.
 pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<QueryAnalysis> {
     let source = opentide_core::strip_bom(source);
+    opentide_core::with_line_index(source, || analyze_queries_lines(source, elastic_tenants))
+}
+
+fn analyze_queries_lines(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<QueryAnalysis> {
     let configurations = TideObject::parse(source).and_then(|object| object.configurations);
     let mut out = analyze_injections(
         source,

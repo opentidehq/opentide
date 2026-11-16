@@ -16,8 +16,6 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-import pytest
-
 _SPEC = importlib.util.spec_from_file_location(
     "bench_reference",
     Path(__file__).resolve().parents[2] / "scripts" / "ci" / "bench_reference.py",
@@ -32,7 +30,7 @@ ENV = {
     "GITHUB_REPOSITORY": "opentidehq/opentide",
     "GITHUB_RUN_ID": "900",
     "BASE_BRANCH": "integration/unified-core",
-    "ENGINE": "python",
+    "ENGINE": "rust",
 }
 
 
@@ -80,8 +78,9 @@ def ci_nightly(at: str, conclusion: str = "success", cpu: str | None = CPU) -> d
         "cpu": cpu,
         "jobs": [
             {"name": "Changes", "conclusion": "success"},
-            {"name": "Benchmarks / Benchmarks (python)", "conclusion": conclusion},
-            {"name": "Benchmarks / Benchmarks (rust)", "conclusion": "success"},
+            {"name": "Nightly / Benchmarks / Benchmarks (rust)", "conclusion": conclusion},
+            # Another job's success never stands for the benchmark's.
+            {"name": "Nightly / Engine tests (windows-latest)", "conclusion": "success"},
         ],
     }
 
@@ -92,7 +91,7 @@ def bench_alone(at: str, conclusion: str = "success", cpu: str | None = CPU) -> 
         "event": "workflow_dispatch",
         "at": at,
         "cpu": cpu,
-        "jobs": [{"name": "Benchmarks (python)", "conclusion": conclusion}],
+        "jobs": [{"name": "Benchmarks (rust)", "conclusion": conclusion}],
     }
 
 
@@ -117,11 +116,6 @@ def find(tmp_path: Path, runs: dict[str, dict[str, Any]]) -> tuple[str | None, F
     return found, fake
 
 
-def test_the_nightly_called_from_ci_is_a_reference(tmp_path: Path) -> None:
-    found, _ = find(tmp_path, {"1": ci_nightly("2026-11-14T01:15:00Z")})
-    assert found == "1"
-
-
 def test_the_newest_of_either_workflow_wins(tmp_path: Path) -> None:
     runs = {
         "1": ci_nightly("2026-11-13T01:15:00Z"),
@@ -133,7 +127,7 @@ def test_the_newest_of_either_workflow_wins(tmp_path: Path) -> None:
     assert find(tmp_path / "again", runs)[0] == "4"
 
 
-def test_a_failed_job_another_cpu_or_a_lost_artifact_is_never_the_reference(
+def test_a_failed_job_another_cpu_a_lost_artifact_this_run_or_a_pr_is_never_the_reference(
     tmp_path: Path,
 ) -> None:
     runs = {
@@ -145,6 +139,10 @@ def test_a_failed_job_another_cpu_or_a_lost_artifact_is_never_the_reference(
     found, fake = find(tmp_path, runs)
     assert found == "1"
     assert fake.downloads == ["4", "3", "1"]
+    # This run (900) and a pull request's never are either.
+    runs = {"900": ci_nightly("2026-11-15T00:00:00Z"), "5": bench_alone("2026-11-14T00:00:00Z")}
+    runs["5"]["event"] = "pull_request"
+    assert find(tmp_path / "own", runs)[0] is None
 
 
 def test_a_run_whose_jobs_cannot_be_listed_is_skipped(tmp_path: Path) -> None:
@@ -154,29 +152,11 @@ def test_a_run_whose_jobs_cannot_be_listed_is_skipped(tmp_path: Path) -> None:
     assert find(tmp_path, runs)[0] == "1"
 
 
-def test_this_run_and_pull_requests_are_never_the_reference(tmp_path: Path) -> None:
-    runs = {"900": ci_nightly("2026-11-15T00:00:00Z"), "5": bench_alone("2026-11-14T00:00:00Z")}
-    runs["5"]["event"] = "pull_request"
-    assert find(tmp_path, runs)[0] is None
-
-
-@pytest.mark.parametrize(
-    ("name", "matches"),
-    [
-        ("Benchmarks (python)", True),
-        ("Benchmarks / Benchmarks (python)", True),
-        ("Benchmarks / Benchmarks (rust)", False),
-        ("Benchmarks", False),
-    ],
-)
-def test_the_job_names_of_both_workflows(name: str, matches: bool) -> None:
-    assert bench_reference.is_bench_job(name, "python") is matches
-
-
 def test_the_workflows_agree_with_the_names_it_looks_for() -> None:
     """ci.yml's `nightly` job calls nightly.yml's `benchmarks` (`Benchmarks`), which
     calls bench.yml, whose job is `Benchmarks (rust)`: `Nightly / Benchmarks /
-    Benchmarks (rust)` in ci.yml's run."""
+    Benchmarks (rust)` in ci.yml's run. The python engine (the oracle) is frozen:
+    bench.yml measures the rust one alone, held to the base branch's last result."""
     import yaml
 
     workflows = Path(__file__).resolve().parents[2] / ".github" / "workflows"
@@ -192,6 +172,16 @@ def test_the_workflows_agree_with_the_names_it_looks_for() -> None:
     assert job["name"] == "Benchmarks (rust)"
     name = f"{nightly['name']} / {benchmarks['name']} / {job['name']}"
     assert bench_reference.is_bench_job(name, "rust")
+    assert bench_reference.is_bench_job("Benchmarks (rust)", "rust")
+    assert not bench_reference.is_bench_job("Benchmarks", "rust")
+    assert "strategy" not in job
+    assert job["env"]["ENGINE"] == "rust"
+    steps = {step.get("name"): step for step in job["steps"]}
+    find_step = steps["Find the base branch's last result"]
+    assert "if" not in find_step
+    check = steps["Check against the budgets"]
+    assert "--previous" in check["run"]  # only when a reference exists
+    assert "--require-reference" in check["run"]  # a command held to nothing fails
     assert "scripts/ci/bench_reference.py" in "\n".join(
         str(step.get("run", "")) for step in job["steps"]
     )

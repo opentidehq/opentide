@@ -16,4 +16,5 @@ mod table;
 pub use analyze::analyze;
 pub use kind::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 pub use lexer::lex;
+pub(crate) use parser::SUBSEARCH_WEIGHT_LEVELS;
 pub use parser::{GRAMMAR, MAX_DEPTH, parse};

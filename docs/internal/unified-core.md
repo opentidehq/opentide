@@ -63,7 +63,7 @@ Phase 0 merges into `integration/unified-core`, not `development`. The integrati
 ### Maintainer steps outstanding
 
 - Freeze language-server `main`, and disable its opentide canary or accept that it fails.
-- Branch protection on `integration/unified-core`: the required checks of [`.github/AGENTS.md`](https://github.com/opentidehq/opentide/blob/integration/unified-core/.github/AGENTS.md#required-checks), among them `Golden compare`, `Supply chain (cargo deny)`, every `Fuzz smoke` cell including `Fuzz smoke (cql)`, and `Engine release (dry run) / SBOMs`; add `Rust coverage gates` (#855). The Golden workflow (`golden.yml`) is path-filtered, so requiring it blocks pull requests that do not touch its paths.
+- Branch protection on `development` and `integration/unified-core`: exactly one required check, `PR gate` ([`.github/AGENTS.md`](https://github.com/opentidehq/opentide/blob/integration/unified-core/.github/AGENTS.md#required-checks)), which needs every job a pull request runs (`cargo deny`, the release build and its smoke tests on a release pull request among them). Remove any older required check (`Golden compare`, `Fuzz smoke (…)`, `Engine release (dry run) / SBOMs`, `Rust coverage gates`): those jobs are gone or run in the nightly, and a required check that no longer reports blocks every pull request.
 - Registry steps and trusted publishers ([publishing](https://github.com/opentidehq/opentide/blob/integration/unified-core/docs/internal/publishing.md#maintainer-steps)), including `opentide-cql`'s trusted publisher and second owner.
 - The engine release-candidate tag, and the `opentidehq/vscode-extension` pull request that pins it.
 - The `.claude/settings.json` allow-list.

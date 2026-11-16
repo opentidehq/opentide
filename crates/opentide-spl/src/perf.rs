@@ -17,10 +17,11 @@
 
 use super::Catalog;
 use super::scan::{
-    base_search, command_word, end_of_macro, end_quoted, read_word, skip_comment,
-    skip_ws_and_comments, split_segments, subsearches,
+    Order, base_search, closing_bracket, command_word, count_nested_scan, end_of_macro, end_quoted,
+    read_word, skip_comment, skip_hidden, skip_ws_and_comments, walk_pipelines,
 };
-use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
+use opentide_core::{ByteSpan, Diagnostic, LineIndex, Range, codes};
+use std::collections::HashSet;
 
 const WILDCARD_CITE: &str =
     "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search";
@@ -31,11 +32,27 @@ const SUBSEARCH_CITE: &str =
 const TRANSACTION_CITE: &str =
     "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Transaction";
 
-pub(crate) fn collect(source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+/// Where the lints' findings go: the analysis's line index (one per
+/// analysis, not a scan from the start per finding) and the findings
+/// already made, by code and range (a finding is reported once).
+struct Sink<'o, 'l> {
+    out: &'o mut Vec<Diagnostic>,
+    lines: &'l LineIndex<'l>,
+    seen: HashSet<(String, Range)>,
+}
+
+pub(crate) fn collect(
+    source: &str,
+    catalog: &Catalog,
+    lines: &LineIndex<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
     if source.is_empty() {
         return;
     }
-    walk_pipeline(source, 0, source.len(), catalog, out);
+    let seen = out.iter().map(|d| (d.code.clone(), d.range)).collect();
+    let mut sink = Sink { out, lines, seen };
+    walk_pipeline(source, 0, source.len(), catalog, &mut sink);
 }
 
 fn walk_pipeline(
@@ -43,33 +60,39 @@ fn walk_pipeline(
     start: usize,
     end: usize,
     catalog: &Catalog,
-    out: &mut Vec<Diagnostic>,
+    out: &mut Sink<'_, '_>,
 ) {
-    let segments = split_segments(source, start, end);
-    if let Some((base_start, base_end)) = base_search(source, &segments, catalog) {
-        scan_search(source, base_start, base_end, out);
-    }
-    for &(seg_start, seg_end) in &segments {
-        if seg_start >= seg_end {
-            continue;
-        }
-        let (word, word_span) = command_word(source, seg_start, seg_end);
-        if let Some((cmd_start, cmd_end)) = word_span
-            && let Some(message) = truncation_message(&word)
-        {
-            push(
-                out,
-                source,
-                codes::SPL_SUBSEARCH_TRUNCATION,
-                message,
-                cmd_start,
-                cmd_end,
-            );
-        }
-        for (inner_start, inner_end) in subsearches(source, seg_start, seg_end) {
-            walk_pipeline(source, inner_start, inner_end, catalog, out);
-        }
-    }
+    walk_pipelines(
+        source,
+        (start, end),
+        skip_hidden,
+        Order::StageFirst,
+        |segments| base_search(source, segments, catalog),
+        |base, index, (seg_start, seg_end)| {
+            // The base search first, before the first stage's own checks.
+            if index == 0
+                && let Some((base_start, base_end)) = *base
+            {
+                scan_search(source, base_start, base_end, out);
+            }
+            if seg_start >= seg_end {
+                return;
+            }
+            let (word, word_span) = command_word(source, seg_start, seg_end);
+            if let Some((cmd_start, cmd_end)) = word_span
+                && let Some(message) = truncation_message(&word)
+            {
+                push(
+                    out,
+                    source,
+                    codes::SPL_SUBSEARCH_TRUNCATION,
+                    message,
+                    cmd_start,
+                    cmd_end,
+                );
+            }
+        },
+    );
 }
 
 fn truncation_message(word: &str) -> Option<String> {
@@ -86,7 +109,7 @@ fn truncation_message(word: &str) -> Option<String> {
     }
 }
 
-fn scan_search(source: &str, start: usize, end: usize, out: &mut Vec<Diagnostic>) {
+fn scan_search(source: &str, start: usize, end: usize, out: &mut Sink<'_, '_>) {
     if let Some((not_start, not_end)) = leading_not_span(source, start, end) {
         push(
             out,
@@ -205,6 +228,14 @@ fn search_terms(source: &str, start: usize, end: usize) -> Vec<Term> {
             continue;
         }
         if bytes[i] == b'[' {
+            // A subsearch is its own query, walked on its own: jump over it.
+            if brackets == 0
+                && let Some(close) = closing_bracket(source, i).filter(|&c| c < end)
+            {
+                i = close + 1;
+                continue;
+            }
+            count_nested_scan();
             brackets += 1;
             i += 1;
             continue;
@@ -356,7 +387,7 @@ fn is_inefficient_wildcard(value: &str) -> bool {
 }
 
 fn push(
-    out: &mut Vec<Diagnostic>,
+    out: &mut Sink<'_, '_>,
     source: &str,
     code: &str,
     message: String,
@@ -368,14 +399,10 @@ fn push(
     if start >= end {
         return;
     }
-    let range = span_to_range(source, ByteSpan::new(start, end));
-    if out
-        .iter()
-        .any(|diag| diag.code == code && diag.range == range)
-    {
-        return;
+    let range = out.lines.range(ByteSpan::new(start, end));
+    if out.seen.insert((code.to_string(), range)) {
+        out.out.push(Diagnostic::warning(code, message, range));
     }
-    out.push(Diagnostic::warning(code, message, range));
 }
 
 #[cfg(test)]
