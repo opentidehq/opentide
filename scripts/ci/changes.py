@@ -220,6 +220,19 @@ CHECKS: Mapping[str, tuple[str, ...]] = {
         "crates/opentide-schema/src/objects/*",
         "xtask/src/spec_fields.rs",
     ),
+    # `cargo xtask stubs --check` (the `stubs` job): the committed stubs of
+    # opentide._native against the extension's introspection, generated from
+    # the binding and opentide-schema's classes (through the facade).
+    "stubs": (
+        "bindings/python/*",
+        "crates/opentide-schema/*",
+        "crates/opentide-schema-derive/*",
+        "crates/opentide/*",
+        "src/opentide/_native/*.pyi",
+        "xtask/src/stubs.rs",
+        "xtask/src/main.rs",
+        "xtask/Cargo.toml",
+    ),
     # opentide-schema's compile-fail cases (trybuild): the derive, the crate,
     # the cases (the lockfile and the toolchain are in EVERYTHING).
     "schema_ui": (

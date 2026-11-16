@@ -88,6 +88,7 @@ env:
 #
 #   build           `build`: the tests, xtask and the language server
 #   native          `native`: the `_native` extension
+#   stubs           `stubs`: the extension with PyO3's introspection, xtask
 #   engine-check    `engine-lint`: clippy (native and wasm32) and rustdoc
 #   wasm            `wasm`: the browser module, the WASI server and command line
 #   full-set-Linux  `node`, `facade` and the nightly's Linux Rust jobs:
@@ -134,6 +135,7 @@ jobs:
       vocab: ${{ steps.plan.outputs.vocab }}
       fields: ${{ steps.plan.outputs.fields }}
       schema_ui: ${{ steps.plan.outputs.schema_ui }}
+      stubs: ${{ steps.plan.outputs.stubs }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -285,6 +287,18 @@ jobs:
         if: needs.changes.outputs.wasm == 'true'
         run: bash scripts/engine/build-wasm.sh clippy
 
+      # opentide-schema for the hosts the workspace run does not lint
+      # (UC-1.1): its `stubs` feature (PyO3's introspection, as `native`'s
+      # stubs check builds it) and the browser target, when
+      # opentide-schema is affected. The workspace run already unifies its
+      # `python` feature on (the binding turns it on).
+      - name: clippy on opentide-schema (stubs, wasm32)
+        if: contains(format(' {0} ', needs.changes.outputs.crates), ' opentide-schema ')
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo clippy --locked -p opentide-schema --all-targets --features stubs -- -D warnings
+          cargo clippy --locked -p opentide-schema --target wasm32-unknown-unknown -- -D warnings
+
       # Broken intra-doc links and the like fail the build.
       - name: rustdoc
         if: needs.changes.outputs.rust == 'true'
@@ -357,6 +371,68 @@ jobs:
           path: ${{ runner.temp }}/native/opentide-*.whl
           if-no-files-found: error
           retention-days: 3
+
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
+  # The stubs of opentide._native.models and opentide._native.sdk, which
+  # `lint`'s ty reads, are generated from the extension (UC-1.9, ADR 0011;
+  # UC-5.2b): xtask builds it with PyO3's introspection data, as Python 3.10
+  # (the abi3 floor) sees it, and fails when a committed stub differs. When
+  # the binding, opentide-schema, the facade, the stubs or the generator
+  # change (`stubs`: scripts/ci/changes.py), and on every push and nightly.
+  # A job of its own, not a step of `native`: the Python jobs wait for
+  # `native`, and this build (xtask, then the extension in the develop
+  # profile) took 8 minutes cold (#1141's regression). Its own compiler cache:
+  # neither the profile nor PYO3_PYTHON is another job's.
+  stubs:
+    name: Generated stubs (_native)
+    needs: changes
+    if: needs.changes.outputs.stubs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_STRIP: debuginfo
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: stubs
+
+      - name: Install mold
+        run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
+
+      - name: Python 3.10
+        id: python310
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.10"
+
+      - name: Generated stubs are up to date
+        env:
+          PYO3_PYTHON: ${{ steps.python310.outputs.python-path }}
+        run: cargo xtask stubs --check
 
       - name: Save the compiler cache
         if: ${{ !cancelled() }}
@@ -812,7 +888,7 @@ jobs:
   # (crates/opentide/): its docs with every feature, as docs.rs builds them,
   # and its API against the branch it merges into (cargo-semver-checks). Its
   # tests and doctests run in `build` with the tests'
-  # features (every feature but `stubs`, which schema.yml builds).
+  # features (every feature but `stubs`, which `native`'s stubs check builds).
   facade:
     name: Facade crate (every feature's docs, semver checks)
     needs: changes
@@ -1592,15 +1668,6 @@ jobs:
     uses: ./.github/workflows/oracle.yml
     secrets: inherit
 
-  schema:
-    name: Schema
-    needs: changes
-    if: needs.changes.outputs.mode == 'nightly'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/schema.yml
-
-
   # Every engine crate builds from its packaged sources, as it will from
   # crates.io: a crate that reads a file outside OPENTIDE_ASSETS fails here, not
   # at release. The binding (bindings/python/, opentide-native), the tooling (xtask)
@@ -2142,6 +2209,7 @@ jobs:
   gate:
     name: PR gate
     needs:
+      - stubs
       - changes
       - lint
       - engine-lint
@@ -2202,7 +2270,6 @@ jobs:
       - coverage
       - benchmarks
       - oracle
-      - schema
       - conformance
       - wasm
       - npm-install

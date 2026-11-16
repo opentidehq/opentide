@@ -270,22 +270,26 @@ def test_the_browser_module_runs_the_typescript_client_tests() -> None:
     ("path", "checks"),
     [
         ("src/opentide/data/vocabulary/mitre/attack.vocab.toml", {"vocab"}),
+        ("bindings/python/src/sdk.rs", {"stubs"}),
+        ("crates/opentide/src/lib.rs", {"stubs"}),
+        ("src/opentide/_native/models.pyi", {"stubs"}),
+        ("xtask/src/stubs.rs", {"stubs"}),
         ("src/opentide/data/pins/specifications.toml", {"vocab"}),
         ("data/specifications.lock.json", {"vocab"}),
         ("xtask/src/vocab/sync.rs", {"vocab"}),
-        ("crates/opentide-schema/src/objects/tide.rs", {"fields", "schema_ui"}),
+        ("crates/opentide-schema/src/objects/tide.rs", {"fields", "schema_ui", "stubs"}),
         ("xtask/src/spec_fields.rs", {"fields"}),
-        ("crates/opentide-schema/src/lib.rs", {"schema_ui"}),
-        ("crates/opentide-schema/tests/ui/missing_field.rs", {"schema_ui"}),
-        ("crates/opentide-schema/Cargo.toml", {"schema_ui"}),
-        ("crates/opentide-schema-derive/src/lib.rs", {"schema_ui"}),
-        # Not their inputs: the crate's other tests, another xtask command.
-        ("crates/opentide-schema/tests/roundtrip.rs", set()),
-        ("xtask/src/main.rs", set()),
+        ("crates/opentide-schema/src/lib.rs", {"schema_ui", "stubs"}),
+        ("crates/opentide-schema/tests/ui/missing_field.rs", {"schema_ui", "stubs"}),
+        ("crates/opentide-schema/Cargo.toml", {"schema_ui", "stubs"}),
+        ("crates/opentide-schema-derive/src/lib.rs", {"schema_ui", "stubs"}),
+        # Not their inputs: another crate, another xtask command.
+        ("crates/opentide-kql/src/lib.rs", set()),
+        ("xtask/src/codegen.rs", set()),
         ("src/opentide/data/vocabulary/README.md", set()),
         # Shared configuration runs every check, as a push does.
-        ("Cargo.lock", {"vocab", "fields", "schema_ui"}),
-        (".github/workflows/ci.yml", {"vocab", "fields", "schema_ui"}),
+        ("Cargo.lock", {"vocab", "fields", "schema_ui", "stubs"}),
+        (".github/workflows/ci.yml", {"vocab", "fields", "schema_ui", "stubs"}),
     ],
 )
 def test_build_s_checks_run_when_their_inputs_change(path: str, checks: set[str]) -> None:
@@ -297,3 +301,11 @@ def test_a_push_runs_every_check() -> None:
     dirs, _ = changes.workspace_graph(metadata())
     full = changes.plan_run({"EVENT": "push"}, metadata()).outputs(dirs)
     assert {full[check] for check in changes.CHECKS} == {"true"}
+
+
+def test_a_stubs_input_runs_the_stubs_job_alone() -> None:
+    """An opentide-schema change runs `stubs`, not the wheel job nor pytest."""
+    outputs = plan("crates/opentide-schema/src/python.rs")
+    assert outputs["stubs"] == "true"
+    assert outputs["native"] == "false"
+    assert outputs["python"] == "false"

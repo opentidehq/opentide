@@ -245,7 +245,7 @@ def test_the_nightly_is_one_workflow() -> None:
         for job in ci_jobs().values()
         if str(job.get("uses", "")).startswith("./")
     }
-    assert {"coverage.yml", "bench.yml", "oracle.yml", "schema.yml"} <= called
+    assert {"coverage.yml", "bench.yml", "oracle.yml"} <= called
     for name in called:
         assert set(triggers(load(WORKFLOWS / name))) <= {"workflow_call", "workflow_dispatch"}
 
