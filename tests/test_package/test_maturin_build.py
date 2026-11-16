@@ -82,16 +82,14 @@ def test_the_stub_ships_while_compiled_modules_stay_out_of_the_sdist() -> None:
 
 
 def test_the_sdist_carries_what_the_crates_compile_in() -> None:
-    """The engine crates read the catalogs, grammars and highlight queries from
+    """The engine crates read the catalogs and highlight data from
     the repository root, and the workspace patches two crates from vendor/:
     cargo packages none of them with a crate, so the sdist adds them."""
     included = {entry["path"] for entry in _maturin()["include"] if entry["format"] == "sdist"}
     assert {
         "data/catalogs/**/*",
-        "grammars/*/src/**/*",
-        "grammars/*/queries/**/*",
         "highlights/spec.toml",
-        "highlights/queries/**/*",
+        "highlights/generated/**/*",
         "vendor/**/*",
     } <= included
     patches = _toml("Cargo.toml")["patch"]["crates-io"]

@@ -1,5 +1,5 @@
-//! ES|QL: the pairs of its `highlights.scm`, in its order (the generator
-//! groups them).
+//! ES|QL: the pairs of the tree-sitter `highlights.scm` it replaced, in its
+//! order (the generator groups them).
 
 use super::{Capture, Keywords};
 

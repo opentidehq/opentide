@@ -28,10 +28,9 @@ ROOT = "/repo"
 # name -> (directory, [(dependency, kind)]); a dependency outside the
 # workspace (serde) has no path and never counts.
 CRATES: dict[str, tuple[str, list[tuple[str, str | None]]]] = {
-    "opentide-syntax": ("crates/opentide-syntax", [("serde", None)]),
-    "opentide-kql": ("crates/opentide-kql", [("opentide-syntax", None)]),
-    "opentide-kuery": ("crates/opentide-kuery", [("opentide-syntax", None)]),
-    "opentide-parse": ("crates/opentide-parse", []),
+    "opentide-parse": ("crates/opentide-parse", [("serde", None)]),
+    "opentide-kql": ("crates/opentide-kql", [("opentide-parse", None)]),
+    "opentide-kuery": ("crates/opentide-kuery", [("opentide-parse", None)]),
     "opentide-schema": ("crates/opentide-schema", []),
     "opentide-schema-derive": ("crates/opentide-schema-derive", []),
     "opentide-analysis": (
@@ -55,8 +54,8 @@ CRATES: dict[str, tuple[str, list[tuple[str, str | None]]]] = {
     "opentide-connectors": ("crates/opentide-connectors", [("opentide-schema", None)]),
 }
 MEMBERS = sorted(CRATES)
-ABOVE_SYNTAX = {
-    "opentide-syntax",
+ABOVE_PARSE = {
+    "opentide-parse",
     "opentide-kql",
     "opentide-kuery",
     "opentide-analysis",
@@ -122,8 +121,8 @@ def test_a_docs_only_change_runs_docs_alone() -> None:
 
 
 def test_a_leaf_crate_runs_itself_and_its_reverse_dependencies() -> None:
-    outputs = plan("crates/opentide-syntax/src/lib.rs")
-    assert set(outputs["crates"].split()) == ABOVE_SYNTAX
+    outputs = plan("crates/opentide-parse/src/lib.rs")
+    assert set(outputs["crates"].split()) == ABOVE_PARSE
     # A Rust-only change builds no wheel and runs no pytest: the Rust tests
     # cover it (the maintainer's rule); of the specialised jobs, the parser
     # layer runs the WebAssembly builds (WASI and browser) alone.
@@ -131,9 +130,9 @@ def test_a_leaf_crate_runs_itself_and_its_reverse_dependencies() -> None:
     # The anchors are built, so the third-party features resolve as on the
     # push that saved the compiler cache; only the affected crates' tests run.
     built = set(outputs["packages"].replace("-p ", "").split())
-    assert built == ABOVE_SYNTAX | {"opentide-connectors"}
+    assert built == ABOVE_PARSE | {"opentide-connectors"}
     assert "opentide-connectors" not in outputs["filter"]
-    assert outputs["filter"].count("package(=") == len(ABOVE_SYNTAX)
+    assert outputs["filter"].count("package(=") == len(ABOVE_PARSE)
 
 
 @pytest.mark.parametrize(
@@ -142,9 +141,8 @@ def test_a_leaf_crate_runs_itself_and_its_reverse_dependencies() -> None:
         "crates/opentide-kuery/src/lib.rs",
         "crates/opentide-kql/src/parse.rs",
         "crates/opentide-parse/src/lib.rs",
-        "crates/opentide-syntax/build.rs",
-        "grammars/kql/grammar.js",
-        "highlights/queries/kql.scm",
+        "crates/opentide-parse/src/parser.rs",
+        "highlights/spec.toml",
     ],
 )
 def test_the_parser_layer_runs_the_webassembly_builds(path: str) -> None:

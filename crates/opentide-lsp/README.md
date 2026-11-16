@@ -88,7 +88,7 @@ With none of these, it says so on stderr and exits `2`. `opentide lsp start`, in
 | --- | --- |
 | `opentide-core` | Shared types, diagnostic codes |
 | `opentide-highlight` | Frozen HighlightSpec, semantic tokens, tm/monaco/helix maps |
-| `opentide-syntax` | Vendored tree-sitter KQL/SPL/ES\|QL/EQL/kuery/Lucene/Falco/CQL/YARA/Exabeam/YARA-L |
+| `opentide-parse` | The parsing toolkit of the pure-Rust query parsers (logos, rowan): every language but YARA, which reads `yara-x-parser` |
 | `opentide-kql` | Catalog, HIR, Sentinel/Defender profiles, `compile_kql_query` |
 | `opentide-spl` | searchbnf-informed catalog, `spl_unknown_command` |
 | `opentide-esql` | ES\|QL catalog with stack-version lifecycle, `esql_*` diagnostics |
@@ -111,7 +111,7 @@ Samples in `editors/{helix,nvim,zed}`. VS Code lives in a **different repository
 
 ## Agent skills
 
-Coding agents start at [`AGENTS.md`](../AGENTS.md). Procedures for the Rust workspace, tree-sitter 0.25, the stdio host, WASM, and catalogs live in [`.agents/skills/`](../../.agents/skills/README.md). Detection-authoring skills stay in `opentidehq/skills`.
+Coding agents start at [`AGENTS.md`](../AGENTS.md). Procedures for the Rust workspace, the query parsers, the stdio host, WASM, and catalogs live in [`.agents/skills/`](../../.agents/skills/README.md). Detection-authoring skills stay in `opentidehq/skills`.
 
 ## License
 

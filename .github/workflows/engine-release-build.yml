@@ -331,7 +331,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          (cd highlights && zip -r "../dist/highlights-${VERSION}.zip" spec.toml generated queries)
+          (cd highlights && zip -r "../dist/highlights-${VERSION}.zip" spec.toml generated)
           zip -j "dist/highlights-${VERSION}.zip" LICENSE NOTICE
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -340,7 +340,7 @@ jobs:
           if-no-files-found: error
 
   # The binaries embed third-party code and data: ship the notices with them.
-  # NOTICE covers ECS, Lucene, dk.brics, and the wasi-libc the WASM builds link
+  # NOTICE covers ECS, Lucene, dk.brics, and the wasi-libc the WASI builds link
   # (texts in licenses/wasi-libc, shipped as WASI-LIBC-LICENSES.txt);
   # cargo-about lists every Rust crate in the workspace, the browser build's
   # included, and fails on a licence about.toml does not accept. No OIDC token
@@ -374,8 +374,8 @@ jobs:
           if-no-files-found: error
 
   # A CycloneDX SBOM for each artifact (#843), each a release asset: the
-  # opentide-lsp binaries and WASI build, the browser build with the wasi-libc
-  # it links, the lsp npm packages (engine assets); the `opentide` binaries and
+  # opentide-lsp binaries and WASI build, the browser build (pure Rust), the
+  # lsp npm packages (engine assets); the `opentide` binaries and
   # crate, @opentide/opentide, and the PyPI wheel built from the same commit
   # (its extras' Python dependencies, pydantic of `plugins`, and the crates in
   # opentide._native), which are the product's. Its SBOM is scanned like the

@@ -5,23 +5,6 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 # ---------------------------------------------------------------------------
-# tree-sitter CLI
-# scripts/engine/check-grammars.sh and the CI "grammars" job regenerate the vendored
-# parsers with this exact version. Install it into the nvm-managed Node prefix:
-# that bin directory is already on PATH and lives under $HOME, so it persists in
-# environment snapshots. Use an inline `--prefix` rather than `npm config set`
-# so nothing is written to ~/.npmrc (a persisted prefix there makes nvm print a
-# warning on every shell start). The base image's default global prefix is not
-# writable, which is why the prefix must be given explicitly.
-# ---------------------------------------------------------------------------
-TS_VERSION="0.25.10"
-if [ "$(tree-sitter --version 2>/dev/null | awk '{print $2}')" != "$TS_VERSION" ]; then
-  node_prefix="$(dirname "$(dirname "$(command -v npm)")")"
-  npm install -g --prefix "$node_prefix" "tree-sitter-cli@${TS_VERSION}"
-fi
-tree-sitter --version
-
-# ---------------------------------------------------------------------------
 # Rust workspace
 # rust-toolchain.toml pins one Rust release plus rustfmt and clippy;
 # `rustup toolchain install` with no name installs exactly that. Then warm the

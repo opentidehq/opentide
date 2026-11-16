@@ -1,5 +1,5 @@
-//! YARA-L 2.0: `grammars/tree-sitter-opentide-yaral/queries/highlights.scm`,
-//! read by capture. The lexer of `opentide-yaral` knows each token (its tests
+//! YARA-L 2.0: the pairs of the tree-sitter `highlights.scm` it replaced
+//! (#1227), by capture. The lexer of `opentide-yaral` knows each token (its tests
 //! hold it to this table).
 
 use super::{Capture, Keywords};

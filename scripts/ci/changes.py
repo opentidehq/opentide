@@ -50,7 +50,6 @@ AREAS = (
     "node",  # the Node package
     "wasm",  # the WebAssembly modules (browser, WASI server and command line)
     "ts_packages",  # the TypeScript client's tests against the native servers
-    "grammars",  # grammars regenerate
     "textmate",  # TextMate grammars
     "gitlab",  # GitLab CI lint
     "facade",  # the facade crate's every feature and semver checks
@@ -111,9 +110,8 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("pyproject.toml", ("python", "pylint"), ()),
     ("uv.lock", ("python", "pylint"), ()),
     (".pre-commit-config.yaml", ("pylint",), ()),
-    # The scripts a gate job runs: the docs job's and the grammars job's.
+    # The scripts a gate job runs: the docs job's.
     ("scripts/validate-docs.sh", ("docs",), ()),
-    ("scripts/engine/check-grammars.sh", ("grammars",), ()),
     # The engine's scripts (the invariants, the WASI build, the release).
     ("scripts/engine/build-wasm.sh", ("wasm",), ()),
     # What the `wasm` job runs besides the build: its smoke tests and packs.
@@ -126,7 +124,6 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("scripts/*.py", ("python", "pylint"), ()),
     ("scripts/*.sh", ("ci",), ()),
     # What the engine compiles in, and its hosts.
-    ("grammars/*", ("grammars", "wasm"), ("opentide-syntax",)),
     ("highlights/test/*", ("textmate",), ()),
     ("highlights/*", ("textmate", "wasm"), ALL),
     ("editors/*", ("textmate",), ()),
@@ -156,9 +153,8 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
 #: build sees neither. Not the reverse
 #: closure of opentide-wasm: the facade it depends on lists every crate, so
 #: that would run it on every pull request. opentide-parse is ADR 0012's
-#: pure-Rust parser, before it lands.
+#: toolkit of the pure-Rust parsers.
 PARSER_CRATES = (
-    "opentide-syntax",
     "opentide-parse",
     "opentide-cql",
     "opentide-eql",

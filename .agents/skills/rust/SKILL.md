@@ -60,7 +60,7 @@ then no incremental cache to grow in the target directory.
 ## clippy and the workspace lints
 
 The lint levels are in the root `Cargo.toml`, `[workspace.lints]`. Every member sets
-`[lints] workspace = true`, except `opentide-syntax` and `opentide-wasm`, which copy the table with
+`[lints] workspace = true`, except `bindings/node` (napi's expansions), which copies the table with
 `unsafe_code = "deny"` (below). `clippy.toml` only tunes lints, and `rustfmt.toml` writes down
 rustfmt's defaults.
 
@@ -79,9 +79,9 @@ cargo clippy --workspace --all-targets -- -D warnings
   fails the build. Use `#[allow]` only where an expectation cannot be fulfilled, and say why beside
   it. Adding a lint to the workspace allow-list is a decision of its own, with its reason, never
   part of a fix.
-- `unsafe_code` is forbidden outside `opentide-syntax` and `opentide-wasm`, and every `unsafe`
-  block needs a `// SAFETY:` comment. `xtask/tests/lint_policy.rs` fails when a crate leaves the
-  workspace table, or when one of those two crates' copies of it drifts.
+- `unsafe_code` is forbidden, and no crate holds any `unsafe`; one that came to need it would
+  need a `// SAFETY:` comment on every block. `xtask/tests/lint_policy.rs` fails when a crate
+  leaves the workspace table, or when `bindings/node`'s copy of it drifts.
 - `missing_docs` holds for every new crate. Inaccurate docs are worse than none.
 - Code under `cfg(target_arch = "wasm32")` is linted only for that target:
   `bash scripts/engine/build-wasm.sh clippy` (CI's `engine-lint` job, when `wasm` runs).

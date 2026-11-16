@@ -4,54 +4,50 @@
 #   browser   wasm32-unknown-unknown  crates/opentide-wasm (wasm-bindgen)
 #   wasi      wasm32-wasip1           crates/opentide-lsp (the CLI, for vscode.dev)
 #
-# tree-sitter, the grammars, and the ES|QL scanner are C, so both need a
-# wasm C toolchain and libc: wasi-sdk, pinned below. The browser artifact
-# links wasi-sdk's libc.a and answers its syscalls inside the module
-# (crates/opentide-wasm/src/libc_syscalls.rs), so it imports nothing but
-# wasm-bindgen's glue. WASI_SDK_PATH reuses an existing install.
+# The engine is pure Rust (ADR 0012): both build with rustup's targets alone,
+# no C toolchain and no libc, and the browser artifact imports nothing but
+# wasm-bindgen's glue.
 #
 #   cli       wasm32-wasip1           the opentide command line (opentide-cli's binary,
 #                                     without its terminal UI), for the VS Code extension's
-#                                     WASI host: optimised with wasm-opt and held to a size
+#                                     WASI host: optimised with wasm-opt and held to a size.
+#                                     It links `ring`, which is C: it needs a wasm C
+#                                     toolchain and libc, wasi-sdk, pinned below and
+#                                     fetched only for it (WASI_SDK_PATH reuses an install)
 #
 #   scripts/engine/build-wasm.sh [browser] [wasi] [cli] [clippy]    default: browser wasi
 #
-# `clippy` lints the code only these targets compile (libc_syscalls.rs, the
-# wasip1 paths of opentide-lsp), which the workspace's native clippy run cannot
-# see, with the same C toolchain and -D warnings.
+# `clippy` lints the code only these targets compile (the wasm32 paths of
+# opentide-wasm, the wasip1 paths of opentide-lsp and the command line), which
+# the workspace's native clippy run cannot see, with -D warnings.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 targets=("$@")
 [[ ${#targets[@]} -gt 0 ]] || targets=(browser wasi)
 
+# wasi-sdk, for the command line's C (ring): `wasi_sdk` fetches it once.
 version=25.0
 digest=52640dde13599bf127a95499e61d6d640256119456d1af8897ab6725bcf3d89c
-if [[ -z "${WASI_SDK_PATH:-}" ]]; then
-  cache="$root/target/wasi-sdk"
-  WASI_SDK_PATH="$cache/wasi-sdk-$version-x86_64-linux"
-  if [[ ! -x "$WASI_SDK_PATH/bin/clang" ]]; then
-    mkdir -p "$cache"
-    curl -fsSL -o "$cache/wasi-sdk.tar.gz" \
-      "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${version%%.*}/wasi-sdk-$version-x86_64-linux.tar.gz"
-    echo "$digest  $cache/wasi-sdk.tar.gz" | sha256sum -c -
-    tar -xzf "$cache/wasi-sdk.tar.gz" -C "$cache"
+wasi_sdk() {
+  if [[ -z "${WASI_SDK_PATH:-}" ]]; then
+    local cache="$root/target/wasi-sdk"
+    WASI_SDK_PATH="$cache/wasi-sdk-$version-x86_64-linux"
+    if [[ ! -x "$WASI_SDK_PATH/bin/clang" ]]; then
+      mkdir -p "$cache"
+      curl -fsSL -o "$cache/wasi-sdk.tar.gz" \
+        "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${version%%.*}/wasi-sdk-$version-x86_64-linux.tar.gz"
+      echo "$digest  $cache/wasi-sdk.tar.gz" | sha256sum -c -
+      tar -xzf "$cache/wasi-sdk.tar.gz" -C "$cache"
+    fi
   fi
-fi
-sysroot="$WASI_SDK_PATH/share/wasi-sysroot"
+  sysroot="$WASI_SDK_PATH/share/wasi-sysroot"
+}
 
 for target in "${targets[@]}"; do
   case "$target" in
     browser)
       rustup target add wasm32-unknown-unknown >/dev/null
-      # wasi-libc's headers describe the libc linked below; tree-sitter's C
-      # needs __wasi__ to take its non-POSIX paths. libc.a is appended to
-      # RUSTFLAGS, not CARGO_TARGET_*_RUSTFLAGS: Cargo ignores the target
-      # variable whenever RUSTFLAGS is set (CI sets -Dwarnings).
-      CC_wasm32_unknown_unknown="$WASI_SDK_PATH/bin/clang" \
-      AR_wasm32_unknown_unknown="$WASI_SDK_PATH/bin/llvm-ar" \
-      CFLAGS_wasm32_unknown_unknown="-isystem $sysroot/include/wasm32-wasip1 -D__wasi__" \
-      RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=$sysroot/lib/wasm32-wasip1/libc.a" \
-        cargo build --release -p opentide-wasm --target wasm32-unknown-unknown
+      cargo build --release -p opentide-wasm --target wasm32-unknown-unknown
       wasm="$root/target/wasm32-unknown-unknown/release/opentide_wasm.wasm"
       node "$root/scripts/engine/wasm-smoke.mjs" imports "$wasm"
       if command -v wasm-bindgen >/dev/null 2>&1; then
@@ -63,10 +59,7 @@ for target in "${targets[@]}"; do
       fi ;;
     wasi)
       rustup target add wasm32-wasip1 >/dev/null
-      CC_wasm32_wasip1="$WASI_SDK_PATH/bin/clang" \
-      AR_wasm32_wasip1="$WASI_SDK_PATH/bin/llvm-ar" \
-      CFLAGS_wasm32_wasip1="--sysroot=$sysroot" \
-        cargo build --release -p opentide-lsp --target wasm32-wasip1
+      cargo build --release -p opentide-lsp --target wasm32-wasip1
       # Node 22's fast WASI calls (fd_write, path_open) can start a garbage
       # collection inside the call, which segfaults once the instance holds
       # enough memory; the lsp-client wasi transport documents the same flag.
@@ -75,6 +68,7 @@ for target in "${targets[@]}"; do
       # The command line under WASI (ADR 0007's amendment): no terminal UI, no
       # threads; requests to the network fail with network_unavailable.
       rustup target add wasm32-wasip1 >/dev/null
+      wasi_sdk
       # The version the module reports: the release's (OPENTIDE_VERSION, as
       # the release train sets it), else a development one of the shape an
       # editable install of the Python package reports (`0.1.devN+g<sha>`),
@@ -117,16 +111,11 @@ for target in "${targets[@]}"; do
       fi ;;
     clippy)
       rustup target add wasm32-unknown-unknown wasm32-wasip1 >/dev/null
-      CC_wasm32_unknown_unknown="$WASI_SDK_PATH/bin/clang" \
-      AR_wasm32_unknown_unknown="$WASI_SDK_PATH/bin/llvm-ar" \
-      CFLAGS_wasm32_unknown_unknown="-isystem $sysroot/include/wasm32-wasip1 -D__wasi__" \
-        cargo clippy --locked -p opentide-wasm --target wasm32-unknown-unknown --all-targets -- -D warnings
+      cargo clippy --locked -p opentide-wasm --target wasm32-unknown-unknown --all-targets -- -D warnings
       # The library and the binary: the tests' dev-dependencies (os_pipe, through
       # trycmd) do not build for wasip1.
-      CC_wasm32_wasip1="$WASI_SDK_PATH/bin/clang" \
-      AR_wasm32_wasip1="$WASI_SDK_PATH/bin/llvm-ar" \
-      CFLAGS_wasm32_wasip1="--sysroot=$sysroot" \
-        cargo clippy --locked -p opentide-lsp --target wasm32-wasip1 --lib --bins -- -D warnings
+      cargo clippy --locked -p opentide-lsp --target wasm32-wasip1 --lib --bins -- -D warnings
+      wasi_sdk
       # The command line's WASI paths (`cfg(target_os = "wasi")`), as `cli` builds it.
       CC_wasm32_wasip1="$WASI_SDK_PATH/bin/clang" \
       AR_wasm32_wasip1="$WASI_SDK_PATH/bin/llvm-ar" \

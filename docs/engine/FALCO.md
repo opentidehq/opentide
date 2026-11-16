@@ -25,7 +25,7 @@ Pinned revisions: libs `f13bc241815d463be433e947b90f42713df1abf9`, falco `b3c37f
 | **real Falco 0.45.2** (`falco --validate`, libs 0.26.1, the three default rules files loaded) | 364 cases: the 172 of `crates/testdata/oracles/falco/cases.yaml` (every row of this page) and the 192 default-rule conditions and broken twins; Falco loads 208, refuses 156 | 364 / 364: 361 identical, 3 documented differences (names a Sysdig tenant may define: an undefined macro, two tunings of a rule the defaults lack), 0 disagreements | `scripts/engine/oracles/falco/oracle.py`, `oracle.yml` → Falco |
 | Falco default rules (`falcosecurity/rules`, plugin rules) | 241 conditions across six sources, unmodified | 241 / 241 clean (no finding), every broken twin a parse error | `crates/opentide-analysis/tests/external_falco.rs` |
 | Public rules converted to opentide (`crates/testdata/workspaces/falco/`) | 9 rules (syscall, k8s_audit, aws_cloudtrail, a tuning) | clean end to end, every injected fault reported where it is written | `crates/opentide-analysis/tests/falco_rules.rs` |
-| tree-sitter grammar (highlighting) | the 376 accepted libs inputs | 375 / 376 (`test.op existsand macro`, below) | `tests/tree_sitter_agreement.rs` |
+| the tree (highlighting, `src/cst.rs`) | the 376 accepted libs inputs | 375 / 376 (`test.op existsand macro`, below) | `tests/tree_agreement.rs` |
 
 Both harnesses were checked to fail when the engine is wrong (a reordered list-operator table, a numeric operator table that allows everything).
 
@@ -173,7 +173,7 @@ Counts agree with all 15 warnings of `compiler.json`.
 
 ## Known differences
 
-- The tree-sitter grammar lexes `existsand` as one word; libsinsp reads `exists` then `and`. Only highlighting differs; the verdict comes from the port.
+- The tree lexes `existsand` as one word, as the tree-sitter grammar it replaced did; libsinsp reads `exists` then `and`. Only highlighting differs; the verdict comes from the port.
 - Plugin READMEs do not list `EPF_NO_RHS` or `EPF_NO_TRANSFORMER`, so plugin fields accept both. The plugin's own field definitions would.
 - `regex` patterns compile with Rust's `regex`, close to RE2 but not identical in every corner (RE2's POSIX mode and some Unicode classes).
 - A port given as a service name is a warning: whether it resolves depends on the agent host's `/etc/services`.

@@ -27,7 +27,7 @@ Citations:
 | **Data models** | `data/catalogs/spl/datamodels.toml` | `from datamodel=`; prefixed fields |
 | **Macros** | `data/catalogs/spl/macros.toml` | `` `drop_dm_object_name` `` hover + completion |
 | **Command options** | `data/catalogs/spl/command-options.toml` | argument completion and signature help |
-| Grammar | `grammars/tree-sitter-opentide-spl` | macros ≠ comments; dotted fields; subsearches |
+| Parser | `crates/opentide-spl/src/syntax/` and `spl.ungram` (on `opentide-parse`) | macros ≠ comments; dotted fields; subsearches |
 | HighlightSpec | `highlights/spec.toml` | `macro` capture (added in 0.2.0) |
 
 CrowdStrike is unrelated. Control/app commands (`dbxquery`, …) stay out of v1.
@@ -146,7 +146,7 @@ The range is the command word.
 
 ## Highlight overlay
 
-After tree-sitter:
+After the parser's highlighting:
 
 - catalog functions → `function.builtin`
 - catalog commands (including `from` / `by` / `AS`) → `keyword`
