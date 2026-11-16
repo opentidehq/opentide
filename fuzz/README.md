@@ -66,9 +66,9 @@ fix (`crates/opentide-lsp/src/protocol.rs`,
 `a_length_longer_than_the_input_ends_it_without_allocating_the_length`, came
 from `framing`).
 
-`.github/workflows/engine-fuzz.yml` runs every target for ten minutes every night,
-keeps each target's corpus in the Actions cache, and uploads what crashed.
-ci.yml's `fuzz-smoke` runs every target for 60 s in CI's nightly set (nightly
-and Run workflow): a panic or a timeout there fails the run. `tests/test_ci/test_workflows.py` and
-`tests/test_ci/test_workflows.py` fail when a target is missing from either
+`.github/workflows/engine-fuzz.yml` runs every target for ten minutes in CI's
+nightly (ci.yml calls it through nightly.yml; Run workflow runs it alone), keeps
+each target's corpus in the Actions cache, and uploads what crashed: a panic or
+a timeout fails the nightly, which opens its `nightly-failure` issue.
+`tests/test_ci/test_workflows.py` fails when a target is missing from its
 matrix.
