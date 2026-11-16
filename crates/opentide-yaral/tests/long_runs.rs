@@ -1,4 +1,5 @@
-//! Every analysis entry point on a 1 MB stack (the browser WASM module's)
+//! Every analysis entry point on a 1 MB stack (the browser WASM module's;
+//! more on Windows and under coverage, [`SMALL_STACK`])
 //! over a million repeats of each token class and over deep input: the
 //! diagnostics of the three contexts, the highlight tokens, the profile,
 //! hover, completions and signature help (#1227). The checks walk the tree

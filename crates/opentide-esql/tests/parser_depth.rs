@@ -1,4 +1,5 @@
-//! The parser's depth guards, on the 1 MB stack of the browser module: the
+//! The parser's depth guards, on the 1 MB stack of the browser module (more
+//! on Windows and under coverage, [`SMALL_STACK`]): the
 //! floors `crates/opentide-analysis/tests/deep_queries.rs` holds for ES|QL
 //! (1,000 nesting levels, a 10,000-term chain) must parse without a
 //! diagnostic, and deeper nesting is one diagnostic, never an overflow.
@@ -66,7 +67,7 @@ fn nesting_floor_chain_floor_and_the_limit() {
 }
 
 /// Every construct that recurses, at the nesting the floor asks of
-/// parentheses (1,000) and past it (1,100), unclosed too, on a 1 MB stack:
+/// parentheses (1,000) and past it (1,100), unclosed too, on a [`SMALL_STACK`]:
 /// none aborts. A call is charged two levels, so 1,000 calls are one
 /// diagnostic, not a stack overflow.
 #[test]
