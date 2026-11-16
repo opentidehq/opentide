@@ -73,19 +73,20 @@ pub(crate) fn parse(source: &str) -> (SyntaxNode, Parse) {
     (SyntaxNode::new_root(parse.green.clone()), parse)
 }
 
-/// Levels a rule on the long recursion path (calls, expressions, bodies) costs: a frame chain
-/// of about 1.5 KB per level in a debug build, so a 1 MB stack holds ~680 of them. Charging two
-/// keeps `MAX_DEPTH` safe; the nesting floor (1,000) is for parentheses of filters, one level.
-const HEAVY: u32 = 2;
-
-fn enter_heavy(p: &mut Parser<'_>) -> bool {
-    (0..HEAVY).all(|_| p.enter())
+/// A cold path that records `message`: the call sites of a recursive rule stay small (a debug
+/// build gives every temporary of every call its own stack slot, and the recursion path is
+/// what a 1 MB stack holds 1,000 levels of).
+/// Consumes the closing token, or records `message`.
+fn close(p: &mut Parser<'_>, k: K, message: &'static str) {
+    if !p.eat(k.raw()) {
+        err(p, message);
+    }
 }
 
-fn exit_heavy(p: &mut Parser<'_>) {
-    for _ in 0..HEAVY {
-        p.exit();
-    }
+#[cold]
+#[inline(never)]
+fn err(p: &mut Parser<'_>, message: &'static str) {
+    p.error(message);
 }
 
 // ---- Helpers -------------------------------------------------------------------------------
@@ -229,14 +230,13 @@ enum Step {
 /// `|`? step (`|` step)*. The whole query may end with `|` (`top`); a nested pipeline may not.
 fn pipeline(p: &mut Parser<'_>, top: bool) {
     let m = p.start();
-    let end = if top { TokenSet::EMPTY } else { NESTED_END };
     let mut steps = false;
     eat(p, K::PIPE);
     loop {
-        if run(p, end) {
+        if run(p, top) {
             steps = true;
         } else if !(top && steps && p.at_eof()) {
-            p.error(EXPECTED_STEP);
+            err(p, EXPECTED_STEP);
         }
         if !eat(p, K::PIPE) {
             break;
@@ -246,7 +246,8 @@ fn pipeline(p: &mut Parser<'_>, top: bool) {
 }
 
 /// Steps with no pipe between them; whether there was one.
-fn run(p: &mut Parser<'_>, end: TokenSet) -> bool {
+fn run(p: &mut Parser<'_>, top: bool) -> bool {
+    let end = if top { TokenSet::EMPTY } else { NESTED_END };
     let mut any = false;
     let mut prev = None;
     while !p.at_eof() && !end.contains(p.current()) && !at(p, K::PIPE) {
@@ -256,37 +257,66 @@ fn run(p: &mut Parser<'_>, end: TokenSet) -> bool {
     any
 }
 
-/// One step, after `prev` (none at the start of a run).
-fn step(p: &mut Parser<'_>, prev: Option<Step>) -> Step {
-    let pending_assign = prev == Some(Step::Assign);
+/// What a step is, decided without recursing.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Next {
+    Assignment,
+    Call,
+    Stats,
+    Saved,
+    Negated,
+    Case,
+    Shorthand,
+    Link,
+    Match,
+    Filter,
+}
+
+/// What the step at the current token is, after `prev` (none at the start of a run).
+#[inline(never)]
+fn classify(p: &Parser<'_>, prev: Option<Step>) -> Next {
     // After a filter only a plain word is an assignment's field, and only where the scanner
     // read it as one (a quoted or indexed name is more free text there).
     let after_filter = prev == Some(Step::Filter);
     if assign_at(p) && !(after_filter && kind(p, 0) != K::ASSIGN_FIELD_TOKEN) {
-        assignment(p);
-        return Step::Assign;
+        return Next::Assignment;
     }
     match kind(p, 0) {
-        K::FUNCTION_NAME_TOKEN => {
+        K::FUNCTION_NAME_TOKEN => Next::Call,
+        K::L_BRACK => Next::Stats,
+        K::DOLLAR => Next::Saved,
+        K::BANG | K::WORD if negation(p) && kind(p, 1) == K::FUNCTION_NAME_TOKEN => Next::Negated,
+        K::WORD if word(p, 0, "case") => Next::Case,
+        _ if field_at(p, 0) => match follow(p) {
+            Follow::Shorthand => Next::Shorthand,
+            Follow::Link => Next::Link,
+            Follow::Match => Next::Match,
+            Follow::Assign | Follow::Compare | Follow::Plain => Next::Filter,
+        },
+        _ => Next::Filter,
+    }
+}
+
+/// One step, after `prev` (none at the start of a run).
+fn step(p: &mut Parser<'_>, prev: Option<Step>) -> Step {
+    match classify(p, prev) {
+        Next::Assignment => {
+            assignment(p);
+            return Step::Assign;
+        }
+        Next::Call => {
             function_call(p);
         }
-        K::L_BRACK => {
+        Next::Stats => {
             array(p, K::STATS_SHORTHAND);
         }
-        K::DOLLAR => saved_query(p),
-        K::BANG | K::WORD if negation(p) && kind(p, 1) == K::FUNCTION_NAME_TOKEN => {
-            negated_call(p);
-        }
-        K::WORD if word(p, 0, "case") => case_statement(p),
-        _ if field_at(p, 0) => match follow(p) {
-            Follow::Shorthand => field_shorthand(p),
-            Follow::Link => link_constraint(p),
-            Follow::Match => match_statement(p),
-            Follow::Assign | Follow::Compare | Follow::Plain => {
-                return filter_step(p, pending_assign);
-            }
-        },
-        _ => return filter_step(p, pending_assign),
+        Next::Saved => saved_query(p),
+        Next::Negated => negated_call(p),
+        Next::Case => case_statement(p),
+        Next::Shorthand => field_shorthand(p),
+        Next::Link => link_constraint(p),
+        Next::Match => match_statement(p),
+        Next::Filter => return filter_step(p, prev == Some(Step::Assign)),
     }
     Step::Call
 }
@@ -294,12 +324,18 @@ fn step(p: &mut Parser<'_>, prev: Option<Step>) -> Step {
 /// A filter as a step; at the end of a token nothing else can start, one token is an error.
 fn filter_step(p: &mut Parser<'_>, pending_assign: bool) -> Step {
     if pending_assign {
-        p.error(FILTER_AFTER_ASSIGNMENT);
+        err(p, FILTER_AFTER_ASSIGNMENT);
     }
     if and_chain(p, true).is_none() {
-        p.err_and_bump(UNEXPECTED);
+        unexpected(p);
     }
     Step::Filter
+}
+
+#[cold]
+#[inline(never)]
+fn unexpected(p: &mut Parser<'_>) {
+    p.err_and_bump(UNEXPECTED);
 }
 
 // ---- Filters -------------------------------------------------------------------------------
@@ -336,6 +372,11 @@ fn and_chain(p: &mut Parser<'_>, steps: bool) -> Option<CompletedMarker> {
     if !(continues_chain(p, steps) || is_word(p, K::AND_KW)) {
         return Some(first);
     }
+    Some(and_rest(p, first, steps))
+}
+
+#[inline(never)]
+fn and_rest(p: &mut Parser<'_>, first: CompletedMarker, steps: bool) -> CompletedMarker {
     let m = first.precede(p);
     loop {
         if is_word(p, K::AND_KW) {
@@ -344,11 +385,11 @@ fn and_chain(p: &mut Parser<'_>, steps: bool) -> Option<CompletedMarker> {
             break;
         }
         if or_chain(p).is_none() {
-            p.error(EXPECTED_FILTER);
+            err(p, EXPECTED_FILTER);
             break;
         }
     }
-    Some(m.complete(p, K::AND_FILTER.raw()))
+    m.complete(p, K::AND_FILTER.raw())
 }
 
 fn is_word(p: &Parser<'_>, k: K) -> bool {
@@ -360,15 +401,20 @@ fn or_chain(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     if !is_word(p, K::OR_KW) {
         return Some(first);
     }
+    Some(or_rest(p, first))
+}
+
+#[inline(never)]
+fn or_rest(p: &mut Parser<'_>, first: CompletedMarker) -> CompletedMarker {
     let m = first.precede(p);
     while is_word(p, K::OR_KW) {
         wrap(p, K::OR, K::OR_KW);
         if unary(p).is_none() {
-            p.error(EXPECTED_FILTER);
+            err(p, EXPECTED_FILTER);
             break;
         }
     }
-    Some(m.complete(p, K::OR_FILTER.raw()))
+    m.complete(p, K::OR_FILTER.raw())
 }
 
 /// `not`* then a primary filter. A negated call is a step, not an operand.
@@ -380,7 +426,7 @@ fn unary(p: &mut Parser<'_>) -> Option<CompletedMarker> {
         let m = p.start();
         negation_token(p);
         if unary(p).is_none() {
-            p.error(EXPECTED_FILTER);
+            err(p, EXPECTED_FILTER);
         }
         p.exit();
         return Some(m.complete(p, K::NOT_FILTER.raw()));
@@ -389,8 +435,16 @@ fn unary(p: &mut Parser<'_>) -> Option<CompletedMarker> {
 }
 
 fn primary_filter(p: &mut Parser<'_>) -> Option<CompletedMarker> {
+    if kind(p, 0) == K::L_PAREN {
+        return paren_filter(p);
+    }
+    leaf_filter(p)
+}
+
+/// A filter with no nested rule inside.
+#[inline(never)]
+fn leaf_filter(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     match kind(p, 0) {
-        K::L_PAREN => paren_filter(p),
         K::WORD if boolean_at(p, 0) => {
             let m = p.start();
             let kw = if word(p, 0, "true") {
@@ -425,9 +479,9 @@ fn paren_filter(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     let m = p.start();
     p.bump();
     if and_chain(p, false).is_none() {
-        p.error(EXPECTED_FILTER);
+        err(p, EXPECTED_FILTER);
     }
-    expect(p, K::R_PAREN, MISSING_PAREN);
+    close(p, K::R_PAREN, MISSING_PAREN);
     p.exit();
     Some(m.complete(p, K::PARENTHESIZED_FILTER.raw()))
 }
@@ -551,8 +605,8 @@ fn assignment(p: &mut Parser<'_>) {
     let m = p.start();
     field(p);
     p.bump();
-    if expr(p).is_none() {
-        p.error(EXPECTED_EXPR);
+    if expr(p, false).is_none() {
+        err(p, EXPECTED_EXPR);
     }
     m.complete(p, K::ASSIGNMENT.raw());
 }
@@ -597,7 +651,7 @@ fn link_constraint(p: &mut Parser<'_>) {
 
 /// `case { branch (; branch)* ;? }`; an empty body parses.
 fn case_statement(p: &mut Parser<'_>) {
-    if !enter_heavy(p) {
+    if !p.enter() {
         return;
     }
     let m = p.start();
@@ -613,13 +667,13 @@ fn case_statement(p: &mut Parser<'_>) {
         }
     }
     expect(p, K::R_BRACE, MISSING_BRACE);
-    exit_heavy(p);
+    p.exit();
     m.complete(p, K::CASE_STATEMENT.raw());
 }
 
 /// `field match { guard => pipeline; ... }`.
 fn match_statement(p: &mut Parser<'_>) {
-    if !enter_heavy(p) {
+    if !p.enter() {
         return;
     }
     let m = p.start();
@@ -634,12 +688,23 @@ fn match_statement(p: &mut Parser<'_>) {
         }
     }
     expect(p, K::R_BRACE, MISSING_BRACE);
-    exit_heavy(p);
+    p.exit();
     m.complete(p, K::MATCH_STATEMENT.raw());
 }
 
 fn match_branch(p: &mut Parser<'_>) {
     let m = p.start();
+    match_guard(p);
+    if !p.eat(K::FAT_ARROW.raw()) {
+        err(p, "expected `=>`");
+    }
+    pipeline(p, false);
+    m.complete(p, K::MATCH_BRANCH.raw());
+}
+
+/// The guard of a match branch: `*` and `**` (patterns), a string, a regex, a call, a parameter.
+#[inline(never)]
+fn match_guard(p: &mut Parser<'_>) {
     match kind(p, 0) {
         K::STRING_TOKEN => wrap(p, K::STRING, K::STRING_TOKEN),
         K::SLASH => {
@@ -666,14 +731,11 @@ fn match_branch(p: &mut Parser<'_>) {
         k if PATTERN_TOKENS.contains(k.raw()) => unquoted_pattern(p),
         _ => p.error(EXPECTED_VALUE),
     }
-    expect(p, K::FAT_ARROW, "expected `=>`");
-    pipeline(p, false);
-    m.complete(p, K::MATCH_BRANCH.raw());
 }
 
 /// `$name(argument=value, ...)`.
 fn saved_query(p: &mut Parser<'_>) {
-    if !enter_heavy(p) {
+    if !p.enter() {
         return;
     }
     let m = p.start();
@@ -699,7 +761,7 @@ fn saved_query(p: &mut Parser<'_>) {
         }
         expect(p, K::R_PAREN, MISSING_PAREN);
     }
-    exit_heavy(p);
+    p.exit();
     m.complete(p, K::SAVED_QUERY.raw());
 }
 
@@ -729,18 +791,20 @@ fn saved_query_argument(p: &mut Parser<'_>) {
 // ---- Function calls and expressions --------------------------------------------------------
 
 fn function_call(p: &mut Parser<'_>) -> Option<CompletedMarker> {
-    if !enter_heavy(p) {
+    if !p.enter() {
         return None;
     }
     let m = p.start();
     wrap(p, K::FUNCTION_NAME, K::FUNCTION_NAME_TOKEN);
-    if expect(p, K::L_PAREN, "expected `(` after the function name") {
+    if p.eat(K::L_PAREN.raw()) {
         if !at(p, K::R_PAREN) {
             argument_list(p);
         }
-        expect(p, K::R_PAREN, MISSING_PAREN);
+        close(p, K::R_PAREN, MISSING_PAREN);
+    } else {
+        err(p, "expected `(` after the function name");
     }
-    exit_heavy(p);
+    p.exit();
     Some(m.complete(p, K::FUNCTION_CALL.raw()))
 }
 
@@ -749,7 +813,7 @@ fn argument_list(p: &mut Parser<'_>) {
     let m = p.start();
     loop {
         argument(p);
-        if !eat(p, K::COMMA) {
+        if !p.eat(K::COMMA.raw()) {
             break;
         }
     }
@@ -758,6 +822,28 @@ fn argument_list(p: &mut Parser<'_>) {
 
 fn argument(p: &mut Parser<'_>) {
     let m = p.start();
+    let named = argument_name(p);
+    if expr(p, true).is_none() {
+        err(
+            p,
+            if named {
+                EXPECTED_EXPR
+            } else {
+                EXPECTED_ARGUMENT
+            },
+        );
+    }
+    let node = if named {
+        K::NAMED_ARGUMENT
+    } else {
+        K::ARGUMENT
+    };
+    m.complete(p, node.raw());
+}
+
+/// The `name =` of a named argument, if there is one.
+#[inline(never)]
+fn argument_name(p: &mut Parser<'_>) -> bool {
     let named = kind(p, 1) == K::EQ
         && ((plain_word(p, 0) && !boolean_at(p, 0)) || kind(p, 0) == K::STRING_TOKEN);
     if named {
@@ -768,121 +854,128 @@ fn argument(p: &mut Parser<'_>) {
         }
         p.bump();
     }
-    if attributed_expr(p).is_none() {
-        p.error(if named {
-            EXPECTED_EXPR
-        } else {
-            EXPECTED_ARGUMENT
-        });
-    }
-    m.complete(
-        p,
-        if named {
-            K::NAMED_ARGUMENT
-        } else {
-            K::ARGUMENT
-        }
-        .raw(),
-    );
-}
-
-/// An expression and the `name: value` attributes after it (correlate()).
-fn attributed_expr(p: &mut Parser<'_>) -> Option<CompletedMarker> {
-    let first = expr(p)?;
-    if !attribute_at(p) {
-        return Some(first);
-    }
-    let m = first.precede(p);
-    while attribute_at(p) {
-        let attr = p.start();
-        wrap(p, K::IDENTIFIER, K::WORD);
-        p.bump();
-        if expr(p).is_none() {
-            p.error(EXPECTED_EXPR);
-        }
-        attr.complete(p, K::EXPRESSION_ATTRIBUTE.raw());
-    }
-    Some(m.complete(p, K::ATTRIBUTED_EXPRESSION.raw()))
+    named
 }
 
 fn attribute_at(p: &Parser<'_>) -> bool {
     plain_word(p, 0) && kind(p, 1) == K::COLON
 }
 
-/// The comparative expression: `== != < <= > >= <=>`, then `+ -`, then `* / %`, then a unary.
-/// Nesting without operators takes the short path, so a deep `((((a))))` costs few frames.
-fn expr(p: &mut Parser<'_>) -> Option<CompletedMarker> {
-    let first = unary_expr(p)?;
-    let cur = p.current();
-    if !(BINARY_COMPARE.contains(cur) || ADDITIVE.contains(cur) || MULTIPLICATIVE.contains(cur)) {
-        return Some(first);
+/// The precedence level of a binary operator: 3 `* / %`, 2 `+ -`, 1 the comparisons, else 0.
+fn level(k: K) -> u8 {
+    match k {
+        k if MULTIPLICATIVE.contains(k.raw()) => 3,
+        k if ADDITIVE.contains(k.raw()) => 2,
+        k if BINARY_COMPARE.contains(k.raw()) => 1,
+        _ => 0,
     }
-    let first = binary_tail(p, first, MULTIPLICATIVE, unary_expr);
-    let first = binary_tail(p, first, ADDITIVE, multiplicative);
-    Some(binary_tail(p, first, BINARY_COMPARE, additive))
 }
 
-fn additive(p: &mut Parser<'_>) -> Option<CompletedMarker> {
-    let first = multiplicative(p)?;
-    Some(binary_tail(p, first, ADDITIVE, multiplicative))
-}
-
-fn multiplicative(p: &mut Parser<'_>) -> Option<CompletedMarker> {
-    let first = unary_expr(p)?;
-    Some(binary_tail(p, first, MULTIPLICATIVE, unary_expr))
-}
-
-/// The operators `ops` after `first`, with `operand` between them, as one flat node.
-fn binary_tail(
-    p: &mut Parser<'_>,
-    first: CompletedMarker,
-    ops: TokenSet,
-    operand: fn(&mut Parser<'_>) -> Option<CompletedMarker>,
-) -> CompletedMarker {
-    if !ops.contains(p.current()) {
-        return first;
+/// An expression: binary operators (`== != < <= > >= <=>`, then `+ -`, then `* / %`) over unary
+/// operands, and with `attributes` the `name: value` attributes after it (correlate()). The
+/// frame of this rule is on the recursion path of every bracket: it stays small, and the rest
+/// is in rules that do not recurse through it.
+fn expr(p: &mut Parser<'_>, attributes: bool) -> Option<CompletedMarker> {
+    let first = primary_expr(p)?;
+    if level(K::from_raw(p.current())) != 0 {
+        let first = binary_rest(p, first);
+        return Some(if attributes && attribute_at(p) {
+            attribute_rest(p, first)
+        } else {
+            first
+        });
     }
-    let m = first.precede(p);
-    while ops.contains(p.current()) {
-        p.bump();
-        if operand(p).is_none() {
-            p.error(EXPECTED_EXPR);
+    if attributes && attribute_at(p) {
+        return Some(attribute_rest(p, first));
+    }
+    Some(first)
+}
+
+/// The operators after `first`, as one flat node per run of one level, nested by precedence
+/// (`a + b * c - d` is `a + (b * c) - d`). One frame whatever the operators: the open nodes
+/// are on a heap stack, not in recursion.
+#[inline(never)]
+fn binary_rest(p: &mut Parser<'_>, first: CompletedMarker) -> CompletedMarker {
+    let mut open: Vec<(u8, opentide_parse::Marker)> = Vec::new();
+    let mut cur = first;
+    loop {
+        let lvl = level(K::from_raw(p.current()));
+        // A looser operator ends the tighter runs before it.
+        while open.last().is_some_and(|&(l, _)| l > lvl) {
+            if let Some((_, m)) = open.pop() {
+                cur = m.complete(p, K::BINARY_EXPRESSION.raw());
+            }
+        }
+        if lvl == 0 {
             break;
         }
-    }
-    m.complete(p, K::BINARY_EXPRESSION.raw())
-}
-
-fn unary_expr(p: &mut Parser<'_>) -> Option<CompletedMarker> {
-    if matches!(kind(p, 0), K::MINUS | K::BANG) {
-        let m = p.start();
-        p.bump();
-        if primary_expr(p).is_none() {
-            p.error(EXPECTED_EXPR);
+        if open.last().is_none_or(|&(l, _)| l != lvl) {
+            open.push((lvl, cur.precede(p)));
         }
-        return Some(m.complete(p, K::UNARY_EXPRESSION.raw()));
+        p.bump();
+        match primary_expr(p) {
+            Some(operand) => cur = operand,
+            None => {
+                err(p, EXPECTED_EXPR);
+                break;
+            }
+        }
     }
-    primary_expr(p)
+    while let Some((_, m)) = open.pop() {
+        cur = m.complete(p, K::BINARY_EXPRESSION.raw());
+    }
+    cur
 }
 
+/// The `name: value` attributes after `first`.
+#[inline(never)]
+fn attribute_rest(p: &mut Parser<'_>, first: CompletedMarker) -> CompletedMarker {
+    let m = first.precede(p);
+    while attribute_at(p) {
+        let attr = p.start();
+        wrap(p, K::IDENTIFIER, K::WORD);
+        p.bump();
+        if expr(p, false).is_none() {
+            err(p, EXPECTED_EXPR);
+        }
+        attr.complete(p, K::EXPRESSION_ATTRIBUTE.raw());
+    }
+    m.complete(p, K::ATTRIBUTED_EXPRESSION.raw())
+}
+
+/// A unary operator (`-`, `!`) and its operand, or a primary expression. The recursive arms
+/// only: the frame of a rule on the recursion path stays small, which is what a 1 MB stack
+/// holds 1,000 levels of.
 fn primary_expr(p: &mut Parser<'_>) -> Option<CompletedMarker> {
-    // The recursive arms only: the frame of a rule on the recursion path stays small, which
-    // is what a 1 MB stack holds 1,000 levels of.
     match kind(p, 0) {
         K::L_PAREN => paren_expr(p),
         K::L_BRACE => subquery(p),
         K::FUNCTION_NAME_TOKEN => function_call(p),
         K::L_BRACK => array(p, K::ARRAY),
-        K::WORD
-            if kind(p, 1) == K::COLON
-                && kind(p, 2) == K::L_BRACE
-                && reserved(p, 0).is_none()
-                && !boolean_at(p, 0) =>
-        {
-            named_subquery(p)
-        }
+        K::MINUS | K::BANG => Some(unary_expr(p)),
+        K::WORD if named_subquery_at(p) => named_subquery(p),
         _ => leaf_expr(p),
     }
+}
+
+#[inline(never)]
+fn named_subquery_at(p: &Parser<'_>) -> bool {
+    kind(p, 1) == K::COLON
+        && kind(p, 2) == K::L_BRACE
+        && reserved(p, 0).is_none()
+        && !boolean_at(p, 0)
+}
+
+/// `-x` or `!x`: the operand is a primary expression.
+#[inline(never)]
+fn unary_expr(p: &mut Parser<'_>) -> CompletedMarker {
+    let m = p.start();
+    p.bump();
+    // The operand is not itself unary (`- - x` is an error).
+    if matches!(kind(p, 0), K::MINUS | K::BANG) || primary_expr(p).is_none() {
+        err(p, EXPECTED_EXPR);
+    }
+    m.complete(p, K::UNARY_EXPRESSION.raw())
 }
 
 /// An expression with no nested rule inside.
@@ -910,22 +1003,22 @@ fn leaf_expr(p: &mut Parser<'_>) -> Option<CompletedMarker> {
 
 /// `( expression )`.
 fn paren_expr(p: &mut Parser<'_>) -> Option<CompletedMarker> {
-    if !enter_heavy(p) {
+    if !p.enter() {
         return None;
     }
     let m = p.start();
     p.bump();
-    if attributed_expr(p).is_none() {
-        p.error(EXPECTED_EXPR);
+    if expr(p, true).is_none() {
+        err(p, EXPECTED_EXPR);
     }
-    expect(p, K::R_PAREN, MISSING_PAREN);
-    exit_heavy(p);
+    close(p, K::R_PAREN, MISSING_PAREN);
+    p.exit();
     Some(m.complete(p, K::PARENTHESIZED_EXPRESSION.raw()))
 }
 
 /// `{ pipeline? }`.
 fn subquery(p: &mut Parser<'_>) -> Option<CompletedMarker> {
-    if !enter_heavy(p) {
+    if !p.enter() {
         return None;
     }
     let m = p.start();
@@ -933,8 +1026,8 @@ fn subquery(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     if !at(p, K::R_BRACE) {
         pipeline(p, false);
     }
-    expect(p, K::R_BRACE, MISSING_BRACE);
-    exit_heavy(p);
+    close(p, K::R_BRACE, MISSING_BRACE);
+    p.exit();
     Some(m.complete(p, K::SUBQUERY.raw()))
 }
 
@@ -950,7 +1043,7 @@ fn named_subquery(p: &mut Parser<'_>) -> Option<CompletedMarker> {
 /// `[ element (, element)* ]`: an array in an expression (`node` = `ARRAY`) or a stats
 /// shorthand step (`STATS_SHORTHAND`). An element is an assignment or an expression.
 fn array(p: &mut Parser<'_>, node: K) -> Option<CompletedMarker> {
-    if !enter_heavy(p) {
+    if !p.enter() {
         return None;
     }
     let m = p.start();
@@ -959,16 +1052,16 @@ fn array(p: &mut Parser<'_>, node: K) -> Option<CompletedMarker> {
         loop {
             if field_at(p, 0) && kind(p, 1) == K::COLON_EQ {
                 assignment(p);
-            } else if attributed_expr(p).is_none() {
-                p.error(EXPECTED_EXPR);
+            } else if expr(p, true).is_none() {
+                err(p, EXPECTED_EXPR);
             }
-            if !eat(p, K::COMMA) {
+            if !p.eat(K::COMMA.raw()) {
                 break;
             }
         }
     }
-    expect(p, K::R_BRACK, MISSING_BRACK);
-    exit_heavy(p);
+    close(p, K::R_BRACK, MISSING_BRACK);
+    p.exit();
     Some(m.complete(p, node.raw()))
 }
 
