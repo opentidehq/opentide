@@ -1,0 +1,31 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/pipe__invalid.eql
+---
+SOURCE_FILE@0..62
+  LINE_COMMENT@0..20 "// prod:pipe invalid"
+  WHITESPACE@20..21 "\n"
+  EVENT_QUERY@21..39
+    EVENT_CATEGORY@21..28
+      IDENTIFIER@21..28
+        WORD@21..28 "process"
+    WHITESPACE@28..29 " "
+    WHERE_KW@29..34 "where"
+    WHITESPACE@34..35 " "
+    BOOLEAN@35..39
+      TRUE_KW@35..39 "true"
+  WHITESPACE@39..40 " "
+  PIPE_STAGE@40..61
+    PIPE@40..41 "|"
+    WHITESPACE@41..42 " "
+    IDENTIFIER@42..48
+      WORD@42..48 "unique"
+    WHITESPACE@48..49 " "
+    FIELD@49..61
+      IDENTIFIER@49..56
+        WORD@49..56 "process"
+      DOT@56..57 "."
+      IDENTIFIER@57..61
+        WORD@57..61 "name"
+  WHITESPACE@61..62 "\n"

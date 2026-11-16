@@ -1,0 +1,47 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/sample__valid.eql
+---
+SOURCE_FILE@0..82
+  LINE_COMMENT@0..20 "// prod:sample valid"
+  WHITESPACE@20..21 "\n"
+  SAMPLE@21..81
+    SAMPLE_KW@21..27 "sample"
+    WHITESPACE@27..28 " "
+    JOIN_KEYS@28..38
+      BY_KW@28..30 "by"
+      WHITESPACE@30..31 " "
+      FIELD@31..38
+        IDENTIFIER@31..35
+          WORD@31..35 "host"
+        DOT@35..36 "."
+        IDENTIFIER@36..38
+          WORD@36..38 "id"
+    WHITESPACE@38..41 "\n  "
+    JOIN_TERM@41..61
+      SUBQUERY@41..61
+        L_BRACK@41..42 "["
+        EVENT_CATEGORY@42..49
+          IDENTIFIER@42..49
+            WORD@42..49 "process"
+        WHITESPACE@49..50 " "
+        WHERE_KW@50..55 "where"
+        WHITESPACE@55..56 " "
+        BOOLEAN@56..60
+          TRUE_KW@56..60 "true"
+        R_BRACK@60..61 "]"
+    WHITESPACE@61..64 "\n  "
+    JOIN_TERM@64..81
+      SUBQUERY@64..81
+        L_BRACK@64..65 "["
+        EVENT_CATEGORY@65..69
+          IDENTIFIER@65..69
+            WORD@65..69 "file"
+        WHITESPACE@69..70 " "
+        WHERE_KW@70..75 "where"
+        WHITESPACE@75..76 " "
+        BOOLEAN@76..80
+          TRUE_KW@76..80 "true"
+        R_BRACK@80..81 "]"
+  WHITESPACE@81..82 "\n"

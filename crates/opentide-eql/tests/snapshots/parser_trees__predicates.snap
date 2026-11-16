@@ -1,0 +1,67 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(source)"
+---
+SOURCE_FILE@0..76
+  EVENT_QUERY@0..76
+    ANY@0..3
+      ANY_KW@0..3 "any"
+    WHITESPACE@3..4 " "
+    WHERE_KW@4..9 "where"
+    WHITESPACE@9..10 " "
+    AND_EXPRESSION@10..76
+      PREDICATE_EXPRESSION@10..28
+        FIELD@10..11
+          IDENTIFIER@10..11
+            WORD@10..11 "a"
+        WHITESPACE@11..12 " "
+        NOT_KW@12..15 "not"
+        WHITESPACE@15..16 " "
+        IN_TILDE@16..19 "in~"
+        WHITESPACE@19..20 " "
+        L_PAREN@20..21 "("
+        STRING@21..24
+          STRING_TOKEN@21..24 "\"x\""
+        COMMA@24..25 ","
+        WHITESPACE@25..26 " "
+        FIELD@26..27
+          IDENTIFIER@26..27
+            WORD@26..27 "y"
+        R_PAREN@27..28 ")"
+      WHITESPACE@28..29 " "
+      AND_KW@29..32 "and"
+      WHITESPACE@32..33 " "
+      PREDICATE_EXPRESSION@33..49
+        FIELD@33..34
+          IDENTIFIER@33..34
+            WORD@33..34 "b"
+        WHITESPACE@34..35 " "
+        COLON@35..36 ":"
+        WHITESPACE@36..37 " "
+        L_PAREN@37..38 "("
+        STRING@38..42
+          STRING_TOKEN@38..42 "\"c*\""
+        COMMA@42..43 ","
+        WHITESPACE@43..44 " "
+        NULL@44..48
+          NULL_KW@44..48 "null"
+        R_PAREN@48..49 ")"
+      WHITESPACE@49..50 " "
+      AND_KW@50..53 "and"
+      WHITESPACE@53..54 " "
+      PREDICATE_EXPRESSION@54..76
+        FIELD@54..65
+          OPTIONAL_MARKER@54..55
+            QUESTION@54..55 "?"
+          IDENTIFIER@55..56
+            WORD@55..56 "c"
+          DOT@56..57 "."
+          QUOTED_IDENTIFIER@57..62
+            QUOTED_IDENT_TOKEN@57..62 "`d e`"
+          INDEX@62..65
+            INDEX_TOKEN@62..65 "[0]"
+        WHITESPACE@65..66 " "
+        REGEX_TILDE@66..72 "regex~"
+        WHITESPACE@72..73 " "
+        STRING@73..76
+          STRING_TOKEN@73..76 "\"f\""

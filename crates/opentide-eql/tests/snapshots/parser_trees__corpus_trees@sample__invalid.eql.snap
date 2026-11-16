@@ -1,0 +1,46 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/sample__invalid.eql
+---
+SOURCE_FILE@0..82
+  LINE_COMMENT@0..22 "// prod:sample invalid"
+  WHITESPACE@22..23 "\n"
+  SAMPLE@23..72
+    SAMPLE_KW@23..29 "sample"
+    WHITESPACE@29..32 "\n  "
+    JOIN_TERM@32..52
+      SUBQUERY@32..52
+        L_BRACK@32..33 "["
+        EVENT_CATEGORY@33..40
+          IDENTIFIER@33..40
+            WORD@33..40 "process"
+        WHITESPACE@40..41 " "
+        WHERE_KW@41..46 "where"
+        WHITESPACE@46..47 " "
+        BOOLEAN@47..51
+          TRUE_KW@47..51 "true"
+        R_BRACK@51..52 "]"
+    WHITESPACE@52..55 "\n  "
+    JOIN_TERM@55..72
+      SUBQUERY@55..72
+        L_BRACK@55..56 "["
+        EVENT_CATEGORY@56..60
+          IDENTIFIER@56..60
+            WORD@56..60 "file"
+        WHITESPACE@60..61 " "
+        WHERE_KW@61..66 "where"
+        WHITESPACE@66..67 " "
+        BOOLEAN@67..71
+          TRUE_KW@67..71 "true"
+        R_BRACK@71..72 "]"
+  WHITESPACE@72..73 " "
+  PIPE_STAGE@73..81
+    PIPE@73..74 "|"
+    WHITESPACE@74..75 " "
+    IDENTIFIER@75..79
+      WORD@75..79 "head"
+    WHITESPACE@79..80 " "
+    NUMBER@80..81
+      NUMBER_TOKEN@80..81 "1"
+  WHITESPACE@81..82 "\n"
