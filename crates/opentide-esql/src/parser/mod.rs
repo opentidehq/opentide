@@ -176,6 +176,58 @@ mod tests {
         }
     }
 
+    /// Every query here is rejected by `@elastic/esql` 4.33.0 (run by hand with
+    /// `scripts/engine/oracles/elastic/esql.cjs`). The old engine rejected them
+    /// too, except `LIMIT 1 LIKE`, `LIMIT 5WITH`, `LIMIT 10 not BY x`,
+    /// `x > 1 on`, `EVAL x = 5 where` and `LIMIT 10 or BY x`: tree-sitter lexed
+    /// by parser state and read the reserved word as the unit of the number.
+    #[test]
+    fn what_elasticsearch_rejects_is_an_error() {
+        for source in [
+            // A map starts with `{`.
+            "FROM a | DENSE_VECTOR embedding = title WITH == \"inference_id\": \"e5\" }",
+            "FROM a | USER_AGENT x = y WITH \"k\": 1 }",
+            "FROM a | RERANK \"q\" ON t WITH 5",
+            "FROM a | FUSE WITH 1",
+            "FROM a | MMR ON f LIMIT 3 WITH 1",
+            "FROM a | HIGHLIGHT WITH 1",
+            // `not` is a keyword only where a boolean expression starts.
+            "FROM a | WHERE b == not 2",
+            "FROM a | WHERE x > not NOW()",
+            "FROM a | WHERE x IN (not a)",
+            // A reserved word is never a unit.
+            "FROM a | LIMIT 1 LIKE",
+            "FROM a | LIMIT 5WITH",
+            "FROM a | LIMIT 10 not BY x",
+            "FROM a | WHERE x > 1 on",
+            "FROM a | EVAL x = 5 where",
+            "FROM a | LIMIT 10 or BY x",
+        ] {
+            let (tree, errors) = tree(source);
+            assert!(errors > 0, "{source}\n{tree}");
+        }
+    }
+
+    /// Accepted by `@elastic/esql`, and by the old engine.
+    #[test]
+    fn a_parameter_names_an_assignment_and_a_word_is_a_unit() {
+        for source in [
+            "ROW ?p = 1",
+            "FROM a | EVAL ?p = 1",
+            "FROM a | EVAL ??p = 1",
+            "FROM a | STATS ?p = COUNT(*)",
+            "FROM a | EVAL x = 5 foo",
+            "FROM a | EVAL x = 5 from",
+            "FROM a | LIMIT 10 BY x",
+            "FROM a | WHERE x > 1 AND y",
+        ] {
+            let t = clean(source);
+            assert!(!t.contains("ERROR@"), "{source}\n{t}");
+        }
+        let t = clean("ROW ?p = 1");
+        assert!(t.contains("QUALIFIED_NAME@4..6"), "{t}");
+    }
+
     #[test]
     fn nesting_past_the_limit_is_one_diagnostic() {
         let deep = format!("ROW x = {}1{}", "(".repeat(2_000), ")".repeat(2_000));
