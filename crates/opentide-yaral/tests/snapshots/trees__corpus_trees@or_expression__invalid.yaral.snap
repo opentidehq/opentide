@@ -1,0 +1,47 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/or_expression__invalid.yaral
+---
+SOURCE_FILE@0..83
+  COMMENT@0..29 "// prod:or_expression invalid"
+  WHITESPACE@29..30 "\n"
+  SEARCH_QUERY@30..82
+    SEARCH_EVENTS@30..82
+      OR_EXPR@30..82
+        OR_EXPR@30..70
+          COMPARISON@30..67
+            UDM_FIELD@30..52
+              VARIABLE@30..32
+                VAR_TOKEN@30..32 "$e"
+              MEMBER@32..41
+                ACCESS_DOT@32..33 "."
+                FIELD_NAME@33..41 "metadata"
+              MEMBER@41..52
+                ACCESS_DOT@41..42 "."
+                FIELD_NAME@42..52 "event_type"
+            WHITESPACE@52..53 " "
+            EQ@53..54 "="
+            WHITESPACE@54..55 " "
+            LITERAL@55..67
+              STRING@55..67 "\"USER_LOGIN\""
+          WHITESPACE@67..68 " "
+          OR_KW@68..70 "or"
+        WHITESPACE@70..71 " "
+        OR_KW@71..73 "or"
+        WHITESPACE@73..74 " "
+        COMPARISON@74..82
+          UDM_FIELD@74..78
+            VARIABLE@74..76
+              VAR_TOKEN@74..76 "$e"
+            MEMBER@76..78
+              ACCESS_DOT@76..77 "."
+              FIELD_NAME@77..78 "x"
+          WHITESPACE@78..79 " "
+          EQ@79..80 "="
+          WHITESPACE@80..81 " "
+          LITERAL@81..82
+            INTEGER@81..82 "1"
+  WHITESPACE@82..83 "\n"
+errors:
+70..71: expected an expression

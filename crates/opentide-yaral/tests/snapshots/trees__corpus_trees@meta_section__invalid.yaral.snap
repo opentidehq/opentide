@@ -1,0 +1,31 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/meta_section__invalid.yaral
+---
+SOURCE_FILE@0..63
+  COMMENT@0..28 "// prod:meta_section invalid"
+  WHITESPACE@28..29 "\n"
+  RULE_DECLARATION@29..62
+    RULE_KW@29..33 "rule"
+    WHITESPACE@33..34 " "
+    RULE_NAME@34..35
+      IDENT@34..35 "r"
+    WHITESPACE@35..36 " "
+    L_BRACE@36..37 "{"
+    WHITESPACE@37..40 "\n  "
+    META_SECTION@40..60
+      META_KW@40..44 "meta"
+      COLON@44..45 ":"
+      WHITESPACE@45..50 "\n    "
+      META_ENTRY@50..60
+        META_KEY@50..56
+          IDENT@50..56 "author"
+        WHITESPACE@56..57 " "
+        LITERAL@57..60
+          STRING@57..60 "\"a\""
+    WHITESPACE@60..61 "\n"
+    R_BRACE@61..62 "}"
+  WHITESPACE@62..63 "\n"
+errors:
+56..57: expected `=` (expected `=`)

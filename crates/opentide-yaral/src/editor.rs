@@ -189,6 +189,105 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
     }
 }
 
+/// The token that holds the byte at `offset`, as rowan's
+/// `token_at_offset(offset).right_biased()` finds it, but in a loop: rowan
+/// descends by recursion, one frame per level, and a tree at the depth limit
+/// overflowed a 1 MB stack.
+fn token_at(
+    root: &crate::syntax::SyntaxNode,
+    offset: rowan::TextSize,
+) -> Option<crate::syntax::SyntaxToken> {
+    let mut node = root.clone();
+    loop {
+        let child = node.children_with_tokens().find(|c| {
+            let r = c.text_range();
+            r.start() <= offset && offset < r.end()
+        })?;
+        match child {
+            rowan::NodeOrToken::Token(token) => return Some(token),
+            rowan::NodeOrToken::Node(inner) => node = inner,
+        }
+    }
+}
+
+/// Hover at byte `offset`, read from the pure-Rust tree.
+pub(crate) fn hover_in_tree(source: &str, offset: usize) -> Option<String> {
+    use crate::syntax::{SyntaxKind as K, SyntaxNode};
+    // An offset inside a character (a decoded escape) has nothing to show.
+    if !source.is_char_boundary(offset.min(source.len())) || offset >= source.len() {
+        return None;
+    }
+    let root = SyntaxNode::new_root(crate::parser::parse(source).green);
+    let at = rowan::TextSize::try_from(offset).ok()?;
+    let token = token_at(&root, at)?;
+    let parent = token.parent()?;
+    match (token.kind(), parent.kind()) {
+        (K::FIELD_NAME | K::IDENT, K::MEMBER | K::BARE_FIELD) => {
+            let field = if parent.kind() == K::MEMBER {
+                parent.parent()?
+            } else {
+                parent
+            };
+            if !matches!(field.kind(), K::UDM_FIELD | K::BARE_FIELD) {
+                return None;
+            }
+            let start = usize::from(token.text_range().start());
+            let mut segs = Vec::new();
+            for (i, s) in crate::analysis::field_segments(&field)
+                .into_iter()
+                .enumerate()
+            {
+                let past = match &s {
+                    Segment::Name(_, at) | Segment::Key(at) | Segment::Position(at) => at.0 > start,
+                };
+                if past && (i > 0 || field.kind() == K::UDM_FIELD) {
+                    break;
+                }
+                segs.push(s);
+            }
+            let udm = Udm::cached();
+            let path: Vec<&str> = segs
+                .iter()
+                .filter_map(|s| match s {
+                    Segment::Name(n, _) => Some(n.as_str()),
+                    _ => None,
+                })
+                .collect();
+            if path.len() == 1
+                && let Some((name, doc)) = Udm::SOURCES.iter().find(|(n, _)| *n == path[0])
+            {
+                return Some(format!("**{name}**: {doc}"));
+            }
+            let resolution = udm.resolve(&segs);
+            let field_row = resolution.field?;
+            if resolution.unknown.is_some() {
+                return None;
+            }
+            Some(field_markdown(udm, &path.join("."), field_row))
+        }
+        (K::IDENT | K::FIELD_NAME | K::ACCESS_DOT, K::FUNCTION_NAME) => {
+            let name: String = parent.text().to_string().split_whitespace().collect();
+            Functions::cached().get(&name).map(function_markdown)
+        }
+        (K::VAR_TOKEN, _) => {
+            let name = token.text();
+            PLATFORM_OUTCOMES
+                .iter()
+                .find(|(n, _)| {
+                    *n == name
+                        || (name.starts_with("$risk_entity_to_score_")
+                            && *n == "$risk_entity_to_score")
+                })
+                .map(|(n, doc)| format!("**{n}**: {doc}"))
+        }
+        (K::REF_LIST_TOKEN, _) => Some(format!(
+            "**{}**: a reference list. Google retires reference lists in 2027: use a data table (`%table.column`). Its contents live in the tenant.",
+            token.text()
+        )),
+        _ => None,
+    }
+}
+
 /// The path being typed before `offset`: its root and its complete
 /// segments, and the partial last segment.
 struct Typed {
@@ -452,6 +551,41 @@ pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Found by review (#1398): hover found its token with rowan's
+    /// `token_at_offset`, which recurses once per level, and a valid rule whose
+    /// tree is near the depth limit (4,085 chained comparisons, nested to the
+    /// left) aborted the process on a 1 MB stack.
+    #[test]
+    fn hover_in_a_deep_tree_fits_a_small_stack() {
+        let chain = vec!["$e.principal.hostname"; 4_085].join(" = ");
+        let source = format!("rule r {{\n events:\n  {chain}\n condition:\n  $e\n}}\n");
+        let deepest = source.find("hostname").unwrap_or(0);
+        let middle = source.len() / 2 + source[source.len() / 2..].find("hostname").unwrap_or(0);
+        let hovers = std::thread::Builder::new()
+            .stack_size(1 << 20)
+            .spawn(move || {
+                assert_eq!(crate::testing::parse_error_count(&source), 0);
+                [deepest, deepest + 1, middle].map(|at| hover_in_tree(&source, at))
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+        for hover in hovers {
+            assert!(hover.is_some_and(|h| h.contains("hostname")));
+        }
+    }
+
+    #[test]
+    fn hover_reads_the_token_after_a_boundary() {
+        // As `token_at_offset(..).right_biased()`: where `.` ends and
+        // `hostname` starts, the segment; on the dot, nothing to show.
+        let source = "rule r {\n events:\n  $e.principal.hostname = \"x\"\n condition:\n  $e\n}\n";
+        let segment = source.find("hostname").unwrap_or(0);
+        assert_eq!(hover_in_tree(source, segment - 1), None, "on the dot");
+        let field = hover_in_tree(source, segment).unwrap_or_default();
+        assert!(field.contains("hostname"), "{field}");
+    }
 
     fn labels(items: &[CompletionItem]) -> Vec<&str> {
         items.iter().map(|i| i.label.as_str()).collect()

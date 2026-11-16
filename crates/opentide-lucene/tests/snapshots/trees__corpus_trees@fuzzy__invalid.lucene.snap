@@ -1,0 +1,17 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/fuzzy__invalid.lucene
+---
+SourceFile@0..11
+  FieldQuery@0..9
+    FieldName@0..4
+      Term@0..4 "name"
+    Colon@4..5 ":"
+    TermQuery@5..9
+      Term@5..8 "jon"
+      Fuzzy@8..9 "~"
+  Whitespace@9..10 " "
+  Error@10..11
+    Fuzzy@10..11 "~"
+9..10: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, Boost, BareOperator, AndKw, OrKw, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)

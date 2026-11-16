@@ -1,0 +1,31 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/index__invalid.yaral
+---
+SOURCE_FILE@0..61
+  COMMENT@0..21 "// prod:index invalid"
+  WHITESPACE@21..22 "\n"
+  SEARCH_QUERY@22..60
+    SEARCH_EVENTS@22..60
+      COMPARISON@22..60
+        UDM_FIELD@22..50
+          VARIABLE@22..24
+            VAR_TOKEN@22..24 "$e"
+          MEMBER@24..35
+            ACCESS_DOT@24..25 "."
+            FIELD_NAME@25..35 "additional"
+          MEMBER@35..42
+            ACCESS_DOT@35..36 "."
+            FIELD_NAME@36..42 "fields"
+          INDEX@42..50
+            INDEX_L_BRACK@42..43 "["
+            STRING@43..50 "\"Owner\""
+        WHITESPACE@50..51 " "
+        EQ@51..52 "="
+        WHITESPACE@52..53 " "
+        LITERAL@53..60
+          STRING@53..60 "\"alice\""
+  WHITESPACE@60..61 "\n"
+errors:
+50..51: expected `]` (expected `]`)

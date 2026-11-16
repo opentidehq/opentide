@@ -1,0 +1,28 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/limit_section__valid.yaral
+---
+SOURCE_FILE@0..75
+  COMMENT@0..27 "// prod:limit_section valid"
+  WHITESPACE@27..28 "\n"
+  SEARCH_QUERY@28..74
+    SEARCH_EVENTS@28..62
+      COMPARISON@28..62
+        BARE_FIELD@28..47
+          IDENT@28..36 "metadata"
+          MEMBER@36..47
+            ACCESS_DOT@36..37 "."
+            FIELD_NAME@37..47 "event_type"
+        WHITESPACE@47..48 " "
+        EQ@48..49 "="
+        WHITESPACE@49..50 " "
+        LITERAL@50..62
+          STRING@50..62 "\"USER_LOGIN\""
+    WHITESPACE@62..63 "\n"
+    LIMIT_SECTION@63..74
+      LIMIT_KW@63..68 "limit"
+      COLON@68..69 ":"
+      WHITESPACE@69..72 "\n  "
+      INTEGER@72..74 "50"
+  WHITESPACE@74..75 "\n"

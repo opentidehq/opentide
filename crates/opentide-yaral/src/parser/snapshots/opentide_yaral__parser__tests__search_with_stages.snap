@@ -1,0 +1,80 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"stage s { $e.x = 1 match: $e.x over 1h } $e.y = 2 order: $e.y desc limit: 10\")"
+---
+SOURCE_FILE@0..76
+  SEARCH_QUERY@0..76
+    STAGE@0..40
+      STAGE_KW@0..5 "stage"
+      WHITESPACE@5..6 " "
+      STAGE_NAME@6..7
+        IDENT@6..7 "s"
+      WHITESPACE@7..8 " "
+      L_BRACE@8..9 "{"
+      WHITESPACE@9..10 " "
+      SEARCH_EVENTS@10..18
+        COMPARISON@10..18
+          UDM_FIELD@10..14
+            VARIABLE@10..12
+              VAR_TOKEN@10..12 "$e"
+            MEMBER@12..14
+              ACCESS_DOT@12..13 "."
+              FIELD_NAME@13..14 "x"
+          WHITESPACE@14..15 " "
+          EQ@15..16 "="
+          WHITESPACE@16..17 " "
+          LITERAL@17..18
+            INTEGER@17..18 "1"
+      WHITESPACE@18..19 " "
+      MATCH_SECTION@19..38
+        MATCH_KW@19..24 "match"
+        COLON@24..25 ":"
+        WHITESPACE@25..26 " "
+        MATCH_CLAUSE@26..38
+          UDM_FIELD@26..30
+            VARIABLE@26..28
+              VAR_TOKEN@26..28 "$e"
+            MEMBER@28..30
+              ACCESS_DOT@28..29 "."
+              FIELD_NAME@29..30 "x"
+          WHITESPACE@30..31 " "
+          MATCH_WINDOW@31..38
+            OVER_KW@31..35 "over"
+            WHITESPACE@35..36 " "
+            DURATION@36..38 "1h"
+      WHITESPACE@38..39 " "
+      R_BRACE@39..40 "}"
+    WHITESPACE@40..41 " "
+    SEARCH_EVENTS@41..49
+      COMPARISON@41..49
+        UDM_FIELD@41..45
+          VARIABLE@41..43
+            VAR_TOKEN@41..43 "$e"
+          MEMBER@43..45
+            ACCESS_DOT@43..44 "."
+            FIELD_NAME@44..45 "y"
+        WHITESPACE@45..46 " "
+        EQ@46..47 "="
+        WHITESPACE@47..48 " "
+        LITERAL@48..49
+          INTEGER@48..49 "2"
+    WHITESPACE@49..50 " "
+    ORDER_SECTION@50..66
+      ORDER_KW@50..55 "order"
+      COLON@55..56 ":"
+      WHITESPACE@56..57 " "
+      ORDER_ITEM@57..66
+        UDM_FIELD@57..61
+          VARIABLE@57..59
+            VAR_TOKEN@57..59 "$e"
+          MEMBER@59..61
+            ACCESS_DOT@59..60 "."
+            FIELD_NAME@60..61 "y"
+        WHITESPACE@61..62 " "
+        DESC_KW@62..66 "desc"
+    WHITESPACE@66..67 " "
+    LIMIT_SECTION@67..76
+      LIMIT_KW@67..72 "limit"
+      COLON@72..73 ":"
+      WHITESPACE@73..74 " "
+      INTEGER@74..76 "10"

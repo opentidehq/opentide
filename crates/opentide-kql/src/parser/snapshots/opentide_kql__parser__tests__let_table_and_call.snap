@@ -1,0 +1,65 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"let x = T;\\nlet y = f(1);\\nlet z = (T | take 1);\\nT\")"
+---
+SOURCE_FILE@0..48
+  LET_STATEMENT@0..10
+    LET_KW@0..3 "let"
+    WHITESPACE@3..4 " "
+    IDENT@4..5 "x"
+    WHITESPACE@5..6 " "
+    EQ@6..7 "="
+    WHITESPACE@7..8 " "
+    TABULAR_EXPRESSION@8..9
+      TABULAR_SOURCE@8..9
+        TABLE_REF@8..9
+          IDENT@8..9 "T"
+    SEMICOLON@9..10 ";"
+  WHITESPACE@10..11 "\n"
+  LET_STATEMENT@11..24
+    LET_KW@11..14 "let"
+    WHITESPACE@14..15 " "
+    IDENT@15..16 "y"
+    WHITESPACE@16..17 " "
+    EQ@17..18 "="
+    WHITESPACE@18..19 " "
+    TABULAR_EXPRESSION@19..23
+      TABULAR_SOURCE@19..23
+        FUNCTION_CALL@19..23
+          IDENT@19..20 "f"
+          L_PAREN@20..21 "("
+          LITERAL@21..22
+            NUMBER@21..22 "1"
+          R_PAREN@22..23 ")"
+    SEMICOLON@23..24 ";"
+  WHITESPACE@24..25 "\n"
+  LET_STATEMENT@25..46
+    LET_KW@25..28 "let"
+    WHITESPACE@28..29 " "
+    IDENT@29..30 "z"
+    WHITESPACE@30..31 " "
+    EQ@31..32 "="
+    WHITESPACE@32..33 " "
+    TABULAR_EXPRESSION@33..45
+      TABULAR_SOURCE@33..45
+        PAREN_TABULAR@33..45
+          L_PAREN@33..34 "("
+          TABULAR_EXPRESSION@34..44
+            TABULAR_SOURCE@34..35
+              TABLE_REF@34..35
+                IDENT@34..35 "T"
+            WHITESPACE@35..36 " "
+            PIPE@36..37 "|"
+            WHITESPACE@37..38 " "
+            TAKE_OPERATOR@38..44
+              TAKE_KW@38..42 "take"
+              WHITESPACE@42..43 " "
+              NUMBER@43..44 "1"
+          R_PAREN@44..45 ")"
+    SEMICOLON@45..46 ";"
+  WHITESPACE@46..47 "\n"
+  QUERY@47..48
+    TABULAR_EXPRESSION@47..48
+      TABULAR_SOURCE@47..48
+        TABLE_REF@47..48
+          IDENT@47..48 "T"

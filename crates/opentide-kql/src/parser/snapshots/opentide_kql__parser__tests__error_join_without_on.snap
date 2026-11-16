@@ -1,0 +1,24 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | join U a\")"
+---
+SOURCE_FILE@0..12
+  QUERY@0..12
+    TABULAR_EXPRESSION@0..12
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      JOIN_OPERATOR@4..12
+        JOIN_KW@4..8 "join"
+        WHITESPACE@8..9 " "
+        TABULAR_SOURCE@9..10
+          TABLE_REF@9..10
+            IDENT@9..10 "U"
+        WHITESPACE@10..11 " "
+        NAME_REF@11..12
+          IDENT@11..12 "a"
+errors:
+10..11: expected `on` (expected `on`)

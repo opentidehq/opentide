@@ -1,0 +1,39 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"match: $a, b.c by first every 1 hour after $p\")"
+---
+SOURCE_FILE@0..45
+  SEARCH_QUERY@0..45
+    MATCH_SECTION@0..29
+      MATCH_KW@0..5 "match"
+      COLON@5..6 ":"
+      WHITESPACE@6..7 " "
+      MATCH_CLAUSE@7..29
+        VARIABLE@7..9
+          VAR_TOKEN@7..9 "$a"
+        COMMA@9..10 ","
+        WHITESPACE@10..11 " "
+        BARE_FIELD@11..14
+          IDENT@11..12 "b"
+          MEMBER@12..14
+            ACCESS_DOT@12..13 "."
+            FIELD_NAME@13..14 "c"
+        WHITESPACE@14..15 " "
+        MATCH_WINDOW@15..29
+          BY_KW@15..17 "by"
+          WHITESPACE@17..18 " "
+          FIRST_KW@18..23 "first"
+          WHITESPACE@23..24 " "
+          TIME_UNIT@24..29
+            IDENT@24..29 "every"
+    WHITESPACE@29..30 " "
+    ERROR@30..45
+      INTEGER@30..31 "1"
+      WHITESPACE@31..32 " "
+      IDENT@32..36 "hour"
+      WHITESPACE@36..37 " "
+      AFTER_KW@37..42 "after"
+      WHITESPACE@42..43 " "
+      VAR_TOKEN@43..45 "$p"
+errors:
+29..30: expected a section such as `events:` (expected `before`, `after`)

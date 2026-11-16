@@ -1,0 +1,24 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | where --a\")"
+---
+SOURCE_FILE@0..13
+  QUERY@0..13
+    TABULAR_EXPRESSION@0..13
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      WHERE_OPERATOR@4..13
+        WHERE_KW@4..9 "where"
+        WHITESPACE@9..10 " "
+        ADDITIVE_EXPR@10..13
+          UNARY_EXPR@10..11
+            MINUS@10..11 "-"
+          MINUS@11..12 "-"
+          NAME_REF@12..13
+            IDENT@12..13 "a"
+errors:
+11..11: expected an expression

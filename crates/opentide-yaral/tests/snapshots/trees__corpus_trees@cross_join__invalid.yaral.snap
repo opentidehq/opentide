@@ -1,0 +1,30 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/cross_join__invalid.yaral
+---
+SOURCE_FILE@0..56
+  COMMENT@0..26 "// prod:cross_join invalid"
+  WHITESPACE@26..27 "\n"
+  SEARCH_QUERY@27..55
+    SEARCH_EVENTS@27..37
+      CROSS_JOIN@27..37
+        CROSS_KW@27..32 "cross"
+        WHITESPACE@32..33 " "
+        JOIN_KW@33..37 "join"
+    WHITESPACE@37..38 "\n"
+    OUTCOME_SECTION@38..55
+      OUTCOME_KW@38..45 "outcome"
+      COLON@45..46 ":"
+      WHITESPACE@46..49 "\n  "
+      COMPARISON@49..55
+        VARIABLE@49..51
+          VAR_TOKEN@49..51 "$n"
+        WHITESPACE@51..52 " "
+        EQ@52..53 "="
+        WHITESPACE@53..54 " "
+        LITERAL@54..55
+          INTEGER@54..55 "1"
+  WHITESPACE@55..56 "\n"
+errors:
+37..38: expected a variable such as `$e` (expected a variable such as `$e`)

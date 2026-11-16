@@ -30,9 +30,36 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+mod analysis;
 pub mod catalog;
 mod check;
 pub mod editor;
+// The pure-Rust parser (#1227, ADR 0012) grows beside the tree-sitter path,
+// which serves until the last PR of the series switches production to it.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the pure-Rust lexer is reached from tests until the last PR of #1227 switches production to it"
+    )
+)]
+mod lexer;
+mod parser;
+mod syntax;
+#[doc(hidden)]
+pub mod testing;
+// The typed AST names the kinds from the crate root.
+use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
+// Generated from yaral.ungram by `cargo xtask codegen`: an accessor for every
+// child of every node, most of which the engine never calls, and names the
+// grammar chooses.
+#[expect(
+    dead_code,
+    clippy::enum_variant_names,
+    reason = "generated from yaral.ungram: every accessor of every node, named by the grammar, most of them not yet called"
+)]
+#[path = "generated/ast.rs"]
+mod ast;
 
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, LineIndex, Range, Severity, codes};
 use opentide_highlight::{HighlightSpec, HighlightToken, YARAL_HIGHLIGHTS_SCM, tokens_from_spans};
