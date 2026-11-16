@@ -1,0 +1,16 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/line_comment__invalid.cql
+---
+SOURCE_FILE@0..13
+  PIPELINE@0..12
+    ERROR@0..7
+      PATTERN_ERROR@0..7 "ERROR//"
+    WHITESPACE@7..8 " "
+    FREE_TEXT@8..12
+      UNQUOTED_PATTERN@8..12
+        WORD@8..12 "note"
+  WHITESPACE@12..13 "\n"
+
+0..0: unexpected (expected PIPE)

@@ -1,0 +1,37 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/negated_function_call__invalid.cql
+---
+SOURCE_FILE@0..36
+  PIPELINE@0..35
+    AND_FILTER@0..3
+      FREE_TEXT@0..3
+        UNQUOTED_PATTERN@0..3
+          WORD@0..3 "foo"
+    WHITESPACE@3..4 " "
+    NEGATED_FUNCTION_CALL@4..35
+      BANG@4..5 "!"
+      FUNCTION_CALL@5..35
+        FUNCTION_NAME@5..7
+          FUNCTION_NAME_TOKEN@5..7 "in"
+        L_PAREN@7..8 "("
+        ARGUMENT_LIST@8..34
+          ARGUMENT@8..16
+            FIELD_NAME@8..16
+              WORD@8..16 "loglevel"
+          COMMA@16..17 ","
+          WHITESPACE@17..18 " "
+          NAMED_ARGUMENT@18..34
+            ARGUMENT_NAME@18..24
+              WORD@18..24 "values"
+            EQ@24..25 "="
+            ARRAY@25..34
+              L_BRACK@25..26 "["
+              STRING@26..33
+                STRING_TOKEN@26..33 "\"DEBUG\""
+              R_BRACK@33..34 "]"
+        R_PAREN@34..35 ")"
+  WHITESPACE@35..36 "\n"
+
+3..4: expected a filter

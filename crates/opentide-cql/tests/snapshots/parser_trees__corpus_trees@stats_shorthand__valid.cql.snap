@@ -1,0 +1,69 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/stats_shorthand__valid.cql
+---
+SOURCE_FILE@0..90
+  PIPELINE@0..89
+    STATS_SHORTHAND@0..16
+      L_BRACK@0..1 "["
+      FUNCTION_CALL@1..7
+        FUNCTION_NAME@1..4
+          FUNCTION_NAME_TOKEN@1..4 "min"
+        L_PAREN@4..5 "("
+        ARGUMENT_LIST@5..6
+          ARGUMENT@5..6
+            FIELD_NAME@5..6
+              WORD@5..6 "x"
+        R_PAREN@6..7 ")"
+      COMMA@7..8 ","
+      WHITESPACE@8..9 " "
+      FUNCTION_CALL@9..15
+        FUNCTION_NAME@9..12
+          FUNCTION_NAME_TOKEN@9..12 "max"
+        L_PAREN@12..13 "("
+        ARGUMENT_LIST@13..14
+          ARGUMENT@13..14
+            FIELD_NAME@13..14
+              WORD@13..14 "x"
+        R_PAREN@14..15 ")"
+      R_BRACK@15..16 "]"
+    WHITESPACE@16..17 "\n"
+    PIPE@17..18 "|"
+    WHITESPACE@18..19 " "
+    STATS_SHORTHAND@19..89
+      L_BRACK@19..20 "["
+      ASSIGNMENT@20..53
+        FIELD_NAME@20..32
+          WORD@20..32 "min_response"
+        WHITESPACE@32..33 " "
+        COLON_EQ@33..35 ":="
+        WHITESPACE@35..36 " "
+        FUNCTION_CALL@36..53
+          FUNCTION_NAME@36..39
+            FUNCTION_NAME_TOKEN@36..39 "min"
+          L_PAREN@39..40 "("
+          ARGUMENT_LIST@40..52
+            ARGUMENT@40..52
+              FIELD_NAME@40..52
+                WORD@40..52 "responsetime"
+          R_PAREN@52..53 ")"
+      COMMA@53..54 ","
+      WHITESPACE@54..55 " "
+      ASSIGNMENT@55..88
+        FIELD_NAME@55..67
+          WORD@55..67 "max_response"
+        WHITESPACE@67..68 " "
+        COLON_EQ@68..70 ":="
+        WHITESPACE@70..71 " "
+        FUNCTION_CALL@71..88
+          FUNCTION_NAME@71..74
+            FUNCTION_NAME_TOKEN@71..74 "max"
+          L_PAREN@74..75 "("
+          ARGUMENT_LIST@75..87
+            ARGUMENT@75..87
+              FIELD_NAME@75..87
+                WORD@75..87 "responsetime"
+          R_PAREN@87..88 ")"
+      R_BRACK@88..89 "]"
+  WHITESPACE@89..90 "\n"

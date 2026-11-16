@@ -1,0 +1,57 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/saved_query_argument__valid.cql
+---
+SOURCE_FILE@0..140
+  PIPELINE@0..139
+    SAVED_QUERY@0..71
+      DOLLAR@0..1 "$"
+      SAVED_QUERY_NAME@1..47
+        SAVED_QUERY_NAME_TOKEN@1..47 "tausight/ephi-risk-posture:Tausight_ePHIStored"
+      L_PAREN@47..48 "("
+      SAVED_QUERY_ARGUMENT@48..70
+        ARGUMENT_NAME@48..56
+          WORD@48..56 "HostName"
+        EQ@56..57 "="
+        QUERY_PARAMETER@57..70
+          QUESTION_L_BRACE@57..59 "?{"
+          PARAMETER_NAME@59..67
+            WORD@59..67 "HostName"
+          PARAMETER_DEFAULT@67..70
+            EQ@67..68 "="
+            UNQUOTED_PATTERN@68..69
+              PATTERN@68..69 "*"
+            R_BRACE@69..70 "}"
+      R_PAREN@70..71 ")"
+    WHITESPACE@71..72 "\n"
+    PIPE@72..73 "|"
+    WHITESPACE@73..74 " "
+    SAVED_QUERY@74..139
+      DOLLAR@74..75 "$"
+      SAVED_QUERY_NAME@75..87
+        SAVED_QUERY_NAME_TOKEN@75..87 "mySavedQuery"
+      L_PAREN@87..88 "("
+      SAVED_QUERY_ARGUMENT@88..119
+        ARGUMENT_NAME@88..98
+          WORD@88..98 "mvArgument"
+        EQ@98..99 "="
+        ARRAY@99..119
+          L_BRACK@99..100 "["
+          STRING@100..108
+            STRING_TOKEN@100..108 "\"value1\""
+          COMMA@108..109 ","
+          WHITESPACE@109..110 " "
+          STRING@110..118
+            STRING_TOKEN@110..118 "\"value2\""
+          R_BRACK@118..119 "]"
+      COMMA@119..120 ","
+      WHITESPACE@120..121 " "
+      SAVED_QUERY_ARGUMENT@121..138
+        ARGUMENT_NAME@121..125
+          WORD@121..125 "path"
+        EQ@125..126 "="
+        UNQUOTED_PATTERN@126..138
+          PATTERN@126..138 "C:\\Windows\\*"
+      R_PAREN@138..139 ")"
+  WHITESPACE@139..140 "\n"
