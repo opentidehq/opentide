@@ -500,7 +500,10 @@ fn decomposed_rule_names_libyara_and_yara_x_refuse() {
         "      imports:\n        - pe\n",
     )
     .replacen("name: Cmd String", "name: PE", 1);
-    assert_eq!(yara(&source), [row("yara_x_incompatible", "name", "P")]);
+    assert_eq!(
+        yara(&source),
+        [row("yara_rule_identifier_conflict", "name", "P")]
+    );
 }
 
 /// `(name, text replaced in DEPLOYED_RULE, replacement, compile_yara_deployment's

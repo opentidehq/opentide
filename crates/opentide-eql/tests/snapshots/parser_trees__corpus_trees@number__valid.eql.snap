@@ -1,0 +1,50 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/number__valid.eql
+---
+SOURCE_FILE@0..67
+  LINE_COMMENT@0..20 "// prod:number valid"
+  WHITESPACE@20..21 "\n"
+  EVENT_QUERY@21..66
+    EVENT_CATEGORY@21..28
+      IDENTIFIER@21..28
+        WORD@21..28 "process"
+    WHITESPACE@28..29 " "
+    WHERE_KW@29..34 "where"
+    WHITESPACE@34..35 " "
+    AND_EXPRESSION@35..66
+      COMPARISON@35..41
+        FIELD@35..36
+          IDENTIFIER@35..36
+            WORD@35..36 "a"
+        WHITESPACE@36..37 " "
+        EQ_EQ@37..39 "=="
+        WHITESPACE@39..40 " "
+        NUMBER@40..41
+          NUMBER_TOKEN@40..41 "1"
+      WHITESPACE@41..42 " "
+      AND_KW@42..45 "and"
+      WHITESPACE@45..46 " "
+      COMPARISON@46..54
+        FIELD@46..47
+          IDENTIFIER@46..47
+            WORD@46..47 "b"
+        WHITESPACE@47..48 " "
+        EQ_EQ@48..50 "=="
+        WHITESPACE@50..51 " "
+        NUMBER@51..54
+          NUMBER_TOKEN@51..54 "1.5"
+      WHITESPACE@54..55 " "
+      AND_KW@55..58 "and"
+      WHITESPACE@58..59 " "
+      COMPARISON@59..66
+        FIELD@59..60
+          IDENTIFIER@59..60
+            WORD@59..60 "c"
+        WHITESPACE@60..61 " "
+        EQ_EQ@61..63 "=="
+        WHITESPACE@63..64 " "
+        NUMBER@64..66
+          NUMBER_TOKEN@64..66 ".5"
+  WHITESPACE@66..67 "\n"

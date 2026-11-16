@@ -1,0 +1,54 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(source)"
+---
+SOURCE_FILE@0..80
+  EVENT_QUERY@0..80
+    EVENT_CATEGORY@0..7
+      IDENTIFIER@0..7
+        WORD@0..7 "process"
+    WHITESPACE@7..8 " "
+    WHERE_KW@8..13 "where"
+    WHITESPACE@13..14 " "
+    AND_EXPRESSION@14..80
+      RELATIONSHIP@14..48
+        IDENTIFIER@14..24
+          WORD@14..24 "descendant"
+        WHITESPACE@24..25 " "
+        OF_KW@25..27 "of"
+        WHITESPACE@27..28 " "
+        SUBQUERY@28..48
+          L_BRACK@28..29 "["
+          EVENT_CATEGORY@29..36
+            IDENTIFIER@29..36
+              WORD@29..36 "process"
+          WHITESPACE@36..37 " "
+          WHERE_KW@37..42 "where"
+          WHITESPACE@42..43 " "
+          BOOLEAN@43..47
+            TRUE_KW@43..47 "true"
+          R_BRACK@47..48 "]"
+      WHITESPACE@48..49 " "
+      AND_KW@49..52 "and"
+      WHITESPACE@52..53 " "
+      NOT_EXPRESSION@53..80
+        NOT_KW@53..56 "not"
+        WHITESPACE@56..57 " "
+        RELATIONSHIP@57..80
+          IDENTIFIER@57..62
+            WORD@57..62 "child"
+          WHITESPACE@62..63 " "
+          OF_KW@63..65 "of"
+          WHITESPACE@65..66 " "
+          SUBQUERY@66..80
+            L_BRACK@66..67 "["
+            EVENT_CATEGORY@67..71
+              IDENTIFIER@67..71
+                WORD@67..71 "file"
+            WHITESPACE@71..72 " "
+            WHERE_KW@72..77 "where"
+            WHITESPACE@77..78 " "
+            FIELD@78..79
+              IDENTIFIER@78..79
+                WORD@78..79 "x"
+            R_BRACK@79..80 "]"

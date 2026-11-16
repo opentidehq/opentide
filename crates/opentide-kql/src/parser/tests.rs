@@ -326,3 +326,92 @@ fn a_hyphen_keyword_after_with_is_an_operator_only_in_facet() {
     assert!(errors("SigninLogs | with project-reorder * asc").is_empty());
     assert!(errors("T | facet by a with project-away b").is_empty());
 }
+
+/// Found by the switch's full differential (seed 2, scale 2): after the `(`
+/// of a call or a parenthesised expression, a hyphen keyword is a
+/// subtraction of names, as tree-sitter read it; the lexer takes it for an
+/// operator after any `(`, so the parser has it lexed again.
+#[test]
+fn a_hyphen_keyword_that_starts_an_expression_is_a_subtraction() {
+    for source in [
+        "SecurityEvent | summarize count(project-away ) by bin(TimeGenerated, 1h), Computer",
+        "T | extend z = strlen(mv-expand)",
+        "T | extend a = (project-away)",
+        "T | extend a = f(b, parse-where)",
+    ] {
+        assert!(errors(source).is_empty(), "{source}: {:?}", errors(source));
+        let tree = SyntaxNode::new_root(parse(source).green);
+        assert!(
+            tree.descendants().any(|n| n.kind() == K::ADDITIVE_EXPR),
+            "{source}"
+        );
+    }
+    // Where a sub-pipeline starts, it is still an operator.
+    for source in [
+        "T | fork (project-away y) (take 1)",
+        "T | mv-apply x on (project-away y)",
+        "T | partition by x (project-away y)",
+    ] {
+        assert!(errors(source).is_empty(), "{source}: {:?}", errors(source));
+        let tree = SyntaxNode::new_root(parse(source).green);
+        assert!(
+            tree.descendants()
+                .any(|n| n.kind() == K::PROJECT_AWAY_OPERATOR),
+            "{source}"
+        );
+    }
+}
+
+/// Found by the switch's full differential (seed 3): in an expression or as
+/// the name an assignment makes, and as a `let` value, `dynamic` and
+/// `toscalar` are no column or table, as the old grammar read them
+/// (`split(a, "b", dynamic -1)` is broken); they still open their literal
+/// and call, and `dynamic` is still a table name elsewhere.
+#[test]
+fn dynamic_and_toscalar_are_not_columns() {
+    for source in [
+        "T | where dynamic == 1",
+        "T | where toscalar == 1",
+        "T | project dynamic",
+        "T | extend dynamic = 1",
+        "T | extend x = split(a, \"b\", dynamic -1)[-1]",
+        "let t = (\ndynamic\n| where a == 1);\nt",
+        "let t = dynamic;\nt",
+        "let t = toscalar;\nt",
+    ] {
+        assert!(!errors(source).is_empty(), "{source}");
+    }
+    for source in [
+        "dynamic",
+        "(dynamic | take 1)",
+        "T | join (dynamic | take 1) on a",
+        "let t = dynamic([1]);\nprint t",
+        "T | extend x = dynamic([1]), y = toscalar(T | count)",
+        "datatable(a: dynamic) [dynamic(1)]",
+    ] {
+        assert!(errors(source).is_empty(), "{source}: {:?}", errors(source));
+    }
+}
+
+/// Class (b), an old-engine false error kept fixed (#1230): Kusto's
+/// multi-line string literals, ```` ```…``` ```` and `~~~…~~~`, are string
+/// literals wherever a string is
+/// (<https://learn.microsoft.com/kusto/query/scalar-data-types/string#multi-line-string-literals>);
+/// tree-sitter rejected them everywhere (the full differential's seed-3
+/// verdict difference).
+#[test]
+fn fenced_multi_line_strings_are_string_literals() {
+    for source in [
+        "print s = ```a\nmulti-line\nstring```",
+        "T | where a == ~~~x~~~",
+        "T | extend b = strlen(```y```) | where c has ```z```",
+    ] {
+        assert!(errors(source).is_empty(), "{source}: {:?}", errors(source));
+        let tree = SyntaxNode::new_root(parse(source).green);
+        assert!(
+            tree.descendants_with_tokens()
+                .any(|t| t.kind() == K::STRING && t.to_string().starts_with(['`', '~'])),
+            "{source}"
+        );
+    }
+}

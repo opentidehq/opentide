@@ -291,7 +291,9 @@ exabeam_not_equal error 0:40-0:42 there is no `!=` in a filter: write NOT user:v
 43..51 string
 == conformance/exabeam/invalid/exabeam_parse_error.rule.exabeam
 exabeam_parse_error error 0:13-0:14 unterminated string
+0..12 property
 12..13 operator
+14..21 string
 == conformance/exabeam/invalid/exabeam_pipe_limit.search.exabeam
 exabeam_pipe_limit error 0:190-0:191 at most 5 pipes
 0..6 keyword
@@ -1289,8 +1291,10 @@ exabeam_parse_error error 2:47-2:48 expected a function argument
 32..35 keyword
 36..49 property
 49..50 operator
+50..54 function.builtin
 54..55 punctuation.bracket
 55..138 string
+138..140 string
 140..141 operator
 141..152 string
 153..158 error
@@ -1300,6 +1304,8 @@ exabeam_parse_error error 2:47-2:48 expected a function argument
 163..168 string
 168..169 punctuation.bracket
 169..170 punctuation.bracket
+170..175 string
+176..177 punctuation.bracket
 == conformance/external/exabeam/run-key-written.rule.exabeam
 0..13 property
 13..14 operator
@@ -1679,7 +1685,6 @@ exabeam_parse_error error 0:21-0:22 expected a clause
 7..11 property
 12..14 keyword
 15..20 variable
-25..27 keyword
 27..28 operator
 28..39 string
 == corpus/exabeam/column__valid.exabeam
@@ -1695,7 +1700,9 @@ exabeam_parse_error error 0:21-0:22 expected a clause
 39..50 string
 == corpus/exabeam/context_term__invalid.exabeam
 exabeam_parse_error error 0:8-0:9 IN takes a context table name in double quotes
+0..4 property
 5..7 keyword
+8..18 string
 == corpus/exabeam/context_term__valid.exabeam
 0..4 property
 5..7 keyword
@@ -1771,6 +1778,8 @@ exabeam_parse_error error 0:29-0:30 FOREACH names a field
 92..94 number
 == corpus/exabeam/free_text__invalid.exabeam
 exabeam_parse_error error 0:0-0:1 unterminated string
+1..6 string
+7..12 string
 == corpus/exabeam/free_text__valid.exabeam
 0..13 string
 14..18 string

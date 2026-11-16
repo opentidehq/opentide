@@ -1,0 +1,25 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/join__invalid.eql
+---
+SOURCE_FILE@0..47
+  LINE_COMMENT@0..20 "// prod:join invalid"
+  WHITESPACE@20..21 "\n"
+  JOIN@21..46
+    JOIN_KW@21..25 "join"
+    WHITESPACE@25..26 " "
+    JOIN_TERM@26..46
+      SUBQUERY@26..46
+        L_BRACK@26..27 "["
+        EVENT_CATEGORY@27..34
+          IDENTIFIER@27..34
+            WORD@27..34 "process"
+        WHITESPACE@34..35 " "
+        WHERE_KW@35..40 "where"
+        WHITESPACE@40..41 " "
+        BOOLEAN@41..45
+          TRUE_KW@41..45 "true"
+        R_BRACK@45..46 "]"
+  WHITESPACE@46..47 "\n"
+46..47: a second subquery `[ ... ]` is missing (expected `by`, `[`, `![`)
