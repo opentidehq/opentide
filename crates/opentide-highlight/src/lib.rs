@@ -1082,6 +1082,8 @@ mod tests {
         let spec = HighlightSpec::load().expect("spec");
         assert!(spec.legend.contains(&"keyword".to_string()));
         assert!(spec.contains_capture("tide.keyword"));
+        assert!(spec.contains_capture("tide.property"));
+        assert!(spec.contains_capture("comment"));
         assert!(spec.contains_capture("markdown.heading"));
         assert!(spec.contains_capture("macro"));
         assert!(spec.token_index("keyword").is_ok());

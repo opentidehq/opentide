@@ -331,7 +331,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          (cd highlights && zip -r "../dist/highlights-${VERSION}.zip" spec.toml generated queries)
+          (cd highlights && zip -r "../dist/highlights-${VERSION}.zip" spec.toml generated)
           zip -j "dist/highlights-${VERSION}.zip" LICENSE NOTICE
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
