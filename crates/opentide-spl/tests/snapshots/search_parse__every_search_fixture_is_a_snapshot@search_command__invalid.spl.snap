@@ -1,0 +1,26 @@
+---
+source: crates/opentide-spl/tests/search_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/search_command__invalid.spl
+---
+SOURCE_FILE@0..24
+  PIPELINE@0..24
+    SEARCH_COMMAND@0..8
+      SEARCH_KW@0..6 "search"
+      WHITESPACE@6..7 " "
+      SEARCH_EXPRESSION@7..8
+        IDENTIFIER@7..8
+          IDENT@7..8 "a"
+    WHITESPACE@8..9 " "
+    PIPE@9..10 "|"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    STATS_COMMAND@13..24
+      STATS_KW@13..18 "stats"
+      WHITESPACE@18..19 " "
+      AGGREGATE_ITEM@19..24
+        IDENTIFIER@19..24
+          IDENT@19..24 "count"
+--
+10..11: expected a command (expected IDENT, MACRO_TOKEN)

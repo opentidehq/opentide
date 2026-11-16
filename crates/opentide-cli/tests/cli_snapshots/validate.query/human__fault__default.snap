@@ -298,12 +298,12 @@ exit: 1
 ␛[34m   │␛[0m
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the KQL reference: https://learn.microsoft.com/kusto/query/
 
-␛[1m␛[31merror[spl_parse_error]␛[0m␛[1m: SPL syntax error: unexpected 'index'␛[0m
-   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/rogue-harvest-rule-0056.yaml␛\objects/rules/rogue-harvest-rule-0056.yaml:70:7␛]8;;␛\
+␛[1m␛[31merror[spl_parse_error]␛[0m␛[1m: unbalanced parentheses: this '(' is never closed␛[0m
+   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/rogue-harvest-rule-0056.yaml␛\objects/rules/rogue-harvest-rule-0056.yaml:70:27␛]8;;␛\
 ␛[34m   │␛[0m
 ␛[34m69 │␛[0m     query: |
-␛[34m70 │␛[0m       index␛[35m=␛[0mmain ␛[1m␛[35m|␛[0m eval x␛[35m=␛[0m(
-␛[34m   │␛[0m       ␛[1m␛[31m━━━━━␛[0m
+␛[34m70 │␛[0m       index␛[35m=␛[0mmain ␛[1m␛[35m|␛[0m ␛[1m␛[35meval␛[0m x␛[35m=␛[0m(
+␛[34m   │␛[0m                           ␛[1m␛[31m━␛[0m
 ␛[34m   │␛[0m
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
 
