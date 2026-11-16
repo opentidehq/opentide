@@ -284,7 +284,9 @@ pub(crate) fn lex_kql(source: &str) -> Vec<Lexeme> {
 /// [`lex_kql`], reading the brackets that open at `index_at` (sorted) as an index
 /// (`[`, a string, `]`), never as a quoted name: where the parser found a
 /// quoted name right after an expression, which the old grammar read as
-/// `step['x']`.
+/// `step['x']`. A hyphen keyword that starts at one of `index_at` is split
+/// into names and a minus: where the parser found it starting an expression
+/// (`count(project-away)`), as the old grammar read it.
 pub(crate) fn lex_kql_indexing(source: &str, index_at: &[TextSize]) -> Vec<Lexeme> {
     let lexemes = lex::<Token>(source, |token, text| kind_of(token, text).raw());
     fix_up(source, lexemes, index_at)
@@ -310,7 +312,8 @@ const BEFORE_AN_OPERATOR: [K; 3] = [K::PIPE, K::L_PAREN, K::COMMA];
 /// tree-sitter lexer knew which tokens its grammar could take here):
 ///
 /// - a hyphen keyword (`parse-where`) that does not start an operator is a
-///   subtraction of names (`a - b`), so it is split;
+///   subtraction of names (`a - b`), so it is split; after a `(` or a `,`
+///   it may start one, unless the parser said it starts an expression;
 /// - `['k']` after a value (`d['k']`, `d.['k']`) is an index, not a quoted
 ///   name: split into `[`, the string and `]`.
 fn fix_up(source: &str, lexemes: Vec<Lexeme>, index_at: &[TextSize]) -> Vec<Lexeme> {
@@ -350,7 +353,12 @@ fn fix_up(source: &str, lexemes: Vec<Lexeme>, index_at: &[TextSize]) -> Vec<Lexe
             K::GRANNY_ASC_KW | K::GRANNY_DESC_KW => Vec::new(),
             kind if text.contains('-') && kind.is_word() => {
                 let facet_with = previous == Some(K::WITH_KW) && in_facet;
-                if facet_with || previous.is_some_and(|p| BEFORE_AN_OPERATOR.contains(&p)) {
+                // Where the parser wanted an expression (`count(project-away)`):
+                // names and a minus, whatever came before.
+                let in_expression = index_at.binary_search(&lexeme.range.start()).is_ok();
+                if !in_expression
+                    && (facet_with || previous.is_some_and(|p| BEFORE_AN_OPERATOR.contains(&p)))
+                {
                     Vec::new()
                 } else {
                     text.match_indices('-').map(|(at, _)| at).collect()

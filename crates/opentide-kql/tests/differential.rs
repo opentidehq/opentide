@@ -2,10 +2,11 @@
 //! `.kql` file of `crates/testdata`, its prefixes, seeded token mutations and
 //! random sentences (`opentide_parse::differential`, #1230).
 //!
-//! The old engine is the production one, reached through its public API; the
-//! new one is `opentide_kql::testing`'s. Compared: every diagnostic under the
-//! Sentinel and Defender profiles, the HIR, the highlight tokens, the column
-//! pass (pipelines, references, definitions) and hover at offsets.
+//! The old engine is `tests/legacy`, a verbatim copy of the tree-sitter
+//! implementation; the new one is production, reached through the public API.
+//! Compared: every diagnostic under the Sentinel and Defender profiles, the
+//! HIR, the highlight tokens, the column pass (pipelines, references,
+//! definitions) and hover at offsets.
 //! Completions and signature help read the text, not a tree: they are the
 //! same function on both sides.
 //!
@@ -18,10 +19,16 @@
 )]
 
 mod common;
+#[allow(
+    dead_code,
+    unused_imports,
+    reason = "a verbatim copy of the old crate; not every item is compared"
+)]
+mod legacy;
 
 use common::corpus;
 use opentide_core::codes;
-use opentide_kql::testing::{analyze_new, columns_new, hover_new, lex_spans, pipeline_parts};
+use opentide_kql::inspect::{lex_spans, pipeline_parts};
 use opentide_kql::{Catalog, Profile, analyze_with_catalog, columns, hover};
 use opentide_parse::differential::{Config, Engine, Source, Surfaces, assert_gates, run};
 
@@ -57,49 +64,53 @@ struct Old;
 struct New;
 
 /// The column pass's findings, one line each: every pipeline's operators and
-/// the columns after each, every reference and definition.
-fn columns_text(analysis: &opentide_kql::schema::Analysis) -> String {
-    let mut out = String::new();
-    for p in &analysis.pipelines {
-        let names = |s: &opentide_kql::schema::Schema| {
-            s.columns
-                .iter()
-                .map(|c| format!("{}:{}", c.name, c.type_name.as_deref().unwrap_or("?")))
-                .collect::<Vec<_>>()
-                .join(",")
-        };
-        out.push_str(&format!(
-            "pipeline {}..{} {:?} {:?} [{}]\n",
-            p.span.start,
-            p.span.end,
-            p.source.source,
-            p.source.known,
-            names(&p.source)
-        ));
-        for stage in &p.stages {
+/// the columns after each, every reference and definition. A macro: the old
+/// engine's types are its own copies.
+macro_rules! columns_text {
+    ($analysis:expr, $schema:ty) => {{
+        let analysis = $analysis;
+        let mut out = String::new();
+        for p in &analysis.pipelines {
+            let names = |s: &$schema| {
+                s.columns
+                    .iter()
+                    .map(|c| format!("{}:{}", c.name, c.type_name.as_deref().unwrap_or("?")))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            };
             out.push_str(&format!(
-                "  {} {}..{} {:?} [{}]\n",
-                stage.operator,
-                stage.span.start,
-                stage.span.end,
-                stage.output.known,
-                names(&stage.output)
+                "pipeline {}..{} {:?} {:?} [{}]\n",
+                p.span.start,
+                p.span.end,
+                p.source.source,
+                p.source.known,
+                names(&p.source)
+            ));
+            for stage in &p.stages {
+                out.push_str(&format!(
+                    "  {} {}..{} {:?} [{}]\n",
+                    stage.operator,
+                    stage.span.start,
+                    stage.span.end,
+                    stage.output.known,
+                    names(&stage.output)
+                ));
+            }
+        }
+        for r in &analysis.references {
+            out.push_str(&format!(
+                "ref {} {}..{} in {}..{} {:?}\n",
+                r.name, r.span.start, r.span.end, r.operator.start, r.operator.end, r.column
             ));
         }
-    }
-    for r in &analysis.references {
-        out.push_str(&format!(
-            "ref {} {}..{} in {}..{} {:?}\n",
-            r.name, r.span.start, r.span.end, r.operator.start, r.operator.end, r.column
-        ));
-    }
-    for d in &analysis.definitions {
-        out.push_str(&format!(
-            "def {}..{} {:?}\n",
-            d.span.start, d.span.end, d.column
-        ));
-    }
-    out
+        for d in &analysis.definitions {
+            out.push_str(&format!(
+                "def {}..{} {:?}\n",
+                d.span.start, d.span.end, d.column
+            ));
+        }
+        out
+    }};
 }
 
 /// An analysis as the differential compares it: diagnostics, the HIR, tokens.
@@ -109,43 +120,67 @@ type Observed = (
     Vec<opentide_highlight::HighlightToken>,
 );
 
-/// What both engines give for `input`, from the given functions.
+/// What both engines give for `input`, from the given functions: `analyze`
+/// under the profile at an index of [`PROFILES`], `columns` as text.
 fn observe(
     input: &str,
-    analyze: &dyn Fn(&str, &Catalog) -> Observed,
-    columns: &dyn Fn(&str) -> opentide_kql::schema::Analysis,
+    analyze: &dyn Fn(&str, usize) -> Observed,
+    columns: &dyn Fn(&str) -> String,
 ) -> Surfaces {
     let mut out = Vec::new();
-    for (name, profile) in PROFILES {
-        let catalog = Catalog::for_workspace(profile, input);
-        let (diagnostics, hir, tokens) = analyze(input, &catalog);
+    for (index, (name, _)) in PROFILES.iter().enumerate() {
+        let (diagnostics, hir, tokens) = analyze(input, index);
         let diagnostics: Vec<String> = diagnostics.iter().map(line).collect();
         out.push((format!("diagnostics.{name}"), diagnostics.join("\n")));
-        if name == "sentinel" {
+        if *name == "sentinel" {
             out.push(("hir".to_owned(), hir));
             out.push(("tokens".to_owned(), tokens_text(&tokens)));
         }
     }
-    out.push(("columns".to_owned(), columns_text(&columns(input))));
+    out.push(("columns".to_owned(), columns(input)));
     out
+}
+
+const LEGACY_PROFILES: [legacy::Profile; 2] =
+    [legacy::Profile::Sentinel, legacy::Profile::Defender];
+
+/// The old engine's diagnostics of `input` under the profile at `index`.
+fn old_diagnostics(input: &str, index: usize) -> Vec<opentide_core::Diagnostic> {
+    let catalog = legacy::Catalog::for_workspace(LEGACY_PROFILES[index], input);
+    legacy::analyze_with_catalog(input, &catalog).diagnostics
+}
+
+/// The new engine's diagnostics of `input` under the profile at `index`.
+fn new_diagnostics(input: &str, index: usize) -> Vec<opentide_core::Diagnostic> {
+    let catalog = Catalog::for_workspace(PROFILES[index].1, input);
+    analyze_with_catalog(input, &catalog).diagnostics
 }
 
 impl Engine for Old {
     fn observe(&self, input: &str) -> Surfaces {
         observe(
             input,
-            &|input, catalog| {
-                let a = analyze_with_catalog(input, catalog);
+            &|input, index| {
+                let catalog = legacy::Catalog::for_workspace(LEGACY_PROFILES[index], input);
+                let a = legacy::analyze_with_catalog(input, &catalog);
                 (a.diagnostics, format!("{:?}", a.hir), a.tokens)
             },
-            &|input| columns(input, Profile::Sentinel),
+            &|input| {
+                columns_text!(
+                    legacy::columns(input, legacy::Profile::Sentinel),
+                    legacy::schema::Schema
+                )
+            },
         )
     }
 
     fn observe_at(&self, input: &str, offset: usize) -> Surfaces {
         vec![(
             "hover".to_owned(),
-            format!("{:?}", hover(input, offset, Profile::Sentinel)),
+            format!(
+                "{:?}",
+                legacy::hover(input, offset, legacy::Profile::Sentinel)
+            ),
         )]
     }
 }
@@ -154,18 +189,24 @@ impl Engine for New {
     fn observe(&self, input: &str) -> Surfaces {
         observe(
             input,
-            &|input, catalog| {
-                let a = analyze_new(input, catalog);
+            &|input, index| {
+                let catalog = Catalog::for_workspace(PROFILES[index].1, input);
+                let a = analyze_with_catalog(input, &catalog);
                 (a.diagnostics, format!("{:?}", a.hir), a.tokens)
             },
-            &|input| columns_new(input, Profile::Sentinel),
+            &|input| {
+                columns_text!(
+                    columns(input, Profile::Sentinel),
+                    opentide_kql::schema::Schema
+                )
+            },
         )
     }
 
     fn observe_at(&self, input: &str, offset: usize) -> Surfaces {
         vec![(
             "hover".to_owned(),
-            format!("{:?}", hover_new(input, offset, Profile::Sentinel)),
+            format!("{:?}", hover(input, offset, Profile::Sentinel)),
         )]
     }
 }
@@ -383,7 +424,7 @@ fn differential(seed: u64) {
 }
 
 /// One seed in CI; `OPENTIDE_DIFF_SEEDS=1,2` and `OPENTIDE_DIFF_SCALE=4` for
-/// the full run before a push (NOTES.md records it).
+/// the full run before a push (the switch PR, #1230, records its numbers).
 #[test]
 fn seeds() {
     let seeds = std::env::var("OPENTIDE_DIFF_SEEDS").unwrap_or_else(|_| "1".into());
@@ -446,14 +487,13 @@ fn broken_input_is_not_noisier() {
         let stride = (cuts.len() / 15).max(1);
         for &cut in cuts.iter().step_by(stride) {
             let input = &text[..cut];
-            for (_, profile) in PROFILES {
-                let catalog = Catalog::for_workspace(profile, input);
-                let old = analyze_with_catalog(input, &catalog).diagnostics;
+            for index in 0..PROFILES.len() {
+                let old = old_diagnostics(input, index);
                 if !old.iter().any(|d| d.code == codes::KQL_PARSE_ERROR) {
                     continue;
                 }
                 checked += 1;
-                let new = analyze_new(input, &catalog).diagnostics;
+                let new = new_diagnostics(input, index);
                 if new.len() > old.len() {
                     noisier.push(format!(
                         "{} cut {cut}: old {:?}\n  new {:?}",
@@ -472,4 +512,94 @@ fn broken_input_is_not_noisier() {
         noisier.len(),
         noisier[..noisier.len().min(10)].join("\n")
     );
+}
+
+/// Runs `run` on a thread with a stack of `size` bytes; an overflow aborts.
+fn on_stack<T: Send + 'static>(size: usize, run: impl FnOnce() -> T + Send + 'static) -> T {
+    std::thread::Builder::new()
+        .stack_size(size)
+        .spawn(run)
+        .expect("spawn")
+        .join()
+        .expect("the analysis panicked")
+}
+
+fn deep(kind: &str, n: usize) -> String {
+    match kind {
+        "member" => format!("T | where {} == 1", vec!["a"; n].join(".")),
+        "index" => format!("T | where a{} == 1", "[0]".repeat(n)),
+        "union" => format!("{}T{}", "union (".repeat(n), ")".repeat(n)),
+        "join" => format!("T{}{}", " | join (T".repeat(n), ") on a".repeat(n)),
+        "mv-apply" => format!(
+            "T{}{}",
+            " | mv-apply x on (where b".repeat(n),
+            ")".repeat(n)
+        ),
+        "pipeline" => format!("{}T | take 1{}", "(".repeat(n), ")".repeat(n)),
+        "expression" => format!("T | where {}a == 1{}", "(".repeat(n), ")".repeat(n)),
+        _ => unreachable!("{kind}"),
+    }
+}
+
+const KINDS: [&str; 7] = [
+    "member",
+    "index",
+    "union",
+    "join",
+    "mv-apply",
+    "pipeline",
+    "expression",
+];
+
+/// Where the tree-sitter engine did not overflow (35 levels, its measured
+/// floor), the column pass's budget changes nothing: the same columns and
+/// diagnostics as the old engine (moved from `tests/deep_analysis.rs`).
+#[test]
+fn the_budget_reads_as_deep_as_the_old_engine() {
+    for kind in KINDS {
+        let n = if matches!(kind, "member" | "index") {
+            250
+        } else {
+            35
+        };
+        let source = deep(kind, n);
+        let text = |a: &opentide_kql::schema::Analysis| {
+            format!(
+                "{} {} {} {:?}",
+                a.pipelines.len(),
+                a.references.len(),
+                a.definitions.len(),
+                a.diagnostics
+            )
+        };
+        let text_old = |a: &legacy::schema::Analysis| {
+            format!(
+                "{} {} {} {:?}",
+                a.pipelines.len(),
+                a.references.len(),
+                a.definitions.len(),
+                a.diagnostics
+            )
+        };
+        let old = {
+            let source = source.clone();
+            on_stack(256 << 20, move || {
+                text_old(&legacy::columns(&source, legacy::Profile::Sentinel))
+            })
+        };
+        let new = on_stack(1 << 20, move || text(&columns(&source, Profile::Sentinel)));
+        assert_eq!(old, new, "{kind} {n}");
+        // And the diagnostics.
+        let source = deep(kind, n);
+        let old = {
+            let source = source.clone();
+            on_stack(256 << 20, move || {
+                format!("{:?}", old_diagnostics(&source, 0))
+            })
+        };
+        let new = on_stack(1 << 20, move || {
+            format!("{:?}", new_diagnostics(&source, 0))
+        });
+        assert_eq!(old, new, "{kind} {n}");
+    }
 }

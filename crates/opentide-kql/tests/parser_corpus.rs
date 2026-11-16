@@ -4,7 +4,7 @@
 mod common;
 use common::corpus;
 use opentide_core::LanguageId;
-use opentide_kql::testing::{conformance, lex_spans, parse_error_count, parse_is_lossless};
+use opentide_kql::inspect::{conformance, lex_spans, parse_error_count, parse_is_lossless};
 
 /// Every corpus file, and its prefixes, parses without a panic and into a
 /// lossless tree (the debug assertions of the toolkit are on in tests).

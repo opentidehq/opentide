@@ -1,0 +1,28 @@
+# sccache's statistics, then the job's compiler cache saved when `save` says so.
+# Call it with `if: ${{ !cancelled() }}` (the statistics are read after a
+# failure too) and put the job's save policy, with `job.status == 'success'`,
+# in `save`: a composite cannot see whether the job's earlier steps passed.
+name: sccache save
+description: The compiler cache's statistics, and the cache saved under the job's policy.
+
+inputs:
+  key:
+    description: The key ./.github/actions/rust-setup restored (its `key` output).
+    required: true
+  save:
+    description: "'true' saves the cache under `key`."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Compiler cache statistics
+      shell: bash
+      run: sccache --show-stats
+
+    - name: Save the compiler cache
+      if: inputs.save == 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ env.SCCACHE_DIR }}
+        key: ${{ inputs.key }}
