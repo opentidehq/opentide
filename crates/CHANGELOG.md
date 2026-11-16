@@ -55,6 +55,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
+- **`opentide_schema::platforms::PlatformId`**. An enum of the thirteen built-in platforms, in `PLATFORMS`' order: `ALL`, `spec()` (its row), `as_str()` (the identifier), `parse(id)` (`None` for a plugin's identifier or any other text) and `Display`. Code that chose by a platform's identifier text matches on it now, so a platform added to the registry is a compile error wherever it needs a decision; the command line's `--platform` choices (`opentide_cli::tree::Platform`) and `deploy`'s per-platform dispatch read it.
+
 - **`opentide_compile::bitdefender::YARA_RULE_LIMIT`, `YARA_RULE_LIMIT_CODE`, `is_yara` and `yara_rule_limit`** ([opentide#1252](https://github.com/opentidehq/opentide/issues/1252)). GravityZone's maximum of 50 YARA rules per company, the code `bitdefender_yara_rule_limit`, whether a rule's block deploys a YARA rule, and the message for a deploy that would pass the limit (recorded and created YARA rules). `deploy` refuses a tenant's YARA creates with it before anything is sent.
 
 - **`opentide_core::with_line_index`** ([opentide#1231](https://github.com/opentidehq/opentide/issues/1231)). `with_line_index(source, run)` installs the line table of `source` while `run` runs: `span_to_range` and `offset_to_position` on that very text (the same address and length) then search it instead of scanning from the start, and the table that was installed before is put back afterwards, even on a panic. An engine wraps the analysis of a query in it so that converting many findings stays linear. `LineIndex` is unchanged.
