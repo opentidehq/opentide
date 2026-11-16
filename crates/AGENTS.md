@@ -30,7 +30,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 | Layer, tier | Crates (each with an `AGENTS.md`) |
 | --- | --- |
 | foundation 0 | [`opentide-core`](opentide-core/AGENTS.md), [`opentide-compare`](opentide-compare/AGENTS.md) (the differential comparator, not published), [`opentide-cassette`](opentide-cassette/AGENTS.md) (the recorded-HTTP harness, UC-4.1, not published) |
-| foundation 1 | [`opentide-syntax`](opentide-syntax/AGENTS.md), [`opentide-parse`](opentide-parse/AGENTS.md) (the pure-Rust parsers' toolkit, ADR 0012), [`opentide-highlight`](opentide-highlight/AGENTS.md), [`opentide-ecs`](opentide-ecs/AGENTS.md) |
+| foundation 1 | [`opentide-parse`](opentide-parse/AGENTS.md) (the pure-Rust parsers' toolkit, ADR 0012), [`opentide-highlight`](opentide-highlight/AGENTS.md), [`opentide-ecs`](opentide-ecs/AGENTS.md) |
 | foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md), [`opentide-cql`](opentide-cql/AGENTS.md) |
 | foundation 3 | [`opentide-lucene`](opentide-lucene/AGENTS.md) (above kuery: each tells the other's rules by the other's grammar) |
 | foundation 4 | [`opentide-esql`](opentide-esql/AGENTS.md), [`opentide-eql`](opentide-eql/AGENTS.md) |

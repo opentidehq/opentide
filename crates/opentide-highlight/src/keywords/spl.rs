@@ -1,9 +1,8 @@
-//! Splunk SPL: every keyword and punctuation token `highlights.scm` names,
+//! Splunk SPL: every keyword and punctuation token the tree-sitter `highlights.scm` named,
 //! each with its capture (#1229). Keywords are read out of words by
 //! position in the parser, so a command name such as `search` is a keyword
 //! only where the grammar puts it; the TextMate grammar lists them as the
-//! `.scm` always did. A test holds the table equal to the `.scm` until the
-//! `.scm` goes.
+//! `.scm` always did.
 
 use super::{Capture, Keywords};
 
@@ -99,23 +98,3 @@ pub(super) const KEYWORDS: Option<Keywords> = Some(&[
     ("sitimechart", Capture::KEYWORD),
     ("geostats", Capture::KEYWORD),
 ]);
-
-#[cfg(test)]
-mod tests {
-    use super::KEYWORDS;
-    use crate::keywords::{scm_pairs, table_pairs};
-    use opentide_core::LanguageId;
-    use std::collections::BTreeSet;
-
-    #[test]
-    fn the_table_spells_out_highlights_scm() {
-        let table = table_pairs(KEYWORDS.unwrap_or_default());
-        let rows = table.len();
-        let table: BTreeSet<_> = table.into_iter().collect();
-        let scm: BTreeSet<_> = scm_pairs(crate::highlights_scm(LanguageId::Spl))
-            .into_iter()
-            .collect();
-        assert_eq!(table, scm);
-        assert_eq!(table.len(), rows, "no row twice");
-    }
-}

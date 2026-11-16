@@ -48,7 +48,7 @@ in the workflow's checkout: maturin writes it back as PEP 440, and the module
 reports the same (`opentide._native.__version__`). `scripts/build/release.py`
 checks the release's version against CHANGELOG.md.
 
-Crates embed catalogs, grammars, and highlight queries from the repository root.
+Crates embed catalogs and highlight data from the repository root.
 Cargo packages only what sits inside a crate, so `vendor` copies the files each
 crate reads (every `OPENTIDE_ASSETS` path in its sources, plus the directories in
 `[package.metadata.opentide] assets`) into `crates/<name>/assets/`, where build.rs

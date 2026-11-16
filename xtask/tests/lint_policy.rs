@@ -15,10 +15,6 @@ use toml::{Table, Value};
 /// the symbols a binding must export, nothing else.
 const UNSAFE_CRATES: &[(&str, &str)] = &[
     (
-        "crates/opentide-syntax",
-        "the tree-sitter FFI: each grammar's C entry point and LanguageFn::from_raw",
-    ),
-    (
         "crates/opentide-wasm",
         "the wasm32 libc shims: #[unsafe(no_mangle)] syscall symbols",
     ),

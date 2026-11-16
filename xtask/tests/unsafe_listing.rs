@@ -228,7 +228,7 @@ fn every_unsafe_is_listed_with_its_reason() -> TestResult {
     let found = found()?;
     assert!(
         !found.is_empty(),
-        "no unsafe found: the scan is broken (the FFI in opentide-syntax has some)"
+        "no unsafe found: the scan is broken (opentide-wasm's libc shims have some)"
     );
     assert_eq!(
         found, listed,

@@ -12,7 +12,7 @@
 # The mapping of today's crates is a decision for the maintainer (UC-0.4, #802):
 #
 # - The plan names no tiers. Foundation crates depend on one another today (the
-#   query engines on core, syntax and highlight; Lucene on kuery; ES|QL and
+#   query engines on core, parse and highlight; Lucene on kuery; ES|QL and
 #   EQL on Lucene), so
 #   foundation has five tiers read off `cargo metadata`, and a sixth, from the
 #   plan's row order, for opentide-schema (below); domain has two.
@@ -34,7 +34,7 @@
 #   with the Python implementation (UC-6.2, #841), and it stays for the
 #   goldens, which remain the command line's specification.
 # - opentide-schema (UC-1.1, #807) is the top foundation tier: the plan's
-#   table puts it in the row above core, syntax, highlight and the query
+#   table puts it in the row above core, parse, highlight and the query
 #   crates, so it may build on any of them (spans, UC-1.2) and none of them
 #   may depend on the model; every domain crate may.
 # - opentide-cli (UC-3.3, #825) is an application, the host the plan and
@@ -66,7 +66,7 @@
 #   shipped (publish = false).
 # - opentide-yara, opentide-yaral and opentide-exabeam (language-server
 #   0.13.0 to 0.16.0, E1) are foundation tier 2, beside opentide-cql: query
-#   engines like it, they depend on opentide-core, -syntax and -highlight (and
+#   engines like it, they depend on opentide-core, -parse and -highlight (and
 #   yara-x-parser, yara-x-fmt or regex-syntax) and on no other query engine.
 # - opentide-lucene (#1231) is foundation tier 3, above opentide-kuery: each
 #   Elastic query string engine tells a rule written for the other language
@@ -74,16 +74,16 @@
 #   asks `opentide_kuery::parses`; the KQL engine takes the Lucene verdict as
 #   an argument of `analyze`, which opentide-analysis and opentide-tide pass.
 #   ES|QL and EQL (Lucene's regular expressions) sit above it.
-# - opentide-parse (ADR 0012, #1221) is foundation tier 1, beside
-#   opentide-syntax, which it replaces: the pure-Rust parsers' toolkit (logos,
-#   rowan) depends on no workspace crate, and every query engine above it may
-#   build on it.
+# - opentide-parse (ADR 0012, #1221) is foundation tier 1, where
+#   opentide-syntax (tree-sitter, deleted in #1231) stood: the pure-Rust
+#   parsers' toolkit (logos, rowan) depends on no workspace crate, and every
+#   query engine above it builds on it.
 
 [[layer]]
 name = "foundation"
 tiers = [
     ["opentide-core", "opentide-compare", "opentide-schema-derive", "opentide-cassette"],
-    ["opentide-syntax", "opentide-parse", "opentide-highlight", "opentide-ecs"],
+    ["opentide-parse", "opentide-highlight", "opentide-ecs"],
     ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-falco", "opentide-cql",
      "opentide-yara", "opentide-yaral", "opentide-exabeam"],
     ["opentide-lucene"],

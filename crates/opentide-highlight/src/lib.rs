@@ -30,74 +30,13 @@ pub const TIDE_FIELDS_JSON: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/data/catalogs/tide/generated/fields.json"
 ));
-pub const KQL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/highlights/queries/kql/highlights.scm"
-));
-pub const SPL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/highlights/queries/spl/highlights.scm"
-));
+/// The highlight query of Tide YAML for the tree-sitter-yaml grammar editors
+/// use (`cargo xtask codegen` writes its key lists). Runtime highlighting is
+/// path-aware and does not read it.
 pub const TIDE_HIGHLIGHTS_SCM: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/highlights/queries/tide/highlights.scm"
 ));
-pub const ESQL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/highlights/queries/esql/highlights.scm"
-));
-pub const EQL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/highlights/queries/eql/highlights.scm"
-));
-pub const KUERY_HIGHLIGHTS_SCM: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/highlights/queries/kuery/highlights.scm"
-));
-pub const LUCENE_HIGHLIGHTS_SCM: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/highlights/queries/lucene/highlights.scm"
-));
-pub const FALCO_HIGHLIGHTS_SCM: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/highlights/queries/falco/highlights.scm"
-));
-pub const CQL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/highlights/queries/cql/highlights.scm"
-));
-pub const YARA_HIGHLIGHTS_SCM: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/highlights/queries/yara/highlights.scm"
-));
-pub const EXABEAM_HIGHLIGHTS_SCM: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/highlights/queries/exabeam/highlights.scm"
-));
-pub const YARAL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/highlights/queries/yaral/highlights.scm"
-));
-
-/// The tree-sitter highlight query for a language. Configuration TOML has
-/// none: the editor's TOML grammar highlights it.
-pub fn highlights_scm(language: LanguageId) -> &'static str {
-    match language {
-        LanguageId::Kql => KQL_HIGHLIGHTS_SCM,
-        LanguageId::Spl => SPL_HIGHLIGHTS_SCM,
-        LanguageId::TideYaml => TIDE_HIGHLIGHTS_SCM,
-        LanguageId::Esql => ESQL_HIGHLIGHTS_SCM,
-        LanguageId::Eql => EQL_HIGHLIGHTS_SCM,
-        LanguageId::Kuery => KUERY_HIGHLIGHTS_SCM,
-        LanguageId::Lucene => LUCENE_HIGHLIGHTS_SCM,
-        LanguageId::Config => "",
-        LanguageId::Falco => FALCO_HIGHLIGHTS_SCM,
-        LanguageId::Cql => CQL_HIGHLIGHTS_SCM,
-        LanguageId::Yara => YARA_HIGHLIGHTS_SCM,
-        LanguageId::Exabeam => EXABEAM_HIGHLIGHTS_SCM,
-        LanguageId::Yaral => YARAL_HIGHLIGHTS_SCM,
-    }
-}
 
 #[derive(Debug, Error)]
 pub enum HighlightError {
@@ -834,7 +773,7 @@ pub fn tm_scope_name(language: LanguageId) -> String {
 /// Generate TextMate / Monaco / Helix maps from the frozen spec.
 ///
 /// The keywords and punctuation come from the language's `KEYWORDS` table
-/// when it has one ([`keywords`]), else from its `highlights.scm`.
+/// ([`keywords`]); Tide YAML and the configuration have none.
 pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde_json::Value {
     generate_tm_language_from(language, spec, keywords::language_pairs(language))
 }
@@ -1218,107 +1157,9 @@ mod tests {
     }
 
     #[test]
-    fn scm_captures_are_subset_of_spec() {
+    fn the_tide_query_names_only_spec_captures() {
         let spec = HighlightSpec::load().unwrap();
-        for language in LanguageId::QUERY_LANGUAGES
-            .into_iter()
-            .chain([LanguageId::TideYaml])
-        {
-            assert_scm_subset_of_spec(&spec, highlights_scm(language))
-                .unwrap_or_else(|e| panic!("{language}: {e}"));
-        }
-    }
-
-    /// Each grammar ships a copy of its highlight query for tree-sitter
-    /// tooling; it must match the one the engine compiles.
-    #[test]
-    fn grammar_query_copies_match_highlight_queries() {
-        let copies = [
-            (
-                LanguageId::Kql,
-                include_str!(concat!(
-                    env!("OPENTIDE_ASSETS"),
-                    "/grammars/tree-sitter-opentide-kql/queries/highlights.scm"
-                )),
-            ),
-            (
-                LanguageId::Spl,
-                include_str!(concat!(
-                    env!("OPENTIDE_ASSETS"),
-                    "/grammars/tree-sitter-opentide-spl/queries/highlights.scm"
-                )),
-            ),
-            (
-                LanguageId::Esql,
-                include_str!(concat!(
-                    env!("OPENTIDE_ASSETS"),
-                    "/grammars/tree-sitter-opentide-esql/queries/highlights.scm"
-                )),
-            ),
-            (
-                LanguageId::Eql,
-                include_str!(concat!(
-                    env!("OPENTIDE_ASSETS"),
-                    "/grammars/tree-sitter-opentide-eql/queries/highlights.scm"
-                )),
-            ),
-            (
-                LanguageId::Kuery,
-                include_str!(concat!(
-                    env!("OPENTIDE_ASSETS"),
-                    "/grammars/tree-sitter-opentide-kuery/queries/highlights.scm"
-                )),
-            ),
-            (
-                LanguageId::Lucene,
-                include_str!(concat!(
-                    env!("OPENTIDE_ASSETS"),
-                    "/grammars/tree-sitter-opentide-lucene/queries/highlights.scm"
-                )),
-            ),
-            (
-                LanguageId::Falco,
-                include_str!(concat!(
-                    env!("OPENTIDE_ASSETS"),
-                    "/grammars/tree-sitter-opentide-falco/queries/highlights.scm"
-                )),
-            ),
-            (
-                LanguageId::Cql,
-                include_str!(concat!(
-                    env!("OPENTIDE_ASSETS"),
-                    "/grammars/tree-sitter-opentide-cql/queries/highlights.scm"
-                )),
-            ),
-            (
-                LanguageId::Yara,
-                include_str!(concat!(
-                    env!("OPENTIDE_ASSETS"),
-                    "/grammars/tree-sitter-opentide-yara/queries/highlights.scm"
-                )),
-            ),
-            (
-                LanguageId::Exabeam,
-                include_str!(concat!(
-                    env!("OPENTIDE_ASSETS"),
-                    "/grammars/tree-sitter-opentide-exabeam/queries/highlights.scm"
-                )),
-            ),
-            (
-                LanguageId::Yaral,
-                include_str!(concat!(
-                    env!("OPENTIDE_ASSETS"),
-                    "/grammars/tree-sitter-opentide-yaral/queries/highlights.scm"
-                )),
-            ),
-        ];
-        for (language, copy) in copies {
-            assert_eq!(
-                copy,
-                highlights_scm(language),
-                "grammars/tree-sitter-opentide-{language}/queries/highlights.scm is stale"
-            );
-        }
+        assert_scm_subset_of_spec(&spec, TIDE_HIGHLIGHTS_SCM).unwrap();
     }
 
     #[test]

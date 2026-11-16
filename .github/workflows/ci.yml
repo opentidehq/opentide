@@ -16,8 +16,8 @@ run-name: >-
 #   The changed workspace crates and their reverse dependencies are built
 #   ONCE (`build`: their tests, which it runs), and the `_native` extension
 #   once (`native`), on which the Python suite and E2E run. Each
-#   specialised job (Node, WASI, grammars, TextMate, GitLab CI
-#   lint, the facade's semver checks, cargo deny, docs) runs only when its
+#   specialised job (Node, WASI, TextMate, GitLab CI lint,
+#   the facade's semver checks, cargo deny, docs) runs only when its
 #   paths change. One required check, `PR gate`, passes when every job that
 #   was needed passed and every other was skipped.
 # - A push to a base branch, and Run workflow (scope `full`): the same jobs
@@ -127,7 +127,6 @@ jobs:
       node: ${{ steps.plan.outputs.node }}
       wasm: ${{ steps.plan.outputs.wasm }}
       ts_packages: ${{ steps.plan.outputs.ts_packages }}
-      grammars: ${{ steps.plan.outputs.grammars }}
       textmate: ${{ steps.plan.outputs.textmate }}
       gitlab: ${{ steps.plan.outputs.gitlab }}
       facade: ${{ steps.plan.outputs.facade }}
@@ -1147,25 +1146,6 @@ jobs:
         with:
           key: ${{ steps.sccache.outputs.key }}
           save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
-
-  # The vendored parser.c of every grammar is what tree-sitter-cli generates
-  # from its grammar.js (crates/AGENTS.md: never hand-edited).
-  grammars:
-    name: Grammars regenerate
-    needs: changes
-    if: needs.changes.outputs.grammars == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-      - run: npm install --prefix /tmp/ts-cli tree-sitter-cli@0.25.10
-      - run: bash scripts/engine/check-grammars.sh
 
   # The generated grammars as VS Code reads them (language-server#171).
   textmate:
@@ -2221,7 +2201,6 @@ jobs:
       - facade
       - node
       - wasm
-      - grammars
       - textmate
       - deny
       - sdist

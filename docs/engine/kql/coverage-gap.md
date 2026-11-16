@@ -72,9 +72,9 @@ Parsed today: equality, `has`/`contains`/`startswith`/`endswith` (+ many `_cs` /
 
 ### Highlights
 
-Canonical: [`highlights/queries/kql/highlights.scm`](../../../highlights/queries/kql/highlights.scm) (synced to grammar `queries/`).
+Canonical: the `KEYWORDS` table, [`crates/opentide-highlight/src/keywords/kql.rs`](../../../crates/opentide-highlight/src/keywords/kql.rs) (the tree-sitter `highlights.scm` it was written from is gone, #1231).
 
-Literal `@operator` rules include `startswith_cs` / `endswith_cs` / `hasprefix*` / `hassuffix*` / `has_ipv4*`. Rules for tokens absent from the grammar will not match until `grammar.js` + generated parser are updated.
+Literal operator rows include `startswith_cs` / `endswith_cs` / `hasprefix*` / `hassuffix*` / `has_ipv4*`. A row for a token the lexer does not cut colours nothing: `opentide-kql`'s tests hold the lexer to the table.
 
 ---
 
