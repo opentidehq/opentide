@@ -43,5 +43,10 @@ context_values = ["file", "memory", "file.pe", "file.elf", "file.macho"]
 yara_x_syntax = "refused"
 ascii_only = true
 max_characters = 30000
+# yara-1.0 "Platform profiles" (RFC 0015): neither vendor publishes its
+# module list, so the confirmed set is a maintainer decision (2026-11-10),
+# the same as HarfangLab's. Importing another known module is the warning
+# `yara_module_unconfirmed` until a live deploy confirms it
+# (docs/internal/publishing.md, live-tenant checklist; #1252).
 confirmed_modules = ["pe", "elf", "math", "hash", "time"]
 recommended_meta = []
