@@ -25,6 +25,13 @@
 pub mod assist;
 pub mod catalog;
 pub mod check;
+// The pure-Rust parser (#1223, ADR 0012) grows beside the tree-sitter path,
+// which serves until the last PR of the series switches highlighting to it.
+#[expect(
+    dead_code,
+    reason = "the pure-Rust lexer is reached from its unit tests until the parser of the next PR of #1223 reads it"
+)]
+mod syntax;
 
 pub use assist::{completions, hover};
 pub use check::{Profile, check};
