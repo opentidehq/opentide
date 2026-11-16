@@ -84,7 +84,7 @@ pub fn run(args: &Args, repo: Option<&str>, env: &Env, cwd: &Path) -> Report {
                 ),
             );
         }
-        // In the order given, once each, as the oracle's dict keeps them.
+        // In the order given, once each.
         fields = Vec::new();
         for name in &args.fields {
             if let Some(field) = SCOPED_FIELDS.iter().find(|field| field.name == name)

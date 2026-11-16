@@ -14,6 +14,7 @@ use regex::Regex;
 use std::sync::OnceLock;
 
 use crate::env::Env;
+use crate::redact::{NOT_UTF8, toml_position};
 
 /// The one sharing integration.
 pub const INTEGRATION_MISP: &str = "misp";
@@ -165,27 +166,27 @@ pub fn load(workspace: &Workspace, env: &Env) -> Sharing {
         if !fs.is_file(&file) {
             continue;
         }
-        let parsed = fs
-            .read(&file)
-            .ok()
-            .and_then(|bytes| String::from_utf8(bytes).ok())
-            .map(|text| toml::parse(&text));
-        match parsed {
-            Some(Ok(document)) => {
-                if matches!(&document.value, Value::Map(entries) if !entries.is_empty()) {
-                    documents.push(document);
-                }
-            }
-            // `tomllib` names its error's class; a file that does not read
-            // as UTF-8 text is a `UnicodeDecodeError`.
-            Some(Err(_)) => issues.push(structural(
+        let problem = match fs.read(&file) {
+            Err(error) => Some(format!("the file could not be read: {error}")),
+            Ok(bytes) => match String::from_utf8(bytes) {
+                Err(_) => Some(NOT_UTF8.to_owned()),
+                Ok(text) => match toml::parse(&text) {
+                    // Where, never what: a parser's message may quote the file.
+                    Err(error) => Some(format!("not valid TOML: {}", toml_position(&error))),
+                    Ok(document) => {
+                        if matches!(&document.value, Value::Map(entries) if !entries.is_empty()) {
+                            documents.push(document);
+                        }
+                        None
+                    }
+                },
+            },
+        };
+        if let Some(problem) = problem {
+            issues.push(structural(
                 "config_parse",
-                "Could not read sharing.toml: TOMLDecodeError".to_owned(),
-            )),
-            None => issues.push(structural(
-                "config_parse",
-                "Could not read sharing.toml: UnicodeDecodeError".to_owned(),
-            )),
+                format!("Could not read sharing.toml: {problem}"),
+            ));
         }
     }
     let statuses = workspace
@@ -250,5 +251,31 @@ mod tests {
         };
         assert_eq!(sharing.secrets(), ["s3cret"]);
         assert!(sharing.errors().is_empty());
+    }
+
+    /// A `sharing.toml` opentide cannot read says where, in the system's or
+    /// the parser's own terms, and never quotes the file.
+    #[test]
+    fn an_unreadable_sharing_file_is_named_without_python_class_names() {
+        let repo = tempfile::tempdir().unwrap();
+        let folder = repo.path().join(".opentide/configurations");
+        std::fs::create_dir_all(&folder).unwrap();
+        let message = |bytes: &[u8]| {
+            std::fs::write(folder.join("sharing.toml"), bytes).unwrap();
+            let workspace = Workspace::open_os(Some(repo.path().to_path_buf())).unwrap();
+            let sharing = load(&workspace, &Env::from_pairs([("HOME", "/nonexistent")]));
+            let errors = sharing.errors();
+            assert_eq!(errors.len(), 1, "{:?}", sharing.issues);
+            assert_eq!(errors[0].code, "config_parse");
+            errors[0].message.clone()
+        };
+        assert_eq!(
+            message(b"[[blocks]]\nsecret: \"hunter2\"\n"),
+            "Could not read sharing.toml: not valid TOML: line 2, column 7"
+        );
+        assert_eq!(
+            message(b"\xff\xfe[x]\n"),
+            "Could not read sharing.toml: the file is not valid UTF-8"
+        );
     }
 }

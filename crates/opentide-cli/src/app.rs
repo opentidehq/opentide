@@ -531,49 +531,12 @@ impl Run<'_> {
                 return self.emit_usage(problem, out, err);
             }
         };
-        let mut words = command_path(&matches);
+        let words = command_path(&matches);
         let typed = match crate::tree::Cli::from_arg_matches(&matches) {
             Ok(cli) => cli,
             // The tree and its derive disagree: a bug, reported as one.
             Err(error) => return Err(std::io::Error::other(error.to_string())),
         };
-        // `generate schemas templates`: the words after `generate` that are
-        // no subcommand of it are its phases.
-        let mut generate_phases = Vec::new();
-        if let Some(RootCommand::Generate(crate::tree::GenerateArgs {
-            command: Some(crate::tree::GenerateCommand::Phases(named)),
-        })) = &typed.command
-        {
-            generate_phases.clone_from(named);
-            words.truncate(1);
-            // The phases end at the first word that starts with `-`
-            // (`GeneratePhaseGroup`): what follows is `generate`'s own
-            // options, parsed as such, so `generate schemas --bogus` is an
-            // unknown option and `generate schemas --help` the group's help.
-            if let Some(end) = generate_phases
-                .iter()
-                .position(|word| word.starts_with('-'))
-            {
-                let options = generate_phases.split_off(end);
-                // The command line up to `generate`, the phases left out.
-                let start = self
-                    .args
-                    .windows(2)
-                    .position(|pair| pair[0] == "generate" && pair[1] == generate_phases[0])
-                    .unwrap_or_default();
-                let mut reparsed = self.args[..=start].to_vec();
-                reparsed.extend(options);
-                let argv =
-                    std::iter::once(catalog::PROGRAM.to_owned()).chain(reparsed.iter().cloned());
-                if let Err(error) = self.root.clone().try_get_matches_from(argv) {
-                    if error.kind() == clap::error::ErrorKind::DisplayHelp {
-                        return self.help(&words, 0, out);
-                    }
-                    let problem = usage::describe(&self.root, &reparsed, error);
-                    return self.emit_usage(problem, out, err);
-                }
-            }
-        }
         if matches.value_source("repo") == Some(ValueSource::CommandLine)
             && let Some(repo) = &self.globals.repo
             && words.first().map(String::as_str) != Some("setup")
@@ -654,7 +617,7 @@ impl Run<'_> {
                 return self.emit(&outcome, &lines, out, err);
             }
             Some(RootCommand::Generate(args)) => {
-                let report = self.generate(args, &generate_phases, &matches);
+                let report = self.generate(args, &matches);
                 return self.emit_report(&report, out, err);
             }
             Some(RootCommand::Validate(
@@ -824,7 +787,6 @@ impl Run<'_> {
     fn generate(
         &self,
         args: &crate::tree::GenerateArgs,
-        phases: &[String],
         matches: &clap::ArgMatches,
     ) -> crate::commands::Report {
         use crate::commands::{extract, generate};
@@ -846,8 +808,15 @@ impl Run<'_> {
             cwd: &cwd,
             proxy: self.globals.proxy.as_deref(),
         };
+        if !args.phases.is_empty() && args.command.is_some() {
+            // A phase word before a subcommand name (`generate schemas
+            // extract`): clap parsed the subcommand, but the words were
+            // always phases, so the unknown one is refused as it was.
+            let words = phases_and_subcommands(&args.phases, matches);
+            return generate::phases(&words, &cx, &self.host.version);
+        }
         match &args.command {
-            None | Some(Command::Phases(_)) => generate::phases(phases, &cx, &self.host.version),
+            None => generate::phases(&args.phases, &cx, &self.host.version),
             Some(Command::Exports(exports)) => generate::exports(exports.into(), &cx),
             Some(Command::Explorer(explorer)) => {
                 let typed = matches
@@ -2538,6 +2507,19 @@ fn unhandled(path: &str) -> Outcome {
     Outcome::failed(path, 1, Failure::new(code::INTERNAL, message))
 }
 
+/// The phase words followed by the subcommand names clap took after them
+/// (`generate schemas extract elastic` gives `schemas extract elastic`),
+/// the words the phase check always saw.
+fn phases_and_subcommands(phases: &[String], matches: &clap::ArgMatches) -> Vec<String> {
+    let mut words = phases.to_vec();
+    let mut level = matches.subcommand_matches("generate");
+    while let Some((name, next)) = level.and_then(clap::ArgMatches::subcommand) {
+        words.push(name.to_owned());
+        level = Some(next);
+    }
+    words
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2689,11 +2671,19 @@ mod tests {
         let past = utc_at(std::time::UNIX_EPOCH + Duration::from_secs(last + 1));
         assert_eq!(past.0, "9999-12-30T22:00:00Z");
         assert_eq!(past.1, "99991230T220000999999Z");
-        let first = utc_at(std::time::UNIX_EPOCH - Duration::from_secs(377_705_023_202));
-        assert_eq!(
-            first,
-            utc_at(std::time::UNIX_EPOCH - Duration::from_secs(377_705_023_201))
+        // Before jiff's start (year -9999). Windows' SystemTime begins in
+        // 1601, so there no such moment exists to stop.
+        let before = std::time::UNIX_EPOCH.checked_sub(Duration::from_secs(377_705_023_202));
+        assert!(
+            before.is_some() || cfg!(windows),
+            "only Windows starts after -9999"
         );
+        if let Some(before) = before {
+            assert_eq!(
+                utc_at(before),
+                utc_at(std::time::UNIX_EPOCH - Duration::from_secs(377_705_023_201))
+            );
+        }
     }
 
     #[test]
@@ -4014,7 +4004,7 @@ mod tests {
             pipeline.stdout
         );
         // The phases end at the first `-` word: what follows is
-        // `generate`'s own options (`GeneratePhaseGroup`).
+        // `generate`'s own options.
         for (argv, option) in [
             ("--json generate schemas --bogus", "--bogus"),
             ("--json generate schemas templates --repo .", "--repo"),
@@ -4036,6 +4026,31 @@ mod tests {
             "{}",
             help.stdout
         );
+        // A phase word before a subcommand name is still an unknown phase.
+        for argv in [
+            "generate schemas extract elastic",
+            "generate schemas inflight",
+            "generate schemas help",
+        ] {
+            for json in ["", "--json "] {
+                let line = format!("{json}{argv}");
+                let refused = dispatched(&line, &[], false);
+                let shown = format!("{}{}", refused.stdout, refused.stderr);
+                assert_eq!(refused.code, 2, "{line}: {shown}");
+                assert!(
+                    shown.contains("Unknown generation phase"),
+                    "{line}: {shown}"
+                );
+                if !json.is_empty() {
+                    assert!(
+                        refused.stdout.contains("\"code\":\"usage_invalid_choice\"")
+                            && refused.stdout.contains("\"argument\":\"phase\""),
+                        "{line}: {}",
+                        refused.stdout
+                    );
+                }
+            }
+        }
         let subcommand = dispatched("--json generate inflight prune --bogus", &[], false);
         assert!(
             subcommand.stdout.contains("usage_unknown_option"),

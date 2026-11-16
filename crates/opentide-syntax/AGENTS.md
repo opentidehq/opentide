@@ -15,7 +15,7 @@ One of the two crates allowed `unsafe`: its `[lints]` copy the workspace's with
 - The only `unsafe` is the FFI to the grammars' `tree_sitter_opentide_*()` entry points, each wrapped once as a `LanguageFn` constant; each item allows it with a reason, each block has a `// SAFETY:` comment and one unsafe operation, and `docs/internal/unsafe.md` lists every site.
 - No `std::fs` in `src/`. `build.rs` may read the grammars.
 - `build.rs` watches each grammar's `src/`; never print `rerun-if-changed` for a path that may not exist (every crate would rebuild on every run).
-- Every required named grammar rule has a production sample in `crates/testdata/corpus/<language>/` tagged `prod:<rule>` (`tests/corpus_gate.rs`).
+- Every required named grammar rule has a production sample in `crates/testdata/corpus/<language>/` tagged `prod:<rule>` (`crates/opentide-analysis/tests/corpus_gate.rs`: analysis depends on every language crate, so the gate can read trees of languages that left tree-sitter).
 
 ## Test
 
