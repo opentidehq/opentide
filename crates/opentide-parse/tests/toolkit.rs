@@ -441,6 +441,44 @@ fn build_flattens_events_past_the_tree_limit() {
     });
 }
 
+/// Found by review (#1473): a wrap of a node with a tall sibling after it
+/// counted the node alone, and wraps after the budget was spent still nested.
+/// Both end in one `TooDeep` within `MAX_TREE_DEPTH`, never `TreeTooDeep`.
+#[test]
+fn wraps_count_later_siblings_and_stop_at_the_budget() {
+    on_small_stack(|| {
+        let source = format!("a {}", "( ".repeat(5_000));
+        let input = Input::new(&source, toy_lex(&source), grammar(u32::MAX));
+        let mut p = Parser::new(&input);
+        let root = p.start();
+        let first = p.start();
+        p.bump();
+        let mut c = first.complete(&mut p, PAIR);
+        // A sibling 4,000 nodes tall, completed after `c`.
+        let tall: Vec<_> = (0..4_000).map(|_| p.start()).collect();
+        p.bump();
+        for m in tall.into_iter().rev() {
+            m.complete(&mut p, GROUP);
+        }
+        // Wraps of `c`, each with a token, then wraps with none left.
+        for _ in 0..6_000 {
+            let m = c.precede(&mut p);
+            if p.at(L) {
+                p.bump();
+            }
+            c = m.complete(&mut p, PAIR);
+        }
+        root.complete(&mut p, ROOT);
+        let parse = build(&input, p.finish());
+        assert!(parse.depth <= MAX_TREE_DEPTH, "{}", parse.depth);
+        let kinds: Vec<_> = parse.errors.iter().map(|e| e.kind).collect();
+        let limit = u32::try_from(TREE_BUDGET).unwrap();
+        assert_eq!(kinds, [ErrorKind::TooDeep { limit }]);
+        let node = rowan::SyntaxNode::<Toy>::new_root(parse.green);
+        assert_eq!(node.to_string(), source, "lossless");
+    });
+}
+
 /// A level that opens many nodes is charged them: nested groups of eight
 /// nodes a level end in one `TooDeep` naming the node limit, well before
 /// `max_depth` levels, and the tree stays under `MAX_TREE_DEPTH` (#1427).

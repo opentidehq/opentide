@@ -105,11 +105,10 @@ pub struct Parser<'i> {
     panic_on_stall: bool,
     depth: u32,
     poisoned: bool,
-    /// One entry per open node, root first: the height of its tallest
-    /// completed child (0 for none). Its length is the depth of the next
-    /// node opened. Markers close in the order they opened, so the last
+    /// One entry per open node, root first. Its length is the depth of the
+    /// next node opened. Markers close in the order they opened, so the last
     /// entry is the marker that closes next.
-    open: Vec<u32>,
+    open: Vec<Frame>,
     /// The height of each completed node, by the position of its start
     /// event: how deep a `precede` pushes it. Kept here, not in the markers,
     /// so a grammar's frames do not grow (ES|QL's limit sits at the edge of
@@ -303,11 +302,19 @@ impl<'i> Parser<'i> {
     }
 
     /// Opens a node.
+    ///
+    /// A level opens few nodes before its next [`Parser::enter`]; the
+    /// headroom of [`TREE_BUDGET`] assumes under 64 (the grammars open at most
+    /// 9). A grammar that opens more trips this in its debug tests.
     pub fn start(&mut self) -> Marker {
+        debug_assert!(
+            self.open.len() < crate::MAX_TREE_DEPTH - 1,
+            "opentide-parse: a level opened more nodes than TREE_BUDGET leaves room for"
+        );
         self.check_stall();
         let pos = u32::try_from(self.events.len()).unwrap_or(u32::MAX);
         self.events.push(Event::Tombstone);
-        self.open.push(0);
+        self.open.push(Frame::default());
         Marker {
             pos,
             child: None,
@@ -319,10 +326,14 @@ impl<'i> Parser<'i> {
     /// tallest child's plus one, recorded at `pos`; abandoned, its children
     /// go to the enclosing node. The enclosing node records the height.
     fn close_frame(&mut self, pos: u32, own: bool) {
-        let tallest = self.open.pop().unwrap_or(0);
+        let tallest = self.open.pop().unwrap_or_default().tallest;
         let height = if own { tallest + 1 } else { tallest };
         if let Some(parent) = self.open.last_mut() {
-            *parent = (*parent).max(height);
+            parent.tallest = parent.tallest.max(height);
+            if own {
+                parent.last_pos = pos;
+                parent.last_height = height;
+            }
         }
         if own {
             let at = pos as usize;
@@ -432,6 +443,16 @@ impl<'i> Parser<'i> {
     }
 }
 
+/// What [`Parser`] knows of an open node's completed children: how tall the
+/// tallest is, and the last one (a `precede` wraps it and every child after
+/// it).
+#[derive(Clone, Copy, Debug, Default)]
+struct Frame {
+    tallest: u32,
+    last_pos: u32,
+    last_height: u32,
+}
+
 /// An open node: [`Marker::complete`] closes it, [`Marker::abandon`] drops
 /// it. Dropping it otherwise is a grammar bug, which debug builds panic on.
 #[derive(Debug)]
@@ -505,19 +526,34 @@ impl CompletedMarker {
     /// In debug builds, when this node is already preceded by a marker that
     /// was not abandoned (a grammar bug: two nodes would claim it).
     ///
-    /// The wrap pushes this node one level down, after the levels inside it
-    /// were charged: past [`TREE_BUDGET`] it ends the parse with one
-    /// [`ErrorKind::TooDeep`] (after which no token is left to wrap on).
+    /// The wrap pushes this node, and any sibling completed after it, one
+    /// level down, after the levels inside them were charged: past
+    /// [`TREE_BUDGET`] it ends the parse with one [`ErrorKind::TooDeep`], and
+    /// the marker it returns wraps nothing (an empty node after the input), so
+    /// no wrap can deepen the tree past the budget.
     pub fn precede(self, p: &mut Parser<'_>) -> Marker {
-        // The wrapper opens where this node was; this node and its subtree
-        // go one deeper.
-        let height = p.heights.get(self.pos as usize).copied().unwrap_or(1);
+        // The wrapper opens where this node was and encloses it and every
+        // sibling completed after it: the node itself when it is the last
+        // child (what a grammar wraps), else the tallest child bounds them.
+        let frame = p.open.last().copied().unwrap_or_default();
+        let height = if frame.last_pos == self.pos {
+            frame.last_height
+        } else {
+            frame
+                .tallest
+                .max(p.heights.get(self.pos as usize).copied().unwrap_or(1))
+        };
         if p.open.len() + 1 + height as usize > TREE_BUDGET {
             p.too_many_nodes();
+            return p.start();
         }
         let mut m = p.start();
         if let Some(frame) = p.open.last_mut() {
-            *frame = height;
+            *frame = Frame {
+                tallest: height,
+                last_pos: self.pos,
+                last_height: height,
+            };
         }
         if let Some(Event::Start { forward_parent, .. }) = p.events.get_mut(self.pos as usize) {
             debug_assert!(

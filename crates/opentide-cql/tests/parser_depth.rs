@@ -114,12 +114,18 @@ fn past_max_depth_it_is_one_error_and_no_overflow() {
             .filter(|k| matches!(k, ErrorKind::TooDeep { .. }))
             .collect();
         assert_eq!(too_deep.len(), 1, "{name}: {errors:?}");
-        // The levels run out first, or, for a construct that opens many nodes a level
-        // (`attributes`), the toolkit's budget of tree nodes (#1427).
+        // The levels run out first, except for `attributes`, which opens more than four
+        // tree nodes a level and meets the toolkit's budget of nodes first (#1427).
         let budget = u32::try_from(opentide_parse::TREE_BUDGET).unwrap_or(u32::MAX);
-        assert!(
-            matches!(too_deep[0], ErrorKind::TooDeep { limit } if *limit == parser::MAX_DEPTH || *limit == budget),
-            "{name}: the error names the limit that was hit: {errors:?}"
+        let limit = if name == "attributes" {
+            budget
+        } else {
+            parser::MAX_DEPTH
+        };
+        assert_eq!(
+            too_deep[0],
+            &ErrorKind::TooDeep { limit },
+            "{name}: the error names the limit that was hit"
         );
     }
     // Far past it: still one error, and no time spent on the rest.
