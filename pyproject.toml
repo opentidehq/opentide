@@ -103,7 +103,6 @@ cache-keys = [
     { file = "data/catalogs/**" },
     { file = "src/opentide/data/**" },
     { file = "highlights/spec.toml" },
-    { file = "highlights/queries/**" },
     { file = "highlights/generated/**" },
 ]
 
@@ -167,7 +166,6 @@ exclude = [
 include = [
     { path = "data/catalogs/**/*", format = "sdist" },
     { path = "highlights/spec.toml", format = "sdist" },
-    { path = "highlights/queries/**/*", format = "sdist" },
     { path = "highlights/generated/**/*", format = "sdist" },
     # The crates the workspace patches in ([patch.crates-io], vendor/README.md).
     { path = "vendor/**/*", format = "sdist" },

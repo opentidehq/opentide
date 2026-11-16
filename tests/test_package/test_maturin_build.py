@@ -89,7 +89,7 @@ def test_the_sdist_carries_what_the_crates_compile_in() -> None:
     assert {
         "data/catalogs/**/*",
         "highlights/spec.toml",
-        "highlights/queries/**/*",
+        "highlights/generated/**/*",
         "vendor/**/*",
     } <= included
     patches = _toml("Cargo.toml")["patch"]["crates-io"]
