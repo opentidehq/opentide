@@ -35,8 +35,6 @@ use crate::json::Json;
 
 /// The command's path.
 pub const COMMAND: &str = "deploy migrate-state";
-/// The Python module whose events this port logs.
-const LOGGER: &str = "opentide.cli.services.migrate_state";
 /// Platforms whose ids move into shards (`MIGRATED_PLATFORMS`).
 const MIGRATED_PLATFORMS: [&str; 3] = ["crowdstrike", "defender_for_endpoint", "sentinel_one"];
 /// Platform-block keys that used to carry the vendor id on the rule.
@@ -569,7 +567,6 @@ pub fn migrate(workspace: &Path, rules_dir: &Path) -> Report {
                     detail = message.as_str(),
                     file = relative.as_str(),
                     uuid = shown(rule.object_uuid.as_ref()).as_str(),
-                    logger = LOGGER,
                     "{code}"
                 );
                 errors.push((
@@ -593,7 +590,6 @@ pub fn migrate(workspace: &Path, rules_dir: &Path) -> Report {
                 tenant = binding.tenant.as_str(),
                 value = binding.stored.as_str(),
                 file = relative.as_str(),
-                logger = LOGGER,
                 "external_id_unused"
             );
             let mut members = vec![
@@ -623,11 +619,7 @@ pub fn migrate(workspace: &Path, rules_dir: &Path) -> Report {
             }
             Err(detail) => {
                 let message = format!("could not write the migration for {relative}: {detail}");
-                tracing::error!(
-                    detail = message.as_str(),
-                    logger = LOGGER,
-                    "deployment_state_write_failed"
-                );
+                tracing::error!(detail = message.as_str(), "deployment_state_write_failed");
                 errors.push((
                     "deployment_state_write_failed".to_owned(),
                     relative.clone(),
@@ -640,7 +632,6 @@ pub fn migrate(workspace: &Path, rules_dir: &Path) -> Report {
         tracing::info!(
             file = relative.as_str(),
             shard = shown(shard_file.as_ref()).as_str(),
-            logger = LOGGER,
             "external_ids_migrated"
         );
         ids += shard_bindings.len();

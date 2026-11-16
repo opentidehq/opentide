@@ -211,7 +211,7 @@ impl Validator {
                 query_check: None,
                 cve_check: None,
                 platform_configurations: crate::plugins::configurations(),
-                // The oracle's share checks each document alone: no compile check.
+                // Share checks each document alone: no compile check.
                 compile_check: None,
             });
             for issue in validation.report.issues {

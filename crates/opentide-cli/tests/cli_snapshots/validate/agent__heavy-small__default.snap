@@ -1,0 +1,11 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/agent/heavy-small/default
+---
+args: opentide validate
+exit: 0
+
+━━━ stdout
+✓ 110 objects valid · 141 queries · <SECONDS>
+
+━━━ stderr · empty

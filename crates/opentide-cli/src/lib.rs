@@ -20,6 +20,7 @@ pub mod app;
 pub mod catalog;
 pub mod commands;
 pub mod crash;
+pub mod digest;
 pub mod embed;
 pub mod env;
 pub mod envelope;

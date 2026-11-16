@@ -22,6 +22,8 @@ schemars.workspace = true
 serde.workspace = true
 # The object vocabularies (threat, objective, rule) are built as vocabulary tables.
 toml.workspace = true
+# Canonical paths without Windows' verbatim (`\\?\`) prefix.
+dunce.workspace = true
 # UUID v4 and canonical forms (`uuid-format`, deployment state shards).
 uuid.workspace = true
 # Objects in the order the registry meets them, looked up by UUID.

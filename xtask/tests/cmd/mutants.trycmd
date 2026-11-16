@@ -21,15 +21,25 @@ xtask mutants: `crates/core/src/lib.rs:3:5: replace f -> bool with true` appears
 
 $ xtask mutants report --policy policy.toml --outcomes shard-0.json --write-baseline new.toml
 ? 2
-xtask mutants: --write-baseline FILE and --commit SHA go together
+error: the following required arguments were not provided:
+  --commit <SHA>
+
+Usage: cargo xtask mutants report --outcomes <FILE> --write-baseline <FILE> --commit <SHA> --policy <FILE>
+
+For more information, try '--help'.
 
 $ xtask mutants report --policy policy.toml --metadata metadata.json --outcomes shard-0.json
 ? 2
-xtask mutants: unknown option `--metadata` for `mutants report`
+error: unexpected argument '--metadata' found
 ...
 
 $ xtask mutants report --policy policy.toml
 ? 2
-xtask mutants: --outcomes FILE is required
+error: the following required arguments were not provided:
+  --outcomes <FILE>
+
+Usage: cargo xtask mutants report --outcomes <FILE> --policy <FILE>
+
+For more information, try '--help'.
 
 ```

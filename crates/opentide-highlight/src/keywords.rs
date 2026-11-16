@@ -1,0 +1,286 @@
+//! The per-language `KEYWORDS` input of the TextMate generator (epic #1219).
+//!
+//! A language's TextMate grammar lists its keywords and punctuation, each
+//! with the `HighlightSpec` capture that colours it. Until a language moves
+//! off tree-sitter, those pairs are scraped from its `highlights.scm`. A
+//! language that has a table (its file under `keywords/`) is generated from
+//! the table instead, and the `.scm` is no longer read for it. The generated
+//! bytes are the same either way:
+//! [`generate_tm_language`](crate::generate_tm_language) groups both inputs
+//! the same way.
+//!
+//! The tables live in this crate, not in the language crates, because the
+//! language crates depend on it (`xtask/layers.toml`). A language's lexer is
+//! checked against its table from the language crate's own tests.
+
+use opentide_core::LanguageId;
+use regex::Regex;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::OnceLock;
+
+/// The name of a `HighlightSpec` capture, as `highlights/spec.toml` spells
+/// it. The names are a frozen contract: renaming one is a breaking change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Capture(&'static str);
+
+impl Capture {
+    /// The capture called `name`. A table is checked against the spec by
+    /// the `keyword_tables_name_spec_captures` test.
+    #[must_use]
+    pub const fn new(name: &'static str) -> Self {
+        Self(name)
+    }
+
+    /// The capture's name in `highlights/spec.toml`.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        self.0
+    }
+}
+
+/// The captures a query language's table uses, as `highlights/spec.toml`
+/// names them (checked by the `capture_constants_name_spec_captures` test).
+impl Capture {
+    pub const COMMENT: Self = Self::new("comment");
+    pub const KEYWORD: Self = Self::new("keyword");
+    pub const OPERATOR: Self = Self::new("operator");
+    pub const PIPE: Self = Self::new("operator.pipe");
+    pub const FUNCTION: Self = Self::new("function");
+    pub const FUNCTION_BUILTIN: Self = Self::new("function.builtin");
+    pub const TYPE: Self = Self::new("type");
+    pub const VARIABLE: Self = Self::new("variable");
+    pub const PROPERTY: Self = Self::new("property");
+    pub const STRING: Self = Self::new("string");
+    pub const NUMBER: Self = Self::new("number");
+    pub const BOOLEAN: Self = Self::new("boolean");
+    pub const CONSTANT: Self = Self::new("constant");
+    pub const PUNCTUATION: Self = Self::new("punctuation");
+    pub const BRACKET: Self = Self::new("punctuation.bracket");
+    pub const DELIMITER: Self = Self::new("punctuation.delimiter");
+    pub const ERROR: Self = Self::new("error");
+    pub const MACRO: Self = Self::new("macro");
+}
+
+/// A language's keywords and punctuation, each with its capture.
+pub type Keywords = &'static [(&'static str, Capture)];
+
+/// The table of each language, one file each, so that a language's port
+/// touches only its own file. `None` until the language's engine moves to
+/// `opentide-parse`; its TextMate grammar is then generated from its
+/// `highlights.scm`.
+mod cql;
+mod eql;
+mod esql;
+mod exabeam;
+mod falco;
+mod kql;
+mod kuery;
+mod lucene;
+mod spl;
+mod yara;
+mod yaral;
+
+/// The `KEYWORDS` table of `language`, or `None` while it is generated from
+/// its `highlights.scm`. A language fills in its own file's `KEYWORDS` when
+/// its engine moves to `opentide-parse`.
+#[must_use]
+pub const fn keywords(language: LanguageId) -> Option<Keywords> {
+    match language {
+        LanguageId::Kql => kql::KEYWORDS,
+        LanguageId::Spl => spl::KEYWORDS,
+        LanguageId::Esql => esql::KEYWORDS,
+        LanguageId::Eql => eql::KEYWORDS,
+        LanguageId::Kuery => kuery::KEYWORDS,
+        LanguageId::Lucene => lucene::KEYWORDS,
+        LanguageId::Falco => falco::KEYWORDS,
+        LanguageId::Cql => cql::KEYWORDS,
+        LanguageId::Yara => yara::KEYWORDS,
+        LanguageId::Exabeam => exabeam::KEYWORDS,
+        LanguageId::Yaral => yaral::KEYWORDS,
+        // Not query languages: their grammars come from their `.scm`.
+        LanguageId::TideYaml | LanguageId::Config => None,
+    }
+}
+
+/// `(token, capture name)` pairs of a table.
+pub(crate) fn table_pairs(table: &[(&str, Capture)]) -> Vec<(String, String)> {
+    table
+        .iter()
+        .map(|(token, capture)| ((*token).to_string(), capture.name().to_string()))
+        .collect()
+}
+
+/// `(token, capture name)` pairs scraped from a `highlights.scm`: every
+/// `"token" @capture`.
+#[expect(
+    clippy::expect_used,
+    reason = "a regex literal: an invalid pattern fails every test that reaches it"
+)]
+pub(crate) fn scm_pairs(scm: &str) -> Vec<(String, String)> {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| Regex::new(r#""([^"\\]+)"\s+@([A-Za-z0-9_.]+)"#).expect("regex"));
+    re.captures_iter(scm)
+        .map(|cap| (cap[1].to_string(), cap[2].to_string()))
+        .collect()
+}
+
+/// The pairs of `language`: its table when it has one, else its `.scm`.
+pub(crate) fn language_pairs(language: LanguageId) -> Vec<(String, String)> {
+    match keywords(language) {
+        Some(table) => table_pairs(table),
+        None => scm_pairs(crate::highlights_scm(language)),
+    }
+}
+
+/// The tokens of each capture, sorted and without duplicates.
+pub(crate) fn by_capture(pairs: Vec<(String, String)>) -> BTreeMap<String, BTreeSet<String>> {
+    let mut by_capture: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for (token, capture) in pairs {
+        by_capture.entry(capture).or_default().insert(token);
+    }
+    by_capture
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{HighlightSpec, generate_tm_language, generate_tm_language_from};
+
+    const ALL: [LanguageId; 13] = [
+        LanguageId::Kql,
+        LanguageId::Spl,
+        LanguageId::TideYaml,
+        LanguageId::Esql,
+        LanguageId::Eql,
+        LanguageId::Kuery,
+        LanguageId::Lucene,
+        LanguageId::Config,
+        LanguageId::Falco,
+        LanguageId::Cql,
+        LanguageId::Yara,
+        LanguageId::Exabeam,
+        LanguageId::Yaral,
+    ];
+
+    /// A table spelling out what a language's `.scm` says: the leaked
+    /// strings are the test's, a table is `'static` in the product.
+    fn table_from_scm(scm: &str) -> Vec<(&'static str, Capture)> {
+        scm_pairs(scm)
+            .into_iter()
+            .map(|(token, capture)| {
+                let token: &'static str = Box::leak(token.into_boxed_str());
+                let capture: &'static str = Box::leak(capture.into_boxed_str());
+                (token, Capture::new(capture))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_table_matching_the_scm_generates_the_same_bytes() {
+        let spec = HighlightSpec::load().expect("spec");
+        for language in ALL {
+            let scm = crate::highlights_scm(language);
+            let table = table_from_scm(scm);
+            assert_eq!(
+                table.is_empty(),
+                scm_pairs(scm).is_empty(),
+                "{language}: the table is the scraped pairs"
+            );
+            let from_scm = generate_tm_language_from(language, &spec, scm_pairs(scm));
+            let from_table = generate_tm_language_from(language, &spec, table_pairs(&table));
+            assert_eq!(
+                serde_json::to_string_pretty(&from_scm).expect("json"),
+                serde_json::to_string_pretty(&from_table).expect("json"),
+                "{language}: a table equal to the .scm generates other bytes"
+            );
+        }
+    }
+
+    #[test]
+    fn a_table_is_grouped_and_ordered_like_the_scm() {
+        // The order of the table and repeated rows do not change the output.
+        let spec = HighlightSpec::load().expect("spec");
+        let mut table = table_from_scm(crate::highlights_scm(LanguageId::Kql));
+        let forward = generate_tm_language_from(LanguageId::Kql, &spec, table_pairs(&table));
+        table.reverse();
+        let doubled: Vec<_> = table.iter().chain(table.iter()).copied().collect();
+        let reversed = generate_tm_language_from(LanguageId::Kql, &spec, table_pairs(&doubled));
+        assert_eq!(forward, reversed);
+        assert!(
+            forward["patterns"]
+                .as_array()
+                .is_some_and(|p| p.iter().any(|v| v["comment"] == "capture:keyword")),
+            "the KQL grammar has keyword patterns"
+        );
+    }
+
+    #[test]
+    fn a_language_without_a_table_keeps_the_scm_path() {
+        let spec = HighlightSpec::load().expect("spec");
+        for language in ALL {
+            if keywords(language).is_some() {
+                continue;
+            }
+            assert_eq!(
+                generate_tm_language(language, &spec),
+                generate_tm_language_from(
+                    language,
+                    &spec,
+                    scm_pairs(crate::highlights_scm(language))
+                ),
+                "{language}"
+            );
+        }
+    }
+
+    #[test]
+    fn capture_constants_name_spec_captures() {
+        let spec = HighlightSpec::load().expect("spec");
+        for capture in [
+            Capture::COMMENT,
+            Capture::KEYWORD,
+            Capture::OPERATOR,
+            Capture::PIPE,
+            Capture::FUNCTION,
+            Capture::FUNCTION_BUILTIN,
+            Capture::TYPE,
+            Capture::VARIABLE,
+            Capture::PROPERTY,
+            Capture::STRING,
+            Capture::NUMBER,
+            Capture::BOOLEAN,
+            Capture::CONSTANT,
+            Capture::PUNCTUATION,
+            Capture::BRACKET,
+            Capture::DELIMITER,
+            Capture::ERROR,
+            Capture::MACRO,
+        ] {
+            assert!(
+                spec.contains_capture(capture.name()),
+                "{} is not a capture of highlights/spec.toml",
+                capture.name()
+            );
+        }
+    }
+
+    #[test]
+    fn keyword_tables_name_spec_captures() {
+        // The tables are static data in this crate, so this test is their
+        // guard: it runs on every change to the crate, and a table that
+        // names a capture the spec lacks (which the generator would skip,
+        // as it skips one from a `.scm`) or an empty token (which would
+        // generate an empty pattern) fails it.
+        let spec = HighlightSpec::load().expect("spec");
+        for language in ALL {
+            for (token, capture) in keywords(language).unwrap_or_default() {
+                assert!(!token.is_empty(), "{language}: an empty token");
+                assert!(
+                    spec.contains_capture(capture.name()),
+                    "{language}: `{token}` names {}, which highlights/spec.toml does not have",
+                    capture.name()
+                );
+            }
+        }
+    }
+}

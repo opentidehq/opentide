@@ -84,6 +84,105 @@ pub struct Args {
     pub since: Option<String>,
 }
 
+impl Args {
+    /// The run `opentide share [COMMAND]` names. An option typed on `share`
+    /// itself, before a subcommand, is that subcommand's: `group_given` says
+    /// which were typed there (the subcommands' own come from their structs).
+    pub fn from_cli(group: &crate::tree::ShareArgs, group_given: impl Fn(&str) -> bool) -> Args {
+        use crate::tree::{ShareCommand as Command, SharePushArgs, ShareSelection, ShareWorkers};
+        // What a subcommand does not take is left unset.
+        let unset = |selection: &ShareSelection, workers: i64| SharePushArgs {
+            selection: selection.clone(),
+            dry_run: false,
+            publish: false,
+            no_publish: false,
+            workers: ShareWorkers { workers },
+            changed: false,
+            since: None,
+        };
+        let empty = ShareSelection {
+            target: Vec::new(),
+            uuid: Vec::new(),
+            object_type: Vec::new(),
+            file: Vec::new(),
+        };
+        let (mode, own, delete, yes) = match &group.command {
+            None => (Mode::Push, group.push.clone(), false, false),
+            Some(Command::Push(push)) => (Mode::Push, push.clone(), false, false),
+            Some(Command::Preview(preview)) => (
+                Mode::Preview,
+                unset(&preview.selection, preview.workers.workers),
+                false,
+                false,
+            ),
+            Some(Command::Status(status)) => {
+                (Mode::Status, unset(&status.selection, 1), false, false)
+            }
+            Some(Command::Retract(retract)) => (
+                Mode::Retract,
+                unset(&retract.selection, retract.workers.workers),
+                retract.delete,
+                retract.yes,
+            ),
+            Some(Command::Targets(_)) => (Mode::Targets, unset(&empty, 1), false, false),
+        };
+        let typed = &group.push;
+        let group_wins = |id: &str| group.command.is_some() && group_given(id);
+        let pick = |id: &str, own: &Vec<String>, typed: &Vec<String>| {
+            if group_wins(id) { typed } else { own }.clone()
+        };
+        // Each of the pair is the group's or the subcommand's alone.
+        let publish = if group_wins("publish") {
+            typed.publish
+        } else {
+            own.publish
+        };
+        let no_publish = if group_wins("no_publish") {
+            typed.no_publish
+        } else {
+            own.no_publish
+        };
+        Args {
+            mode,
+            targets: pick("target", &own.selection.target, &typed.selection.target),
+            uuids: pick("uuid", &own.selection.uuid, &typed.selection.uuid),
+            types: pick(
+                "object_type",
+                &own.selection.object_type,
+                &typed.selection.object_type,
+            ),
+            files: pick("file", &own.selection.file, &typed.selection.file),
+            dry_run: if group_wins("dry_run") {
+                typed.dry_run
+            } else {
+                own.dry_run
+            },
+            publish: match (publish, no_publish) {
+                (true, _) => Some(true),
+                (_, true) => Some(false),
+                _ => None,
+            },
+            workers: if group_wins("workers") {
+                typed.workers.workers
+            } else {
+                own.workers.workers
+            },
+            delete,
+            yes,
+            changed: if group_wins("changed") {
+                typed.changed
+            } else {
+                own.changed
+            },
+            since: if group_wins("since") {
+                typed.since.clone()
+            } else {
+                own.since.clone()
+            },
+        }
+    }
+}
+
 /// Where a share runs.
 pub struct Context<'a> {
     /// The command path (`share push`).
@@ -979,4 +1078,76 @@ pub(crate) fn documents_for_test(texts: &[(&str, &str)]) -> Vec<document::TideDo
         .iter()
         .map(|(path, text)| document::load(text.as_bytes(), Some(PathBuf::from(path))))
         .collect()
+}
+
+#[cfg(test)]
+mod from_cli_tests {
+    use clap::Parser as _;
+
+    use super::{Args, Mode};
+    use crate::tree::{Cli, RootCommand};
+
+    /// `args` as `Args::from_cli` reads them; `group` names the options
+    /// typed on `share` itself, before its subcommand.
+    fn parse(words: &[&str], group: &[&str]) -> Args {
+        let words = std::iter::once("opentide").chain(words.iter().copied());
+        match Cli::try_parse_from(words).map(|cli| cli.command) {
+            Ok(Some(RootCommand::Share(share))) => Args::from_cli(&share, |id| group.contains(&id)),
+            other => panic!("not a share command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_bare_group_is_a_push_with_its_own_options() {
+        let args = parse(
+            &["share", "--target", "a", "--dry-run", "--workers", "4"],
+            &["target", "dry_run", "workers"],
+        );
+        assert_eq!(args.mode, Mode::Push);
+        assert_eq!(args.targets, ["a"]);
+        assert!(args.dry_run);
+        assert_eq!(args.workers, 4);
+        assert_eq!(args.publish, None);
+    }
+
+    #[test]
+    fn an_option_typed_before_the_subcommand_is_the_subcommands() {
+        let args = parse(
+            &["share", "--target", "a", "--workers", "3", "preview"],
+            &["target", "workers"],
+        );
+        assert_eq!(args.mode, Mode::Preview);
+        assert_eq!(args.targets, ["a"]);
+        assert_eq!(args.workers, 3);
+    }
+
+    #[test]
+    fn a_subcommand_takes_its_own_options_and_leaves_the_rest_unset() {
+        let args = parse(
+            &["share", "retract", "--uuid", "u", "--delete", "--yes"],
+            &[],
+        );
+        assert_eq!(args.mode, Mode::Retract);
+        assert_eq!(args.uuids, ["u"]);
+        assert!(args.delete && args.yes);
+        assert_eq!(args.workers, 1);
+        assert!(!args.dry_run && !args.changed && args.since.is_none());
+        let status = parse(&["share", "status"], &[]);
+        assert_eq!(status.mode, Mode::Status);
+        assert_eq!(status.workers, 1);
+    }
+
+    #[test]
+    fn publish_and_no_publish_each_come_from_where_they_were_typed() {
+        // `--no-publish` before `push` and `--publish` after it: each is read
+        // from where it was typed, and `--publish` is looked at first.
+        let args = parse(
+            &["share", "--no-publish", "push", "--publish"],
+            &["no_publish"],
+        );
+        assert_eq!(args.publish, Some(true));
+        let args = parse(&["share", "push", "--no-publish"], &[]);
+        assert_eq!(args.publish, Some(false));
+        assert_eq!(parse(&["share", "push"], &[]).publish, None);
+    }
 }

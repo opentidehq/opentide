@@ -41,7 +41,6 @@ exit: 0
   "detail": "configurations.splunk.status is an anchor or an alias",
   "event": "rule_not_promoted",
   "level": "warning",
-  "logger": "opentide.mutation.promotion",
   "path": "<WS>/objects/rules/splunk-a-create.yaml",
   "timestamp": "0000-00-00 00:00:00"
 }

@@ -50,56 +50,33 @@ pub const BUNDLE_FILES: [(&str, &str); 3] = [
 const PIN_FAMILIES: [&str; 3] = ["threat", "objective", "rule"];
 
 /// What a run does.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, clap::Args)]
 pub struct Options {
-    /// Compute without writing; dirty is a failure (also the default).
+    /// Compute without writing; dirty is a failure (also the default)
+    #[arg(long, conflicts_with = "apply")]
     pub check: bool,
-    /// Write the vocabularies and sync the bundle.
+    /// Write the vocabularies and sync the bundle
+    #[arg(long)]
     pub apply: bool,
-    /// Read the STIX bundles already in the STIX directory.
+    /// Read the STIX bundles already in the STIX directory
+    #[arg(long)]
     pub no_fetch: bool,
     /// The STIX directory; else `$OPENTIDE_ATTACK_STIX_DIR`, else a scratch
-    /// directory for the fetch.
+    /// directory for the fetch
+    #[arg(long, value_name = "DIR")]
     pub stix_dir: Option<PathBuf>,
     /// The MISP galaxy; else the bundled `resources.toml`'s
-    /// `misp.galaxies.threat_actors`. `file://` reads a local file.
+    /// `misp.galaxies.threat_actors`. `file://` reads a local file
+    #[arg(long, value_name = "URL")]
     pub misp_url: Option<String>,
-    /// The specifications checkout; else `$OPENTIDE_SPECIFICATIONS_ROOT`,
-    /// else `../specifications`.
+    /// The specifications checkout; else `$OPENTIDE_SPECIFICATIONS_ROOT`, else
+    /// `../specifications`
+    #[arg(long, value_name = "DIR")]
     pub specifications: Option<PathBuf>,
-    /// The time to write where the run would read the clock (`2026-11-13T00:00:00.000Z`),
-    /// for a reproducible run.
+    /// The time to write where the run would read the clock
+    /// (`2026-11-13T00:00:00.000Z`), for a reproducible run
+    #[arg(long, value_name = "TIMESTAMP")]
     pub now: Option<String>,
-}
-
-/// Parses `vocab ingest`'s options.
-pub fn parse(args: &[String]) -> Result<Options> {
-    let mut options = Options::default();
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let mut value = |name: &str| {
-            args.next()
-                .cloned()
-                .with_context(|| format!("{name} needs a value"))
-        };
-        match arg.as_str() {
-            "--check" => options.check = true,
-            "--apply" => options.apply = true,
-            "--no-fetch" => options.no_fetch = true,
-            "--stix-dir" => options.stix_dir = Some(PathBuf::from(value("--stix-dir")?)),
-            "--misp-url" => options.misp_url = Some(value("--misp-url")?),
-            "--specifications" => {
-                options.specifications = Some(PathBuf::from(value("--specifications")?));
-            }
-            "--now" => options.now = Some(value("--now")?),
-            other => bail!("unknown option `{other}`\n\n{}", super::USAGE),
-        }
-    }
-    ensure!(
-        !(options.check && options.apply),
-        "use either --check or --apply, not both"
-    );
-    Ok(options)
 }
 
 /// The ingest's result.
@@ -239,26 +216,15 @@ pub fn utc_now_iso() -> Result<String> {
     Ok(format_utc(since.as_secs(), since.subsec_millis()))
 }
 
-/// `YYYY-MM-DDTHH:MM:SS.mmmZ` for `seconds` after the epoch.
+/// `YYYY-MM-DDTHH:MM:SS.mmmZ` for `seconds` after the epoch (a moment past
+/// the end of jiff's range, year 9999, reads as the end of it).
 pub fn format_utc(seconds: u64, millis: u32) -> String {
-    let days = i64::try_from(seconds / 86_400).unwrap_or(i64::MAX);
-    let rest = seconds % 86_400;
-    // Howard Hinnant's civil_from_days.
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    format!(
-        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{millis:03}Z",
-        rest / 3600,
-        rest % 3600 / 60,
-        rest % 60
-    )
+    let nanos = i32::try_from(millis.min(999) * 1_000_000).unwrap_or(0);
+    let at = i64::try_from(seconds)
+        .ok()
+        .and_then(|seconds| jiff::Timestamp::new(seconds, nanos).ok())
+        .unwrap_or(jiff::Timestamp::MAX);
+    at.strftime("%Y-%m-%dT%H:%M:%S.%3fZ").to_string()
 }
 
 /// curl's options: HTTPS only, redirects followed, TLS 1.2 or later, failing

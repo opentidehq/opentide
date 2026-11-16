@@ -395,13 +395,20 @@ pub struct ExportObjectsArgs {}
 #[derive(Debug, Args)]
 pub struct ExportNavigatorArgs {}
 
-/// `opentide document`.
+/// The options `opentide document` and each of its subcommands take.
 #[derive(Debug, Args)]
-pub struct DocumentArgs {
+pub struct DocumentOptions {
     #[arg(long = "output")]
     pub output: Option<String>,
     #[arg(long = "flavor")]
     pub flavor: Option<String>,
+}
+
+/// `opentide document`.
+#[derive(Debug, Args)]
+pub struct DocumentArgs {
+    #[command(flatten)]
+    pub options: DocumentOptions,
     #[command(subcommand)]
     pub command: Option<DocumentCommand>,
 }
@@ -409,37 +416,29 @@ pub struct DocumentArgs {
 /// `opentide document index`.
 #[derive(Debug, Args)]
 pub struct DocumentIndexArgs {
-    #[arg(long = "output")]
-    pub output: Option<String>,
-    #[arg(long = "flavor")]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub options: DocumentOptions,
 }
 
 /// `opentide document threats`.
 #[derive(Debug, Args)]
 pub struct DocumentThreatsArgs {
-    #[arg(long = "output")]
-    pub output: Option<String>,
-    #[arg(long = "flavor")]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub options: DocumentOptions,
 }
 
 /// `opentide document objectives`.
 #[derive(Debug, Args)]
 pub struct DocumentObjectivesArgs {
-    #[arg(long = "output")]
-    pub output: Option<String>,
-    #[arg(long = "flavor")]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub options: DocumentOptions,
 }
 
 /// `opentide document rules`.
 #[derive(Debug, Args)]
 pub struct DocumentRulesArgs {
-    #[arg(long = "output")]
-    pub output: Option<String>,
-    #[arg(long = "flavor")]
-    pub flavor: Option<String>,
+    #[command(flatten)]
+    pub options: DocumentOptions,
 }
 
 /// `opentide serve`.
@@ -530,6 +529,48 @@ pub struct SetupArgs {
         default_value = "."
     )]
     pub path: String,
+    #[command(flatten)]
+    pub repo: SetupRepoFields,
+    #[arg(
+        long = "ci",
+        help = "CI/CD pipeline to write: github, gitlab, azure or none",
+        value_name = "PROVIDER"
+    )]
+    pub ci: Option<Ci>,
+    #[command(flatten)]
+    pub pipeline: SetupPipelineFields,
+    #[arg(
+        long = "vscode-setup",
+        help = "Run deprecated setup vscode: the extension recommendation and snippets"
+    )]
+    pub vscode_setup: bool,
+    #[arg(long = "mcp", help = "Write MCP configuration for vscode, cursor, claude-code or generic (repeatable)", action = clap::ArgAction::Append, value_name = "HOST")]
+    pub mcp: Vec<Mcp>,
+    #[arg(long = "skills", help = "Install agent skills for claude-code, cursor, github-copilot or generic (repeatable)", action = clap::ArgAction::Append, value_name = "TARGET")]
+    pub skills: Vec<Skills>,
+    #[arg(
+        long = "plugin",
+        help = "Register the opentidehq/skills Agent Plugin for Claude Code (.claude/settings.json)"
+    )]
+    pub plugin: bool,
+    #[arg(long = "hooks", help = "Validate objects on every commit")]
+    pub hooks: bool,
+    #[arg(long = "env", help = "Write .env.example and ignore .env")]
+    pub env: bool,
+    #[arg(
+        long = "plan",
+        help = "List the files each step would write, and write nothing"
+    )]
+    pub plan: bool,
+    #[arg(long = "yes", short = 'y', help = "Non-interactive mode")]
+    pub yes: bool,
+    #[command(subcommand)]
+    pub command: Option<SetupCommand>,
+}
+
+/// The repository's descriptive options, taken by `setup` and `setup repo`.
+#[derive(Debug, Args)]
+pub struct SetupRepoFields {
     #[arg(long = "name", help = "Repository name, used in the README")]
     pub name: Option<String>,
     #[arg(long = "org", help = "Organisation or team, used in the README")]
@@ -541,12 +582,11 @@ pub struct SetupArgs {
     pub description: Option<String>,
     #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
-    #[arg(
-        long = "ci",
-        help = "CI/CD pipeline to write: github, gitlab, azure or none",
-        value_name = "PROVIDER"
-    )]
-    pub ci: Option<Ci>,
+}
+
+/// The CI/CD pipeline's options, taken by `setup` and `setup ci`.
+#[derive(Debug, Args)]
+pub struct SetupPipelineFields {
     #[arg(
         long = "staging",
         help = "Deploy to staging tenants from pull requests",
@@ -635,33 +675,42 @@ pub struct SetupArgs {
         help = "Branch that deploys and receives inflight shards (default: origin/HEAD, then the checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)"
     )]
     pub default_branch: Option<String>,
-    #[arg(
-        long = "vscode-setup",
-        help = "Run deprecated setup vscode: the extension recommendation and snippets"
-    )]
-    pub vscode_setup: bool,
-    #[arg(long = "mcp", help = "Write MCP configuration for vscode, cursor, claude-code or generic (repeatable)", action = clap::ArgAction::Append, value_name = "HOST")]
-    pub mcp: Vec<Mcp>,
-    #[arg(long = "skills", help = "Install agent skills for claude-code, cursor, github-copilot or generic (repeatable)", action = clap::ArgAction::Append, value_name = "TARGET")]
-    pub skills: Vec<Skills>,
-    #[arg(
-        long = "plugin",
-        help = "Register the opentidehq/skills Agent Plugin for Claude Code (.claude/settings.json)"
-    )]
-    pub plugin: bool,
-    #[arg(long = "hooks", help = "Validate objects on every commit")]
-    pub hooks: bool,
-    #[arg(long = "env", help = "Write .env.example and ignore .env")]
-    pub env: bool,
+}
+
+/// `--plan` and `--yes`, as the file-writing `setup` steps take them.
+#[derive(Debug, Args)]
+pub struct SetupConfirm {
     #[arg(
         long = "plan",
         help = "List the files each step would write, and write nothing"
     )]
     pub plan: bool,
-    #[arg(long = "yes", short = 'y', help = "Non-interactive mode")]
+    #[arg(
+        long = "yes",
+        short = 'y',
+        help = "Write without asking for confirmation"
+    )]
     pub yes: bool,
-    #[command(subcommand)]
-    pub command: Option<SetupCommand>,
+}
+
+/// The repository a `setup` step writes to: `--path`, and the positional
+/// path it replaces (hidden, deprecated).
+#[derive(Debug, Args)]
+pub struct SetupTarget {
+    #[arg(
+        hide = true,
+        help = "Repository path (alias for --path)",
+        default_value = ".",
+        value_name = "path"
+    )]
+    pub path: String,
+    #[arg(
+        long = "path",
+        short = 'C',
+        help = "Repository path",
+        default_value = "."
+    )]
+    pub path_flag: String,
 }
 
 /// `opentide setup skills`.
@@ -780,20 +829,8 @@ pub struct SetupSkillsDiscoverArgs {
 /// `opentide setup vscode`.
 #[derive(Debug, Args)]
 pub struct SetupVscodeArgs {
-    #[arg(
-        hide = true,
-        help = "Repository path (alias for --path)",
-        default_value = ".",
-        value_name = "path"
-    )]
-    pub path: String,
-    #[arg(
-        long = "path",
-        short = 'C',
-        help = "Repository path",
-        default_value = "."
-    )]
-    pub path_flag: String,
+    #[command(flatten)]
+    pub target: SetupTarget,
     #[arg(
         long = "settings",
         help = "Recommend the opentide extension in .vscode/extensions.json, and remove opentide's yaml.schemas from .vscode/settings.json"
@@ -826,20 +863,8 @@ pub struct SetupVscodeArgs {
 /// `opentide setup mcp`.
 #[derive(Debug, Args)]
 pub struct SetupMcpArgs {
-    #[arg(
-        hide = true,
-        help = "Repository path (alias for --path)",
-        default_value = ".",
-        value_name = "path"
-    )]
-    pub path: String,
-    #[arg(
-        long = "path",
-        short = 'C',
-        help = "Repository path",
-        default_value = "."
-    )]
-    pub path_flag: String,
+    #[command(flatten)]
+    pub target: SetupTarget,
     #[arg(long = "vscode", help = "Configure VS Code (.vscode/mcp.json)")]
     pub vscode: bool,
     #[arg(long = "cursor", help = "Configure Cursor (.cursor/mcp.json)")]
@@ -848,36 +873,15 @@ pub struct SetupMcpArgs {
     pub claude_code: bool,
     #[arg(long = "generic", help = "Configure any MCP host (opentide.mcp.json)")]
     pub generic: bool,
-    #[arg(
-        long = "plan",
-        help = "List the files each step would write, and write nothing"
-    )]
-    pub plan: bool,
-    #[arg(
-        long = "yes",
-        short = 'y',
-        help = "Write without asking for confirmation"
-    )]
-    pub yes: bool,
+    #[command(flatten)]
+    pub confirm: SetupConfirm,
 }
 
 /// `opentide setup hooks`.
 #[derive(Debug, Args)]
 pub struct SetupHooksArgs {
-    #[arg(
-        hide = true,
-        help = "Repository path (alias for --path)",
-        default_value = ".",
-        value_name = "path"
-    )]
-    pub path: String,
-    #[arg(
-        long = "path",
-        short = 'C',
-        help = "Repository path",
-        default_value = "."
-    )]
-    pub path_flag: String,
+    #[command(flatten)]
+    pub target: SetupTarget,
     #[arg(
         long = "install",
         help = "Install .git/hooks/pre-commit when this path is a Git repository",
@@ -890,47 +894,17 @@ pub struct SetupHooksArgs {
         help = "Turn --install off"
     )]
     pub no_install: bool,
-    #[arg(
-        long = "plan",
-        help = "List the files each step would write, and write nothing"
-    )]
-    pub plan: bool,
-    #[arg(
-        long = "yes",
-        short = 'y',
-        help = "Write without asking for confirmation"
-    )]
-    pub yes: bool,
+    #[command(flatten)]
+    pub confirm: SetupConfirm,
 }
 
 /// `opentide setup env`.
 #[derive(Debug, Args)]
 pub struct SetupEnvArgs {
-    #[arg(
-        hide = true,
-        help = "Repository path (alias for --path)",
-        default_value = ".",
-        value_name = "path"
-    )]
-    pub path: String,
-    #[arg(
-        long = "path",
-        short = 'C',
-        help = "Repository path",
-        default_value = "."
-    )]
-    pub path_flag: String,
-    #[arg(
-        long = "plan",
-        help = "List the files each step would write, and write nothing"
-    )]
-    pub plan: bool,
-    #[arg(
-        long = "yes",
-        short = 'y',
-        help = "Write without asking for confirmation"
-    )]
-    pub yes: bool,
+    #[command(flatten)]
+    pub target: SetupTarget,
+    #[command(flatten)]
+    pub confirm: SetupConfirm,
 }
 
 /// `opentide setup ci`.
@@ -949,124 +923,17 @@ pub struct SetupCiArgs {
         default_value = "."
     )]
     pub path: String,
-    #[arg(
-        long = "staging",
-        help = "Deploy to staging tenants from pull requests",
-        overrides_with = "no_staging"
-    )]
-    pub staging: bool,
-    #[arg(
-        long = "no-staging",
-        overrides_with = "staging",
-        help = "Turn --staging off"
-    )]
-    pub no_staging: bool,
-    #[arg(
-        long = "inflight",
-        help = "Update .opentide/inflight/ preview shards on pull requests",
-        overrides_with = "no_inflight"
-    )]
-    pub inflight: bool,
-    #[arg(
-        long = "no-inflight",
-        overrides_with = "inflight",
-        help = "Turn --inflight off"
-    )]
-    pub no_inflight: bool,
-    #[arg(
-        long = "sharing",
-        help = "Share changed objects on the default branch (off unless selected)",
-        overrides_with = "no_sharing"
-    )]
-    pub sharing: bool,
-    #[arg(
-        long = "no-sharing",
-        overrides_with = "sharing",
-        help = "Turn --sharing off"
-    )]
-    pub no_sharing: bool,
-    #[arg(
-        long = "lint-changed",
-        help = "Gate lint on the object files each run changes, so a catalogue with inherited findings can adopt it (validate still checks every file)",
-        overrides_with = "lint_all"
-    )]
-    pub lint_changed: bool,
-    #[arg(
-        long = "lint-all",
-        overrides_with = "lint_changed",
-        help = "Turn --lint-changed off"
-    )]
-    pub lint_all: bool,
-    #[arg(
-        long = "promotion",
-        help = "Write [promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
-        overrides_with = "no_promotion"
-    )]
-    pub promotion: bool,
-    #[arg(
-        long = "no-promotion",
-        overrides_with = "promotion",
-        help = "Turn --promotion off"
-    )]
-    pub no_promotion: bool,
-    #[arg(
-        long = "promotion-target",
-        help = "Status deploy promotes rules to. Omit to keep the repository's setting."
-    )]
-    pub promotion_target: Option<String>,
-    #[arg(
-        long = "python-version",
-        help = "Python version the pipeline installs",
-        default_value = "3.12"
-    )]
-    pub python_version: String,
-    #[arg(
-        long = "explorer-pages",
-        help = "Include GitHub Pages explorer build and deploy jobs",
-        overrides_with = "no_explorer_pages"
-    )]
-    pub explorer_pages: bool,
-    #[arg(
-        long = "no-explorer-pages",
-        overrides_with = "explorer_pages",
-        help = "Turn --explorer-pages off"
-    )]
-    pub no_explorer_pages: bool,
-    #[arg(
-        long = "default-branch",
-        help = "Branch that deploys and receives inflight shards (default: origin/HEAD, then the checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)"
-    )]
-    pub default_branch: Option<String>,
-    #[arg(
-        long = "plan",
-        help = "List the files each step would write, and write nothing"
-    )]
-    pub plan: bool,
-    #[arg(
-        long = "yes",
-        short = 'y',
-        help = "Write without asking for confirmation"
-    )]
-    pub yes: bool,
+    #[command(flatten)]
+    pub pipeline: SetupPipelineFields,
+    #[command(flatten)]
+    pub confirm: SetupConfirm,
 }
 
 /// `opentide setup platforms`.
 #[derive(Debug, Args)]
 pub struct SetupPlatformsArgs {
-    #[arg(
-        hide = true,
-        help = "Repository path (alias for --path)",
-        default_value = ".",
-        value_name = "path"
-    )]
-    pub path: String,
-    #[arg(
-        long = "path",
-        short = 'C',
-        help = "Repository path",
-        default_value = "."
-    )]
-    pub path_flag: String,
+    #[command(flatten)]
+    pub target: SetupTarget,
     #[arg(long = "sentinel", help = "Enable Microsoft Sentinel")]
     pub sentinel: bool,
     #[arg(
@@ -1099,63 +966,34 @@ pub struct SetupPlatformsArgs {
         help = "Enable Google Security Operations (YARA-L)"
     )]
     pub google_secops: bool,
-    #[arg(
-        long = "plan",
-        help = "List the files each step would write, and write nothing"
-    )]
-    pub plan: bool,
-    #[arg(
-        long = "yes",
-        short = 'y',
-        help = "Write without asking for confirmation"
-    )]
-    pub yes: bool,
+    #[command(flatten)]
+    pub confirm: SetupConfirm,
 }
 
 /// `opentide setup repo`.
 #[derive(Debug, Args)]
 pub struct SetupRepoArgs {
-    #[arg(
-        hide = true,
-        help = "Repository path (alias for --path)",
-        default_value = ".",
-        value_name = "path"
-    )]
-    pub path: String,
-    #[arg(
-        long = "path",
-        short = 'C',
-        help = "Repository path",
-        default_value = "."
-    )]
-    pub path_flag: String,
-    #[arg(long = "name", help = "Repository name, used in the README")]
-    pub name: Option<String>,
-    #[arg(long = "org", help = "Organisation or team, used in the README")]
-    pub org: Option<String>,
-    #[arg(
-        long = "description",
-        help = "One-line description, used in the README"
-    )]
-    pub description: Option<String>,
-    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
-    pub platform: Vec<Platform>,
-    #[arg(
-        long = "plan",
-        help = "List the files each step would write, and write nothing"
-    )]
-    pub plan: bool,
-    #[arg(
-        long = "yes",
-        short = 'y',
-        help = "Write without asking for confirmation"
-    )]
-    pub yes: bool,
+    #[command(flatten)]
+    pub target: SetupTarget,
+    #[command(flatten)]
+    pub repo: SetupRepoFields,
+    #[command(flatten)]
+    pub confirm: SetupConfirm,
 }
 
 /// `opentide share`.
 #[derive(Debug, Args)]
 pub struct ShareArgs {
+    #[command(flatten)]
+    pub push: SharePushArgs,
+    #[command(subcommand)]
+    pub command: Option<ShareCommand>,
+}
+
+/// The objects a `share` command selects: the destinations, and what to
+/// limit the run to.
+#[derive(Clone, Debug, Args)]
+pub struct ShareSelection {
     #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
     pub target: Vec<String>,
     #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
@@ -1164,42 +1002,17 @@ pub struct ShareArgs {
     pub object_type: Vec<String>,
     #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
     pub file: Vec<String>,
-    #[arg(
-        long = "dry-run",
-        help = "Resolve the run locally and make no request."
-    )]
-    pub dry_run: bool,
-    #[arg(
-        long = "publish",
-        help = "Override the block publish flag.",
-        overrides_with = "no_publish"
-    )]
-    pub publish: bool,
-    #[arg(
-        long = "no-publish",
-        overrides_with = "publish",
-        help = "Turn --publish off"
-    )]
-    pub no_publish: bool,
+}
+
+/// `--workers`, as `share push`, `preview` and `retract` take it.
+#[derive(Clone, Debug, Args)]
+pub struct ShareWorkers {
     #[arg(
         long = "workers",
         help = "Parallel object workers for one destination.",
         default_value = "1"
     )]
     pub workers: i64,
-    #[arg(
-        long = "changed",
-        help = "Share only objects the default-branch CI diff changed."
-    )]
-    pub changed: bool,
-    #[arg(
-        long = "since",
-        help = "With --changed: diff from this commit SHA or ref to HEAD.",
-        value_name = "COMMIT"
-    )]
-    pub since: Option<String>,
-    #[command(subcommand)]
-    pub command: Option<ShareCommand>,
 }
 
 /// `opentide share targets`.
@@ -1209,14 +1022,8 @@ pub struct ShareTargetsArgs {}
 /// `opentide share retract`.
 #[derive(Debug, Args)]
 pub struct ShareRetractArgs {
-    #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
-    pub target: Vec<String>,
-    #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
-    #[arg(long = "type", help = "Limit to threat, objective, or rule.", action = clap::ArgAction::Append)]
-    pub object_type: Vec<String>,
-    #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
+    #[command(flatten)]
+    pub selection: ShareSelection,
     #[arg(
         long = "delete",
         help = "Delete the remote event instead of unpublishing it."
@@ -1224,57 +1031,31 @@ pub struct ShareRetractArgs {
     pub delete: bool,
     #[arg(long = "yes", help = "Confirm --delete.")]
     pub yes: bool,
-    #[arg(
-        long = "workers",
-        help = "Parallel object workers for one destination.",
-        default_value = "1"
-    )]
-    pub workers: i64,
+    #[command(flatten)]
+    pub workers: ShareWorkers,
 }
 
 /// `opentide share status`.
 #[derive(Debug, Args)]
 pub struct ShareStatusArgs {
-    #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
-    pub target: Vec<String>,
-    #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
-    #[arg(long = "type", help = "Limit to threat, objective, or rule.", action = clap::ArgAction::Append)]
-    pub object_type: Vec<String>,
-    #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
+    #[command(flatten)]
+    pub selection: ShareSelection,
 }
 
 /// `opentide share preview`.
 #[derive(Debug, Args)]
 pub struct SharePreviewArgs {
-    #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
-    pub target: Vec<String>,
-    #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
-    #[arg(long = "type", help = "Limit to threat, objective, or rule.", action = clap::ArgAction::Append)]
-    pub object_type: Vec<String>,
-    #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
-    #[arg(
-        long = "workers",
-        help = "Parallel object workers for one destination.",
-        default_value = "1"
-    )]
-    pub workers: i64,
+    #[command(flatten)]
+    pub selection: ShareSelection,
+    #[command(flatten)]
+    pub workers: ShareWorkers,
 }
 
-/// `opentide share push`.
-#[derive(Debug, Args)]
+/// `opentide share push`, and the options `opentide share` takes for it.
+#[derive(Clone, Debug, Args)]
 pub struct SharePushArgs {
-    #[arg(long = "target", help = "Destination block name. Repeatable.", action = clap::ArgAction::Append)]
-    pub target: Vec<String>,
-    #[arg(long = "uuid", help = "Limit to these object UUIDs.", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
-    #[arg(long = "type", help = "Limit to threat, objective, or rule.", action = clap::ArgAction::Append)]
-    pub object_type: Vec<String>,
-    #[arg(long = "file", help = "Limit to these object files.", action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
+    #[command(flatten)]
+    pub selection: ShareSelection,
     #[arg(
         long = "dry-run",
         help = "Resolve the run locally and make no request."
@@ -1292,12 +1073,8 @@ pub struct SharePushArgs {
         help = "Turn --publish off"
     )]
     pub no_publish: bool,
-    #[arg(
-        long = "workers",
-        help = "Parallel object workers for one destination.",
-        default_value = "1"
-    )]
-    pub workers: i64,
+    #[command(flatten)]
+    pub workers: ShareWorkers,
     #[arg(
         long = "changed",
         help = "Share only objects the default-branch CI diff changed."
@@ -1423,6 +1200,11 @@ pub struct RulesUnreviewedArgs {
 pub struct GenerateArgs {
     #[command(subcommand)]
     pub command: Option<GenerateCommand>,
+    /// The phases named as words (`generate schemas templates`), in the
+    /// order given; none runs the whole pipeline. An unknown one is refused
+    /// by the run, which lists the phases.
+    #[arg(value_name = "PHASE", hide = true)]
+    pub phases: Vec<String>,
 }
 
 /// `opentide generate inflight`.
@@ -1766,20 +1548,12 @@ pub struct ValidateArgs {
         value_name = "CHECK"
     )]
     pub check: Option<Check>,
-    #[arg(long = "file", help = "Validate only this file (repeatable)", action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
-    #[arg(long = "uuid", help = "Validate only the object with this UUID (repeatable)", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
+    #[command(flatten)]
+    pub select: QuerySelect,
     #[arg(long = "type", help = "Validate only this type: rule, threat or objective (repeatable)", value_parser = CommandChecked(&["rule", "threat", "objective"]), action = clap::ArgAction::Append)]
     pub object_type: Vec<String>,
-    #[arg(long = "strict", help = "Fail on warnings too")]
-    pub strict: bool,
-    #[arg(
-        long = "queries",
-        help = "How a query the platform would reject is reported: error (the default), warn (passes unless --strict) or off (queries are not checked)",
-        value_name = "error|warn|off"
-    )]
-    pub queries: Option<Queries>,
+    #[command(flatten)]
+    pub strictness: QueryStrictness,
     #[arg(
         long = "fix",
         help = "Apply every safe fix (vocabulary typos), then validate again"
@@ -1849,6 +1623,30 @@ pub fn validate_query_file_help() -> String {
     )
 }
 
+/// `--file` and `--uuid`, which `validate` and `validate query` both take;
+/// `validate query` words them for rules and queries (`ValidateCommand`).
+#[derive(Debug, Args)]
+pub struct QuerySelect {
+    #[arg(long = "file", help = "Validate only this file (repeatable)", action = clap::ArgAction::Append)]
+    pub file: Vec<String>,
+    #[arg(long = "uuid", help = "Validate only the object with this UUID (repeatable)", action = clap::ArgAction::Append)]
+    pub uuid: Vec<String>,
+}
+
+/// `--strict` and `--queries`, which `validate` and `validate query` both
+/// take; `validate query` words `--queries` for what it checks.
+#[derive(Debug, Args)]
+pub struct QueryStrictness {
+    #[arg(long = "strict", help = "Fail on warnings too")]
+    pub strict: bool,
+    #[arg(
+        long = "queries",
+        help = "How a query the platform would reject is reported: error (the default), warn (passes unless --strict) or off (queries are not checked)",
+        value_name = "error|warn|off"
+    )]
+    pub queries: Option<Queries>,
+}
+
 /// `opentide validate query`.
 #[derive(Debug, Args)]
 pub struct ValidateQueryArgs {
@@ -1878,18 +1676,10 @@ pub struct ValidateQueryArgs {
         help = "Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (the files deploy reads)"
     )]
     pub changed: bool,
-    #[arg(long = "file", help = validate_query_file_help(), action = clap::ArgAction::Append)]
-    pub file: Vec<String>,
-    #[arg(long = "uuid", help = "Check only the rule with this UUID (repeatable)", action = clap::ArgAction::Append)]
-    pub uuid: Vec<String>,
-    #[arg(long = "strict", help = "Fail on warnings too")]
-    pub strict: bool,
-    #[arg(
-        long = "queries",
-        help = "How a rejected query is reported offline: error (the default) or warn",
-        value_name = "error|warn"
-    )]
-    pub queries: Option<Queries>,
+    #[command(flatten)]
+    pub select: QuerySelect,
+    #[command(flatten)]
+    pub strictness: QueryStrictness,
     #[arg(
         long = "check-timeout",
         help = "Seconds each query may take on a tenant before its check fails (--live; default: OPENTIDE_QUERY_CHECK_TIMEOUT, else 120)",
@@ -1943,7 +1733,8 @@ pub enum RootCommand {
         about = "Generate schemas, templates, docs and exports",
         long_about = "Generate schemas, templates, docs and exports\n\nRun with no argument for the full pipeline, or name one or more phases to run only those, in the order given: schemas, templates, vocabs, snippets.\n\nRegenerate editor schemas without paying for documentation: `opentide generate schemas templates vocabs snippets`.",
         after_help = "Examples:\n  $ opentide generate\n  $ opentide generate schemas templates",
-        subcommand_value_name = "COMMAND"
+        subcommand_value_name = "COMMAND",
+        subcommand_precedence_over_arg = true
     )]
     Generate(GenerateArgs),
     #[command(
@@ -2329,11 +2120,6 @@ pub enum GenerateCommand {
         subcommand_value_name = "COMMAND"
     )]
     Inflight(GenerateInflightArgs),
-    /// The phases named as words (`generate schemas templates`): a word that
-    /// is not a subcommand starts them (`GeneratePhaseGroup`). Not a
-    /// subcommand, so not in the catalogue.
-    #[command(external_subcommand)]
-    Phases(Vec<String>),
 }
 
 /// The subcommands of `opentide generate inflight`.
@@ -2466,7 +2252,17 @@ pub enum ValidateCommand {
         name = "query",
         about = "Check rule queries offline, or on the tenants (--live)",
         long_about = "Check rule queries offline with the analysis engine, or on the tenants (--live).\n\nOffline, the engine reports the queries the platform would reject, as\n`opentide validate` does; `opentide lint` reports their style.",
-        after_help = "Examples:\n  $ opentide validate query\n  $ opentide validate query --platform splunk --changed\n  $ opentide validate query --file hunting/lsass.kql\n  $ opentide validate query --platform sentinel --live"
+        after_help = "Examples:\n  $ opentide validate query\n  $ opentide validate query --platform splunk --changed\n  $ opentide validate query --file hunting/lsass.kql\n  $ opentide validate query --platform sentinel --live",
+        // `mut_arg` moves the argument it changes to the end, so every one
+        // from `--file` on is named, in order: the catalogue lists them as
+        // they were declared.
+        mut_arg("file", |arg| arg.help(validate_query_file_help())),
+        mut_arg("uuid", |arg| arg.help("Check only the rule with this UUID (repeatable)")),
+        mut_arg("strict", |arg| arg),
+        mut_arg("queries", |arg| arg
+            .help("How a rejected query is reported offline: error (the default) or warn")
+            .value_name("error|warn")),
+        mut_arg("check_timeout", |arg| arg)
     )]
     Query(ValidateQueryArgs),
 }
