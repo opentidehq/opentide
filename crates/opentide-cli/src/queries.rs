@@ -378,6 +378,32 @@ impl Profiles {
             .map(|diagnostic| finding(&text, &lines, diagnostic))
             .collect()
     }
+
+    /// [`Profiles::check_file`] on `text` (its line endings `\n`), whose
+    /// parse after its byte-order mark is `document`: the queries and the
+    /// blocks are read from that one tree (#1233).
+    fn check_parsed(
+        &self,
+        path: &Path,
+        text: &str,
+        document: &opentide_core::node::Document,
+    ) -> Vec<Finding> {
+        let lines = LineStarts::new(text);
+        let response = opentide_analysis::analyze_tide_parsed(
+            &self.host,
+            &path.to_string_lossy(),
+            text,
+            document,
+        );
+        response
+            .diagnostics
+            .into_iter()
+            .chain(opentide_analysis::analyze_blocks_parsed(
+                &self.host, text, document,
+            ))
+            .map(|diagnostic| finding(text, &lines, diagnostic))
+            .collect()
+    }
 }
 
 /// One query on its own (a query file), in its own coordinates, with
@@ -523,7 +549,13 @@ impl EngineLintQueries {
             .collect();
         let mut out = Vec::new();
         let harfanglab = HarfangLabAdvisories::of(&text, document);
-        for item in self.profiles.check_file(file, &text) {
+        // Lint's parse is of the text after its byte-order mark, as the
+        // engine reads it; the check's own parse above is the advisories'.
+        let checked = match parsed {
+            Some(document) => self.profiles.check_parsed(file, &text, document),
+            None => self.profiles.check_file(file, &text),
+        };
+        for item in checked {
             if item.severity == EngineSeverity::Error || in_placeholder(&item, &lines, &marked) {
                 continue;
             }

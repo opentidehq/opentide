@@ -497,8 +497,8 @@ struct Record {
     key_lines: IndexMap<String, usize>,
     placeholders: Vec<Marked>,
     text: Option<String>,
-    /// `text`'s parse, kept for the queries check only (#1233): lint drops it
-    /// as soon as the record is loaded otherwise, and after the check.
+    /// `text`'s parse, kept until the queries check of the record's chunk
+    /// has read it (#1233).
     document: Option<std::sync::Arc<node::Document>>,
 }
 
@@ -519,6 +519,10 @@ pub fn lint(
 /// index holds. Lint reads such a file from its parse, not the disk; the
 /// parse is the same (`load::parse` reads a file as lint does).
 type Parses = std::collections::HashMap<PathBuf, std::sync::Arc<node::Document>>;
+
+/// How many object files lint parses and checks at a time: their trees are
+/// alive together.
+const LOAD_CHUNK: usize = 64;
 
 /// [`lint`], reading the files `parses` holds from there.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
@@ -550,29 +554,59 @@ fn lint_with(
     let nested: Vec<PathBuf> = nested.into_iter().filter(|p| in_scope(p)).collect();
     let every = reported.is_none() || selected.contains(&LintCheck::Filenames);
     let recommended = selected.contains(&LintCheck::Recommended);
-    let queries = selected.contains(&LintCheck::Queries) && options.query_check.is_some();
     let mut recommended_fields = RecommendedFields::default();
     let mut missing: Vec<Draft> = Vec::new();
-    let mut records: Vec<Record> = object_files
+    let query_check = options
+        .query_check
+        .filter(|_| selected.contains(&LintCheck::Queries));
+    let candidates: Vec<&PathBuf> = object_files
         .iter()
         .filter(|path| every || in_scope(path))
-        .map(|path| {
-            let mut record = load_record(fs, &target, path, parses.get(path));
-            // The tree is read here and dropped: kept on every record, every
-            // tree lint parsed itself stayed alive to the end of the run (one
-            // from the workspace's index is the index's to free).
+        .collect();
+    let mut records: Vec<Record> = Vec::with_capacity(candidates.len());
+    // The queries check's results, in the order of the files it checked.
+    let mut checked: Vec<Result<Vec<LintFinding>, String>> = Vec::new();
+    // A chunk of files is parsed on every core, read in order, and checked
+    // on every core; then its trees are freed (#1233). The queries check
+    // reads the tree lint parsed instead of parsing the file again, and only
+    // one chunk's trees are alive at a time, as before only one file's was.
+    for chunk in candidates.chunks(LOAD_CHUNK) {
+        let loaded: Vec<Record> = chunk
+            .par_iter()
+            .map(|path| load_record(fs, &target, path, parses.get(*path)))
+            .collect();
+        let first = records.len();
+        for mut record in loaded {
             if let Some(root) = record.root.take()
                 && recommended
                 && in_scope(&record.path)
             {
                 missing.extend(recommended_fields.findings(&record, &root));
             }
-            if !(queries && in_scope(&record.path)) {
-                record.document = None;
-            }
-            record
-        })
-        .collect();
+            records.push(record);
+        }
+        if let Some(check) = query_check {
+            checked.par_extend(records[first..].par_iter().filter_map(|record| {
+                let (true, None, Some(text)) =
+                    (in_scope(&record.path), &record.parse_error, &record.text)
+                else {
+                    return None;
+                };
+                let uuid = record.uuid.as_deref();
+                Some(match &record.document {
+                    Some(document) => {
+                        check.check_parsed(&record.path, &record.relative, uuid, text, document)
+                    }
+                    None => check.check(&record.path, &record.relative, uuid, text),
+                })
+            }));
+        }
+        // A tree lint parsed itself is freed here (one from the workspace's
+        // index is the index's to free).
+        for record in &mut records[first..] {
+            record.document = None;
+        }
+    }
     let shown: Vec<usize> = (0..records.len())
         .filter(|&index| in_scope(&records[index].path))
         .collect();
@@ -588,39 +622,14 @@ fn lint_with(
         findings.extend(placeholder_findings(shown.iter().map(|&i| &records[i])));
     }
     let mut engine: Vec<LintFinding> = Vec::new();
-    if selected.contains(&LintCheck::Queries)
-        && let Some(check) = options.query_check
-    {
-        // The files are checked on every core and their findings taken in
-        // order: the first file the engine refuses still decides the report.
-        let checked: Vec<Result<Vec<LintFinding>, String>> = shown
-            .par_iter()
-            .filter_map(|&index| {
-                let record = &records[index];
-                let (None, Some(text)) = (&record.parse_error, &record.text) else {
-                    return None;
-                };
-                let uuid = record.uuid.as_deref();
-                Some(match &record.document {
-                    Some(document) => {
-                        check.check_parsed(&record.path, &record.relative, uuid, text, document)
-                    }
-                    None => check.check(&record.path, &record.relative, uuid, text),
-                })
-            })
-            .collect();
-        // The trees were kept for the check alone.
-        for record in &mut records {
-            record.document = None;
-        }
-        for one in checked {
-            match one {
-                Ok(found) => engine.extend(found),
-                Err(message) => {
-                    let mut report = LintReport::refused(&target, selected, message, 2);
-                    report.failure_code = Some("engine_unavailable");
-                    return report;
-                }
+    // The first file the engine refuses decides the report.
+    for one in checked {
+        match one {
+            Ok(found) => engine.extend(found),
+            Err(message) => {
+                let mut report = LintReport::refused(&target, selected, message, 2);
+                report.failure_code = Some("engine_unavailable");
+                return report;
             }
         }
     }
