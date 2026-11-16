@@ -3,6 +3,7 @@
 //! the kinds, the lexer and the grammar of the pipeline
 //! and of search terms so far.
 
+mod analyze;
 mod expr;
 mod kind;
 mod lexer;
@@ -12,6 +13,7 @@ mod search;
 mod stats;
 mod table;
 
+pub use analyze::analyze;
 pub use kind::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 pub use lexer::lex;
 pub use parser::{GRAMMAR, MAX_DEPTH, parse};

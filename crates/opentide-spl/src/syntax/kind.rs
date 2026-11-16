@@ -316,6 +316,13 @@ impl SyntaxKind {
         rowan::SyntaxKind(self as u16)
     }
 
+    /// Whether this is a keyword the parser reads out of a word (`by`,
+    /// `stats`, a catalog command name, ...).
+    pub const fn is_keyword(self) -> bool {
+        let k = self as u16;
+        k >= SyntaxKind::AND_KW as u16 && k <= SyntaxKind::CATALOG_COMMAND_WORD as u16
+    }
+
     /// Whether this is a token kind (a lexeme or a keyword read out of one).
     pub const fn is_token(self) -> bool {
         (self as u16) < FIRST_NODE as u16

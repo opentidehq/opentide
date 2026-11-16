@@ -479,7 +479,7 @@ fn previous_token(node: Node) -> Option<Node> {
 /// More steps than any query has tokens.
 const MAX_TOKEN_STEPS: usize = 1 << 20;
 
-fn unknown_command(name: &str, range: Range, catalog: &Catalog) -> Diagnostic {
+pub(crate) fn unknown_command(name: &str, range: Range, catalog: &Catalog) -> Diagnostic {
     let message = format!(
         "'{name}' is not a command opentide knows; if an app on the search head provides it, declare it"
     );

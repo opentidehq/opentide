@@ -2,26 +2,35 @@
 //! `opentide_parse::differential`: every `.spl` file under the test data,
 //! every prefix, seeded token mutations and random sentences.
 //!
-//! The old engine here is production's tree-sitter path (it serves until the
-//! switch, so there is no copy yet); the analysis, hover and completion
-//! surfaces join the comparison when the analysis moves onto the new tree
-//! (a later PR of the series, which also copies the old engine verbatim to
-//! `tests/legacy`). What is compared now, per input:
+//! The old engine is the tree-sitter engine, copied to `tests/legacy` before
+//! the switch; the new one is the pure-Rust parser and the analysis on its
+//! tree (`opentide_spl::syntax::analyze`). What is compared, per input:
 //!
-//! - `parse_error`: whether the parse has an error;
+//! - `parse_error`: whether the parse has an error (the verdict);
 //! - `stages`: the kind of every stage of every pipeline, subsearches
 //!   included, in source order (`bare_search`, `stats_command`, ...);
 //! - `tokens`: the byte range of every token (tree-sitter's leaves against
-//!   the lexer's lexemes).
+//!   the lexer's lexemes);
+//! - `diagnostics`: every diagnostic of the analysis (code, severity, range,
+//!   message, suggestion);
+//! - `highlight`: every highlight token (range and capture);
+//! - at offsets: `hover`, `completions` (labels) and `signature_help`.
 //!
-//! `OPENTIDE_SPL_DIFF=<file>` writes the JSON report there; `OPENTIDE_SPL_DIFF_SEED`
-//! and `OPENTIDE_SPL_DIFF_EXAMPLES` change the seed and the examples listed.
+//! `OPENTIDE_SPL_DIFF=<file>` writes the JSON report there; `OPENTIDE_DIFF_SEEDS`
+//! (`1,2,3`), `OPENTIDE_DIFF_SCALE=full` and `OPENTIDE_SPL_DIFF_EXAMPLES` choose
+//! the seeds, the scale and the examples listed.
 
 #![expect(
     clippy::expect_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]
 
+#[allow(
+    dead_code,
+    clippy::too_many_lines,
+    reason = "the tree-sitter engine copied verbatim: not every item is compared, and its dispatchers are long"
+)]
+mod legacy;
 mod support;
 
 use opentide_core::LanguageId;
@@ -76,8 +85,64 @@ fn ranges(r: &[Range<usize>]) -> String {
         .join(" ")
 }
 
+fn render_diagnostics(diagnostics: &[opentide_core::Diagnostic]) -> String {
+    diagnostics
+        .iter()
+        .map(|d| {
+            format!(
+                "{} {:?} {}:{}-{}:{} {} {:?}",
+                d.code,
+                d.severity,
+                d.range.start.line,
+                d.range.start.character,
+                d.range.end.line,
+                d.range.end.character,
+                d.message,
+                d.suggestion
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn render_tokens(tokens: &[opentide_highlight::HighlightToken]) -> String {
+    tokens
+        .iter()
+        .map(|t| format!("{}..{} {}", t.span.start, t.span.end, t.capture))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn render_at(
+    hover: Option<String>,
+    completions: &[opentide_core::CompletionItem],
+    signature: Option<opentide_core::SignatureHelp>,
+) -> Surfaces {
+    vec![
+        ("hover".to_owned(), hover.unwrap_or_default()),
+        (
+            "completions".to_owned(),
+            completions
+                .iter()
+                .map(|c| c.label.as_str())
+                .collect::<Vec<_>>()
+                .join(" "),
+        ),
+        ("signature_help".to_owned(), format!("{signature:?}")),
+    ]
+}
+
 impl Engine for Old {
+    fn observe_at(&self, input: &str, offset: usize) -> Surfaces {
+        render_at(
+            legacy::hover(input, offset),
+            &legacy::completions(input, offset),
+            legacy::signature_help(input, offset),
+        )
+    }
+
     fn observe(&self, input: &str) -> Surfaces {
+        let analysis = legacy::analyze(input);
         let tree = opentide_syntax::parse(LanguageId::Spl, input).expect("parser");
         let mut stages = Vec::new();
         old_stage_kinds(tree.root_node(), &mut stages);
@@ -95,6 +160,11 @@ impl Engine for Old {
             ),
             ("stages".to_owned(), stages.join(" ")),
             ("tokens".to_owned(), ranges(&tokens)),
+            (
+                "diagnostics".to_owned(),
+                render_diagnostics(&analysis.diagnostics),
+            ),
+            ("highlight".to_owned(), render_tokens(&analysis.tokens)),
         ]
     }
 }
@@ -111,8 +181,17 @@ fn new_name(kind: SyntaxKind) -> String {
 }
 
 impl Engine for New {
+    fn observe_at(&self, input: &str, offset: usize) -> Surfaces {
+        render_at(
+            opentide_spl::hover(input, offset),
+            &opentide_spl::completions(input, offset),
+            opentide_spl::signature_help(input, offset),
+        )
+    }
+
     fn observe(&self, input: &str) -> Surfaces {
         let (tree, parsed) = parse(input);
+        let analysis = opentide_spl::syntax::analyze(input);
         // Debugging aid: the whole text of an input the old parser accepts and
         // this one does not (the report cuts texts at 300 characters).
         if let Ok(path) = std::env::var("OPENTIDE_SPL_DIFF_DUMP")
@@ -156,6 +235,11 @@ impl Engine for New {
             ),
             ("stages".to_owned(), stages.join(" ")),
             ("tokens".to_owned(), ranges(&tokens)),
+            (
+                "diagnostics".to_owned(),
+                render_diagnostics(&analysis.diagnostics),
+            ),
+            ("highlight".to_owned(), render_tokens(&analysis.tokens)),
         ]
     }
 }
@@ -342,6 +426,11 @@ fn generated() -> Vec<Source> {
         .collect()
 }
 
+/// Whether `OPENTIDE_DIFF_SCALE=full` asks for the whole run.
+fn full_scale() -> bool {
+    std::env::var("OPENTIDE_DIFF_SCALE").is_ok_and(|s| s == "full")
+}
+
 fn run(seed: u64, files: &[Source]) -> differential::Report {
     let verdict = |observed: &Surfaces| {
         observed
@@ -358,6 +447,16 @@ fn run(seed: u64, files: &[Source]) -> differential::Report {
     let mut config = Config::new(&verdict, &tokens, SAMPLES);
     config.seed = seed;
     config.mutations_per_input = 40;
+    // The default scale is a sample that runs well under two minutes in CI:
+    // OPENTIDE_DIFF_SCALE=full runs every prefix, 500 sentences and 16 offsets
+    // per input (minutes per seed, run by hand before a push, NOTES.md).
+    if full_scale() {
+        config.max_offsets = 16;
+    } else {
+        config.max_offsets = 2;
+        config.max_prefixes = 12;
+        config.sentences = 100;
+    }
     if let Ok(n) = std::env::var("OPENTIDE_SPL_DIFF_EXAMPLES") {
         config.max_examples = n.parse().unwrap_or(5);
     }
@@ -365,17 +464,21 @@ fn run(seed: u64, files: &[Source]) -> differential::Report {
 }
 
 /// The corpus, the conformance and oracle files and the generated queries,
-/// each with its prefixes, 40 mutations and random sentences, over three
-/// seeds (`OPENTIDE_SPL_DIFF_SEED` runs one).
+/// each with prefixes, 40 mutations and random sentences: seed 1 at a
+/// sampled scale by default; `OPENTIDE_DIFF_SEEDS` and
+/// `OPENTIDE_DIFF_SCALE=full` for the whole run.
 #[test]
 fn the_pure_rust_parser_matches_tree_sitter() {
     let mut files = sources();
     assert!(files.len() > 250, "{} files", files.len());
     files.extend(generated());
-    let seeds: Vec<u64> = std::env::var("OPENTIDE_SPL_DIFF_SEED")
+    // OPENTIDE_DIFF_SEEDS=1,2,3 runs those seeds; the default is seed 1.
+    let seeds: Vec<u64> = std::env::var("OPENTIDE_DIFF_SEEDS")
+        .or_else(|_| std::env::var("OPENTIDE_SPL_DIFF_SEED"))
         .ok()
-        .and_then(|s| s.parse().ok())
-        .map_or_else(|| vec![1, 2, 3], |s| vec![s]);
+        .map(|s| s.split(',').filter_map(|n| n.trim().parse().ok()).collect())
+        .filter(|v: &Vec<u64>| !v.is_empty())
+        .unwrap_or_else(|| vec![1]);
     for seed in seeds {
         let report = run(seed, &files);
         if let Ok(path) = std::env::var("OPENTIDE_SPL_DIFF") {
