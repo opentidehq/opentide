@@ -13,7 +13,7 @@
 )]
 
 use opentide_core::Severity;
-use opentide_yara::{Context, Dialect, analyze_with};
+use opentide_yara::{Context, Dialect, YaraXSyntax, analyze_with};
 use std::fs;
 use std::path::PathBuf;
 
@@ -54,6 +54,7 @@ fn every_public_rule_file_is_clean() {
             let ctx = Context {
                 dialect,
                 profile: None,
+                yara_x_syntax: YaraXSyntax::Allowed,
             };
             let found = analyze_with(text, &ctx).diagnostics;
             assert!(
