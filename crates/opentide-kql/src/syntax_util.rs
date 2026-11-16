@@ -164,3 +164,42 @@ pub(crate) fn legacy_kind(kind: K) -> &'static str {
 pub(crate) fn is_operator(kind: K) -> bool {
     legacy_kind(kind) != "operator"
 }
+
+/// The token at `offset`, as rowan's `token_at_offset` gives it: with `left`,
+/// the one that ends there or holds it (the first token at offset 0); else
+/// the one that starts there or holds it (the last token at the end of the
+/// text). A scan of the tokens in order, on rowan's iterative preorder:
+/// `token_at_offset` recurses once per tree level, and a 20,000-term chain
+/// is a tree that deep (it overflowed a 1 MB stack).
+pub(crate) fn token_at(
+    root: &SyntaxNode,
+    offset: rowan::TextSize,
+    left: bool,
+) -> Option<SyntaxToken> {
+    let mut last = None;
+    for token in root
+        .descendants_with_tokens()
+        .filter_map(NodeOrToken::into_token)
+    {
+        let range = token.text_range();
+        let here = if left {
+            range.start() < offset && offset <= range.end()
+                || (offset == range.start() && last.is_none())
+        } else {
+            range.start() <= offset && offset < range.end()
+        };
+        if here {
+            return Some(token);
+        }
+        if range.start() > offset {
+            break;
+        }
+        last = Some(token);
+    }
+    // Past the last token: the last one (right) or none found (left).
+    if left {
+        None
+    } else {
+        last.filter(|t| t.text_range().end() == offset)
+    }
+}

@@ -1,6 +1,5 @@
 ---
 source: crates/opentide-cli/tests/render.rs
-expression: candidate
 ---
 [1m[31merror[deployment_state_uuid_mismatch][0m[1m: <WS>/.opentide/states/deployment/[0m
   [1m1fe3b71b-24be-4604-9b91-72cb32381bfc.json records object_uuid[0m
@@ -77,7 +76,7 @@ expression: candidate
    [34m╭─▶[0m ]8;;file://<WS>/objects/rules/covert-tunnel-rule-0088.yaml\objects/rules/covert-tunnel-rule-0088.yaml:62:7]8;;\
 [34m   │[0m
 [34m61 │[0m     query: |
-[34m62 │[0m       union [35m*[0m [1m[35m|[0m take [33m1[0m
+[34m62 │[0m       [1m[35munion[0m [35m*[0m [1m[35m|[0m take [33m1[0m
 [34m   │[0m       [1m[31m━━━━━━━━━━━━━━━━[0m
 [34m   │[0m
    [34m╰─[0m [1m[36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
@@ -131,7 +130,7 @@ expression: candidate
    [34m╭─▶[0m ]8;;file://<WS>/objects/rules/elevated-relay-rule-0034.yaml\objects/rules/elevated-relay-rule-0034.yaml:64:21]8;;\
 [34m   │[0m
 [34m63 │[0m     query: |
-[34m64 │[0m       [96mSecurityEvent[0m [1m[35m|[0m where (
+[34m64 │[0m       [96mSecurityEvent[0m [1m[35m|[0m [1m[35mwhere[0m (
 [34m   │[0m                     [1m[31m━━━━━━━━━[0m
 [34m   │[0m
    [34m╰─[0m [1m[36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
@@ -215,7 +214,7 @@ expression: candidate
    [34m╭─▶[0m ]8;;file://<WS>/objects/rules/encoded-loader-rule-0037.yaml\objects/rules/encoded-loader-rule-0037.yaml:50:7]8;;\
 [34m   │[0m
 [34m49 │[0m       [96mSecurityEvent[0m
-[34m50 │[0m       [1m[35m|[0m where (
+[34m50 │[0m       [1m[35m|[0m [1m[35mwhere[0m (
 [34m   │[0m       [1m[31m━━━━━━━━━[0m
 [34m   │[0m
    [34m╰─[0m [1m[36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
@@ -808,7 +807,7 @@ expression: candidate
    [34m╭─▶[0m ]8;;file://<WS>/objects/rules/staged-injection-rule-0106.yaml\objects/rules/staged-injection-rule-0106.yaml:58:7]8;;\
 [34m   │[0m
 [34m57 │[0m     query: |
-[34m58 │[0m       union [35m*[0m [1m[35m|[0m take [33m1[0m
+[34m58 │[0m       [1m[35munion[0m [35m*[0m [1m[35m|[0m take [33m1[0m
 [34m   │[0m       [1m[31m━━━━━━━━━━━━━━━━[0m
 [34m   │[0m
    [34m╰─[0m [1m[36mhelp:[0m the KQL reference: https://learn.microsoft.com/kusto/query/
