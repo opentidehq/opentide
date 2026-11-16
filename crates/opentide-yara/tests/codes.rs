@@ -927,7 +927,15 @@ fn profiles() {
             "{module}"
         );
     }
-    for module in ["dotnet", "macho", "lnk", "zip"] {
+    let catalog = opentide_yara::catalog::Catalog::cached();
+    let confirmed = &catalog.profiles["bitdefender"].confirmed_modules;
+    let unconfirmed: Vec<&String> = catalog
+        .known_modules
+        .iter()
+        .filter(|m| !confirmed.contains(m))
+        .collect();
+    assert_eq!(unconfirmed.len(), catalog.known_modules.len() - 5);
+    for module in unconfirmed {
         assert_eq!(
             codes(
                 &format!("import \"{module}\" rule a {{ condition: true }}"),
