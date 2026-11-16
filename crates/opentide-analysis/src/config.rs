@@ -50,6 +50,10 @@ pub fn is_configuration_path(path: &str) -> bool {
 
 /// `issues`, the host's findings on `text`, each at its place in the buffer.
 pub fn place_configuration_issues(text: &str, issues: Vec<ConfigIssue>) -> Vec<Diagnostic> {
+    opentide_core::with_line_index(text, || place_all(text, issues))
+}
+
+fn place_all(text: &str, issues: Vec<ConfigIssue>) -> Vec<Diagnostic> {
     let parsed = ImDocument::parse(text);
     issues
         .into_iter()

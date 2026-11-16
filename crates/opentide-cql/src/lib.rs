@@ -86,11 +86,15 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 }
 
 /// Analyze a CQL query where `ctx` says it runs.
+pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
+    opentide_core::with_line_index(source, || analyze_lines(source, *ctx))
+}
+
 #[expect(
     clippy::expect_used,
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
-pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
+fn analyze_lines(source: &str, ctx: Context) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let (root, parse) = parser::parse(source);
     let mut diagnostics = Vec::new();
@@ -102,7 +106,7 @@ pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
             span_to_range(source, span),
         ));
     }
-    diagnostics.extend(check::diagnostics(&root, &parse.errors, source, *ctx));
+    diagnostics.extend(check::diagnostics(&root, &parse.errors, source, ctx));
     AnalyzeResult {
         diagnostics,
         tokens: highlight::tokens(&spec, &root, source),

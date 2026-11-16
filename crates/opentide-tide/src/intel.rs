@@ -373,11 +373,15 @@ fn document_uuid(source: &str) -> Option<String> {
     (token.len() == 36).then(|| token.to_string())
 }
 
+pub fn inlay_hints(source: &str, workspace: &[IndexedObject]) -> Vec<TideInlay> {
+    opentide_core::with_line_index(source, || inlay_hints_lines(source, workspace))
+}
+
 #[expect(
     clippy::expect_used,
     reason = "a regex literal: an invalid pattern fails every test that reaches it"
 )]
-pub fn inlay_hints(source: &str, workspace: &[IndexedObject]) -> Vec<TideInlay> {
+fn inlay_hints_lines(source: &str, workspace: &[IndexedObject]) -> Vec<TideInlay> {
     let self_uuid = document_uuid(source);
     let re = regex::Regex::new(
         r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",

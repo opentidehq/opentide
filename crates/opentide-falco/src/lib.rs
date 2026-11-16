@@ -119,11 +119,17 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_with(source, &Context::default())
 }
 
+/// Analyze a condition where `ctx` says it runs. The findings' ranges come
+/// from one line table ([`opentide_core::with_line_index`]).
+pub fn analyze_with(text: &str, ctx: &Context) -> AnalyzeResult {
+    opentide_core::with_line_index(text, || analyze_lines(text, ctx))
+}
+
 #[expect(
     clippy::expect_used,
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
-pub fn analyze_with(text: &str, ctx: &Context) -> AnalyzeResult {
+fn analyze_lines(text: &str, ctx: &Context) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     AnalyzeResult {
         diagnostics: condition_diagnostics(text, ctx),
@@ -818,11 +824,15 @@ const OUTPUT_PLACEHOLDERS: &[&str] = &["container.info"];
 /// (`eventformatter.cpp`) reads it: an optional leading `*`; each `%` takes an
 /// optional length, then the longest text that parses as a field or a
 /// transformer and compiles (so `%proc.namex` is `proc.name` then `x`).
+pub fn analyze_output(text: &str, ctx: &Context) -> AnalyzeResult {
+    opentide_core::with_line_index(text, || analyze_output_lines(text, ctx))
+}
+
 #[expect(
     clippy::expect_used,
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
-pub fn analyze_output(text: &str, ctx: &Context) -> AnalyzeResult {
+fn analyze_output_lines(text: &str, ctx: &Context) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let catalog = Catalog::cached();
     let mut diagnostics = Vec::new();
