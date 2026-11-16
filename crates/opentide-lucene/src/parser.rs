@@ -11,9 +11,11 @@ use opentide_parse::{
 
 /// Nesting (`(`) deeper than this is one error. The tree-sitter engine took
 /// 10 000 levels; the floor every language keeps is `deep_queries`'
-/// `NESTING_CEILING` (1,000), and a level is at most three nodes, far under
-/// `MAX_TREE_DEPTH`.
-pub(crate) const MAX_DEPTH: u32 = 1_024;
+/// `NESTING_CEILING` (1,000). A level opens at most four nodes (a group, its
+/// clause list, a modified clause and a field query), so the tree stays
+/// under `MAX_TREE_DEPTH` (4,096) at this limit: at 1,024 levels a valid
+/// query got `TreeTooDeep` instead.
+pub(crate) const MAX_DEPTH: u32 = 1_000;
 
 /// Error messages the analysis maps to its own text.
 pub(crate) const MISSING_PAREN: &str = "missing `)`";
@@ -396,6 +398,9 @@ mod tests {
         for source in [
             format!("{}a:1{}", "(".repeat(levels), ")".repeat(levels)),
             format!("a:{}b{}", "(".repeat(levels), ")".repeat(levels)),
+            // The most nodes a level opens: a group, its clause list, a
+            // modified clause and a field query.
+            format!("{}b{}", "+a:(".repeat(levels), " c)".repeat(levels)),
         ] {
             let (_, parse) = parse(&source);
             assert!(parse.errors.is_empty(), "{:?}", &parse.errors[..1]);
@@ -431,6 +436,11 @@ mod tests {
             (
                 "modified groups",
                 format!("{}b{}", "+a:(".repeat(levels), ")".repeat(levels)),
+                true,
+            ),
+            (
+                "modified groups of two clauses",
+                format!("{}b{}", "+a:(".repeat(levels), " c)".repeat(levels)),
                 true,
             ),
             ("unclosed", "(".repeat(levels), false),
