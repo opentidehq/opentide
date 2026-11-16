@@ -290,6 +290,11 @@ pub struct LineIndex<'a> {
     starts: Vec<usize>,
     /// Lines that are pure ASCII, where a column is a byte distance.
     ascii: Vec<bool>,
+    /// Each non-ASCII character's byte offset and the running sum, up to and
+    /// including it, of its UTF-8 length minus its UTF-16 length: a column
+    /// is the byte distance less that sum over the characters before it, so
+    /// a long non-ASCII line needs no scan.
+    wide: Vec<(usize, usize)>,
 }
 
 impl<'a> LineIndex<'a> {
@@ -302,10 +307,29 @@ impl<'a> LineIndex<'a> {
                 source[starts[line]..end].is_ascii()
             })
             .collect();
+        let mut excess = 0;
+        let wide = source
+            .char_indices()
+            .filter(|(_, c)| !c.is_ascii())
+            .map(|(i, c)| {
+                excess += c.len_utf8() - c.len_utf16();
+                (i, excess)
+            })
+            .collect();
         Self {
             source,
             starts,
             ascii,
+            wide,
+        }
+    }
+
+    /// The excess (UTF-8 minus UTF-16 length) of the characters before byte
+    /// `offset`, a char boundary.
+    fn excess_before(&self, offset: usize) -> usize {
+        match self.wide.partition_point(|&(at, _)| at < offset) {
+            0 => 0,
+            n => self.wide[n - 1].1,
         }
     }
 
@@ -321,7 +345,7 @@ impl<'a> LineIndex<'a> {
         let character = if self.ascii[line] {
             (offset - start) as u32
         } else {
-            utf16_len(&self.source[start..offset])
+            (offset - start - (self.excess_before(offset) - self.excess_before(start))) as u32
         };
         Position {
             line: line as u32,
@@ -1988,6 +2012,30 @@ mod tests {
                 "{offset}"
             );
         }
+    }
+
+    /// A long non-ASCII line converts each offset by binary search, not by a
+    /// scan from the line's start (8,000 kuery diagnostics on one line of
+    /// non-ASCII text took 9 s).
+    #[test]
+    fn a_long_non_ascii_line_converts_in_linear_time() {
+        let text = "\u{e9}:\"\u{fc} ".repeat(50_000);
+        let index = LineIndex::new(&text);
+        let started = std::time::Instant::now();
+        let mut last = Position::new(0, 0);
+        for offset in (0..text.len()).step_by(7) {
+            last = index.position(offset);
+        }
+        assert!(last.character > 0);
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            started.elapsed()
+        );
+        assert_eq!(
+            index.position(text.len()),
+            offset_to_position(&text, text.len())
+        );
     }
 
     /// `LineIndex` gives exactly what the scanning functions give, at every

@@ -176,10 +176,56 @@ fn sources() -> Vec<Source> {
     for q in BROKEN {
         add("broken", (*q).to_owned());
     }
+    for q in generated() {
+        add("generated", q);
+    }
     texts
         .into_iter()
         .map(|(name, text)| Source { name, text })
         .collect()
+}
+
+/// Clauses of every construct the corpus uses, valid each on its own.
+const CLAUSES: &[&str] = &[
+    "a:1",
+    "process.name:\"cmd.exe\"",
+    "source.port >= 1024",
+    "bytes < 10",
+    "x:(a or b)",
+    "x:(a and not b)",
+    "user:{ name:x and id:1 }",
+    "f:*",
+    "not g:2",
+    "(h:1 and i:2)",
+    "msg:foo bar",
+    "t:true",
+    "n:null",
+    "w:a*b",
+    "free",
+    "\"quoted text\"",
+    "e:a\\:b",
+    "e:\\u00e9",
+    "p:/a/b",
+    "k:or",
+];
+
+/// Valid queries composed from [`CLAUSES`]: every pair joined by each
+/// operator, and triples with the first two grouped, in both cases of the
+/// operator and with odd spacing, so the differential reaches past the corpus.
+fn generated() -> Vec<String> {
+    let ops = [" and ", " or ", " AND ", " Or ", " and not ", "\tor\n"];
+    let mut out = Vec::new();
+    for (i, a) in CLAUSES.iter().enumerate() {
+        for (j, b) in CLAUSES.iter().enumerate() {
+            let op = ops[(i + j) % ops.len()];
+            out.push(format!("{a}{op}{b}"));
+            let c = CLAUSES[(i * 7 + j * 3) % CLAUSES.len()];
+            let op2 = ops[(i * 5 + j) % ops.len()];
+            out.push(format!("({a}{op}{b}){op2}{c}"));
+            out.push(format!("not ({a}{op2}{c})"));
+        }
+    }
+    out
 }
 
 fn yaml_files(dir: &Path) -> Vec<PathBuf> {
@@ -386,7 +432,7 @@ fn pure_rust_parser_matches_tree_sitter() {
     let files = sources();
     let mut config = Config::new(&verdict, &token_ranges, SAMPLES);
     config.sentences = 3_000;
-    config.mutations_per_input = 20;
+    config.mutations_per_input = 40;
     config.max_prefixes = 40;
     config.max_offsets = 32;
     // `OPENTIDE_KUERY_SEED=<n>` runs another round (the default is the committed seed 1).
