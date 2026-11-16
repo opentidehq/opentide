@@ -1,0 +1,62 @@
+---
+source: crates/opentide-spl/tests/rest_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/inputlookup_command__valid.spl
+---
+SOURCE_FILE@0..61
+  PIPELINE@0..61
+    PIPE@0..1 "|"
+    WHITESPACE@1..2 " "
+    INPUTLOOKUP_COMMAND@2..61
+      INPUTLOOKUP_KW@2..13 "inputlookup"
+      WHITESPACE@13..14 " "
+      COMMAND_OPTION@14..22
+        IDENTIFIER@14..20
+          IDENT@14..20 "append"
+        EQ@20..21 "="
+        IDENTIFIER@21..22
+          IDENT@21..22 "t"
+      WHITESPACE@22..23 " "
+      IDENTIFIER@23..28
+        IDENT@23..28 "t.csv"
+      WHITESPACE@28..29 " "
+      WHERE_KW@29..34 "where"
+      WHITESPACE@34..35 " "
+      SEARCH_EXPRESSION@35..61
+        SEARCH_GROUP@35..51
+          L_PAREN@35..36 "("
+          SEARCH_EXPRESSION@36..50
+            FIELD_VALUE@36..41
+              FIELD_REF@36..37
+                IDENTIFIER@36..37
+                  IDENT@36..37 "x"
+              EQ@37..38 "="
+              FIELD_VALUE_RHS@38..41
+                STR@38..41
+                  STRING_TOKEN@38..41 "\"a\""
+            WHITESPACE@41..42 " "
+            SEARCH_BOOLEAN@42..44
+              OR_KW@42..44 "OR"
+            WHITESPACE@44..45 " "
+            FIELD_VALUE@45..50
+              FIELD_REF@45..46
+                IDENTIFIER@45..46
+                  IDENT@45..46 "x"
+              EQ@46..47 "="
+              FIELD_VALUE_RHS@47..50
+                STR@47..50
+                  STRING_TOKEN@47..50 "\"b\""
+          R_PAREN@50..51 ")"
+        WHITESPACE@51..52 " "
+        SEARCH_BOOLEAN@52..55
+          AND_KW@52..55 "AND"
+        WHITESPACE@55..56 " "
+        FIELD_VALUE@56..61
+          FIELD_REF@56..57
+            IDENTIFIER@56..57
+              IDENT@56..57 "y"
+          LE@57..59 "<="
+          FIELD_VALUE_RHS@59..61
+            NUMBER@59..61
+              NUMBER_TOKEN@59..61 "60"
+--

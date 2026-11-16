@@ -1,0 +1,41 @@
+---
+source: crates/opentide-spl/tests/table_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/rename_item__valid.spl
+---
+SOURCE_FILE@0..41
+  PIPELINE@0..41
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    RENAME_COMMAND@13..41
+      RENAME_KW@13..19 "rename"
+      WHITESPACE@19..20 " "
+      RENAME_ITEM@20..30
+        GLOB@20..25
+          GLOB_TOKEN@20..25 "DNS.*"
+        WHITESPACE@25..26 " "
+        AS_KW@26..28 "as"
+        WHITESPACE@28..29 " "
+        GLOB@29..30
+          GLOB_TOKEN@29..30 "*"
+      COMMA@30..31 ","
+      WHITESPACE@31..32 " "
+      RENAME_ITEM@32..41
+        IDENTIFIER@32..36
+          IDENT@32..36 "host"
+        WHITESPACE@36..37 " "
+        AS_KW@37..39 "AS"
+        WHITESPACE@39..40 " "
+        IDENTIFIER@40..41
+          IDENT@40..41 "h"
+--

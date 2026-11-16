@@ -72,8 +72,7 @@ def ledger() -> dict[str, dict]:
             or entry.get("check") not in ("yara_x", "portable")
         ):
             sys.exit(
-                f"[[yara]] {entry.get('id')}: needs an id, a reason, "
-                "and check = yara_x or portable"
+                f"[[yara]] {entry.get('id')}: needs an id, a reason, and check = yara_x or portable"
             )
         for path in entry.get("paths", []):
             out[path] = entry
