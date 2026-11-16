@@ -168,6 +168,10 @@ fn primary(p: &mut P<'_>) -> Option<CompletedMarker> {
             p.done(m, K::PAREN_EXPR)
         }
         K::QUOTED_IDENT => name_ref(p),
+        // In an expression, `dynamic` and `toscalar` only open
+        // `dynamic(...)` and `toscalar(...)`: never a column, as in the old
+        // grammar (found by the switch's full differential, seed 3).
+        K::DYNAMIC_KW | K::TOSCALAR_KW => return None,
         _ if p.name_at(0) => {
             if p.nth(1) == K::L_PAREN {
                 function_call(p)

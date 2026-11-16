@@ -361,3 +361,27 @@ fn a_hyphen_keyword_that_starts_an_expression_is_a_subtraction() {
         );
     }
 }
+
+/// Found by the switch's full differential (seed 3): in an expression or as
+/// the name an assignment makes, `dynamic` and `toscalar` are no column, as
+/// the old grammar read them (`split(a, "b", dynamic -1)` is broken); they
+/// still open their literal and call, and `dynamic` is still a table name.
+#[test]
+fn dynamic_and_toscalar_are_not_columns() {
+    for source in [
+        "T | where dynamic == 1",
+        "T | where toscalar == 1",
+        "T | project dynamic",
+        "T | extend dynamic = 1",
+        "T | extend x = split(a, \"b\", dynamic -1)[-1]",
+    ] {
+        assert!(!errors(source).is_empty(), "{source}");
+    }
+    for source in [
+        "dynamic",
+        "T | extend x = dynamic([1]), y = toscalar(T | count)",
+        "datatable(a: dynamic) [dynamic(1)]",
+    ] {
+        assert!(errors(source).is_empty(), "{source}: {:?}", errors(source));
+    }
+}

@@ -7,7 +7,7 @@
 use crate::highlight::highlight_spans;
 use crate::parser::parse_once;
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
-use crate::syntax_util::{is_operator, legacy_kind, span, text};
+use crate::syntax_util::{is_operator, legacy_kind, span, text, token_at};
 use crate::{
     Catalog, Hir, HirOp, TYPED_LITERAL_TYPES, check_table_named, overlay_catalog_captures, perf,
     schema,
@@ -55,6 +55,7 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
         &mut diagnostics,
     );
     if let Some(error) = parsed.errors.first() {
+        with_typed_literal_hint(&mut diagnostics);
         let boundary = lines.position(usize::from(quiet_from(&root, error)));
         quiet_after_the_error(&mut diagnostics, boundary);
     }
@@ -80,8 +81,8 @@ fn quiet_from(root: &SyntaxNode, error: &SyntaxError) -> rowan::TextSize {
     let at = error.gap.end();
     // The tokens on both sides of the error: the operator the error ends is
     // as much a fragment as the one it starts.
-    let before = root.token_at_offset(error.gap.start()).left_biased();
-    let after = root.token_at_offset(at).right_biased();
+    let before = token_at(root, error.gap.start(), true);
+    let after = token_at(root, at, false);
     [before, after]
         .into_iter()
         .flatten()
@@ -102,7 +103,7 @@ fn quiet_from(root: &SyntaxNode, error: &SyntaxError) -> rowan::TextSize {
 /// operator that holds it, the parser's recovery has made nodes of fragments
 /// (`| summ` is an unknown operator, a half-typed word a table), so only the
 /// findings that end before `boundary` (and before the error) are kept with
-/// the error (the first diagnostic), and the other `kql_parse_error`s.
+/// the error (the first diagnostic).
 fn quiet_after_the_error(diagnostics: &mut Vec<Diagnostic>, boundary: opentide_core::Position) {
     let key = |p: opentide_core::Position| (p.line, p.character);
     let Some(error) = diagnostics.first().map(|d| d.range.start) else {
@@ -115,13 +116,28 @@ fn quiet_after_the_error(diagnostics: &mut Vec<Diagnostic>, boundary: opentide_c
     };
     let mut first = true;
     diagnostics.retain(|d| {
-        // A finding about the syntax error itself (`datetime(` without its
-        // `)` on the line) says more than the error: kept, as the old engine
-        // kept it.
-        let keep = first || d.code == codes::KQL_PARSE_ERROR || key(d.range.end) <= key(boundary);
+        let keep = first || key(d.range.end) <= key(boundary);
         first = false;
         keep
     });
+}
+
+/// When the syntax error lies in a `datetime(` the typed-literal check
+/// explains (its value and `)` not on one line), the explanation joins the
+/// error's message: it says more than the error, and the quieting would drop
+/// it as a second finding in the broken operator (the old engine gave it
+/// where its tree held the call, which this tree does more often).
+fn with_typed_literal_hint(diagnostics: &mut [Diagnostic]) {
+    let key = |p: opentide_core::Position| (p.line, p.character);
+    let Some((error, rest)) = diagnostics.split_first_mut() else {
+        return;
+    };
+    let at = key(error.range.start);
+    if let Some(hint) = rest.iter().find(|d| {
+        d.code == codes::KQL_PARSE_ERROR && key(d.range.start) <= at && at <= key(d.range.end)
+    }) {
+        error.message = format!("{}; {}", error.message, hint.message);
+    }
 }
 
 /// The column pass alone (`opentide_kql::columns`), on the memoised parse.
@@ -252,13 +268,12 @@ fn syntax_error(lines: &LineIndex, root: &SyntaxNode, error: &SyntaxError) -> Di
         message.push_str(&format!("; expected {expected}"));
     }
     let at = error.gap.end();
-    let mut next = root.token_at_offset(at).right_biased();
-    while let Some(token) = &next {
-        if !matches!(token.kind(), K::WHITESPACE | K::COMMENT) && token.text_range().start() >= at {
-            break;
-        }
-        next = token.next_token();
-    }
+    // The first significant token from `at` on, by an iterative scan: rowan's
+    // `token_at_offset` and `next_token` recurse once per tree level.
+    let next = root
+        .descendants_with_tokens()
+        .filter_map(NodeOrToken::into_token)
+        .find(|t| !matches!(t.kind(), K::WHITESPACE | K::COMMENT) && t.text_range().start() >= at);
     // Past the last token, the error is on that token: an empty range at the end
     // of the text, often a blank line, is not visible in an editor.
     let range = next
@@ -559,6 +574,44 @@ mod tests {
                 d.range.end.character
             ),
             (1, 22, 23)
+        );
+    }
+
+    /// Broken input is not noisier, and the `datetime(` hint is not lost: it
+    /// joins the syntax error it explains (#1230).
+    #[test]
+    fn the_typed_literal_hint_joins_the_syntax_error() {
+        for source in ["print x = datetime(2024-01-01", "print a = datetime(2024-"] {
+            let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+            let diagnostics = analyze(source, &catalog).diagnostics;
+            assert_eq!(diagnostics.len(), 1, "{source}: {diagnostics:?}");
+            assert!(
+                diagnostics[0]
+                    .message
+                    .contains("'datetime(' starts a typed literal"),
+                "{source}: {diagnostics:?}"
+            );
+        }
+    }
+
+    /// The scope checks read tokens, not the tree: they stay on broken input,
+    /// as on the old engine (`union *` is the shape they exist for).
+    #[test]
+    fn the_scope_checks_run_on_broken_input() {
+        let source = "search \"a\" | union *";
+        let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+        let codes: Vec<String> = analyze(source, &catalog)
+            .diagnostics
+            .into_iter()
+            .map(|d| d.code)
+            .collect();
+        assert_eq!(
+            codes,
+            [
+                codes::KQL_PARSE_ERROR,
+                codes::KQL_UNSCOPED_SEARCH,
+                codes::KQL_UNSCOPED_UNION
+            ]
         );
     }
 }

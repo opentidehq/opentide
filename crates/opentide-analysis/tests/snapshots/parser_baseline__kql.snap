@@ -12338,8 +12338,7 @@ kql_parse_error error 0:16-0:20 KQL syntax error: expected a number
 91..92 operator
 93..102 variable
 == corpus/kql/typed_literal__invalid.kql
-kql_parse_error error 0:27-0:29 KQL syntax error: expected `)`
-kql_parse_error error 0:10-0:29 'datetime(' starts a typed literal: write the value and ')' on the same line, directly after 'datetime'
+kql_parse_error error 0:27-0:29 KQL syntax error: expected `)`; 'datetime(' starts a typed literal: write the value and ')' on the same line, directly after 'datetime'
 0..5 keyword
 6..7 variable
 8..9 operator
@@ -13241,8 +13240,7 @@ kql_parse_error error 0:19-0:20 KQL syntax error: expected an expression
 44..46 number
 46..47 punctuation.bracket
 == oracles/kql/typed_literal_unclosed.broken.kql
-kql_parse_error error 0:27-0:29 KQL syntax error: expected `)`
-kql_parse_error error 0:10-0:29 'datetime(' starts a typed literal: write the value and ')' on the same line, directly after 'datetime'
+kql_parse_error error 0:27-0:29 KQL syntax error: expected `)`; 'datetime(' starts a typed literal: write the value and ')' on the same line, directly after 'datetime'
 0..5 keyword
 6..7 variable
 8..9 operator

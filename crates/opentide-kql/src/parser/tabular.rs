@@ -281,7 +281,10 @@ fn predicate(p: &mut P<'_>, kind: K) -> K {
 
 /// `name = value` or an expression.
 fn assignment_or_expr(p: &mut P<'_>) {
-    let named = (p.name_at(0) || p.at(K::QUOTED_IDENT)) && p.nth(1) == K::EQ;
+    // `dynamic` and `toscalar` name no column (see `expr::primary`).
+    let named = ((p.name_at(0) && !matches!(p.current(), K::DYNAMIC_KW | K::TOSCALAR_KW))
+        || p.at(K::QUOTED_IDENT))
+        && p.nth(1) == K::EQ;
     let tuple = p.at(K::L_PAREN) && p.nth(p.after_group(0)) == K::EQ;
     if named || tuple {
         assignment(p);
