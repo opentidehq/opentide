@@ -10,10 +10,6 @@
     missing_docs,
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
-#![expect(
-    clippy::too_many_lines,
-    reason = "engine dispatchers match every node kind in one function"
-)]
 
 mod keywords;
 mod markdown;
@@ -844,6 +840,7 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
 }
 
 /// [`generate_tm_language`] over explicit `(token, capture name)` pairs.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn generate_tm_language_from(
     language: LanguageId,
     spec: &HighlightSpec,

@@ -3195,6 +3195,7 @@ dependencies = [
  "opentide-kuery",
  "opentide-lucene",
  "opentide-spl",
+ "opentide-syntax",
  "opentide-tide",
  "opentide-yara",
  "opentide-yaral",
@@ -3369,6 +3370,7 @@ dependencies = [
  "regex",
  "reqwest",
  "ring",
+ "roxmltree",
  "rustls",
  "rustls-native-certs",
  "serde",
@@ -3406,9 +3408,12 @@ dependencies = [
 name = "opentide-cql"
 version = "0.12.0"
 dependencies = [
+ "logos",
  "opentide-core",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
+ "rowan",
  "serde",
  "toml 0.8.23",
  "tree-sitter",
@@ -3509,11 +3514,15 @@ dependencies = [
 name = "opentide-kuery"
 version = "0.12.0"
 dependencies = [
+ "insta",
+ "logos",
  "opentide-core",
  "opentide-ecs",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
  "regex",
+ "rowan",
  "tree-sitter",
 ]
 
@@ -4590,6 +4599,15 @@ dependencies = [
  "memoffset",
  "rustc-hash 1.1.0",
  "text-size",
+]
+
+[[package]]
+name = "roxmltree"
+version = "0.21.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9da7f59328b09405b181fee1018925fad50f157afb43c0c0f5c522c256dd5907"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
@@ -6580,6 +6598,7 @@ dependencies = [
  "opentide-schema",
  "opentide-workspace",
  "pyo3-introspection",
+ "rayon",
  "regex",
  "rustix",
  "schemars",

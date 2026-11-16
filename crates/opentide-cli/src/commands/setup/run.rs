@@ -542,7 +542,7 @@ pub fn skills(args: &SkillsArgs, paths: &Paths, cx: &Context<'_>) -> Report {
 }
 
 /// Installs `options` into `root` and writes what it staged, what it wrote
-/// before an error included, as the oracle wrote it.
+/// before an error included.
 fn install_now(
     options: &install::Options,
     root: &Path,

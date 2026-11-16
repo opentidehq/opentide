@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use opentide_compile::Json as Setting;
-use opentide_compile::promotion::{self, Error, LOGGER, NOT_PROMOTED_ADVICE, Settings};
+use opentide_compile::promotion::{self, Error, NOT_PROMOTED_ADVICE, Settings};
 use opentide_schema::node;
 
 use super::deploy_send::Lines;
@@ -72,7 +72,6 @@ fn emit(event: &Event) {
             path = path.as_str(),
             detail = detail.as_str(),
             advice = NOT_PROMOTED_ADVICE,
-            logger = LOGGER,
             "rule_not_promoted"
         ),
         Event::Info(name, fields) => {
@@ -90,10 +89,10 @@ fn emit(event: &Event) {
                 .map(|(_, value)| value.as_str());
             match (path, target, detail) {
                 (Some(path), Some(target), _) => {
-                    tracing::info!(path, target, logger = LOGGER, "{name}");
+                    tracing::info!(path, target, "{name}");
                 }
-                (_, _, Some(detail)) => tracing::info!(detail, logger = LOGGER, "{name}"),
-                _ => tracing::info!(logger = LOGGER, "{name}"),
+                (_, _, Some(detail)) => tracing::info!(detail, "{name}"),
+                _ => tracing::info!("{name}"),
             }
         }
     }
@@ -106,14 +105,14 @@ fn invalid_target(target: &Setting, detail: &str) {
     let event = "invalid_promotion_target";
     match target {
         Setting::Int(number) => {
-            tracing::error!(target = number, detail, logger = LOGGER, "{event}");
+            tracing::error!(target = number, detail, "{event}");
         }
         Setting::Float(number) => {
-            tracing::error!(target = number, detail, logger = LOGGER, "{event}");
+            tracing::error!(target = number, detail, "{event}");
         }
         other => {
             let text = setting_text(other);
-            tracing::error!(target = text.as_str(), detail, logger = LOGGER, "{event}");
+            tracing::error!(target = text.as_str(), detail, "{event}");
         }
     }
 }

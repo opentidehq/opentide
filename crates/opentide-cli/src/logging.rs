@@ -66,10 +66,6 @@ impl LogLayer {
     }
 }
 
-/// The field naming the Python module whose event a port logs: a JSON line
-/// writes it as `logger`, after the event, as structlog does.
-pub const LOGGER_FIELD: &str = "logger";
-
 /// The field marking an ERROR event that Python logs as `critical`: a JSON
 /// line's `level` reads `critical`, a text line `error:` as for any error.
 pub const CRITICAL_FIELD: &str = "critical";
@@ -201,38 +197,22 @@ impl Visit for Fields {
 impl LogLayer {
     /// One line for an event: `label: Event · key: value`.
     ///
-    /// Two fields describe the event rather than belong to it, and no text
-    /// line prints them: [`LOGGER_FIELD`], the Python module whose event a
-    /// port logs (a JSON line names it after the event, as structlog does),
-    /// and [`CRITICAL_FIELD`], set on an ERROR event Python logs as
-    /// `critical` (its JSON line's `level`; a text line reads `error:`).
+    /// [`CRITICAL_FIELD`] describes the event rather than belongs to it, and
+    /// no text line prints it: it is set on an ERROR event that is `critical`
+    /// (its JSON line's `level`; a text line reads `error:`).
     fn line(&self, level: Level, fields: &Fields) -> String {
-        let logger = fields
-            .pairs
-            .iter()
-            .find(|(key, _)| key == LOGGER_FIELD)
-            .map(|(_, value)| value.text());
         let critical = level == Level::ERROR
             && fields
                 .pairs
                 .iter()
                 .any(|(key, value)| key == CRITICAL_FIELD && *value == Value::Bool(true));
-        let own = || {
-            fields
-                .pairs
-                .iter()
-                .filter(|(key, _)| key != LOGGER_FIELD && key != CRITICAL_FIELD)
-        };
+        let own = || fields.pairs.iter().filter(|(key, _)| key != CRITICAL_FIELD);
         if self.config.json_lines {
-            // The event's fields, then the event, its logger, its level and
-            // its time, in the order structlog's JSON lines have them.
+            // The event's fields, then the event, its level and its time.
             let mut members: Vec<(String, Json)> = own()
                 .map(|(key, value)| (key.clone(), value.json()))
                 .collect();
             members.push(("event".to_owned(), Json::str(&fields.message)));
-            if let Some(logger) = logger {
-                members.push(("logger".to_owned(), Json::Str(logger)));
-            }
             let level = if critical { "critical" } else { label(level) };
             members.extend([
                 ("level".to_owned(), Json::str(level)),
@@ -352,22 +332,35 @@ mod tests {
     }
 
     #[test]
-    fn a_ported_event_names_its_logger_and_a_critical_level() {
+    fn a_critical_event_is_a_critical_level_and_names_no_logger() {
         let emit = || {
             tracing::error!(
                 detail = "Unset configuration variables: $A",
-                logger = "opentide.core.environment",
                 critical = true,
                 "environment_variable_missing"
             );
         };
         assert_eq!(
             capture(config(false, false, true), emit),
-            "{\"detail\":\"Unset configuration variables: $A\",\"event\":\"environment_variable_missing\",\"logger\":\"opentide.core.environment\",\"level\":\"critical\",\"timestamp\":\"12:00:00\"}\n"
+            "{\"detail\":\"Unset configuration variables: $A\",\"event\":\"environment_variable_missing\",\"level\":\"critical\",\"timestamp\":\"12:00:00\"}\n"
         );
         assert_eq!(
             capture(config(false, false, false), emit),
             "error: Environment variable missing · detail: Unset configuration variables: $A\n"
+        );
+    }
+
+    #[test]
+    fn a_missing_value_is_no_field() {
+        let emit = || {
+            let rule: Option<&str> = None;
+            let status: Option<u16> = None;
+            tracing::warn!(rule, status_code = status, "elastic_import_window_widened");
+            tracing::warn!(rule = Some("R"), status_code = Some(503u16), "x");
+        };
+        assert_eq!(
+            capture(config(false, false, false), emit),
+            "warning: Elastic import window widened\nwarning: X · rule: R · status_code: 503\n"
         );
     }
 

@@ -21,6 +21,12 @@ fn words(words: &[&str]) -> Vec<String> {
     words.iter().map(|word| (*word).to_owned()).collect()
 }
 
+/// `vocab malapi <args>` as the command line parses it.
+fn parse(args: &[String]) -> Result<Options, clap::Error> {
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    crate::parse_args::<Options>(&args)
+}
+
 /// The vocabulary the site's pages are merged into: GetDriveTypeA with an
 /// older description, IsDebuggerPresent as the site has it, Gone (no longer
 /// listed) and Dead (removed before).
@@ -288,7 +294,8 @@ fn check_exits_1_on_drift_apply_writes_and_syncs_and_then_check_passes() {
         "--now",
         NOW,
     ];
-    assert_eq!(super::super::main(&words(&args)), ExitCode::FAILURE);
+    let command = crate::parse_subcommand::<super::super::Cmd>(&args).unwrap();
+    assert_eq!(super::super::main(&command), ExitCode::FAILURE);
 
     assert!(run(&repo, &options(root, &fixtures, false, true)).unwrap());
     let written = read_vocab_document(&vocabulary(root)).unwrap();
@@ -309,7 +316,7 @@ fn check_exits_1_on_drift_apply_writes_and_syncs_and_then_check_passes() {
         run(&repo, &options(root, &fixtures, false, true)).unwrap(),
         "no changes to write"
     );
-    assert_eq!(super::super::main(&words(&args)), ExitCode::SUCCESS);
+    assert_eq!(super::super::main(&command), ExitCode::SUCCESS);
 }
 
 #[test]
@@ -381,7 +388,9 @@ fn the_options_are_checked() {
     assert!(parse(&words(&["--html-dir"])).is_err());
     assert!(parse(&words(&["--frobnicate"])).is_err());
     for delay in ["-1", "NaN", "inf", "soon", "1e300"] {
-        assert!(parse(&words(&["--delay", delay])).is_err(), "{delay}");
+        let error = parse(&words(&["--delay", delay])).unwrap_err().to_string();
+        assert!(error.contains("invalid value"), "{delay}: {error}");
+        assert!(error.contains(&format!("`{delay}`")), "{delay}: {error}");
     }
     let defaults = parse(&[]).unwrap();
     assert!(!defaults.check && !defaults.apply);

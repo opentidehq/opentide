@@ -138,7 +138,6 @@ exit: 1
   "detail": "rule 00000000-0000-4000-8047-000000000013 has no sentinel_one id for tenant \"***\" in <WS>/.opentide/states/deployment/00000000-0000-4000-8047-000000000013.json, so nothing is known to exist on that tenant and there is nothing to disablement. If a remote copy exists, it must be removed by hand.",
   "event": "external_id_missing",
   "level": "warning",
-  "logger": "opentide.deployment.external_ids",
   "platform": "sentinel_one",
   "tenant": "***",
   "timestamp": "0000-00-00 00:00:00",

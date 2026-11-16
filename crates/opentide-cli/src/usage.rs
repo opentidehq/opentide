@@ -125,6 +125,25 @@ fn tidy_context(error: &mut clap::Error, root: &Command, path: &[String]) {
     }
 }
 
+/// Whether clap shows `arg` as `name` ([`argument_name`]): `--long`, `-s` for
+/// an option with no long name, or a positional by its value name (`<NAME>`)
+/// or its id.
+fn is_shown_as(arg: &clap::Arg, name: &str) -> bool {
+    if let Some(long) = arg.get_long() {
+        return name.strip_prefix("--") == Some(long);
+    }
+    if let Some(short) = arg.get_short() {
+        return name.strip_prefix('-').is_some_and(|rest| {
+            let mut chars = rest.chars();
+            chars.next() == Some(short) && chars.next().is_none()
+        });
+    }
+    arg.get_id().as_str() == name
+        || arg
+            .get_value_names()
+            .is_some_and(|names| names.iter().any(|shown| shown.as_str() == name))
+}
+
 /// `--platform: choose from sentinel, …` for each missing required argument
 /// that takes one of a fixed set of values: clap names a missing argument and
 /// its usage but not its choices, which the oracle's missing-option error
@@ -140,11 +159,9 @@ fn choice_hints(error: &clap::Error, command: &Command) -> Vec<String> {
         .iter()
         .filter_map(|shown| {
             let name = argument_name(shown);
-            let arg = command.get_arguments().find(|arg| {
-                arg.get_long()
-                    .is_some_and(|long| name.strip_prefix("--") == Some(long))
-                    || (arg.get_long().is_none() && arg.get_id().as_str() == name)
-            })?;
+            let arg = command
+                .get_arguments()
+                .find(|arg| is_shown_as(arg, &name))?;
             let values: Vec<String> = arg
                 .get_possible_values()
                 .iter()
@@ -388,7 +405,7 @@ mod tests {
     }
 
     /// Every required option or argument with a fixed set of values names the
-    /// set when it is missing (the oracle did, in every mode).
+    /// set when it is missing, in every mode.
     #[test]
     fn framework_usage_a_missing_choice_lists_its_choices() {
         fn walk(command: &Command, path: &mut Vec<String>, found: &mut Vec<(String, String)>) {
@@ -438,6 +455,36 @@ mod tests {
             !plain.failure.message.contains("choose from"),
             "{}",
             plain.failure.message
+        );
+    }
+
+    /// The choices are found by how clap shows the argument, not by its id:
+    /// a positional with a value name of its own, and an option with a short
+    /// name only.
+    #[test]
+    fn framework_usage_choice_hints_find_an_argument_as_it_is_shown() {
+        use clap::Arg;
+        let command = Command::new("x")
+            .arg(
+                Arg::new("kind")
+                    .value_name("what")
+                    .required(true)
+                    .value_parser(["a", "b"]),
+            )
+            .arg(
+                Arg::new("level")
+                    .short('l')
+                    .required(true)
+                    .value_parser(["low", "high"]),
+            );
+        let Err(error) = command.clone().try_get_matches_from(["x"]) else {
+            panic!("x needs its arguments");
+        };
+        let mut hints = choice_hints(&error, &command);
+        hints.sort();
+        assert_eq!(
+            hints,
+            ["-l: choose from low, high", "what: choose from a, b"]
         );
     }
 
