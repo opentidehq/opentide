@@ -340,12 +340,12 @@ error[invalid_uuid]: UUID "bad-1" is not a valid UUIDv4
   │
   ╰─ help: replace it with a UUID v4: python -c "import uuid; print(uuid.uuid4())"
 
-error[esql_parse_error]: ES|QL syntax error near `|`
-   ╭─▶ objects/rules/lateral-pivot-rule-0104.yaml:76:32
+error[esql_parse_error]: ES|QL syntax error at the end of the query: expected an expression
+   ╭─▶ objects/rules/lateral-pivot-rule-0104.yaml:76:40
    │
 75 │     query: |
 76 │       FROM logs-* METADATA _id | WHERE (
-   │                                ━━━━━━━━━
+   │                                        ━
    │
    ╰─ help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
 

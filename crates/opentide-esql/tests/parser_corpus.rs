@@ -1,7 +1,7 @@
 //! The parser over every ES|QL file of the corpora: a lossless tree, and the
 //! verdict tree-sitter gave (an error or none).
 //!
-//! The parser is private to the crate (production still runs tree-sitter), so
+//! The parser is private to the crate, so
 //! this test includes its source.
 
 #![expect(dead_code, reason = "the included modules are used in part")]

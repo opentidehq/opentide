@@ -88,8 +88,9 @@ env:
 #
 #   build           `build`: the tests, xtask and the language server
 #   native          `native`: the `_native` extension
-#   engine-check    `engine-lint`: clippy and rustdoc
-#   wasi            `wasi`: the WASI module
+#   stubs           `stubs`: the extension with PyO3's introspection, xtask
+#   engine-check    `engine-lint`: clippy (native and wasm32) and rustdoc
+#   wasm            `wasm`: the browser module, the WASI server and command line
 #   full-set-Linux  `node`, `facade` and the nightly's Linux Rust jobs:
 #                   `conformance` saves it, by the nightly and on pushes to
 #                   development and integration/unified-core
@@ -124,8 +125,8 @@ jobs:
       skills: ${{ steps.plan.outputs.skills }}
       docs: ${{ steps.plan.outputs.docs }}
       node: ${{ steps.plan.outputs.node }}
-      wasi: ${{ steps.plan.outputs.wasi }}
       wasm: ${{ steps.plan.outputs.wasm }}
+      ts_packages: ${{ steps.plan.outputs.ts_packages }}
       grammars: ${{ steps.plan.outputs.grammars }}
       textmate: ${{ steps.plan.outputs.textmate }}
       gitlab: ${{ steps.plan.outputs.gitlab }}
@@ -134,6 +135,7 @@ jobs:
       vocab: ${{ steps.plan.outputs.vocab }}
       fields: ${{ steps.plan.outputs.fields }}
       schema_ui: ${{ steps.plan.outputs.schema_ui }}
+      stubs: ${{ steps.plan.outputs.stubs }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -236,7 +238,9 @@ jobs:
   engine-lint:
     name: Engine lint (fmt, clippy, doc)
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    # The wasm32 clippy alone when only build-wasm.sh or what the `wasm` job
+    # reads changed (`wasm` without `rust`).
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.wasm == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -247,7 +251,7 @@ jobs:
       CARGO_TERM_COLOR: always
       RUSTC_WRAPPER: sccache
       SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_CACHE_SIZE: 3G
       SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -263,18 +267,41 @@ jobs:
           cache: engine-check
 
       - name: rustfmt
+        if: needs.changes.outputs.rust == 'true'
         run: cargo fmt --all --check
 
       - name: clippy
+        if: needs.changes.outputs.rust == 'true'
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       # opentide-cli as xtask and the WASI build compile it, without its
       # `terminal` feature: the workspace-wide run above unifies it on.
       - name: clippy without the terminal feature
+        if: needs.changes.outputs.rust == 'true'
         run: cargo clippy --package opentide-cli --no-default-features --locked -- -D warnings
+
+      # The code only wasm32 compiles (libc_syscalls.rs, the wasip1 paths of
+      # opentide-lsp and opentide-cli), which the native clippy never sees:
+      # when the `wasm` job runs, with build-wasm.sh's wasi-sdk.
+      - name: clippy on the WebAssembly targets
+        if: needs.changes.outputs.wasm == 'true'
+        run: bash scripts/engine/build-wasm.sh clippy
+
+      # opentide-schema for the hosts the workspace run does not lint
+      # (UC-1.1): its `stubs` feature (PyO3's introspection, as `native`'s
+      # stubs check builds it) and the browser target, when
+      # opentide-schema is affected. The workspace run already unifies its
+      # `python` feature on (the binding turns it on).
+      - name: clippy on opentide-schema (stubs, wasm32)
+        if: contains(format(' {0} ', needs.changes.outputs.crates), ' opentide-schema ')
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo clippy --locked -p opentide-schema --all-targets --features stubs -- -D warnings
+          cargo clippy --locked -p opentide-schema --target wasm32-unknown-unknown -- -D warnings
 
       # Broken intra-doc links and the like fail the build.
       - name: rustdoc
+        if: needs.changes.outputs.rust == 'true'
         env:
           RUSTDOCFLAGS: "-D warnings"
         run: cargo doc --no-deps --workspace --locked
@@ -344,6 +371,68 @@ jobs:
           path: ${{ runner.temp }}/native/opentide-*.whl
           if-no-files-found: error
           retention-days: 3
+
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
+  # The stubs of opentide._native.models and opentide._native.sdk, which
+  # `lint`'s ty reads, are generated from the extension (UC-1.9, ADR 0011;
+  # UC-5.2b): xtask builds it with PyO3's introspection data, as Python 3.10
+  # (the abi3 floor) sees it, and fails when a committed stub differs. When
+  # the binding, opentide-schema, the facade, the stubs or the generator
+  # change (`stubs`: scripts/ci/changes.py), and on every push and nightly.
+  # A job of its own, not a step of `native`: the Python jobs wait for
+  # `native`, and this build (xtask, then the extension in the develop
+  # profile) took 8 minutes cold (#1141's regression). Its own compiler cache:
+  # neither the profile nor PYO3_PYTHON is another job's.
+  stubs:
+    name: Generated stubs (_native)
+    needs: changes
+    if: needs.changes.outputs.stubs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_STRIP: debuginfo
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: stubs
+
+      - name: Install mold
+        run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
+
+      - name: Python 3.10
+        id: python310
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.10"
+
+      - name: Generated stubs are up to date
+        env:
+          PYO3_PYTHON: ${{ steps.python310.outputs.python-path }}
+        run: cargo xtask stubs --check
 
       - name: Save the compiler cache
         if: ${{ !cancelled() }}
@@ -799,7 +888,7 @@ jobs:
   # (crates/opentide/): its docs with every feature, as docs.rs builds them,
   # and its API against the branch it merges into (cargo-semver-checks). Its
   # tests and doctests run in `build` with the tests'
-  # features (every feature but `stubs`, which schema.yml builds).
+  # features (every feature but `stubs`, which `native`'s stubs check builds).
   facade:
     name: Facade crate (every feature's docs, semver checks)
     needs: changes
@@ -949,58 +1038,71 @@ jobs:
         run: npm test
 
 
-  # The WASI build of the command line, the one module the VS Code extension
-  # runs (ADR 0007's amendment): wasm32-wasip1 with the wasi-sdk
-  # build-wasm.sh pins, its deflated size held to the .vsix's 15 MiB, and
-  # tenant commands through the module with @opentide/wasi-host performing
-  # their requests from the cassettes. Nightly and on Run workflow.
-  # (`cargo xtask golden check --runner wasi`, every golden case through the
-  # module, is no gate since the oracle policing left CI; it stays runnable
-  # by hand.)
-  wasi:
-    name: WASI command line (size, serve)
+  # Every WebAssembly artifact in one job, one wasi-sdk and one compiler cache:
+  # scripts/engine/build-wasm.sh builds the browser module (opentide-wasm,
+  # wasm-bindgen), the WASI language server and the WASI command line, the
+  # one module the VS Code extension runs (ADR 0007's amendment), whose
+  # deflated size is held to the .vsix's 15 MiB; then tenant commands through
+  # that module with @opentide/wasi-host performing their requests from the
+  # cassettes, and the npm packages build and pack. When the parser layer, a
+  # query-language crate, the WebAssembly crate, a WASI shim or the scripts
+  # change (the `wasm` area of changes.py: a C dependency gained or lost and
+  # the stack a deep parse needs show only here), and on every push and
+  # nightly. The native language server and command line, and the TypeScript
+  # client's tests against the native, worker and WASI servers, only when
+  # packages/ or the browser module change (`ts_packages`) and on every push and nightly: they check
+  # the client, not the parser. The WebAssembly targets' clippy is
+  # `engine-lint`'s. (`cargo xtask golden check --runner wasi`, every golden
+  # case through the module, is no gate since the oracle policing left CI; it
+  # stays runnable by hand.)
+  wasm:
+    name: WebAssembly (browser, WASI, npm packages)
     needs: changes
-    if: needs.changes.outputs.wasi == 'true'
+    if: needs.changes.outputs.wasm == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       contents: read
     env:
+      # build-wasm.sh adds its link arguments to these flags.
       RUSTFLAGS: "-Dwarnings"
       CARGO_TERM_COLOR: always
       RUSTC_WRAPPER: sccache
       SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_CACHE_SIZE: 3G
+      # The server stays up for the whole job: its statistics are the run's.
       SCCACHE_IDLE_TIMEOUT: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      # A family of its own (#841): the module's crates for wasm32-wasip1 in
-      # the `wasi` profile, which no other job builds. Saved by the nightly
-      # (and pushes to development), whose caches every branch reads.
+      # The `wasm` family: the wasm32 compiles, which no other family holds
+      # (the full set's is native), saved from a push to a base branch.
+      # wasm-bindgen is the prebuilt release; its version must match the
+      # wasm-bindgen crate in Cargo.lock.
       - name: Set up Rust
         id: sccache
         uses: ./.github/actions/rust-setup
         with:
           targets: wasm32-unknown-unknown wasm32-wasip1
-          tools: sccache@0.19.0,wasmtime@33.0.0
-          cache: wasi
-
-      # Builds target/wasm32-wasip1/wasi/opentide.wasm and fails over the
-      # budget; the sizes go to the step summary.
-      - name: The WASI module and its size
-        run: bash scripts/engine/build-wasm.sh cli
+          tools: sccache@0.19.0,wasm-bindgen@0.2.128
+          cache: wasm
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
-      # The cases that need the network, through the WASI module: tenant
-      # commands under `opentide serve` in Node's WASI, every request made by
-      # @opentide/wasi-host's FetchHost and answered from the golden cassettes
-      # (no network in the module; the extension host performs the requests).
+      # One wasi-sdk for the three: the browser module and the WASI language
+      # server (smoke-tested), then the command line, which fails over its
+      # budget; the sizes go to the step summary.
+      - name: The WebAssembly modules (browser, WASI server, WASI command line)
+        run: bash scripts/engine/build-wasm.sh browser wasi cli
+
+      # Tenant commands under `opentide serve` in Node's WASI, every request
+      # made by @opentide/wasi-host's FetchHost and answered from the golden
+      # cassettes (no network in the module; the extension host performs the
+      # requests).
       - name: Tenant commands through the host's opentide/fetch, in the WASI module
         env:
           OPENTIDE_WASI_CLI: target/wasm32-wasip1/wasi/opentide.wasm
@@ -1008,12 +1110,43 @@ jobs:
           (cd packages/wasi-host && npm ci)
           node --experimental-strip-types --test --test-name-pattern='^serve \(wasi\)' packages/wasi-host/src/index.test.ts
 
+      - name: npm packages build and pack
+        run: |
+          for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done
+          node scripts/engine/check-npm-packs.mjs
+
+      - name: Native language server and command line
+        if: needs.changes.outputs.ts_packages == 'true'
+        run: cargo build --locked -p opentide-lsp -p opentide-cli
+
+      # The extension host's half of `opentide/fetch` (W2): its HTTP stack on
+      # the loopback, the protocol, and `opentide serve` running tenant
+      # commands whose requests the host answers from the golden cassettes.
+      - name: wasi-host (opentide/fetch against opentide serve)
+        if: needs.changes.outputs.ts_packages == 'true'
+        env:
+          OPENTIDE_BIN: target/debug/opentide-cli
+        run: node --experimental-strip-types --test packages/wasi-host/src/index.test.ts
+
+      # node:wasi's path_open is a V8 fast API call whose allocation can start
+      # a GC inside the call, which segfaults node 22 once the WASI instances
+      # hold enough memory; plain calls do not.
+      - name: lsp-client (stdio, worker, wasi)
+        if: needs.changes.outputs.ts_packages == 'true'
+        env:
+          OPENTIDE_LSP_BIN: target/debug/opentide-lsp
+          OPENTIDE_WASI_BIN: target/wasm32-wasip1/release/opentide-lsp.wasm
+          OPENTIDE_WASM_GLUE: target/wasm-bindgen/opentide_wasm.js
+        run: >-
+          node --no-turbo-fast-api-calls --experimental-strip-types
+          --test packages/lsp-client/src/index.test.ts
+
       - name: Save the compiler cache
         if: ${{ !cancelled() }}
         uses: ./.github/actions/sccache-save
         with:
           key: ${{ steps.sccache.outputs.key }}
-          save: ${{ job.status == 'success' && ((github.event_name == 'schedule' || github.ref == 'refs/heads/development') && steps.sccache.outputs.cache-hit != 'true') }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
 
   # The vendored parser.c of every grammar is what tree-sitter-cli generates
   # from its grammar.js (crates/AGENTS.md: never hand-edited).
@@ -1535,15 +1668,6 @@ jobs:
     uses: ./.github/workflows/oracle.yml
     secrets: inherit
 
-  schema:
-    name: Schema
-    needs: changes
-    if: needs.changes.outputs.mode == 'nightly'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/schema.yml
-
-
   # Every engine crate builds from its packaged sources, as it will from
   # crates.io: a crate that reads a file outside OPENTIDE_ASSETS fails here, not
   # at release. The binding (bindings/python/, opentide-native), the tooling (xtask)
@@ -1719,94 +1843,6 @@ jobs:
         with:
           key: ${{ steps.sccache.outputs.key }}
           save: ${{ job.status == 'success' && ((github.event_name == 'schedule' || github.ref == 'refs/heads/development' || github.ref == 'refs/heads/integration/unified-core') && steps.sccache.outputs.cache-hit != 'true' && runner.os == 'Linux') }}
-
-  # scripts/engine/build-wasm.sh builds both WebAssembly artifacts with the
-  # wasi-sdk it pins and smoke-tests them; the npm packages build and pack only
-  # what they publish; the TypeScript client runs against the native, worker
-  # and WASI servers.
-  engine-wasm:
-    name: Engine WebAssembly and npm packages
-    # The nightly; a push to a base branch, Run workflow (scope `full`) and a
-    # release pull request, which turn every area on; and a pull request that
-    # touches the parser layer or a query-language crate (the `wasm` area of
-    # changes.py): the browser build is where a C dependency gained or lost and
-    # the stack a deep parse needs show. The release dry run builds the
-    # WebAssembly assets too.
-    needs: changes
-    if: needs.changes.outputs.mode == 'nightly' || needs.changes.outputs.wasm == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      # build-wasm.sh adds its link arguments to these flags.
-      RUSTFLAGS: "-Dwarnings"
-      RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 2G
-      # The server stays up for the whole job: its statistics are the run's.
-      SCCACHE_IDLE_TIMEOUT: "0"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      # The release rust-toolchain.toml pins, with the rustfmt and clippy it lists,
-      # then the targets the job builds: rustup ignores `--target` on an install
-      # with no name, and `rustup target add` with none adds to the pinned release.
-      # The full set's compiler cache for this OS; `conformance` saves it.
-      # By content: a stale one still serves every crate that did not change.
-      - name: Set up Rust
-        id: sccache
-        uses: ./.github/actions/rust-setup
-        with:
-          targets: wasm32-unknown-unknown wasm32-wasip1
-          tools: sccache@0.19.0
-          cache: full-set-${{ runner.os }}
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-
-      # The prebuilt release; its version must match the wasm-bindgen crate in Cargo.lock.
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: wasm-bindgen@0.2.128
-
-      - name: WebAssembly engine (browser and WASI)
-        run: bash scripts/engine/build-wasm.sh
-
-      # The code only wasm32 compiles: the engine job's clippy never sees it.
-      - name: clippy on the WebAssembly targets
-        run: bash scripts/engine/build-wasm.sh clippy
-
-      - name: npm packages build and pack
-        run: |
-          for p in lsp-client lsp-worker wasi-host; do (cd "packages/$p" && npm ci); done
-          node scripts/engine/check-npm-packs.mjs
-
-      - name: Native language server and command line
-        run: cargo build --locked -p opentide-lsp -p opentide-cli
-
-      # The extension host's half of `opentide/fetch` (W2): its HTTP stack on
-      # the loopback, the protocol, and `opentide serve` running tenant
-      # commands whose requests the host answers from the golden cassettes.
-      - name: wasi-host (opentide/fetch against opentide serve)
-        env:
-          OPENTIDE_BIN: target/debug/opentide-cli
-        run: node --experimental-strip-types --test packages/wasi-host/src/index.test.ts
-
-      # node:wasi's path_open is a V8 fast API call whose allocation can start
-      # a GC inside the call, which segfaults node 22 once the WASI instances
-      # hold enough memory; plain calls do not.
-      - name: lsp-client (stdio, worker, wasi)
-        env:
-          OPENTIDE_LSP_BIN: target/debug/opentide-lsp
-          OPENTIDE_WASI_BIN: target/wasm32-wasip1/release/opentide-lsp.wasm
-          OPENTIDE_WASM_GLUE: target/wasm-bindgen/opentide_wasm.js
-        run: >-
-          node --no-turbo-fast-api-calls --experimental-strip-types
-          --test packages/lsp-client/src/index.test.ts
-
 
   # The npm packages as a user installs them, as publish.yml's smoke-npm
   # does before a release: the tree's packages at the workspace version
@@ -2173,6 +2209,7 @@ jobs:
   gate:
     name: PR gate
     needs:
+      - stubs
       - changes
       - lint
       - engine-lint
@@ -2183,8 +2220,7 @@ jobs:
       - docs
       - facade
       - node
-      - wasi
-      - engine-wasm
+      - wasm
       - grammars
       - textmate
       - deny
@@ -2234,9 +2270,8 @@ jobs:
       - coverage
       - benchmarks
       - oracle
-      - schema
       - conformance
-      - engine-wasm
+      - wasm
       - npm-install
       - elastic-sweep
       - fuzz-smoke

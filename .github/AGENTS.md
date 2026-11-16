@@ -63,13 +63,12 @@ closed). Then:
   changes; actionlint and `tests/test_ci` when a workflow, `scripts/ci/` or those tests change;
   the skills' validation; the engine's invariant scripts when a crate changes. `docs` validates
   the pages and runs the docs tests that need no wheel;
-- each specialised job runs only when its own paths change: `node` (`bindings/node/`), `wasi`
+- each specialised job runs only when its own paths change: `node` (`bindings/node/`), `wasm`
   (`crates/opentide-wasm/`, the WASI shims: `crates/*wasi*`, `vendor/`, `packages/`,
   `build-wasm.sh`; the parser layer, where a C dependency and a parse's stack show only in
   WebAssembly: `crates/opentide-syntax/`, `crates/opentide-parse/`, the eleven query-language
-  crates (`PARSER_CRATES` in `scripts/ci/changes.py`), `grammars/`, `highlights/`), `wasm` (the
-  browser build, `engine-wasm`: the same parser-layer paths, `crates/opentide-wasm/` and
-  `build-wasm.sh`; a push, a `full` run, a release PR and the nightly run it too), `grammars` (`grammars/`), `textmate` (`highlights/`,
+  crates (`PARSER_CRATES` in `scripts/ci/changes.py`), `grammars/`, `highlights/`; its native
+  TypeScript-client tests only when `packages/` or `crates/opentide-wasm/` changes, `ts_packages`), `grammars` (`grammars/`), `textmate` (`highlights/`,
   `editors/`),
   `gitlab-ci-lint` (opentide-cli's CI renderer and `setup` commands, the linters' installer, its
   test), `facade` (`crates/opentide/`: the public API), `deny` (`Cargo.lock`, `deny.toml`, a
@@ -85,16 +84,22 @@ checked before the next pull request builds on it.
 |-----|----------------|
 | `changes` | The plan: the tier, the affected crates, what `build` compiles (`packages`: `--workspace`, or `-p` per affected crate and per anchor, with the facade's and opentide-schema's test features) and the tests it runs (`filter`: a nextest filterset of the affected crates), the areas. Seconds: the runner's stable cargo reads the manifests |
 | `lint` | ruff, ty over `src/opentide` on the checked-in stubs of `_native` (`src/opentide/_native/*.pyi`: nothing compiles), actionlint 1.7.7 with shellcheck (`.github/actionlint.yaml`), `uv build --sdist` and `twine check`, the engine's invariant scripts (`check-io-free.sh`, `check-names.sh`, `validate-skills.sh`), the engine release script's tests and the CI contracts (`tests/test_ci`). About a minute |
-| `engine-lint` | rustfmt, clippy `-D warnings` and `cargo doc --no-deps` with `RUSTDOCFLAGS=-D warnings`, **workspace-wide** whatever changed (a warm cache re-checks only what changed) |
-| `native` | opentide's wheel as a release builds it (`maturin build --locked --profile dev --compatibility linux`: a `linux` tag, installed on this runner image only), linked with mold, its own sccache family, uploaded for the Python jobs: when the Python surface or GitLab CI lint's inputs change, every push and the nightly. A job of its own so that the Python jobs start after it, not after the tests (#1141: a push's `python` waited 8.4 min for the build) |
+<<<<<<< HEAD
+| `engine-lint` | rustfmt, clippy `-D warnings` and `cargo doc --no-deps` with `RUSTDOCFLAGS=-D warnings`, **workspace-wide** whatever changed (a warm cache re-checks only what changed); clippy on the WebAssembly targets (`build-wasm.sh clippy`) when `wasm` runs; when opentide-schema is affected, clippy on it with its `stubs` feature and for `wasm32-unknown-unknown` (UC-1.1; the `python` feature is unified on workspace-wide) |
+| `native` | opentide's wheel as a release builds it (`maturin build --locked --profile dev --compatibility linux`: a `linux` tag, installed on this runner image only), linked with mold, its own sccache family, uploaded for the Python jobs: when the Python surface or GitLab CI lint's inputs change, every push and the nightly. A job of its own so that the Python jobs start after it, not after the tests (#1141: a push's `python` waited 8.4 min for the build). |
+| `stubs` | `cargo xtask stubs --check` on Python 3.10 (the abi3 floor): the committed `src/opentide/_native/models.pyi` and `sdk.pyi`, which `lint`'s ty reads, against the extension built with PyO3's introspection (UC-1.9, UC-5.2b). When the binding, opentide-schema, the facade, the stubs or `xtask stubs` change (`stubs`) and on every push and nightly. Its own job and sccache family `stubs`: inside `native` it held the Python jobs back 8 minutes (#1141) |
 | `build` | **The gate's one build of the tests, and the Rust tests** (with `native`, the only gate jobs that compile the workspace): the affected crates' tests, the binaries their tests run, xtask and the language server, linked with mold, one sccache family; then `xtask check-layers`, `xtask cassettes check`, `xtask codegen --check` (never `--oracle`), `opentide-lsp generate-highlights --check`, `xtask vocab sync --check` and `xtask spec-fields` against `opentidehq/specifications` when their inputs change (`changes`' `vocab` and `fields` outputs; on every push and nightly); then the tests, `cargo nextest run --profile ci -E <filter>`, where they were built, on eight threads (`NEXTEST_TEST_THREADS`: many wait on the processes they start); the doctests (nextest runs none); and opentide-schema's compile-fail cases (trybuild, which compiles at test time) when the derive, the crate, the cases, `Cargo.lock` or the toolchain change (`schema_ui`). Every path filter is `changes.py`'s (`CHECKS`, tested in `test_changes.py`): no job diffs the tree itself. Fails when a test leaves a file in the checkout (#931). On a pull request it also builds the **anchors** (`opentide-connectors`, `opentide-workspace`, `ANCHORS` in `changes.py`), whose tests run only when affected: their dev-dependencies turn on third-party features (tokio's `test-util`, getrandom's `std`) that the push's `--workspace` build resolves with, so every unit a pull request builds is one the push's cache holds (without them a leaf change missed it for every crate above tokio and getrandom). Its `RUSTC_WRAPPER` is [`scripts/ci/rustc-wrapper/sccache`](../scripts/ci/rustc-wrapper/sccache), sccache without `CARGO_PRIMARY_PACKAGE`: sccache keys a compile on every `CARGO_*` variable, and cargo sets that one only for the packages a command names, so a pull request missed the cache for every unaffected crate it compiled (opentide-schema, 48 s). Named `sccache`, so that the cc crate sends the build scripts' C compiles through it too; Python, not `sh`: a shell drops the variables whose names are no identifiers (`CARGO_BIN_EXE_opentide-lsp`). No test archive and no test partitions: shipping the archive (1.5 GB, 18 s to pack, 15-33 s to download and 41 s to extract per partition) cost more than the partitions saved (#1141). `--timings`: the `cargo-timings` artifact shows where the build went |
+=======
+| `engine-lint` | rustfmt, clippy `-D warnings` and `cargo doc --no-deps` with `RUSTDOCFLAGS=-D warnings`, **workspace-wide** whatever changed (a warm cache re-checks only what changed); clippy on the WebAssembly targets (`build-wasm.sh clippy`) when `wasm` runs (alone when only `wasm` is on, e.g. a `build-wasm.sh`-only change) |
+| `native` | opentide's wheel as a release builds it (`maturin build --locked --profile dev --compatibility linux`: a `linux` tag, installed on this runner image only), linked with mold, its own sccache family, uploaded for the Python jobs: when the Python surface or GitLab CI lint's inputs change, every push and the nightly. A job of its own so that the Python jobs start after it, not after the tests (#1141: a push's `python` waited 8.4 min for the build) |
+| `build` | **The gate's one build of the tests, and the Rust tests** (with `native`, the only gate jobs that compile the workspace): the affected crates' tests, the binaries their tests run, xtask and the language server, linked with mold, one sccache family; then `xtask check-layers`, `xtask cassettes check`, `xtask codegen --check` (never `--oracle`), `opentide-lsp generate-highlights --check`, `xtask vocab sync --check` and `xtask spec-fields` against `opentidehq/specifications` when their inputs change (and on every push and nightly); then the tests, `cargo nextest run --profile ci -E <filter>`, where they were built, on eight threads (`NEXTEST_TEST_THREADS`: many wait on the processes they start); the doctests (nextest runs none); and opentide-schema's compile-fail cases (trybuild, which compiles at test time) when the derive, the crate, the cases, `Cargo.lock` or the toolchain change. Fails when a test leaves a file in the checkout (#931). On a pull request it also builds the **anchors** (`opentide-connectors`, `opentide-workspace`, `ANCHORS` in `changes.py`), whose tests run only when affected: their dev-dependencies turn on third-party features (tokio's `test-util`, getrandom's `std`) that the push's `--workspace` build resolves with, so every unit a pull request builds is one the push's cache holds (without them a leaf change missed it for every crate above tokio and getrandom). Its `RUSTC_WRAPPER` is [`scripts/ci/rustc-wrapper/sccache`](../scripts/ci/rustc-wrapper/sccache), sccache without `CARGO_PRIMARY_PACKAGE`: sccache keys a compile on every `CARGO_*` variable, and cargo sets that one only for the packages a command names, so a pull request missed the cache for every unaffected crate it compiled (opentide-schema, 48 s). Named `sccache`, so that the cc crate sends the build scripts' C compiles through it too; Python, not `sh`: a shell drops the variables whose names are no identifiers (`CARGO_BIN_EXE_opentide-lsp`). No test archive and no test partitions: shipping the archive (1.5 GB, 18 s to pack, 15-33 s to download and 41 s to extract per partition) cost more than the partitions saved (#1141). `--timings`: the `cargo-timings` artifact shows where the build went |
+>>>>>>> ci/one-wasm-job
 | `python` | Python is the packaging layer: **one** job, one pytest run (`-n 4`) of the package's surface (the SDK, the models, the plugin API, the console script) and the E2E suite (CLI, MCP and LSP over stdio), Python **3.14** with the coverage gate, on `native`'s wheel (`uv sync --no-install-project`, then `uv pip install` of the wheel, its `_native` module copied into `src/opentide/` for the tests, which import from `src/`; `UV_NO_SYNC=1`: nothing compiles). No shards; the tests marked `full_set` run nightly; `tests/test_ci` runs in `lint` |
 | `gitlab-ci-lint` | The pipeline `opentide setup ci gitlab` renders, linted (glint, gitlab-ci-verify) |
 | `docs` | `scripts/validate-docs.sh` (the site builds in opentidehq/website) and the docs tests that need no wheel (`tests/test_docs` but `test_docs_commands_golden.py` and `test_sdk_snippets.py`, the Python job's) |
 | `facade` | The `opentide` facade with every feature: tests and doctests, rustdoc as docs.rs builds it, `cargo semver-checks` (0.51.0) against the first parent |
 | `node` | `@opentide/opentide` (`bindings/node`): the napi-rs addon for linux-x64-gnu, the generated `index.js` and `index.d.ts` against the committed ones, and `npm test`; it compiles its own addon, so it starts beside `build`. Node's parity with the Python and Rust SDKs, byte for byte, is the conformance suite's (nightly and release pull requests) |
-| `wasi` | The WASI command line the VS Code extension runs: `build-wasm.sh cli`, its size held to the .vsix's 15 MiB, tenant commands through `@opentide/wasi-host` |
-| `engine-wasm` | The browser WebAssembly module and the npm packages: `build-wasm.sh` (both artifacts, smoke-tested), clippy on the WebAssembly targets, `npm` packs, the TypeScript client against the native, worker and WASI servers. The nightly, a push to a base branch, a `full` run, a release pull request, and a pull request that changes the parser layer, a query-language crate, `opentide-wasm` or `build-wasm.sh` |
+| `wasm` | Every WebAssembly artifact, one wasi-sdk, one compiler cache (`wasm`): `build-wasm.sh browser wasi cli` (the browser module and the WASI language server, smoke-tested; the WASI command line the VS Code extension runs, its size held to the .vsix's 15 MiB), tenant commands through `@opentide/wasi-host` in the WASI module, the npm packs; when `packages/` changes (`ts_packages`) and on every push and nightly also the native language server and command line and the TypeScript client against the native, worker and WASI servers. The WebAssembly targets' clippy is `engine-lint`'s |
 | `grammars`, `textmate` | Every vendored `parser.c` is what tree-sitter-cli 0.25.10 generates; the TextMate grammars as VS Code reads them |
 | `deny` | `cargo deny check` against [`deny.toml`](../deny.toml) for the workspace, `fuzz/` and the `publishing/` placeholder crate ([`docs/internal/supply-chain.md`](../docs/internal/supply-chain.md)) |
 | `gate` (**`PR gate`**) | The one required check (below) |
@@ -117,11 +122,11 @@ The smoke tests are publish.yml's own.
 Windows, built there), `test-full` (Python 3.10 to 3.13 on the build's abi3 extension), `e2e-full`
 (the `full_set` E2E tests), `coverage` ([`coverage.yml`](workflows/coverage.yml)), `benchmarks`
 ([`bench.yml`](workflows/bench.yml)), `oracle` ([`oracle.yml`](workflows/oracle.yml): the
-vendor-parser oracles), `schema` ([`schema.yml`](workflows/schema.yml)), `conformance` (the
+vendor-parser oracles), `conformance` (the
 cross-SDK suite on three OSes), `npm-install`, `elastic-sweep`, `fuzz-smoke`,
 `clients` and `bench` (informational), `cli-windows-smoke`, `engine-release-consumers`, plus the
 packaging jobs above; `nightly-report` opens or comments on the one open issue labelled
-`nightly-failure` with the failing jobs. coverage.yml, bench.yml, oracle.yml, schema.yml and
+`nightly-failure` with the failing jobs. coverage.yml, bench.yml, oracle.yml and
 publish-dry-run.yml have `workflow_call` and `workflow_dispatch` only: ci.yml runs them. The
 schedule runs `development`'s copy of the workflows: test a change to the nightly with Run
 workflow (`scope: nightly`) on its branch.
@@ -161,15 +166,15 @@ composite cannot see whether the job's steps passed; `rust-setup`'s `save` outpu
 policy below. sccache is
 content-addressed, so a copy a few days old still serves every crate that did not change; a key
 on the sources or `Cargo.lock` saved every family on each merge and evicted what pull requests
-restore. The families: `build` (the tests' build), `native` (the extension) and `engine-check` (`engine-lint`), saved
+restore. The families: `build` (the tests' build), `native` (the extension), `stubs` (the `stubs` job) and `engine-check` (`engine-lint`), saved
 from a push to each base branch and from Run workflow (a pull request reads its base branch's
 caches and `development`'s), and from a pull request only when it restored no copy of the family
 at all (`cache-matched-key` empty: its base has none yet, after a new family or a toolchain bump),
-so its next push is warm; `wasi`; `full-set-Linux` (`conformance` saves it, by the nightly; `node`,
+so its next push is warm; `wasm` (the `wasm` job's wasm32 compiles) under the same rule; `full-set-Linux` (`conformance` saves it, by the nightly; `node`,
 `facade` and the nightly's Linux Rust jobs restore it); the release dry run's own
 (`release-Linux-<arch>`, `release-wasm`). **Linux only**: macOS and Windows build cold (their
 caches crowded the Linux families out of the 10 GB GitHub keeps). **A pull request saves no
-cache** but that bootstrap copy. The one rust-cache left: `fuzz` (`fuzz-smoke`), plus coverage.yml's, schema.yml's and
+cache** but that bootstrap copy. The one rust-cache left: `fuzz` (`fuzz-smoke`), plus coverage.yml's and
 oracle.yml's own. uv's cache (setup-uv) is keyed on `uv.lock`.
 
 **Coverage:** gate on Python **3.14** only (`COVERAGE_PYTHON`); the Code Quality upload is
@@ -240,14 +245,6 @@ merging** → add `PR gate`, remove the others → **Save changes**.
   (`git ls-files`) every day, with deny.toml's exceptions, and opens or comments on one issue when it finds an advisory.
   Its issue job is the only job in any workflow with `issues: write`, and it never runs on a pull
   request (`tests/test_ci/test_workflows.py`).
-- [`schema.yml`](workflows/schema.yml), in the nightly (ci.yml calls it) and on demand:
-  `opentide-schema` (UC-1.1)
-  built for the native target, abi3-py310 (feature `python`) and `wasm32-unknown-unknown`
-  (feature `wasm`), clippy on the last two (ci.yml's engine jobs build no features), and its tests
-  with the Python class on CPython 3.10, the abi3 floor; clippy with feature `stubs`, and
-  `cargo xtask stubs --check`, which fails when the generated `src/opentide/_native/models.pyi`
-  or `src/opentide/_native/sdk.pyi` differs from the extension (UC-1.9, UC-5.2b). Written before ci.yml became one workflow; not a required
-  check.
 - [`oracle.yml`](workflows/oracle.yml) checks the query parsers against Kusto.Language, Splunk,
   Elasticsearch, Lucene, Kibana and Falco (`OPENTIDE_ORACLE_REQUIRED`), the vendors' own parsers
   (not the Python oracle), in the nightly (ci.yml calls it, with the Carbon Black Cloud tenant)

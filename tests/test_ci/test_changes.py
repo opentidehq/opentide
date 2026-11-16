@@ -127,7 +127,7 @@ def test_a_leaf_crate_runs_itself_and_its_reverse_dependencies() -> None:
     # A Rust-only change builds no wheel and runs no pytest: the Rust tests
     # cover it (the maintainer's rule); of the specialised jobs, the parser
     # layer runs the WebAssembly builds (WASI and browser) alone.
-    assert on(outputs) == {"rust", "lint", "wasi", "wasm"}
+    assert on(outputs) == {"rust", "lint", "wasm"}
     # The anchors are built, so the third-party features resolve as on the
     # push that saved the compiler cache; only the affected crates' tests run.
     built = set(outputs["packages"].replace("-p ", "").split())
@@ -148,11 +148,12 @@ def test_a_leaf_crate_runs_itself_and_its_reverse_dependencies() -> None:
     ],
 )
 def test_the_parser_layer_runs_the_webassembly_builds(path: str) -> None:
-    # A known path, not the fail-open of an unknown one: the WASI build and
-    # the browser build (engine-wasm), and no other specialised job.
+    # A known path, not the fail-open of an unknown one: the `wasm` job
+    # (browser, WASI server and command line) without the TypeScript client's
+    # native tests, and no other specialised job.
     outputs = plan(path)
-    assert outputs["wasi"] == "true"
     assert outputs["wasm"] == "true"
+    assert outputs["ts_packages"] == "false"
     assert outputs["node"] == "false"
 
 
@@ -167,16 +168,27 @@ def test_the_parser_layer_runs_the_webassembly_builds(path: str) -> None:
 )
 def test_other_changes_skip_the_webassembly_builds(path: str) -> None:
     outputs = plan(path)
-    assert outputs["wasi"] == "false"
     assert outputs["wasm"] == "false"
+    assert outputs["ts_packages"] == "false"
 
 
 @pytest.mark.parametrize(
     "path",
-    ["crates/opentide-wasm/src/lib.rs", "scripts/engine/build-wasm.sh"],
+    [
+        "crates/opentide-wasm/src/lib.rs",
+        "scripts/engine/build-wasm.sh",
+        "vendor/memmap2/src/lib.rs",
+    ],
 )
-def test_the_browser_build_runs_on_its_own_paths(path: str) -> None:
+def test_the_webassembly_job_runs_on_its_own_paths(path: str) -> None:
     assert plan(path)["wasm"] == "true"
+
+
+def test_the_typescript_packages_run_their_native_tests() -> None:
+    outputs = plan("packages/lsp-client/src/index.ts")
+    assert outputs["wasm"] == "true"
+    assert outputs["ts_packages"] == "true"
+    assert outputs["rust"] == "false"
 
 
 def test_a_pull_request_that_changes_a_workflow_runs_the_browser_build() -> None:
@@ -211,7 +223,8 @@ def test_a_test_only_dependency_counts() -> None:
 def test_shared_configuration_and_unknown_paths_mark_everything(path: str) -> None:
     outputs = plan(path)
     assert outputs["packages"] == "--workspace"
-    assert {"rust", "python", "node", "wasi", "wasm", "docs", "deny", "facade"} <= on(outputs)
+    expected = {"rust", "python", "node", "wasm", "ts_packages", "docs", "deny", "facade"}
+    assert expected <= on(outputs)
 
 
 @pytest.mark.parametrize(
@@ -241,26 +254,42 @@ def test_pushes_and_the_nightly_check_everything(event: str, scope: str, mode: s
     assert set(result.crates) == set(MEMBERS)
 
 
+def test_a_wasm_script_alone_runs_the_wasm_job_and_its_clippy() -> None:
+    """`wasm` without `rust`: engine-lint runs its wasm32 clippy alone (ci.yml)."""
+    for path in ("scripts/engine/build-wasm.sh", "scripts/engine/wasm-smoke.mjs"):
+        outputs = plan(path)
+        assert outputs["wasm"] == "true", path
+        assert outputs["rust"] == "false", path
+
+
+def test_the_browser_module_runs_the_typescript_client_tests() -> None:
+    assert plan("crates/opentide-wasm/src/lib.rs")["ts_packages"] == "true"
+
+
 @pytest.mark.parametrize(
     ("path", "checks"),
     [
         ("src/opentide/data/vocabulary/mitre/attack.vocab.toml", {"vocab"}),
+        ("bindings/python/src/sdk.rs", {"stubs"}),
+        ("crates/opentide/src/lib.rs", {"stubs"}),
+        ("src/opentide/_native/models.pyi", {"stubs"}),
+        ("xtask/src/stubs.rs", {"stubs"}),
         ("src/opentide/data/pins/specifications.toml", {"vocab"}),
         ("data/specifications.lock.json", {"vocab"}),
         ("xtask/src/vocab/sync.rs", {"vocab"}),
-        ("crates/opentide-schema/src/objects/tide.rs", {"fields", "schema_ui"}),
+        ("crates/opentide-schema/src/objects/tide.rs", {"fields", "schema_ui", "stubs"}),
         ("xtask/src/spec_fields.rs", {"fields"}),
-        ("crates/opentide-schema/src/lib.rs", {"schema_ui"}),
-        ("crates/opentide-schema/tests/ui/missing_field.rs", {"schema_ui"}),
-        ("crates/opentide-schema/Cargo.toml", {"schema_ui"}),
-        ("crates/opentide-schema-derive/src/lib.rs", {"schema_ui"}),
-        # Not their inputs: the crate's other tests, another xtask command.
-        ("crates/opentide-schema/tests/roundtrip.rs", set()),
-        ("xtask/src/main.rs", set()),
+        ("crates/opentide-schema/src/lib.rs", {"schema_ui", "stubs"}),
+        ("crates/opentide-schema/tests/ui/missing_field.rs", {"schema_ui", "stubs"}),
+        ("crates/opentide-schema/Cargo.toml", {"schema_ui", "stubs"}),
+        ("crates/opentide-schema-derive/src/lib.rs", {"schema_ui", "stubs"}),
+        # Not their inputs: another crate, another xtask command.
+        ("crates/opentide-kql/src/lib.rs", set()),
+        ("xtask/src/codegen.rs", set()),
         ("src/opentide/data/vocabulary/README.md", set()),
         # Shared configuration runs every check, as a push does.
-        ("Cargo.lock", {"vocab", "fields", "schema_ui"}),
-        (".github/workflows/ci.yml", {"vocab", "fields", "schema_ui"}),
+        ("Cargo.lock", {"vocab", "fields", "schema_ui", "stubs"}),
+        (".github/workflows/ci.yml", {"vocab", "fields", "schema_ui", "stubs"}),
     ],
 )
 def test_build_s_checks_run_when_their_inputs_change(path: str, checks: set[str]) -> None:
@@ -272,3 +301,11 @@ def test_a_push_runs_every_check() -> None:
     dirs, _ = changes.workspace_graph(metadata())
     full = changes.plan_run({"EVENT": "push"}, metadata()).outputs(dirs)
     assert {full[check] for check in changes.CHECKS} == {"true"}
+
+
+def test_a_stubs_input_runs_the_stubs_job_alone() -> None:
+    """An opentide-schema change runs `stubs`, not the wheel job nor pytest."""
+    outputs = plan("crates/opentide-schema/src/python.rs")
+    assert outputs["stubs"] == "true"
+    assert outputs["native"] == "false"
+    assert outputs["python"] == "false"

@@ -35,7 +35,7 @@ The package is a thin layer over the Rust core; what ty sees of it comes from th
 
 - **The compiled module's stubs** (`src/opentide/_native/`): `__init__.pyi` is written by
   hand, updated with every change to the binding; `models.pyi` and `sdk.pyi` are generated
-  from the extension by `cargo xtask stubs` (`--check` in CI's schema workflow), never edited.
+  from the extension by `cargo xtask stubs` (`--check` in ci.yml's `stubs` job), never edited.
   A diagnostic about `opentide._native` is fixed in the stub (or by regenerating it), not
   ignored at the call site.
 - **The plugin API** (`opentide.plugins`): frozen dataclasses (`Tenant`, `DeployRequest`,

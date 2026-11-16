@@ -38,7 +38,7 @@ needs goes into the facade's API first. It inherits the workspace lints, `unsafe
   `src/opentide/_native/models.pyi`: `cargo xtask stubs` rewrites it, never by hand. So does the
   submodule `sdk`'s, `src/opentide/_native/sdk.pyi` (UC-5.2b): run `cargo xtask stubs` after a
   change to `src/sdk.rs` or `src/sdk/`; `tests/test_sdk/test_stubs.py` holds it to the module's
-  names and parameters, and CI's `schema` workflow runs `cargo xtask stubs --check`. A value the
+  names and parameters, and CI's `stubs` job runs `cargo xtask stubs --check`. A value the
   introspection cannot type (an awaitable, an exception class) gets its type hint from a wrapper's
   `OUTPUT_TYPE` (`Pending`, `SdkErrorClass`).
 - An async operation returns an awaitable (`pyo3_async_runtimes::tokio::future_into_py`) and

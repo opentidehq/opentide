@@ -105,6 +105,34 @@ impl KindNames for TreeSitterNames {
     }
 }
 
+/// The ES|QL names of `opentide-esql`'s own parser (#1228): its node kinds,
+/// and its trees parsed on a 1 MB stack (the browser WASM module's).
+struct EsqlNames;
+
+impl KindNames for EsqlNames {
+    fn productions(&self) -> BTreeSet<String> {
+        opentide_esql::production_names()
+            .into_iter()
+            .map(str::to_string)
+            .collect()
+    }
+
+    fn parse(&self, body: &str) -> Parsed {
+        let body = body.to_string();
+        let (has_error, kinds) = std::thread::Builder::new()
+            .stack_size(1 << 20)
+            .spawn(move || opentide_esql::debug_kinds(&body))
+            .unwrap()
+            .join()
+            .expect("the ES|QL parser overflowed a 1 MB stack or panicked");
+        Parsed {
+            has_error,
+            dump: kinds.join(" "),
+            kinds: kinds.into_iter().map(str::to_string).collect(),
+        }
+    }
+}
+
 /// The names of the pure-Rust KQL parser (#1230): its node kinds, lower-case,
 /// and the token classes the corpus tags. Four kinds are spelt shorter than
 /// the tree-sitter rules the corpus tags, which [`KQL_TAG_NAMES`] maps.
@@ -180,6 +208,7 @@ fn kind_names(language: LanguageId, id: &'static str) -> Box<dyn KindNames> {
     match language {
         LanguageId::Cql => Box::new(CqlNames),
         LanguageId::Kql => Box::new(KqlNames),
+        LanguageId::Esql => Box::new(EsqlNames),
         _ => Box::new(TreeSitterNames { language, id }),
     }
 }
@@ -464,45 +493,56 @@ fn check_gate_with(gate: &ElasticGate, names: &dyn KindNames) {
 
 #[test]
 fn esql_corpus_gate() {
-    check_gate(&ElasticGate {
-        language: LanguageId::Esql,
-        id: "esql",
-        structural: &[
-            "source_file",
-            "query",
-            "aggregate_field",
-            "field_assignment_or_expression",
-            "command_option",
-            "command_name",
-            "index_pattern",
-            "index_name",
-            "cluster",
-            "selector",
-            "enrich_policy",
-            "enrich_with_clause",
-            "rename_clause",
-            "order_expression",
-            "fork_branch",
-            "name_pattern",
-            "id_pattern",
-            "qualified_name",
-            "identifier",
-            "quoted_identifier",
-            "type_name",
-            "map_entry",
-            "array",
-            "boolean",
-            "null",
-            "and_expression",
-            "or_expression",
-            "not_expression",
-            "comparison",
-            "unary_expression",
-            "binary_expression",
-            "parenthesized_expression",
-        ],
-    });
+    check_gate(&ESQL_GATE);
 }
+
+const ESQL_GATE: ElasticGate = ElasticGate {
+    language: LanguageId::Esql,
+    id: "esql",
+    structural: &[
+        "source_file",
+        "query",
+        "aggregate_field",
+        "field_assignment_or_expression",
+        "command_option",
+        "command_name",
+        "index_pattern",
+        "index_name",
+        "cluster",
+        "selector",
+        "enrich_policy",
+        "enrich_with_clause",
+        "rename_clause",
+        "order_expression",
+        "fork_branch",
+        "name_pattern",
+        "id_pattern",
+        "qualified_name",
+        "identifier",
+        "quoted_identifier",
+        "type_name",
+        "map_entry",
+        "array",
+        "boolean",
+        "null",
+        "and_expression",
+        "or_expression",
+        "not_expression",
+        "comparison",
+        "unary_expression",
+        "binary_expression",
+        "parenthesized_expression",
+        // One-token nodes of the pure-Rust parser that tree-sitter kept as
+        // tokens: the production around them is what the corpus tags.
+        "enrich_mode",
+        "metadata_field",
+        "policy_name",
+        "promql_text",
+        "star",
+        "time_unit",
+        "unknown_text",
+    ],
+};
 
 #[test]
 fn eql_corpus_gate() {
@@ -741,6 +781,46 @@ fn the_gate_reads_productions_and_trees_only_through_its_table() {
     );
     assert_eq!(names.productions.get(), 1);
     assert!(names.parses.get() > 0);
+}
+
+/// The ES|QL table is the pure-Rust parser's: a body it cannot parse is an
+/// error, a valid one names its productions, and a production with no tagged
+/// fixture fails the gate.
+#[test]
+fn the_esql_table_flags_what_the_gate_must() {
+    let names = kind_names(LanguageId::Esql, "esql");
+    let valid = names.parse("FROM logs-* | WHERE a == 1 | KEEP a");
+    assert!(!valid.has_error, "{}", valid.dump);
+    for kind in [
+        "from_command",
+        "where_command",
+        "keep_command",
+        "comparison",
+    ] {
+        assert!(valid.has_kind(kind), "{kind}: {}", valid.dump);
+    }
+    for broken in ["FROM logs-* | WHERE", "FROM a | KEEP a,", "ROW a = (1"] {
+        assert!(names.parse(broken).has_error, "{broken}");
+    }
+
+    /// The ES|QL table with one production no fixture is tagged with.
+    struct Extra(Box<dyn KindNames>);
+    impl KindNames for Extra {
+        fn productions(&self) -> BTreeSet<String> {
+            let mut out = self.0.productions();
+            out.insert("no_such_production".into());
+            out
+        }
+        fn parse(&self, body: &str) -> Parsed {
+            self.0.parse(body)
+        }
+    }
+    let gate = std::panic::catch_unwind(|| {
+        check_gate_with(&ESQL_GATE, &Extra(kind_names(LanguageId::Esql, "esql")));
+    });
+    // The real table passes; the one extra production alone fails it.
+    check_gate_with(&ESQL_GATE, &*kind_names(LanguageId::Esql, "esql"));
+    assert!(gate.is_err(), "an untagged production must fail the gate");
 }
 
 #[test]
