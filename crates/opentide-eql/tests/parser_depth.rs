@@ -1,0 +1,87 @@
+//! The parser's depth guards, on the 1 MB stack of the browser module: the floors
+//! `crates/opentide-analysis/tests/deep_queries.rs` holds for EQL (1,000 nesting levels, a
+//! 20,000-term chain) parse without a diagnostic, every construct that recurses survives deeper
+//! nesting as one diagnostic, never an overflow, and chains stay flat. The parser is private to
+//! the crate until the switch, so this test includes its source.
+
+#![expect(dead_code, reason = "the included modules are used in part")]
+
+#[path = "../src/lexer.rs"]
+mod lexer;
+#[path = "../src/parser.rs"]
+mod parser;
+#[path = "../src/syntax.rs"]
+mod syntax;
+
+use opentide_parse::{ErrorKind, MAX_TREE_DEPTH};
+
+/// Parses on a 1 MB stack, drops the tree there too; the errors' kinds and the tree's depth.
+fn parse_small(source: String) -> (Vec<ErrorKind>, usize) {
+    std::thread::Builder::new()
+        .stack_size(1 << 20)
+        .spawn(move || {
+            let parse = parser::parse(&source);
+            let root = syntax::SyntaxNode::new_root(parse.green);
+            assert_eq!(root.text().len(), rowan::TextSize::of(source.as_str()));
+            (parse.errors.iter().map(|e| e.kind).collect(), parse.depth)
+        })
+        .map(std::thread::JoinHandle::join)
+        .unwrap_or_else(|e| panic!("spawn: {e}"))
+        .unwrap_or_else(|_| panic!("the parser overflowed or panicked"))
+}
+
+fn query(expr: &str) -> String {
+    format!("process where {expr}")
+}
+
+#[test]
+fn the_floors_parse_without_a_diagnostic() {
+    let n = 1_000;
+    let nest = query(&format!("{}a == 1{}", "(".repeat(n), ")".repeat(n)));
+    assert_eq!(parse_small(nest).0, []);
+    let limit = usize::try_from(parser::MAX_DEPTH).unwrap_or(usize::MAX);
+    let at_limit = query(&format!("{}a == 1{}", "(".repeat(limit), ")".repeat(limit)));
+    assert_eq!(parse_small(at_limit).0, []);
+    for op in [" or ", " and ", " + ", " * "] {
+        let (errors, depth) = parse_small(query(&vec!["a == 1"; 20_000].join(op)));
+        if op.trim() == "or" || op.trim() == "and" {
+            assert_eq!(errors, [], "{op}");
+        }
+        assert!(depth < 10, "{op}: depth {depth}");
+    }
+    let (errors, depth) = parse_small(query(&vec!["a"; 20_000].join(" - ")));
+    assert_eq!(errors, []);
+    assert!(depth < 10, "depth {depth}");
+}
+
+#[test]
+fn every_recursive_construct_is_one_diagnostic_past_the_limit() {
+    for n in [1_100, 5_000, 100_000] {
+        let wrap =
+            |open: &str, close: &str| query(&format!("{}1{}", open.repeat(n), close.repeat(n)));
+        let cases = [
+            wrap("(", ")"),
+            wrap("(", ""),
+            wrap("f(", ")"),
+            wrap("f(", ""),
+            wrap("not ", ""),
+            wrap("- ", ""),
+            wrap("+", ""),
+            wrap("a in (", ")"),
+            wrap("a : (", ")"),
+            wrap("f(1, (", "))"),
+            wrap("x of [any where ", "]"),
+            format!("sequence {}", "[any where x of ".repeat(n)),
+        ];
+        for source in cases {
+            let head: String = source.chars().take(40).collect();
+            let (errors, depth) = parse_small(source);
+            let deep = errors
+                .iter()
+                .filter(|e| matches!(e, ErrorKind::TooDeep { .. }))
+                .count();
+            assert_eq!(deep, 1, "{n} {head}: {errors:?}");
+            assert!(depth < MAX_TREE_DEPTH, "{n} {head}: depth {depth}");
+        }
+    }
+}

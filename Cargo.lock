@@ -3433,6 +3433,7 @@ dependencies = [
 name = "opentide-eql"
 version = "0.12.0"
 dependencies = [
+ "insta",
  "logos",
  "opentide-core",
  "opentide-ecs",
