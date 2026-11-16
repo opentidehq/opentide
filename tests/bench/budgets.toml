@@ -105,6 +105,22 @@ target_rss_mib = 95.4
 # EPYC 7763, run 43450448595 (PR #1055).
 rss_waiver = "#1071, the catalogs' loading redesign"
 waived_rss_mib = 140.3
+# Re-recorded at the reference run 43748171977 (5732728, EPYC 9V74; #1252, the 1.0
+# in-flight work): what the code adds since 0.27 is the 0.28 checks' platform engines
+# (#1122), +3.5% instructions on the heavy workspace (old 841e53b6e^1 6.90 G, current
+# 7.14 G). On the 9V74, whose runs follow each other, validate_clean held at 0.504 s
+# before 0.28, 0.514 s (43706440600) and 0.496 s (43748171977); a local A/B of
+# 5732728 against d095a1310 (30 interleaved rounds, both orders) is within ±5%. The
+# other CPU models' last results are older: the 9V45's from cf8e65f3 (0.414 s, then
+# 0.478 s in 43779975577) and the 8370C's from 2d417849 (0.599 s, then 0.679 s in
+# 43728231039), 100-plus merges apart, measure that interval and the runner instance,
+# not a change. accepted_s / accepted_rss_mib are the slowest medians measured since 0.28
+# (the 8370C's time in 43728231039, the 9V45's peak RSS in 43779975577), as for lint.
+accepted = "#1252, the 1.0 work since the CPU models' last results: the 0.28 engines (#1122)"
+accepted_engine = "rust"
+accepted_unix = 1794769371
+accepted_s = 0.679
+accepted_rss_mib = 147.7
 
 [commands.validate_warnings]
 label = "validate, platforms disabled (a warning per platform block)"
