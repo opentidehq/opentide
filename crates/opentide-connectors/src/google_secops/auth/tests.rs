@@ -500,3 +500,12 @@ async fn refused_or_unanswered_credentials_stop_the_tenant() {
         "{error}"
     );
 }
+
+#[test]
+fn a_refusal_reason_does_not_quote_the_bearer() {
+    use crate::answer::{TEST_BEARER, answer_to_bearer};
+    let answer = answer_to_bearer(&format!(
+        r#"{{"error":"invalid_grant","error_description":"bad {TEST_BEARER}"}}"#
+    ));
+    assert_eq!(refusal_reason(&answer), "invalid_grant: bad ***");
+}

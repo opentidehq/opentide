@@ -301,7 +301,6 @@ pub fn select(
     if options.log && options.wide {
         tracing::warn!(
             detail = "Assembling plan without status filtering.",
-            logger = "opentide.deployment.utils",
             "wide_scope_enabled"
         );
     }
@@ -311,7 +310,6 @@ pub fn select(
                 count = scope.nested.len(),
                 files = format!("{:?}", scope.nested).as_str(),
                 issue = NESTED_RULES_ISSUE,
-                logger = "opentide.deployment.utils",
                 "deploy_nested_rules_skipped"
             );
         }
@@ -386,7 +384,6 @@ pub fn select(
                             platform.replace('_', "-")
                         )
                         .as_str(),
-                        logger = "opentide.deployment.utils",
                         "system_disabled_for_deploy"
                     );
                     continue;
@@ -424,7 +421,6 @@ pub fn select(
                             run_strategies = run_names.as_str(),
                             deployed_by = deployed.as_str(),
                             rule = name.as_str(),
-                            logger = "opentide.deployment.utils",
                             "rule_skipped_for_strategy"
                         );
                     }
@@ -458,7 +454,6 @@ pub fn select(
                         platform = "*",
                         tenant = "",
                         advice = MIGRATE_ADVICE,
-                        logger = "opentide.deployment.external_ids",
                         "external_id_in_rule"
                     );
                 }

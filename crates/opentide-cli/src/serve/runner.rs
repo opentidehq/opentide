@@ -218,9 +218,13 @@ impl HostRunner {
     ) -> RunOutcome {
         let directory = normalised(&rust.cwd);
         if !directory.is_dir() {
+            let reason = match std::fs::metadata(&directory) {
+                Ok(_) => "not a directory".to_owned(),
+                Err(error) => error.to_string(),
+            };
             let message = format!(
-                "[Errno 2] No such file or directory: {:?}",
-                directory.display().to_string()
+                "cannot run in the working directory {}: {reason}",
+                directory.display()
             );
             return failure(&plan.words, &message, 1);
         }
@@ -341,8 +345,8 @@ pub fn keeps_workspace(words: &[String], argv: &[String]) -> bool {
     })
 }
 
-/// `path` as Python's `Path` prints it: no `.` parts, no repeated or
-/// trailing separator.
+/// `path` normalised without touching the disk: no `.` parts, no repeated
+/// or trailing separator.
 fn normalised(path: &str) -> PathBuf {
     let mut out = PathBuf::new();
     for component in Path::new(path).components() {

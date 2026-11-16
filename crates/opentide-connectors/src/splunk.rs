@@ -270,7 +270,7 @@ fn entity_name(name: &str) -> String {
     byte_serialize(name.as_bytes()).collect()
 }
 
-/// A saved search the tenant holds (the Python Splunk client's `SavedSearch`).
+/// A saved search the tenant holds.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SavedSearch {
     /// Its path under the namespace, percent-decoded (`saved/searches/<name>`).
@@ -824,7 +824,7 @@ fn epoch(at: jiff::Timestamp) -> String {
     format!("{seconds:.3}")
 }
 
-/// A saved search call the tenant refused (the Python Splunk client's `HTTPError`).
+/// A saved search call the tenant refused.
 fn refused_call(cx: TenantContext<'_>, reply: &Reply) -> ConnectorError {
     ConnectorError::refused(PLATFORM, &cx.tenant.label.tenant, reply.http_error(), None)
 }
