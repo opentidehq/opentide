@@ -408,7 +408,7 @@ model! {
 
 model! {
     /// Repeated triggers suppressed (`ExabeamSuppression`). The YAML key is
-    /// `for`, a Python keyword: `for_` is an unknown key.
+    /// `for`; the field's own name, `for_`, is an unknown key.
     ExabeamSuppression = "ExabeamSuppression" {
         /// Suppress repeated triggers for this long: whole `m`, `h`, `d`, or `w`
         #[serde(rename = "for")]
@@ -436,8 +436,8 @@ model! {
 }
 
 model! {
-    /// When the rule is active (`ExabeamRecurrence`). The YAML key is `from`,
-    /// a Python keyword: `from_` is an unknown key.
+    /// When the rule is active (`ExabeamRecurrence`). The YAML key is `from`;
+    /// the field's own name, `from_`, is an unknown key.
     ExabeamRecurrence = "ExabeamRecurrence" {
         /// `day`, `week`, `month`, or `days` (a range of weekdays)
         pub every: ExabeamEvery,
@@ -636,7 +636,7 @@ fn number(node: &Node) -> bool {
     matches!(node.value, Value::Int(_) | Value::Float(_))
 }
 
-/// Whether `value` is one of `allowed` (Python's `value in allowed`).
+/// Whether `value` is a string and one of `allowed`.
 fn one_of(node: Option<&Node>, allowed: &[&str]) -> bool {
     text(node).is_some_and(|value| allowed.contains(&value))
 }

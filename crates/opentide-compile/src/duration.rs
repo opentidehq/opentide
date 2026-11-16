@@ -2,8 +2,7 @@
 //! (`platforms/sentinel/client.py`) and Elastic's date math
 //! (`platforms/elastic/durations.py`).
 //!
-//! Digits are ASCII digits. The oracle's Sentinel parser took any Unicode
-//! decimal digit (Python's `\d`), which Azure does not accept either.
+//! Digits are ASCII digits: Azure accepts no other script's decimal digits.
 
 /// Seconds in a minute, an hour, a day and a week.
 const MINUTE: u64 = 60;

@@ -71,8 +71,8 @@ pub fn read(uri: &str, context: &Context<'_>) -> Answer {
     }
 }
 
-/// The value of a template's variable, as the Python SDK's RFC 6570 scan
-/// matches it: a simple expansion ends at `/`, `?`, `#`, `&` or `,` (a value
+/// The value of a template's variable (RFC 6570, level 2): a simple
+/// expansion ends at `/`, `?`, `#`, `&` or `,` (a value
 /// holding one does not match), a reserved one (`{+name}`) at `?` or `#`.
 /// Either is percent-decoded.
 fn expand(raw: &str, reserved: bool) -> Option<String> {

@@ -4,8 +4,8 @@
 //!
 //! Each block is one struct, its fields Pydantic's in Pydantic's order: the
 //! shared ones of `PlatformConfigBase` first (`platform_block!`), then the
-//! block's own. A field's doc comment is the Python docstring, so the schema's
-//! description is the same text (`cargo xtask schema diff --against python`).
+//! block's own. A field's doc comment is its schema description, held to the
+//! oracle's text by `cargo xtask schema diff --against python`.
 //!
 //! | Oracle | Here |
 //! |--------|------|
@@ -24,7 +24,7 @@
 //!
 //! The named checks are Rust functions registered by name ([`NAMED_CHECKS`]);
 //! each one's message is the oracle's (`ElasticConfig validation failed with
-//! code(s): …`), the codes sorted and joined as Python joins them.
+//! code(s): …`), the codes sorted and joined with `, `.
 
 pub mod bitdefender;
 pub mod carbon_black;

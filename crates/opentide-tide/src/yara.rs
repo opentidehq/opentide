@@ -442,7 +442,7 @@ fn block_items(source: &str, from: usize, end: usize) -> Vec<(String, Vec<usize>
     out
 }
 
-/// A body after Python's `strip()`, with its map.
+/// A body without its leading and trailing white space, with its map.
 fn stripped(text: &str, map: &[usize]) -> (String, Vec<usize>) {
     let start = text.len() - text.trim_start().len();
     let end = text.trim_end().len().max(start);

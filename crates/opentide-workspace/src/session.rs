@@ -8,9 +8,8 @@
 //! - every folder the workspace reads (its object folders, recursively, and
 //!   its configuration folders) is listed again and each entry's [`Stamp`]
 //!   compared with the one taken before the last load, so an edit, a new
-//!   file or a deleted one is read without being announced, as the Python
-//!   `serve` reads it ([`crate::Workspace::invalidate`] re-reads only those
-//!   files);
+//!   file or a deleted one is read without being announced
+//!   ([`crate::Workspace::invalidate`] re-reads only those files);
 //! - the paths [`Session::invalidate`] was told about since (`serve`'s
 //!   `invalidate`, a file the configuration points at) are invalidated too;
 //! - a workspace whose root moved (a marker created or deleted) is opened

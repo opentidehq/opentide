@@ -228,8 +228,8 @@ fn generated_schemas_and_templates_are_served() {
 
 /// `deployment_status` reads the platform blocks from `configurations`, else
 /// from the legacy `platforms`: a `configurations` that is not a table, such
-/// as the string "false", holds no block and does not hide `platforms` (the
-/// Python CLI's truth value counted the string as holding blocks).
+/// as the string "false", holds no block and does not hide `platforms`
+/// (though a non-empty string).
 #[test]
 fn deployment_status_reads_platforms_past_a_configurations_that_is_not_a_table() {
     let scratch = tempfile::tempdir().unwrap();

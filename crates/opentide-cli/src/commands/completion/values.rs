@@ -1,7 +1,6 @@
 //! The workspace's values a Tab press completes (#841): object UUIDs and
 //! files, object types, ATT&CK techniques, platforms, strategies, tenants and
-//! diagnostic codes, as the Python CLI's Typer callbacks completed them
-//! (`cli/completion.py`, 0.28.0).
+//! diagnostic codes.
 //!
 //! [`attach`] gives each option of the command tree its
 //! [`ArgValueCompleter`], by option name, so `--uuid` completes the same way
