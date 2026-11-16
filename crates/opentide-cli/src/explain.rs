@@ -261,6 +261,18 @@ pub fn all() -> Vec<Page> {
 /// Where a query code is reported. A code the engine only ever warns about
 /// (opentide-yara's `WARNING_CODES`, #1015) never fails `opentide validate`.
 fn query_reported_by(code: &str, article: &str, language: &str) -> String {
+    if code == opentide_core::codes::YARA_ENTRYPOINT_DEPRECATED {
+        // The one warning that comes with an error: YARA-X refuses
+        // `entrypoint` (#1225).
+        return format!(
+            "Reported by the analysis engine in {article} {language} query, at the place in \
+             the query, as a warning that names the replacement, together with the error \
+             `yara_undefined_identifier` at the same place: YARA-X refuses `entrypoint`, so \
+             `opentide validate` (its `queries` check) and `opentide validate query` fail on \
+             the rule; `opentide lint` (its `queries` check) and an editor running `opentide \
+             lsp start` show both."
+        );
+    }
     if opentide_yara::always_warning(code) {
         format!(
             "Reported by the analysis engine in {article} {language} query, at the place in \
@@ -756,7 +768,6 @@ mod tests {
     #[test]
     fn a_warning_only_yara_code_is_not_described_as_an_error() {
         for code in [
-            "yara_entrypoint_deprecated",
             "yara_module_unconfirmed",
             "yara_slow_pattern",
             "yara_suspicious_expression",
@@ -777,6 +788,17 @@ mod tests {
                 "{code}"
             );
         }
+    }
+
+    /// `entrypoint` is a warning that names the replacement, but YARA-X
+    /// refuses it: the error `yara_undefined_identifier` comes with it, so
+    /// its page must not say `opentide validate` passes (#1405 review).
+    #[test]
+    fn the_entrypoint_page_names_the_error_that_comes_with_it() {
+        let page = page("yara_entrypoint_deprecated").expect("a page");
+        assert!(page.markdown.contains("`yara_undefined_identifier`"));
+        assert!(page.markdown.contains("fail on"));
+        assert!(!page.markdown.contains("does not fail on it"));
     }
 
     #[test]

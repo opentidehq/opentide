@@ -195,12 +195,29 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         &[("yara_hex_string", E)],
     ),
     (
+        // A branch that starts with a jump is a syntax error.
         "rule a { strings: $h = { 01 02 ( 03 | [-] 04 ) 05 } condition: $h }",
         &[("yara_hex_string", E)],
     ),
     (
+        // A branch that starts with a jump is a syntax error.
         "rule a { strings: $h = { 01 02 ( 03 | [1-300] 04 ) 05 } condition: $h }",
         &[("yara_hex_string", E)],
+    ),
+    // YARA-X takes any jump inside an alternative: libyara refused an
+    // unbounded or over-200 one (#1405 review).
+    (
+        "rule a { strings: $h = { 01 ( 02 [1-300] 03 | 04 ) 05 } condition: $h }",
+        &[("yara_slow_pattern", W)],
+    ),
+    (
+        "rule a { strings: $h = { 01 ( 02 [-] 03 | 04 ) 05 } condition: $h }",
+        &[("yara_slow_pattern", W)],
+    ),
+    // YARA-X reads an index above `i64::MAX` as a negative `i64` (E007).
+    (
+        "rule a { strings: $a = \"abc\" condition: @a[0xFFFFFFFFFFFFFFFF] == 0 }",
+        &[("yara_number_out_of_range", E)],
     ),
     (
         "rule a { strings: $h = { 01 0 } condition: $h }",

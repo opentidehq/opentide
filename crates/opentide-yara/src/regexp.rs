@@ -10,6 +10,13 @@
 /// libyara's `RE_MAX_RANGE` (`INT16_MAX`).
 const RE_MAX_RANGE: u32 = 32767;
 
+/// The deepest group nesting YARA-X could take. Its regexp parser
+/// (`regex-syntax`, nest limit 250) also counts repetitions, alternations
+/// and concatenations as levels, so 250 bare groups around one byte are the
+/// most it takes; any deeper group is refused. The bound also keeps the
+/// recursive descent here off the end of a small stack (#1405 review).
+const MAX_GROUP_DEPTH: usize = 250;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding {
     /// Byte offsets into the pattern text (between the slashes).
@@ -111,6 +118,8 @@ struct Parser<'a> {
     check: Check,
     /// After a `(?u` flag: YARA-X refuses a word boundary in Unicode mode.
     unicode: bool,
+    /// The capture group names so far: YARA-X refuses one twice.
+    names: std::collections::BTreeSet<Vec<u8>>,
 }
 
 /// Check the source of a regexp (the text between the slashes).
@@ -120,6 +129,7 @@ pub fn check(src: &str) -> Check {
         pos: 0,
         check: Check::default(),
         unicode: false,
+        names: std::collections::BTreeSet::new(),
     };
     if src.is_empty() {
         p.error(0, 0, "empty regular expression");
@@ -311,26 +321,50 @@ impl Parser<'_> {
             false
         };
         if name {
-            let len = self.src[self.pos..]
+            // YARA-X's names (regex-syntax): a letter or `_`, then letters,
+            // digits, `_`, `.`, `[`, `]`; each name once.
+            let rest = &self.src[self.pos..];
+            if !rest
+                .first()
+                .is_some_and(|&b| b.is_ascii_alphabetic() || b == b'_')
+            {
+                return None;
+            }
+            let len = rest
                 .iter()
-                .take_while(|&&b| b.is_ascii_alphanumeric() || b == b'_')
+                .take_while(|&&b| {
+                    b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'[' | b']')
+                })
                 .count();
+            let group = rest[..len].to_vec();
             self.pos += len;
-            if len == 0 || self.peek() != Some(b'>') {
+            if self.peek() != Some(b'>') || !self.names.insert(group) {
                 return None;
             }
             self.pos += 1;
             return Some(true);
         }
+        // Flags: each at most once, one `-` followed by a flag, and at
+        // least one flag before `)`.
         let mut negated = false;
+        let mut seen: Vec<u8> = Vec::new();
+        let mut after_dash = false;
         while let Some(c) = self.peek() {
             self.pos += 1;
             match c {
-                b'u' => self.unicode = !negated,
-                b'-' => negated = true,
-                b'i' | b'm' | b's' | b'x' | b'U' | b'R' => {}
-                b':' => return Some(true),
-                b')' => return Some(false),
+                b'-' if !negated => {
+                    negated = true;
+                    after_dash = true;
+                }
+                b'i' | b'm' | b's' | b'x' | b'U' | b'R' | b'u' if !seen.contains(&c) => {
+                    if c == b'u' {
+                        self.unicode = !negated;
+                    }
+                    seen.push(c);
+                    after_dash = false;
+                }
+                b':' if !after_dash => return Some(true),
+                b')' if !after_dash && !seen.is_empty() => return Some(false),
                 _ => return None,
             }
         }
@@ -373,6 +407,14 @@ impl Parser<'_> {
                         }
                     }
                     self.yara_x_only(start, start + 2, "A `(?` group in a regular expression");
+                }
+                if depth >= MAX_GROUP_DEPTH {
+                    self.error(
+                        start,
+                        start + 1,
+                        "regular expression nested too deeply: YARA-X takes at most 250 levels of groups, repetitions and alternatives",
+                    );
+                    return Item::Other;
                 }
                 let inner = self.alternation(depth + 1);
                 if self.check.errors.is_empty() {
@@ -775,6 +817,54 @@ mod tests {
         ] {
             assert!(yara_x(re).is_empty(), "{re}: {:?}", yara_x(re));
         }
+    }
+
+    /// Group heads as YARA-X 1.23.0 reads them, checked against the wheel.
+    #[test]
+    fn group_heads_follow_yara_x() {
+        for re in [
+            "(?P<n>a)(?P<n>b)",
+            "(?P<n>a)(?<n>b)",
+            "(?<1a>a)",
+            "(?i-)a",
+            "(?-)a",
+            "(?)a",
+            "(?ii)a",
+            "(?i-i)a",
+            "(?i--s)a",
+            "(?i-:a)",
+        ] {
+            assert_eq!(errors(re).len(), 1, "{re}");
+        }
+        for re in [
+            "(?<_a>a)",
+            "(?<a.b>a)",
+            "(?<a[1]>a)",
+            "(?:)a",
+            "(?-i:a)",
+            "(?P<a>x)(?P<b>y)",
+            "(?i)a",
+            "(?is-mx:a)",
+        ] {
+            assert!(errors(re).is_empty(), "{re}: {:?}", errors(re));
+        }
+    }
+
+    /// YARA-X refuses a regexp nested past its limit (E014); 250 bare
+    /// groups around one byte compile, 251 do not (checked against the
+    /// 1.23.0 wheel). Far deeper text stops at the limit instead of
+    /// overflowing the stack, plain or `(?:` groups.
+    #[test]
+    fn nesting_stops_at_yara_xs_limit() {
+        let nest = |open: &str, n: usize| format!("{}a{}", open.repeat(n), ")".repeat(n));
+        assert!(errors(&nest("(", 250)).is_empty());
+        assert_eq!(errors(&nest("(", 251)).len(), 1);
+        let deep = nest("(?:a|", 100_000);
+        let run = std::thread::Builder::new()
+            .stack_size(1 << 20)
+            .spawn(move || errors(&deep).len())
+            .expect("a thread");
+        assert_eq!(run.join().expect("no overflow"), 1);
     }
 
     /// YARA-X 1.23's verdicts (E014, E045), checked against the wheel.

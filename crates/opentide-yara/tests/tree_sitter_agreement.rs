@@ -41,8 +41,8 @@ fn inputs(dir: &Path, ext: &str) -> Vec<PathBuf> {
 
 /// Inputs where the parsers disagree by design. The tree-sitter grammar is
 /// libyara's dialect: yara-x-parser also accepts YARA-X-only syntax, and
-/// refuses some of libyara's (the engine reports those as
-/// `yara_x_incompatible`, not as parse errors).
+/// refuses some of libyara's (YARA-X is the language: the engine reports
+/// those as errors, #1225).
 const EXPECTED: &[(&str, &str)] = &[
     (
         "base64_modifier__valid.yar",
