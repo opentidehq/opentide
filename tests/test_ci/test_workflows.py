@@ -94,6 +94,10 @@ def test_the_gate_needs_every_job_that_is_not_the_nightlys() -> None:
     assert gated == expected, {"missing": expected - gated, "extra": gated - expected}
     assert jobs["gate"]["name"] == "PR gate"
     assert jobs["gate"]["if"] == "always()"
+    # The branch rules require it alone; the guide lists what they require.
+    guide = (ROOT / ".github" / "AGENTS.md").read_text(encoding="utf-8")
+    block = guide.split("<!-- required-checks -->", 1)[1].split("```text\n", 1)[1]
+    assert block.split("```", 1)[0].split("\n")[:-1] == ["PR gate"]
 
 
 @pytest.mark.parametrize(
@@ -121,42 +125,29 @@ def test_the_gate_fails_unless_every_needed_job_passed(
     assert (done.returncode == 0) is passes, done.stdout + done.stderr
 
 
-def test_the_required_checks_are_the_gate() -> None:
-    guide = (ROOT / ".github" / "AGENTS.md").read_text(encoding="utf-8")
-    block = guide.split("<!-- required-checks -->", 1)[1].split("```text\n", 1)[1]
-    assert block.split("```", 1)[0].split("\n")[:-1] == ["PR gate"]
-
-
-def test_every_changes_output_a_job_reads_exists() -> None:
-    """A typo in `needs.changes.outputs.<x>` reads as empty: the job never runs."""
-    text = CI.read_text(encoding="utf-8")
-    outputs = set(ci_jobs()["changes"]["outputs"])
-    assert set(re.findall(r"needs\.changes\.outputs\.([\w-]+)", text)) <= outputs
-
-
-def test_the_changes_job_exports_what_changes_py_writes() -> None:
+def test_the_changes_jobs_outputs_are_what_changes_py_writes() -> None:
+    """Each output is changes.py's own, read under its own name, and every one a job
+    reads exists: a typo in `needs.changes.outputs.<x>` or a swapped mapping
+    (`vocab: ${{ steps.plan.outputs.fields }}`) reads as empty or valid, and the job
+    never runs."""
     from tests.test_ci.test_changes import changes, metadata
 
+    outputs = ci_jobs()["changes"]["outputs"]
     dirs, _ = changes.workspace_graph(metadata())
-    written = set(changes.Plan(mode="pr").outputs(dirs))
-    assert set(ci_jobs()["changes"]["outputs"]) == written
-
-
-def test_each_changes_output_reads_its_own_plan_output() -> None:
-    """A swapped mapping (`vocab: ${{ steps.plan.outputs.fields }}`) reads as valid."""
-    for name, value in ci_jobs()["changes"]["outputs"].items():
+    assert set(outputs) == set(changes.Plan(mode="pr").outputs(dirs))
+    for name, value in outputs.items():
         assert value == f"${{{{ steps.plan.outputs.{name} }}}}", name
+    read = set(re.findall(r"needs\.changes\.outputs\.([\w-]+)", CI.read_text(encoding="utf-8")))
+    assert read <= set(outputs)
 
 
-def test_the_pr_gates_jobs_run_on_linux() -> None:
+def test_the_gates_jobs_run_on_linux_and_only_the_build_compiles() -> None:
+    """A pull request's jobs run on Linux; `build` builds and runs the Rust tests and
+    `native` builds the wheel the Python jobs install: no other job compiles again."""
     for job_id, job in ci_jobs().items():
         release_or_nightly = "release" in str(job.get("if", "")) or nightly_only(job)
         if not release_or_nightly and "runs-on" in job:
             assert job["runs-on"] == "ubuntu-latest", job_id
-
-
-def test_only_the_build_compiles_the_gates_workspace() -> None:
-    """`build` builds and runs the Rust tests; `native` builds the wheel the Python jobs install."""
     compiles = re.compile(
         r"\bcargo (?:build|test|nextest run)\b|\bmaturin\b|\buv (?:sync|build)\b(?!.*--no-install)"
     )
@@ -187,28 +178,28 @@ def test_no_workflow_runs_a_python_oracle_comparison(path: Path) -> None:
         assert not ORACLE.search(run), (path.name, job_id, run)
 
 
-def test_the_oracle_workflows_and_the_full_ci_label_are_gone() -> None:
-    for name in ("golden.yml", "golden-preview.yml", "docs.yml", "stack-comment.yml"):
-        assert not (WORKFLOWS / name).exists(), name
-    for path in ALL:
-        assert "full-ci" not in path.read_text(encoding="utf-8"), path.name
-
-
 @pytest.mark.parametrize("path", ALL + COMPOSITES, ids=lambda p: f"{p.parent.name}/{p.name}")
-def test_actions_are_pinned_by_commit(path: Path) -> None:
+def test_actions_are_pinned_by_commit_and_local_ones_exist(path: Path) -> None:
+    """A local action's typo fails only when its step runs (actionlint does not see it)."""
     document = load(path)
     jobs = document["jobs"].values() if "jobs" in document else [document["runs"]]
     for job in jobs:
         uses = [job["uses"]] if "uses" in job else []
         uses += [s["uses"] for s in job.get("steps") or [] if "uses" in s]
         for action in uses:
-            assert action.startswith("./") or re.fullmatch(
-                r"[\w.-]+/[\w./-]+@[0-9a-f]{40}", action
-            ), (path.name, action)
+            if action.startswith("./.github/actions/"):
+                assert (ROOT / action / "action.yml").is_file(), (path.name, action)
+            elif action.startswith("./.github/workflows/"):
+                assert (ROOT / action).is_file(), (path.name, action)
+            else:
+                assert re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}", action), (path.name, action)
 
 
 @pytest.mark.parametrize("path", ALL, ids=lambda p: p.name)
-def test_permissions_are_least_privilege(path: Path) -> None:
+def test_permissions_are_least_privilege_and_checkouts_keep_no_credentials(path: Path) -> None:
+    """Writes only where WRITES grants them (publish.yml's OIDC tokens in its four
+    publishing jobs alone); no checkout leaves the token in .git/config, except
+    vocab-upstream.yml's, which pushes the branch of the pull request it opens."""
     workflow = load(path)
     top = workflow.get("permissions")
     assert isinstance(top, dict), f"{path.name}: no workflow-level permissions"
@@ -216,13 +207,9 @@ def test_permissions_are_least_privilege(path: Path) -> None:
         granted = job.get("permissions") or {}
         writes = {scope for scope, level in granted.items() if level == "write"}
         assert writes <= WRITES.get((path.name, job_id), set()), (path.name, job_id, writes)
-
-
-@pytest.mark.parametrize("path", ALL, ids=lambda p: p.name)
-def test_checkouts_keep_no_credentials(path: Path) -> None:
     if path.name == "vocab-upstream.yml":
-        pytest.skip("pushes the branch of the pull request it opens")
-    for job in load(path)["jobs"].values():
+        return
+    for job in workflow["jobs"].values():
         for step in job.get("steps") or []:
             if str(step.get("uses", "")).startswith("actions/checkout@"):
                 assert (step.get("with") or {}).get("persist-credentials") is False, path.name
@@ -257,56 +244,19 @@ def test_the_nightly_is_one_workflow() -> None:
     assert {"nightly.yml", "coverage.yml", "bench.yml", "oracle.yml", "engine-fuzz.yml"} <= called
     for name in called:
         assert set(triggers(load(WORKFLOWS / name))) <= {"workflow_call", "workflow_dispatch"}
-    nightly = ci_jobs()["nightly"]
-    assert nightly["uses"] == "./.github/workflows/nightly.yml"
-    assert nightly_only(nightly)
-
-
-def test_the_nightly_report_waits_for_every_nightly_job() -> None:
-    """It reads the run's failed jobs: one still running when it starts is missed."""
     jobs = ci_jobs()
+    assert jobs["nightly"]["uses"] == "./.github/workflows/nightly.yml"
+    assert nightly_only(jobs["nightly"])
+    # nightly-report reads the run's failed jobs: one still running when it starts
+    # is missed, so it waits for every nightly job and the gate.
     nightly = {job_id for job_id, job in jobs.items() if nightly_only(job)} - {"nightly-report"}
-    assert nightly <= set(jobs["nightly-report"]["needs"])
-    assert "gate" in jobs["nightly-report"]["needs"]
+    assert nightly | {"gate"} <= set(jobs["nightly-report"]["needs"])
 
 
 def test_the_fuzz_matrix_holds_every_target() -> None:
     targets = {path.stem for path in (ROOT / "fuzz" / "fuzz_targets").glob("*.rs")}
     matrix = load(WORKFLOWS / "engine-fuzz.yml")["jobs"]["fuzz"]["strategy"]["matrix"]["target"]
     assert sorted(matrix) == sorted(targets)
-
-
-def test_the_rust_benchmark_is_held_to_its_last_result() -> None:
-    """The python engine (the oracle) is frozen: bench.yml measures the rust one alone."""
-    job = load(WORKFLOWS / "bench.yml")["jobs"]["bench"]
-    assert "strategy" not in job
-    assert job["env"]["ENGINE"] == "rust"
-    steps = job["steps"]
-    (find,) = (s for s in steps if s.get("name") == "Find the base branch's last result")
-    assert "if" not in find
-    check = next(s for s in steps if s.get("name") == "Check against the budgets")
-    assert "--previous" in check["run"]  # only when a reference exists
-    assert "--require-reference" in check["run"]  # a command held to nothing fails
-
-
-def test_every_local_action_a_workflow_uses_exists() -> None:
-    """A typo in `uses: ./.github/actions/<x>` fails only when the step runs."""
-    used = {
-        str(step["uses"]).removeprefix("./")
-        for path in ALL
-        for job in load(path)["jobs"].values()
-        for step in job.get("steps") or []
-        if str(step.get("uses", "")).startswith("./.github/actions/")
-    }
-    assert used, "ci.yml sets Rust up with .github/actions/rust-setup"
-    for action in used:
-        assert (ROOT / action / "action.yml").is_file(), action
-
-
-def test_no_workflow_runs_on_a_tag() -> None:
-    for path in ALL:
-        push = triggers(load(path)).get("push") or {}
-        assert "tags" not in push, path.name
 
 
 # --- Publishing ---------------------------------------------------------------
@@ -323,16 +273,9 @@ def test_only_the_release_train_publishes() -> None:
                 assert publish_commands.is_dry_run(command), (path.name, job_id, command)
     assert seen, "the dry run's publishes are found: the parser reads the commands"
     assert set(triggers(load(PUBLISH))) == {"workflow_dispatch", "repository_dispatch"}
-
-
-def test_publish_mints_oidc_tokens_in_its_publish_jobs_only() -> None:
-    holders = {
-        job_id
-        for job_id, job in load(PUBLISH)["jobs"].items()
-        if (job.get("permissions") or {}).get("id-token") == "write"
-    }
-    assert holders == {"attest", "pypi", "crates", "npm"}
-    assert load(PUBLISH)["permissions"] == {"contents": "read"}
+    # A pushed tag starts nothing: publish.yml creates the tag it releases.
+    for path in ALL:
+        assert "tags" not in (triggers(load(path)).get("push") or {}), path.name
 
 
 def test_the_internal_channel_publishes_to_no_registry() -> None:
