@@ -19,8 +19,11 @@ use rowan::{TextRange, TextSize};
 /// What logos reads, before a word is looked up.
 #[derive(Logos, Clone, Copy, Debug, PartialEq, Eq)]
 enum Token {
-    /// What tree-sitter's `\s` was: the Unicode white space.
-    #[regex(r"[\t\n\x0B\x0C\r \u{85}\u{A0}\u{1680}\u{2000}-\u{200A}\u{2028}\u{2029}\u{202F}\u{205F}\u{3000}]+")]
+    /// What tree-sitter's `\s` was: the Unicode white space. One character
+    /// by the regex, the rest of the run by [`white_space_run`]: a repeated
+    /// class with multi-byte members is a repeated group of byte sequences,
+    /// which logos' generated code recurses on once per character.
+    #[regex(r"[\t\n\x0B\x0C\r \u{85}\u{A0}\u{1680}\u{2000}-\u{200A}\u{2028}\u{2029}\u{202F}\u{205F}\u{3000}]", white_space_run)]
     Whitespace,
     #[regex(r"//[^\n]*", allow_greedy = true)]
     Comment,
@@ -105,6 +108,33 @@ enum Token {
     Slash,
     #[token("%")]
     Percent,
+}
+
+/// Whether `c` is white space as the `Whitespace` token reads it (`\s`).
+fn is_white_space(c: char) -> bool {
+    matches!(
+        c,
+        '\t' | '\n'
+            | '\u{0B}'
+            | '\u{0C}'
+            | '\r'
+            | ' '
+            | '\u{85}'
+            | '\u{A0}'
+            | '\u{1680}'
+            | '\u{2000}'
+            ..='\u{200A}' | '\u{2028}' | '\u{2029}' | '\u{202F}' | '\u{205F}' | '\u{3000}'
+    )
+}
+
+/// The rest of a run of white space after its first character, by a loop.
+fn white_space_run(lex: &mut logos::Lexer<'_, Token>) {
+    let rest = lex.remainder();
+    let end = rest
+        .char_indices()
+        .find(|&(_, c)| !is_white_space(c))
+        .map_or(rest.len(), |(at, _)| at);
+    lex.bump(end);
 }
 
 /// The kind of a logos token and its text.
@@ -488,6 +518,34 @@ mod tests {
     }
 
     #[test]
+    /// Found by review (#1314): a run of multi-byte white space (`\u{3000}`,
+    /// `\u{A0}`) aborted on a 1 MB stack: the repeated class recursed once
+    /// per character in logos' generated code. A run is one token whatever
+    /// its length or mix, and `\s` is still the set it was.
+    #[test]
+    fn a_long_run_of_white_space_is_one_token_on_a_small_stack() {
+        for unit in ["\u{3000}", "\u{A0}", " \u{2028}\t", "\u{205F}\r\n"] {
+            let source = unit.repeat(1_000_000);
+            let lexemes = std::thread::Builder::new()
+                .stack_size(1 << 20)
+                .spawn(move || lex_kql(&source).len())
+                .expect("spawn")
+                .join()
+                .expect("the lexer overflowed or panicked");
+            assert_eq!(lexemes, 1, "{unit:?}");
+        }
+        for c in (0..=0x3000).filter_map(char::from_u32) {
+            // `\s` is Unicode's White_Space, which is what `is_whitespace` reads.
+            let white = c.is_whitespace();
+            let source = format!("a{c}b");
+            let kinds: Vec<K> = lex_kql(&source)
+                .iter()
+                .map(|l| K::from_raw(l.kind))
+                .collect();
+            assert_eq!(kinds.get(1) == Some(&K::WHITESPACE), white, "{c:?}");
+        }
+    }
+
     fn unicode_white_space_is_trivia_and_other_characters_are_errors() {
         let got: Vec<K> = lex_kql("a\u{A0}\u{3000}b é")
             .iter()
