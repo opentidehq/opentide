@@ -3127,11 +3127,12 @@ impl Sender<'_, '_> {
     }
 
     /// GravityZone's cap on YARA rules per company: when the YARA rules
-    /// deployment state records on the tenant, less those the run deletes,
-    /// plus those it creates, pass the limit, each YARA create is refused
-    /// before anything is sent. Updates and deletes go on. A rule recorded
-    /// there that the workspace no longer holds is not counted: its kind is
-    /// unknown.
+    /// deployment state records on the tenant plus those the run creates pass
+    /// the limit, each YARA create is refused before anything is sent.
+    /// Updates and deletes go on; a deletion makes no room in the same run,
+    /// since the rules are sent in plan order. A recorded rule is counted by
+    /// the kind its workspace block has now; one the workspace no longer
+    /// holds, or whose block does not read, is not counted.
     fn bitdefender_yara_limit<'b>(
         &mut self,
         batch: &Batch,
@@ -3142,17 +3143,13 @@ impl Sender<'_, '_> {
             PLATFORM, YARA_RULE_LIMIT_CODE, is_yara, yara_rule_limit,
         };
         let tenant = batch.tenant.name.as_str();
-        let count = |wanted: fn(&Planned) -> bool| {
-            planned
-                .iter()
-                .filter(|(rule, action)| wanted(action) && is_yara(rule))
-                .count()
-        };
-        let created = count(|action| matches!(action, Planned::Create));
+        let created = planned
+            .iter()
+            .filter(|(rule, action)| matches!(action, Planned::Create) && is_yara(rule))
+            .count();
         if created == 0 {
             return planned;
         }
-        let deleted = count(|action| matches!(action, Planned::Delete(_)));
         let root = self.workspace.root().to_path_buf();
         let recorded = deploy_state::recorded(&root, PLATFORM, tenant)
             .iter()
@@ -3161,7 +3158,7 @@ impl Sender<'_, '_> {
                     .is_some_and(|rule| is_yara(&rule))
             })
             .count();
-        let Some(message) = yara_rule_limit(tenant, recorded, created, deleted) else {
+        let Some(message) = yara_rule_limit(tenant, recorded, created) else {
             return planned;
         };
         let error = StateError {

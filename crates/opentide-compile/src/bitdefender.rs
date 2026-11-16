@@ -125,21 +125,18 @@ pub fn is_yara(rule: &Rule) -> bool {
 }
 
 /// Why a deploy to `tenant` is refused its YARA creates, or `None` within the
-/// limit: `recorded` YARA rules have an id there in deployment state, the run
-/// deletes `deleted` of them and creates `created` more.
-pub fn yara_rule_limit(
-    tenant: &str,
-    recorded: usize,
-    created: usize,
-    deleted: usize,
-) -> Option<String> {
-    let after = (recorded + created).saturating_sub(deleted);
+/// limit: `recorded` YARA rules have an id there in deployment state and the
+/// run creates `created` more. A deletion in the same run makes no room: the
+/// rules are sent in plan order, so a create may reach GravityZone first.
+pub fn yara_rule_limit(tenant: &str, recorded: usize, created: usize) -> Option<String> {
+    let after = recorded + created;
     (after > YARA_RULE_LIMIT).then(|| {
         format!(
             "the deploy would leave {after} YARA rules on tenant {:?} ({recorded} recorded in \
-             deployment state, {created} to create, {deleted} to delete), and GravityZone allows \
-             at most {YARA_RULE_LIMIT} per company. No YARA rule is created on this tenant: \
-             retire some, or deploy fewer",
+             deployment state, {created} to create), and GravityZone allows at most \
+             {YARA_RULE_LIMIT} per company. No YARA rule is created on this tenant: retire some \
+             first (a deletion in the same run is sent in plan order, so it makes no room), or \
+             deploy fewer",
             tenant.trim()
         )
     })
@@ -603,23 +600,21 @@ pub fn request(
 mod tests {
     use super::*;
 
-    /// Fifty YARA rules fit; the fifty-first is refused, deletions making room
-    /// first.
+    /// Fifty YARA rules fit; the fifty-first is refused.
     #[test]
-    fn the_yara_rule_limit_is_fifty_after_deletions() {
-        assert_eq!(yara_rule_limit("lab", 0, 50, 0), None);
-        assert_eq!(yara_rule_limit("lab", 49, 1, 0), None);
-        assert_eq!(yara_rule_limit("lab", 50, 1, 1), None);
-        let refused = yara_rule_limit(" lab ", 49, 3, 1).unwrap();
+    fn the_yara_rule_limit_is_fifty() {
+        assert_eq!(yara_rule_limit("lab", 0, 50), None);
+        assert_eq!(yara_rule_limit("lab", 49, 1), None);
+        let refused = yara_rule_limit(" lab ", 48, 3).unwrap();
         assert!(
             refused.starts_with(
-                "the deploy would leave 51 YARA rules on tenant \"lab\" (49 recorded in \
-                 deployment state, 3 to create, 1 to delete)"
+                "the deploy would leave 51 YARA rules on tenant \"lab\" (48 recorded in \
+                 deployment state, 3 to create)"
             ),
             "{refused}"
         );
         assert!(
-            yara_rule_limit("lab", 51, 0, 0).is_some(),
+            yara_rule_limit("lab", 51, 0).is_some(),
             "already past: no create fits"
         );
     }

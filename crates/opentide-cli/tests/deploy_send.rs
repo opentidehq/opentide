@@ -1150,7 +1150,7 @@ fn bitdefender_block(yara: bool) -> String {
     let rule = if yara {
         "    yara:\n      signature: |\n        rule A {\n          strings:\n            $a = \"evil\"\n          condition:\n            $a\n        }\n"
     } else {
-        "    detection:\n      criteria:\n        - field: Process.Name\n          relation: is\n          value: evil.exe\n"
+        "    detection:\n      target: process\n      criteria:\n        - field: Process.Name\n          is: evil.exe\n"
     };
     format!(
         "  bitdefender:\n    enabled: true\n    schema: platform::bitdefender::1.0\n    status: STAGING\n{rule}"
@@ -1159,7 +1159,7 @@ fn bitdefender_block(yara: bool) -> String {
 
 const BITDEFENDER_SETUP: &str = "api_key = \"key\"\nurl = \"https://127.0.0.1:9\"\n";
 
-/// The rows of the run, each `(status, message)`, for the rules `uuids`.
+/// The rows of the run, each `(status, message)`: `count` of them.
 fn rows_for(sent: &Sent, count: usize) -> Vec<(String, Option<String>)> {
     let rows = rows(sent);
     assert_eq!(rows.len(), count, "{rows:?}");
@@ -1198,9 +1198,9 @@ fn bitdefender_refuses_yara_creates_past_fifty_rules() {
     }
 }
 
-/// The rules deployment state records on the tenant count, and so do the
-/// rules the run deletes (less) and creates (more); a custom detection rule
-/// does not count.
+/// The YARA rules deployment state records on the tenant count with those
+/// the run creates; a recorded custom detection rule (a valid block, so the
+/// count reads its kind) does not.
 #[test]
 fn bitdefender_counts_the_yara_rules_deployment_state_records() {
     let yara = bitdefender_block(true);
@@ -1214,6 +1214,7 @@ fn bitdefender_counts_the_yara_rules_deployment_state_records() {
             )
         })
         .collect();
+    // A custom detection rule recorded on the tenant does not count.
     rules.push((
         "d.yaml".into(),
         "00000000-0000-4000-8097-000000000001".into(),
@@ -1226,38 +1227,28 @@ fn bitdefender_counts_the_yara_rules_deployment_state_records() {
         .collect();
     let ws = stated("bitdefender", BITDEFENDER_SETUP, &refs);
     let new = "00000000-0000-4000-8096-000000000001";
-    let detection = "00000000-0000-4000-8096-000000000002";
     let dir = ws.path().join("objects/rules");
     std::fs::write(
         dir.join("new.yaml"),
         rule("New YARA rule", new, "New.", &yara),
     )
     .unwrap();
-    std::fs::write(
-        dir.join("new-detection.yaml"),
-        rule(
-            "New detection",
-            detection,
-            "New.",
-            &bitdefender_block(false),
-        ),
-    )
-    .unwrap();
     let args = Args {
         strategies: vec!["PREVIEW".into(), "RELEASE".into()],
-        uuids: vec![new.into(), detection.into()],
+        uuids: vec![new.into()],
         platform: Some("bitdefender".into()),
         keep_deprecated: Some(true),
         ..Args::default()
     };
     let env = Env::from_pairs(Vec::<(String, String)>::new());
     let (sent, text) = deploy_with(ws.path(), &args, &env, &Registry::new(), 0);
-    let rows = rows_for(&sent, 2);
-    let refused: Vec<_> = rows
-        .iter()
-        .filter_map(|(_, message)| message.as_deref())
-        .filter(|message| message.starts_with("the deploy would leave 51 YARA rules"))
-        .collect();
-    assert_eq!(refused.len(), 1, "{rows:?}\n{text}");
-    assert!(refused[0].contains("(50 recorded in deployment state, 1 to create, 0 to delete)"));
+    let rows = rows_for(&sent, 1);
+    assert_eq!(rows[0].0, "failed", "{text}");
+    assert!(
+        rows[0].1.as_deref().unwrap().starts_with(
+            "the deploy would leave 51 YARA rules on tenant \"lab\" (50 recorded in deployment \
+             state, 1 to create)"
+        ),
+        "{rows:?}"
+    );
 }
