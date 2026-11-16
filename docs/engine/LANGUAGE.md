@@ -386,7 +386,7 @@ Hover explains functions (signature, summary, aggregate, lifecycle, CrowdStrike'
 Language id `exabeam` (`.exabeam`). The Exabeam Query Language of Exabeam's New-Scale SIEM ([exabeam-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/exabeam-1.0.md)): `configurations.exabeam.sequences[].query` (profile `rule`), hunts with `system: exabeam` and `.exabeam` files (profile `search`). Exabeam's guides call it "EQL"; the id is never `eql`, which is Elastic's. `docs/engine/EXABEAM.md` has the profiles, the codes and the conformance results.
 
 - **Verdicts** come from `crates/opentide-exabeam/src/check.rs`, a port of the specification's reference checker, which agrees with it on every conformance query and on Exabeam's 2,371 published rules but for three RE2 differences (`docs/engine/EXABEAM.md`).
-- **The tree-sitter grammar** (`grammars/tree-sitter-opentide-exabeam`) colours and structures the text: the filter (`NOT` > `AND` > `OR`, juxtaposition is `AND`) and the advanced operators, keywords in any case, clauses in any order. Its tokens equal the verdict parser's on every error-free conformance query but one, listed in `tests/reference.rs`.
+- **The tree** (`crates/opentide-exabeam/src/cst.rs`, a parser on `opentide-parse` that accepts what `grammars/tree-sitter-opentide-exabeam` accepts) colours the text: the filter (`NOT` > `AND` > `OR`, juxtaposition is `AND`) and the advanced operators, keywords in any case, clauses in any order. Its tokens equal the verdict parser's on every error-free conformance query (`tests/reference.rs`), and the grammar's highlights on every query the grammar parses without an error (`tests/differential.rs`).
 
 | id | grammar rule | fixture ids | capture |
 | --- | --- | --- | --- |

@@ -138,7 +138,7 @@ const HIGHLIGHT_DIFFERENCES: &[&str] = &[];
 /// The tree's highlighting (the parser on `opentide-parse`) matches the reference checker's
 /// tokens on every query the reference finds no error in.
 #[test]
-fn tree_sitter_highlighting_agrees_on_error_free_queries() {
+fn tree_highlighting_agrees_on_error_free_queries() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../testdata/conformance/exabeam/reference.json");
     let doc: serde_json::Value =
