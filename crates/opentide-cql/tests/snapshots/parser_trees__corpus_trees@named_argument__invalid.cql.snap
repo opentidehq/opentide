@@ -1,0 +1,28 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/named_argument__invalid.cql
+---
+SOURCE_FILE@0..33
+  PIPELINE@0..32
+    FUNCTION_CALL@0..32
+      FUNCTION_NAME@0..4
+        FUNCTION_NAME_TOKEN@0..4 "rdns"
+      L_PAREN@4..5 "("
+      ARGUMENT_LIST@5..32
+        NAMED_ARGUMENT@5..20
+          ARGUMENT_NAME@5..10
+            WORD@5..10 "field"
+          EQ@10..11 "="
+          FIELD_NAME@11..20
+            WORD@11..20 "ipaddress"
+        COMMA@20..21 ","
+        NAMED_ARGUMENT@21..32
+          ARGUMENT_NAME@21..23
+            WORD@21..23 "as"
+          EQ@23..24 "="
+          FIELD_NAME@24..32
+            WORD@24..32 "hostname"
+  WHITESPACE@32..33 "\n"
+
+32..33: missing `)` (expected R_PAREN, COMMA)

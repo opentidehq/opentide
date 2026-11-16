@@ -1,0 +1,17 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..13
+  PIPELINE@0..13
+    FIELD_FILTER@0..13
+      FIELD_NAME@0..1
+        WORD@0..1 "a"
+      EQ@1..2 "="
+      REGEX@2..13
+        SLASH@2..3 "/"
+        REGEX_PATTERN@3..11
+          REGEX_PATTERN_TOKEN@3..11 "x\\/y[/]z"
+        SLASH@11..12 "/"
+        REGEX_FLAGS@12..13
+          REGEX_FLAGS_TOKEN@12..13 "i"

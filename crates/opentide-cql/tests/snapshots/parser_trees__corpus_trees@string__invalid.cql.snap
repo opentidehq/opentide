@@ -1,0 +1,27 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/string__invalid.cql
+---
+SOURCE_FILE@0..20
+  PIPELINE@0..19
+    FIELD_FILTER@0..6
+      FIELD_NAME@0..4
+        WORD@0..4 "user"
+      WHITESPACE@4..5 " "
+      EQ@5..6 "="
+    WHITESPACE@6..7 " "
+    ERROR@7..8
+      ERROR_TOKEN@7..8 "\""
+    AND_FILTER@8..19
+      FREE_TEXT@8..12
+        UNQUOTED_PATTERN@8..12
+          WORD@8..12 "Alan"
+      WHITESPACE@12..13 " "
+      FREE_TEXT@13..19
+        UNQUOTED_PATTERN@13..19
+          WORD@13..19 "Turing"
+  WHITESPACE@19..20 "\n"
+
+6..7: expected a value
+6..7: unexpected (expected PIPE)

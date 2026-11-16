@@ -51,15 +51,17 @@ const ADDITIVE: TokenSet = K::set(&[K::PLUS, K::MINUS]);
 const MULTIPLICATIVE: TokenSet = K::set(&[K::STAR, K::SLASH, K::PERCENT]);
 const PATTERN_TOKENS: TokenSet = K::set(&[K::PATTERN, K::WORD, K::TAG_TOKEN, K::NUMBER_TOKEN]);
 
+/// The toolkit's kinds for CQL.
+pub(crate) const GRAMMAR: Grammar = Grammar {
+    eof: K::EOF.raw(),
+    error: K::ERROR.raw(),
+    trivia: K::set(&[K::WHITESPACE, K::LINE_COMMENT, K::BLOCK_COMMENT]),
+    max_depth: MAX_DEPTH,
+};
+
 /// Parses `source`.
 pub(crate) fn parse(source: &str) -> (SyntaxNode, Parse) {
-    let grammar = Grammar {
-        eof: K::EOF.raw(),
-        error: K::ERROR.raw(),
-        trivia: K::set(&[K::WHITESPACE, K::LINE_COMMENT, K::BLOCK_COMMENT]),
-        max_depth: MAX_DEPTH,
-    };
-    let input = Input::new(source, lexer::lex(source), grammar);
+    let input = Input::new(source, lexer::lex(source), GRAMMAR);
     let mut p = Parser::new(&input);
     let root = p.start();
     if !p.at_eof() {

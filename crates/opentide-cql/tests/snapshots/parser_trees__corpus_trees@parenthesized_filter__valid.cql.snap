@@ -1,0 +1,62 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/parenthesized_filter__valid.cql
+---
+SOURCE_FILE@0..121
+  PIPELINE@0..120
+    AND_FILTER@0..120
+      FIELD_FILTER@0..32
+        TAG@0..17
+          TAG_TOKEN@0..17 "#event_simpleName"
+        EQ@17..18 "="
+        UNQUOTED_PATTERN@18..32
+          WORD@18..32 "ProcessRollup2"
+      WHITESPACE@32..33 " "
+      OR_FILTER@33..120
+        PARENTHESIZED_FILTER@33..84
+          L_PAREN@33..34 "("
+          AND_FILTER@34..83
+            FIELD_FILTER@34..63
+              FIELD_NAME@34..47
+                WORD@34..47 "ImageFileName"
+              EQ@47..48 "="
+              REGEX@48..63
+                SLASH@48..49 "/"
+                REGEX_PATTERN@49..61
+                  REGEX_PATTERN_TOKEN@49..61 "\\\\net1?\\.exe"
+                SLASH@61..62 "/"
+                REGEX_FLAGS@62..63
+                  REGEX_FLAGS_TOKEN@62..63 "i"
+            WHITESPACE@63..64 " "
+            FIELD_FILTER@64..83
+              FIELD_NAME@64..75
+                WORD@64..75 "CommandLine"
+              EQ@75..76 "="
+              REGEX@76..83
+                SLASH@76..77 "/"
+                REGEX_PATTERN@77..81
+                  REGEX_PATTERN_TOKEN@77..81 "view"
+                SLASH@81..82 "/"
+                REGEX_FLAGS@82..83
+                  REGEX_FLAGS_TOKEN@82..83 "i"
+          R_PAREN@83..84 ")"
+        WHITESPACE@84..85 " "
+        OR@85..87
+          OR_KW@85..87 "OR"
+        WHITESPACE@87..88 " "
+        PARENTHESIZED_FILTER@88..120
+          L_PAREN@88..89 "("
+          FIELD_FILTER@89..119
+            FIELD_NAME@89..102
+              WORD@89..102 "ImageFileName"
+            EQ@102..103 "="
+            REGEX@103..119
+              SLASH@103..104 "/"
+              REGEX_PATTERN@104..117
+                REGEX_PATTERN_TOKEN@104..117 "\\\\nltest\\.exe"
+              SLASH@117..118 "/"
+              REGEX_FLAGS@118..119
+                REGEX_FLAGS_TOKEN@118..119 "i"
+          R_PAREN@119..120 ")"
+  WHITESPACE@120..121 "\n"

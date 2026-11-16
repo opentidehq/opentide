@@ -1,0 +1,35 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..15
+  PIPELINE@0..15
+    FUNCTION_CALL@0..15
+      FUNCTION_NAME@0..1
+        FUNCTION_NAME_TOKEN@0..1 "f"
+      L_PAREN@1..2 "("
+      ARGUMENT_LIST@2..13
+        ARGUMENT@2..13
+          SUBQUERY@2..13
+            L_BRACE@2..3 "{"
+            WHITESPACE@3..4 " "
+            PIPELINE@4..13
+              FIELD_FILTER@4..7
+                FIELD_NAME@4..5
+                  WORD@4..5 "a"
+                EQ@5..6 "="
+                UNQUOTED_PATTERN@6..7
+                  WORD@6..7 "1"
+              WHITESPACE@7..8 " "
+              PIPE@8..9 "|"
+              WHITESPACE@9..10 " "
+              FIELD_FILTER@10..13
+                FIELD_NAME@10..11
+                  WORD@10..11 "b"
+                EQ@11..12 "="
+                UNQUOTED_PATTERN@12..13
+                  WORD@12..13 "2"
+      WHITESPACE@13..14 " "
+      R_PAREN@14..15 ")"
+
+13..14: missing `}` (expected PIPE, R_BRACE)

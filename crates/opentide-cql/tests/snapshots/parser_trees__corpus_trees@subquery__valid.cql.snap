@@ -1,0 +1,152 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/subquery__valid.cql
+---
+SOURCE_FILE@0..200
+  PIPELINE@0..199
+    FUNCTION_CALL@0..53
+      FUNCTION_NAME@0..11
+        FUNCTION_NAME_TOKEN@0..11 "defineTable"
+      L_PAREN@11..12 "("
+      ARGUMENT_LIST@12..52
+        NAMED_ARGUMENT@12..32
+          ARGUMENT_NAME@12..17
+            WORD@12..17 "query"
+          EQ@17..18 "="
+          SUBQUERY@18..32
+            L_BRACE@18..19 "{"
+            WHITESPACE@19..20 " "
+            PIPELINE@20..30
+              PIPE@20..21 "|"
+              WHITESPACE@21..22 " "
+              FIELD_FILTER@22..30
+                FIELD_NAME@22..27
+                  WORD@22..27 "value"
+                EQ@27..28 "="
+                UNQUOTED_PATTERN@28..30
+                  WORD@28..30 "42"
+            WHITESPACE@30..31 " "
+            R_BRACE@31..32 "}"
+        COMMA@32..33 ","
+        WHITESPACE@33..34 " "
+        NAMED_ARGUMENT@34..43
+          ARGUMENT_NAME@34..41
+            WORD@34..41 "include"
+          EQ@41..42 "="
+          UNQUOTED_PATTERN@42..43
+            PATTERN@42..43 "*"
+        COMMA@43..44 ","
+        WHITESPACE@44..45 " "
+        NAMED_ARGUMENT@45..52
+          ARGUMENT_NAME@45..49
+            WORD@45..49 "name"
+          EQ@49..50 "="
+          STRING@50..52
+            STRING_TOKEN@50..52 "\"\""
+      R_PAREN@52..53 ")"
+    WHITESPACE@53..54 "\n"
+    PIPE@54..55 "|"
+    WHITESPACE@55..56 " "
+    FUNCTION_CALL@56..124
+      FUNCTION_NAME@56..60
+        FUNCTION_NAME_TOKEN@56..60 "join"
+      L_PAREN@60..61 "("
+      ARGUMENT_LIST@61..123
+        NAMED_ARGUMENT@61..89
+          ARGUMENT_NAME@61..66
+            WORD@61..66 "query"
+          EQ@66..67 "="
+          SUBQUERY@67..89
+            L_BRACE@67..68 "{"
+            PIPELINE@68..88
+              AND_FILTER@68..88
+                FIELD_FILTER@68..75
+                  TAG@68..73
+                    TAG_TOKEN@68..73 "#repo"
+                  EQ@73..74 "="
+                  UNQUOTED_PATTERN@74..75
+                    WORD@74..75 "B"
+                WHITESPACE@75..76 " "
+                FIELD_FILTER@76..88
+                  FIELD_NAME@76..86
+                    WORD@76..86 "session_id"
+                  EQ@86..87 "="
+                  UNQUOTED_PATTERN@87..88
+                    PATTERN@87..88 "*"
+            R_BRACE@88..89 "}"
+        COMMA@89..90 ","
+        WHITESPACE@90..91 " "
+        NAMED_ARGUMENT@91..107
+          ARGUMENT_NAME@91..96
+            WORD@91..96 "field"
+          EQ@96..97 "="
+          FIELD_NAME@97..107
+            WORD@97..107 "session_id"
+        COMMA@107..108 ","
+        WHITESPACE@108..109 " "
+        NAMED_ARGUMENT@109..123
+          ARGUMENT_NAME@109..112
+            WORD@109..112 "key"
+          EQ@112..113 "="
+          FIELD_NAME@113..123
+            WORD@113..123 "session_id"
+      R_PAREN@123..124 ")"
+    WHITESPACE@124..125 "\n"
+    PIPE@125..126 "|"
+    WHITESPACE@126..127 " "
+    FUNCTION_CALL@127..199
+      FUNCTION_NAME@127..134
+        FUNCTION_NAME_TOKEN@127..134 "groupBy"
+      L_PAREN@134..135 "("
+      ARGUMENT_LIST@135..198
+        ARGUMENT@135..139
+          FIELD_NAME@135..139
+            WORD@135..139 "type"
+        COMMA@139..140 ","
+        WHITESPACE@140..141 " "
+        NAMED_ARGUMENT@141..198
+          ARGUMENT_NAME@141..149
+            WORD@141..149 "function"
+          EQ@149..150 "="
+          SUBQUERY@150..198
+            L_BRACE@150..151 "{"
+            WHITESPACE@151..152 " "
+            PIPELINE@152..196
+              ASSIGNMENT@152..170
+                FIELD_NAME@152..158
+                  WORD@152..158 "avgFoo"
+                WHITESPACE@158..159 " "
+                COLON_EQ@159..161 ":="
+                WHITESPACE@161..162 " "
+                FUNCTION_CALL@162..170
+                  FUNCTION_NAME@162..165
+                    FUNCTION_NAME_TOKEN@162..165 "avg"
+                  L_PAREN@165..166 "("
+                  ARGUMENT_LIST@166..169
+                    ARGUMENT@166..169
+                      FIELD_NAME@166..169
+                        WORD@166..169 "foo"
+                  R_PAREN@169..170 ")"
+              WHITESPACE@170..171 " "
+              PIPE@171..172 "|"
+              WHITESPACE@172..173 " "
+              ASSIGNMENT@173..196
+                FIELD_NAME@173..179
+                  WORD@173..179 "outFoo"
+                WHITESPACE@179..180 " "
+                COLON_EQ@180..182 ":="
+                WHITESPACE@182..183 " "
+                FUNCTION_CALL@183..196
+                  FUNCTION_NAME@183..188
+                    FUNCTION_NAME_TOKEN@183..188 "round"
+                  L_PAREN@188..189 "("
+                  ARGUMENT_LIST@189..195
+                    ARGUMENT@189..195
+                      FIELD_NAME@189..195
+                        WORD@189..195 "avgFoo"
+                  R_PAREN@195..196 ")"
+            WHITESPACE@196..197 " "
+            R_BRACE@197..198 "}"
+      R_PAREN@198..199 ")"
+  WHITESPACE@199..200 "\n"

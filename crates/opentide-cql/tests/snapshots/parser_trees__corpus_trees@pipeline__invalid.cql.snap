@@ -1,0 +1,33 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/pipeline__invalid.cql
+---
+SOURCE_FILE@0..52
+  PIPELINE@0..51
+    FIELD_FILTER@0..32
+      TAG@0..17
+        TAG_TOKEN@0..17 "#event_simpleName"
+      EQ@17..18 "="
+      UNQUOTED_PATTERN@18..32
+        WORD@18..32 "ProcessRollup2"
+    WHITESPACE@32..33 "\n"
+    PIPE@33..34 "|"
+    WHITESPACE@34..35 " "
+    PIPE@35..36 "|"
+    WHITESPACE@36..37 " "
+    FUNCTION_CALL@37..51
+      FUNCTION_NAME@37..44
+        FUNCTION_NAME_TOKEN@37..44 "groupBy"
+      L_PAREN@44..45 "("
+      ARGUMENT_LIST@45..50
+        ARGUMENT@45..50
+          ARRAY@45..50
+            L_BRACK@45..46 "["
+            FIELD_NAME@46..49
+              WORD@46..49 "aid"
+            R_BRACK@49..50 "]"
+      R_PAREN@50..51 ")"
+  WHITESPACE@51..52 "\n"
+
+34..35: expected a step (expected PIPE)

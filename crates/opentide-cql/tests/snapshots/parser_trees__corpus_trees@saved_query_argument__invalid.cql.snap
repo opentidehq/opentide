@@ -1,0 +1,20 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/saved_query_argument__invalid.cql
+---
+SOURCE_FILE@0..26
+  PIPELINE@0..25
+    SAVED_QUERY@0..25
+      DOLLAR@0..1 "$"
+      SAVED_QUERY_NAME@1..13
+        SAVED_QUERY_NAME_TOKEN@1..13 "mySavedQuery"
+      L_PAREN@13..14 "("
+      SAVED_QUERY_ARGUMENT@14..24
+        ARGUMENT_NAME@14..24
+          WORD@14..24 "mvArgument"
+      R_PAREN@24..25 ")"
+  WHITESPACE@25..26 "\n"
+
+24..24: expected `=` after the argument name (expected EQ)
+24..24: expected a value (expected EQ)

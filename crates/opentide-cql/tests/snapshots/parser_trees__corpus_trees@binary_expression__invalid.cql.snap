@@ -1,0 +1,40 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/binary_expression__invalid.cql
+---
+SOURCE_FILE@0..22
+  PIPELINE@0..21
+    FUNCTION_CALL@0..10
+      FUNCTION_NAME@0..4
+        FUNCTION_NAME_TOKEN@0..4 "test"
+      L_PAREN@4..5 "("
+      ARGUMENT_LIST@5..10
+        ARGUMENT@5..10
+          BINARY_EXPRESSION@5..10
+            FIELD_NAME@5..6
+              WORD@5..6 "a"
+            WHITESPACE@6..7 " "
+            GT@7..8 ">"
+            WHITESPACE@8..9 " "
+            NUMBER@9..10
+              NUMBER_TOKEN@9..10 "1"
+    WHITESPACE@10..11 " "
+    ERROR@11..14
+      WORD@11..14 "and"
+    WHITESPACE@14..15 " "
+    FIELD_FILTER@15..20
+      FIELD_NAME@15..16
+        WORD@15..16 "b"
+      WHITESPACE@16..17 " "
+      GT@17..18 ">"
+      WHITESPACE@18..19 " "
+      NUMBER@19..20
+        NUMBER_TOKEN@19..20 "2"
+    ERROR@20..21
+      R_PAREN@20..21 ")"
+  WHITESPACE@21..22 "\n"
+
+10..11: missing `)` (expected R_PAREN, COMMA)
+10..11: unexpected (expected PIPE, R_PAREN, COMMA)
+20..20: unexpected (expected PIPE)

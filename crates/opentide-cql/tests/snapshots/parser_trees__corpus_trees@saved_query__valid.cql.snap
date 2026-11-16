@@ -1,0 +1,47 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/saved_query__valid.cql
+---
+SOURCE_FILE@0..120
+  PIPELINE@0..119
+    SAVED_QUERY@0..19
+      DOLLAR@0..1 "$"
+      STRING@1..17
+        STRING_TOKEN@1..17 "\"My Saved Query\""
+      L_PAREN@17..18 "("
+      R_PAREN@18..19 ")"
+    WHITESPACE@19..20 " "
+    PIPE@20..21 "|"
+    WHITESPACE@21..22 " "
+    SAVED_QUERY@22..47
+      DOLLAR@22..23 "$"
+      SAVED_QUERY_NAME@23..45
+        SAVED_QUERY_NAME_TOKEN@23..45 "filterOutFalsePositive"
+      L_PAREN@45..46 "("
+      R_PAREN@46..47 ")"
+    WHITESPACE@47..48 "\n"
+    PIPE@48..49 "|"
+    WHITESPACE@49..50 " "
+    SAVED_QUERY@50..88
+      DOLLAR@50..51 "$"
+      SAVED_QUERY_NAME@51..71
+        SAVED_QUERY_NAME_TOKEN@51..71 "falcon/helper:enrich"
+      L_PAREN@71..72 "("
+      SAVED_QUERY_ARGUMENT@72..87
+        ARGUMENT_NAME@72..77
+          WORD@72..77 "field"
+        EQ@77..78 "="
+        UNQUOTED_PATTERN@78..87
+          WORD@78..87 "LogonType"
+      R_PAREN@87..88 ")"
+    WHITESPACE@88..89 "\n"
+    PIPE@89..90 "|"
+    WHITESPACE@90..91 " "
+    SAVED_QUERY@91..119
+      DOLLAR@91..92 "$"
+      SAVED_QUERY_NAME@92..117
+        SAVED_QUERY_NAME_TOKEN@92..117 "query://anotherView:saved"
+      L_PAREN@117..118 "("
+      R_PAREN@118..119 ")"
+  WHITESPACE@119..120 "\n"
