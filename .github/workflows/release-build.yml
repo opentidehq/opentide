@@ -1,0 +1,333 @@
+# Everything a release ships, built and smoke-tested once for both callers
+# (the CI simplification, step 5a):
+#
+#   - publish.yml, the release train: at the release's (or a candidate's)
+#     versions and tag, from nothing (no compiler cache), then attested and
+#     published by its own jobs;
+#   - ci.yml's `release` job, on a release pull request, `scope: release` and
+#     the nightly: a development build of the workspace version (PyPI
+#     X.Y.Z.devN, npm X.Y.Z-dev.N, N the run number) with the dry run's
+#     compiler caches, kept as the run's artifacts (docs/internal/publishing.md,
+#     "Testing a build without publishing").
+#
+# Jobs:
+#
+#   - `release-versions`: the revision (a 40-hex SHA) and the versions every build carries;
+#   - `packages` (build-packages.yml): the six cp310-abi3 wheels, each
+#     installed and run on its own OS (`wheel-smoke`), the six npm addons and
+#     every npm tarball (`npm-packages`);
+#   - `engine-assets` (engine-release-build.yml): the GitHub Release's assets,
+#     `release-assets` (the binaries per target, the installers, the
+#     WebAssembly builds, the SBOMs, SHA256SUMS);
+#   - `sdist`: the sdist, at the wheels' version, with twine's check;
+#   - `crate-packages`: every publishable crate built from its package and the
+#     licence scan (`crates`);
+#   - `smoke`: one matrix, one script (scripts/build/smoke_release.sh): on
+#     each of the six platforms the binary installer against `release-assets`
+#     and `npm install` from a throwaway local registry of `npm-packages`;
+#     on Linux x64 a build from the sdist (with the PyPI dist's shape: one
+#     version, six cp310-abi3 wheels, one sdist) and `cargo install` from the
+#     crate packages. The wheels' own smoke is build-packages.yml's.
+#
+# Artifacts keep their names (wheels-<platform>, npm-packages, release-assets,
+# sdist, crates): publish.yml's attest, internal-release and registry jobs
+# download them by name. Nothing here publishes or holds a token.
+name: Release build
+
+on:
+  workflow_call:
+    inputs:
+      revision:
+        description: "The commit to build, as its 40-hex SHA (publish.yml's guard resolves it; ci.yml passes github.sha)."
+        required: true
+        type: string
+      tag:
+        description: "vX.Y.Z or vX.Y.Z-rc.N for the release's assets; empty: the workspace version's tag."
+        required: false
+        default: ""
+        type: string
+      pypi-version:
+        description: "The wheels' and the sdist's version (PEP 440); empty: X.Y.Z.devN."
+        required: false
+        default: ""
+        type: string
+      npm-version:
+        description: "The npm packages' version; empty: X.Y.Z-dev.N."
+        required: false
+        default: ""
+        type: string
+      crates-version:
+        description: "The crates' version, a candidate's X.Y.Z-rc.N; empty: the workspace's."
+        required: false
+        default: ""
+        type: string
+      dry-run:
+        description: "Not a release: the compiler caches may be restored."
+        required: false
+        default: false
+        type: boolean
+      retention-days:
+        description: "How long the artifacts are kept; 0 is the repository's default."
+        required: false
+        default: 0
+        type: number
+    outputs:
+      pypi:
+        description: "The wheels' and the sdist's version."
+        value: ${{ jobs.release-versions.outputs.pypi }}
+      npm:
+        description: "The npm packages' version."
+        value: ${{ jobs.release-versions.outputs.npm }}
+      crates:
+        description: "The crates' version."
+        value: ${{ jobs.release-versions.outputs.crates }}
+      version:
+        description: "The version the binaries report (the tag without its v)."
+        value: ${{ jobs.engine-assets.outputs.version }}
+  # Run workflow: a development build of the branch's commit, as ci.yml's.
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Not a release: the compiler caches may be restored."
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  release-versions:
+    name: Versions
+    runs-on: ubuntu-latest
+    outputs:
+      revision: ${{ steps.revision.outputs.revision }}
+      workspace: ${{ steps.versions.outputs.workspace }}
+      crates: ${{ steps.versions.outputs.crates }}
+      pypi: ${{ steps.versions.outputs.pypi }}
+      npm: ${{ steps.versions.outputs.npm }}
+    steps:
+      # Before any checkout: a commit SHA, never a branch or tag that could move.
+      - name: The revision is a commit SHA
+        id: revision
+        env:
+          REVISION: ${{ inputs.revision || github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${REVISION}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::revision must be a 40-hex commit SHA, not '${REVISION}'." >&2
+            exit 1
+          fi
+          echo "revision=${REVISION}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ steps.revision.outputs.revision }}
+      - name: The versions
+        id: versions
+        env:
+          PYPI_VERSION: ${{ inputs.pypi-version }}
+          NPM_VERSION: ${{ inputs.npm-version }}
+          CRATES_VERSION: ${{ inputs.crates-version }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          workspace="$(python3 scripts/engine/release.py version)"
+          {
+            echo "workspace=${workspace}"
+            echo "crates=${CRATES_VERSION:-${workspace}}"
+            echo "pypi=${PYPI_VERSION:-${workspace}.dev${RUN_NUMBER}}"
+            echo "npm=${NPM_VERSION:-${workspace}-dev.${RUN_NUMBER}}"
+          } >> "$GITHUB_OUTPUT"
+
+  packages:
+    name: Packages
+    needs: release-versions
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-packages.yml
+    with:
+      revision: ${{ needs.release-versions.outputs.revision }}
+      pypi-version: ${{ needs.release-versions.outputs.pypi }}
+      npm-version: ${{ needs.release-versions.outputs.npm }}
+      # A development build compiles the wheels through sccache.
+      sccache: ${{ inputs.dry-run }}
+      retention-days: ${{ inputs.retention-days }}
+
+  engine-assets:
+    name: Release assets
+    needs: release-versions
+    permissions:
+      contents: read
+    uses: ./.github/workflows/engine-release-build.yml
+    with:
+      tag: ${{ inputs.tag }}
+      wheel-version: ${{ inputs.pypi-version }}
+      dry-run: ${{ inputs.dry-run }}
+
+  # The sdist carries the workspace's manifests, sources and embedded data: a
+  # platform without a wheel (musl, free-threaded CPython) builds from it
+  # wherever a Rust toolchain is installed. At the wheels' version.
+  sdist:
+    name: Sdist
+    needs: release-versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYPI_VERSION: ${{ needs.release-versions.outputs.pypi }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.release-versions.outputs.revision }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      # As build-packages.yml's wheels: maturin takes the version from
+      # bindings/python/'s crate (scripts/engine/release.py pypi-version).
+      - name: The sdist at the wheels' version
+        run: python scripts/engine/release.py pypi-version "${PYPI_VERSION}"
+      - name: Build sdist
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: v1.16.0
+          command: sdist
+          args: --out dist
+      - name: Twine check
+        run: pipx run twine check dist/*
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+  # Every publishable crate built from its package (`cargo package`, as
+  # crates.io and `cargo install` build it), and the licence scan over the
+  # packages: no oracle reference ships. Left out: the members with
+  # `publish = false` (the PyO3 and Node.js bindings, xtask, the test harnesses
+  # opentide-compare and opentide-cassette, and opentide-wasm, which ships as a
+  # release asset), whose sources are scanned instead
+  # (tests/test_ci/test_workflows.py). opentide-cli carries opentide's package
+  # data, its explain pages, as the wheel does: scanned as a product.
+  crate-packages:
+    name: Crate packages and licence scan
+    needs: release-versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      # A compiler warning fails the build.
+      RUSTFLAGS: "-Dwarnings"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.release-versions.outputs.revision }}
+      # The release rust-toolchain.toml pins (`rustup toolchain install` with no
+      # name). No compiler cache: off the critical path (the wheels take longer).
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      # A candidate's crates are crates.io pre-releases, X.Y.Z-rc.N: this
+      # checkout only (the branch keeps X.Y.Z) carries that version and pins.
+      - name: A candidate's crates at its pre-release version
+        if: needs.release-versions.outputs.crates != needs.release-versions.outputs.workspace
+        env:
+          VERSION: ${{ needs.release-versions.outputs.crates }}
+        run: python3 scripts/engine/release.py bump "${VERSION}"
+      - run: python3 scripts/engine/release.py vendor
+      # `cargo publish --workspace` skips the members with `publish = false`;
+      # `cargo package` names them.
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-cassette --exclude opentide-wasm --exclude opentide-node --allow-dirty
+      - name: license scan (no oracle references)
+        run: |
+          set -euo pipefail
+          find target/package -maxdepth 1 -name '*.crate' ! -name 'opentide-cli-*' -print0 | xargs -0 bash scripts/engine/license-scan.sh
+          bash scripts/engine/license-scan.sh --product target/package/opentide-cli-*.crate
+          bash scripts/engine/license-scan.sh crates/opentide-compare crates/opentide-cassette crates/opentide-wasm bindings/node bindings/python
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: crates
+          path: target/package/*.crate
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+  # Each artifact installed the way a user installs it, on its own platform
+  # (scripts/build/smoke_release.sh says what each kind checks).
+  smoke:
+    name: Smoke (${{ matrix.name }})
+    needs: [release-versions, packages, engine-assets, sdist, crate-packages]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x64, os: ubuntu-latest, kind: platform }
+          - { name: linux-arm64, os: ubuntu-24.04-arm, kind: platform }
+          - { name: macos-arm64, os: macos-latest, kind: platform }
+          - { name: macos-x64, os: macos-15-intel, kind: platform }
+          - { name: windows-x64, os: windows-latest, kind: platform }
+          - { name: windows-arm64, os: windows-11-arm, kind: platform }
+          - { name: sdist, os: ubuntu-latest, kind: sdist }
+          - { name: cargo install, os: ubuntu-latest, kind: cargo }
+    env:
+      VERSION: ${{ needs.engine-assets.outputs.version }}
+      PYPI_VERSION: ${{ needs.release-versions.outputs.pypi }}
+      NPM_VERSION: ${{ needs.release-versions.outputs.npm }}
+      CRATES_VERSION: ${{ needs.release-versions.outputs.crates }}
+      SMOKE_ARTIFACTS: ${{ github.workspace }}/smoke-artifacts
+    steps:
+      # The script, scripts/build/smoke_package.py, the tide corpus and the npm
+      # test's lock, at the commit built.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.release-versions.outputs.revision }}
+      - if: matrix.kind == 'platform'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - if: matrix.kind == 'platform'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets
+          path: smoke-artifacts/release-assets
+      - if: matrix.kind == 'platform'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-packages
+          path: smoke-artifacts/npm
+      - if: matrix.kind == 'sdist'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - if: matrix.kind == 'sdist'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdist
+          path: smoke-artifacts/dist
+      - if: matrix.kind == 'sdist'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: wheels-*
+          path: smoke-artifacts/dist
+          merge-multiple: true
+      # The release rust-toolchain.toml pins, for `cargo install`; the sdist
+      # builds with the runner's own Rust, as a user's machine would.
+      - name: Set up Rust
+        if: matrix.kind == 'cargo'
+        run: rustup toolchain install --profile minimal --no-self-update
+      - if: matrix.kind == 'cargo'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: crates
+          path: smoke-artifacts/crates
+      - name: Smoke test
+        shell: bash
+        env:
+          KIND: ${{ matrix.kind }}
+        run: bash scripts/build/smoke_release.sh "${KIND}"

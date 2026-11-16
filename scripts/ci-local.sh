@@ -81,7 +81,7 @@ tree_unchanged() {
   fi
 }
 
-# ci.yml's Rust jobs (engine, engine-test, engine-package, engine-wasm, grammars,
+# ci.yml's Rust jobs (engine, engine-test, release-build's crate-packages, engine-wasm, grammars,
 # fuzz-smoke) for --full; rustfmt, clippy and the layers ran above.
 rust_jobs() {
   echo "==> Cargo workspace: nextest (profile ci)"
@@ -106,7 +106,7 @@ rust_jobs() {
   trap 'python3 scripts/engine/release.py vendor --clean >/dev/null' EXIT
   python3 scripts/engine/release.py vendor
   # Every crate the release train publishes, from its package, as in ci.yml's
-  # engine-package job; the unpublished members' sources are scanned, and
+  # release job (release-build.yml's crate-packages); the unpublished members' sources are scanned, and
   # opentide-cli, which carries opentide's package data, as a product.
   cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-cassette --exclude opentide-wasm --exclude opentide-node --allow-dirty --quiet
   find "${CARGO_TARGET_DIR:-target}/package" -maxdepth 1 -name '*.crate' ! -name 'opentide-cli-*' -print0 | xargs -0 bash scripts/engine/license-scan.sh
