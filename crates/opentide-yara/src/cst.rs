@@ -4,10 +4,50 @@
 //! The CST is lossless (whitespace and comments are tokens) and recovers from
 //! errors, so every function here accepts any text. Verdicts do not come from
 //! here: they are the AST's (`lib.rs`).
+//!
+//! An editor asks for highlighting, folding and diagnostics (which read the
+//! parenthesis pairs) of one buffer in a row, so the last parse is kept per
+//! thread ([`parsed`]): the same text is parsed once.
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use opentide_core::ByteSpan;
 use opentide_highlight::Capture;
 use yara_x_parser::cst::{CST, Immutable, Node, NodeOrToken, SyntaxKind, Token};
+
+/// The last text parsed on this thread and its tree.
+struct Memo {
+    source: Box<str>,
+    cst: Rc<CST>,
+}
+
+thread_local! {
+    static LAST: RefCell<Option<Memo>> = const { RefCell::new(None) };
+    #[cfg(test)]
+    static PARSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The CST of `source`: the last one parsed on this thread when the text is
+/// the same, else a new parse, which replaces it. One tree is kept, so the
+/// memo holds at most the size of the last buffer.
+fn parsed(source: &str) -> Rc<CST> {
+    if let Some(cst) = LAST.with_borrow(|last| {
+        last.as_ref()
+            .filter(|m| &*m.source == source)
+            .map(|m| Rc::clone(&m.cst))
+    }) {
+        return cst;
+    }
+    #[cfg(test)]
+    PARSES.set(PARSES.get() + 1);
+    let cst = Rc::new(CST::from(source));
+    LAST.set(Some(Memo {
+        source: source.into(),
+        cst: Rc::clone(&cst),
+    }));
+    cst
+}
 
 type Tok = Token<Immutable>;
 type Elem = NodeOrToken<Immutable>;
@@ -226,7 +266,7 @@ fn adjacent(a: &Tok, b: &Tok) -> bool {
 /// The highlight spans of `source`, sorted and not overlapping: the token
 /// spans with their capture names.
 pub(crate) fn highlight_spans(source: &str) -> Vec<(ByteSpan, &'static str)> {
-    let cst = CST::from(source);
+    let cst = parsed(source);
     let leaves = leaves(&cst);
     let mut out = Vec::new();
     let mut i = 0;
@@ -273,7 +313,7 @@ pub(crate) fn highlight_spans(source: &str) -> Vec<(ByteSpan, &'static str)> {
 /// parentheses. They are its tokens, so a parenthesis inside a string, a
 /// regexp or a comment is none; pairs are matched in order.
 pub(crate) fn paren_pairs(source: &str) -> Vec<(usize, usize)> {
-    let cst = CST::from(source);
+    let cst = parsed(source);
     let mut pairs = Vec::new();
     let mut open = Vec::new();
     for t in leaves(&cst) {
@@ -293,7 +333,7 @@ pub(crate) fn paren_pairs(source: &str) -> Vec<(usize, usize)> {
 /// Fold ranges as byte spans: each rule, each section, and each multi-line
 /// hex string or comment.
 pub(crate) fn folding(source: &str) -> Vec<(usize, usize)> {
-    let cst = CST::from(source);
+    let cst = parsed(source);
     let mut out = Vec::new();
     let mut stack = vec![cst.root().children_with_tokens()];
     while let Some(top) = stack.last_mut() {
@@ -407,6 +447,23 @@ mod tests {
         assert_eq!(at("r1", 0), Some("variable"));
         assert_eq!(at("sections", 0), Some("property"));
         assert_eq!(at("name", 0), Some("property"));
+    }
+
+    /// Highlighting, parenthesis pairs and folding of one text share a
+    /// parse; another text parses again, and replaces the memo.
+    #[test]
+    fn one_text_is_parsed_once() {
+        let a = "rule a {\n  condition: (true)\n}";
+        let b = "rule b { condition: false }";
+        let before = PARSES.get();
+        let spans = highlight_spans(a);
+        assert_eq!(paren_pairs(a), [(22, 27)]);
+        assert_eq!(folding(a), [(0, a.len())]);
+        assert_eq!(PARSES.get() - before, 1);
+        assert_ne!(highlight_spans(b), spans);
+        assert_eq!(PARSES.get() - before, 2);
+        assert_eq!(highlight_spans(a), spans, "a after b: the same result");
+        assert_eq!(PARSES.get() - before, 3);
     }
 
     #[test]
