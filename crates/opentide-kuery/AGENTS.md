@@ -7,7 +7,7 @@ Kusto is `opentide-kql`.
 
 ## Place
 
-foundation, tier 2: depends on opentide-core, -ecs, -syntax, -highlight. Used by opentide-tide and -analysis.
+foundation, tier 2: depends on opentide-core, -ecs, -parse, -highlight. Used by opentide-lucene (`parses`), -tide and -analysis. `analyze` takes the Lucene grammar's verdict (`opentide_lucene::parses`) as an argument: Lucene sits above this crate.
 
 ## Invariants
 

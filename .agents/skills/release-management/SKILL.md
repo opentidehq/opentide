@@ -106,13 +106,13 @@ The `Cargo.lock` diff is only the workspace crates' `version` lines; anything el
 | GitHub | A **pre-release** (never Latest) tagged `v1.0.0-rc.N`, with every asset (binaries, installers, engine assets, SBOMs, `SHA256SUMS`) and attestation |
 | PyPI | `1.0.0rcN` on **pypi.org** (environment `pypi`, no TestPyPI): `pip install --pre opentide`, `uv pip install --prerelease=allow opentide`, or `opentide==1.0.0rc1` |
 | crates.io | Every crate at `1.0.0-rc.N`, in dependency order (the workflow runs `release.py bump 1.0.0-rc.N` in its own checkout; the branch keeps `1.0.0`). **Yankable, never deletable**; the first candidate **claims the new crate names** |
-| npm | **Nothing.** Test the npm packages from ci.yml's `packages` artifacts (`npm-<platform>`) |
+| npm | **Nothing.** Test the npm packages from ci.yml's `release` artifacts (`npm-packages`) |
 
 Its notes quote `## [Unreleased]`. Every job must be green, `Smoke the registries` included. A candidate needs no notes PR; the guard (`release.py check-candidate`) refuses one whose version is not above the newest dated `CHANGELOG.md` heading. **GitHub dispatches `publish.yml` only once a file of that name is on the default branch, `development`:** to run a candidate from `integration/unified-core` before it merges, a `publish.yml` stub must be on `development` first (`docs/internal/publishing.md`, "Release candidates").
 
 **Dry run.** `dry_run: true` builds and smoke-tests every artifact and publishes nothing (no tag, no release, no attestation): any branch, any time.
 
-**A build to test, nothing published.** ci.yml's nightly set (`packages`, `build-packages.yml`) keeps the wheels (`wheels-<platform>`) and npm tarballs (`npm-<platform>`) of a development version for 14 days: `gh run download <run-id> -R opentidehq/opentide -n wheels-linux-x64`, then `uv pip install opentide-*.whl`; `npm install ./opentide-opentide-*.tgz`. With a Rust toolchain: `uv tool install "git+https://github.com/opentidehq/opentide@<ref>"`.
+**A build to test, nothing published.** ci.yml's `release` job (`release-build.yml`; nightly, release PR, `scope: release`) keeps the wheels (`wheels-<platform>`) and npm tarballs (`npm-packages`) of a development version for 14 days: `gh run download <run-id> -R opentidehq/opentide -n wheels-linux-x64`, then `uv pip install opentide-*.whl`; `npm install ./2-package/opentide-opentide-*.tgz ./1-native/opentide-opentide-<platform>-*.tgz`. With a Rust toolchain: `uv tool install "git+https://github.com/opentidehq/opentide@<ref>"`.
 
 ### Step 1 — Prepare notes PR (must merge to `development` first)
 

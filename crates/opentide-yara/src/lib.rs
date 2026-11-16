@@ -313,6 +313,97 @@ pub fn format(source: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
+/// Whether YARA-X rejects `source` (the errors the analysis reports), and the
+/// `Debug` names of the kinds of `yara-x-parser`'s CST in preorder: a node by
+/// its own name, a token as `PARENT/TOKEN` (the CST's expressions are generic
+/// nodes, told apart by their tokens and where they stand). What the corpus
+/// gate of `opentide-analysis` reads. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
+    use yara_x_parser::cst::{CST, Event, SyntaxKind};
+    let rejected = !AST::from(Parser::new(source.as_bytes()))
+        .errors()
+        .is_empty();
+    let mut open = Vec::new();
+    let mut kinds = Vec::new();
+    for event in CST::from(source).iter() {
+        match event {
+            Event::Begin { kind, .. } => {
+                kinds.push(format!("{kind:?}"));
+                open.push(kind);
+            }
+            Event::End { .. } => {
+                open.pop();
+            }
+            Event::Token { kind, span } => {
+                // A negated hex byte (`~5A`) is one HEX_BYTE token.
+                let negated = kind == SyntaxKind::HEX_BYTE
+                    && source.as_bytes().get(span.start()) == Some(&b'~');
+                let name = if negated {
+                    "HEX_BYTE_NOT".to_owned()
+                } else {
+                    format!("{kind:?}")
+                };
+                match open.last() {
+                    Some(parent) => kinds.push(format!("{parent:?}/{name}")),
+                    None => kinds.push(name),
+                }
+            }
+            Event::Error { .. } => {}
+        }
+    }
+    (rejected, kinds)
+}
+
+/// The `Debug` names of the node kinds of `yara-x-parser`'s CST, the error
+/// node left out: the productions the corpus gate of `opentide-analysis` asks
+/// a fixture of. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_node_kinds() -> Vec<String> {
+    use yara_x_parser::cst::SyntaxKind as K;
+    [
+        K::SOURCE_FILE,
+        K::IMPORT_STMT,
+        K::INCLUDE_STMT,
+        K::RULE_DECL,
+        K::RULE_MODS,
+        K::RULE_TAGS,
+        K::META_BLK,
+        K::META_DEF,
+        K::PATTERNS_BLK,
+        K::PATTERN_DEF,
+        K::PATTERN_MODS,
+        K::PATTERN_MOD,
+        K::HEX_PATTERN,
+        K::HEX_SUB_PATTERN,
+        K::HEX_ALTERNATIVE,
+        K::HEX_JUMP,
+        K::CONDITION_BLK,
+        K::BOOLEAN_EXPR,
+        K::BOOLEAN_TERM,
+        K::EXPR,
+        K::TERM,
+        K::PRIMARY_EXPR,
+        K::FUNC_CALL,
+        K::RANGE,
+        K::FOR_EXPR,
+        K::OF_EXPR,
+        K::WITH_EXPR,
+        K::WITH_DECLS,
+        K::WITH_DECL,
+        K::ITERABLE,
+        K::QUANTIFIER,
+        K::EXPR_TUPLE,
+        K::BOOLEAN_EXPR_TUPLE,
+        K::PATTERN_IDENT_TUPLE,
+    ]
+    .iter()
+    .map(|k| format!("{k:?}"))
+    .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

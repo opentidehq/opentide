@@ -474,6 +474,9 @@ WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 WORKFLOW = WORKFLOWS / "publish.yml"
 BUILD = WORKFLOWS / "engine-release-build.yml"
 PACKAGES = WORKFLOWS / "build-packages.yml"
+#: What publish.yml and ci.yml call: the two builds above, the sdist, the
+#: crate packages and the smoke tests.
+RELEASE_BUILD = WORKFLOWS / "release-build.yml"
 
 
 def workflow_jobs(path: Path = WORKFLOW) -> dict[str, str]:
@@ -496,17 +499,14 @@ def workflow_jobs(path: Path = WORKFLOW) -> dict[str, str]:
 
 
 def all_jobs() -> dict[str, str]:
-    """The jobs of the release workflow and the two it calls; their names do
+    """The jobs of the release workflow and the three it calls; their names do
     not collide."""
-    release, build, packages = (
-        workflow_jobs(WORKFLOW),
-        workflow_jobs(BUILD),
-        workflow_jobs(PACKAGES),
-    )
-    assert not release.keys() & build.keys(), release.keys() & build.keys()
-    assert not release.keys() & packages.keys(), release.keys() & packages.keys()
-    assert not build.keys() & packages.keys(), build.keys() & packages.keys()
-    return {**release, **build, **packages}
+    workflows = [workflow_jobs(path) for path in (WORKFLOW, RELEASE_BUILD, BUILD, PACKAGES)]
+    jobs: dict[str, str] = {}
+    for each in workflows:
+        assert not jobs.keys() & each.keys(), jobs.keys() & each.keys()
+        jobs.update(each)
+    return jobs
 
 
 def workflow_header(path: Path = WORKFLOW) -> str:
@@ -699,11 +699,13 @@ class ReleaseWorkflowTest(unittest.TestCase):
             # Every job states its permissions, so none inherits a token.
             self.assertIn("permissions:", jobs[job], job)
         # The asset and package builds, which ci.yml also runs, hold none.
-        self.assertNotIn("id-token", BUILD.read_text(encoding="utf-8"))
-        self.assertNotIn("id-token", PACKAGES.read_text(encoding="utf-8"))
-        self.assertNotIn("secrets.", PACKAGES.read_text(encoding="utf-8"))
-        self.assertRegex(jobs["packages"], r"permissions:\n      contents: read\n")
-        self.assertRegex(jobs["release-assets"], r"permissions:\n      contents: read\n")
+        for path in (RELEASE_BUILD, BUILD, PACKAGES):
+            self.assertNotIn("id-token", path.read_text(encoding="utf-8"), path.name)
+            self.assertNotIn("secrets.", path.read_text(encoding="utf-8"), path.name)
+        self.assertRegex(jobs["build"], r"permissions:\n      contents: read\n")
+        built = workflow_jobs(RELEASE_BUILD)
+        self.assertRegex(built["packages"], r"permissions:\n      contents: read\n")
+        self.assertRegex(built["engine-assets"], r"permissions:\n      contents: read\n")
         # There is no crates dry-run job: a candidate's crates are published.
         self.assertNotIn("crates-dry-run", jobs)
 
@@ -732,21 +734,22 @@ class ReleaseWorkflowTest(unittest.TestCase):
             for job, body in jobs.items()
             if re.search(
                 r"\bcargo (?:build|run|install|package|publish)\b|build-wasm\.sh|build\.mjs"
-                r"|release\.py (?:vendor|publish)",
+                r"|release\.py (?:vendor|publish)|smoke_release\.sh",
                 body,
             )
         )
         self.assertEqual(
             rust,
             [
-                "checks",
+                "crate-packages",
                 "crates",
                 "highlights",
                 "licences",
                 "native",
                 "npm-native",
                 "sbom",
-                "smoke-cargo",
+                # `cargo install` from the crate packages (smoke_release.sh cargo).
+                "smoke",
                 "smoke-registries",
                 "wasm",
             ],
@@ -815,15 +818,25 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
     def test_nothing_publishes_before_every_smoke_test_passed(self) -> None:
         jobs = workflow_jobs()
-        needs = re.search(r"^    needs: \[(.*)\]$", jobs["attest"], re.MULTILINE)
+        for job in ("attest", "internal-release"):
+            needs = re.search(r"^    needs: \[(.*)\]$", jobs[job], re.MULTILINE)
+            assert needs is not None
+            # `build` passes only when its smoke matrix and every build passed.
+            self.assertIn("build", needs.group(1).split(", "), job)
+        self.assertIn("uses: ./.github/workflows/release-build.yml", jobs["build"])
+        built = workflow_jobs(RELEASE_BUILD)
+        needs = re.search(r"^    needs: \[(.*)\]$", built["smoke"], re.MULTILINE)
         assert needs is not None
-        smokes = sorted(
-            job for job in jobs if job.startswith("smoke-") and job != "smoke-registries"
-        )
         self.assertEqual(
-            smokes, ["smoke-cargo", "smoke-installer", "smoke-npm", "smoke-sdist", "smoke-wheel"]
+            set(needs.group(1).split(", ")) - {"release-versions"},
+            set(built) - {"release-versions", "smoke"},
         )
-        self.assertLessEqual(set(smokes), set(needs.group(1).split(", ")))
+        # Each of the six platforms, the sdist and the crate packages.
+        kinds = re.findall(r"kind: (\w+) \}", built["smoke"])
+        self.assertEqual(kinds, ["platform"] * 6 + ["sdist", "cargo"])
+        # The wheels are smoke-tested on their own OS in build-packages.yml.
+        smoke = workflow_jobs(PACKAGES)["wheel-smoke"]
+        self.assertIn("needs: [versions, wheels]", smoke)
         # A dry run and an internal candidate stop before attest, and so
         # before every write after it.
         self.assertIn(
@@ -833,13 +846,15 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("needs.attest.result == 'success'", jobs["verify-assets"])
 
     def test_the_npm_smoke_installs_from_a_local_registry(self) -> None:
-        jobs = workflow_jobs()
-        smoke = jobs["smoke-npm"]
-        self.assertIn("os: [ubuntu-latest, macos-latest, windows-latest]", smoke)
+        smoke = workflow_jobs(RELEASE_BUILD)["smoke"]
+        self.assertIn("name: npm-packages", smoke)
+        script = (Path(__file__).resolve().parents[1] / "build" / "smoke_release.sh").read_text(
+            encoding="utf-8"
+        )
         self.assertIn(
             'node scripts/engine/npm-local-registry/test.mjs --version "${NPM_VERSION}" '
-            '--tarballs "${RUNNER_TEMP}/npm"',
-            smoke,
+            '--tarballs "${artifacts}/npm"',
+            script,
         )
         # The registry is the script's own: the job publishes nothing itself
         # and cannot mint the token npm's trusted publishing needs.
@@ -911,20 +926,31 @@ class ReleaseWorkflowTest(unittest.TestCase):
             r"\|\| needs\.guard\.outputs\.channel == 'rc'\n",
         )
         bump = 'python3 scripts/engine/release.py bump "${VERSION}"'
-        for job in ["checks", "crates"]:
-            body = jobs[job]
-            self.assertIn("if: needs.guard.outputs.version != needs.guard.outputs.base", body)
-            self.assertIn("VERSION: ${{ needs.guard.outputs.version }}", body)
-            # Before anything is packaged or published.
-            self.assertLess(body.index(bump), body.index("release.py vendor"), job)
-        self.assertLess(
-            jobs["crates"].index(bump),
-            jobs["crates"].index("python3 scripts/engine/release.py publish"),
-        )
+        crates = jobs["crates"]
+        self.assertIn("if: needs.guard.outputs.version != needs.guard.outputs.base", crates)
+        self.assertIn("VERSION: ${{ needs.guard.outputs.version }}", crates)
+        # Before anything is packaged or published.
+        self.assertLess(crates.index(bump), crates.index("release.py vendor"))
+        publish = crates.index("python3 scripts/engine/release.py publish")
+        self.assertLess(crates.index(bump), publish)
+        # The packages the build makes and smoke-tests carry the candidate's
+        # version too: release-build.yml's crate packages bump to it.
+        self.assertIn("crates-version: ${{ needs.guard.outputs.version }}", jobs["build"])
+        built = workflow_jobs(RELEASE_BUILD)
+        package = built["crate-packages"]
         self.assertIn(
-            '--path "${RUNNER_TEMP}/packages/opentide-${CRATES_VERSION}"', jobs["smoke-cargo"]
+            "if: needs.release-versions.outputs.crates != needs.release-versions.outputs.workspace",
+            package,
         )
-        self.assertIn("CRATES_VERSION: ${{ needs.guard.outputs.version }}", jobs["smoke-cargo"])
+        self.assertIn("VERSION: ${{ needs.release-versions.outputs.crates }}", package)
+        self.assertLess(package.index(bump), package.index("release.py vendor"))
+        self.assertIn(
+            "CRATES_VERSION: ${{ needs.release-versions.outputs.crates }}", built["smoke"]
+        )
+        script = (Path(__file__).resolve().parents[1] / "build" / "smoke_release.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('--path "${tmp}/packages/opentide-${CRATES_VERSION}"', script)
         # PyPI: real PyPI, the one environment; no TestPyPI anywhere.
         self.assertRegex(jobs["pypi"], r"environment:\n      name: pypi\n")
         self.assertNotIn("test.pypi.org", WORKFLOW.read_text(encoding="utf-8"))

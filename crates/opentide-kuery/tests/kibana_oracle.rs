@@ -51,7 +51,7 @@ fn kibana_verdicts() {
             continue;
         };
         let query = json_string(query);
-        let found = opentide_kuery::analyze(&query).diagnostics;
+        let found = opentide_kuery::analyze(&query, |_| false).diagnostics;
         let errors: Vec<_> = found
             .iter()
             .filter(|d| d.severity == Severity::Error)

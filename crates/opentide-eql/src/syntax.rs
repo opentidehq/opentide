@@ -233,6 +233,14 @@ macro_rules! T {
     [?] => { $crate::SyntaxKind::QUESTION };
 }
 
+/// The `Debug` names of the node kinds, the error node left out (`debug_node_kinds`).
+pub(crate) fn node_kinds() -> Vec<String> {
+    ALL.iter()
+        .filter(|k| **k >= SyntaxKind::SOURCE_FILE && **k != SyntaxKind::ERROR)
+        .map(|k| format!("{k:?}"))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -31,9 +31,10 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 | --- | --- |
 | foundation 0 | [`opentide-core`](opentide-core/AGENTS.md), [`opentide-compare`](opentide-compare/AGENTS.md) (the differential comparator, not published), [`opentide-cassette`](opentide-cassette/AGENTS.md) (the recorded-HTTP harness, UC-4.1, not published) |
 | foundation 1 | [`opentide-syntax`](opentide-syntax/AGENTS.md), [`opentide-parse`](opentide-parse/AGENTS.md) (the pure-Rust parsers' toolkit, ADR 0012), [`opentide-highlight`](opentide-highlight/AGENTS.md), [`opentide-ecs`](opentide-ecs/AGENTS.md) |
-| foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-lucene`](opentide-lucene/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md), [`opentide-cql`](opentide-cql/AGENTS.md) |
-| foundation 3 | [`opentide-esql`](opentide-esql/AGENTS.md), [`opentide-eql`](opentide-eql/AGENTS.md) |
-| foundation 4 | [`opentide-schema`](opentide-schema/AGENTS.md) |
+| foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md), [`opentide-cql`](opentide-cql/AGENTS.md) |
+| foundation 3 | [`opentide-lucene`](opentide-lucene/AGENTS.md) (above kuery: each tells the other's rules by the other's grammar) |
+| foundation 4 | [`opentide-esql`](opentide-esql/AGENTS.md), [`opentide-eql`](opentide-eql/AGENTS.md) |
+| foundation 5 | [`opentide-schema`](opentide-schema/AGENTS.md) |
 | domain 0, 1, 2 | [`opentide-tide`](opentide-tide/AGENTS.md) and [`opentide-workspace`](opentide-workspace/AGENTS.md) (loading and the index, UC-2.1), then [`opentide-analysis`](opentide-analysis/AGENTS.md) and [`opentide-compile`](opentide-compile/AGENTS.md) (deploy compile and plan, UC-3.1), then [`opentide-connectors`](opentide-connectors/AGENTS.md) (tenant HTTP, UC-4.1) |
 | application 0, 1 | [`opentide-lsp`](opentide-lsp/AGENTS.md), then [`opentide-cli`](opentide-cli/AGENTS.md) (the command line, UC-3.3, which hosts the language server: `lsp start`) |
 | facade | [`opentide`](opentide/AGENTS.md): the Rust SDK, the only crate with a stability promise (UC-5.1, #836) |
