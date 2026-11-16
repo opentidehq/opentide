@@ -699,10 +699,24 @@ impl Suggestions {
         if let Some(known) = seen.get(name) {
             return known.clone();
         }
+        SUGGESTION_SCANS.set(SUGGESTION_SCANS.get() + 1);
         let answer = suggest(name);
         seen.insert(name.to_string(), answer.clone());
         answer
     }
+}
+
+thread_local! {
+    /// The catalog scans for a "did you mean" on this thread: [`suggestion_scans`].
+    static SUGGESTION_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times this thread has scanned the catalog for a "did you mean"
+/// (an unknown command, function or type). For the tests that hold it to one
+/// scan per distinct name in a query (`tests/entry_points.rs`). Not API.
+#[doc(hidden)]
+pub fn suggestion_scans() -> usize {
+    SUGGESTION_SCANS.get()
 }
 
 fn unknown_command(node: Node, source: &str, suggestions: &mut Suggestions) -> Diagnostic {
