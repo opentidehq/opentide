@@ -172,7 +172,7 @@ fn span(s: &Span) -> (usize, usize) {
 
 impl<'a> Checker<'a> {
     pub fn new(source: &'a str, ctx: &'a Context, rule_wildcards: &'a [(usize, usize)]) -> Self {
-        let pairs = crate::syntax::paren_pairs(source);
+        let pairs = crate::cst::paren_pairs(source);
         Self {
             paren_open: pairs.iter().copied().collect(),
             paren_close: pairs.iter().map(|&(o, c)| (c, o)).collect(),

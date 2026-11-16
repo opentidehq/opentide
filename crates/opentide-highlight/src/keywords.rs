@@ -46,6 +46,7 @@ pub type Keywords = &'static [(&'static str, Capture)];
 #[must_use]
 pub const fn keywords(language: LanguageId) -> Option<Keywords> {
     match language {
+        LanguageId::Yara => Some(YARA),
         LanguageId::Kql
         | LanguageId::Spl
         | LanguageId::TideYaml
@@ -56,11 +57,70 @@ pub const fn keywords(language: LanguageId) -> Option<Keywords> {
         | LanguageId::Config
         | LanguageId::Falco
         | LanguageId::Cql
-        | LanguageId::Yara
         | LanguageId::Exabeam
         | LanguageId::Yaral => None,
     }
 }
+
+/// YARA (YARA-X's grammar): the words and punctuation the TextMate grammar
+/// lists. The words that only a position makes a keyword (`all`, `any`, `them`,
+/// the string modifiers) and the division operator are not here, as they were not
+/// in `highlights.scm`: the generated grammar is byte for byte what it was.
+/// `opentide-yara`'s `cst.rs` colours every token and checks its table.
+const YARA: Keywords = &[
+    ("xor", Capture::new("keyword")),
+    ("base64", Capture::new("keyword")),
+    ("base64wide", Capture::new("keyword")),
+    ("~", Capture::new("operator")),
+    ("rule", Capture::new("keyword")),
+    ("meta", Capture::new("keyword")),
+    ("strings", Capture::new("keyword")),
+    ("condition", Capture::new("keyword")),
+    ("import", Capture::new("keyword")),
+    ("include", Capture::new("keyword")),
+    ("and", Capture::new("keyword")),
+    ("or", Capture::new("keyword")),
+    ("not", Capture::new("keyword")),
+    ("defined", Capture::new("keyword")),
+    ("at", Capture::new("keyword")),
+    ("in", Capture::new("keyword")),
+    ("of", Capture::new("keyword")),
+    ("for", Capture::new("keyword")),
+    ("matches", Capture::new("keyword")),
+    ("contains", Capture::new("keyword")),
+    ("icontains", Capture::new("keyword")),
+    ("startswith", Capture::new("keyword")),
+    ("istartswith", Capture::new("keyword")),
+    ("endswith", Capture::new("keyword")),
+    ("iendswith", Capture::new("keyword")),
+    ("iequals", Capture::new("keyword")),
+    ("==", Capture::new("operator")),
+    ("!=", Capture::new("operator")),
+    ("<", Capture::new("operator")),
+    ("<=", Capture::new("operator")),
+    (">", Capture::new("operator")),
+    (">=", Capture::new("operator")),
+    ("+", Capture::new("operator")),
+    ("-", Capture::new("operator")),
+    ("*", Capture::new("operator")),
+    ("%", Capture::new("operator")),
+    ("&", Capture::new("operator")),
+    ("|", Capture::new("operator")),
+    ("^", Capture::new("operator")),
+    ("<<", Capture::new("operator")),
+    (">>", Capture::new("operator")),
+    ("=", Capture::new("operator")),
+    ("..", Capture::new("operator")),
+    ("(", Capture::new("punctuation.bracket")),
+    (")", Capture::new("punctuation.bracket")),
+    ("[", Capture::new("punctuation.bracket")),
+    ("]", Capture::new("punctuation.bracket")),
+    ("{", Capture::new("punctuation.bracket")),
+    ("}", Capture::new("punctuation.bracket")),
+    (",", Capture::new("punctuation.delimiter")),
+    (":", Capture::new("punctuation.delimiter")),
+    (".", Capture::new("punctuation.delimiter")),
+];
 
 /// `(token, capture name)` pairs of a table.
 pub(crate) fn table_pairs(table: &[(&str, Capture)]) -> Vec<(String, String)> {

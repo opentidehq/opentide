@@ -3,7 +3,6 @@ source: crates/opentide-analysis/tests/yara_baseline.rs
 expression: out
 ---
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.AgentRacoon.broken.yara
-fold 0..7887
 fold 70..531
 fold 537..7582
 fold 577..2028
@@ -73,6 +72,7 @@ symbol string $open_url_v2 102:8-102:20
 symbol string $monitoring_v2 111:8-111:22
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.LimeRAT.broken.yara
 fold 67..516
+fold 522..4577
 fold 565..900
 fold 926..1486
 fold 1510..2118
@@ -131,7 +131,6 @@ symbol string $take_screenshot 73:8-73:24
 symbol string $get_passwords 80:8-80:22
 symbol string $process_key_action 99:8-99:27
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.ResolverRAT.broken.yara
-fold 0..5549
 fold 71..532
 fold 538..5274
 fold 579..1640
@@ -210,7 +209,6 @@ symbol string $find_files 19:8-19:19
 symbol string $encrypt_files 37:8-37:22
 symbol string $setup_env 53:8-53:18
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.ChupaCabra.broken.yara
-fold 0..5174
 fold 72..534
 fold 540..4953
 fold 578..1354
@@ -261,6 +259,7 @@ symbol string $find_files_p2 26:8-26:22
 symbol string $encrypt_files 44:8-44:22
 == conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.Dusk.broken.yara
 fold 66..510
+fold 516..3459
 fold 554..802
 fold 832..1515
 fold 1547..2095
@@ -312,7 +311,6 @@ symbol string $find_files_p1 48:8-48:22
 symbol string $find_files_p2 62:8-62:22
 symbol string $destroy_exe_file 69:8-69:25
 == conformance/external/yara/reversinglabs/Linux.Rootkit.Pumakit.broken.yara
-fold 0..11241
 fold 58..505
 fold 511..11007
 fold 562..2373
@@ -429,6 +427,7 @@ symbol string $download_bin_1 29:8-29:23
 symbol string $download_bin_2 51:8-51:23
 == conformance/external/yara/reversinglabs/Win32.Exploit.CVE20200601.broken.yara
 fold 75..540
+fold 546..9561
 fold 586..636
 fold 666..1052
 fold 1082..1468
@@ -505,7 +504,6 @@ symbol string $ecc_public_key_20 213:8-213:26
 symbol string $ecc_public_key_21 223:8-223:26
 symbol string $ecc_public_key_22 233:8-233:26
 == conformance/external/yara/reversinglabs/Win32.Infostealer.MultigrainPOS.broken.yara
-fold 0..4833
 fold 68..541
 fold 547..4536
 fold 591..1138
@@ -581,6 +579,7 @@ symbol string $form_create_2 72:8-72:22
 symbol string $form_create_3 80:8-80:22
 == conformance/external/yara/reversinglabs/Win32.PUA.Domaiq.broken.yara
 fold 53..518
+fold 524..8874
 fold 615..1084
 fold 1112..1650
 fold 1681..1885
@@ -662,7 +661,6 @@ symbol string $delete_shadow_copies_p2 41:8-41:32
 symbol string $destroy_files_p1 64:8-64:25
 symbol string $destroy_files_p2 78:8-78:25
 == conformance/external/yara/reversinglabs/Win32.Trojan.CaddyWiper.broken.yara
-fold 0..5556
 fold 60..514
 fold 520..5322
 fold 567..1091
@@ -689,6 +687,7 @@ symbol string $erase_drives_recursively_2_p1 55:8-55:38
 symbol string $erase_drives_recursively_2_p2 69:8-69:38
 == conformance/external/yara/reversinglabs/Win32.Virus.Awfull.broken.yara
 fold 68..508
+fold 514..948
 fold 546..948
 == conformance/external/yara/reversinglabs/Win32.Virus.Awfull.yara
 fold 13..1048
@@ -719,7 +718,6 @@ symbol rule Win32_Virus_Cmay 2:5-2:21
 symbol string $cmay_body_1 20:8-20:20
 symbol string $cmay_body_2 47:8-47:20
 == conformance/external/yara/reversinglabs/Win32.Virus.DeadCode.broken.yara
-fold 13..3714
 fold 70..516
 fold 522..3373
 fold 556..662
@@ -748,7 +746,6 @@ symbol string $deadcode_ep_3 36:8-36:22
 symbol string $deadcode_body_1 41:8-41:24
 symbol string $deadcode_body_2 61:8-61:24
 == conformance/external/yara/signature-base/apt_aa19_024a.broken.yar
-fold 1..914
 fold 52..478
 fold 482..838
 fold 842..914
@@ -851,7 +848,6 @@ symbol string $s13 98:6-98:10
 fold 1..2132
 fold 52..455
 fold 459..634
-fold 1515..2030
 fold 2034..2130
 fold 2134..2633
 fold 2189..2547
@@ -933,7 +929,6 @@ symbol string $sc1 28:6-28:10
 symbol string $sc2 30:6-30:10
 == conformance/external/yara/signature-base/crime_andromeda_jun17.broken.yar
 fold 1..221
-fold 305..1696
 fold 339..1128
 fold 1132..1602
 fold 1606..1696
@@ -985,7 +980,6 @@ symbol string $x2 25:6-25:9
 fold 1..2107
 fold 64..462
 fold 466..725
-fold 1299..2024
 fold 2028..2105
 fold 2109..3312
 fold 2170..2565
@@ -1307,7 +1301,6 @@ fold 0..1112
 fold 34..708
 fold 712..992
 fold 996..1110
-fold 1114..3077
 fold 1151..1450
 fold 1455..2744
 fold 2966..3077
@@ -1393,6 +1386,7 @@ symbol string $a2 61:6-61:9
 symbol string $a3 62:6-62:9
 == conformance/external/yara/signature-base/generic_cryptors.broken.yar
 fold 27..864
+fold 866..897
 == conformance/external/yara/signature-base/generic_cryptors.yar
 fold 1..942
 fold 27..864
@@ -1419,7 +1413,6 @@ symbol string $x1 10:6-10:9
 symbol string $x2 11:6-11:9
 symbol string $x3 12:6-12:9
 == conformance/external/yara/signature-base/htkl_blue_hammer_tool.broken.yar
-fold 0..1702
 fold 32..1180
 fold 1184..1536
 fold 1540..1702
@@ -1472,7 +1465,7 @@ symbol string $fp1 36:6-36:10
 == conformance/external/yara/signature-base/lotusblossom_notepad_exploitation.broken.yar
 fold 0..1598
 fold 40..530
-fold 534..1566
+fold 534..699
 fold 1570..1596
 fold 1600..2658
 fold 1639..2112
@@ -1566,7 +1559,6 @@ fold 1115..1870
 fold 1149..1465
 fold 1469..1816
 fold 1820..1868
-fold 1872..2925
 fold 1938..2232
 fold 2236..2873
 fold 2582..2669
@@ -1676,7 +1668,7 @@ symbol string $s11 37:2-37:6
 == conformance/external/yara/signature-base/react_pocs_indicators_dec25.broken.yar
 fold 0..1294
 fold 53..428
-fold 432..1211
+fold 432..669
 fold 1215..1292
 fold 1296..1907
 fold 1353..1701
@@ -1856,7 +1848,6 @@ fold 1944..2996
 fold 1987..2607
 fold 2611..2889
 fold 2893..2994
-fold 2998..3633
 fold 3038..3466
 fold 3470..3576
 fold 3580..3633
@@ -1997,7 +1988,7 @@ symbol string $s4 83:6-83:9
 == conformance/external/yara/signature-base/vul_backdoor_antitheftweb.broken.yar
 fold 1..1167
 fold 49..316
-fold 320..1121
+fold 320..430
 fold 1125..1165
 == conformance/external/yara/signature-base/vul_backdoor_antitheftweb.yar
 fold 1..476
@@ -2037,7 +2028,6 @@ symbol string $fix2 14:6-14:11
 symbol string $fix3 15:6-15:11
 symbol string $fix4 16:6-16:11
 == conformance/external/yara/signature-base/webshell_regeorg.broken.yar
-fold 0..675
 fold 36..315
 fold 320..623
 fold 628..675
@@ -2067,14 +2057,14 @@ symbol rule r 0:5-0:6
 symbol string $a 2:4-2:6
 == corpus/yara/arithmetic_expression__invalid.yar
 fold 0..47
-fold 11..34
+fold 11..45
 == corpus/yara/arithmetic_expression__valid.yar
 fold 0..91
 fold 11..89
 symbol rule r 0:5-0:6
 == corpus/yara/base64_modifier__invalid.yar
 fold 0..65
-fold 11..41
+fold 11..34
 fold 46..63
 == corpus/yara/base64_modifier__valid.yar
 fold 0..170
@@ -2099,27 +2089,28 @@ fold 49..71
 symbol rule r 0:5-0:6
 == corpus/yara/comparison__invalid.yar
 fold 0..44
-fold 11..34
+fold 11..42
 == corpus/yara/comparison__valid.yar
 fold 0..142
 fold 11..140
 symbol rule r 0:5-0:6
 == corpus/yara/condition_section__invalid.yar
 fold 0..23
+fold 11..22
 == corpus/yara/condition_section__valid.yar
 fold 0..42
 fold 11..40
 symbol rule r 0:5-0:6
 == corpus/yara/entrypoint__invalid.yar
 fold 0..41
-fold 11..36
+fold 11..39
 == corpus/yara/entrypoint__valid.yar
 fold 0..47
 fold 11..45
 symbol rule r 0:5-0:6
 == corpus/yara/filesize__invalid.yar
 fold 0..38
-fold 11..34
+fold 11..36
 == corpus/yara/filesize__valid.yar
 fold 0..43
 fold 11..41
@@ -2132,7 +2123,9 @@ fold 0..38
 fold 11..36
 symbol rule r 0:5-0:6
 == corpus/yara/for_expression__invalid.yar
+fold 0..90
 fold 11..34
+fold 37..88
 == corpus/yara/for_expression__valid.yar
 fold 13..193
 fold 24..47
@@ -2141,7 +2134,6 @@ symbol rule r 2:5-2:6
 symbol string $a 4:4-4:6
 == corpus/yara/hex_alternative__invalid.yar
 fold 0..70
-fold 11..48
 fold 51..68
 == corpus/yara/hex_alternative__valid.yar
 fold 0..80
@@ -2151,7 +2143,6 @@ symbol rule r 0:5-0:6
 symbol string $h 2:4-2:6
 == corpus/yara/hex_jump__invalid.yar
 fold 0..64
-fold 11..42
 fold 45..62
 == corpus/yara/hex_jump__valid.yar
 fold 0..97
@@ -2161,7 +2152,6 @@ symbol rule r 0:5-0:6
 symbol string $h 2:4-2:6
 == corpus/yara/hex_not__invalid.yar
 fold 0..59
-fold 11..37
 fold 40..57
 == corpus/yara/hex_not__valid.yar
 fold 0..65
@@ -2227,7 +2217,6 @@ fold 24..64
 symbol rule r 2:5-2:6
 == corpus/yara/meta_definition__invalid.yar
 fold 0..53
-fold 11..28
 fold 32..51
 == corpus/yara/meta_definition__valid.yar
 fold 0..96
@@ -2235,6 +2224,8 @@ fold 11..72
 fold 75..94
 symbol rule r 0:5-0:6
 == corpus/yara/meta_section__invalid.yar
+fold 0..40
+fold 19..38
 == corpus/yara/meta_section__valid.yar
 fold 0..57
 fold 11..33
@@ -2242,7 +2233,6 @@ fold 36..55
 symbol rule r 0:5-0:6
 == corpus/yara/negative_integer__invalid.yar
 fold 0..58
-fold 11..34
 fold 37..56
 == corpus/yara/negative_integer__valid.yar
 fold 0..57
@@ -2252,7 +2242,7 @@ symbol rule r 0:5-0:6
 == corpus/yara/not_expression__invalid.yar
 fold 0..60
 fold 11..34
-fold 37..54
+fold 37..58
 == corpus/yara/not_expression__valid.yar
 fold 0..78
 fold 11..34
@@ -2273,7 +2263,7 @@ symbol string $b1 3:4-3:7
 == corpus/yara/or_expression__invalid.yar
 fold 0..59
 fold 11..34
-fold 37..54
+fold 37..57
 == corpus/yara/or_expression__valid.yar
 fold 0..72
 fold 11..34
@@ -2349,6 +2339,8 @@ fold 51..87
 symbol rule base1 0:13-0:18
 symbol rule r 2:5-2:6
 == corpus/yara/rule_wildcard__invalid.yar
+fold 40..78
+fold 51..76
 symbol rule base1 0:13-0:18
 == corpus/yara/rule_wildcard__valid.yar
 fold 40..82
@@ -2398,7 +2390,7 @@ symbol string $a 2:4-2:6
 == corpus/yara/string_match__invalid.yar
 fold 0..59
 fold 11..34
-fold 37..54
+fold 37..57
 == corpus/yara/string_match__valid.yar
 fold 0..84
 fold 11..34
@@ -2447,6 +2439,8 @@ fold 36..63
 symbol rule r 0:5-0:6
 symbol string $a1 2:4-2:7
 == corpus/yara/strings_section__invalid.yar
+fold 0..43
+fold 22..41
 == corpus/yara/strings_section__valid.yar
 fold 0..56
 fold 11..34
@@ -2469,7 +2463,7 @@ fold 11..33
 symbol rule r 0:5-0:6
 == corpus/yara/xor_modifier__invalid.yar
 fold 0..64
-fold 11..42
+fold 11..34
 fold 45..62
 == corpus/yara/xor_modifier__valid.yar
 fold 0..117
