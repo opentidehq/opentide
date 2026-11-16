@@ -334,7 +334,7 @@ scripts/ci-local.sh --full     # + nextest ci, doctests, rustdoc, crate packages
 ```
 
 `--full` says which optional step it skipped and what to install for it. `FUZZ_SMOKE_SECONDS`
-(default 60, as CI) sets the fuzz smoke's time per target; `0` skips it.
+(default 60; the nightly's engine-fuzz.yml runs 600) sets the fuzz smoke's time per target; `0` skips it.
 
 ## CodeQL, Dependabot
 

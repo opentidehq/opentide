@@ -27,8 +27,8 @@ bash scripts/engine/build-wasm.sh clippy                 # clippy for wasm32 (an
 
 Code under `cfg(target_arch = "wasm32")` is linted only by clippy for that target, which needs a
 wasm C compiler and libc headers for the grammars: `build-wasm.sh clippy` sets them up (or reuses
-`WASI_SDK_PATH`). CI's `engine-wasm` job runs it, builds the artifact with `-Dwarnings` and
-smoke-tests it in Node.
+`WASI_SDK_PATH`). CI's `engine-lint` job runs it, and the `wasm` job builds the artifact with
+`-Dwarnings` and smoke-tests it in Node.
 
 ## Do not
 

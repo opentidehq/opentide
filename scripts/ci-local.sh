@@ -70,7 +70,7 @@ skip() { echo "==> SKIPPED: $*"; skipped+=("$1"); }
 skipped=()
 
 # A test writes under a temporary folder, never in the checkout (#931), as
-# ci.yml's engine-test job checks: `git status` before and after the tests.
+# ci.yml's `build` job checks: `git status` before and after the tests.
 tree_state() { git status --porcelain --untracked-files=all; }
 tree_unchanged() {
   local after
@@ -82,7 +82,7 @@ tree_unchanged() {
   fi
 }
 
-# CI's Rust jobs (engine, engine-test, release-build's crate-packages, wasm, grammars,
+# CI's Rust jobs (engine-lint, build, release-build's crate-packages, wasm, grammars,
 # engine-fuzz.yml, briefly) for --full; rustfmt, clippy and the layers ran above.
 rust_jobs() {
   echo "==> Cargo workspace: nextest (profile ci)"
