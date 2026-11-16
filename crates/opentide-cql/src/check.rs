@@ -66,14 +66,17 @@ pub(crate) fn diagnostics(
 }
 
 /// Where the parse errors are, to find the nodes they break. tree-sitter wrapped a broken
-/// construct in an ERROR node or gave it a MISSING child; the rowan tree keeps the construct
-/// and records the fault as a gap, often at the construct's end (`foo((` before a `|` is a
-/// call with two `)` missing at its end). Both lists are sorted offsets.
+/// construct in an ERROR node, or gave a finished one a MISSING closer and checked it still;
+/// the rowan tree keeps the construct and records the fault as a gap, often at the
+/// construct's end (`foo((` before a `|` is a call with an expression and two `)` missing at
+/// its end). Both lists are sorted offsets.
 struct Broken {
     /// Where each error is.
     any: Vec<u32>,
-    /// Where an error says something is missing or expected: the construct that ends there
-    /// was not finished. (An `unexpected` token after a node is not the node's fault.)
+    /// Where an error says what was expected: the construct that ends there was not
+    /// finished. (A `missing` closer alone leaves it whole, as tree-sitter's MISSING node did:
+    /// `rdns(field=ip` is still a call to a removed function. An `unexpected` token after a
+    /// node is not the node's fault.)
     unfinished: Vec<u32>,
 }
 
@@ -83,7 +86,7 @@ impl Broken {
         let mut any: Vec<u32> = errors.iter().map(at).collect();
         let mut unfinished: Vec<u32> = errors
             .iter()
-            .filter(|e| e.message.starts_with("missing ") || e.message.starts_with("expected "))
+            .filter(|e| e.message.starts_with("expected "))
             .map(at)
             .collect();
         any.sort_unstable();

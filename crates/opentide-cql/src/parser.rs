@@ -234,11 +234,16 @@ enum Step {
 
 /// `|`? step (`|` step)*. The whole query may end with `|` (`top`); a nested pipeline may not.
 fn pipeline(p: &mut Parser<'_>, top: bool) {
+    pipeline_in(p, top, false);
+}
+
+/// [`pipeline`]; `subquery`: the body of `{ ... }`.
+fn pipeline_in(p: &mut Parser<'_>, top: bool, subquery: bool) {
     let m = p.start();
     let mut steps = false;
     eat(p, K::PIPE);
     loop {
-        if run(p, top) {
+        if run(p, top, subquery) {
             steps = true;
         } else if !(top && steps && p.at_eof()) {
             err(p, EXPECTED_STEP);
@@ -251,13 +256,21 @@ fn pipeline(p: &mut Parser<'_>, top: bool) {
 }
 
 /// Steps with no pipe between them; whether there was one.
-fn run(p: &mut Parser<'_>, top: bool) -> bool {
+fn run(p: &mut Parser<'_>, top: bool, subquery: bool) -> bool {
     let end = if top { TokenSet::EMPTY } else { NESTED_END };
     let mut any = false;
     let mut prev = None;
     // `kind`, not `at`: an empty step expects a step, not the `|` it found.
     while !p.at_eof() && !end.contains(p.current()) && kind(p, 0) != K::PIPE {
         any = true;
+        // A `,` starts no step: in a subquery (`join({ a | b, field=x)`) it is where the `}`
+        // was due. The comma is skipped as any stray token is, so the subquery still ends at
+        // the `}` the lexer's modes expect, and nothing after it is misread.
+        if subquery && kind(p, 0) == K::COMMA {
+            p.err_and_bump(MISSING_BRACE);
+            prev = Some(Step::Filter);
+            continue;
+        }
         prev = Some(step(p, prev));
     }
     any
@@ -487,7 +500,13 @@ fn paren_filter(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     if and_chain(p, false).is_none() {
         err(p, EXPECTED_FILTER);
     }
-    close(p, K::R_PAREN, MISSING_PAREN);
+    // A `,` in a group of filters is the fault, not a `)` missing before it: `rdns (a=1, b)`
+    // (a space before the call's `(`) is a group, and `)` would be the wrong fix.
+    if kind(p, 0) == K::COMMA {
+        err(p, UNEXPECTED);
+    } else {
+        close(p, K::R_PAREN, MISSING_PAREN);
+    }
     p.exit();
     Some(m.complete(p, K::PARENTHESIZED_FILTER.raw()))
 }
@@ -829,7 +848,8 @@ fn function_call(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     let m = p.start();
     wrap(p, K::FUNCTION_NAME, K::FUNCTION_NAME_TOKEN);
     if p.eat(K::L_PAREN.raw()) {
-        if !at(p, K::R_PAREN) {
+        // `f( | ...`: a `|` starts no argument; it is the `)` that is missing.
+        if !at(p, K::R_PAREN) && kind(p, 0) != K::PIPE {
             argument_list(p);
         }
         close(p, K::R_PAREN, MISSING_PAREN);
@@ -1063,7 +1083,7 @@ fn subquery(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     let m = p.start();
     p.bump();
     if !at(p, K::R_BRACE) {
-        pipeline(p, false);
+        pipeline_in(p, false, true);
     }
     close(p, K::R_BRACE, MISSING_BRACE);
     p.exit();
