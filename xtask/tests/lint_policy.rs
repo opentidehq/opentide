@@ -13,17 +13,11 @@ use toml::{Table, Value};
 
 /// The members that may contain `unsafe`, and why. Keep it minimal: FFI and
 /// the symbols a binding must export, nothing else.
-const UNSAFE_CRATES: &[(&str, &str)] = &[
-    (
-        "crates/opentide-wasm",
-        "the wasm32 libc shims: #[unsafe(no_mangle)] syscall symbols",
-    ),
-    (
-        "bindings/node",
-        "napi-derive's registration: each #[napi] item expands to a `ctor` static \
+const UNSAFE_CRATES: &[(&str, &str)] = &[(
+    "bindings/node",
+    "napi-derive's registration: each #[napi] item expands to a `ctor` static \
          constructor carrying #[allow(unsafe_code)], which forbid refuses; no unsafe of its own",
-    ),
-];
+)];
 
 type TestResult = Result<(), Box<dyn Error>>;
 

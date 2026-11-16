@@ -158,9 +158,10 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-The WebAssembly builds (opentide-wasm-web-*.zip and
-opentide-lsp-wasm32-wasip1.wasm) also statically link wasi-libc, from
-wasi-sdk 25. wasi-libc is licensed under the Apache License v2.0 with LLVM
+The WASI WebAssembly builds (opentide-lsp-wasm32-wasip1.wasm and the
+command line's opentide.wasm) also statically link wasi-libc: Rust's
+wasm32-wasip1 target's, and wasi-sdk 25's for the command line's C. The
+browser build (opentide-wasm-web-*.zip) links no libc. wasi-libc is licensed under the Apache License v2.0 with LLVM
 Exceptions, the Apache License v2.0, and the MIT License. It includes parts
 of musl libc (MIT, Copyright (c) 2005-2020 Rich Felker, et al.), cloudlibc
 (BSD-2-Clause, Copyright (c) 2015-2017 Nuxi and contributors), and dlmalloc

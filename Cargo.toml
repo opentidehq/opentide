@@ -204,13 +204,12 @@ sha2 = "0.11"
 # from wait4(2), whose safe wrapper this is (the workspace forbids `unsafe`).
 wait4 = "0.2"
 
-# Lints for every member: each one sets `[lints] workspace = true`, except the
-# one that contains `unsafe` (crates/opentide-wasm: the wasm32 libc shims).
-# `forbid` cannot be relaxed inside a crate, so it copies this table with
-# `unsafe_code = "deny"` and allows it at each site with a reason;
+# Lints for every member: each one sets `[lints] workspace = true`. No crate
+# holds `unsafe` (docs/internal/unsafe.md). `forbid` cannot be relaxed inside a
+# crate, so one that needs it copies this table with `unsafe_code = "deny"`;
 # xtask/tests/lint_policy.rs fails when a copy differs from this table or
 # another crate leaves it. bindings/node (the
-# napi-rs binding) copies it too, with `deny`, and writes no `unsafe`: each
+# napi-rs binding) copies it, with `deny`, and writes no `unsafe`: each
 # `#[napi]` item expands to a static constructor carrying
 # `#[allow(unsafe_code)]`, which `forbid` refuses (docs/internal/unsafe.md).
 #

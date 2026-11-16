@@ -226,9 +226,13 @@ fn found() -> Result<BTreeMap<String, usize>, Box<dyn Error>> {
 fn every_unsafe_is_listed_with_its_reason() -> TestResult {
     let listed = listed()?;
     let found = found()?;
-    assert!(
-        !found.is_empty(),
-        "no unsafe found: the scan is broken (opentide-wasm's libc shims have some)"
+    // The workspace holds no `unsafe` since tree-sitter and the browser
+    // build's libc left (#1231): the scan proves itself on a sample instead.
+    let sample = "unsafe { f() } // unsafe\nlet s = \"unsafe\"; let unsafety = 1;\n";
+    assert_eq!(
+        unsafe_lines(&code_only(sample)),
+        [1],
+        "the scan is broken: it finds the keyword in code only"
     );
     assert_eq!(
         found, listed,
