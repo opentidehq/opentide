@@ -205,6 +205,31 @@ CRATE_PATHS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("xtask/Cargo.toml", ("deny",)),
 )
 
+#: Checks inside a job that run when their own inputs change (and on every
+#: push and nightly), not with an area: `build`'s steps read them.
+CHECKS: Mapping[str, tuple[str, ...]] = {
+    # xtask vocab sync --check against opentidehq/specifications.
+    "vocab": (
+        "src/opentide/data/vocabulary/*.vocab.toml",
+        "src/opentide/data/pins/*.toml",
+        "data/specifications.lock.json",
+        "xtask/src/vocab/sync.rs",
+    ),
+    # xtask spec-fields: the models' field descriptions against its tables.
+    "fields": (
+        "crates/opentide-schema/src/objects/*",
+        "xtask/src/spec_fields.rs",
+    ),
+    # opentide-schema's compile-fail cases (trybuild): the derive, the crate,
+    # the cases (the lockfile and the toolchain are in EVERYTHING).
+    "schema_ui": (
+        "crates/opentide-schema-derive/*",
+        "crates/opentide-schema/src/*",
+        "crates/opentide-schema/tests/ui*",
+        "crates/opentide-schema/Cargo.toml",
+    ),
+}
+
 #: The facade's features and opentide-schema's `python`, which the tests build
 #: with (the facade crate's job builds every feature).
 FEATURES: Mapping[str, str] = {
@@ -236,6 +261,7 @@ class Plan:
     release: bool = False
     areas: set[str] = field(default_factory=set)
     crates: set[str] = field(default_factory=set)
+    checks: set[str] = field(default_factory=set)
     reasons: list[str] = field(default_factory=list)
 
     def outputs(self, workspace: Iterable[str]) -> dict[str, str]:
@@ -267,6 +293,8 @@ class Plan:
         for area in AREAS:
             if area not in {"rust", "python"}:
                 out[area] = _bool(area in self.areas)
+        for check in CHECKS:
+            out[check] = _bool(check in self.checks)
         return out
 
 
@@ -337,6 +365,7 @@ def everything(plan: Plan, members: Iterable[str], reason: str) -> Plan:
     """Mark every area and every crate."""
     plan.areas.update(AREAS)
     plan.crates.update(members)
+    plan.checks.update(CHECKS)
     plan.reasons.append(reason)
     return plan
 
@@ -351,6 +380,9 @@ def plan_for_paths(
     for path in paths:
         if any(_matches(path, pattern) for pattern in EVERYTHING):
             return everything(plan, members, f"{path}: shared configuration, everything runs")
+        for check, patterns in CHECKS.items():
+            if any(_matches(path, pattern) for pattern in patterns):
+                plan.checks.add(check)
         crate = owning_crate(path, dirs)
         if crate is not None:
             changed.add(crate)

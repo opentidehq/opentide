@@ -131,6 +131,9 @@ jobs:
       gitlab: ${{ steps.plan.outputs.gitlab }}
       facade: ${{ steps.plan.outputs.facade }}
       deny: ${{ steps.plan.outputs.deny }}
+      vocab: ${{ steps.plan.outputs.vocab }}
+      fields: ${{ steps.plan.outputs.fields }}
+      schema_ui: ${{ steps.plan.outputs.schema_ui }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -405,9 +408,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The merge commit and its first parent: the compile-fail cases'
-          # inputs are read from what the pull request changed.
-          fetch-depth: 2
           persist-credentials: false
 
       # `v5`: the build's settings (RUSTFLAGS, the profile's debuginfo and
@@ -479,25 +479,10 @@ jobs:
 
       # The vocabulary bundle and pins against the specifications repository,
       # and the models' field descriptions against its field tables: when
-      # their inputs change, and on every push and nightly.
-      - name: Whether the specifications are read
-        id: specs
-        if: steps.bins.outputs.xtask == 'true'
-        env:
-          MODE: ${{ needs.changes.outputs.mode }}
-        run: |
-          set -euo pipefail
-          vocab=true; fields=true
-          if [[ "${MODE}" == pr ]] && git rev-parse --verify --quiet HEAD^2 >/dev/null; then
-            changed="$(git diff --no-renames --name-only HEAD^1 HEAD)"
-            grep -qE '^(src/opentide/data/vocabulary/.*\.vocab\.toml|src/opentide/data/pins/.*\.toml|data/specifications\.lock\.json|xtask/src/vocab/sync\.rs|\.github/workflows/ci\.yml)$' <<<"${changed}" || vocab=false
-            grep -qE '^(crates/opentide-schema/src/objects/.*|xtask/src/spec_fields\.rs|\.github/workflows/ci\.yml)$' <<<"${changed}" || fields=false
-          fi
-          echo "vocab=${vocab}" >> "$GITHUB_OUTPUT"
-          echo "fields=${fields}" >> "$GITHUB_OUTPUT"
-
+      # their inputs change (`vocab`, `fields`: scripts/ci/changes.py), and on
+      # every push and nightly.
       - name: Checkout specifications
-        if: steps.specs.outputs.vocab == 'true' || steps.specs.outputs.fields == 'true'
+        if: steps.bins.outputs.xtask == 'true' && (needs.changes.outputs.vocab == 'true' || needs.changes.outputs.fields == 'true')
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: opentidehq/specifications
@@ -508,7 +493,7 @@ jobs:
       # Without a specifications clone, --check would only compare the
       # lockfile with the bundle.
       - name: Vocabulary and pin sync drift
-        if: steps.specs.outputs.vocab == 'true'
+        if: steps.bins.outputs.xtask == 'true' && needs.changes.outputs.vocab == 'true'
         env:
           OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
         run: target/debug/xtask vocab sync --check
@@ -516,7 +501,7 @@ jobs:
       # It exits 2 without a checkout and 1 when fewer than 100 rows match a
       # field, so it cannot pass by not running.
       - name: Model field descriptions against the specifications
-        if: steps.specs.outputs.fields == 'true'
+        if: steps.bins.outputs.xtask == 'true' && needs.changes.outputs.fields == 'true'
         env:
           OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
         run: target/debug/xtask spec-fields
@@ -580,40 +565,10 @@ jobs:
 
       # opentide-schema's compile-fail cases (trybuild) compile at test time,
       # so they run here, where the dependencies are: when their inputs (the
-      # derive, the crate, the cases, the toolchain) change, and on every
-      # push and nightly.
-      - name: Whether to run opentide-schema's compile-fail cases
-        id: ui
-        env:
-          MODE: ${{ needs.changes.outputs.mode }}
-          UI_PATHS: |
-            crates/opentide-schema-derive/*
-            crates/opentide-schema/src/*
-            crates/opentide-schema/tests/ui*
-            crates/opentide-schema/Cargo.toml
-            Cargo.lock
-            rust-toolchain.toml
-        run: |
-          set -euo pipefail
-          run=true
-          if [[ "${MODE}" == pr ]] && git rev-parse --verify --quiet HEAD^2 >/dev/null; then
-            run=false
-            while IFS= read -r file; do
-              [[ -n "${file}" ]] || continue
-              while IFS= read -r pattern; do
-                # Unquoted on the right: a pattern, not a string.
-                # shellcheck disable=SC2053
-                if [[ -n "${pattern}" && "${file}" == ${pattern} ]]; then
-                  echo "compile-fail input changed: ${file}"
-                  run=true
-                fi
-              done <<<"${UI_PATHS}"
-            done < <(git diff --no-renames --name-only HEAD^1 HEAD)
-          fi
-          echo "run=${run}" >> "$GITHUB_OUTPUT"
-
+      # derive, the crate, the cases, the lockfile, the toolchain) change
+      # (`schema_ui`: scripts/ci/changes.py), and on every push and nightly.
       - name: opentide-schema's compile-fail cases
-        if: steps.ui.outputs.run == 'true'
+        if: needs.changes.outputs.schema_ui == 'true'
         # The build's own packages and features (opentide-schema is among them
         # whenever a case's input changed): nothing is built again.
         run: |
