@@ -451,3 +451,17 @@ fn nth_range_is_none_once_the_parser_has_stalled() {
     assert_eq!(p.nth_range(0), None);
     assert_eq!(p.nth_range(1), None);
 }
+
+/// `nth_range` burns fuel like `nth`: a loop that only reads ranges stalls.
+#[test]
+fn a_loop_that_only_reads_ranges_stalls() {
+    let source = "a b";
+    let input = Input::new(source, toy_lex(source), grammar(8));
+    let p = Parser::with_fuel(&input, 50);
+    let mut reads = 0;
+    while p.nth_range(0).is_some() {
+        reads += 1;
+        assert!(reads < 1_000, "nth_range never ran out of fuel");
+    }
+    assert!(p.stalled());
+}

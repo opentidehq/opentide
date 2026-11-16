@@ -166,6 +166,14 @@ impl<'i> Parser<'i> {
     /// (`nth_range(0)` ends where `nth_range(1)` starts) or what follows a
     /// keyword in the source (a context keyword, Kibana's trailing `or`).
     pub fn nth_range(&self, n: usize) -> Option<TextRange> {
+        // Look-ahead like `nth`: it burns fuel, so a loop that only reads
+        // ranges stalls instead of hanging.
+        let fuel = self.fuel.get();
+        if fuel == 0 {
+            self.stalled.set(true);
+        } else {
+            self.fuel.set(fuel - 1);
+        }
         if self.stalled.get() {
             return None;
         }
