@@ -3442,6 +3442,7 @@ dependencies = [
  "opentide-lucene",
  "opentide-parse",
  "opentide-syntax",
+ "regex",
  "rowan",
  "serde",
  "toml 0.8.23",

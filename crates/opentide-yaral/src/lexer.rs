@@ -382,6 +382,15 @@ pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
     let mut out: Vec<Lexeme> = Vec::new();
     let mut context = Context::default();
     let mut base = 0;
+    // A byte order mark at the start is blank, as tree-sitter read it.
+    if source.starts_with('\u{feff}') {
+        base = '\u{feff}'.len_utf8();
+        out.push(Lexeme {
+            kind: K::WHITESPACE.raw(),
+            range: text_range(0, base),
+        });
+        context = context.after(K::WHITESPACE);
+    }
     'restart: while base < source.len() {
         let mut lexer = Tok::lexer_with_extras(&source[base..], context);
         while let Some(token) = lexer.next() {

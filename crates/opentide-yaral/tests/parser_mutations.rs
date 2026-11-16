@@ -8,7 +8,7 @@
 //! well under CI's limit.
 
 use opentide_core::LanguageId;
-use opentide_yaral::testing::{lex_spans, parse_error_count, parse_is_lossless};
+use opentide_yaral::parse_facts::{lex_spans, parse_error_count, parse_is_lossless};
 use std::path::{Path, PathBuf};
 
 const SAMPLES: &[&str] = &[

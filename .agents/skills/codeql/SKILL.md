@@ -1,14 +1,14 @@
 ---
 name: codeql
 description: >-
-  Work with CodeQL in opentide: the codeql.yml workflow (Python + Actions), investigating or
+  Work with CodeQL in opentide: the codeql.yml workflow (Python, Rust and Actions), investigating or
   fixing code-scanning alerts, and running scripts/codeql-local.sh. Use when a PR shows CodeQL
   findings or when changing security-sensitive code or workflows.
 ---
 
 # CodeQL — opentide
 
-Static analysis for Python and GitHub Actions workflows. One workflow, no duplicate scans.
+Static analysis for Python, the Rust workspace and GitHub Actions workflows. One workflow, no duplicate scans.
 
 ## When to use
 
@@ -21,9 +21,10 @@ Static analysis for Python and GitHub Actions workflows. One workflow, no duplic
 [`.github/workflows/codeql.yml`](../../../.github/workflows/codeql.yml):
 
 - **Action:** `github/codeql-action` **v4** (Node 24). Do not pin v3 — GitHub runners force Node 20 actions onto Node 24, and `analyze` then dies during SARIF upload with no `##[error]` line.
-- **Languages:** `python` and `actions` in one matrix job (categories `/language:python` and `/language:actions`)
-- **Why both in the workflow:** PR code-scanning comparison requires the same `(codeql.yml) /language:python` category registered on `development`; Code Quality dynamic scans alone leave PR checks in a NEUTRAL "configuration not found" state
-- **Triggers:** push to `main`/`development`, all PRs, weekly schedule
+- **Languages:** `python`, `rust` and `actions` in one matrix job (categories `/language:python`, `/language:rust` and `/language:actions`)
+- **Rust:** `build-mode: none` — CodeQL extracts the crates from source (GA since CodeQL 2.23.3), no cargo build or toolchain in the job. A pull request analyses Rust when it changes `crates/`, `bindings/`, `xtask/`, `vendor/` (patched in), `fuzz/`, `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml` or `.cargo/`
+- **Why Python is in the workflow:** PR code-scanning comparison requires the same `(codeql.yml) /language:python` category registered on `development`; Code Quality dynamic scans alone leave PR checks in a NEUTRAL "configuration not found" state
+- **Triggers:** push to `main`/`development`/`integration/unified-core`, PRs that change a language's files (each language analysed only when its files change), nightly schedule
 - **Queries:** `security-extended`
 - **Python deps:** `uv sync --group dev` before analyze
 
@@ -36,7 +37,7 @@ scripts/codeql-local.sh              # create DB + analyze Python (~40–60s col
 scripts/codeql-local.sh --install    # brew install CodeQL CLI only
 ```
 
-Mirrors the Python path in CI. Not suitable for pre-commit or pre-push hooks.
+Mirrors the Python path in CI; Rust and Actions run in CI only. Not suitable for pre-commit or pre-push hooks.
 
 Output: `codeql-results.sarif` at repo root.
 

@@ -6,11 +6,12 @@
 //! function results, and arithmetic are typed here. Every type rule accepts
 //! `null`, as Elasticsearch's `TypeResolutions.isType` does.
 
+use crate::tree::Node;
 use opentide_core::{ByteSpan, Diagnostic, Range, Severity, codes, span_to_range};
 use std::collections::HashMap;
-use tree_sitter::Node;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 enum Ty {
     Str,
     Int,
@@ -24,6 +25,16 @@ enum Ty {
 }
 
 impl Ty {
+    const ALL: [Ty; 7] = [
+        Ty::Str,
+        Ty::Int,
+        Ty::Double,
+        Ty::Num,
+        Ty::Bool,
+        Ty::Null,
+        Ty::Unknown,
+    ];
+
     fn name(self) -> &'static str {
         match self {
             Ty::Str => "string",
@@ -155,13 +166,7 @@ fn ty(node: Node, source: &str) -> Ty {
                 Ty::Unknown
             }
         }
-        "binary_expression" => {
-            let side = |f: &str| {
-                node.child_by_field_name(f)
-                    .map_or(Ty::Unknown, |n| ty(n, source))
-            };
-            arithmetic(side("left"), side("right"))
-        }
+        "binary_expression" => binary_ty(node, source),
         "function_call" => {
             let name = function_name(node, source);
             match name.as_str() {
@@ -183,6 +188,36 @@ fn ty(node: Node, source: &str) -> Ty {
         }
         _ => Ty::Unknown,
     }
+}
+
+/// The type of a run of `+ - * / %`, which the tree nests to the left: folded in a loop over
+/// the left spine, not by recursion (a 20,000-term run is 20,000 levels deep), and kept on each
+/// node of the spine, so that typing every node of the run (`check_types` does) stays linear.
+fn binary_ty(node: Node, source: &str) -> Ty {
+    let mut spine = Vec::new();
+    let mut cur = node;
+    let mut acc = loop {
+        if let Some(known) = cur.remembered() {
+            break Ty::ALL
+                .get(usize::from(known))
+                .copied()
+                .unwrap_or(Ty::Unknown);
+        }
+        spine.push(cur);
+        match cur.child_by_field_name("left") {
+            Some(left) if left.kind() == "binary_expression" => cur = left,
+            left => break left.map_or(Ty::Unknown, |n| ty(n, source)),
+        }
+    };
+    // From the innermost: `acc` is the type of each node's left side.
+    for n in spine.into_iter().rev() {
+        let right = n
+            .child_by_field_name("right")
+            .map_or(Ty::Unknown, |r| ty(r, source));
+        acc = arithmetic(acc, right);
+        n.remember(acc as u8);
+    }
+    acc
 }
 
 /// Result of `+ - * / %`: the common numeric type. A non-numeric operand is
@@ -274,7 +309,9 @@ fn check_value(
     out: &mut Vec<Diagnostic>,
 ) {
     let span = ByteSpan::new(node.start_byte(), node.end_byte());
-    let range = span_to_range(source, span);
+    // Only for a finding: a range is a scan of the source, and every operand of a long run is
+    // checked.
+    let range = || span_to_range(source, span);
     if want == Want::StrConst {
         let (required, optional_only) = field_refs(node);
         if required || optional_only {
@@ -289,7 +326,7 @@ fn check_value(
                 severity,
                 codes::EQL_ARGUMENT_TYPE,
                 format!("{what} must be a constant string, not a field{tail}"),
-                range,
+                range(),
             ));
             return;
         }
@@ -305,7 +342,7 @@ fn check_value(
                     opentide_ecs::version(),
                     field.type_name
                 ),
-                range,
+                range(),
             ));
             return;
         }
@@ -327,7 +364,7 @@ fn check_value(
                 want.name(),
                 literal_desc(node, source, found)
             ),
-            range,
+            range(),
         ));
     }
 }

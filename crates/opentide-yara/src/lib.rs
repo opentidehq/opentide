@@ -1,23 +1,22 @@
 //! I/O-free YARA engine (yara-1.0, #165).
 //!
-//! The contract is YARA as libyara 4.5 compiles it; YARA-X 1.x is a second
-//! opinion whose refusals are warnings (`yara_x_incompatible`). The verdict
-//! parser is VirusTotal's `yara-x-parser` (lossless, with error recovery), and
-//! `.yar` files are formatted with `yara-x-fmt`. The `yara-x` compiler crate is
-//! not a dependency: it is an oracle only (`scripts/engine/oracles`).
+//! The language is YARA-X 1.x (#1225): what it refuses is an error. The
+//! verdict parser is VirusTotal's `yara-x-parser` (lossless, with error
+//! recovery), and `.yar` files are formatted with `yara-x-fmt`. The `yara-x`
+//! compiler crate is not a dependency: it is an oracle only
+//! (`scripts/engine/oracles`).
 //!
 //! A signature goes through:
 //!
 //! 1. the platform profile's text checks (`bitdefender_yara_ascii`,
 //!    `bitdefender_yara_size`);
-//! 2. `syntax::prepare`: the libyara forms yara-x-parser refuses are
-//!    blanked, keeping every offset (`yara_x_incompatible`);
-//! 3. `yara-x-parser`: its errors, classified (`yara_parse_error`,
-//!    `yara_hex_string`, `yara_number_out_of_range`, ...);
-//! 4. `check::Checker`: the symbol table, types and every other code of
-//!    the spec, on each rule that parsed.
+//! 2. `yara-x-parser`: its errors, classified (`errors.rs`:
+//!    `yara_parse_error`, `yara_hex_string`, `yara_number_out_of_range`, ...);
+//! 3. `check::Checker`: the symbol table, types and every other code of
+//!    the spec, on each rule that parsed, and the profile's portability
+//!    check (`yara_x_only_syntax`).
 //!
-//! `docs/engine/YARA.md` maps each code to the libyara source and the test.
+//! `docs/engine/YARA.md` maps each code to its source and its test.
 //!
 //! Internal to opentide, with no stability promise: depend on the
 //! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
@@ -35,8 +34,8 @@ pub mod catalog;
 mod check;
 mod cst;
 pub mod editor;
+mod errors;
 pub mod regexp;
-mod syntax;
 
 /// The parser's parenthesis pairs of `source`, for the range tests.
 #[doc(hidden)]
@@ -48,18 +47,6 @@ use opentide_core::{Diagnostic, LineIndex, Range, Severity, codes};
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use yara_x_parser::Parser;
 use yara_x_parser::ast::AST;
-
-/// Which engine's language the signature is checked against.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Dialect {
-    /// libyara 4.5: the contract of every profile today. What only YARA-X
-    /// refuses is the warning `yara_x_incompatible`.
-    #[default]
-    Libyara4,
-    /// YARA-X 1.x: its syntax is accepted, and `yara_x_incompatible` is an
-    /// error.
-    YaraX,
-}
 
 /// Whether the platform takes syntax only YARA-X has (`with`, digit
 /// separators, float meta values, `\"\"\"` strings, booleans in `of` tuples, hex or octal
@@ -107,38 +94,30 @@ impl Profile {
     }
 }
 
-/// Where the signature runs. A raw `.yar` file has no profile: libyara 4.5,
-/// YARA-X syntax allowed, no module set to confirm, no recommended meta.
+/// Where the signature runs. A raw `.yar` file has no profile: YARA-X
+/// syntax allowed, no module set to confirm, no recommended meta.
 #[derive(Debug, Clone, Default)]
 pub struct Context {
-    pub dialect: Dialect,
     pub profile: Option<Profile>,
     pub yara_x_syntax: YaraXSyntax,
 }
 
 impl Context {
-    /// The profile's context, with the dialect it names.
+    /// The profile's context, with its `yara_x_syntax` setting.
     pub fn for_profile(profile: Profile) -> Self {
         let data = &catalog::Catalog::cached().profiles[profile.key()];
-        let dialect = if data.dialect == "yara_x" {
-            Dialect::YaraX
-        } else {
-            Dialect::Libyara4
-        };
         Self {
-            dialect,
             profile: Some(profile),
             yara_x_syntax: data.yara_x_syntax,
         }
     }
 }
 
-/// The codes the engine only ever reports as warnings, whatever the dialect
-/// or profile: libyara compiles the rule, so the platform takes it. The
-/// checker reports them through its one warning path (`Checker::warn`), which
-/// takes no other code, and [`diagnostics`] never returns one as an error;
-/// every other code is an error, or a warning under libyara and an error
-/// under YARA-X (`yara_x_incompatible`).
+/// The codes the engine only ever reports as warnings, whatever the profile:
+/// the rule compiles, so the platform takes it. The checker reports them
+/// through its one warning path (`Checker::warn`), which takes no other
+/// code, and [`diagnostics`] never returns one as an error; every other code
+/// is an error.
 pub const WARNING_CODES: [&str; 6] = [
     codes::HARFANGLAB_YARA_CONTEXT,
     codes::YARA_ENTRYPOINT_DEPRECATED,
@@ -203,31 +182,18 @@ pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
 /// Every diagnostic of a signature, in source order.
 pub fn diagnostics(source: &str, ctx: &Context) -> Vec<Diagnostic> {
     let mut findings = profile_findings(source, ctx);
-    let prepared = syntax::prepare(source);
-    findings.extend(prepared.findings.iter().cloned().map(|mut f| {
-        if ctx.dialect == Dialect::YaraX {
-            f.severity = Severity::Error;
-        }
-        f
-    }));
-    let ast = AST::from(Parser::new(prepared.text.as_bytes()));
+    let ast = AST::from(Parser::new(source.as_bytes()));
     let errors: Vec<(usize, usize)> = ast
         .errors()
         .iter()
         .map(|e| {
-            let s = syntax::error_span(e);
+            let s = errors::span(e);
             (s.start(), s.end())
         })
         .collect();
-    for error in ast.errors() {
-        let mut f = syntax::classify(error, &prepared.text);
-        if f.code == codes::YARA_X_INCOMPATIBLE && ctx.dialect == Dialect::YaraX {
-            f.severity = Severity::Error;
-        }
-        findings.push(f);
-    }
+    findings.extend(ast.errors().iter().map(|e| errors::classify(e, source)));
     // A rule runs from its name to the next rule's: a parse error there
-    // stops libyara before the semantic checks.
+    // stops the compiler before the semantic checks.
     let starts: Vec<usize> = ast
         .rules()
         .map(|r| {
@@ -251,7 +217,7 @@ pub fn diagnostics(source: &str, ctx: &Context) -> Vec<Diagnostic> {
         })
     };
     // The checker reads text (alphabets, jump bounds) from the source itself.
-    let mut checker = check::Checker::new(source, ctx, &prepared.rule_wildcards);
+    let mut checker = check::Checker::new(source, ctx);
     checker.signature(&ast, errors.is_empty(), &broken);
     findings.extend(checker.findings);
     findings.sort_by_key(|f| (f.start, f.end));

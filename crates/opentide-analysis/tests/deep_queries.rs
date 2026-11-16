@@ -16,10 +16,10 @@
 //!
 //! A replacement parser must keep every floor (its `max_depth` sits at or
 //! above it). A floor equal to the cap means the engine passed at the cap, so
-//! the true limit is higher. The yaral chain floor is set below the measured
-//! edge on purpose: yaral is quadratic in the chain length on tree-sitter, so
-//! the edge sits near the time budget and a test there would be flaky. kql's
-//! floors were measured on its pure-Rust parser (#1230).
+//! the true limit is higher. No floor sits below its measured edge any more:
+//! kql and yaral were quadratic on tree-sitter (yaral in the nesting depth
+//! too), and both were measured again on their pure-Rust parsers (#1230,
+//! #1227).
 
 #![expect(
     clippy::unwrap_used,
@@ -41,10 +41,9 @@ const CHAIN_CAP: usize = 20_000;
 /// rescanned the query for its tables); on the pure-Rust parser (#1230), which
 /// scans once, the cap passed in 8 s.
 const KQL_CHAIN_FLOOR: usize = CHAIN_CAP;
-/// yaral: 1,000 terms took 6 s, 1,500 took 20 s, 2,000 took 44 s, 2,500 took 87 s
-/// (quadratic); 1,500 took 71 s on a CI runner. Set well below the edge so that
-/// load cannot flip the test.
-const YARAL_CHAIN_FLOOR: usize = 1_000;
+/// yaral passed the cap on the pure-Rust parser (#1227). On tree-sitter 1,000
+/// terms took 6 s and 2,500 took 87 s (quadratic), so the floor was 1,000.
+const YARAL_CHAIN_FLOOR: usize = CHAIN_CAP;
 /// spl passed the cap in 0.9 s.
 const SPL_CHAIN_FLOOR: usize = CHAIN_CAP;
 /// cql passed the cap in 0.3 s.
@@ -82,8 +81,9 @@ const KQL_NEST_FLOOR: usize = 254;
 const SPL_NEST_FLOOR: usize = NESTING_CEILING;
 /// cql passed the 10,000 cap in 0.1 s; held at the ceiling.
 const CQL_NEST_FLOOR: usize = NESTING_CEILING;
-/// yaral passed the 10,000 cap in 19 s (33 s on a CI runner; quadratic: 5,000
-/// took 6 s); held at the ceiling.
+/// yaral passed the 10,000 cap on tree-sitter in 19 s (quadratic); held at the
+/// ceiling. The pure-Rust parser (#1227) takes 1,100 levels and reports
+/// "nesting deeper than 1100 levels" past them.
 const YARAL_NEST_FLOOR: usize = NESTING_CEILING;
 /// yara: 495 levels passed; 496 gives `yara_parse_error`.
 const YARA_NEST_FLOOR: usize = 495;
