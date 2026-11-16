@@ -1,0 +1,34 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(\"a:\\\"b AND c:d\")"
+---
+source_file@0..12
+  statement@0..2
+    filter@0..2
+      field_term@0..2
+        field_name@0..1
+          identifier@0..1
+            letters@0..1 "a"
+        :@1..2 ":"
+  ERROR@2..3
+    error_token@2..3 "\""
+  statement@3..12
+    filter@3..12
+      and_expression@3..12
+        free_text@3..4
+          identifier@3..4
+            letters@3..4 "b"
+        whitespace@4..5 " "
+        keyword@5..8
+          letters@5..8 "AND"
+        whitespace@8..9 " "
+        field_term@9..12
+          field_name@9..10
+            identifier@9..10
+              letters@9..10 "c"
+          :@10..11 ":"
+          identifier@11..12
+            letters@11..12 "d"
+errors:
+2..2: expected a value
+2..2: unexpected

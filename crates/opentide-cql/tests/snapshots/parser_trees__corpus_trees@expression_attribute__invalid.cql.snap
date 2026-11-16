@@ -42,5 +42,5 @@ SOURCE_FILE@0..55
       R_PAREN@53..54 ")"
   WHITESPACE@54..55 "\n"
 
-36..37: missing `)` (expected R_PAREN, COMMA)
-53..53: unexpected (expected PIPE)
+36..37: unexpected (expected R_PAREN, COMMA)
+53..53: unexpected

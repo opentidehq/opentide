@@ -1,0 +1,33 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/term_option__valid.eql
+---
+SOURCE_FILE@0..68
+  LINE_COMMENT@0..25 "// prod:term_option valid"
+  WHITESPACE@25..26 "\n"
+  SEQUENCE@26..67
+    SEQUENCE_KW@26..34 "sequence"
+    WHITESPACE@34..35 " "
+    SEQUENCE_TERM@35..67
+      SUBQUERY@35..55
+        L_BRACK@35..36 "["
+        EVENT_CATEGORY@36..43
+          IDENTIFIER@36..43
+            WORD@36..43 "process"
+        WHITESPACE@43..44 " "
+        WHERE_KW@44..49 "where"
+        WHITESPACE@49..50 " "
+        BOOLEAN@50..54
+          TRUE_KW@50..54 "true"
+        R_BRACK@54..55 "]"
+      WHITESPACE@55..56 " "
+      TERM_OPTION@56..67
+        WITH_KW@56..60 "with"
+        WHITESPACE@60..61 " "
+        IDENTIFIER@61..65
+          WORD@61..65 "runs"
+        EQ@65..66 "="
+        NUMBER@66..67
+          NUMBER_TOKEN@66..67 "2"
+  WHITESPACE@67..68 "\n"

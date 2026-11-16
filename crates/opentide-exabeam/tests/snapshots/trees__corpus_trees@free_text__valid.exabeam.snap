@@ -1,0 +1,20 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/free_text__valid.exabeam
+---
+source_file@0..23
+  statement@0..23
+    filter@0..23
+      and_expression@0..23
+        free_text@0..13
+          string@0..13 "\"Admin login\""
+        whitespace@13..14 " "
+        free_text@14..18
+          text_word@14..18
+            letters@14..17 "web"
+            *@17..18 "*"
+        whitespace@18..19 " "
+        free_text@19..23
+          identifier@19..23
+            letters@19..23 "Okta"

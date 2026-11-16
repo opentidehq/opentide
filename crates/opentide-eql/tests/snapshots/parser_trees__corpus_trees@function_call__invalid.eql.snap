@@ -1,0 +1,33 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/function_call__invalid.eql
+---
+SOURCE_FILE@0..60
+  LINE_COMMENT@0..29 "// prod:function_call invalid"
+  WHITESPACE@29..30 "\n"
+  EVENT_QUERY@30..59
+    EVENT_CATEGORY@30..37
+      IDENTIFIER@30..37
+        WORD@30..37 "process"
+    WHITESPACE@37..38 " "
+    WHERE_KW@38..43 "where"
+    WHITESPACE@43..44 " "
+    COMPARISON@44..59
+      FUNCTION_CALL@44..54
+        CASE_INSENSITIVE_NAME@44..48
+          TILDE_WORD@44..48 "add~"
+        L_PAREN@48..49 "("
+        NUMBER@49..50
+          NUMBER_TOKEN@49..50 "1"
+        COMMA@50..51 ","
+        WHITESPACE@51..52 " "
+        NUMBER@52..53
+          NUMBER_TOKEN@52..53 "2"
+        R_PAREN@53..54 ")"
+      WHITESPACE@54..55 " "
+      EQ_EQ@55..57 "=="
+      WHITESPACE@57..58 " "
+      NUMBER@58..59
+        NUMBER_TOKEN@58..59 "3"
+  WHITESPACE@59..60 "\n"

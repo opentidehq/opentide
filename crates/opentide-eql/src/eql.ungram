@@ -1,0 +1,121 @@
+// The tree of an EQL query (Elasticsearch Event Query Language): the named nodes of the
+// tree-sitter grammar (grammars/tree-sitter-opentide-eql/grammar.js) it replaces, one node
+// per named production, with its labels as the grammar's fields. Hidden rules (`_query`,
+// `_event_filter`, `_expression`, `_constant`, `_name_part`) are enums or are written inline.
+//
+// Quoted names are the lexer's tokens (src/lexer.rs): `word` is an identifier, and every
+// keyword is a `word` the parser re-kinds (Elasticsearch reserves them, in lower case only);
+// `tilde_word` is a name ending in `~` (a case-insensitive function), and `in~`, `like~` and
+// `regex~` are the `tilde_word`s the parser re-kinds as operators; `number`, `string`,
+// `quoted_ident` and `index` are one token each; `bang_l_brack` is `![`. The punctuation is
+// quoted as written.
+//
+// A node that tree-sitter made of one token (`identifier`, `string`, `null`, `any`, ...) is a
+// node here too, wrapping that token. Runs of `or`, of `and`, of `* / %` and of `+ -` are one
+// flat node each (tree-sitter nested them to the left), so a 20,000-term chain is not 20,000
+// levels deep.
+
+SourceFile = query:Query? PipeStage*
+
+Query = Sequence | Sample | Join | EventQuery
+
+// ---- Queries ---------------------------------------------------------------------------------
+
+EventQuery = category:Category 'where' condition:Expr
+
+Category = Any | EventCategory
+
+Any = 'any'
+
+EventCategory = name:CategoryName
+
+CategoryName = Identifier | String
+
+// `by` and `with maxspan` come in either order, once each (the builder rejects `with` first,
+// and the analysis says so).
+// The terms, the `until` one last (after `until`).
+Sequence =
+  'sequence' (by:JoinKeys | params:SequenceParams)*
+  SequenceTerm* ('until' SequenceTerm)?
+
+SequenceParams = 'with' 'maxspan' '=' maxspan:TimeUnit
+
+TimeUnit = value:Number unit:Identifier?
+
+Sample = 'sample' by:JoinKeys? JoinTerm*
+
+Join = 'join' by:JoinKeys? JoinTerm* ('until' JoinTerm)?
+
+JoinKeys = 'by' Expr (',' Expr)*
+
+JoinTerm = Subquery by:JoinKeys?
+
+SequenceTerm = Subquery by:JoinKeys? TermOption?
+
+TermOption = 'with' key:Identifier '=' value:Number
+
+Subquery = ('[' | open:MissingEventOpen) category:Category 'where' condition:Expr ']'
+
+MissingEventOpen = 'bang_l_brack'
+
+// `| head 5`: the name of any pipe, and its arguments.
+PipeStage = '|' name:Identifier (Expr (',' Expr)*)?
+
+// ---- Expressions -----------------------------------------------------------------------------
+
+// From the loosest: `or`, `and`, `not`, a comparison, `+ -`, `* / %`, a unary sign, a predicate.
+Expr =
+  OrExpression | AndExpression | NotExpression | Relationship | Comparison
+| UnaryExpression | BinaryExpression | PredicateExpression | ParenthesizedExpression
+| FunctionCall | Field | Null | Number | Boolean | String
+
+OrExpression = Expr ('or' Expr)*
+
+AndExpression = Expr ('and' Expr)*
+
+NotExpression = 'not' operand:Expr
+
+// Lineage (`descendant of [...]`): parsed so the analysis can name it; Elasticsearch rejects it.
+Relationship = relation:Identifier 'of' subquery:Subquery
+
+Comparison = left:Expr operator:('==' | '!=' | '<' | '<=' | '>' | '>=') right:Expr
+
+UnaryExpression = operator:('-' | '+') operand:Expr
+
+// A run of one precedence level: `* / %`, or `+ -`.
+BinaryExpression = Expr (operator:('*' | '/' | '%' | '+' | '-') Expr)*
+
+// `subject not in (...)`, or a pattern operator with one constant or a list of them: the
+// subject is the first expression, the values the others.
+PredicateExpression =
+  Expr 'not'? operator:('in' | 'in~' | ':' | 'like' | 'like~' | 'regex' | 'regex~')
+  ('(' Expr (',' Expr)* ')' | Expr)
+
+ParenthesizedExpression = '(' Expr ')'
+
+FunctionCall = name:FunctionName '(' (Expr (',' Expr)*)? ')'
+
+FunctionName = Identifier | CaseInsensitiveName
+
+CaseInsensitiveName = 'tilde_word'
+
+// `?a.b[0].`c``: an optional marker, then name parts, dots and indexes.
+Field = OptionalMarker? NamePart ('.' NamePart | Index)*
+
+NamePart = Identifier | QuotedIdentifier
+
+OptionalMarker = '?'
+
+Index = 'index'
+
+Identifier = 'word'
+
+QuotedIdentifier = 'quoted_ident'
+
+Null = 'null'
+
+Boolean = value:('true' | 'false')
+
+Number = 'number'
+
+String = 'string'

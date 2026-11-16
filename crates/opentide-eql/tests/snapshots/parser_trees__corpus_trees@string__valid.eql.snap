@@ -1,0 +1,41 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/string__valid.eql
+---
+SOURCE_FILE@0..90
+  LINE_COMMENT@0..20 "// prod:string valid"
+  WHITESPACE@20..21 "\n"
+  EVENT_QUERY@21..89
+    EVENT_CATEGORY@21..28
+      IDENTIFIER@21..28
+        WORD@21..28 "process"
+    WHITESPACE@28..29 " "
+    WHERE_KW@29..34 "where"
+    WHITESPACE@34..35 " "
+    AND_EXPRESSION@35..89
+      COMPARISON@35..72
+        FIELD@35..44
+          IDENTIFIER@35..39
+            WORD@35..39 "file"
+          DOT@39..40 "."
+          IDENTIFIER@40..44
+            WORD@40..44 "path"
+        WHITESPACE@44..45 " "
+        EQ_EQ@45..47 "=="
+        WHITESPACE@47..48 " "
+        STRING@48..72
+          STRING_TOKEN@48..72 "\"\"\"C:\\Windows\\cmd.exe\"\"\""
+      WHITESPACE@72..73 " "
+      AND_KW@73..76 "and"
+      WHITESPACE@76..77 " "
+      COMPARISON@77..89
+        FIELD@77..78
+          IDENTIFIER@77..78
+            WORD@77..78 "a"
+        WHITESPACE@78..79 " "
+        EQ_EQ@79..81 "=="
+        WHITESPACE@81..82 " "
+        STRING@82..89
+          STRING_TOKEN@82..89 "\"tab\\t\""
+  WHITESPACE@89..90 "\n"

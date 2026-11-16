@@ -1,0 +1,26 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/comment__invalid.eql
+---
+SOURCE_FILE@0..59
+  LINE_COMMENT@0..23 "// prod:comment invalid"
+  WHITESPACE@23..24 "\n"
+  EVENT_QUERY@24..39
+    EVENT_CATEGORY@24..31
+      IDENTIFIER@24..31
+        WORD@24..31 "process"
+    WHITESPACE@31..32 " "
+    WHERE_KW@32..37 "where"
+    WHITESPACE@37..38 " "
+    ERROR@38..39
+      SLASH@38..39 "/"
+  ERROR@39..58
+    STAR@39..40 "*"
+    WHITESPACE@40..41 " "
+    WORD@41..53 "unterminated"
+    WHITESPACE@53..54 " "
+    TRUE_KW@54..58 "true"
+  WHITESPACE@58..59 "\n"
+37..38: an expression is missing (expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `true`, `+`, `-`, `(`, `?`)
+39..39: unexpected token (expected `|`)

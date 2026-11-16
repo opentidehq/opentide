@@ -1,0 +1,20 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/or_expression__invalid.exabeam
+---
+source_file@0..29
+  statement@0..29
+    filter@0..29
+      or_expression@0..29
+        field_term@0..26
+          field_name@0..12
+            identifier@0..12
+              letters@0..12 "process_name"
+          :@12..13 ":"
+          string@13..26 "\"wscript.exe\""
+        whitespace@26..27 " "
+        keyword@27..29
+          letters@27..29 "OR"
+errors:
+29..29: expected a term

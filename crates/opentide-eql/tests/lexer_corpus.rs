@@ -1,6 +1,6 @@
-//! The lexer on every EQL file of the corpora, against tree-sitter's tokens (the engine it
-//! replaces), and on the hand-written cases of each token's regex: the five string forms,
-//! numbers, indexes, quoted names and the nested block comments.
+//! The lexer on every EQL file of the corpora, against tree-sitter's tokens, their ranges and
+//! kinds (the engine it replaces), and on the hand-written cases of each token's regex: the five
+//! string forms, numbers, indexes, quoted names and the nested block comments.
 
 #![expect(dead_code, reason = "the included modules are used in part")]
 #![expect(clippy::expect_used, reason = "a test")]
@@ -85,12 +85,63 @@ fn leaves(node: tree_sitter::Node<'_>, out: &mut Vec<(&'static str, usize, usize
     }
 }
 
-type Ranges = Vec<(usize, usize)>;
+/// Each token's kind, start and end.
+type Cuts = Vec<(K, usize, usize)>;
 
-/// The token ranges of `source` that tree-sitter and the lexer cut, when tree-sitter parses it
-/// without an error (a broken query is lexed by what the parser accepts next, which a lexer
-/// without a parser cannot follow).
-fn both_cut(source: &str) -> Option<(Ranges, Ranges)> {
+/// The lexer's kind of a tree-sitter leaf: a keyword, `any`, `null` and the booleans are words
+/// (the parser re-kinds them), `in~` and a case-insensitive name a `TILDE_WORD`, the others by
+/// their node or their text.
+fn lexer_kind(leaf: &str, text: &str) -> K {
+    match leaf {
+        "identifier" | "any" | "null" | "boolean" => K::WORD,
+        "case_insensitive_name" | "in~" | "like~" | "regex~" => K::TILDE_WORD,
+        "number" => K::NUMBER_TOKEN,
+        "string" => K::STRING_TOKEN,
+        "quoted_identifier" => K::QUOTED_IDENT_TOKEN,
+        "index" => K::INDEX_TOKEN,
+        "comment" if text.starts_with("//") => K::LINE_COMMENT,
+        "comment" => K::BLOCK_COMMENT,
+        "missing_event_open" => K::BANG_L_BRACK,
+        "optional_marker" => K::QUESTION,
+        _ if leaf.bytes().all(|b| b.is_ascii_lowercase()) => K::WORD,
+        _ => punctuation(leaf),
+    }
+}
+
+/// The kind of a punctuation leaf, from a table of its own: lexing the leaf's text would compare
+/// the lexer with itself.
+fn punctuation(leaf: &str) -> K {
+    match leaf {
+        "|" => K::PIPE,
+        "=" => K::EQ,
+        "==" => K::EQ_EQ,
+        "!=" => K::NOT_EQ,
+        "<" => K::LT,
+        "<=" => K::LT_EQ,
+        ">" => K::GT,
+        ">=" => K::GT_EQ,
+        "+" => K::PLUS,
+        "-" => K::MINUS,
+        "*" => K::STAR,
+        "/" => K::SLASH,
+        "%" => K::PERCENT,
+        "(" => K::L_PAREN,
+        ")" => K::R_PAREN,
+        "[" => K::L_BRACK,
+        "]" => K::R_BRACK,
+        "![" => K::BANG_L_BRACK,
+        "," => K::COMMA,
+        "." => K::DOT,
+        ":" => K::COLON,
+        "?" => K::QUESTION,
+        _ => panic!("a tree-sitter leaf the test does not know: {leaf:?}"),
+    }
+}
+
+/// The tokens of `source` that tree-sitter and the lexer cut, each with its kind, when
+/// tree-sitter parses it without an error (a broken query is lexed by what the parser accepts
+/// next, which a lexer without a parser cannot follow).
+fn both_cut(source: &str) -> Option<(Cuts, Cuts)> {
     let prepared = lexical::prepare(source);
     let tree = opentide_syntax::parse(LanguageId::Eql, &prepared.text).expect("tree");
     if opentide_syntax::has_error(&tree) {
@@ -101,13 +152,17 @@ fn both_cut(source: &str) -> Option<(Ranges, Ranges)> {
     let mut at = 0;
     let found = tokens(source)
         .iter()
-        .map(|(_, text)| {
+        .map(|(kind, text)| {
             let start = at + source[at..].find(text).expect("in order");
             at = start + text.len();
-            (start, at)
+            (*kind, start, at)
         })
         .collect();
-    Some((found, expected.iter().map(|&(_, s, e)| (s, e)).collect()))
+    let expected = expected
+        .iter()
+        .map(|&(leaf, s, e)| (lexer_kind(leaf, &source[s..e]), s, e))
+        .collect();
+    Some((found, expected))
 }
 
 #[test]
