@@ -1,0 +1,22 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/comment__valid.eql
+---
+SOURCE_FILE@0..65
+  LINE_COMMENT@0..21 "// prod:comment valid"
+  WHITESPACE@21..22 "\n"
+  LINE_COMMENT@22..32 "// leading"
+  WHITESPACE@32..33 "\n"
+  EVENT_QUERY@33..64
+    EVENT_CATEGORY@33..40
+      IDENTIFIER@33..40
+        WORD@33..40 "process"
+    WHITESPACE@40..41 " "
+    WHERE_KW@41..46 "where"
+    WHITESPACE@46..47 " "
+    BLOCK_COMMENT@47..59 "/* inline */"
+    WHITESPACE@59..60 " "
+    BOOLEAN@60..64
+      TRUE_KW@60..64 "true"
+  WHITESPACE@64..65 "\n"

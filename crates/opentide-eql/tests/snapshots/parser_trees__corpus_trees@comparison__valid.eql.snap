@@ -1,0 +1,44 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/comparison__valid.eql
+---
+SOURCE_FILE@0..77
+  LINE_COMMENT@0..24 "// prod:comparison valid"
+  WHITESPACE@24..25 "\n"
+  EVENT_QUERY@25..76
+    EVENT_CATEGORY@25..32
+      IDENTIFIER@25..32
+        WORD@25..32 "process"
+    WHITESPACE@32..33 " "
+    WHERE_KW@33..38 "where"
+    WHITESPACE@38..39 " "
+    AND_EXPRESSION@39..76
+      COMPARISON@39..55
+        FIELD@39..50
+          IDENTIFIER@39..46
+            WORD@39..46 "process"
+          DOT@46..47 "."
+          IDENTIFIER@47..50
+            WORD@47..50 "pid"
+        WHITESPACE@50..51 " "
+        GT_EQ@51..53 ">="
+        WHITESPACE@53..54 " "
+        NUMBER@54..55
+          NUMBER_TOKEN@54..55 "4"
+      WHITESPACE@55..56 " "
+      AND_KW@56..59 "and"
+      WHITESPACE@59..60 " "
+      COMPARISON@60..76
+        FIELD@60..71
+          IDENTIFIER@60..67
+            WORD@60..67 "process"
+          DOT@67..68 "."
+          IDENTIFIER@68..71
+            WORD@68..71 "pid"
+        WHITESPACE@71..72 " "
+        NOT_EQ@72..74 "!="
+        WHITESPACE@74..75 " "
+        NUMBER@75..76
+          NUMBER_TOKEN@75..76 "8"
+  WHITESPACE@76..77 "\n"

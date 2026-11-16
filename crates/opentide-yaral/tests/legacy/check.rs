@@ -2,9 +2,10 @@
 //! `outcome`, `condition`, `options`, the catalogues, literals and limits.
 //! Each finding carries its code from `opentide_core::codes`.
 
-use crate::catalog::{Functions, Segment, TypeKind, Udm, is_keyword};
-use crate::{Finding, Profile};
+use super::Finding;
 use opentide_core::{Severity, codes};
+use opentide_yaral::Profile;
+use opentide_yaral::catalog::{Functions, Segment, TypeKind, Udm, is_keyword};
 use std::collections::{BTreeMap, BTreeSet};
 use tree_sitter::{Node, Tree};
 
@@ -2063,8 +2064,13 @@ impl<'s> Checker<'s> {
     }
 }
 
-impl Profile {
-    pub(crate) fn noun(self) -> &'static str {
+// Was `impl Profile`: a test crate cannot add methods to the library's type.
+trait Noun {
+    fn noun(self) -> &'static str;
+}
+
+impl Noun for Profile {
+    fn noun(self) -> &'static str {
         match self {
             Profile::Rule => "rule",
             Profile::Search => "search",

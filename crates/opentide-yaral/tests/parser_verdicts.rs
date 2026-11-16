@@ -5,7 +5,7 @@
 //! The texts are statements, searches and rules, valid and broken.
 
 use opentide_core::LanguageId;
-use opentide_yaral::testing::{parse_error_count, parse_is_lossless};
+use opentide_yaral::parse_facts::{parse_error_count, parse_is_lossless};
 
 /// Valid and broken statements, in the shapes the grammar has.
 const TEXTS: &[&str] = &[

@@ -1,11 +1,11 @@
-//! The YARA-L analysis on the pure-Rust parser (#1227): the diagnostics, the
-//! highlight tokens and what the editor reads from the tree. Production still
-//! runs `check.rs` on tree-sitter until the last PR of the series switches it.
+//! The YARA-L analysis on the pure-Rust parser (#1227, ADR 0012): the
+//! diagnostics, the highlight tokens and what the editor reads from the tree.
 
 pub(crate) mod checker;
 mod highlight;
 mod nav;
 mod nodes;
+mod support;
 
 pub(crate) use nav::field_segments;
 
@@ -15,14 +15,17 @@ use crate::parser::parse;
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use crate::{Context, Finding, Profile};
 use opentide_core::{Diagnostic, LineIndex, Range, Severity, codes};
-use opentide_parse::{ErrorKind, SyntaxError, describe_expected};
+use opentide_parse::{ErrorKind, Parse, SyntaxError, describe_expected};
 use rowan::NodeOrToken;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
 /// The profile of `source`: a rule when it holds a `rule` declaration.
 pub(crate) fn infer_profile(source: &str) -> Profile {
-    let root = SyntaxNode::new_root(parse(source).green);
+    profile_of(source, &SyntaxNode::new_root(parse(source).green))
+}
+
+fn profile_of(source: &str, root: &SyntaxNode) -> Profile {
     let rule = root.children().any(|n| n.kind() == K::RULE_DECLARATION);
     if rule || source.trim_start().to_ascii_lowercase().starts_with("rule") {
         Profile::Rule
@@ -35,18 +38,21 @@ pub(crate) fn infer_profile(source: &str) -> Profile {
 pub(crate) fn diagnostics(source: &str, ctx: Context) -> Vec<Diagnostic> {
     let parsed = parse(source);
     let root = SyntaxNode::new_root(parsed.green.clone());
-    let profile = ctx.profile.unwrap_or_else(|| {
-        let rule = root.children().any(|n| n.kind() == K::RULE_DECLARATION);
-        if rule || source.trim_start().to_ascii_lowercase().starts_with("rule") {
-            Profile::Rule
-        } else {
-            Profile::Search
-        }
-    });
+    diagnostics_of(source, ctx, &parsed, &root)
+}
+
+/// [`diagnostics`] of a text already parsed: `root` is `parsed`'s tree.
+pub(crate) fn diagnostics_of(
+    source: &str,
+    ctx: Context,
+    parsed: &Parse,
+    root: &SyntaxNode,
+) -> Vec<Diagnostic> {
+    let profile = ctx.profile.unwrap_or_else(|| profile_of(source, root));
     let mut findings = Vec::new();
     let mut checker = checker::Checker::new(source, profile, ctx.meta_required);
     if let Some(first) = parsed.errors.first() {
-        findings.push(parse_error(source, &root, first));
+        findings.push(parse_error(source, root, first));
         // String escapes are lexical: still reported.
         for element in root.descendants_with_tokens() {
             if let NodeOrToken::Token(t) = element
@@ -56,7 +62,7 @@ pub(crate) fn diagnostics(source: &str, ctx: Context) -> Vec<Diagnostic> {
             }
         }
     } else {
-        checker.run(&root);
+        checker.run(root);
     }
     findings.extend(checker.findings);
     findings.sort_by_key(|f| (f.start, f.end));

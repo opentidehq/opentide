@@ -1,0 +1,66 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(source)"
+---
+SOURCE_FILE@0..50
+  EVENT_QUERY@0..50
+    ANY@0..3
+      ANY_KW@0..3 "any"
+    WHITESPACE@3..4 " "
+    WHERE_KW@4..9 "where"
+    WHITESPACE@9..10 " "
+    OR_EXPRESSION@10..50
+      NOT_EXPRESSION@10..15
+        NOT_KW@10..13 "not"
+        WHITESPACE@13..14 " "
+        FIELD@14..15
+          IDENTIFIER@14..15
+            WORD@14..15 "a"
+      WHITESPACE@15..16 " "
+      OR_KW@16..18 "or"
+      WHITESPACE@18..19 " "
+      AND_EXPRESSION@19..50
+        FIELD@19..20
+          IDENTIFIER@19..20
+            WORD@19..20 "b"
+        WHITESPACE@20..21 " "
+        AND_KW@21..24 "and"
+        WHITESPACE@24..25 " "
+        COMPARISON@25..50
+          BINARY_EXPRESSION@25..35
+            BINARY_EXPRESSION@25..31
+              UNARY_EXPRESSION@25..27
+                MINUS@25..26 "-"
+                FIELD@26..27
+                  IDENTIFIER@26..27
+                    WORD@26..27 "c"
+              WHITESPACE@27..28 " "
+              STAR@28..29 "*"
+              WHITESPACE@29..30 " "
+              FIELD@30..31
+                IDENTIFIER@30..31
+                  WORD@30..31 "d"
+            WHITESPACE@31..32 " "
+            PLUS@32..33 "+"
+            WHITESPACE@33..34 " "
+            FIELD@34..35
+              IDENTIFIER@34..35
+                WORD@34..35 "e"
+          WHITESPACE@35..36 " "
+          EQ_EQ@36..38 "=="
+          WHITESPACE@38..39 " "
+          PREDICATE_EXPRESSION@39..50
+            FIELD@39..40
+              IDENTIFIER@39..40
+                WORD@39..40 "f"
+            WHITESPACE@40..41 " "
+            IN_KW@41..43 "in"
+            WHITESPACE@43..44 " "
+            L_PAREN@44..45 "("
+            NUMBER@45..46
+              NUMBER_TOKEN@45..46 "1"
+            COMMA@46..47 ","
+            WHITESPACE@47..48 " "
+            NUMBER@48..49
+              NUMBER_TOKEN@48..49 "2"
+            R_PAREN@49..50 ")"

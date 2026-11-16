@@ -1,0 +1,13 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/any__invalid.eql
+---
+SOURCE_FILE@0..24
+  LINE_COMMENT@0..19 "// prod:any invalid"
+  WHITESPACE@19..20 "\n"
+  EVENT_QUERY@20..23
+    ANY@20..23
+      ANY_KW@20..23 "any"
+  WHITESPACE@23..24 "\n"
+23..24: missing `where` (expected `where`)

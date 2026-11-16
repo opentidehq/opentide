@@ -1,0 +1,49 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/subquery__valid.eql
+---
+SOURCE_FILE@0..92
+  LINE_COMMENT@0..22 "// prod:subquery valid"
+  WHITESPACE@22..23 "\n"
+  SEQUENCE@23..91
+    SEQUENCE_KW@23..31 "sequence"
+    WHITESPACE@31..32 " "
+    SEQUENCE_PARAMS@32..47
+      WITH_KW@32..36 "with"
+      WHITESPACE@36..37 " "
+      MAXSPAN_KW@37..44 "maxspan"
+      EQ@44..45 "="
+      TIME_UNIT@45..47
+        NUMBER@45..46
+          NUMBER_TOKEN@45..46 "5"
+        IDENTIFIER@46..47
+          WORD@46..47 "m"
+    WHITESPACE@47..50 "\n  "
+    SEQUENCE_TERM@50..70
+      SUBQUERY@50..70
+        L_BRACK@50..51 "["
+        EVENT_CATEGORY@51..58
+          IDENTIFIER@51..58
+            WORD@51..58 "process"
+        WHITESPACE@58..59 " "
+        WHERE_KW@59..64 "where"
+        WHITESPACE@64..65 " "
+        BOOLEAN@65..69
+          TRUE_KW@65..69 "true"
+        R_BRACK@69..70 "]"
+    WHITESPACE@70..73 "\n  "
+    SEQUENCE_TERM@73..91
+      SUBQUERY@73..91
+        MISSING_EVENT_OPEN@73..75
+          BANG_L_BRACK@73..75 "!["
+        EVENT_CATEGORY@75..79
+          IDENTIFIER@75..79
+            WORD@75..79 "file"
+        WHITESPACE@79..80 " "
+        WHERE_KW@80..85 "where"
+        WHITESPACE@85..86 " "
+        BOOLEAN@86..90
+          TRUE_KW@86..90 "true"
+        R_BRACK@90..91 "]"
+  WHITESPACE@91..92 "\n"

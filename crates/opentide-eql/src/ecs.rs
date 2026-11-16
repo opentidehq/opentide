@@ -9,11 +9,10 @@
 //! value. `==` and `!=` convert their constant, so they are never reported.
 
 use crate::semantics::{Want, function_name, named_children, parameters, strip_parens};
+use crate::tree::{Node, node_span};
 use crate::{parse_prepared, range, text};
 use opentide_core::{Diagnostic, codes};
 use opentide_ecs::ValueType;
-use opentide_syntax::node_span;
-use tree_sitter::Node;
 
 /// The dotted name a `field` node reads, and whether it is optional (`?x`).
 /// `None` for an array element (`process.args[0]`).
@@ -79,7 +78,7 @@ pub fn ecs_diagnostics(source: &str) -> Vec<Diagnostic> {
         return Vec::new();
     }
     let mut out = Vec::new();
-    opentide_syntax::walk(root, |node| check(node, source, &mut out));
+    crate::tree::walk(root, |node| check(node, source, &mut out));
     out
 }
 
