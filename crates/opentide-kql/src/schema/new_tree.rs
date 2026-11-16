@@ -28,6 +28,8 @@ pub(crate) fn analyze(root: &SyntaxNode, source: &str, catalog: &Catalog, clean:
         out: Analysis::default(),
         quiet: 0,
         diagnose: clean,
+        depth: 0,
+        expanding: Vec::new(),
     };
     let mut scope = Scope::default();
     for child in root.children() {
@@ -69,7 +71,25 @@ struct Pass<'a> {
     /// Above zero while re-reading a function body for its schema.
     quiet: u32,
     diagnose: bool,
+    /// What the walk down the tree has spent of [`BUDGET`].
+    depth: u32,
+    /// The functions whose bodies are being read for a call's schema: a call
+    /// to one of them inside its own body is not read again.
+    expanding: Vec<String>,
 }
+
+/// How deep the pass walks, so that it never overflows a 1 MB stack (the
+/// browser's): a level of an expression costs 1, a level of a pipeline (a
+/// tabular expression, a subquery, a function body) costs [`PIPELINE`],
+/// which has about twelve times its stack (a debug build: about 1.2 KB a
+/// level of expression, 15 KB a level of nested `join`). Past it the pass
+/// reads nothing deeper: a pipeline's schema is open. The parser's nesting
+/// limit bounds the expressions and pipelines a query nests, but not a chain
+/// of members (`a.b.c`) or indexes, which the pass reads as nested nodes.
+const BUDGET: u32 = 480;
+/// What a level of a pipeline costs of [`BUDGET`]: 40 nested pipelines, more
+/// than the 35 levels the tree-sitter engine took.
+const PIPELINE: u32 = 12;
 
 /// Matches a quirk of the tree-sitter pass: it read the items of `project`,
 /// `extend` and either list of `summarize` by a field that also holds the
@@ -164,7 +184,23 @@ impl<'a> Pass<'a> {
         }
     }
 
+    /// Runs `walk` one level deeper, or gives `None` past the budget.
+    fn deeper<T>(&mut self, cost: u32, walk: impl FnOnce(&mut Self) -> T) -> Option<T> {
+        if self.depth + cost > BUDGET {
+            return None;
+        }
+        self.depth += cost;
+        let out = walk(self);
+        self.depth -= cost;
+        Some(out)
+    }
+
     fn function_schema(&mut self, def: &SyntaxNode, outer: &Scope) -> Option<Schema> {
+        self.deeper(PIPELINE, |pass| pass.function_schema_at(def, outer))
+            .flatten()
+    }
+
+    fn function_schema_at(&mut self, def: &SyntaxNode, outer: &Scope) -> Option<Schema> {
         let mut scope = outer.clone();
         let mut body = None;
         for child in def.children() {
@@ -204,6 +240,11 @@ impl<'a> Pass<'a> {
     // --- tabular expressions ---------------------------------------------
 
     fn tabular(&mut self, expr: &SyntaxNode, scope: &Scope) -> Schema {
+        self.deeper(PIPELINE, |pass| pass.tabular_at(expr, scope))
+            .unwrap_or_else(Schema::open)
+    }
+
+    fn tabular_at(&mut self, expr: &SyntaxNode, scope: &Scope) -> Schema {
         let expr_span = span(expr);
         let Some(source) = child_of(expr, K::TABULAR_SOURCE) else {
             return Schema::open();
@@ -235,6 +276,11 @@ impl<'a> Pass<'a> {
     }
 
     fn subquery(&mut self, node: &SyntaxNode, input: Schema, scope: &Scope) -> Schema {
+        self.deeper(PIPELINE, |pass| pass.subquery_at(node, input, scope))
+            .unwrap_or_else(Schema::open)
+    }
+
+    fn subquery_at(&mut self, node: &SyntaxNode, input: Schema, scope: &Scope) -> Schema {
         let mut schema = input;
         for op in nodes_but(node, &[K::ERROR]) {
             schema = self.operator(&op, schema, scope);
@@ -310,9 +356,15 @@ impl<'a> Pass<'a> {
             return Schema::open();
         }
         if let Some(def) = scope.functions.get(&name).cloned() {
+            if self.expanding.contains(&name) {
+                // A function that calls itself: Kusto has no recursion.
+                return Schema::open();
+            }
+            self.expanding.push(name.clone());
             self.quiet += 1;
             let schema = self.function_schema(&def, scope);
             self.quiet -= 1;
+            self.expanding.pop();
             return schema
                 .map(|mut s| {
                     s.source = Source::Let(name.clone());
@@ -1121,6 +1173,17 @@ impl<'a> Pass<'a> {
     }
 
     fn expression(
+        &mut self,
+        node: &SyntaxNode,
+        ctx: Ctx,
+        scope: &Scope,
+        op: ByteSpan,
+        extra: &[&str],
+    ) {
+        self.deeper(1, |pass| pass.expression_at(node, ctx, scope, op, extra));
+    }
+
+    fn expression_at(
         &mut self,
         node: &SyntaxNode,
         ctx: Ctx,
