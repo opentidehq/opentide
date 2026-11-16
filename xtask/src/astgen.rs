@@ -185,8 +185,9 @@ fn enum_members(grammar: &Grammar, node: Node) -> Option<Vec<Node>> {
 enum Shape {
     /// A child node; `nth` is its place among the children of its type.
     Node { ty: String, nth: usize, many: bool },
-    /// The first child token of one of these kinds.
-    Tokens(Vec<Token>),
+    /// The first child token of one of these kinds, or with `many` (under
+    /// `*`) every one.
+    Tokens { tokens: Vec<Token>, many: bool },
 }
 
 #[derive(Debug)]
@@ -225,8 +226,11 @@ fn occurrences(
         loose,
     };
     match rule {
-        Rule::Labeled { label, rule } => match &**rule {
-            Rule::Alt(alts) if alts.iter().all(|r| matches!(r, Rule::Token(_))) => {
+        Rule::Labeled { label, rule } => match unwrap_optional(rule) {
+            // `label:('a' | 'b')`, and the same under `?` or `*`: one field
+            // for the whole choice (#1454: under `?` each token was a field of
+            // its own, and the label kept only the first).
+            (Rule::Alt(alts), optional) if alts.iter().all(|r| matches!(r, Rule::Token(_))) => {
                 let tokens = alts
                     .iter()
                     .filter_map(|r| {
@@ -240,15 +244,15 @@ fn occurrences(
                 out.push(Occurrence {
                     label: Some(label.clone()),
                     target: Target::Tokens(tokens),
-                    many,
-                    loose,
+                    many: many || matches!(**rule, Rule::Rep(_)),
+                    loose: loose || optional,
                 });
             }
-            Rule::Seq(_) | Rule::Alt(_) => bail!(
+            (Rule::Seq(_) | Rule::Alt(_), false) => bail!(
                 "label `{label}` names {}: label one node or token, or a choice of tokens",
                 render(grammar, rule, false)
             ),
-            inner => occurrences(grammar, inner, Some(label), (many, loose), out)?,
+            _ => occurrences(grammar, rule, Some(label), (many, loose), out)?,
         },
         Rule::Node(node) => out.push(occur(Target::Node(*node))),
         Rule::Token(token) => out.push(occur(Target::Tokens(vec![*token]))),
@@ -268,6 +272,16 @@ fn occurrences(
     Ok(())
 }
 
+/// The rule under any `?` and `*`, and whether there was one.
+fn unwrap_optional(mut rule: &Rule) -> (&Rule, bool) {
+    let mut optional = false;
+    while let Rule::Opt(inner) | Rule::Rep(inner) = rule {
+        rule = inner;
+        optional = true;
+    }
+    (rule, optional)
+}
+
 fn fields(grammar: &Grammar, node: Node) -> Result<Vec<Field>> {
     let mut found = Vec::new();
     occurrences(
@@ -280,7 +294,6 @@ fn fields(grammar: &Grammar, node: Node) -> Result<Vec<Field>> {
     let mut by_node: BTreeMap<Node, Vec<(usize, &Occurrence)>> = BTreeMap::new();
     // Each field with the place of its first occurrence, which orders them.
     let mut fields: Vec<(usize, Field)> = Vec::new();
-    let mut seen_tokens = BTreeSet::new();
     for (at, occ) in found.iter().enumerate() {
         match &occ.target {
             Target::Node(n) => by_node.entry(*n).or_default().push((at, occ)),
@@ -290,12 +303,30 @@ fn fields(grammar: &Grammar, node: Node) -> Result<Vec<Field>> {
                     (None, [token]) => format!("{}_token", token_name(&grammar[*token].name)?),
                     (None, _) => bail!("an unlabeled choice of tokens"),
                 };
-                if seen_tokens.insert(name.clone()) {
+                // Two tokens one name stands for (`'LIKE' | 'like'`) are one
+                // field that reads both (#1454: the second was out of reach).
+                if let Some((_, field)) = fields.iter_mut().find(|(_, f)| f.name == name) {
+                    if let Shape::Tokens {
+                        tokens: known,
+                        many,
+                    } = &mut field.shape
+                    {
+                        for token in tokens {
+                            if !known.contains(token) {
+                                known.push(*token);
+                            }
+                        }
+                        *many |= occ.many;
+                    }
+                } else {
                     fields.push((
                         at,
                         Field {
                             name,
-                            shape: Shape::Tokens(tokens.clone()),
+                            shape: Shape::Tokens {
+                                tokens: tokens.clone(),
+                                many: occ.many,
+                            },
                         },
                     ));
                 }
@@ -455,18 +486,31 @@ fn emit_struct(grammar: &Grammar, node: Node, fields: &[Field]) -> String {
                 "/// The `{ty}` child, number {nth} from 0 among the `{ty}` children.\n\
                  pub fn {fname}(&self) -> Option<{ty}> {{ support::nth_child(&self.syntax, {nth}) }}\n"
             ),
-            Shape::Tokens(tokens) => {
+            Shape::Tokens { tokens, many } => {
                 let kinds: Vec<String> = tokens
                     .iter()
                     .map(|t| format!("T![{}]", t_arg(&grammar[*t].name)))
                     .collect();
-                let call = match kinds.as_slice() {
-                    [one] => format!("support::token(&self.syntax, {one})"),
-                    many => format!("support::token_in(&self.syntax, &[{}])", many.join(", ")),
-                };
-                format!(
-                    "/// The token child.\npub fn {fname}(&self) -> Option<SyntaxToken> {{ {call} }}\n"
-                )
+                // A choice under `*` reads every token: the first alone
+                // would hide the other kinds (`a * b / c`). One repeated kind
+                // keeps its first-token accessor.
+                if *many && kinds.len() > 1 {
+                    format!(
+                        "/// The token children, in order.\n\
+                         pub fn {fname}(&self) -> Vec<SyntaxToken> {{ support::tokens_in(&self.syntax, &[{}]) }}\n",
+                        kinds.join(", ")
+                    )
+                } else {
+                    let call = match kinds.as_slice() {
+                        [one] => format!("support::token(&self.syntax, {one})"),
+                        many => {
+                            format!("support::token_in(&self.syntax, &[{}])", many.join(", "))
+                        }
+                    };
+                    format!(
+                        "/// The token child.\npub fn {fname}(&self) -> Option<SyntaxToken> {{ {call} }}\n"
+                    )
+                }
             }
         };
     }
