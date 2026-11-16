@@ -1,0 +1,38 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/aggregate__invalid.exabeam
+---
+source_file@0..44
+  statement@0..44
+    select_clause@0..19
+      keyword@0..6
+        letters@0..6 "SELECT"
+      whitespace@6..7 " "
+      column@7..19
+        aggregate@7..14
+          identifier@7..12
+            letters@7..12 "COUNT"
+          (@12..13 "("
+          *@13..14 "*"
+        whitespace@14..15 " "
+        keyword@15..17
+          letters@15..17 "AS"
+        whitespace@17..18 " "
+        alias@18..19
+          identifier@18..19
+            letters@18..19 "n"
+    whitespace@19..20 " "
+    where_clause@20..44
+      keyword@20..25
+        letters@20..25 "WHERE"
+      whitespace@25..26 " "
+      filter@26..44
+        field_term@26..44
+          field_name@26..32
+            identifier@26..32
+              letters@26..32 "vendor"
+          :@32..33 ":"
+          string@33..44 "\"Microsoft\""
+errors:
+14..15: missing `)`

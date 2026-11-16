@@ -17,4 +17,4 @@ SOURCE_FILE@0..8
       UNQUOTED_PATTERN@7..8
         WORD@7..8 "y"
 
-6..7: a filter cannot follow an assignment without a pipe (expected PIPE)
+6..7: a filter cannot follow an assignment without a pipe
