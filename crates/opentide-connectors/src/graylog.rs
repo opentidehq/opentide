@@ -241,7 +241,7 @@ fn errors_of(body: Option<&Json>) -> Vec<(String, Vec<String>)> {
     found
 }
 
-/// A JSON value as Python's `str()` writes it: a string as itself.
+/// A JSON value as text: a string as itself.
 fn text_of(value: &Json) -> String {
     match value {
         Json::Str(text) => text.clone(),
@@ -252,7 +252,7 @@ fn text_of(value: &Json) -> String {
 /// Graylog's `message` and `errors` of an answer; a body that is not JSON is
 /// described instead (`_message`).
 fn message_of(answer: &Answer) -> (String, Vec<(String, Vec<String>)>) {
-    let Some(body) = answer.json() else {
+    let Some(body) = answer.quotable_json() else {
         let described = answer
             .not_json_detail()
             .unwrap_or_else(|| format!("HTTP {}", answer.status));
@@ -1296,6 +1296,21 @@ impl Platform for Graylog {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_refused_call_does_not_quote_the_bearer() {
+        use crate::answer::{TEST_BEARER, answer_to_bearer};
+        let answer = answer_to_bearer(&format!(
+            r#"{{"message":"bad {TEST_BEARER}","errors":{{"query":["{TEST_BEARER} is wrong"]}}}}"#
+        ));
+        let (message, errors) = message_of(&answer);
+        assert_eq!(message, "bad ***");
+        let shown = format!("{errors:?}");
+        assert!(
+            shown.contains("*** is wrong") && !shown.contains(TEST_BEARER),
+            "{shown}"
+        );
+    }
 
     fn api(method: &str, status: u16, message: &str) -> ApiError {
         ApiError {

@@ -25,9 +25,6 @@ use regex::Regex;
 use crate::Json;
 use crate::strategy::{StatusStrategy, Statuses};
 
-/// The logger the oracle's promotion logs as.
-pub const LOGGER: &str = "opentide.mutation.promotion";
-
 /// The advice of a rule a promotion leaves as it is (`rule_not_promoted`).
 pub const NOT_PROMOTED_ADVICE: &str =
     "Write each platform block's status as a plain value, then deploy again";
