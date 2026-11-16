@@ -755,6 +755,7 @@ pub mod codes {
     pub const YARA_STRING_MODIFIER: &str = "yara_string_modifier";
     pub const YARA_NUMBER_OUT_OF_RANGE: &str = "yara_number_out_of_range";
     pub const YARA_X_INCOMPATIBLE: &str = "yara_x_incompatible";
+    pub const YARA_X_ONLY_SYNTAX: &str = "yara_x_only_syntax";
     pub const YARA_SLOW_PATTERN: &str = "yara_slow_pattern";
     pub const YARA_ENTRYPOINT_DEPRECATED: &str = "yara_entrypoint_deprecated";
     pub const YARA_SUSPICIOUS_EXPRESSION: &str = "yara_suspicious_expression";
@@ -1069,6 +1070,7 @@ pub mod codes {
         YARA_STRING_MODIFIER,
         YARA_NUMBER_OUT_OF_RANGE,
         YARA_X_INCOMPATIBLE,
+        YARA_X_ONLY_SYNTAX,
         YARA_SLOW_PATTERN,
         YARA_ENTRYPOINT_DEPRECATED,
         YARA_SUSPICIOUS_EXPRESSION,
@@ -1786,6 +1788,9 @@ pub mod codes {
                 "A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts."
             }
             YARA_X_INCOMPATIBLE => "libyara 4.5 compiles this YARA but YARA-X 1.x refuses it.",
+            YARA_X_ONLY_SYNTAX => {
+                "This YARA uses syntax only YARA-X has, and the platform profile has yara_x_syntax refused: the platform may not accept it."
+            }
             YARA_SLOW_PATTERN => {
                 "libyara warns that this YARA string or loop may slow scanning down."
             }

@@ -1,0 +1,65 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/operator_modifier__valid.falco
+---
+source_file@0..113
+  and_expression@0..113
+    comparison@0..28
+      field@0..9
+        field_name@0..9 "proc.name"
+      whitespace@9..10 " "
+      comparison_operator@10..11
+        =@10..11 "="
+      whitespace@11..12 " "
+      operator_modifier@12..17
+        identifier@12..17 "anyof"
+      whitespace@17..18 " "
+      value_list@18..28
+        (@18..19 "("
+        bare_string@19..23
+          identifier@19..23 "bash"
+        ,@23..24 ","
+        whitespace@24..25 " "
+        bare_string@25..27
+          identifier@25..27 "sh"
+        )@27..28 ")"
+    whitespace@28..29 " "
+    and@29..32 "and"
+    whitespace@32..33 " "
+    comparison@33..70
+      field@33..40
+        field_name@33..40 "fd.name"
+      whitespace@40..41 " "
+      comparison_operator@41..51
+        identifier@41..51 "startswith"
+      whitespace@51..52 " "
+      operator_modifier@52..57
+        identifier@52..57 "oneof"
+      whitespace@57..58 " "
+      value_list@58..70
+        (@58..59 "("
+        bare_string@59..63
+          other@59..60 "/"
+          identifier@60..63 "etc"
+        ,@63..64 ","
+        whitespace@64..65 " "
+        bare_string@65..69
+          other@65..66 "/"
+          identifier@66..69 "usr"
+        )@69..70 ")"
+    whitespace@70..71 " "
+    and@71..74 "and"
+    whitespace@74..75 " "
+    comparison@75..113
+      field@75..87
+        field_name@75..87 "proc.cmdline"
+      whitespace@87..88 " "
+      comparison_operator@88..96
+        identifier@88..96 "contains"
+      whitespace@96..97 " "
+      operator_modifier@97..102
+        identifier@97..102 "allof"
+      whitespace@102..103 " "
+      list_reference@103..113
+        identifier@103..113 "shell_args"

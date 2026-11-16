@@ -1,0 +1,55 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(\"spawned_process and not proc.name in (sshd, \\\"su do\\\") and fd.name startswith /etc or evt.type = open\")"
+---
+source_file@0..99
+  or_expression@0..99
+    and_expression@0..80
+      macro_reference@0..15
+        identifier@0..15 "spawned_process"
+      whitespace@15..16 " "
+      and@16..19 "and"
+      whitespace@19..20 " "
+      not_expression@20..52
+        not@20..23 "not"
+        whitespace@23..24 " "
+        comparison@24..52
+          field@24..33
+            field_name@24..33 "proc.name"
+          whitespace@33..34 " "
+          list_operator@34..36
+            identifier@34..36 "in"
+          whitespace@36..37 " "
+          value_list@37..52
+            (@37..38 "("
+            bare_string@38..42
+              identifier@38..42 "sshd"
+            ,@42..43 ","
+            whitespace@43..44 " "
+            quoted_string@44..51 "\"su do\""
+            )@51..52 ")"
+      whitespace@52..53 " "
+      and@53..56 "and"
+      whitespace@56..57 " "
+      comparison@57..80
+        field@57..64
+          field_name@57..64 "fd.name"
+        whitespace@64..65 " "
+        comparison_operator@65..75
+          identifier@65..75 "startswith"
+        whitespace@75..76 " "
+        bare_string@76..80
+          other@76..77 "/"
+          identifier@77..80 "etc"
+    whitespace@80..81 " "
+    or@81..83 "or"
+    whitespace@83..84 " "
+    comparison@84..99
+      field@84..92
+        field_name@84..92 "evt.type"
+      whitespace@92..93 " "
+      comparison_operator@93..94
+        =@93..94 "="
+      whitespace@94..95 " "
+      bare_string@95..99
+        identifier@95..99 "open"

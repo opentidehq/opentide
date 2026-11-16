@@ -1,0 +1,20 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/or_expression__invalid.falco
+---
+source_file@0..19
+  or_expression@0..19
+    comparison@0..16
+      field@0..9
+        field_name@0..9 "proc.name"
+      whitespace@9..10 " "
+      comparison_operator@10..11
+        =@10..11 "="
+      whitespace@11..12 " "
+      bare_string@12..16
+        identifier@12..16 "bash"
+    whitespace@16..17 " "
+    or@17..19 "or"
+errors:
+19..19: expected a condition
