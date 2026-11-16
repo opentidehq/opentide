@@ -6,17 +6,18 @@
 //! number, date, ip, or boolean field ("Can only use wildcard queries on
 //! keyword and text fields").
 
-use crate::{mask_trailing_keywords, range, text};
-use opentide_core::{Diagnostic, LanguageId};
+use crate::parser;
+use crate::syntax::{SyntaxElement, SyntaxKind as K, SyntaxNode};
+use crate::{field_value, node_span, range, text};
+use opentide_core::Diagnostic;
+use opentide_core::LineIndex;
 use opentide_ecs::ValueType;
-use opentide_syntax::{node_span, parse as ts_parse, walk_with_ancestors};
-use tree_sitter::Node;
 
 /// A literal as Kibana reads it: its text, and whether it holds an
 /// unescaped `*` (a wildcard; quoted strings never do).
-fn literal(node: Node, source: &str) -> (String, bool) {
-    let raw = text(node, source);
-    if node.kind() == "quoted_string" {
+fn literal(element: &SyntaxElement, source: &str) -> (String, bool) {
+    let raw = text(element.text_range(), source);
+    if element.kind() == K::QuotedString {
         let inner = raw.get(1..raw.len().saturating_sub(1)).unwrap_or("");
         return (unescape(inner).0, false);
     }
@@ -56,21 +57,24 @@ fn unescape(raw: &str) -> (String, bool) {
 }
 
 /// The field a `field` node names, unless it is a pattern (`file.hash.*`).
-fn field_name(node: Node, source: &str) -> Option<String> {
-    let inner = node.named_child(0)?;
-    let (name, wildcard) = literal(inner, source);
+fn field_name(node: &SyntaxNode, source: &str) -> Option<String> {
+    let inner = node
+        .children_with_tokens()
+        .find(|e| e.kind() != K::Whitespace)?;
+    let (name, wildcard) = literal(&inner, source);
     let name = name.trim().to_string();
     (!wildcard && !name.is_empty() && !name.contains('*')).then_some(name)
 }
 
 /// Literal values under a `field:` value, through `( ... )` lists.
-fn literals<'t>(node: Node<'t>, out: &mut Vec<Node<'t>>) {
-    match node.kind() {
-        "quoted_string" | "unquoted_literal" => out.push(node),
+fn literals(element: SyntaxElement, out: &mut Vec<SyntaxElement>) {
+    match element.kind() {
+        K::QuotedString | K::UnquotedLiteral => out.push(element),
         _ => {
-            let mut cursor = node.walk();
-            for child in node.named_children(&mut cursor) {
-                literals(child, out);
+            if let Some(node) = element.as_node() {
+                for child in node.children_with_tokens() {
+                    literals(child, out);
+                }
             }
         }
     }
@@ -80,46 +84,52 @@ fn literals<'t>(node: Node<'t>, out: &mut Vec<Node<'t>>) {
 /// ECS documents. Fields inside a nested query (`a:{ b:c }`) are relative to
 /// their parent and are not checked. A query that does not parse gets none.
 pub fn ecs_diagnostics(source: &str) -> Vec<Diagnostic> {
-    let masked = mask_trailing_keywords(source);
-    let Some(tree) = ts_parse(LanguageId::Kuery, &masked) else {
-        return Vec::new();
-    };
-    let root = tree.root_node();
-    if root.has_error() {
+    let parsed = parser::parse_memo(source);
+    let (root, parse) = &*parsed;
+    if !parse.errors.is_empty() {
         return Vec::new();
     }
+    let lines = LineIndex::new(source);
     let mut out = Vec::new();
-    walk_with_ancestors(root, |node, ancestors| {
+    for node in root.descendants() {
         let kind = node.kind();
-        if !matches!(kind, "field_value_expression" | "range_expression")
-            || ancestors.iter().any(|a| a.kind() == "nested_query")
+        if !matches!(kind, K::FieldValueExpression | K::RangeExpression)
+            || node.ancestors().any(|a| a.kind() == K::NestedQuery)
         {
-            return;
+            continue;
         }
-        let Some(field) = node.child_by_field_name("field") else {
-            return;
+        let Some(field) = node.children().find(|c| c.kind() == K::Field) else {
+            continue;
         };
-        let Some(name) = field_name(field, source) else {
-            return;
+        let Some(name) = field_name(&field, source) else {
+            continue;
         };
-        if let Some(d) =
-            opentide_ecs::unknown_field_diagnostic(&name, || range(source, node_span(field)))
-        {
+        if let Some(d) = opentide_ecs::unknown_field_diagnostic(&name, || {
+            range(&lines, node_span(field.text_range()))
+        }) {
             out.push(d);
-            return;
+            continue;
         }
         let Some((value_type, type_name)) = opentide_ecs::field_type(&name) else {
-            return;
+            continue;
         };
-        let Some(value) = node.child_by_field_name("value") else {
-            return;
+        let value = if kind == K::FieldValueExpression {
+            field_value(&node)
+        } else {
+            node.children_with_tokens()
+                .skip_while(|e| !matches!(e.kind(), K::Lt | K::Lte | K::Gt | K::Gte))
+                .skip(1)
+                .find(|e| e.kind() != K::Whitespace)
+        };
+        let Some(value) = value else {
+            continue;
         };
         let mut values = Vec::new();
         literals(value, &mut values);
         for v in values {
-            let (value_text, wildcard) = literal(v, source);
-            let at = || range(source, node_span(v));
-            if kind == "field_value_expression" && wildcard {
+            let (value_text, wildcard) = literal(&v, source);
+            let at = || range(&lines, node_span(v.text_range()));
+            if kind == K::FieldValueExpression && wildcard {
                 // `field:*` asks whether the field exists.
                 if value_text.trim() == "*" || value_type == ValueType::String {
                     continue;
@@ -134,7 +144,7 @@ pub fn ecs_diagnostics(source: &str) -> Vec<Diagnostic> {
             }
             // A range compares dates in any format Kibana sends; only
             // numbers and addresses are checked there.
-            if kind == "range_expression"
+            if kind == K::RangeExpression
                 && !matches!(value_type, ValueType::Numeric | ValueType::Ip)
             {
                 continue;
@@ -148,7 +158,7 @@ pub fn ecs_diagnostics(source: &str) -> Vec<Diagnostic> {
                 ));
             }
         }
-    });
+    }
     out
 }
 
