@@ -310,11 +310,13 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
         ));
     }
     let mut translated = semantics::Translated::default();
+    semantics::forget_types();
     for event in parsed.syntax.preorder() {
         if let rowan::WalkEvent::Enter(node) = event {
             check_node(&node, &parsed, &mut translated, source, catalog, &mut out);
         }
     }
+    semantics::forget_types();
     if let Some(root) = ast::SourceFile::cast(parsed.syntax.clone()) {
         builder::check_pipes(&root, source, catalog, &mut out);
     }
@@ -410,7 +412,8 @@ fn check_node(
     );
     // An expression the parser could not finish (`startsWith(a, `) is not checked further: its
     // arity and types are those of a fragment, and the syntax error already says what is wrong.
-    if expression && parsed.broken(nav::span(node)) {
+    // (A span is a walk down the node's edges: worth it only when the parser found a problem.)
+    if expression && parsed.has_problems() && parsed.broken(nav::span(node)) {
         return;
     }
     match kind {

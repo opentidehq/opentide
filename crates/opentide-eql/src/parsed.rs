@@ -32,6 +32,11 @@ pub(crate) struct Parsed {
 }
 
 impl Parsed {
+    /// Whether the parser reported any problem.
+    pub(crate) fn has_problems(&self) -> bool {
+        !self.token_starts.is_empty() || !self.gap_starts.is_empty()
+    }
+
     /// Whether the parser reported a problem in `at`, or right after it.
     pub(crate) fn broken(&self, at: ByteSpan) -> bool {
         // A token starting in `start..end`, or a gap starting in `start + 1..=end`.

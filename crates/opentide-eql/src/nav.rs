@@ -32,11 +32,12 @@ fn edge(node: &SyntaxNode, first: bool) -> usize {
             let r = own_token_range(&node);
             return usize::from(if first { r.start() } else { r.end() });
         }
-        let mut children = node.children_with_tokens().filter(visible);
+        // The last child is found from the end: a run's node can hold thousands of children.
         let child = if first {
-            children.next()
+            node.children_with_tokens().find(visible)
         } else {
-            children.last()
+            std::iter::successors(node.last_child_or_token(), |c| c.prev_sibling_or_token())
+                .find(visible)
         };
         match child {
             Some(NodeOrToken::Node(child)) => node = child,
@@ -94,6 +95,15 @@ pub(crate) fn element_at<'a>(
         }
         let mut next = None;
         for child in node.children_with_tokens() {
+            // A span lies in its element's range: only an element whose range holds `offset`
+            // needs its span, a walk down its edges.
+            let whole = child.text_range();
+            if usize::from(whole.end()) <= offset {
+                continue;
+            }
+            if offset < usize::from(whole.start()) {
+                break;
+            }
             let range = match &child {
                 NodeOrToken::Node(n) => span(n),
                 NodeOrToken::Token(t) if t.kind() != K::WHITESPACE => {

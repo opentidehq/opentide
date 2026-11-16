@@ -37,7 +37,7 @@ fn a_long_arithmetic_run_is_analysed_on_a_small_stack() {
         });
         assert_eq!(errors, 0, "{op}");
         assert!(
-            started.elapsed() < Duration::from_secs(20),
+            started.elapsed() < Duration::from_secs(5),
             "{op}: {:?}",
             started.elapsed()
         );
@@ -222,8 +222,8 @@ fn a_broken_run_reports_each_finding_once() {
 }
 
 /// Broken input with a problem at every step stays linear on every surface: each problem's
-/// token is found by a binary search (a call with 20,000 empty arguments took about a minute
-/// when each was looked up from the root), and so is whether a node holds one.
+/// token is found by a binary search (a call with 20,000 empty arguments took seconds per
+/// surface when each was looked up from the root), and so is whether a node holds one.
 #[test]
 fn many_problems_are_linear() {
     for source in [
@@ -241,8 +241,60 @@ fn many_problems_are_linear() {
             let _ = completions(&source, source.len());
         });
         assert!(
-            started.elapsed() < Duration::from_secs(20),
+            started.elapsed() < Duration::from_secs(5),
             "{:?}",
+            started.elapsed()
+        );
+    }
+}
+
+/// Arithmetic nested in parentheses, `((1 + 1) + 1) …`, is typed once per run: each run is the
+/// left operand of the run around it, and was typed again at each depth.
+#[test]
+fn nested_arithmetic_is_linear() {
+    let nested = format!("{}1{} == 1", "(".repeat(500), " + 1)".repeat(500));
+    let source = format!("process where {}", vec![nested.as_str(); 200].join(" or "));
+    let started = Instant::now();
+    on_small_stack(move || analyze(&source).diagnostics.len());
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "{:?}",
+        started.elapsed()
+    );
+}
+
+/// A chain of `not` is spanned only when the parser found a problem.
+#[test]
+fn a_long_chain_of_not_is_linear() {
+    let chained = format!("{}a == 1", "not ".repeat(500));
+    let source = format!("process where {}", vec![chained.as_str(); 200].join(" or "));
+    let started = Instant::now();
+    on_small_stack(move || analyze(&source).diagnostics.len());
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "{:?}",
+        started.elapsed()
+    );
+}
+
+/// Unclosed calls around a long run: a span's end is found from the end of each node's
+/// children, and hover spans only the child that holds the offset.
+#[test]
+fn unclosed_nesting_around_a_long_run_is_linear() {
+    for open in ["f(", "("] {
+        let source = format!(
+            "process where {}{}",
+            open.repeat(500),
+            vec!["a == 1"; 40_000].join(" or ")
+        );
+        let started = Instant::now();
+        on_small_stack(move || {
+            let _ = analyze(&source);
+            let _ = hover(&source, source.len() - 2);
+        });
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "{open}: {:?}",
             started.elapsed()
         );
     }
