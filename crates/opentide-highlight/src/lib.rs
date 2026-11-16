@@ -15,7 +15,6 @@ mod keywords;
 mod markdown;
 
 use opentide_core::{ByteSpan, LanguageId, LineIndex, Range};
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, OnceLock, RwLock};
@@ -30,14 +29,6 @@ pub const TIDE_FIELDS_JSON: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/data/catalogs/tide/generated/fields.json"
 ));
-/// The highlight query of Tide YAML for the tree-sitter-yaml grammar editors
-/// use (`cargo xtask codegen` writes its key lists). Runtime highlighting is
-/// path-aware and does not read it.
-pub const TIDE_HIGHLIGHTS_SCM: &str = include_str!(concat!(
-    env!("OPENTIDE_ASSETS"),
-    "/highlights/queries/tide/highlights.scm"
-));
-
 #[derive(Debug, Error)]
 pub enum HighlightError {
     #[error("highlight spec: {0}")]
@@ -519,27 +510,6 @@ pub fn tide_keys_for_capture(capture: &str) -> Vec<String> {
         }
     }
     names.into_iter().collect()
-}
-
-/// Extract `@capture` names from a tree-sitter highlights.scm file.
-#[expect(
-    clippy::expect_used,
-    reason = "a regex literal: an invalid pattern fails every test that reaches it"
-)]
-pub fn scm_captures(scm: &str) -> BTreeSet<String> {
-    let re = Regex::new(r"@([A-Za-z][A-Za-z0-9_.]*)").expect("regex");
-    re.captures_iter(scm)
-        .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
-        .collect()
-}
-
-pub fn assert_scm_subset_of_spec(spec: &HighlightSpec, scm: &str) -> Result<(), HighlightError> {
-    for capture in scm_captures(scm) {
-        if !spec.contains_capture(&capture) {
-            return Err(HighlightError::UnknownCapture(capture));
-        }
-    }
-    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1157,35 +1127,9 @@ mod tests {
     }
 
     #[test]
-    fn the_tide_query_names_only_spec_captures() {
+    fn an_unknown_capture_fails() {
         let spec = HighlightSpec::load().unwrap();
-        assert_scm_subset_of_spec(&spec, TIDE_HIGHLIGHTS_SCM).unwrap();
-    }
-
-    #[test]
-    fn tide_highlights_scm_lists_every_field_catalog_key() {
-        let re = Regex::new(r#"\^\(([^)]+)\)\$"#).unwrap();
-        let mut scm_keys = std::collections::BTreeSet::new();
-        for cap in re.captures_iter(TIDE_HIGHLIGHTS_SCM) {
-            for part in cap[1].split('|') {
-                scm_keys.insert(part.to_string());
-            }
-        }
-        let catalog: std::collections::BTreeSet<String> = load_tide_fields()
-            .into_iter()
-            .map(|f| f.name.clone())
-            .collect();
-        let missing: Vec<_> = catalog.difference(&scm_keys).cloned().collect();
-        assert!(
-            missing.is_empty(),
-            "highlights.scm missing generated field names: {missing:?}"
-        );
-    }
-
-    #[test]
-    fn unknown_scm_capture_fails() {
-        let spec = HighlightSpec::load().unwrap();
-        let err = assert_scm_subset_of_spec(&spec, "(identifier) @not_a_real_capture").unwrap_err();
+        let err = spec.token_index("not_a_real_capture").unwrap_err();
         match err {
             HighlightError::UnknownCapture(name) => assert_eq!(name, "not_a_real_capture"),
             other => panic!("{other}"),
