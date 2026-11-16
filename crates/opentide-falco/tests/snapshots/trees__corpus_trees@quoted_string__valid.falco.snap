@@ -1,0 +1,26 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/quoted_string__valid.falco
+---
+source_file@0..63
+  and_expression@0..63
+    comparison@0..35
+      field@0..12
+        field_name@0..12 "proc.cmdline"
+      whitespace@12..13 " "
+      comparison_operator@13..21
+        identifier@13..21 "contains"
+      whitespace@21..22 " "
+      quoted_string@22..35 "\"-c \\\"curl\\\"\""
+    whitespace@35..36 " "
+    and@36..39 "and"
+    whitespace@39..40 " "
+    comparison@40..63
+      field@40..47
+        field_name@40..47 "fd.name"
+      whitespace@47..48 " "
+      comparison_operator@48..49
+        =@48..49 "="
+      whitespace@49..50 " "
+      quoted_string@50..63 "'/etc/shadow'"

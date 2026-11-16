@@ -1,0 +1,27 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(\"and not proc.pname in (a, b)\")"
+---
+source_file@0..28
+  append_fragment@0..28
+    and@0..3 "and"
+    whitespace@3..4 " "
+    not_expression@4..28
+      not@4..7 "not"
+      whitespace@7..8 " "
+      comparison@8..28
+        field@8..18
+          field_name@8..18 "proc.pname"
+        whitespace@18..19 " "
+        list_operator@19..21
+          identifier@19..21 "in"
+        whitespace@21..22 " "
+        value_list@22..28
+          (@22..23 "("
+          bare_string@23..24
+            identifier@23..24 "a"
+          ,@24..25 ","
+          whitespace@25..26 " "
+          bare_string@26..27
+            identifier@26..27 "b"
+          )@27..28 ")"

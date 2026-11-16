@@ -1,0 +1,19 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/field_shorthand__invalid.cql
+---
+SOURCE_FILE@0..20
+  PIPELINE@0..19
+    FIELD_SHORTHAND@0..11
+      FIELD_NAME@0..8
+        WORD@0..8 "loglevel"
+      WHITESPACE@8..9 " "
+      EQ_TILDE@9..11 "=~"
+    WHITESPACE@11..12 " "
+    FREE_TEXT@12..19
+      STRING@12..19
+        STRING_TOKEN@12..19 "\"ERROR\""
+  WHITESPACE@19..20 "\n"
+
+11..12: expected a function call (expected FUNCTION_NAME_TOKEN)

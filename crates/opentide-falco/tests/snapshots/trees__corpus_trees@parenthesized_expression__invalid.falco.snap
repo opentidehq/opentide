@@ -1,0 +1,26 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/parenthesized_expression__invalid.falco
+---
+source_file@0..39
+  parenthesized_expression@0..39
+    (@0..1 "("
+    and_expression@1..39
+      macro_reference@1..11
+        identifier@1..11 "open_write"
+      whitespace@11..12 " "
+      and@12..15 "and"
+      whitespace@15..16 " "
+      comparison@16..39
+        field@16..23
+          field_name@16..23 "fd.name"
+        whitespace@23..24 " "
+        comparison_operator@24..34
+          identifier@24..34 "startswith"
+        whitespace@34..35 " "
+        bare_string@35..39
+          other@35..36 "/"
+          identifier@36..39 "etc"
+errors:
+39..39: missing `)` (expected ))

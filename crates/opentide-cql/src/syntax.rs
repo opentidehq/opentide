@@ -35,8 +35,9 @@ kinds! {
         WHITESPACE, LINE_COMMENT, BLOCK_COMMENT,
         // Words and literals. `WORD` is a run of field characters: a field name, a
         // keyword, an identifier, a bare pattern. `PATTERN` holds `* + - : /` (a scanner
-        // token of the tree-sitter grammar); `PATTERN_ERROR` is one that ends in `//`.
-        WORD, PATTERN, PATTERN_ERROR, NUMBER_TOKEN, TAG_TOKEN, STRING_TOKEN,
+        // token of the tree-sitter grammar); `ASSIGN_FIELD_TOKEN` is the scanner's name before `:=`
+        // (any word, keywords included); `PATTERN_ERROR` is one that ends in `//`.
+        WORD, ASSIGN_FIELD_TOKEN, PATTERN, PATTERN_ERROR, NUMBER_TOKEN, TAG_TOKEN, STRING_TOKEN,
         FUNCTION_NAME_TOKEN, SAVED_QUERY_NAME_TOKEN, PARAMETER_NAME_TOKEN,
         REGEX_PATTERN_TOKEN, REGEX_FLAGS_TOKEN,
         // Keywords: never lexed, the parser re-kinds a word.
@@ -103,6 +104,11 @@ impl rowan::Language for Lang {
         kind.raw()
     }
 }
+
+/// A node of the CQL tree.
+pub type SyntaxNode = rowan::SyntaxNode<Lang>;
+/// A token of the CQL tree.
+pub type SyntaxToken = rowan::SyntaxToken<Lang>;
 
 /// The kind of each token of `cql.ungram`.
 #[macro_export]

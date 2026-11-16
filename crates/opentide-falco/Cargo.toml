@@ -17,6 +17,9 @@ workspace = true
 opentide-core.workspace = true
 opentide-syntax.workspace = true
 opentide-highlight.workspace = true
+opentide-parse.workspace = true
+logos.workspace = true
+rowan.workspace = true
 tree-sitter.workspace = true
 regex.workspace = true
 serde.workspace = true
@@ -24,3 +27,5 @@ toml.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+insta.workspace = true
+opentide-parse = { workspace = true, features = ["differential"] }

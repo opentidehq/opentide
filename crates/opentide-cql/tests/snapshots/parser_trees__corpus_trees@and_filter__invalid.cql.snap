@@ -1,0 +1,31 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/and_filter__invalid.cql
+---
+SOURCE_FILE@0..60
+  PIPELINE@0..59
+    AND_FILTER@0..36
+      FIELD_FILTER@0..32
+        TAG@0..17
+          TAG_TOKEN@0..17 "#event_simpleName"
+        EQ@17..18 "="
+        UNQUOTED_PATTERN@18..32
+          WORD@18..32 "ProcessRollup2"
+      WHITESPACE@32..33 " "
+      AND@33..36
+        AND_KW@33..36 "and"
+    WHITESPACE@36..37 " "
+    ERROR@37..40
+      WORD@37..40 "and"
+    WHITESPACE@40..41 " "
+    FIELD_FILTER@41..59
+      FIELD_NAME@41..55
+        WORD@41..55 "event_platform"
+      EQ@55..56 "="
+      UNQUOTED_PATTERN@56..59
+        WORD@56..59 "Win"
+  WHITESPACE@59..60 "\n"
+
+36..37: expected a filter
+36..37: unexpected (expected PIPE)

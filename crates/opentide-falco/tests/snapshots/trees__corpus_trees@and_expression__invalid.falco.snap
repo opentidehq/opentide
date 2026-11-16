@@ -1,0 +1,19 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/and_expression__invalid.falco
+---
+source_file@0..33
+  and_expression@0..23
+    macro_reference@0..15
+      identifier@0..15 "spawned_process"
+    whitespace@15..16 " "
+    and@16..19 "and"
+    whitespace@19..20 " "
+    macro_reference@20..23
+      identifier@20..23 "and"
+  whitespace@23..24 " "
+  ERROR@24..33
+    identifier@24..33 "container"
+errors:
+23..24: unexpected

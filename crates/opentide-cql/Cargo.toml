@@ -23,3 +23,6 @@ logos.workspace = true
 rowan.workspace = true
 serde.workspace = true
 toml.workspace = true
+
+[dev-dependencies]
+insta.workspace = true

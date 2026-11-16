@@ -1,0 +1,18 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..6
+  PIPELINE@0..6
+    OR_FILTER@0..6
+      FIELD_FILTER@0..3
+        FIELD_NAME@0..1
+          WORD@0..1 "a"
+        EQ@1..2 "="
+        UNQUOTED_PATTERN@2..3
+          WORD@2..3 "1"
+      WHITESPACE@3..4 " "
+      OR@4..6
+        OR_KW@4..6 "or"
+
+6..6: expected a filter

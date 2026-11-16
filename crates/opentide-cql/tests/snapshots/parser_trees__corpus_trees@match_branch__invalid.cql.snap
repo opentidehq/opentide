@@ -1,0 +1,61 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/match_branch__invalid.cql
+---
+SOURCE_FILE@0..64
+  PIPELINE@0..63
+    MATCH_STATEMENT@0..63
+      FIELD_NAME@0..8
+        WORD@0..8 "loglevel"
+      WHITESPACE@8..9 " "
+      MATCH_KW@9..14 "match"
+      WHITESPACE@14..15 " "
+      L_BRACE@15..16 "{"
+      WHITESPACE@16..17 " "
+      MATCH_BRANCH@17..43
+        REGEX@17..28
+          SLASH@17..18 "/"
+          REGEX_PATTERN@18..27
+            REGEX_PATTERN_TOKEN@18..27 ".*ERROR.*"
+          SLASH@27..28 "/"
+        WHITESPACE@28..29 " "
+        FAT_ARROW@29..31 "=>"
+        WHITESPACE@31..32 " "
+        PIPELINE@32..43
+          ASSIGNMENT@32..43
+            FIELD_NAME@32..33
+              WORD@32..33 "s"
+            WHITESPACE@33..34 " "
+            COLON_EQ@34..36 ":="
+            WHITESPACE@36..37 " "
+            STRING@37..43
+              STRING_TOKEN@37..43 "\"High\""
+      SEMI@43..44 ";"
+      WHITESPACE@44..45 " "
+      MATCH_BRANCH@45..61
+        PIPELINE@45..61
+          ERROR@45..46
+            EQ@45..46 "="
+          ERROR@46..47
+            GT@46..47 ">"
+          WHITESPACE@47..48 " "
+          FREE_TEXT@48..49
+            UNQUOTED_PATTERN@48..49
+              WORD@48..49 "s"
+          WHITESPACE@49..50 " "
+          ERROR@50..52
+            COLON_EQ@50..52 ":="
+          WHITESPACE@52..53 " "
+          FREE_TEXT@53..61
+            STRING@53..61
+              STRING_TOKEN@53..61 "\"Medium\""
+      WHITESPACE@61..62 " "
+      R_BRACE@62..63 "}"
+  WHITESPACE@63..64 "\n"
+
+44..45: expected a value (expected R_BRACE)
+44..45: expected `=>` (expected FAT_ARROW, R_BRACE)
+44..45: unexpected (expected PIPE, FAT_ARROW, R_BRACE)
+46..46: unexpected (expected PIPE)
+49..50: unexpected (expected PIPE)
