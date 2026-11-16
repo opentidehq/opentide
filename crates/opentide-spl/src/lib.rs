@@ -366,7 +366,21 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     syntax::analyze(source)
 }
 
+thread_local! {
+    /// The unknown-command findings made on this thread: [`unknown_command_findings`].
+    static UNKNOWN_COMMAND_FINDINGS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many unknown-command findings this thread has built, each with a scan
+/// of the command catalog: one per distinct name in an analysis
+/// (`tests/many_findings.rs`). Not API.
+#[doc(hidden)]
+pub fn unknown_command_findings() -> usize {
+    UNKNOWN_COMMAND_FINDINGS.get()
+}
+
 pub(crate) fn unknown_command(name: &str, range: Range, catalog: &Catalog) -> Diagnostic {
+    UNKNOWN_COMMAND_FINDINGS.set(UNKNOWN_COMMAND_FINDINGS.get() + 1);
     let message = format!(
         "'{name}' is not a command opentide knows; if an app on the search head provides it, declare it"
     );

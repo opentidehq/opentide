@@ -15,7 +15,7 @@ use opentide_parse::{Grammar, Input, Parse, Parser, build};
 pub const MAX_DEPTH: u32 = 1_024;
 
 /// The cost of one subsearch in levels of [`MAX_DEPTH`] (see `search.rs`).
-pub(super) const SUBSEARCH_WEIGHT_LEVELS: u32 = 4;
+pub(crate) const SUBSEARCH_WEIGHT_LEVELS: u32 = 4;
 
 /// What the toolkit needs to know of SPL's kinds.
 pub const GRAMMAR: Grammar = Grammar {

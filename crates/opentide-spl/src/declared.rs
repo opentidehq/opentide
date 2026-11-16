@@ -17,11 +17,11 @@
 
 use super::Catalog;
 use super::scan::{
-    base_search, command_word, end_of_brackets, end_of_macro, end_quoted, skip_comment, skip_ws,
-    split_segments, subsearches,
+    Order, base_search, command_word, end_of_brackets, end_of_macro, end_quoted, skip_comment,
+    skip_hidden, skip_ws, walk_pipelines,
 };
 use opentide_core::datasets::{DatasetKind, DeclaredColumn, DeclaredDatasets, current};
-use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
+use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
 
 const PLATFORM: &str = "splunk";
 
@@ -41,15 +41,26 @@ impl Read {
     }
 }
 
-pub(crate) fn collect(source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+pub(crate) fn collect(
+    source: &str,
+    catalog: &Catalog,
+    lines: &LineIndex<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
     let datasets = current();
     if source.is_empty() || !datasets.declares(PLATFORM) {
         return;
     }
-    check(source, catalog, &datasets, out);
+    check(source, catalog, &datasets, lines, out);
 }
 
-fn check(source: &str, catalog: &Catalog, datasets: &DeclaredDatasets, out: &mut Vec<Diagnostic>) {
+fn check(
+    source: &str,
+    catalog: &Catalog,
+    datasets: &DeclaredDatasets,
+    lines: &LineIndex<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
     let declared = datasets.names(PLATFORM);
     if declared.is_empty() {
         return;
@@ -66,7 +77,7 @@ fn check(source: &str, catalog: &Catalog, datasets: &DeclaredDatasets, out: &mut
             format!(
                 "sourcetype `{name}` is not declared: no Splunk log source in visibility.toml names it"
             ),
-            span_to_range(source, ByteSpan::new(read.start, read.end.max(read.start + 1))),
+            lines.range(ByteSpan::new(read.start, read.end.max(read.start + 1))),
         ));
     }
 }
@@ -102,22 +113,24 @@ pub(crate) fn declared_fields(source: &str, catalog: &Catalog) -> Vec<(String, D
 }
 
 fn walk(source: &str, start: usize, end: usize, catalog: &Catalog, out: &mut Vec<Read>) {
-    let segments = split_segments(source, start, end);
-    // The stage that reads the index, as the wildcard lints see it (perf.rs).
-    let base = base_search(source, &segments, catalog);
-    for &(seg_start, seg_end) in &segments {
-        for (inner_start, inner_end) in subsearches(source, seg_start, seg_end) {
-            walk(source, inner_start, inner_end, catalog, out);
-        }
-        // The base search, and a `tstats` `where` clause.
-        if base == Some((seg_start, seg_end))
-            || command_word(source, seg_start, seg_end)
-                .0
-                .eq_ignore_ascii_case("tstats")
-        {
-            scan_terms(source, seg_start, seg_end, out);
-        }
-    }
+    walk_pipelines(
+        source,
+        (start, end),
+        skip_hidden,
+        Order::SubsearchesFirst,
+        // The stage that reads the index, as the wildcard lints see it (perf.rs).
+        |segments| base_search(source, segments, catalog),
+        |base, _, (seg_start, seg_end)| {
+            // The base search, and a `tstats` `where` clause.
+            if *base == Some((seg_start, seg_end))
+                || command_word(source, seg_start, seg_end)
+                    .0
+                    .eq_ignore_ascii_case("tstats")
+            {
+                scan_terms(source, seg_start, seg_end, out);
+            }
+        },
+    );
 }
 
 /// Walks search terms, tracking `NOT`, and collects sourcetype values.
@@ -312,7 +325,13 @@ mod tests {
     /// The names warned about, in order.
     fn undeclared(src: &str, datasets: &DeclaredDatasets) -> Vec<String> {
         let mut out = Vec::new();
-        check(src, Catalog::cached(), datasets, &mut out);
+        check(
+            src,
+            Catalog::cached(),
+            datasets,
+            &opentide_core::LineIndex::new(src),
+            &mut out,
+        );
         for d in &out {
             assert_eq!(d.code, codes::SPL_DATASET_NOT_DECLARED);
             assert_eq!(d.severity, Severity::Warning);
