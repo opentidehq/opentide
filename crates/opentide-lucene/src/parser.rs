@@ -5,7 +5,9 @@
 //! `BooleanQuery`, however long.
 
 use crate::syntax::{SyntaxKind as K, SyntaxNode, lex};
-use opentide_parse::{Grammar, Input, Parse, Parser, TokenSet, build, debug_errors, debug_tree};
+use opentide_parse::{
+    Grammar, Input, Marker, Parse, Parser, TokenSet, build, debug_errors, debug_tree,
+};
 
 /// Nesting (`(`) deeper than this is one error. The tree-sitter engine took
 /// 10 000 levels; the floor every language keeps is `deep_queries`'
@@ -63,7 +65,7 @@ pub(crate) fn parse(source: &str) -> (SyntaxNode, Parse) {
     let input = Input::new(source, lex(source), grammar);
     let mut p = Parser::new(&input);
     let root = p.start();
-    query(&mut p, false);
+    query(&mut p);
     root.complete(&mut p, K::SourceFile.raw());
     let parse = build(&input, p.finish());
     (SyntaxNode::new_root(parse.green.clone()), parse)
@@ -73,33 +75,92 @@ fn at(p: &mut Parser<'_>, kind: K) -> bool {
     p.at(kind.raw())
 }
 
-/// `_query`: clauses and operators up to the end, or up to `)` in a group.
-fn query(p: &mut Parser<'_>, in_group: bool) {
-    let m = p.start();
-    let mut clauses = 0usize;
-    // Whether an operator was read and a clause must follow.
-    let mut pending = false;
-    loop {
-        if p.at_eof() || (in_group && at(p, K::RParen)) {
-            break;
+/// The markers a clause opened before its body: a `FieldQuery` and a
+/// `ModifiedClause`, completed inside out once the body is read.
+struct Wrap {
+    field: Option<Marker>,
+    modified: Option<Marker>,
+}
+
+impl Wrap {
+    fn finish(self, p: &mut Parser<'_>) {
+        if let Some(m) = self.field {
+            m.complete(p, K::FieldQuery.raw());
         }
-        if clauses > 0 && !pending && (p.at_set(AND) || p.at_set(OR)) {
+        if let Some(m) = self.modified {
+            m.complete(p, K::ModifiedClause.raw());
+        }
+    }
+}
+
+/// A clause list being read: the whole query, or the inside of a group
+/// (`group` is that group's marker and what its clause opened around it).
+struct List {
+    m: Marker,
+    clauses: usize,
+    /// Whether an operator was read and a clause must follow.
+    pending: bool,
+    group: Option<(Marker, Wrap)>,
+}
+
+/// `_query`: clauses and operators up to the end. A group's clause list is
+/// read by the same loop, on an explicit stack, not by recursion: a level
+/// of nesting costs a `List` on the heap, not a chain of stack frames (five
+/// rules deep, which held only about 640 levels on a 1 MB debug stack).
+fn query(p: &mut Parser<'_>) {
+    let mut stack = vec![List {
+        m: p.start(),
+        clauses: 0,
+        pending: false,
+        group: None,
+    }];
+    while let Some(list) = stack.last_mut() {
+        let in_group = list.group.is_some();
+        if p.at_eof() || (in_group && at(p, K::RParen)) {
+            let Some(list) = stack.pop() else { break };
+            end_list(p, list.m, list.clauses, list.pending);
+            let Some((group, wrap)) = list.group else {
+                break;
+            };
+            close_group(p, group);
+            wrap.finish(p);
+            if let Some(outer) = stack.last_mut() {
+                outer.clauses += 1;
+                outer.pending = false;
+            }
+            continue;
+        }
+        if list.clauses > 0 && !list.pending && (p.at_set(AND) || p.at_set(OR)) {
             conjunction(p);
-            pending = true;
+            list.pending = true;
         } else if p.at_set(MODIFIERS) || p.at_set(BODIES) {
-            clause(p);
-            clauses += 1;
-            pending = false;
+            match clause(p) {
+                // The body is a group: read its clauses, then come back.
+                Some(group) => stack.push(List {
+                    m: p.start(),
+                    clauses: 0,
+                    pending: false,
+                    group: Some(group),
+                }),
+                None => {
+                    list.clauses += 1;
+                    list.pending = false;
+                }
+            }
         } else {
             // A stray closer, an operator with no clause before it, `AND` where
             // a clause begins: the token is the error.
-            if pending {
+            if list.pending {
                 p.error(MISSING_CLAUSE);
-                pending = false;
+                list.pending = false;
             }
             p.err_and_bump(UNEXPECTED);
         }
     }
+}
+
+/// A clause list ends: one `BooleanQuery` when it holds more than one clause.
+fn end_list(p: &mut Parser<'_>, m: Marker, clauses: usize, pending: bool) {
     if pending {
         p.error(MISSING_CLAUSE);
     }
@@ -117,10 +178,11 @@ fn conjunction(p: &mut Parser<'_>) {
     m.complete(p, kind.raw());
 }
 
-/// A clause with its modifier, if any.
-fn clause(p: &mut Parser<'_>) {
+/// A clause with its modifier, if any. When its body is a group, the group
+/// is open (its `(` read) and returned with what the clause opened around it.
+fn clause(p: &mut Parser<'_>) -> Option<(Marker, Wrap)> {
     if !p.at_set(MODIFIERS) {
-        return clause_body(p);
+        return clause_body(p, None);
     }
     let m = p.start();
     let n = p.start();
@@ -132,38 +194,58 @@ fn clause(p: &mut Parser<'_>) {
     p.bump();
     n.complete(p, kind.raw());
     if p.at_set(BODIES) {
-        clause_body(p);
+        clause_body(p, Some(m))
     } else {
         p.error(MISSING_CLAUSE);
+        m.complete(p, K::ModifiedClause.raw());
+        None
     }
-    m.complete(p, K::ModifiedClause.raw());
 }
 
 /// `_clause`: a field query or a clause body.
-fn clause_body(p: &mut Parser<'_>) {
+fn clause_body(p: &mut Parser<'_>, modified: Option<Marker>) -> Option<(Marker, Wrap)> {
     if p.at_set(FIELD_NAMES) && p.nth(1) == K::Colon.raw() {
         let m = p.start();
         let name = p.start();
         term(p);
         name.complete(p, K::FieldName.raw());
         p.bump();
+        let wrap = Wrap {
+            field: Some(m),
+            modified,
+        };
         if p.at_set(BODIES) {
-            body(p);
+            body(p, wrap)
         } else {
             p.error(MISSING_CLAUSE);
+            wrap.finish(p);
+            None
         }
-        m.complete(p, K::FieldQuery.raw());
     } else {
-        body(p);
+        body(
+            p,
+            Wrap {
+                field: None,
+                modified,
+            },
+        )
     }
 }
 
-/// A group, a term, a phrase, a range or a regexp, with its suffixes.
-fn body(p: &mut Parser<'_>) {
+/// A group, a term, a phrase, a range or a regexp, with its suffixes. A
+/// group is only opened here: `query` reads its clauses.
+fn body(p: &mut Parser<'_>, wrap: Wrap) -> Option<(Marker, Wrap)> {
     let current = p.current();
     if current == K::LParen.raw() {
-        group(p);
-    } else if current == K::LBracket.raw() || current == K::LBrace.raw() {
+        if !p.enter() {
+            wrap.finish(p);
+            return None;
+        }
+        let m = p.start();
+        p.bump();
+        return Some((m, wrap));
+    }
+    if current == K::LBracket.raw() || current == K::LBrace.raw() {
         range(p);
     } else if current == K::Regexp.raw() {
         let m = p.start();
@@ -183,6 +265,8 @@ fn body(p: &mut Parser<'_>) {
     } else {
         p.error(MISSING_CLAUSE);
     }
+    wrap.finish(p);
+    None
 }
 
 /// A term token; `&&` and `||` are terms here.
@@ -203,13 +287,8 @@ fn suffix(p: &mut Parser<'_>) {
     }
 }
 
-fn group(p: &mut Parser<'_>) {
-    if !p.enter() {
-        return;
-    }
-    let m = p.start();
-    p.bump();
-    query(p, true);
+/// A group's `)` and boost, after its clauses.
+fn close_group(p: &mut Parser<'_>, m: Marker) {
     if at(p, K::RParen) {
         p.bump();
     } else {
@@ -320,6 +399,54 @@ mod tests {
         ] {
             let (_, parse) = parse(&source);
             assert!(parse.errors.is_empty(), "{:?}", &parse.errors[..1]);
+        }
+    }
+
+    /// `f` on a 1 MB stack, as the browser WASM module has; the debug build
+    /// spends the most stack per level.
+    fn on_small_stack(name: &str, f: impl FnOnce() + Send + 'static) {
+        std::thread::Builder::new()
+            .name(name.into())
+            .stack_size(1 << 20)
+            .spawn(f)
+            .expect("a thread")
+            .join()
+            .unwrap_or_else(|_| panic!("{name} overflowed or panicked"));
+    }
+
+    #[test]
+    fn nesting_at_and_past_the_limit_fits_a_small_stack() {
+        let levels = usize::try_from(MAX_DEPTH).expect("fits");
+        for (name, source, clean) in [
+            (
+                "balanced",
+                format!("{}a{}", "(".repeat(levels), ")".repeat(levels)),
+                true,
+            ),
+            (
+                "field groups",
+                format!("{}b{}", "a:(".repeat(levels), ")".repeat(levels)),
+                true,
+            ),
+            (
+                "modified groups",
+                format!("{}b{}", "+a:(".repeat(levels), ")".repeat(levels)),
+                true,
+            ),
+            ("unclosed", "(".repeat(levels), false),
+            (
+                "past the limit",
+                format!("{}a{}", "(".repeat(200_000), ")".repeat(200_000)),
+                false,
+            ),
+        ] {
+            on_small_stack(name, move || {
+                let (root, parse) = parse(&source);
+                assert_eq!(parse.errors.is_empty(), clean, "{:?}", parse.errors.first());
+                // The tree drops recursively too, and the debug rendering walks it.
+                assert!(debug(&source).starts_with("SourceFile@"));
+                drop(root);
+            });
         }
     }
 
