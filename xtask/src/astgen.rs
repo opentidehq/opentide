@@ -230,7 +230,9 @@ fn occurrences(
             // `label:('a' | 'b')`, and the same under `?` or `*`: one field
             // for the whole choice (#1454: under `?` each token was a field of
             // its own, and the label kept only the first).
-            (Rule::Alt(alts), optional) if alts.iter().all(|r| matches!(r, Rule::Token(_))) => {
+            (Rule::Alt(alts), (optional, repeated))
+                if alts.iter().all(|r| matches!(r, Rule::Token(_))) =>
+            {
                 let tokens = alts
                     .iter()
                     .filter_map(|r| {
@@ -244,11 +246,13 @@ fn occurrences(
                 out.push(Occurrence {
                     label: Some(label.clone()),
                     target: Target::Tokens(tokens),
-                    many: many || matches!(**rule, Rule::Rep(_)),
+                    many: many || repeated,
                     loose: loose || optional,
                 });
             }
-            (Rule::Seq(_) | Rule::Alt(_), false) => bail!(
+            // A sequence or a choice with a node in it is refused under `?`
+            // and `*` too: one accessor could not reach its later parts.
+            (Rule::Seq(_) | Rule::Alt(_), _) => bail!(
                 "label `{label}` names {}: label one node or token, or a choice of tokens",
                 render(grammar, rule, false)
             ),
@@ -272,14 +276,17 @@ fn occurrences(
     Ok(())
 }
 
-/// The rule under any `?` and `*`, and whether there was one.
-fn unwrap_optional(mut rule: &Rule) -> (&Rule, bool) {
-    let mut optional = false;
-    while let Rule::Opt(inner) | Rule::Rep(inner) = rule {
-        rule = inner;
-        optional = true;
+/// The rule under any `?` and `*`, whether there was one, and whether one
+/// was a `*` (at any depth: `(('a' | 'b')*)?` repeats).
+fn unwrap_optional(mut rule: &Rule) -> (&Rule, (bool, bool)) {
+    let (mut optional, mut repeated) = (false, false);
+    loop {
+        match rule {
+            Rule::Opt(inner) => (rule, optional) = (inner, true),
+            Rule::Rep(inner) => (rule, optional, repeated) = (inner, true, true),
+            _ => return (rule, (optional, repeated)),
+        }
     }
-    (rule, optional)
 }
 
 fn fields(grammar: &Grammar, node: Node) -> Result<Vec<Field>> {
@@ -306,6 +313,14 @@ fn fields(grammar: &Grammar, node: Node) -> Result<Vec<Field>> {
                 // Two tokens one name stands for (`'LIKE' | 'like'`) are one
                 // field that reads both (#1454: the second was out of reach).
                 if let Some((_, field)) = fields.iter_mut().find(|(_, f)| f.name == name) {
+                    // A label given twice over other tokens (`d:('a' | 'b')?
+                    // d:'c'`): the first token present would hide the
+                    // other's. Over the same tokens it is one list
+                    // (`table:'ident' (',' table:'ident')*`).
+                    let same = matches!(&field.shape, Shape::Tokens { tokens: known, .. } if known == tokens);
+                    if occ.label.is_some() && !same {
+                        bail!("two children are named `{name}`: label one of them");
+                    }
                     if let Shape::Tokens {
                         tokens: known,
                         many,
