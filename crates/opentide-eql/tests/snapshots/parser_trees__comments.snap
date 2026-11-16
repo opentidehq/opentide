@@ -1,0 +1,20 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(source)"
+---
+SOURCE_FILE@0..50
+  BLOCK_COMMENT@0..7 "/* a */"
+  WHITESPACE@7..8 " "
+  EVENT_QUERY@8..50
+    EVENT_CATEGORY@8..15
+      IDENTIFIER@8..15
+        WORD@8..15 "process"
+    WHITESPACE@15..16 " "
+    LINE_COMMENT@16..20 "// b"
+    WHITESPACE@20..22 "\n "
+    WHERE_KW@22..27 "where"
+    WHITESPACE@27..28 " "
+    BLOCK_COMMENT@28..45 "/* c /* d */ e */"
+    WHITESPACE@45..46 " "
+    BOOLEAN@46..50
+      TRUE_KW@46..50 "true"

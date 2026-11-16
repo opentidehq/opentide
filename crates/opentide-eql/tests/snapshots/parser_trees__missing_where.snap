@@ -1,0 +1,18 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(source)"
+---
+SOURCE_FILE@0..14
+  EVENT_QUERY@0..7
+    EVENT_CATEGORY@0..7
+      IDENTIFIER@0..7
+        WORD@0..7 "process"
+  WHITESPACE@7..8 " "
+  ERROR@8..14
+    WORD@8..9 "a"
+    WHITESPACE@9..10 " "
+    EQ_EQ@10..12 "=="
+    WHITESPACE@12..13 " "
+    NUMBER_TOKEN@13..14 "1"
+7..8: missing `where` (expected `where`)
+7..8: unexpected token (expected `where`, `|`)

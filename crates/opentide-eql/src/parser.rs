@@ -140,7 +140,9 @@ pub(crate) fn parse(source: &str) -> Parse {
     let input = Input::new(source, keywords(source, lex(source)), GRAMMAR);
     let mut p = Parser::new(&input);
     let root = p.start();
-    if !p.at_eof() && !at(&mut p, K::PIPE) {
+    if at(&mut p, K::PIPE) {
+        p.error("a query is missing before the first pipe");
+    } else if !p.at_eof() {
         query(&mut p);
     }
     while !p.at_eof() {
@@ -285,28 +287,35 @@ fn join(p: &mut Parser<'_>) {
     if at(p, K::BY_KW) {
         join_keys(p);
     }
-    terms(p, K::JOIN_TERM);
+    // A join needs two terms: `join` with one is a syntax error, as in tree-sitter's grammar.
+    if terms(p, K::JOIN_TERM) == 1 {
+        p.error("a second subquery `[ ... ]` is missing");
+    }
     if eat(p, K::UNTIL_KW) {
         term(p, K::JOIN_TERM);
     }
     m.complete(p, K::JOIN.raw());
 }
 
-/// One term or more.
-fn terms(p: &mut Parser<'_>, kind: K) {
+/// One term or more; how many.
+fn terms(p: &mut Parser<'_>, kind: K) -> usize {
     term(p, kind);
+    let mut n = 1;
     while p.at_set(OPENS) {
         term(p, kind);
+        n += 1;
     }
+    n
 }
 
 /// `[...] by keys` and, in a sequence, `with runs=n`.
 fn term(p: &mut Parser<'_>, kind: K) {
+    let m = p.start();
     if !p.at_set(OPENS) {
+        m.abandon(p);
         p.error("a subquery `[ ... ]` is missing");
         return;
     }
-    let m = p.start();
     subquery(p);
     if at(p, K::BY_KW) {
         join_keys(p);
@@ -314,10 +323,12 @@ fn term(p: &mut Parser<'_>, kind: K) {
     if kind == K::SEQUENCE_TERM && at(p, K::WITH_KW) {
         let option = p.start();
         p.bump();
-        if identifier(p) && expect(p, K::EQ) && at(p, K::NUMBER_TOKEN) {
-            leaf(p, K::NUMBER);
-        } else if !p.at_eof() && !p.at_set(RECOVERY) {
-            p.err_and_bump("a number is missing");
+        if identifier(p) && expect(p, K::EQ) {
+            if at(p, K::NUMBER_TOKEN) {
+                leaf(p, K::NUMBER);
+            } else {
+                fail(p, "a number is missing");
+            }
         }
         option.complete(p, K::TERM_OPTION.raw());
     }

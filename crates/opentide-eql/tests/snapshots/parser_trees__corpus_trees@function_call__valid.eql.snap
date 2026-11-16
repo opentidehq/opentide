@@ -1,0 +1,52 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/function_call__valid.eql
+---
+SOURCE_FILE@0..100
+  LINE_COMMENT@0..27 "// prod:function_call valid"
+  WHITESPACE@27..28 "\n"
+  EVENT_QUERY@28..99
+    EVENT_CATEGORY@28..35
+      IDENTIFIER@28..35
+        WORD@28..35 "process"
+    WHITESPACE@35..36 " "
+    WHERE_KW@36..41 "where"
+    WHITESPACE@41..42 " "
+    AND_EXPRESSION@42..99
+      FUNCTION_CALL@42..73
+        CASE_INSENSITIVE_NAME@42..51
+          TILDE_WORD@42..51 "endsWith~"
+        L_PAREN@51..52 "("
+        FIELD@52..64
+          IDENTIFIER@52..59
+            WORD@52..59 "process"
+          DOT@59..60 "."
+          IDENTIFIER@60..64
+            WORD@60..64 "name"
+        COMMA@64..65 ","
+        WHITESPACE@65..66 " "
+        STRING@66..72
+          STRING_TOKEN@66..72 "\".EXE\""
+        R_PAREN@72..73 ")"
+      WHITESPACE@73..74 " "
+      AND_KW@74..77 "and"
+      WHITESPACE@77..78 " "
+      COMPARISON@78..99
+        FUNCTION_CALL@78..95
+          IDENTIFIER@78..84
+            WORD@78..84 "length"
+          L_PAREN@84..85 "("
+          FIELD@85..94
+            IDENTIFIER@85..89
+              WORD@85..89 "user"
+            DOT@89..90 "."
+            IDENTIFIER@90..94
+              WORD@90..94 "name"
+          R_PAREN@94..95 ")"
+        WHITESPACE@95..96 " "
+        GT@96..97 ">"
+        WHITESPACE@97..98 " "
+        NUMBER@98..99
+          NUMBER_TOKEN@98..99 "3"
+  WHITESPACE@99..100 "\n"

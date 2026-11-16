@@ -1,0 +1,28 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(source)"
+---
+SOURCE_FILE@0..25
+  EVENT_QUERY@0..20
+    EVENT_CATEGORY@0..7
+      IDENTIFIER@0..7
+        WORD@0..7 "process"
+    WHITESPACE@7..8 " "
+    WHERE_KW@8..13 "where"
+    WHITESPACE@13..14 " "
+    COMPARISON@14..20
+      FIELD@14..15
+        IDENTIFIER@14..15
+          WORD@14..15 "a"
+      WHITESPACE@15..16 " "
+      EQ_EQ@16..18 "=="
+      WHITESPACE@18..19 " "
+      FIELD@19..20
+        IDENTIFIER@19..20
+          WORD@19..20 "b"
+  WHITESPACE@20..21 " "
+  ERROR@21..25
+    EQ_EQ@21..23 "=="
+    WHITESPACE@23..24 " "
+    WORD@24..25 "c"
+20..21: unexpected token (expected an index, `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `|`, `.`, `:`)

@@ -1,0 +1,46 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/term_option__invalid.eql
+---
+SOURCE_FILE@0..91
+  LINE_COMMENT@0..27 "// prod:term_option invalid"
+  WHITESPACE@27..28 "\n"
+  SEQUENCE@28..90
+    SEQUENCE_KW@28..36 "sequence"
+    WHITESPACE@36..37 " "
+    SEQUENCE_TERM@37..72
+      SUBQUERY@37..57
+        L_BRACK@37..38 "["
+        EVENT_CATEGORY@38..45
+          IDENTIFIER@38..45
+            WORD@38..45 "process"
+        WHITESPACE@45..46 " "
+        WHERE_KW@46..51 "where"
+        WHITESPACE@51..52 " "
+        BOOLEAN@52..56
+          TRUE_KW@52..56 "true"
+        R_BRACK@56..57 "]"
+      WHITESPACE@57..58 " "
+      TERM_OPTION@58..72
+        WITH_KW@58..62 "with"
+        WHITESPACE@62..63 " "
+        IDENTIFIER@63..70
+          WORD@63..70 "repeats"
+        EQ@70..71 "="
+        NUMBER@71..72
+          NUMBER_TOKEN@71..72 "2"
+    WHITESPACE@72..73 " "
+    SEQUENCE_TERM@73..90
+      SUBQUERY@73..90
+        L_BRACK@73..74 "["
+        EVENT_CATEGORY@74..78
+          IDENTIFIER@74..78
+            WORD@74..78 "file"
+        WHITESPACE@78..79 " "
+        WHERE_KW@79..84 "where"
+        WHITESPACE@84..85 " "
+        BOOLEAN@85..89
+          TRUE_KW@85..89 "true"
+        R_BRACK@89..90 "]"
+  WHITESPACE@90..91 "\n"

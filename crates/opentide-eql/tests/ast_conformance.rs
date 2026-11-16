@@ -3,12 +3,7 @@
 //! without an error has the shape the `.ungram` states, node by node. The parser is private to
 //! the crate until the switch, so this test includes its source.
 
-#![expect(
-    dead_code,
-    unused_imports,
-    reason = "the included modules are used in part"
-)]
-#![expect(clippy::expect_used, reason = "a test")]
+#![expect(unused_imports, reason = "the included modules are used in part")]
 
 #[path = "../src/generated/ast.rs"]
 mod ast;
@@ -81,7 +76,10 @@ fn the_typed_ast_reads_a_query() {
     let Some(ast::Query::Sequence(sequence)) = root.query() else {
         panic!("a sequence");
     };
-    assert_eq!(sequence.by().next().expect("keys").syntax().to_string(), "by k");
+    assert_eq!(
+        sequence.by().next().expect("keys").syntax().to_string(),
+        "by k"
+    );
     let unit = sequence
         .params()
         .next()
