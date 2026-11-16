@@ -251,44 +251,55 @@ fn signature_help_tracks_the_parameter() {
 
 /// A range counts lines from the start of the text, so it is computed only
 /// for a finding: 3000 nested calls stay linear.
+///
+/// The parser nests 1,000 levels (`parser::MAX_DEPTH`): 990 calls are clean, and
+/// 3,000 are one syntax error, as fast.
 #[test]
 fn deep_nesting_stays_fast() {
-    let q = format!(
-        "{}count(){}",
-        "groupBy(a, function=".repeat(3000),
-        ")".repeat(3000)
-    );
-    let t = std::time::Instant::now();
-    let r = analyze(&q);
-    assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
-    // Debug builds are slow; the quadratic version took seconds even in release.
-    assert!(
-        t.elapsed() < std::time::Duration::from_secs(2),
-        "{:?}",
-        t.elapsed()
-    );
+    for (n, clean) in [(990, true), (3000, false)] {
+        let q = format!(
+            "{}count(){}",
+            "groupBy(a, function=".repeat(n),
+            ")".repeat(n)
+        );
+        let t = std::time::Instant::now();
+        let r = analyze(&q);
+        if clean {
+            assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+        } else {
+            let codes: Vec<&str> = r.diagnostics.iter().map(|d| d.code.as_str()).collect();
+            assert_eq!(codes, [codes::CQL_PARSE_ERROR], "{n}");
+            assert!(r.diagnostics[0].message.contains("1000 levels"));
+        }
+        // Debug builds are slow; the quadratic version took seconds even in release.
+        assert!(
+            t.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            t.elapsed()
+        );
+    }
 }
 
 /// No check scans the ancestors of each node: an aggregate looked for an
-/// enclosing correlate() through all of them, which took seconds at this
-/// depth. The correlation-rule checks and nested `case` blocks read the same
-/// summary of the ancestors.
+/// enclosing correlate() through all of them, which took seconds at 3,000
+/// levels (now past the parser's 1,000). The correlation-rule checks and
+/// nested `case` blocks read the same summary of the ancestors.
 #[test]
 fn deep_nesting_stays_fast_in_every_check() {
     let aggregates = format!(
         "{}count(){}",
-        "groupBy(a, function=".repeat(3000),
-        ")".repeat(3000)
+        "groupBy(a, function=".repeat(990),
+        ")".repeat(990)
     );
     let cases = format!(
         "{}x := 1{}",
-        "case { a=1 | ".repeat(3000),
-        "; * }".repeat(3000)
+        "case { a=1 | ".repeat(990),
+        "; * }".repeat(990)
     );
     let linked = format!(
         "correlate(A: {{ a=1 }}, B: {{ {}b=1{} | aid <=> A.aid }}, within=5m)",
-        "(".repeat(3000),
-        " c=1)".repeat(3000)
+        "(".repeat(990),
+        " c=1)".repeat(990)
     );
     for q in [&aggregates, &cases, &linked] {
         for ctx in [Context::default(), Context::CORRELATION_RULE] {
