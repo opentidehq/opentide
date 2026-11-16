@@ -23,6 +23,8 @@ mod position;
 pub use position::LineStarts;
 
 pub mod config;
+#[cfg(feature = "workspace")]
+pub mod queries;
 mod yara;
 pub use config::{
     CONFIGURATIONS_DIRECTORY, ConfigIssue, ConfigurationSchemas, configuration_completions,

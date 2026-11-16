@@ -21,7 +21,7 @@ facade (`xtask/layers.toml`), above the applications: its features reach opentid
 | `src/error.rs` | `Error`: `#[non_exhaustive]`, each variant with a stable code (`Error::code`) |
 | `src/document.rs` | `Document`: a JSON document's text (key order kept: `serde_json` sorts keys, and the workspace never turns on `preserve_order`) and its value |
 | `src/workspace.rs` | `Workspace` (a newtype over `opentide_workspace::Workspace`): `open`, `from_files`, `validate`, `lint`, `info`, `catalog`, `coverage`; `Options`, `ValidateOptions`, `LintOptions`, `Info` |
-| `src/queries.rs` | The queries checks: the engines (`queries` feature, from opentide-cli's `queries`), else a stand-in that reports `engine_unavailable` |
+| `src/queries.rs` | The queries checks: the engines (`queries` feature, from opentide-analysis's `queries`), else a stand-in that reports `engine_unavailable` |
 | `src/deploy.rs` | `Workspace::deploy_plan` over `opentide_compile::dry_run`; `Strategy`, `DeployPlanOptions`, `DeployPlan` |
 | `src/models.rs`, `catalog.rs`, `validate.rs`, `lint.rs` | Curated re-exports of the internal crates' types |
 | `src/cli.rs` | `cli` feature: `main`, `main_with_version` (a host whose version is its package's: the Python binding), `exit`, `run_json`, `VERSION` |

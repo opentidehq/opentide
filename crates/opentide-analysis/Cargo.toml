@@ -34,6 +34,17 @@ opentide-tide.workspace = true
 serde_json.workspace = true
 regex.workspace = true
 toml_edit.workspace = true
+# `workspace`: the queries checks of `validate` and `lint` on a Tide
+# workspace (`queries`, UC-2.5), which the command line and the facade's
+# `queries` feature run. Off for the language server and the browser build.
+opentide-schema = { workspace = true, optional = true }
+opentide-workspace = { workspace = true, optional = true }
+indexmap = { version = "2", optional = true }
+rayon = { workspace = true, optional = true }
+
+[features]
+# The queries checks on a workspace (`opentide_analysis::queries`).
+workspace = ["dep:opentide-schema", "dep:opentide-workspace", "dep:indexmap", "dep:rayon"]
 
 [dev-dependencies]
 serde_json.workspace = true

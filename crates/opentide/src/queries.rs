@@ -27,7 +27,7 @@ pub const AVAILABLE: bool = cfg!(feature = "queries");
 pub(crate) fn validate_check() -> &'static dyn QueryCheck {
     #[cfg(feature = "queries")]
     {
-        &opentide_cli::queries::EngineQueries
+        &opentide_analysis::queries::EngineQueries
     }
     #[cfg(not(feature = "queries"))]
     {
@@ -40,10 +40,10 @@ pub(crate) fn validate_check() -> &'static dyn QueryCheck {
 pub(crate) fn with_lint_check<T>(ws: &Workspace, run: impl FnOnce(&dyn LintQueryCheck) -> T) -> T {
     #[cfg(feature = "queries")]
     {
-        let _engine = opentide_cli::queries::ENGINE
+        let _engine = opentide_analysis::queries::ENGINE
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let check = opentide_cli::queries::EngineLintQueries::install(ws.fs().as_ref(), ws.root());
+        let check = opentide_analysis::queries::EngineLintQueries::install(ws.fs().as_ref(), ws.root());
         run(&check)
     }
     #[cfg(not(feature = "queries"))]
