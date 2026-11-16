@@ -275,6 +275,11 @@ jobs:
       - name: clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
+      # opentide-cli as xtask and the WASI build compile it, without its
+      # `terminal` feature: the workspace-wide run above unifies it on.
+      - name: clippy without the terminal feature
+        run: cargo clippy --package opentide-cli --no-default-features --locked -- -D warnings
+
       # Broken intra-doc links and the like fail the build.
       - name: rustdoc
         env:

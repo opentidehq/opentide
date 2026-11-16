@@ -368,6 +368,39 @@ fn setup_ci_reads_the_statuses_of_a_refused_paths_toml() {
     );
 }
 
+/// A status without a `name` shows as a placeholder in the list of statuses
+/// `--promotion-target` offers, not as Python's `None`.
+#[test]
+fn setup_ci_lists_a_nameless_status_as_a_placeholder() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("vscode-docs-folder", &ws);
+    std::fs::write(
+        ws.join(".opentide/configurations/deployment.toml"),
+        "[[statuses]]\nname = \"STAGING\"\n\n[[statuses]]\ndescription = \"no name\"\n",
+    )
+    .unwrap();
+    let (code, stdout) = run_json(
+        &ws,
+        &[
+            "setup",
+            "ci",
+            "github",
+            "--promotion-target",
+            "NOPE",
+            "--yes",
+        ],
+    );
+    assert_eq!(code, 2, "{stdout}");
+    assert!(
+        document(&stdout)["failure"]["message"]
+            .as_str()
+            .unwrap()
+            .ends_with("use one of: STAGING, (no name)"),
+        "{stdout}"
+    );
+}
+
 /// The parsed document of a run's stdout.
 fn document(stdout: &str) -> serde_json::Value {
     serde_json::from_str(stdout).unwrap()
