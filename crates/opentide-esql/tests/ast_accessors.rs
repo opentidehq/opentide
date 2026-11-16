@@ -9,7 +9,7 @@
 //! the generated file, so a grammar change cannot leave one out.
 
 use opentide_esql::ast;
-use opentide_esql::{SyntaxNode, SyntaxToken, syntax_tree};
+use opentide_esql::{SyntaxKind as K, SyntaxNode, SyntaxToken, syntax_tree};
 use opentide_parse::ast::{AstChildren, AstNode};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -60,6 +60,26 @@ impl Lift for Option<SyntaxToken> {
     type Out = Token;
     fn lift(self) -> Token {
         Token(self)
+    }
+}
+
+/// A repeated choice of tokens: every one it returned.
+struct Tokens(Vec<SyntaxToken>);
+
+impl Reached for Tokens {
+    const PLURAL: bool = true;
+    fn reached(self) -> Vec<(rowan::TextRange, Option<SyntaxNode>)> {
+        self.0
+            .into_iter()
+            .map(|t| (t.text_range(), t.parent()))
+            .collect()
+    }
+}
+
+impl Lift for Vec<SyntaxToken> {
+    type Out = Tokens;
+    fn lift(self) -> Tokens {
+        Tokens(self)
     }
 }
 
@@ -298,8 +318,6 @@ const EXTRA: &[&str] = &[
     "FROM a | USER_AGENT u = x WITH {} | IP_LOCATION l = x WITH {}",
     "FROM a | MMR x ON y LIMIT 3 WITH {} | HIGHLIGHT q ON a WITH {}",
     "FROM a | DENSE_VECTOR v = x, y | FILLNULL 0 ON a, b",
-    // `ASC`: `OrderExpression::direction` reads only `asc` of `('asc' | 'desc')?`,
-    // the codegen bug #1454 (an optional token choice exposes its first token).
     "FROM a | SORT x ASC | ENRICH \"policy\" | WHERE x NOT LIKE \"a\"",
 ];
 
@@ -350,21 +368,69 @@ fn nth_accessors() -> Vec<(String, String, usize)> {
         .collect()
 }
 
+/// The direct token children of `node` (blanks, comments and error tokens
+/// aside) whose kind no accessor of the typed nodes it cast to returned: a
+/// token the grammar puts there that the typed AST cannot reach (#1454: a
+/// labelled optional choice of tokens read its first token only, so `desc`
+/// was out of reach). By kind, so that a second `,` of a list is reached
+/// through the accessor that returns the first.
+fn unreached_tokens(node: &SyntaxNode, found: &[Found]) -> Vec<String> {
+    let tokens: Vec<SyntaxToken> = node
+        .children_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .collect();
+    let reached: Vec<K> = tokens
+        .iter()
+        .filter(|t| found.iter().any(|(_, _, _, r)| r.contains(&t.text_range())))
+        .map(SyntaxToken::kind)
+        .collect();
+    let mut types: Vec<&str> = found.iter().map(|(t, ..)| *t).collect();
+    types.dedup();
+    tokens
+        .iter()
+        .filter(|t| !matches!(t.kind(), K::WHITESPACE | K::COMMENT | K::ERROR_TOKEN))
+        .filter(|t| !reached.contains(&t.kind()))
+        .map(|t| {
+            format!(
+                "{types:?}: `{}` ({:?}) at {:?}",
+                t.text(),
+                t.kind(),
+                t.text_range()
+            )
+        })
+        .collect()
+}
+
+/// Whether the tree holds no error node or token: there every token is
+/// where the grammar puts it.
+fn is_clean(root: &SyntaxNode) -> bool {
+    !root
+        .descendants_with_tokens()
+        .any(|e| matches!(e.kind(), K::ERROR | K::ERROR_TOKEN))
+}
+
 #[test]
 fn every_accessor_reaches_a_child_of_its_node() {
     let (mut casts, mut hits, mut bad, mut nodes) = (HashSet::new(), HashSet::new(), Vec::new(), 0);
     let nth = nth_accessors();
     assert!(!nth.is_empty(), "the ungram labels positional children");
     let mut disordered = Vec::new();
+    let (mut tokens_unreached, mut clean_trees) = (Vec::new(), 0);
     for source in corpus()
         .into_iter()
         .chain(EXTRA.iter().map(ToString::to_string))
     {
         let root = syntax_tree(&source);
+        let clean = is_clean(&root);
+        clean_trees += usize::from(clean);
         for node in root.descendants() {
             nodes += 1;
             let mut found = Vec::new();
             casts.extend(visit(&node, &mut hits, &mut found, &mut bad));
+            // A choice of nodes (an enum) has no accessors of its own.
+            if clean && !found.is_empty() {
+                tokens_unreached.extend(unreached_tokens(&node, &found));
+            }
             // The n-th of a kind stands after the (n-1)-th: `left` before
             // `right`, a map entry's key before its value.
             let at: HashMap<(&str, &str), rowan::TextRange> = found
@@ -412,6 +478,17 @@ fn every_accessor_reaches_a_child_of_its_node() {
         disordered[..disordered.len().min(20)].join("\n")
     );
     assert!(nodes > 5_000, "visited {nodes} nodes");
+    // Every token child of a tree without errors is reachable through some
+    // accessor of its node.
+    assert!(clean_trees > 100, "{clean_trees} trees without errors");
+    tokens_unreached.sort_unstable();
+    tokens_unreached.dedup_by(|a, b| a.split(" at ").next() == b.split(" at ").next());
+    assert!(
+        tokens_unreached.is_empty(),
+        "{} token kinds no accessor reaches (in {clean_trees} trees without errors):\n{}",
+        tokens_unreached.len(),
+        tokens_unreached[..tokens_unreached.len().min(20)].join("\n")
+    );
     // Every node kind of the ungram occurs, and casts.
     let missing: Vec<_> = ACCESSORS
         .iter()
@@ -474,4 +551,19 @@ fn the_list_names_every_accessor() {
         listed, expected,
         "regenerate the list from src/generated/ast.rs"
     );
+}
+
+/// An optional token choice exposes each of its tokens (#1454: `direction`
+/// read only `asc` of `('asc' | 'desc')?`).
+#[test]
+fn a_token_choice_returns_each_token() {
+    let directions: Vec<String> = syntax_tree("FROM a | SORT x ASC, y DESC, z")
+        .descendants()
+        .filter_map(ast::OrderExpression::cast)
+        .map(|o| {
+            o.direction()
+                .map_or_else(String::new, |t| t.text().to_string())
+        })
+        .collect();
+    assert_eq!(directions, ["ASC", "DESC", ""]);
 }
