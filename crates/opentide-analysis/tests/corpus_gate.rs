@@ -96,13 +96,15 @@ struct RustNames {
 
 impl RustNames {
     /// The tags of `kind`: the ones [`RustNames::tags`] gives it (a coarse
-    /// kind can stand for several tree-sitter productions), else its name.
+    /// kind can stand for several tree-sitter productions; a key `*/name`
+    /// matches a token `name` under any node), else its name.
     fn tags_of(&self, kind: &str) -> Vec<String> {
         let kind = snake_case(kind);
+        let bare = kind.rsplit('/').next().unwrap_or(&kind);
         let tags: Vec<String> = self
             .tags
             .iter()
-            .filter(|(k, _)| *k == kind)
+            .filter(|(k, _)| *k == kind || k.strip_prefix("*/") == Some(bare))
             .map(|(_, tag)| (*tag).to_string())
             .collect();
         if tags.is_empty() { vec![kind] } else { tags }
@@ -118,9 +120,21 @@ impl KindNames for RustNames {
             .collect()
     }
 
+    /// A node gives its tags; a token only the ones [`RustNames::tokens`]
+    /// lists, so a token spelt like a production (EQL's `|` and its `pipe`
+    /// stage) does not stand in for the node.
     fn parse(&self, body: &str) -> Parsed {
+        let nodes: BTreeSet<String> = (self.node_kinds)().iter().map(|k| snake_case(k)).collect();
         let (has_error, kinds) = (self.kinds)(body);
-        let kinds: Vec<String> = kinds.iter().flat_map(|k| self.tags_of(k)).collect();
+        let kinds: Vec<String> = kinds
+            .iter()
+            .flat_map(|k| {
+                let node = nodes.contains(&snake_case(k));
+                self.tags_of(k)
+                    .into_iter()
+                    .filter(move |t| node || self.tokens.contains(&t.as_str()))
+            })
+            .collect();
         Parsed {
             has_error,
             dump: kinds.join(" "),
@@ -292,15 +306,16 @@ fn kind_names(language: LanguageId) -> Box<dyn KindNames> {
     }
 }
 
-// SPL, kuery, Lucene, Falco and Exabeam name every kind as the corpus tags it.
+// SPL, kuery, Lucene, Falco and Exabeam name every kind as the corpus tags it;
+// a few productions are tokens.
 const SPL_TAGS: &[(&str, &str)] = &[];
-const SPL_TOKENS: &[&str] = &[];
+const SPL_TOKENS: &[&str] = &["comment"];
 const KUERY_TAGS: &[(&str, &str)] = &[];
-const KUERY_TOKENS: &[&str] = &[];
+const KUERY_TOKENS: &[&str] = &["quoted_string"];
 const LUCENE_TAGS: &[(&str, &str)] = &[];
-const LUCENE_TOKENS: &[&str] = &[];
+const LUCENE_TOKENS: &[&str] = &["boost", "fuzzy", "star", "wildcard_term"];
 const FALCO_TAGS: &[(&str, &str)] = &[];
-const FALCO_TOKENS: &[&str] = &[];
+const FALCO_TOKENS: &[&str] = &["quoted_string"];
 const EXABEAM_TAGS: &[(&str, &str)] = &[];
 const EXABEAM_TOKENS: &[&str] = &[];
 
@@ -333,10 +348,9 @@ const YARAL_TOKENS: &[&str] = &["comment", "duration", "raw_string", "regex"];
 
 /// YARA: `yara-x-parser`'s CST (#1225) is coarser than the tree-sitter grammar
 /// the fixtures were tagged for. Its blocks and declarations are nodes under
-/// other names; an expression is a generic `expr` or `boolean_expr`, told by its
-/// operator token. A token that can stand for two productions (`(`, `[`, `-`,
-/// a pattern identifier) gives both tags, and a hex byte (`~5A` included) is
-/// `hex_not`'s, so those fixtures are checked only for the token.
+/// other names; an expression is a generic `expr`, `term` or `boolean_term`,
+/// told by an operator token and the node it stands in (`opentide_yara::debug_kinds`
+/// names a token `parent/token`; a negated hex byte, `~5A`, is `hex_byte_not`).
 const YARA_TAGS: &[(&str, &str)] = &[
     ("rule_decl", "rule"),
     ("rule_mods", "rule_modifier"),
@@ -355,55 +369,59 @@ const YARA_TAGS: &[(&str, &str)] = &[
     ("of_expr", "of_expression"),
     ("expr_tuple", "integer_enumeration"),
     ("pattern_ident_tuple", "string_set"),
-    ("and_kw", "and_expression"),
-    ("or_kw", "or_expression"),
-    ("not_kw", "not_expression"),
-    ("add", "arithmetic_expression"),
-    ("sub", "arithmetic_expression"),
-    ("mul", "arithmetic_expression"),
-    ("div", "arithmetic_expression"),
-    ("mod", "arithmetic_expression"),
-    ("shl", "arithmetic_expression"),
-    ("shr", "arithmetic_expression"),
-    ("bitwise_and", "arithmetic_expression"),
-    ("bitwise_or", "arithmetic_expression"),
-    ("bitwise_xor", "arithmetic_expression"),
-    ("minus", "unary_expression"),
-    ("minus", "negative_integer"),
-    ("bitwise_not", "unary_expression"),
-    ("hex_byte", "hex_not"),
-    ("eq", "comparison"),
-    ("ne", "comparison"),
-    ("lt", "comparison"),
-    ("le", "comparison"),
-    ("gt", "comparison"),
-    ("ge", "comparison"),
-    ("contains_kw", "comparison"),
-    ("icontains_kw", "comparison"),
-    ("startswith_kw", "comparison"),
-    ("istartswith_kw", "comparison"),
-    ("endswith_kw", "comparison"),
-    ("iendswith_kw", "comparison"),
-    ("iequals_kw", "comparison"),
-    ("matches_kw", "comparison"),
-    ("base64_kw", "base64_modifier"),
-    ("base64wide_kw", "base64_modifier"),
-    ("xor_kw", "xor_modifier"),
-    ("entrypoint_kw", "entrypoint"),
-    ("filesize_kw", "filesize"),
-    ("float_lit", "float"),
-    ("dot", "member_expression"),
-    ("l_bracket", "index_expression"),
-    ("l_bracket", "indexed_string"),
-    ("l_paren", "parenthesized_expression"),
-    ("l_paren", "parenthesized_primary"),
-    ("pattern_count", "string_count"),
-    ("pattern_count", "string_count_in_range"),
-    ("pattern_length", "string_length"),
-    ("pattern_offset", "string_offset"),
-    ("pattern_ident", "string_match"),
-    ("pattern_ident", "string_wildcard"),
-    ("percent", "percent_quantifier"),
+    ("boolean_expr_tuple", "rule_set"),
+    ("boolean_expr/and_kw", "and_expression"),
+    ("boolean_expr/or_kw", "or_expression"),
+    ("boolean_term/not_kw", "not_expression"),
+    ("expr/add", "arithmetic_expression"),
+    ("expr/sub", "arithmetic_expression"),
+    ("expr/mul", "arithmetic_expression"),
+    ("expr/div", "arithmetic_expression"),
+    ("expr/mod", "arithmetic_expression"),
+    ("expr/shl", "arithmetic_expression"),
+    ("expr/shr", "arithmetic_expression"),
+    ("expr/bitwise_and", "arithmetic_expression"),
+    ("expr/bitwise_or", "arithmetic_expression"),
+    ("expr/bitwise_xor", "arithmetic_expression"),
+    ("term/minus", "unary_expression"),
+    ("term/bitwise_not", "unary_expression"),
+    ("meta_def/minus", "negative_integer"),
+    ("hex_sub_pattern/hex_byte_not", "hex_not"),
+    ("hex_alternative/hex_byte_not", "hex_not"),
+    ("boolean_term/eq", "comparison"),
+    ("boolean_term/ne", "comparison"),
+    ("boolean_term/lt", "comparison"),
+    ("boolean_term/le", "comparison"),
+    ("boolean_term/gt", "comparison"),
+    ("boolean_term/ge", "comparison"),
+    ("boolean_term/contains_kw", "comparison"),
+    ("boolean_term/icontains_kw", "comparison"),
+    ("boolean_term/startswith_kw", "comparison"),
+    ("boolean_term/istartswith_kw", "comparison"),
+    ("boolean_term/endswith_kw", "comparison"),
+    ("boolean_term/iendswith_kw", "comparison"),
+    ("boolean_term/iequals_kw", "comparison"),
+    ("boolean_term/matches_kw", "comparison"),
+    ("pattern_mod/base64_kw", "base64_modifier"),
+    ("pattern_mod/base64wide_kw", "base64_modifier"),
+    ("pattern_mod/xor_kw", "xor_modifier"),
+    ("term/entrypoint_kw", "entrypoint"),
+    ("term/filesize_kw", "filesize"),
+    ("term/float_lit", "float"),
+    ("term/dot", "member_expression"),
+    ("primary_expr/l_bracket", "index_expression"),
+    ("term/l_bracket", "indexed_string"),
+    ("boolean_term/l_paren", "parenthesized_expression"),
+    ("term/l_paren", "parenthesized_primary"),
+    ("term/pattern_count", "string_count"),
+    ("term/in_kw", "string_count_in_range"),
+    ("term/pattern_length", "string_length"),
+    ("term/pattern_offset", "string_offset"),
+    ("boolean_term/pattern_ident", "string_match"),
+    ("pattern_ident_tuple/asterisk", "string_wildcard"),
+    ("quantifier/percent", "percent_quantifier"),
+    ("*/comment", "comment"),
+    ("*/regexp", "regexp"),
 ];
 const YARA_TOKENS: &[&str] = &[
     "and_expression",
@@ -432,6 +450,7 @@ const YARA_TOKENS: &[&str] = &[
     "string_match",
     "string_wildcard",
     "percent_quantifier",
+    "regexp",
 ];
 
 const KQL_REQUIRED: &[&str] = &[
@@ -506,7 +525,7 @@ fn spl_corpus_tags_cover_required_productions() {
 }
 
 #[test]
-fn kql_named_rules_in_grammar_json_are_known() {
+fn kql_named_rules_are_known() {
     let rules = kind_names(LanguageId::Kql).productions();
     let tags = tags_in("crates/testdata/corpus/kql");
     // The kinds of the pure-Rust parser (#1230) the corpus does not tag.
@@ -632,7 +651,7 @@ fn spl_valid_fixtures_parse() {
             .collect::<Vec<_>>()
             .join("\n");
         let tree = kind_names(LanguageId::Spl).parse(&body);
-        assert!(!tree.has_error, "{name} sexp={}", tree.dump);
+        assert!(!tree.has_error, "{name} kinds={}", tree.dump);
     }
 }
 
@@ -704,7 +723,7 @@ fn check_gate_with(gate: &ElasticGate, names: &dyn KindNames) {
             }
             assert!(
                 !tree.has_error,
-                "{dir}/{name} must parse; sexp={}",
+                "{dir}/{name} must parse; kinds={}",
                 tree.dump
             );
             assert!(
@@ -907,12 +926,10 @@ fn yara_corpus_gate() {
             "with_expr",
             "with_decls",
             "with_decl",
-            "boolean_expr_tuple",
         ],
         unparsed: &[
-            // libyara's rule wildcards (`any of (base*)`): YARA-X 1.23 parses
-            // no rule set with a wildcard in it.
-            "rule_set__valid.yar",
+            // libyara's rule wildcards (`any of (base*)`): YARA-X 1.23 reads
+            // `base*` as a product, which a rule set does not take.
             "rule_wildcard__valid.yar",
         ],
     });
@@ -992,24 +1009,34 @@ fn snake_case_spells_both_kind_styles() {
     assert_eq!(snake_case("Or"), "or");
 }
 
-/// A coarse kind gives every tag the table lists for it, and a kind the table
-/// does not list keeps its own name.
+/// A YARA token stands for a production only in the node it stands in: a
+/// pattern identifier in a condition is `string_match`, in a definition it
+/// is not; a parenthesis in a boolean term is `parenthesized_expression`, in
+/// a term `parenthesized_primary`. A kind the table does not list keeps its
+/// own name, and a token's own name is never a production.
 #[test]
-fn a_kind_gives_every_tag_listed_for_it() {
+fn yara_tokens_are_told_by_the_node_they_stand_in() {
     let names = kind_names(LanguageId::Yara);
-    let tree = names.parse("rule r { condition: (1 + 2) == 3 }");
+    let tree = names.parse("rule r { strings: $a = \"x\" condition: ($a) and #a > (1 + 2) }");
     assert!(!tree.has_error, "{}", tree.dump);
     for tag in [
         "rule",
+        "string_definition",
+        "string_match",
         "parenthesized_expression",
         "parenthesized_primary",
-        "arithmetic_expression",
+        "and_expression",
+        "string_count",
         "comparison",
+        "arithmetic_expression",
         "boolean_expr",
     ] {
         assert!(tree.has_kind(tag), "{tag}: {}", tree.dump);
     }
     assert!(!tree.has_kind("rule_decl"), "{}", tree.dump);
+    assert!(!tree.has_kind("l_paren"), "{}", tree.dump);
+    let tree = names.parse("rule r { strings: $a = \"x\" condition: true }");
+    assert!(!tree.has_kind("string_match"), "{}", tree.dump);
     assert!(names.parse("rule r { condition: }").has_error);
 }
 

@@ -7,7 +7,7 @@ highlighting, hover, completion and signature help.
 
 ## Place
 
-foundation, tier 3: depends on opentide-core, -ecs, -lucene, -highlight, -parse. Used by opentide-tide and -analysis.
+foundation, tier 4: depends on opentide-core, -ecs, -lucene, -highlight, -parse. Used by opentide-tide and -analysis.
 
 ## Invariants
 
