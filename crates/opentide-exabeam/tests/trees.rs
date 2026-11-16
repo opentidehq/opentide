@@ -27,6 +27,16 @@ fn trees() {
     insta::assert_snapshot!("unclosed_quote", debug_parse("a:\"b AND c:d"));
 }
 
+/// After a piece no statement continues with, a `FOREACH` still starts a
+/// `FOREACH` statement, as at the start of the text or after a pipe.
+#[test]
+fn foreach_after_a_stray_piece() {
+    for source in [") FOREACH a [b]", "LIMIT 1 , FOREACH x [y]"] {
+        let tree = debug_parse(source);
+        assert!(tree.contains("foreach_statement"), "{source}:\n{tree}");
+    }
+}
+
 #[test]
 fn corpus_trees() {
     insta::glob!("../../testdata/corpus/exabeam", "*.exabeam", |path| {

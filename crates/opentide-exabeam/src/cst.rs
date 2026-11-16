@@ -22,9 +22,12 @@ use std::rc::Rc;
 use std::sync::OnceLock;
 
 /// Nesting deeper than this is one error. The analysis' own limit is 200
-/// levels ([`crate::check`]); the floor every language keeps is
-/// `deep_queries`' `NESTING_CEILING`. A level of parentheses is five frames of
-/// this descent (`group`, `expression`, `and_chain`, `unary`, `primary`).
+/// levels ([`crate::check`]), and the floor this parser keeps is
+/// `deep_queries`' `EXABEAM_NEST_FLOOR` (199), below `NESTING_CEILING`; 512
+/// is Falco's limit too. A level of parentheses is five frames of this
+/// descent (`group`, `expression`, `and_chain`, `unary`, `primary`): 512
+/// levels take about 750 KB of a debug build's stack, under the 1 MB of the
+/// browser module (`tests/long_runs.rs` highlights 500 levels there).
 pub(crate) const MAX_DEPTH: u32 = 512;
 
 /// A token of the grammar, as its parser states expect them.
@@ -359,7 +362,7 @@ fn source_file(p: &mut Parser<'_>) {
         // What cannot continue a statement: skip a piece, and read on.
         p.err_and_bump("unexpected");
         if next(p, &statement_start(true)).is_some() {
-            statement(p);
+            statement_or_foreach(p);
         }
     }
     m.complete(p, K::SourceFile.raw());
