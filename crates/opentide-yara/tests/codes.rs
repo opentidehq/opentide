@@ -1050,12 +1050,20 @@ fn every_range_is_balanced() {
 }
 
 /// YARA-X's own syntax, one case per construct the portability check lists.
-const YARA_X_ONLY: [&str; 6] = [
+const YARA_X_ONLY: [&str; 13] = [
     "rule a { condition: with x = 1 : ( x == 1 ) }",
     "rule a { condition: 1_000 == 1000 }",
+    "rule a { condition: 1_0.5 > 1.0 }",
     "rule a { meta: f = 1.5 condition: true }",
+    "rule a { meta: d = \"\"\"x\"\"\" condition: true }",
+    // An escape makes the value bytes, not a string, in yara-x-parser's AST.
+    "rule a { meta: d = \"\"\"x\\n\"\"\" condition: true }",
+    "rule a { condition: \"\"\"x\"\"\" == \"x\" }",
     "rule a { strings: $h = { 01 02 [0x2-0x4] 03 04 } condition: $h }",
     "rule a { condition: 1 of (true, false) }",
+    "rule a { strings: $a = \"abcd\" condition: 50% of them at 0 }",
+    "rule a { strings: $a = \"abcd\" condition: for 50% of them : ( $ ) }",
+    "rule a { strings: $a = /abc/si condition: $a }",
     "import \"pe\"\nrule a { condition: pe.sections.len() > 1 }",
 ];
 

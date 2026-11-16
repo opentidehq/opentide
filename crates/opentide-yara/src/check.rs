@@ -507,7 +507,10 @@ impl<'a> Checker<'a> {
             );
             match &meta.value {
                 MetaValue::Float((_, s)) => self.yara_x_only("A float meta value", span(s)),
-                MetaValue::String((raw, s)) if raw.starts_with("\"\"\"") => {
+                // The value is unescaped: the quotes are in the source text.
+                MetaValue::String((_, s)) | MetaValue::Bytes((_, s))
+                    if self.text(span(s)).starts_with("\"\"\"") =>
+                {
                     self.yara_x_only("A `\"\"\"` string", span(s));
                 }
                 _ => {}
