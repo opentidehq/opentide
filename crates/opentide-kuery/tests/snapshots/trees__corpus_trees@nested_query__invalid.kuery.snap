@@ -1,0 +1,34 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/kuery/nested_query__invalid.kuery
+---
+SourceFile@0..47
+  FieldValueExpression@0..32
+    Field@0..6
+      UnquotedLiteral@0..6
+        Word@0..1 "#"
+        Whitespace@1..2 " "
+        Word@2..6 "prod"
+    Colon@6..7 ":"
+    UnquotedLiteral@7..32
+      Word@7..19 "nested_query"
+      Whitespace@19..20 " "
+      Word@20..27 "invalid"
+      Whitespace@27..28 "\n"
+      Word@28..32 "user"
+  Error@32..33
+    Colon@32..33 ":"
+  Error@33..34
+    LBrace@33..34 "{"
+  Whitespace@34..35 " "
+  FieldValueExpression@35..46
+    Field@35..40
+      UnquotedLiteral@35..40
+        Word@35..40 "first"
+    Colon@40..41 ":"
+    UnquotedLiteral@41..46
+      Word@41..46 "Alice"
+  Whitespace@46..47 "\n"
+32..32: unexpected (expected `or`, `and`, end of input)
+33..33: unexpected
