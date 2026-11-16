@@ -1452,8 +1452,14 @@ mod tests {
         for (unclosed, message) in [
             ("process where a == \"x", "this \" string is never closed"),
             ("process where a == 'x", "this ' string is never closed"),
-            ("process where a == \"\"\"x", "this \" string is never closed"),
-            ("process where `a == 1", "this ` quoted name is never closed"),
+            (
+                "process where a == \"\"\"x",
+                "this \" string is never closed",
+            ),
+            (
+                "process where `a == 1",
+                "this ` quoted name is never closed",
+            ),
         ] {
             assert_eq!(
                 parse_error(unclosed),
