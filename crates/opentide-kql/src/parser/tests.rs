@@ -374,6 +374,8 @@ fn dynamic_and_toscalar_are_not_columns() {
         "T | project dynamic",
         "T | extend dynamic = 1",
         "T | extend x = split(a, \"b\", dynamic -1)[-1]",
+        "let t = (\ndynamic\n| where a == 1);\nt",
+        "(toscalar | take 1)",
     ] {
         assert!(!errors(source).is_empty(), "{source}");
     }
