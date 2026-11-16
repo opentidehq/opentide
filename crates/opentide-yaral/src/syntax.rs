@@ -105,6 +105,7 @@ impl SyntaxKind {
     }
 
     /// Whether this is a token kind: the kinds below `ERROR`.
+    #[cfg(test)]
     pub const fn is_token(self) -> bool {
         (self as u16) < K::ERROR as u16
     }
@@ -131,6 +132,7 @@ impl SyntaxKind {
     }
 
     /// The reserved word spelled `word` in any case.
+    #[cfg(test)]
     pub fn from_keyword(word: &str) -> Option<Self> {
         KEYWORDS
             .iter()
@@ -139,6 +141,7 @@ impl SyntaxKind {
     }
 
     /// The contextual keyword spelled `word` in any case.
+    #[cfg(test)]
     pub fn from_contextual(word: &str) -> Option<Self> {
         CONTEXTUAL
             .iter()

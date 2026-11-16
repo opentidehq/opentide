@@ -5,13 +5,13 @@
 //! The lexer is private to the crate, so this test includes its source.
 
 #![expect(dead_code, reason = "the included modules are used in part")]
-#![expect(
-    clippy::upper_case_acronyms,
-    reason = "the included syntax.rs names its kinds as rust-analyzer does; the crate's own copy is public API, where the lint does not fire"
-)]
 
 #[path = "../src/lexer.rs"]
 mod lexer;
+#[expect(
+    clippy::upper_case_acronyms,
+    reason = "the included syntax.rs names its kinds as rust-analyzer does; the crate's own copy is public API, where the lint does not fire"
+)]
 #[path = "../src/syntax.rs"]
 mod syntax;
 
