@@ -70,9 +70,10 @@ fn constructs(n: usize) -> Vec<(&'static str, String)> {
         ("function calls with operators", rep("f(a + ", "b", ")")),
         ("named arguments", rep("f(a=", "b", ")")),
         ("arrays", format!("x := {}", rep("[", "a", "]"))),
+        // The call is a level too: `n - 1` arrays inside it.
         (
             "array elements with assignments",
-            format!("f({})", rep("[a := ", "b", "]")),
+            format!("f({}b{})", "[a := ".repeat(n - 1), "]".repeat(n - 1)),
         ),
         ("subqueries", rep("x := { ", "a=1", " }")),
         ("subqueries in calls", pair("f({ ", "a=1", " })")),
