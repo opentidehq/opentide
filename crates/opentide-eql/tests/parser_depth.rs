@@ -54,6 +54,46 @@ fn the_floors_parse_without_a_diagnostic() {
     assert!(depth < 10, "depth {depth}");
 }
 
+/// Every construct that recurses, closed, at the nesting floor and at the limit: no diagnostic
+/// and no overflow. Nested calls overflowed a 1 MB stack before the recursive rules' frames
+/// were trimmed (1,065 bytes a level in a debug build; now about 715).
+#[test]
+fn every_recursive_construct_parses_to_the_limit() {
+    let limit = usize::try_from(parser::MAX_DEPTH).unwrap_or(usize::MAX);
+    for n in [1_000, limit] {
+        let wrap =
+            |open: &str, close: &str| query(&format!("{}1{}", open.repeat(n), close.repeat(n)));
+        let cases = [
+            wrap("(", ")"),
+            wrap("f(", ")"),
+            wrap("f~(", ")"),
+            wrap("not ", ""),
+            wrap("- ", ""),
+            wrap("+", ""),
+            wrap("a in (", ")"),
+            wrap("a not in~ (", ")"),
+            wrap("x of [any where ", "]"),
+        ];
+        for source in cases {
+            let head: String = source.chars().take(40).collect();
+            let (errors, _) = parse_small(source);
+            assert_eq!(errors, [], "{n} {head}");
+        }
+    }
+}
+
+/// A pattern operator takes constants, so `a : (a : (...` does not nest: a few syntax errors,
+/// not one per level.
+#[test]
+fn a_pattern_list_does_not_nest() {
+    let (errors, _) = parse_small(query(&format!(
+        "{}1{}",
+        "a : (".repeat(5_000),
+        ")".repeat(5_000)
+    )));
+    assert!(!errors.is_empty() && errors.len() <= 3, "{errors:?}");
+}
+
 #[test]
 fn every_recursive_construct_is_one_diagnostic_past_the_limit() {
     for n in [1_100, 5_000, 100_000] {
@@ -68,7 +108,6 @@ fn every_recursive_construct_is_one_diagnostic_past_the_limit() {
             wrap("- ", ""),
             wrap("+", ""),
             wrap("a in (", ")"),
-            wrap("a : (", ")"),
             wrap("f(1, (", "))"),
             wrap("x of [any where ", "]"),
             format!("sequence {}", "[any where x of ".repeat(n)),

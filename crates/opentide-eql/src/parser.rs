@@ -106,6 +106,9 @@ const CONSTANTS: TokenSet = K::set(&[
     K::STRING_TOKEN,
 ]);
 const OPENS: TokenSet = K::set(&[K::L_BRACK, K::BANG_L_BRACK]);
+const CATEGORY_NAMES: TokenSet = K::set(&[K::WORD, K::STRING_TOKEN]);
+const SUBQUERY_STOP: TokenSet = K::set(&[K::R_BRACK, K::PIPE]);
+const OR_AND: TokenSet = K::set(&[K::OR_KW, K::AND_KW]);
 
 /// The operator levels, from the loosest. `not` and lineage are prefixes at [`NOT`]; their
 /// operand is a comparison or tighter.
@@ -167,6 +170,29 @@ pub(crate) fn debug(source: &str) -> String {
     out
 }
 
+// The rules that recurse (an expression, a call, a subquery) run about six frames deep per
+// nesting level, and 1,024 levels must fit a 1 MB stack in a debug build. A `TokenSet` is 64
+// bytes: one built or copied in a recursive rule's own frame stays there while the rule
+// recurses. These helpers keep every set in a frame of their own, gone before the recursion.
+
+/// Whether the current token is in `set` (recorded as expected, as `Parser::at_set`).
+#[inline(never)]
+fn at_any(p: &mut Parser<'_>, set: &TokenSet) -> bool {
+    p.at_set(*set)
+}
+
+/// Whether `kind` is in `set`.
+#[inline(never)]
+fn in_set(set: &TokenSet, kind: K) -> bool {
+    set.contains(kind.raw())
+}
+
+/// The tokens up to one of `stop`, in one error node.
+#[inline(never)]
+fn skip_until(p: &mut Parser<'_>, stop: &TokenSet) {
+    p.err_until(UNEXPECTED, *stop);
+}
+
 fn at(p: &mut Parser<'_>, kind: K) -> bool {
     p.at(kind.raw())
 }
@@ -216,7 +242,7 @@ fn query(p: &mut Parser<'_>) {
 fn event_filter(p: &mut Parser<'_>) {
     if at(p, K::ANY_KW) {
         leaf(p, K::ANY);
-    } else if p.at_set(K::set(&[K::WORD, K::STRING_TOKEN])) {
+    } else if at_any(p, &CATEGORY_NAMES) {
         let m = p.start();
         if at(p, K::WORD) {
             leaf(p, K::IDENTIFIER);
@@ -228,7 +254,7 @@ fn event_filter(p: &mut Parser<'_>) {
         p.error("an event category is missing");
     }
     if expect(p, K::WHERE_KW) {
-        expr(p);
+        expr_bp(p, OR);
     }
 }
 
@@ -348,7 +374,7 @@ fn subquery(p: &mut Parser<'_>) {
     }
     event_filter(p);
     if !at(p, K::R_BRACK) && !p.at_eof() {
-        p.err_until(UNEXPECTED, K::set(&[K::R_BRACK, K::PIPE]));
+        skip_until(p, &SUBQUERY_STOP);
     }
     expect(p, K::R_BRACK);
     m.complete(p, K::SUBQUERY.raw());
@@ -365,9 +391,9 @@ fn join_keys(p: &mut Parser<'_>) {
 
 /// `expr (, expr)*`.
 fn list(p: &mut Parser<'_>) {
-    expr(p);
+    expr_bp(p, OR);
     while eat(p, K::COMMA) {
-        expr(p);
+        expr_bp(p, OR);
     }
 }
 
@@ -418,7 +444,7 @@ fn expr_bp(p: &mut Parser<'_>, min: u8) {
         return;
     };
     // Records what may follow, for an error's expected set.
-    p.at_set(K::set(&[K::OR_KW, K::AND_KW]));
+    at_any(p, &OR_AND);
     while let Some(level) = infix(p) {
         if level < min || level > ceiling {
             break;
@@ -456,14 +482,14 @@ fn prefix(p: &mut Parser<'_>, min: u8) -> Option<(CompletedMarker, u8)> {
         let m = p.start();
         leaf(p, K::IDENTIFIER);
         p.bump();
-        if p.at_set(OPENS) {
+        if at_any(p, &OPENS) {
             subquery(p);
         } else {
             p.error("a subquery `[ ... ]` is missing");
         }
         return Some((m.complete(p, K::RELATIONSHIP.raw()), AND));
     }
-    if p.at_set(ADDITIVE_OPS) {
+    if at_any(p, &ADDITIVE_OPS) {
         let m = p.start();
         p.bump();
         if p.enter() {
@@ -533,7 +559,7 @@ fn parenthesized_list(p: &mut Parser<'_>, expressions: bool) {
     }
     let item = |p: &mut Parser<'_>| {
         if expressions {
-            expr(p);
+            expr_bp(p, OR);
         } else {
             constant(p);
         }
@@ -579,7 +605,7 @@ fn fail(p: &mut Parser<'_>, message: &str) {
 /// A constant, a call, a field or a parenthesized expression.
 fn primary(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     let kind = K::from_raw(p.current());
-    if CONSTANTS.contains(kind.raw()) {
+    if in_set(&CONSTANTS, kind) {
         return constant(p);
     }
     match kind {
@@ -589,7 +615,7 @@ fn primary(p: &mut Parser<'_>) -> Option<CompletedMarker> {
             }
             let m = p.start();
             p.bump();
-            expr(p);
+            expr_bp(p, OR);
             close(p, K::R_PAREN);
             p.exit();
             Some(m.complete(p, K::PARENTHESIZED_EXPRESSION.raw()))
@@ -597,11 +623,16 @@ fn primary(p: &mut Parser<'_>) -> Option<CompletedMarker> {
         K::WORD | K::TILDE_WORD if p.nth(1) == K::L_PAREN.raw() => function_call(p),
         K::WORD | K::QUOTED_IDENT_TOKEN | K::QUESTION => Some(field(p)),
         _ => {
-            p.at_set(EXPR_START);
-            fail(p, EXPECTED_EXPRESSION);
+            missing_expression(p);
             None
         }
     }
+}
+
+#[inline(never)]
+fn missing_expression(p: &mut Parser<'_>) {
+    p.at_set(EXPR_START);
+    fail(p, EXPECTED_EXPRESSION);
 }
 
 fn function_call(p: &mut Parser<'_>) -> Option<CompletedMarker> {
@@ -616,7 +647,11 @@ fn function_call(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     }
     p.bump();
     if !at(p, K::R_PAREN) {
-        list(p);
+        // `list`, inline: one frame less per nested call.
+        expr_bp(p, OR);
+        while eat(p, K::COMMA) {
+            expr_bp(p, OR);
+        }
     }
     close(p, K::R_PAREN);
     p.exit();

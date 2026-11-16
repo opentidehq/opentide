@@ -4,7 +4,7 @@
 //! the accessors and that a tree of the wrong shape is reported. The parser is private to the
 //! crate until the switch, so this test includes its source.
 
-#![expect(dead_code, unused_imports, reason = "the included modules are used in part")]
+#![expect(dead_code, reason = "the included modules are used in part")]
 
 #[path = "../src/generated/ast.rs"]
 mod ast;

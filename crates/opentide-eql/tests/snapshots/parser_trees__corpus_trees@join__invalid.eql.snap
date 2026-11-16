@@ -22,3 +22,4 @@ SOURCE_FILE@0..47
           TRUE_KW@41..45 "true"
         R_BRACK@45..46 "]"
   WHITESPACE@46..47 "\n"
+46..47: a second subquery `[ ... ]` is missing (expected `by`, `[`, `![`)
