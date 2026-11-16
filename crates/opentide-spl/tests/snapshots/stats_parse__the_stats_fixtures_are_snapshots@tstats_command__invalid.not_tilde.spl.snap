@@ -1,0 +1,43 @@
+---
+source: crates/opentide-spl/tests/stats_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/tstats_command__invalid.not_tilde.spl
+---
+SOURCE_FILE@0..53
+  PIPELINE@0..53
+    PIPE@0..1 "|"
+    WHITESPACE@1..2 " "
+    TSTATS_COMMAND@2..53
+      TSTATS_KW@2..8 "tstats"
+      WHITESPACE@8..9 " "
+      AGGREGATE_ITEM@9..14
+        IDENTIFIER@9..14
+          IDENT@9..14 "count"
+      WHITESPACE@14..15 " "
+      WHERE_KW@15..20 "where"
+      WHITESPACE@20..21 " "
+      SEARCH_EXPRESSION@21..45
+        FIELD_VALUE@21..31
+          FIELD_REF@21..26
+            IDENTIFIER@21..26
+              IDENT@21..26 "index"
+          EQ@26..27 "="
+          FIELD_VALUE_RHS@27..31
+            IDENTIFIER@27..31
+              IDENT@27..31 "main"
+        WHITESPACE@31..32 " "
+        FIELD_VALUE@32..45
+          FIELD_REF@32..42
+            IDENTIFIER@32..42
+              IDENT@32..42 "sourcetype"
+          BANG_TILDE@42..44 "!~"
+          FIELD_VALUE_RHS@44..45
+            IDENTIFIER@44..45
+              IDENT@44..45 "x"
+      WHITESPACE@45..46 " "
+      BY_CLAUSE@46..53
+        BY_KW@46..48 "by"
+        WHITESPACE@48..49 " "
+        IDENTIFIER@49..53
+          IDENT@49..53 "host"
+--
