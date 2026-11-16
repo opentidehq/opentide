@@ -1,0 +1,35 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/from_clause__valid.exabeam
+---
+source_file@0..44
+  statement@0..44
+    select_clause@0..11
+      keyword@0..6
+        letters@0..6 "SELECT"
+      whitespace@6..7 " "
+      column@7..11
+        field_name@7..11
+          identifier@7..11
+            letters@7..11 "user"
+    whitespace@11..12 " "
+    from_clause@12..23
+      keyword@12..16
+        letters@12..16 "FROM"
+      whitespace@16..17 " "
+      table_name@17..23
+        identifier@17..23
+          letters@17..23 "logins"
+    whitespace@23..24 " "
+    where_clause@24..44
+      keyword@24..29
+        letters@24..29 "WHERE"
+      whitespace@29..30 " "
+      filter@30..44
+        field_term@30..44
+          field_name@30..37
+            identifier@30..37
+              letters@30..37 "outcome"
+          :@37..38 ":"
+          string@38..44 "\"fail\""

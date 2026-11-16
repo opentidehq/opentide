@@ -1,0 +1,22 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(source)"
+---
+SOURCE_FILE@0..21
+  EVENT_QUERY@0..21
+    EVENT_CATEGORY@0..7
+      IDENTIFIER@0..7
+        WORD@0..7 "process"
+    WHITESPACE@7..8 " "
+    WHERE_KW@8..13 "where"
+    WHITESPACE@13..14 " "
+    PREDICATE_EXPRESSION@14..21
+      FIELD@14..15
+        IDENTIFIER@14..15
+          WORD@14..15 "a"
+      WHITESPACE@15..16 " "
+      IN_KW@16..18 "in"
+      WHITESPACE@18..19 " "
+      L_PAREN@19..20 "("
+      R_PAREN@20..21 ")"
+20..20: an expression is missing (expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `true`, `+`, `-`, `(`, `?`)

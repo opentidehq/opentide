@@ -1,0 +1,35 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/call__valid.exabeam
+---
+source_file@0..70
+  statement@0..70
+    filter@0..70
+      and_expression@0..70
+        field_term@0..39
+          field_name@0..20
+            identifier@0..20
+              letters@0..20 "process_command_line"
+          :@20..21 ":"
+          call@21..39
+            identifier@21..25
+              letters@21..25 "RGXi"
+            (@25..26 "("
+            string@26..38 "\"\\\\s-enc\\\\s\""
+            )@38..39 ")"
+        whitespace@39..40 " "
+        keyword@40..43
+          letters@40..43 "AND"
+        whitespace@43..44 " "
+        field_term@44..70
+          field_name@44..53
+            identifier@44..53
+              letters@44..53 "file_name"
+          :@53..54 ":"
+          call@54..70
+            identifier@54..58
+              letters@54..58 "WLDi"
+            (@58..59 "("
+            string@59..69 "\"*resume*\""
+            )@69..70 ")"

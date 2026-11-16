@@ -27,7 +27,7 @@ SOURCE_FILE@0..13
   WHITESPACE@12..13 "\n"
 
 4..5: expected an expression
-4..5: a filter cannot follow an assignment without a pipe (expected PIPE)
+4..5: a filter cannot follow an assignment without a pipe
 6..6: expected a regular expression (expected REGEX_PATTERN_TOKEN)
 6..6: the regular expression is never closed (expected REGEX_PATTERN_TOKEN, SLASH)
 11..11: expected a regular expression (expected REGEX_PATTERN_TOKEN)

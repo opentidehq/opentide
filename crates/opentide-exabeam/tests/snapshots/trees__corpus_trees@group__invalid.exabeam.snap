@@ -1,0 +1,40 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/group__invalid.exabeam
+---
+source_file@0..58
+  statement@0..58
+    filter@0..58
+      group@0..58
+        (@0..1 "("
+        or_expression@1..58
+          field_term@1..21
+            field_name@1..13
+              identifier@1..13
+                letters@1..13 "process_name"
+            :@13..14 ":"
+            string@14..21 "\"a.exe\""
+          whitespace@21..22 " "
+          keyword@22..24
+            letters@22..24 "OR"
+          whitespace@24..25 " "
+          and_expression@25..58
+            field_term@25..45
+              field_name@25..37
+                identifier@25..37
+                  letters@25..37 "process_name"
+              :@37..38 ":"
+              string@38..45 "\"b.exe\""
+            whitespace@45..46 " "
+            keyword@46..49
+              letters@46..49 "AND"
+            whitespace@49..50 " "
+            field_term@50..58
+              field_name@50..54
+                identifier@50..54
+                  letters@50..54 "user"
+              :@54..55 ":"
+              string@55..58 "\"x\""
+errors:
+58..58: missing `)`

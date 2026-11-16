@@ -1,0 +1,86 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/field_term__valid.exabeam
+---
+source_file@0..116
+  statement@0..116
+    filter@0..116
+      and_expression@0..116
+        field_term@0..15
+          field_name@0..8
+            identifier@0..8
+              letters@0..8 "bytes_in"
+          whitespace@8..9 " "
+          >@9..10 ">"
+          whitespace@10..11 " "
+          number@11..15
+            digits@11..15 "1000"
+        whitespace@15..16 " "
+        keyword@16..19
+          letters@16..19 "AND"
+        whitespace@19..20 " "
+        field_term@20..33
+          field_name@20..29
+            identifier@20..29
+              letters@20..29 "bytes_out"
+          :@29..30 ":"
+          >=@30..32
+            >@30..31 ">"
+            =@31..32 "="
+          number@32..33
+            digits@32..33 "5"
+        whitespace@33..34 " "
+        keyword@34..37
+          letters@34..37 "AND"
+        whitespace@37..38 " "
+        field_term@38..64
+          field_name@38..45
+            identifier@38..45
+              letters@38..45 "product"
+          ==@45..47
+            =@45..46 "="
+            =@46..47 "="
+          string@47..64 "\"web application\""
+        whitespace@64..65 " "
+        keyword@65..68
+          letters@65..68 "AND"
+        whitespace@68..69 " "
+        field_term@69..84
+          field_name@69..75
+            identifier@69..75
+              letters@69..75 "src_ip"
+          :@75..76 ":"
+          bare_word@76..84
+            digits@76..78 "10"
+            .@78..79 "."
+            digits@79..80 "0"
+            .@80..81 "."
+            digits@81..82 "0"
+            .@82..83 "."
+            digits@83..84 "1"
+        whitespace@84..85 " "
+        keyword@85..88
+          letters@85..88 "AND"
+        whitespace@88..89 " "
+        field_term@89..100
+          field_name@89..95
+            identifier@89..95
+              letters@89..95 "parsed"
+          :@95..96 ":"
+          identifier@96..100
+            letters@96..100 "true"
+        whitespace@100..101 " "
+        keyword@101..104
+          letters@101..104 "AND"
+        whitespace@104..105 " "
+        field_term@105..116
+          field_name@105..109
+            identifier@105..109
+              letters@105..109 "user"
+          whitespace@109..110 " "
+          not_equal@110..112
+            !@110..111 "!"
+            =@111..112 "="
+          whitespace@112..113 " "
+          string@113..116 "\"x\""

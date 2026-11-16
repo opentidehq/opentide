@@ -1,0 +1,60 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/foreach_statement__valid.exabeam
+---
+source_file@0..94
+  statement@0..18
+    filter@0..18
+      field_term@0..18
+        field_name@0..6
+          identifier@0..6
+            letters@0..6 "vendor"
+        :@6..7 ":"
+        string@7..18 "\"Microsoft\""
+  whitespace@18..19 " "
+  |@19..20 "|"
+  whitespace@20..21 " "
+  foreach_statement@21..94
+    keyword@21..28
+      letters@21..28 "FOREACH"
+    whitespace@28..29 " "
+    field_name@29..38
+      identifier@29..38
+        letters@29..38 "dest_host"
+    whitespace@38..39 " "
+    [@39..40 "["
+    whitespace@40..41 " "
+    statement@41..83
+      select_clause@41..56
+        keyword@41..47
+          letters@41..47 "SELECT"
+        whitespace@47..48 " "
+        column@48..56
+          field_name@48..56
+            identifier@48..56
+              letters@48..56 "src_host"
+      whitespace@56..57 " "
+      where_clause@57..83
+        keyword@57..62
+          letters@57..62 "WHERE"
+        whitespace@62..63 " "
+        filter@63..83
+          field_term@63..83
+            field_name@63..71
+              identifier@63..71
+                letters@63..71 "src_host"
+            :@71..72 ":"
+            whitespace@72..73 " "
+            bare_word@73..83
+              other@73..74 "@"
+              letters@74..83 "dest_host"
+    whitespace@83..84 " "
+    ]@84..85 "]"
+    whitespace@85..86 " "
+    limit_clause@86..94
+      keyword@86..91
+        letters@86..91 "LIMIT"
+      whitespace@91..92 " "
+      number@92..94
+        digits@92..94 "10"

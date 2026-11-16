@@ -91,6 +91,73 @@ impl SyntaxKind {
     }
 }
 
+/// The node kinds a parse builds: one per named production of `cql.ungram` (its enums,
+/// such as `Filter` and `Expr`, are no node), and the two comments, which tree-sitter's
+/// grammar named. The corpus gate tags each (`prod:<name>`).
+pub(crate) const PRODUCTIONS: &[SyntaxKind] = {
+    use SyntaxKind as K;
+    &[
+        K::LINE_COMMENT,
+        K::BLOCK_COMMENT,
+        K::SOURCE_FILE,
+        K::PIPELINE,
+        K::AND_FILTER,
+        K::OR_FILTER,
+        K::NOT_FILTER,
+        K::PARENTHESIZED_FILTER,
+        K::FIELD_FILTER,
+        K::FREE_TEXT,
+        K::FIELD_NAME,
+        K::UNQUOTED_PATTERN,
+        K::TAG,
+        K::STRING,
+        K::NUMBER,
+        K::BOOLEAN,
+        K::AND,
+        K::OR,
+        K::NOT,
+        K::NEGATED_FUNCTION_CALL,
+        K::ASSIGNMENT,
+        K::FIELD_SHORTHAND,
+        K::STATS_SHORTHAND,
+        K::LINK_CONSTRAINT,
+        K::CASE_STATEMENT,
+        K::CASE_BRANCH,
+        K::MATCH_STATEMENT,
+        K::MATCH_BRANCH,
+        K::SAVED_QUERY,
+        K::SAVED_QUERY_NAME,
+        K::SAVED_QUERY_ARGUMENT,
+        K::ARGUMENT_NAME,
+        K::QUERY_PARAMETER,
+        K::PARAMETER_DEFAULT,
+        K::PARAMETER_NAME,
+        K::REGEX,
+        K::REGEX_PATTERN,
+        K::REGEX_FLAGS,
+        K::FUNCTION_CALL,
+        K::FUNCTION_NAME,
+        K::ARGUMENT_LIST,
+        K::ARGUMENT,
+        K::NAMED_ARGUMENT,
+        K::ATTRIBUTED_EXPRESSION,
+        K::EXPRESSION_ATTRIBUTE,
+        K::IDENTIFIER,
+        K::BINARY_EXPRESSION,
+        K::UNARY_EXPRESSION,
+        K::PARENTHESIZED_EXPRESSION,
+        K::SUBQUERY,
+        K::NAMED_SUBQUERY,
+        K::ARRAY,
+    ]
+};
+
+/// The `snake_case` name of `kind` (`FIELD_FILTER` is `field_filter`): tree-sitter's
+/// name of the same production.
+pub(crate) fn snake_case(kind: SyntaxKind) -> String {
+    format!("{kind:?}").to_ascii_lowercase()
+}
+
 /// The rowan language of CQL.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Lang {}

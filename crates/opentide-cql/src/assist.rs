@@ -2,49 +2,56 @@
 
 use crate::catalog::{Catalog, Event, Field, Function, Parameter};
 use crate::check::{call_name, name_text, unquote};
-use crate::text;
-use opentide_core::{
-    CompletionItem, LanguageId, ParameterInformation, SignatureHelp, SignatureInformation,
-};
-use opentide_syntax::parse as ts_parse;
-use tree_sitter::Node;
+use crate::syntax::{SyntaxKind as K, SyntaxNode};
+use crate::{nth, text};
+use opentide_core::{CompletionItem, ParameterInformation, SignatureHelp, SignatureInformation};
 
 /// Hover at byte `offset` of `source` (an LSP host converts the editor's
 /// UTF-16 position once, with `opentide_core::position_to_offset`).
 pub fn hover(source: &str, offset: usize) -> Option<String> {
     let offset = offset.min(source.len());
-    let tree = ts_parse(LanguageId::Cql, source)?;
+    let (root, _) = crate::parser::parse(source);
     let catalog = Catalog::cached();
-    let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
+    let node = leaf_at(&root, offset)?;
     let parent = node.parent();
-    let is_field =
-        |p: Node, field: &str| p.child_by_field_name(field).map(|n| n.id()) == Some(node.id());
-    if let Some(p) = parent {
-        if p.kind() == "function_call" && is_field(p, "name") {
-            return catalog.function(text(node, source)).map(function_hover);
+    let is_field = |p: &SyntaxNode, n: usize| nth(p, n).as_ref() == Some(&node);
+    if let Some(p) = &parent {
+        if p.kind() == K::FUNCTION_CALL && node.kind() == K::FUNCTION_NAME {
+            return catalog.function(text(&node, source)).map(function_hover);
         }
-        if p.kind() == "named_argument" && is_field(p, "name") {
+        if p.kind() == K::NAMED_ARGUMENT && is_field(p, 0) {
             let call = p.parent().and_then(|list| list.parent())?;
-            let function = catalog.function(call_name(call, source))?;
-            let parameter = function.parameter(name_text(node, source))?;
+            let function = catalog.function(call_name(&call, source))?;
+            let parameter = function.parameter(name_text(&node, source))?;
             return Some(parameter_hover(function, parameter));
         }
-        if p.kind() == "field_filter" && is_field(p, "value") {
-            let field = p
-                .child_by_field_name("field")
-                .map(|f| unquote(text(f, source)))
-                .unwrap_or("");
+        if p.kind() == K::FIELD_FILTER && is_field(p, 1) {
+            let field = nth(p, 0).map_or("", |f| unquote(text(&f, source)));
             if (field == "#event_simpleName" || field == "event_simpleName")
-                && let Some(e) = catalog.event(unquote(text(node, source)))
+                && let Some(e) = catalog.event(unquote(text(&node, source)))
             {
                 return Some(event_hover(e));
             }
         }
     }
-    if matches!(node.kind(), "field_name" | "tag" | "string") {
-        return catalog.field(unquote(text(node, source))).map(field_hover);
+    if matches!(node.kind(), K::FIELD_NAME | K::TAG | K::STRING) {
+        return catalog.field(unquote(text(&node, source))).map(field_hover);
     }
     None
+}
+
+/// The one-token node (a name, a literal) under byte `offset`, the token starting there
+/// when two touch: what tree-sitter's smallest node at an offset was for the hover's
+/// purposes. A punctuation token, a keyword, trivia or the end of the text is none.
+fn leaf_at(root: &SyntaxNode, offset: usize) -> Option<SyntaxNode> {
+    let at = rowan::TextSize::try_from(offset).ok()?;
+    let token = root.token_at_offset(at).right_biased()?;
+    if !token.text_range().contains(at) {
+        return None;
+    }
+    let node = token.parent()?;
+    // A wrapper holds its one token and nothing else.
+    (node.text_range() == token.text_range() && node.kind() != K::ERROR).then_some(node)
 }
 
 fn function_hover(f: &Function) -> String {

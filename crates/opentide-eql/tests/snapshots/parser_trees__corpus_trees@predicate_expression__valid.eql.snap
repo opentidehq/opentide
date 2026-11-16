@@ -1,0 +1,62 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/predicate_expression__valid.eql
+---
+SOURCE_FILE@0..122
+  LINE_COMMENT@0..34 "// prod:predicate_expression valid"
+  WHITESPACE@34..35 "\n"
+  EVENT_QUERY@35..121
+    EVENT_CATEGORY@35..42
+      IDENTIFIER@35..42
+        WORD@35..42 "process"
+    WHITESPACE@42..43 " "
+    WHERE_KW@43..48 "where"
+    WHITESPACE@48..49 " "
+    AND_EXPRESSION@49..121
+      PREDICATE_EXPRESSION@49..76
+        FIELD@49..61
+          IDENTIFIER@49..56
+            WORD@49..56 "process"
+          DOT@56..57 "."
+          IDENTIFIER@57..61
+            WORD@57..61 "name"
+        WHITESPACE@61..62 " "
+        IN_TILDE@62..65 "in~"
+        WHITESPACE@65..66 " "
+        L_PAREN@66..67 "("
+        STRING@67..70
+          STRING_TOKEN@67..70 "\"a\""
+        COMMA@70..71 ","
+        WHITESPACE@71..72 " "
+        STRING@72..75
+          STRING_TOKEN@72..75 "\"b\""
+        R_PAREN@75..76 ")"
+      WHITESPACE@76..77 " "
+      AND_KW@77..80 "and"
+      WHITESPACE@80..81 " "
+      PREDICATE_EXPRESSION@81..104
+        FIELD@81..90
+          IDENTIFIER@81..85
+            WORD@81..85 "file"
+          DOT@85..86 "."
+          IDENTIFIER@86..90
+            WORD@86..90 "path"
+        WHITESPACE@90..91 " "
+        LIKE_TILDE@91..96 "like~"
+        WHITESPACE@96..97 " "
+        STRING@97..104
+          STRING_TOKEN@97..104 "\"*.dll\""
+      WHITESPACE@104..105 " "
+      AND_KW@105..108 "and"
+      WHITESPACE@108..109 " "
+      PREDICATE_EXPRESSION@109..121
+        FIELD@109..110
+          IDENTIFIER@109..110
+            WORD@109..110 "x"
+        WHITESPACE@110..111 " "
+        REGEX_KW@111..116 "regex"
+        WHITESPACE@116..117 " "
+        STRING@117..121
+          STRING_TOKEN@117..121 "\"a+\""
+  WHITESPACE@121..122 "\n"

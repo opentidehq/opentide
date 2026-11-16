@@ -1,0 +1,21 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/free_text__invalid.exabeam
+---
+source_file@0..12
+  ERROR@0..1
+    error_token@0..1 "\""
+  statement@1..12
+    filter@1..12
+      and_expression@1..12
+        free_text@1..6
+          identifier@1..6
+            letters@1..6 "Admin"
+        whitespace@6..7 " "
+        free_text@7..12
+          identifier@7..12
+            letters@7..12 "login"
+errors:
+0..0: expected a statement
+0..0: unexpected
