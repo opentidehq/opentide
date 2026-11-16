@@ -810,9 +810,12 @@ impl Driver<'_> {
                             Search::Word
                                 if spelling.signs
                                     && !starts_with_sign(slice)
-                                    && slice[1..].contains('+') =>
+                                    && slice[first_len(slice)..].contains('+') =>
                             {
-                                let cut = 1 + slice[1..].find('+').unwrap_or(0);
+                                // After the first character, which can be any
+                                // character: `slice[1..]` cut inside `\u{70f}`.
+                                let first = first_len(slice);
+                                let cut = first + slice[first..].find('+').unwrap_or(0);
                                 (classify(&slice[..cut]), cut)
                             }
                             Search::Word
@@ -996,6 +999,11 @@ impl Driver<'_> {
         };
         self.raw = raw;
     }
+}
+
+/// The length in bytes of `word`'s first character (0 for an empty word).
+fn first_len(word: &str) -> usize {
+    word.chars().next().map_or(0, char::len_utf8)
 }
 
 fn starts_with_sign(word: &str) -> bool {
@@ -1199,6 +1207,25 @@ mod tests {
         assert_eq!(tokens[3], (K::IDENT, "lt"));
         assert_eq!(kinds("| fields - a")[2], (K::MINUS, "-"));
         assert_eq!(kinds("earliest=-1h@h")[2], (K::SEARCH_WORD_TOKEN, "-1h@h"));
+    }
+
+    #[test]
+    fn a_signed_word_may_start_with_any_character() {
+        // The nightly fuzzer (crash-fd275c9b): `slice[1..]` cut inside the
+        // first character of a word in `dedup`, `fields` or `sort`.
+        for source in [
+            "| dedup \u{70f}+a",
+            "| sort \u{e9}+x",
+            "| fields \u{1f600}+",
+            "| dedup \u{70f}",
+        ] {
+            let lexemes = lex(source);
+            assert_eq!(
+                lexemes.last().map(|l| usize::from(l.range.end())),
+                Some(source.len()),
+                "{source:?}"
+            );
+        }
     }
 
     #[test]

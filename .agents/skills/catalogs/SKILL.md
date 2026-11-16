@@ -191,7 +191,7 @@ Injections come from the YAML structure (`injection.rs` over `yaml_scalar.rs`), 
 
 - Do not vendor, generate into `data/catalogs/`, or hand-write a configuration JSON Schema. `crates/testdata/config/schemas/` is opentide's own export, read only by tests of the schema walker.
 - Do not port a configuration check to Rust. A finding the editor lacks is a change to opentide's `configuration_text_issues`.
-- No tree-sitter TOML grammar and no HighlightSpec captures for TOML.
+- No TOML grammar and no HighlightSpec captures for TOML.
 - `Cargo.toml` and `data/catalogs/**/*.toml` are not `opentide-config` documents.
 
 ## Checks

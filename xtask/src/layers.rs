@@ -346,8 +346,7 @@ pub fn check(table: &LayerTable, metadata: &Metadata) -> Report {
                 continue;
             }
             // A dev-dependency of a crate on itself turns a feature on for its
-            // own tests (opentide-parse's `differential`): no edge between
-            // two crates, so nothing to place.
+            // own tests: no edge between two crates, so nothing to place.
             if dependency.name == *name && DepKind::of(dependency) == DepKind::Dev {
                 continue;
             }
@@ -616,7 +615,7 @@ mod tests {
         let report = check(
             &table(SMALL),
             &metadata(&[
-                ("core", &[("serde", None), ("tree-sitter", Some("build"))]),
+                ("core", &[("serde", None), ("cc", Some("build"))]),
                 ("syntax", &[]),
                 ("highlight", &[]),
                 ("lsp", &[]),
@@ -734,15 +733,14 @@ mod tests {
     /// real graph; this copy lets a unit test change it.
     const WORKSPACE: &Graph<'static> = &[
         ("opentide-core", &[]),
-        ("opentide-syntax", &[("opentide-core", None)]),
-        ("opentide-parse", &[("opentide-parse", Some("dev"))]),
+        ("opentide-parse", &[]),
         ("opentide-highlight", &[("opentide-core", None)]),
         ("opentide-ecs", &[("opentide-core", None)]),
         (
             "opentide-kql",
             &[
                 ("opentide-core", None),
-                ("opentide-syntax", None),
+                ("opentide-parse", None),
                 ("opentide-highlight", None),
             ],
         ),
@@ -750,7 +748,7 @@ mod tests {
             "opentide-spl",
             &[
                 ("opentide-core", None),
-                ("opentide-syntax", None),
+                ("opentide-parse", None),
                 ("opentide-highlight", None),
             ],
         ),
@@ -759,7 +757,7 @@ mod tests {
             &[
                 ("opentide-core", None),
                 ("opentide-ecs", None),
-                ("opentide-syntax", None),
+                ("opentide-parse", None),
                 ("opentide-highlight", None),
             ],
         ),
@@ -768,7 +766,8 @@ mod tests {
             &[
                 ("opentide-core", None),
                 ("opentide-ecs", None),
-                ("opentide-syntax", None),
+                ("opentide-kuery", None),
+                ("opentide-parse", None),
                 ("opentide-highlight", None),
             ],
         ),
@@ -776,7 +775,7 @@ mod tests {
             "opentide-falco",
             &[
                 ("opentide-core", None),
-                ("opentide-syntax", None),
+                ("opentide-parse", None),
                 ("opentide-highlight", None),
             ],
         ),
@@ -784,7 +783,7 @@ mod tests {
             "opentide-cql",
             &[
                 ("opentide-core", None),
-                ("opentide-syntax", None),
+                ("opentide-parse", None),
                 ("opentide-highlight", None),
             ],
         ),
@@ -792,7 +791,7 @@ mod tests {
             "opentide-yara",
             &[
                 ("opentide-core", None),
-                ("opentide-syntax", None),
+                ("opentide-parse", None),
                 ("opentide-highlight", None),
             ],
         ),
@@ -800,7 +799,7 @@ mod tests {
             "opentide-yaral",
             &[
                 ("opentide-core", None),
-                ("opentide-syntax", None),
+                ("opentide-parse", None),
                 ("opentide-highlight", None),
             ],
         ),
@@ -808,7 +807,7 @@ mod tests {
             "opentide-exabeam",
             &[
                 ("opentide-core", None),
-                ("opentide-syntax", None),
+                ("opentide-parse", None),
                 ("opentide-highlight", None),
             ],
         ),
@@ -818,7 +817,7 @@ mod tests {
                 ("opentide-core", None),
                 ("opentide-ecs", None),
                 ("opentide-lucene", None),
-                ("opentide-syntax", None),
+                ("opentide-parse", None),
                 ("opentide-highlight", None),
             ],
         ),
@@ -828,7 +827,7 @@ mod tests {
                 ("opentide-core", None),
                 ("opentide-ecs", None),
                 ("opentide-lucene", None),
-                ("opentide-syntax", None),
+                ("opentide-parse", None),
                 ("opentide-highlight", None),
             ],
         ),
@@ -948,7 +947,7 @@ mod tests {
     fn the_repository_table_places_todays_workspace() {
         let report = check(&table(REPOSITORY_TABLE), &metadata(WORKSPACE));
         assert_eq!(report.violations, []);
-        assert_eq!(report.crates, 32);
+        assert_eq!(report.crates, 31);
     }
 
     #[test]

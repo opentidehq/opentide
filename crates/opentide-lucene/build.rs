@@ -1,4 +1,4 @@
-//! Points `include_str!` at the shared catalogs, grammars, and highlight queries:
+//! Points `include_str!` at the shared catalogs and highlight data:
 //! the workspace root in a checkout, or else the `assets/` copy that
 //! `scripts/engine/release.py vendor` puts inside a published crate. The checkout wins, so
 //! a copy left behind never shadows the real files.

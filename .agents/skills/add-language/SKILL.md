@@ -1,6 +1,6 @@
 ---
 name: add-language
-description: Add a query language to the opentide language server (S1QL, Sigma, YARA). Follow the harness from LanguageId through a vendored tree-sitter grammar, corpus gate, OnceLock catalogs, HighlightSpec, YAML injection, and external fault twins. SQL stays unsupported. Use when creating a new engine crate or grammar.
+description: Add a query language to the opentide language server (S1QL, Sigma). Follow the harness from LanguageId through a pure-Rust parser on opentide-parse (logos lexer, hand-written grammar, .ungram), the corpus gate, OnceLock catalogs, HighlightSpec and its KEYWORDS table, YAML injection, and external fault twins. SQL stays unsupported. Use when creating a new engine crate or parser.
 license: EUPL-1.2
 metadata:
   author: opentidehq
@@ -8,7 +8,7 @@ metadata:
 
 # Add a language
 
-KQL, SPL, and Tide YAML are the 1.0 engines. ES|QL, EQL, Kibana KQL (`kuery`), and Lucene followed this list for Elastic Security, Falco for Sysdig Secure, and CQL for CrowdStrike; `opentide-esql` and `opentide-eql` are the most complete examples, and `opentide-falco` the smallest complete one (grammar, catalogs from a generator, block context from Tide). `opentide-exabeam` is the pattern for a language whose spec ships a reference checker: port it as the verdict parser, record its verdicts (`scripts/engine/sync_exabeam_conformance.py`) and keep the tree-sitter grammar for highlighting. A later language follows this list. Authoring guidance for detections lives in `opentidehq/skills` (`kusto-query-language`, `splunk-spl-processing`, and the platform skills). Those skills are not an engine. Implementation skills in this repo are `rust-engine`, `tree-sitter`, `catalogs`, `lsp-host`, and `wasm-hosts`. Read them before the matching step.
+KQL, SPL, and Tide YAML are the 1.0 engines. ES|QL, EQL, Kibana KQL (`kuery`), and Lucene followed this list for Elastic Security, Falco for Sysdig Secure, and CQL for CrowdStrike; `opentide-esql` and `opentide-eql` are the most complete examples, and `opentide-falco` the smallest complete one (grammar, catalogs from a generator, block context from Tide). `opentide-exabeam` is the pattern for a language whose spec ships a reference checker: port it as the verdict parser, record its verdicts (`scripts/engine/sync_exabeam_conformance.py`) and give it a recovering tree on `opentide-parse` for highlighting (`src/cst.rs`). A later language follows this list. Authoring guidance for detections lives in `opentidehq/skills` (`kusto-query-language`, `splunk-spl-processing`, and the platform skills). Those skills are not an engine. Implementation skills in this repo are `rust-engine`, `parser`, `catalogs`, `lsp-host`, and `wasm-hosts`. Read them before the matching step.
 
 SQL stays unsupported until a real dialect and grammar are chosen. A stub parser or a fake highlighter is not a language.
 
@@ -16,9 +16,9 @@ SQL stays unsupported until a real dialect and grammar are chosen. A stub parser
 
 - `LanguageId` parses the public name and rejects `sql`.
 - `scripts/engine/check-names.sh` still passes (`opentide`, never `otide`; no `opentide-sql`).
-- The grammar coverage gate names the productions, and `parser.c` matches `tree-sitter-cli` 0.25.10.
+- The parser is pure Rust on `opentide-parse` (no C, no `unsafe`): lossless, finite on every input, at or above the nesting floor of `deep_queries.rs`, every token class safe at a million characters on a 1 MB stack. The corpus gate names its productions.
 - Catalogs load once per process through `OnceLock` and `include_str!`. No `std::fs` in the new engine's `src/`.
-- `generate-highlights --check` passes, and capture names are an append-only change to HighlightSpec.
+- `generate-highlights --check` passes (the language's `KEYWORDS` table), and capture names are an append-only change to HighlightSpec.
 - `crates/testdata/conformance/external/<id>/` contains real public rules and a `.broken.` twin with one injected fault. The full valid file may still parse-error where the grammar does not cover the rule yet. The harness keeps that file, takes the longest prefix that parses, and requires the injected fault on that prefix to diagnose. The broken full file must produce at least one diagnostic. Copy `crates/opentide-analysis/tests/external_corpus.rs`.
 - Unsupported platforms still produce no fake validation.
 - The language has an oracle in `scripts/engine/oracles/` against its reference parser (pySigma for Sigma, yara-python for YARA), or `scripts/engine/oracles/README.md` says why none exists.
@@ -28,11 +28,11 @@ SQL stays unsupported until a real dialect and grammar are chosen. A stub parser
 
 1. Add a variant to `LanguageId` in `crates/opentide-core` (`as_str`, `parse`, `Display`, serde rename). Wire name is the public id (`kql`, `spl`, `opentide-yaml`), not a crate path.
 2. Add diagnostic codes to `opentide_core::codes`. Unknown constructs get a stable code, not a free-form message.
-3. Vendor `grammars/tree-sitter-opentide-<id>/` and compile `parser.c` from `crates/opentide-syntax/build.rs`. Follow `.agents/skills/tree-sitter/SKILL.md`. CI fails if `parser.c` drifts.
-4. Add the C symbol to the `unsafe extern` block, a `LanguageFn` constant (`unsafe { LanguageFn::from_raw(tree_sitter_opentide_<id>) }` with its `// SAFETY:` comment) and a `language()` arm, and its row in `docs/internal/unsafe.md` (`xtask/tests/unsafe_listing.rs` counts them). Do not `.collect()` a `QueryCursor`.
-5. Add corpus files under `crates/testdata/corpus/<id>/` tagged `prod:<rule>`, a row in `docs/engine/LANGUAGE.md`, and the required list in `crates/opentide-syntax/tests/corpus_gate.rs`.
+3. Write the parser in `crates/opentide-<id>` on `opentide-parse`: `SyntaxKind`, a logos lexer, the grammar, `src/<id>.ungram` and `cargo xtask codegen` for its typed AST. Follow `.agents/skills/parser/SKILL.md` and `crates/opentide-parse/AGENTS.md`. Add its floors to `crates/opentide-analysis/tests/deep_queries.rs`.
+4. Give the crate the hidden `debug_kinds` and `debug_node_kinds` hooks the corpus gate reads (`opentide-kuery` has the shortest pair).
+5. Add corpus files under `crates/testdata/corpus/<id>/` tagged `prod:<rule>`, a row in `docs/engine/LANGUAGE.md`, and the language's gate in `crates/opentide-analysis/tests/corpus_gate.rs` (`kind_names`, its structural list).
 6. Add `data/catalogs/<id>/` and a `Catalog::cached`-style `OnceLock`. Follow `.agents/skills/catalogs/SKILL.md`.
-7. Add `highlights/queries/<id>/highlights.scm`. Specific patterns come before `(identifier) @variable`. New captures are appended to `highlights/spec.toml` `legend`. Run `generate-highlights`.
+7. Colour the tree with HighlightSpec captures (the crate's `highlight`), and list the keywords and punctuation the TextMate grammar should know in `crates/opentide-highlight/src/keywords/<id>.rs` (`KEYWORDS`, wired in `keywords()`); a lexer test holds the table to the tokens the lexer cuts. New captures are appended to `highlights/spec.toml` `legend`. Run `generate-highlights`.
 8. Register the engine in `opentide-analysis` on `LanguageId`. Hover, completion, and signature help dispatch here. Do not copy a second implementation into `opentide-tide` except the injection remap.
 9. If Tide YAML embeds the language, add a row to the injection table in `docs/engine/ARCHITECTURE.md` and to `language_for_field_path`. Remap tokens onto YAML coordinates after stripping block-scalar indent.
 10. Add `crates/testdata/conformance/external/<id>/`: unmodified public rules, plus `<name>.broken.<ext>` with one injected fault. Record the source and license in `SOURCES.md`. Follow `external_corpus.rs`: do not delete a public rule because the full text parse-errors; assert the fault on the longest prefix the grammar accepts, and assert the broken full file emits some diagnostic.

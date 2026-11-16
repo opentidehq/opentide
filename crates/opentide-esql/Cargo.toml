@@ -26,8 +26,3 @@ rowan.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
-# The tree-sitter engine, kept in tests/legacy for the differential until stage 2 (#1231).
-opentide-syntax.workspace = true
-tree-sitter.workspace = true
-# The old-versus-new differential harness (tests/differential.rs).
-opentide-parse = { workspace = true, features = ["differential"] }

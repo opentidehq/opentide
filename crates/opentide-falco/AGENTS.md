@@ -24,9 +24,8 @@ cargo nextest run --profile fast -p opentide-falco
 ```
 
 `tests/libsinsp_parser.rs`, `tests/libsinsp_compiler.rs` (libs' tests) and
-`tests/tree_agreement.rs` (inputs libsinsp accepts parse into a tree without an error), and
-`tests/differential.rs` (the tree against the tree-sitter grammar it replaced, kept verbatim in
-`tests/legacy`); the Falco oracle runs through `scripts/engine/ci-oracle.sh`.
+`tests/tree_agreement.rs` (inputs libsinsp accepts parse into a tree without an error); the Falco
+oracle runs through `scripts/engine/ci-oracle.sh`.
 
 ## Do not
 

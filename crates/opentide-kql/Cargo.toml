@@ -26,7 +26,3 @@ regex.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
-# The tree-sitter implementation, kept in tests/legacy for the differential until stage 2 (#1231).
-tree-sitter.workspace = true
-opentide-syntax.workspace = true
-opentide-parse = { workspace = true, features = ["differential"] }

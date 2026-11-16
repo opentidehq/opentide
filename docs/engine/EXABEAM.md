@@ -14,7 +14,7 @@ The contract is opentidehq/specifications [`specs/languages/exabeam-1.0.md`](htt
 | Syntax, profiles, every language code | exabeam-1.0 and its reference checker | `src/check.rs`: a step-for-step port of the reference checker |
 | Regular expressions (`RGX`, `RGXi`, `RGX_EXTRACT`) | RE2 | the `regex` crate's syntax parser (RE2 syntax), after RE2's own rules and refusals (below) |
 | Fields, subjects, activity types, outcomes | Exabeam's Common Information Model, ExabeamLabs/CIMLibrary@e72bfa2 (Apache-2.0) | `data/catalogs/exabeam/` (`scripts/engine/sync_exabeam_catalog.py`), `src/catalog.rs` |
-| Highlighting | the spec's highlight table (existing HighlightSpec captures only) | `crates/opentide-exabeam/src/cst.rs` (the tree, on `opentide-parse`; it accepts what `grammars/tree-sitter-opentide-exabeam` accepts and highlights as `highlights/queries/exabeam/highlights.scm` did) |
+| Highlighting | the spec's highlight table (existing HighlightSpec captures only) | `crates/opentide-exabeam/src/cst.rs` (the tree, on `opentide-parse`; it accepts what the tree-sitter grammar it replaced accepted and highlights as its `highlights.scm` did) |
 | Block constraints and advisories | exabeam-1.0 platform "Constraints", "Advisories" and `validate_exabeam_block` | `crates/opentide-tide/src/exabeam.rs` |
 
 ## The SQL-like layer
@@ -37,7 +37,7 @@ The repository's rule that "SQL is out of scope" is about a generic SQL dialect:
 | The tree's highlighting against the reference's tokens | every error-free query of `reference.json` | identical | `tests/reference.rs` |
 | Queries written for opentide (`crates/testdata/conformance/external/exabeam/`) | 16 (12 rule, 4 search), each with a `.broken.` twin | 16 / 16 clean under their profile; every twin reports the code `FAULTS.toml` names (16 fault kinds) | `crates/opentide-analysis/tests/external_exabeam.rs` |
 | The block checker's recorded verdicts: 51 block cases written for opentide and the spec's 8 object fixtures | 59 | every error, code and field path, identical, but for the block without `status` (below) | `crates/opentide-tide/tests/exabeam_spec.rs` |
-| Grammar productions | 21 rules, one valid and one invalid fixture each | 21 / 21 | `crates/opentide-syntax/tests/corpus_gate.rs` |
+| Grammar productions | 21 rules, one valid and one invalid fixture each | 21 / 21 | `crates/opentide-analysis/tests/corpus_gate.rs` |
 | Exabeam's published correlation rules, ExabeamLabs/new-scale-content-hub (measured, not vendored: its README forbids redistribution) | 2,371 rules, one sequence each | see below | `crates/opentide-exabeam/tests/content_hub.rs` (ignored; reads a local checkout) |
 
 ### Exabeam's published rules (measured, not vendored)
@@ -83,7 +83,7 @@ The catalogue is Exabeam's CIM: the 1,130 typed fields of `Fields_Descriptions.m
 
 ## Highlighting
 
-The tree (`src/cst.rs`) gives the captures `highlights/queries/exabeam/highlights.scm` gave, which remains the oracle of `tests/differential.rs` and the source of `opentide-highlight`'s `KEYWORDS` table; it uses the spec's table and only existing HighlightSpec captures. Filter operators are any case; clause keywords are recognised in any case so a mixed-case one still highlights while the engine reports `exabeam_keyword_case`, and clauses parse in any order while the engine reports `exabeam_clause_order`. Function names, values (booleans, `null`, IP addresses, `@field`) and range bounds are told apart by their text, as the query's `#match?` predicates did. Sequence queries are nested in a list, so the Tide TextMate grammar gives them no embedded region: semantic tokens colour them.
+The tree (`src/cst.rs`) gives the captures the tree-sitter `highlights.scm` gave (checked by a differential until #1231 deleted both; `tests/captures.rs` keeps cases), and `opentide-highlight`'s `KEYWORDS` table holds its keywords; it uses the spec's table and only existing HighlightSpec captures. Filter operators are any case; clause keywords are recognised in any case so a mixed-case one still highlights while the engine reports `exabeam_keyword_case`, and clauses parse in any order while the engine reports `exabeam_clause_order`. Function names, values (booleans, `null`, IP addresses, `@field`) and range bounds are told apart by their text, as the query's `#match?` predicates did. Sequence queries are nested in a list, so the Tide TextMate grammar gives them no embedded region: semantic tokens colour them.
 
 ## Block constraints
 

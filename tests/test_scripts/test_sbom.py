@@ -44,16 +44,15 @@ def test_references_name_workspace_crates_relative_to_the_repository(tmp_path: P
     assert str(root.resolve()) not in str(relative)
 
 
-def test_the_browser_build_lists_the_wasi_libc_it_links() -> None:
+def test_the_browser_build_links_no_c() -> None:
+    # The browser module is pure Rust since tree-sitter left (#1231): its SBOM
+    # is the crate's alone, and build-wasm.sh gives it no C toolchain or libc.
     script = (ROOT / "scripts" / "engine" / "build-wasm.sh").read_text(encoding="utf-8")
-    libc = sbom.wasi_libc_component(script)
-    assert libc["name"] == "wasi-libc"
-    assert libc["version"].startswith("wasi-sdk-")
-    bom = sbom.add_component(_bom("wasm", ["dep"], {"wasm": ["dep"], "dep": []}), libc)
-    assert sbom.structural_problems(bom) == []
-    assert libc["bom-ref"] in bom["dependencies"][0]["dependsOn"]
-    with pytest.raises(SystemExit):
-        sbom.wasi_libc_component("no version here")
+    browser = script.split("    browser)", 1)[1].split(";;", 1)[0]
+    assert "cargo build --release -p opentide-wasm --target wasm32-unknown-unknown" in browser
+    for c_toolchain in ("CC_wasm32", "libc.a", "WASI_SDK_PATH", "wasi_sdk"):
+        assert c_toolchain not in browser
+    assert not hasattr(sbom, "wasi_libc_component")
 
 
 def test_the_wheel_lists_python_dependencies_and_the_compiled_crates() -> None:

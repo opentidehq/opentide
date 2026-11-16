@@ -23,7 +23,7 @@ languages=("$@")
 # manifest that feeds a release may depend on them.
 manifests=(
   "$root/Cargo.lock" "$root"/crates/*/Cargo.toml
-  "$root"/packages/*/package.json "$root"/grammars/*/package.json
+  "$root"/packages/*/package.json
 )
 # grep exits 1 for no match and 2 when it cannot read a manifest: only 1 passes,
 # so a missing file can never hide a match.

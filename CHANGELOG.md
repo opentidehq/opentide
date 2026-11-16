@@ -101,6 +101,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Changed
 
+- **Every query language is parsed in Rust; tree-sitter is gone** ([#1231](https://github.com/opentidehq/opentide/issues/1231)). KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, Falco, CQL, Exabeam and YARA-L each have a parser of their own in Rust, and YARA is read by YARA-X's. Valid queries get the same findings and colours as before. The language server (`opentide-lsp`) and the browser build of the editor engine compile without a C compiler, and the editors' TextMate grammars are unchanged.
 - **EQL syntax errors say what was expected** ([#1224](https://github.com/opentidehq/opentide/issues/1224)). EQL queries are parsed by a Rust parser, no longer by tree-sitter. A valid query gets exactly the findings it got before. In a broken one, the error sits on the token where the query went wrong and names what could come there: `process wehre true` reads ``near `wehre`; expected `where` ``, where it marked the whole query as ``near `any` ``; an unclosed `/*`, string or quoted name says so. The case-sensitivity warnings that tree-sitter's error recovery produced for a broken query are gone, and the `=` and upper-case keyword hints stay. A long run of `+`, `-`, `*`, `/` or `%` (3,000 terms or more) no longer overflows the stack, and its analysis is linear. Nesting deeper than 1,024 levels is one error, `nesting deeper than 1024 levels`, where tree-sitter went on; Elasticsearch stops at 250 (`eql_expression_depth`).
 
 #### The Rust core

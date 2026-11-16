@@ -19,7 +19,7 @@
 | `bindings/python/` | The PyO3 binding compiled into the package as `opentide._native` | [`bindings/python/AGENTS.md`](bindings/python/AGENTS.md) |
 | `bindings/node/` | The npm package `@opentide/opentide`: the napi-rs binding of the facade, the SDK and the `opentide` bin for Node.js | [`bindings/node/AGENTS.md`](bindings/node/AGENTS.md) |
 | `xtask/` | `cargo xtask`: the layer check (`xtask/layers.toml`), the benchmarks (`bench`, budgets in `tests/bench/`), `codegen`, `golden` and the oracle comparisons | [`xtask/AGENTS.md`](xtask/AGENTS.md) |
-| `grammars/`, `highlights/`, `data/catalogs/`, `editors/`, `packages/`, `fuzz/`, `crates/testdata/`, `scripts/engine/` | What the engine compiles in, its hosts, fuzzing and tooling | [`crates/AGENTS.md`](crates/AGENTS.md) |
+| `highlights/`, `data/catalogs/`, `editors/`, `packages/`, `fuzz/`, `crates/testdata/`, `scripts/engine/` | What the engine compiles in, its hosts, fuzzing and tooling | [`crates/AGENTS.md`](crates/AGENTS.md) |
 | `docs/` | The site's four tabs (Usage, CLI, MCP, SDK); `docs/internal/` (with the ADRs, `docs/internal/adr/`) and `docs/engine/` for maintainers | [`docs/README.md`](docs/README.md) |
 | `.github/` | CI, CodeQL, release and Dependabot workflows | [`.github/AGENTS.md`](.github/AGENTS.md) |
 | `scripts/` | `ci-local.sh`, `codeql-local.sh`, `validate-docs.sh`, `ast_equivalence.py`, `build/` | this file, "Checks" |
@@ -47,7 +47,7 @@
 | Building, linting, testing any Rust crate: toolchain, clippy, nextest, insta, trycmd, xtask, worktrees and target pools | [`.agents/skills/rust/SKILL.md`](.agents/skills/rust/SKILL.md) |
 | Holding the command line to the Python oracle: goldens, `golden check --engine rust`, the approved-diffs ledger | [`.agents/skills/golden/SKILL.md`](.agents/skills/golden/SKILL.md) |
 | The engine's Rust crates, `Cargo.toml`, `Cargo.lock` | [`.agents/skills/rust-engine/SKILL.md`](.agents/skills/rust-engine/SKILL.md) |
-| Grammars, `crates/opentide-syntax`, highlight queries | [`.agents/skills/tree-sitter/SKILL.md`](.agents/skills/tree-sitter/SKILL.md) |
+| The query parsers: lexers, grammars on `crates/opentide-parse`, `.ungram`, keyword tables | [`.agents/skills/parser/SKILL.md`](.agents/skills/parser/SKILL.md) |
 | The language server host (`crates/opentide-lsp`), `editors/` | [`.agents/skills/lsp-host/SKILL.md`](.agents/skills/lsp-host/SKILL.md) |
 | WebAssembly (`crates/opentide-wasm`), npm `packages/` | [`.agents/skills/wasm-hosts/SKILL.md`](.agents/skills/wasm-hosts/SKILL.md) |
 | `data/catalogs/`, HighlightSpec, conformance corpora, the vendor-parser oracles | [`.agents/skills/catalogs/SKILL.md`](.agents/skills/catalogs/SKILL.md) |
@@ -143,12 +143,12 @@ uv sync --group dev                             # this worktree's .venv; _native
 | Rust, everything | `cargo nextest run --workspace --profile ci` and `cargo test --workspace --doc` (nextest runs no doctests), or `cargo test --workspace` |
 | Python, while editing | `uv run pytest tests/<area> -q --no-cov` |
 | Lint and types | `scripts/ci-local.sh --quick` (ruff, ty, cargo fmt, clippy, layers, engine checks, `uv build`) |
-| Before a push | `scripts/ci-local.sh --full` (adds nextest `ci`, doctests, rustdoc, the crates' package and licence scan, pytest with the coverage gate, the E2E suite, GitLab CI lint; WebAssembly, grammars and fuzz smoke when their tools are installed) |
+| Before a push | `scripts/ci-local.sh --full` (adds nextest `ci`, doctests, rustdoc, the crates' package and licence scan, pytest with the coverage gate, the E2E suite, GitLab CI lint; WebAssembly and fuzz smoke when their tools are installed) |
 
 CI (`ci.yml`, [`.github/AGENTS.md`](.github/AGENTS.md)) runs, on a pull request, only what the
 change affects, on Linux: the changed crates and their reverse dependencies built **once** (a
 nextest archive and the `_native` extension) and tested from that build, the Python suite and E2E
-when the command line or Python changed, each specialised job (Node, WASI, grammars, GitLab CI
+when the command line or Python changed, each specialised job (Node, WASI, GitLab CI
 lint, the facade's semver checks, cargo deny, docs) when its paths changed; one required check,
 `PR gate`. A push to a base branch runs every job on Linux; a release pull request adds every
 package and its install on each OS; the nightly adds macOS and Windows, the other Pythons,
@@ -165,7 +165,7 @@ The test profiles are in [`.config/nextest.toml`](.config/nextest.toml); CI's jo
   neither has an exclude list. Never add one: fix the code or, where a tool is wrong, suppress
   the single site with a reason (`# noqa: RULE -- why`, `# ty: ignore[rule]  # why`).
 - **The Rust workspace** passes rustfmt and `clippy -D warnings` under the lints in the root
-  [`Cargo.toml`](Cargo.toml) (`[workspace.lints]`: `unsafe_code` forbidden outside two crates,
+  [`Cargo.toml`](Cargo.toml) (`[workspace.lints]`: `unsafe_code` forbidden in every crate,
   `clippy::pedantic`, no `unwrap`/`expect`/`dbg!`/`todo!`/`unimplemented!` outside tests,
   `missing_docs`). Fix what a lint reports, or put `#[expect(lint, reason = "...")]` on the
   narrowest item where it fires; growing the workspace's allow-list is a decision of its own.

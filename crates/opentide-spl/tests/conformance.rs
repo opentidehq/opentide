@@ -1,6 +1,6 @@
-//! Every tree of the pure-Rust parser conforms to `spl.ungram`: wherever
-//! tree-sitter accepts a file, the children of each node match the rule the
-//! grammar documents (`cargo xtask codegen` writes the rules as data).
+//! Every tree of the parser conforms to `spl.ungram`: wherever it accepts a
+//! file, the children of each node match the rule the grammar documents
+//! (`cargo xtask codegen` writes the rules as data).
 
 use opentide_parse::conformance::check;
 use opentide_spl::ast::RULES;
@@ -36,15 +36,6 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-#[expect(
-    clippy::expect_used,
-    reason = "test helpers outside #[test] functions: a panic fails the test"
-)]
-fn old_accepts(source: &str) -> bool {
-    let tree = opentide_syntax::parse(opentide_core::LanguageId::Spl, source).expect("parser");
-    !opentide_syntax::has_error(&tree)
-}
-
 #[test]
 fn every_accepted_file_conforms_to_the_ungram() {
     let mut files = Vec::new();
@@ -56,11 +47,11 @@ fn every_accepted_file_conforms_to_the_ungram() {
     let (mut checked, mut failures) = (0, Vec::new());
     for path in files {
         let source = body(&path);
-        if !old_accepts(&source) {
+        let (tree, parse) = parse(&source);
+        if !parse.errors.is_empty() {
             continue;
         }
         checked += 1;
-        let (tree, _) = parse(&source);
         for mismatch in check(&tree, RULES, GRAMMAR).iter().take(2) {
             failures.push(format!("{}: {mismatch}", path.display()));
         }

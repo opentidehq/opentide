@@ -1,6 +1,6 @@
 ---
 title: "Adding a language"
-description: "What adding a query language to the engine takes: grammar, corpus gate, catalogs, HighlightSpec and YAML injection."
+description: "What adding a query language to the engine takes: a pure-Rust parser, corpus gate, catalogs, HighlightSpec and YAML injection."
 ---
 
 # Adding a language
@@ -18,10 +18,10 @@ Raw `.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, and `.lucene` files are first-cla
 SQL stays unsupported until a real dialect and grammar are chosen (for example T-SQL, or the SQL a specific platform documents). There is no SQL `LanguageId`, no `.sql` suffix, and no `opentide-sql` dialect. A `.sql` file is treated as Tide YAML and does not validate SQL. A stub parser or a fake SQL highlighter is not a 1.0 language.
 
 1. Add a variant to `LanguageId` in `crates/opentide-core`.
-2. Vendor `grammars/tree-sitter-opentide-<id>/` and compile it from `crates/opentide-syntax`. CI fails if `parser.c` drifts.
-3. Add corpus files under `crates/testdata/corpus/<id>/` tagged `prod:<rule>`, and a row in `docs/engine/LANGUAGE.md`. `crates/opentide-syntax/tests/corpus_gate.rs` must require every production.
+2. Write its parser in Rust on `crates/opentide-parse` (ADR 0012): a logos lexer, a hand-written grammar into a lossless rowan tree, and a `.ungram` its typed AST is generated from (`cargo xtask codegen`). No C and no `unsafe`. The procedure is `.agents/skills/parser/SKILL.md`; the depth and stack floors are `crates/opentide-analysis/tests/deep_queries.rs`'s.
+3. Add corpus files under `crates/testdata/corpus/<id>/` tagged `prod:<rule>`, and a row in `docs/engine/LANGUAGE.md`. `crates/opentide-analysis/tests/corpus_gate.rs` must require every production (through the crate's `debug_kinds` and `debug_node_kinds`).
 4. Add catalogs under `data/catalogs/<id>/` and load them once with `OnceLock`, the way `Catalog::cached` does for KQL and SPL. Catalogs generated from upstream docs carry facts only (names, signatures, versions) with summaries written here; `scripts/engine/sync_esql_catalog.py` and `scripts/engine/sync_eql_catalog.py` are the pattern.
-5. Add `highlights/queries/<id>/highlights.scm`. `generate-highlights --check` must pass.
+5. Colour the tree with HighlightSpec captures, and list the keywords and punctuation of the TextMate grammar in `crates/opentide-highlight/src/keywords/<id>.rs`. `generate-highlights --check` must pass.
 6. If Tide YAML embeds the language, add a row to the injection table in `docs/engine/ARCHITECTURE.md` and `language_for_field_path`.
 7. Add cases under `crates/testdata/conformance/external/<id>/`: unmodified public rules, and the same rules with one injected fault. The analysis test must see a diagnostic on every broken file and no parse error on the valid files.
 8. Do not validate a platform whose language is unspecified. Return unsupported. Never invent a successful diagnostic.

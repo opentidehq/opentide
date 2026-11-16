@@ -39,12 +39,12 @@ Unknown language ids become `Err(JsValue)`. Invalid UTF-8 becomes `Err`. Do not 
 
 Native tests in this crate call `opentide_analysis::highlight` and `LanguageServer::handle` directly. They do not need a browser. `cargo test -p opentide-wasm` runs on the host. Do not add `wasm-bindgen-test` unless a browser harness exists.
 
-Build both artifacts with `scripts/engine/build-wasm.sh` (`ci.yml` job `wasm`, and the release). tree-sitter, the grammars, and the ES|QL comment scanner are C, so a plain `cargo build --target wasm32-unknown-unknown` fails on missing libc headers. The script pins wasi-sdk, compiles the C with its clang and wasi-libc headers, links wasi-libc's `libc.a`, and smoke-tests each artifact (`scripts/engine/wasm-smoke.mjs`):
+Build both artifacts with `scripts/engine/build-wasm.sh` (`ci.yml` job `wasm`, and the release). The engine is pure Rust (ADR 0012), so both build with rustup's targets alone: no C toolchain, no libc. The script smoke-tests each artifact (`scripts/engine/wasm-smoke.mjs`):
 
 - browser: the module imports nothing but wasm-bindgen glue, `highlight()` works for every language through `wasm-bindgen --target nodejs`, and its `LanguageServer` answers `initialize`, diagnostics, hover and completion;
 - wasi: the CLI runs `analyze` under `node:wasi`.
 
-libc's stdio and clock code can reach seven WASI syscalls. `crates/opentide-wasm/src/libc_syscalls.rs` defines their import symbols inside the module (no files, clock 0), so the browser artifact still has no WASI imports. That is libc for the C parsers, not a WASI mix-in: the rule below stands.
+Only the WASI command line (`build-wasm.sh cli`) links C: `ring`, built with the wasi-sdk the script pins and fetches for that target alone. Do not add a C dependency (a `cc` build, a `*-sys` crate) to the browser or the language server's graph: the browser module must import nothing but wasm-bindgen's glue, which `wasm-smoke.mjs imports` checks.
 
 ```bash
 bash scripts/engine/build-wasm.sh            # both; needs node, and wasm-bindgen-cli 0.2.128 for the highlight() check

@@ -13,18 +13,9 @@ readme = "../COMPONENT.md"
 [lints]
 workspace = true
 
-[features]
-# The old-versus-new differential harness; only dev-dependencies enable it.
-differential = ["dep:serde_json"]
-
 [dependencies]
 logos.workspace = true
 rowan.workspace = true
-serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 insta.workspace = true
-# The crate's own tests run with the harness: CI tests a crate with its default
-# features, so without this the differential tests would compile to nothing.
-# A path dev-dependency without a version is left out of the published manifest.
-opentide-parse = { path = ".", features = ["differential"] }

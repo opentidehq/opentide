@@ -8,7 +8,6 @@
 // so an expectation would be unfulfilled in some binaries (crates/AGENTS.md).
 #![allow(dead_code)]
 
-use opentide_core::LanguageId;
 use opentide_parse::{debug_errors, debug_tree};
 use opentide_spl::syntax::{Lang, SyntaxKind, parse};
 use std::path::{Path, PathBuf};
@@ -42,9 +41,4 @@ pub fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
             out.push(path);
         }
     }
-}
-
-pub fn old_accepts(source: &str) -> bool {
-    let tree = opentide_syntax::parse(LanguageId::Spl, source).expect("parser");
-    !opentide_syntax::has_error(&tree)
 }

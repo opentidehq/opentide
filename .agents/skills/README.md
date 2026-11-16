@@ -7,7 +7,7 @@ The engine's skills came from opentidehq/language-server with its history (#800)
 | Skill | Use when |
 | --- | --- |
 | `rust-engine` | Editing the Rust workspace, edition 2024 code, or `Cargo.lock` |
-| `tree-sitter` | Grammars, the syntax crate, or `highlights.scm` |
+| `parser` | The query parsers: lexers, grammars on `opentide-parse`, `.ungram`, keyword tables |
 | `lsp-host` | The stdio server, editor samples, or protocol tests |
 | `wasm-hosts` | `wasm-bindgen`, WASI, the TypeScript client, or packaging |
 | `catalogs` | Compiled catalogs, HighlightSpec, or conformance corpora |
