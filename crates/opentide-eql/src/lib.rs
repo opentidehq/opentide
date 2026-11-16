@@ -21,6 +21,7 @@
     reason = "engine dispatchers match every node kind in one function"
 )]
 mod ecs;
+mod highlight;
 mod lexer;
 mod lexical;
 mod parser;
@@ -288,7 +289,7 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
         ));
     }
     check_comments(&prepared.comments, source, &mut out);
-    if let Some(span) = expression_depth_exceeded(root) {
+    if let Some(span) = highlight::expression_depth_exceeded(&tree.syntax) {
         out.push(Diagnostic::warning(
             codes::EQL_EXPRESSION_DEPTH,
             format!(
@@ -303,7 +304,7 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
         check_node(node, ancestors, &mut translated, source, catalog, &mut out);
     });
     check_pipes(root, source, catalog, &mut out);
-    let tokens = highlight(&spec, source, root);
+    let tokens = highlight(&spec, source, &tree.syntax);
     AnalyzeResult {
         diagnostics: out,
         tokens,
@@ -367,32 +368,6 @@ fn parse_error_message(problem: &tree::Problem, source: &str) -> String {
     } else {
         format!("EQL syntax error near `{near}`{expected}")
     }
-}
-
-/// `EqlParser` scans the tokens before parsing: `(` and `)` move a depth counter, and a run of
-/// prefix-capable `not`, `-`, `+` tokens adds to it; any other visible token ends the run.
-/// Whitespace and comments do not. Returns the token where `depth + run` first exceeds the
-/// limit.
-fn expression_depth_exceeded(root: Node) -> Option<ByteSpan> {
-    let mut depth: i64 = 0;
-    let mut chain: i64 = 0;
-    let mut found = None;
-    walk(root, |node| {
-        if found.is_some() || node.child_count() > 0 || node.end_byte() <= node.start_byte() {
-            return;
-        }
-        match node.kind() {
-            "(" => depth += 1,
-            ")" => depth -= 1,
-            "not" | "-" | "+" if !node.is_named() => chain += 1,
-            "comment" => {}
-            _ => chain = 0,
-        }
-        if depth + chain > lexical::MAX_EXPRESSION_DEPTH {
-            found = Some(node_span(node));
-        }
-    });
-    found
 }
 
 fn check_node(
@@ -1066,26 +1041,16 @@ fn text<'a>(node: Node, source: &'a str) -> &'a str {
     source.get(node.start_byte()..node.end_byte()).unwrap_or("")
 }
 
-/// Each leaf's capture (`tree::capture`), a known function's as `function.builtin`.
-fn highlight(spec: &HighlightSpec, source: &str, root: Node) -> Vec<HighlightToken> {
+/// Each token's capture (`highlight::captures`), a known function's as `function.builtin`.
+fn highlight(spec: &HighlightSpec, source: &str, root: &syntax::SyntaxNode) -> Vec<HighlightToken> {
     let catalog = Catalog::cached();
-    let mut spans: Vec<(ByteSpan, &str)> = Vec::new();
-    walk(root, |node| {
-        if node.child_count() > 0 || node.end_byte() <= node.start_byte() {
-            return;
+    let mut spans = highlight::captures(root);
+    for (span, capture) in &mut spans {
+        let name = source.get(span.start..span.end).unwrap_or("");
+        if *capture == "function" && catalog.function(name.trim_end_matches('~')).is_some() {
+            *capture = "function.builtin";
         }
-        let Some(mut capture) = tree::capture(node) else {
-            return;
-        };
-        if capture == "function"
-            && catalog
-                .function(text(node, source).trim_end_matches('~'))
-                .is_some()
-        {
-            capture = "function.builtin";
-        }
-        spans.push((node_span(node), capture));
-    });
+    }
     tokens_from_spans(spec, source, &spans).unwrap_or_default()
 }
 
