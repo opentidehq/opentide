@@ -29,7 +29,8 @@ from tests.test_cli.e2e.test_wheel_install_regression import (
 )
 from tests.test_platforms.test_plugin_hook import CASSETTE, FIXTURE, TOKEN, VALID_RULE, StandIn
 
-# A wheel build takes minutes: CI runs this on release pull requests and the nightly only (python-matrix).
+# A wheel build takes minutes: CI runs this on release pull requests and the
+# nightly only (python-matrix).
 pytestmark = [pytest.mark.cli_e2e, pytest.mark.full_set]
 
 
