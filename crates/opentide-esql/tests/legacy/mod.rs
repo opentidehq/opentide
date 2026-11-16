@@ -1,4 +1,4 @@
-//! The tree-sitter engine of `src/lib.rs`, copied verbatim (tests removed, paths adjusted) as the old side of the differential. Deleted with the engine in the last PR of #1228.
+//! The tree-sitter engine of `src/lib.rs`, copied verbatim (tests removed, paths adjusted) as the old side of the differential. Deleted with the grammar in stage 2 of #1219 (#1231).
 
 mod columns;
 mod ecs;

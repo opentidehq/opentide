@@ -1442,12 +1442,12 @@ exit: 1
       },
       {
         "code": "esql_parse_error",
-        "column": 32,
+        "column": 40,
         "context": {
           "language": "esql",
           "platform": "elastic",
           "position": {
-            "column": 32,
+            "column": 40,
             "end_column": 41,
             "end_line": 76,
             "line": 76
@@ -1466,7 +1466,7 @@ exit: 1
         "fix": null,
         "help": "the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql",
         "line": 76,
-        "message": "ES|QL syntax error near `|`",
+        "message": "ES|QL syntax error at the end of the query: expected an expression",
         "object_type": "rule",
         "object_uuid": "b0426c34-7210-42fc-8c4d-f638236f19c1",
         "path": "objects/rules/lateral-pivot-rule-0104.yaml",

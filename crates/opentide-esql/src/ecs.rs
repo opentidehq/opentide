@@ -17,13 +17,14 @@
 //! compares `text` with `==` and casts a string constant compared with an
 //! `ip` or a date, so comparisons are never reported.
 
+use crate::catalog::Catalog;
 use crate::columns::{dissect_keys, grok_names, qualified};
-use crate::{Catalog, range, string_value, text};
-use opentide_core::{ByteSpan, Diagnostic, LanguageId};
+use crate::tree::Node;
+use crate::tree::node_span;
+use crate::{range, string_value, text};
+use opentide_core::{ByteSpan, Diagnostic};
 use opentide_ecs::ValueType;
-use opentide_syntax::{node_span, parse as ts_parse};
 use std::collections::HashSet;
-use tree_sitter::Node;
 
 fn query_node(root: Node) -> Option<Node> {
     let mut cursor = root.walk();
@@ -68,7 +69,7 @@ fn sources(root: Node, source: &str) -> Option<Vec<(String, ByteSpan)>> {
 /// written. `None` for `ROW`, `SHOW`, a subquery source, or a query that
 /// does not parse.
 pub fn source_indices(source: &str) -> Option<Vec<String>> {
-    let tree = ts_parse(LanguageId::Esql, source)?;
+    let tree = crate::tree::parse_tree(source)?;
     let root = tree.root_node();
     if root.has_error() {
         return None;
@@ -102,7 +103,11 @@ pub(crate) fn dataset_diagnostics(root: Node, source: &str) -> Vec<Diagnostic> {
 /// it reads held ECS documents. `analyze` adds them itself when the `FROM`
 /// indices do; this entry point is for callers that know more.
 pub fn ecs_diagnostics(source: &str) -> Vec<Diagnostic> {
-    let Some(tree) = ts_parse(LanguageId::Esql, source) else {
+    crate::with_lines(source, || field_diagnostics(source))
+}
+
+fn field_diagnostics(source: &str) -> Vec<Diagnostic> {
+    let Some(tree) = crate::tree::parse_tree(source) else {
         return Vec::new();
     };
     let root = tree.root_node();
