@@ -1,0 +1,35 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/user_agent_command__invalid.esql
+---
+SOURCE_FILE@0..75
+  COMMENT@0..34 "// prod:user_agent_command invalid"
+  WHITESPACE@34..35 "\n"
+  QUERY@35..74
+    FROM_COMMAND@35..59
+      FROM_KW@35..39 "FROM"
+      WHITESPACE@39..40 " "
+      INDEX_PATTERN@40..46
+        INDEX_NAME@40..46
+          SOURCE_TEXT@40..46 "logs-*"
+      WHITESPACE@46..47 " "
+      METADATA@47..59
+        METADATA_KW@47..55 "METADATA"
+        WHITESPACE@55..56 " "
+        METADATA_FIELD@56..59
+          SOURCE_TEXT@56..59 "_id"
+    WHITESPACE@59..60 "\n"
+    PIPE@60..61 "|"
+    WHITESPACE@61..62 " "
+    USER_AGENT_COMMAND@62..74
+      USER_AGENT_KW@62..72 "USER_AGENT"
+      WHITESPACE@72..73 " "
+      QUALIFIED_NAME@73..74
+        ERROR@73..74
+          EQ@73..74 "="
+  WHITESPACE@74..75 "\n"
+--- errors
+72..73: expected a name (expected IDENT)
+74..75: expected `=` (expected DOT, EQ)
+74..75: expected an expression (expected DOT, EQ)

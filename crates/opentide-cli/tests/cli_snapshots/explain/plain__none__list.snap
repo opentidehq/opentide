@@ -439,6 +439,7 @@ yara_unknown_module                       A YARA import names a module libyara d
 yara_unknown_module_member                The YARA module has no such field or function, or the function takes other arguments.
 yara_unreferenced_string                  A YARA string is never used in the condition, which libyara refuses unless the condition uses them.
 yara_x_incompatible                       libyara 4.5 compiles this YARA but YARA-X 1.x refuses it.
+yara_x_only_syntax                        This YARA uses syntax only YARA-X has, and the platform profile has yara_x_syntax refused: the platform may not accept it.
 yaral_condition_shape                     The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event.
 yaral_deprecated_field                    The UDM field is deprecated.
 yaral_enum_value                          The value is not one of the enumerated UDM field's values.
@@ -472,6 +473,6 @@ yaral_unfiltered_event                    An event variable has no equality on `
 yaral_unknown_function                    The function is not in Google's YARA-L function list, or it takes a different number of arguments.
 yaral_unknown_udm_field                   The field path is not in the Unified Data Model.
 yaral_window_bound                        `window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window.
-✓ 466 diagnostic codes
+✓ 467 diagnostic codes
 
 ━━━ stderr · empty

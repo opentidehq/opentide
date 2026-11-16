@@ -1,0 +1,32 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/highlight_command__invalid.esql
+---
+SOURCE_FILE@0..72
+  COMMENT@0..33 "// prod:highlight_command invalid"
+  WHITESPACE@33..34 "\n"
+  QUERY@34..72
+    FROM_COMMAND@34..56
+      FROM_KW@34..38 "FROM"
+      WHITESPACE@38..39 " "
+      INDEX_PATTERN@39..43
+        INDEX_NAME@39..43
+          SOURCE_TEXT@39..43 "docs"
+      WHITESPACE@43..44 " "
+      METADATA@44..56
+        METADATA_KW@44..52 "METADATA"
+        WHITESPACE@52..53 " "
+        METADATA_FIELD@53..56
+          SOURCE_TEXT@53..56 "_id"
+    WHITESPACE@56..57 "\n"
+    PIPE@57..58 "|"
+    WHITESPACE@58..59 " "
+    HIGHLIGHT_COMMAND@59..72
+      HIGHLIGHT_KW@59..68 "HIGHLIGHT"
+      WHITESPACE@68..69 " "
+      ON_KW@69..71 "ON"
+      WHITESPACE@71..72 "\n"
+      NAME_PATTERN@72..72
+--- errors
+71..72: expected a name pattern (expected ID_PATTERN_TEXT)

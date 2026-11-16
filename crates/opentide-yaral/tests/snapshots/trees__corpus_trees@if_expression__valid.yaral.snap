@@ -1,0 +1,96 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/if_expression__valid.yaral
+---
+SOURCE_FILE@0..213
+  COMMENT@0..27 "// prod:if_expression valid"
+  WHITESPACE@27..28 "\n"
+  RULE_DECLARATION@28..212
+    RULE_KW@28..32 "rule"
+    WHITESPACE@32..33 " "
+    RULE_NAME@33..34
+      IDENT@33..34 "r"
+    WHITESPACE@34..35 " "
+    L_BRACE@35..36 "{"
+    WHITESPACE@36..39 "\n  "
+    META_SECTION@39..61
+      META_KW@39..43 "meta"
+      COLON@43..44 ":"
+      WHITESPACE@44..49 "\n    "
+      META_ENTRY@49..61
+        META_KEY@49..55
+          IDENT@49..55 "author"
+        WHITESPACE@55..56 " "
+        EQ@56..57 "="
+        WHITESPACE@57..58 " "
+        LITERAL@58..61
+          STRING@58..61 "\"a\""
+    WHITESPACE@61..64 "\n  "
+    EVENTS_SECTION@64..113
+      EVENTS_KW@64..70 "events"
+      COLON@70..71 ":"
+      WHITESPACE@71..76 "\n    "
+      COMPARISON@76..113
+        UDM_FIELD@76..98
+          VARIABLE@76..78
+            VAR_TOKEN@76..78 "$e"
+          MEMBER@78..87
+            ACCESS_DOT@78..79 "."
+            FIELD_NAME@79..87 "metadata"
+          MEMBER@87..98
+            ACCESS_DOT@87..88 "."
+            FIELD_NAME@88..98 "event_type"
+        WHITESPACE@98..99 " "
+        EQ@99..100 "="
+        WHITESPACE@100..101 " "
+        LITERAL@101..113
+          STRING@101..113 "\"USER_LOGIN\""
+    WHITESPACE@113..116 "\n  "
+    OUTCOME_SECTION@116..190
+      OUTCOME_KW@116..123 "outcome"
+      COLON@123..124 ":"
+      WHITESPACE@124..129 "\n    "
+      COMPARISON@129..190
+        VARIABLE@129..140
+          VAR_TOKEN@129..140 "$risk_score"
+        WHITESPACE@140..141 " "
+        EQ@141..142 "="
+        WHITESPACE@142..143 " "
+        IF_EXPR@143..190
+          IF_KW@143..145 "if"
+          L_PAREN@145..146 "("
+          COMPARISON@146..181
+            UDM_FIELD@146..171
+              VARIABLE@146..148
+                VAR_TOKEN@146..148 "$e"
+              MEMBER@148..164
+                ACCESS_DOT@148..149 "."
+                FIELD_NAME@149..164 "security_result"
+              MEMBER@164..171
+                ACCESS_DOT@164..165 "."
+                FIELD_NAME@165..171 "action"
+            WHITESPACE@171..172 " "
+            EQ@172..173 "="
+            WHITESPACE@173..174 " "
+            LITERAL@174..181
+              STRING@174..181 "\"BLOCK\""
+          COMMA@181..182 ","
+          WHITESPACE@182..183 " "
+          LITERAL@183..185
+            INTEGER@183..185 "80"
+          COMMA@185..186 ","
+          WHITESPACE@186..187 " "
+          LITERAL@187..189
+            INTEGER@187..189 "20"
+          R_PAREN@189..190 ")"
+    WHITESPACE@190..193 "\n  "
+    CONDITION_SECTION@193..210
+      CONDITION_KW@193..202 "condition"
+      COLON@202..203 ":"
+      WHITESPACE@203..208 "\n    "
+      VARIABLE@208..210
+        VAR_TOKEN@208..210 "$e"
+    WHITESPACE@210..211 "\n"
+    R_BRACE@211..212 "}"
+  WHITESPACE@212..213 "\n"

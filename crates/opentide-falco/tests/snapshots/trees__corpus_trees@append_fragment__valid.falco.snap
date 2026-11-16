@@ -1,0 +1,32 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/append_fragment__valid.falco
+---
+source_file@0..54
+  append_fragment@0..54
+    and@0..3 "and"
+    whitespace@3..4 " "
+    not_expression@4..54
+      not@4..7 "not"
+      whitespace@7..8 " "
+      comparison@8..54
+        field@8..18
+          field_name@8..18 "proc.pname"
+        whitespace@18..19 " "
+        list_operator@19..21
+          identifier@19..21 "in"
+        whitespace@21..22 " "
+        value_list@22..54
+          (@22..23 "("
+          bare_string@23..36
+            identifier@23..29 "gitlab"
+            other@29..30 "-"
+            identifier@30..36 "runner"
+          ,@36..37 ","
+          whitespace@37..38 " "
+          bare_string@38..53
+            identifier@38..47 "buildkite"
+            other@47..48 "-"
+            identifier@48..53 "agent"
+          )@53..54 ")"

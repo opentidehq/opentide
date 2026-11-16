@@ -1,0 +1,42 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/block_comment__valid.cql
+---
+SOURCE_FILE@0..108
+  BLOCK_COMMENT@0..33 "/* Search for killed processes */"
+  WHITESPACE@33..34 " "
+  PIPELINE@34..107
+    FREE_TEXT@34..47
+      QUERY_PARAMETER@34..47
+        QUESTION_L_BRACE@34..36 "?{"
+        PARAMETER_NAME@36..42
+          WORD@36..42 "signal"
+        PARAMETER_DEFAULT@42..47
+          EQ@42..43 "="
+          STRING@43..46
+            STRING_TOKEN@43..46 "\"*\""
+          R_BRACE@46..47 "}"
+    WHITESPACE@47..48 " "
+    PIPE@48..49 "|"
+    WHITESPACE@49..50 " "
+    FREE_TEXT@50..88
+      REGEX@50..88
+        SLASH@50..51 "/"
+        REGEX_PATTERN@51..87
+          REGEX_PATTERN_TOKEN@51..87 "Service exited due to (?<signal>\\S+)"
+        SLASH@87..88 "/"
+    WHITESPACE@88..89 " "
+    PIPE@89..90 "|"
+    WHITESPACE@90..91 " "
+    FIELD_FILTER@91..107
+      FIELD_NAME@91..97
+        WORD@91..97 "signal"
+      WHITESPACE@97..98 " "
+      EQ@98..99 "="
+      WHITESPACE@99..100 " "
+      QUERY_PARAMETER@100..107
+        QUESTION@100..101 "?"
+        PARAMETER_NAME@101..107
+          PARAMETER_NAME_TOKEN@101..107 "signal"
+  WHITESPACE@107..108 "\n"

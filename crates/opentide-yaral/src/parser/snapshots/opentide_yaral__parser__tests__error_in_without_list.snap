@@ -1,0 +1,17 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"$a in $b\")"
+---
+SOURCE_FILE@0..8
+  SEARCH_QUERY@0..8
+    SEARCH_EVENTS@0..8
+      IN_EXPR@0..5
+        VARIABLE@0..2
+          VAR_TOKEN@0..2 "$a"
+        WHITESPACE@2..3 " "
+        IN_KW@3..5 "in"
+      WHITESPACE@5..6 " "
+      VARIABLE@6..8
+        VAR_TOKEN@6..8 "$b"
+errors:
+5..6: expected a reference list such as `%list` (expected `regex`, `cidr`, a reference list such as `%list`)

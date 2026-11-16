@@ -1,0 +1,69 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/query_parameter__valid.cql
+---
+SOURCE_FILE@0..130
+  PIPELINE@0..129
+    FIELD_FILTER@0..12
+      FIELD_NAME@0..4
+        WORD@0..4 "host"
+      WHITESPACE@4..5 " "
+      EQ@5..6 "="
+      WHITESPACE@6..7 " "
+      QUERY_PARAMETER@7..12
+        QUESTION@7..8 "?"
+        PARAMETER_NAME@8..12
+          PARAMETER_NAME_TOKEN@8..12 "host"
+    WHITESPACE@12..13 "\n"
+    PIPE@13..14 "|"
+    WHITESPACE@14..15 " "
+    ASSIGNMENT@15..58
+      FIELD_NAME@15..26
+        WORD@15..26 "matchstring"
+      WHITESPACE@26..27 " "
+      COLON_EQ@27..29 ":="
+      WHITESPACE@29..30 " "
+      QUERY_PARAMETER@30..58
+        QUESTION@30..31 "?"
+        STRING@31..58
+          STRING_TOKEN@31..58 "\"Matching String to Locate\""
+    WHITESPACE@58..59 "\n"
+    PIPE@59..60 "|"
+    WHITESPACE@60..61 " "
+    FUNCTION_CALL@61..96
+      FUNCTION_NAME@61..68
+        FUNCTION_NAME_TOKEN@61..68 "groupBy"
+      L_PAREN@68..69 "("
+      ARGUMENT_LIST@69..95
+        NAMED_ARGUMENT@69..95
+          ARGUMENT_NAME@69..74
+            WORD@69..74 "field"
+          EQ@74..75 "="
+          QUERY_PARAMETER@75..95
+            QUESTION_L_BRACE@75..77 "?{"
+            PARAMETER_NAME@77..86
+              WORD@77..86 "basefield"
+            PARAMETER_DEFAULT@86..95
+              EQ@86..87 "="
+              STRING@87..94
+                STRING_TOKEN@87..94 "\"@host\""
+              R_BRACE@94..95 "}"
+      R_PAREN@95..96 ")"
+    WHITESPACE@96..97 "\n"
+    PIPE@97..98 "|"
+    WHITESPACE@98..99 " "
+    FIELD_FILTER@99..129
+      FIELD_NAME@99..111
+        WORD@99..111 "ComputerName"
+      EQ@111..112 "="
+      QUERY_PARAMETER@112..129
+        QUESTION_L_BRACE@112..114 "?{"
+        PARAMETER_NAME@114..126
+          WORD@114..126 "ComputerName"
+        PARAMETER_DEFAULT@126..129
+          EQ@126..127 "="
+          UNQUOTED_PATTERN@127..128
+            PATTERN@127..128 "*"
+          R_BRACE@128..129 "}"
+  WHITESPACE@129..130 "\n"

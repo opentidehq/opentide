@@ -358,29 +358,7 @@ pub fn rename(source: &str, offset: usize, new_name: &str) -> Result<Vec<(Span, 
 /// Fold ranges as byte spans: each rule, each section, and each multi-line
 /// hex string or comment.
 pub fn folding(source: &str) -> Vec<Span> {
-    let Some(tree) = opentide_syntax::parse(opentide_core::LanguageId::Yara, source) else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    let mut stack = vec![tree.root_node()];
-    while let Some(node) = stack.pop() {
-        if matches!(
-            node.kind(),
-            "rule"
-                | "meta_section"
-                | "strings_section"
-                | "condition_section"
-                | "hex_string"
-                | "comment"
-        ) && node.start_position().row < node.end_position().row
-        {
-            out.push((node.start_byte(), node.end_byte()));
-        }
-        let mut cursor = node.walk();
-        stack.extend(node.children(&mut cursor));
-    }
-    out.sort_unstable();
-    out
+    crate::cst::folding(source)
 }
 
 // --- Module chains ---

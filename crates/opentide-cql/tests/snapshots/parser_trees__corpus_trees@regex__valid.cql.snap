@@ -1,0 +1,43 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/regex__valid.cql
+---
+SOURCE_FILE@0..85
+  PIPELINE@0..84
+    AND_FILTER@0..74
+      FIELD_FILTER@0..29
+        FIELD_NAME@0..13
+          WORD@0..13 "ImageFileName"
+        EQ@13..14 "="
+        REGEX@14..29
+          SLASH@14..15 "/"
+          REGEX_PATTERN@15..26
+            REGEX_PATTERN_TOKEN@15..26 "\\\\cmd\\.exe$"
+          SLASH@26..27 "/"
+          REGEX_FLAGS@27..29
+            REGEX_FLAGS_TOKEN@27..29 "iF"
+      WHITESPACE@29..30 " "
+      FIELD_FILTER@30..74
+        FIELD_NAME@30..41
+          WORD@30..41 "CommandLine"
+        EQ@41..42 "="
+        REGEX@42..74
+          SLASH@42..43 "/"
+          REGEX_PATTERN@43..72
+            REGEX_PATTERN_TOKEN@43..72 "[-/][ix]\\s*(?<URL>https?:\\S+)"
+          SLASH@72..73 "/"
+          REGEX_FLAGS@73..74
+            REGEX_FLAGS_TOKEN@73..74 "i"
+    WHITESPACE@74..75 "\n"
+    PIPE@75..76 "|"
+    WHITESPACE@76..77 " "
+    FREE_TEXT@77..84
+      REGEX@77..84
+        SLASH@77..78 "/"
+        REGEX_PATTERN@78..82
+          REGEX_PATTERN_TOKEN@78..82 "fisk"
+        SLASH@82..83 "/"
+        REGEX_FLAGS@83..84
+          REGEX_FLAGS_TOKEN@83..84 "i"
+  WHITESPACE@84..85 "\n"

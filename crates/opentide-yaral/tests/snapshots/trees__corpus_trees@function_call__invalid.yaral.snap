@@ -1,0 +1,35 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/function_call__invalid.yaral
+---
+SOURCE_FILE@0..75
+  COMMENT@0..29 "// prod:function_call invalid"
+  WHITESPACE@29..30 "\n"
+  SEARCH_QUERY@30..74
+    SEARCH_EVENTS@30..74
+      FUNCTION_CALL@30..74
+        FUNCTION_NAME@30..46
+          IDENT@30..37 "strings"
+          ACCESS_DOT@37..38 "."
+          FIELD_NAME@38..46 "to_lower"
+        L_PAREN@46..47 "("
+        ARGUMENTS@47..74
+          COMPARISON@47..74
+            UDM_FIELD@47..68
+              VARIABLE@47..49
+                VAR_TOKEN@47..49 "$e"
+              MEMBER@49..59
+                ACCESS_DOT@49..50 "."
+                FIELD_NAME@50..59 "principal"
+              MEMBER@59..68
+                ACCESS_DOT@59..60 "."
+                FIELD_NAME@60..68 "hostname"
+            WHITESPACE@68..69 " "
+            EQ@69..70 "="
+            WHITESPACE@70..71 " "
+            LITERAL@71..74
+              STRING@71..74 "\"a\""
+  WHITESPACE@74..75 "\n"
+errors:
+74..75: expected `)` (expected `nocase`, `)`, `,`)

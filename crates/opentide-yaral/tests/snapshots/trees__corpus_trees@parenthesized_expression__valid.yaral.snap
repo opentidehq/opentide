@@ -1,0 +1,67 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/parenthesized_expression__valid.yaral
+---
+SOURCE_FILE@0..119
+  COMMENT@0..38 "// prod:parenthesized_expression valid"
+  WHITESPACE@38..39 "\n"
+  SEARCH_QUERY@39..118
+    SEARCH_EVENTS@39..118
+      AND_EXPR@39..118
+        COMPARISON@39..67
+          UDM_FIELD@39..61
+            VARIABLE@39..41
+              VAR_TOKEN@39..41 "$e"
+            MEMBER@41..50
+              ACCESS_DOT@41..42 "."
+              FIELD_NAME@42..50 "metadata"
+            MEMBER@50..61
+              ACCESS_DOT@50..51 "."
+              FIELD_NAME@51..61 "event_type"
+          WHITESPACE@61..62 " "
+          EQ@62..63 "="
+          WHITESPACE@63..64 " "
+          LITERAL@64..67
+            STRING@64..67 "\"A\""
+        WHITESPACE@67..68 " "
+        AND_KW@68..71 "and"
+        WHITESPACE@71..72 " "
+        PAREN_EXPR@72..118
+          L_PAREN@72..73 "("
+          OR_EXPR@73..117
+            COMPARISON@73..92
+              UDM_FIELD@73..87
+                VARIABLE@73..75
+                  VAR_TOKEN@73..75 "$e"
+                MEMBER@75..82
+                  ACCESS_DOT@75..76 "."
+                  FIELD_NAME@76..82 "target"
+                MEMBER@82..87
+                  ACCESS_DOT@82..83 "."
+                  FIELD_NAME@83..87 "port"
+              WHITESPACE@87..88 " "
+              EQ@88..89 "="
+              WHITESPACE@89..90 " "
+              LITERAL@90..92
+                INTEGER@90..92 "22"
+            WHITESPACE@92..93 " "
+            OR_KW@93..95 "or"
+            WHITESPACE@95..96 " "
+            COMPARISON@96..117
+              UDM_FIELD@96..110
+                VARIABLE@96..98
+                  VAR_TOKEN@96..98 "$e"
+                MEMBER@98..105
+                  ACCESS_DOT@98..99 "."
+                  FIELD_NAME@99..105 "target"
+                MEMBER@105..110
+                  ACCESS_DOT@105..106 "."
+                  FIELD_NAME@106..110 "port"
+              WHITESPACE@110..111 " "
+              EQ@111..112 "="
+              WHITESPACE@112..113 " "
+              LITERAL@113..117
+                INTEGER@113..117 "3389"
+          R_PAREN@117..118 ")"
+  WHITESPACE@118..119 "\n"

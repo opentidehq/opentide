@@ -1,0 +1,25 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/fuzzy__valid.lucene
+---
+SourceFile@0..28
+  BooleanQuery@0..28
+    FieldQuery@0..10
+      FieldName@0..4
+        Term@0..4 "name"
+      Colon@4..5 ":"
+      TermQuery@5..10
+        Term@5..8 "jon"
+        Fuzzy@8..10 "~1"
+    Whitespace@10..11 " "
+    And@11..14
+      AndKw@11..14 "AND"
+    Whitespace@14..15 " "
+    FieldQuery@15..28
+      FieldName@15..19
+        Term@15..19 "name"
+      Colon@19..20 ":"
+      TermQuery@20..28
+        Term@20..23 "bob"
+        Fuzzy@23..28 "~AUTO"

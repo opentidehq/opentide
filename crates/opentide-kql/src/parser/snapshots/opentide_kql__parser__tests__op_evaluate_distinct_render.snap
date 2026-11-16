@@ -1,0 +1,63 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | evaluate hint.distribution = single bag_unpack(x) | distinct a, b = c | distinct * | render timechart\")"
+---
+SOURCE_FILE@0..105
+  QUERY@0..105
+    TABULAR_EXPRESSION@0..105
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      EVALUATE_OPERATOR@4..53
+        EVALUATE_KW@4..12 "evaluate"
+        WHITESPACE@12..13 " "
+        HINT_OPTION@13..39
+          HINT_NAME@13..30 "hint.distribution"
+          WHITESPACE@30..31 " "
+          EQ@31..32 "="
+          WHITESPACE@32..33 " "
+          OPTION_VALUE@33..39
+            IDENT@33..39 "single"
+        WHITESPACE@39..40 " "
+        FUNCTION_CALL@40..53
+          IDENT@40..50 "bag_unpack"
+          L_PAREN@50..51 "("
+          NAME_REF@51..52
+            IDENT@51..52 "x"
+          R_PAREN@52..53 ")"
+      WHITESPACE@53..54 " "
+      PIPE@54..55 "|"
+      WHITESPACE@55..56 " "
+      DISTINCT_OPERATOR@56..73
+        DISTINCT_KW@56..64 "distinct"
+        WHITESPACE@64..65 " "
+        NAME_REF@65..66
+          IDENT@65..66 "a"
+        COMMA@66..67 ","
+        WHITESPACE@67..68 " "
+        ASSIGNMENT@68..73
+          NAME_REF@68..69
+            IDENT@68..69 "b"
+          WHITESPACE@69..70 " "
+          EQ@70..71 "="
+          WHITESPACE@71..72 " "
+          NAME_REF@72..73
+            IDENT@72..73 "c"
+      WHITESPACE@73..74 " "
+      PIPE@74..75 "|"
+      WHITESPACE@75..76 " "
+      DISTINCT_OPERATOR@76..86
+        DISTINCT_KW@76..84 "distinct"
+        WHITESPACE@84..85 " "
+        STAR_ARG@85..86
+          STAR@85..86 "*"
+      WHITESPACE@86..87 " "
+      PIPE@87..88 "|"
+      WHITESPACE@88..89 " "
+      RENDER_OPERATOR@89..105
+        RENDER_KW@89..95 "render"
+        WHITESPACE@95..96 " "
+        IDENT@96..105 "timechart"

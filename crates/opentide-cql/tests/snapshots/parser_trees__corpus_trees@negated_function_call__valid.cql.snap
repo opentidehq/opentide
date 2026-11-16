@@ -1,0 +1,85 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/negated_function_call__valid.cql
+---
+SOURCE_FILE@0..134
+  PIPELINE@0..133
+    NEGATED_FUNCTION_CALL@0..39
+      BANG@0..1 "!"
+      FUNCTION_CALL@1..39
+        FUNCTION_NAME@1..3
+          FUNCTION_NAME_TOKEN@1..3 "in"
+        L_PAREN@3..4 "("
+        ARGUMENT_LIST@4..38
+          ARGUMENT@4..12
+            FIELD_NAME@4..12
+              WORD@4..12 "loglevel"
+          COMMA@12..13 ","
+          WHITESPACE@13..14 " "
+          NAMED_ARGUMENT@14..38
+            ARGUMENT_NAME@14..20
+              WORD@14..20 "values"
+            EQ@20..21 "="
+            ARRAY@21..38
+              L_BRACK@21..22 "["
+              STRING@22..29
+                STRING_TOKEN@22..29 "\"DEBUG\""
+              COMMA@29..30 ","
+              WHITESPACE@30..31 " "
+              STRING@31..37
+                STRING_TOKEN@31..37 "\"INFO\""
+              R_BRACK@37..38 "]"
+        R_PAREN@38..39 ")"
+    WHITESPACE@39..40 "\n"
+    PIPE@40..41 "|"
+    WHITESPACE@41..42 " "
+    NEGATED_FUNCTION_CALL@42..66
+      NOT@42..45
+        NOT_KW@42..45 "not"
+      WHITESPACE@45..46 " "
+      FUNCTION_CALL@46..66
+        FUNCTION_NAME@46..50
+          FUNCTION_NAME_TOKEN@46..50 "test"
+        L_PAREN@50..51 "("
+        ARGUMENT_LIST@51..65
+          ARGUMENT@51..65
+            BINARY_EXPRESSION@51..65
+              FIELD_NAME@51..58
+                WORD@51..58 "cputime"
+              WHITESPACE@58..59 " "
+              LT@59..60 "<"
+              WHITESPACE@60..61 " "
+              NUMBER@61..65
+                NUMBER_TOKEN@61..65 "7500"
+        R_PAREN@65..66 ")"
+    WHITESPACE@66..67 "\n"
+    PIPE@67..68 "|"
+    WHITESPACE@68..69 " "
+    NEGATED_FUNCTION_CALL@69..133
+      BANG@69..70 "!"
+      FUNCTION_CALL@70..133
+        FUNCTION_NAME@70..74
+          FUNCTION_NAME_TOKEN@70..74 "cidr"
+        L_PAREN@74..75 "("
+        ARGUMENT_LIST@75..132
+          ARGUMENT@75..91
+            FIELD_NAME@75..91
+              WORD@75..91 "RemoteAddressIP4"
+          COMMA@91..92 ","
+          WHITESPACE@92..93 " "
+          NAMED_ARGUMENT@93..132
+            ARGUMENT_NAME@93..99
+              WORD@93..99 "subnet"
+            EQ@99..100 "="
+            ARRAY@100..132
+              L_BRACK@100..101 "["
+              STRING@101..113
+                STRING_TOKEN@101..113 "\"10.0.0.0/8\""
+              COMMA@113..114 ","
+              WHITESPACE@114..115 " "
+              STRING@115..131
+                STRING_TOKEN@115..131 "\"192.168.0.0/16\""
+              R_BRACK@131..132 "]"
+        R_PAREN@132..133 ")"
+  WHITESPACE@133..134 "\n"

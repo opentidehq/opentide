@@ -172,7 +172,7 @@ fn span(s: &Span) -> (usize, usize) {
 
 impl<'a> Checker<'a> {
     pub fn new(source: &'a str, ctx: &'a Context, rule_wildcards: &'a [(usize, usize)]) -> Self {
-        let pairs = crate::syntax::paren_pairs(source);
+        let pairs = crate::cst::paren_pairs(source);
         Self {
             paren_open: pairs.iter().copied().collect(),
             paren_close: pairs.iter().map(|&(o, c)| (c, o)).collect(),
@@ -264,12 +264,14 @@ impl<'a> Checker<'a> {
         self.push(codes::YARA_X_INCOMPATIBLE, severity, message, at);
     }
 
-    /// Syntax only YARA-X accepts: an error under libyara.
+    /// Syntax only YARA-X accepts: an error while the context refuses it
+    /// (`yara_x_syntax`), naming the construct and the profile.
     fn yara_x_only(&mut self, feature: &str, at: (usize, usize)) {
-        if self.libyara() {
+        if self.ctx.yara_x_syntax == crate::YaraXSyntax::Refused {
+            let who = self.ctx.profile.map_or("this context", Profile::display);
             self.error(
-                codes::YARA_PARSE_ERROR,
-                format!("{feature} is YARA-X syntax; libyara 4.5 refuses it"),
+                codes::YARA_X_ONLY_SYNTAX,
+                format!("{feature} is YARA-X syntax, and {who} has `yara_x_syntax: refused`: its engine is not known to take it"),
                 at,
             );
         }
@@ -505,7 +507,10 @@ impl<'a> Checker<'a> {
             );
             match &meta.value {
                 MetaValue::Float((_, s)) => self.yara_x_only("A float meta value", span(s)),
-                MetaValue::String((raw, s)) if raw.starts_with("\"\"\"") => {
+                // The value is unescaped: the quotes are in the source text.
+                MetaValue::String((_, s)) | MetaValue::Bytes((_, s))
+                    if self.text(span(s)).starts_with("\"\"\"") =>
+                {
                     self.yara_x_only("A `\"\"\"` string", span(s));
                 }
                 _ => {}

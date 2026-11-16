@@ -1,0 +1,94 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-syntax/change_point_by.esql
+---
+SOURCE_FILE@0..113
+  QUERY@0..112
+    FROM_COMMAND@0..11
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..11
+        INDEX_NAME@5..11
+          SOURCE_TEXT@5..11 "logs-*"
+    WHITESPACE@11..12 " "
+    PIPE@12..13 "|"
+    WHITESPACE@13..14 " "
+    STATS_COMMAND@14..77
+      STATS_KW@14..19 "STATS"
+      WHITESPACE@19..20 " "
+      AGGREGATE_FIELD@20..32
+        QUALIFIED_NAME@20..21
+          IDENTIFIER@20..21
+            IDENT@20..21 "c"
+        WHITESPACE@21..22 " "
+        EQ@22..23 "="
+        WHITESPACE@23..24 " "
+        FUNCTION_CALL@24..32
+          IDENTIFIER@24..29
+            IDENT@24..29 "COUNT"
+          L_PAREN@29..30 "("
+          STAR@30..31
+            STAR_TOKEN@30..31 "*"
+          R_PAREN@31..32 ")"
+      WHITESPACE@32..33 " "
+      BY_KW@33..35 "BY"
+      WHITESPACE@35..36 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@36..66
+        QUALIFIED_NAME@36..37
+          IDENTIFIER@36..37
+            IDENT@36..37 "t"
+        WHITESPACE@37..38 " "
+        EQ@38..39 "="
+        WHITESPACE@39..40 " "
+        FUNCTION_CALL@40..66
+          IDENTIFIER@40..46
+            IDENT@40..46 "BUCKET"
+          L_PAREN@46..47 "("
+          QUALIFIED_NAME@47..57
+            IDENTIFIER@47..57
+              IDENT@47..57 "@timestamp"
+          COMMA@57..58 ","
+          WHITESPACE@58..59 " "
+          QUALIFIED_INTERVAL@59..65
+            NUMBER@59..60
+              NUMBER_LIT@59..60 "1"
+            WHITESPACE@60..61 " "
+            TIME_UNIT@61..65
+              IDENT@61..65 "hour"
+          R_PAREN@65..66 ")"
+      COMMA@66..67 ","
+      WHITESPACE@67..68 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@68..77
+        QUALIFIED_NAME@68..77
+          IDENTIFIER@68..72
+            IDENT@68..72 "host"
+          DOT@72..73 "."
+          IDENTIFIER@73..77
+            IDENT@73..77 "name"
+    WHITESPACE@77..78 " "
+    PIPE@78..79 "|"
+    WHITESPACE@79..80 " "
+    CHANGE_POINT_COMMAND@80..112
+      CHANGE_POINT_KW@80..92 "CHANGE_POINT"
+      WHITESPACE@92..93 " "
+      QUALIFIED_NAME@93..94
+        IDENTIFIER@93..94
+          IDENT@93..94 "c"
+      WHITESPACE@94..95 " "
+      ON_KW@95..97 "ON"
+      WHITESPACE@97..98 " "
+      QUALIFIED_NAME@98..99
+        IDENTIFIER@98..99
+          IDENT@98..99 "t"
+      WHITESPACE@99..100 " "
+      BY_KW@100..102 "BY"
+      WHITESPACE@102..103 " "
+      QUALIFIED_NAME@103..112
+        IDENTIFIER@103..107
+          IDENT@103..107 "host"
+        DOT@107..108 "."
+        IDENTIFIER@108..112
+          IDENT@108..112 "name"
+  WHITESPACE@112..113 "\n"
+--- errors

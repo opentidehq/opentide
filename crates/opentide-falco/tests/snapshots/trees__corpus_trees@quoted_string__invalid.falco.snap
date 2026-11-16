@@ -1,0 +1,20 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/quoted_string__invalid.falco
+---
+source_file@0..35
+  comparison@0..21
+    field@0..12
+      field_name@0..12 "proc.cmdline"
+    whitespace@12..13 " "
+    comparison_operator@13..21
+      identifier@13..21 "contains"
+  whitespace@21..22 " "
+  ERROR@22..23
+    error_token@22..23 "\""
+  macro_reference@23..35
+    identifier@23..35 "unterminated"
+errors:
+21..22: expected a value (expected quoted_string)
+21..22: unexpected (expected quoted_string)

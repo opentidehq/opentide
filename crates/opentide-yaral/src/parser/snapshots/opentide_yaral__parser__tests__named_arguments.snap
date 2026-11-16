@@ -1,0 +1,50 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"m.f(period: 1d, principal.user.userid: $u, g: *, 3)\")"
+---
+SOURCE_FILE@0..51
+  SEARCH_QUERY@0..51
+    SEARCH_EVENTS@0..51
+      FUNCTION_CALL@0..51
+        FUNCTION_NAME@0..3
+          IDENT@0..1 "m"
+          ACCESS_DOT@1..2 "."
+          FIELD_NAME@2..3 "f"
+        L_PAREN@3..4 "("
+        ARGUMENTS@4..50
+          NAMED_ARGUMENT@4..14
+            ARGUMENT_NAME@4..10
+              IDENT@4..10 "period"
+            COLON@10..11 ":"
+            WHITESPACE@11..12 " "
+            LITERAL@12..14
+              DURATION@12..14 "1d"
+          COMMA@14..15 ","
+          WHITESPACE@15..16 " "
+          NAMED_ARGUMENT@16..41
+            ARGUMENT_NAME@16..37
+              BARE_FIELD@16..37
+                IDENT@16..25 "principal"
+                MEMBER@25..30
+                  ACCESS_DOT@25..26 "."
+                  FIELD_NAME@26..30 "user"
+                MEMBER@30..37
+                  ACCESS_DOT@30..31 "."
+                  FIELD_NAME@31..37 "userid"
+            COLON@37..38 ":"
+            WHITESPACE@38..39 " "
+            VARIABLE@39..41
+              VAR_TOKEN@39..41 "$u"
+          COMMA@41..42 ","
+          WHITESPACE@42..43 " "
+          NAMED_ARGUMENT@43..47
+            ARGUMENT_NAME@43..44
+              IDENT@43..44 "g"
+            COLON@44..45 ":"
+            WHITESPACE@45..46 " "
+            STAR@46..47 "*"
+          COMMA@47..48 ","
+          WHITESPACE@48..49 " "
+          LITERAL@49..50
+            INTEGER@49..50 "3"
+        R_PAREN@50..51 ")"

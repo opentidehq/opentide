@@ -1,0 +1,46 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(\"a:[ 1 TO 2] b:{\\\"x y\\\" TO z}^2 c:[TO TO TO]\")"
+---
+SourceFile@0..41
+  BooleanQuery@0..41
+    FieldQuery@0..11
+      FieldName@0..1
+        Term@0..1 "a"
+      Colon@1..2 ":"
+      RangeQuery@2..11
+        LBracket@2..3 "["
+        Whitespace@3..4 " "
+        RangeTerm@4..5 "1"
+        Whitespace@5..6 " "
+        ToKw@6..8 "TO"
+        Whitespace@8..9 " "
+        RangeTerm@9..10 "2"
+        RBracket@10..11 "]"
+    Whitespace@11..12 " "
+    FieldQuery@12..28
+      FieldName@12..13
+        Term@12..13 "b"
+      Colon@13..14 ":"
+      RangeQuery@14..28
+        LBrace@14..15 "{"
+        Phrase@15..20 "\"x y\""
+        Whitespace@20..21 " "
+        ToKw@21..23 "TO"
+        Whitespace@23..24 " "
+        RangeTerm@24..25 "z"
+        RBrace@25..26 "}"
+        Boost@26..28 "^2"
+    Whitespace@28..29 " "
+    FieldQuery@29..41
+      FieldName@29..30
+        Term@29..30 "c"
+      Colon@30..31 ":"
+      RangeQuery@31..41
+        LBracket@31..32 "["
+        RangeTerm@32..34 "TO"
+        Whitespace@34..35 " "
+        ToKw@35..37 "TO"
+        Whitespace@37..38 " "
+        RangeTerm@38..40 "TO"
+        RBracket@40..41 "]"

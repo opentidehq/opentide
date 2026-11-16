@@ -1,0 +1,29 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/raw_string__valid.yaral
+---
+SOURCE_FILE@0..79
+  COMMENT@0..24 "// prod:raw_string valid"
+  WHITESPACE@24..25 "\n"
+  SEARCH_QUERY@25..78
+    SEARCH_EVENTS@25..78
+      COMPARISON@25..78
+        UDM_FIELD@25..55
+          VARIABLE@25..27
+            VAR_TOKEN@25..27 "$e"
+          MEMBER@27..34
+            ACCESS_DOT@27..28 "."
+            FIELD_NAME@28..34 "target"
+          MEMBER@34..42
+            ACCESS_DOT@34..35 "."
+            FIELD_NAME@35..42 "process"
+          MEMBER@42..55
+            ACCESS_DOT@42..43 "."
+            FIELD_NAME@43..55 "command_line"
+        WHITESPACE@55..56 " "
+        EQ@56..57 "="
+        WHITESPACE@57..58 " "
+        LITERAL@58..78
+          RAW_STRING@58..78 "`C:\\Windows\\cmd.exe`"
+  WHITESPACE@78..79 "\n"

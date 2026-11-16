@@ -1,0 +1,31 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..16
+  PIPELINE@0..16
+    OR_FILTER@0..16
+      FREE_TEXT@0..1
+        UNQUOTED_PATTERN@0..1
+          WORD@0..1 "a"
+      WHITESPACE@1..2 " "
+      OR@2..4
+        OR_KW@2..4 "or"
+      WHITESPACE@4..5 " "
+      FREE_TEXT@5..6
+        UNQUOTED_PATTERN@5..6
+          WORD@5..6 "b"
+      WHITESPACE@6..7 " "
+      OR@7..9
+        OR_KW@7..9 "or"
+      WHITESPACE@9..10 " "
+      FREE_TEXT@10..11
+        UNQUOTED_PATTERN@10..11
+          WORD@10..11 "c"
+      WHITESPACE@11..12 " "
+      OR@12..14
+        OR_KW@12..14 "or"
+      WHITESPACE@14..15 " "
+      FREE_TEXT@15..16
+        UNQUOTED_PATTERN@15..16
+          WORD@15..16 "d"

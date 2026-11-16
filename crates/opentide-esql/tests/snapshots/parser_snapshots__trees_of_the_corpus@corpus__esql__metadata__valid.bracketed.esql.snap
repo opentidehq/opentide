@@ -1,0 +1,37 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/metadata__valid.bracketed.esql
+---
+SOURCE_FILE@0..109
+  COMMENT@0..61 "// prod:metadata valid (the bracketed form only 8.19 accepts)"
+  WHITESPACE@61..62 "\n"
+  QUERY@62..108
+    FROM_COMMAND@62..98
+      FROM_KW@62..66 "FROM"
+      WHITESPACE@66..67 " "
+      INDEX_PATTERN@67..73
+        INDEX_NAME@67..73
+          SOURCE_TEXT@67..73 "logs-*"
+      WHITESPACE@73..74 " "
+      METADATA@74..98
+        L_BRACK@74..75 "["
+        METADATA_KW@75..83 "METADATA"
+        WHITESPACE@83..84 " "
+        METADATA_FIELD@84..87
+          SOURCE_TEXT@84..87 "_id"
+        COMMA@87..88 ","
+        WHITESPACE@88..89 " "
+        METADATA_FIELD@89..97
+          SOURCE_TEXT@89..97 "_version"
+        R_BRACK@97..98 "]"
+    WHITESPACE@98..99 "\n"
+    PIPE@99..100 "|"
+    WHITESPACE@100..101 " "
+    LIMIT_COMMAND@101..108
+      LIMIT_KW@101..106 "LIMIT"
+      WHITESPACE@106..107 " "
+      NUMBER@107..108
+        NUMBER_LIT@107..108 "1"
+  WHITESPACE@108..109 "\n"
+--- errors
