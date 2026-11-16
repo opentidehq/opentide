@@ -1649,12 +1649,17 @@ target_s = 0.03
             "cross_cpu_regression = 0.50\n",
             "cross_cpu_regression = 0.50\nreference_unix = 1000\nreference_run = \"x\"\n",
         );
-        assert!(Budgets::parse(&early).is_err());
+        let error = Budgets::parse(&early).unwrap_err().to_string();
+        assert!(
+            error.contains("reference_unix 1000 is before 2020"),
+            "{error}"
+        );
         let alone = BUDGETS.replace(
             "cross_cpu_regression = 0.50\n",
             "cross_cpu_regression = 0.50\nreference_unix = 1794700000\n",
         );
-        assert!(Budgets::parse(&alone).is_err());
+        let error = Budgets::parse(&alone).unwrap_err().to_string();
+        assert!(error.contains("go together"), "{error}");
     }
 
     /// An accepted change is not held to a last result measured before it,
