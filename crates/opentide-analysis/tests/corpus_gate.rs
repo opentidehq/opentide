@@ -105,11 +105,42 @@ impl KindNames for TreeSitterNames {
     }
 }
 
-/// The kind-name table of `language`. Every language has the tree-sitter
-/// names; a language that moves to `opentide-parse` returns its `SyntaxKind`
-/// names here.
+/// The ES|QL names of `opentide-esql`'s own parser (#1228): its node kinds,
+/// and its trees parsed on a 1 MB stack (the browser WASM module's).
+struct EsqlNames;
+
+impl KindNames for EsqlNames {
+    fn productions(&self) -> BTreeSet<String> {
+        opentide_esql::production_names()
+            .into_iter()
+            .map(str::to_string)
+            .collect()
+    }
+
+    fn parse(&self, body: &str) -> Parsed {
+        let body = body.to_string();
+        let (has_error, kinds) = std::thread::Builder::new()
+            .stack_size(1 << 20)
+            .spawn(move || opentide_esql::debug_kinds(&body))
+            .unwrap()
+            .join()
+            .expect("the ES|QL parser overflowed a 1 MB stack or panicked");
+        Parsed {
+            has_error,
+            dump: kinds.join(" "),
+            kinds: kinds.into_iter().map(str::to_string).collect(),
+        }
+    }
+}
+
+/// The kind-name table of `language`. A language still on tree-sitter has
+/// the tree-sitter names; a language that moved to `opentide-parse` returns
+/// its `SyntaxKind` names here.
 fn kind_names(language: LanguageId, id: &'static str) -> Box<dyn KindNames> {
-    Box::new(TreeSitterNames { language, id })
+    match language {
+        LanguageId::Esql => Box::new(EsqlNames),
+        _ => Box::new(TreeSitterNames { language, id }),
+    }
 }
 
 const KQL_REQUIRED: &[&str] = &[
@@ -423,6 +454,15 @@ fn esql_corpus_gate() {
             "unary_expression",
             "binary_expression",
             "parenthesized_expression",
+            // One-token nodes of the pure-Rust parser that tree-sitter kept as
+            // tokens: the production around them is what the corpus tags.
+            "enrich_mode",
+            "metadata_field",
+            "policy_name",
+            "promql_text",
+            "star",
+            "time_unit",
+            "unknown_text",
         ],
     });
 }

@@ -3,7 +3,7 @@
 //! conformance: every tree of the corpus that parses without an error has
 //! the shape the `.ungram` states, node by node.
 //!
-//! The parser is private to the crate (production still runs tree-sitter), so
+//! The parser is private to the crate, so
 //! this test includes its source.
 
 #![expect(

@@ -729,11 +729,6 @@ impl Tree {
     pub(crate) fn root_node(&self) -> Node<'_> {
         Node { tree: self, id: 0 }
     }
-
-    /// Whether the parser reported anything.
-    pub(crate) fn has_error(&self) -> bool {
-        !self.problems.is_empty()
-    }
 }
 
 impl<'t> Node<'t> {
@@ -754,10 +749,6 @@ impl<'t> Node<'t> {
 
     pub(crate) fn is_named(&self) -> bool {
         self.d().named
-    }
-
-    pub(crate) fn is_missing(&self) -> bool {
-        false
     }
 
     pub(crate) fn field_name(&self) -> Option<&'static str> {
@@ -929,4 +920,28 @@ pub(crate) fn walk<'t>(root: Node<'t>, mut f: impl FnMut(Node<'t>)) {
 /// The parse of `source`, as the analysis asks for it.
 pub(crate) fn parse_tree(source: &str) -> Option<Tree> {
     Some(parse(source))
+}
+
+/// The production names of the tree's named nodes (`from_command`): the
+/// names the corpus's `prod:` tags use. `NAMED_PARAMETERS` is hidden and
+/// `JOIN_QUALIFIER` reads as an `identifier`, as in [`parse`].
+pub(crate) fn production_names() -> Vec<&'static str> {
+    (K::SOURCE_FILE as u16..=K::PARAMETER as u16)
+        .map(|raw| <Lang as rowan::Language>::kind_from_raw(rowan::SyntaxKind(raw)))
+        .filter(|kind| !matches!(kind, K::NAMED_PARAMETERS | K::JOIN_QUALIFIER))
+        .map(node_name)
+        .collect()
+}
+
+/// Whether the parser reported a problem in `source`, and the names of the
+/// named nodes of its tree in preorder.
+pub(crate) fn named_kinds(source: &str) -> (bool, Vec<&'static str>) {
+    let tree = parse(source);
+    let mut kinds = Vec::new();
+    walk(tree.root_node(), |node| {
+        if node.is_named() {
+            kinds.push(node.kind());
+        }
+    });
+    (!tree.problems.is_empty(), kinds)
 }

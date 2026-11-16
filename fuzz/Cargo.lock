@@ -2865,11 +2865,9 @@ dependencies = [
  "opentide-highlight",
  "opentide-lucene",
  "opentide-parse",
- "opentide-syntax",
  "rowan",
  "serde",
  "toml",
- "tree-sitter",
 ]
 
 [[package]]

@@ -41,30 +41,10 @@ pub mod catalog;
 mod columns;
 mod ecs;
 mod gates;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the pure-Rust lexer is reached from tests until the last PR of #1228 switches production to it"
-    )
-)]
 mod lexer;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the pure-Rust parser is reached from tests until the last PR of #1228 switches production to it"
-    )
-)]
 mod parser;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the pure-Rust tree's kinds are reached from tests until the last PR of #1228 switches production to it"
-    )
-)]
 mod syntax;
+mod tree;
 pub mod version;
 
 pub use catalog::{Catalog, CommandRow, FunctionRow, Lifecycle, StackVersion, TypeRow};
@@ -73,12 +53,11 @@ pub use ecs::{ecs_diagnostics, source_indices};
 pub use version::{Availability, RELEASES, StackTarget};
 
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, Severity,
-    SignatureHelp, SignatureInformation, codes, span_to_range,
+    ByteSpan, CompletionItem, Diagnostic, ParameterInformation, Range, Severity, SignatureHelp,
+    SignatureInformation, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
-use opentide_syntax::{first_error, node_span, parse as ts_parse, walk};
-use tree_sitter::Node;
+use tree::{Node, node_span, walk};
 
 pub struct AnalyzeResult {
     pub diagnostics: Vec<Diagnostic>,
@@ -100,6 +79,21 @@ const METADATA_FIELDS: &[(&str, &str)] = &[
     ("_tsid", "Time series id, for time series indices."),
 ];
 
+/// The production names of the ES|QL tree's named nodes (`from_command`), for
+/// the corpus gate in `opentide-analysis`. Not API.
+#[doc(hidden)]
+pub fn production_names() -> Vec<&'static str> {
+    tree::production_names()
+}
+
+/// Whether the ES|QL parser reports a problem in `source`, and the production
+/// names of its tree's named nodes in preorder, for the corpus gate in
+/// `opentide-analysis`. Not API.
+#[doc(hidden)]
+pub fn debug_kinds(source: &str) -> (bool, Vec<&'static str>) {
+    tree::named_kinds(source)
+}
+
 /// Analyze against every supported stack (8.19 and 9.x). Same as
 /// `analyze_for(source, None)`.
 pub fn analyze(source: &str) -> AnalyzeResult {
@@ -120,7 +114,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 pub fn analyze_for(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let catalog = Catalog::cached();
-    let Some(tree) = ts_parse(LanguageId::Esql, source) else {
+    let Some(tree) = tree::parse_tree(source) else {
         return AnalyzeResult {
             diagnostics: vec![Diagnostic::error(
                 codes::ESQL_PARSE_ERROR,
@@ -132,12 +126,8 @@ pub fn analyze_for(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
     };
     let root = tree.root_node();
     let mut diagnostics = Vec::new();
-    if let Some(err) = first_error(root) {
-        diagnostics.push(Diagnostic::error(
-            codes::ESQL_PARSE_ERROR,
-            parse_error_message(err, source),
-            range(source, node_span(err)),
-        ));
+    if let Some(d) = parse_problem(&tree, source) {
+        diagnostics.push(d);
     }
     let to_range = |span: ByteSpan| range(source, span);
     walk(root, |node| {
@@ -210,7 +200,7 @@ pub fn analyze_for(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
     // 9.3.4, and 9.4.2; 300 from 8.19.17, 9.3.5, 9.4.3, and 9.5.
     let (depth, deepest) = expression_depth(root);
     if depth > 300 {
-        let span = deepest.map_or_else(|| node_span(root), node_span);
+        let span = deepest.unwrap_or_else(|| node_span(root));
         let (severity, message) = if depth > 400 {
             (
                 Severity::Error,
@@ -408,8 +398,10 @@ fn pattern_problems(node: Node, source: &str) -> Vec<Diagnostic> {
 
 /// Nesting depth of expressions, counted the way Elasticsearch's parser
 /// limit sees a chain of `AND`/`OR` terms: each logical, comparison,
-/// arithmetic, predicate, cast, call, or parenthesized node adds one.
-fn expression_depth(root: Node) -> (usize, Option<Node>) {
+/// arithmetic, predicate, cast, call, or parenthesized node adds one. A flat
+/// chain of `k` terms nests `k - 1` levels (the first two terms the deepest,
+/// as in a left-leaning tree); the span reported is the innermost pair.
+fn expression_depth(root: Node) -> (usize, Option<ByteSpan>) {
     const NESTING: &[&str] = &[
         "not_expression",
         "and_expression",
@@ -426,52 +418,66 @@ fn expression_depth(root: Node) -> (usize, Option<Node>) {
         "function_call",
     ];
     // Iterative: a 10 000-term chain must not overflow the stack.
-    let mut cursor = root.walk();
-    let mut depth = 0usize;
-    let mut stack: Vec<bool> = Vec::new();
+    let mut stack = vec![(root, 0usize)];
     let (mut max, mut deepest) = (0usize, None);
-    loop {
-        let node = cursor.node();
-        let counts = NESTING.contains(&node.kind());
-        if counts {
-            depth += 1;
-            if depth > max {
-                max = depth;
-                deepest = Some(node);
+    while let Some((node, base)) = stack.pop() {
+        let mut cursor = node.walk();
+        let kids: Vec<Node> = node
+            .named_children(&mut cursor)
+            .filter(|k| k.kind() != "comment")
+            .collect();
+        let flat = matches!(
+            node.kind(),
+            "and_expression" | "or_expression" | "binary_expression"
+        ) && kids.len() > 1;
+        let mut depths = vec![base; kids.len()];
+        if NESTING.contains(&node.kind()) {
+            let levels = if flat { kids.len() - 1 } else { 1 };
+            if base + levels > max {
+                max = base + levels;
+                deepest = Some(if flat {
+                    ByteSpan::new(node.start_byte(), kids[1].end_byte())
+                } else {
+                    node_span(node)
+                });
+            }
+            for (i, d) in depths.iter_mut().enumerate() {
+                *d = base
+                    + if !flat {
+                        1
+                    } else if i == 0 {
+                        levels
+                    } else {
+                        kids.len() - i
+                    };
             }
         }
-        stack.push(counts);
-        if cursor.goto_first_child() {
-            continue;
-        }
-        loop {
-            if stack.pop() == Some(true) {
-                depth -= 1;
-            }
-            if cursor.goto_next_sibling() {
-                break;
-            }
-            if !cursor.goto_parent() {
-                return (max, deepest);
-            }
+        for (kid, depth) in kids.into_iter().zip(depths).rev() {
+            stack.push((kid, depth));
         }
     }
+    (max, deepest)
 }
 
-fn parse_error_message(err: Node, source: &str) -> String {
-    if err.is_missing() {
-        return format!("ES|QL syntax error: missing `{}`", err.kind());
-    }
-    let text = source
-        .get(err.start_byte()..err.end_byte())
-        .unwrap_or("")
-        .trim();
-    let first = text.split_whitespace().next().unwrap_or("");
-    if first.is_empty() {
-        "ES|QL syntax error".to_string()
+/// The first syntax problem as a diagnostic: where it is, the word it sits
+/// on, and what the parser expected there (its message names it).
+fn parse_problem(tree: &tree::Tree, source: &str) -> Option<Diagnostic> {
+    let problem = tree.problems.first()?;
+    let at = problem.at.min(source.len());
+    let rest = source.get(at..).unwrap_or("");
+    let word_len = rest.find(char::is_whitespace).unwrap_or(rest.len());
+    let word = &rest[..word_len];
+    let near = if word.is_empty() {
+        "ES|QL syntax error at the end of the query".to_string()
     } else {
-        format!("ES|QL syntax error near `{first}`")
-    }
+        format!("ES|QL syntax error near `{word}`")
+    };
+    let message = format!("{near}: {}", problem.message);
+    Some(Diagnostic::error(
+        codes::ESQL_PARSE_ERROR,
+        message,
+        range(source, ByteSpan::new(at, at + word_len)),
+    ))
 }
 
 fn range(source: &str, span: ByteSpan) -> Range {
@@ -483,7 +489,7 @@ pub(crate) fn text<'a>(node: Node, source: &'a str) -> &'a str {
 }
 
 /// Catalog name of a command node: `stats`, `inline stats`, `lookup join`.
-pub fn command_name(node: Node, source: &str) -> Option<String> {
+pub(crate) fn command_name(node: Node, source: &str) -> Option<String> {
     let kind = node.kind();
     let base = kind.strip_suffix("_command")?;
     Some(match base {
@@ -675,14 +681,16 @@ fn availability(
     span: ByteSpan,
     to_range: &dyn Fn(ByteSpan) -> Range,
 ) -> Option<Diagnostic> {
-    let range = to_range(span);
+    // The line and column are found only for a finding: a scan from the start
+    // of the source per command made a long pipeline quadratic.
+    let range = || to_range(span);
     if snapshot_only {
         return Some(Diagnostic::error(
             codes::ESQL_UNAVAILABLE,
             format!(
                 "{what} `{name}` exists only in Elasticsearch snapshot builds; release clusters reject it"
             ),
-            range,
+            range(),
         ));
     }
     let described = lifecycle.describe();
@@ -715,7 +723,7 @@ fn availability(
                     "{what} `{name}` needs Elasticsearch {first} or later ({}); the declared stack {target} lacks it",
                     lifecycle.describe()
                 ),
-                range,
+                range(),
             ));
         }
     } else if let Some(first) = lifecycle.after_floor() {
@@ -725,7 +733,7 @@ fn availability(
                 "{what} `{name}` needs Elasticsearch {first} or later ({}); an 8.19 cluster rejects it",
                 lifecycle.describe()
             ),
-            range,
+            range(),
         );
         d.severity = Severity::Information;
         return Some(d);
@@ -737,7 +745,7 @@ fn availability(
                 "{what} `{name}` is in technical preview ({}); Elastic may change or remove it",
                 lifecycle.describe()
             ),
-            range,
+            range(),
         );
         d.severity = Severity::Information;
         return Some(d);
@@ -787,22 +795,32 @@ fn named_child_of_kind<'t>(node: Node<'t>, kind: &str) -> Option<Node<'t>> {
     node.named_children(&mut cursor).find(|c| c.kind() == kind)
 }
 
-fn highlight(spec: &HighlightSpec, source: &str, catalog: &Catalog) -> Vec<HighlightToken> {
-    let Ok(mut spans) = opentide_syntax::query_captures(
-        LanguageId::Esql,
-        source,
-        opentide_highlight::ESQL_HIGHLIGHTS_SCM,
-    ) else {
-        return Vec::new();
-    };
-    for (span, capture) in &mut spans {
-        if capture == "function" {
-            let name = source.get(span.start..span.end).unwrap_or("");
-            if catalog.function(name).is_some() {
-                *capture = "function.builtin".into();
-            }
+pub(crate) fn highlight(
+    spec: &HighlightSpec,
+    source: &str,
+    catalog: &Catalog,
+) -> Vec<HighlightToken> {
+    let tree = tree::parse(source);
+    let mut spans: Vec<(ByteSpan, String)> = Vec::new();
+    walk(tree.root_node(), |node| {
+        if node.child_count() > 0 || node.end_byte() <= node.start_byte() {
+            return;
         }
-    }
+        let Some(capture) = tree::capture(node) else {
+            return;
+        };
+        let span = node_span(node);
+        let capture = if capture == "function"
+            && catalog
+                .function(source.get(span.start..span.end).unwrap_or(""))
+                .is_some()
+        {
+            "function.builtin"
+        } else {
+            capture
+        };
+        spans.push((span, capture.to_string()));
+    });
     let refs: Vec<(ByteSpan, &str)> = spans.iter().map(|(s, c)| (*s, c.as_str())).collect();
     tokens_from_spans(spec, source, &refs).unwrap_or_default()
 }
@@ -817,7 +835,7 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
     if !source.is_char_boundary(offset) {
         return None;
     }
-    let tree = ts_parse(LanguageId::Esql, source)?;
+    let tree = tree::parse_tree(source)?;
     let catalog = Catalog::cached();
     let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
     // Function name.
@@ -1042,7 +1060,7 @@ fn clause_keywords(command: &str) -> &'static [&'static str] {
 
 /// Column names the query already references or creates.
 fn columns_in(source: &str) -> Vec<String> {
-    let Some(tree) = ts_parse(LanguageId::Esql, source) else {
+    let Some(tree) = tree::parse_tree(source) else {
         return Vec::new();
     };
     let mut names = std::collections::BTreeSet::new();
@@ -1630,5 +1648,20 @@ mod tests {
         assert!(completions(src, inside).is_empty());
         assert_eq!(hover(src, inside), None);
         assert!(signature_help(src, inside).is_none());
+    }
+
+    #[test]
+    fn a_map_recovery_makes_up_has_no_gate() {
+        let maps = |src: &str| {
+            analyze(src)
+                .diagnostics
+                .into_iter()
+                .filter(|d| d.message.contains("an empty or nested map"))
+                .count()
+        };
+        // `{` missing: the parse error only, no hint on a map nobody wrote.
+        assert_eq!(maps("FROM docs | DENSE_VECTOR embedding = WITH"), 0);
+        // A written empty map keeps its gate.
+        assert_eq!(maps("FROM docs | DENSE_VECTOR embedding = WITH {}"), 1);
     }
 }
