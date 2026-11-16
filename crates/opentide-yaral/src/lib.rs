@@ -35,19 +35,18 @@ pub mod catalog;
 pub mod editor;
 mod lexer;
 mod parser;
-mod syntax;
+#[doc(hidden)]
+pub mod syntax;
 // The typed AST names the kinds from the crate root.
-use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
+#[doc(hidden)]
+pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 // Generated from yaral.ungram by `cargo xtask codegen`: an accessor for every
-// child of every node, most of which the engine never calls, and names the
-// grammar chooses.
-#[expect(
-    dead_code,
-    clippy::enum_variant_names,
-    reason = "generated from yaral.ungram: every accessor of every node, named by the grammar, most of them not yet called"
-)]
+// child of every node, named by the grammar. Public but hidden, as SPL's and
+// KQL's: `tests/ast_accessors.rs` calls every accessor on the corpus's
+// trees, which keeps them right and measured.
+#[doc(hidden)]
 #[path = "generated/ast.rs"]
-mod ast;
+pub mod ast;
 
 use opentide_core::{Diagnostic, Severity};
 use opentide_highlight::HighlightToken;
@@ -202,6 +201,13 @@ pub mod parse_facts {
                 )
             })
             .collect()
+    }
+
+    /// The tree of `source`, for the tests of the typed AST
+    /// (`tests/ast_accessors.rs`).
+    #[must_use]
+    pub fn tree(source: &str) -> SyntaxNode {
+        SyntaxNode::new_root(crate::parser::parse(source).green)
     }
 
     /// Whether the tree prints back as `source`.

@@ -9,7 +9,9 @@
 #                                 class, [baseline] below: the python engine fails when it
 #                                 is more than policy.regression above these
 #   target_s, target_rss_mib      plan section 11's target: the rust engine fails above it
-#                                 (an absolute budget, at scale 1). Only the commands
+#                                 (an absolute budget, at scale 1; a time target with
+#                                 policy.regression on top, as two runners of one CPU
+#                                 model differ by that much). Only the commands
 #                                 section 11 names have one
 #   target_waiver, rust_baseline_s  a time target the Rust implementation of today misses,
 #                                 waived until the work item named meets it: meanwhile the

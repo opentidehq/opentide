@@ -78,7 +78,8 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   (`src/bench/lsp.rs`), with the workspace as its root.
 - `--check` (`src/bench/check.rs`) fails a median or peak RSS more than `policy.regression` (10%)
   over the base branch's last result (`--previous`) or over the oracle baseline in the budgets
-  (`python`), and a rust result over the absolute plan section 11 target (or, where a
+  (`python`), and a rust result over the absolute plan section 11 target (a time target + 10%:
+  two runners of one CPU model differ by that much; or, where a
   `target_waiver` names the work item that will meet it, more than 10% over the Rust baseline;
   where the plan names no target, over the oracle's median on the same CPU, or on a CPU recorded
   nowhere over the slowest recorded + 20%: never slower than the implementation it replaces);
