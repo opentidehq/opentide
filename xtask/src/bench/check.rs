@@ -770,7 +770,11 @@ fn check_against(budgets: &Budgets, report: &Report, previous: Option<&Report>) 
     }
     let heavy = report.seed == Some(SEED_OF_TARGETS);
     let reference = match report.engine.as_str() {
-        "rust" if report.scale == 1 && heavy => "plan section 11 target".to_owned(),
+        "rust" if report.scale == 1 && heavy => format!(
+            "plan section 11 target (time budget = target + {:.0}%, runners of one CPU \
+             model differ by that much)",
+            policy.regression * 100.0
+        ),
         "rust" if !heavy => {
             notes.push(
                 "the plan section 11 targets are for the heavy workspace; this report \
@@ -1083,11 +1087,16 @@ fn check_one(
                                 rust_time_tolerance * 100.0
                             ));
                         }
-                        row.reasons.push(if median > target {
-                            format!("over the plan target {target:.3} s, waived until {waiver}")
-                        } else {
-                            format!("meets the plan target {target:.3} s: remove its target_waiver")
-                        });
+                        // Met as the unwaived check below would meet it: within the
+                        // target + policy.regression.
+                        row.reasons
+                            .push(if median > target * (1.0 + policy.regression) {
+                                format!("over the plan target {target:.3} s, waived until {waiver}")
+                            } else {
+                                format!(
+                                    "meets the plan target {target:.3} s: remove its target_waiver"
+                                )
+                            });
                     }
                     _ => {
                         // The target is a fixed line, but the median it is held to is
@@ -1097,8 +1106,9 @@ fn check_one(
                         // no change at all (validate_file, 0.088 s and 0.100 s against
                         // 0.100 s on two EPYC 7763 runners one hour apart). A miss is a
                         // median more than policy.regression above the target, the
-                        // tolerance every other time budget has; one within it passes
-                        // and says so.
+                        // relative tolerance of the other time budgets; one within it
+                        // passes and says so. Without their noise floor: a 20 ms floor
+                        // would more than double the 20 and 30 ms start targets.
                         let ceiling = target * (1.0 + policy.regression);
                         row.budget_s = Some(ceiling);
                         if median > ceiling {
@@ -1736,7 +1746,7 @@ target_s = 0.03
             "{:?}",
             bigger.failures
         );
-        // Accepted at 0.8 s, the run is still held to the 0.7 s target.
+        // Accepted at 0.8 s, the run is still held to the 0.7 s target (+ 10%: 0.77 s).
         let generous = Budgets::parse(&BUDGETS.replace(
             "[commands.validate_clean]\n",
             &ACCEPTED.replace("accepted_s = 0.6", "accepted_s = 0.8"),
@@ -2280,6 +2290,19 @@ target_s = 0.03
         assert!(
             text.contains("✅ pass (over the plan target 0.030 s, waived until UC-3.6 (#999))"),
             "{text}"
+        );
+        // Over the target but within its 10%, as the check without the waiver
+        // would pass it: the waiver can go (0.032 s against 0.030 s).
+        let near = Budgets::parse(&BUDGETS.replace(
+            "target_s = 0.03\n",
+            "target_s = 0.03\ntarget_waiver = \"UC-3.6 (#999)\"\nrust_baseline_s = 0.031\n",
+        ))
+        .unwrap();
+        let outcome = check(&near, &rust(0.032), None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert_eq!(
+            outcome.rows[1].reasons,
+            ["meets the plan target 0.030 s: remove its target_waiver"]
         );
         // A regression against the Rust baseline still fails.
         let outcome = check(&budgets, &rust(0.2), None);

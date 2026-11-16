@@ -52,7 +52,7 @@ bench --check: 4 failure(s) against budgets.toml
 $ xtask bench --check budgets.toml rust.json
 ### Benchmarks: rust engine, scale 1: passed
 
-Median of 5 cold process runs (after 1 warm-up) and the median peak RSS (`wait4`), on ubuntu24 20261102.1 (4 CPUs, AMD EPYC 7763 64-Core Processor). Reference: plan section 11 target. Last `base-branch` result: none found.
+Median of 5 cold process runs (after 1 warm-up) and the median peak RSS (`wait4`), on ubuntu24 20261102.1 (4 CPUs, AMD EPYC 7763 64-Core Processor). Reference: plan section 11 target (time budget = target + 10%, runners of one CPU model differ by that much). Last `base-branch` result: none found.
 
 | Command | Median | Peak RSS | Budget (time) | Budget (RSS) | Δ reference | Δ last `base-branch` | Result |
 |---|---:|---:|---:|---:|---:|---:|---|
