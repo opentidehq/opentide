@@ -569,3 +569,38 @@ fn parse_errors_name_the_fault() {
         assert_eq!(d[0].message, message, "{q}: {d:#?}");
     }
 }
+
+/// `syntax::PRODUCTIONS` names every node a parse builds: on each file of the corpus and
+/// the conformance sets, valid or broken, each node kind other than `ERROR` is in it, so the
+/// corpus gate cannot miss a production the parser grows.
+#[test]
+fn every_node_built_is_a_production() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata");
+    let mut stack = vec![root];
+    let mut files = 0;
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|e| e != "cql") {
+                continue;
+            }
+            files += 1;
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            let (tree, _) = crate::parser::parse(&text);
+            for node in tree.descendants() {
+                let kind = node.kind();
+                assert!(
+                    kind == crate::syntax::SyntaxKind::ERROR
+                        || crate::syntax::PRODUCTIONS.contains(&kind),
+                    "{kind:?} in {}",
+                    path.display()
+                );
+            }
+        }
+    }
+    assert!(files > 100, "{files} files");
+}

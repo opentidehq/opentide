@@ -689,7 +689,7 @@ fn the_gate_reads_productions_and_trees_only_through_its_table() {
 #[test]
 fn cql_names_are_the_pure_rust_tree() {
     let names = kind_names(LanguageId::Cql, "cql");
-    let tree = names.parse("a=1 or groupBy(x) // note");
+    let tree = names.parse("a=1 or b=2 | groupBy(x) // note");
     assert!(!tree.has_error, "{}", tree.dump);
     for kind in ["or_filter", "field_filter", "function_call", "line_comment"] {
         assert!(tree.has_kind(kind), "{kind}: {}", tree.dump);
