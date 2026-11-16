@@ -75,8 +75,9 @@ struct Pass<'a> {
 /// `extend` and either list of `summarize` by a field that also holds the
 /// commas between them, and took each comma for an item it cannot name, so
 /// a list of two or more items leaves the schema open (no column
-/// diagnostic after it). Kept until the maintainer decides to fix it
-/// (`lang-kql/NOTES.md`, class (b)).
+/// diagnostic after it). Kept for parity with the engine this one replaces
+/// (epic #1219); #1386 removes it after the port, behind a measurement of
+/// every new `kql_unknown_column` over the corpora.
 fn comma_quirk(out: &mut Schema, items: usize) {
     if items >= 2 {
         out.make_open();

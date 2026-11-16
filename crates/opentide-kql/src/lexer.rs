@@ -272,8 +272,9 @@ const ENDS_A_VALUE: [K; 6] = [
 
 /// The kinds a hyphen keyword may follow: an operator starts after a pipe,
 /// after the `(` of a sub-pipeline, after the comma of `top-nested`, and
-/// after the `with` of `facet`.
-const BEFORE_AN_OPERATOR: [K; 4] = [K::PIPE, K::L_PAREN, K::COMMA, K::WITH_KW];
+/// after the `with` of `facet` (only there: `| with a-b` is an unknown
+/// operator `with` and a subtraction).
+const BEFORE_AN_OPERATOR: [K; 3] = [K::PIPE, K::L_PAREN, K::COMMA];
 
 /// What the lexer cannot decide on one token, decided on its neighbours (the
 /// tree-sitter lexer knew which tokens its grammar could take here):
@@ -285,6 +286,8 @@ const BEFORE_AN_OPERATOR: [K; 4] = [K::PIPE, K::L_PAREN, K::COMMA, K::WITH_KW];
 fn fix_up(source: &str, lexemes: Vec<Lexeme>, index_at: &[TextSize]) -> Vec<Lexeme> {
     let mut out: Vec<Lexeme> = Vec::with_capacity(lexemes.len());
     let mut previous = None;
+    // Since the last pipe, a `facet` came: its `with` may start an operator.
+    let mut in_facet = false;
     let mut i = 0;
     while let Some(lexeme) = lexemes.get(i) {
         i += 1;
@@ -307,11 +310,17 @@ fn fix_up(source: &str, lexemes: Vec<Lexeme>, index_at: &[TextSize]) -> Vec<Lexe
             i += 2;
             continue;
         }
+        match kind {
+            K::PIPE => in_facet = false,
+            K::FACET_KW => in_facet = true,
+            _ => {}
+        }
         let text = &source[lexeme.range];
         let split_at: Vec<usize> = match kind {
             K::GRANNY_ASC_KW | K::GRANNY_DESC_KW => Vec::new(),
             kind if text.contains('-') && kind.is_word() => {
-                if previous.is_some_and(|p| BEFORE_AN_OPERATOR.contains(&p)) {
+                let facet_with = previous == Some(K::WITH_KW) && in_facet;
+                if facet_with || previous.is_some_and(|p| BEFORE_AN_OPERATOR.contains(&p)) {
                     Vec::new()
                 } else {
                     text.match_indices('-').map(|(at, _)| at).collect()

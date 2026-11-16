@@ -345,14 +345,18 @@ fn differential(seed: u64) {
     let files = sources();
     assert!(files.len() > 150, "{} files", files.len());
     let scale = scale();
+    // CI (scale 1): a sample that finishes well under two minutes in a debug
+    // build. The full run (`OPENTIDE_DIFF_SCALE` 2 or more) has 40 word
+    // mutations per file and more of everything else.
+    let full = scale > 1;
     let mut config = Config::new(&verdict, &tokens, SAMPLES);
     config.seed = seed;
-    config.max_prefixes = 15 * scale;
-    config.mutations_per_input = 3 * scale;
-    config.sentences = 150 * scale;
-    config.max_offsets = 12;
+    config.max_prefixes = if full { 15 * scale } else { 8 };
+    config.mutations_per_input = if full { 40.max(10 * scale) } else { 2 };
+    config.sentences = if full { 150 * scale } else { 60 };
+    config.max_offsets = if full { 12 } else { 4 };
     let report = run(&Old, &New, &files, &config);
-    let generated = generated(&files, seed, 1_000 * scale);
+    let generated = generated(&files, seed, if full { 1_000 * scale } else { 300 });
     let mut gen_config = Config::new(&verdict, &tokens, SAMPLES);
     gen_config.seed = seed;
     gen_config.max_prefixes = 1;

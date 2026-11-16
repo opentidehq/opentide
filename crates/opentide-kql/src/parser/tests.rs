@@ -261,3 +261,32 @@ fn keywords_that_start_a_clause_need_the_clause() {
         assert!(errors(source).is_empty(), "{source}");
     }
 }
+
+/// Found by the differential at four times its scale: a keyword used as a
+/// column and indexed (`step ['x']`) is an index, as tree-sitter read it; the
+/// lexer reads `['x']` as a quoted name, so the parser has it lexed again.
+#[test]
+fn a_quoted_name_after_an_expression_is_an_index() {
+    for source in [
+        "T | where step ['ResultType'] == \"0\"",
+        "T | where by ['a'] == 1 and on [\"b\"] == 2",
+    ] {
+        assert!(errors(source).is_empty(), "{source}: {:?}", errors(source));
+        let tree = SyntaxNode::new_root(parse(source).green);
+        assert!(
+            tree.descendants().any(|n| n.kind() == K::INDEX_EXPR),
+            "{source}"
+        );
+    }
+    // A quoted name where a name is wanted stays one.
+    let tree = SyntaxNode::new_root(parse("T | project ['a b'], c").green);
+    assert!(tree.descendants().all(|n| n.kind() != K::INDEX_EXPR));
+}
+
+/// Found by the differential: `with` starts an operator only in `facet`;
+/// elsewhere it is a name, and `project-reorder` after it a subtraction.
+#[test]
+fn a_hyphen_keyword_after_with_is_an_operator_only_in_facet() {
+    assert!(errors("SigninLogs | with project-reorder * asc").is_empty());
+    assert!(errors("T | facet by a with project-away b").is_empty());
+}
