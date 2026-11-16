@@ -1,0 +1,26 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/relationship__invalid.eql
+---
+SOURCE_FILE@0..65
+  LINE_COMMENT@0..28 "// prod:relationship invalid"
+  WHITESPACE@28..29 "\n"
+  EVENT_QUERY@29..56
+    EVENT_CATEGORY@29..36
+      IDENTIFIER@29..36
+        WORD@29..36 "process"
+    WHITESPACE@36..37 " "
+    WHERE_KW@37..42 "where"
+    WHITESPACE@42..43 " "
+    RELATIONSHIP@43..56
+      IDENTIFIER@43..53
+        WORD@43..53 "descendant"
+      WHITESPACE@53..54 " "
+      OF_KW@54..56 "of"
+  WHITESPACE@56..57 " "
+  ERROR@57..64
+    WORD@57..64 "process"
+  WHITESPACE@64..65 "\n"
+56..57: a subquery `[ ... ]` is missing (expected `[`, `![`)
+56..57: unexpected token (expected `and`, `or`, `|`, `[`, `![`)

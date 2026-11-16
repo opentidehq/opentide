@@ -6,12 +6,12 @@ args: opentide validate query
 exit: 1
 
 ━━━ stdout
-error[kql_parse_error]: KQL syntax error
-   ╭─▶ objects/rules/covert-exfiltration-rule-0157.yaml:45:31
+error[kql_parse_error]: KQL syntax error: expected a name
+   ╭─▶ objects/rules/covert-exfiltration-rule-0157.yaml:45:33
    │
 44 │     query: |
 45 │       search in (SecurityEvent, *) "error"
-   │                               ━━━
+   │                                 ━
    │
    ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 
@@ -42,12 +42,12 @@ error[kuery_parse_error]: Kibana ends an unquoted value at `not ` and rejects th
    │
    ╰─ help: try: "cannot run"
 
-error[kql_parse_error]: KQL syntax error
-   ╭─▶ objects/rules/covert-tunnel-rule-0170.yaml:49:7
+error[kql_parse_error]: KQL syntax error: expected a name
+   ╭─▶ objects/rules/covert-tunnel-rule-0170.yaml:49:13
    │
 48 │     query: |
 49 │       union * | take 1
-   │       ━━━━━━━━━━━━━━━━
+   │             ━
    │
    ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 
@@ -96,12 +96,12 @@ error[eql_parse_error]: use double quotes ["] for string literals, not single qu
    │
    ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
 
-error[kql_parse_error]: KQL syntax error
-   ╭─▶ objects/rules/encoded-tunnel-rule-0049.yaml:51:21
+error[kql_parse_error]: KQL syntax error: expected an expression
+   ╭─▶ objects/rules/encoded-tunnel-rule-0049.yaml:51:29
    │
 50 │     query: |
 51 │       SecurityEvent | where (
-   │                     ━━━━━━━━━
+   │                             ━
    │
    ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 
@@ -249,12 +249,12 @@ error[esql_unknown_type]: `foo` is not an ES|QL type Elasticsearch can cast to; 
    │
    ╰─ help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
 
-error[kql_parse_error]: KQL syntax error
-   ╭─▶ objects/rules/remote-dropper-rule-0140.yaml:75:7
+error[kql_parse_error]: KQL syntax error: expected a name
+   ╭─▶ objects/rules/remote-dropper-rule-0140.yaml:75:13
    │
 74 │     query: |
 75 │       union * | take 1
-   │       ━━━━━━━━━━━━━━━━
+   │             ━
    │
    ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 
@@ -384,12 +384,12 @@ error[eql_field_comparison]: Elasticsearch EQL cannot compare a field with anoth
    │
    ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
 
-error[kql_parse_error]: KQL syntax error
-   ╭─▶ objects/rules/staged-beacon-rule-0053.yaml:62:7
+error[kql_parse_error]: KQL syntax error: expected an expression
+   ╭─▶ objects/rules/staged-beacon-rule-0053.yaml:62:15
    │
 61 │       SecurityEvent
 62 │       | where (
-   │       ━━━━━━━━━
+   │               ━
    │
    ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 

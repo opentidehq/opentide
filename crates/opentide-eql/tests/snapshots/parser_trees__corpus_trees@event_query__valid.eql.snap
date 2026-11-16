@@ -1,0 +1,44 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/event_query__valid.eql
+---
+SOURCE_FILE@0..91
+  LINE_COMMENT@0..25 "// prod:event_query valid"
+  WHITESPACE@25..26 "\n"
+  EVENT_QUERY@26..90
+    EVENT_CATEGORY@26..33
+      IDENTIFIER@26..33
+        WORD@26..33 "process"
+    WHITESPACE@33..34 " "
+    WHERE_KW@34..39 "where"
+    WHITESPACE@39..40 " "
+    AND_EXPRESSION@40..90
+      COMPARISON@40..61
+        FIELD@40..50
+          IDENTIFIER@40..45
+            WORD@40..45 "event"
+          DOT@45..46 "."
+          IDENTIFIER@46..50
+            WORD@46..50 "type"
+        WHITESPACE@50..51 " "
+        EQ_EQ@51..53 "=="
+        WHITESPACE@53..54 " "
+        STRING@54..61
+          STRING_TOKEN@54..61 "\"start\""
+      WHITESPACE@61..62 " "
+      AND_KW@62..65 "and"
+      WHITESPACE@65..66 " "
+      PREDICATE_EXPRESSION@66..90
+        FIELD@66..78
+          IDENTIFIER@66..73
+            WORD@66..73 "process"
+          DOT@73..74 "."
+          IDENTIFIER@74..78
+            WORD@74..78 "name"
+        WHITESPACE@78..79 " "
+        COLON@79..80 ":"
+        WHITESPACE@80..81 " "
+        STRING@81..90
+          STRING_TOKEN@81..90 "\"cmd.exe\""
+  WHITESPACE@90..91 "\n"

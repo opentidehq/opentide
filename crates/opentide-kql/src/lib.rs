@@ -13,17 +13,16 @@
 )]
 use opentide_core::datasets::{Declaration, DeclaredSource};
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, SignatureHelp,
-    SignatureInformation, codes, span_to_range, suggest,
+    ByteSpan, CompletionItem, Diagnostic, ParameterInformation, Range, SignatureHelp,
+    SignatureInformation, codes, suggest,
 };
-use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use opentide_highlight::HighlightToken;
 mod perf;
 pub mod schema;
 pub mod tables;
 
-// The pure-Rust parser (#1230, ADR 0012) grows beside the tree-sitter path,
-// which serves until the last PR of the series switches production to it.
-// Generated from kql.ungram by `cargo xtask codegen`: an accessor for every
+// The pure-Rust parser (#1230, ADR 0012): a logos lexer, a recursive
+// descent on opentide-parse, a rowan tree. Generated from kql.ungram by `cargo xtask codegen`: an accessor for every
 // child of every node, most of which the engine never calls, and names the
 // grammar chooses (`TabularOperator::WhereOperator`, `RenameItem::new`).
 #[expect(
@@ -39,25 +38,16 @@ mod diagnose;
 mod highlight;
 mod lexer;
 mod parser;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the new parser is reached from tests until the switch"
-    )
-)]
 mod syntax;
 mod syntax_util;
 // The typed AST names the kinds from the crate root.
 use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 #[doc(hidden)]
-pub mod testing;
+pub mod inspect;
 
-use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
-use tree_sitter::Node;
 
 const OPERATORS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
@@ -764,7 +754,12 @@ impl Catalog {
     }
 
     pub fn resolve_column(&self, source: &str, name: &str) -> Option<&ColumnRow> {
-        let mentioned = self.mentioned_tables(source);
+        self.resolve_column_among(&self.mentioned_tables(source), name)
+    }
+
+    /// [`Catalog::resolve_column`] with the tables the query names already
+    /// found: a caller that resolves many names scans the query once.
+    fn resolve_column_among(&self, mentioned: &[&TableRow], name: &str) -> Option<&ColumnRow> {
         if let Some(col) = mentioned.iter().find_map(|table| {
             self.columns_for_table(&table.name)
                 .into_iter()
@@ -777,6 +772,18 @@ impl Catalog {
         self.columns
             .iter()
             .find(|c| c.name == name && c.hand_written())
+    }
+
+    /// The names [`Catalog::resolve_column_among`] resolves, as a set: what a
+    /// caller that asks about every name of a query looks up, once each
+    /// (the hand-written columns are a scan of the whole catalog).
+    fn column_names_among(&self, mentioned: &[&TableRow]) -> HashSet<&str> {
+        mentioned
+            .iter()
+            .flat_map(|table| self.columns_for_table(&table.name))
+            .chain(self.columns.iter().filter(|c| c.hand_written()))
+            .map(|c| c.name.as_str())
+            .collect()
     }
 
     pub fn option_values(&self, operator: &str, option: &str) -> &[String] {
@@ -867,82 +874,10 @@ impl std::fmt::Display for Hir {
     }
 }
 
+/// The HIR of `source`: its `let`s, its first source and its operators.
 pub fn lower(source: &str) -> Hir {
-    let Some(tree) = ts_parse(LanguageId::Kql, source) else {
-        return Hir::Empty;
-    };
-    let root = tree.root_node();
-    let mut lets = Vec::new();
-    let mut source_name = String::new();
-    let mut operators = Vec::new();
-    if let Some(hir) = walk(&root, source, &mut |node| {
-        if node.kind() == "let_statement" {
-            let name = child_text(node, "name", source).unwrap_or_default();
-            let value = child_text(node, "value", source).unwrap_or_default();
-            lets.push((name, value));
-        }
-        if node.kind() == "control_command" {
-            let name = child_text(node, "name", source).unwrap_or_default();
-            return Walk::Stop(Hir::ControlCommand { name });
-        }
-        if node.kind() == "tabular_primary" && source_name.is_empty() {
-            source_name = node
-                .utf8_text(source.as_bytes())
-                .unwrap_or("")
-                .trim()
-                .to_string();
-        }
-        if node.kind().ends_with("_operator") && node.kind() != "tabular_operator" {
-            let name = if node.kind() == "keyword_operator" {
-                child_text(node, "name", source).unwrap_or_else(|| "unknown".into())
-            } else {
-                node.kind().trim_end_matches("_operator").replace('_', "-")
-            };
-            let args = node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
-            operators.push(HirOp { name, args });
-        }
-        Walk::Continue
-    }) {
-        return hir;
-    }
-    if source_name.is_empty() && operators.is_empty() && lets.is_empty() {
-        Hir::Empty
-    } else {
-        Hir::Query {
-            lets,
-            source: source_name,
-            operators,
-        }
-    }
-}
-
-enum Walk<T> {
-    Continue,
-    Stop(T),
-}
-
-#[expect(
-    clippy::used_underscore_binding,
-    reason = "`_source` only passes through the recursion (clippy::only_used_in_recursion)"
-)]
-fn walk<T>(node: &Node, _source: &str, f: &mut impl FnMut(Node) -> Walk<T>) -> Option<T> {
-    match f(*node) {
-        Walk::Stop(v) => return Some(v),
-        Walk::Continue => {}
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        if let Some(v) = walk(&child, _source, f) {
-            return Some(v);
-        }
-    }
-    None
-}
-
-fn child_text(node: Node, field: &str, source: &str) -> Option<String> {
-    node.child_by_field_name(field)
-        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-        .map(|s| s.to_string())
+    let parsed = parser::parse_once(source);
+    diagnose::lower(&SyntaxNode::new_root(parsed.green), source)
 }
 
 pub struct AnalyzeResult {
@@ -961,150 +896,17 @@ pub fn analyze(source: &str, profile: Profile) -> AnalyzeResult {
 /// parse at all.
 pub fn columns(source: &str, profile: Profile) -> schema::Analysis {
     let catalog = Catalog::for_workspace(profile, source);
-    ts_parse(LanguageId::Kql, source)
-        .map(|tree| schema::analyze(tree.root_node(), source, &catalog))
-        .unwrap_or_default()
+    diagnose::columns(source, &catalog)
 }
 
-#[expect(
-    clippy::expect_used,
-    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
-)]
+/// Parses `source`, checks it against `catalog` and highlights it: every
+/// diagnostic, the HIR and the highlight tokens, from one parse.
 pub fn analyze_with_catalog(source: &str, catalog: &Catalog) -> AnalyzeResult {
-    let spec = HighlightSpec::load().expect("highlight spec");
-    let mut diagnostics = Vec::new();
-    let Some(tree) = ts_parse(LanguageId::Kql, source) else {
-        return AnalyzeResult {
-            diagnostics: vec![Diagnostic::error(
-                codes::KQL_PARSE_ERROR,
-                "failed to initialize KQL parser",
-                Range::point(0, 0),
-            )],
-            hir: Hir::Empty,
-            tokens: Vec::new(),
-        };
-    };
-    if has_error(&tree) {
-        let err = first_error_node(tree.root_node());
-        let range = node_range(source, err.unwrap_or(tree.root_node()));
-        diagnostics.push(Diagnostic::error(
-            codes::KQL_PARSE_ERROR,
-            "KQL syntax error",
-            range,
-        ));
-    }
-
-    let hir = lower(source);
-    collect_control_commands(tree.root_node(), source, &mut diagnostics);
-
-    collect_operator_diagnostics(tree.root_node(), source, catalog, &mut diagnostics);
-    let mut lets = BTreeSet::new();
-    let_names(tree.root_node(), source, &mut lets);
-    collect_function_diagnostics(tree.root_node(), source, catalog, &lets, &mut diagnostics);
-    collect_scalar_operator_diagnostics(tree.root_node(), source, catalog, &mut diagnostics);
-    collect_table_diagnostics(tree.root_node(), source, catalog, &lets, &mut diagnostics);
-    let columns = schema::analyze(tree.root_node(), source, catalog);
-    diagnostics.extend(columns.diagnostics.iter().cloned());
-    perf::collect(tree.root_node(), source, &columns, &mut diagnostics);
-
-    let tokens = highlight_tree(&spec, source, tree.root_node(), catalog).unwrap_or_default();
+    let analysis = diagnose::analyze(source, catalog);
     AnalyzeResult {
-        diagnostics,
-        hir,
-        tokens,
-    }
-}
-
-fn first_error_node(node: Node) -> Option<Node> {
-    if node.is_error() || node.is_missing() {
-        return Some(node);
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        if let Some(n) = first_error_node(child) {
-            return Some(n);
-        }
-    }
-    None
-}
-
-fn node_range(source: &str, node: Node) -> Range {
-    span_to_range(
-        source,
-        ByteSpan::new(
-            node.start_byte(),
-            node.end_byte().max(node.start_byte() + 1),
-        ),
-    )
-}
-
-fn collect_control_commands(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    if node.kind() == "control_command" {
-        let name = child_text(node, "name", source).unwrap_or_else(|| ".".into());
-        if !out
-            .iter()
-            .any(|d| d.code == codes::KQL_CONTROL_COMMAND_UNSUPPORTED)
-        {
-            out.push(Diagnostic::error(
-                codes::KQL_CONTROL_COMMAND_UNSUPPORTED,
-                format!("KQL control command '.{name}' is not valid in detections"),
-                node_range(source, node),
-            ));
-        }
-        return;
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_control_commands(child, source, out);
-    }
-}
-
-fn collect_operator_diagnostics(
-    node: Node,
-    source: &str,
-    catalog: &Catalog,
-    out: &mut Vec<Diagnostic>,
-) {
-    if node.kind() == "unknown_operator" {
-        let name = child_text(node, "name", source).unwrap_or_default();
-        if catalog.operator(&name).is_none() {
-            let mut d = Diagnostic::error(
-                codes::KQL_UNKNOWN_OPERATOR,
-                format!("unknown tabular operator '{name}'"),
-                node_range(source, node),
-            );
-            if let Some(s) =
-                suggest::closest(&name, catalog.operators.iter().map(|o| o.name.as_str()))
-            {
-                d = d.with_suggestion(s);
-            }
-            out.push(d);
-        }
-    }
-    if node.kind() == "render_operator" {
-        out.push(Diagnostic::warning(
-            codes::KQL_RENDER_NOT_VALID,
-            "`render` is not valid in detection queries",
-            node_range(source, node),
-        ));
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_operator_diagnostics(child, source, catalog, out);
-    }
-}
-
-/// Names bound by `let` anywhere in the query: tables, scalars and functions the
-/// author declared, which the catalog cannot know.
-fn let_names(node: Node, source: &str, out: &mut BTreeSet<String>) {
-    if node.kind() == "let_statement"
-        && let Some(name) = child_text(node, "name", source)
-    {
-        out.insert(name);
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        let_names(child, source, out);
+        diagnostics: analysis.diagnostics,
+        hir: analysis.hir,
+        tokens: analysis.tokens,
     }
 }
 
@@ -1114,209 +916,6 @@ const TYPED_LITERAL_TYPES: &[&str] = &[
     "bool", "date", "datetime", "decimal", "double", "guid", "int", "int32", "int64", "long",
     "real", "time", "timespan",
 ];
-
-/// The range of a call's name, which a quick fix replaces with the suggestion
-/// without touching the arguments.
-fn call_name_range(source: &str, node: Node) -> Range {
-    node_range(source, node.child_by_field_name("name").unwrap_or(node))
-}
-
-fn collect_function_diagnostics(
-    node: Node,
-    source: &str,
-    catalog: &Catalog,
-    lets: &BTreeSet<String>,
-    out: &mut Vec<Diagnostic>,
-) {
-    if node.kind() == "function_call"
-        && let Some(name) = child_text(node, "name", source)
-    {
-        let is_plugin = node.parent().map(|p| p.kind()) == Some("evaluate_operator");
-        let function = catalog.function(&name);
-        if lets.contains(&name) {
-            // A function the query declares with `let`.
-        } else if !is_plugin && TYPED_LITERAL_TYPES.contains(&name.as_str()) {
-            // The grammar lexes `datetime(...)` closed on its line as one
-            // literal token. A call shape here is a literal Kusto rejects: a
-            // space before `(`, or a value that runs onto the next line.
-            out.push(Diagnostic::error(
-                    codes::KQL_PARSE_ERROR,
-                    format!(
-                        "'{name}(' starts a typed literal: write the value and ')' on the same line, directly after '{name}'"
-                    ),
-                    node_range(source, node),
-                ));
-        } else if is_plugin {
-            if catalog.plugin(&name).is_none() {
-                let mut d = Diagnostic::error(
-                    codes::KQL_UNKNOWN_FUNCTION,
-                    format!("unknown evaluate plugin '{name}'"),
-                    call_name_range(source, node),
-                );
-                if let Some(s) =
-                    suggest::closest(&name, catalog.plugins.iter().map(|p| p.name.as_str()))
-                {
-                    d = d.with_suggestion(s);
-                }
-                out.push(d);
-            }
-        } else if let Some(replacement) = function.and_then(|f| f.deprecated.as_ref()) {
-            out.push(
-                Diagnostic::warning(
-                    codes::KQL_DEPRECATED_FUNCTION,
-                    format!("'{name}' is deprecated; use {replacement}()"),
-                    call_name_range(source, node),
-                )
-                .with_suggestion(replacement.clone()),
-            );
-        } else if function.is_none() && catalog.operator(&name).is_none() {
-            // Operators used as functions are fine; unknown names get a diagnostic.
-            // Many scalar functions are not yet catalogued — only flag if it looks like a typo of a known one:
-            // within two edits (strsim's Levenshtein distance), the check's own threshold. Among those,
-            // the shared rule chooses.
-            if let Some(suggestion) = suggest::best(
-                &name,
-                catalog
-                    .functions
-                    .iter()
-                    .filter(|f| f.deprecated.is_none())
-                    .map(|f| f.name.as_str())
-                    .filter(|f| (1..=2).contains(&strsim::levenshtein(f, &name))),
-            ) {
-                out.push(
-                    Diagnostic::error(
-                        codes::KQL_UNKNOWN_FUNCTION,
-                        format!("unknown function '{name}'"),
-                        call_name_range(source, node),
-                    )
-                    .with_suggestion(suggestion),
-                );
-            }
-        }
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_function_diagnostics(child, source, catalog, lets, out);
-    }
-}
-
-/// `containscs`, `notcontains` and `notcontainscs` are legacy spellings Kusto
-/// still parses; the catalog names the current operator.
-fn collect_scalar_operator_diagnostics(
-    node: Node,
-    source: &str,
-    catalog: &Catalog,
-    out: &mut Vec<Diagnostic>,
-) {
-    if node.kind() == "comparison_expression" {
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            if child.is_named() {
-                continue;
-            }
-            let Ok(text) = child.utf8_text(source.as_bytes()) else {
-                continue;
-            };
-            if let Some(replacement) = catalog
-                .scalar_operator(text)
-                .and_then(|op| op.deprecated.as_ref())
-            {
-                out.push(
-                    Diagnostic::warning(
-                        codes::KQL_DEPRECATED_OPERATOR,
-                        format!("'{text}' is a legacy spelling; use {replacement}"),
-                        node_range(source, child),
-                    )
-                    .with_suggestion(replacement.clone()),
-                );
-            }
-        }
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_scalar_operator_diagnostics(child, source, catalog, out);
-    }
-}
-
-/// Parameters of a function definition that take a table, `(T:(x:string))` or
-/// `(T:(*))`: inside the body their names are tables.
-fn tabular_parameters(definition: Node, source: &str) -> Vec<String> {
-    let mut names = Vec::new();
-    let mut cursor = definition.walk();
-    for parameter in definition.children(&mut cursor) {
-        if parameter.kind() != "parameter" {
-            continue;
-        }
-        let tabular = parameter
-            .child_by_field_name("type")
-            .and_then(|t| t.child(0))
-            .is_some_and(|first| first.kind() == "(");
-        if tabular && let Some(name) = child_text(parameter, "name", source) {
-            names.push(name);
-        }
-    }
-    names
-}
-
-fn collect_table_diagnostics(
-    node: Node,
-    source: &str,
-    catalog: &Catalog,
-    lets: &BTreeSet<String>,
-    out: &mut Vec<Diagnostic>,
-) {
-    if catalog.tables.is_empty() {
-        return;
-    }
-    if node.kind() == "function_definition" {
-        let params = tabular_parameters(node, source);
-        if !params.is_empty() {
-            let mut scoped = lets.clone();
-            scoped.extend(params);
-            let mut cursor = node.walk();
-            for child in node.children(&mut cursor) {
-                collect_table_diagnostics(child, source, catalog, &scoped, out);
-            }
-            return;
-        }
-    }
-    match node.kind() {
-        "tabular_primary" => {
-            if let Some(table) = node.child_by_field_name("table") {
-                check_table(table, node, source, catalog, lets, out);
-            }
-        }
-        // `union isfuzzy=true` runs whatever legs exist.
-        "union_operator" if !is_fuzzy_union(node, source) => {
-            let mut cursor = node.walk();
-            let union_legs: Vec<Node> = node
-                .children_by_field_name("tables", &mut cursor)
-                .filter(|n| n.kind() == "identifier")
-                .collect();
-            for leg in union_legs {
-                check_table(leg, leg, source, catalog, lets, out);
-            }
-        }
-        _ => {}
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_table_diagnostics(child, source, catalog, lets, out);
-    }
-}
-
-fn is_fuzzy_union(node: Node, source: &str) -> bool {
-    let mut cursor = node.walk();
-    node.named_children(&mut cursor)
-        .filter(|c| c.kind() == "operator_option")
-        .any(|c| {
-            let text = |f: &str| {
-                c.child_by_field_name(f)
-                    .map(|n| source[n.byte_range()].to_ascii_lowercase())
-            };
-            text("name").as_deref() == Some("isfuzzy") && text("value").as_deref() == Some("true")
-        })
-}
 
 /// A name in the form of an ASIM parser (`_Im_Dns`, `_ASim_Dns`, `imDns`,
 /// `ASimDns`, `vimDnsMicrosoftOMS`), when the catalog does not list it: a
@@ -1360,28 +959,6 @@ fn dataset_platform(profile: Profile) -> &'static str {
         Profile::Defender => "defender_for_endpoint",
         Profile::Core | Profile::Sentinel => "sentinel",
     }
-}
-
-/// One table a query reads (#110's tiers): a table the workspace declares in
-/// `visibility.toml` is known; a catalog table it does not declare warns
-/// when it declares others for the platform (`kql_table_not_declared`); a
-/// name neither knows is `kql_unknown_table` (#111, #147), whose help names
-/// the declaration once the workspace declares tables.
-fn check_table(
-    name: Node,
-    at: Node,
-    source: &str,
-    catalog: &Catalog,
-    lets: &BTreeSet<String>,
-    out: &mut Vec<Diagnostic>,
-) {
-    check_table_named(
-        &source[name.byte_range()],
-        node_range(source, at),
-        catalog,
-        lets,
-        out,
-    );
 }
 
 /// [`check_table`] on the table's name and the range to report: the part of
@@ -1481,41 +1058,11 @@ fn check_table_named(
     out.push(d);
 }
 
-#[expect(
-    clippy::manual_assert,
-    reason = "a broken highlights.scm panics in debug builds (the tests) and falls back to the tree walk in release builds"
-)]
-fn highlight_tree(
-    spec: &HighlightSpec,
-    source: &str,
-    root: Node,
-    catalog: &Catalog,
-) -> Result<Vec<HighlightToken>, opentide_highlight::HighlightError> {
-    match opentide_syntax::query_captures(
-        LanguageId::Kql,
-        source,
-        opentide_highlight::KQL_HIGHLIGHTS_SCM,
-    ) {
-        Ok(mut owned) => {
-            overlay_catalog_captures(source, &mut owned, catalog);
-            let refs: Vec<(ByteSpan, &str)> = owned
-                .iter()
-                .map(|(span, cap)| (*span, cap.as_str()))
-                .collect();
-            tokens_from_spans(spec, source, &refs)
-        }
-        Err(err) => {
-            if cfg!(debug_assertions) {
-                panic!("KQL highlights.scm query failed: {err}");
-            }
-            let mut spans = Vec::new();
-            collect_highlights(root, source, &mut spans);
-            tokens_from_spans(spec, source, &spans)
-        }
-    }
-}
-
 fn overlay_catalog_captures(source: &str, spans: &mut [(ByteSpan, String)], catalog: &Catalog) {
+    // Once per query, not once per name: a long query has thousands of names,
+    // and each scan reads the whole query (quadratic on the old engine).
+    let mentioned = catalog.mentioned_tables(source);
+    let columns = catalog.column_names_among(&mentioned);
     for (span, capture) in spans.iter_mut() {
         let end = span.end.min(source.len());
         if span.start >= end {
@@ -1542,60 +1089,9 @@ fn overlay_catalog_captures(source: &str, spans: &mut [(ByteSpan, String)], cata
             && *capture == "variable"
         {
             *capture = "operator".into();
-        } else if catalog.resolve_column(source, text).is_some() && *capture == "variable" {
+        } else if *capture == "variable" && columns.contains(text) {
             *capture = "property".into();
         }
-    }
-}
-
-#[expect(
-    clippy::used_underscore_binding,
-    reason = "`_source` only passes through the recursion (clippy::only_used_in_recursion)"
-)]
-fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'static str)>) {
-    let kind = node.kind();
-    let capture = match kind {
-        "comment" => Some("comment"),
-        "string" => Some("string"),
-        "number" | "timespan" => Some("number"),
-        "boolean" => Some("boolean"),
-        "null" => Some("constant"),
-        "|" => Some("operator.pipe"),
-        "let" | "where" | "filter" | "project" | "project-away" | "project-rename"
-        | "project-keep" | "project-reorder" | "extend" | "summarize" | "join" | "union"
-        | "parse" | "parse-where" | "parse-kv" | "lookup" | "take" | "limit" | "sort" | "order"
-        | "distinct" | "render" | "print" | "by" | "on" | "with" | "and" | "or" | "not" | "top"
-        | "count" | "mv-expand" | "mvexpand" | "search" | "find" | "invoke" | "evaluate"
-        | "serialize" | "as" => Some("keyword"),
-        "identifier" => {
-            if node.parent().map(|p| p.kind()) == Some("function_call")
-                && node
-                    .parent()
-                    .and_then(|p| p.child_by_field_name("name"))
-                    .map(|n| n.id())
-                    == Some(node.id())
-            {
-                Some("function")
-            } else if node.parent().map(|p| p.kind()) == Some("tabular_primary") {
-                Some("type")
-            } else {
-                Some("variable")
-            }
-        }
-        "quoted_identifier" | "column_pattern" => Some("variable"),
-        "==" | "!=" | "=~" | "=" | "+" | "-" | "*" | "/" => Some("operator"),
-        "(" | ")" => Some("punctuation.bracket"),
-        "," | ";" => Some("punctuation.delimiter"),
-        _ => None,
-    };
-    if let Some(capture) = capture
-        && (node.child_count() == 0 || matches!(kind, "string" | "comment" | "number" | "timespan"))
-    {
-        out.push((ByteSpan::new(node.start_byte(), node.end_byte()), capture));
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_highlights(child, _source, out);
     }
 }
 
@@ -1945,22 +1441,6 @@ fn prefix_option_items(op: &str, options: &[&OperatorOption]) -> Vec<CompletionI
 /// Hover at byte `offset` of `source` (an LSP host converts the editor's
 /// UTF-16 position once, with `opentide_core::position_to_offset`).
 pub fn hover(source: &str, offset: usize, profile: Profile) -> Option<String> {
-    hover_with(source, offset, profile, tree_sitter_columns)
-}
-
-/// The column pass on the tree-sitter tree: what hover reads a column from.
-fn tree_sitter_columns(source: &str, catalog: &Catalog) -> Option<schema::Analysis> {
-    let tree = ts_parse(LanguageId::Kql, source)?;
-    Some(schema::analyze(tree.root_node(), source, catalog))
-}
-
-/// [`hover`], with the column pass `columns` (the old tree's or the new's).
-pub(crate) fn hover_with(
-    source: &str,
-    offset: usize,
-    profile: Profile,
-    columns: fn(&str, &Catalog) -> Option<schema::Analysis>,
-) -> Option<String> {
     let offset = offset.min(source.len());
     // An offset inside a character (a decoded escape) has nothing to show.
     if !source.is_char_boundary(offset) {
@@ -1969,7 +1449,7 @@ pub(crate) fn hover_with(
     let workspace = Catalog::for_workspace(profile, source);
     let catalog = &*workspace;
     let word = word_at(source, offset)?;
-    if let Some(md) = column_hover(source, offset, catalog, columns) {
+    if let Some(md) = column_hover(source, offset, catalog) {
         return Some(md);
     }
     if let Some(parser) = catalog.asim_parser(&word) {
@@ -2134,13 +1614,8 @@ pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<S
 
 /// Hover for a column the query reads or defines: its name and type as the
 /// pipeline has them at that point, and where it comes from.
-fn column_hover(
-    source: &str,
-    offset: usize,
-    catalog: &Catalog,
-    columns: fn(&str, &Catalog) -> Option<schema::Analysis>,
-) -> Option<String> {
-    let analysis = columns(source, catalog)?;
+fn column_hover(source: &str, offset: usize, catalog: &Catalog) -> Option<String> {
+    let analysis = diagnose::columns(source, catalog);
     let column = analysis.column_at(offset)?;
     let type_name = column.type_name.as_deref().unwrap_or("unknown type");
     let mut md = format!("**{}** column (`{type_name}`)", column.name);
@@ -2707,7 +2182,7 @@ mod tests {
 
     #[test]
     fn engine_has_no_sql() {
-        assert!(LanguageId::parse("sql").is_none());
+        assert!(opentide_core::LanguageId::parse("sql").is_none());
     }
 
     #[test]

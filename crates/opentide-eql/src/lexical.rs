@@ -1,9 +1,7 @@
 //! Checks that follow Elasticsearch's EQL lexer rather than the grammar:
-//! nested block comments and the expression-depth pre-scan.
+//! nested block comments, and the expression-depth pre-scan's limit.
 
 use opentide_core::ByteSpan;
-use std::borrow::Cow;
-use tree_sitter::Node;
 
 /// Depth limit of `EqlParser.MAX_EXPRESSION_DEPTH`.
 pub(crate) const MAX_EXPRESSION_DEPTH: i64 = 250;
@@ -19,17 +17,14 @@ pub(crate) enum CommentFinding {
     NotAComment(ByteSpan),
 }
 
-/// The text the grammar parses (block comments Elasticsearch nests have their
-/// inner `/` and `*` blanked so tree-sitter ends them where Elasticsearch
-/// does; byte offsets are unchanged), and what was found on the way.
-pub(crate) struct Prepared<'a> {
-    pub text: Cow<'a, str>,
+/// What a scan of the source finds about its block comments (the lexer itself ends a
+/// comment where Elasticsearch's lexer does, nested ones too).
+pub(crate) struct Prepared {
     pub comments: Vec<CommentFinding>,
 }
 
-pub(crate) fn prepare(source: &str) -> Prepared<'_> {
+pub(crate) fn prepare(source: &str) -> Prepared {
     let bytes = source.as_bytes();
-    let mut masked: Option<Vec<u8>> = None;
     let mut comments = Vec::new();
     let mut i = 0;
     while i < bytes.len() {
@@ -52,7 +47,7 @@ pub(crate) fn prepare(source: &str) -> Prepared<'_> {
                 let mut j = i + 1;
                 loop {
                     match bytes.get(j) {
-                        None => return finish(source, masked, comments),
+                        None => return Prepared { comments },
                         Some(b'`') if bytes.get(j + 1) == Some(&b'`') => j += 2,
                         Some(b'`') => break,
                         Some(_) => j += 1,
@@ -75,12 +70,6 @@ pub(crate) fn prepare(source: &str) -> Prepared<'_> {
                 match es_comment_end(bytes, i) {
                     Some(end) if end == first => i = first,
                     Some(end) => {
-                        let buf = masked.get_or_insert_with(|| bytes.to_vec());
-                        for b in &mut buf[i + 2..end - 2] {
-                            if matches!(*b, b'*' | b'/') {
-                                *b = b' ';
-                            }
-                        }
                         comments.push(CommentFinding::Nested(ByteSpan::new(i, end)));
                         i = end;
                     }
@@ -93,17 +82,7 @@ pub(crate) fn prepare(source: &str) -> Prepared<'_> {
             _ => i += 1,
         }
     }
-    finish(source, masked, comments)
-}
-
-fn finish(source: &str, masked: Option<Vec<u8>>, comments: Vec<CommentFinding>) -> Prepared<'_> {
-    // Only ASCII `*` and `/` inside a comment were replaced, so the bytes
-    // stay valid UTF-8.
-    let text = match masked.map(String::from_utf8) {
-        Some(Ok(s)) => Cow::Owned(s),
-        _ => Cow::Borrowed(source),
-    };
-    Prepared { text, comments }
+    Prepared { comments }
 }
 
 /// End of a `"""` string: content runs to the first `"""` on the same line,
@@ -196,42 +175,6 @@ fn push(state: (u32, u8), next: &mut Vec<(u32, u8)>) {
     }
 }
 
-/// `EqlParser` scans the tokens before parsing: `(` and `)` move a depth
-/// counter, and a run of prefix-capable `not`, `-`, `+` tokens adds to it;
-/// any other visible token ends the run. Whitespace and comments do not.
-/// Returns the token where `depth + run` first exceeds the limit.
-pub(crate) fn expression_depth_exceeded(root: Node) -> Option<ByteSpan> {
-    let mut depth: i64 = 0;
-    let mut chain: i64 = 0;
-    let mut cursor = root.walk();
-    loop {
-        let node = cursor.node();
-        if node.child_count() == 0 && !node.is_missing() && node.end_byte() > node.start_byte() {
-            match node.kind() {
-                "(" => depth += 1,
-                ")" => depth -= 1,
-                "not" | "-" | "+" if !node.is_named() => chain += 1,
-                "comment" => {}
-                _ => chain = 0,
-            }
-            if depth + chain > MAX_EXPRESSION_DEPTH {
-                return Some(ByteSpan::new(node.start_byte(), node.end_byte()));
-            }
-        }
-        if cursor.goto_first_child() {
-            continue;
-        }
-        loop {
-            if cursor.goto_next_sibling() {
-                break;
-            }
-            if !cursor.goto_parent() {
-                return None;
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -257,18 +200,15 @@ mod tests {
     }
 
     #[test]
-    fn nested_comments_are_masked_to_their_elasticsearch_extent() {
+    fn nested_comments_are_found_with_their_elasticsearch_extent() {
         let src = "process where /* a /* b */ c */ true";
         let p = prepare(src);
-        assert_eq!(p.text.len(), src.len());
         assert_eq!(
             p.comments,
             vec![CommentFinding::Nested(ByteSpan::new(14, 31))]
         );
-        assert_eq!(&p.text[14..31], "/* a    b    c */");
         // Strings and backticks are not comments.
         let p = prepare("process where a == \"/* /* */\" and `/*` == 1");
         assert!(p.comments.is_empty());
-        assert!(matches!(p.text, Cow::Borrowed(_)));
     }
 }

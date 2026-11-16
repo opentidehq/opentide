@@ -1,0 +1,33 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(source)"
+---
+SOURCE_FILE@0..37
+  SEQUENCE@0..37
+    SEQUENCE_KW@0..8 "sequence"
+    WHITESPACE@8..9 " "
+    SEQUENCE_TERM@9..23
+      SUBQUERY@9..23
+        L_BRACK@9..10 "["
+        EVENT_CATEGORY@10..11
+          IDENTIFIER@10..11
+            WORD@10..11 "a"
+        WHITESPACE@11..12 " "
+        WHERE_KW@12..17 "where"
+        WHITESPACE@17..18 " "
+        BOOLEAN@18..22
+          TRUE_KW@18..22 "true"
+        R_BRACK@22..23 "]"
+    WHITESPACE@23..24 " "
+    SEQUENCE_TERM@24..37
+      SUBQUERY@24..37
+        L_BRACK@24..25 "["
+        EVENT_CATEGORY@25..26
+          IDENTIFIER@25..26
+            WORD@25..26 "b"
+        WHITESPACE@26..27 " "
+        WHERE_KW@27..32 "where"
+        WHITESPACE@32..33 " "
+        BOOLEAN@33..37
+          TRUE_KW@33..37 "true"
+37..37: missing `]` (expected `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `+`, `-`, `*`, `/`, `%`, `]`, `:`)

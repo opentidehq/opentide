@@ -1,0 +1,32 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/missing_event_open__invalid.eql
+---
+SOURCE_FILE@0..77
+  LINE_COMMENT@0..34 "// prod:missing_event_open invalid"
+  WHITESPACE@34..35 "\n"
+  EVENT_QUERY@35..57
+    EVENT_CATEGORY@35..42
+      IDENTIFIER@35..42
+        WORD@35..42 "process"
+    WHITESPACE@42..43 " "
+    WHERE_KW@43..48 "where"
+    WHITESPACE@48..49 " "
+    AND_EXPRESSION@49..57
+      BOOLEAN@49..53
+        TRUE_KW@49..53 "true"
+      WHITESPACE@53..54 " "
+      AND_KW@54..57 "and"
+  WHITESPACE@57..58 " "
+  ERROR@58..76
+    BANG_L_BRACK@58..60 "!["
+    WORD@60..64 "file"
+    WHITESPACE@64..65 " "
+    WHERE_KW@65..70 "where"
+    WHITESPACE@70..71 " "
+    TRUE_KW@71..75 "true"
+    R_BRACK@75..76 "]"
+  WHITESPACE@76..77 "\n"
+57..58: an expression is missing (expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `true`, `+`, `-`, `(`, `?`)
+57..58: unexpected token (expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `or`, `true`, `|`, `+`, `-`, `(`, `?`)

@@ -1,23 +1,37 @@
 //! The semantic pass over yara-x-parser's AST: the symbol table (imports,
 //! rules, strings, loop variables), types, and every yara-1.0 code that is
-//! not a syntax error. Each check cites the libyara 4.5 behaviour it mirrors
-//! (`docs/engine/YARA.md`).
+//! not a syntax error. The language is YARA-X 1.x (#1225): each check
+//! refuses what YARA-X's compiler refuses (`docs/engine/YARA.md`); the
+//! warnings follow libyara's and YARA-X's.
 
 use crate::atoms::{self, MaskedByte};
 use crate::catalog::{Catalog, Kind, Member};
-use crate::{Context, Dialect, Finding, Profile, regexp};
+use crate::{Context, Finding, Profile, regexp};
 use opentide_core::{Severity, codes};
-use std::collections::{BTreeMap, BTreeSet};
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use yara_x_parser::Span;
 use yara_x_parser::ast::{
     AST, Expr, HexSubPattern, HexToken, Ident, Iterable, MatchAnchor, MetaValue, OfItems, Pattern,
     PatternModifier, PatternSet, Quantifier, Rule, RuleFlags, WithSpan,
 };
 
-/// The integer readers libyara builds in (`lexer.l`: `u?int(8|16|32)(be)?`).
+/// The integer readers libyara and YARA-X build in (`u?int(8|16|32)(be)?`).
 const INTEGER_FUNCTIONS: &[&str] = &[
     "int8", "int16", "int32", "uint8", "uint16", "uint32", "int8be", "int16be", "int32be",
     "uint8be", "uint16be", "uint32be",
+];
+
+/// The readers only YARA-X builds in: 64-bit integers and floats.
+const YARA_X_READERS: &[(&str, Ty)] = &[
+    ("int64", Ty::Int),
+    ("uint64", Ty::Int),
+    ("int64be", Ty::Int),
+    ("uint64be", Ty::Int),
+    ("float32", Ty::Float),
+    ("float64", Ty::Float),
+    ("float32be", Ty::Float),
+    ("float64be", Ty::Float),
 ];
 
 /// libyara's `YR_STRING_CHAINING_THRESHOLD`: the longest jump inside a hex
@@ -146,32 +160,23 @@ pub struct Checker<'a> {
     /// The parser's parenthesis pairs: `(` to its `)`, and back.
     paren_open: BTreeMap<usize, usize>,
     paren_close: BTreeMap<usize, usize>,
-    /// Identifiers past libyara's 128 characters already reported.
-    long_identifiers: BTreeSet<String>,
     /// Rules defined before the current one.
     earlier_rules: BTreeSet<String>,
-    rule_wildcards: &'a [(usize, usize)],
     scopes: Vec<BTreeMap<String, Ty>>,
     /// Depth of `for … of` bodies, where the anonymous `$` is the current string.
     in_for_of: usize,
     rule: RuleState,
-    /// The current rule's name: a rule wildcard may match it.
-    current_rule: String,
-    /// Rule wildcards conditions used (`a*` as `a`): libyara refuses a rule
-    /// defined after them that they would match.
-    used_wildcards: Vec<String>,
     pub findings: Vec<Finding>,
+    /// Constant folds, one per node.
+    folds: Folds,
 }
-
-/// The longest rule name, tag or meta key libyara 4.5's lexer accepts.
-const MAX_IDENTIFIER: usize = 128;
 
 fn span(s: &Span) -> (usize, usize) {
     (s.start(), s.end())
 }
 
 impl<'a> Checker<'a> {
-    pub fn new(source: &'a str, ctx: &'a Context, rule_wildcards: &'a [(usize, usize)]) -> Self {
+    pub fn new(source: &'a str, ctx: &'a Context) -> Self {
         let pairs = crate::cst::paren_pairs(source);
         Self {
             paren_open: pairs.iter().copied().collect(),
@@ -184,23 +189,16 @@ impl<'a> Checker<'a> {
             yara_x_bool: BTreeSet::new(),
             last_member_yara_x_bool: false,
             yara_x_bool_vars: BTreeSet::new(),
-            long_identifiers: BTreeSet::new(),
             earlier_rules: BTreeSet::new(),
-            rule_wildcards,
             scopes: Vec::new(),
             in_for_of: 0,
             rule: RuleState {
                 patterns: Vec::new(),
                 uses_them: false,
             },
-            current_rule: String::new(),
-            used_wildcards: Vec::new(),
             findings: Vec::new(),
+            folds: Folds::default(),
         }
-    }
-
-    fn libyara(&self) -> bool {
-        self.ctx.dialect == Dialect::Libyara4
     }
 
     /// `e`'s range as written: from its leftmost operand to its rightmost
@@ -253,17 +251,6 @@ impl<'a> Checker<'a> {
         self.push(code, Severity::Warning, message, at);
     }
 
-    /// What libyara accepts and YARA-X refuses: a warning under libyara, an
-    /// error when the profile's dialect is YARA-X.
-    fn yara_x(&mut self, message: String, at: (usize, usize)) {
-        let severity = if self.libyara() {
-            Severity::Warning
-        } else {
-            Severity::Error
-        };
-        self.push(codes::YARA_X_INCOMPATIBLE, severity, message, at);
-    }
-
     /// Syntax only YARA-X accepts: an error while the context refuses it
     /// (`yara_x_syntax`), naming the construct and the profile.
     fn yara_x_only(&mut self, feature: &str, at: (usize, usize)) {
@@ -307,7 +294,15 @@ impl<'a> Checker<'a> {
             if !self.catalog.known_modules.contains(name) {
                 self.error(
                     codes::YARA_UNKNOWN_MODULE,
-                    format!("libyara 4.5 has no module `{name}`"),
+                    format!(
+                        "YARA has no module `{name}`: yara-1.0 knows {}",
+                        self.catalog
+                            .known_modules
+                            .iter()
+                            .cloned()
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
                     at,
                 );
                 continue;
@@ -352,7 +347,7 @@ impl<'a> Checker<'a> {
                 .map(|(m, _)| m.clone())
                 .collect();
             if broken(at) {
-                // A rule with a syntax error: libyara stops there.
+                // A rule with a syntax error: the compiler stops there.
                 self.earlier_rules.insert(name.to_string());
                 continue;
             }
@@ -378,22 +373,10 @@ impl<'a> Checker<'a> {
     fn rule(&mut self, rule: &Rule) {
         let name = rule.identifier.name;
         let name_at = span(&rule.identifier.span());
-        self.current_rule = name.to_string();
-        if let Some(prefix) = self
-            .used_wildcards
-            .iter()
-            .find(|p| name.starts_with(p.as_str()))
-        {
+        if self.imports.contains(name) {
             self.error(
                 codes::YARA_RULE_IDENTIFIER_CONFLICT,
-                format!("the rule `{name}` matches the rule wildcard `{prefix}*` an earlier condition uses: libyara refuses it"),
-                name_at,
-            );
-        }
-        if self.imports.contains(name) {
-            // libyara 4.5 accepts it; the module is then unreachable by name.
-            self.yara_x(
-                format!("YARA-X refuses a rule named like the imported module `{name}`"),
+                format!("a rule cannot be named like the imported module `{name}`"),
                 name_at,
             );
         } else if self.catalog.keywords.contains(name) {
@@ -403,11 +386,9 @@ impl<'a> Checker<'a> {
                 name_at,
             );
         }
-        self.identifier_length("rule name", name, name_at);
         if let Some(tags) = &rule.tags {
             let mut seen = BTreeSet::new();
             for tag in tags {
-                self.identifier_length("tag", tag.name, span(&tag.span()));
                 if !seen.insert(tag.name) {
                     self.error(
                         codes::YARA_DUPLICATE_TAG,
@@ -432,26 +413,32 @@ impl<'a> Checker<'a> {
         let cond_key = span(&rule.condition.span());
         let cond_at = self.written(&rule.condition);
         match ty {
-            Ty::Regexp => self.yara_x(
-                "YARA-X refuses a regular expression as a condition; libyara reads it as true".to_string(),
+            Ty::Regexp => self.error(
+                codes::YARA_TYPE,
+                "a regular expression is not a condition: match it against a string with `matches`"
+                    .to_string(),
                 cond_at,
             ),
             // YARA-X's non_bool_expr: a predicate it types as boolean is not one.
             Ty::Int | Ty::Float if self.yara_x_bool.contains(&cond_key) => {}
             Ty::Int | Ty::Float => self.warn(
                 codes::YARA_SUSPICIOUS_EXPRESSION,
-                format!("the condition is {}, not a boolean: libyara reads any non-zero value as true", ty.name()),
+                format!(
+                    "the condition is {}, not a boolean: any non-zero value reads as true",
+                    ty.name()
+                ),
                 cond_at,
             ),
             Ty::Str => self.warn(
                 codes::YARA_SUSPICIOUS_EXPRESSION,
-                "the condition is a string, not a boolean: libyara reads any non-empty string as true".to_string(),
+                "the condition is a string, not a boolean: any non-empty string reads as true"
+                    .to_string(),
                 cond_at,
             ),
             _ => {}
         }
         // A condition naming a string the rule lacks is already an error;
-        // libyara stops there, so the strings it then leaves unused are not.
+        // the compiler stops there, so the strings it then leaves unused are not.
         let undefined = self.findings[findings_before..]
             .iter()
             .any(|f| f.code == codes::YARA_UNDEFINED_STRING);
@@ -475,36 +462,9 @@ impl<'a> Checker<'a> {
         }
     }
 
-    /// libyara's lexer takes an identifier (every one but a string's: rule
-    /// names, tags, meta keys, loop variables, any bare name) of at most 128 characters
-    /// (a longer rule name, tag or meta key ends its token); a longer
-    /// one is a syntax error there. YARA-X has no limit.
-    fn identifier_length(&mut self, kind: &str, name: &str, at: (usize, usize)) {
-        // Once per identifier: its first occurrence is libyara's error.
-        if self.libyara()
-            && name.len() > MAX_IDENTIFIER
-            && self.long_identifiers.insert(name.to_string())
-        {
-            self.error(
-                codes::YARA_PARSE_ERROR,
-                format!(
-                    "the {kind} `{}…` is {} characters long: libyara 4.5 refuses an identifier longer than {MAX_IDENTIFIER}",
-                    &name[..24.min(name.len())],
-                    name.len()
-                ),
-                at,
-            );
-        }
-    }
-
     fn meta(&mut self, rule: &Rule, name_at: (usize, usize)) {
         let metas = rule.meta.as_deref().unwrap_or(&[]);
         for meta in metas {
-            self.identifier_length(
-                "meta key",
-                meta.identifier.name,
-                span(&meta.identifier.span()),
-            );
             match &meta.value {
                 MetaValue::Float((_, s)) => self.yara_x_only("A float meta value", span(s)),
                 // The value is unescaped: the quotes are in the source text.
@@ -598,7 +558,7 @@ impl<'a> Checker<'a> {
                 if value.is_empty() {
                     self.error(
                         codes::YARA_PARSE_ERROR,
-                        "libyara refuses an empty string".to_string(),
+                        "a text string cannot be empty".to_string(),
                         text_at,
                     );
                     return;
@@ -606,8 +566,9 @@ impl<'a> Checker<'a> {
                 let base64 = pattern.modifiers().base64().is_some()
                     || pattern.modifiers().base64wide().is_some();
                 if base64 && value.len() < 3 {
-                    self.yara_x(
-                        "YARA-X refuses `base64` on a string shorter than 3 bytes".to_string(),
+                    self.error(
+                        codes::YARA_STRING_MODIFIER,
+                        "`base64` and `base64wide` take a string of at least 3 bytes".to_string(),
                         text_at,
                     );
                 }
@@ -629,15 +590,16 @@ impl<'a> Checker<'a> {
                     );
                 }
                 if check.can_match_empty {
-                    self.yara_x(
-                        "YARA-X refuses a regular expression that can match the empty string"
-                            .to_string(),
+                    self.error(
+                        codes::YARA_REGEXP,
+                        "a string's regular expression cannot match the empty string".to_string(),
                         re_at,
                     );
                 }
                 if check.leading_unbounded_dot && re.regexp.dot_matches_new_line {
-                    self.yara_x(
-                        "YARA-X refuses a regular expression that starts with an arbitrary prefix (`.*`, `.+`, `.{n,}` under `/s`)".to_string(),
+                    self.error(
+                        codes::YARA_REGEXP,
+                        "a string's regular expression cannot start with an arbitrary prefix (`.*`, `.+`, `.{n,}` under `/s`)".to_string(),
                         re_at,
                     );
                 }
@@ -648,17 +610,7 @@ impl<'a> Checker<'a> {
                         re_at,
                     );
                 }
-                let base = re_at.0 + 1;
-                for f in &check.errors {
-                    self.error(
-                        codes::YARA_REGEXP,
-                        format!("invalid regular expression: {}", f.message),
-                        (base + f.start, base + f.end.max(f.start + 1)),
-                    );
-                }
-                for f in &check.yara_x {
-                    self.yara_x(f.message.clone(), (base + f.start, base + f.end));
-                }
+                self.regexp_findings(&check, re_at.0 + 1);
                 if check.errors.is_empty() {
                     let q = check
                         .atoms
@@ -669,7 +621,7 @@ impl<'a> Checker<'a> {
                 }
             }
             Pattern::Hex(hex) => {
-                self.hex(&hex.sub_patterns, false);
+                self.hex(&hex.sub_patterns);
                 // libyara splits a string at a long or unbounded jump and
                 // needs an atom in every fragment.
                 if hex_fragments(&hex.sub_patterns)
@@ -722,7 +674,7 @@ impl<'a> Checker<'a> {
                 };
                 self.error(
                     codes::YARA_STRING_MODIFIER,
-                    format!("libyara refuses `{name}` on {kind}"),
+                    format!("`{name}` does not apply to {kind}"),
                     m_at,
                 );
             }
@@ -786,17 +738,13 @@ impl<'a> Checker<'a> {
                 })
                 .collect();
             if alphabets.len() == 2 && alphabets[0] != alphabets[1] {
-                self.error(
-                    codes::YARA_STRING_MODIFIER,
-                    "libyara can not specify multiple alphabets: give base64 and base64wide the same one".to_string(),
-                    at,
-                );
+                self.yara_x_only("Different alphabets for `base64` and `base64wide`", at);
             }
         }
     }
 
-    /// `hex_grammar.y`'s jump checks, and the YARA-X-only jump bounds.
-    fn hex(&mut self, sub: &HexSubPattern, inside_alternative: bool) {
+    /// A hex string's jump checks, and the YARA-X-only jump bounds.
+    fn hex(&mut self, sub: &HexSubPattern) {
         for token in sub.iter() {
             match token {
                 HexToken::Jump(jump) => {
@@ -805,52 +753,17 @@ impl<'a> Checker<'a> {
                     if text.contains("0x") || text.contains("0o") {
                         self.yara_x_only("A hex or octal jump bound", at);
                     }
-                    // libyara reads a jump bound into a 32-bit signed int:
-                    // 2^31 and above wrap negative, which it refuses.
-                    let negative = [jump.start, jump.end]
-                        .iter()
-                        .flatten()
-                        .any(|&b| b > i32::MAX as u32);
-                    if negative {
-                        self.error(
-                            codes::YARA_HEX_STRING,
-                            if text.contains('-') {
-                                format!("invalid negative jump length: libyara reads a bound above {} as negative", i32::MAX)
-                            } else {
-                                format!("invalid jump length: libyara reads a length above {} as negative", i32::MAX)
-                            },
-                            at,
-                        );
-                    }
-                    // libyara stops at a jump's first error.
-                    let mut refused = negative;
+                    // A bound past `u32` is the parser's error. YARA-X takes
+                    // any jump inside an alternative, unbounded or long.
                     match (jump.start, jump.end) {
-                        _ if negative => {}
-                        // `[0]` is refused; `[0-0]` libyara reads, YARA-X refuses.
-                        // A bound past u32 that wrapped to 0 is reported already.
-                        (Some(0), Some(0))
-                            if text.contains('-')
-                                && !text
-                                    .split(|c: char| !c.is_ascii_digit())
-                                    .filter_map(|d| d.parse::<u128>().ok())
-                                    .any(|v| v > u128::from(u32::MAX)) =>
-                        {
-                            self.yara_x(
-                                "YARA-X refuses the empty jump range `[0-0]`".to_string(),
-                                at,
-                            );
-                        }
-                        (Some(0), Some(0)) if text.contains('-') => {}
                         (Some(0), Some(0)) => {
-                            refused = true;
                             self.error(
                                 codes::YARA_HEX_STRING,
-                                "invalid jump length: [0]".to_string(),
+                                format!("invalid jump length: `{text}` skips no byte"),
                                 at,
                             );
                         }
                         (Some(a), Some(b)) if a > b => {
-                            refused = true;
                             self.error(
                                 codes::YARA_HEX_STRING,
                                 format!("invalid jump range: {a} is greater than {b}"),
@@ -859,25 +772,10 @@ impl<'a> Checker<'a> {
                         }
                         _ => {}
                     }
-                    if inside_alternative && !refused {
-                        if jump.end.is_none() {
-                            self.error(
-                                codes::YARA_HEX_STRING,
-                                "unbounded jumps are not allowed inside an alternative".to_string(),
-                                at,
-                            );
-                        } else if jump.end.is_some_and(|e| e > CHAINING_THRESHOLD) {
-                            self.error(
-                                codes::YARA_HEX_STRING,
-                                format!("jumps over {CHAINING_THRESHOLD} are not allowed inside an alternative"),
-                                at,
-                            );
-                        }
-                    }
                 }
                 HexToken::Alternative(alt) => {
                     for branch in &alt.alternatives {
-                        self.hex(branch, true);
+                        self.hex(branch);
                     }
                 }
                 HexToken::NotByte(b) if b.mask == 0 => self.error(
@@ -975,7 +873,7 @@ impl<'a> Checker<'a> {
         self.operand(e, true);
     }
 
-    /// `e` where libyara takes any value as a truth value: a boolean
+    /// `e` where YARA takes any value as a truth value: a boolean
     /// operand, or (`non_bool` false) the operand of `defined`, which YARA-X
     /// does not call a non-boolean.
     fn operand(&mut self, e: &Expr, non_bool: bool) {
@@ -986,17 +884,16 @@ impl<'a> Checker<'a> {
             && !matches!(e, Expr::LiteralString(_))
             && !self.yara_x_bool.contains(&span(&e.span()))
         {
-            // YARA-X's non_bool_expr (libyara reads any non-zero number,
-            // any non-empty string, as true).
+            // YARA-X's non_bool_expr (any non-zero number, any non-empty
+            // string, reads as true).
             self.warn(
                 codes::YARA_SUSPICIOUS_EXPRESSION,
                 match &ty {
                     Ty::Str => {
-                        "a string used as a boolean: libyara reads any non-empty string as true"
-                            .to_string()
+                        "a string used as a boolean: any non-empty string reads as true".to_string()
                     }
                     other => format!(
-                        "{} used as a boolean: libyara reads any non-zero value as true",
+                        "{} used as a boolean: any non-zero value reads as true",
                         other.name()
                     ),
                 },
@@ -1024,8 +921,8 @@ impl<'a> Checker<'a> {
         }
     }
 
-    /// F: a member YARA-X types as boolean (`pe.is_dll()`) in arithmetic or
-    /// an ordering: libyara computes with its integer, YARA-X refuses it.
+    /// A member YARA-X types as boolean (`pe.is_dll()`) in arithmetic or an
+    /// ordering.
     fn yara_x_bool_arithmetic(&mut self, e: &Expr) {
         self.yara_x_number(e, "in arithmetic or an ordering");
     }
@@ -1033,30 +930,28 @@ impl<'a> Checker<'a> {
     /// `e` where YARA-X needs an integer or a float (an operand of
     /// arithmetic, an ordering or `!=`, an offset, a range bound, an index,
     /// a quantifier, a function argument): a member YARA-X types as boolean
-    /// is refused there, though libyara reads its integer.
+    /// is refused there.
     fn yara_x_number(&mut self, e: &Expr, place: &str) -> bool {
         let refused = self.yara_x_bool.contains(&span(&e.span()));
         if refused {
             let at = self.written(e);
-            self.yara_x(
-                format!(
-                    "YARA-X refuses `{}` {place}: it types it as a boolean, where libyara reads an integer",
-                    self.text(at)
-                ),
+            self.error(
+                codes::YARA_TYPE,
+                format!("`{}` is a boolean, not a number {place}", self.text(at)),
                 at,
             );
         }
         refused
     }
 
-    /// A comparison or arithmetic operand: libyara's `primary_expression`,
-    /// which is never a boolean.
+    /// A comparison or arithmetic operand: YARA's `primary_expression`,
+    /// which is never a syntactic boolean.
     fn primary(&mut self, e: &Expr) -> Ty {
         let ty = self.expr(e);
         if ty == Ty::Bool && is_syntactic_boolean(e) {
             self.error(
                 codes::YARA_TYPE,
-                "libyara compares and computes with integers, floats and strings; this operand is a boolean".to_string(),
+                "YARA compares and computes with integers, floats and strings; this operand is a boolean".to_string(),
                 span(&e.span()),
             );
             return Ty::Unknown;
@@ -1078,9 +973,12 @@ impl<'a> Checker<'a> {
                     "`entrypoint` is deprecated in libyara and refused by YARA-X: use `pe.entry_point` or `elf.entry_point`".to_string(),
                     at,
                 );
-                if !self.libyara() {
-                    self.yara_x("YARA-X does not support `entrypoint`".to_string(), at);
-                }
+                self.error(
+                    codes::YARA_UNDEFINED_IDENTIFIER,
+                    "`entrypoint` is unsupported: use `pe.entry_point` or `elf.entry_point`"
+                        .to_string(),
+                    at,
+                );
                 Ty::Int
             }
             Expr::LiteralString(s) => {
@@ -1093,13 +991,6 @@ impl<'a> Checker<'a> {
                 if i.literal.contains('_') {
                     self.yara_x_only("A digit separator (`_`)", at);
                 }
-                if (i.is_unsigned || literal_magnitude(i.literal).is_none()) && self.libyara() {
-                    self.error(
-                        codes::YARA_NUMBER_OUT_OF_RANGE,
-                        format!("`{}` does not fit libyara's signed 64-bit integers (YARA-X reads it unsigned)", i.literal),
-                        at,
-                    );
-                }
                 Ty::Int
             }
             Expr::LiteralFloat(f) => {
@@ -1110,24 +1001,10 @@ impl<'a> Checker<'a> {
             }
             Expr::Regexp(re) => {
                 self.regexp_flags(re.literal, at);
-                let check = regexp::check(re.src);
-                let base = at.0 + 1;
-                for f in &check.errors {
-                    self.error(
-                        codes::YARA_REGEXP,
-                        format!("invalid regular expression: {}", f.message),
-                        (base + f.start, base + f.end.max(f.start + 1)),
-                    );
-                }
-                for f in &check.yara_x {
-                    self.yara_x(f.message.clone(), (base + f.start, base + f.end));
-                }
+                self.regexp_findings(&regexp::check(re.src), at.0 + 1);
                 Ty::Regexp
             }
-            Expr::Ident(ident) => {
-                self.identifier_length("identifier", ident.name, span(&ident.span()));
-                self.ident(ident)
-            }
+            Expr::Ident(ident) => self.ident(ident),
             Expr::PatternMatch(m) => {
                 self.use_pattern(&m.identifier);
                 self.anchor(m.anchor.as_ref());
@@ -1145,22 +1022,16 @@ impl<'a> Checker<'a> {
                 if let Some(index) = &p.index {
                     let ty = self.primary(index);
                     self.yara_x_number(index, "as a string index");
-                    // libyara takes a string too (`@a["1"]`).
                     self.expect(
                         &ty,
-                        ty.is_int() || ty == Ty::Str,
+                        ty.is_int(),
                         "a string index is an integer",
                         span(&index.span()),
                     );
-                    if ty == Ty::Str {
-                        self.yara_x(
-                            "YARA-X refuses a string as a string index".to_string(),
-                            span(&index.span()),
-                        );
-                    }
-                    if const_value(index).is_some_and(|v| v < 1) {
-                        self.yara_x(
-                            "YARA-X refuses a string index below 1; in libyara it is always undefined".to_string(),
+                    if let Some(v) = self.folds.bits(index).filter(|&v| v < 1) {
+                        self.error(
+                            codes::YARA_NUMBER_OUT_OF_RANGE,
+                            format!("a string's matches are numbered from 1; `{v}` is no index"),
                             span(&index.span()),
                         );
                     }
@@ -1179,10 +1050,7 @@ impl<'a> Checker<'a> {
                 };
                 for operand in operands {
                     ty = match operand {
-                        Expr::Ident(ident) => {
-                            self.identifier_length("identifier", ident.name, span(&ident.span()));
-                            self.member(ty, ident.name, span(&ident.span()))
-                        }
+                        Expr::Ident(ident) => self.member(ty, ident.name, span(&ident.span())),
                         // `pe.signatures[0].valid_on(0)`: the call is on the
                         // value the access has reached.
                         Expr::FuncCall(call) if call.object.is_none() => {
@@ -1218,8 +1086,8 @@ impl<'a> Checker<'a> {
                     self.yara_x_bool.insert(key);
                 }
                 if let Ty::Func { path, .. } = &ty {
-                    // A function named, not called (`pe.imphash`): libyara's
-                    // "wrong usage of identifier".
+                    // A function named, not called (`pe.imphash`): "wrong
+                    // usage of identifier".
                     let name = path.rsplit('.').next().unwrap_or(path);
                     self.error(
                         codes::YARA_UNDEFINED_IDENTIFIER,
@@ -1330,7 +1198,7 @@ impl<'a> Checker<'a> {
                 let separators = [&b.lhs, &b.rhs]
                     .iter()
                     .any(|e| self.text(span(&e.span())).contains('_'));
-                if let Some(always) = constant_comparison(op, &b.lhs, &b.rhs)
+                if let Some(always) = constant_comparison(&self.folds, op, &b.lhs, &b.rhs)
                     && !separators
                 {
                     self.warn(
@@ -1481,24 +1349,6 @@ impl<'a> Checker<'a> {
                 let vars: Vec<&Ident> = f.variables.iter().collect();
                 // The variables are what YARA-X types as boolean.
                 let mut bool_vars = false;
-                for (n, v) in vars.iter().enumerate() {
-                    self.identifier_length("loop variable", v.name, span(&v.span()));
-                    // libyara refuses a name an enclosing loop binds, or the
-                    // loop's own earlier variable; YARA-X shadows it.
-                    if self.libyara()
-                        && (self.lookup_var(v.name).is_some()
-                            || vars[..n].iter().any(|w| w.name == v.name))
-                    {
-                        self.error(
-                            codes::YARA_UNDEFINED_IDENTIFIER,
-                            format!(
-                                "duplicated loop identifier `{}`: an enclosing loop binds it",
-                                v.name
-                            ),
-                            span(&v.span()),
-                        );
-                    }
-                }
                 let bound: Vec<Ty> = match &f.iterable {
                     Iterable::Range(range) => {
                         self.range(range);
@@ -1510,11 +1360,21 @@ impl<'a> Checker<'a> {
                             let t = self.primary(item);
                             self.expect(
                                 &t,
-                                t.is_int() || t.is_str(),
-                                "a loop enumerates integers or strings",
+                                t.is_numeric() || t.is_str(),
+                                "a loop enumerates integers, floats or strings",
                                 span(&item.span()),
                             );
-                            ty = t;
+                            // YARA-X's E003: one type for every item.
+                            if t != Ty::Unknown && ty != Ty::Unknown && t != ty {
+                                self.error(
+                                    codes::YARA_TYPE,
+                                    format!("a loop enumerates values of one type: this is {}, the first is {}", t.name(), ty.name()),
+                                    span(&item.span()),
+                                );
+                            }
+                            if ty == Ty::Unknown {
+                                ty = t;
+                            }
                         }
                         // YARA-X types `pe.is_dll()` as boolean: it refuses
                         // one among integers (E003); all booleans bind one.
@@ -1584,12 +1444,14 @@ impl<'a> Checker<'a> {
             }
             Expr::With(w) => {
                 self.yara_x_only("The `with` statement", at);
-                let mut scope = BTreeMap::new();
+                // Each declaration sees the ones before it.
+                self.scopes.push(BTreeMap::new());
                 for decl in &w.declarations {
                     let ty = self.expr(&decl.expression);
-                    scope.insert(decl.identifier.name.to_string(), ty);
+                    if let Some(scope) = self.scopes.last_mut() {
+                        scope.insert(decl.identifier.name.to_string(), ty);
+                    }
                 }
-                self.scopes.push(scope);
                 let ty = self.expr(&w.body);
                 self.scopes.pop();
                 ty
@@ -1604,24 +1466,7 @@ impl<'a> Checker<'a> {
             return;
         };
         let at = span(&ident.span());
-        let wildcard = self.rule_wildcards.contains(&at);
-        if wildcard {
-            self.used_wildcards.push(ident.name.to_string());
-            // libyara matches the rule being defined too.
-            if !self.earlier_rules.iter().any(|r| r.starts_with(ident.name))
-                && !self.current_rule.starts_with(ident.name)
-            {
-                self.error(
-                    codes::YARA_UNDEFINED_IDENTIFIER,
-                    format!(
-                        "no rule defined earlier in the signature matches `{}*`",
-                        ident.name
-                    ),
-                    (at.0, at.1 + 1),
-                );
-            }
-        } else if !self.earlier_rules.contains(ident.name) && self.lookup_var(ident.name).is_none()
-        {
+        if !self.earlier_rules.contains(ident.name) && self.lookup_var(ident.name).is_none() {
             self.error(
                 codes::YARA_UNDEFINED_IDENTIFIER,
                 format!(
@@ -1635,7 +1480,7 @@ impl<'a> Checker<'a> {
 
     fn quantifier(&mut self, q: &Quantifier, size: Option<usize>) {
         if let Quantifier::Expr(e) | Quantifier::Percentage(e) = q
-            && let Some(v) = const_value(e)
+            && let Some(v) = self.folds.value(e)
             && v < 0
         {
             self.error(
@@ -1655,11 +1500,11 @@ impl<'a> Checker<'a> {
                     span(&e.span()),
                 );
                 if let Expr::LiteralInteger(i) = e
-                    && !(1..=100).contains(&i.value)
+                    && !(0..=100).contains(&i.value)
                 {
                     self.error(
                         codes::YARA_NUMBER_OUT_OF_RANGE,
-                        format!("a percentage is between 1 and 100, not {}", i.value),
+                        format!("a percentage is between 0 and 100, not {}", i.value),
                         span(&e.span()),
                     );
                 }
@@ -1706,10 +1551,10 @@ impl<'a> Checker<'a> {
                     "`at` takes an integer offset",
                     span(&a.expr.span()),
                 );
-                if const_value(&a.expr).is_some_and(|v| v < 0) {
-                    self.yara_x(
-                        "YARA-X refuses a negative offset; libyara never matches at one"
-                            .to_string(),
+                if self.folds.value(&a.expr).is_some_and(|v| v < 0) || is_unsigned(&a.expr) {
+                    self.error(
+                        codes::YARA_NUMBER_OUT_OF_RANGE,
+                        "an offset is between 0 and 2^63 - 1".to_string(),
                         span(&a.expr.span()),
                     );
                 }
@@ -1731,7 +1576,18 @@ impl<'a> Checker<'a> {
             );
         }
         let at = span(&range.lower_bound.span().combine(&range.upper_bound.span()));
-        match (const_value(&range.lower_bound), const_value(&range.upper_bound)) {
+        if is_unsigned(&range.lower_bound) || is_unsigned(&range.upper_bound) {
+            self.error(
+                codes::YARA_NUMBER_OUT_OF_RANGE,
+                "a range bound is between 0 and 2^63 - 1".to_string(),
+                at,
+            );
+            return;
+        }
+        match (
+            self.folds.value(&range.lower_bound),
+            self.folds.value(&range.upper_bound),
+        ) {
             (Some(lo), _) if lo < 0 => self.error(
                 codes::YARA_NUMBER_OUT_OF_RANGE,
                 "invalid value in condition: a range lower bound can not be negative".to_string(),
@@ -1746,11 +1602,11 @@ impl<'a> Checker<'a> {
         }
     }
 
-    /// libyara folds constant integer arithmetic and refuses what overflows
-    /// 64 bits, a division by zero and a negative shift. Reported on the
-    /// operation that fails, not on the ones around it.
+    /// YARA-X folds constant integer arithmetic and refuses what overflows 64
+    /// bits and a negative shift (a division by zero is `undefined`, no
+    /// error). Reported on the operation that fails, not the ones around it.
     fn fold(&mut self, e: &Expr, at: (usize, usize)) {
-        if let Err(problem) = fold_step(e) {
+        if let Err(problem) = self.folds.step(e).0 {
             let text = self.text(at).to_string();
             self.error(
                 codes::YARA_NUMBER_OUT_OF_RANGE,
@@ -1768,6 +1624,27 @@ impl<'a> Checker<'a> {
                 &format!("The regexp modifiers `{flags}` (libyara reads `i`, `s` or `is`)"),
                 at,
             );
+        }
+    }
+
+    /// A regexp's findings, `base` the offset of its first byte.
+    fn regexp_findings(&mut self, check: &regexp::Check, base: usize) {
+        for f in &check.errors {
+            self.error(
+                codes::YARA_REGEXP,
+                format!("invalid regular expression: {}", f.message),
+                (base + f.start, base + f.end.max(f.start + 1)),
+            );
+        }
+        for f in &check.refused {
+            self.error(
+                codes::YARA_REGEXP,
+                format!("invalid regular expression: {}", f.message),
+                (base + f.start, base + f.end),
+            );
+        }
+        for f in &check.yara_x_only {
+            self.yara_x_only(&f.message, (base + f.start, base + f.end));
         }
     }
 
@@ -1805,30 +1682,16 @@ impl<'a> Checker<'a> {
         Ty::Unknown
     }
 
-    /// Whether a catalogue member is usable in the dialect, reporting it
-    /// when it is not or when only libyara has it.
+    /// Whether a catalogue member is YARA-X's, reporting it when it is not.
     fn available(&mut self, m: &Member, shown: &str, at: (usize, usize)) -> bool {
-        let libyara_decls = self.catalog.has_libyara_declarations(&m.module);
-        if self.libyara() && libyara_decls && !m.libyara {
-            self.error(
-                codes::YARA_UNKNOWN_MODULE_MEMBER,
-                format!("`{shown}` is a YARA-X member; libyara 4.5 does not have it"),
-                at,
-            );
-            return false;
-        }
-        if !self.libyara() && !m.yara_x {
+        if !m.yara_x {
             self.error(
                 codes::YARA_UNKNOWN_MODULE_MEMBER,
                 format!("YARA-X does not have `{shown}`"),
                 at,
             );
-            return false;
         }
-        if self.libyara() && m.libyara && !m.yara_x {
-            self.yara_x(format!("YARA-X does not have `{shown}`"), at);
-        }
-        true
+        m.yara_x
     }
 
     fn member(&mut self, base: Ty, name: &str, at: (usize, usize)) -> Ty {
@@ -1950,7 +1813,11 @@ impl<'a> Checker<'a> {
         let name_at = span(&call.identifier.span());
         let args: Vec<Ty> = call.args.iter().map(|a| self.expr(a)).collect();
         let Some(base) = base else {
-            if INTEGER_FUNCTIONS.contains(&name) {
+            let reader = YARA_X_READERS.iter().find(|(r, _)| *r == name);
+            if reader.is_some() {
+                self.yara_x_only(&format!("The reader `{name}`"), name_at);
+            }
+            if INTEGER_FUNCTIONS.contains(&name) || reader.is_some() {
                 for a in &call.args {
                     self.yara_x_number(a, "as a function argument");
                 }
@@ -1961,7 +1828,7 @@ impl<'a> Checker<'a> {
                         at,
                     );
                 }
-                return Ty::Int;
+                return reader.map_or(Ty::Int, |(_, ty)| ty.clone());
             }
             self.error(
                 codes::YARA_UNDEFINED_IDENTIFIER,
@@ -1978,7 +1845,7 @@ impl<'a> Checker<'a> {
             Ty::Func { module, path } => (module, path),
             Ty::Unknown => return Ty::Unknown,
             other => {
-                // A field, not a function: libyara's "is not a function".
+                // A field, not a function: "is not a function".
                 self.error(
                     codes::YARA_UNDEFINED_IDENTIFIER,
                     format!("`{name}` is not a function: it is {}", other.name()),
@@ -1990,12 +1857,7 @@ impl<'a> Checker<'a> {
         let Some(m) = self.catalog.member(&module, &path) else {
             return Ty::Unknown;
         };
-        let use_libyara = self.libyara() && self.catalog.has_libyara_declarations(&module);
-        let candidates: Vec<_> = m
-            .overloads
-            .iter()
-            .filter(|o| if use_libyara { o.libyara } else { o.yara_x })
-            .collect();
+        let candidates: Vec<_> = m.overloads.iter().filter(|o| o.yara_x).collect();
         let found = candidates.iter().find(|o| {
             o.args.len() == args.len()
                 && o.args.chars().zip(&args).all(|(want, got)| {
@@ -2218,14 +2080,8 @@ fn unescaped_len(literal: &str) -> usize {
     n
 }
 
-/// The value of a constant integer expression, as libyara folds it; `None`
-/// when it is not one or does not fold.
-fn const_value(e: &Expr) -> Option<i64> {
-    match e {
-        Expr::LiteralInteger(i) if !i.is_unsigned => Some(i.value),
-        _ => fold_step(e).ok().flatten(),
-    }
-}
+/// The value of a constant integer expression that fits `i64`, as YARA-X
+/// folds it; `None` when it is not one or does not fold.
 
 #[derive(Clone, Copy)]
 enum Cmp {
@@ -2265,13 +2121,13 @@ impl Cmp {
 /// constants (`1 == 1`), or of `filesize`, never negative, with a constant
 /// that decides it (`filesize < 0`, `filesize >= 0`). `Some(result)` when
 /// the comparison does not depend on the scanned data.
-fn constant_comparison(op: Cmp, lhs: &Expr, rhs: &Expr) -> Option<bool> {
-    if let (Some(a), Some(b)) = (const_value(lhs), const_value(rhs)) {
+fn constant_comparison(folds: &Folds, op: Cmp, lhs: &Expr, rhs: &Expr) -> Option<bool> {
+    if let (Some(a), Some(b)) = (folds.value(lhs), folds.value(rhs)) {
         return Some(op.eval(a, b));
     }
     let (op, c) = match (lhs, rhs) {
-        (Expr::Filesize { .. }, other) => (op, const_value(other)?),
-        (other, Expr::Filesize { .. }) => (op.swapped(), const_value(other)?),
+        (Expr::Filesize { .. }, other) => (op, folds.value(other)?),
+        (other, Expr::Filesize { .. }) => (op.swapped(), folds.value(other)?),
         _ => return None,
     };
     // `filesize op c` for every filesize >= 0.
@@ -2286,96 +2142,151 @@ fn constant_comparison(op: Cmp, lhs: &Expr, rhs: &Expr) -> Option<bool> {
     }
 }
 
-/// libyara's product check (`grammar.y`): `|a| > INT64_MAX / |b|` is an
-/// overflow, so `4611686018427387904 * -2` is one though `i64::MIN` fits.
-fn libyara_mul(a: i64, b: i64) -> Option<i64> {
-    if b != 0 && a.unsigned_abs() > i64::MAX as u64 / b.unsigned_abs() {
-        return None;
+/// A literal above `i64::MAX` (`0xFFFFFFFFFFFFFFFF`), which YARA-X reads as
+/// the `i64` of the same bits.
+fn is_unsigned(e: &Expr) -> bool {
+    matches!(e, Expr::LiteralInteger(i) if i.is_unsigned)
+}
+
+/// One folding step's result: `Ok(Some(v))` the value, `Ok(None)` not
+/// constant (or an operand that fails on its own), `Err` this operation
+/// fails; and whether the expression computes from YARA-X's unsigned
+/// integers (a literal above `i64::MAX`: `(0xFFFFFFFFFFFFFFFF \\ 2) * 2`
+/// reaches `u64::MAX`).
+type Folded = (Result<Option<i128>, &'static str>, bool);
+
+/// Constant folding, as YARA-X folds, with each node folded once: the
+/// checker folds at every arithmetic node, and each fold reads its
+/// operands' folds, so without the memo a nested expression is folded
+/// once per level above it (#1405 review). Keyed by node address: a
+/// checker reads one AST, which outlives it.
+#[derive(Default)]
+struct Folds(RefCell<HashMap<usize, Folded>>);
+
+#[cfg(test)]
+thread_local! {
+    static COMPUTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+impl Folds {
+    /// `e`'s constant value as YARA-X's `i64`.
+    fn value(&self, e: &Expr) -> Option<i64> {
+        self.step(e)
+            .0
+            .ok()
+            .flatten()
+            .and_then(|v| i64::try_from(v).ok())
     }
-    Some(a.wrapping_mul(b))
-}
 
-/// The magnitude of an integer literal as libyara's lexer reads it, before
-/// any sign: `None` when it does not fit `i64::MAX`.
-fn literal_magnitude(literal: &str) -> Option<i64> {
-    // Digit separators are YARA-X syntax, reported on their own.
-    let digits = literal.trim_start_matches('-').replace('_', "");
-    let digits = digits.as_str();
-    let (digits, scale) = if let Some(d) = digits.strip_suffix("KB") {
-        (d, 1024)
-    } else if let Some(d) = digits.strip_suffix("MB") {
-        (d, 1024 * 1024)
-    } else {
-        (digits, 1)
-    };
-    let value = if let Some(h) = digits.strip_prefix("0x") {
-        i64::from_str_radix(h, 16).ok()
-    } else if let Some(o) = digits.strip_prefix("0o") {
-        i64::from_str_radix(o, 8).ok()
-    } else {
-        digits.parse::<i64>().ok()
-    };
-    value?.checked_mul(scale)
-}
+    /// `e`'s constant value as YARA-X stores it: an unsigned result above
+    /// `i64::MAX` is the `i64` of the same bits (`0xFFFFFFFFFFFFFFFF` is
+    /// `-1`), as YARA-X reads a string index.
+    fn bits(&self, e: &Expr) -> Option<i64> {
+        let v = self.step(e).0.ok().flatten()?;
+        i64::try_from(v).ok().or_else(|| {
+            u64::try_from(v)
+                .ok()
+                .map(|u| i64::from_ne_bytes(u.to_ne_bytes()))
+        })
+    }
 
-/// One folding step: `Ok(Some(v))` the value, `Ok(None)` not constant (or
-/// an operand that fails on its own), `Err` this operation fails.
-fn fold_step(e: &Expr) -> Result<Option<i64>, &'static str> {
-    let nary = |operands: &[Expr], op: fn(i64, i64) -> Option<i64>, what: &'static str| {
-        let mut values = operands.iter().map(const_value);
-        let Some(Some(mut acc)) = values.next() else {
-            return Ok(None);
-        };
-        for v in values {
-            let Some(v) = v else {
-                return Ok(None);
-            };
-            acc = op(acc, v).ok_or(what)?;
+    /// One folding step. Values are `i128`: a literal above `i64::MAX`
+    /// (`0xFFFFFFFFFFFFFFFF`) is YARA-X's unsigned integer, and a sum,
+    /// difference or product with one may reach `u64::MAX`; without one,
+    /// and for a negation, the result must fit `i64`.
+    fn step(&self, e: &Expr) -> Folded {
+        let key = std::ptr::from_ref(e) as usize;
+        if let Some(done) = self.0.borrow().get(&key) {
+            return *done;
         }
-        Ok(Some(acc))
-    };
-    let binary = |l: &Expr, r: &Expr| match (const_value(l), const_value(r)) {
-        (Some(a), Some(b)) => Some((a, b)),
-        _ => None,
-    };
-    match e {
-        Expr::LiteralInteger(i) if !i.is_unsigned => Ok(Some(i.value)),
-        Expr::Minus(u) => match const_value(&u.operand) {
-            Some(v) => v.checked_neg().map(Some).ok_or("integer overflow"),
-            None => Ok(None),
-        },
-        Expr::BitwiseNot(u) => Ok(const_value(&u.operand).map(|v| !v)),
-        Expr::Add(n) => nary(n.as_slice(), i64::checked_add, "integer overflow"),
-        Expr::Sub(n) => nary(n.as_slice(), i64::checked_sub, "integer overflow"),
-        Expr::Mul(n) => nary(n.as_slice(), libyara_mul, "integer overflow"),
-        Expr::Div(n) => nary(
-            n.as_slice(),
-            i64::checked_div,
-            "division by zero or overflow",
-        ),
-        Expr::Mod(n) => nary(
-            n.as_slice(),
-            i64::checked_rem,
-            "division by zero or overflow",
-        ),
-        Expr::Shl(b) | Expr::Shr(b) => match binary(&b.lhs, &b.rhs) {
-            Some((_, s)) if s < 0 => Err("a negative shift"),
-            Some((a, s)) if s >= 64 => Ok(Some(if matches!(e, Expr::Shr(_)) && a < 0 {
-                -1
-            } else {
-                0
-            })),
-            Some((a, s)) => Ok(Some(if matches!(e, Expr::Shl(_)) {
-                a << s
-            } else {
-                a >> s
-            })),
-            None => Ok(None),
-        },
-        Expr::BitwiseAnd(b) => Ok(binary(&b.lhs, &b.rhs).map(|(x, y)| x & y)),
-        Expr::BitwiseOr(b) => Ok(binary(&b.lhs, &b.rhs).map(|(x, y)| x | y)),
-        Expr::BitwiseXor(b) => Ok(binary(&b.lhs, &b.rhs).map(|(x, y)| x ^ y)),
-        _ => Ok(None),
+        let done = self.compute(e);
+        self.0.borrow_mut().insert(key, done);
+        done
+    }
+
+    fn compute(&self, e: &Expr) -> Folded {
+        #[cfg(test)]
+        COMPUTES.set(COMPUTES.get() + 1);
+        const SIGNED: (i128, i128) = (i64::MIN as i128, i64::MAX as i128);
+        const UNSIGNED: (i128, i128) = (i64::MIN as i128, u64::MAX as i128);
+        let nary = |operands: &[Expr], op: fn(i128, i128) -> Option<i128>| -> Folded {
+            let folded: Vec<Folded> = operands.iter().map(|o| self.step(o)).collect();
+            let unsigned = folded.iter().any(|f| f.1);
+            let values: Option<Vec<i128>> = folded.iter().map(|f| f.0.ok().flatten()).collect();
+            let Some(values) = values else {
+                return (Ok(None), unsigned);
+            };
+            let (lo, hi) = if unsigned { UNSIGNED } else { SIGNED };
+            let mut acc = values[0];
+            for &v in &values[1..] {
+                match op(acc, v).filter(|r| (lo..=hi).contains(r)) {
+                    Some(r) => acc = r,
+                    None => return (Err("integer overflow"), unsigned),
+                }
+            }
+            (Ok(Some(acc)), unsigned)
+        };
+        let signed = |v: Folded| {
+            (
+                v.0.map(|v| v.filter(|v| (SIGNED.0..=SIGNED.1).contains(v))),
+                v.1,
+            )
+        };
+        let binary = |l: &Expr, r: &Expr| match (self.value(l), self.value(r)) {
+            (Some(a), Some(b)) => Some((a, b)),
+            _ => None,
+        };
+        let wide = |v: Option<i64>| (Ok(v.map(i128::from)), false);
+        match e {
+            Expr::LiteralInteger(i) if i.is_unsigned => (
+                Ok(Some(i128::from(u64::from_ne_bytes(i.value.to_ne_bytes())))),
+                true,
+            ),
+            Expr::LiteralInteger(i) => (Ok(Some(i128::from(i.value))), false),
+            Expr::Minus(u) => {
+                let (v, unsigned) = self.step(&u.operand);
+                let v = match v.ok().flatten() {
+                    Some(v) if (SIGNED.0..=SIGNED.1).contains(&-v) => Ok(Some(-v)),
+                    Some(_) => Err("integer overflow"),
+                    None => Ok(None),
+                };
+                (v, unsigned)
+            }
+            Expr::BitwiseNot(u) => (
+                Ok(self.value(&u.operand).map(|v| i128::from(!v))),
+                self.step(&u.operand).1,
+            ),
+            Expr::Add(n) => nary(n.as_slice(), i128::checked_add),
+            Expr::Sub(n) => nary(n.as_slice(), i128::checked_sub),
+            Expr::Mul(n) => nary(n.as_slice(), i128::checked_mul),
+            // A division by zero or `i64::MIN \\ -1` is `undefined`, no error.
+            Expr::Div(n) => {
+                let (v, u) = nary(n.as_slice(), |a, b| a.checked_div(b));
+                signed((Ok(v.unwrap_or(None)), u))
+            }
+            Expr::Mod(n) => {
+                let (v, u) = nary(n.as_slice(), |a, b| a.checked_rem(b));
+                signed((Ok(v.unwrap_or(None)), u))
+            }
+            Expr::Shl(b) | Expr::Shr(b) => match binary(&b.lhs, &b.rhs) {
+                Some((_, s)) if s < 0 => (Err("a negative shift"), false),
+                Some((a, s)) if s >= 64 => wide(Some(if matches!(e, Expr::Shr(_)) && a < 0 {
+                    -1
+                } else {
+                    0
+                })),
+                Some((a, s)) => wide(Some(if matches!(e, Expr::Shl(_)) {
+                    a << s
+                } else {
+                    a >> s
+                })),
+                None => wide(None),
+            },
+            Expr::BitwiseAnd(b) => wide(binary(&b.lhs, &b.rhs).map(|(x, y)| x & y)),
+            Expr::BitwiseOr(b) => wide(binary(&b.lhs, &b.rhs).map(|(x, y)| x | y)),
+            Expr::BitwiseXor(b) => wide(binary(&b.lhs, &b.rhs).map(|(x, y)| x ^ y)),
+            _ => wide(None),
+        }
     }
 }
 
@@ -2426,6 +2337,28 @@ fn hex_fragments(sub: &HexSubPattern) -> Vec<Vec<Vec<MaskedByte>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Each arithmetic node is folded once, however deep it nests: the
+    /// checker folds at every level, and folding read the whole subtree
+    /// each time (a 4 KB condition took 1.6 s).
+    #[test]
+    fn a_nested_expression_is_folded_once_per_node() {
+        let depth = 100;
+        let condition = format!("{}1{} == 1", "(".repeat(depth), " + 1 - 1)".repeat(depth));
+        let source = format!("rule a {{ condition: {condition} }}");
+        let before = COMPUTES.get();
+        let diagnostics = crate::diagnostics(&source, &crate::Context::default());
+        let folds = COMPUTES.get() - before;
+        // One `1` and one `+ 1 - 1` (an add, a sub, two literals) per level,
+        // and the `== 1`.
+        assert!(folds <= 4 * depth + 4, "{folds} folds");
+        assert!(
+            diagnostics
+                .iter()
+                .all(|d| d.severity != opentide_core::Severity::Error),
+            "{diagnostics:?}"
+        );
+    }
 
     #[test]
     fn unescaped_lengths() {

@@ -1,6 +1,7 @@
 //! The analysis on the new tree walks it recursively; on a 1 MB stack (the
-//! browser's) it must survive whatever the parser accepts, and agree with the
-//! tree-sitter engine where that engine did not overflow (#1230).
+//! browser's) it must survive whatever the parser accepts (#1230). That it
+//! agrees with the tree-sitter engine where that engine did not overflow is
+//! `tests/differential.rs`'s `the_budget_reads_as_deep_as_the_old_engine`.
 //!
 //! Found by review (#1399): on a 1 MB stack in a debug build the column pass
 //! overflowed at 65 nested `join`s, 91 nested `mv-apply`s, 200 nested
@@ -14,8 +15,7 @@
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]
 
-use opentide_kql::testing::{analyze_new, columns_new, hover_new};
-use opentide_kql::{Catalog, Profile, analyze_with_catalog, columns};
+use opentide_kql::{Catalog, Profile, analyze_with_catalog, columns, hover};
 
 /// Runs `run` on a thread with a stack of `size` bytes; an overflow aborts.
 fn on_stack<T: Send + 'static>(size: usize, run: impl FnOnce() -> T + Send + 'static) -> T {
@@ -32,13 +32,13 @@ fn on_stack<T: Send + 'static>(size: usize, run: impl FnOnce() -> T + Send + 'st
 fn analyze_small(source: String) -> Vec<String> {
     on_stack(1 << 20, move || {
         let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
-        let codes = analyze_new(&source, &catalog)
+        let codes = analyze_with_catalog(&source, &catalog)
             .diagnostics
             .into_iter()
             .map(|d| d.code)
             .collect();
-        let _ = columns_new(&source, Profile::Sentinel);
-        let _ = hover_new(&source, source.len() / 2, Profile::Sentinel);
+        let _ = columns(&source, Profile::Sentinel);
+        let _ = hover(&source, source.len() / 2, Profile::Sentinel);
         codes
     })
 }
@@ -97,52 +97,5 @@ fn a_function_that_calls_itself_is_read_once() {
     ] {
         let codes = analyze_small(source.to_owned());
         assert!(!codes.iter().any(|c| c == "kql_parse_error"), "{source}");
-    }
-}
-
-/// Where the tree-sitter engine did not overflow (35 levels, its measured
-/// floor), the budget changes nothing: the same column pass.
-#[test]
-fn the_budget_reads_as_deep_as_the_old_engine() {
-    for kind in KINDS {
-        let n = if matches!(kind, "member" | "index") {
-            250
-        } else {
-            35
-        };
-        let source = deep(kind, n);
-        let text = |a: &opentide_kql::schema::Analysis| {
-            format!(
-                "{} {} {} {:?}",
-                a.pipelines.len(),
-                a.references.len(),
-                a.definitions.len(),
-                a.diagnostics
-            )
-        };
-        let old = {
-            let source = source.clone();
-            on_stack(256 << 20, move || {
-                text(&columns(&source, Profile::Sentinel))
-            })
-        };
-        let new = on_stack(1 << 20, move || {
-            text(&columns_new(&source, Profile::Sentinel))
-        });
-        assert_eq!(old, new, "{kind} {n}");
-        // And the diagnostics.
-        let source = deep(kind, n);
-        let old = {
-            let source = source.clone();
-            on_stack(256 << 20, move || {
-                let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
-                format!("{:?}", analyze_with_catalog(&source, &catalog).diagnostics)
-            })
-        };
-        let new = on_stack(1 << 20, move || {
-            let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
-            format!("{:?}", analyze_new(&source, &catalog).diagnostics)
-        });
-        assert_eq!(old, new, "{kind} {n}");
     }
 }

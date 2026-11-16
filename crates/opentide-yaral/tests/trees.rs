@@ -1,7 +1,7 @@
 //! The parser's trees as snapshots: one tree per file of the small corpus,
 //! valid and invalid alike.
 
-use opentide_yaral::testing::debug_parse;
+use opentide_yaral::debug_parse;
 
 #[test]
 fn corpus_trees() {
