@@ -25,6 +25,7 @@ from opentide import (
     Capabilities,
     Connection,
     DeployOutcome,
+    DeployWarning,
     LiveCheck,
     OpentideError,
     QueryResult,
@@ -209,6 +210,29 @@ def test_a_deploy_creates_the_rule(connection: Connection) -> None:
     assert outcome.remote_id is not None
     assert outcome.remote_id.startswith("19000000000000000")
     assert outcome.warnings == []
+
+
+class _WarningDeployer:
+    """A native connection whose deploy raised a warning (#1142)."""
+
+    async def deploy(self, *_args: object, **_kwargs: object) -> str:
+        return json.dumps(
+            {
+                "remote_id": "43",
+                "operation": "update",
+                "warnings": [{"code": "sysdig_rule_recreated", "message": "creating it again"}],
+            }
+        )
+
+
+def test_a_deploy_returns_the_warnings_it_raised() -> None:
+    connection = Connection(_WarningDeployer())  # ty: ignore[invalid-argument-type]  # a stand-in for the native connection
+    outcome = run(connection.deploy("42", "update", b"{}"))
+    assert outcome == DeployOutcome(
+        remote_id="43",
+        operation="update",
+        warnings=[DeployWarning(code="sysdig_rule_recreated", message="creating it again")],
+    )
 
 
 @pytest.mark.parametrize("policies", [["Default policy"], []])

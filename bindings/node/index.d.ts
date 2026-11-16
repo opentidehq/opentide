@@ -253,10 +253,6 @@ export interface DeployPlanOptions {
   keepDeprecated?: boolean
 }
 
-/**
- * What `Workspace.lint` runs: `opentide lint`'s options, without `--fix`
- * and `--changed` (the command line's).
- */
 /** A warning a deploy raised: the rule is deployed, with something to check. */
 export interface DeployWarning {
   /** The event `opentide deploy` logs it as (`sysdig_rule_recreated`). */
@@ -265,6 +261,10 @@ export interface DeployWarning {
   message: string
 }
 
+/**
+ * What `Workspace.lint` runs: `opentide lint`'s options, without `--fix`
+ * and `--changed` (the command line's).
+ */
 export interface LintOptions {
   /** `--check`; empty runs the checks `lint.toml` enables. */
   checks?: Array<'filenames' | 'metadata' | 'recommended' | 'placeholders' | 'queries'>

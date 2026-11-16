@@ -78,7 +78,9 @@ pub struct DeployOutcome {
     /// What the deploy raised without failing: the rule is deployed, and
     /// these say what to check (a rule created again because the tenant
     /// lost it, a partial deployment). `opentide deploy` logs each one and
-    /// ends with its warnings exit code.
+    /// ends with its warnings exit code. A deploy that fails is a
+    /// [`ConnectorError`], which carries none: the warnings raised before the
+    /// failure are not reported.
     pub warnings: Vec<DeployWarning>,
 }
 
