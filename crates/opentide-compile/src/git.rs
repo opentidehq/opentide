@@ -18,7 +18,7 @@
 use std::path::{Path, PathBuf};
 
 use gix_error::bstr::{BStr, ByteSlice as _};
-use gix_error::{ErrorExt as _, Exn};
+use gix_error::ErrorExt as _;
 use gix_hash::ObjectId;
 use gix_object::{Find as _, FindExt as _};
 use gix_ref::file::ReferenceExt as _;
@@ -204,8 +204,8 @@ impl Repo {
 }
 
 /// An error for the rev-spec parser.
-fn refused(message: String) -> Exn {
-    gix_error::Message::new(message).raise().erased()
+fn refused(message: String) -> gix_error::Error {
+    gix_error::Message::new(message).raise()
 }
 
 /// Resolves the revisions `gix_revision::spec::parse` reads: references
@@ -236,18 +236,18 @@ impl Resolve<'_> {
         }
     }
 
-    fn current(&self) -> Result<ObjectId, Exn> {
+    fn current(&self) -> Result<ObjectId, gix_error::Error> {
         self.current
             .ok_or_else(|| refused("no revision to start from".to_owned()))
     }
 
-    fn unsupported(what: &str) -> Result<(), Exn> {
+    fn unsupported(what: &str) -> Result<(), gix_error::Error> {
         Err(refused(format!("{what} names no commit a run diffs")))
     }
 }
 
 impl delegate::Revision for Resolve<'_> {
-    fn find_ref(&mut self, name: &BStr) -> Result<(), Exn> {
+    fn find_ref(&mut self, name: &BStr) -> Result<(), gix_error::Error> {
         let found = self
             .repo
             .refs
@@ -266,7 +266,7 @@ impl delegate::Revision for Resolve<'_> {
         &mut self,
         prefix: gix_hash::Prefix,
         _hint: Option<delegate::PrefixHint<'_>>,
-    ) -> Result<(), Exn> {
+    ) -> Result<(), gix_error::Error> {
         match self.repo.odb.lookup_prefix(prefix, None) {
             Ok(Some(Ok(id))) => {
                 self.current = Some(id);
@@ -278,21 +278,21 @@ impl delegate::Revision for Resolve<'_> {
         }
     }
 
-    fn reflog(&mut self, _query: delegate::ReflogLookup) -> Result<(), Exn> {
+    fn reflog(&mut self, _query: delegate::ReflogLookup) -> Result<(), gix_error::Error> {
         Self::unsupported("a reflog entry")
     }
 
-    fn nth_checked_out_branch(&mut self, _branch_no: usize) -> Result<(), Exn> {
+    fn nth_checked_out_branch(&mut self, _branch_no: usize) -> Result<(), gix_error::Error> {
         Self::unsupported("a checked-out branch")
     }
 
-    fn sibling_branch(&mut self, _kind: delegate::SiblingBranch) -> Result<(), Exn> {
+    fn sibling_branch(&mut self, _kind: delegate::SiblingBranch) -> Result<(), gix_error::Error> {
         Self::unsupported("an upstream branch")
     }
 }
 
 impl delegate::Navigate for Resolve<'_> {
-    fn traverse(&mut self, kind: delegate::Traversal) -> Result<(), Exn> {
+    fn traverse(&mut self, kind: delegate::Traversal) -> Result<(), gix_error::Error> {
         let mut id = self.current()?;
         let (steps, parent) = match kind {
             delegate::Traversal::NthParent(n) => (1, n.saturating_sub(1)),
@@ -312,7 +312,7 @@ impl delegate::Navigate for Resolve<'_> {
         Ok(())
     }
 
-    fn peel_until(&mut self, kind: delegate::PeelTo<'_>) -> Result<(), Exn> {
+    fn peel_until(&mut self, kind: delegate::PeelTo<'_>) -> Result<(), gix_error::Error> {
         let id = self.current()?;
         match kind {
             delegate::PeelTo::ObjectKind(gix_object::Kind::Commit)
@@ -334,23 +334,23 @@ impl delegate::Navigate for Resolve<'_> {
         }
     }
 
-    fn find(&mut self, _regex: &BStr, _negated: bool) -> Result<(), Exn> {
+    fn find(&mut self, _regex: &BStr, _negated: bool) -> Result<(), gix_error::Error> {
         Self::unsupported("a message search")
     }
 
-    fn index_lookup(&mut self, _path: &BStr, _stage: u8) -> Result<(), Exn> {
+    fn index_lookup(&mut self, _path: &BStr, _stage: u8) -> Result<(), gix_error::Error> {
         Self::unsupported("an index path")
     }
 }
 
 impl delegate::Kind for Resolve<'_> {
-    fn kind(&mut self, _kind: gix_revision::spec::Kind) -> Result<(), Exn> {
+    fn kind(&mut self, _kind: gix_revision::spec::Kind) -> Result<(), gix_error::Error> {
         Self::unsupported("a range")
     }
 }
 
 impl gix_revision::spec::parse::Delegate for Resolve<'_> {
-    fn done(&mut self) -> Result<(), Exn> {
+    fn done(&mut self) -> Result<(), gix_error::Error> {
         Ok(())
     }
 }
@@ -1229,11 +1229,11 @@ impl WorkTree {
                 worktree_dir: Some(top.to_path_buf()),
                 ..Default::default()
             },
+            kind,
             gix_filter::pipeline::Options {
                 drivers,
                 eol_config: gix_filter::eol::Configuration { auto_crlf, eol },
                 crlf_roundtrip_check: gix_filter::pipeline::CrlfRoundTripCheck::Skip,
-                object_hash: kind,
                 ..Default::default()
             },
         );
