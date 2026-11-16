@@ -1028,7 +1028,7 @@ impl<'a> Checker<'a> {
                         "a string index is an integer",
                         span(&index.span()),
                     );
-                    if let Some(v) = self.folds.value(index).filter(|&v| v < 1) {
+                    if let Some(v) = self.folds.bits(index).filter(|&v| v < 1) {
                         self.error(
                             codes::YARA_NUMBER_OUT_OF_RANGE,
                             format!("a string's matches are numbered from 1; `{v}` is no index"),
@@ -2176,6 +2176,18 @@ impl Folds {
             .ok()
             .flatten()
             .and_then(|v| i64::try_from(v).ok())
+    }
+
+    /// `e`'s constant value as YARA-X stores it: an unsigned result above
+    /// `i64::MAX` is the `i64` of the same bits (`0xFFFFFFFFFFFFFFFF` is
+    /// `-1`), as YARA-X reads a string index.
+    fn bits(&self, e: &Expr) -> Option<i64> {
+        let v = self.step(e).0.ok().flatten()?;
+        i64::try_from(v).ok().or_else(|| {
+            u64::try_from(v)
+                .ok()
+                .map(|u| i64::from_ne_bytes(u.to_ne_bytes()))
+        })
     }
 
     /// One folding step. Values are `i128`: a literal above `i64::MAX`
