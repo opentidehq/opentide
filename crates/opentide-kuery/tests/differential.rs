@@ -431,9 +431,9 @@ const SAMPLES: &[&str] = &[
 fn pure_rust_parser_matches_tree_sitter() {
     let files = sources();
     // `OPENTIDE_DIFF_SCALE=full`: 40 mutations a file, 3,000 sentences, 40
-    // prefixes and 32 offsets, run before every push. The default is a sample
-    // that keeps CI well under its 300 s test limit. `OPENTIDE_DIFF_SEEDS=1,2,3`
-    // runs several seeds (default 1).
+    // prefixes and 32 offsets, run before every push. The default, CI's, takes
+    // 5 mutations a file and 10 prefixes, well under CI's 300 s test limit.
+    // `OPENTIDE_DIFF_SEEDS=1,2,3` runs several seeds (default 1).
     let full = std::env::var("OPENTIDE_DIFF_SCALE").is_ok_and(|s| s == "full");
     let seeds: Vec<u64> = std::env::var("OPENTIDE_DIFF_SEEDS")
         .or_else(|_| std::env::var("OPENTIDE_KUERY_SEED"))
@@ -450,10 +450,12 @@ fn pure_rust_parser_matches_tree_sitter() {
             config.max_prefixes = 40;
             config.max_offsets = 32;
         } else {
-            config.sentences = 200;
-            config.mutations_per_input = 2;
-            config.max_prefixes = 4;
-            config.max_offsets = 4;
+            // No fewer inputs than CI ran before the full scale existed
+            // (12,823 a seed).
+            config.sentences = 3_000;
+            config.mutations_per_input = 5;
+            config.max_prefixes = 10;
+            config.max_offsets = 32;
         }
         let report = run(&Old, &New, &files, &config);
         eprintln!(
