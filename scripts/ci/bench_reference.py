@@ -110,7 +110,15 @@ def find_reference(
     cpu = cpu_model(current)
     candidate = previous.with_name(previous.name + ".candidate")
     for run_id in candidate_runs(run_gh, repo, env["BASE_BRANCH"], env.get("GITHUB_RUN_ID", "")):
-        if not engine_succeeded(run_jobs(run_gh, repo, run_id), engine):
+        try:
+            jobs = run_jobs(run_gh, repo, run_id)
+        except subprocess.CalledProcessError as error:
+            # One run's jobs the API would not list (a transient error, a
+            # rate limit) is not the reference; the next run may be.
+            detail = (error.stderr or "").strip().splitlines()[-1:] or [""]
+            print(f"::warning::the jobs of run {run_id} could not be listed: {detail[0]}")
+            continue
+        if not engine_succeeded(jobs, engine):
             continue
         shutil.rmtree(candidate, ignore_errors=True)
         try:
