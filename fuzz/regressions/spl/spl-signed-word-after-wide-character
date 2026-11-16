@@ -1,0 +1,5 @@
+```܏ valid
+index=main | dedup host user ke_pempty=true sorcid -tstats_com`܏ valid
+index=main | dedup host user ke_pempty=true mand invalid
+| tstats
+_time
