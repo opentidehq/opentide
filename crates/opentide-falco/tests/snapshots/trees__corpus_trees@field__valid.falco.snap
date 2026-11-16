@@ -1,0 +1,33 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/field__valid.falco
+---
+source_file@0..55
+  and_expression@0..55
+    comparison@0..20
+      field@0..13
+        field_name@0..10 "proc.aname"
+        field_argument@10..13
+          [@10..11 "["
+          argument_value@11..12
+            number@11..12 "2"
+          ]@12..13 "]"
+      whitespace@13..14 " "
+      comparison_operator@14..15
+        =@14..15 "="
+      whitespace@15..16 " "
+      bare_string@16..20
+        identifier@16..20 "sshd"
+    whitespace@20..21 " "
+    and@21..24 "and"
+    whitespace@24..25 " "
+    comparison@25..55
+      field@25..38
+        field_name@25..38 "evt.arg.flags"
+      whitespace@38..39 " "
+      comparison_operator@39..47
+        identifier@39..47 "contains"
+      whitespace@47..48 " "
+      bare_string@48..55
+        identifier@48..55 "O_TRUNC"
