@@ -1,0 +1,98 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/range__valid.exabeam
+---
+source_file@0..94
+  statement@0..94
+    filter@0..94
+      and_expression@0..94
+        field_term@0..14
+          field_name@0..5
+            identifier@0..5
+              letters@0..5 "count"
+          :@5..6 ":"
+          range@6..14
+            [@6..7 "["
+            bound@7..8
+              digits@7..8 "1"
+            whitespace@8..9 " "
+            keyword@9..11
+              letters@9..11 "TO"
+            whitespace@11..12 " "
+            bound@12..13
+              digits@12..13 "5"
+            ]@13..14 "]"
+        whitespace@14..15 " "
+        keyword@15..18
+          letters@15..18 "AND"
+        whitespace@18..19 " "
+        field_term@19..33
+          field_name@19..24
+            identifier@19..24
+              letters@19..24 "bytes"
+          :@24..25 ":"
+          range@25..33
+            {@25..26 "{"
+            bound@26..27
+              digits@26..27 "1"
+            whitespace@27..28 " "
+            keyword@28..30
+              letters@28..30 "TO"
+            whitespace@30..31 " "
+            bound@31..32
+              *@31..32 "*"
+            }@32..33 "}"
+        whitespace@33..34 " "
+        keyword@34..37
+          letters@34..37 "AND"
+        whitespace@37..38 " "
+        field_term@38..57
+          field_name@38..44
+            identifier@38..44
+              letters@38..44 "src_ip"
+          :@44..45 ":"
+          range@45..57
+            [@45..46 "["
+            bound@46..56
+              digits@46..48 "10"
+              .@48..49 "."
+              digits@49..50 "0"
+              .@50..51 "."
+              digits@51..52 "0"
+              .@52..53 "."
+              digits@53..54 "0"
+              other@54..55 "/"
+              digits@55..56 "8"
+            ]@56..57 "]"
+        whitespace@57..58 " "
+        keyword@58..61
+          letters@58..61 "AND"
+        whitespace@61..62 " "
+        field_term@62..94
+          field_name@62..66
+            identifier@62..66
+              letters@62..66 "time"
+          :@66..67 ":"
+          range@67..94
+            [@67..68 "["
+            bound@68..88
+              digits@68..72 "2026"
+              -@72..73 "-"
+              digits@73..75 "11"
+              -@75..76 "-"
+              digits@76..78 "01"
+              letters@78..79 "T"
+              digits@79..81 "00"
+              :@81..82 ":"
+              digits@82..84 "00"
+              :@84..85 ":"
+              digits@85..87 "00"
+              letters@87..88 "Z"
+            whitespace@88..89 " "
+            keyword@89..91
+              letters@89..91 "TO"
+            whitespace@91..92 " "
+            bound@92..93
+              *@92..93 "*"
+            ]@93..94 "]"

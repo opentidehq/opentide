@@ -268,6 +268,10 @@ impl rowan::Language for Exabeam {
 /// A node of the tree.
 pub(crate) type SyntaxNode = rowan::SyntaxNode<Exabeam>;
 /// A token of the tree.
+#[expect(
+    dead_code,
+    reason = "the highlight captures of a later PR of #1223 read tokens"
+)]
 pub(crate) type SyntaxToken = rowan::SyntaxToken<Exabeam>;
 
 /// The grammar's keywords, upper case; they match in any case.

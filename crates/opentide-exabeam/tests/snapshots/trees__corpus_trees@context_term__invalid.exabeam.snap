@@ -1,0 +1,22 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/context_term__invalid.exabeam
+---
+source_file@0..18
+  statement@0..18
+    filter@0..18
+      and_expression@0..18
+        context_term@0..7
+          field_name@0..4
+            identifier@0..4
+              letters@0..4 "user"
+          whitespace@4..5 " "
+          keyword@5..7
+            letters@5..7 "IN"
+        whitespace@7..8 " "
+        free_text@8..18
+          identifier@8..18
+            letters@8..18 "Privileged"
+errors:
+7..8: expected a context table
