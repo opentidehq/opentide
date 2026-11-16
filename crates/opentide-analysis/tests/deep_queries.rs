@@ -16,10 +16,10 @@
 //!
 //! A replacement parser must keep every floor (its `max_depth` sits at or
 //! above it). A floor equal to the cap means the engine passed at the cap, so
-//! the true limit is higher. Three floors are set below the measured edge on
-//! purpose: kql and yaral are quadratic in the chain length on tree-sitter (and
-//! yaral in the nesting depth), so the edge sits near the time budget and a
-//! test there would be flaky.
+//! the true limit is higher. The yaral chain floor is set below the measured
+//! edge on purpose: yaral is quadratic in the chain length on tree-sitter, so
+//! the edge sits near the time budget and a test there would be flaky. kql's
+//! floors were measured on its pure-Rust parser (#1230).
 
 #![expect(
     clippy::unwrap_used,
@@ -37,10 +37,10 @@ const CHAIN_CAP: usize = 20_000;
 
 // Chain floors. Measured edge (the largest size that finished within 60 s, or
 // the cap), in a debug build under a host load average of 15 to 25.
-/// kql: 2,000 terms took 21 s locally but 63 s on a CI runner, 3,000 took 41 s,
-/// 4,000 took 72 s (quadratic). Set at 1,000 (about a quarter of the 2,000 time)
-/// so that a loaded runner cannot flip the test.
-const KQL_CHAIN_FLOOR: usize = 1_000;
+/// kql: on tree-sitter, 2,000 terms took 21 s (quadratic: each highlighted name
+/// rescanned the query for its tables); on the pure-Rust parser (#1230), which
+/// scans once, the cap passed in 8 s.
+const KQL_CHAIN_FLOOR: usize = CHAIN_CAP;
 /// yaral: 1,000 terms took 6 s, 1,500 took 20 s, 2,000 took 44 s, 2,500 took 87 s
 /// (quadratic); 1,500 took 71 s on a CI runner. Set well below the edge so that
 /// load cannot flip the test.
@@ -73,8 +73,11 @@ const LUCENE_CHAIN_FLOOR: usize = CHAIN_CAP;
 /// debug build). 1,000 is above every vendor's own limit known (ES|QL 400, EQL 250,
 /// Falco 100); past it a new parser reports one `TooDeep` diagnostic.
 const NESTING_CEILING: usize = 1_000;
-/// kql: 35 levels passed; 36 overflows the 1 MB stack (abort).
-const KQL_NEST_FLOOR: usize = 35;
+/// kql: tree-sitter passed 35 levels and overflowed the 1 MB stack at 36 (abort).
+/// The pure-Rust parser (#1230) passes 254 and reports the nesting past its
+/// `MAX_DEPTH` (256 levels; `T | where` takes two) as one error; with a higher
+/// limit, a debug build overflowed 1 MB between 500 and 700 levels.
+const KQL_NEST_FLOOR: usize = 254;
 /// spl passed the 10,000 cap in 0.2 s; held at the ceiling.
 const SPL_NEST_FLOOR: usize = NESTING_CEILING;
 /// cql passed the 10,000 cap in 0.1 s; held at the ceiling.

@@ -3,9 +3,9 @@
 //!
 //! The gate does not know a parser. It names productions, and reads a parsed
 //! tree, through a per-language [`KindNames`] table ([`kind_names`]): every
-//! language has the tree-sitter names today, and a language that moves to
-//! `opentide-parse` keeps its gate by supplying the names of its
-//! `SyntaxKind`s instead (#1219).
+//! language has the tree-sitter names until it moves to `opentide-parse`,
+//! when it keeps its gate by supplying the names of its `SyntaxKind`s instead
+//! (#1219): KQL does (#1230).
 
 #![expect(
     clippy::expect_used,
@@ -105,11 +105,62 @@ impl KindNames for TreeSitterNames {
     }
 }
 
-/// The kind-name table of `language`. Every language has the tree-sitter
-/// names; a language that moves to `opentide-parse` returns its `SyntaxKind`
-/// names here.
+/// The names of the pure-Rust KQL parser (#1230): its node kinds, lower-case,
+/// and the token classes the corpus tags. Four kinds are spelt shorter than
+/// the tree-sitter rules the corpus tags, which [`KQL_TAG_NAMES`] maps.
+struct KqlNames;
+
+/// A KQL kind and the tag the corpus gives it (its tree-sitter rule's name).
+const KQL_TAG_NAMES: &[(&str, &str)] = &[
+    ("index_expr", "index_expression"),
+    ("member_expr", "member_expression"),
+    ("quoted_ident", "quoted_identifier"),
+    ("toscalar_expr", "toscalar_expression"),
+];
+
+/// The token classes the corpus tags, as productions of their own.
+const KQL_TOKEN_PRODUCTIONS: &[&str] = &[
+    "comment",
+    "string",
+    "number",
+    "quoted_identifier",
+    "typed_literal",
+];
+
+fn kql_tag(kind: String) -> String {
+    KQL_TAG_NAMES
+        .iter()
+        .find(|(k, _)| *k == kind)
+        .map_or(kind, |(_, tag)| (*tag).to_string())
+}
+
+impl KindNames for KqlNames {
+    fn productions(&self) -> BTreeSet<String> {
+        opentide_kql::inspect::node_kinds()
+            .into_iter()
+            .filter(|k| k != "error")
+            .map(kql_tag)
+            .chain(KQL_TOKEN_PRODUCTIONS.iter().map(ToString::to_string))
+            .collect()
+    }
+
+    fn parse(&self, body: &str) -> Parsed {
+        let (has_error, kinds, dump) = opentide_kql::inspect::tree_kinds(body);
+        Parsed {
+            has_error,
+            kinds: kinds.into_iter().map(kql_tag).collect(),
+            dump,
+        }
+    }
+}
+
+/// The kind-name table of `language`: the `SyntaxKind` names of a language
+/// that moved to `opentide-parse` (KQL), the tree-sitter names of the others.
 fn kind_names(language: LanguageId, id: &'static str) -> Box<dyn KindNames> {
-    Box::new(TreeSitterNames { language, id })
+    match language {
+        LanguageId::Kql => Box::new(KqlNames),
+        _ => Box::new(TreeSitterNames { language, id }),
+    }
 }
 
 const KQL_REQUIRED: &[&str] = &[
@@ -187,56 +238,61 @@ fn spl_corpus_tags_cover_required_productions() {
 fn kql_named_rules_in_grammar_json_are_known() {
     let rules = kind_names(LanguageId::Kql, "kql").productions();
     let tags = tags_in("crates/testdata/corpus/kql");
+    // The kinds of the pure-Rust parser (#1230) the corpus does not tag.
     let skip: BTreeSet<&str> = [
         "source_file",
         "query",
         "tabular_expression",
-        "tabular_primary",
-        "tabular_operator",
-        "project_item",
+        "tabular_source",
+        "table_ref",
+        "paren_tabular",
+        "subquery",
         "rename_item",
+        "reorder_item",
         "assignment",
+        "tuple_assignment",
+        "name_tuple",
         "sort_item",
-        "expression",
-        "or_expression",
-        "and_expression",
-        "not_expression",
-        "comparison_expression",
-        "additive_expression",
-        "multiplicative_expression",
-        "unary_expression",
-        "primary_expression",
-        "identifier",
-        "boolean",
-        "null",
-        "timespan",
+        "or_expr",
+        "and_expr",
+        "not_expr",
+        "comparison_expr",
+        "in_expr",
+        "between_expr",
+        "additive_expr",
+        "multiplicative_expr",
+        "unary_expr",
+        "paren_expr",
+        "name_ref",
+        "literal",
         "print_operator",
         "unknown_operator",
-        "control_command",
-        "function_call",
-        "render_operator",
         "count_operator",
-        "filter_operator",
         "keyword_operator",
-        "mv_expand_operator",
         "parse_kv_operator",
         "project_keep_operator",
         "project_reorder_operator",
-        "top_operator",
         // pieces of the productions above, covered by their fixtures
-        "column_item",
-        "subquery",
-        "type",
         "parameter",
-        "json_value",
-        "hint_name",
-        "parse_column",
-        "mv_expand_item",
+        "type",
+        "table_type",
+        "table_column",
+        "datatable_column",
+        "option_value",
         "mv_option",
+        "mv_expand_item",
+        "parse_piece",
+        "parse_column",
         "series_aggregate",
-        "star",
-        "_column_name",
-        "_column_name_or_pattern",
+        "series_default",
+        "top_nested_of",
+        "top_nested_others",
+        "top_nested_by",
+        "star_arg",
+        "json_array",
+        "json_object",
+        "json_property",
+        "json_scalar",
     ]
     .into_iter()
     .collect();
@@ -267,7 +323,7 @@ fn kql_valid_fixtures_parse() {
             .collect::<Vec<_>>()
             .join("\n");
         let tree = kind_names(LanguageId::Kql, "kql").parse(&body);
-        assert!(!tree.has_error, "{name} sexp={}", tree.dump);
+        assert!(!tree.has_error, "{name} tree={}", tree.dump);
     }
 }
 
@@ -654,4 +710,26 @@ fn the_gate_reads_productions_and_trees_only_through_its_table() {
     );
     assert_eq!(names.productions.get(), 1);
     assert!(names.parses.get() > 0);
+}
+
+#[test]
+fn kql_names_read_the_pure_rust_tree() {
+    let names = kind_names(LanguageId::Kql, "kql");
+    let tree = names.parse("T | where a.b == 1 | project ['x y'] // c");
+    assert!(!tree.has_error, "{}", tree.dump);
+    for kind in [
+        "where_operator",
+        "member_expression",
+        "quoted_identifier",
+        "comment",
+    ] {
+        assert!(tree.has_kind(kind), "{kind}: {}", tree.dump);
+    }
+    // The parser's spelling is not a tag; the corpus's is.
+    assert!(!tree.has_kind("member_expr"), "{}", tree.dump);
+    assert!(names.parse("T | where").has_error);
+    let productions = names.productions();
+    assert!(productions.contains("toscalar_expression"));
+    assert!(productions.contains("typed_literal"));
+    assert!(!productions.contains("error"));
 }
