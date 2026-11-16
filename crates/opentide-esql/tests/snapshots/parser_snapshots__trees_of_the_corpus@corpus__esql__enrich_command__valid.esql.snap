@@ -1,0 +1,69 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/enrich_command__valid.esql
+---
+SOURCE_FILE@0..121
+  COMMENT@0..28 "// prod:enrich_command valid"
+  WHITESPACE@28..29 "\n"
+  QUERY@29..120
+    FROM_COMMAND@29..53
+      FROM_KW@29..33 "FROM"
+      WHITESPACE@33..34 " "
+      INDEX_PATTERN@34..40
+        INDEX_NAME@34..40
+          SOURCE_TEXT@34..40 "logs-*"
+      WHITESPACE@40..41 " "
+      METADATA@41..53
+        METADATA_KW@41..49 "METADATA"
+        WHITESPACE@49..50 " "
+        METADATA_FIELD@50..53
+          SOURCE_TEXT@50..53 "_id"
+    WHITESPACE@53..54 "\n"
+    PIPE@54..55 "|"
+    WHITESPACE@55..56 " "
+    ENRICH_COMMAND@56..120
+      ENRICH_KW@56..62 "ENRICH"
+      WHITESPACE@62..63 " "
+      ENRICH_POLICY@63..75
+        POLICY_NAME@63..75
+          POLICY_PART@63..75 "hosts-policy"
+      WHITESPACE@75..76 " "
+      ON_KW@76..78 "ON"
+      WHITESPACE@78..79 " "
+      NAME_PATTERN@79..88
+        ID_PATTERN@79..83
+          ID_PATTERN_TEXT@79..83 "host"
+        DOT@83..84 "."
+        ID_PATTERN@84..88
+          ID_PATTERN_TEXT@84..88 "name"
+      WHITESPACE@88..89 " "
+      WITH_KW@89..93 "WITH"
+      WHITESPACE@93..94 " "
+      ENRICH_WITH_CLAUSE@94..111
+        NAME_PATTERN@94..96
+          ID_PATTERN@94..96
+            ID_PATTERN_TEXT@94..96 "os"
+        WHITESPACE@96..97 " "
+        EQ@97..98 "="
+        WHITESPACE@98..99 " "
+        NAME_PATTERN@99..111
+          ID_PATTERN@99..103
+            ID_PATTERN_TEXT@99..103 "host"
+          DOT@103..104 "."
+          ID_PATTERN@104..106
+            ID_PATTERN_TEXT@104..106 "os"
+          DOT@106..107 "."
+          ID_PATTERN@107..111
+            ID_PATTERN_TEXT@107..111 "name"
+      COMMA@111..112 ","
+      WHITESPACE@112..113 " "
+      ENRICH_WITH_CLAUSE@113..120
+        NAME_PATTERN@113..120
+          ID_PATTERN@113..117
+            ID_PATTERN_TEXT@113..117 "host"
+          DOT@117..118 "."
+          ID_PATTERN@118..120
+            ID_PATTERN_TEXT@118..120 "ip"
+  WHITESPACE@120..121 "\n"
+--- errors

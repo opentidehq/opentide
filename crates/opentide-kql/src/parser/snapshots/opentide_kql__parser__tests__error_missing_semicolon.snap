@@ -1,0 +1,22 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"let x = 1\\nT\")"
+---
+SOURCE_FILE@0..11
+  LET_STATEMENT@0..9
+    LET_KW@0..3 "let"
+    WHITESPACE@3..4 " "
+    IDENT@4..5 "x"
+    WHITESPACE@5..6 " "
+    EQ@6..7 "="
+    WHITESPACE@7..8 " "
+    LITERAL@8..9
+      NUMBER@8..9 "1"
+  WHITESPACE@9..10 "\n"
+  QUERY@10..11
+    TABULAR_EXPRESSION@10..11
+      TABULAR_SOURCE@10..11
+        TABLE_REF@10..11
+          IDENT@10..11 "T"
+errors:
+9..10: expected `;` (expected `;`, `+`, `-`, `*`, `/`, `%`, `and`, `or`)

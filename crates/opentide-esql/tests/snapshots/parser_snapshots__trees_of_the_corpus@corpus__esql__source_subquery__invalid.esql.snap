@@ -1,0 +1,41 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/source_subquery__invalid.esql
+---
+SOURCE_FILE@0..84
+  COMMENT@0..31 "// prod:source_subquery invalid"
+  WHITESPACE@31..32 "\n"
+  QUERY@32..83
+    FROM_COMMAND@32..83
+      FROM_KW@32..36 "FROM"
+      WHITESPACE@36..37 " "
+      INDEX_PATTERN@37..43
+        INDEX_NAME@37..43
+          SOURCE_TEXT@37..43 "logs-*"
+      COMMA@43..44 ","
+      WHITESPACE@44..45 " "
+      SOURCE_SUBQUERY@45..70
+        L_PAREN@45..46 "("
+        FROM_COMMAND@46..60
+          FROM_KW@46..50 "FROM"
+          WHITESPACE@50..51 " "
+          INDEX_PATTERN@51..60
+            INDEX_NAME@51..60
+              SOURCE_TEXT@51..60 "archive-*"
+        WHITESPACE@60..61 " "
+        PIPE@61..62 "|"
+        WHITESPACE@62..63 " "
+        WHERE_COMMAND@63..68
+          WHERE_KW@63..68 "WHERE"
+        WHITESPACE@68..69 " "
+        R_PAREN@69..70 ")"
+      WHITESPACE@70..71 " "
+      METADATA@71..83
+        METADATA_KW@71..79 "METADATA"
+        WHITESPACE@79..80 " "
+        METADATA_FIELD@80..83
+          SOURCE_TEXT@80..83 "_id"
+  WHITESPACE@83..84 "\n"
+--- errors
+68..69: expected an expression (expected NOT_KW, PLUS, MINUS)

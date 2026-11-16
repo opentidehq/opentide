@@ -1,0 +1,57 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/source_subquery__valid.esql
+---
+SOURCE_FILE@0..97
+  COMMENT@0..29 "// prod:source_subquery valid"
+  WHITESPACE@29..30 "\n"
+  QUERY@30..96
+    FROM_COMMAND@30..86
+      FROM_KW@30..34 "FROM"
+      WHITESPACE@34..35 " "
+      INDEX_PATTERN@35..41
+        INDEX_NAME@35..41
+          SOURCE_TEXT@35..41 "logs-*"
+      COMMA@41..42 ","
+      WHITESPACE@42..43 " "
+      SOURCE_SUBQUERY@43..73
+        L_PAREN@43..44 "("
+        FROM_COMMAND@44..58
+          FROM_KW@44..48 "FROM"
+          WHITESPACE@48..49 " "
+          INDEX_PATTERN@49..58
+            INDEX_NAME@49..58
+              SOURCE_TEXT@49..58 "archive-*"
+        WHITESPACE@58..59 " "
+        PIPE@59..60 "|"
+        WHITESPACE@60..61 " "
+        WHERE_COMMAND@61..72
+          WHERE_KW@61..66 "WHERE"
+          WHITESPACE@66..67 " "
+          COMPARISON@67..72
+            QUALIFIED_NAME@67..68
+              IDENTIFIER@67..68
+                IDENT@67..68 "x"
+            WHITESPACE@68..69 " "
+            GT@69..70 ">"
+            WHITESPACE@70..71 " "
+            NUMBER@71..72
+              NUMBER_LIT@71..72 "1"
+        R_PAREN@72..73 ")"
+      WHITESPACE@73..74 " "
+      METADATA@74..86
+        METADATA_KW@74..82 "METADATA"
+        WHITESPACE@82..83 " "
+        METADATA_FIELD@83..86
+          SOURCE_TEXT@83..86 "_id"
+    WHITESPACE@86..87 "\n"
+    PIPE@87..88 "|"
+    WHITESPACE@88..89 " "
+    LIMIT_COMMAND@89..96
+      LIMIT_KW@89..94 "LIMIT"
+      WHITESPACE@94..95 " "
+      NUMBER@95..96
+        NUMBER_LIT@95..96 "1"
+  WHITESPACE@96..97 "\n"
+--- errors

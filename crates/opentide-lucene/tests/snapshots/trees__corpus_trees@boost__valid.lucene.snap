@@ -1,0 +1,13 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/boost__valid.lucene
+---
+SourceFile@0..13
+  FieldQuery@0..13
+    FieldName@0..5
+      Term@0..5 "title"
+    Colon@5..6 ":"
+    TermQuery@6..13
+      Term@6..11 "alert"
+      Boost@11..13 "^2"

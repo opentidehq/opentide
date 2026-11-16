@@ -1,0 +1,13 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/phrase_query__valid.lucene
+---
+SourceFile@0..24
+  FieldQuery@0..24
+    FieldName@0..7
+      Term@0..7 "message"
+    Colon@7..8 ":"
+    PhraseQuery@8..24
+      Phrase@8..22 "\"failed login\""
+      Fuzzy@22..24 "~2"

@@ -1,0 +1,54 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/string__valid.esql
+---
+SOURCE_FILE@0..116
+  COMMENT@0..20 "// prod:string valid"
+  WHITESPACE@20..21 "\n"
+  QUERY@21..115
+    FROM_COMMAND@21..45
+      FROM_KW@21..25 "FROM"
+      WHITESPACE@25..26 " "
+      INDEX_PATTERN@26..32
+        INDEX_NAME@26..32
+          SOURCE_TEXT@26..32 "logs-*"
+      WHITESPACE@32..33 " "
+      METADATA@33..45
+        METADATA_KW@33..41 "METADATA"
+        WHITESPACE@41..42 " "
+        METADATA_FIELD@42..45
+          SOURCE_TEXT@42..45 "_id"
+    WHITESPACE@45..46 "\n"
+    PIPE@46..47 "|"
+    WHITESPACE@47..48 " "
+    WHERE_COMMAND@48..115
+      WHERE_KW@48..53 "WHERE"
+      WHITESPACE@53..54 " "
+      OR_EXPRESSION@54..115
+        COMPARISON@54..92
+          QUALIFIED_NAME@54..63
+            IDENTIFIER@54..58
+              IDENT@54..58 "file"
+            DOT@58..59 "."
+            IDENTIFIER@59..63
+              IDENT@59..63 "path"
+          WHITESPACE@63..64 " "
+          EQ_EQ@64..66 "=="
+          WHITESPACE@66..67 " "
+          STRING@67..92
+            STRING_LIT@67..92 "\"\"\"C:\\Windows\\System32\"\"\""
+        WHITESPACE@92..93 " "
+        OR_KW@93..95 "OR"
+        WHITESPACE@95..96 " "
+        COMPARISON@96..115
+          QUALIFIED_NAME@96..97
+            IDENTIFIER@96..97
+              IDENT@96..97 "a"
+          WHITESPACE@97..98 " "
+          EQ_EQ@98..100 "=="
+          WHITESPACE@100..101 " "
+          STRING@101..115
+            STRING_LIT@101..115 "\"tab\\tquote\\\"\""
+  WHITESPACE@115..116 "\n"
+--- errors

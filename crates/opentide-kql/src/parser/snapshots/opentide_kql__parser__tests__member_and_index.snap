@@ -1,0 +1,68 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | where a.b[0].c == d[\\\"k\\\"] and e.[\\\"x.y\\\"] == f['q']['r']\")"
+---
+SOURCE_FILE@0..57
+  QUERY@0..57
+    TABULAR_EXPRESSION@0..57
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      WHERE_OPERATOR@4..57
+        WHERE_KW@4..9 "where"
+        WHITESPACE@9..10 " "
+        AND_EXPR@10..57
+          COMPARISON_EXPR@10..28
+            MEMBER_EXPR@10..18
+              INDEX_EXPR@10..16
+                MEMBER_EXPR@10..13
+                  NAME_REF@10..11
+                    IDENT@10..11 "a"
+                  DOT@11..12 "."
+                  IDENT@12..13 "b"
+                L_BRACKET@13..14 "["
+                LITERAL@14..15
+                  NUMBER@14..15 "0"
+                R_BRACKET@15..16 "]"
+              DOT@16..17 "."
+              IDENT@17..18 "c"
+            WHITESPACE@18..19 " "
+            CMP_OP@19..21 "=="
+            WHITESPACE@21..22 " "
+            INDEX_EXPR@22..28
+              NAME_REF@22..23
+                IDENT@22..23 "d"
+              L_BRACKET@23..24 "["
+              LITERAL@24..27
+                STRING@24..27 "\"k\""
+              R_BRACKET@27..28 "]"
+          WHITESPACE@28..29 " "
+          AND_KW@29..32 "and"
+          WHITESPACE@32..33 " "
+          COMPARISON_EXPR@33..57
+            INDEX_EXPR@33..42
+              NAME_REF@33..34
+                IDENT@33..34 "e"
+              DOT@34..35 "."
+              L_BRACKET@35..36 "["
+              LITERAL@36..41
+                STRING@36..41 "\"x.y\""
+              R_BRACKET@41..42 "]"
+            WHITESPACE@42..43 " "
+            CMP_OP@43..45 "=="
+            WHITESPACE@45..46 " "
+            INDEX_EXPR@46..57
+              INDEX_EXPR@46..52
+                NAME_REF@46..47
+                  IDENT@46..47 "f"
+                L_BRACKET@47..48 "["
+                LITERAL@48..51
+                  STRING@48..51 "'q'"
+                R_BRACKET@51..52 "]"
+              L_BRACKET@52..53 "["
+              LITERAL@53..56
+                STRING@53..56 "'r'"
+              R_BRACKET@56..57 "]"

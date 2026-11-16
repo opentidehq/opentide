@@ -1,0 +1,16 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{source}\\n{tree}--- errors\\n{errors}\")"
+---
+| LIMIT 1
+SOURCE_FILE@0..9
+  QUERY@0..9
+    PIPE@0..1 "|"
+    WHITESPACE@1..2 " "
+    LIMIT_COMMAND@2..9
+      LIMIT_KW@2..7 "LIMIT"
+      WHITESPACE@7..8 " "
+      NUMBER@8..9
+        NUMBER_LIT@8..9 "1"
+--- errors
+0..0: expected a source command (expected FROM_KW, TS_KW, ROW_KW, SHOW_KW, EXPLAIN_KW, SET_KW)

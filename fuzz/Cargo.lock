@@ -2859,11 +2859,14 @@ dependencies = [
 name = "opentide-esql"
 version = "0.12.0"
 dependencies = [
+ "logos",
  "opentide-core",
  "opentide-ecs",
  "opentide-highlight",
  "opentide-lucene",
+ "opentide-parse",
  "opentide-syntax",
+ "rowan",
  "serde",
  "toml",
  "tree-sitter",
@@ -2927,10 +2930,13 @@ dependencies = [
 name = "opentide-kql"
 version = "0.12.0"
 dependencies = [
+ "logos",
  "opentide-core",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
  "regex",
+ "rowan",
  "serde",
  "strsim",
  "toml",
@@ -2980,11 +2986,12 @@ dependencies = [
  "opentide-core",
  "opentide-ecs",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
+ "rowan",
  "serde",
  "strsim",
  "toml",
- "tree-sitter",
 ]
 
 [[package]]
