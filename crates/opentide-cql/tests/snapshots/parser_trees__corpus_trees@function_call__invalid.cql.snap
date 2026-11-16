@@ -31,5 +31,5 @@ SOURCE_FILE@0..35
   WHITESPACE@34..35 "\n"
 
 21..21: missing `)` (expected R_PAREN)
-21..21: unexpected (expected PIPE, R_PAREN)
-33..33: unexpected (expected PIPE)
+21..21: unexpected (expected R_PAREN)
+33..33: unexpected

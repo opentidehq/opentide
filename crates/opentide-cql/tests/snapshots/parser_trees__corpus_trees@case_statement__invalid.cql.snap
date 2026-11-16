@@ -58,4 +58,4 @@ SOURCE_FILE@0..42
       R_BRACE@40..41 "}"
   WHITESPACE@41..42 "\n"
 
-21..22: a filter cannot follow an assignment without a pipe (expected PIPE)
+21..22: a filter cannot follow an assignment without a pipe

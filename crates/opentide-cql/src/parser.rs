@@ -703,18 +703,21 @@ fn match_statement(p: &mut Parser<'_>) {
     m.complete(p, K::MATCH_STATEMENT.raw());
 }
 
-/// `guard => pipeline`. A guard that is missing where no `=>` follows is the branch's one
-/// error: the body is not read as a second one.
+/// `guard => pipeline`. A missing guard is the branch's one error: where the branch ends there
+/// (`x match { ; }`) nothing more is read, and otherwise what follows is read as its body, with
+/// no second error for the `=>` (`x match { a => b ; => c }`: the `=>` after `;` lexes as `=`).
 fn match_branch(p: &mut Parser<'_>) {
     let m = p.start();
-    if !match_guard(p) && kind(p, 0) != K::FAT_ARROW {
+    let guard = match_guard(p);
+    let ends = |p: &Parser<'_>| p.at_eof() || NESTED_END.contains(p.current());
+    if !guard && kind(p, 0) != K::FAT_ARROW && ends(p) {
         m.complete(p, K::MATCH_BRANCH.raw());
         return;
     }
-    if !p.eat(K::FAT_ARROW.raw()) {
+    if !p.eat(K::FAT_ARROW.raw()) && guard {
         err(p, "expected `=>`");
         // `x match { a }`: no body either, and that is the same error.
-        if p.at_eof() || NESTED_END.contains(p.current()) {
+        if ends(p) {
             m.complete(p, K::MATCH_BRANCH.raw());
             return;
         }

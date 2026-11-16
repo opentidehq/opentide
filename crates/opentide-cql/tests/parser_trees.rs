@@ -86,6 +86,7 @@ fn recovery() {
         ("empty_match", "x match { }"),
         ("match_guard_without_arrow", "x match { a }"),
         ("double_unary", "x := !!a"),
+        ("match_branch_without_guard", "x match { a => b ; => c }"),
     ] {
         insta::assert_snapshot!(name, debug_parse(source));
     }
@@ -101,6 +102,7 @@ fn one_error_per_fault() {
         "x := !!a",
         "x := - - a",
         "a=1 | | b=2",
+        "x match { ; }",
     ] {
         let (_, parse) = parser::parse(source);
         assert_eq!(parse.errors.len(), 1, "{source}: {:?}", parse.errors);

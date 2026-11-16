@@ -1,0 +1,17 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..11
+  PIPELINE@0..11
+    MATCH_STATEMENT@0..11
+      FIELD_NAME@0..1
+        WORD@0..1 "x"
+      WHITESPACE@1..2 " "
+      MATCH_KW@2..7 "match"
+      WHITESPACE@7..8 " "
+      L_BRACE@8..9 "{"
+      WHITESPACE@9..10 " "
+      R_BRACE@10..11 "}"
+
+9..10: expected a match branch (`guard => pipeline`)
