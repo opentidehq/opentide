@@ -2967,6 +2967,7 @@ impl Sender<'_, '_> {
         for batch in batches {
             let tenant = batch.tenant.name.clone();
             let planned = self.screen(PLATFORM, batch, log);
+            let planned = self.bitdefender_yara_limit(batch, planned, log);
             if planned.is_empty() {
                 continue;
             }
@@ -3123,6 +3124,61 @@ impl Sender<'_, '_> {
             }
         }
         Ok(())
+    }
+
+    /// GravityZone's cap on YARA rules per company: when the YARA rules
+    /// deployment state records on the tenant, less those the run deletes,
+    /// plus those it creates, pass the limit, each YARA create is refused
+    /// before anything is sent. Updates and deletes go on. A rule recorded
+    /// there that the workspace no longer holds is not counted: its kind is
+    /// unknown.
+    fn bitdefender_yara_limit<'b>(
+        &mut self,
+        batch: &Batch,
+        planned: Vec<(&'b opentide_compile::Rule, Planned)>,
+        log: &mut DeployLog<'_>,
+    ) -> Vec<(&'b opentide_compile::Rule, Planned)> {
+        use opentide_compile::bitdefender::{
+            PLATFORM, YARA_RULE_LIMIT_CODE, is_yara, yara_rule_limit,
+        };
+        let tenant = batch.tenant.name.as_str();
+        let count = |wanted: fn(&Planned) -> bool| {
+            planned
+                .iter()
+                .filter(|(rule, action)| wanted(action) && is_yara(rule))
+                .count()
+        };
+        let created = count(|action| matches!(action, Planned::Create));
+        if created == 0 {
+            return planned;
+        }
+        let deleted = count(|action| matches!(action, Planned::Delete(_)));
+        let root = self.workspace.root().to_path_buf();
+        let recorded = deploy_state::recorded(&root, PLATFORM, tenant)
+            .iter()
+            .filter(|uuid| {
+                crate::commands::validate_live::rule_of(self.workspace, uuid)
+                    .is_some_and(|rule| is_yara(&rule))
+            })
+            .count();
+        let Some(message) = yara_rule_limit(tenant, recorded, created, deleted) else {
+            return planned;
+        };
+        let error = StateError {
+            code: YARA_RULE_LIMIT_CODE,
+            message,
+        };
+        planned
+            .into_iter()
+            .filter(|(rule, action)| {
+                let refused = matches!(action, Planned::Create) && is_yara(rule);
+                if refused {
+                    self.report_failure(&error, &rule.uuid, PLATFORM, tenant);
+                    log.refused(PLATFORM, tenant, &rule.uuid, &rule.name, &error.message);
+                }
+                !refused
+            })
+            .collect()
     }
 
     /// Google Security Operations: each rule verified, created, updated,

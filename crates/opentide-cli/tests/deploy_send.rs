@@ -1144,3 +1144,120 @@ fn only_opentide_debug_promotes_the_whole_folder_not_debug() {
     assert!(!push_promotes_the_whole_folder(&[("DEBUG", "true")]));
     assert!(push_promotes_the_whole_folder(&[("OPENTIDE_DEBUG", "1")]));
 }
+
+/// A Bitdefender block: a YARA rule, or a custom detection rule.
+fn bitdefender_block(yara: bool) -> String {
+    let rule = if yara {
+        "    yara:\n      signature: |\n        rule A {\n          strings:\n            $a = \"evil\"\n          condition:\n            $a\n        }\n"
+    } else {
+        "    detection:\n      criteria:\n        - field: Process.Name\n          relation: is\n          value: evil.exe\n"
+    };
+    format!(
+        "  bitdefender:\n    enabled: true\n    schema: platform::bitdefender::1.0\n    status: STAGING\n{rule}"
+    )
+}
+
+const BITDEFENDER_SETUP: &str = "api_key = \"key\"\nurl = \"https://127.0.0.1:9\"\n";
+
+/// The rows of the run, each `(status, message)`, for the rules `uuids`.
+fn rows_for(sent: &Sent, count: usize) -> Vec<(String, Option<String>)> {
+    let rows = rows(sent);
+    assert_eq!(rows.len(), count, "{rows:?}");
+    rows
+}
+
+/// GravityZone holds at most 50 YARA rules per company (bitdefender-1.0): a
+/// deploy that would leave more refuses its YARA creates before anything is
+/// sent (the tenant here is unreachable), naming the count, instead of
+/// letting the API fail part-way.
+#[test]
+fn bitdefender_refuses_yara_creates_past_fifty_rules() {
+    let block = bitdefender_block(true);
+    let files: Vec<(String, String)> = (0..51)
+        .map(|i| {
+            let uuid = format!("00000000-0000-4000-8099-{i:012}");
+            (
+                format!("r{i}.yaml"),
+                rule("YARA rule", &uuid, "A YARA rule.", &block),
+            )
+        })
+        .collect();
+    let refs: Vec<(&str, String)> = files.iter().map(|(f, t)| (f.as_str(), t.clone())).collect();
+    let ws = workspace("bitdefender", "lab", BITDEFENDER_SETUP, &refs);
+    let env = Env::from_pairs(Vec::<(String, String)>::new());
+    let (sent, _) = deploy(ws.path(), "bitdefender", &env, &Registry::new(), 0);
+    for (status, message) in rows_for(&sent, 51) {
+        assert_eq!(status, "failed");
+        let message = message.unwrap();
+        assert!(
+            message
+                .starts_with("the deploy would leave 51 YARA rules on tenant \"lab\" (0 recorded"),
+            "{message}"
+        );
+        assert!(message.contains("at most 50 per company"), "{message}");
+    }
+}
+
+/// The rules deployment state records on the tenant count, and so do the
+/// rules the run deletes (less) and creates (more); a custom detection rule
+/// does not count.
+#[test]
+fn bitdefender_counts_the_yara_rules_deployment_state_records() {
+    let yara = bitdefender_block(true);
+    let mut rules: Vec<(String, String, String, String)> = (0..50)
+        .map(|i| {
+            (
+                format!("s{i}.yaml"),
+                format!("00000000-0000-4000-8098-{i:012}"),
+                yara.clone(),
+                format!("{i:024x}"),
+            )
+        })
+        .collect();
+    rules.push((
+        "d.yaml".into(),
+        "00000000-0000-4000-8097-000000000001".into(),
+        bitdefender_block(false),
+        format!("{:024x}", 99),
+    ));
+    let refs: Vec<(&str, &str, String, &str)> = rules
+        .iter()
+        .map(|(f, u, b, id)| (f.as_str(), u.as_str(), b.clone(), id.as_str()))
+        .collect();
+    let ws = stated("bitdefender", BITDEFENDER_SETUP, &refs);
+    let new = "00000000-0000-4000-8096-000000000001";
+    let detection = "00000000-0000-4000-8096-000000000002";
+    let dir = ws.path().join("objects/rules");
+    std::fs::write(
+        dir.join("new.yaml"),
+        rule("New YARA rule", new, "New.", &yara),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("new-detection.yaml"),
+        rule(
+            "New detection",
+            detection,
+            "New.",
+            &bitdefender_block(false),
+        ),
+    )
+    .unwrap();
+    let args = Args {
+        strategies: vec!["PREVIEW".into(), "RELEASE".into()],
+        uuids: vec![new.into(), detection.into()],
+        platform: Some("bitdefender".into()),
+        keep_deprecated: Some(true),
+        ..Args::default()
+    };
+    let env = Env::from_pairs(Vec::<(String, String)>::new());
+    let (sent, text) = deploy_with(ws.path(), &args, &env, &Registry::new(), 0);
+    let rows = rows_for(&sent, 2);
+    let refused: Vec<_> = rows
+        .iter()
+        .filter_map(|(_, message)| message.as_deref())
+        .filter(|message| message.starts_with("the deploy would leave 51 YARA rules"))
+        .collect();
+    assert_eq!(refused.len(), 1, "{rows:?}\n{text}");
+    assert!(refused[0].contains("(50 recorded in deployment state, 1 to create, 0 to delete)"));
+}

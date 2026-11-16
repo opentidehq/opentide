@@ -112,6 +112,39 @@ fn block_json(rule: &Rule) -> Result<&Json, CompileError> {
     })
 }
 
+/// GravityZone's maximum of YARA rules per company (bitdefender-1.0).
+pub const YARA_RULE_LIMIT: usize = 50;
+/// A deploy that would leave a tenant more YARA rules than
+/// [`YARA_RULE_LIMIT`]: its YARA creates are refused before anything is sent.
+pub const YARA_RULE_LIMIT_CODE: &str = "bitdefender_yara_rule_limit";
+
+/// Whether the rule's Bitdefender block deploys a YARA rule; `false` for a
+/// block its model does not read (compiling it reports why).
+pub fn is_yara(rule: &Rule) -> bool {
+    block_of(rule).is_ok_and(|block| block.kind() == Kind::Yara)
+}
+
+/// Why a deploy to `tenant` is refused its YARA creates, or `None` within the
+/// limit: `recorded` YARA rules have an id there in deployment state, the run
+/// deletes `deleted` of them and creates `created` more.
+pub fn yara_rule_limit(
+    tenant: &str,
+    recorded: usize,
+    created: usize,
+    deleted: usize,
+) -> Option<String> {
+    let after = (recorded + created).saturating_sub(deleted);
+    (after > YARA_RULE_LIMIT).then(|| {
+        format!(
+            "the deploy would leave {after} YARA rules on tenant {:?} ({recorded} recorded in \
+             deployment state, {created} to create, {deleted} to delete), and GravityZone allows \
+             at most {YARA_RULE_LIMIT} per company. No YARA rule is created on this tenant: \
+             retire some, or deploy fewer",
+            tenant.trim()
+        )
+    })
+}
+
 /// The rule's Bitdefender block, read by its model (`block_of`).
 pub fn block_of(rule: &Rule) -> Result<BitdefenderConfig, CompileError> {
     let value = serde_json::to_value(block_json(rule)?)
@@ -564,4 +597,30 @@ pub fn request(
         Action::Update(rule_id) => request_body(UPDATE, update_params(&compiled, rule_id)),
         _ => request_body(CREATE, create_params(&compiled)),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Fifty YARA rules fit; the fifty-first is refused, deletions making room
+    /// first.
+    #[test]
+    fn the_yara_rule_limit_is_fifty_after_deletions() {
+        assert_eq!(yara_rule_limit("lab", 0, 50, 0), None);
+        assert_eq!(yara_rule_limit("lab", 49, 1, 0), None);
+        assert_eq!(yara_rule_limit("lab", 50, 1, 1), None);
+        let refused = yara_rule_limit(" lab ", 49, 3, 1).unwrap();
+        assert!(
+            refused.starts_with(
+                "the deploy would leave 51 YARA rules on tenant \"lab\" (49 recorded in \
+                 deployment state, 3 to create, 1 to delete)"
+            ),
+            "{refused}"
+        );
+        assert!(
+            yara_rule_limit("lab", 51, 0, 0).is_some(),
+            "already past: no create fits"
+        );
+    }
 }
