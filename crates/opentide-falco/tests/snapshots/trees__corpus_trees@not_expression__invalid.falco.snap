@@ -1,0 +1,22 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/not_expression__invalid.falco
+---
+source_file@0..20
+  comparison@0..9
+    field@0..9
+      field_name@0..9 "proc.name"
+  whitespace@9..10 " "
+  ERROR@10..13
+    identifier@10..13 "not"
+  whitespace@13..14 " "
+  ERROR@14..15
+    =@14..15 "="
+  whitespace@15..16 " "
+  macro_reference@16..20
+    identifier@16..20 "bash"
+errors:
+9..10: expected an operator
+9..10: unexpected
+13..14: unexpected (expected field_name, identifier, transformer_name, ()

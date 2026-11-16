@@ -1,0 +1,41 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/string__valid.cql
+---
+SOURCE_FILE@0..104
+  PIPELINE@0..103
+    FREE_TEXT@0..18
+      STRING@0..18
+        STRING_TOKEN@0..18 "\"msg:\\\"welcome\\\" \""
+    WHITESPACE@18..19 " "
+    PIPE@19..20 "|"
+    WHITESPACE@20..21 " "
+    FIELD_FILTER@21..40
+      FIELD_NAME@21..25
+        WORD@21..25 "user"
+      EQ@25..26 "="
+      WHITESPACE@26..27 " "
+      STRING@27..40
+        STRING_TOKEN@27..40 "\"Alan Turing\""
+    WHITESPACE@40..41 " "
+    PIPE@41..42 "|"
+    WHITESPACE@42..43 " "
+    FUNCTION_CALL@43..103
+      FUNCTION_NAME@43..48
+        FUNCTION_NAME_TOKEN@43..48 "regex"
+      L_PAREN@48..49 "("
+      ARGUMENT_LIST@49..102
+        ARGUMENT@49..80
+          STRING@49..80
+            STRING_TOKEN@49..80 "\"\\x5c\\x5c(?<file_name>[^\\\\]+)$\""
+        COMMA@80..81 ","
+        WHITESPACE@81..82 " "
+        NAMED_ARGUMENT@82..102
+          ARGUMENT_NAME@82..87
+            WORD@82..87 "field"
+          EQ@87..88 "="
+          FIELD_NAME@88..102
+            WORD@88..102 "TargetFileName"
+      R_PAREN@102..103 ")"
+  WHITESPACE@103..104 "\n"

@@ -1,0 +1,129 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/expression_attribute__valid.cql
+---
+SOURCE_FILE@0..221
+  PIPELINE@0..220
+    FUNCTION_CALL@0..220
+      FUNCTION_NAME@0..9
+        FUNCTION_NAME_TOKEN@0..9 "correlate"
+      L_PAREN@9..10 "("
+      ARGUMENT_LIST@10..219
+        ARGUMENT@10..36
+          NAMED_SUBQUERY@10..36
+            IDENTIFIER@10..15
+              WORD@10..15 "Login"
+            COLON@15..16 ":"
+            WHITESPACE@16..17 " "
+            SUBQUERY@17..36
+              L_BRACE@17..18 "{"
+              WHITESPACE@18..19 " "
+              PIPELINE@19..34
+                FIELD_FILTER@19..34
+                  TAG@19..26
+                    TAG_TOKEN@19..26 "#action"
+                  EQ@26..27 "="
+                  STRING@27..34
+                    STRING_TOKEN@27..34 "\"login\""
+              WHITESPACE@34..35 " "
+              R_BRACE@35..36 "}"
+        COMMA@36..37 ","
+        WHITESPACE@37..38 " "
+        ARGUMENT@38..96
+          NAMED_SUBQUERY@38..96
+            IDENTIFIER@38..46
+              WORD@38..46 "Purchase"
+            COLON@46..47 ":"
+            WHITESPACE@47..48 " "
+            SUBQUERY@48..96
+              L_BRACE@48..49 "{"
+              WHITESPACE@49..50 " "
+              PIPELINE@50..94
+                FIELD_FILTER@50..68
+                  TAG@50..57
+                    TAG_TOKEN@50..57 "#action"
+                  EQ@57..58 "="
+                  STRING@58..68
+                    STRING_TOKEN@58..68 "\"purchase\""
+                WHITESPACE@68..69 " "
+                PIPE@69..70 "|"
+                WHITESPACE@70..71 " "
+                LINK_CONSTRAINT@71..94
+                  FIELD_NAME@71..77
+                    WORD@71..77 "userId"
+                  WHITESPACE@77..78 " "
+                  LT_EQ_GT@78..81 "<=>"
+                  WHITESPACE@81..82 " "
+                  FIELD_NAME@82..94
+                    WORD@82..94 "Login.userId"
+              WHITESPACE@94..95 " "
+              R_BRACE@95..96 "}"
+        COMMA@96..97 ","
+        WHITESPACE@97..98 " "
+        NAMED_ARGUMENT@98..219
+          ARGUMENT_NAME@98..109
+            WORD@98..109 "aggregation"
+          WHITESPACE@109..110 " "
+          EQ@110..111 "="
+          WHITESPACE@111..112 " "
+          ARRAY@112..219
+            L_BRACK@112..113 "["
+            WHITESPACE@113..114 " "
+            ATTRIBUTED_EXPRESSION@114..217
+              NAMED_SUBQUERY@114..183
+                IDENTIFIER@114..123
+                  WORD@114..123 "pageViews"
+                COLON@123..124 ":"
+                WHITESPACE@124..125 " "
+                SUBQUERY@125..183
+                  L_BRACE@125..126 "{"
+                  WHITESPACE@126..127 " "
+                  PIPELINE@127..181
+                    FIELD_FILTER@127..145
+                      TAG@127..134
+                        TAG_TOKEN@127..134 "#action"
+                      EQ@134..135 "="
+                      STRING@135..145
+                        STRING_TOKEN@135..145 "\"pageView\""
+                    WHITESPACE@145..146 " "
+                    PIPE@146..147 "|"
+                    WHITESPACE@147..148 " "
+                    LINK_CONSTRAINT@148..171
+                      FIELD_NAME@148..154
+                        WORD@148..154 "userId"
+                      WHITESPACE@154..155 " "
+                      LT_EQ_GT@155..158 "<=>"
+                      WHITESPACE@158..159 " "
+                      FIELD_NAME@159..171
+                        WORD@159..171 "Login.userId"
+                    WHITESPACE@171..172 " "
+                    PIPE@172..173 "|"
+                    WHITESPACE@173..174 " "
+                    FUNCTION_CALL@174..181
+                      FUNCTION_NAME@174..179
+                        FUNCTION_NAME_TOKEN@174..179 "count"
+                      L_PAREN@179..180 "("
+                      R_PAREN@180..181 ")"
+                  WHITESPACE@181..182 " "
+                  R_BRACE@182..183 "}"
+              WHITESPACE@183..184 " "
+              EXPRESSION_ATTRIBUTE@184..198
+                IDENTIFIER@184..189
+                  WORD@184..189 "after"
+                COLON@189..190 ":"
+                WHITESPACE@190..191 " "
+                STRING@191..198
+                  STRING_TOKEN@191..198 "\"Login\""
+              WHITESPACE@198..199 " "
+              EXPRESSION_ATTRIBUTE@199..217
+                IDENTIFIER@199..205
+                  WORD@199..205 "before"
+                COLON@205..206 ":"
+                WHITESPACE@206..207 " "
+                STRING@207..217
+                  STRING_TOKEN@207..217 "\"Purchase\""
+            WHITESPACE@217..218 " "
+            R_BRACK@218..219 "]"
+      R_PAREN@219..220 ")"
+  WHITESPACE@220..221 "\n"

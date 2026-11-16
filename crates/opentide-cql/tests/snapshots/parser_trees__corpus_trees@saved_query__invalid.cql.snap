@@ -1,0 +1,23 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/saved_query__invalid.cql
+---
+SOURCE_FILE@0..40
+  PIPELINE@0..39
+    SAVED_QUERY@0..39
+      DOLLAR@0..1 "$"
+      SAVED_QUERY_NAME@1..21
+        SAVED_QUERY_NAME_TOKEN@1..21 "falcon/helper:enrich"
+      WHITESPACE@21..22 " "
+      L_PAREN@22..23 "("
+      SAVED_QUERY_ARGUMENT@23..38
+        ARGUMENT_NAME@23..28
+          WORD@23..28 "field"
+        EQ@28..29 "="
+        UNQUOTED_PATTERN@29..38
+          WORD@29..38 "LogonType"
+      R_PAREN@38..39 ")"
+  WHITESPACE@39..40 "\n"
+
+21..22: expected `(` directly after the saved query name

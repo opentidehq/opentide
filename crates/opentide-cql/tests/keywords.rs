@@ -82,6 +82,7 @@ fn the_lexer_cuts_no_fixed_token_the_table_lacks() {
         K::LINE_COMMENT,
         K::BLOCK_COMMENT,
         K::WORD,
+        K::ASSIGN_FIELD_TOKEN,
         K::PATTERN,
         K::PATTERN_ERROR,
         K::NUMBER_TOKEN,

@@ -155,9 +155,9 @@ Expr =
 | FunctionCall | Array | QueryParameter | Number | Boolean | String | FieldName | Tag
 | UnquotedPattern
 
+// One flat node per run of operators of one precedence level (`a + b - c`).
 BinaryExpression =
-  left:Expr operator:('==' | '!=' | '<' | '<=' | '>' | '>=' | '<=>' | '+' | '-' | '*' | '/' | '%')
-  right:Expr
+  Expr (('==' | '!=' | '<' | '<=' | '>' | '>=' | 'lt_eq_gt' | '+' | '-' | '*' | '/' | '%') Expr)*
 
 UnaryExpression = operator:('-' | '!') operand:Expr
 
