@@ -25,8 +25,3 @@ rowan.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
-# The tree-sitter implementation, kept in tests/legacy for the differential
-# and the old-against-new parser tests until stage 2 of the decommission (#1231).
-opentide-syntax.workspace = true
-tree-sitter.workspace = true
-opentide-parse = { workspace = true, features = ["differential"] }

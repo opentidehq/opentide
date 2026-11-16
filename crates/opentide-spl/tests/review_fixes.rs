@@ -1,19 +1,21 @@
-//! Findings of the independent review of the first PRs, each as the verdict
-//! tree-sitter gives (accepted or an error) on the same text.
+//! Findings of the independent review of the first PRs: `(text, the parser
+//! accepts it)`, each the verdict tree-sitter gave the same text when the
+//! parser replaced it.
 
 mod support;
 
 use opentide_spl::syntax::parse;
-use support::{old_accepts, render};
+use support::render;
 
-fn same_verdict(queries: &[&str]) {
+fn same_verdict(queries: &[(&str, bool)]) {
     let mut wrong = Vec::new();
-    for query in queries {
+    for &(query, accepted) in queries {
         let ours = parse(query).1.errors.is_empty();
-        if ours != old_accepts(query) {
+        if ours != accepted {
             wrong.push(format!(
-                "{query:?}: new {ours}, tree-sitter {}\n{}",
-                !ours,
+                "{query:?}: the parser {}, expected {}\n{}",
+                if ours { "accepts" } else { "rejects" },
+                if accepted { "accepted" } else { "rejected" },
                 render(query)
             ));
         }
@@ -24,94 +26,94 @@ fn same_verdict(queries: &[&str]) {
 #[test]
 fn a_subsearch_that_starts_with_a_macro_and_has_terms_is_a_search() {
     same_verdict(&[
-        "a [ `m` earliest=-1d ]",
-        "a [ `m` \"foo\" ]",
-        "a [ `m` host=x ]",
-        "a [ `m` NOT b ]",
-        "a [ `m` ]",
-        "a [ `m` | head 1 ]",
-        "a [ | `m` x=1 ]",
+        ("a [ `m` earliest=-1d ]", true),
+        ("a [ `m` \"foo\" ]", true),
+        ("a [ `m` host=x ]", true),
+        ("a [ `m` NOT b ]", true),
+        ("a [ `m` ]", true),
+        ("a [ `m` | head 1 ]", true),
+        ("a [ | `m` x=1 ]", true),
     ]);
 }
 
 #[test]
 fn value_lists_take_one_comma_between_values() {
     same_verdict(&[
-        "x IN (1,2,)",
-        "x IN (,1)",
-        "x IN (1,,2)",
-        "x IN (1,2)",
-        "x IN (1 2)",
-        "x IN ()",
-        "x IN (1,",
+        ("x IN (1,2,)", false),
+        ("x IN (,1)", false),
+        ("x IN (1,,2)", false),
+        ("x IN (1,2)", true),
+        ("x IN (1 2)", true),
+        ("x IN ()", false),
+        ("x IN (1,", false),
     ]);
 }
 
 #[test]
 fn in_is_a_keyword_after_a_field() {
     same_verdict(&[
-        "a IN b",
-        "a IN",
-        "IN IN",
-        "a IN 1",
-        "IN",
-        "IN (1)",
-        "a IN (1)",
-        "x=1 IN (2)",
+        ("a IN b", false),
+        ("a IN", false),
+        ("IN IN", false),
+        ("a IN 1", false),
+        ("IN", true),
+        ("IN (1)", true),
+        ("a IN (1)", true),
+        ("x=1 IN (2)", true),
     ]);
 }
 
 #[test]
 fn reserved_words_are_no_command_names() {
     same_verdict(&[
-        "| AND",
-        "| OR",
-        "| NOT",
-        "[ AND ]",
-        "a [ OR ]",
-        "a | AND b",
-        "| and",
-        "| or x",
+        ("| AND", false),
+        ("| OR", false),
+        ("| NOT", false),
+        ("[ AND ]", false),
+        ("a [ OR ]", false),
+        ("a | AND b", false),
+        ("| and", true),
+        ("| or x", true),
     ]);
 }
 
 #[test]
 fn an_unknown_command_may_be_a_field_word() {
     same_verdict(&[
-        "| a-b",
-        "| a*",
-        "[ | a-b ]",
-        "a | b-c x=1",
-        "| a-b | head 1",
-        "| {x}",
-        "| 1a",
+        ("| a-b", true),
+        ("| a*", true),
+        ("[ | a-b ]", true),
+        ("a | b-c x=1", true),
+        ("| a-b | head 1", true),
+        ("| {x}", false),
+        ("| 1a", false),
     ]);
 }
 
 #[test]
 fn a_directive_after_an_operator_or_a_loose_operator() {
     same_verdict(&[
-        "a=TERM(x)",
-        "== TERM(x)",
-        "a == TERM(x)",
-        "TERM( (",
-        "TERM(x) y",
-        "a=CASE(x) b",
-        "a!=TERM(x)",
-        "TERM(",
-        "TERM((",
+        ("a=TERM(x)", true),
+        ("== TERM(x)", true),
+        ("a == TERM(x)", true),
+        ("TERM( (", false),
+        ("TERM(x) y", true),
+        ("a=CASE(x) b", true),
+        ("a!=TERM(x)", true),
+        ("TERM(", true),
+        ("TERM((", false),
     ]);
 }
 
 #[test]
 fn command_words_glue_like_tree_sitter() {
     same_verdict(&[
-        "| fiel-ds",
-        "| st*ats",
-        "| head-x",
-        "| table-a b",
-        "| a.b c",
-        "| a:b",
+        ("| fiel-ds", true),
+        ("| st*ats", true),
+        ("| head-x", false),
+        ("| table-a b", false),
+        ("| a.b c", true),
+        ("| a:b", true),
     ]);
 }
 
@@ -130,25 +132,25 @@ fn a_run_of_equals_after_a_command_is_linear() {
 #[test]
 fn second_review_comparisons_do_not_chain_after_and_or() {
     same_verdict(&[
-        "| where a and b = c = d",
-        "| where a or b < c > d",
-        "| where a<b and c<d<e",
-        "| where a<b or c<d<e",
-        "| eval x=a and b == c != d",
-        "| where (a and b = c = d)",
-        "| where a<b and c<d",
-        "| where a + b = c and d",
-        "| where a * b = c or d = e",
+        ("| where a and b = c = d", false),
+        ("| where a or b < c > d", false),
+        ("| where a<b and c<d<e", false),
+        ("| where a<b or c<d<e", false),
+        ("| eval x=a and b == c != d", false),
+        ("| where (a and b = c = d)", false),
+        ("| where a<b and c<d", true),
+        ("| where a + b = c and d", true),
+        ("| where a * b = c or d = e", true),
     ]);
 }
 
 #[test]
 fn second_review_a_dedup_option_takes_a_name_or_a_boolean() {
     same_verdict(&[
-        "| dedup keepevents=1 a",
-        "| dedup keepevents=a-b a",
-        "| dedup keepevents=true() a",
-        "| dedup keepevents=true a",
-        "| dedup keepevents=x a",
+        ("| dedup keepevents=1 a", false),
+        ("| dedup keepevents=a-b a", false),
+        ("| dedup keepevents=true() a", false),
+        ("| dedup keepevents=true a", true),
+        ("| dedup keepevents=x a", true),
     ]);
 }

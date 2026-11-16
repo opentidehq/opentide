@@ -24,7 +24,3 @@ toml.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
-# The tree-sitter implementation, kept in tests/legacy for the differential until it is deleted.
-opentide-syntax.workspace = true
-tree-sitter.workspace = true
-opentide-parse = { workspace = true, features = ["differential"] }

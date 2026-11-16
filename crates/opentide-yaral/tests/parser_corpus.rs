@@ -1,8 +1,7 @@
-//! The parser over every YARA-L file of the corpora: the tree is lossless,
-//! the verdict is tree-sitter's (a valid file has no error, a broken one has
-//! one) and a valid file's tree conforms to `yaral.ungram`.
+//! The parser over every YARA-L file of the corpora: the tree is lossless and
+//! a valid file's tree conforms to `yaral.ungram` (`opentide-analysis`'s
+//! `parser_baseline` keeps each file's verdict).
 
-use opentide_core::LanguageId;
 use opentide_yaral::parse_facts::{conformance, parse_error_count, parse_is_lossless};
 use std::path::{Path, PathBuf};
 
@@ -31,7 +30,7 @@ fn corpus() -> Vec<PathBuf> {
 }
 
 #[test]
-fn every_corpus_file_gets_the_verdict_of_tree_sitter() {
+fn every_corpus_file_parses_losslessly_and_a_valid_one_conforms() {
     let files = corpus();
     assert!(files.len() > 200, "{} files", files.len());
     let (mut valid, mut broken) = (0, 0);
@@ -39,14 +38,7 @@ fn every_corpus_file_gets_the_verdict_of_tree_sitter() {
         let source = std::fs::read_to_string(&path).unwrap_or_default();
         let name = path.display();
         assert!(parse_is_lossless(&source), "{name} is not lossless");
-        let old = opentide_syntax::parse(LanguageId::Yaral, &source)
-            .is_some_and(|tree| tree.root_node().has_error());
         let errors = parse_error_count(&source);
-        assert_eq!(
-            old,
-            errors > 0,
-            "{name}: {errors} errors here, tree-sitter {old}"
-        );
         if errors == 0 {
             valid += 1;
             let misfits = conformance(&source);

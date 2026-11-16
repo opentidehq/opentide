@@ -1,7 +1,6 @@
 //! The lexer against the corpus: every `.spl` file under the test data lexes
-//! losslessly, a valid one without an error token, and where tree-sitter put
-//! its token boundaries the lexer puts them. (Reading files is the tests'
-//! job: `src/` is I/O-free.)
+//! losslessly, a valid one without an error token, and so does every prefix
+//! of one. (Reading files is the tests' job: `src/` is I/O-free.)
 
 use opentide_spl::syntax::{SyntaxKind as K, lex};
 
@@ -66,80 +65,6 @@ fn the_corpus_lexes_losslessly_and_a_valid_file_has_no_error_token() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-}
-
-/// The byte ranges of the tree-sitter tree's leaves.
-fn leaves(node: tree_sitter::Node<'_>, out: &mut Vec<(usize, usize)>) {
-    if node.child_count() == 0 {
-        if node.end_byte() > node.start_byte() {
-            out.push((node.start_byte(), node.end_byte()));
-        }
-        return;
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        leaves(child, out);
-    }
-}
-
-/// Where the old lexer put its token boundaries, the new one puts them,
-/// on every file the old parser accepts. The known exceptions are
-/// tokens the grammar glues from more than one of ours (the parser
-/// does it): see `NOTES.md`.
-#[test]
-fn tokens_start_and_end_where_tree_sitters_do() {
-    let mut mismatches = Vec::new();
-    let (mut files, mut tokens) = (0, 0);
-    for (path, valid) in corpus() {
-        if !valid {
-            continue;
-        }
-        let source = std::fs::read_to_string(&path).expect("read");
-        let source = if path.components().any(|c| c.as_os_str() == "corpus") {
-            source.lines().skip(1).collect::<Vec<_>>().join("\n")
-        } else {
-            source
-        };
-        let Some(tree) = opentide_syntax::parse(opentide_core::LanguageId::Spl, &source) else {
-            continue;
-        };
-        if opentide_syntax::has_error(&tree) {
-            continue;
-        }
-        files += 1;
-        let mut old = Vec::new();
-        leaves(tree.root_node(), &mut old);
-        let new: Vec<(usize, usize)> = lex(&source)
-            .iter()
-            .filter(|l| l.kind != K::WHITESPACE.raw())
-            .map(|l| (usize::from(l.range.start()), usize::from(l.range.end())))
-            .collect();
-        tokens += old.len();
-        if old != new {
-            let at = old
-                .iter()
-                .zip(&new)
-                .position(|(a, b)| a != b)
-                .unwrap_or(old.len().min(new.len()));
-            let show = |v: &[(usize, usize)]| {
-                v.get(at)
-                    .map_or(String::from("-"), |&(a, b)| format!("{:?}", &source[a..b]))
-            };
-            mismatches.push(format!(
-                "{}: token {at}: tree-sitter {}, here {}",
-                path.display(),
-                show(&old),
-                show(&new)
-            ));
-        }
-    }
-    assert!(files > 150, "{files} files compared");
-    assert!(
-        mismatches.is_empty(),
-        "{} of {files} files ({tokens} tokens) differ:\n{}",
-        mismatches.len(),
-        mismatches.join("\n")
-    );
 }
 
 /// A prefix cuts a string, a macro, a comment or a directive anywhere:

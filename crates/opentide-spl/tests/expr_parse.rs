@@ -1,47 +1,29 @@
 //! `where`, `eval` and their expressions against every file under the test
-//! data: wherever tree-sitter accepts a file, the pure-Rust parser does too
-//! (and loses no byte); the expression fixtures' trees are snapshots.
+//! data (no byte lost), a few queries keep the verdicts tree-sitter gave them,
+//! and the expression fixtures' trees are snapshots.
 
 mod support;
 
 use opentide_spl::syntax::parse;
 use std::path::Path;
-use support::{body, old_accepts, render, walk};
+use support::{body, render, walk};
 
+/// Every file parses into a lossless tree (`opentide-analysis`'s
+/// `parser_baseline` keeps each file's verdict).
 #[test]
-fn every_file_the_old_parser_accepts_parses_without_an_error() {
+fn every_file_parses_losslessly() {
     let mut files = Vec::new();
     walk(
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata"),
         &mut files,
     );
     files.sort();
-    let (mut checked, mut failures) = (0, Vec::new());
+    assert!(files.len() > 200, "{} files", files.len());
     for path in files {
         let source = body(&path);
-        if !old_accepts(&source) {
-            continue;
-        }
-        checked += 1;
-        let (tree, parsed) = parse(&source);
+        let (tree, _) = parse(&source);
         assert_eq!(tree.to_string(), source, "{}", path.display());
-        if !parsed.errors.is_empty() {
-            let first = parsed.errors[0].gap.start();
-            failures.push(format!(
-                "{}: {} (at {})",
-                path.display(),
-                parsed.errors[0].message,
-                usize::from(first)
-            ));
-        }
     }
-    assert!(checked > 200, "{checked} files");
-    assert!(
-        failures.is_empty(),
-        "{} of {checked}:\n{}",
-        failures.len(),
-        failures.join("\n")
-    );
 }
 
 #[test]
@@ -67,26 +49,26 @@ fn the_expression_fixtures_are_snapshots() {
 }
 
 #[test]
-fn expression_verdicts_follow_the_old_parser() {
-    for query in [
-        "index=a | where x>1",
-        "index=a | where",
-        "index=a | where x<1<2",
-        "index=a | where (x",
-        "index=a | where x +",
-        "index=a | eval",
-        "index=a | eval x",
-        "index=a | eval x=",
-        "index=a | eval x=1,",
-        "index=a | eval x=f(1,)",
-        "index=a | eval x=1 y=2",
-        "index=a | eval x=a b",
-        "index=a | eval x=NOT y",
-        "index=a | where a IN (1, 2) OR b LIKE \"x%\"",
+fn expression_verdicts_are_pinned() {
+    for (query, accepted) in [
+        ("index=a | where x>1", true),
+        ("index=a | where", true),
+        ("index=a | where x<1<2", false),
+        ("index=a | where (x", false),
+        ("index=a | where x +", false),
+        ("index=a | eval", false),
+        ("index=a | eval x", false),
+        ("index=a | eval x=", false),
+        ("index=a | eval x=1,", false),
+        ("index=a | eval x=f(1,)", false),
+        ("index=a | eval x=1 y=2", false),
+        ("index=a | eval x=a b", false),
+        ("index=a | eval x=NOT y", true),
+        ("index=a | where a IN (1, 2) OR b LIKE \"x%\"", true),
     ] {
         assert_eq!(
             parse(query).1.errors.is_empty(),
-            old_accepts(query),
+            accepted,
             "{query:?}: {}",
             render(query)
         );
