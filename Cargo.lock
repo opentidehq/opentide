@@ -3195,6 +3195,7 @@ dependencies = [
  "opentide-kuery",
  "opentide-lucene",
  "opentide-spl",
+ "opentide-syntax",
  "opentide-tide",
  "opentide-yara",
  "opentide-yaral",
