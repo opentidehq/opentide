@@ -3734,6 +3734,7 @@ dependencies = [
 name = "opentide-yaral"
 version = "0.12.0"
 dependencies = [
+ "insta",
  "logos",
  "opentide-core",
  "opentide-highlight",

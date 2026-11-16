@@ -43,11 +43,14 @@ pub mod editor;
     )
 )]
 mod lexer;
+mod parser;
 #[expect(
     dead_code,
     reason = "the pure-Rust tree's kinds are reached from tests until the last PR of #1227 switches production to it"
 )]
 mod syntax;
+#[doc(hidden)]
+pub mod testing;
 // The typed AST names the kinds from the crate root.
 use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 // Generated from yaral.ungram by `cargo xtask codegen`: an accessor for every

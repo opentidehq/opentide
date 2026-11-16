@@ -24,3 +24,6 @@ toml.workspace = true
 regex-syntax.workspace = true
 logos.workspace = true
 rowan.workspace = true
+
+[dev-dependencies]
+insta.workspace = true

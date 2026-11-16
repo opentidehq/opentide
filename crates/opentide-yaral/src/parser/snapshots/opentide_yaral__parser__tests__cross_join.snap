@@ -1,0 +1,26 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"cross join $a, $b\\nCROSS JOIN $c\")"
+---
+SOURCE_FILE@0..31
+  SEARCH_QUERY@0..31
+    SEARCH_EVENTS@0..31
+      CROSS_JOIN@0..17
+        CROSS_KW@0..5 "cross"
+        WHITESPACE@5..6 " "
+        JOIN_KW@6..10 "join"
+        WHITESPACE@10..11 " "
+        VARIABLE@11..13
+          VAR_TOKEN@11..13 "$a"
+        COMMA@13..14 ","
+        WHITESPACE@14..15 " "
+        VARIABLE@15..17
+          VAR_TOKEN@15..17 "$b"
+      WHITESPACE@17..18 "\n"
+      CROSS_JOIN@18..31
+        CROSS_KW@18..23 "CROSS"
+        WHITESPACE@23..24 " "
+        JOIN_KW@24..28 "JOIN"
+        WHITESPACE@28..29 " "
+        VARIABLE@29..31
+          VAR_TOKEN@29..31 "$c"

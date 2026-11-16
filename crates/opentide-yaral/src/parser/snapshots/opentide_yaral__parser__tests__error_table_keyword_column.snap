@@ -1,0 +1,16 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"%l.options\")"
+---
+SOURCE_FILE@0..10
+  SEARCH_QUERY@0..3
+    SEARCH_EVENTS@0..3
+      DATA_TABLE_COLUMN@0..3
+        REFERENCE_LIST@0..2
+          REF_LIST_TOKEN@0..2 "%l"
+        DOT@2..3 "."
+  ERROR@3..10
+    OPTIONS_KW@3..10 "options"
+errors:
+3..3: expected a name (expected a name)
+3..3: unexpected text (expected a name)

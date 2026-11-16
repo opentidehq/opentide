@@ -1,0 +1,17 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"any [$a]\")"
+---
+SOURCE_FILE@0..8
+  SEARCH_QUERY@0..8
+    SEARCH_EVENTS@0..8
+      QUANTIFIED_FIELD@0..3
+        ANY_KW@0..3 "any"
+      WHITESPACE@3..4 " "
+      ARRAY_EXPR@4..8
+        L_BRACK@4..5 "["
+        VARIABLE@5..7
+          VAR_TOKEN@5..7 "$a"
+        R_BRACK@7..8 "]"
+errors:
+3..4: expected a field such as `$e.field`
