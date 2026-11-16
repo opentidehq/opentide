@@ -119,3 +119,21 @@ fn a_broken_query_still_highlights_its_names_and_literals() {
     let names = tokens.iter().filter(|t| t.capture == "variable").count();
     assert!(names >= 2, "{tokens:?}");
 }
+
+/// A run with a doubled or trailing operator highlights each token once (the tree-sitter-shaped
+/// view re-nested such a run and emitted a whole operand twice).
+#[test]
+fn a_broken_run_highlights_each_token_once() {
+    for source in [
+        "process where a and b and",
+        "process where x and y and and b",
+        "process where a in~ (\"a\") and b like~ \"*.dll\" and",
+    ] {
+        let tokens = analyze(source).tokens;
+        let mut spans: Vec<_> = tokens.iter().map(|t| (t.span.start, t.span.end)).collect();
+        let all = spans.len();
+        spans.sort_unstable();
+        spans.dedup();
+        assert_eq!(spans.len(), all, "{source}: {tokens:?}");
+    }
+}
