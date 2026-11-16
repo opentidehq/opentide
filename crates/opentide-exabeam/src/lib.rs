@@ -33,7 +33,7 @@ mod syntax;
 pub use assist::{completions, hover};
 pub use check::{Profile, check};
 #[doc(hidden)]
-pub use cst::debug_parse;
+pub use cst::{debug_parse, highlight_captures, tree_has_error};
 
 pub(crate) use opentide_core::codes;
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, LineIndex};

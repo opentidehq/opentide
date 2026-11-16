@@ -1,0 +1,68 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/sequence__valid.eql
+---
+SOURCE_FILE@0..122
+  LINE_COMMENT@0..22 "// prod:sequence valid"
+  WHITESPACE@22..23 "\n"
+  SEQUENCE@23..121
+    SEQUENCE_KW@23..31 "sequence"
+    WHITESPACE@31..32 " "
+    JOIN_KEYS@32..42
+      BY_KW@32..34 "by"
+      WHITESPACE@34..35 " "
+      FIELD@35..42
+        IDENTIFIER@35..39
+          WORD@35..39 "host"
+        DOT@39..40 "."
+        IDENTIFIER@40..42
+          WORD@40..42 "id"
+    WHITESPACE@42..43 " "
+    SEQUENCE_PARAMS@43..58
+      WITH_KW@43..47 "with"
+      WHITESPACE@47..48 " "
+      MAXSPAN_KW@48..55 "maxspan"
+      EQ@55..56 "="
+      TIME_UNIT@56..58
+        NUMBER@56..57
+          NUMBER_TOKEN@56..57 "1"
+        IDENTIFIER@57..58
+          WORD@57..58 "m"
+    WHITESPACE@58..61 "\n  "
+    SEQUENCE_TERM@61..98
+      SUBQUERY@61..98
+        L_BRACK@61..62 "["
+        EVENT_CATEGORY@62..69
+          IDENTIFIER@62..69
+            WORD@62..69 "process"
+        WHITESPACE@69..70 " "
+        WHERE_KW@70..75 "where"
+        WHITESPACE@75..76 " "
+        COMPARISON@76..97
+          FIELD@76..86
+            IDENTIFIER@76..81
+              WORD@76..81 "event"
+            DOT@81..82 "."
+            IDENTIFIER@82..86
+              WORD@82..86 "type"
+          WHITESPACE@86..87 " "
+          EQ_EQ@87..89 "=="
+          WHITESPACE@89..90 " "
+          STRING@90..97
+            STRING_TOKEN@90..97 "\"start\""
+        R_BRACK@97..98 "]"
+    WHITESPACE@98..101 "\n  "
+    SEQUENCE_TERM@101..121
+      SUBQUERY@101..121
+        L_BRACK@101..102 "["
+        EVENT_CATEGORY@102..109
+          IDENTIFIER@102..109
+            WORD@102..109 "network"
+        WHITESPACE@109..110 " "
+        WHERE_KW@110..115 "where"
+        WHITESPACE@115..116 " "
+        BOOLEAN@116..120
+          TRUE_KW@116..120 "true"
+        R_BRACK@120..121 "]"
+  WHITESPACE@121..122 "\n"

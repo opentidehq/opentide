@@ -23,6 +23,7 @@ falco_parse_error error 0:45-0:46 expected a ')' token (libsinsp)
 36..38 keyword
 39..40 punctuation.bracket
 40..44 string
+45..48 keyword
 49..52 keyword
 53..61 property
 62..68 keyword
@@ -46,6 +47,7 @@ falco_parse_error error 0:45-0:46 expected a ')' token (libsinsp)
 36..38 keyword
 39..40 punctuation.bracket
 40..44 string
+45..48 keyword
 49..52 keyword
 53..61 property
 62..68 keyword
@@ -69,6 +71,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
+46..49 keyword
 50..53 keyword
 54..62 property
 63..69 keyword
@@ -116,6 +119,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
+46..49 keyword
 50..53 keyword
 54..62 property
 63..69 keyword
@@ -178,6 +182,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
+46..49 keyword
 50..53 keyword
 54..62 property
 63..69 keyword
@@ -249,6 +254,7 @@ falco_parse_error error 0:44-0:45 expected a ')' token (libsinsp)
 35..37 keyword
 38..39 punctuation.bracket
 39..43 string
+44..47 keyword
 48..51 keyword
 52..60 property
 61..67 keyword
@@ -272,6 +278,7 @@ falco_parse_error error 0:45-0:46 expected a ')' token (libsinsp)
 36..38 keyword
 39..40 punctuation.bracket
 40..44 string
+45..48 keyword
 49..52 keyword
 53..61 property
 62..68 keyword
@@ -295,6 +302,7 @@ falco_parse_error error 0:56-0:57 expected a ')' token (libsinsp)
 47..49 keyword
 50..51 punctuation.bracket
 51..55 string
+56..59 keyword
 60..63 keyword
 64..72 property
 73..79 keyword
@@ -318,6 +326,7 @@ falco_parse_error error 0:53-0:54 expected a ')' token (libsinsp)
 44..46 keyword
 47..48 punctuation.bracket
 48..52 string
+53..56 keyword
 57..60 keyword
 61..69 property
 70..76 keyword
@@ -359,6 +368,7 @@ falco_parse_error error 0:56-0:57 expected a ')' token (libsinsp)
 47..49 keyword
 50..51 punctuation.bracket
 51..55 string
+56..59 keyword
 60..63 keyword
 64..72 property
 73..79 keyword
@@ -382,6 +392,7 @@ falco_parse_error error 0:60-0:61 expected a ')' token (libsinsp)
 51..53 keyword
 54..55 punctuation.bracket
 55..59 string
+60..63 keyword
 64..67 keyword
 68..76 property
 77..83 keyword
@@ -484,6 +495,7 @@ falco_parse_error error 0:45-0:46 expected a ')' token (libsinsp)
 36..38 keyword
 39..40 punctuation.bracket
 40..44 string
+45..48 keyword
 49..52 keyword
 53..61 property
 62..68 keyword
@@ -507,7 +519,7 @@ falco_parse_error error 0:50-0:51 expected a ')' token (libsinsp)
 41..43 keyword
 44..45 punctuation.bracket
 45..49 string
-50..53 variable
+50..53 keyword
 54..61 property
 61..62 operator
 62..77 string
@@ -540,8 +552,9 @@ falco_parse_error error 0:50-0:51 expected a ')' token (libsinsp)
 41..43 keyword
 44..45 punctuation.bracket
 45..49 string
+50..53 keyword
 54..55 punctuation.bracket
-55..62 string
+55..62 property
 62..63 operator
 63..72 string
 73..75 keyword
@@ -585,6 +598,7 @@ falco_parse_error error 0:45-0:46 expected a ')' token (libsinsp)
 36..38 keyword
 39..40 punctuation.bracket
 40..44 string
+45..48 keyword
 49..52 keyword
 53..61 property
 62..68 keyword
@@ -608,6 +622,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
+46..49 keyword
 50..53 keyword
 54..62 property
 63..69 keyword
@@ -631,6 +646,7 @@ falco_parse_error error 0:49-0:50 expected a ')' token (libsinsp)
 40..42 keyword
 43..44 punctuation.bracket
 44..48 string
+49..52 keyword
 53..56 keyword
 57..65 property
 66..72 keyword
@@ -654,6 +670,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
+46..49 keyword
 50..53 keyword
 54..62 property
 63..69 keyword
@@ -677,6 +694,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
+46..49 keyword
 50..53 keyword
 54..62 property
 63..69 keyword
@@ -715,6 +733,7 @@ falco_parse_error error 0:62-0:63 expected a ')' token (libsinsp)
 53..55 keyword
 56..57 punctuation.bracket
 57..61 string
+62..65 keyword
 66..69 keyword
 70..78 property
 79..85 keyword
@@ -738,6 +757,7 @@ falco_parse_error error 0:71-0:72 expected a ')' token (libsinsp)
 62..64 keyword
 65..66 punctuation.bracket
 66..70 string
+71..74 keyword
 75..78 keyword
 79..87 property
 88..94 keyword
@@ -759,8 +779,10 @@ falco_parse_error error 0:42-0:43 expected a ')' token (libsinsp)
 33..35 keyword
 36..37 punctuation.bracket
 37..41 string
+42..45 keyword
 46..47 punctuation.bracket
-47..61 string
+47..61 property
+62..70 operator
 71..103 string
 103..104 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_backend_service_deleted.falco
@@ -780,7 +802,7 @@ falco_parse_error error 0:43-0:44 expected a ')' token (libsinsp)
 34..36 keyword
 37..38 punctuation.bracket
 38..42 string
-43..46 variable
+43..46 keyword
 47..61 property
 61..62 operator
 62..100 string
@@ -803,7 +825,7 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
-38..41 variable
+38..41 keyword
 42..56 property
 56..57 operator
 57..84 string
@@ -826,7 +848,7 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
-38..41 variable
+38..41 keyword
 42..56 property
 56..57 operator
 57..81 string
@@ -845,7 +867,7 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
-38..41 variable
+38..41 keyword
 42..56 property
 56..57 operator
 57..79 string
@@ -864,7 +886,7 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-39..42 variable
+39..42 keyword
 43..57 property
 57..58 operator
 58..82 string
@@ -887,7 +909,7 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
-38..41 variable
+38..41 keyword
 42..56 property
 56..57 operator
 57..84 string
@@ -906,7 +928,7 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
-38..41 variable
+38..41 keyword
 42..56 property
 56..57 operator
 57..81 string
@@ -925,8 +947,10 @@ falco_parse_error error 0:49-0:50 expected a ')' token (libsinsp)
 40..42 keyword
 43..44 punctuation.bracket
 44..48 string
+49..52 keyword
 53..54 punctuation.bracket
-54..68 string
+54..68 property
+68..69 operator
 69..133 string
 133..134 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_cloud_function_created.falco
@@ -946,8 +970,10 @@ falco_parse_error error 0:49-0:50 expected a ')' token (libsinsp)
 40..42 keyword
 43..44 punctuation.bracket
 44..48 string
+49..52 keyword
 53..54 punctuation.bracket
-54..68 string
+54..68 property
+68..69 operator
 69..133 string
 133..134 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_cloud_function_deleted.falco
@@ -967,8 +993,10 @@ falco_parse_error error 0:49-0:50 expected a ')' token (libsinsp)
 40..42 keyword
 43..44 punctuation.bracket
 44..48 string
+49..52 keyword
 53..54 punctuation.bracket
-54..68 string
+54..68 property
+68..69 operator
 69..133 string
 133..134 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_cloud_function_modified.falco
@@ -988,7 +1016,7 @@ falco_parse_error error 0:43-0:44 expected a ')' token (libsinsp)
 34..36 keyword
 37..38 punctuation.bracket
 38..42 string
-43..46 variable
+43..46 keyword
 47..61 property
 61..62 operator
 62..90 string
@@ -1007,7 +1035,7 @@ falco_parse_error error 0:43-0:44 expected a ')' token (libsinsp)
 34..36 keyword
 37..38 punctuation.bracket
 38..42 string
-43..46 variable
+43..46 keyword
 47..61 property
 61..62 operator
 62..89 string
@@ -1026,7 +1054,7 @@ falco_parse_error error 0:43-0:44 expected a ')' token (libsinsp)
 34..36 keyword
 37..38 punctuation.bracket
 38..42 string
-43..46 variable
+43..46 keyword
 47..61 property
 61..62 operator
 62..89 string
@@ -1045,8 +1073,9 @@ falco_parse_error error 0:43-0:44 expected a ')' token (libsinsp)
 34..36 keyword
 37..38 punctuation.bracket
 38..42 string
+43..46 keyword
 47..48 punctuation.bracket
-48..62 string
+48..62 property
 62..63 operator
 63..90 string
 92..94 keyword
@@ -1085,8 +1114,9 @@ falco_parse_error error 0:43-0:44 expected a ')' token (libsinsp)
 34..36 keyword
 37..38 punctuation.bracket
 38..42 string
+43..46 keyword
 47..48 punctuation.bracket
-48..62 string
+48..62 property
 62..63 operator
 63..86 string
 87..89 keyword
@@ -1116,10 +1146,12 @@ falco_parse_error error 0:42-0:43 expected a ')' token (libsinsp)
 33..35 keyword
 36..37 punctuation.bracket
 37..41 string
+42..45 keyword
 46..47 punctuation.bracket
-47..61 string
+47..61 property
+62..70 operator
 71..115 string
-117..119 variable
+117..119 keyword
 120..134 property
 135..143 operator
 144..188 string
@@ -1155,10 +1187,12 @@ falco_parse_error error 0:42-0:43 expected a ')' token (libsinsp)
 33..35 keyword
 36..37 punctuation.bracket
 37..41 string
+42..45 keyword
 46..47 punctuation.bracket
-47..61 string
+47..61 property
+62..70 operator
 71..97 string
-99..101 variable
+99..101 keyword
 102..116 property
 117..125 operator
 126..151 string
@@ -1194,8 +1228,10 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
+38..41 keyword
 42..43 punctuation.bracket
-43..57 string
+43..57 property
+57..58 operator
 58..90 string
 90..91 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_iam_custom_role_created.falco
@@ -1215,8 +1251,10 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
+38..41 keyword
 42..43 punctuation.bracket
-43..57 string
+43..57 property
+57..58 operator
 58..90 string
 90..91 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_iam_custom_role_modified.falco
@@ -1236,8 +1274,10 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
+38..41 keyword
 42..43 punctuation.bracket
-43..57 string
+43..57 property
+57..58 operator
 58..72 string
 72..73 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_iam_policy_modified.falco
@@ -1257,8 +1297,10 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
+38..41 keyword
 42..43 punctuation.bracket
-43..57 string
+43..57 property
+57..58 operator
 58..100 string
 100..101 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_iam_service_account_created.falco
@@ -1278,8 +1320,10 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
+38..41 keyword
 42..43 punctuation.bracket
-43..57 string
+43..57 property
+57..58 operator
 58..100 string
 100..101 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_iam_service_account_deleted.falco
@@ -1299,8 +1343,10 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
+38..41 keyword
 42..43 punctuation.bracket
-43..57 string
+43..57 property
+57..58 operator
 58..103 string
 103..104 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_iam_service_account_key_created.falco
@@ -1320,8 +1366,10 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
+38..41 keyword
 42..43 punctuation.bracket
-43..57 string
+43..57 property
+57..58 operator
 58..103 string
 103..104 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_iam_service_account_key_deleted.falco
@@ -1341,8 +1389,10 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
+38..41 keyword
 42..43 punctuation.bracket
-43..57 string
+43..57 property
+57..58 operator
 58..100 string
 100..101 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_iam_service_account_modified.falco
@@ -1362,7 +1412,7 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
-38..41 variable
+38..41 keyword
 42..56 property
 56..57 operator
 57..74 string
@@ -1381,8 +1431,10 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
+38..41 keyword
 42..43 punctuation.bracket
-43..57 string
+43..57 property
+57..58 operator
 58..83 string
 83..84 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_kms_deleted.falco
@@ -1402,7 +1454,7 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
-38..41 variable
+38..41 keyword
 42..56 property
 56..57 operator
 57..72 string
@@ -1421,8 +1473,10 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
+38..41 keyword
 42..43 punctuation.bracket
-43..57 string
+43..57 property
+57..58 operator
 58..75 string
 75..76 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_kms_updated.falco
@@ -1442,8 +1496,10 @@ falco_parse_error error 0:42-0:43 expected a ')' token (libsinsp)
 33..35 keyword
 36..37 punctuation.bracket
 37..41 string
+42..45 keyword
 46..47 punctuation.bracket
-47..61 string
+47..61 property
+61..62 operator
 62..108 string
 108..109 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_logging_sink_deleted.falco
@@ -1463,8 +1519,10 @@ falco_parse_error error 0:42-0:43 expected a ')' token (libsinsp)
 33..35 keyword
 36..37 punctuation.bracket
 37..41 string
+42..45 keyword
 46..47 punctuation.bracket
-47..61 string
+47..61 property
+61..62 operator
 62..108 string
 108..109 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_logging_sink_modified.falco
@@ -1484,8 +1542,10 @@ falco_parse_error error 0:41-0:42 expected a ')' token (libsinsp)
 32..34 keyword
 35..36 punctuation.bracket
 36..40 string
+41..44 keyword
 45..46 punctuation.bracket
-46..60 string
+46..60 property
+60..61 operator
 61..109 string
 109..110 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_pub_sub_subscription_deleted.falco
@@ -1505,8 +1565,10 @@ falco_parse_error error 0:41-0:42 expected a ')' token (libsinsp)
 32..34 keyword
 35..36 punctuation.bracket
 36..40 string
+41..44 keyword
 45..46 punctuation.bracket
-46..60 string
+46..60 property
+60..61 operator
 61..109 string
 109..110 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_pub_sub_subscription_modified.falco
@@ -1526,7 +1588,7 @@ falco_parse_error error 0:41-0:42 expected a ')' token (libsinsp)
 32..34 keyword
 35..36 punctuation.bracket
 36..40 string
-41..44 variable
+41..44 keyword
 45..59 property
 59..60 operator
 60..100 string
@@ -1545,10 +1607,12 @@ falco_parse_error error 0:42-0:43 expected a ')' token (libsinsp)
 33..35 keyword
 36..37 punctuation.bracket
 37..41 string
+42..45 keyword
 46..47 punctuation.bracket
-47..61 string
+47..61 property
+62..70 operator
 71..97 string
-99..101 variable
+99..101 keyword
 102..116 property
 117..125 operator
 126..152 string
@@ -1611,8 +1675,10 @@ falco_parse_error error 0:42-0:43 expected a ')' token (libsinsp)
 33..35 keyword
 36..37 punctuation.bracket
 37..41 string
+42..45 keyword
 46..47 punctuation.bracket
-47..61 string
+47..61 property
+62..70 operator
 71..95 string
 95..96 punctuation.bracket
 == conformance/external/falco/gcp_auditlog/gcp_vm_stopped.falco
@@ -1632,10 +1698,12 @@ falco_parse_error error 0:42-0:43 expected a ')' token (libsinsp)
 33..35 keyword
 36..37 punctuation.bracket
 37..41 string
+42..45 keyword
 46..47 punctuation.bracket
-47..61 string
+47..61 property
+62..70 operator
 71..104 string
-106..108 variable
+106..108 keyword
 109..123 property
 124..132 operator
 133..166 string
@@ -1671,10 +1739,12 @@ falco_parse_error error 0:42-0:43 expected a ')' token (libsinsp)
 33..35 keyword
 36..37 punctuation.bracket
 37..41 string
+42..45 keyword
 46..47 punctuation.bracket
-47..61 string
+47..61 property
+62..70 operator
 71..108 string
-110..112 variable
+110..112 keyword
 113..127 property
 128..136 operator
 137..171 string
@@ -1712,7 +1782,7 @@ falco_parse_error error 0:42-0:43 expected a ')' token (libsinsp)
 33..35 keyword
 36..37 punctuation.bracket
 37..41 string
-42..45 variable
+42..45 keyword
 46..59 property
 59..60 operator
 60..65 string
@@ -1736,7 +1806,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
-46..49 variable
+46..49 keyword
 50..63 property
 63..64 operator
 64..71 string
@@ -1760,7 +1830,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
-46..49 variable
+46..49 keyword
 50..63 property
 63..64 operator
 64..71 string
@@ -1793,7 +1863,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
-46..49 variable
+46..49 keyword
 50..63 property
 63..64 operator
 64..71 string
@@ -1817,7 +1887,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
-46..49 variable
+46..49 keyword
 50..63 property
 63..64 operator
 64..71 string
@@ -1841,7 +1911,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
-46..49 variable
+46..49 keyword
 50..63 property
 63..64 operator
 64..71 string
@@ -1874,7 +1944,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
-46..49 variable
+46..49 keyword
 50..63 property
 63..64 operator
 64..71 string
@@ -1898,7 +1968,7 @@ falco_parse_error error 0:48-0:49 expected a ')' token (libsinsp)
 39..41 keyword
 42..43 punctuation.bracket
 43..47 string
-48..51 variable
+48..51 keyword
 52..65 property
 65..66 operator
 66..75 string
@@ -1931,7 +2001,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
-46..49 variable
+46..49 keyword
 50..63 property
 63..64 operator
 64..74 string
@@ -1955,7 +2025,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
-46..49 variable
+46..49 keyword
 50..63 property
 63..64 operator
 64..74 string
@@ -1979,7 +2049,7 @@ falco_parse_error error 0:42-0:43 expected a ')' token (libsinsp)
 33..35 keyword
 36..37 punctuation.bracket
 37..41 string
-42..45 variable
+42..45 keyword
 46..59 property
 59..60 operator
 60..67 string
@@ -2003,7 +2073,7 @@ falco_parse_error error 0:40-0:41 expected a ')' token (libsinsp)
 31..33 keyword
 34..35 punctuation.bracket
 35..39 string
-40..43 variable
+40..43 keyword
 44..67 property
 68..69 operator
 70..74 boolean
@@ -2036,7 +2106,7 @@ falco_parse_error error 0:40-0:41 expected a ')' token (libsinsp)
 31..33 keyword
 34..35 punctuation.bracket
 35..39 string
-40..43 variable
+40..43 keyword
 44..67 property
 68..69 operator
 70..74 boolean
@@ -2080,7 +2150,7 @@ falco_parse_error error 0:40-0:41 expected a ')' token (libsinsp)
 31..33 keyword
 34..35 punctuation.bracket
 35..39 string
-40..43 variable
+40..43 keyword
 44..57 property
 57..58 operator
 58..65 string
@@ -2109,7 +2179,7 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-28..31 variable
+28..31 keyword
 32..44 property
 44..45 operator
 45..61 string
@@ -2155,7 +2225,8 @@ falco_parse_error error 0:36-0:37 expected a ')' token (libsinsp)
 27..29 keyword
 30..31 punctuation.bracket
 31..35 string
-40..55 variable
+36..39 keyword
+40..55 macro
 56..59 keyword
 60..61 punctuation.bracket
 61..68 macro
@@ -2203,7 +2274,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..50 variable
+28..31 keyword
+32..50 macro
 51..54 keyword
 55..62 macro
 63..66 keyword
@@ -2229,8 +2301,9 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
+28..31 keyword
 32..33 punctuation.bracket
-33..37 variable
+33..37 macro
 38..40 keyword
 41..52 macro
 52..53 punctuation.bracket
@@ -2267,8 +2340,9 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
+28..31 keyword
 32..33 punctuation.bracket
-33..37 variable
+33..37 macro
 38..40 keyword
 41..52 macro
 52..53 punctuation.bracket
@@ -2322,8 +2396,9 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
+28..31 keyword
 32..33 punctuation.bracket
-33..37 variable
+33..37 macro
 38..40 keyword
 41..52 macro
 52..53 punctuation.bracket
@@ -2352,7 +2427,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..41 variable
+28..31 keyword
+32..41 macro
 42..45 keyword
 46..53 macro
 54..57 keyword
@@ -2384,7 +2460,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..35 variable
+28..31 keyword
+32..35 macro
 36..39 keyword
 40..47 macro
 48..51 keyword
@@ -2408,7 +2485,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..35 variable
+28..31 keyword
+32..35 macro
 36..39 keyword
 40..47 macro
 48..51 keyword
@@ -2453,7 +2531,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..35 variable
+28..31 keyword
+32..35 macro
 36..39 keyword
 40..47 macro
 48..51 keyword
@@ -2498,7 +2577,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..35 variable
+28..31 keyword
+32..35 macro
 36..39 keyword
 40..47 macro
 48..51 keyword
@@ -2543,7 +2623,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..41 variable
+28..31 keyword
+32..41 macro
 42..45 keyword
 46..53 macro
 54..57 keyword
@@ -2565,7 +2646,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..39 variable
+28..31 keyword
+32..39 macro
 40..43 keyword
 44..51 macro
 52..55 keyword
@@ -2597,7 +2679,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..35 variable
+28..31 keyword
+32..35 macro
 36..39 keyword
 40..47 macro
 48..51 keyword
@@ -2633,7 +2716,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..35 variable
+28..31 keyword
+32..35 macro
 36..39 keyword
 40..47 macro
 48..51 keyword
@@ -2669,7 +2753,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..47 variable
+28..31 keyword
+32..47 macro
 48..51 keyword
 52..55 keyword
 56..68 property
@@ -2712,7 +2797,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..47 variable
+28..31 keyword
+32..47 macro
 48..51 keyword
 52..59 macro
 60..63 keyword
@@ -2748,7 +2834,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..47 variable
+28..31 keyword
+32..47 macro
 48..51 keyword
 52..64 property
 65..67 keyword
@@ -2781,7 +2868,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..57 macro
 58..61 keyword
@@ -2813,7 +2901,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..61 macro
 62..65 keyword
@@ -2839,7 +2928,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..61 macro
 62..65 keyword
@@ -2865,7 +2955,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..68 macro
 69..72 keyword
@@ -2891,7 +2982,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..68 macro
 69..72 keyword
@@ -2917,7 +3009,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..59 macro
 60..63 keyword
@@ -2943,7 +3036,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..59 macro
 60..63 keyword
@@ -2969,7 +3063,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..60 macro
 61..64 keyword
@@ -2995,7 +3090,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..60 macro
 61..64 keyword
@@ -3021,7 +3117,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..59 macro
 60..63 keyword
@@ -3047,7 +3144,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..53 variable
+34..37 keyword
+38..53 macro
 54..57 keyword
 58..65 macro
 66..69 keyword
@@ -3077,7 +3175,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..54 macro
 55..58 keyword
@@ -3103,7 +3202,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..54 macro
 55..58 keyword
@@ -3129,7 +3229,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..61 macro
 62..65 keyword
@@ -3155,7 +3256,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..61 macro
 62..65 keyword
@@ -3181,7 +3283,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..56 macro
 57..60 keyword
@@ -3219,7 +3322,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..56 macro
 57..60 keyword
@@ -3256,7 +3360,8 @@ falco_parse_error error 0:30-0:31 expected a ')' token (libsinsp)
 21..23 keyword
 24..25 punctuation.bracket
 25..29 string
-34..38 variable
+30..33 keyword
+34..38 macro
 39..42 keyword
 43..52 macro
 53..56 keyword
@@ -3278,7 +3383,8 @@ falco_parse_error error 0:30-0:31 expected a ')' token (libsinsp)
 21..23 keyword
 24..25 punctuation.bracket
 25..29 string
-34..38 variable
+30..33 keyword
+34..38 macro
 39..42 keyword
 43..52 macro
 53..56 keyword
@@ -3303,7 +3409,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..57 macro
 58..61 keyword
@@ -3329,7 +3436,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..57 macro
 58..61 keyword
@@ -3355,7 +3463,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..64 macro
 65..68 keyword
@@ -3381,7 +3490,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..64 macro
 65..68 keyword
@@ -3406,7 +3516,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..35 variable
+28..31 keyword
+32..35 macro
 36..39 keyword
 40..47 macro
 48..51 keyword
@@ -3450,8 +3561,9 @@ falco_parse_error error 0:62-0:63 expected a ')' token (libsinsp)
 53..55 keyword
 56..57 punctuation.bracket
 57..61 string
+62..65 keyword
 66..69 keyword
-70..103 variable
+70..103 macro
 == conformance/external/falco/k8s_audit/port_forward.falco
 falco_unknown_field error 0:0-0:21 `ka.target.subresource` is a field of the `k8s_audit` source, not of `syscall`
 0..21 property
@@ -3470,7 +3582,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..46 variable
+28..31 keyword
+32..46 macro
 47..50 keyword
 51..58 macro
 59..62 keyword
@@ -3514,8 +3627,9 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
+28..31 keyword
 32..33 punctuation.bracket
-33..37 variable
+33..37 macro
 38..40 keyword
 41..52 macro
 52..53 punctuation.bracket
@@ -3579,7 +3693,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..36 variable
+28..31 keyword
+32..36 macro
 37..40 keyword
 41..48 macro
 49..52 keyword
@@ -3621,7 +3736,8 @@ falco_parse_error error 0:28-0:29 expected a ')' token (libsinsp)
 19..21 keyword
 22..23 punctuation.bracket
 23..27 string
-32..36 variable
+28..31 keyword
+32..36 macro
 37..40 keyword
 41..48 macro
 49..52 keyword
@@ -3722,8 +3838,9 @@ falco_parse_error error 0:60-0:61 expected a ')' token (libsinsp)
 51..53 keyword
 54..55 punctuation.bracket
 55..59 string
+60..63 keyword
 64..67 keyword
-68..88 variable
+68..88 macro
 == conformance/external/falco/okta/detecting_unknown_logins_using_geolocation.falco
 falco_unknown_field error 0:0-0:13 `okta.evt.type` is a field of the `okta` source, not of `syscall`
 0..13 property
@@ -3917,8 +4034,9 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
+34..37 keyword
 38..39 punctuation.bracket
-39..57 variable
+39..57 macro
 58..60 keyword
 61..68 property
 69..79 operator
@@ -3964,7 +4082,7 @@ falco_parse_error error 0:33-0:34 expected a ')' token (libsinsp)
 24..26 keyword
 27..28 punctuation.bracket
 28..32 string
-33..36 variable
+33..36 keyword
 37..46 property
 46..47 operator
 47..51 string
@@ -4002,7 +4120,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..63 variable
+39..42 keyword
+43..63 macro
 64..67 keyword
 68..76 property
 77..79 operator
@@ -4033,8 +4152,9 @@ falco_parse_error error 0:36-0:37 expected a ')' token (libsinsp)
 27..29 keyword
 30..31 punctuation.bracket
 31..35 string
+36..39 keyword
 40..41 punctuation.bracket
-41..52 string
+41..52 property
 52..53 operator
 53..54 number
 55..57 keyword
@@ -4072,7 +4192,8 @@ falco_parse_error error 0:40-0:41 expected a ')' token (libsinsp)
 31..33 keyword
 34..35 punctuation.bracket
 35..39 string
-44..53 variable
+40..43 keyword
+44..53 macro
 54..57 keyword
 58..61 keyword
 62..82 property
@@ -4099,7 +4220,8 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
-42..58 variable
+38..41 keyword
+42..58 macro
 59..62 keyword
 63..66 keyword
 67..68 punctuation.bracket
@@ -4300,7 +4422,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..54 variable
+34..37 keyword
+38..54 macro
 55..58 keyword
 59..72 property
 73..81 operator
@@ -4339,7 +4462,8 @@ falco_parse_error error 0:32-0:33 expected a ')' token (libsinsp)
 23..25 keyword
 26..27 punctuation.bracket
 27..31 string
-36..45 variable
+32..35 keyword
+36..45 macro
 46..49 keyword
 50..56 property
 56..57 operator
@@ -4366,7 +4490,8 @@ falco_parse_error error 0:32-0:33 expected a ')' token (libsinsp)
 23..25 keyword
 26..27 punctuation.bracket
 27..31 string
-36..45 variable
+32..35 keyword
+36..45 macro
 46..49 keyword
 50..56 property
 56..57 operator
@@ -4395,8 +4520,9 @@ falco_parse_error error 0:40-0:41 expected a ')' token (libsinsp)
 31..33 keyword
 34..35 punctuation.bracket
 35..39 string
+40..43 keyword
 44..45 punctuation.bracket
-45..56 string
+45..56 property
 56..57 operator
 57..58 number
 59..61 keyword
@@ -4450,7 +4576,8 @@ falco_parse_error error 0:49-0:50 expected a ')' token (libsinsp)
 40..42 keyword
 43..44 punctuation.bracket
 44..48 string
-53..62 variable
+49..52 keyword
+53..62 macro
 63..66 keyword
 67..68 punctuation.bracket
 68..75 property
@@ -4507,7 +4634,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..60 keyword
 61..85 macro
@@ -4526,7 +4654,8 @@ falco_parse_error error 0:29-0:30 expected a ')' token (libsinsp)
 20..22 keyword
 23..24 punctuation.bracket
 24..28 string
-33..42 variable
+29..32 keyword
+33..42 macro
 43..46 keyword
 47..57 property
 57..59 operator
@@ -4615,7 +4744,7 @@ falco_parse_error error 0:63-0:64 expected a ')' token (libsinsp)
 54..56 keyword
 57..58 punctuation.bracket
 58..62 string
-63..66 variable
+63..66 keyword
 67..77 property
 77..79 operator
 79..80 number
@@ -4673,7 +4802,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..66 property
 66..67 operator
@@ -4724,7 +4854,7 @@ falco_parse_error error 0:81-0:82 expected a ')' token (libsinsp)
 72..74 keyword
 75..76 punctuation.bracket
 76..80 string
-81..84 variable
+81..84 keyword
 85..98 property
 99..107 operator
 108..115 string
@@ -4810,8 +4940,10 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
+39..42 keyword
 43..44 punctuation.bracket
-44..59 string
+44..59 property
+60..62 keyword
 63..64 punctuation.bracket
 64..84 variable
 84..85 punctuation.bracket
@@ -4836,7 +4968,7 @@ falco_parse_error error 0:32-0:33 expected a ')' token (libsinsp)
 23..25 keyword
 26..27 punctuation.bracket
 27..31 string
-32..35 variable
+32..35 keyword
 36..51 property
 52..60 operator
 61..65 string
@@ -4926,8 +5058,10 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
+38..41 keyword
 42..43 punctuation.bracket
-43..57 string
+43..57 property
+58..60 keyword
 61..62 punctuation.bracket
 62..82 variable
 82..83 punctuation.bracket
@@ -4962,7 +5096,7 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-39..42 variable
+39..42 keyword
 43..53 property
 54..56 keyword
 57..58 punctuation.bracket
@@ -5010,7 +5144,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..77 property
 77..78 operator
@@ -5039,7 +5174,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..72 macro
 73..76 keyword
@@ -5074,8 +5210,9 @@ falco_parse_error error 0:72-0:73 expected a ')' token (libsinsp)
 63..65 keyword
 66..67 punctuation.bracket
 67..71 string
+72..75 keyword
 76..79 keyword
-80..103 variable
+80..103 macro
 104..107 keyword
 108..111 keyword
 112..121 property
@@ -5107,10 +5244,12 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
+39..42 keyword
 43..44 punctuation.bracket
-44..56 string
+44..56 property
+57..65 operator
 66..79 string
-80..82 variable
+80..82 keyword
 88..100 property
 101..109 operator
 110..124 string
@@ -5151,8 +5290,9 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 29..31 keyword
 32..33 punctuation.bracket
 33..37 string
+38..41 keyword
 42..45 keyword
-46..83 variable
+46..83 macro
 == conformance/external/falco/syscall/detect_outbound_connections_to_common_miner_pool_ports.falco
 0..14 macro
 15..18 keyword
@@ -5166,7 +5306,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..47 variable
+34..37 keyword
+38..47 macro
 48..51 keyword
 52..59 property
 60..68 operator
@@ -5219,8 +5360,9 @@ falco_parse_error error 0:55-0:56 expected a ')' token (libsinsp)
 46..48 keyword
 49..50 punctuation.bracket
 50..54 string
+55..58 keyword
 59..60 punctuation.bracket
-60..67 variable
+60..67 macro
 68..70 keyword
 71..89 macro
 90..92 keyword
@@ -5278,7 +5420,7 @@ falco_parse_error error 0:32-0:33 expected a ')' token (libsinsp)
 23..25 keyword
 26..27 punctuation.bracket
 27..31 string
-32..35 variable
+32..35 keyword
 36..44 property
 45..53 operator
 54..57 string
@@ -5308,7 +5450,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..80 property
 80..81 operator
@@ -5349,13 +5492,17 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
+39..42 keyword
 43..44 punctuation.bracket
-44..52 string
+44..52 property
+53..63 operator
 64..75 string
+76..78 keyword
 83..84 punctuation.bracket
-84..92 string
+84..92 property
+93..103 operator
 104..115 string
-116..119 variable
+116..119 keyword
 120..128 property
 129..139 operator
 140..144 string
@@ -5473,7 +5620,8 @@ falco_parse_error error 0:33-0:34 expected a ')' token (libsinsp)
 24..26 keyword
 27..28 punctuation.bracket
 28..32 string
-37..46 variable
+33..36 keyword
+37..46 macro
 47..50 keyword
 51..60 property
 60..61 operator
@@ -5512,7 +5660,7 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-39..42 variable
+39..42 keyword
 43..65 property
 65..66 operator
 66..70 boolean
@@ -5536,9 +5684,10 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
+39..42 keyword
 43..44 punctuation.bracket
 44..45 punctuation.bracket
-45..58 variable
+45..58 macro
 59..62 keyword
 63..86 macro
 86..87 punctuation.bracket
@@ -5581,7 +5730,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..66 property
 67..69 keyword
@@ -5612,7 +5762,8 @@ falco_parse_error error 0:31-0:32 expected a ')' token (libsinsp)
 22..24 keyword
 25..26 punctuation.bracket
 26..30 string
-35..52 variable
+31..34 keyword
+35..52 macro
 == conformance/external/falco/syscall/interpreted_procs_inbound_network_activity.falco
 0..7 macro
 8..11 keyword
@@ -5625,7 +5776,8 @@ falco_parse_error error 0:32-0:33 expected a ')' token (libsinsp)
 23..25 keyword
 26..27 punctuation.bracket
 27..31 string
-36..53 variable
+32..35 keyword
+36..53 macro
 == conformance/external/falco/syscall/interpreted_procs_outbound_network_activity.falco
 0..8 macro
 9..12 keyword
@@ -5638,7 +5790,7 @@ falco_parse_error error 0:41-0:42 expected a ')' token (libsinsp)
 32..34 keyword
 35..36 punctuation.bracket
 36..40 string
-41..44 variable
+41..44 keyword
 45..55 property
 56..65 operator
 66..74 string
@@ -5656,7 +5808,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..59 variable
+39..42 keyword
+43..59 macro
 == conformance/external/falco/syscall/known_cryptominer_process_executed.falco
 0..15 macro
 16..19 keyword
@@ -5669,7 +5822,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..60 keyword
 61..99 macro
@@ -5700,8 +5854,9 @@ falco_parse_error error 0:41-0:42 expected a ')' token (libsinsp)
 32..34 keyword
 35..36 punctuation.bracket
 36..40 string
+41..44 keyword
 45..48 keyword
-49..67 variable
+49..67 macro
 == conformance/external/falco/syscall/launch_disallowed_container.falco
 0..17 macro
 18..21 keyword
@@ -5715,7 +5870,8 @@ falco_parse_error error 0:41-0:42 expected a ')' token (libsinsp)
 32..34 keyword
 35..36 punctuation.bracket
 36..40 string
-45..74 variable
+41..44 keyword
+45..74 macro
 75..78 keyword
 79..82 keyword
 83..110 macro
@@ -5740,7 +5896,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..58 punctuation.bracket
 58..88 macro
@@ -5771,7 +5928,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..66 property
 67..69 operator
@@ -5814,7 +5972,7 @@ falco_parse_error error 0:41-0:42 expected a ')' token (libsinsp)
 32..34 keyword
 35..36 punctuation.bracket
 36..40 string
-41..44 variable
+41..44 keyword
 45..65 property
 65..66 operator
 66..70 boolean
@@ -5850,7 +6008,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..79 macro
 80..83 keyword
@@ -5873,7 +6032,8 @@ falco_parse_error error 0:41-0:42 expected a ')' token (libsinsp)
 32..34 keyword
 35..36 punctuation.bracket
 36..40 string
-45..60 variable
+41..44 keyword
+45..60 macro
 61..64 keyword
 65..68 keyword
 69..101 macro
@@ -5898,7 +6058,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..75 macro
 76..79 keyword
@@ -5921,8 +6082,9 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
+39..42 keyword
 43..46 keyword
-47..56 variable
+47..56 macro
 57..60 keyword
 61..79 macro
 80..83 keyword
@@ -5946,7 +6108,8 @@ falco_parse_error error 0:42-0:43 expected a ')' token (libsinsp)
 33..35 keyword
 36..37 punctuation.bracket
 37..41 string
-46..55 variable
+42..45 keyword
+46..55 macro
 56..59 keyword
 60..80 property
 81..90 operator
@@ -5981,7 +6144,8 @@ falco_parse_error error 0:29-0:30 expected a ')' token (libsinsp)
 20..22 keyword
 23..24 punctuation.bracket
 24..28 string
-33..46 variable
+29..32 keyword
+33..46 macro
 47..50 keyword
 51..54 keyword
 55..73 macro
@@ -6012,7 +6176,8 @@ falco_parse_error error 0:30-0:31 expected a ')' token (libsinsp)
 21..23 keyword
 24..25 punctuation.bracket
 25..29 string
-34..48 variable
+30..33 keyword
+34..48 macro
 49..52 keyword
 53..56 keyword
 57..75 macro
@@ -6043,7 +6208,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..47 variable
+34..37 keyword
+38..47 macro
 48..51 keyword
 52..53 punctuation.bracket
 53..60 property
@@ -6092,8 +6258,9 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
+34..37 keyword
 38..39 punctuation.bracket
-39..54 variable
+39..54 macro
 55..57 keyword
 58..79 macro
 79..80 punctuation.bracket
@@ -6145,8 +6312,10 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
+34..37 keyword
 38..39 punctuation.bracket
-39..50 string
+39..50 property
+51..53 keyword
 54..55 punctuation.bracket
 55..77 variable
 77..78 punctuation.bracket
@@ -6219,7 +6388,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..77 property
 77..78 operator
@@ -6278,7 +6448,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..58 punctuation.bracket
 58..59 punctuation.bracket
@@ -6383,8 +6554,9 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
+39..42 keyword
 43..46 keyword
-47..56 variable
+47..56 macro
 57..60 keyword
 61..62 punctuation.bracket
 62..63 punctuation.bracket
@@ -6522,7 +6694,8 @@ falco_parse_error error 0:40-0:41 expected a ')' token (libsinsp)
 31..33 keyword
 34..35 punctuation.bracket
 35..39 string
-44..53 variable
+40..43 keyword
+44..53 macro
 54..57 keyword
 58..69 property
 70..72 keyword
@@ -6553,7 +6726,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..75 macro
 76..79 keyword
@@ -6582,8 +6756,9 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
+39..42 keyword
 43..44 punctuation.bracket
-44..67 variable
+44..67 macro
 68..70 keyword
 71..74 keyword
 75..84 macro
@@ -6695,7 +6870,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..71 property
 72..80 operator
@@ -6732,7 +6908,7 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-39..42 variable
+39..42 keyword
 43..56 property
 57..59 operator
 60..61 number
@@ -6766,7 +6942,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..61 variable
+39..42 keyword
+43..61 macro
 == conformance/external/falco/syscall/potential_local_privilege_escalation_via_environment_variables_misuse.falco
 0..15 macro
 16..19 keyword
@@ -6783,7 +6960,8 @@ falco_parse_error error 0:49-0:50 expected a ')' token (libsinsp)
 40..42 keyword
 43..44 punctuation.bracket
 44..48 string
-53..62 variable
+49..52 keyword
+53..62 macro
 63..66 keyword
 67..68 punctuation.bracket
 68..75 property
@@ -6858,7 +7036,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..59 variable
+39..42 keyword
+43..59 macro
 60..63 keyword
 64..72 property
 73..82 operator
@@ -6887,7 +7066,7 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-39..42 variable
+39..42 keyword
 43..58 property
 59..67 operator
 68..82 string
@@ -6911,7 +7090,8 @@ falco_parse_error error 0:50-0:51 expected a ')' token (libsinsp)
 41..43 keyword
 44..45 punctuation.bracket
 45..49 string
-54..70 variable
+50..53 keyword
+54..70 macro
 71..74 keyword
 75..78 keyword
 79..97 macro
@@ -6930,7 +7110,8 @@ falco_parse_error error 0:33-0:34 expected a ')' token (libsinsp)
 24..26 keyword
 27..28 punctuation.bracket
 28..32 string
-37..46 variable
+33..36 keyword
+37..46 macro
 47..50 keyword
 51..52 punctuation.bracket
 52..59 property
@@ -6969,7 +7150,8 @@ falco_parse_error error 0:33-0:34 expected a ')' token (libsinsp)
 24..26 keyword
 27..28 punctuation.bracket
 28..32 string
-37..52 variable
+33..36 keyword
+37..52 macro
 53..56 keyword
 57..69 macro
 70..73 keyword
@@ -7006,7 +7188,8 @@ falco_parse_error error 0:33-0:34 expected a ')' token (libsinsp)
 24..26 keyword
 27..28 punctuation.bracket
 28..32 string
-37..52 variable
+33..36 keyword
+37..52 macro
 53..56 keyword
 57..73 macro
 74..77 keyword
@@ -7197,8 +7380,10 @@ falco_parse_error error 0:33-0:34 expected a ')' token (libsinsp)
 24..26 keyword
 27..28 punctuation.bracket
 28..32 string
+33..36 keyword
 37..38 punctuation.bracket
-38..49 string
+38..49 property
+50..52 keyword
 53..54 punctuation.bracket
 54..76 variable
 76..77 punctuation.bracket
@@ -7263,8 +7448,9 @@ falco_parse_error error 1:24-1:25 expected a ')' token (libsinsp)
 45..47 keyword
 48..49 punctuation.bracket
 49..53 string
+54..57 keyword
 58..59 punctuation.bracket
-59..77 variable
+59..77 macro
 78..80 keyword
 81..88 property
 89..99 operator
@@ -7312,7 +7498,8 @@ falco_parse_error error 0:27-0:28 expected a ')' token (libsinsp)
 18..20 keyword
 21..22 punctuation.bracket
 22..26 string
-31..40 variable
+27..30 keyword
+31..40 macro
 41..44 keyword
 45..55 property
 56..58 keyword
@@ -7367,7 +7554,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..59 variable
+39..42 keyword
+43..59 macro
 60..63 keyword
 64..67 keyword
 68..101 macro
@@ -7386,7 +7574,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..64 variable
+39..42 keyword
+43..64 macro
 65..68 keyword
 69..70 punctuation.bracket
 70..82 property
@@ -7487,7 +7676,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..54 variable
+39..42 keyword
+43..54 macro
 55..58 keyword
 59..69 property
 70..76 keyword
@@ -7740,7 +7930,7 @@ falco_parse_error error 0:36-0:37 expected a ')' token (libsinsp)
 27..29 keyword
 30..31 punctuation.bracket
 31..35 string
-36..39 variable
+36..39 keyword
 40..47 property
 48..58 operator
 59..68 string
@@ -7786,9 +7976,10 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
+39..42 keyword
 43..44 punctuation.bracket
 44..45 punctuation.bracket
-45..58 variable
+45..58 macro
 59..62 keyword
 63..86 macro
 86..87 punctuation.bracket
@@ -7859,8 +8050,10 @@ falco_parse_error error 0:29-0:30 expected a ')' token (libsinsp)
 20..22 keyword
 23..24 punctuation.bracket
 24..28 string
+29..32 keyword
 33..34 punctuation.bracket
-34..46 string
+34..46 property
+47..55 operator
 56..65 string
 66..68 keyword
 69..81 property
@@ -7913,7 +8106,7 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-39..42 variable
+39..42 keyword
 43..56 property
 57..59 operator
 60..61 number
@@ -7999,7 +8192,7 @@ falco_parse_error error 0:40-0:41 expected a ')' token (libsinsp)
 31..33 keyword
 34..35 punctuation.bracket
 35..39 string
-40..43 variable
+40..43 keyword
 44..57 property
 58..59 operator
 60..62 string
@@ -8063,7 +8256,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..55 variable
+39..42 keyword
+43..55 macro
 56..59 keyword
 60..71 macro
 72..75 keyword
@@ -8086,7 +8280,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..52 variable
+39..42 keyword
+43..52 macro
 53..56 keyword
 57..68 macro
 69..72 keyword
@@ -8121,6 +8316,7 @@ falco_parse_error error 0:31-0:32 expected a ')' token (libsinsp)
 22..24 keyword
 25..26 punctuation.bracket
 26..30 string
+31..34 keyword
 35..38 keyword
 39..40 punctuation.bracket
 40..41 punctuation.bracket
@@ -8184,7 +8380,8 @@ falco_parse_error error 0:40-0:41 expected a ')' token (libsinsp)
 31..33 keyword
 34..35 punctuation.bracket
 35..39 string
-44..53 variable
+40..43 keyword
+44..53 macro
 54..57 keyword
 58..66 property
 67..69 operator
@@ -8219,7 +8416,7 @@ falco_parse_error error 0:40-0:41 expected a ')' token (libsinsp)
 31..33 keyword
 34..35 punctuation.bracket
 35..39 string
-40..43 variable
+40..43 keyword
 44..54 property
 54..55 operator
 55..58 string
@@ -8245,7 +8442,7 @@ falco_parse_error error 0:46-0:47 expected a ')' token (libsinsp)
 37..39 keyword
 40..41 punctuation.bracket
 41..45 string
-46..49 variable
+46..49 keyword
 50..58 property
 59..61 operator
 62..63 number
@@ -8301,6 +8498,8 @@ falco_parse_error error 0:36-0:37 expected a ')' token (libsinsp)
 27..29 keyword
 30..31 punctuation.bracket
 31..35 string
+36..39 keyword
+40..59 macro
 59..60 punctuation.bracket
 61..63 keyword
 64..65 punctuation.bracket
@@ -8355,8 +8554,9 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
+39..42 keyword
 43..46 keyword
-47..56 variable
+47..56 macro
 57..60 keyword
 61..70 property
 71..73 keyword
@@ -8514,7 +8714,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..64 variable
+39..42 keyword
+43..64 macro
 65..68 keyword
 69..78 property
 79..81 keyword
@@ -8565,7 +8766,8 @@ falco_parse_error error 0:39-0:40 expected a ')' token (libsinsp)
 30..32 keyword
 33..34 punctuation.bracket
 34..38 string
-43..64 variable
+39..42 keyword
+43..64 macro
 65..68 keyword
 69..78 property
 79..81 keyword
@@ -8630,7 +8832,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..45 variable
+34..37 keyword
+38..45 macro
 46..49 keyword
 50..53 keyword
 54..72 macro
@@ -8679,7 +8882,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..51 variable
+34..37 keyword
+38..51 macro
 52..55 keyword
 56..59 keyword
 60..78 macro
@@ -8740,7 +8944,8 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-38..46 variable
+34..37 keyword
+38..46 macro
 47..50 keyword
 51..67 macro
 68..71 keyword
@@ -8893,7 +9098,7 @@ falco_parse_error error 0:34-0:35 expected a ')' token (libsinsp)
 25..27 keyword
 28..29 punctuation.bracket
 29..33 string
-34..37 variable
+34..37 keyword
 38..45 property
 46..56 operator
 57..69 string
@@ -8956,9 +9161,7 @@ falco_parse_error error 0:24-0:25 unexpected token after 'and', expecting 'or', 
 falco_parse_error error 0:8-0:9 unexpected token after 'and', expecting 'or', 'and' (libsinsp)
 0..3 keyword
 4..7 macro
-8..17 property
-18..19 operator
-20..24 string
+20..24 macro
 == corpus/falco/append_fragment__valid.falco
 0..3 keyword
 4..7 keyword
@@ -8974,8 +9177,7 @@ falco_parse_error error 0:11-0:12 expected a number value or a field with a vali
 0..8 property
 9..10 operator
 11..14 string
-15..22 property
-23..33 operator
+23..33 macro
 == corpus/falco/comparison__valid.falco
 falco_deprecated_field warning 0:70-0:77 `evt.dir` is deprecated: due to the drop of enter events, 'evt.dir = <' always evaluates to true, and 'evt.dir = >' always evaluates to false. The rule expression can be simplified by removing the condition on 'evt.dir'
 falco_no_evttype warning 0:0-0:81 the rule matches 454 event types: narrow it with `evt.type` (a macro such as `spawned_process` or `open_write`). Falco and Sysdig warn: this has a significant performance penalty
@@ -8996,6 +9198,7 @@ falco_no_evttype warning 0:0-0:81 the rule matches 454 event types: narrow it wi
 == corpus/falco/field__invalid.falco
 falco_parse_error error 0:4-0:5 unexpected token after 'proc', expecting 'or', 'and' (libsinsp)
 0..4 macro
+6..10 macro
 13..17 macro
 == corpus/falco/field__valid.falco
 falco_no_evttype warning 0:0-0:55 the rule matches 454 event types: narrow it with `evt.type` (a macro such as `spawned_process` or `open_write`). Falco and Sysdig warn: this has a significant performance penalty
@@ -9103,8 +9306,7 @@ falco_parse_error error 0:23-0:24 unexpected token after 'sensitive', expecting 
 == corpus/falco/not_expression__invalid.falco
 falco_parse_error error 0:10-0:11 expected a valid check operator: one of 'exists', '<=', '<', '>=', '>', '==', '=', '!=', 'glob', 'iglob', 'contains', 'icontains', 'bcontains', 'startswith', 'bstartswith', 'endswith', 'regex', 'intersects', 'in', 'pmatch' (libsinsp)
 0..9 property
-14..15 operator
-16..20 string
+16..20 macro
 == corpus/falco/not_expression__valid.falco
 falco_no_evttype warning 0:0-0:47 the rule matches 454 event types: narrow it with `evt.type` (a macro such as `spawned_process` or `open_write`). Falco and Sysdig warn: this has a significant performance penalty
 0..3 keyword
@@ -9198,6 +9400,7 @@ falco_parse_error error 0:38-0:39 expected a ')' token (libsinsp)
 falco_parse_error error 0:22-0:23 expected a string value or a field with a valid transformer: 'val', 'tolower', 'toupper', 'b64', 'basename', 'len', 'join', 'concat', 'getopt' (libsinsp)
 0..12 property
 13..21 operator
+23..35 macro
 == corpus/falco/quoted_string__valid.falco
 falco_no_evttype warning 0:0-0:63 the rule matches 454 event types: narrow it with `evt.type` (a macro such as `spawned_process` or `open_write`). Falco and Sysdig warn: this has a significant performance penalty
 0..12 property
@@ -9216,7 +9419,8 @@ falco_parse_error error 0:22-0:23 expected transformer list argument: field, tra
 11..20 property
 20..21 punctuation.delimiter
 22..23 punctuation.bracket
-26..27 macro
+24..25 operator
+26..27 string
 == corpus/falco/transformer_list__valid.falco
 falco_transformer error 0:109-0:136 getopt() first argument must be a list
 falco_newer_syntax warning 0:0-0:42 `join()` needs libsinsp 0.24.0 or later: an older Falco or Sysdig agent refuses the rule

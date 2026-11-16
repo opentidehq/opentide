@@ -8,7 +8,7 @@ completion. Catalogs: `data/catalogs/falco/` (`scripts/engine/sync_falco_catalog
 
 ## Place
 
-foundation, tier 2: depends on opentide-core, -syntax, -highlight. Used by opentide-tide and -analysis.
+foundation, tier 2: depends on opentide-core, -highlight, -parse. Used by opentide-tide and -analysis.
 
 ## Invariants
 
@@ -24,8 +24,9 @@ cargo nextest run --profile fast -p opentide-falco
 ```
 
 `tests/libsinsp_parser.rs`, `tests/libsinsp_compiler.rs` (libs' tests) and
-`tests/tree_sitter_agreement.rs` (inputs libsinsp accepts highlight without an error node); the Falco
-oracle runs through `scripts/engine/ci-oracle.sh`.
+`tests/tree_agreement.rs` (inputs libsinsp accepts parse into a tree without an error), and
+`tests/differential.rs` (the tree against the tree-sitter grammar it replaced, kept verbatim in
+`tests/legacy`); the Falco oracle runs through `scripts/engine/ci-oracle.sh`.
 
 ## Do not
 
