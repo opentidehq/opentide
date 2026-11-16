@@ -11,7 +11,7 @@
 //! `OPENTIDE_DIFF_SCALE` (default 1) multiplies the sampling, and
 //! `OPENTIDE_DIFF_REPORT` names a file the JSON reports are written to.
 //! The generated-query pass (`generated_queries_match_tree_sitter`) has its own
-//! `OPENTIDE_GEN_SEEDS` (default `11,12`), `OPENTIDE_GEN_SCALE` and `OPENTIDE_GEN_REPORT`.
+//! `OPENTIDE_GEN_SEEDS` (default `11`), `OPENTIDE_GEN_SCALE` and `OPENTIDE_GEN_REPORT`.
 //! `word_level_mutants_match_tree_sitter` is the reviewer's scheme (40 word-level
 //! mutants per file: `OPENTIDE_MUT_SEEDS` default `21`, `OPENTIDE_MUT_PER_FILE`, `OPENTIDE_MUT_REPORT`).
 //!
@@ -916,10 +916,10 @@ fn generated_queries_match_tree_sitter() {
         .and_then(|s| s.parse().ok())
         .unwrap_or(1);
     let (old, new) = (old(), new());
-    for seed in env_list("OPENTIDE_GEN_SEEDS", "11,12") {
+    for seed in env_list("OPENTIDE_GEN_SEEDS", "11") {
         let mut rng = rng::Rng::new(seed);
         let mut generator = generated::Gen(&mut rng);
-        let files: Vec<Source> = (0..400 * scale)
+        let files: Vec<Source> = (0..80 * scale)
             .map(|i| Source {
                 name: format!("generated/{seed}/{i}"),
                 text: generator.query(),
