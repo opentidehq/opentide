@@ -52,12 +52,6 @@ pub const UNREACHABLE_AFTER_TIMEOUTS: usize = 3;
 pub const QUERY_CHECK_TIMEOUT: &str = "query_check_timeout";
 /// `OPENTIDE_QUERY_CHECK_TIMEOUT`.
 const CHECK_TIMEOUT_ENV: &str = super::validate_query::CHECK_TIMEOUT_ENV;
-/// The live validator's logger, as its events name it.
-const LIVE_LOGGER: &str = "opentide.platforms.live_validation";
-/// The Elastic validator's logger.
-const ELASTIC_LOGGER: &str = "opentide.platforms.elastic.validator";
-/// The validation service's logger.
-const SERVICE_LOGGER: &str = "opentide.cli.services.validation";
 /// What a run that sent no query advises (`_no_tenant_reached`).
 const NO_TENANT_ADVICE: &str = "a tenant takes a rule only when its 'strategies' accept the run \
      strategy that deploys the rule's status; a 'manual' tenant only when the rule lists it under \
@@ -702,7 +696,6 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
                     tracing::error!(
                         system = platform,
                         detail = error.as_str(),
-                        logger = SERVICE_LOGGER,
                         "query_validation_failed"
                     );
                     let mut result = head(Some(platform), "failed");
@@ -1403,7 +1396,6 @@ async fn generic(
                     mdr_name = rule.name.as_str(),
                     uuid = rule.uuid.as_str(),
                     tenant = tenant.name.as_str(),
-                    logger = LIVE_LOGGER,
                     "validating_query"
                 );
                 let conn = connection
@@ -1446,7 +1438,6 @@ async fn generic(
                             );
                             tracing::error!(
                                 detail = detail.as_str(),
-                                logger = "opentide.platforms.defender_for_endpoint.validator",
                                 critical = true,
                                 "defender_xdr_custom_detection_query_is_missing_required_columns"
                             );
@@ -1460,7 +1451,6 @@ async fn generic(
                                     format!("{} ({}) on {}", rule.name, rule.uuid, tenant.name)
                                         .as_str(),
                                 warning = warning.as_str(),
-                                logger = LIVE_LOGGER,
                                 "query_validation_warning"
                             );
                         }
@@ -1468,7 +1458,6 @@ async fn generic(
                             tracing::info!(
                                 mdr_name = rule.name.as_str(),
                                 tenant = tenant.name.as_str(),
-                                logger = LIVE_LOGGER,
                                 "valid_query"
                             );
                         }
@@ -1606,7 +1595,6 @@ async fn google_secops(
                 mdr_name = rule.name.as_str(),
                 uuid = rule.uuid.as_str(),
                 tenant = tenant.name.as_str(),
-                logger = LIVE_LOGGER,
                 "validating_query"
             );
             let assembled = match opentide_compile::google_secops::assemble(compile, rule) {
@@ -1639,7 +1627,6 @@ async fn google_secops(
                             detail = format!("{} ({}) on {}", rule.name, rule.uuid, tenant.name)
                                 .as_str(),
                             warning = warning.as_str(),
-                            logger = LIVE_LOGGER,
                             "query_validation_warning"
                         );
                     }
@@ -1647,7 +1634,6 @@ async fn google_secops(
                         tracing::info!(
                             mdr_name = rule.name.as_str(),
                             tenant = tenant.name.as_str(),
-                            logger = LIVE_LOGGER,
                             "valid_query"
                         );
                     }
@@ -1669,7 +1655,6 @@ async fn google_secops(
                         tenant = tenant.name.as_str(),
                         error = text.as_str(),
                         critical = true,
-                        logger = "opentide.platforms.google_secops.validator",
                         "google_secops_tenant_validation_failed"
                     );
                     report
@@ -1730,7 +1715,6 @@ fn log_rejected(platform: &str, rule: &opentide_compile::Rule, tenant: &str, err
         )
         .as_str(),
         reason = error,
-        logger = LIVE_LOGGER,
         critical = true,
         "query_rejected"
     );
@@ -1774,7 +1758,6 @@ fn timed_out(
         )
         .as_str(),
         reason = error.as_str(),
-        logger = LIVE_LOGGER,
         critical = true,
         "query_check_timed_out"
     );
@@ -1811,7 +1794,6 @@ fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str,
             rule,
             lookback = lookback.as_str(),
             advice = "scheduling.lookback is 0m; Elastic recommends at least 1m overlap",
-            logger = ELASTIC_LOGGER,
             "lookback_zero"
         ),
         "lookback_long" => tracing::warn!(
@@ -1823,7 +1805,6 @@ fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str,
             advice = "scheduling.lookback exceeds 1h; in Elastic, lookback is additional overlap \
                       added to interval (from = now-(interval+lookback)), not the total query \
                       window",
-            logger = ELASTIC_LOGGER,
             "lookback_long"
         ),
         "threshold_lookback" => tracing::warn!(
@@ -1835,7 +1816,6 @@ fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str,
             advice = "threshold rule has scheduling.lookback > scheduling.interval; threshold \
                       rules count across interval + lookback and do not deduplicate alerts \
                       across overlapping runs",
-            logger = ELASTIC_LOGGER,
             "threshold_lookback"
         ),
         "esql_metadata_id" => tracing::warn!(
@@ -1844,7 +1824,6 @@ fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str,
             rule,
             advice = "Non-aggregating ES|QL query lacks METADATA _id; alerts will not be \
                       deduplicated",
-            logger = ELASTIC_LOGGER,
             "esql_metadata_id"
         ),
         "risk_band" => {
@@ -1869,7 +1848,6 @@ fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str,
                      '{severity}'"
                 )
                 .as_str(),
-                logger = ELASTIC_LOGGER,
                 "risk_band"
             );
         }
@@ -1895,7 +1873,6 @@ fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str,
                          full maxspan cannot match"
                     )
                     .as_str(),
-                    logger = ELASTIC_LOGGER,
                     "eql_maxspan_window"
                 );
             } else {
@@ -1911,7 +1888,6 @@ fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str,
                          ({lookback}); sequences straddling two runs can be missed"
                     )
                     .as_str(),
-                    logger = ELASTIC_LOGGER,
                     "eql_maxspan_lookback"
                 );
             }
@@ -1921,7 +1897,6 @@ fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str,
             rule_id = uuid,
             tenant,
             advice = "Tenant setup.suppression is false; alert_suppression will be omitted",
-            logger = ELASTIC_LOGGER,
             "suppression_omitted_basic_license"
         ),
         _ => {}
@@ -1997,7 +1972,6 @@ async fn elastic_rule(
                 tracing::warn!(
                     rule = rule.name.as_str(),
                     warning = warning.as_str(),
-                    logger = ELASTIC_LOGGER,
                     "elasticsearch_check_warning"
                 );
                 warnings.push(warning);
@@ -2018,11 +1992,7 @@ async fn elastic_rule(
         Err(error) => return Err(RuleFailure::Connector(error)),
     };
     if matches!(preview.get("isAborted"), Some(CJson::Bool(true))) {
-        tracing::warn!(
-            rule = rule.name.as_str(),
-            logger = ELASTIC_LOGGER,
-            "preview_inconclusive_aborted"
-        );
+        tracing::warn!(rule = rule.name.as_str(), "preview_inconclusive_aborted");
         warnings.push("Kibana aborted the preview before it finished".into());
     }
     let mut errors: Vec<String> = Vec::new();
@@ -2034,7 +2004,6 @@ async fn elastic_rule(
                     tracing::warn!(
                         rule = rule.name.as_str(),
                         warning = warning.as_str(),
-                        logger = ELASTIC_LOGGER,
                         "preview_log_warning"
                     );
                     warnings.push(warning);
@@ -2140,7 +2109,6 @@ async fn elastic(
                         rule = rule.name.as_str(),
                         uuid = rule.uuid.as_str(),
                         error = error.as_str(),
-                        logger = ELASTIC_LOGGER,
                         critical = true,
                         "elastic_tenant_validation_failed"
                     );
@@ -2153,7 +2121,6 @@ async fn elastic(
                         rule = rule.name.as_str(),
                         uuid = rule.uuid.as_str(),
                         error = error.as_str(),
-                        logger = ELASTIC_LOGGER,
                         critical = true,
                         "elastic_rule_validation_failed"
                     );
