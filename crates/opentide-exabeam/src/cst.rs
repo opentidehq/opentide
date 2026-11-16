@@ -64,6 +64,10 @@ const IN: T = T::Kw("IN");
 const TO: T = T::Kw("TO");
 const AS: T = T::Kw("AS");
 const LIMIT: T = T::Kw("LIMIT");
+const FOREACH: T = T::Kw("FOREACH");
+const DISTINCT: T = T::Kw("DISTINCT");
+const ASC: T = T::Kw("ASC");
+const DESC: T = T::Kw("DESC");
 const LPAREN: T = T::Lit("(");
 const RPAREN: T = T::Lit(")");
 const LBRACKET: T = T::Lit("[");
@@ -73,6 +77,7 @@ const RBRACE: T = T::Lit("}");
 const COMMA: T = T::Lit(",");
 const PIPE: T = T::Lit("|");
 const DOT: T = T::Lit(".");
+const STAR: T = T::Lit("*");
 
 /// What starts a term.
 const UNARY: [T; 5] = [NOT, LPAREN, T::Str, T::Ident, T::Text];
@@ -115,6 +120,13 @@ fn after_term(top: bool, more: &[T]) -> Vec<T> {
         v.push(RPAREN);
     }
     v.extend_from_slice(more);
+    v
+}
+
+fn after_clause(more: &[T]) -> Vec<T> {
+    let mut v = more.to_vec();
+    v.extend(CLAUSES);
+    v.extend(STATEMENT_END);
     v
 }
 
@@ -263,6 +275,17 @@ fn expect(p: &mut Parser<'_>, wanted: &[T], message: &str) -> Option<T> {
     }
 }
 
+/// An identifier wrapped in `kind`, or an error.
+fn name(p: &mut Parser<'_>, kind: K, message: &str) {
+    if let Some((T::Ident, end)) = next(p, &[T::Ident]) {
+        let m = p.start();
+        take(p, T::Ident, end);
+        m.complete(p, kind.raw());
+    } else {
+        p.error(message);
+    }
+}
+
 /// A tree and its parse.
 pub(crate) type Parsed = (SyntaxNode, Parse);
 
@@ -297,35 +320,163 @@ pub fn debug_parse(source: &str) -> String {
 // ---------------------------------------------------------------------------
 // The grammar.
 
-// Until the next PR of #1223 reads clauses and `FOREACH`, a statement is
-// its filter.
 fn source_file(p: &mut Parser<'_>) {
     let m = p.start();
     if !p.at_eof() {
-        statement(p);
+        statement_or_foreach(p);
     }
     while !p.at_eof() {
         if eat(p, &[PIPE], PIPE) {
-            statement(p);
+            statement_or_foreach(p);
             continue;
         }
         // What cannot continue a statement: skip a piece, and read on.
         p.err_and_bump("unexpected");
-        if next(p, &UNARY).is_some() {
-            statement(p);
+        if next(p, &statement_start(true)).is_some() {
+            statement_or_foreach(p);
         }
     }
     m.complete(p, K::SourceFile.raw());
 }
 
-fn statement(p: &mut Parser<'_>) {
-    if next(p, &UNARY).is_none() {
-        p.error("expected a statement");
-        return;
+fn statement_start(top: bool) -> Vec<T> {
+    let mut v = UNARY.to_vec();
+    v.extend(CLAUSES);
+    if top {
+        v.push(FOREACH);
     }
+    v
+}
+
+fn statement_or_foreach(p: &mut Parser<'_>) {
+    match next(p, &statement_start(true)) {
+        Some((FOREACH, _)) => foreach(p),
+        Some(_) => statement(p),
+        None => p.error("expected a statement"),
+    }
+}
+
+fn foreach(p: &mut Parser<'_>) {
     let m = p.start();
-    filter(p, true);
+    eat(p, &[FOREACH], FOREACH);
+    name(p, K::FieldName, "expected a field");
+    if expect(p, &[LBRACKET], "missing `[`").is_some() {
+        let mut inner = statement_start(false);
+        inner.push(RBRACKET);
+        if next(p, &inner).is_some_and(|(t, _)| t != RBRACKET) {
+            statement(p);
+        }
+        expect(p, &[RBRACKET], "missing `]`");
+        if at(p, &[LIMIT, PIPE], LIMIT) {
+            limit(p);
+        }
+    }
+    m.complete(p, K::ForeachStatement.raw());
+}
+
+/// A filter then clauses, or clauses alone.
+fn statement(p: &mut Parser<'_>) {
+    let m = p.start();
+    if next(p, &statement_start(false)).is_some_and(|(t, _)| UNARY.contains(&t)) {
+        filter(p, true);
+    }
+    while let Some((t, _)) = next(p, &after_clause(&[])) {
+        if !CLAUSES.contains(&t) {
+            break;
+        }
+        clause(p, t);
+    }
     m.complete(p, K::Statement.raw());
+}
+
+fn clause(p: &mut Parser<'_>, t: T) {
+    let m = p.start();
+    eat(p, &CLAUSES, t);
+    let kind = match t {
+        T::Kw("SELECT") => {
+            eat(p, &[DISTINCT, STAR, T::Ident], DISTINCT);
+            loop {
+                column(p);
+                if !eat(p, &after_clause(&[COMMA, AS]), COMMA) {
+                    break;
+                }
+            }
+            K::SelectClause
+        }
+        T::Kw("FROM") => {
+            name(p, K::TableName, "expected a table");
+            let mut v = UNARY.to_vec();
+            v.extend(after_clause(&[]));
+            if next(p, &v).is_some_and(|(t, _)| UNARY.contains(&t)) {
+                filter(p, true);
+            }
+            K::FromClause
+        }
+        T::Kw("WHERE") => {
+            filter(p, true);
+            K::WhereClause
+        }
+        T::Kw("AS") => {
+            name(p, K::TableName, "expected a table");
+            K::AsClause
+        }
+        T::Kw("GROUP-BY") => {
+            loop {
+                name(p, K::FieldName, "expected a field");
+                if !eat(p, &after_clause(&[COMMA]), COMMA) {
+                    break;
+                }
+            }
+            K::GroupByClause
+        }
+        T::Kw("ORDER-BY") => {
+            loop {
+                name(p, K::FieldName, "expected a field");
+                if let Some((t @ (ASC | DESC), end)) = next(p, &after_clause(&[ASC, DESC, COMMA])) {
+                    take(p, t, end);
+                }
+                if !eat(p, &after_clause(&[COMMA]), COMMA) {
+                    break;
+                }
+            }
+            K::OrderByClause
+        }
+        _ => {
+            expect(p, &[T::Num], "expected a number");
+            K::LimitClause
+        }
+    };
+    m.complete(p, kind.raw());
+}
+
+fn limit(p: &mut Parser<'_>) {
+    let m = p.start();
+    eat(p, &[LIMIT], LIMIT);
+    expect(p, &[T::Num], "expected a number");
+    m.complete(p, K::LimitClause.raw());
+}
+
+/// `*`, a field or an aggregate, then `AS alias`.
+fn column(p: &mut Parser<'_>) {
+    let m = p.start();
+    match next(p, &[STAR, T::Ident]) {
+        Some((STAR, end)) => take(p, STAR, end),
+        Some((T::Ident, end)) => {
+            let inner = p.start();
+            take(p, T::Ident, end);
+            if at(p, &after_clause(&[LPAREN, COMMA, AS]), LPAREN) {
+                arguments(p, &[STAR, T::Ident, T::Str, T::Bare], true);
+                inner.complete(p, K::Aggregate.raw());
+            } else {
+                inner.complete(p, K::FieldName.raw());
+            }
+        }
+        _ => p.error("expected a column"),
+    }
+    if eat(p, &after_clause(&[COMMA, AS]), AS) {
+        name(p, K::Alias, "expected a name");
+    }
+    m.complete(p, K::Column.raw());
 }
 
 /// `(` arguments `)`: of a call (`fields` false) or an aggregate, whose

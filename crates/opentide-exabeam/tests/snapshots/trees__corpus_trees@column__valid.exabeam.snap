@@ -1,0 +1,38 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/column__valid.exabeam
+---
+source_file@0..50
+  statement@0..50
+    select_clause@0..25
+      keyword@0..6
+        letters@0..6 "SELECT"
+      whitespace@6..7 " "
+      column@7..22
+        field_name@7..11
+          identifier@7..11
+            letters@7..11 "user"
+        whitespace@11..12 " "
+        keyword@12..14
+          letters@12..14 "AS"
+        whitespace@14..15 " "
+        alias@15..22
+          identifier@15..22
+            letters@15..22 "account"
+      ,@22..23 ","
+      whitespace@23..24 " "
+      column@24..25
+        *@24..25 "*"
+    whitespace@25..26 " "
+    where_clause@26..50
+      keyword@26..31
+        letters@26..31 "WHERE"
+      whitespace@31..32 " "
+      filter@32..50
+        field_term@32..50
+          field_name@32..38
+            identifier@32..38
+              letters@32..38 "vendor"
+          :@38..39 ":"
+          string@39..50 "\"Microsoft\""
