@@ -19,14 +19,14 @@ strsim.workspace = true
 opentide-ecs.workspace = true
 opentide-syntax.workspace = true
 opentide-highlight.workspace = true
-tree-sitter.workspace = true
 opentide-parse.workspace = true
 rowan.workspace = true
 serde.workspace = true
 toml.workspace = true
 
-
 [dev-dependencies]
+# The tree-sitter implementation, kept in tests/legacy for the differential until the last PR.
+tree-sitter.workspace = true
 insta.workspace = true
 regex.workspace = true
 opentide-parse = { workspace = true, features = ["differential"] }

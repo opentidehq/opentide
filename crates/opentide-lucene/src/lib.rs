@@ -27,6 +27,7 @@ pub mod graylog;
 mod parser;
 pub mod regexp;
 mod syntax;
+mod tree;
 
 pub use ecs::ecs_diagnostics;
 
@@ -39,13 +40,12 @@ pub fn debug_parse(source: &str) -> String {
 }
 
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, Range, Severity, codes, position_to_offset,
-    span_to_range,
+    ByteSpan, CompletionItem, Diagnostic, LanguageId, LineIndex, Range, Severity, codes,
+    position_to_offset,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
-use opentide_syntax::{first_error, node_span, parse as ts_parse, walk};
-
-use tree_sitter::Node;
+use syntax::SyntaxKind as K;
+use tree::{Node, Tree, walk_with_ancestors};
 
 const SYNTAX_DOCS: &str = "https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query#query-string-syntax";
 
@@ -102,121 +102,211 @@ pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
     } else {
         source
     };
-    let Some(tree) = ts_parse(LanguageId::Lucene, text) else {
-        return AnalyzeResult {
-            diagnostics: vec![Diagnostic::error(
-                codes::LUCENE_PARSE_ERROR,
-                "failed to initialize the Lucene parser",
-                Range::point(0, 0),
-            )],
-            tokens: Vec::new(),
-        };
-    };
-    let root = tree.root_node();
+    let tree = Tree::parse(text);
+    let root = tree.root();
+    let lines = LineIndex::new(text);
+    let range = |span: ByteSpan| lines.range(span);
     let mut diagnostics = Vec::new();
-    if let Some(err) = first_error(root) {
+    if let Some(err) = tree.errors.first() {
+        let (message, span) = parse_error(&tree, err, text);
         diagnostics.push(Diagnostic::error(
             codes::LUCENE_PARSE_ERROR,
-            parse_error_message(err, text),
-            range(text, node_span(err)),
+            message,
+            range(span),
         ));
     }
     let elastic = dialect == Dialect::Elastic;
     let graylog = dialect == Dialect::Graylog;
-    opentide_syntax::walk_with_ancestors(root, |node, ancestors| match node.kind() {
-        "boolean_query" => {
-            lowercase_operators(node, text, &mut diagnostics);
-            mixed_operators(node, text, &mut diagnostics);
-            kuery_ranges(node, text, &mut diagnostics);
-            bare_terms(node, text, dialect, &mut diagnostics);
-            glued_regexps(node, text, &mut diagnostics);
+    let cx = Cx {
+        source: text,
+        lines: &lines,
+    };
+    walk_with_ancestors(&root, |node, ancestors| match node.kind() {
+        K::BooleanQuery => {
+            lowercase_operators(node, cx, &mut diagnostics);
+            mixed_operators(node, cx, &mut diagnostics);
+            kuery_ranges(node, cx, &mut diagnostics);
+            bare_terms(node, cx, dialect, &mut diagnostics);
+            glued_regexps(node, cx, &mut diagnostics);
         }
-        "field_name" => {
-            field_wildcard(node, text, &mut diagnostics);
+        K::FieldName => {
+            field_wildcard(node, cx, &mut diagnostics);
             if dialect == Dialect::CarbonBlack {
-                elasticsearch_field_syntax(node, text, &mut diagnostics);
-                carbon_black::check_field(node, text, &mut diagnostics);
+                elasticsearch_field_syntax(node, cx, &mut diagnostics);
+                carbon_black::check_field(node, cx, &mut diagnostics);
             }
         }
-        "field_query" => range_operator(node, text, dialect, &mut diagnostics),
-        "range_query" => {
-            range_whitespace(node, text, &mut diagnostics);
+        K::FieldQuery => range_operator(node, cx, dialect, &mut diagnostics),
+        K::RangeQuery => {
+            range_whitespace(node, cx, &mut diagnostics);
             if graylog {
-                graylog::open_range(node, text, &mut diagnostics);
-                graylog::analyzed_field(node, ancestors, text, &mut diagnostics);
+                graylog::open_range(node, cx, &mut diagnostics);
+                graylog::analyzed_field(node, ancestors, cx, &mut diagnostics);
             }
         }
-        "term_query" if graylog => {
-            graylog::leading_wildcard(node, text, &mut diagnostics);
-            graylog::analyzed_field(node, ancestors, text, &mut diagnostics);
+        K::TermQuery if graylog => {
+            graylog::leading_wildcard(node, cx, &mut diagnostics);
+            graylog::analyzed_field(node, ancestors, cx, &mut diagnostics);
         }
-        "regexp_query" if graylog => {
-            graylog::analyzed_field(node, ancestors, text, &mut diagnostics);
+        K::RegexpQuery if graylog => {
+            graylog::analyzed_field(node, ancestors, cx, &mut diagnostics);
         }
-        "term" | "wildcard_term" | "phrase" | "range_term" => escapes(node, text, &mut diagnostics),
-        "fuzzy" => fuzziness(node, ancestors, text, dialect, &mut diagnostics),
-        "regexp" => regexp_body(node, ancestors, text, dialect, &mut diagnostics),
+        K::Term | K::WildcardTerm | K::Phrase | K::RangeTerm => escapes(node, cx, &mut diagnostics),
+        K::Fuzzy => fuzziness(node, ancestors, cx, dialect, &mut diagnostics),
+        K::Regexp => regexp_body(node, ancestors, cx, dialect, &mut diagnostics),
         _ => {}
     });
     if graylog {
-        graylog::double_backslash(text, &mut diagnostics);
+        graylog::double_backslash(cx, &mut diagnostics);
     }
-    if elastic && let Some(d) = looks_like_kuery(root, text, &diagnostics) {
+    if elastic && let Some(d) = looks_like_kuery(&tree, cx, &diagnostics) {
         diagnostics.push(d);
     }
     // The checks ran on the joined text, where every newline is a space:
     // move their ranges back onto the source's lines (same byte offsets).
     if !std::ptr::eq(text, source) {
+        let source_lines = LineIndex::new(source);
         for d in &mut diagnostics {
             let start = position_to_offset(text, d.range.start);
             let end = position_to_offset(text, d.range.end);
-            d.range = range(source, ByteSpan::new(start, end));
+            d.range = source_lines.range(ByteSpan::new(start, end));
         }
     }
-    let tokens = highlight(&spec, source);
+    let tokens = if std::ptr::eq(text, source) {
+        highlight(&spec, &tree.root, source)
+    } else {
+        highlight(&spec, &Tree::parse(source).root, source)
+    };
     AnalyzeResult {
         diagnostics,
         tokens,
     }
 }
 
-fn parse_error_message(err: Node, source: &str) -> String {
-    if err.is_missing() {
-        return format!("Lucene syntax error: missing `{}`", err.kind());
+/// The first syntax error, in words, and its span.
+fn parse_error(tree: &Tree, err: &opentide_parse::SyntaxError, source: &str) -> (String, ByteSpan) {
+    let at = usize::from(err.gap.start());
+    let point = |at: usize| ByteSpan::new(at, at + 1);
+    // An unclosed `"` or `/` where the error stands is what to fix, whatever
+    // the parser missed because of it (`message:"failed login`).
+    let next = source[at..]
+        .char_indices()
+        .find(|(_, c)| !c.is_whitespace())
+        .map(|(i, _)| at + i);
+    if let Some(unclosed) = next.and_then(|next| unclosed_at(tree, source, next)) {
+        return unclosed;
     }
-    let t = text(err, source);
-    // An unescaped `/` opens a regexp; without a closing `/` the lexer fails.
-    if let Some(rest) = t.strip_prefix('/') {
-        let glued = source[..err.start_byte()]
-            .chars()
-            .next_back()
-            .is_some_and(|c| !c.is_whitespace() && !matches!(c, '(' | ':'));
-        let word = rest.split_whitespace().next().unwrap_or("");
-        return if glued {
-            format!(
-                "`/` inside a value starts a Lucene regular expression that is never closed (`/{word}`); escape it as `\\/` or quote the value"
-            )
-        } else {
-            format!(
-                "`/` starts a Lucene regular expression that is never closed (`/{word}`); escape it as `\\/` or quote the value"
-            )
-        };
+    let missing = |what: &str| (format!("Lucene syntax error: missing `{what}`"), point(at));
+    match err.message.as_str() {
+        parser::MISSING_PAREN => return missing(")"),
+        parser::MISSING_TO => return missing("TO"),
+        parser::MISSING_CLOSE => {
+            // The bracket that would close the range: `]` for `[`, else `}`.
+            let open = source[..at].rfind(['[', '{']).map(|i| &source[i..=i]);
+            return missing(if open == Some("[") { "]" } else { "}" });
+        }
+        parser::MISSING_BOUND => {
+            return (
+                "Lucene syntax error: a range bound is missing (`[a TO b]`; `*` for an open end)"
+                    .into(),
+                point(at),
+            );
+        }
+        parser::MISSING_CLAUSE => {
+            let before = source[..at].trim_end();
+            let last = before.rsplit(char::is_whitespace).next().unwrap_or("");
+            // `foo:AND`: an operator where a value belongs.
+            let word = source[at..].split_whitespace().next().unwrap_or("");
+            if let Some(op) = ["AND", "OR", "NOT"]
+                .into_iter()
+                .find(|op| word.trim_end_matches(')') == *op)
+            {
+                let start = at + source[at..].find(op).unwrap_or(0);
+                return (
+                    format!(
+                        "Lucene syntax error: `{op}` is an operator, so a clause is missing after `{last}`; quote it (`\"{op}\"`) to search the word"
+                    ),
+                    ByteSpan::new(start, start + op.len()),
+                );
+            }
+            let message = if last.is_empty() {
+                "Lucene syntax error: a clause is missing".to_string()
+            } else {
+                format!("Lucene syntax error: a clause is missing after `{last}`")
+            };
+            return (message, point(at));
+        }
+        _ => {}
     }
-    match t.split_whitespace().next() {
+    // An unexpected token: the error node that starts where the gap ends.
+    let end = usize::from(err.gap.end());
+    let node = tree
+        .root
+        .descendants()
+        .find(|n| n.kind() == K::Error && usize::from(n.text_range().start()) >= end);
+    let span = node.map_or(point(end), |n| {
+        let r = n.text_range();
+        ByteSpan::new(
+            usize::from(r.start()),
+            usize::from(r.end()).max(usize::from(r.start()) + 1),
+        )
+    });
+    if let Some(unclosed) = unclosed_at(tree, source, span.start) {
+        return unclosed;
+    }
+    let t = source.get(span.start..span.end).unwrap_or("");
+    let message = match t.split_whitespace().next() {
         Some(first) => format!("Lucene syntax error near `{first}`"),
         None => "Lucene syntax error".into(),
+    };
+    (message, span)
+}
+
+/// The message for a `"` or `/` at byte `at` that the lexer could not close
+/// (an error token there), and its span: from it to the end of the query.
+fn unclosed_at(tree: &Tree, source: &str, at: usize) -> Option<(String, ByteSpan)> {
+    let offset = rowan::TextSize::from(u32::try_from(at).ok()?);
+    let token = tree.root.token_at_offset(offset).right_biased()?;
+    if token.kind() != K::ErrorToken || token.text_range().start() != offset {
+        return None;
     }
+    let span = ByteSpan::new(at, source.len().max(at + 1));
+    if token.text() == "\"" {
+        return Some((
+            "Lucene syntax error: a quoted phrase is never closed".into(),
+            span,
+        ));
+    }
+    // An unescaped `/` opens a regexp; without a closing `/` the lexer fails.
+    if token.text() != "/" {
+        return None;
+    }
+    let word = source[at + 1..].split_whitespace().next().unwrap_or("");
+    let glued = source[..at]
+        .chars()
+        .next_back()
+        .is_some_and(|c| !c.is_whitespace() && !matches!(c, '(' | ':'));
+    let message = if glued {
+        format!(
+            "`/` inside a value starts a Lucene regular expression that is never closed (`/{word}`); escape it as `\\/` or quote the value"
+        )
+    } else {
+        format!(
+            "`/` starts a Lucene regular expression that is never closed (`/{word}`); escape it as `\\/` or quote the value"
+        )
+    };
+    Some((message, span))
 }
 
 /// A bare `and`, `or`, or `not` term between two clauses.
-fn lowercase_operators(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let mut cursor = node.walk();
-    let items: Vec<Node> = node.named_children(&mut cursor).collect();
+fn lowercase_operators(node: &Node, cx: Cx<'_>, out: &mut Vec<Diagnostic>) {
+    let source = cx.source;
+    let items = node.children();
     for (i, item) in items.iter().enumerate() {
-        if i == 0 || i + 1 == items.len() || item.kind() != "term_query" {
+        if i == 0 || i + 1 == items.len() || item.kind() != K::TermQuery {
             continue;
         }
-        let word = text(*item, source);
+        let word = item.text(source);
         let upper = word.to_ascii_uppercase();
         if matches!(upper.as_str(), "AND" | "OR" | "NOT") && word != upper {
             out.push(
@@ -225,7 +315,7 @@ fn lowercase_operators(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
                     format!(
                         "`{word}` is a search term in Lucene, not an operator; operators are upper case (`{upper}`)"
                     ),
-                    range(source, node_span(*item)),
+                    cx.range(item.span()),
                 )
                 .with_suggestion(upper),
             );
@@ -235,61 +325,55 @@ fn lowercase_operators(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
 
 /// `a OR b AND c` is `a +b +c`: Lucene marks clauses pairwise and has no
 /// precedence, so mixing the two at one level is never what it looks like.
-fn mixed_operators(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let mut cursor = node.walk();
-    let ops: Vec<Node> = node
-        .children_by_field_name("operator", &mut cursor)
-        .collect();
-    let has_and = ops.iter().any(|o| o.kind() == "and");
-    let has_or = ops.iter().any(|o| o.kind() == "or");
+fn mixed_operators(node: &Node, cx: Cx<'_>, out: &mut Vec<Diagnostic>) {
+    let ops = node.operators();
+    let has_and = ops.iter().any(|o| o.kind() == K::And);
+    let has_or = ops.iter().any(|o| o.kind() == K::Or);
     if has_and && has_or {
-        let first_or = ops
-            .iter()
-            .find(|o| o.kind() == "or")
-            .copied()
-            .unwrap_or(node);
+        let first_or = ops.iter().find(|o| o.kind() == K::Or).unwrap_or(node);
         out.push(Diagnostic::warning(
             codes::LUCENE_MIXED_OPERATORS,
             "Lucene has no AND/OR precedence (`a OR b AND c` means `a +b +c`); add parentheses",
-            range(source, node_span(first_or)),
+            cx.range(first_or.span()),
         ));
     }
 }
 
 /// `field >= 10` is KQL. In Lucene it is three terms; write `field:>=10`.
-fn kuery_ranges(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let mut cursor = node.walk();
-    let items: Vec<Node> = node.named_children(&mut cursor).collect();
+fn kuery_ranges(node: &Node, cx: Cx<'_>, out: &mut Vec<Diagnostic>) {
+    let source = cx.source;
+    let items = node.children();
     for pair in items.windows(2) {
-        let op = text(pair[1], source);
-        if pair[0].kind() == "term_query"
-            && pair[1].kind() == "term_query"
+        let op = pair[1].text(source);
+        if pair[0].kind() == K::TermQuery
+            && pair[1].kind() == K::TermQuery
             && matches!(op, "<" | "<=" | ">" | ">=")
         {
             out.push(Diagnostic::warning(
                 codes::LUCENE_KUERY_SYNTAX,
                 format!(
                     "`{} {op}` is KQL; Lucene searches `{op}` as a term. Write `{}:{op}value`",
-                    text(pair[0], source),
-                    text(pair[0], source)
+                    pair[0].text(source),
+                    pair[0].text(source)
                 ),
-                range(source, node_span(pair[1])),
+                cx.range(pair[1].span()),
             ));
         }
     }
 }
 
-fn field_wildcard(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
+fn field_wildcard(node: &Node, cx: Cx<'_>, out: &mut Vec<Diagnostic>) {
+    let source = cx.source;
     if node
-        .named_child(0)
-        .is_some_and(|c| c.kind() == "wildcard_term")
+        .first_child()
+        .is_some_and(|c| c.kind() == K::WildcardTerm)
     {
-        let name = text(node, source);
+        let name = node.text(source);
         out.push(
             Diagnostic::error(
                 codes::LUCENE_PARSE_ERROR,
                 "Lucene rejects `*` or `?` in a field name; escape it (`book.\\*:`)",
-                range(source, node_span(node)),
+                cx.range(node.span()),
             )
             .with_suggestion(name.replace('*', "\\*").replace('?', "\\?")),
         );
@@ -298,17 +382,18 @@ fn field_wildcard(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
 
 /// Lucene's range lexer splits bounds on a space only: `[1 TO<newline>5]`
 /// reads `TO<newline>5` as one bound and fails.
-fn range_whitespace(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
+fn range_whitespace(node: &Node, cx: Cx<'_>, out: &mut Vec<Diagnostic>) {
+    let source = cx.source;
     let mut in_phrase = false;
-    for (i, c) in text(node, source).char_indices() {
+    for (i, c) in node.text(source).char_indices() {
         match c {
             '"' => in_phrase = !in_phrase,
             '\t' | '\n' | '\r' if !in_phrase => {
-                let at = node.start_byte() + i;
+                let at = node.start() + i;
                 out.push(Diagnostic::error(
                     codes::LUCENE_PARSE_ERROR,
                     "Lucene allows only spaces inside a range; a tab or newline joins `TO` to a bound",
-                    range(source, ByteSpan::new(at, at + 1)),
+                    cx.range(ByteSpan::new(at, at + 1)),
                 ));
                 return;
             }
@@ -319,10 +404,11 @@ fn range_whitespace(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
 
 /// `\uXXXX` needs four hex digits; any other single backslash is dropped, so
 /// `"C:\Windows"` searches `C:Windows`.
-fn escapes(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let t = text(node, source);
+fn escapes(node: &Node, cx: Cx<'_>, out: &mut Vec<Diagnostic>) {
+    let source = cx.source;
+    let t = node.text(source);
     let bytes = t.as_bytes();
-    let phrase = node.kind() == "phrase";
+    let phrase = node.kind() == K::Phrase;
     let mut i = 0;
     while i + 1 < bytes.len() {
         if bytes[i] != b'\\' {
@@ -330,14 +416,14 @@ fn escapes(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
             continue;
         }
         let next = bytes[i + 1];
-        let at = node.start_byte() + i;
+        let at = node.start() + i;
         if next == b'u' {
             let hex = t.get(i + 2..i + 6).unwrap_or("");
             if hex.len() < 4 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
                 out.push(Diagnostic::error(
                     codes::LUCENE_ESCAPE,
                     "`\\u` must be followed by four hex digits; Lucene rejects the query. Write `\\\\u` for a literal backslash",
-                    range(source, ByteSpan::new(at, at + 2)),
+                    cx.range(ByteSpan::new(at, at + 2)),
                 ));
                 return;
             }
@@ -349,7 +435,7 @@ fn escapes(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
                         "Lucene drops a single backslash: `\\{}` searches `{}`. Write `\\\\` for a literal backslash",
                         next as char, next as char
                     ),
-                    range(source, ByteSpan::new(at, at + 2)),
+                    cx.range(ByteSpan::new(at, at + 2)),
                 )
                 .with_suggestion(format!("\\\\{}", next as char)),
             );
@@ -360,11 +446,11 @@ fn escapes(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
     // A range bound is taken up to the next space, so `[a\ TO b]` leaves a
     // bound that ends in a backslash, which Lucene rejects.
     if i + 1 == bytes.len() && bytes[i] == b'\\' {
-        let at = node.start_byte() + i;
+        let at = node.start() + i;
         out.push(Diagnostic::error(
             codes::LUCENE_ESCAPE,
             "a value cannot end with a lone backslash; Lucene rejects the query. Write `\\\\` for a literal backslash",
-            range(source, ByteSpan::new(at, at + 1)),
+            cx.range(ByteSpan::new(at, at + 1)),
         ));
     }
 }
@@ -372,30 +458,24 @@ fn escapes(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
 /// `f:v w`: `w` has no field. Elasticsearch searches it in every field
 /// (`index.query.default_field`); Carbon Black searches its default fields
 /// and, with its default operator, requires it.
-fn bare_terms(node: Node, source: &str, dialect: Dialect, out: &mut Vec<Diagnostic>) {
-    let mut cursor = node.walk();
-    let children: Vec<Node> = node.children(&mut cursor).collect();
+fn bare_terms(node: &Node, cx: Cx<'_>, dialect: Dialect, out: &mut Vec<Diagnostic>) {
+    let source = cx.source;
+    let children = node.children();
     for pair in children.windows(2) {
-        let (prev, item) = (pair[0], pair[1]);
-        if prev.kind() != "field_query" || !matches!(item.kind(), "term_query" | "phrase_query") {
+        let (prev, item) = (&pair[0], &pair[1]);
+        if prev.kind() != K::FieldQuery || !matches!(item.kind(), K::TermQuery | K::PhraseQuery) {
             continue;
         }
-        let word = text(item, source);
+        let word = item.text(source);
         let upper = word.to_ascii_uppercase();
         if matches!(upper.as_str(), "AND" | "OR" | "NOT")
             || matches!(word, "<" | "<=" | ">" | ">=")
-            || source[prev.end_byte()..item.start_byte()].is_empty()
+            || source[prev.end()..item.start()].is_empty()
         {
             continue;
         }
-        let field = prev
-            .child_by_field_name("field")
-            .map(|f| text(f, source))
-            .unwrap_or("");
-        let value = prev
-            .child_by_field_name("query")
-            .map(|q| text(q, source))
-            .unwrap_or("");
+        let field = prev.field().map_or("", |f| f.text(source));
+        let value = prev.query().map_or("", |q| q.text(source));
         let (severity, place) = match dialect {
             Dialect::Elastic => (Severity::Hint, "Elasticsearch searches it in every field"),
             Dialect::Graylog => (Severity::Hint, "Graylog searches it in every field"),
@@ -409,7 +489,7 @@ fn bare_terms(node: Node, source: &str, dialect: Dialect, out: &mut Vec<Diagnost
             format!(
                 "`{word}` has no field, so {place}; to search `{field}` for both, write `{field}:({value} {word})`"
             ),
-            range(source, node_span(item)),
+            cx.range(item.span()),
         );
         d.severity = severity;
         out.push(d);
@@ -418,30 +498,30 @@ fn bare_terms(node: Node, source: &str, dialect: Dialect, out: &mut Vec<Diagnost
 
 /// `/x/` glued to a term (`a/b/c`, `path:/var/log`): an unescaped `/`
 /// starts a regexp, so the value splits into clauses.
-fn glued_regexps(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let mut cursor = node.walk();
-    let children: Vec<Node> = node.children(&mut cursor).collect();
+fn glued_regexps(node: &Node, cx: Cx<'_>, out: &mut Vec<Diagnostic>) {
+    let source = cx.source;
+    let children = node.children();
     for (i, item) in children.iter().enumerate() {
         let regexp = match item.kind() {
-            "regexp_query" => *item,
-            "field_query" => match item.child_by_field_name("query") {
-                Some(q) if q.kind() == "regexp_query" => q,
+            K::RegexpQuery => item.clone(),
+            K::FieldQuery => match item.query() {
+                Some(q) if q.kind() == K::RegexpQuery => q,
                 _ => continue,
             },
             _ => continue,
         };
-        let before = i > 0 && children[i - 1].end_byte() == item.start_byte();
+        let before = i > 0 && children[i - 1].end() == item.start();
         let after = children
             .get(i + 1)
-            .is_some_and(|n| n.start_byte() == regexp.end_byte());
+            .is_some_and(|n| n.start() == regexp.end());
         if before || after {
             out.push(Diagnostic::warning(
                 codes::LUCENE_UNESCAPED_SLASH,
                 format!(
                     "`{}` is read as a regular expression because `/` is unescaped, so the value splits into separate clauses; escape the slashes (`\\/`) or quote the value",
-                    text(regexp, source)
+                    regexp.text(source)
                 ),
-                range(source, node_span(regexp)),
+                cx.range(regexp.span()),
             ));
         }
     }
@@ -450,12 +530,13 @@ fn glued_regexps(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
 /// `f:> 10`: Elasticsearch's one-sided range needs the value right after
 /// the operator. With a space, `f` is searched for the text `>` (and `>=`
 /// becomes a range from `=`), and `10` is searched in every field.
-fn range_operator(node: Node, source: &str, dialect: Dialect, out: &mut Vec<Diagnostic>) {
-    let Some(query) = node.child_by_field_name("query") else {
+fn range_operator(node: &Node, cx: Cx<'_>, dialect: Dialect, out: &mut Vec<Diagnostic>) {
+    let source = cx.source;
+    let Some(query) = node.query() else {
         return;
     };
-    let op = text(query, source);
-    if query.kind() != "term_query" {
+    let op = query.text(source);
+    if query.kind() != K::TermQuery {
         return;
     }
     if dialect == Dialect::CarbonBlack {
@@ -464,9 +545,9 @@ fn range_operator(node: Node, source: &str, dialect: Dialect, out: &mut Vec<Diag
                 codes::LUCENE_ELASTICSEARCH_ONLY,
                 format!(
                     "`{}` is Elasticsearch's one-sided range; Carbon Black searches `{op}` as text. Use `[a TO *]`",
-                    text(node, source)
+                    node.text(source)
                 ),
-                range(source, node_span(query)),
+                cx.range(query.span()),
             ));
         }
         return;
@@ -474,13 +555,10 @@ fn range_operator(node: Node, source: &str, dialect: Dialect, out: &mut Vec<Diag
     if !matches!(op, "<" | "<=" | ">" | ">=") {
         return;
     }
-    let field = node
-        .child_by_field_name("field")
-        .map(|f| text(f, source))
-        .unwrap_or("");
+    let field = node.field().map_or("", |f| f.text(source));
     let next = node
         .next_sibling()
-        .filter(|n| n.kind() == "term_query" && source[node.end_byte()..n.start_byte()] == *" ");
+        .filter(|n| n.kind() == K::TermQuery && source[node.end()..n.start()] == *" ");
     let mut d = Diagnostic::warning(
         codes::LUCENE_RANGE_OPERATOR,
         format!(
@@ -491,19 +569,20 @@ fn range_operator(node: Node, source: &str, dialect: Dialect, out: &mut Vec<Diag
                 ""
             }
         ),
-        range(source, node_span(query)),
+        cx.range(query.span()),
     );
     if let Some(next) = next {
-        d.range = range(source, ByteSpan::new(query.start_byte(), next.end_byte()));
-        d = d.with_suggestion(format!("{op}{}", text(next, source)));
+        d.range = cx.range(ByteSpan::new(query.start(), next.end()));
+        d = d.with_suggestion(format!("{op}{}", next.text(source)));
     }
     out.push(d);
 }
 
 /// `_exists_` and escaped wildcards in field names are Elasticsearch
 /// extensions; Carbon Black reads them literally.
-fn elasticsearch_field_syntax(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let name = text(node, source);
+fn elasticsearch_field_syntax(node: &Node, cx: Cx<'_>, out: &mut Vec<Diagnostic>) {
+    let source = cx.source;
+    let name = node.text(source);
     let message = if name == "_exists_" {
         "`_exists_:field` is Elasticsearch syntax; Carbon Black searches a field named `_exists_`. Use `field:*`"
     } else if name.contains("\\*") || name.contains("\\?") {
@@ -514,7 +593,7 @@ fn elasticsearch_field_syntax(node: Node, source: &str, out: &mut Vec<Diagnostic
     out.push(Diagnostic::warning(
         codes::LUCENE_ELASTICSEARCH_ONLY,
         message,
-        range(source, node_span(node)),
+        cx.range(node.span()),
     ));
 }
 
@@ -522,28 +601,29 @@ fn elasticsearch_field_syntax(node: Node, source: &str, out: &mut Vec<Diagnostic
 /// `AUTO`; anything else fails the query. Lucene itself clamps `~3` to 2
 /// and reads `~0.5` as a similarity, which is what Carbon Black's Solr does.
 fn fuzziness(
-    node: Node,
+    node: &Node,
     ancestors: &[Node],
-    source: &str,
+    cx: Cx<'_>,
     dialect: Dialect,
     out: &mut Vec<Diagnostic>,
 ) {
+    let source = cx.source;
     // Phrase slop (`"a b"~3`) is a proximity, not an edit distance.
-    if ancestors.last().is_none_or(|p| p.kind() != "term_query") {
+    if ancestors.last().is_none_or(|p| p.kind() != K::TermQuery) {
         return;
     }
-    let slop = &text(node, source)[1..];
+    let slop = &node.text(source)[1..];
     if slop.is_empty() {
         return;
     }
-    let span = node_span(node);
+    let span = node.span();
     match dialect {
         Dialect::Elastic | Dialect::Graylog => {
             if let Some(message) = elastic_fuzziness_error(slop) {
                 out.push(Diagnostic::error(
                     codes::LUCENE_FUZZY,
                     message,
-                    range(source, span),
+                    cx.range(span),
                 ));
             }
         }
@@ -563,7 +643,7 @@ fn fuzziness(
             out.push(Diagnostic::warning(
                 codes::LUCENE_FUZZY,
                 message,
-                range(source, span),
+                cx.range(span),
             ));
         }
     }
@@ -644,29 +724,30 @@ fn java_float(s: &str) -> JavaFloat {
 
 /// Whether a node with these ancestors sits under a `field:` clause.
 fn has_field(ancestors: &[Node]) -> bool {
-    ancestors.iter().any(|n| n.kind() == "field_query")
+    ancestors.iter().any(|n| n.kind() == K::FieldQuery)
 }
 
 /// The body of `/.../`, checked as Lucene's `RegExp` the way Elasticsearch
 /// compiles it.
 fn regexp_body(
-    node: Node,
+    node: &Node,
     ancestors: &[Node],
-    source: &str,
+    cx: Cx<'_>,
     dialect: Dialect,
     out: &mut Vec<Diagnostic>,
 ) {
-    let t = text(node, source);
+    let source = cx.source;
+    let t = node.text(source);
     if t.len() < 2 {
         return;
     }
     let body = &t[1..t.len() - 1];
-    let start = node.start_byte() + 1;
+    let start = node.start() + 1;
     let at_char = |at: usize| {
         let b = body.char_indices().nth(at).map_or(body.len(), |(b, _)| b);
         let width = body[b..].chars().next().map_or(1, char::len_utf8);
         if b >= body.len() {
-            node_span(node)
+            node.span()
         } else {
             ByteSpan::new(start + b, start + b + width)
         }
@@ -683,7 +764,7 @@ fn regexp_body(
         let mut d = Diagnostic::error(
             code,
             finding.message.clone(),
-            range(source, ByteSpan::new(at, at + finding.len)),
+            cx.range(ByteSpan::new(at, at + finding.len)),
         );
         d.severity = severity;
         out.push(d);
@@ -699,7 +780,7 @@ fn regexp_body(
         if dialect == Dialect::CarbonBlack && !problem.syntax {
             continue;
         }
-        let span = problem.at.map_or_else(|| node_span(node), at_char);
+        let span = problem.at.map_or_else(|| node.span(), at_char);
         // Without a field, `query_string` searches every field (`*`), which
         // Elasticsearch runs leniently: the term matches nothing instead of
         // failing the query. Graylog's validator compiles every regex, so
@@ -713,7 +794,7 @@ fn regexp_body(
                 problem.message
             )
         };
-        let mut d = Diagnostic::error(codes::LUCENE_REGEXP, message, range(source, span));
+        let mut d = Diagnostic::error(codes::LUCENE_REGEXP, message, cx.range(span));
         d.severity = match dialect {
             Dialect::Elastic | Dialect::Graylog if fielded => problem.severity,
             Dialect::Elastic | Dialect::Graylog | Dialect::CarbonBlack => Severity::Warning,
@@ -731,7 +812,7 @@ fn regexp_body(
             push_body(f, codes::GRAYLOG_REGEX_QUOTE, Severity::Warning, out);
         }
     }
-    regexp_pcre_habits(body, start, source, dialect, out);
+    regexp_pcre_habits(body, start, cx, dialect, out);
 }
 
 /// Valid Lucene, but not what a PCRE author meant: `(?:`, `(?i)`, and the
@@ -741,7 +822,7 @@ fn regexp_body(
 fn regexp_pcre_habits(
     body: &str,
     start: usize,
-    source: &str,
+    cx: Cx<'_>,
     dialect: Dialect,
     out: &mut Vec<Diagnostic>,
 ) {
@@ -787,7 +868,7 @@ fn regexp_pcre_habits(
         }
         i += 1;
     }
-    let span = |b: usize, len: usize| range(source, ByteSpan::new(start + b, start + b + len));
+    let span = |b: usize, len: usize| cx.range(ByteSpan::new(start + b, start + b + len));
     // Graylog reports `(?…)` as `graylog_regex_unsupported`.
     if let Some(b) = group.filter(|_| dialect != Dialect::Graylog) {
         out.push(Diagnostic::warning(
@@ -820,7 +901,9 @@ fn regexp_pcre_habits(
 
 /// Lucene text that reads like Kibana KQL. One sign can be a coincidence; two
 /// different kinds of KQL syntax are a rule written for `language: kuery`.
-fn looks_like_kuery(root: Node, source: &str, found: &[Diagnostic]) -> Option<Diagnostic> {
+fn looks_like_kuery(tree: &Tree, cx: Cx<'_>, found: &[Diagnostic]) -> Option<Diagnostic> {
+    let source = cx.source;
+    let root = tree.root();
     let mut signals: Vec<&str> = Vec::new();
     let has = |code: &str| found.iter().any(|d| d.code == code);
     if has(codes::LUCENE_LOWERCASE_OPERATOR) {
@@ -830,24 +913,23 @@ fn looks_like_kuery(root: Node, source: &str, found: &[Diagnostic]) -> Option<Di
         signals.push("`field >= value` ranges");
     }
     // A leading lower-case `not` is a term to Lucene, an operator to KQL.
-    let first = root.named_child(0).map(|n| {
-        if n.kind() == "boolean_query" {
-            n.named_child(0).unwrap_or(n)
+    let top = root.first_child();
+    let first = top.clone().map(|n| {
+        if n.kind() == K::BooleanQuery {
+            n.first_child().unwrap_or(n)
         } else {
             n
         }
     });
-    if first
-        .is_some_and(|n| n.kind() == "term_query" && text(n, source).eq_ignore_ascii_case("not"))
-        && root
-            .named_child(0)
-            .is_some_and(|n| n.kind() == "boolean_query")
+    if first.is_some_and(|n| n.kind() == K::TermQuery && n.text(source).eq_ignore_ascii_case("not"))
+        && top.is_some_and(|n| n.kind() == K::BooleanQuery)
     {
         signals.push("a leading `not`");
     }
     // Lucene rejects the text, and Kibana's KQL grammar accepts it.
-    if root.has_error()
-        && ts_parse(LanguageId::Kuery, source).is_some_and(|t| !t.root_node().has_error())
+    if tree.has_error()
+        && opentide_syntax::parse(LanguageId::Kuery, source)
+            .is_some_and(|t| !opentide_syntax::has_error(&t))
     {
         signals.push("text only KQL parses");
     }
@@ -859,42 +941,74 @@ fn looks_like_kuery(root: Node, source: &str, found: &[Diagnostic]) -> Option<Di
                 "this query reads like Kibana KQL ({}); if it is an Elastic rule, set `language: kuery`",
                 signals.join(", ")
             ),
-            range(source, ByteSpan::new(0, source.len())),
+            cx.range(ByteSpan::new(0, source.len())),
         )
     })
 }
 
-fn range(source: &str, span: ByteSpan) -> Range {
-    span_to_range(source, span)
+/// What every check reads: the text and its line index (one per analysis,
+/// so converting a span is a binary search, not a scan from the start).
+#[derive(Clone, Copy)]
+pub(crate) struct Cx<'a> {
+    pub(crate) source: &'a str,
+    pub(crate) lines: &'a LineIndex<'a>,
 }
 
-fn text<'a>(node: Node, source: &'a str) -> &'a str {
-    source.get(node.start_byte()..node.end_byte()).unwrap_or("")
+impl Cx<'_> {
+    pub(crate) fn range(self, span: ByteSpan) -> Range {
+        self.lines.range(span)
+    }
 }
 
-fn highlight(spec: &HighlightSpec, source: &str) -> Vec<HighlightToken> {
-    let Ok(spans) = opentide_syntax::query_captures(
-        LanguageId::Lucene,
-        source,
-        opentide_highlight::LUCENE_HIGHLIGHTS_SCM,
-    ) else {
-        return Vec::new();
-    };
-    let refs: Vec<(ByteSpan, &str)> = spans.iter().map(|(s, c)| (*s, c.as_str())).collect();
-    tokens_from_spans(spec, source, &refs).unwrap_or_default()
+/// The HighlightSpec capture of a token: `highlights/queries/lucene/
+/// highlights.scm` as a match on kinds (a field name's token first, then
+/// what a token is, then what its node is).
+fn capture(token: &rowan::SyntaxToken<syntax::Lucene>) -> Option<&'static str> {
+    let parent = token.parent().map(|p| p.kind());
+    if parent == Some(K::FieldName) {
+        return Some("property");
+    }
+    Some(match (token.kind(), parent) {
+        (K::Star | K::Colon, _)
+        | (K::Plus, Some(K::Required))
+        | (K::Minus, Some(K::Prohibited)) => "operator",
+        (K::RangeTerm | K::Boost | K::Fuzzy, _) => "number",
+        (K::Regexp | K::Phrase | K::WildcardTerm | K::BareOperator | K::Term, _) => "string",
+        (K::AndKw | K::AmpAmp, Some(K::And))
+        | (K::OrKw | K::PipePipe, Some(K::Or))
+        | (K::NotKw | K::Bang, Some(K::Not))
+        | (K::ToKw, _) => "keyword",
+        (K::LParen | K::RParen | K::LBracket | K::RBracket | K::LBrace | K::RBrace, _) => {
+            "punctuation.bracket"
+        }
+        _ => return None,
+    })
+}
+
+fn highlight(spec: &HighlightSpec, root: &syntax::SyntaxNode, source: &str) -> Vec<HighlightToken> {
+    let spans: Vec<(ByteSpan, &str)> = root
+        .descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .filter_map(|t| {
+            let r = t.text_range();
+            Some((
+                ByteSpan::new(usize::from(r.start()), usize::from(r.end())),
+                capture(&t)?,
+            ))
+        })
+        .collect();
+    tokens_from_spans(spec, source, &spans).unwrap_or_default()
 }
 
 /// Field names a query mentions, for completion.
 pub fn fields(source: &str) -> Vec<String> {
-    let Some(tree) = ts_parse(LanguageId::Lucene, source) else {
-        return Vec::new();
-    };
-    let mut names = std::collections::BTreeSet::new();
-    walk(tree.root_node(), |node| {
-        if node.kind() == "field_name" && !node.has_error() {
-            names.insert(text(node, source).to_string());
-        }
-    });
+    let tree = Tree::parse(source);
+    let names: std::collections::BTreeSet<String> = tree
+        .root
+        .descendants()
+        .filter(|n| n.kind() == K::FieldName)
+        .map(|n| n.text().to_string())
+        .collect();
     names.into_iter().collect()
 }
 
@@ -931,15 +1045,15 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
     if !source.is_char_boundary(offset) {
         return None;
     }
-    let tree = ts_parse(LanguageId::Lucene, source)?;
-    let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
-    let word = text(node, source);
-    if node.kind() == "boost" {
+    let tree = Tree::parse(source);
+    let node = tree.root().at_offset(offset)?;
+    let word = node.text(source);
+    if node.kind() == K::Boost {
         return Some(format!(
             "**`^`** boost\n\nRaises the clause's relevance weight.\n\n[Elastic docs]({SYNTAX_DOCS})"
         ));
     }
-    if node.kind() == "fuzzy" {
+    if node.kind() == K::Fuzzy {
         return Some(format!(
             "**`~`** fuzzy or proximity\n\nAfter a term, edit distance; after a phrase, word slop.\n\n[Elastic docs]({SYNTAX_DOCS})"
         ));
@@ -960,33 +1074,31 @@ pub fn hover_dialect(source: &str, offset: usize, dialect: Dialect) -> Option<St
     }
     if dialect == Dialect::Graylog {
         let offset = offset.min(source.len());
-        if let Some(tree) = ts_parse(LanguageId::Lucene, source) {
-            let mut node = tree.root_node().descendant_for_byte_range(offset, offset);
-            while let Some(n) = node {
-                if n.kind() == "field_name" {
-                    if let Some(docs) = graylog::field_docs(text(n, source)) {
-                        return Some(docs);
-                    }
-                    break;
+        let tree = Tree::parse(source);
+        let mut node = tree.root().at_offset(offset);
+        while let Some(n) = node {
+            if n.kind() == K::FieldName {
+                if let Some(docs) = graylog::field_docs(n.text(source)) {
+                    return Some(docs);
                 }
-                node = n.parent();
+                break;
             }
+            node = n.parent();
         }
     }
     if dialect == Dialect::CarbonBlack {
         let offset = offset.min(source.len());
-        if let Some(tree) = ts_parse(LanguageId::Lucene, source) {
-            // A field name is a `term` (or a wildcard) under `field_name`.
-            let mut node = tree.root_node().descendant_for_byte_range(offset, offset);
-            while let Some(n) = node {
-                if n.kind() == "field_name" {
-                    if let Some(f) = carbon_black::field(text(n, source)) {
-                        return Some(carbon_black::markdown(f));
-                    }
-                    break;
+        let tree = Tree::parse(source);
+        // A field name is a `term` (or a wildcard) under `field_name`.
+        let mut node = tree.root().at_offset(offset);
+        while let Some(n) = node {
+            if n.kind() == K::FieldName {
+                if let Some(f) = carbon_black::field(n.text(source)) {
+                    return Some(carbon_black::markdown(f));
                 }
-                node = n.parent();
+                break;
             }
+            node = n.parent();
         }
     }
     hover(source, offset)

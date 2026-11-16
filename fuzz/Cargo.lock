@@ -2983,7 +2983,6 @@ dependencies = [
  "serde",
  "strsim",
  "toml",
- "tree-sitter",
 ]
 
 [[package]]

@@ -186,10 +186,71 @@ pub fn sources() -> Vec<Source> {
     for q in BROKEN {
         add("broken", (*q).to_owned());
     }
+    for q in generated() {
+        add("generated", q);
+    }
     texts
         .into_iter()
         .map(|(name, text)| Source { name, text })
         .collect()
+}
+
+/// Clauses of every construct the corpus uses, valid each on its own.
+const CLAUSES: &[&str] = &[
+    "a:1",
+    "process.name:\"cmd.exe\"",
+    "bytes:[100 TO 200}",
+    "n:{* TO 5]",
+    "x:(a OR b)",
+    "x:(a AND NOT b)",
+    "+a:1",
+    "-b:2",
+    "!c",
+    "NOT d:e",
+    "f:*",
+    "w:a*b?",
+    "r:/a.*b/",
+    "/x[0-9]+/",
+    "t:term~1",
+    "p:\"a b\"~2",
+    "b:x^2",
+    "(g:1 h:2)^3",
+    "e:a\\:b",
+    "_exists_:host",
+    "free",
+    "\"quoted text\"",
+    "u:\\u00e9",
+    "&&",
+    "path:C\\:\\Windows",
+    "message:and",
+];
+
+/// Valid queries composed from [`CLAUSES`]: every pair joined by each
+/// operator (or none), and triples with the first two grouped, so the
+/// differential reaches past the corpus.
+fn generated() -> Vec<String> {
+    let ops = [
+        " AND ",
+        " OR ",
+        " ",
+        " && ",
+        " || ",
+        " AND NOT ",
+        "\t",
+        "\n",
+    ];
+    let mut out = Vec::new();
+    for (i, a) in CLAUSES.iter().enumerate() {
+        for (j, b) in CLAUSES.iter().enumerate() {
+            let op = ops[(i + j) % ops.len()];
+            out.push(format!("{a}{op}{b}"));
+            let c = CLAUSES[(i * 7 + j * 3) % CLAUSES.len()];
+            let op2 = ops[(i * 5 + j) % ops.len()];
+            out.push(format!("({a}{op}{b}){op2}{c}"));
+            out.push(format!("f:({a}{op2}{c})"));
+        }
+    }
+    out
 }
 
 /// Token byte ranges: runs of word characters, or one punctuation character
