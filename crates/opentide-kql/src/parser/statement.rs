@@ -45,12 +45,27 @@ pub(super) fn let_value(p: &mut P<'_>) {
     }
     if p.current() == K::L_PAREN && p.nth(p.after_group(0)) == K::L_BRACE {
         function_definition(p);
+    } else if names_dynamic(p) {
+        // `let t = dynamic;`, `let t = (dynamic | take 1);`: a `let` value is
+        // no table named `dynamic` or `toscalar`, as in the old grammar (full
+        // differential, seed 3); read as the expression it starts, an error.
+        expr::expr(p);
     } else if is_tabular(p) {
         tabular::tabular_expression(p);
     } else {
         expr::expr(p);
     }
     p.exit();
+}
+
+/// Whether the value starts, past its opening parentheses, with `dynamic` or
+/// `toscalar` that open no literal or call.
+fn names_dynamic(p: &P<'_>) -> bool {
+    let mut n = 0;
+    while p.nth(n) == K::L_PAREN {
+        n += 1;
+    }
+    matches!(p.nth(n), K::DYNAMIC_KW | K::TOSCALAR_KW) && p.nth(n + 1) != K::L_PAREN
 }
 
 /// Whether the value that starts here is a tabular expression.

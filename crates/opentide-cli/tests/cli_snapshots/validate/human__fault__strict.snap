@@ -65,12 +65,12 @@ exit: 1
 ␛[34m   │␛[0m
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the template in .opentide/templates/ shows the field and its values
 
-␛[1m␛[31merror[kql_parse_error]␛[0m␛[1m: KQL syntax error␛[0m
-   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/covert-exfiltration-rule-0157.yaml␛\objects/rules/covert-exfiltration-rule-0157.yaml:45:31␛]8;;␛\
+␛[1m␛[31merror[kql_parse_error]␛[0m␛[1m: KQL syntax error: expected a name␛[0m
+   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/covert-exfiltration-rule-0157.yaml␛\objects/rules/covert-exfiltration-rule-0157.yaml:45:33␛]8;;␛\
 ␛[34m   │␛[0m
 ␛[34m44 │␛[0m     query: |
 ␛[34m45 │␛[0m       search ␛[35min␛[0m (SecurityEvent, ␛[35m*␛[0m) ␛[32m"error"␛[0m
-␛[34m   │␛[0m                               ␛[1m␛[31m━━━␛[0m
+␛[34m   │␛[0m                                 ␛[1m␛[31m━␛[0m
 ␛[34m   │␛[0m
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the KQL reference: https://learn.microsoft.com/kusto/query/
 
@@ -110,12 +110,12 @@ exit: 1
 ␛[34m   │␛[0m
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m try: "cannot run"
 
-␛[1m␛[31merror[kql_parse_error]␛[0m␛[1m: KQL syntax error␛[0m
-   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/covert-tunnel-rule-0170.yaml␛\objects/rules/covert-tunnel-rule-0170.yaml:49:7␛]8;;␛\
+␛[1m␛[31merror[kql_parse_error]␛[0m␛[1m: KQL syntax error: expected a name␛[0m
+   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/covert-tunnel-rule-0170.yaml␛\objects/rules/covert-tunnel-rule-0170.yaml:49:13␛]8;;␛\
 ␛[34m   │␛[0m
 ␛[34m48 │␛[0m     query: |
-␛[34m49 │␛[0m       union ␛[35m*␛[0m ␛[1m␛[35m|␛[0m take ␛[33m1␛[0m
-␛[34m   │␛[0m       ␛[1m␛[31m━━━━━━━━━━━━━━━━␛[0m
+␛[34m49 │␛[0m       ␛[1m␛[35munion␛[0m ␛[35m*␛[0m ␛[1m␛[35m|␛[0m take ␛[33m1␛[0m
+␛[34m   │␛[0m             ␛[1m␛[31m━␛[0m
 ␛[34m   │␛[0m
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the KQL reference: https://learn.microsoft.com/kusto/query/
 
@@ -236,12 +236,12 @@ exit: 1
 ␛[34m9 │␛[0m   tlp: whitish
 ␛[34m  │␛[0m        ␛[1m␛[31m━━━━━━━ not in tlp::1.0␛[0m
 
-␛[1m␛[31merror[kql_parse_error]␛[0m␛[1m: KQL syntax error␛[0m
-   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/encoded-tunnel-rule-0049.yaml␛\objects/rules/encoded-tunnel-rule-0049.yaml:51:21␛]8;;␛\
+␛[1m␛[31merror[kql_parse_error]␛[0m␛[1m: KQL syntax error: expected an expression␛[0m
+   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/encoded-tunnel-rule-0049.yaml␛\objects/rules/encoded-tunnel-rule-0049.yaml:51:29␛]8;;␛\
 ␛[34m   │␛[0m
 ␛[34m50 │␛[0m     query: |
-␛[34m51 │␛[0m       ␛[96mSecurityEvent␛[0m ␛[1m␛[35m|␛[0m where (
-␛[34m   │␛[0m                     ␛[1m␛[31m━━━━━━━━━␛[0m
+␛[34m51 │␛[0m       ␛[96mSecurityEvent␛[0m ␛[1m␛[35m|␛[0m ␛[1m␛[35mwhere␛[0m (
+␛[34m   │␛[0m                             ␛[1m␛[31m━␛[0m
 ␛[34m   │␛[0m
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the KQL reference: https://learn.microsoft.com/kusto/query/
 
@@ -537,12 +537,12 @@ exit: 1
 ␛[34m   │␛[0m
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the template in .opentide/templates/ shows the field and its values
 
-␛[1m␛[31merror[kql_parse_error]␛[0m␛[1m: KQL syntax error␛[0m
-   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/remote-dropper-rule-0140.yaml␛\objects/rules/remote-dropper-rule-0140.yaml:75:7␛]8;;␛\
+␛[1m␛[31merror[kql_parse_error]␛[0m␛[1m: KQL syntax error: expected a name␛[0m
+   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/remote-dropper-rule-0140.yaml␛\objects/rules/remote-dropper-rule-0140.yaml:75:13␛]8;;␛\
 ␛[34m   │␛[0m
 ␛[34m74 │␛[0m     query: |
-␛[34m75 │␛[0m       union ␛[35m*␛[0m ␛[1m␛[35m|␛[0m take ␛[33m1␛[0m
-␛[34m   │␛[0m       ␛[1m␛[31m━━━━━━━━━━━━━━━━␛[0m
+␛[34m75 │␛[0m       ␛[1m␛[35munion␛[0m ␛[35m*␛[0m ␛[1m␛[35m|␛[0m take ␛[33m1␛[0m
+␛[34m   │␛[0m             ␛[1m␛[31m━␛[0m
 ␛[34m   │␛[0m
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the KQL reference: https://learn.microsoft.com/kusto/query/
 
@@ -762,12 +762,12 @@ exit: 1
 ␛[34m   │␛[0m
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
 
-␛[1m␛[31merror[kql_parse_error]␛[0m␛[1m: KQL syntax error␛[0m
-   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/staged-beacon-rule-0053.yaml␛\objects/rules/staged-beacon-rule-0053.yaml:62:7␛]8;;␛\
+␛[1m␛[31merror[kql_parse_error]␛[0m␛[1m: KQL syntax error: expected an expression␛[0m
+   ␛[34m╭─▶␛[0m ␛]8;;file://<WS>/objects/rules/staged-beacon-rule-0053.yaml␛\objects/rules/staged-beacon-rule-0053.yaml:62:15␛]8;;␛\
 ␛[34m   │␛[0m
 ␛[34m61 │␛[0m       ␛[96mSecurityEvent␛[0m
-␛[34m62 │␛[0m       ␛[1m␛[35m|␛[0m where (
-␛[34m   │␛[0m       ␛[1m␛[31m━━━━━━━━━␛[0m
+␛[34m62 │␛[0m       ␛[1m␛[35m|␛[0m ␛[1m␛[35mwhere␛[0m (
+␛[34m   │␛[0m               ␛[1m␛[31m━␛[0m
 ␛[34m   │␛[0m
    ␛[34m╰─␛[0m ␛[1m␛[36mhelp:␛[0m the KQL reference: https://learn.microsoft.com/kusto/query/
 

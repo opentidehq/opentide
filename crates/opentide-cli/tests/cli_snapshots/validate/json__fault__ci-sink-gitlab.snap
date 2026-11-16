@@ -443,12 +443,12 @@ exit: 1
       },
       {
         "code": "kql_parse_error",
-        "column": 31,
+        "column": 33,
         "context": {
           "language": "kql",
           "platform": "sentinel",
           "position": {
-            "column": 31,
+            "column": 33,
             "end_column": 34,
             "end_line": 45,
             "line": 45
@@ -467,7 +467,7 @@ exit: 1
         "fix": null,
         "help": "the KQL reference: https://learn.microsoft.com/kusto/query/",
         "line": 45,
-        "message": "KQL syntax error",
+        "message": "KQL syntax error: expected a name",
         "object_type": "rule",
         "object_uuid": "7e3599fb-f2cc-46e9-86f1-e82bbf62a6ee",
         "path": "objects/rules/covert-exfiltration-rule-0157.yaml",
@@ -601,19 +601,19 @@ exit: 1
       },
       {
         "code": "kql_parse_error",
-        "column": 7,
+        "column": 13,
         "context": {
           "language": "kql",
           "platform": "sentinel",
           "position": {
-            "column": 7,
-            "end_column": 23,
+            "column": 13,
+            "end_column": 14,
             "end_line": 49,
             "line": 49
           },
           "source": "engine"
         },
-        "end_column": 23,
+        "end_column": 14,
         "end_line": 49,
         "explain": "opentide explain kql_parse_error",
         "field_path": [
@@ -625,7 +625,7 @@ exit: 1
         "fix": null,
         "help": "the KQL reference: https://learn.microsoft.com/kusto/query/",
         "line": 49,
-        "message": "KQL syntax error",
+        "message": "KQL syntax error: expected a name",
         "object_type": "rule",
         "object_uuid": "284f1a57-9937-4de4-8cdf-0a3a9b4747e4",
         "path": "objects/rules/covert-tunnel-rule-0170.yaml",
@@ -1027,12 +1027,12 @@ exit: 1
       },
       {
         "code": "kql_parse_error",
-        "column": 21,
+        "column": 29,
         "context": {
           "language": "kql",
           "platform": "sentinel",
           "position": {
-            "column": 21,
+            "column": 29,
             "end_column": 30,
             "end_line": 51,
             "line": 51
@@ -1051,7 +1051,7 @@ exit: 1
         "fix": null,
         "help": "the KQL reference: https://learn.microsoft.com/kusto/query/",
         "line": 51,
-        "message": "KQL syntax error",
+        "message": "KQL syntax error: expected an expression",
         "object_type": "rule",
         "object_uuid": "15340492-4a04-4499-ab3e-44ca06f3a96c",
         "path": "objects/rules/encoded-tunnel-rule-0049.yaml",
@@ -1974,19 +1974,19 @@ exit: 1
       },
       {
         "code": "kql_parse_error",
-        "column": 7,
+        "column": 13,
         "context": {
           "language": "kql",
           "platform": "sentinel",
           "position": {
-            "column": 7,
-            "end_column": 23,
+            "column": 13,
+            "end_column": 14,
             "end_line": 75,
             "line": 75
           },
           "source": "engine"
         },
-        "end_column": 23,
+        "end_column": 14,
         "end_line": 75,
         "explain": "opentide explain kql_parse_error",
         "field_path": [
@@ -1998,7 +1998,7 @@ exit: 1
         "fix": null,
         "help": "the KQL reference: https://learn.microsoft.com/kusto/query/",
         "line": 75,
-        "message": "KQL syntax error",
+        "message": "KQL syntax error: expected a name",
         "object_type": "rule",
         "object_uuid": "602ab076-b4a0-4a2b-b07f-11f07e52f005",
         "path": "objects/rules/remote-dropper-rule-0140.yaml",
@@ -2694,12 +2694,12 @@ exit: 1
       },
       {
         "code": "kql_parse_error",
-        "column": 7,
+        "column": 15,
         "context": {
           "language": "kql",
           "platform": "sentinel",
           "position": {
-            "column": 7,
+            "column": 15,
             "end_column": 16,
             "end_line": 62,
             "line": 62
@@ -2718,7 +2718,7 @@ exit: 1
         "fix": null,
         "help": "the KQL reference: https://learn.microsoft.com/kusto/query/",
         "line": 62,
-        "message": "KQL syntax error",
+        "message": "KQL syntax error: expected an expression",
         "object_type": "rule",
         "object_uuid": "30a6f17f-68a4-40fa-9aa4-3deae92290be",
         "path": "objects/rules/staged-beacon-rule-0053.yaml",

@@ -770,7 +770,8 @@ fn yara_editor_features_over_stdio() {
         .as_array()
         .map(|a| a.iter().filter_map(|s| s["label"].as_str()).collect())
         .unwrap_or_default();
-    assert!(sig_labels.contains(&"exports(string) -> integer"), "{sig}");
+    // YARA-X's return type: a predicate is boolean (#1225).
+    assert!(sig_labels.contains(&"exports(string) -> boolean"), "{sig}");
     // Rename: prepared on the name, refused for a clash, applied with sigils.
     let prepared = lsp.request("textDocument/prepareRename", pos("#cfg", 2));
     assert_eq!(prepared["result"]["start"]["character"], 5, "{prepared}");

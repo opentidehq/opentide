@@ -87,7 +87,7 @@ checked before the next pull request builds on it.
 | `lint` | ruff, ty over `src/opentide` on the checked-in stubs of `_native` (`src/opentide/_native/*.pyi`: nothing compiles), actionlint 1.7.7 with shellcheck (`.github/actionlint.yaml`), `uv build --sdist` and `twine check`, the engine's invariant scripts (`check-io-free.sh`, `check-names.sh`, `validate-skills.sh`), the engine release script's tests and the CI contracts (`tests/test_ci`). About a minute |
 | `engine-lint` | rustfmt, clippy `-D warnings` and `cargo doc --no-deps` with `RUSTDOCFLAGS=-D warnings`, **workspace-wide** whatever changed (a warm cache re-checks only what changed) |
 | `native` | opentide's wheel as a release builds it (`maturin build --locked --profile dev --compatibility linux`: a `linux` tag, installed on this runner image only), linked with mold, its own sccache family, uploaded for the Python jobs: when the Python surface or GitLab CI lint's inputs change, every push and the nightly. A job of its own so that the Python jobs start after it, not after the tests (#1141: a push's `python` waited 8.4 min for the build) |
-| `build` | **The gate's one build of the tests, and the Rust tests** (with `native`, the only gate jobs that compile the workspace): the affected crates' tests, the binaries their tests run, xtask and the language server, linked with mold, one sccache family; then `xtask check-layers`, `xtask cassettes check`, `xtask codegen --check` (never `--oracle`), `opentide-lsp generate-highlights --check`, `xtask vocab sync --check` and `xtask spec-fields` against `opentidehq/specifications` when their inputs change (and on every push and nightly); then the tests, `cargo nextest run --profile ci -E <filter>`, where they were built, on eight threads (`NEXTEST_TEST_THREADS`: many wait on the processes they start); the doctests (nextest runs none); and opentide-schema's compile-fail cases (trybuild, which compiles at test time) when the derive, the crate, the cases, `Cargo.lock` or the toolchain change. Fails when a test leaves a file in the checkout (#931). On a pull request it also builds the **anchors** (`opentide-connectors`, `opentide-workspace`, `ANCHORS` in `changes.py`), whose tests run only when affected: their dev-dependencies turn on third-party features (tokio's `test-util`, getrandom's `std`) that the push's `--workspace` build resolves with, so every unit a pull request builds is one the push's cache holds (without them a leaf change missed it for every crate above tokio and getrandom). Its `RUSTC_WRAPPER` is [`scripts/ci/rustc-wrapper/sccache`](../scripts/ci/rustc-wrapper/sccache), sccache without `CARGO_PRIMARY_PACKAGE`: sccache keys a compile on every `CARGO_*` variable, and cargo sets that one only for the packages a command names, so a pull request missed the cache for every unaffected crate it compiled (opentide-schema, 48 s). Named `sccache`, so that the cc crate sends the build scripts' C compiles through it too; Python, not `sh`: a shell drops the variables whose names are no identifiers (`CARGO_BIN_EXE_opentide-lsp`). No test archive and no test partitions: shipping the archive (1.5 GB, 18 s to pack, 15-33 s to download and 41 s to extract per partition) cost more than the partitions saved (#1141). `--timings`: the `cargo-timings` artifact shows where the build went |
+| `build` | **The gate's one build of the tests, and the Rust tests** (with `native`, the only gate jobs that compile the workspace): the affected crates' tests, the binaries their tests run, xtask and the language server, linked with mold, one sccache family; then `xtask check-layers`, `xtask cassettes check`, `xtask codegen --check` (never `--oracle`), `opentide-lsp generate-highlights --check`, `xtask vocab sync --check` and `xtask spec-fields` against `opentidehq/specifications` when their inputs change (`changes`' `vocab` and `fields` outputs; on every push and nightly); then the tests, `cargo nextest run --profile ci -E <filter>`, where they were built, on eight threads (`NEXTEST_TEST_THREADS`: many wait on the processes they start); the doctests (nextest runs none); and opentide-schema's compile-fail cases (trybuild, which compiles at test time) when the derive, the crate, the cases, `Cargo.lock` or the toolchain change (`schema_ui`). Every path filter is `changes.py`'s (`CHECKS`, tested in `test_changes.py`): no job diffs the tree itself. Fails when a test leaves a file in the checkout (#931). On a pull request it also builds the **anchors** (`opentide-connectors`, `opentide-workspace`, `ANCHORS` in `changes.py`), whose tests run only when affected: their dev-dependencies turn on third-party features (tokio's `test-util`, getrandom's `std`) that the push's `--workspace` build resolves with, so every unit a pull request builds is one the push's cache holds (without them a leaf change missed it for every crate above tokio and getrandom). Its `RUSTC_WRAPPER` is [`scripts/ci/rustc-wrapper/sccache`](../scripts/ci/rustc-wrapper/sccache), sccache without `CARGO_PRIMARY_PACKAGE`: sccache keys a compile on every `CARGO_*` variable, and cargo sets that one only for the packages a command names, so a pull request missed the cache for every unaffected crate it compiled (opentide-schema, 48 s). Named `sccache`, so that the cc crate sends the build scripts' C compiles through it too; Python, not `sh`: a shell drops the variables whose names are no identifiers (`CARGO_BIN_EXE_opentide-lsp`). No test archive and no test partitions: shipping the archive (1.5 GB, 18 s to pack, 15-33 s to download and 41 s to extract per partition) cost more than the partitions saved (#1141). `--timings`: the `cargo-timings` artifact shows where the build went |
 | `python` | Python is the packaging layer: **one** job, one pytest run (`-n 4`) of the package's surface (the SDK, the models, the plugin API, the console script) and the E2E suite (CLI, MCP and LSP over stdio), Python **3.14** with the coverage gate, on `native`'s wheel (`uv sync --no-install-project`, then `uv pip install` of the wheel, its `_native` module copied into `src/opentide/` for the tests, which import from `src/`; `UV_NO_SYNC=1`: nothing compiles). No shards; the tests marked `full_set` run nightly; `tests/test_ci` runs in `lint` |
 | `gitlab-ci-lint` | The pipeline `opentide setup ci gitlab` renders, linted (glint, gitlab-ci-verify) |
 | `docs` | `scripts/validate-docs.sh` (the site builds in opentidehq/website) and the docs tests that need no wheel (`tests/test_docs` but `test_docs_commands_golden.py` and `test_sdk_snippets.py`, the Python job's) |
@@ -136,9 +136,11 @@ hand; the Rust tests that replay the oracle's recordings are
 ([`tests/golden/README.md`](../tests/golden/README.md)). The vendor-parser oracles (Kusto.Language,
 Splunk, Elasticsearch, Lucene, Falco) are real products' parsers: they run nightly.
 
-Every Rust job installs the release `rust-toolchain.toml` pins (`rustup toolchain install` with no
-name, never floating `stable`), then its targets with `rustup target add`: that install drops
-`--target` and `--component` silently. `changes` alone
+Every Rust job in `ci.yml` sets Rust up with one composite action,
+[`actions/rust-setup`](actions/rust-setup/action.yml): the release `rust-toolchain.toml` pins
+(`rustup toolchain install` with no name, never floating `stable`), then its `targets` with
+`rustup target add` (that install drops `--target` and `--component` silently), its prebuilt
+`tools` (taiki-e/install-action) and, given a `cache` family, the compiler cache restored (below). `changes` alone
 uses the runner's stable cargo, for `cargo metadata --no-deps`. Only the fuzz jobs name a
 toolchain, the dated nightly `fuzz/NIGHTLY` pins. The npm addons are stricter
 (`build-packages.yml`): `scripts/build/install-rust.sh` installs the pinned release by name with
@@ -151,7 +153,12 @@ directory's override, so rustup installs nothing mid-build either. Every job tha
 **Compiler caches** (#841, #1047): sccache (`RUSTC_WRAPPER`,
 0.19.0) in `.sccache/`, kept by actions/cache under
 `sccache-<family>-<hash of rust-toolchain.toml>-<ISO week>`, restored with the family and
-toolchain as `restore-keys`, saved by exactly one job when the key missed: once a week. sccache is
+toolchain as `restore-keys` (by `rust-setup`, whose step has the id `sccache`), saved by exactly
+one job when the key missed: once a week. The save is
+[`actions/sccache-save`](actions/sccache-save/action.yml) (the statistics, then the save), called
+with `if: ${{ !cancelled() }}` and the job's policy in `save`, `job.status == 'success'` first: a
+composite cannot see whether the job's steps passed; `rust-setup`'s `save` output is the base-branch
+policy below. sccache is
 content-addressed, so a copy a few days old still serves every crate that did not change; a key
 on the sources or `Cargo.lock` saved every family on each merge and evicted what pull requests
 restore. The families: `build` (the tests' build), `native` (the extension) and `engine-check` (`engine-lint`), saved
@@ -318,9 +325,11 @@ scripts/ci-local.sh --full     # + nextest ci, doctests, rustdoc, crate packages
 
 ## CodeQL, Dependabot
 
-**CodeQL:** Python and Actions via [`workflows/codeql.yml`](workflows/codeql.yml)
-(`/language:python` + `/language:actions`): on a pull request that changes a Python file or a
-workflow, on every push to a base branch, and nightly; not a required check. Code Quality may
+**CodeQL:** Python, Rust and Actions via [`workflows/codeql.yml`](workflows/codeql.yml)
+(`/language:python`, `/language:rust`, `/language:actions`, `security-extended`; Rust with
+`build-mode: none`, no cargo build): each language on a pull request that changes its files
+(Python sources; `crates/`, `bindings/`, `xtask/`, `vendor/`, `fuzz/`, `Cargo.toml`, `Cargo.lock`,
+`rust-toolchain.toml`, `.cargo/`; the workflows and actions; every language when `codeql.yml` changes), every language on every push to a base branch and nightly; not a required check. Code Quality may
 also run dynamic Python on push. Local Python: `scripts/codeql-local.sh`. Skill:
 [codeql](../.agents/skills/codeql/SKILL.md).
 

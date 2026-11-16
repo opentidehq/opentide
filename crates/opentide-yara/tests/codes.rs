@@ -8,9 +8,7 @@
 )]
 
 use opentide_core::Severity;
-use opentide_yara::{
-    Context, Dialect, Profile, WARNING_CODES, YaraXSyntax, always_warning, analyze_with,
-};
+use opentide_yara::{Context, Profile, WARNING_CODES, YaraXSyntax, always_warning, analyze_with};
 
 fn codes(source: &str, ctx: &Context) -> Vec<(String, Severity)> {
     let mut out: Vec<_> = analyze_with(source, ctx)
@@ -33,7 +31,8 @@ fn raw() -> Context {
 const E: Severity = Severity::Error;
 const W: Severity = Severity::Warning;
 
-/// `(source, expected codes)` for a raw `.yar` file (libyara 4.5, no profile).
+/// `(source, expected codes)` for a raw `.yar` file under a context that
+/// refuses YARA-X-only syntax (YARA-X 1.x, #1225).
 const RAW: &[(&str, &[(&str, Severity)])] = &[
     // Clean.
     ("rule a { condition: true }", &[]),
@@ -144,7 +143,7 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
     ),
     (
         "import \"pe\" rule pe { condition: true }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_rule_identifier_conflict", E)],
     ),
     (
         "rule uint8 { condition: true }",
@@ -196,12 +195,29 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         &[("yara_hex_string", E)],
     ),
     (
+        // A branch that starts with a jump is a syntax error.
         "rule a { strings: $h = { 01 02 ( 03 | [-] 04 ) 05 } condition: $h }",
         &[("yara_hex_string", E)],
     ),
     (
+        // A branch that starts with a jump is a syntax error.
         "rule a { strings: $h = { 01 02 ( 03 | [1-300] 04 ) 05 } condition: $h }",
         &[("yara_hex_string", E)],
+    ),
+    // YARA-X takes any jump inside an alternative: libyara refused an
+    // unbounded or over-200 one (#1405 review).
+    (
+        "rule a { strings: $h = { 01 ( 02 [1-300] 03 | 04 ) 05 } condition: $h }",
+        &[("yara_slow_pattern", W)],
+    ),
+    (
+        "rule a { strings: $h = { 01 ( 02 [-] 03 | 04 ) 05 } condition: $h }",
+        &[("yara_slow_pattern", W)],
+    ),
+    // YARA-X reads an index above `i64::MAX` as a negative `i64` (E007).
+    (
+        "rule a { strings: $a = \"abc\" condition: @a[0xFFFFFFFFFFFFFFFF] == 0 }",
+        &[("yara_number_out_of_range", E)],
     ),
     (
         "rule a { strings: $h = { 01 0 } condition: $h }",
@@ -243,7 +259,7 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "rule a { strings: $a = \"abcd\" condition: 150% of them }",
         &[("yara_number_out_of_range", E)],
     ),
-    // YARA-X-only syntax: errors under libyara.
+    // YARA-X-only syntax: the portability check's errors.
     (
         "rule a { strings: $a = \"abcd\" condition: for 50% of them : ( $ ) }",
         &[("yara_x_only_syntax", E)],
@@ -268,35 +284,141 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "rule a { condition: 1 of (true, false) }",
         &[("yara_x_only_syntax", E), ("yara_x_only_syntax", E)],
     ),
-    // Warnings.
+    // What libyara compiled and YARA-X refuses: errors (#1225).
     (
         "rule a { strings: $r = /\\Release/ condition: $r }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_regexp", E)],
     ),
     (
         "rule a { strings: $r = /abc{/ condition: $r }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_regexp", E)],
     ),
     (
         "rule a { strings: $a = \"ab\" base64 condition: $a }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_string_modifier", E)],
     ),
     (
         "rule a { strings: $a = \"abcd\" condition: @a[-1] == 0 }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_number_out_of_range", E)],
     ),
     (
         "global global rule a { condition: true } rule b { condition: true }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_parse_error", E)],
     ),
     (
         "private rule base1 { condition: true } rule a { condition: any of (base*) }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_parse_error", E)],
     ),
     (
         "rule a { strings: $a = \"abcd\" base64(\"!@#$%^&*(){}[].,|ABCDEFGHIJ\\x09LMNOPQRSTUVWXYZabcdefghijklmnopqrstu\") condition: $a }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_parse_error", E)],
     ),
+    // YARA-X's semantics where libyara's differed (each checked on the wheel).
+    (
+        "rule a { condition: uint64(0) == 1 and int64be(0) == 1 }",
+        &[("yara_x_only_syntax", E), ("yara_x_only_syntax", E)],
+    ),
+    (
+        "rule a { condition: float32(0) > 1.5 }",
+        &[("yara_x_only_syntax", E)],
+    ),
+    (
+        "rule a { condition: float64(0) contains \"a\" }",
+        &[("yara_type", E), ("yara_x_only_syntax", E)],
+    ),
+    (
+        "rule int64 { condition: true }",
+        &[("yara_rule_identifier_conflict", E)],
+    ),
+    (
+        "rule a { condition: \"x\" matches /(?i)abc/ }",
+        &[("yara_x_only_syntax", E)],
+    ),
+    (
+        "rule a { condition: \"x\" matches /(|abc)/ }",
+        &[("yara_x_only_syntax", E)],
+    ),
+    (
+        "rule a { condition: \"x\" matches /(?=abc)/ }",
+        &[("yara_regexp", E)],
+    ),
+    (
+        "rule a { condition: for all x in (1.0, 2.0) : (x >= 1.0) }",
+        &[],
+    ),
+    (
+        "rule a { condition: for all x in (1, 2.0) : (x >= 1.0) }",
+        &[("yara_type", E)],
+    ),
+    (
+        "rule a { condition: for any i in (\"a\", 2) : (true) }",
+        &[("yara_type", E)],
+    ),
+    ("rule a { condition: -9223372036854775808 \\ -1 == 0 }", &[]),
+    ("rule a { condition: 1 \\ 0 == 0 and 1 % 0 == 0 }", &[]),
+    (
+        "rule a { condition: 4611686018427387904 * -2 == 0 }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    (
+        "rule a { condition: 0xFFFFFFFFFFFFFFFF - 1 == 0xFFFFFFFFFFFFFFFE and -(0x8000000000000000) == -9223372036854775808 }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    (
+        "rule a { condition: (4 \\ 2) * (0xFFFFFFFFFFFFFFFF \\ 2) == filesize }",
+        &[],
+    ),
+    (
+        "rule a { condition: 2 * 4611686018427387904 == 1 }",
+        &[("yara_number_out_of_range", E)],
+    ),
+    (
+        "rule a { condition: -(-9223372036854775808) == 1 }",
+        &[("yara_number_out_of_range", E)],
+    ),
+    (
+        "rule a { condition: 0xFFFFFFFFFFFFFFFF + 1 == 0 }",
+        &[("yara_number_out_of_range", E)],
+    ),
+    (
+        "rule a { condition: -(0xFFFFFFFFFFFFFFFF) == 1 }",
+        &[("yara_number_out_of_range", E)],
+    ),
+    (
+        "rule a { condition: 0xFFFFFFFFFFFFFFFF & 1 == 0 and uint8(0xFFFFFFFFFFFFFFFF) == 0 }",
+        &[],
+    ),
+    (
+        "rule a { condition: for any i in (0..0x8000000000000000) : (true) }",
+        &[("yara_number_out_of_range", E)],
+    ),
+    (
+        "rule a { strings: $a = \"abcd\" condition: $a at 0xFFFFFFFFFFFFFFFF }",
+        &[("yara_number_out_of_range", E)],
+    ),
+    (
+        "rule a { strings: $a = \"abcd\" condition: $a in (0..0xFFFFFFFFFFFFFFFF) }",
+        &[("yara_number_out_of_range", E)],
+    ),
+    (
+        "rule a { strings: $a = \"abcd\" condition: 0% of them }",
+        &[],
+    ),
+    (
+        "rule a { strings: $a = \"abcd\" condition: 101% of them }",
+        &[("yara_number_out_of_range", E)],
+    ),
+    // A `with` declaration sees the ones before it.
+    (
+        "rule a { condition: with a = 1, b = a + 1 : (b == 2) }",
+        &[("yara_x_only_syntax", E)],
+    ),
+    // Two alphabets: YARA-X's.
+    (
+        "rule a { strings: $a = \"abcd\" base64(\"!@#$%^&*(){}[].,|ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstu\") base64wide(\"!@#$%^&*(){}[].,|ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstv\") condition: $a }",
+        &[("yara_x_only_syntax", E)],
+    ),
+    // Warnings.
     (
         "rule a { strings: $a = \"a\" condition: $a }",
         &[("yara_slow_pattern", W)],
@@ -311,7 +433,10 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
     ),
     (
         "rule a { condition: entrypoint == 0 }",
-        &[("yara_entrypoint_deprecated", W)],
+        &[
+            ("yara_entrypoint_deprecated", W),
+            ("yara_undefined_identifier", E),
+        ],
     ),
     (
         "rule a { condition: \"abc\" and true }",
@@ -333,22 +458,22 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "rule a { strings: $a = \"abcd\" $b = \"efgh\" condition: all of them at 0 }",
         &[("yara_suspicious_expression", W)],
     ), // Review of #165 (libyara 4.5.4 and YARA-X 1.23.0 checked on each).
-    // libyara's identifiers stop at 128 characters: rule names, tags, meta keys.
+    // YARA-X has no identifier length limit (libyara stopped at 128).
     (
         "rule aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa { condition: true }",
         &[],
     ),
     (
         "rule aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa { condition: true }",
-        &[("yara_parse_error", E)],
+        &[],
     ),
     (
         "rule r : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa { condition: true }",
-        &[("yara_parse_error", E)],
+        &[],
     ),
     (
         "rule r { meta: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa = 1 condition: true }",
-        &[("yara_parse_error", E)],
+        &[],
     ),
     // A module used above its import is undefined there.
     (
@@ -396,39 +521,37 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "import \"math\" rule a { condition: math.entropy(0, filesize) }",
         &[("yara_suspicious_expression", W)],
     ),
-    // libyara reads a jump bound as a 32-bit signed int: 2^31 is negative.
+    // YARA-X reads a jump bound up to 2^32 - 1 (libyara refused 2^31 and up).
     (
         "rule a { strings: $h = { 4D 5A 90 00 [0-2147483647] 50 45 00 00 } condition: $h }",
         &[],
     ),
     (
         "rule a { strings: $h = { 4D 5A 90 00 [0-2147483648] 50 45 00 00 } condition: $h }",
-        &[("yara_hex_string", E)],
+        &[],
     ),
     (
         "rule a { strings: $h = { 4D 5A 90 00 [3000000000] 50 45 00 00 } condition: $h }",
-        &[("yara_hex_string", E)],
+        &[],
     ),
-    // A bound past u32: libyara wraps it modulo 2^32 (then warns on the
-    // one-byte atoms), YARA-X refuses it.
+    // A bound past u32 is refused.
     (
         "rule a { strings: $h = { 01 [0-4294967296] 02 } condition: $h }",
-        &[("yara_slow_pattern", W), ("yara_x_incompatible", W)],
+        &[("yara_hex_string", E)],
     ),
-    // `[4294967296]` wraps to `[0]`, which libyara refuses.
     (
         "rule a { strings: $h = { 01 02 03 04 [4294967296] 05 06 07 08 } condition: $h }",
-        &[("yara_hex_string", E), ("yara_x_incompatible", W)],
+        &[("yara_hex_string", E)],
     ),
-    // `[0-0]`: libyara reads it, YARA-X refuses it.
+    // `[0-0]` skips no byte.
     (
         "rule a { strings: $h = { 01 02 03 04 [0-0] 05 06 07 08 } condition: $h }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_hex_string", E)],
     ),
-    // A rule named like an imported module: libyara accepts it, YARA-X does not.
+    // A rule named like an imported module.
     (
         "import \"pe\"\nrule pe { condition: true }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_rule_identifier_conflict", E)],
     ),
     // An undefined string is the finding; libyara stops before unused ones.
     (
@@ -439,15 +562,13 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "rule a { strings: $d = \"abcd\" condition: any of ($c*) }",
         &[("yara_undefined_string", E)],
     ),
-    // libyara's strtoll saturates a bound at i64::MAX before the 32-bit
-    // truncation: 2^63 and above read as -1, refused.
     (
         "rule a { strings: $h = { 01 02 03 04 [9223372036854775813] 05 06 07 08 } condition: $h }",
-        &[("yara_hex_string", E), ("yara_x_incompatible", W)],
+        &[("yara_hex_string", E)],
     ),
     (
         "rule a { strings: $h = { 01 02 03 04 [18446744073709551621] 05 06 07 08 } condition: $h }",
-        &[("yara_hex_string", E), ("yara_x_incompatible", W)],
+        &[("yara_hex_string", E)],
     ),
     // An integer compared with a boolean (YARA-X `bool_int_comparison`).
     (
@@ -462,36 +583,26 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "import \"pe\" rule a { condition: pe.is_signed == 1 }",
         &[("yara_suspicious_expression", W)],
     ),
-    // Arithmetic or an ordering on what YARA-X types as a boolean: libyara
-    // reads an integer, YARA-X refuses it.
+    // Arithmetic or an ordering on what YARA-X types as a boolean.
     (
         "import \"pe\" rule a { condition: pe.is_dll() > 0 }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_type", E)],
     ),
     (
         "import \"pe\" rule a { condition: pe.is_dll() * 2 > 1 }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_type", E)],
     ),
     (
         "import \"pe\" rule a { condition: pe.is_dll() + 1 }",
-        &[
-            ("yara_suspicious_expression", W),
-            ("yara_x_incompatible", W),
-        ],
+        &[("yara_suspicious_expression", W), ("yara_type", E)],
     ),
     (
         "import \"pe\" rule a { condition: pe.is_dll() & 1 }",
-        &[
-            ("yara_suspicious_expression", W),
-            ("yara_x_incompatible", W),
-        ],
+        &[("yara_suspicious_expression", W), ("yara_type", E)],
     ),
     (
         "import \"pe\" rule a { condition: -pe.is_dll() }",
-        &[
-            ("yara_suspicious_expression", W),
-            ("yara_x_incompatible", W),
-        ],
+        &[("yara_suspicious_expression", W), ("yara_type", E)],
     ),
     // A non-boolean operand of `and`, `or`, `not` or a `for` body (YARA-X
     // `non_bool_expr`).
@@ -565,14 +676,11 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
     // an index, a range bound, a quantifier, a function argument.
     (
         "import \"pe\" rule a { condition: 1 != pe.is_dll() }",
-        &[
-            ("yara_suspicious_expression", W),
-            ("yara_x_incompatible", W),
-        ],
+        &[("yara_suspicious_expression", W), ("yara_type", E)],
     ),
     (
         "import \"pe\" rule a { condition: pe.is_dll() != pe.is_32bit() }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_type", E)],
     ),
     (
         "import \"pe\" rule a { condition: pe.is_dll() == pe.is_32bit() }",
@@ -580,38 +688,35 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
     ),
     (
         "import \"pe\" rule a { condition: pe.is_dll() == 1.0 }",
-        &[
-            ("yara_suspicious_expression", W),
-            ("yara_x_incompatible", W),
-        ],
+        &[("yara_suspicious_expression", W), ("yara_type", E)],
     ),
     (
         "import \"pe\" rule a { strings: $a = \"cmd.exe\" condition: $a at pe.is_dll() }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_type", E)],
     ),
     (
         "import \"pe\" rule a { strings: $a = \"cmd.exe\" condition: @a[pe.is_dll()] == 0 }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_type", E)],
     ),
     (
         "import \"pe\" rule a { strings: $a = \"cmd.exe\" condition: pe.is_dll() of ($a) }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_type", E)],
     ),
     (
         "import \"pe\" rule a { condition: pe.sections[pe.is_dll()].virtual_size == 0 }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_type", E)],
     ),
     (
         "import \"pe\" rule a { condition: for any i in (0..pe.is_dll()) : (i == 0) }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_type", E)],
     ),
     (
         "import \"pe\" rule a { condition: uint8(pe.is_dll()) == 0 }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_type", E)],
     ),
     (
         "import \"pe\" import \"math\" rule a { condition: math.entropy(0, pe.is_dll()) > 1 }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_type", E)],
     ),
     // yara-1.0's integer compared with a boolean, where YARA-X is silent too.
     (
@@ -635,33 +740,33 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
     // bind a boolean, which is no non-boolean body.
     (
         "import \"pe\" rule a { condition: for 1 i in (pe.is_dll(), 2) : (true) }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_type", E)],
     ),
     (
         "import \"pe\" rule a { condition: for any i in (1, pe.is_dll()) : (i == 1) }",
-        &[("yara_x_incompatible", W)],
+        &[("yara_type", E)],
     ),
     (
         "import \"pe\" rule a { condition: for any i in (pe.is_dll(), pe.is_32bit()) : (i) }",
         &[],
     ),
-    // A loop variable an enclosing loop binds: libyara's "duplicated loop
-    // identifier"; YARA-X shadows it. Sibling loops and other rules are fine.
+    // A loop variable an enclosing loop binds: YARA-X shadows it, and takes
+    // one named twice over a dictionary.
     (
         "rule a { condition: for any i in (1,2) : (for any i in (3,4) : (i == 3)) }",
-        &[("yara_undefined_identifier", E)],
+        &[],
     ),
     (
         "import \"pe\" rule a { condition: for any s in pe.sections : (for any s in pe.sections : (s.virtual_size > 0)) }",
-        &[("yara_undefined_identifier", E)],
+        &[],
     ),
     (
         "import \"pe\" rule a { condition: for all i in (pe.is_dll(), pe.is_32bit()) : (for any i in (1, 2) : (i == 1)) }",
-        &[("yara_undefined_identifier", E)],
+        &[],
     ),
     (
         "import \"pe\" rule a { condition: for any k, k in pe.version_info : (true) }",
-        &[("yara_undefined_identifier", E)],
+        &[],
     ),
     (
         "import \"pe\" rule a { condition: for any k, v in pe.version_info : (k == v) }",
@@ -671,10 +776,10 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "rule a { condition: for any i in (1,2) : (i == 1) and for any i in (3,4) : (i == 3) } rule b { condition: for any i in (1,2) : (i == 1) }",
         &[],
     ),
-    // libyara reports a jump's first error only.
+    // A jump's one error.
     (
         "rule a { strings: $h = { 01 02 ( 05 [9223372036854775813] 06 | 07 ) } condition: $h }",
-        &[("yara_hex_string", E), ("yara_x_incompatible", W)],
+        &[("yara_hex_string", E)],
     ),
 ];
 
@@ -762,56 +867,39 @@ fn profiles() {
     assert_eq!(codes(&big, &raw()), []);
 }
 
+/// YARA-X is the language (#1225): its syntax is taken where the context
+/// allows it, and what it refuses is an error with the code of the problem.
 #[test]
-fn yara_x_dialect_accepts_its_syntax_and_refuses_libyara_only() {
-    let yx = Context {
-        dialect: Dialect::YaraX,
-        profile: None,
-        yara_x_syntax: YaraXSyntax::Allowed,
-    };
+fn yara_x_is_the_language() {
+    let yx = Context::default();
     assert_eq!(
         codes("rule a { condition: with x = 1 : ( x == 1 ) }", &yx),
         []
     );
     assert_eq!(
         codes("rule a { strings: $r = /\\Release/ condition: $r }", &yx),
-        [("yara_x_incompatible".to_string(), E)]
-    ); // A parse-phase refusal (a jump bound past u32) follows the dialect too.
+        [("yara_regexp".to_string(), E)]
+    );
     let jump = "rule a { strings: $h = { 01 02 [0-4294967296] 03 04 } condition: $h }";
-    assert_eq!(
-        codes(jump, &raw()),
-        [("yara_x_incompatible".to_string(), W)]
-    );
-    assert_eq!(codes(jump, &yx), [("yara_x_incompatible".to_string(), E)]);
-    // YARA-X shadows an enclosing loop's variable, and takes one named twice.
-    assert_eq!(
-        codes(
-            "import \"pe\" rule a { condition: for any k, k in pe.version_info : (true) }",
-            &yx
-        ),
-        []
-    );
-    assert_eq!(
-        codes(
-            "rule a { condition: for any i in (1,2) : (for any i in (3,4) : (i == 3)) }",
-            &yx
-        ),
-        []
+    assert_eq!(codes(jump, &yx), [("yara_hex_string".to_string(), E)]);
+    assert_eq!(codes(jump, &raw()), [("yara_hex_string".to_string(), E)]);
+    // A rule wildcard's syntax error names the fix.
+    let wildcard = "rule base1 { condition: true } rule a { condition: any of (base*) }";
+    let found = analyze_with(wildcard, &yx).diagnostics;
+    assert!(
+        found.len() == 1 && found[0].message.contains("list the rules"),
+        "{found:?}"
     );
 }
 
 /// `WARNING_CODES` is the engine's severity, the one `opentide explain` reads:
-/// each of its codes is a warning in every dialect and profile, and every
+/// each of its codes is a warning in every context and profile, and every
 /// other code the table expects is an error somewhere.
 #[test]
 fn warning_codes_are_warnings_in_every_context() {
     let contexts = [
         raw(),
-        Context {
-            dialect: Dialect::YaraX,
-            profile: None,
-            yara_x_syntax: YaraXSyntax::Allowed,
-        },
+        Context::default(),
         Context::for_profile(Profile::Harfanglab),
         Context::for_profile(Profile::Bitdefender),
     ];
@@ -845,7 +933,6 @@ fn warning_codes_are_warnings_in_every_context() {
             }
         }
     }
-    assert!(!always_warning("yara_x_incompatible"));
     assert!(!always_warning("yara_unknown_module"));
 }
 
@@ -881,58 +968,25 @@ rule Loader_Stage1 : loader {
     );
 }
 
-/// libyara refuses an identifier over 128 characters, every one but a
-/// string's: a loop variable, a bare name, a field. A string identifier of
-/// any length is fine; YARA-X has no limit.
+/// YARA-X takes an identifier of any length (libyara stopped at 128):
+/// a loop variable, a bare name, a field, a rule name, a tag, a meta key.
 #[test]
-fn identifiers_over_128_characters() {
+fn identifiers_have_no_length_limit() {
     let long = "a".repeat(129);
-    let parse_error = |source: &str| {
-        codes(source, &raw())
-            .iter()
-            .any(|(c, s)| c == "yara_parse_error" && *s == E)
-    };
-    assert!(parse_error(&format!(
-        "rule a {{ condition: for any {long} in (1..2) : ({long} > 0) }}"
-    )));
-    assert!(parse_error(&format!("rule a {{ condition: {long} }}")));
-    assert!(parse_error(&format!(
-        "import \"pe\" rule a {{ condition: pe.{long} }}"
-    )));
-    assert!(parse_error(&format!("rule {long} {{ condition: true }}")));
-    assert!(parse_error(&format!(
-        "rule a : {long} {{ condition: true }}"
-    )));
-    assert!(parse_error(&format!(
-        "rule a {{ meta: {long} = 1 condition: true }}"
-    )));
-    assert_eq!(
-        codes(
-            &format!("rule a {{ strings: ${long} = \"cmd.exe\" condition: ${long} }}"),
-            &raw()
-        ),
-        []
+    for source in [
+        format!("rule a {{ condition: for any {long} in (1..2) : ({long} > 0) }}"),
+        format!("rule {long} {{ condition: true }} rule b {{ condition: {long} }}"),
+        format!("rule a : {long} {{ condition: true }}"),
+        format!("rule a {{ meta: {long} = 1 condition: true }}"),
+        format!("rule a {{ strings: ${long} = \"cmd.exe\" condition: ${long} }}"),
+    ] {
+        assert_eq!(codes(&source, &raw()), [], "{source}");
+    }
+    let found = codes(
+        &format!("import \"pe\" rule a {{ condition: pe.{long} }}"),
+        &raw(),
     );
-    let at_limit = "a".repeat(128);
-    assert_eq!(
-        codes(
-            &format!("rule a {{ condition: for any {at_limit} in (1..2) : ({at_limit} > 0) }}"),
-            &raw()
-        ),
-        []
-    );
-    let yx = Context {
-        dialect: Dialect::YaraX,
-        profile: None,
-        yara_x_syntax: YaraXSyntax::Allowed,
-    };
-    assert_eq!(
-        codes(
-            &format!("rule a {{ condition: for any {long} in (1..2) : ({long} > 0) }}"),
-            &yx
-        ),
-        []
-    );
+    assert_eq!(found, [("yara_unknown_module_member".to_string(), E)]);
 }
 
 /// A finding's range is the expression as written: from the module of a
@@ -1000,7 +1054,7 @@ fn ranges_cover_the_expression_as_written() {
     }
     assert_eq!(
         ranges(&format!("{head}rule a {{ condition: pe.is_dll() > 0 }}")),
-        [("yara_x_incompatible".to_string(), "pe.is_dll()".to_string())]
+        [("yara_type".to_string(), "pe.is_dll()".to_string())]
     );
 }
 
@@ -1050,7 +1104,7 @@ fn every_range_is_balanced() {
 }
 
 /// YARA-X's own syntax, one case per construct the portability check lists.
-const YARA_X_ONLY: [&str; 13] = [
+const YARA_X_ONLY: [&str; 18] = [
     "rule a { condition: with x = 1 : ( x == 1 ) }",
     "rule a { condition: 1_000 == 1000 }",
     "rule a { condition: 1_0.5 > 1.0 }",
@@ -1065,6 +1119,11 @@ const YARA_X_ONLY: [&str; 13] = [
     "rule a { strings: $a = \"abcd\" condition: for 50% of them : ( $ ) }",
     "rule a { strings: $a = /abc/si condition: $a }",
     "import \"pe\"\nrule a { condition: pe.sections.len() > 1 }",
+    "rule a { condition: \"x\" matches /(?i)abc/ }",
+    "rule a { condition: \"x\" matches /(|abc)/ }",
+    "rule a { condition: uint64(0) == 1 }",
+    "rule a { condition: float32be(0) > 1.5 }",
+    "rule a { strings: $a = \"abcd\" base64(\"!@#$%^&*(){}[].,|ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstu\") base64wide(\"!@#$%^&*(){}[].,|ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstv\") condition: $a }",
 ];
 
 /// `yara_x_syntax: allowed` (a raw file, #1225): YARA-X syntax is the language.

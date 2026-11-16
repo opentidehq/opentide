@@ -190,8 +190,13 @@ def libyara_cases(root: Path) -> list[dict]:
 
 
 def libyara_verdict(source: str) -> tuple[str, str]:
-    """libyara's verdict and its first message."""
-    import yara
+    """libyara's verdict and its first message; ``unavailable`` without
+    yara-python, which only this script's recording needs (the oracle,
+    ``oracles/yara/oracle.py``, reads YARA-X's verdict alone)."""
+    try:
+        import yara
+    except ImportError:
+        return "unavailable", ""
 
     try:
         yara.compile(source=source)
