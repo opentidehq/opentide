@@ -1,0 +1,61 @@
+---
+source: crates/opentide-spl/tests/stats_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/stats_command__valid.eventstats.spl
+---
+SOURCE_FILE@0..74
+  PIPELINE@0..74
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    STATS_COMMAND@13..74
+      STATS_KW@13..23 "eventstats"
+      WHITESPACE@23..24 " "
+      AGGREGATE_ITEM@24..46
+        FUNCTION_CALL@24..37
+          IDENTIFIER@24..30
+            IDENT@24..30 "values"
+          L_PAREN@30..31 "("
+          GLOB@31..36
+            GLOB_TOKEN@31..36 "dns_*"
+          R_PAREN@36..37 ")"
+        WHITESPACE@37..38 " "
+        AS_KW@38..40 "as"
+        WHITESPACE@40..41 " "
+        GLOB@41..46
+          GLOB_TOKEN@41..46 "dns_*"
+      COMMA@46..47 ","
+      WHITESPACE@47..48 " "
+      AGGREGATE_ITEM@48..60
+        FUNCTION_CALL@48..55
+          IDENTIFIER@48..50
+            IDENT@48..50 "dc"
+          L_PAREN@50..51 "("
+          IDENTIFIER@51..54
+            IDENT@51..54 "src"
+          R_PAREN@54..55 ")"
+        WHITESPACE@55..56 " "
+        AS_KW@56..58 "AS"
+        WHITESPACE@58..59 " "
+        IDENTIFIER@59..60
+          IDENT@59..60 "c"
+      WHITESPACE@60..61 " "
+      BY_CLAUSE@61..74
+        BY_KW@61..63 "by"
+        WHITESPACE@63..64 " "
+        IDENTIFIER@64..68
+          IDENT@64..68 "dest"
+        COMMA@68..69 ","
+        WHITESPACE@69..70 " "
+        IDENTIFIER@70..74
+          IDENT@70..74 "user"
+--

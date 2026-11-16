@@ -1,0 +1,11 @@
+---
+source: crates/opentide-spl/tests/search_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/bare_search__valid.word.spl
+---
+SOURCE_FILE@0..5
+  PIPELINE@0..5
+    BARE_SEARCH@0..5
+      IDENTIFIER@0..5
+        IDENT@0..5 "index"
+--

@@ -1,0 +1,26 @@
+---
+source: crates/opentide-spl/tests/search_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/bare_search__valid.spl
+---
+SOURCE_FILE@0..25
+  PIPELINE@0..25
+    BARE_SEARCH@0..25
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+      WHITESPACE@10..11 " "
+      FIELD_VALUE@11..25
+        FIELD_REF@11..21
+          IDENTIFIER@11..21
+            IDENT@11..21 "sourcetype"
+        EQ@21..22 "="
+        FIELD_VALUE_RHS@22..25
+          IDENTIFIER@22..25
+            IDENT@22..25 "foo"
+--
