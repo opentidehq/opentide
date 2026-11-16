@@ -146,6 +146,10 @@ fn a_broken_pipe_is_only_its_syntax_error() {
         "process where true | in head 5",
         "process where process.pid =| = \"4624\"",
         "\"dns\" where (false) | tail 10\n\"dns\" where (false) | tail 10",
+        // A sample's pipe with no name is not also a pipe on a sample.
+        "sample by a [a where true] [b where true] | (",
+        // An argument that is an error region is not counted.
+        "process where true | head 1 x",
     ] {
         let codes: Vec<String> = analyze(source)
             .diagnostics
