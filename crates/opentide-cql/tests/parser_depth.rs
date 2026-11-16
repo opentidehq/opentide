@@ -124,9 +124,9 @@ fn past_max_depth_it_is_one_error_and_no_overflow() {
     );
 }
 
-/// The deepest construct opens four tree nodes per level (`!f(` in an argument: a unary
-/// expression, a call, an argument list, an argument): at `max_depth` the tree stays under
-/// the toolkit's `MAX_TREE_DEPTH`, so `TooDeep` is the only error, never `TreeTooDeep`.
+/// A negated call in an argument opens four tree nodes per level (a unary expression, a call,
+/// an argument list, an argument): at `max_depth` the tree stays under the toolkit's
+/// `MAX_TREE_DEPTH`, so `TooDeep` is the only error, never `TreeTooDeep`.
 #[test]
 fn max_depth_stays_under_the_tree_limit() {
     for n in [parser::MAX_DEPTH as usize, parser::MAX_DEPTH as usize + 1] {
@@ -198,5 +198,25 @@ fn long_flat_runs_of_other_shapes() {
         let (errors, depth) = parse_on_small_stack(name, source);
         assert!(errors.is_empty(), "{name}: {errors:?}");
         assert!(depth < 20, "{name}: {depth}");
+    }
+}
+
+/// A call in an operand of each precedence in turn is up to seven tree nodes a level, and
+/// binary operators are not levels of `max_depth`: the tree reaches `MAX_TREE_DEPTH` first,
+/// under 1,000 levels. That is one `TreeTooDeep` error, with no overflow and nothing after it.
+/// (Known: below the 1,000 floor for this shape; lifting it is the toolkit's tree limit.)
+#[test]
+fn operator_operands_reach_the_tree_limit_as_one_error() {
+    for (shape, clean_at, past) in [("f(a + !", 800, 830), ("f(a == b + c * !", 570, 600)] {
+        let build = |n: usize| format!("{}a{}", shape.repeat(n), ")".repeat(n));
+        let (errors, depth) = parse_on_small_stack("operands", build(clean_at));
+        assert!(errors.is_empty(), "{shape} x{clean_at}: {errors:?}");
+        assert!(depth < opentide_parse::MAX_TREE_DEPTH, "{shape}: {depth}");
+        let (errors, _) = parse_on_small_stack("operands", build(past));
+        assert_eq!(errors.len(), 1, "{shape} x{past}: {errors:?}");
+        assert!(
+            matches!(errors[0], ErrorKind::TreeTooDeep { .. }),
+            "{shape}: {errors:?}"
+        );
     }
 }
