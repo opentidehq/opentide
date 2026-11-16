@@ -654,3 +654,79 @@ for (const server of SERVERS) {
     },
   );
 }
+
+// `opentide mcp start` in the WASI module (#1180, #1142). A live `deploy_rule`
+// runs the command line's deploy inside the server's runtime, and WASI has
+// no other thread to hand it to: tokio cannot block on a second runtime
+// there. The deploy must fail naming why (opentide_connectors::runtime's
+// refusal), not panic into "the deploy stopped unexpectedly", and the server
+// must go on answering.
+test(
+  "mcp (wasi): a live deploy_rule inside the server's runtime fails by name, not by a panic",
+  { skip: wasiModule === undefined ? "wasi: no WASI module (OPENTIDE_WASI_CLI)" : false },
+  async () => {
+    const scratch = realpathSync(mkdtempSync(join(tmpdir(), "wasi-host-")));
+    const ws = join(scratch, "ws");
+    cpSync(join(root, "tests/golden/fixtures/deploy-tenants"), ws, { recursive: true });
+    const server = spawn(
+      process.execPath,
+      ["--no-turbo-fast-api-calls", join(root, "scripts/engine/wasi-run.mjs"), wasiModule as string, "mcp", "start"],
+      {
+        cwd: ws,
+        env: {
+          PATH: process.env.PATH ?? "",
+          HOME: ws,
+          PWD: ws,
+          NO_COLOR: "1",
+          TZ: "UTC",
+          LANG: "C.UTF-8",
+          CROWDSTRIKE_CLIENT_SECRET: SECRET,
+        },
+      },
+    );
+    let buffer = "";
+    const waiting = new Map<number, (message: Record<string, unknown>) => void>();
+    server.stdout.setEncoding("utf8");
+    server.stdout.on("data", (chunk: string) => {
+      buffer += chunk;
+      for (let end = buffer.indexOf("\n"); end >= 0; end = buffer.indexOf("\n")) {
+        const line = buffer.slice(0, end).trim();
+        buffer = buffer.slice(end + 1);
+        if (line === "") continue;
+        const message = JSON.parse(line) as Record<string, unknown>;
+        if (typeof message.id === "number") waiting.get(message.id)?.(message);
+      }
+    });
+    let next = 0;
+    const call = (method: string, params: object): Promise<Record<string, unknown>> => {
+      next += 1;
+      const id = next;
+      const answered = new Promise<Record<string, unknown>>((resolve) => waiting.set(id, resolve));
+      server.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+      return answered;
+    };
+    try {
+      await call("initialize", {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "wasi-host-test", version: "0" },
+      });
+      server.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
+      const answer = await call("tools/call", {
+        name: "deploy_rule",
+        arguments: { uuid: "00000000-0000-4000-8047-000000000021", platform: "crowdstrike", dry_run: false },
+      });
+      const result = answer.result as { content: { text: string }[] };
+      const text = result.content.map((part) => part.text).join("\n");
+      assert.match(text, /"status": ?"failed"/, text);
+      assert.doesNotMatch(text, /stopped unexpectedly/, text);
+      // The server still serves.
+      const listed = await call("tools/list", {});
+      assert.ok(Array.isArray((listed.result as { tools: unknown[] }).tools));
+    } finally {
+      server.stdin.end();
+      await new Promise((resolve) => server.once("exit", resolve));
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  },
+);

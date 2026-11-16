@@ -65,15 +65,26 @@ pub fn apart<T: Send>(work: impl FnOnce() -> T + Send) -> std::thread::Result<T>
 /// WASI has no other thread to hand the work to (`apart` runs it on this
 /// one).
 pub fn block_on<F: Future>(work: F) -> Result<F::Output, String> {
+    Ok(start()?.block_on(work))
+}
+
+/// A runtime of its own, for a caller that runs many pieces of work one
+/// after another on it (`deploy`, a request per rule): [`block_on`]'s,
+/// kept.
+///
+/// # Errors
+///
+/// As [`block_on`]'s: the runtime cannot start, or, on WASI, the caller is
+/// inside a runtime, where blocking on another would panic.
+pub fn start() -> Result<tokio::runtime::Runtime, String> {
     #[cfg(target_os = "wasi")]
     if tokio::runtime::Handle::try_current().is_ok() {
         return Err(INSIDE_A_RUNTIME.into());
     }
-    let runtime = builder()
+    builder()
         .enable_all()
         .build()
-        .map_err(|error| format!("cannot start the network runtime: {error}"))?;
-    Ok(runtime.block_on(work))
+        .map_err(|error| format!("cannot start the network runtime: {error}"))
 }
 
 /// [`block_on`]'s refusal inside a runtime on WASI.
@@ -247,6 +258,11 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn block_on_inside_a_runtime_is_refused_not_a_panic() {
         assert_eq!(block_on(async { 7 }), Err(INSIDE_A_RUNTIME.to_owned()));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn start_inside_a_runtime_is_refused_not_a_panic() {
+        assert_eq!(start().err().as_deref(), Some(INSIDE_A_RUNTIME));
     }
 
     #[test]
