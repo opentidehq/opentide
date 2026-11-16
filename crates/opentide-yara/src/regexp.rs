@@ -1,7 +1,9 @@
-//! YARA regular expressions as libyara 4.5 reads them (`re_lexer.l`,
-//! `re_grammar.y`). Errors are what libyara refuses (`yara_regexp`); notes
-//! are what libyara accepts and YARA-X refuses (`yara_x_incompatible`): an
-//! unknown escape such as `\R`, and a `{` that does not start a repetition.
+//! YARA regular expressions as YARA-X reads them, from libyara's grammar
+//! (`re_lexer.l`, `re_grammar.y`) with YARA-X's stricter rules. Errors are
+//! what libyara refuses, and `refused` what only YARA-X refuses (an unknown
+//! escape such as `\R`, a `{` that does not start a repetition): both are
+//! `yara_regexp`. `yara_x_only` is what YARA-X takes and libyara does not
+//! (`(?` groups, an empty first alternative), the portability check's.
 //! The same pass collects the literal bytes every match must contain, for
 //! the atom quality behind `yara_slow_pattern`.
 
@@ -23,7 +25,8 @@ pub struct Finding {
 )]
 pub struct Check {
     pub errors: Vec<Finding>,
-    pub yara_x: Vec<Finding>,
+    pub refused: Vec<Finding>,
+    pub yara_x_only: Vec<Finding>,
     /// The literal bytes matches contain, for atom quality.
     pub atoms: Atoms,
     /// A greedy quantifier (`*`, `+`, `?`, `{n,m}`) and a lazy one (`*?`):
@@ -106,6 +109,8 @@ struct Parser<'a> {
     src: &'a [u8],
     pos: usize,
     check: Check,
+    /// After a `(?u` flag: YARA-X refuses a word boundary in Unicode mode.
+    unicode: bool,
 }
 
 /// Check the source of a regexp (the text between the slashes).
@@ -114,6 +119,7 @@ pub fn check(src: &str) -> Check {
         src: src.as_bytes(),
         pos: 0,
         check: Check::default(),
+        unicode: false,
     };
     if src.is_empty() {
         p.error(0, 0, "empty regular expression");
@@ -140,8 +146,16 @@ impl Parser<'_> {
         });
     }
 
-    fn yara_x(&mut self, start: usize, end: usize, message: &str) {
-        self.check.yara_x.push(Finding {
+    fn yara_x_only(&mut self, start: usize, end: usize, message: &str) {
+        self.check.yara_x_only.push(Finding {
+            start,
+            end,
+            message: message.to_string(),
+        });
+    }
+
+    fn refuse(&mut self, start: usize, end: usize, message: &str) {
+        self.check.refused.push(Finding {
             start,
             end,
             message: message.to_string(),
@@ -156,13 +170,13 @@ impl Parser<'_> {
     fn alternation(&mut self, depth: usize) -> Node {
         let start = self.pos;
         let mut branches = vec![self.concatenation(depth)];
-        // `re_grammar.y`: an alternative cannot start empty (`|a`, `(|a)`);
-        // later branches may be (`a|`, `a||b`).
+        // libyara refuses an alternative that starts empty (`|a`, `(|a)`);
+        // later branches may be (`a|`, `a||b`). YARA-X takes it.
         if self.peek() == Some(b'|') && self.pos == start {
-            self.error(
+            self.yara_x_only(
                 self.pos,
                 self.pos + 1,
-                "syntax error: an empty alternative before `|`",
+                "An empty first alternative in a regular expression (`(|a)`)",
             );
         }
         while self.peek() == Some(b'|') && self.check.errors.is_empty() {
@@ -281,6 +295,48 @@ impl Parser<'_> {
         }
     }
 
+    /// After `(`, at `?`: YARA-X's group heads (the `regex` crate's).
+    /// `Some(true)` a group whose body follows (`(?:`, `(?i:`, `(?P<n>`,
+    /// `(?<n>`), `Some(false)` flags alone (`(?i)`), `None` none of them
+    /// (a look-around, an unknown flag, the end of the text).
+    fn group_head(&mut self) -> Option<bool> {
+        self.pos += 1;
+        let name = if self.src[self.pos..].starts_with(b"P<") {
+            self.pos += 2;
+            true
+        } else if self.peek() == Some(b'<') {
+            self.pos += 1;
+            true
+        } else {
+            false
+        };
+        if name {
+            let len = self.src[self.pos..]
+                .iter()
+                .take_while(|&&b| b.is_ascii_alphanumeric() || b == b'_')
+                .count();
+            self.pos += len;
+            if len == 0 || self.peek() != Some(b'>') {
+                return None;
+            }
+            self.pos += 1;
+            return Some(true);
+        }
+        let mut negated = false;
+        while let Some(c) = self.peek() {
+            self.pos += 1;
+            match c {
+                b'u' => self.unicode = !negated,
+                b'-' => negated = true,
+                b'i' | b'm' | b's' | b'x' | b'U' | b'R' => {}
+                b':' => return Some(true),
+                b')' => return Some(false),
+                _ => return None,
+            }
+        }
+        None
+    }
+
     /// Whether the quantifier at `from..self.pos` has no upper bound.
     fn unbounded_quantifier(&self, from: usize) -> bool {
         let q = &self.src[from..self.pos];
@@ -296,13 +352,27 @@ impl Parser<'_> {
         self.pos += 1;
         match c {
             b'(' => {
+                // Flags set in a group end with it; `(?u)` alone lasts to
+                // the end of the group around it.
+                let outer = self.unicode;
                 if self.peek() == Some(b'?') {
-                    self.error(
-                        start,
-                        start + 2,
-                        "`(?` groups are YARA-X syntax; libyara 4.5 has no group flags",
-                    );
-                    return Item::Other;
+                    match self.group_head() {
+                        Some(true) => {}
+                        // `(?i)`: flags for the rest, matching nothing.
+                        Some(false) => {
+                            self.yara_x_only(
+                                start,
+                                self.pos,
+                                "A `(?` group in a regular expression",
+                            );
+                            return Item::Assertion;
+                        }
+                        None => {
+                            self.error(start, self.pos.max(start + 2), "invalid group: YARA-X takes `(?:`, `(?flags:`, `(?flags)`, `(?P<name>` and `(?<name>`");
+                            return Item::Other;
+                        }
+                    }
+                    self.yara_x_only(start, start + 2, "A `(?` group in a regular expression");
                 }
                 let inner = self.alternation(depth + 1);
                 if self.check.errors.is_empty() {
@@ -312,6 +382,7 @@ impl Parser<'_> {
                         self.error(start, start + 1, "missing )");
                     }
                 }
+                self.unicode = outer;
                 Item::Group(inner)
             }
             b'[' => {
@@ -328,7 +399,7 @@ impl Parser<'_> {
                 if self.repeat_bounds().is_some() {
                     self.error(start, self.pos, "nothing to repeat");
                 } else if !self.yara_x_brace(start) {
-                    self.yara_x(
+                    self.refuse(
                         start,
                         start + 1,
                         "YARA-X requires `{` to be escaped outside a repetition (`\\{`)",
@@ -351,7 +422,16 @@ impl Parser<'_> {
         self.pos += 1;
         match c {
             b'w' | b'W' | b's' | b'S' | b'd' | b'D' => Item::Other,
-            b'b' | b'B' if !in_class => Item::Assertion,
+            b'b' | b'B' if !in_class => {
+                if self.unicode {
+                    self.refuse(
+                        start,
+                        self.pos,
+                        "YARA-X refuses a word boundary (`\\b`, `\\B`) after `(?u)`",
+                    );
+                }
+                Item::Assertion
+            }
             b'0'..=b'9' if !in_class => {
                 self.error(start, self.pos, "backreferences are not allowed");
                 Item::Other
@@ -383,7 +463,7 @@ impl Parser<'_> {
             c if c.is_ascii_alphanumeric() => {
                 // libyara warns "unknown escape sequence" and reads the
                 // character; YARA-X refuses it.
-                self.yara_x(
+                self.refuse(
                     start,
                     self.pos,
                     &format!(
@@ -586,7 +666,15 @@ mod tests {
     }
 
     fn yara_x(src: &str) -> Vec<String> {
-        check(src).yara_x.into_iter().map(|f| f.message).collect()
+        check(src).refused.into_iter().map(|f| f.message).collect()
+    }
+
+    fn yara_x_only(src: &str) -> Vec<String> {
+        check(src)
+            .yara_x_only
+            .into_iter()
+            .map(|f| f.message)
+            .collect()
     }
 
     #[test]
@@ -621,10 +709,50 @@ mod tests {
         assert_eq!(errors("(a)\\1"), ["backreferences are not allowed"]);
         assert_eq!(errors("\\xZZ"), ["illegal escape sequence"]);
         assert!(errors("タイトル").is_empty());
-        assert!(errors("(|abc)ef")[0].contains("empty alternative"));
         assert!(errors("a||b").is_empty());
         assert!(errors("(abc|)").is_empty());
-        assert!(errors("(?i)abc")[0].contains("YARA-X"));
+    }
+
+    /// What YARA-X 1.23 takes and libyara refuses, checked against the
+    /// wheel: the portability check's, never an error.
+    #[test]
+    fn yara_x_only_forms() {
+        for re in [
+            "(|abc)ef",
+            "|abc",
+            "(?i)abc",
+            "ab(?i)c",
+            "(?:abc)",
+            "(?is:abc)",
+            "(?-i:abc)",
+            "(?x)a b",
+            "(?P<n>abc)",
+            "(?<n>abc)",
+            "(?i:)abc",
+        ] {
+            assert!(errors(re).is_empty(), "{re}: {:?}", errors(re));
+            assert_eq!(yara_x_only(re).len(), 1, "{re}");
+        }
+        // YARA-X refuses a word boundary in Unicode mode (E014).
+        for re in ["(?u)foo\\b", "(?u)^abc\\Bxyz$", "(?iu)a\\b{start}x"] {
+            assert_eq!(yara_x(re).len(), 1, "{re}");
+        }
+        for re in [
+            "(?-u)foo\\b",
+            "(?u)^abc(?-u)\\b x",
+            "^((?u)abc)\\b x",
+            "^(?u:abc)\\b x",
+        ] {
+            assert!(yara_x(re).is_empty(), "{re}");
+        }
+        for re in ["(?=abc)", "(?", "(?i", "(?P<>a)", "(?<n"] {
+            assert!(
+                errors(re)[0].contains("invalid group"),
+                "{re}: {:?}",
+                errors(re)
+            );
+        }
+        assert!(yara_x_only("a||b").is_empty());
     }
 
     #[test]

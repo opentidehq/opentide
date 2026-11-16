@@ -47,8 +47,8 @@ pub enum LanguageId {
     /// (`configurations.crowdstrike`). Not Cassandra's CQL.
     #[serde(rename = "cql", alias = "opentide-cql")]
     Cql,
-    /// YARA signatures as libyara 4.5 compiles them, with YARA-X 1.x as a
-    /// second opinion (yara-1.0; HarfangLab and Bitdefender `yara` blocks).
+    /// YARA signatures as YARA-X 1.x compiles them (yara-1.0; HarfangLab
+    /// and Bitdefender `yara` blocks).
     #[serde(rename = "yara", alias = "opentide-yara")]
     Yara,
     /// The Exabeam Query Language of the New-Scale SIEM (exabeam-1.0;
@@ -733,8 +733,10 @@ pub mod codes {
     pub const CQL_REGEX_GROUP_UNDER_OR: &str = "cql_regex_group_under_or";
     pub const CQL_CORRELATE_AGGREGATE: &str = "cql_correlate_aggregate";
 
-    // YARA (yara-1.0, #165). Errors are what libyara 4.5 refuses; the
-    // warnings are yara_x_incompatible through yara_meta_missing.
+    // YARA (yara-1.0, #165). Errors are what YARA-X 1.x refuses (#1225),
+    // and yara_x_only_syntax what a profile refuses; the warnings are
+    // yara_slow_pattern through yara_meta_missing. yara_x_incompatible is
+    // retired (opentide-cli's `explain::RETIRED`).
     pub const YARA_PARSE_ERROR: &str = "yara_parse_error";
     pub const YARA_INCLUDE: &str = "yara_include";
     pub const YARA_SIGNATURE_ALIAS: &str = "yara_signature_alias";
@@ -754,7 +756,6 @@ pub mod codes {
     pub const YARA_HEX_STRING: &str = "yara_hex_string";
     pub const YARA_STRING_MODIFIER: &str = "yara_string_modifier";
     pub const YARA_NUMBER_OUT_OF_RANGE: &str = "yara_number_out_of_range";
-    pub const YARA_X_INCOMPATIBLE: &str = "yara_x_incompatible";
     pub const YARA_X_ONLY_SYNTAX: &str = "yara_x_only_syntax";
     pub const YARA_SLOW_PATTERN: &str = "yara_slow_pattern";
     pub const YARA_ENTRYPOINT_DEPRECATED: &str = "yara_entrypoint_deprecated";
@@ -1069,7 +1070,6 @@ pub mod codes {
         YARA_HEX_STRING,
         YARA_STRING_MODIFIER,
         YARA_NUMBER_OUT_OF_RANGE,
-        YARA_X_INCOMPATIBLE,
         YARA_X_ONLY_SYNTAX,
         YARA_SLOW_PATTERN,
         YARA_ENTRYPOINT_DEPRECATED,
@@ -1744,7 +1744,7 @@ pub mod codes {
             EXABEAM_CORRELATION_WINDOW => {
                 "An Exabeam correlation window is shorter than the longest sequence threshold window."
             }
-            YARA_PARSE_ERROR => "The YARA signature does not parse as libyara 4.5 reads it.",
+            YARA_PARSE_ERROR => "The YARA signature does not parse as YARA-X 1.x reads it.",
             YARA_INCLUDE => {
                 "A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it."
             }
@@ -1761,15 +1761,15 @@ pub mod codes {
                 "A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define."
             }
             YARA_UNREFERENCED_STRING => {
-                "A YARA string is never used in the condition, which libyara refuses unless the condition uses them."
+                "A YARA string is never used in the condition, which YARA-X refuses unless the condition uses them."
             }
             YARA_UNDEFINED_IDENTIFIER => {
-                "A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds."
+                "A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as YARA-X refuses: a module field called as a function, a module function named without a call, or `entrypoint`."
             }
             YARA_RULE_IDENTIFIER_CONFLICT => {
-                "A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible."
+                "A YARA rule is named like a keyword, a built-in or an imported module."
             }
-            YARA_UNKNOWN_MODULE => "A YARA import names a module libyara does not ship.",
+            YARA_UNKNOWN_MODULE => "A YARA import names a module outside yara-1.0's 13.",
             YARA_MODULE_NOT_IMPORTED => {
                 "A YARA module field or function is used without importing its module."
             }
@@ -1782,12 +1782,11 @@ pub mod codes {
                 "A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives."
             }
             YARA_STRING_MODIFIER => {
-                "libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range."
+                "YARA-X refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range."
             }
             YARA_NUMBER_OUT_OF_RANGE => {
-                "A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts."
+                "A YARA integer, size suffix, jump bound or string index is outside the range YARA-X accepts."
             }
-            YARA_X_INCOMPATIBLE => "libyara 4.5 compiles this YARA but YARA-X 1.x refuses it.",
             YARA_X_ONLY_SYNTAX => {
                 "This YARA uses syntax only YARA-X has, and the platform profile has yara_x_syntax refused: the platform may not accept it."
             }
@@ -1795,7 +1794,7 @@ pub mod codes {
                 "libyara warns that this YARA string or loop may slow scanning down."
             }
             YARA_ENTRYPOINT_DEPRECATED => {
-                "entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point."
+                "entrypoint is deprecated in libyara and refused by YARA-X (yara_undefined_identifier); use pe.entry_point or elf.entry_point."
             }
             YARA_SUSPICIOUS_EXPRESSION => {
                 "A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean."

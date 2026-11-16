@@ -61,6 +61,21 @@ pub const RETIRED: &[Retired] = &[
         level: "warning",
     },
     Retired {
+        code: "yara_x_incompatible",
+        retired_in: "opentide 0.29.0",
+        successor: "YARA-X is the YARA language: what it refuses is an error with its own \
+            code (`yara_regexp`, `yara_type`, `yara_parse_error`, ...), and syntax only YARA-X \
+            has is `yara_x_only_syntax` under a profile that refuses it",
+        meaning: "libyara 4.5 compiled the YARA signature, but YARA-X 1.x refused it.",
+        reported_by: "Until opentide 0.29.0, the analysis engine reported it as a warning on a \
+            YARA signature (a HarfangLab or Bitdefender `yara` block, a `.yar` file), where \
+            libyara 4.5 was the language and YARA-X a second opinion. YARA-X is the language \
+            now (#1225): the same signature gets an error with the code of what is wrong, \
+            and `opentide validate` fails on it. No command reports `yara_x_incompatible` now.",
+        example: "opentide explain yara_x_only_syntax",
+        level: "warning",
+    },
+    Retired {
         code: "filename_slug",
         retired_in: "opentide 0.24.0",
         successor: "`opentide lint` reports a file name that is not the object's as \
@@ -766,7 +781,7 @@ mod tests {
 
     #[test]
     fn a_yara_error_keeps_the_generic_query_page() {
-        for code in ["yara_unknown_module", "yara_x_incompatible"] {
+        for code in ["yara_unknown_module", "yara_x_only_syntax"] {
             let page = page(code).unwrap();
             assert!(
                 page.markdown

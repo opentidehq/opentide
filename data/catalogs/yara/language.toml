@@ -6,7 +6,7 @@
 # `yara_unknown_module`.
 known_modules = ["pe", "elf", "math", "hash", "time", "dotnet", "macho", "magic", "cuckoo", "console", "string", "lnk", "dex"]
 
-# libyara 4.5 reserved words (libyara/lexer.l): a rule may not be named after
+# YARA-X 1.x reserved words and built-ins (libyara/lexer.l's, with YARA-X's): a rule may not be named after
 # one (`yara_rule_identifier_conflict`), and neither may a derived HarfangLab
 # rule name (`harfanglab_yara_rule_name`).
 keywords = [
@@ -17,11 +17,13 @@ keywords = [
   "istartswith", "matches", "meta", "nocase", "none", "not", "of", "or",
   "private", "rule", "startswith", "strings", "them", "true", "uint16",
   "uint16be", "uint32", "uint32be", "uint8", "uint8be", "wide", "xor",
+  # YARA-X's: `with` and its 64-bit and float readers.
+  "float32", "float32be", "float64", "float64be", "int64", "int64be",
+  "uint64", "uint64be", "with",
 ]
 
 # yara-1.0 "Platform profiles".
 [profile.harfanglab]
-dialect = "libyara4"
 # Whether the platform is known to accept YARA-X-only syntax (`with`, digit
 # separators, float meta, `"""` strings, booleans in `of` tuples, hex or octal
 # jump bounds, `.len()`): "refused" until a live deploy confirms it
@@ -35,7 +37,6 @@ recommended_meta = ["context"]
 context_values = ["file", "memory", "file.pe", "file.elf", "file.macho"]
 
 [profile.bitdefender]
-dialect = "libyara4"
 # Whether the platform is known to accept YARA-X-only syntax (`with`, digit
 # separators, float meta, `"""` strings, booleans in `of` tuples, hex or octal
 # jump bounds, `.len()`): "refused" until a live deploy confirms it

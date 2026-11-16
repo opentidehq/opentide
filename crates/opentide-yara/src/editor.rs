@@ -5,7 +5,6 @@
 //! cursor, so they work in a rule that does not parse yet.
 
 use crate::catalog::{Catalog, Kind, Member, leaf_name};
-use crate::syntax;
 use opentide_core::{CompletionItem, ParameterInformation, SignatureHelp, SignatureInformation};
 use std::collections::BTreeSet;
 use yara_x_parser::Parser;
@@ -63,8 +62,7 @@ fn span_of(s: &yara_x_parser::Span) -> Span {
 }
 
 fn rules(source: &str) -> Vec<RuleInfo> {
-    let prepared = syntax::prepare(source);
-    let ast = AST::from(Parser::new(prepared.text.as_bytes()));
+    let ast = AST::from(Parser::new(source.as_bytes()));
     ast.rules().map(|r| rule_info(r)).collect()
 }
 
