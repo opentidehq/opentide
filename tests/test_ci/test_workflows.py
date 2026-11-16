@@ -140,6 +140,12 @@ def test_the_changes_job_exports_what_changes_py_writes() -> None:
     assert set(ci_jobs()["changes"]["outputs"]) == written
 
 
+def test_each_changes_output_reads_its_own_plan_output() -> None:
+    """A swapped mapping (`vocab: ${{ steps.plan.outputs.fields }}`) reads as valid."""
+    for name, value in ci_jobs()["changes"]["outputs"].items():
+        assert value == f"${{{{ steps.plan.outputs.{name} }}}}", name
+
+
 def test_the_pr_gates_jobs_run_on_linux() -> None:
     for job_id, job in ci_jobs().items():
         release_or_nightly = "release" in str(job.get("if", "")) or nightly_only(job)
