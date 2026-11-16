@@ -77,12 +77,15 @@ pub(super) fn expression(p: &mut Parser<'_>) -> Option<CompletedMarker> {
 /// Operators of binding power at least `min`.
 fn bin(p: &mut Parser<'_>, min: u8) -> Option<CompletedMarker> {
     let mut lhs = operand(p)?;
-    let mut compared = false;
+    // The power of the last run: an operator that binds tighter than it is
+    // one the run's operand refused (a second comparison, `a and b = c = d`),
+    // which no level of the grammar takes either.
+    let mut last: Option<u8> = None;
     while let Some((power, _)) = infix(p) {
-        if power < min || (power == 3 && compared) {
+        if power < min || last.is_some_and(|last| power > last || (power == 3 && last == 3)) {
             break;
         }
-        compared = power == 3;
+        last = Some(power);
         let m = lhs.precede(p);
         // One flat node per level and run: `a + b - c` is one node.
         while let Some((next, kind)) = infix(p) {
@@ -291,6 +294,25 @@ mod tests {
     fn comparisons_do_not_chain_and_in_takes_a_list() {
         assert!(render("| where a<b").ends_with("--\n"));
         assert!(render("| where a<b<c").contains("unexpected token"));
+        // A comparison after an `and` or `or` run does not chain either:
+        // tree-sitter's comparison operands are additive expressions.
+        for chained in [
+            "| where a and b = c = d",
+            "| where a or b < c > d",
+            "| where a<b and c<d<e",
+            "| eval x=a and b == c != d",
+            "| where (a and b = c = d)",
+        ] {
+            assert!(!render(chained).ends_with("--\n"), "{chained}");
+        }
+        for valid in [
+            "| where a<b and c<d",
+            "| where a + b = c and d",
+            "| where a * b = c or d = e",
+            "| where a = b and c or d",
+        ] {
+            assert!(render(valid).ends_with("--\n"), "{valid}");
+        }
         let out = render(r#"| where x IN ("a", b) and not y"#);
         assert!(out.contains("VALUE_LIST") && out.ends_with("--\n"), "{out}");
     }
