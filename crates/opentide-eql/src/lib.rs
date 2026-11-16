@@ -255,11 +255,17 @@ fn parse_prepared(source: &str) -> Option<(tree::Tree, lexical::Prepared)> {
     Some((tree::parse(source), prepared))
 }
 
+/// Analyze an EQL query: its diagnostics and highlight tokens. The findings'
+/// ranges come from one line table ([`opentide_core::with_line_index`]).
+pub fn analyze(source: &str) -> AnalyzeResult {
+    opentide_core::with_line_index(source, || analyze_lines(source))
+}
+
 #[expect(
     clippy::expect_used,
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
-pub fn analyze(source: &str) -> AnalyzeResult {
+fn analyze_lines(source: &str) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let catalog = Catalog::cached();
     let Some((tree, prepared)) = parse_prepared(source) else {

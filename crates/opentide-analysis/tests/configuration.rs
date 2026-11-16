@@ -264,3 +264,39 @@ fn schemas_that_are_not_json_or_lack_the_router_s_files_are_refused() {
     let schemas = schemas();
     assert_eq!(labels(&schemas, SHARING, "[["), ["misp"]);
 }
+
+/// Placing many findings converts them through one line table, not by a
+/// scan of the file from its start each (a work count, not a wall clock).
+#[test]
+fn many_findings_are_placed_through_one_table() {
+    let n = 500;
+    let mut text = String::new();
+    for i in 0..n {
+        text.push_str("[[misp]]\nname = \"m");
+        text.push_str(&i.to_string());
+        text.push_str("\"\nmax_tlp = \"white\"\n");
+    }
+    let issues = (0..n)
+        .map(|i| {
+            let index = i.to_string();
+            issue(
+                "max_tlp_unknown",
+                &["misp", &index, "max_tlp"],
+                Severity::Error,
+                "not a tlp",
+            )
+        })
+        .collect();
+    let before = opentide_core::scans_from_the_start();
+    let found = place_configuration_issues(&text, issues);
+    assert_eq!(
+        opentide_core::scans_from_the_start(),
+        before,
+        "a finding was converted by a scan"
+    );
+    assert_eq!(found.len(), n);
+    assert_eq!(
+        found[n - 1].range.start.line,
+        u32::try_from(3 * n - 1).unwrap()
+    );
+}

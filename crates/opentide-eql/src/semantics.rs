@@ -309,8 +309,7 @@ fn check_value(
     out: &mut Vec<Diagnostic>,
 ) {
     let span = ByteSpan::new(node.start_byte(), node.end_byte());
-    // Only for a finding: a range is a scan of the source, and every operand of a long run is
-    // checked.
+    // Only for a finding: every operand of a long run is checked, and most have none.
     let range = || span_to_range(source, span);
     if want == Want::StrConst {
         let (required, optional_only) = field_refs(node);
