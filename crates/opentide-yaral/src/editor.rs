@@ -189,6 +189,27 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
     }
 }
 
+/// The token that holds the byte at `offset`, as rowan's
+/// `token_at_offset(offset).right_biased()` finds it, but in a loop: rowan
+/// descends by recursion, one frame per level, and a tree at the depth limit
+/// overflowed a 1 MB stack.
+fn token_at(
+    root: &crate::syntax::SyntaxNode,
+    offset: rowan::TextSize,
+) -> Option<crate::syntax::SyntaxToken> {
+    let mut node = root.clone();
+    loop {
+        let child = node.children_with_tokens().find(|c| {
+            let r = c.text_range();
+            r.start() <= offset && offset < r.end()
+        })?;
+        match child {
+            rowan::NodeOrToken::Token(token) => return Some(token),
+            rowan::NodeOrToken::Node(inner) => node = inner,
+        }
+    }
+}
+
 /// Hover at byte `offset`, read from the pure-Rust tree.
 pub(crate) fn hover_in_tree(source: &str, offset: usize) -> Option<String> {
     use crate::syntax::{SyntaxKind as K, SyntaxNode};
@@ -198,7 +219,7 @@ pub(crate) fn hover_in_tree(source: &str, offset: usize) -> Option<String> {
     }
     let root = SyntaxNode::new_root(crate::parser::parse(source).green);
     let at = rowan::TextSize::try_from(offset).ok()?;
-    let token = root.token_at_offset(at).right_biased()?;
+    let token = token_at(&root, at)?;
     let parent = token.parent()?;
     match (token.kind(), parent.kind()) {
         (K::FIELD_NAME | K::IDENT, K::MEMBER | K::BARE_FIELD) => {
@@ -530,6 +551,41 @@ pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Found by review (#1398): hover found its token with rowan's
+    /// `token_at_offset`, which recurses once per level, and a valid rule whose
+    /// tree is near the depth limit (4,085 chained comparisons, nested to the
+    /// left) aborted the process on a 1 MB stack.
+    #[test]
+    fn hover_in_a_deep_tree_fits_a_small_stack() {
+        let chain = vec!["$e.principal.hostname"; 4_085].join(" = ");
+        let source = format!("rule r {{\n events:\n  {chain}\n condition:\n  $e\n}}\n");
+        let deepest = source.find("hostname").unwrap_or(0);
+        let middle = source.len() / 2 + source[source.len() / 2..].find("hostname").unwrap_or(0);
+        let hovers = std::thread::Builder::new()
+            .stack_size(1 << 20)
+            .spawn(move || {
+                assert_eq!(crate::testing::parse_error_count(&source), 0);
+                [deepest, deepest + 1, middle].map(|at| hover_in_tree(&source, at))
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+        for hover in hovers {
+            assert!(hover.is_some_and(|h| h.contains("hostname")));
+        }
+    }
+
+    #[test]
+    fn hover_reads_the_token_after_a_boundary() {
+        // As `token_at_offset(..).right_biased()`: where `.` ends and
+        // `hostname` starts, the segment; on the dot, nothing to show.
+        let source = "rule r {\n events:\n  $e.principal.hostname = \"x\"\n condition:\n  $e\n}\n";
+        let segment = source.find("hostname").unwrap_or(0);
+        assert_eq!(hover_in_tree(source, segment - 1), None, "on the dot");
+        let field = hover_in_tree(source, segment).unwrap_or_default();
+        assert!(field.contains("hostname"), "{field}");
+    }
 
     fn labels(items: &[CompletionItem]) -> Vec<&str> {
         items.iter().map(|i| i.label.as_str()).collect()
