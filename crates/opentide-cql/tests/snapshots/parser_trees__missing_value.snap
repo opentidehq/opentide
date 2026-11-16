@@ -1,0 +1,12 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..2
+  PIPELINE@0..2
+    FIELD_FILTER@0..2
+      FIELD_NAME@0..1
+        WORD@0..1 "a"
+      EQ@1..2 "="
+
+2..2: expected a value

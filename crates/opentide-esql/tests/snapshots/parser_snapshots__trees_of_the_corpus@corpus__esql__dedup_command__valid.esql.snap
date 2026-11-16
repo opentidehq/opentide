@@ -1,0 +1,28 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/dedup_command__valid.esql
+---
+SOURCE_FILE@0..61
+  COMMENT@0..27 "// prod:dedup_command valid"
+  WHITESPACE@27..28 "\n"
+  QUERY@28..60
+    FROM_COMMAND@28..52
+      FROM_KW@28..32 "FROM"
+      WHITESPACE@32..33 " "
+      INDEX_PATTERN@33..39
+        INDEX_NAME@33..39
+          SOURCE_TEXT@33..39 "logs-*"
+      WHITESPACE@39..40 " "
+      METADATA@40..52
+        METADATA_KW@40..48 "METADATA"
+        WHITESPACE@48..49 " "
+        METADATA_FIELD@49..52
+          SOURCE_TEXT@49..52 "_id"
+    WHITESPACE@52..53 "\n"
+    PIPE@53..54 "|"
+    WHITESPACE@54..55 " "
+    DEDUP_COMMAND@55..60
+      DEDUP_KW@55..60 "DEDUP"
+  WHITESPACE@60..61 "\n"
+--- errors

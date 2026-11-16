@@ -1,0 +1,39 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/events_section__invalid.yaral
+---
+SOURCE_FILE@0..84
+  COMMENT@0..30 "// prod:events_section invalid"
+  WHITESPACE@30..31 "\n"
+  RULE_DECLARATION@31..83
+    RULE_KW@31..35 "rule"
+    WHITESPACE@35..36 " "
+    RULE_NAME@36..37
+      IDENT@36..37 "r"
+    WHITESPACE@37..38 " "
+    L_BRACE@38..39 "{"
+    WHITESPACE@39..42 "\n  "
+    EVENTS_SECTION@42..81
+      EVENTS_KW@42..48 "events"
+      WHITESPACE@48..53 "\n    "
+      COMPARISON@53..81
+        UDM_FIELD@53..75
+          VARIABLE@53..55
+            VAR_TOKEN@53..55 "$e"
+          MEMBER@55..64
+            ACCESS_DOT@55..56 "."
+            FIELD_NAME@56..64 "metadata"
+          MEMBER@64..75
+            ACCESS_DOT@64..65 "."
+            FIELD_NAME@65..75 "event_type"
+        WHITESPACE@75..76 " "
+        EQ@76..77 "="
+        WHITESPACE@77..78 " "
+        LITERAL@78..81
+          STRING@78..81 "\"A\""
+    WHITESPACE@81..82 "\n"
+    R_BRACE@82..83 "}"
+  WHITESPACE@83..84 "\n"
+errors:
+48..53: expected `:` (expected `:`)

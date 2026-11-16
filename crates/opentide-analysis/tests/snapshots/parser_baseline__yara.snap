@@ -173,7 +173,7 @@ yara_parse_error error 4:11-4:14 YARA syntax error: expecting expression or iden
 46..47 punctuation.delimiter
 52..54 variable
 55..58 keyword
-59..62 variable
+59..62 keyword
 63..67 boolean
 68..69 punctuation.bracket
 == corpus/yara/and_expression__valid.yar
@@ -283,7 +283,7 @@ yara_parse_error error 3:0-3:1 YARA syntax error: expecting operator, expression
 7..8 punctuation.bracket
 11..20 keyword
 20..21 punctuation.delimiter
-26..32 function.builtin
+26..32 variable
 32..33 punctuation.bracket
 33..34 number
 35..37 operator
@@ -461,7 +461,7 @@ yara_parse_error error 2:5-2:6 YARA syntax error: expecting `%`, operator, `of`,
 == corpus/yara/for_expression__invalid.yar
 yara_parse_error error 4:25-4:26 YARA syntax error: expecting `:`, found `(`
 0..4 keyword
-5..6 variable
+5..6 type
 7..8 punctuation.bracket
 11..18 keyword
 18..19 punctuation.delimiter
@@ -609,7 +609,8 @@ yara_hex_string error 2:15-2:16 YARA syntax error: expecting INTEGER or `-`, fou
 34..35 punctuation.bracket
 35..36 variable
 36..37 punctuation.bracket
-38..40 number
+38..39 number
+39..40 variable
 41..42 punctuation.bracket
 45..54 keyword
 54..55 punctuation.delimiter
@@ -788,7 +789,7 @@ yara_parse_error error 4:17-4:18 YARA syntax error: expecting operator or `]`, f
 50..51 punctuation.bracket
 51..52 number
 52..53 punctuation.delimiter
-53..57 property
+53..57 variable
 58..60 operator
 61..68 string
 69..70 punctuation.bracket
@@ -937,7 +938,7 @@ yara_parse_error error 3:2-3:11 YARA syntax error: expecting `-`, INTEGER, FLOAT
 7..8 punctuation.bracket
 11..15 keyword
 15..16 punctuation.delimiter
-21..26 property
+21..26 variable
 27..28 operator
 32..41 keyword
 41..42 punctuation.delimiter
@@ -965,12 +966,13 @@ yara_parse_error error 3:2-3:11 YARA syntax error: expecting `-`, INTEGER, FLOAT
 == corpus/yara/meta_section__invalid.yar
 yara_parse_error error 2:2-2:11 YARA syntax error: expecting identifier, found `condition`
 0..4 keyword
-5..6 variable
+5..6 type
 7..8 punctuation.bracket
 11..15 keyword
 15..16 punctuation.delimiter
-19..28 variable
+19..28 keyword
 28..29 punctuation.delimiter
+34..38 boolean
 39..40 punctuation.bracket
 == corpus/yara/meta_section__valid.yar
 0..4 keyword
@@ -992,7 +994,7 @@ yara_parse_error error 2:14-2:15 YARA syntax error: expecting INTEGER or FLOAT, 
 7..8 punctuation.bracket
 11..15 keyword
 15..16 punctuation.delimiter
-21..27 property
+21..27 variable
 28..29 operator
 30..31 operator
 31..32 operator
@@ -1028,7 +1030,7 @@ yara_parse_error error 4:7-4:10 YARA syntax error: expecting `at`, `in`, operato
 37..46 keyword
 46..47 punctuation.delimiter
 52..54 variable
-55..58 variable
+55..58 keyword
 59..60 punctuation.bracket
 == corpus/yara/not_expression__valid.yar
 0..4 keyword
@@ -1313,6 +1315,7 @@ yara_parse_error error 0:5-0:6 YARA syntax error: expecting identifier, found `{
 5..6 punctuation.bracket
 7..16 keyword
 16..17 punctuation.delimiter
+18..22 boolean
 23..24 punctuation.bracket
 == corpus/yara/rule__valid.yar
 0..4 keyword
@@ -1361,7 +1364,7 @@ yara_parse_error error 4:18-4:19 YARA syntax error: expecting expression or iden
 66..69 keyword
 70..72 keyword
 73..74 punctuation.bracket
-74..79 type
+74..79 variable
 79..80 punctuation.delimiter
 80..81 punctuation.bracket
 82..83 punctuation.bracket
@@ -1383,9 +1386,10 @@ yara_x_incompatible warning 4:19-4:24 YARA-X refuses rule wildcards in `of`: it 
 66..69 keyword
 70..72 keyword
 73..74 punctuation.bracket
-74..79 type
+74..79 variable
 79..80 punctuation.delimiter
-81..86 type
+81..85 variable
+85..86 operator
 86..87 punctuation.bracket
 88..89 punctuation.bracket
 == corpus/yara/rule_wildcard__invalid.yar
@@ -1399,7 +1403,7 @@ yara_parse_error error 4:12-4:13 YARA syntax error: expecting pattern identifier
 32..36 boolean
 37..38 punctuation.bracket
 40..44 keyword
-45..46 variable
+45..46 type
 47..48 punctuation.bracket
 51..60 keyword
 60..61 punctuation.delimiter
@@ -1427,7 +1431,8 @@ yara_x_incompatible warning 4:12-4:17 YARA-X refuses rule wildcards in `of`: it 
 66..69 keyword
 70..72 keyword
 73..74 punctuation.bracket
-74..79 type
+74..78 variable
+78..79 operator
 79..80 punctuation.bracket
 81..82 punctuation.bracket
 == corpus/yara/string_count__invalid.yar
@@ -1754,12 +1759,13 @@ yara_slow_pattern warning 2:4-2:7 libyara: string `$a1` may slow down scanning (
 == corpus/yara/strings_section__invalid.yar
 yara_parse_error error 2:2-2:11 YARA syntax error: expecting pattern identifier, found `condition`
 0..4 keyword
-5..6 variable
+5..6 type
 7..8 punctuation.bracket
 11..18 keyword
 18..19 punctuation.delimiter
-22..31 variable
+22..31 keyword
 31..32 punctuation.delimiter
+37..41 boolean
 42..43 punctuation.bracket
 == corpus/yara/strings_section__valid.yar
 0..4 keyword

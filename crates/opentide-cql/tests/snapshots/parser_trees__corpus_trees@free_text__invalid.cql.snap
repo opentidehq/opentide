@@ -1,0 +1,12 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/free_text__invalid.cql
+---
+SOURCE_FILE@0..9
+  PIPELINE@0..8
+    ERROR@0..8
+      PATTERN_ERROR@0..8 "https://"
+  WHITESPACE@8..9 "\n"
+
+0..0: unexpected (expected PIPE)

@@ -1,0 +1,23 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/wildcard_term__valid.lucene
+---
+SourceFile@0..35
+  BooleanQuery@0..35
+    FieldQuery@0..17
+      FieldName@0..12
+        Term@0..12 "process.name"
+      Colon@12..13 ":"
+      TermQuery@13..17
+        WildcardTerm@13..17 "cmd*"
+    Whitespace@17..18 " "
+    And@18..21
+      AndKw@18..21 "AND"
+    Whitespace@21..22 " "
+    FieldQuery@22..35
+      FieldName@22..31
+        Term@22..31 "file.name"
+      Colon@31..32 ":"
+      TermQuery@32..35
+        WildcardTerm@32..35 "a?c"

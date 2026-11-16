@@ -1,0 +1,75 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/file_event_lnx_persistence_sudoers_files.broken.esql
+---
+SOURCE_FILE@0..231
+  QUERY@0..230
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    UNKNOWN_COMMAND@40..230
+      COMMAND_NAME@40..50
+        COMMAND_WORD@40..50 "frobnicate"
+      WHITESPACE@50..51 " "
+      UNKNOWN_TEXT@51..68
+        UNKNOWN_WORD@51..68 "(TargetFilename=="
+      STRING@68..82
+        STRING_LIT@68..82 "\"/etc/sudoers\""
+      WHITESPACE@82..83 " "
+      UNKNOWN_TEXT@83..85
+        UNKNOWN_WORD@83..85 "or"
+      WHITESPACE@85..86 " "
+      UNKNOWN_TEXT@86..113
+        UNKNOWN_WORD@86..113 "starts_with(TargetFilename,"
+      WHITESPACE@113..114 " "
+      STRING@114..131
+        STRING_LIT@114..131 "\"/etc/sudoers.d/\""
+      UNKNOWN_TEXT@131..133
+        UNKNOWN_WORD@131..133 "))"
+      WHITESPACE@133..134 " "
+      UNKNOWN_TEXT@134..137
+        UNKNOWN_WORD@134..137 "and"
+      WHITESPACE@137..138 " "
+      UNKNOWN_TEXT@138..141
+        UNKNOWN_WORD@138..141 "not"
+      WHITESPACE@141..142 " "
+      UNKNOWN_TEXT@142..159
+        UNKNOWN_WORD@142..159 "(ends_with(Image,"
+      WHITESPACE@159..160 " "
+      STRING@160..175
+        STRING_LIT@160..175 "\"/usr/bin/dpkg\""
+      UNKNOWN_TEXT@175..176
+        UNKNOWN_WORD@175..176 ")"
+      WHITESPACE@176..177 " "
+      UNKNOWN_TEXT@177..180
+        UNKNOWN_WORD@177..180 "and"
+      WHITESPACE@180..181 " "
+      UNKNOWN_TEXT@181..197
+        UNKNOWN_WORD@181..197 "TargetFilename=="
+      STRING@197..229
+        STRING_LIT@197..229 "\"/etc/sudoers.d/README.dpkg-new\""
+      UNKNOWN_TEXT@229..230
+        UNKNOWN_WORD@229..230 ")"
+  WHITESPACE@230..231 "\n"
+--- errors

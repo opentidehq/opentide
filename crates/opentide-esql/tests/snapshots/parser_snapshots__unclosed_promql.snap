@@ -1,0 +1,19 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{source}\\n{tree}--- errors\\n{errors}\")"
+---
+PROMQL (rate(x)
+SOURCE_FILE@0..15
+  QUERY@0..15
+    PROMQL_COMMAND@0..15
+      PROMQL_KW@0..6 "PROMQL"
+      WHITESPACE@6..7 " "
+      L_PAREN@7..8 "("
+      PROMQL_TEXT@8..12
+        PROMQL_WORD@8..12 "rate"
+      L_PAREN@12..13 "("
+      PROMQL_TEXT@13..14
+        PROMQL_WORD@13..14 "x"
+      R_PAREN@14..15 ")"
+--- errors
+15..15: expected `)`

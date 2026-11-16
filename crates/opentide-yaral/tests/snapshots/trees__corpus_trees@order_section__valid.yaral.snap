@@ -1,0 +1,84 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/order_section__valid.yaral
+---
+SOURCE_FILE@0..168
+  COMMENT@0..27 "// prod:order_section valid"
+  WHITESPACE@27..28 "\n"
+  SEARCH_QUERY@28..167
+    SEARCH_EVENTS@28..89
+      COMPARISON@28..62
+        BARE_FIELD@28..47
+          IDENT@28..36 "metadata"
+          MEMBER@36..47
+            ACCESS_DOT@36..37 "."
+            FIELD_NAME@37..47 "event_type"
+        WHITESPACE@47..48 " "
+        EQ@48..49 "="
+        WHITESPACE@49..50 " "
+        LITERAL@50..62
+          STRING@50..62 "\"USER_LOGIN\""
+      WHITESPACE@62..63 "\n"
+      COMPARISON@63..89
+        VARIABLE@63..68
+          VAR_TOKEN@63..68 "$user"
+        WHITESPACE@68..69 " "
+        EQ@69..70 "="
+        WHITESPACE@70..71 " "
+        BARE_FIELD@71..89
+          IDENT@71..77 "target"
+          MEMBER@77..82
+            ACCESS_DOT@77..78 "."
+            FIELD_NAME@78..82 "user"
+          MEMBER@82..89
+            ACCESS_DOT@82..83 "."
+            FIELD_NAME@83..89 "userid"
+    WHITESPACE@89..90 "\n"
+    MATCH_SECTION@90..104
+      MATCH_KW@90..95 "match"
+      COLON@95..96 ":"
+      WHITESPACE@96..99 "\n  "
+      MATCH_CLAUSE@99..104
+        VARIABLE@99..104
+          VAR_TOKEN@99..104 "$user"
+    WHITESPACE@104..105 "\n"
+    OUTCOME_SECTION@105..139
+      OUTCOME_KW@105..112 "outcome"
+      COLON@112..113 ":"
+      WHITESPACE@113..116 "\n  "
+      COMPARISON@116..139
+        VARIABLE@116..118
+          VAR_TOKEN@116..118 "$n"
+        WHITESPACE@118..119 " "
+        EQ@119..120 "="
+        WHITESPACE@120..121 " "
+        FUNCTION_CALL@121..139
+          FUNCTION_NAME@121..126
+            IDENT@121..126 "count"
+          L_PAREN@126..127 "("
+          ARGUMENTS@127..138
+            BARE_FIELD@127..138
+              IDENT@127..135 "metadata"
+              MEMBER@135..138
+                ACCESS_DOT@135..136 "."
+                FIELD_NAME@136..138 "id"
+          R_PAREN@138..139 ")"
+    WHITESPACE@139..140 "\n"
+    ORDER_SECTION@140..167
+      ORDER_KW@140..145 "order"
+      COLON@145..146 ":"
+      WHITESPACE@146..149 "\n  "
+      ORDER_ITEM@149..156
+        VARIABLE@149..151
+          VAR_TOKEN@149..151 "$n"
+        WHITESPACE@151..152 " "
+        DESC_KW@152..156 "desc"
+      COMMA@156..157 ","
+      WHITESPACE@157..158 " "
+      ORDER_ITEM@158..167
+        VARIABLE@158..163
+          VAR_TOKEN@158..163 "$user"
+        WHITESPACE@163..164 " "
+        ASC_KW@164..167 "asc"
+  WHITESPACE@167..168 "\n"

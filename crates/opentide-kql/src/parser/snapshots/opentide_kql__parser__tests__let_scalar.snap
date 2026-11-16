@@ -1,0 +1,38 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"let x = 1;\\nlet y = a + 1;\\nT\")"
+---
+SOURCE_FILE@0..27
+  LET_STATEMENT@0..10
+    LET_KW@0..3 "let"
+    WHITESPACE@3..4 " "
+    IDENT@4..5 "x"
+    WHITESPACE@5..6 " "
+    EQ@6..7 "="
+    WHITESPACE@7..8 " "
+    LITERAL@8..9
+      NUMBER@8..9 "1"
+    SEMICOLON@9..10 ";"
+  WHITESPACE@10..11 "\n"
+  LET_STATEMENT@11..25
+    LET_KW@11..14 "let"
+    WHITESPACE@14..15 " "
+    IDENT@15..16 "y"
+    WHITESPACE@16..17 " "
+    EQ@17..18 "="
+    WHITESPACE@18..19 " "
+    ADDITIVE_EXPR@19..24
+      NAME_REF@19..20
+        IDENT@19..20 "a"
+      WHITESPACE@20..21 " "
+      PLUS@21..22 "+"
+      WHITESPACE@22..23 " "
+      LITERAL@23..24
+        NUMBER@23..24 "1"
+    SEMICOLON@24..25 ";"
+  WHITESPACE@25..26 "\n"
+  QUERY@26..27
+    TABULAR_EXPRESSION@26..27
+      TABULAR_SOURCE@26..27
+        TABLE_REF@26..27
+          IDENT@26..27 "T"

@@ -1,0 +1,41 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/is_null_expression__invalid.esql
+---
+SOURCE_FILE@0..85
+  COMMENT@0..34 "// prod:is_null_expression invalid"
+  WHITESPACE@34..35 "\n"
+  QUERY@35..84
+    FROM_COMMAND@35..59
+      FROM_KW@35..39 "FROM"
+      WHITESPACE@39..40 " "
+      INDEX_PATTERN@40..46
+        INDEX_NAME@40..46
+          SOURCE_TEXT@40..46 "logs-*"
+      WHITESPACE@46..47 " "
+      METADATA@47..59
+        METADATA_KW@47..55 "METADATA"
+        WHITESPACE@55..56 " "
+        METADATA_FIELD@56..59
+          SOURCE_TEXT@56..59 "_id"
+    WHITESPACE@59..60 "\n"
+    PIPE@60..61 "|"
+    WHITESPACE@61..62 " "
+    WHERE_COMMAND@62..84
+      WHERE_KW@62..67 "WHERE"
+      WHITESPACE@67..68 " "
+      IS_NULL_EXPRESSION@68..84
+        QUALIFIED_NAME@68..77
+          IDENTIFIER@68..72
+            IDENT@68..72 "user"
+          DOT@72..73 "."
+          IDENTIFIER@73..77
+            IDENT@73..77 "name"
+        WHITESPACE@77..78 " "
+        IS_KW@78..80 "IS"
+        WHITESPACE@80..81 " "
+        NOT_KW@81..84 "NOT"
+  WHITESPACE@84..85 "\n"
+--- errors
+84..85: expected `null` (expected NULL_KW)

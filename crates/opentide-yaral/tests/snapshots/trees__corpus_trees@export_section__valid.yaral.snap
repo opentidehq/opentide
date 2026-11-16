@@ -1,0 +1,101 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/export_section__valid.yaral
+---
+SOURCE_FILE@0..227
+  COMMENT@0..28 "// prod:export_section valid"
+  WHITESPACE@28..29 "\n"
+  RULE_DECLARATION@29..226
+    RULE_KW@29..33 "rule"
+    WHITESPACE@33..34 " "
+    RULE_NAME@34..35
+      IDENT@34..35 "r"
+    WHITESPACE@35..36 " "
+    L_BRACE@36..37 "{"
+    WHITESPACE@37..40 "\n  "
+    META_SECTION@40..62
+      META_KW@40..44 "meta"
+      COLON@44..45 ":"
+      WHITESPACE@45..50 "\n    "
+      META_ENTRY@50..62
+        META_KEY@50..56
+          IDENT@50..56 "author"
+        WHITESPACE@56..57 " "
+        EQ@57..58 "="
+        WHITESPACE@58..59 " "
+        LITERAL@59..62
+          STRING@59..62 "\"a\""
+    WHITESPACE@62..65 "\n  "
+    EVENTS_SECTION@65..114
+      EVENTS_KW@65..71 "events"
+      COLON@71..72 ":"
+      WHITESPACE@72..77 "\n    "
+      COMPARISON@77..114
+        UDM_FIELD@77..99
+          VARIABLE@77..79
+            VAR_TOKEN@77..79 "$e"
+          MEMBER@79..88
+            ACCESS_DOT@79..80 "."
+            FIELD_NAME@80..88 "metadata"
+          MEMBER@88..99
+            ACCESS_DOT@88..89 "."
+            FIELD_NAME@89..99 "event_type"
+        WHITESPACE@99..100 " "
+        EQ@100..101 "="
+        WHITESPACE@101..102 " "
+        LITERAL@102..114
+          STRING@102..114 "\"USER_LOGIN\""
+    WHITESPACE@114..117 "\n  "
+    OUTCOME_SECTION@117..159
+      OUTCOME_KW@117..124 "outcome"
+      COLON@124..125 ":"
+      WHITESPACE@125..130 "\n    "
+      COMPARISON@130..159
+        VARIABLE@130..135
+          VAR_TOKEN@130..135 "$user"
+        WHITESPACE@135..136 " "
+        EQ@136..137 "="
+        WHITESPACE@137..138 " "
+        UDM_FIELD@138..159
+          VARIABLE@138..140
+            VAR_TOKEN@138..140 "$e"
+          MEMBER@140..147
+            ACCESS_DOT@140..141 "."
+            FIELD_NAME@141..147 "target"
+          MEMBER@147..152
+            ACCESS_DOT@147..148 "."
+            FIELD_NAME@148..152 "user"
+          MEMBER@152..159
+            ACCESS_DOT@152..153 "."
+            FIELD_NAME@153..159 "userid"
+    WHITESPACE@159..162 "\n  "
+    CONDITION_SECTION@162..179
+      CONDITION_KW@162..171 "condition"
+      COLON@171..172 ":"
+      WHITESPACE@172..177 "\n    "
+      VARIABLE@177..179
+        VAR_TOKEN@177..179 "$e"
+    WHITESPACE@179..182 "\n  "
+    EXPORT_SECTION@182..224
+      EXPORT_KW@182..188 "export"
+      COLON@188..189 ":"
+      WHITESPACE@189..194 "\n    "
+      TABLE_CALL@194..224
+        REFERENCE_LIST@194..201
+          REF_LIST_TOKEN@194..201 "%logins"
+        DOT@201..202 "."
+        IDENT@202..211 "write_row"
+        L_PAREN@211..212 "("
+        ARGUMENTS@212..223
+          NAMED_ARGUMENT@212..223
+            ARGUMENT_NAME@212..216
+              IDENT@212..216 "user"
+            COLON@216..217 ":"
+            WHITESPACE@217..218 " "
+            VARIABLE@218..223
+              VAR_TOKEN@218..223 "$user"
+        R_PAREN@223..224 ")"
+    WHITESPACE@224..225 "\n"
+    R_BRACE@225..226 "}"
+  WHITESPACE@226..227 "\n"

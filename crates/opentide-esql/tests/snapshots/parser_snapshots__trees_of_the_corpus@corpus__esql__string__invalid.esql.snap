@@ -1,0 +1,41 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/string__invalid.esql
+---
+SOURCE_FILE@0..82
+  COMMENT@0..22 "// prod:string invalid"
+  WHITESPACE@22..23 "\n"
+  QUERY@23..81
+    FROM_COMMAND@23..47
+      FROM_KW@23..27 "FROM"
+      WHITESPACE@27..28 " "
+      INDEX_PATTERN@28..34
+        INDEX_NAME@28..34
+          SOURCE_TEXT@28..34 "logs-*"
+      WHITESPACE@34..35 " "
+      METADATA@35..47
+        METADATA_KW@35..43 "METADATA"
+        WHITESPACE@43..44 " "
+        METADATA_FIELD@44..47
+          SOURCE_TEXT@44..47 "_id"
+    WHITESPACE@47..48 "\n"
+    PIPE@48..49 "|"
+    WHITESPACE@49..50 " "
+    WHERE_COMMAND@50..81
+      WHERE_KW@50..55 "WHERE"
+      WHITESPACE@55..56 " "
+      COMPARISON@56..81
+        QUALIFIED_NAME@56..65
+          IDENTIFIER@56..60
+            IDENT@56..60 "file"
+          DOT@60..61 "."
+          IDENTIFIER@61..65
+            IDENT@61..65 "path"
+        WHITESPACE@65..66 " "
+        EQ_EQ@66..68 "=="
+        WHITESPACE@68..69 " "
+        STRING@69..81
+          STRING_LIT@69..81 "\"C:\\Windows\""
+  WHITESPACE@81..82 "\n"
+--- errors

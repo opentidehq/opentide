@@ -1,0 +1,15 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/not_expression__invalid.yaral
+---
+SOURCE_FILE@0..35
+  COMMENT@0..30 "// prod:not_expression invalid"
+  WHITESPACE@30..31 "\n"
+  SEARCH_QUERY@31..34
+    SEARCH_EVENTS@31..34
+      NOT_EXPR@31..34
+        NOT_KW@31..34 "not"
+  WHITESPACE@34..35 "\n"
+errors:
+34..35: expected an expression

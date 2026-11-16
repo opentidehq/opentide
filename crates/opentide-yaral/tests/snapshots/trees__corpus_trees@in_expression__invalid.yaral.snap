@@ -1,0 +1,27 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/in_expression__invalid.yaral
+---
+SOURCE_FILE@0..54
+  COMMENT@0..29 "// prod:in_expression invalid"
+  WHITESPACE@29..30 "\n"
+  SEARCH_QUERY@30..53
+    SEARCH_EVENTS@30..53
+      IN_EXPR@30..53
+        UDM_FIELD@30..45
+          VARIABLE@30..32
+            VAR_TOKEN@30..32 "$e"
+          MEMBER@32..42
+            ACCESS_DOT@32..33 "."
+            FIELD_NAME@33..42 "principal"
+          MEMBER@42..45
+            ACCESS_DOT@42..43 "."
+            FIELD_NAME@43..45 "ip"
+        WHITESPACE@45..46 " "
+        IN_KW@46..48 "in"
+        WHITESPACE@48..49 " "
+        CIDR_KW@49..53 "cidr"
+  WHITESPACE@53..54 "\n"
+errors:
+53..54: expected a reference list such as `%list` (expected a reference list such as `%list`)

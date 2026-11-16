@@ -1,0 +1,85 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | summarize hint.strategy = shuffle count(), c = dcount(a) by bin(t, 1h), k = b | summarize by x | summarize count()\")"
+---
+SOURCE_FILE@0..118
+  QUERY@0..118
+    TABULAR_EXPRESSION@0..118
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      SUMMARIZE_OPERATOR@4..81
+        SUMMARIZE_KW@4..13 "summarize"
+        WHITESPACE@13..14 " "
+        HINT_OPTION@14..37
+          HINT_NAME@14..27 "hint.strategy"
+          WHITESPACE@27..28 " "
+          EQ@28..29 "="
+          WHITESPACE@29..30 " "
+          OPTION_VALUE@30..37
+            IDENT@30..37 "shuffle"
+        WHITESPACE@37..38 " "
+        FUNCTION_CALL@38..45
+          IDENT@38..43 "count"
+          L_PAREN@43..44 "("
+          R_PAREN@44..45 ")"
+        COMMA@45..46 ","
+        WHITESPACE@46..47 " "
+        ASSIGNMENT@47..60
+          NAME_REF@47..48
+            IDENT@47..48 "c"
+          WHITESPACE@48..49 " "
+          EQ@49..50 "="
+          WHITESPACE@50..51 " "
+          FUNCTION_CALL@51..60
+            IDENT@51..57 "dcount"
+            L_PAREN@57..58 "("
+            NAME_REF@58..59
+              IDENT@58..59 "a"
+            R_PAREN@59..60 ")"
+        WHITESPACE@60..61 " "
+        BY_KW@61..63 "by"
+        WHITESPACE@63..64 " "
+        FUNCTION_CALL@64..74
+          IDENT@64..67 "bin"
+          L_PAREN@67..68 "("
+          NAME_REF@68..69
+            IDENT@68..69 "t"
+          COMMA@69..70 ","
+          WHITESPACE@70..71 " "
+          LITERAL@71..73
+            TIMESPAN@71..73 "1h"
+          R_PAREN@73..74 ")"
+        COMMA@74..75 ","
+        WHITESPACE@75..76 " "
+        ASSIGNMENT@76..81
+          NAME_REF@76..77
+            IDENT@76..77 "k"
+          WHITESPACE@77..78 " "
+          EQ@78..79 "="
+          WHITESPACE@79..80 " "
+          NAME_REF@80..81
+            IDENT@80..81 "b"
+      WHITESPACE@81..82 " "
+      PIPE@82..83 "|"
+      WHITESPACE@83..84 " "
+      SUMMARIZE_OPERATOR@84..98
+        SUMMARIZE_KW@84..93 "summarize"
+        WHITESPACE@93..94 " "
+        BY_KW@94..96 "by"
+        WHITESPACE@96..97 " "
+        NAME_REF@97..98
+          IDENT@97..98 "x"
+      WHITESPACE@98..99 " "
+      PIPE@99..100 "|"
+      WHITESPACE@100..101 " "
+      SUMMARIZE_OPERATOR@101..118
+        SUMMARIZE_KW@101..110 "summarize"
+        WHITESPACE@110..111 " "
+        FUNCTION_CALL@111..118
+          IDENT@111..116 "count"
+          L_PAREN@116..117 "("
+          R_PAREN@117..118 ")"

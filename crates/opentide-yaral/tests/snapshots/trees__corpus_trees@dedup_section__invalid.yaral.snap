@@ -1,0 +1,38 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/dedup_section__invalid.yaral
+---
+SOURCE_FILE@0..94
+  COMMENT@0..29 "// prod:dedup_section invalid"
+  WHITESPACE@29..30 "\n"
+  SEARCH_QUERY@30..93
+    SEARCH_EVENTS@30..64
+      COMPARISON@30..64
+        BARE_FIELD@30..49
+          IDENT@30..38 "metadata"
+          MEMBER@38..49
+            ACCESS_DOT@38..39 "."
+            FIELD_NAME@39..49 "event_type"
+        WHITESPACE@49..50 " "
+        EQ@50..51 "="
+        WHITESPACE@51..52 " "
+        LITERAL@52..64
+          STRING@52..64 "\"USER_LOGIN\""
+    WHITESPACE@64..65 "\n"
+    DEDUP_SECTION@65..93
+      DEDUP_KW@65..70 "dedup"
+      COLON@70..71 ":"
+      WHITESPACE@71..74 "\n  "
+      BARE_FIELD@74..92
+        IDENT@74..80 "target"
+        MEMBER@80..85
+          ACCESS_DOT@80..81 "."
+          FIELD_NAME@81..85 "user"
+        MEMBER@85..92
+          ACCESS_DOT@85..86 "."
+          FIELD_NAME@86..92 "userid"
+      COMMA@92..93 ","
+  WHITESPACE@93..94 "\n"
+errors:
+93..94: expected an expression
