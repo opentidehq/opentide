@@ -1,4 +1,5 @@
-//! The parser's depth guards, on the 1 MB stack of the browser module: the
+//! The parser's depth guards, on the 1 MB stack of the browser module (more
+//! on Windows and under coverage, [`SMALL_STACK`]): the
 //! floors `crates/opentide-analysis/tests/deep_queries.rs` holds for ES|QL
 //! (1,000 nesting levels, a 10,000-term chain) must parse without a
 //! diagnostic, and deeper nesting is one diagnostic, never an overflow.
@@ -15,7 +16,19 @@ mod parser;
 #[path = "../src/syntax.rs"]
 mod syntax;
 
-/// Parses on a 1 MB stack; the number of errors.
+/// The stack the depth checks run on: the browser WASM module's 1 MB.
+#[cfg(not(any(coverage, windows)))]
+const SMALL_STACK: usize = 1 << 20;
+/// A Windows debug build's frames are larger, and `cargo llvm-cov`'s
+/// instrumentation enlarges every frame: the depths that fit 1 MB on Linux
+/// overflowed the nightly's Windows engine tests. Neither binary is the WASM
+/// budget, which the Linux and macOS test jobs keep enforcing at 1 MB; 8 MB is
+/// a generous bound, not a measurement. The same rule as `SMALL_STACK` in
+/// `crates/opentide-analysis/tests/deep_queries.rs`.
+#[cfg(any(coverage, windows))]
+const SMALL_STACK: usize = 8 << 20;
+
+/// Parses on a [`SMALL_STACK`]; the number of errors.
 fn errors(source: String) -> usize {
     eprintln!(
         "parsing {} bytes: {}",
@@ -23,7 +36,7 @@ fn errors(source: String) -> usize {
         &source[..source.len().min(60)]
     );
     std::thread::Builder::new()
-        .stack_size(1 << 20)
+        .stack_size(SMALL_STACK)
         .spawn(move || parser::parse(&source).errors.len())
         .map(|h| h.join().unwrap_or(usize::MAX))
         .unwrap_or(usize::MAX)
@@ -54,7 +67,7 @@ fn nesting_floor_chain_floor_and_the_limit() {
 }
 
 /// Every construct that recurses, at the nesting the floor asks of
-/// parentheses (1,000) and past it (1,100), unclosed too, on a 1 MB stack:
+/// parentheses (1,000) and past it (1,100), unclosed too, on a [`SMALL_STACK`]:
 /// none aborts. A call is charged two levels, so 1,000 calls are one
 /// diagnostic, not a stack overflow.
 #[test]

@@ -1,5 +1,6 @@
 //! Every public entry point of the engine on the 1 MB stack of the browser
-//! module (epic #1219's exit criteria): each token class one million
+//! module (epic #1219's exit criteria; more on Windows and under coverage,
+//! [`SMALL_STACK`]): each token class one million
 //! characters long, and the deepest nesting and longest chains the parser
 //! accepts and past them. None may overflow, panic or go quadratic.
 
@@ -10,13 +11,25 @@ use opentide_esql::{
 use std::thread;
 use std::time::{Duration, Instant};
 
+/// The stack the depth checks run on: the browser WASM module's 1 MB.
+#[cfg(not(any(coverage, windows)))]
+const SMALL_STACK: usize = 1 << 20;
+/// A Windows debug build's frames are larger, and `cargo llvm-cov`'s
+/// instrumentation enlarges every frame: the depths that fit 1 MB on Linux
+/// overflowed the nightly's Windows engine tests. Neither binary is the WASM
+/// budget, which the Linux and macOS test jobs keep enforcing at 1 MB; 8 MB is
+/// a generous bound, not a measurement. The same rule as `SMALL_STACK` in
+/// `crates/opentide-analysis/tests/deep_queries.rs`.
+#[cfg(any(coverage, windows))]
+const SMALL_STACK: usize = 8 << 20;
+
 /// Runs every entry point over `source`, the offset ones at its start, middle
-/// and end (moved back to a character boundary), on a 1 MB stack.
+/// and end (moved back to a character boundary), on a [`SMALL_STACK`].
 fn every_entry_point(source: String) {
     let head: String = source.chars().take(50).collect();
     let started = Instant::now();
     let joined = thread::Builder::new()
-        .stack_size(1 << 20)
+        .stack_size(SMALL_STACK)
         .spawn(move || {
             analyze(&source);
             analyze_for(&source, opentide_esql::StackTarget::parse("8.19"));
