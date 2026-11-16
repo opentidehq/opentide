@@ -13,7 +13,7 @@
 #
 # - The plan names no tiers. Foundation crates depend on one another today (the
 #   query engines on core, syntax and highlight; ES|QL and EQL on Lucene), so
-#   foundation has four tiers read off `cargo metadata`, and a fifth, from the
+#   foundation has five tiers read off `cargo metadata`, and a sixth, from the
 #   plan's row order, for opentide-schema (below); domain has two.
 # - opentide-tide and opentide-analysis are Domain: the plan folds both into
 #   opentide-workspace (UC-2.x), and opentide-analysis depends on opentide-tide.
@@ -67,6 +67,12 @@
 #   0.13.0 to 0.16.0, E1) are foundation tier 2, beside opentide-cql: query
 #   engines like it, they depend on opentide-core, -syntax and -highlight (and
 #   yara-x-parser, yara-x-fmt or regex-syntax) and on no other query engine.
+# - opentide-lucene (#1231) is foundation tier 3, above opentide-kuery: each
+#   Elastic query string engine tells a rule written for the other language
+#   partly by whether the other grammar accepts the text. The Lucene engine
+#   asks `opentide_kuery::parses`; the KQL engine takes the Lucene verdict as
+#   an argument of `analyze`, which opentide-analysis and opentide-tide pass.
+#   ES|QL and EQL (Lucene's regular expressions) sit above it.
 # - opentide-parse (ADR 0012, #1221) is foundation tier 1, beside
 #   opentide-syntax, which it replaces: the pure-Rust parsers' toolkit (logos,
 #   rowan) depends on no workspace crate, and every query engine above it may
@@ -77,8 +83,9 @@ name = "foundation"
 tiers = [
     ["opentide-core", "opentide-compare", "opentide-schema-derive", "opentide-cassette"],
     ["opentide-syntax", "opentide-parse", "opentide-highlight", "opentide-ecs"],
-    ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-lucene", "opentide-falco", "opentide-cql",
+    ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-falco", "opentide-cql",
      "opentide-yara", "opentide-yaral", "opentide-exabeam"],
+    ["opentide-lucene"],
     ["opentide-esql", "opentide-eql"],
     ["opentide-schema"],
 ]

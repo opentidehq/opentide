@@ -318,7 +318,7 @@ struct New;
 
 impl Engine for New {
     fn observe(&self, input: &str) -> Surfaces {
-        let r = opentide_kuery::analyze(input);
+        let r = opentide_kuery::analyze(input, |_| false);
         vec![
             ("diagnostics".to_owned(), show(&r.diagnostics)),
             ("highlight".to_owned(), tokens(&r.tokens)),
@@ -516,7 +516,7 @@ fn the_highlight_golden_is_covered() {
         "old engine"
     );
     assert_eq!(
-        tokens(&opentide_kuery::analyze(&query).tokens),
+        tokens(&opentide_kuery::analyze(&query, |_| false).tokens),
         expected,
         "new engine"
     );

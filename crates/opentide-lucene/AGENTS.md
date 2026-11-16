@@ -7,7 +7,7 @@ catalog in `data/catalogs/carbon_black/`), with Lucene's own regular-expression 
 
 ## Place
 
-foundation, tier 2: depends on opentide-core, -ecs, -syntax, -highlight. Used by opentide-esql, -eql, -tide and -analysis.
+foundation, tier 3: depends on opentide-core, -ecs, -parse, -highlight, and opentide-kuery (`parses`: a Lucene error that Kibana KQL accepts is one sign of a rule written for `language: kuery`). Used by opentide-esql, -eql, -tide and -analysis.
 
 ## Invariants
 

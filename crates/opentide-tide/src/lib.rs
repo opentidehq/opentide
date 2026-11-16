@@ -783,7 +783,7 @@ fn analyze_injections(
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Kuery => {
-                let mut r = opentide_kuery::analyze(&inj.inner);
+                let mut r = opentide_kuery::analyze(&inj.inner, opentide_lucene::parses);
                 if let Some(indices) = elastic::ecs_indices(configurations, &inj.field_path) {
                     let ecs = opentide_ecs::with_declared_fields(&indices, || {
                         opentide_kuery::ecs_diagnostics(&inj.inner)

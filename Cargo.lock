@@ -3580,6 +3580,7 @@ dependencies = [
  "opentide-core",
  "opentide-ecs",
  "opentide-highlight",
+ "opentide-kuery",
  "opentide-parse",
  "opentide-syntax",
  "regex",

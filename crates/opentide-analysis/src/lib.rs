@@ -174,7 +174,7 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
             }
         }
         LanguageId::Kuery => {
-            let r = opentide_kuery::analyze(&request.text);
+            let r = opentide_kuery::analyze(&request.text, opentide_lucene::parses);
             AnalyzeResponse {
                 diagnostics: r.diagnostics,
                 tokens: r.tokens,

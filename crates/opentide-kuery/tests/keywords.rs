@@ -22,7 +22,7 @@ fn every_table_token_is_highlighted_with_its_capture() {
     let table = keywords(LanguageId::Kuery).expect("kuery has a KEYWORDS table");
     for (token, capture) in table {
         let source = sample(token);
-        let tokens = opentide_kuery::analyze(&source).tokens;
+        let tokens = opentide_kuery::analyze(&source, |_| false).tokens;
         assert!(
             tokens.iter().any(|t| &source[t.span.start..t.span.end] == *token
                 && t.capture == capture.name()),
@@ -41,7 +41,7 @@ fn only_table_tokens_are_operators_or_brackets() {
         "x:\"q\" or y > 4",
         "a: (1 or 2)",
     ] {
-        for t in opentide_kuery::analyze(source).tokens {
+        for t in opentide_kuery::analyze(source, |_| false).tokens {
             let text = &source[t.span.start..t.span.end];
             if matches!(t.capture.as_str(), "operator" | "punctuation.bracket") {
                 assert!(

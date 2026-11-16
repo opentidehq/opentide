@@ -64,7 +64,7 @@ fn analyze(
             },
         ),
         LanguageId::Kuery => (
-            opentide_kuery::analyze(query).diagnostics,
+            opentide_kuery::analyze(query, opentide_lucene::parses).diagnostics,
             if ecs {
                 opentide_kuery::ecs_diagnostics(query)
             } else {

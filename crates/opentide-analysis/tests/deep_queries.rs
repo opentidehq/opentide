@@ -236,7 +236,10 @@ fn long_or_chains_do_not_overflow_the_stack() {
         opentide_eql::ecs_diagnostics(&q);
     });
     on_small_stack("kuery", || {
-        opentide_kuery::analyze(&chain("a:1", " or ", KUERY_CHAIN_FLOOR));
+        opentide_kuery::analyze(
+            &chain("a:1", " or ", KUERY_CHAIN_FLOOR),
+            opentide_lucene::parses,
+        );
         opentide_kuery::ecs_diagnostics(&chain("source.port:1", " or ", KUERY_CHAIN_FLOOR));
     });
     on_small_stack("lucene", || {
@@ -352,7 +355,9 @@ fn eql_chain_floor() {
 #[test]
 fn kuery_chain_floor() {
     let q = chain("a:1", " or ", KUERY_CHAIN_FLOOR);
-    analyzes_cleanly("kuery chain", q, |q| opentide_kuery::analyze(q).diagnostics);
+    analyzes_cleanly("kuery chain", q, |q| {
+        opentide_kuery::analyze(q, opentide_lucene::parses).diagnostics
+    });
 }
 
 #[test]
@@ -378,7 +383,9 @@ fn eql_nest_floor() {
 #[test]
 fn kuery_nest_floor() {
     let q = nest("a:1", KUERY_NEST_FLOOR);
-    analyzes_cleanly("kuery nest", q, |q| opentide_kuery::analyze(q).diagnostics);
+    analyzes_cleanly("kuery nest", q, |q| {
+        opentide_kuery::analyze(q, opentide_lucene::parses).diagnostics
+    });
 }
 
 /// kuery's `max_depth` (`opentide-kuery` `MAX_DEPTH`): the margin above
@@ -394,7 +401,7 @@ fn kuery_nest_at_its_limit() {
         format!("a:{}", nest("b", KUERY_MAX_DEPTH)),
     ] {
         analyzes_cleanly("kuery nest at the limit", q, |q| {
-            opentide_kuery::analyze(q).diagnostics
+            opentide_kuery::analyze(q, opentide_lucene::parses).diagnostics
         });
     }
 }
@@ -408,7 +415,7 @@ fn kuery_nest_past_its_limit_is_one_error() {
         "a:{".repeat(50_000),
     ] {
         let diagnostics = on_small_stack("kuery nest past the limit", move || {
-            opentide_kuery::analyze(&q).diagnostics
+            opentide_kuery::analyze(&q, opentide_lucene::parses).diagnostics
         });
         let errors: Vec<_> = diagnostics
             .iter()
