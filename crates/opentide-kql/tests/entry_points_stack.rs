@@ -64,17 +64,28 @@ fn long_tokens_in_a_query() {
         let (elapsed, _) = every_entry_point(source);
         assert_fast(name, elapsed);
     }
-    // Many short tokens of each class.
-    for (name, token) in [
-        ("names", "a "),
-        ("pipes", "| take 1 "),
-        ("strings", "\"x\" "),
-        ("quoted names", "['x'] "),
-        ("commas", ", "),
+    // Many short tokens of each class, in a valid query, so that every pass
+    // reads them all (a broken one stops at its error).
+    // A call costs a catalog lookup (about 0.5 ms in a debug build, linear:
+    // 12,500 took 6 s, 25,000 took 12 s), so calls run at a quarter of that.
+    for (name, item, count) in [
+        ("names", "a", N / 10),
+        ("strings", "\"x\"", N / 10),
+        ("quoted names", "['x']", N / 10),
+        ("numbers", "1", N / 10),
+        ("timespans", "5m", N / 10),
+        ("calls", "strlen(a)", N / 40),
     ] {
-        let source = format!("SecurityEvent | project {}", token.repeat(N / 10));
-        let (elapsed, _) = every_entry_point(source);
+        let source = format!(
+            "SecurityEvent | where a in ({})",
+            vec![item; count].join(", ")
+        );
+        let (elapsed, codes) = every_entry_point(source);
         assert_fast(name, elapsed);
+        assert!(
+            !codes.iter().any(|c| c == "kql_parse_error"),
+            "{name}: {codes:?}"
+        );
     }
 }
 

@@ -57,7 +57,8 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     if let Some(error) = parsed.errors.first() {
         with_typed_literal_hint(&mut diagnostics);
         let boundary = lines.position(usize::from(quiet_from(&root, error)));
-        quiet_after_the_error(&mut diagnostics, boundary);
+        let whole = whole_unknown_operators(&root, &lines);
+        quiet_after_the_error(&mut diagnostics, boundary, &whole);
     }
     // The scope checks scan tokens, not the tree: the old engine gave them on
     // broken input too, and `union *` and `search *`, which both engines
@@ -99,12 +100,41 @@ fn quiet_from(root: &SyntaxNode, error: &SyntaxError) -> rowan::TextSize {
         .fold(at, rowan::TextSize::min)
 }
 
+/// The ranges of the unknown operators that parsed whole: no error node in
+/// them and every bracket closed (`summarzie count()`, not `summarzie
+/// count(`). The syntax error that follows one is what its mistyped name
+/// caused, so its "did you mean" stays ([`quiet_after_the_error`]).
+fn whole_unknown_operators(root: &SyntaxNode, lines: &LineIndex) -> Vec<Range> {
+    root.descendants()
+        .filter(|n| n.kind() == K::UNKNOWN_OPERATOR)
+        .filter(|n| {
+            let mut depth = 0_i64;
+            let mut broken = false;
+            for element in n.descendants_with_tokens() {
+                match element.kind() {
+                    K::ERROR => broken = true,
+                    K::L_PAREN | K::L_BRACKET | K::L_BRACE => depth += 1,
+                    K::R_PAREN | K::R_BRACKET | K::R_BRACE => depth -= 1,
+                    _ => {}
+                }
+            }
+            !broken && depth == 0
+        })
+        .map(|n| range_of(lines, n.text_range()))
+        .collect()
+}
+
 /// Broken input must not get noisier: past the syntax error, and in the
 /// operator that holds it, the parser's recovery has made nodes of fragments
 /// (`| summ` is an unknown operator, a half-typed word a table), so only the
 /// findings that end before `boundary` (and before the error) are kept with
-/// the error (the first diagnostic), and an unknown operator the error is in.
-fn quiet_after_the_error(diagnostics: &mut Vec<Diagnostic>, boundary: opentide_core::Position) {
+/// the error (the first diagnostic), and the unknown operators in `whole`
+/// that end before the error.
+fn quiet_after_the_error(
+    diagnostics: &mut Vec<Diagnostic>,
+    boundary: opentide_core::Position,
+    whole: &[Range],
+) {
     let key = |p: opentide_core::Position| (p.line, p.character);
     let Some(error) = diagnostics.first().map(|d| d.range.start) else {
         return;
@@ -117,31 +147,42 @@ fn quiet_after_the_error(diagnostics: &mut Vec<Diagnostic>, boundary: opentide_c
     let mut first = true;
     diagnostics.retain(|d| {
         // A mistyped operator name (`| summarzie count() by a`) is why the
-        // operator does not parse: its "did you mean" stays, as on the old
-        // engine.
-        let explains = d.code == codes::KQL_UNKNOWN_OPERATOR && key(d.range.start) <= key(error);
+        // query does not parse: its "did you mean" stays, as on the old
+        // engine, when the operator parsed whole before the error.
+        let explains = d.code == codes::KQL_UNKNOWN_OPERATOR
+            && key(d.range.end) <= key(error)
+            && whole.contains(&d.range);
         let keep = first || explains || key(d.range.end) <= key(boundary);
         first = false;
         keep
     });
 }
 
-/// When the syntax error lies in a `datetime(` the typed-literal check
-/// explains (its value and `)` not on one line), the explanation joins the
-/// error's message: it says more than the error, and the quieting would drop
-/// it as a second finding in the broken operator (the old engine gave it
+/// When a `datetime(` the typed-literal check explains (its value and `)`
+/// not on one line) comes before the syntax error, the explanation joins the
+/// error's message, once: it says more than the error, and the quieting would
+/// drop it as a second finding in the broken operator (the old engine gave it
 /// where its tree held the call, which this tree does more often).
-fn with_typed_literal_hint(diagnostics: &mut [Diagnostic]) {
+fn with_typed_literal_hint(diagnostics: &mut Vec<Diagnostic>) {
     let key = |p: opentide_core::Position| (p.line, p.character);
-    let Some((error, rest)) = diagnostics.split_first_mut() else {
+    let Some(at) = diagnostics.first().map(|e| key(e.range.start)) else {
         return;
     };
-    let at = key(error.range.start);
-    if let Some(hint) = rest.iter().find(|d| {
-        d.code == codes::KQL_PARSE_ERROR && key(d.range.start) <= at && at <= key(d.range.end)
-    }) {
-        error.message = format!("{}; {}", error.message, hint.message);
-    }
+    // The last hint that starts before the error: the unclosed `datetime(`
+    // the error is in or comes after (`datetime(2024-01-01` and `)` on the
+    // next line).
+    let Some(index) = diagnostics
+        .iter()
+        .enumerate()
+        .skip(1)
+        .filter(|(_, d)| d.code == codes::KQL_PARSE_ERROR && key(d.range.start) <= at)
+        .max_by_key(|(_, d)| key(d.range.start))
+        .map(|(i, _)| i)
+    else {
+        return;
+    };
+    let hint = diagnostics.remove(index);
+    diagnostics[0].message = format!("{}; {}", diagnostics[0].message, hint.message);
 }
 
 /// The column pass alone (`opentide_kql::columns`), on the memoised parse.
@@ -616,6 +657,46 @@ mod tests {
                 codes::KQL_UNSCOPED_SEARCH,
                 codes::KQL_UNSCOPED_UNION
             ]
+        );
+    }
+
+    fn codes_of(source: &str) -> Vec<String> {
+        let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+        analyze(source, &catalog)
+            .diagnostics
+            .into_iter()
+            .map(|d| d.code)
+            .collect()
+    }
+
+    /// Found by review (#1411): a mistyped operator keeps its "did you mean"
+    /// when it parsed whole before the error, as on the old engine; not when
+    /// the error is inside it, where the old engine gave the error alone.
+    #[test]
+    fn a_whole_unknown_operator_before_the_error_keeps_its_suggestion() {
+        assert_eq!(
+            codes_of("SecurityEvent | summarzie count() by Account"),
+            [codes::KQL_PARSE_ERROR, codes::KQL_UNKNOWN_OPERATOR]
+        );
+        assert_eq!(
+            codes_of("SecurityEvent | where Account == \"a\" | summarzie count( by Account"),
+            [codes::KQL_PARSE_ERROR]
+        );
+    }
+
+    /// Found by review (#1411): the hint joins the error when the error comes
+    /// after the call, on the next line, and is not given twice.
+    #[test]
+    fn the_typed_literal_hint_joins_an_error_after_the_call() {
+        let source = "print a = datetime(2024-01-01\n| where x";
+        let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+        let diagnostics = analyze(source, &catalog).diagnostics;
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(
+            diagnostics[0]
+                .message
+                .contains("'datetime(' starts a typed literal"),
+            "{diagnostics:?}"
         );
     }
 }

@@ -162,7 +162,9 @@ impl<'i> P<'i> {
     /// after a `(` the lexer took for a sub-pipeline's): the old grammar read
     /// names and a minus there ([`parse`]).
     pub(crate) fn hyphen_keyword_in_expression(&mut self) {
+        // `granny-asc` and `granny-desc` the lexer never splits.
         if self.current().is_word()
+            && !matches!(self.current(), K::GRANNY_ASC_KW | K::GRANNY_DESC_KW)
             && self.0.current_text().contains('-')
             && let Some(range) = self.current_range()
         {

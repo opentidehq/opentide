@@ -46,7 +46,7 @@ use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 pub mod inspect;
 
 use serde::Deserialize;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 
 const OPERATORS_TOML: &str = include_str!(concat!(
@@ -774,6 +774,18 @@ impl Catalog {
             .find(|c| c.name == name && c.hand_written())
     }
 
+    /// The names [`Catalog::resolve_column_among`] resolves, as a set: what a
+    /// caller that asks about every name of a query looks up, once each
+    /// (the hand-written columns are a scan of the whole catalog).
+    fn column_names_among(&self, mentioned: &[&TableRow]) -> HashSet<&str> {
+        mentioned
+            .iter()
+            .flat_map(|table| self.columns_for_table(&table.name))
+            .chain(self.columns.iter().filter(|c| c.hand_written()))
+            .map(|c| c.name.as_str())
+            .collect()
+    }
+
     pub fn option_values(&self, operator: &str, option: &str) -> &[String] {
         self.options
             .iter()
@@ -1050,6 +1062,7 @@ fn overlay_catalog_captures(source: &str, spans: &mut [(ByteSpan, String)], cata
     // Once per query, not once per name: a long query has thousands of names,
     // and each scan reads the whole query (quadratic on the old engine).
     let mentioned = catalog.mentioned_tables(source);
+    let columns = catalog.column_names_among(&mentioned);
     for (span, capture) in spans.iter_mut() {
         let end = span.end.min(source.len());
         if span.start >= end {
@@ -1076,8 +1089,7 @@ fn overlay_catalog_captures(source: &str, spans: &mut [(ByteSpan, String)], cata
             && *capture == "variable"
         {
             *capture = "operator".into();
-        } else if *capture == "variable" && catalog.resolve_column_among(&mentioned, text).is_some()
-        {
+        } else if *capture == "variable" && columns.contains(text) {
             *capture = "property".into();
         }
     }
