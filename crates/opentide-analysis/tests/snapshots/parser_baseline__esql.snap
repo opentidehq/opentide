@@ -777,7 +777,7 @@ esql_unknown_command error 0:40-0:50 unknown ES|QL command `frobnicate`; Elastic
 173..175 operator
 175..183 string
 == corpus/esql/change_point_command__invalid.esql
-esql_parse_error error 1:14-1:14 ES|QL syntax error at the end of the query: expected a name
+esql_parse_error error 1:13-1:14 ES|QL syntax error at the end of the query: expected a name
 esql_unavailable information 1:2-1:14 command `CHANGE_POINT`: Elasticsearch 9.0 rejects it (it works on 8.19 and 9.1 to 9.6); technical preview from 9.1, GA from 9.2
 esql_metadata_id warning 0:0-0:4 non-aggregating ES|QL query lacks `METADATA _id`; before 9.4 Elastic Security cannot de-duplicate its alerts (9.4 and later add it)
 0..4 keyword
@@ -857,7 +857,7 @@ esql_parse_error error 0:35-0:37 ES|QL syntax error near `*/`: expected `|` or t
 69..70 number
 71..124 comment
 == corpus/esql/completion_command__invalid.esql
-esql_parse_error error 1:22-1:22 ES|QL syntax error at the end of the query: expected an expression
+esql_parse_error error 1:21-1:22 ES|QL syntax error at the end of the query: expected an expression
 esql_unavailable information 1:2-1:12 command `COMPLETION`: Elasticsearch 9.0 rejects it (it works on 8.19 and 9.1 to 9.6); technical preview from 9.1, GA from 9.3
 0..4 keyword
 5..11 type
@@ -918,7 +918,7 @@ esql_unavailable information 1:2-1:7 command `DEDUP`: needs Elasticsearch 9.6 or
 25..26 operator.pipe
 27..32 keyword
 == corpus/esql/dense_vector_command__invalid.esql
-esql_parse_error error 1:31-1:31 ES|QL syntax error at the end of the query: expected `{`
+esql_parse_error error 1:30-1:31 ES|QL syntax error at the end of the query: expected `{`
 esql_unavailable information 1:2-1:14 command `DENSE_VECTOR`: needs Elasticsearch 9.6 or later; 8.19 and 9.0 to 9.5 reject it; technical preview from 9.6
 0..4 keyword
 5..9 type
@@ -947,7 +947,7 @@ esql_unavailable information 1:2-1:14 command `DENSE_VECTOR`: needs Elasticsearc
 79..83 string
 84..85 punctuation.bracket
 == corpus/esql/dissect_command__invalid.esql
-esql_parse_error error 1:17-1:17 ES|QL syntax error at the end of the query: expected a string
+esql_parse_error error 1:16-1:17 ES|QL syntax error at the end of the query: expected a string
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -968,7 +968,7 @@ esql_parse_error error 1:17-1:17 ES|QL syntax error at the end of the query: exp
 79..80 operator
 81..84 string
 == corpus/esql/drop_command__invalid.esql
-esql_parse_error error 1:6-1:6 ES|QL syntax error at the end of the query: expected a name pattern
+esql_parse_error error 1:5-1:6 ES|QL syntax error at the end of the query: expected a name pattern
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -1023,7 +1023,7 @@ esql_parse_error error 1:12-1:21 ES|QL syntax error near `host.name`: expected `
 88..89 punctuation.delimiter
 89..91 property
 == corpus/esql/eval_command__invalid.esql
-esql_parse_error error 1:10-1:10 ES|QL syntax error at the end of the query: expected an expression
+esql_parse_error error 1:9-1:10 ES|QL syntax error at the end of the query: expected an expression
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -1056,7 +1056,7 @@ esql_parse_error error 1:10-1:10 ES|QL syntax error at the end of the query: exp
 79..80 operator
 81..82 number
 == corpus/esql/explain_command__invalid.esql
-esql_parse_error error 0:30-0:30 ES|QL syntax error at the end of the query: expected `)`
+esql_parse_error error 0:29-0:30 ES|QL syntax error at the end of the query: expected `)`
 esql_unavailable error 0:0-0:7 command `EXPLAIN` exists only in Elasticsearch snapshot builds; release clusters reject it
 0..7 keyword
 8..9 punctuation.bracket
@@ -1097,7 +1097,7 @@ esql_unavailable error 1:2-1:10 command `FILLNULL` exists only in Elasticsearch 
 38..40 keyword
 41..46 property
 == corpus/esql/fork_command__invalid.esql
-esql_parse_error error 1:20-1:20 ES|QL syntax error at the end of the query: expected `)`
+esql_parse_error error 1:19-1:20 ES|QL syntax error at the end of the query: expected `)`
 esql_unavailable information 1:2-1:6 command `FORK`: needs Elasticsearch 9.1 or later; 8.19 and 9.0 reject it; technical preview from 9.1, GA from 9.4
 0..4 keyword
 5..11 type
@@ -1157,7 +1157,7 @@ esql_metadata_id warning 0:0-0:4 non-aggregating ES|QL query lacks `METADATA _id
 84..89 keyword
 90..92 number
 == corpus/esql/function_call__invalid.esql
-esql_parse_error error 1:24-1:24 ES|QL syntax error at the end of the query: expected `)` after the arguments
+esql_parse_error error 1:23-1:24 ES|QL syntax error at the end of the query: expected `)` after the arguments
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -1198,7 +1198,7 @@ esql_parse_error error 1:24-1:24 ES|QL syntax error at the end of the query: exp
 82..85 string
 85..86 punctuation.bracket
 == corpus/esql/fuse_command__invalid.esql
-esql_parse_error error 1:15-1:15 ES|QL syntax error at the end of the query: expected a name
+esql_parse_error error 1:14-1:15 ES|QL syntax error at the end of the query: expected a name
 esql_unavailable information 1:2-1:6 command `FUSE`: needs Elasticsearch 9.2 or later; 8.19, 9.0 and 9.1 reject it; technical preview from 9.2, GA from 9.5
 esql_metadata_id warning 0:0-0:4 non-aggregating ES|QL query lacks `METADATA _id`; before 9.4 Elastic Security cannot de-duplicate its alerts (9.4 and later add it)
 0..4 keyword
@@ -1239,7 +1239,7 @@ esql_unavailable information 2:2-2:6 command `FUSE`: needs Elasticsearch 9.2 or 
 96..98 keyword
 99..105 property
 == corpus/esql/grok_command__invalid.esql
-esql_parse_error error 1:21-1:21 ES|QL syntax error at the end of the query: expected a string
+esql_parse_error error 1:20-1:21 ES|QL syntax error at the end of the query: expected a string
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -1257,7 +1257,7 @@ esql_parse_error error 1:21-1:21 ES|QL syntax error at the end of the query: exp
 32..39 property
 40..69 string
 == corpus/esql/highlight_command__invalid.esql
-esql_parse_error error 1:14-1:14 ES|QL syntax error at the end of the query: expected a name pattern
+esql_parse_error error 1:13-1:14 ES|QL syntax error at the end of the query: expected a name pattern
 esql_unavailable information 1:2-1:11 command `HIGHLIGHT`: needs Elasticsearch 9.6 or later; 8.19 and 9.0 to 9.5 reject it; GA from 9.6
 0..4 keyword
 5..9 type
@@ -1416,7 +1416,7 @@ esql_unavailable information 1:8-1:30 an `(a, b) IN (subquery)` tuple: needs Ela
 95..99 property
 99..100 punctuation.bracket
 == corpus/esql/inline_cast__invalid.esql
-esql_parse_error error 1:32-1:32 ES|QL syntax error at the end of the query: expected a type name after `::`
+esql_parse_error error 1:31-1:32 ES|QL syntax error at the end of the query: expected a type name after `::`
 esql_unknown_type error 1:32-1:32 `` is not an ES|QL type Elasticsearch can cast to; use a type such as `keyword`, `long`, `double`, `ip`, or `datetime`
 0..4 keyword
 5..11 type
@@ -1480,7 +1480,7 @@ esql_unavailable information 1:2-1:14 command `INLINE STATS`: needs Elasticsearc
 76..77 operator
 78..80 number
 == corpus/esql/ip_location_command__invalid.esql
-esql_parse_error error 1:17-1:17 ES|QL syntax error at the end of the query: expected `=`
+esql_parse_error error 1:16-1:17 ES|QL syntax error at the end of the query: expected `=`
 esql_unavailable information 1:2-1:13 command `IP_LOCATION`: needs Elasticsearch 9.5 or later; 8.19 and 9.0 to 9.4 reject it; technical preview from 9.5
 0..4 keyword
 5..11 type
@@ -1503,7 +1503,7 @@ esql_unavailable information 1:2-1:13 command `IP_LOCATION`: needs Elasticsearch
 51..52 punctuation.delimiter
 52..54 property
 == corpus/esql/is_null_expression__invalid.esql
-esql_parse_error error 1:24-1:24 ES|QL syntax error at the end of the query: expected `null`
+esql_parse_error error 1:23-1:24 ES|QL syntax error at the end of the query: expected `null`
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -1533,7 +1533,7 @@ esql_parse_error error 1:24-1:24 ES|QL syntax error at the end of the query: exp
 64..66 property
 67..69 keyword
 == corpus/esql/join_command__invalid.esql
-esql_parse_error error 1:26-1:26 ES|QL syntax error at the end of the query: expected `on`
+esql_parse_error error 1:25-1:26 ES|QL syntax error at the end of the query: expected `on`
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -1557,7 +1557,7 @@ esql_parse_error error 1:26-1:26 ES|QL syntax error at the end of the query: exp
 61..62 punctuation.delimiter
 62..64 property
 == corpus/esql/keep_command__invalid.esql
-esql_parse_error error 1:6-1:6 ES|QL syntax error at the end of the query: expected a name pattern
+esql_parse_error error 1:5-1:6 ES|QL syntax error at the end of the query: expected a name pattern
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -1579,7 +1579,7 @@ esql_parse_error error 1:6-1:6 ES|QL syntax error at the end of the query: expec
 50..51 punctuation.delimiter
 52..66 property
 == corpus/esql/like_expression__invalid.esql
-esql_parse_error error 1:25-1:25 ES|QL syntax error at the end of the query: expected an expression
+esql_parse_error error 1:24-1:25 ES|QL syntax error at the end of the query: expected an expression
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -1609,7 +1609,7 @@ esql_parse_error error 1:25-1:25 ES|QL syntax error at the end of the query: exp
 75..80 keyword
 81..88 string
 == corpus/esql/limit_command__invalid.esql
-esql_parse_error error 1:7-1:7 ES|QL syntax error at the end of the query: expected a constant
+esql_parse_error error 1:6-1:7 ES|QL syntax error at the end of the query: expected a constant
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -1662,7 +1662,7 @@ esql_parse_error error 1:42-1:43 ES|QL syntax error near `}`: expected `:` after
 70..71 punctuation.bracket
 71..72 punctuation.bracket
 == corpus/esql/match_expression__invalid.esql
-esql_parse_error error 1:16-1:16 ES|QL syntax error at the end of the query: expected a constant
+esql_parse_error error 1:15-1:16 ES|QL syntax error at the end of the query: expected a constant
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -1732,7 +1732,7 @@ esql_unavailable information 1:2-1:14 command `METRICS_INFO`: needs Elasticsearc
 13..14 operator.pipe
 15..27 keyword
 == corpus/esql/mmr_command__invalid.esql
-esql_parse_error error 1:24-1:24 ES|QL syntax error at the end of the query: expected a constant
+esql_parse_error error 1:23-1:24 ES|QL syntax error at the end of the query: expected a constant
 esql_unavailable information 1:2-1:5 command `MMR`: needs Elasticsearch 9.4 or later; 8.19 and 9.0 to 9.3 reject it; technical preview from 9.4
 0..4 keyword
 5..9 type
@@ -1756,7 +1756,7 @@ esql_unavailable information 1:2-1:5 command `MMR`: needs Elasticsearch 9.4 or l
 42..47 keyword
 48..50 number
 == corpus/esql/mv_expand_command__invalid.esql
-esql_parse_error error 1:11-1:11 ES|QL syntax error at the end of the query: expected a name
+esql_parse_error error 1:10-1:11 ES|QL syntax error at the end of the query: expected a name
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -1797,7 +1797,7 @@ esql_parse_error error 0:10-0:12 ES|QL syntax error near `.5`: expected `|` or t
 30..31 operator
 32..35 number
 == corpus/esql/parameter__invalid.esql
-esql_parse_error error 1:23-1:23 ES|QL syntax error at the end of the query: expected an expression
+esql_parse_error error 1:22-1:23 ES|QL syntax error at the end of the query: expected an expression
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -1827,7 +1827,7 @@ esql_parse_error error 1:23-1:23 ES|QL syntax error at the end of the query: exp
 58..59 operator
 60..62 constant
 == corpus/esql/promql_command__invalid.esql
-esql_parse_error error 0:37-0:37 ES|QL syntax error at the end of the query: expected `)`
+esql_parse_error error 0:36-0:37 ES|QL syntax error at the end of the query: expected `)`
 esql_unavailable information 0:0-0:6 command `PROMQL`: needs Elasticsearch 9.4 or later; 8.19 and 9.0 to 9.3 reject it; technical preview from 9.4, GA from 9.5
 0..6 keyword
 7..8 punctuation.bracket
@@ -1877,7 +1877,7 @@ esql_parse_error error 1:29-1:36 a time span needs a whole number (`90 minutes`,
 54..55 number
 56..59 constant
 == corpus/esql/registered_domain_command__invalid.esql
-esql_parse_error error 1:23-1:23 ES|QL syntax error at the end of the query: expected an expression
+esql_parse_error error 1:22-1:23 ES|QL syntax error at the end of the query: expected an expression
 esql_unavailable information 1:2-1:19 command `REGISTERED_DOMAIN`: needs Elasticsearch 9.4 or later; 8.19 and 9.0 to 9.3 reject it; technical preview from 9.4
 0..4 keyword
 5..11 type
@@ -1903,7 +1903,7 @@ esql_unavailable information 1:2-1:19 command `REGISTERED_DOMAIN`: needs Elastic
 61..62 punctuation.delimiter
 62..66 property
 == corpus/esql/rename_command__invalid.esql
-esql_parse_error error 1:21-1:21 ES|QL syntax error at the end of the query: expected a name pattern
+esql_parse_error error 1:20-1:21 ES|QL syntax error at the end of the query: expected a name pattern
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -1959,7 +1959,7 @@ esql_metadata_id warning 0:10-0:25 non-aggregating ES|QL query lacks `METADATA _
 80..83 string
 84..85 punctuation.bracket
 == corpus/esql/row_command__invalid.esql
-esql_parse_error error 0:8-0:8 ES|QL syntax error at the end of the query: expected an expression
+esql_parse_error error 0:6-0:7 ES|QL syntax error at the end of the query: expected an expression
 0..3 keyword
 4..5 property
 6..7 operator
@@ -1981,7 +1981,7 @@ esql_parse_error error 0:8-0:8 ES|QL syntax error at the end of the query: expec
 30..31 number
 31..32 punctuation.bracket
 == corpus/esql/sample_command__invalid.esql
-esql_parse_error error 1:8-1:8 ES|QL syntax error at the end of the query: expected a constant
+esql_parse_error error 1:7-1:8 ES|QL syntax error at the end of the query: expected a constant
 esql_unavailable information 1:2-1:8 command `SAMPLE`: Elasticsearch 9.0 rejects it (it works on 8.19 and 9.1 to 9.6); technical preview from 9.1, GA from 9.5
 0..4 keyword
 5..11 type
@@ -2022,13 +2022,13 @@ esql_metadata_id warning 1:0-1:4 non-aggregating ES|QL query lacks `METADATA _id
 40..45 keyword
 46..47 number
 == corpus/esql/show_command__invalid.esql
-esql_parse_error error 0:4-0:4 ES|QL syntax error at the end of the query: expected `info`
+esql_parse_error error 0:3-0:4 ES|QL syntax error at the end of the query: expected `info`
 0..4 keyword
 == corpus/esql/show_command__valid.esql
 0..4 keyword
 5..9 keyword
 == corpus/esql/sort_command__invalid.esql
-esql_parse_error error 1:6-1:6 ES|QL syntax error at the end of the query: expected an expression
+esql_parse_error error 1:5-1:6 ES|QL syntax error at the end of the query: expected an expression
 0..4 keyword
 5..11 type
 12..20 keyword
@@ -2245,7 +2245,7 @@ esql_unknown_command error 1:2-1:12 unknown ES|QL command `FROBNICATE`; Elastics
 40..41 string
 42..43 string
 == corpus/esql/uri_parts_command__invalid.esql
-esql_parse_error error 1:15-1:15 ES|QL syntax error at the end of the query: expected an expression
+esql_parse_error error 1:14-1:15 ES|QL syntax error at the end of the query: expected an expression
 esql_unavailable information 1:2-1:11 command `URI_PARTS`: needs Elasticsearch 9.4 or later; 8.19 and 9.0 to 9.3 reject it; technical preview from 9.4
 0..4 keyword
 5..11 type
@@ -2292,7 +2292,7 @@ esql_unavailable information 1:2-1:12 command `USER_AGENT`: needs Elasticsearch 
 53..54 punctuation.delimiter
 54..62 property
 == corpus/esql/where_command__invalid.esql
-esql_parse_error error 1:7-1:7 ES|QL syntax error at the end of the query: expected an expression
+esql_parse_error error 1:6-1:7 ES|QL syntax error at the end of the query: expected an expression
 0..4 keyword
 5..11 type
 12..20 keyword
