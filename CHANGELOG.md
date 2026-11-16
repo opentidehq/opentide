@@ -10,7 +10,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Upgrade
 
-- If a HarfangLab or Bitdefender `yara` block or a `.yar` file imports `magic` or `vt`, drop the import and the conditions that use it: `opentide validate` now fails on it (`yara_unknown_module`).
+- If a HarfangLab or Bitdefender `yara` block or a `.yar` file imports `magic` or `vt`, drop the import and the conditions that use it: `opentide validate` now fails on it (`yara_unknown_module`). If it orders, adds or compares with `!=` or a float a module boolean such as `lnk.is_lnk`, `dex.contains_class(…)` or `macho.has_dylib(…)` (`lnk.is_lnk > 0`, `lnk.is_lnk != 0`), write the boolean alone or `not` it: that is now `yara_type`, as YARA-X refuses it.
 - If you install opentide on Alpine Linux or another musl distribution, install a Rust toolchain first: no musllinux wheel ships, so `pip install opentide` builds from the sdist. If you pinned an `opentide-lsp-*-unknown-linux-musl` binary, build `opentide-lsp` with `cargo install opentide-lsp` instead.
 - If your code imports a library that came with opentide's install (`requests`, `rich`, `typer`, `pyyaml`, a vendor SDK, …), add it to your own dependencies: opentide installs no Python dependency, and `opentide[plugins]` adds `pydantic` alone.
 - If you wrote a platform plugin, or run one, install `opentide[plugins]` instead of `opentide` and list `opentide[plugins]` in the plugin package's dependencies: pydantic, which its configuration model needs, is no longer installed with opentide.

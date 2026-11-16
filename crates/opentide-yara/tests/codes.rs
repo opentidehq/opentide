@@ -178,6 +178,24 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "import \"lnk\" rule a { condition: lnk.is_lnk > 0 }",
         &[("yara_type", E)],
     ),
+    // A `with` name bound to a module boolean stays one (#1225 review);
+    // `with` itself is YARA-X-only syntax this context refuses.
+    (
+        "import \"lnk\" rule a { condition: with x = lnk.is_lnk : (x and not x) }",
+        &[("yara_x_only_syntax", E)],
+    ),
+    (
+        "import \"lnk\" rule a { condition: with x = lnk.is_lnk : (x > 0) }",
+        &[("yara_type", E), ("yara_x_only_syntax", E)],
+    ),
+    (
+        "import \"dex\" rule a { condition: with x = dex.contains_class(\"a\") : (x == 1) }",
+        &[("yara_suspicious_expression", W), ("yara_x_only_syntax", E)],
+    ),
+    (
+        "import \"pe\" rule a { condition: with x = pe.is_pe : (x) }",
+        &[("yara_x_only_syntax", E)],
+    ),
     (
         "rule a { condition: pe.number_of_sections > 1 }",
         &[("yara_module_not_imported", E)],

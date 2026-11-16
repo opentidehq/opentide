@@ -192,6 +192,11 @@ pub fn generate(dump: &str) -> Result<String> {
         if !modules.contains_key(*name) {
             bail!("{DUMP}: the excluded module `{name}` is gone; drop it from EXCLUDED");
         }
+        // An excluded module is one YARA-X has: its message must say why
+        // opentide refuses it, not that YARA has no such module.
+        if !UNSUPPORTED.iter().any(|(m, _)| m == name) {
+            bail!("the excluded module `{name}` has no reason in UNSUPPORTED");
+        }
     }
     let known: Vec<&String> = modules
         .keys()

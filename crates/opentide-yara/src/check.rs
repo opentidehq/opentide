@@ -300,10 +300,10 @@ impl<'a> Checker<'a> {
                     .join(", ");
                 let message = match self.catalog.unsupported.get(name) {
                     Some(why) => format!(
-                        "opentide does not support the YARA module `{name}`: {why}. The modules it knows are YARA-X's defaults: {known}"
+                        "opentide does not support the YARA module `{name}`: {why}. The modules it knows are YARA-X's defaults, less `vt`: {known}"
                     ),
                     None => format!(
-                        "YARA has no module `{name}`: the modules opentide knows are YARA-X's defaults, {known}"
+                        "YARA has no module `{name}`: the modules opentide knows are YARA-X's defaults, less `vt`: {known}"
                     ),
                 };
                 self.error(codes::YARA_UNKNOWN_MODULE, message, at);
@@ -1446,16 +1446,29 @@ impl<'a> Checker<'a> {
             }
             Expr::With(w) => {
                 self.yara_x_only("The `with` statement", at);
-                // Each declaration sees the ones before it.
+                // Each declaration sees the ones before it. A name bound to
+                // a YARA-X module boolean stays one, as a loop variable does.
                 self.scopes.push(BTreeMap::new());
+                let saved = self.yara_x_bool_vars.clone();
                 for decl in &w.declarations {
                     let ty = self.expr(&decl.expression);
+                    let name = decl.identifier.name.to_string();
+                    if self.yara_x_bool.contains(&span(&decl.expression.span())) {
+                        self.yara_x_bool_vars.insert(name.clone());
+                    } else {
+                        self.yara_x_bool_vars.remove(&name);
+                    }
                     if let Some(scope) = self.scopes.last_mut() {
-                        scope.insert(decl.identifier.name.to_string(), ty);
+                        scope.insert(name, ty);
                     }
                 }
                 let ty = self.expr(&w.body);
+                // `with x = lnk.is_lnk : (x)` is a YARA-X boolean too.
+                if self.yara_x_bool.contains(&span(&w.body.span())) {
+                    self.yara_x_bool.insert(key);
+                }
                 self.scopes.pop();
+                self.yara_x_bool_vars = saved;
                 ty
             }
         }
