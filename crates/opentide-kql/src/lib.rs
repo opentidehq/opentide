@@ -21,6 +21,38 @@ mod perf;
 pub mod schema;
 pub mod tables;
 
+// The pure-Rust parser (#1230, ADR 0012) grows beside the tree-sitter path,
+// which serves until the last PR of the series switches production to it.
+// Generated from kql.ungram by `cargo xtask codegen`: an accessor for every
+// child of every node, most of which the engine never calls, and names the
+// grammar chooses (`TabularOperator::WhereOperator`, `RenameItem::new`).
+#[expect(
+    dead_code,
+    clippy::enum_variant_names,
+    clippy::wrong_self_convention,
+    clippy::new_ret_no_self,
+    reason = "generated from kql.ungram: every accessor of every node, named by the grammar"
+)]
+#[path = "generated/ast.rs"]
+mod ast;
+mod diagnose;
+mod highlight;
+mod lexer;
+mod parser;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the new parser is reached from tests until the switch"
+    )
+)]
+mod syntax;
+mod syntax_util;
+// The typed AST names the kinds from the crate root.
+use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
+#[doc(hidden)]
+pub mod testing;
+
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -1343,7 +1375,24 @@ fn check_table(
     lets: &BTreeSet<String>,
     out: &mut Vec<Diagnostic>,
 ) {
-    let table = &source[name.byte_range()];
+    check_table_named(
+        &source[name.byte_range()],
+        node_range(source, at),
+        catalog,
+        lets,
+        out,
+    );
+}
+
+/// [`check_table`] on the table's name and the range to report: the part of
+/// the check no parser is in.
+fn check_table_named(
+    table: &str,
+    range: Range,
+    catalog: &Catalog,
+    lets: &BTreeSet<String>,
+    out: &mut Vec<Diagnostic>,
+) {
     // `let` bindings, tabular parameters, functions the engine knows
     // (`_GetWatchlist`) and ASIM parsers are not tables.
     if table.starts_with('$')
@@ -1369,7 +1418,6 @@ fn check_table(
     {
         return;
     }
-    let range = node_range(source, at);
     let status = datasets.status(platform, table);
     // A near miss of a declared table, else of a catalog table.
     let suggest = |catalog_too: bool| {
@@ -1897,6 +1945,22 @@ fn prefix_option_items(op: &str, options: &[&OperatorOption]) -> Vec<CompletionI
 /// Hover at byte `offset` of `source` (an LSP host converts the editor's
 /// UTF-16 position once, with `opentide_core::position_to_offset`).
 pub fn hover(source: &str, offset: usize, profile: Profile) -> Option<String> {
+    hover_with(source, offset, profile, tree_sitter_columns)
+}
+
+/// The column pass on the tree-sitter tree: what hover reads a column from.
+fn tree_sitter_columns(source: &str, catalog: &Catalog) -> Option<schema::Analysis> {
+    let tree = ts_parse(LanguageId::Kql, source)?;
+    Some(schema::analyze(tree.root_node(), source, catalog))
+}
+
+/// [`hover`], with the column pass `columns` (the old tree's or the new's).
+pub(crate) fn hover_with(
+    source: &str,
+    offset: usize,
+    profile: Profile,
+    columns: fn(&str, &Catalog) -> Option<schema::Analysis>,
+) -> Option<String> {
     let offset = offset.min(source.len());
     // An offset inside a character (a decoded escape) has nothing to show.
     if !source.is_char_boundary(offset) {
@@ -1905,7 +1969,7 @@ pub fn hover(source: &str, offset: usize, profile: Profile) -> Option<String> {
     let workspace = Catalog::for_workspace(profile, source);
     let catalog = &*workspace;
     let word = word_at(source, offset)?;
-    if let Some(md) = column_hover(source, offset, catalog) {
+    if let Some(md) = column_hover(source, offset, catalog, columns) {
         return Some(md);
     }
     if let Some(parser) = catalog.asim_parser(&word) {
@@ -2070,9 +2134,13 @@ pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<S
 
 /// Hover for a column the query reads or defines: its name and type as the
 /// pipeline has them at that point, and where it comes from.
-fn column_hover(source: &str, offset: usize, catalog: &Catalog) -> Option<String> {
-    let tree = ts_parse(LanguageId::Kql, source)?;
-    let analysis = schema::analyze(tree.root_node(), source, catalog);
+fn column_hover(
+    source: &str,
+    offset: usize,
+    catalog: &Catalog,
+    columns: fn(&str, &Catalog) -> Option<schema::Analysis>,
+) -> Option<String> {
+    let analysis = columns(source, catalog)?;
     let column = analysis.column_at(offset)?;
     let type_name = column.type_name.as_deref().unwrap_or("unknown type");
     let mut md = format!("**{}** column (`{type_name}`)", column.name);

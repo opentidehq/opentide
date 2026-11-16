@@ -1,0 +1,99 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | mv-expand kind = array a, b = c to typeof(int) limit 10 | mvexpand x | mv-apply e = a on (where e > 1 | take 2)\")"
+---
+SOURCE_FILE@0..115
+  QUERY@0..115
+    TABULAR_EXPRESSION@0..115
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      MV_EXPAND_OPERATOR@4..59
+        MV_EXPAND_KW@4..13 "mv-expand"
+        WHITESPACE@13..14 " "
+        MV_OPTION@14..26
+          KIND_KW@14..18 "kind"
+          WHITESPACE@18..19 " "
+          EQ@19..20 "="
+          WHITESPACE@20..21 " "
+          OPTION_VALUE@21..26
+            IDENT@21..26 "array"
+        WHITESPACE@26..27 " "
+        MV_EXPAND_ITEM@27..28
+          NAME_REF@27..28
+            IDENT@27..28 "a"
+        COMMA@28..29 ","
+        WHITESPACE@29..30 " "
+        MV_EXPAND_ITEM@30..50
+          ASSIGNMENT@30..35
+            NAME_REF@30..31
+              IDENT@30..31 "b"
+            WHITESPACE@31..32 " "
+            EQ@32..33 "="
+            WHITESPACE@33..34 " "
+            NAME_REF@34..35
+              IDENT@34..35 "c"
+          WHITESPACE@35..36 " "
+          TO_KW@36..38 "to"
+          WHITESPACE@38..39 " "
+          TYPEOF_KW@39..45 "typeof"
+          L_PAREN@45..46 "("
+          TYPE@46..49
+            IDENT@46..49 "int"
+          R_PAREN@49..50 ")"
+        WHITESPACE@50..51 " "
+        LIMIT_KW@51..56 "limit"
+        WHITESPACE@56..57 " "
+        LITERAL@57..59
+          NUMBER@57..59 "10"
+      WHITESPACE@59..60 " "
+      PIPE@60..61 "|"
+      WHITESPACE@61..62 " "
+      MV_EXPAND_OPERATOR@62..72
+        MVEXPAND_KW@62..70 "mvexpand"
+        WHITESPACE@70..71 " "
+        MV_EXPAND_ITEM@71..72
+          NAME_REF@71..72
+            IDENT@71..72 "x"
+      WHITESPACE@72..73 " "
+      PIPE@73..74 "|"
+      WHITESPACE@74..75 " "
+      MV_APPLY_OPERATOR@75..115
+        MV_APPLY_KW@75..83 "mv-apply"
+        WHITESPACE@83..84 " "
+        MV_EXPAND_ITEM@84..89
+          ASSIGNMENT@84..89
+            NAME_REF@84..85
+              IDENT@84..85 "e"
+            WHITESPACE@85..86 " "
+            EQ@86..87 "="
+            WHITESPACE@87..88 " "
+            NAME_REF@88..89
+              IDENT@88..89 "a"
+        WHITESPACE@89..90 " "
+        ON_KW@90..92 "on"
+        WHITESPACE@92..93 " "
+        L_PAREN@93..94 "("
+        SUBQUERY@94..114
+          WHERE_OPERATOR@94..105
+            WHERE_KW@94..99 "where"
+            WHITESPACE@99..100 " "
+            COMPARISON_EXPR@100..105
+              NAME_REF@100..101
+                IDENT@100..101 "e"
+              WHITESPACE@101..102 " "
+              CMP_OP@102..103 ">"
+              WHITESPACE@103..104 " "
+              LITERAL@104..105
+                NUMBER@104..105 "1"
+          WHITESPACE@105..106 " "
+          PIPE@106..107 "|"
+          WHITESPACE@107..108 " "
+          TAKE_OPERATOR@108..114
+            TAKE_KW@108..112 "take"
+            WHITESPACE@112..113 " "
+            NUMBER@113..114 "2"
+        R_PAREN@114..115 ")"

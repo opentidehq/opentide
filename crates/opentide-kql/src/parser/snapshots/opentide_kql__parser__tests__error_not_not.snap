@@ -1,0 +1,26 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | where not not a\")"
+---
+SOURCE_FILE@0..19
+  QUERY@0..17
+    TABULAR_EXPRESSION@0..17
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      WHERE_OPERATOR@4..17
+        WHERE_KW@4..9 "where"
+        WHITESPACE@9..10 " "
+        NOT_EXPR@10..17
+          NOT_KW@10..13 "not"
+          WHITESPACE@13..14 " "
+          NAME_REF@14..17
+            IDENT@14..17 "not"
+  WHITESPACE@17..18 " "
+  ERROR@18..19
+    IDENT@18..19 "a"
+errors:
+17..18: unexpected input after the query (expected `|`, `+`, `-`, `*`, `/`, `%`, `and`, `or`)

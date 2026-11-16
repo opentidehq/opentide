@@ -1,0 +1,22 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | | take 1\")"
+---
+SOURCE_FILE@0..12
+  QUERY@0..12
+    TABULAR_EXPRESSION@0..12
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      UNKNOWN_OPERATOR@4..4
+      PIPE@4..5 "|"
+      WHITESPACE@5..6 " "
+      TAKE_OPERATOR@6..12
+        TAKE_KW@6..10 "take"
+        WHITESPACE@10..11 " "
+        NUMBER@11..12 "1"
+errors:
+3..4: expected an operator
