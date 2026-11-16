@@ -621,7 +621,7 @@ impl<'a> Checker<'a> {
                 }
             }
             Pattern::Hex(hex) => {
-                self.hex(&hex.sub_patterns, false);
+                self.hex(&hex.sub_patterns);
                 // libyara splits a string at a long or unbounded jump and
                 // needs an atom in every fragment.
                 if hex_fragments(&hex.sub_patterns)
@@ -744,7 +744,7 @@ impl<'a> Checker<'a> {
     }
 
     /// A hex string's jump checks, and the YARA-X-only jump bounds.
-    fn hex(&mut self, sub: &HexSubPattern, inside_alternative: bool) {
+    fn hex(&mut self, sub: &HexSubPattern) {
         for token in sub.iter() {
             match token {
                 HexToken::Jump(jump) => {
@@ -753,15 +753,15 @@ impl<'a> Checker<'a> {
                     if text.contains("0x") || text.contains("0o") {
                         self.yara_x_only("A hex or octal jump bound", at);
                     }
-                    // A bound past `u32` is the parser's error.
-                    let refused = match (jump.start, jump.end) {
+                    // A bound past `u32` is the parser's error. YARA-X takes
+                    // any jump inside an alternative, unbounded or long.
+                    match (jump.start, jump.end) {
                         (Some(0), Some(0)) => {
                             self.error(
                                 codes::YARA_HEX_STRING,
                                 format!("invalid jump length: `{text}` skips no byte"),
                                 at,
                             );
-                            true
                         }
                         (Some(a), Some(b)) if a > b => {
                             self.error(
@@ -769,29 +769,13 @@ impl<'a> Checker<'a> {
                                 format!("invalid jump range: {a} is greater than {b}"),
                                 at,
                             );
-                            true
                         }
-                        _ => false,
-                    };
-                    if inside_alternative && !refused {
-                        if jump.end.is_none() {
-                            self.error(
-                                codes::YARA_HEX_STRING,
-                                "unbounded jumps are not allowed inside an alternative".to_string(),
-                                at,
-                            );
-                        } else if jump.end.is_some_and(|e| e > CHAINING_THRESHOLD) {
-                            self.error(
-                                codes::YARA_HEX_STRING,
-                                format!("jumps over {CHAINING_THRESHOLD} are not allowed inside an alternative"),
-                                at,
-                            );
-                        }
+                        _ => {}
                     }
                 }
                 HexToken::Alternative(alt) => {
                     for branch in &alt.alternatives {
-                        self.hex(branch, true);
+                        self.hex(branch);
                     }
                 }
                 HexToken::NotByte(b) if b.mask == 0 => self.error(
