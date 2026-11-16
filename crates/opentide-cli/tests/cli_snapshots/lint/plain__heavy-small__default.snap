@@ -1,0 +1,11 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lint/plain/heavy-small/default
+---
+args: opentide lint
+exit: 0
+
+━━━ stdout
+✓ 110 files clean
+
+━━━ stderr · empty

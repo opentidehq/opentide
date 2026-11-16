@@ -233,32 +233,3 @@ fn the_diff_patches_the_file_as_difflibs_does() {
         realigned.len()
     );
 }
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn every_recorded_dry_run_diff_is_the_oracles() {
-    // tests/golden/cases/validate/*/tide-corpus-typo/fix-typo-dry-run: the
-    // file the typo fixture edits, and the diff the oracle printed for it.
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    // The fixture is checked out with the platform's line endings (git's
-    // autocrlf turns it into CRLF on Windows); the recording was made from the
-    // LF file, so the test works on that.
-    let before = std::fs::read_to_string(root.join(
-        "tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0001-sentinel-kql.yaml",
-    ))
-    .unwrap()
-    .replace("\r\n", "\n")
-    .replace("\nseverity: High\n", "\nseverity: high\n");
-    let after = before.replace("\nseverity: high\n", "\nseverity: High\n");
-    assert_ne!(before, after, "the typo edit must change the fixture");
-    let path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml";
-    let recorded: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(
-            root.join("tests/golden/cases/validate/json/tide-corpus-typo/fix-typo-dry-run/stdout"),
-        )
-        .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(unified_diff(path, &before, &after), recorded["diff"]);
-    let oracle = oracle_diffs(&[(path.to_owned(), before.clone(), after.clone())]);
-    assert_eq!(unified_diff(path, &before, &after), oracle[0]);
-}

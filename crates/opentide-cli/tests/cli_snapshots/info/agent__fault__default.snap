@@ -1,0 +1,26 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: info/agent/fault/default
+---
+args: opentide info
+exit: 0
+
+━━━ stdout
+  version  0.28.1
+platforms  Microsoft Sentinel               enabled · deploy, validate, query
+           Microsoft Defender for Endpoint  enabled · deploy, validate, query
+           Splunk Enterprise Security       enabled · deploy, validate, query
+           SentinelOne                      enabled · deploy, validate, query
+           CrowdStrike Falcon               enabled · deploy, query
+           HarfangLab                       enabled · deploy, query
+           Carbon Black Cloud               enabled · deploy, validate, query
+           Elastic Security                 enabled · deploy, validate, query
+           Sysdig Secure                    enabled · deploy
+           Bitdefender GravityZone          enabled · deploy
+           Graylog                          enabled · deploy, validate, query
+           Exabeam New-Scale SIEM           enabled · deploy, validate, query
+           Google Security Operations       enabled · deploy, validate, query
+! 693 rules · 119 threats · 60 objectives · 7 load errors
+→ opentide validate · show where each object failed to load
+
+━━━ stderr · empty

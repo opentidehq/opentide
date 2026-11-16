@@ -33,9 +33,9 @@ entry 1: changelog "**Not in the changelog**" begins no entry (`- **Not in the c
 
 $ xtask compare --oracle oracle --command validate --ledger ledger.toml --changelog CHANGELOG.md
 ? 2
-xtask compare: --candidate is required
+error: the following required arguments were not provided:
+  --candidate <DIR>
 
-usage: cargo xtask <command> [options]
 ...
 
 ```

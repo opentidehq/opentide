@@ -23,10 +23,7 @@ pub fn run(code: Option<&str>, terminal: &Terminal) -> Report {
         let codes = explain::codes();
         return Report::usage(
             "explain",
-            format!(
-                "No diagnostic code {}. Run 'opentide explain' to list them.",
-                crate::render::codeframe::quoted(code)
-            ),
+            format!("No diagnostic code {code:?}. Run 'opentide explain' to list them."),
             USAGE_INVALID_CHOICE,
             "code",
             Some(code),
@@ -261,7 +258,7 @@ mod tests {
         assert_eq!(failure.suggestion.as_deref(), Some("vocab_unknown"));
         assert_eq!(
             failure.message,
-            "No diagnostic code 'vocab_unknwn'. Run 'opentide explain' to list them."
+            "No diagnostic code \"vocab_unknwn\". Run 'opentide explain' to list them."
         );
     }
 

@@ -195,7 +195,6 @@ fn fault_approvals() -> Vec<(String, String)> {
 }
 
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
     let corpus = dunce::canonicalize(repo().join("tests/golden/payloads/corpus")).unwrap();

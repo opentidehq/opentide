@@ -1,5 +1,11 @@
 //! Production coverage gate: every required named grammar rule must appear
 //! in `crates/testdata/corpus/<language>/` tagged `prod:<rule>`.
+//!
+//! The gate does not know a parser. It names productions, and reads a parsed
+//! tree, through a per-language [`KindNames`] table ([`kind_names`]): every
+//! language has the tree-sitter names today, and a language that moves to
+//! `opentide-parse` keeps its gate by supplying the names of its
+//! `SyntaxKind`s instead (#1219).
 
 #![expect(
     clippy::expect_used,
@@ -32,9 +38,78 @@ fn tags_in(dir: &str) -> BTreeSet<String> {
     tags
 }
 
-fn named_rules(grammar_json: &str) -> BTreeSet<String> {
-    let v: serde_json::Value = serde_json::from_str(grammar_json).unwrap();
-    v["rules"].as_object().unwrap().keys().cloned().collect()
+/// A body parsed by a language's parser, as the gate reads it.
+struct Parsed {
+    /// The parser reported an error: an error or missing node, a syntax error.
+    has_error: bool,
+    /// The names of the node kinds in the tree.
+    kinds: BTreeSet<String>,
+    /// The tree as text, for a failure message.
+    dump: String,
+}
+
+impl Parsed {
+    fn has_kind(&self, kind: &str) -> bool {
+        self.kinds.contains(kind)
+    }
+}
+
+/// How one language names its productions and reads its trees: the table the
+/// gate goes through, so that it does not depend on tree-sitter.
+trait KindNames {
+    /// The names of the language's named productions: what `prod:<rule>` tags.
+    fn productions(&self) -> BTreeSet<String>;
+    /// Parses `body` and returns the tree's error flag and its kind names.
+    fn parse(&self, body: &str) -> Parsed;
+}
+
+/// The tree-sitter names: the rules of the grammar's `grammar.json` and the
+/// named nodes of its tree.
+struct TreeSitterNames {
+    language: LanguageId,
+    /// The grammar's directory name: `grammars/tree-sitter-opentide-<id>`.
+    id: &'static str,
+}
+
+impl KindNames for TreeSitterNames {
+    fn productions(&self) -> BTreeSet<String> {
+        let json = fs::read_to_string(repo_root().join(format!(
+            "grammars/tree-sitter-opentide-{}/src/grammar.json",
+            self.id
+        )))
+        .unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        v["rules"].as_object().unwrap().keys().cloned().collect()
+    }
+
+    fn parse(&self, body: &str) -> Parsed {
+        let tree = parse(self.language, body).expect("parser");
+        let dump = tree.root_node().to_sexp();
+        // `(kind` opens a named node in the s-expression; a field's `name:`
+        // is not followed by a parenthesis of its own.
+        let kinds = dump
+            .split('(')
+            .skip(1)
+            .map(|rest| {
+                rest.split(|c: char| c.is_whitespace() || c == ')')
+                    .next()
+                    .unwrap_or("")
+                    .to_string()
+            })
+            .collect();
+        Parsed {
+            has_error: has_error(&tree),
+            kinds,
+            dump,
+        }
+    }
+}
+
+/// The kind-name table of `language`. Every language has the tree-sitter
+/// names; a language that moves to `opentide-parse` returns its `SyntaxKind`
+/// names here.
+fn kind_names(language: LanguageId, id: &'static str) -> Box<dyn KindNames> {
+    Box::new(TreeSitterNames { language, id })
 }
 
 const KQL_REQUIRED: &[&str] = &[
@@ -110,10 +185,7 @@ fn spl_corpus_tags_cover_required_productions() {
 
 #[test]
 fn kql_named_rules_in_grammar_json_are_known() {
-    let json =
-        fs::read_to_string(repo_root().join("grammars/tree-sitter-opentide-kql/src/grammar.json"))
-            .unwrap();
-    let rules = named_rules(&json);
+    let rules = kind_names(LanguageId::Kql, "kql").productions();
     let tags = tags_in("crates/testdata/corpus/kql");
     let skip: BTreeSet<&str> = [
         "source_file",
@@ -194,12 +266,8 @@ fn kql_valid_fixtures_parse() {
             .filter(|l| !l.starts_with("//"))
             .collect::<Vec<_>>()
             .join("\n");
-        let tree = parse(LanguageId::Kql, &body).expect("parser");
-        assert!(
-            !has_error(&tree),
-            "{name} sexp={}",
-            tree.root_node().to_sexp()
-        );
+        let tree = kind_names(LanguageId::Kql, "kql").parse(&body);
+        assert!(!tree.has_error, "{name} sexp={}", tree.dump);
     }
 }
 
@@ -236,21 +304,18 @@ fn spl_valid_fixtures_parse() {
             .filter(|l| !l.starts_with("``` prod:"))
             .collect::<Vec<_>>()
             .join("\n");
-        let tree = parse(LanguageId::Spl, &body).expect("parser");
-        assert!(
-            !has_error(&tree),
-            "{name} sexp={}",
-            tree.root_node().to_sexp()
-        );
+        let tree = kind_names(LanguageId::Spl, "spl").parse(&body);
+        assert!(!tree.has_error, "{name} sexp={}", tree.dump);
     }
 }
 
 #[test]
 fn spl_valid_bare_search_and_unknown_command_parse() {
-    let tree = parse(LanguageId::Spl, "index=main | head 1").unwrap();
-    assert!(!has_error(&tree), "{}", tree.root_node().to_sexp());
-    let tree = parse(LanguageId::Spl, "index=main | bogus foo=bar").unwrap();
-    assert!(tree.root_node().to_sexp().contains("unknown_command"));
+    let names = kind_names(LanguageId::Spl, "spl");
+    let tree = names.parse("index=main | head 1");
+    assert!(!tree.has_error, "{}", tree.dump);
+    let tree = names.parse("index=main | bogus foo=bar");
+    assert!(tree.has_kind("unknown_command"), "{}", tree.dump);
 }
 
 /// One Elastic language's corpus gate: every required production is tagged
@@ -269,16 +334,15 @@ fn fixture_body(text: &str) -> String {
 }
 
 fn check_gate(gate: &ElasticGate) {
+    check_gate_with(gate, &*kind_names(gate.language, gate.id));
+}
+
+fn check_gate_with(gate: &ElasticGate, names: &dyn KindNames) {
     let dir = format!("crates/testdata/corpus/{}", gate.id);
     let tags = tags_in(&dir);
-    let json = fs::read_to_string(repo_root().join(format!(
-        "grammars/tree-sitter-opentide-{}/src/grammar.json",
-        gate.id
-    )))
-    .unwrap();
     let structural: BTreeSet<&str> = gate.structural.iter().copied().collect();
     let mut required = Vec::new();
-    for rule in named_rules(&json) {
+    for rule in names.productions() {
         if rule.starts_with('_') || structural.contains(rule.as_str()) {
             continue;
         }
@@ -299,14 +363,14 @@ fn check_gate(gate: &ElasticGate) {
         kinds.insert((rule.to_string(), kind.clone()));
         if kind == "valid" {
             let body = fixture_body(&fs::read_to_string(&path).unwrap());
-            let tree = parse(gate.language, &body).expect("parser");
+            let tree = names.parse(&body);
             assert!(
-                !has_error(&tree),
+                !tree.has_error,
                 "{dir}/{name} must parse; sexp={}",
-                tree.root_node().to_sexp()
+                tree.dump
             );
             assert!(
-                tree.root_node().to_sexp().contains(&format!("({rule}")),
+                tree.has_kind(rule),
                 "{dir}/{name} does not contain a `{rule}` node"
             );
         }
@@ -540,4 +604,54 @@ fn yaral_corpus_gate() {
             "option_entry",
         ],
     });
+}
+
+#[test]
+fn tree_sitter_names_read_the_named_nodes_of_a_tree() {
+    let names = kind_names(LanguageId::Spl, "spl");
+    let tree = names.parse("index=main | bogus foo=bar");
+    assert!(!tree.has_error, "{}", tree.dump);
+    assert!(tree.has_kind("unknown_command"), "{}", tree.dump);
+    // A kind is a whole name: a prefix of one is not a kind.
+    assert!(!tree.has_kind("unknown"), "{}", tree.dump);
+    assert!(names.parse("index=main | (").has_error);
+    assert!(names.productions().contains("unknown_command"));
+}
+
+#[test]
+fn the_gate_reads_productions_and_trees_only_through_its_table() {
+    use std::cell::Cell;
+
+    /// A table that counts its calls and hands them to the tree-sitter names.
+    struct Counting {
+        inner: Box<dyn KindNames>,
+        productions: Cell<usize>,
+        parses: Cell<usize>,
+    }
+    impl KindNames for Counting {
+        fn productions(&self) -> BTreeSet<String> {
+            self.productions.set(self.productions.get() + 1);
+            self.inner.productions()
+        }
+        fn parse(&self, body: &str) -> Parsed {
+            self.parses.set(self.parses.get() + 1);
+            self.inner.parse(body)
+        }
+    }
+
+    let names = Counting {
+        inner: kind_names(LanguageId::Kuery, "kuery"),
+        productions: Cell::new(0),
+        parses: Cell::new(0),
+    };
+    check_gate_with(
+        &ElasticGate {
+            language: LanguageId::Kuery,
+            id: "kuery",
+            structural: &["source_file", "word", "or", "and", "not"],
+        },
+        &names,
+    );
+    assert_eq!(names.productions.get(), 1);
+    assert!(names.parses.get() > 0);
 }

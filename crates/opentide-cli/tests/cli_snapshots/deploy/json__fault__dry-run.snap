@@ -1,0 +1,33 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/fault/dry-run
+---
+args: opentide --json deploy --strategy PREVIEW --all --dry-run
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "deploy",
+  "duration_ms": 0,
+  "error": "deployment.toml is invalid: colour1: unknown key; colour2: unknown key; colour3: unknown key; colour4: unknown key; colour5: unknown key",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "deployment.toml is invalid: colour1: unknown key; colour2: unknown key; colour3: unknown key; colour4: unknown key; colour5: unknown key",
+    "suggestion": null
+  },
+  "message": "deployment.toml is invalid: colour1: unknown key; colour2: unknown key; colour3: unknown key; colour4: unknown key; colour5: unknown key",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "warnings": [
+    "1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/encoded-spray-rule-0017.yaml",
+    "5 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-beacon-rule-0034.yaml, objects/rules/hidden-implant-rule-0006.yaml, objects/rules/hidden-loader-rule-0024.yaml, objects/rules/staged-exfiltration-rule-0021.yaml; opentide validate shows where"
+  ]
+}
+
+━━━ stderr · empty

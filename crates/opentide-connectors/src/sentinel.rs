@@ -331,11 +331,10 @@ impl Sentinel {
             .get("error")
             .is_some_and(|error| !matches!(error, Json::Null));
         if partial {
-            let message = body
-                .get("error")
-                .and_then(|error| error.get("message"))
-                .map_or_else(|| "null".to_owned(), json_text);
-            warnings.push(format!("partial result: {message}"));
+            warnings.push(format!(
+                "partial result: {}",
+                partial_message(&answer, &body)
+            ));
         }
         let tables: &[Json] = match body.get("tables") {
             Some(Json::Array(tables)) => tables,
@@ -377,10 +376,21 @@ impl Sentinel {
     }
 }
 
+/// The `error.message` of a partial result, the request's credentials masked
+/// (the rows around it are data and stay as they came).
+fn partial_message(answer: &Answer, body: &Json) -> String {
+    body.get("error")
+        .and_then(|error| error.get("message"))
+        .map_or_else(
+            || "null".to_owned(),
+            |message| json_text(&answer.quoted(message)),
+        )
+}
+
 /// ARM's `error.code` and `error.message` (`_arm_error`), else the text.
 fn arm_error(answer: &Answer) -> (String, String) {
     let head = || answer.text().trim().chars().take(500).collect::<String>();
-    match answer.json() {
+    match answer.quotable_json() {
         Some(body) => {
             let error = body.get("error").filter(|error| error.is_filled());
             let code = error
@@ -401,7 +411,7 @@ fn arm_error(answer: &Answer) -> (String, String) {
 /// The KQL parser's message inside a Log Analytics error, else the error's
 /// `code: message` (and its target), else its HTTP status.
 fn inner_message(answer: &Answer) -> String {
-    let body = answer.json().unwrap_or(Json::Null);
+    let body = answer.quotable_json().unwrap_or(Json::Null);
     let error = body
         .get("error")
         .filter(|error| error.as_object().is_some());
@@ -627,6 +637,35 @@ impl Platform for Sentinel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::answer::{TEST_BEARER, answer_to_bearer};
+
+    #[test]
+    fn arm_and_log_analytics_errors_do_not_quote_the_bearer() {
+        let arm = answer_to_bearer(&format!(
+            r#"{{"error":{{"code":"c","message":"bad {TEST_BEARER}"}}}}"#
+        ));
+        assert_eq!(arm_error(&arm), ("c".to_owned(), "bad ***".to_owned()));
+        let inner = answer_to_bearer(&format!(
+            r#"{{"error":{{"innererror":{{"message":"parse {TEST_BEARER}"}}}}}}"#
+        ));
+        assert_eq!(inner_message(&inner), "parse ***");
+        let plain = answer_to_bearer(&format!(
+            r#"{{"error":{{"code":"c","message":"no {TEST_BEARER}"}}}}"#
+        ));
+        let message = inner_message(&plain);
+        assert!(!message.contains(TEST_BEARER), "{message}");
+    }
+
+    #[test]
+    fn a_partial_result_message_does_not_quote_the_bearer() {
+        let mut answer = answer_to_bearer(&format!(
+            r#"{{"error":{{"message":"cut {TEST_BEARER}"}},"tables":[{{"rows":[["{TEST_BEARER}"]]}}]}}"#
+        ));
+        answer.status = 200;
+        let body = answer.json().unwrap();
+        assert_eq!(partial_message(&answer, &body), "cut ***");
+        assert!(body.to_compact().contains(TEST_BEARER), "rows are data");
+    }
 
     #[test]
     fn instants_serialise_as_azure_core_writes_them() {
