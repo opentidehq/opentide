@@ -81,7 +81,7 @@ tree_unchanged() {
   fi
 }
 
-# ci.yml's Rust jobs (engine, engine-test, release-build's crate-packages, engine-wasm, grammars,
+# ci.yml's Rust jobs (engine, engine-test, release-build's crate-packages, wasm, grammars,
 # fuzz-smoke) for --full; rustfmt, clippy and the layers ran above.
 rust_jobs() {
   echo "==> Cargo workspace: nextest (profile ci)"
