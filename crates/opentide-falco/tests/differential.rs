@@ -295,14 +295,15 @@ impl Engine for Old {
     }
 }
 
-/// What `hover` dispatches on. Text with whitespace in it names nothing
-/// `hover` knows (no field, list, macro or keyword holds a space), so only
-/// that it is such text is compared: tree-sitter and the new tree attach the
-/// whitespace at the edges of the text to different nodes.
+/// What `hover` dispatches on: the kind always, and the text unless it holds
+/// whitespace. Such text names nothing `hover` knows (no field, list, macro
+/// or keyword holds a space), so only that it is such text is compared:
+/// tree-sitter and the new tree attach the whitespace at the edges of the
+/// text to different nodes.
 fn hover_surface(target: Option<(&str, String)>) -> Surfaces {
     let target = target.map(|(kind, word)| {
         if word.chars().any(char::is_whitespace) {
-            ("other", "<spaced>".to_owned())
+            (kind, "<spaced>".to_owned())
         } else {
             (kind, word)
         }
