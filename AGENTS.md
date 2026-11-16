@@ -151,8 +151,9 @@ nextest archive and the `_native` extension) and tested from that build, the Pyt
 when the command line or Python changed, each specialised job (Node, WASI, grammars, GitLab CI
 lint, the facade's semver checks, cargo deny, docs) when its paths changed; one required check,
 `PR gate`. A push to a base branch runs every job on Linux; a release pull request adds every
-package and its install on each OS; the nightly adds macOS and Windows, the other Pythons,
-coverage, benchmarks, fuzz smoke and the vendor-parser oracles, and never gates. Nothing compares
+package and its install on each OS, and Python 3.10 to 3.13; the nightly (`nightly.yml`) adds the
+workspace's tests on macOS and Windows, coverage, benchmarks, every fuzz target for ten minutes
+(`engine-fuzz.yml`), lsp parity and the vendor-parser oracles, and never gates. Nothing compares
 with the frozen Python oracle: `cargo xtask golden`, `compare` and `corpus` run by hand
 (`tests/golden/README.md`).
 The test profiles are in [`.config/nextest.toml`](.config/nextest.toml); CI's jobs are in
