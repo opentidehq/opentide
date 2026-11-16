@@ -150,7 +150,7 @@ accessors! {
         JoinOperator => [join_token, operator_options, tabular_source, on_token, exprs, comma_token],
         ParseOperator => [parse_token, operator_options, column, with_token, parse_parts],
         ParseWhereOperator => [keyword, operator_options, column, with_token, parse_parts],
-        ParseKvOperator => [keyword, args],
+        ParseKvOperator => [keyword, args, as_token, l_paren_token, datatable_columns, comma_token, r_paren_token, with_token, operator_options],
         LookupOperator => [lookup_token, operator_options, tabular_source, on_token, exprs, comma_token],
         TakeOperator => [take_token, count],
         LimitOperator => [limit_token, count],

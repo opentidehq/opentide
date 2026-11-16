@@ -415,3 +415,30 @@ fn fenced_multi_line_strings_are_string_literals() {
         );
     }
 }
+
+/// Found by review (#1411's coverage follow-up): `parse-kv` took an
+/// expression only, so its documented form
+/// (<https://learn.microsoft.com/kusto/query/parse-kv-operator>), with the
+/// keys `as (...)` and the delimiters `with (...)`, was a syntax error.
+#[test]
+fn parse_kv_takes_its_keys_and_options() {
+    for source in [
+        "Syslog | parse-kv SyslogMessage as (Level: string, Host: string) with (pair_delimiter = \" \", kv_delimiter = \"=\")",
+        "T | parse-kv Text as (a: long) with (quote = '\"', greedy = true)",
+        "T | parse-kv Text as (a: long, b: string,)",
+        "T | parse-kv Text",
+    ] {
+        assert!(errors(source).is_empty(), "{source}: {:?}", errors(source));
+        let tree = SyntaxNode::new_root(parse(source).green);
+        let op = tree
+            .descendants()
+            .find(|n| n.kind() == K::PARSE_KV_OPERATOR)
+            .expect("a parse-kv operator");
+        assert_eq!(
+            op.to_string().trim_end(),
+            source[source.find("parse-kv").unwrap_or(0)..].trim_end()
+        );
+    }
+    assert!(!errors("T | parse-kv Text as (a long)").is_empty());
+    assert!(!errors("T | parse-kv Text with (pair_delimiter)").is_empty());
+}

@@ -2281,7 +2281,7 @@ impl ParseWhereOperator {
     }
 }
 
-/// `ParseKvOperator = keyword:'parse-kv' args:Expr?`
+/// `ParseKvOperator = keyword:'parse-kv' args:Expr? ('as' '(' DatatableColumn (',' DatatableColumn)* ','? ')')? ('with' '(' OperatorOption (',' OperatorOption)* ')')?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ParseKvOperator {
     syntax: SyntaxNode,
@@ -2308,6 +2308,34 @@ impl ParseKvOperator {
     /// The `Expr` child.
     pub fn args(&self) -> Option<Expr> {
         support::child(&self.syntax)
+    }
+    /// The token child.
+    pub fn as_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![as])
+    }
+    /// The token child.
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T!['('])
+    }
+    /// The `DatatableColumn` children.
+    pub fn datatable_columns(&self) -> AstChildren<DatatableColumn> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![,])
+    }
+    /// The token child.
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![')'])
+    }
+    /// The token child.
+    pub fn with_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![with])
+    }
+    /// The `OperatorOption` children.
+    pub fn operator_options(&self) -> AstChildren<OperatorOption> {
+        support::children(&self.syntax)
     }
 }
 
@@ -6188,7 +6216,7 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::PARSE_KV_OPERATOR as u16,
         name: "ParseKvOperator",
-        text: "keyword:'parse-kv' args:Expr?",
+        text: "keyword:'parse-kv' args:Expr? ('as' '(' DatatableColumn (',' DatatableColumn)* ','? ')')? ('with' '(' OperatorOption (',' OperatorOption)* ')')?",
         rule: Rule::Seq(&[
             Rule::Kind(T![parse - kv] as u16),
             Rule::Opt(&Rule::Alt(&[
@@ -6209,6 +6237,27 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::NAME_REF as u16),
                 Rule::Kind(SyntaxKind::LITERAL as u16),
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+            ])),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Kind(T![as] as u16),
+                Rule::Kind(T!['('] as u16),
+                Rule::Kind(SyntaxKind::DATATABLE_COLUMN as u16),
+                Rule::Rep(&Rule::Seq(&[
+                    Rule::Kind(T![,] as u16),
+                    Rule::Kind(SyntaxKind::DATATABLE_COLUMN as u16),
+                ])),
+                Rule::Opt(&Rule::Kind(T![,] as u16)),
+                Rule::Kind(T![')'] as u16),
+            ])),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Kind(T![with] as u16),
+                Rule::Kind(T!['('] as u16),
+                Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16),
+                Rule::Rep(&Rule::Seq(&[
+                    Rule::Kind(T![,] as u16),
+                    Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16),
+                ])),
+                Rule::Kind(T![')'] as u16),
             ])),
         ]),
     },

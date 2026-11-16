@@ -145,11 +145,18 @@ fn operator(p: &mut P<'_>) {
         K::SUMMARIZE_KW => summarize(p),
         K::JOIN_KW | K::LOOKUP_KW => join(p),
         K::PARSE_KW | K::PARSE_WHERE_KW => parse_operator(p),
+        // `parse-kv Message as (Level: string, Host: string)
+        // with (pair_delimiter = " ", kv_delimiter = "=")`
+        // (https://learn.microsoft.com/kusto/query/parse-kv-operator).
         K::PARSE_KV_KW => {
             p.bump();
             if expr::at_expr_start(p) {
                 expr::expr(p);
             }
+            if p.eat(K::AS_KW) {
+                typed_columns(p);
+            }
+            with_options(p);
             K::PARSE_KV_OPERATOR
         }
         K::TAKE_KW | K::LIMIT_KW => {
@@ -836,6 +843,12 @@ fn externaldata(p: &mut P<'_>) {
     p.expect(K::L_BRACKET);
     list_until(p, K::R_BRACKET, expr_item);
     p.expect(K::R_BRACKET);
+    with_options(p);
+    p.done(m, K::EXTERNALDATA_EXPRESSION);
+}
+
+/// `with (format = "csv", ignoreFirstRecord = true)`, when `with` comes.
+fn with_options(p: &mut P<'_>) {
     if p.eat(K::WITH_KW) {
         p.expect(K::L_PAREN);
         loop {
@@ -851,7 +864,6 @@ fn externaldata(p: &mut P<'_>) {
         }
         p.expect(K::R_PAREN);
     }
-    p.done(m, K::EXTERNALDATA_EXPRESSION);
 }
 
 /// `search "x"`, `search in (A, B) where x`, `find in (T) where x`.
