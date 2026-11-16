@@ -100,14 +100,15 @@ const KUERY_NEST_FLOOR: usize = NESTING_CEILING;
 const LUCENE_NEST_FLOOR: usize = NESTING_CEILING;
 
 /// The stack the floors are measured against: the browser WASM module's 1 MB.
-#[cfg(not(coverage))]
+#[cfg(not(any(coverage, windows)))]
 const SMALL_STACK: usize = 1 << 20;
 /// Under `cargo llvm-cov` (`--cfg coverage`) the instrumentation enlarges every frame,
 /// so the depths measured on an ordinary debug build overflow 1 MB (`kql nest` aborted
-/// the nightly Coverage job). The instrumented binary is a measurement artefact, not
-/// the WASM budget; the 1 MB model stays enforced by the ordinary test jobs. 8 MB is a
-/// generous bound, not a measurement.
-#[cfg(coverage)]
+/// the nightly Coverage job). A Windows debug build's frames are larger too (`kql nest`
+/// aborted the nightly's Windows engine tests: the floors sit at the edge measured on
+/// Linux and macOS). Neither binary is the WASM budget; the 1 MB model stays enforced
+/// by the Linux and macOS test jobs. 8 MB is a generous bound, not a measurement.
+#[cfg(any(coverage, windows))]
 const SMALL_STACK: usize = 8 << 20;
 
 /// Run `run` on a [`SMALL_STACK`] and fail on an overflow, a panic or a blown time budget.
