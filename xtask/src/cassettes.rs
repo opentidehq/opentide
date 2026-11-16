@@ -614,6 +614,7 @@ mod tests {
         assert!(format!("{error:#}").contains("read "), "{error:#}");
     }
 
+    #[cfg(unix)]
     fn words(words: &[&str]) -> Vec<String> {
         words.iter().map(|word| (*word).to_owned()).collect()
     }
