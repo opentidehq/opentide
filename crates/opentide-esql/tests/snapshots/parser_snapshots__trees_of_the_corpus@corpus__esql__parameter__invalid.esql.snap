@@ -41,4 +41,4 @@ SOURCE_FILE@0..75
           MINUS@73..74 "-"
   WHITESPACE@74..75 "\n"
 --- errors
-74..75: expected an expression (expected NOT_KW, PLUS, MINUS)
+74..75: expected an expression (expected PLUS, MINUS)

@@ -36,5 +36,5 @@ SOURCE_FILE@0..25
     ERROR@24..25
       NUMBER_LIT@24..25 "2"
 --- errors
-21..22: expected an expression (expected NOT_KW, PLUS, MINUS)
+21..22: expected an expression (expected PLUS, MINUS)
 23..24: expected `|` or the end of the query (expected AND_KW, OR_KW, PIPE, COMMA, R_PAREN)
