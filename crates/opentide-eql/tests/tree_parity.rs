@@ -141,4 +141,3 @@ fn the_tree_is_tree_sitters_on_every_valid_file_and_line() {
     );
     assert!(compared > 300, "{compared} compared");
 }
-

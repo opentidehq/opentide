@@ -1401,6 +1401,44 @@ mod tests {
             .collect()
     }
 
+    /// The first syntax error's message, as `analyze` words it.
+    fn parse_error(src: &str) -> String {
+        analyze(src)
+            .diagnostics
+            .into_iter()
+            .find(|d| d.code == codes::EQL_PARSE_ERROR)
+            .map(|d| d.message)
+            .unwrap_or_default()
+    }
+
+    /// The hints the tree-sitter engine gave stay: `=` for `==`, and upper-case keywords
+    /// (#1408 review). The parser adds what it expected.
+    #[test]
+    fn syntax_errors_keep_their_hints_and_say_what_was_expected() {
+        assert_eq!(
+            parse_error("process where a = 1"),
+            "EQL syntax error: use `==` for equality; `=` is not a comparison"
+        );
+        assert_eq!(
+            parse_error("process where a == 1 AND b == 2"),
+            "EQL syntax error near `AND`: keywords are lower case (`and`)"
+        );
+        assert_eq!(
+            parse_error("sequence WITH maxspan=1m [a where true] [b where true]"),
+            "EQL syntax error near `WITH`: keywords are lower case (`with`)"
+        );
+        let early = parse_error("process where a ==");
+        assert!(
+            early.starts_with("EQL syntax error: the query ends too early; expected "),
+            "{early}"
+        );
+        let near = parse_error("process where a == 1)");
+        assert!(
+            near.starts_with("EQL syntax error near `)`; expected ") && near.contains("`and`"),
+            "{near}"
+        );
+    }
+
     /// #180: a backslash before a multi-byte character panicked.
     #[test]
     fn an_invalid_escape_of_a_multi_byte_character_is_one_error_on_it() {
