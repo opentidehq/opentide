@@ -2058,8 +2058,9 @@ mod elastic_tests {
     }
 
     /// The derived ids are version-5 UUIDs (SHA-1, RFC 9562) of the
-    /// migration namespace: an import derives the same id every time, so the
-    /// values below never change.
+    /// migration namespace. The expected values are the ids the Python
+    /// importer produced (`uuid.uuid5`), so a re-import keeps the ids earlier
+    /// imports created: the test checks against that outside source.
     #[test]
     fn prebuilt_rule_ids_match_python_uuid5() {
         assert_eq!(

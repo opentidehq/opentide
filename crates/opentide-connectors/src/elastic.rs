@@ -423,7 +423,7 @@ impl Client {
     }
 }
 
-// ---- small readers of a block, each telling a missing key from an empty value ----
+// ---- small readers of a block ----
 
 /// `block.get(key, default)`: the default only when the key is missing.
 fn get_or<'j>(block: &'j Json, key: &str, default: &'j Json) -> &'j Json {

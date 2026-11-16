@@ -2,7 +2,7 @@
 //! schemas `platform::<platform>::1.0`, ported from `models/platform.py`,
 //! `models/platform_configs.py` and `models/platform_schema.py`.
 //!
-//! Each block is one struct, its fields Pydantic's in Pydantic's order: the
+//! Each block is one struct, its fields the oracle's in the oracle's order: the
 //! shared ones of `PlatformConfigBase` first (`platform_block!`), then the
 //! block's own. A field's doc comment is its schema description, held to the
 //! oracle's text by `cargo xtask schema diff --against python`.

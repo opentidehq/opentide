@@ -71,10 +71,10 @@ pub fn read(uri: &str, context: &Context<'_>) -> Answer {
     }
 }
 
-/// The value of a template's variable (RFC 6570, level 2): a simple
-/// expansion ends at `/`, `?`, `#`, `&` or `,` (a value
-/// holding one does not match), a reserved one (`{+name}`) at `?` or `#`.
-/// Either is percent-decoded.
+/// The value of a template's variable, for RFC 6570's simple (`{name}`) and
+/// reserved (`{+name}`) expansions. An empty value does not match, nor does
+/// one holding a stop character: `/`, `?`, `#`, `&` or `,` for a simple
+/// expansion, `?` or `#` for a reserved one. Either is percent-decoded.
 fn expand(raw: &str, reserved: bool) -> Option<String> {
     let stops = if reserved { "?#" } else { "/?#&," };
     if raw.is_empty() || raw.chars().any(|c| stops.contains(c)) {
