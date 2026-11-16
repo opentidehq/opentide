@@ -521,7 +521,7 @@ fn scan(s: &str, start: usize, flags: Flags) -> Option<(K, usize)> {
             }
         }
         if before_assign {
-            return Some((K::WORD, end));
+            return Some((K::ASSIGN_FIELD_TOKEN, end));
         }
     }
     if want_function
@@ -719,15 +719,16 @@ impl Driver<'_> {
         if let Some((kind, end)) = scan(self.src, start, self.flags()) {
             match kind {
                 K::FUNCTION_NAME_TOKEN => {
-                    self.call_ret = if matches!(self.mode, Mode::Step | Mode::Guard) {
-                        Mode::Step
-                    } else {
-                        Mode::After
-                    };
+                    self.call_ret =
+                        if matches!(self.mode, Mode::Step | Mode::Guard | Mode::AfterAssign) {
+                            Mode::Step
+                        } else {
+                            Mode::After
+                        };
                     self.push(kind, end);
                 }
                 // The field of an assignment: `:=` follows.
-                K::WORD => {
+                K::ASSIGN_FIELD_TOKEN => {
                     self.push(kind, end);
                     if matches!(self.mode, Mode::Operand { .. }) {
                         self.mode = Mode::After;
@@ -775,6 +776,11 @@ impl Driver<'_> {
     /// A string, tag, number, word, regex or pattern; whether `c` started one.
     fn atom(&mut self, c: char, was_field: bool) -> bool {
         let (s, start) = (self.src, self.pos);
+        // Where an operator is due, `%` is the operator, not a field character (a word there
+        // is an attribute name: `{ ... } include: [a]`).
+        if self.mode == Mode::After && c == '%' {
+            return false;
+        }
         let step_like = matches!(self.mode, Mode::Step | Mode::Guard | Mode::Value);
         let (kind, end) = if let Some(end) = string_end(s, start, &mut self.memo) {
             (K::STRING_TOKEN, end)
@@ -1050,7 +1056,10 @@ impl Driver<'_> {
                 }),
             ),
         };
-        if end > start {
+        // A comment that starts here and is longer than the name wins (`$/*x ... */`): the
+        // longest token does, in tree-sitter.
+        let comment = comment_end(s, start, &mut self.memo).is_some_and(|(_, c)| c > end);
+        if end > start && !comment {
             self.push(kind, end);
             self.prev.saved_name = true;
         }

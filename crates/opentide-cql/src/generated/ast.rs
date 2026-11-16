@@ -2530,7 +2530,7 @@ impl Identifier {
     }
 }
 
-/// `BinaryExpression = left:Expr operator:('==' | '!=' | '<' | '<=' | '>' | '>=' | '<=>' | '+' | '-' | '*' | '/' | '%') right:Expr`
+/// `BinaryExpression = Expr (('==' | '!=' | '<' | '<=' | '>' | '>=' | 'lt_eq_gt' | '+' | '-' | '*' | '/' | '%') Expr)*`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BinaryExpression {
     syntax: SyntaxNode,
@@ -2550,33 +2550,57 @@ impl AstNode for BinaryExpression {
 }
 
 impl BinaryExpression {
-    /// The `Expr` child.
-    pub fn left(&self) -> Option<Expr> {
-        support::child(&self.syntax)
+    /// The `Expr` children.
+    pub fn exprs(&self) -> AstChildren<Expr> {
+        support::children(&self.syntax)
     }
     /// The token child.
-    pub fn operator(&self) -> Option<SyntaxToken> {
-        support::token_in(
-            &self.syntax,
-            &[
-                T![==],
-                T![!=],
-                T![<],
-                T![<=],
-                T![>],
-                T![>=],
-                T![<=>],
-                T![+],
-                T![-],
-                T![*],
-                T![/],
-                T![%],
-            ],
-        )
+    pub fn eqeq_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![==])
     }
-    /// The `Expr` child, number 1 from 0 among the `Expr` children.
-    pub fn right(&self) -> Option<Expr> {
-        support::nth_child(&self.syntax, 1)
+    /// The token child.
+    pub fn neq_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![!=])
+    }
+    /// The token child.
+    pub fn l_angle_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![<])
+    }
+    /// The token child.
+    pub fn lteq_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![<=])
+    }
+    /// The token child.
+    pub fn r_angle_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![>])
+    }
+    /// The token child.
+    pub fn gteq_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![>=])
+    }
+    /// The token child.
+    pub fn lt_eq_gt_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![lt_eq_gt])
+    }
+    /// The token child.
+    pub fn plus_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![+])
+    }
+    /// The token child.
+    pub fn minus_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![-])
+    }
+    /// The token child.
+    pub fn star_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![*])
+    }
+    /// The token child.
+    pub fn slash_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![/])
+    }
+    /// The token child.
+    pub fn percent_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![%])
     }
 }
 
@@ -3481,7 +3505,7 @@ pub static RULES: &[NodeRule] = &[
     NodeRule {
         kind: SyntaxKind::BINARY_EXPRESSION as u16,
         name: "BinaryExpression",
-        text: "left:Expr operator:('==' | '!=' | '<' | '<=' | '>' | '>=' | '<=>' | '+' | '-' | '*' | '/' | '%') right:Expr",
+        text: "Expr (('==' | '!=' | '<' | '<=' | '>' | '>=' | 'lt_eq_gt' | '+' | '-' | '*' | '/' | '%') Expr)*",
         rule: Rule::Seq(&[
             Rule::Alt(&[
                 Rule::Kind(SyntaxKind::BINARY_EXPRESSION as u16),
@@ -3499,36 +3523,38 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::TAG as u16),
                 Rule::Kind(SyntaxKind::UNQUOTED_PATTERN as u16),
             ]),
-            Rule::Alt(&[
-                Rule::Kind(T![==] as u16),
-                Rule::Kind(T![!=] as u16),
-                Rule::Kind(T![<] as u16),
-                Rule::Kind(T![<=] as u16),
-                Rule::Kind(T![>] as u16),
-                Rule::Kind(T![>=] as u16),
-                Rule::Kind(T![<=>] as u16),
-                Rule::Kind(T![+] as u16),
-                Rule::Kind(T![-] as u16),
-                Rule::Kind(T![*] as u16),
-                Rule::Kind(T![/] as u16),
-                Rule::Kind(T![%] as u16),
-            ]),
-            Rule::Alt(&[
-                Rule::Kind(SyntaxKind::BINARY_EXPRESSION as u16),
-                Rule::Kind(SyntaxKind::UNARY_EXPRESSION as u16),
-                Rule::Kind(SyntaxKind::PARENTHESIZED_EXPRESSION as u16),
-                Rule::Kind(SyntaxKind::SUBQUERY as u16),
-                Rule::Kind(SyntaxKind::NAMED_SUBQUERY as u16),
-                Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
-                Rule::Kind(SyntaxKind::ARRAY as u16),
-                Rule::Kind(SyntaxKind::QUERY_PARAMETER as u16),
-                Rule::Kind(SyntaxKind::NUMBER as u16),
-                Rule::Kind(SyntaxKind::BOOLEAN as u16),
-                Rule::Kind(SyntaxKind::STRING as u16),
-                Rule::Kind(SyntaxKind::FIELD_NAME as u16),
-                Rule::Kind(SyntaxKind::TAG as u16),
-                Rule::Kind(SyntaxKind::UNQUOTED_PATTERN as u16),
-            ]),
+            Rule::Rep(&Rule::Seq(&[
+                Rule::Alt(&[
+                    Rule::Kind(T![==] as u16),
+                    Rule::Kind(T![!=] as u16),
+                    Rule::Kind(T![<] as u16),
+                    Rule::Kind(T![<=] as u16),
+                    Rule::Kind(T![>] as u16),
+                    Rule::Kind(T![>=] as u16),
+                    Rule::Kind(T![lt_eq_gt] as u16),
+                    Rule::Kind(T![+] as u16),
+                    Rule::Kind(T![-] as u16),
+                    Rule::Kind(T![*] as u16),
+                    Rule::Kind(T![/] as u16),
+                    Rule::Kind(T![%] as u16),
+                ]),
+                Rule::Alt(&[
+                    Rule::Kind(SyntaxKind::BINARY_EXPRESSION as u16),
+                    Rule::Kind(SyntaxKind::UNARY_EXPRESSION as u16),
+                    Rule::Kind(SyntaxKind::PARENTHESIZED_EXPRESSION as u16),
+                    Rule::Kind(SyntaxKind::SUBQUERY as u16),
+                    Rule::Kind(SyntaxKind::NAMED_SUBQUERY as u16),
+                    Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                    Rule::Kind(SyntaxKind::ARRAY as u16),
+                    Rule::Kind(SyntaxKind::QUERY_PARAMETER as u16),
+                    Rule::Kind(SyntaxKind::NUMBER as u16),
+                    Rule::Kind(SyntaxKind::BOOLEAN as u16),
+                    Rule::Kind(SyntaxKind::STRING as u16),
+                    Rule::Kind(SyntaxKind::FIELD_NAME as u16),
+                    Rule::Kind(SyntaxKind::TAG as u16),
+                    Rule::Kind(SyntaxKind::UNQUOTED_PATTERN as u16),
+                ]),
+            ])),
         ]),
     },
     NodeRule {

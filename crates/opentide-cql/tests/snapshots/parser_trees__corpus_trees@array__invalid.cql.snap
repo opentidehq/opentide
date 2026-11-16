@@ -1,0 +1,33 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/array__invalid.cql
+---
+SOURCE_FILE@0..41
+  PIPELINE@0..40
+    FUNCTION_CALL@0..40
+      FUNCTION_NAME@0..2
+        FUNCTION_NAME_TOKEN@0..2 "in"
+      L_PAREN@2..3 "("
+      ARGUMENT_LIST@3..39
+        ARGUMENT@3..11
+          FIELD_NAME@3..11
+            WORD@3..11 "severity"
+        COMMA@11..12 ","
+        WHITESPACE@12..13 " "
+        NAMED_ARGUMENT@13..39
+          ARGUMENT_NAME@13..19
+            WORD@13..19 "values"
+          EQ@19..20 "="
+          ARRAY@20..39
+            L_BRACK@20..21 "["
+            STRING@21..31
+              STRING_TOKEN@21..31 "\"critical\""
+            COMMA@31..32 ","
+            WHITESPACE@32..33 " "
+            STRING@33..39
+              STRING_TOKEN@33..39 "\"high\""
+      R_PAREN@39..40 ")"
+  WHITESPACE@40..41 "\n"
+
+39..39: missing `]` (expected R_BRACK, COMMA)

@@ -1,0 +1,49 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/not_filter__valid.cql
+---
+SOURCE_FILE@0..77
+  PIPELINE@0..76
+    AND_FILTER@0..22
+      FREE_TEXT@0..3
+        UNQUOTED_PATTERN@0..3
+          WORD@0..3 "foo"
+      WHITESPACE@3..4 " "
+      NOT_FILTER@4..22
+        NOT@4..7
+          NOT_KW@4..7 "not"
+        WHITESPACE@7..8 " "
+        FIELD_FILTER@8..22
+          FIELD_NAME@8..18
+            WORD@8..18 "statuscode"
+          EQ@18..19 "="
+          UNQUOTED_PATTERN@19..22
+            WORD@19..22 "200"
+    WHITESPACE@22..23 "\n"
+    PIPE@23..24 "|"
+    WHITESPACE@24..25 " "
+    AND_FILTER@25..76
+      NOT_FILTER@25..60
+        NOT@25..28
+          NOT_KW@25..28 "NOT"
+        WHITESPACE@28..29 " "
+        FIELD_FILTER@29..60
+          FIELD_NAME@29..47
+            WORD@29..47 "ParentBaseFileName"
+          EQ@47..48 "="
+          UNQUOTED_PATTERN@48..60
+            WORD@48..60 "explorer.exe"
+      WHITESPACE@60..61 " "
+      NOT_FILTER@61..76
+        BANG@61..62 "!"
+        FIELD_FILTER@62..76
+          FIELD_NAME@62..70
+            WORD@62..70 "UserName"
+          EQ@70..71 "="
+          REGEX@71..76
+            SLASH@71..72 "/"
+            REGEX_PATTERN@72..75
+              REGEX_PATTERN_TOKEN@72..75 "\\$$"
+            SLASH@75..76 "/"
+  WHITESPACE@76..77 "\n"

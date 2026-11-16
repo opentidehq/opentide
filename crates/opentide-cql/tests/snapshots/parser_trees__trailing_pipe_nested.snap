@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..12
+  PIPELINE@0..12
+    FUNCTION_CALL@0..12
+      FUNCTION_NAME@0..1
+        FUNCTION_NAME_TOKEN@0..1 "f"
+      L_PAREN@1..2 "("
+      ARGUMENT_LIST@2..11
+        ARGUMENT@2..11
+          SUBQUERY@2..11
+            L_BRACE@2..3 "{"
+            WHITESPACE@3..4 " "
+            PIPELINE@4..9
+              FIELD_FILTER@4..7
+                FIELD_NAME@4..5
+                  WORD@4..5 "a"
+                EQ@5..6 "="
+                UNQUOTED_PATTERN@6..7
+                  WORD@6..7 "1"
+              WHITESPACE@7..8 " "
+              PIPE@8..9 "|"
+            WHITESPACE@9..10 " "
+            R_BRACE@10..11 "}"
+      R_PAREN@11..12 ")"
+
+9..10: expected a step
