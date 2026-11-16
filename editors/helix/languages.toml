@@ -60,7 +60,7 @@ scope = "source.opentide.cql"
 file-types = ["cql"]
 language-servers = ["opentide-lsp"]
 
-# YARA signatures (libyara 4.5). The scope matches the TextMate grammar's,
+# YARA signatures (YARA-X 1.x). The scope matches the TextMate grammar's,
 # which avoids the YARA extensions' `source.yara`.
 [[language]]
 name = "yara"

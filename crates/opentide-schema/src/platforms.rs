@@ -232,7 +232,8 @@ pub const PLATFORMS: &[Platform] = &[
         query_runner: true,
         runner_languages: &["telemetry"],
         // harfanglab-1.0 1.2: its YARA (the HarfangLab profile), and `.yar`
-        // and `.yara` files, checked offline as libyara 4.5 compiles them.
+        // and `.yara` files, checked offline as YARA-X 1.x compiles them
+        // (#1225), YARA-X-only syntax refused under the profile.
         offline_languages: &["yara"],
         query_file_suffixes: &["yar", "yara"],
     },

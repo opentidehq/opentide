@@ -415,7 +415,7 @@ Language id `exabeam` (`.exabeam`). The Exabeam Query Language of Exabeam's New-
 
 ## YARA
 
-Language id `yara` (`.yar`, `.yara`). YARA signatures as libyara 4.5 compiles them ([yara-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-1.0.md)): HarfangLab and Bitdefender `yara` blocks. `docs/engine/YARA.md` has the codes.
+Language id `yara` (`.yar`, `.yara`). YARA signatures as YARA-X 1.x compiles them ([yara-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-1.0.md), its YARA-X revision language-yara 1.6 in [opentidehq/specifications#94](https://github.com/opentidehq/specifications/pull/94); #1225): HarfangLab and Bitdefender `yara` blocks, whose profiles refuse YARA-X-only syntax (the setting `yara_x_syntax`, the error `yara_x_only_syntax`). `docs/engine/YARA.md` has the codes.
 
 - **Verdicts** come from VirusTotal's `yara-x-parser` (`crates/opentide-yara`), not from this grammar.
 - **`yara-x-parser`'s CST** (`crates/opentide-yara/src/cst.rs`) colours and structures the text, folding and bracket pairs included; its AST gives the verdict.
