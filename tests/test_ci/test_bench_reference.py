@@ -30,7 +30,7 @@ ENV = {
     "GITHUB_REPOSITORY": "opentidehq/opentide",
     "GITHUB_RUN_ID": "900",
     "BASE_BRANCH": "integration/unified-core",
-    "ENGINE": "python",
+    "ENGINE": "rust",
 }
 
 
@@ -78,8 +78,9 @@ def ci_nightly(at: str, conclusion: str = "success", cpu: str | None = CPU) -> d
         "cpu": cpu,
         "jobs": [
             {"name": "Changes", "conclusion": "success"},
-            {"name": "Benchmarks / Benchmarks (python)", "conclusion": conclusion},
-            {"name": "Benchmarks / Benchmarks (rust)", "conclusion": "success"},
+            {"name": "Nightly / Benchmarks / Benchmarks (rust)", "conclusion": conclusion},
+            # Another job's success never stands for the benchmark's.
+            {"name": "Nightly / Engine tests (windows-latest)", "conclusion": "success"},
         ],
     }
 
@@ -90,7 +91,7 @@ def bench_alone(at: str, conclusion: str = "success", cpu: str | None = CPU) -> 
         "event": "workflow_dispatch",
         "at": at,
         "cpu": cpu,
-        "jobs": [{"name": "Benchmarks (python)", "conclusion": conclusion}],
+        "jobs": [{"name": "Benchmarks (rust)", "conclusion": conclusion}],
     }
 
 

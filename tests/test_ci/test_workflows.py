@@ -207,6 +207,16 @@ def test_permissions_are_least_privilege_and_checkouts_keep_no_credentials(path:
         granted = job.get("permissions") or {}
         writes = {scope for scope, level in granted.items() if level == "write"}
         assert writes <= WRITES.get((path.name, job_id), set()), (path.name, job_id, writes)
+    if path.name == "publish.yml":
+        # Its publishing jobs do hold their OIDC token: without it, a release fails
+        # only on the day it runs.
+        holders = {
+            job_id
+            for job_id, job in workflow["jobs"].items()
+            if (job.get("permissions") or {}).get("id-token") == "write"
+        }
+        assert holders == {"attest", "pypi", "crates", "npm"}
+        assert top == {"contents": "read"}
     if path.name == "vocab-upstream.yml":
         return
     for job in workflow["jobs"].values():
