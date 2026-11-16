@@ -500,8 +500,26 @@ fn values_are_exact() {
 
 #[test]
 fn a_syntax_error_does_not_cascade() {
-    let d = analyze("groupBy(x) | foo(( | bar baz").diagnostics;
-    assert!(d.iter().all(|d| d.code == codes::CQL_PARSE_ERROR), "{d:#?}");
+    // The call is unfinished (two `)` missing at its end), and a call with a fault inside.
+    for q in ["groupBy(x) | foo(( | bar baz", "foo(a, , b) | bar"] {
+        let d = analyze(q).diagnostics;
+        assert!(
+            d.iter().all(|d| d.code == codes::CQL_PARSE_ERROR),
+            "{q}: {d:#?}"
+        );
+    }
+}
+
+/// A finished node before a stray token is still checked: the fault is not its own.
+#[test]
+fn a_stray_token_after_a_call_leaves_the_call_checked() {
+    let d = analyze("foo() )").diagnostics;
+    let codes: Vec<&str> = d.iter().map(|d| d.code.as_str()).collect();
+    assert_eq!(
+        codes,
+        [codes::CQL_PARSE_ERROR, codes::CQL_UNKNOWN_FUNCTION],
+        "{d:#?}"
+    );
 }
 
 #[test]

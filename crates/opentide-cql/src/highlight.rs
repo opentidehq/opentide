@@ -18,7 +18,7 @@ pub(crate) fn tokens(spec: &HighlightSpec, root: &SyntaxNode, source: &str) -> V
         .filter_map(|t| {
             let range = t.text_range();
             let span = ByteSpan::new(usize::from(range.start()), usize::from(range.end()));
-            let mut c = capture(&t)?;
+            let mut c = capture(&t, source)?;
             if c == Capture::FUNCTION
                 && catalog
                     .function(source.get(span.start..span.end).unwrap_or(""))
@@ -57,7 +57,7 @@ fn is_argument_name(node: &SyntaxNode) -> bool {
 
 /// The capture of a token: its own kind for the punctuation, the node that wraps it for
 /// a word, a literal or a name.
-fn capture(token: &SyntaxToken) -> Option<Capture> {
+fn capture(token: &SyntaxToken, source: &str) -> Option<Capture> {
     let parent = token.parent()?;
     let in_node = |k: K| parent.kind() == k;
     Some(match token.kind() {
@@ -90,13 +90,16 @@ fn capture(token: &SyntaxToken) -> Option<Capture> {
             Capture::BRACKET
         }
         K::COMMA | K::SEMI | K::COLON => Capture::DELIMITER,
-        _ => node_capture(&parent)?,
+        _ => node_capture(&parent, source)?,
     })
 }
 
-/// The capture of the one-token node `node` (a name or a literal).
-fn node_capture(node: &SyntaxNode) -> Option<Capture> {
-    let text = node.text().to_string();
+/// The capture of the one-token node `node` (a name or a literal). Its text is a slice of
+/// `source`, read only where the capture depends on it: a token's parent can be a node as
+/// large as the query (whitespace in a deep `case`), and copying its text for each token
+/// was quadratic in the nesting.
+fn node_capture(node: &SyntaxNode, source: &str) -> Option<Capture> {
+    let text = || crate::text(node, source);
     Some(match node.kind() {
         K::SAVED_QUERY_NAME => Capture::MACRO,
         K::STRING if is_child(node, K::SAVED_QUERY, 0) => Capture::MACRO,
@@ -114,11 +117,11 @@ fn node_capture(node: &SyntaxNode) -> Option<Capture> {
         }
         K::ARGUMENT_NAME | K::STRING if is_argument_name(node) => Capture::VARIABLE,
         K::IDENTIFIER => Capture::VARIABLE,
-        K::FIELD_NAME if is_duration(&text) => Capture::NUMBER,
+        K::FIELD_NAME if is_duration(text()) => Capture::NUMBER,
         K::FIELD_NAME => Capture::PROPERTY,
         K::REGEX_PATTERN => Capture::STRING,
         K::REGEX_FLAGS => Capture::CONSTANT,
-        K::UNQUOTED_PATTERN if is_number(&text) => Capture::NUMBER,
+        K::UNQUOTED_PATTERN if is_number(text()) => Capture::NUMBER,
         K::UNQUOTED_PATTERN | K::STRING => Capture::STRING,
         K::NUMBER => Capture::NUMBER,
         K::BOOLEAN => Capture::BOOLEAN,

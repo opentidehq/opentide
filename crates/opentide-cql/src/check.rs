@@ -8,6 +8,7 @@ use crate::catalog::{Catalog, Function, Parameter};
 use crate::syntax::{SyntaxKind as K, SyntaxNode};
 use crate::{Context, child, nth, range, text};
 use opentide_core::{Diagnostic, codes};
+use opentide_parse::SyntaxError;
 use rowan::WalkEvent;
 
 /// Regex flags CQL accepts (`d` dot-all, `g`, `i`, `m`, `F` regex engine v2).
@@ -20,11 +21,12 @@ const STRING_ESCAPES: &[char] = &['"', '\\', 'n', 't', 'u', 'x'];
 
 pub(crate) fn diagnostics(
     root: &SyntaxNode,
-    has_error: bool,
+    errors: &[SyntaxError],
     source: &str,
     ctx: &Context,
 ) -> Vec<Diagnostic> {
     let catalog = Catalog::cached();
+    let broken = Broken::new(errors);
     let mut out = Vec::new();
     // Checks that look upward read `ancestors` and `above`: a scan of
     // `ancestors` at every node makes a deeply nested query quadratic.
@@ -39,7 +41,7 @@ pub(crate) fn diagnostics(
         ];
         // Inside a syntax error the tree is a guess: its first error is the
         // finding, not what the guess looks like.
-        if CHECKED.contains(&node.kind()) && above.error {
+        if CHECKED.contains(&node.kind()) && (above.error || broken.contains(node)) {
             return;
         }
         match node.kind() {
@@ -54,13 +56,50 @@ pub(crate) fn diagnostics(
     });
     // Step order is only known in a tree without errors: after recovery the
     // text past a syntax error is a guess at steps, not what was written.
-    if !has_error {
+    if errors.is_empty() {
         free_text_after_aggregate(root, source, catalog, &mut out);
     }
     if ctx.correlation_rule {
         correlation_rule(root, source, catalog, &mut out);
     }
     out
+}
+
+/// Where the parse errors are, to find the nodes they break. tree-sitter wrapped a broken
+/// construct in an ERROR node or gave it a MISSING child; the rowan tree keeps the construct
+/// and records the fault as a gap, often at the construct's end (`foo((` before a `|` is a
+/// call with two `)` missing at its end). Both lists are sorted offsets.
+struct Broken {
+    /// Where each error is.
+    any: Vec<u32>,
+    /// Where an error says something is missing or expected: the construct that ends there
+    /// was not finished. (An `unexpected` token after a node is not the node's fault.)
+    unfinished: Vec<u32>,
+}
+
+impl Broken {
+    fn new(errors: &[SyntaxError]) -> Self {
+        let at = |e: &SyntaxError| u32::from(e.gap.start());
+        let mut any: Vec<u32> = errors.iter().map(at).collect();
+        let mut unfinished: Vec<u32> = errors
+            .iter()
+            .filter(|e| e.message.starts_with("missing ") || e.message.starts_with("expected "))
+            .map(at)
+            .collect();
+        any.sort_unstable();
+        unfinished.sort_unstable();
+        Self { any, unfinished }
+    }
+
+    /// Whether a parse error is inside `node`, or one at its end says it was not finished.
+    /// Two binary searches: no scan of the errors per node.
+    fn contains(&self, node: &SyntaxNode) -> bool {
+        let r = node.text_range();
+        let (start, end) = (u32::from(r.start()), u32::from(r.end()));
+        let first_after = |v: &[u32]| v.get(v.partition_point(|&o| o <= start)).copied();
+        first_after(&self.any).is_some_and(|o| o < end)
+            || first_after(&self.unfinished).is_some_and(|o| o <= end)
+    }
 }
 
 /// What the ancestors of a node add up to, so that no check scans them: one

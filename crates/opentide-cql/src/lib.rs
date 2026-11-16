@@ -76,12 +76,7 @@ pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
             span_to_range(source, span),
         ));
     }
-    diagnostics.extend(check::diagnostics(
-        &root,
-        !parse.errors.is_empty(),
-        source,
-        ctx,
-    ));
+    diagnostics.extend(check::diagnostics(&root, &parse.errors, source, ctx));
     AnalyzeResult {
         diagnostics,
         tokens: highlight::tokens(&spec, &root, source),
