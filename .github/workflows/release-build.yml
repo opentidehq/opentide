@@ -92,6 +92,11 @@ on:
         required: false
         default: true
         type: boolean
+      retention-days:
+        description: "How long the artifacts are kept; 0 is the repository's default."
+        required: false
+        default: 0
+        type: number
 
 permissions:
   contents: read
@@ -207,8 +212,7 @@ jobs:
   # packages: no oracle reference ships. Left out: the members with
   # `publish = false` (the PyO3 and Node.js bindings, xtask, the test harnesses
   # opentide-compare and opentide-cassette, and opentide-wasm, which ships as a
-  # release asset), whose sources are scanned instead
-  # (tests/test_ci/test_workflows.py). opentide-cli carries opentide's package
+  # release asset), whose sources are scanned instead. opentide-cli carries opentide's package
   # data, its explain pages, as the wheel does: scanned as a product.
   crate-packages:
     name: Crate packages and licence scan

@@ -76,7 +76,8 @@ def ci_jobs() -> dict[str, Any]:
 
 
 def nightly_only(job: dict[str, Any]) -> bool:
-    return str(job.get("if", "")).strip() == NIGHTLY
+    """The nightly's, whether or not it runs after a failed need (`always() && …`)."""
+    return str(job.get("if", "")).strip() in {NIGHTLY, f"always() && {NIGHTLY}"}
 
 
 # --- The one required check ------------------------------------------------

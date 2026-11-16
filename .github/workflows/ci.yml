@@ -1893,7 +1893,10 @@ jobs:
   engine-release-consumers:
     name: Engine release assets in vscode-extension
     needs: [changes, release]
-    if: needs.changes.outputs.mode == 'nightly'
+    # Whatever else in `release` failed (a smoke cell, the crates' licence
+    # scan): this needs only its engine assets, and the download fails when
+    # they were not built.
+    if: always() && needs.changes.outputs.mode == 'nightly'
     runs-on: ubuntu-latest
     permissions:
       contents: read
