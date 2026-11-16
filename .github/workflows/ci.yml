@@ -76,7 +76,8 @@ env:
   COVERAGE_PYTHON: "3.14"
 
 # Compiler caches (tests/test_ci/test_workflows.py): sccache (RUSTC_WRAPPER)
-# in .sccache/, kept by actions/cache under
+# in .sccache/, restored by .github/actions/rust-setup (`cache:`) and saved by
+# .github/actions/sccache-save, kept by actions/cache under
 # `sccache-<family>-<hash of rust-toolchain.toml>-<ISO week>`, restored with the
 # family and toolchain as restore-keys and saved by exactly one job when the
 # key missed (once a week): from a push or Run workflow (the nightly, for the
@@ -252,25 +253,14 @@ jobs:
 
       # The release rust-toolchain.toml pins, with the rustfmt and clippy it lists.
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: engine-check
 
       - name: rustfmt
         run: cargo fmt --all --check
-
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: sccache@0.19.0
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
-        id: sccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-engine-check-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-engine-check-${{ hashFiles('rust-toolchain.toml') }}-
 
       - name: clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -286,16 +276,12 @@ jobs:
           RUSTDOCFLAGS: "-D warnings"
         run: cargo doc --no-deps --workspace --locked
 
-      - name: Compiler cache statistics
-        if: ${{ !cancelled() }}
-        run: sccache --show-stats
-
       - name: Save the compiler cache
-        if: steps.sccache.outputs.cache-hit != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.sccache.outputs.cache-matched-key == '')
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
         with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-engine-check-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
 
   # opentide's wheel, built by maturin as a release's is (#1157), for the
   # Python jobs, which install it without compiling: a job of its own, so they
@@ -330,28 +316,16 @@ jobs:
         with:
           persist-credentials: false
 
+      # maturin as a prebuilt binary: `pipx run` took 7 s to install it.
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        id: sccache
+        uses: ./.github/actions/rust-setup
         with:
-          # maturin as a prebuilt binary: `pipx run` took 7 s to install it.
-          tool: sccache@0.19.0,maturin@1.16.0
+          tools: sccache@0.19.0,maturin@1.16.0
+          cache: native-v2
 
       - name: Install mold
         run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
-
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
-        id: sccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-native-v2-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-native-v2-${{ hashFiles('rust-toolchain.toml') }}-
 
       # `v2`: maturin's compiles (its environment is in their sccache keys)
       # replaced cargo's; bump it with the build's settings, or the week's
@@ -368,16 +342,12 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-      - name: Compiler cache statistics
-        if: ${{ !cancelled() }}
-        run: sccache --show-stats
-
       - name: Save the compiler cache
-        if: steps.sccache.outputs.cache-hit != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.sccache.outputs.cache-matched-key == '')
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
         with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-native-v2-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
 
   # The gate's one build of the tests, and the Rust tests run where they were
   # built: the affected crates' tests, xtask and the language server with one
@@ -427,33 +397,21 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
+      # `v5`: the build's settings (RUSTFLAGS, the profile's debuginfo and
+      # strip, the wrapper) are in every compile's sccache key: bump it with them, or the
+      # week's copy, already saved, keeps the old compiles and none is saved.
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        id: sccache
+        uses: ./.github/actions/rust-setup
         with:
-          tool: sccache@0.19.0,cargo-nextest@0.9.148
+          tools: sccache@0.19.0,cargo-nextest@0.9.148
+          cache: build-v5
 
       - name: Install mold
         run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
 
       - name: Runner CPU
         run: grep -m1 "model name" /proc/cpuinfo
-
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      # `v5`: the build's settings (RUSTFLAGS, the profile's debuginfo and
-      # strip, the wrapper) are in every compile's sccache key: bump it with them, or the
-      # week's copy, already saved, keeps the old compiles and none is saved.
-      - name: Restore the compiler cache
-        id: sccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-build-v5-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-build-v5-${{ hashFiles('rust-toolchain.toml') }}-
 
       # The affected crates' test binaries, with the binaries their tests run
       # (CARGO_BIN_EXE_*). `--timings`: the report is uploaded below.
@@ -677,16 +635,12 @@ jobs:
           path: target/cargo-timings/cargo-timing.html
           retention-days: 7
 
-      - name: Compiler cache statistics
-        if: ${{ !cancelled() }}
-        run: sccache --show-stats
-
       - name: Save the compiler cache
-        if: steps.sccache.outputs.cache-hit != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.sccache.outputs.cache-matched-key == '')
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
         with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-build-v5-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
 
   # The Python package as a package (Python is the packaging layer): its
   # surface (the SDK, the models, the plugin API, the console script) and the
@@ -733,7 +687,7 @@ jobs:
       # compiled): the pinned toolchain, which rustup no longer installs on
       # first use.
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
+        uses: ./.github/actions/rust-setup
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -915,27 +869,14 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-
       # The full set's compiler cache for this OS; `conformance` saves it.
       # By content: a stale one still serves every crate that did not change.
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: sccache@0.19.0
-      # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_workflows.py).
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
+      - name: Set up Rust
         id: sccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/rust-setup
         with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
 
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
@@ -1008,27 +949,14 @@ jobs:
         with:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-
       # The full set's compiler cache for this OS; `conformance` saves it.
       # By content: a stale one still serves every crate that did not change.
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: sccache@0.19.0
-      # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_workflows.py).
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
+      - name: Set up Rust
         id: sccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/rust-setup
         with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -1094,28 +1022,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Rust
-        run: |
-          rustup toolchain install --profile minimal --no-self-update
-          rustup target add wasm32-unknown-unknown wasm32-wasip1
-
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: sccache@0.19.0,wasmtime@33.0.0
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       # A family of its own (#841): the module's crates for wasm32-wasip1 in
       # the `wasi` profile, which no other job builds. Saved by the nightly
       # (and pushes to development), whose caches every branch reads.
-      - name: Restore the compiler cache
+      - name: Set up Rust
         id: sccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/rust-setup
         with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-wasi-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-wasi-${{ hashFiles('rust-toolchain.toml') }}-
+          targets: wasm32-unknown-unknown wasm32-wasip1
+          tools: sccache@0.19.0,wasmtime@33.0.0
+          cache: wasi
 
       # Builds target/wasm32-wasip1/wasi/opentide.wasm and fails over the
       # budget; the sizes go to the step summary.
@@ -1137,16 +1053,12 @@ jobs:
           (cd packages/wasi-host && npm ci)
           node --experimental-strip-types --test --test-name-pattern='^serve \(wasi\)' packages/wasi-host/src/index.test.ts
 
-      - name: Compiler cache statistics
-        if: ${{ !cancelled() }}
-        run: sccache --show-stats
-
       - name: Save the compiler cache
-        if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development') && steps.sccache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
         with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-wasi-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && ((github.event_name == 'schedule' || github.ref == 'refs/heads/development') && steps.sccache.outputs.cache-hit != 'true') }}
 
   # The vendored parser.c of every grammar is what tree-sitter-cli generates
   # from its grammar.js (crates/AGENTS.md: never hand-edited).
@@ -1213,10 +1125,9 @@ jobs:
       # The release rust-toolchain.toml pins: cargo-deny reads the graph with
       # `cargo metadata`.
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        uses: ./.github/actions/rust-setup
         with:
-          tool: cargo-deny@0.20.2
+          tools: cargo-deny@0.20.2
           fallback: none
       - name: cargo deny (workspace)
         run: cargo deny --config deny.toml --locked check
@@ -1452,7 +1363,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
+        uses: ./.github/actions/rust-setup
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -1519,10 +1430,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        uses: ./.github/actions/rust-setup
         with:
-          tool: cargo-nextest@0.9.148
+          tools: cargo-nextest@0.9.148
       # The cli_snapshots cases hold `Objects/` and `objects/` side by side,
       # which are one folder on macOS's default (case-insensitive) volume, and
       # the harness stops there. A small case-sensitive volume, at a short
@@ -1581,7 +1491,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       # cargo for the test that reads the workspace's metadata.
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
+        uses: ./.github/actions/rust-setup
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: native
@@ -1625,7 +1535,7 @@ jobs:
           python-version: ${{ env.COVERAGE_PYTHON }}
       # The tests build wheels of their own.
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
+        uses: ./.github/actions/rust-setup
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: native
@@ -1704,26 +1614,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
       # The full set's compiler cache for this OS; `conformance` saves it.
       # By content: a stale one still serves every crate that did not change.
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: sccache@0.19.0
-      # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_workflows.py).
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
+      - name: Set up Rust
         id: sccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/rust-setup
         with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -1795,29 +1693,14 @@ jobs:
         with:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-
       # The full set's compiler cache for this OS; `conformance` saves it.
       # By content: a stale one still serves every crate that did not change.
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: sccache@0.19.0
-      # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_workflows.py).
-      - name: Compiler cache week
-        id: week
-        if: runner.os == 'Linux'
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
+      - name: Set up Rust
         id: sccache
-        if: runner.os == 'Linux'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/rust-setup
         with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+          tools: sccache@0.19.0
+          cache: ${{ runner.os == 'Linux' && 'full-set-Linux' || '' }}
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -1867,10 +1750,6 @@ jobs:
           path: target/conformance/report.json
           if-no-files-found: ignore
 
-      - name: Compiler cache statistics
-        if: ${{ !cancelled() }}
-        run: sccache --show-stats
-
       # The full set's Linux compiler cache, which the other full-set jobs
       # restore: saved by the nightly and pushes to development (the default
       # branch, whose caches every branch reads), and by pushes to
@@ -1880,11 +1759,11 @@ jobs:
       # train: a copy per base branch did not fit beside the core families
       # in the 10 GB GitHub keeps.
       - name: Save the compiler cache
-        if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development' || github.ref == 'refs/heads/integration/unified-core') && steps.sccache.outputs.cache-hit != 'true' && runner.os == 'Linux'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
         with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && ((github.event_name == 'schedule' || github.ref == 'refs/heads/development' || github.ref == 'refs/heads/integration/unified-core') && steps.sccache.outputs.cache-hit != 'true' && runner.os == 'Linux') }}
 
   # scripts/engine/build-wasm.sh builds both WebAssembly artifacts with the
   # wasi-sdk it pins and smoke-tests them; the npm packages build and pack only
@@ -1919,29 +1798,15 @@ jobs:
       # The release rust-toolchain.toml pins, with the rustfmt and clippy it lists,
       # then the targets the job builds: rustup ignores `--target` on an install
       # with no name, and `rustup target add` with none adds to the pinned release.
-      - name: Set up Rust
-        run: |
-          rustup toolchain install --profile minimal --no-self-update
-          rustup target add wasm32-unknown-unknown wasm32-wasip1
-
       # The full set's compiler cache for this OS; `conformance` saves it.
       # By content: a stale one still serves every crate that did not change.
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: sccache@0.19.0
-      # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_workflows.py).
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
+      - name: Set up Rust
         id: sccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/rust-setup
         with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+          targets: wasm32-unknown-unknown wasm32-wasip1
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -2024,27 +1889,14 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-
       # The full set's compiler cache for this OS; `conformance` saves it.
       # By content: a stale one still serves every crate that did not change.
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: sccache@0.19.0
-      # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_workflows.py).
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
+      - name: Set up Rust
         id: sccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/rust-setup
         with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -2110,24 +1962,13 @@ jobs:
             rules
             rules_building_block
             hunting
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
       # engine-test's compiler cache, as its rust-cache (RUSTC_WRAPPER is in that key).
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
         with:
-          tool: sccache@0.19.0
-      # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_workflows.py).
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
       - name: detection-rules sweep
         env:
           OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules
@@ -2226,24 +2067,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
       # engine-test's compiler cache, as its rust-cache (RUSTC_WRAPPER is in that key).
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
         with:
-          tool: sccache@0.19.0
-      # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_workflows.py).
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -2281,26 +2111,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
       # The full set's compiler cache for this OS; `conformance` saves it.
       # By content: a stale one still serves every crate that did not change.
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: sccache@0.19.0
-      # The compiler cache's week: its key is the toolchain and the ISO week,
-      # so a family is saved once a week (tests/test_ci/test_workflows.py).
-      - name: Compiler cache week
-        id: week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the compiler cache
+      - name: Set up Rust
         id: sccache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/rust-setup
         with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
-          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
       - name: cargo bench (opentide-analysis)
         run: |
           cargo bench --locked -p opentide-analysis --bench analyze | tee bench.txt
@@ -2338,7 +2156,7 @@ jobs:
       # macOS's and Windows's (a gigabyte each) crowded the Linux families every
       # pull request restores out of the 10 GB GitHub keeps (#841).
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
+        uses: ./.github/actions/rust-setup
 
       - name: Install dependencies
         run: uv sync --group dev
