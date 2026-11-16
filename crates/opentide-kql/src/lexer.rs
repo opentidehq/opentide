@@ -614,7 +614,6 @@ pub(crate) mod tests {
         );
     }
 
-    #[test]
     /// Found by review (#1314): a run of multi-byte white space (`\u{3000}`,
     /// `\u{A0}`) aborted on a 1 MB stack: the repeated class recursed once
     /// per character in logos' generated code. A run is one token whatever
@@ -643,6 +642,7 @@ pub(crate) mod tests {
         }
     }
 
+    #[test]
     fn unicode_white_space_is_trivia_and_other_characters_are_errors() {
         let got: Vec<K> = lex_kql("a\u{A0}\u{3000}b é")
             .iter()
