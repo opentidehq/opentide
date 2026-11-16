@@ -15,7 +15,7 @@
 //! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, Range, Severity, codes, span_to_range,
+    ByteSpan, CompletionItem, Diagnostic, LanguageId, LineIndex, Range, Severity, codes,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_parse::TokenSet;
@@ -56,9 +56,41 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     // Kibana reads `or`, `and`, and `not` as keywords only with whitespace
     // after them; at the end of the query or before `)` they are value text.
-    let (root, parse) = parser::parse(source, true);
+    let parsed = parser::parse_memo(source);
+    let (root, parse) = &*parsed;
+    let lines = LineIndex::new(source);
+    // Recovery builds fragments after a syntax error that Kibana never
+    // reads: the advice about text and Lucene shapes is for what Kibana
+    // parsed, so a node past the first error gets none.
+    let first_error = parse.errors.iter().map(|e| e.gap.start()).min();
+    // The characters no token takes (a lone `\`), sorted: a node glued to
+    // one (`process\-name`) is part of the same broken word.
+    let error_tokens: Vec<TextRange> = if first_error.is_some() {
+        root.descendants_with_tokens()
+            .filter(|e| e.kind() == K::ErrorToken)
+            .map(|e| e.text_range())
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let error_starts_at = |at: TextSize| {
+        error_tokens
+            .binary_search_by_key(&at, |r| r.start())
+            .is_ok()
+    };
+    let error_ends_at = |at: TextSize| error_tokens.binary_search_by_key(&at, |r| r.end()).is_ok();
+    let glued_after = |node: &SyntaxNode| error_starts_at(node.text_range().end());
+    let recovered = |node: &SyntaxNode| {
+        first_error.is_some_and(|at| node.text_range().end() > at) || glued_after(node)
+    };
+    // Lucene shapes: reported on a clean parse. On a broken one they still
+    // count toward `looks_like_lucene` (Lucene text breaks KQL), except in a
+    // fragment glued to a character no token takes (`process\-name`: the
+    // `-` follows a `\`, it is no prefix).
+    let glued = |node: &SyntaxNode| error_ends_at(node.text_range().start());
+    let mut lucene_signals = Vec::new();
     let mut diagnostics = Vec::new();
-    if let Some(d) = parse_error(&root, &parse, source) {
+    if let Some(d) = parse_error(root, parse, source, &lines) {
         diagnostics.push(d);
     }
     for event in root.preorder_with_tokens() {
@@ -68,29 +100,38 @@ pub fn analyze(source: &str) -> AnalyzeResult {
         match element {
             NodeOrToken::Node(node) => match node.kind() {
                 K::UnquotedLiteral => {
-                    diagnostics.extend(embedded_not(&node, source));
-                    diagnostics.extend(lucene_syntax(&node, source));
-                    diagnostics.extend(unquoted_escapes(&node, source));
-                    diagnostics.extend(question_mark(&node, source));
+                    diagnostics.extend(embedded_not(&node, source, &lines));
+                    if !glued(&node)
+                        && let Some(d) = lucene_syntax(&node, source, &lines)
+                    {
+                        if first_error.is_none() {
+                            diagnostics.push(d.clone());
+                        }
+                        lucene_signals.push(d);
+                    }
+                    diagnostics.extend(unquoted_escapes(&node, source, &lines));
+                    diagnostics.extend(question_mark(&node, source, &lines));
                 }
-                K::NestedQuery => diagnostics.extend(exclusive_range(&node, source)),
-                K::RangeExpression => diagnostics.extend(range_type(&node, source)),
-                K::ValueExpression => diagnostics.extend(free_text(&node, source)),
+                K::NestedQuery => diagnostics.extend(exclusive_range(&node, source, &lines)),
+                K::RangeExpression => diagnostics.extend(range_type(&node, source, &lines)),
+                K::ValueExpression if !recovered(&node) => {
+                    diagnostics.extend(free_text(&node, source, &lines));
+                }
                 _ => {}
             },
             NodeOrToken::Token(token) => match token.kind() {
                 K::OrKw | K::AndKw | K::NotKw => {
-                    diagnostics.extend(keyword_spacing(&token, source));
+                    diagnostics.extend(keyword_spacing(&token, source, &lines));
                 }
-                K::QuotedString => diagnostics.extend(quoted_string(&token, source)),
+                K::QuotedString => diagnostics.extend(quoted_string(&token, &lines)),
                 _ => {}
             },
         }
     }
-    if let Some(d) = looks_like_lucene(!parse.errors.is_empty(), source, &diagnostics) {
+    if let Some(d) = looks_like_lucene(!parse.errors.is_empty(), source, &lines, &lucene_signals) {
         diagnostics.push(d);
     }
-    let tokens = highlight(&spec, &root, source);
+    let tokens = highlight(&spec, root, source);
     AnalyzeResult {
         diagnostics,
         tokens,
@@ -104,6 +145,7 @@ fn parse_error(
     root: &SyntaxNode,
     parse: &opentide_parse::Parse,
     source: &str,
+    lines: &LineIndex<'_>,
 ) -> Option<Diagnostic> {
     let err = parse.errors.first()?;
     let at = usize::from(err.gap.start());
@@ -154,7 +196,7 @@ fn parse_error(
     Some(Diagnostic::error(
         codes::KUERY_PARSE_ERROR,
         message,
-        range(source, span),
+        range(lines, span),
     ))
 }
 
@@ -163,7 +205,10 @@ fn parse_error(
 /// it too: `Expected AND, OR, or end of input but ":" found.`).
 fn unexpected_message(source: &str, span: ByteSpan, expected: TokenSet) -> String {
     let before = source[..span.start].trim_end();
-    if unclosed_quote(source).is_some_and(|at| at <= span.end) {
+    // An unclosed quote anywhere breaks the query; recovery reads past the
+    // first error, and the quote is what to fix (tree-sitter's error ran to
+    // the end of the text and said so).
+    if unclosed_quote(source).is_some() {
         return "KQL syntax error: a quoted string is never closed".into();
     }
     let t = source.get(span.start..span.end).unwrap_or("");
@@ -188,7 +233,7 @@ fn unexpected_message(source: &str, span: ByteSpan, expected: TokenSet) -> Strin
 /// `kuery_range_type` (hint): a range on a field ECS maps as a string type
 /// compares text, not numbers (`"10" < "9"`). Fields outside ECS, or with a
 /// numeric, date, or ip type, are left alone: the list is never closed.
-fn range_type(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
+fn range_type(node: &SyntaxNode, source: &str, lines: &LineIndex<'_>) -> Option<Diagnostic> {
     let field = child(node, K::Field)?;
     let name = text(field.text_range(), source).trim_matches('"');
     let ecs = opentide_ecs::field(name)?;
@@ -202,7 +247,7 @@ fn range_type(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
             opentide_ecs::version(),
             ecs.type_name
         ),
-        range(source, node_span(node.text_range())),
+        range(lines, node_span(node.text_range())),
     );
     d.severity = opentide_core::Severity::Hint;
     Some(d)
@@ -215,7 +260,7 @@ fn range_type(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
     clippy::expect_used,
     reason = "a regex literal: an invalid pattern fails every test that reaches it"
 )]
-fn embedded_not(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
+fn embedded_not(node: &SyntaxNode, source: &str, lines: &LineIndex<'_>) -> Option<Diagnostic> {
     static NOT_SPACE: OnceLock<Regex> = OnceLock::new();
     let re = NOT_SPACE.get_or_init(|| Regex::new(r"(?i)not[ \t\r\n\u{00A0}]").expect("regex"));
     let (start, mut end) = bounds(node.text_range());
@@ -238,7 +283,7 @@ fn embedded_not(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
         Diagnostic::error(
             codes::KUERY_PARSE_ERROR,
             "Kibana ends an unquoted value at `not ` and rejects the query; quote the value",
-            range(source, ByteSpan::new(at, at + 3)),
+            range(lines, ByteSpan::new(at, at + 3)),
         )
         .with_suggestion(format!("\"{}\"", text(node.text_range(), source))),
     )
@@ -248,12 +293,12 @@ fn embedded_not(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
 /// something else. Ranges, `_exists_`, and prefix operators are warnings;
 /// regex and fuzzy/boost shapes are hints, because paths and 8.3 names look
 /// alike.
-fn lucene_syntax(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
+fn lucene_syntax(node: &SyntaxNode, source: &str, lines: &LineIndex<'_>) -> Option<Diagnostic> {
     let literal = text(node.text_range(), source);
     let in_field = node.parent().is_some_and(|p| p.kind() == K::Field);
     let span = node_span(node.text_range());
     let diagnostic = |severity: Severity, message: &str| {
-        let mut d = Diagnostic::warning(codes::KUERY_LUCENE_SYNTAX, message, range(source, span));
+        let mut d = Diagnostic::warning(codes::KUERY_LUCENE_SYNTAX, message, range(lines, span));
         d.severity = severity;
         Some(d)
     };
@@ -301,7 +346,7 @@ fn lucene_syntax(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
 
 /// Kibana's `Or` and `And` need whitespace on both sides and `Not` after it:
 /// `not(a:1)` and `a:1 and(b:2)` are syntax errors.
-fn keyword_spacing(token: &SyntaxToken, source: &str) -> Option<Diagnostic> {
+fn keyword_spacing(token: &SyntaxToken, source: &str, lines: &LineIndex<'_>) -> Option<Diagnostic> {
     let (start, end) = bounds(token.text_range());
     let before = source[..start].chars().next_back();
     let after = source[end..].chars().next();
@@ -314,13 +359,13 @@ fn keyword_spacing(token: &SyntaxToken, source: &str) -> Option<Diagnostic> {
         Diagnostic::error(
             codes::KUERY_PARSE_ERROR,
             format!("Kibana needs whitespace {place} `{word}`"),
-            range(source, node_span(token.text_range())),
+            range(lines, node_span(token.text_range())),
         )
     })
 }
 
 /// `field:{1 TO 5}` is a Lucene exclusive range; Kibana reads a nested query.
-fn exclusive_range(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
+fn exclusive_range(node: &SyntaxNode, source: &str, lines: &LineIndex<'_>) -> Option<Diagnostic> {
     // The nested query is the node after the field.
     let query = node.children().nth(1)?;
     let body = text(query.text_range(), source);
@@ -328,13 +373,13 @@ fn exclusive_range(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
         Diagnostic::warning(
             codes::KUERY_LUCENE_SYNTAX,
             "`{a TO b}` is a Lucene range; Kibana reads `field:{ ... }` as a nested query. Use `field > a and field < b`",
-            range(source, node_span(node.text_range())),
+            range(lines, node_span(node.text_range())),
         )
     })
 }
 
 /// `\not` outside quotes: Kibana reads `\n` first, a newline plus `ot`.
-fn unquoted_escapes(node: &SyntaxNode, source: &str) -> Vec<Diagnostic> {
+fn unquoted_escapes(node: &SyntaxNode, source: &str, lines: &LineIndex<'_>) -> Vec<Diagnostic> {
     let (start, _) = bounds(node.text_range());
     text(node.text_range(), source)
         .match_indices("\\not")
@@ -343,7 +388,7 @@ fn unquoted_escapes(node: &SyntaxNode, source: &str) -> Vec<Diagnostic> {
             Diagnostic::warning(
                 codes::KUERY_ESCAPE,
                 "Kibana reads `\\not` as a newline followed by `ot`; write `\\NOT` or quote the value",
-                range(source, ByteSpan::new(at, at + 4)),
+                range(lines, ByteSpan::new(at, at + 4)),
             )
             .with_suggestion("\\NOT")
         })
@@ -352,7 +397,7 @@ fn unquoted_escapes(node: &SyntaxNode, source: &str) -> Vec<Diagnostic> {
 
 /// Inside quotes Kibana turns `\t`, `\r`, and `\n` into control characters
 /// (`"C:\temp"` searches a TAB), and `*` is a literal asterisk.
-fn quoted_string(token: &SyntaxToken, source: &str) -> Vec<Diagnostic> {
+fn quoted_string(token: &SyntaxToken, lines: &LineIndex<'_>) -> Vec<Diagnostic> {
     let t = token.text();
     let (start, _) = bounds(token.text_range());
     let bytes = t.as_bytes();
@@ -371,7 +416,7 @@ fn quoted_string(token: &SyntaxToken, source: &str) -> Vec<Diagnostic> {
                             "Kibana turns `\\{}` inside quotes into a control character; write `\\\\{}` for a backslash",
                             next as char, next as char
                         ),
-                        range(source, ByteSpan::new(at, at + 2)),
+                        range(lines, ByteSpan::new(at, at + 2)),
                     )
                     .with_suggestion(format!("\\\\{}", next as char)),
                 );
@@ -387,7 +432,7 @@ fn quoted_string(token: &SyntaxToken, source: &str) -> Vec<Diagnostic> {
         let mut d = Diagnostic::warning(
             codes::KUERY_QUOTED_WILDCARD,
             "`*` inside quotes is a literal asterisk in KQL, not a wildcard; drop the quotes and escape spaces to match a pattern",
-            range(source, node_span(token.text_range())),
+            range(lines, node_span(token.text_range())),
         );
         d.severity = opentide_core::Severity::Hint;
         out.push(d);
@@ -396,7 +441,7 @@ fn quoted_string(token: &SyntaxToken, source: &str) -> Vec<Diagnostic> {
 }
 
 /// `?` is not a wildcard in KQL: `jo?n` searches the text `jo?n`.
-fn question_mark(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
+fn question_mark(node: &SyntaxNode, source: &str, lines: &LineIndex<'_>) -> Option<Diagnostic> {
     let t = text(node.text_range(), source);
     let i = t.find('?')?;
     // A URL query string (`/path?x=1`, `/api/secrets?limit*`) is a real
@@ -409,7 +454,7 @@ fn question_mark(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
     let mut d = Diagnostic::warning(
         codes::KUERY_QUESTION_MARK,
         "`?` is a literal character in KQL, not a single-character wildcard; use `*` to match any characters",
-        range(source, ByteSpan::new(at, at + 1)),
+        range(lines, ByteSpan::new(at, at + 1)),
     );
     d.severity = Severity::Hint;
     Some(d)
@@ -418,7 +463,7 @@ fn question_mark(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
 /// A value with no field. Kibana searches it in every field
 /// (`index.query.default_field`), and after `f:a and` it is easy to read
 /// `b` as part of `f`.
-fn free_text(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
+fn free_text(node: &SyntaxNode, source: &str, lines: &LineIndex<'_>) -> Option<Diagnostic> {
     let value = text(node.text_range(), source);
     if value.trim() == "*" {
         return None;
@@ -461,7 +506,7 @@ fn free_text(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
     let mut d = Diagnostic::warning(
         codes::KUERY_FREE_TEXT,
         message,
-        range(source, node_span(node.text_range())),
+        range(lines, node_span(node.text_range())),
     );
     d.severity = Severity::Hint;
     Some(d)
@@ -469,7 +514,12 @@ fn free_text(node: &SyntaxNode, source: &str) -> Option<Diagnostic> {
 
 /// KQL text that reads like Lucene. One sign can be a coincidence; two
 /// different kinds of Lucene syntax are a rule written for `language: lucene`.
-fn looks_like_lucene(has_error: bool, source: &str, found: &[Diagnostic]) -> Option<Diagnostic> {
+fn looks_like_lucene(
+    has_error: bool,
+    source: &str,
+    lines: &LineIndex<'_>,
+    found: &[Diagnostic],
+) -> Option<Diagnostic> {
     let mut signals: Vec<&str> = Vec::new();
     for d in found
         .iter()
@@ -506,7 +556,7 @@ fn looks_like_lucene(has_error: bool, source: &str, found: &[Diagnostic]) -> Opt
                 "this query reads like Lucene ({}); if it is an Elastic rule, set `language: lucene`",
                 signals.join(", ")
             ),
-            range(source, ByteSpan::new(0, source.len())),
+            range(lines, ByteSpan::new(0, source.len())),
         )
     })
 }
@@ -549,7 +599,11 @@ fn implicit_and(source: &str, start: usize, end: usize) -> Option<(String, char)
 
 /// What the query lacks when it ends after `before`.
 fn missing_after(before: &str) -> String {
-    let last = before.split_whitespace().next_back().unwrap_or("");
+    // The last word, without the brackets glued before it (`(b:` names `b:`).
+    let last = before
+        .rsplit(|c: char| is_kql_space(c) || matches!(c, '(' | '{'))
+        .next()
+        .unwrap_or("");
     let lower = last.to_ascii_lowercase();
     if last.ends_with([':', '<', '>', '=']) {
         format!("KQL syntax error: a value is missing after `{last}`")
@@ -636,8 +690,10 @@ fn point(at: usize) -> ByteSpan {
     ByteSpan::new(at, at + 1)
 }
 
-fn range(source: &str, span: ByteSpan) -> Range {
-    span_to_range(source, span)
+/// The LSP range of `span`: a binary search in the line index, so a query
+/// with thousands of diagnostics stays linear.
+fn range(lines: &LineIndex<'_>, span: ByteSpan) -> Range {
+    lines.range(span)
 }
 
 fn text(r: TextRange, source: &str) -> &str {
@@ -704,7 +760,8 @@ fn highlight(spec: &HighlightSpec, root: &SyntaxNode, source: &str) -> Vec<Highl
 
 /// Field names a query mentions, for completion and for Tide checks.
 pub fn fields(source: &str) -> Vec<String> {
-    let (root, _) = parser::parse(source, true);
+    let parsed = parser::parse_memo(source);
+    let root = &parsed.0;
     let names: std::collections::BTreeSet<String> = root
         .descendants()
         .filter(|n| n.kind() == K::Field)
@@ -946,6 +1003,69 @@ mod tests {
         assert!(message("a:1 or ").contains("missing after `or`"));
         // `not ` at the very end fails in Kibana as well.
         assert!(codes_of("message:cannot ").contains(&codes::KUERY_PARSE_ERROR.to_string()));
+    }
+
+    #[test]
+    fn recovery_fragments_get_no_advice() {
+        // Kibana reads nothing past the first error: one syntax error, no
+        // free-text or Lucene advice on what recovery rebuilt after it.
+        for src in [
+            r"process\-name:cmd.exe",
+            "} or x\" and not  and :b}",
+            r"\ not  and 1 :ba:",
+        ] {
+            let codes = codes_of(src);
+            for code in [
+                codes::KUERY_FREE_TEXT,
+                codes::KUERY_LUCENE_SYNTAX,
+                codes::KUERY_LOOKS_LIKE_LUCENE,
+            ] {
+                assert!(!codes.contains(&code.to_string()), "{src}: {codes:?}");
+            }
+        }
+        // Before the error, and on a clean parse, the advice stays.
+        assert!(codes_of("powershell and (b:").contains(&codes::KUERY_FREE_TEXT.to_string()));
+        assert!(codes_of("a:[1 TO 2] OR b:x~").contains(&codes::KUERY_LUCENE_SYNTAX.to_string()));
+    }
+
+    #[test]
+    fn an_unclosed_quote_after_the_first_error_is_named() {
+        let d = find("\u{e9}:b1not :b or \"x", codes::KUERY_PARSE_ERROR).expect("an error");
+        assert!(
+            d.message.ends_with("a quoted string is never closed"),
+            "{}",
+            d.message
+        );
+        assert_eq!(d.range.start.character, 14);
+    }
+
+    #[test]
+    fn a_missing_value_names_the_field_not_the_bracket() {
+        let d = find("a and (b:", codes::KUERY_PARSE_ERROR).expect("an error");
+        assert_eq!(d.message, "KQL syntax error: a value is missing after `b:`");
+    }
+
+    #[test]
+    fn many_diagnostics_convert_their_spans_in_linear_time() {
+        // Each diagnostic's range used to scan from the start of the text.
+        let src = format!("a:{}", "\"x ".repeat(8_000));
+        let started = std::time::Instant::now();
+        let n = analyze(&src).diagnostics.len();
+        assert!(n >= 1);
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "{n} diagnostics took {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn analyze_fields_and_ecs_share_one_parse() {
+        let src = "source.port:80 and process.name:x";
+        let first = parser::parse_memo(src);
+        let _ = (analyze(src), fields(src), ecs_diagnostics(src));
+        assert!(std::rc::Rc::ptr_eq(&first, &parser::parse_memo(src)));
+        assert!(!std::rc::Rc::ptr_eq(&first, &parser::parse_memo("a:1")));
     }
 
     #[test]

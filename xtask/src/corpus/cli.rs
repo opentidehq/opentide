@@ -12,169 +12,213 @@ use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
-/// The usage of `cargo xtask corpus`.
-pub const USAGE: &str = "\
-usage: cargo xtask corpus <command> [options]
+/// `cargo xtask corpus <command>`: the corpora of UC-0.6 (#804).
+///
+/// The oracle is BIN, else $OPENTIDE_ORACLE, else `opentide` on PATH; it must
+/// print the version faults.toml names. `--engine rust` covers the object kinds
+/// (opentide-schema, UC-1.3), the platform kinds (UC-1.4), the configuration
+/// kinds (UC-1.5) and validate's query kinds (UC-2.5) today.
+#[derive(clap::Subcommand, Debug)]
+pub enum Cmd {
+    /// Write the heavy workspace for a seed (default counts 300/300/500,
+    /// --scale multiplies them); DIR must not exist or be empty
+    Generate(GenerateArgs),
+    /// Apply each fault kind of tests/corpora/faults.toml to its own copy of the
+    /// clean workspace and check what the oracle (or, with --engine rust, the
+    /// Rust engine) reports for it, or write one workspace with every kind
+    /// applied (--out)
+    Faults(FaultsArgs),
+    /// Print the codes the oracle can report (--write: tests/corpora/codes.toml)
+    Codes(CodesArgs),
+    /// Run the oracle's validate and lint on a workspace that must report
+    /// nothing
+    Clean(CleanArgs),
+    /// Report which of the oracle's codes the fault catalogue covers
+    Coverage(CoverageArgs),
+}
 
-commands:
-  generate --seed N [--scale F | --threats N --objectives N --rules N]
-           [--layout standard|explicit|custom] --out DIR
-                 write the heavy workspace for seed N (default counts
-                 300/300/500, --scale multiplies them); DIR must not exist
-                 or be empty. --digest prints the digest instead of writing
-  faults --check --engine python [--oracle BIN] [--only ID,...] [--jobs N]
-         [--keep DIR] [--report FILE] [--catalogue FILE]
-                 apply each fault kind of tests/corpora/faults.toml to its own
-                 copy of the clean workspace, run the oracle, and check it
-                 reports exactly the expected codes and severities
-  faults --check --engine rust [--oracle BIN]
-         [--only objects|structural|platforms|ID,...] [--keep DIR] [--catalogue FILE]
-                 the object fault kinds (UC-1.3; structural: UC-1.2's subset;
-                 platforms: the platform blocks', UC-1.4): each object file read
-                 and converted by opentide-schema's object models, every
-                 schema_validation finding compared with the oracle's field for
-                 field (code, field path, message, line, columns, yaml_line),
-                 and yaml_parse by code
-  faults --check --engine rust [--oracle BIN] --only configuration|ID,...
-         [--keep DIR] [--catalogue FILE]
-                 the configuration fault kinds (UC-1.5): each workspace's
-                 configuration resolved by opentide-schema, and what validate
-                 reports for it compared with the oracle field for field
-                 (code, severity, field path, message), or the failure that
-                 stops resolution
-  faults --check --engine rust [--oracle BIN] --only queries|ID,...
-         [--keep DIR] [--catalogue FILE]
-                 the kinds validate reports query findings for (UC-2.5): the
-                 Rust validate with the query engines, every finding of the
-                 queries check compared with the oracle's, every key, and the
-                 number of queries checked; and the kinds lint's queries
-                 check reports (UC-3.5b): the Rust lint with the query
-                 engines, every finding of its queries check compared with
-                 the oracle's, every key; without --only, every group runs
-  faults --out DIR [--catalogue FILE]
-                 write one workspace ([combined] counts) with every fault
-                 kind not marked isolated applied once (twice if cross-file)
-                 to files of its own, and DIR.faults.json beside it listing
-                 each kind's files, command and expected codes
-  clean --engine python [--oracle BIN] --repo DIR
-                 run the oracle's validate and lint on DIR and fail on any
-                 finding (the clean heavy workspace has none); prints timings
-  codes --engine python [--oracle BIN] [--write]
-                 list the diagnostic codes in scope from the oracle
-                 (tests/corpora/codes.toml); --write records them
-  coverage [--check | --write] [--dir DIR]
-                 map every code in tests/corpora/codes.toml to the fault
-                 kinds that produce it; --write records tests/corpora/COVERAGE.md,
-                 --check fails when a code has no kind or the file is stale;
-                 --dir reads faults.toml, codes.toml and COVERAGE.md from DIR
+/// The engine a check runs against.
+const ENGINES: [&str; 2] = ["python", "rust"];
 
-The oracle is BIN, else $OPENTIDE_ORACLE, else `opentide` on PATH; it must
-print the version faults.toml names. `--engine rust` covers the object
-kinds (opentide-schema, UC-1.3), the platform kinds (UC-1.4) and the
-configuration kinds (UC-1.5) and validate's query kinds (UC-2.5) today;
-every kind comes with the Rust engine's validate and lint (UC-2.x).
-";
+/// The arguments of `corpus generate`.
+#[derive(clap::Args, Debug)]
+pub struct GenerateArgs {
+    /// The seed
+    #[arg(long)]
+    seed: u64,
+    /// Multiply the default counts by this factor, in (0, 1000]
+    #[arg(long, value_name = "F", value_parser = parse_scale)]
+    scale: Option<Counts>,
+    /// The threats
+    #[arg(long, value_name = "N", conflicts_with = "scale")]
+    threats: Option<usize>,
+    /// The objectives
+    #[arg(long, value_name = "N", conflicts_with = "scale")]
+    objectives: Option<usize>,
+    /// The rules
+    #[arg(long, value_name = "N", conflicts_with = "scale")]
+    rules: Option<usize>,
+    /// How the files are laid out: standard, explicit or custom
+    #[arg(long, value_parser = parse_layout, default_value = "explicit")]
+    layout: Layout,
+    /// Write the workspace to DIR (required, or --digest)
+    #[arg(long, value_name = "DIR")]
+    out: Option<String>,
+    /// Print the digest instead of writing
+    #[arg(long)]
+    digest: bool,
+}
 
-/// Runs `corpus <args>`; the process exit status.
+/// `--scale` as clap reads it.
+fn parse_scale(text: &str) -> Result<Counts, String> {
+    let factor: f64 = text
+        .parse()
+        .map_err(|_| format!("`{text}` is not a number"))?;
+    Counts::scaled(factor).ok_or_else(|| format!("`{text}` is not in (0, 1000]"))
+}
+
+/// `--layout` as clap reads it.
+fn parse_layout(text: &str) -> Result<Layout, String> {
+    Layout::parse(text).ok_or_else(|| format!("`{text}` is not standard, explicit or custom"))
+}
+
+impl GenerateArgs {
+    /// The generator's options, the directory to write to and whether to print
+    /// the digest instead.
+    fn options(&self) -> (Options, Option<String>, bool) {
+        let base = self.scale.unwrap_or(generate::DEFAULT_COUNTS);
+        let counts = Counts {
+            threats: self.threats.unwrap_or(base.threats),
+            objectives: self.objectives.unwrap_or(base.objectives),
+            rules: self.rules.unwrap_or(base.rules),
+        };
+        (
+            Options {
+                platforms: crate::corpus::vocab::PLATFORMS,
+                seed: self.seed,
+                counts,
+                layout: self.layout,
+            },
+            self.out.clone(),
+            self.digest,
+        )
+    }
+}
+
+/// The arguments of `corpus faults`.
+#[derive(clap::Args, Debug)]
+pub struct FaultsArgs {
+    /// Check the oracle (or the Rust engine) reports exactly the expected codes
+    /// and severities for each kind
+    #[arg(long)]
+    check: bool,
+    /// The engine: python, the oracle the expectations name; rust, which covers
+    /// the object, platform, configuration and query kinds today
+    #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(ENGINES))]
+    engine: Option<String>,
+    /// The oracle executable
+    #[arg(long, value_name = "BIN")]
+    oracle: Option<String>,
+    /// Only these fault kinds; with --engine rust, also a group: objects,
+    /// structural, platforms, configuration or queries
+    #[arg(long, value_name = "ID", value_delimiter = ',')]
+    only: Option<Vec<String>>,
+    /// Run this many kinds at once (default: the available parallelism)
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize))]
+    jobs: Option<usize>,
+    /// Keep the workspaces in DIR, which must not exist
+    #[arg(long, value_name = "DIR")]
+    keep: Option<PathBuf>,
+    /// Write the verdicts as JSON to FILE
+    #[arg(long, value_name = "FILE")]
+    report: Option<PathBuf>,
+    /// Write one workspace ([combined] counts) with every fault kind not marked
+    /// isolated applied once (twice if cross-file)
+    #[arg(long, value_name = "DIR")]
+    out: Option<PathBuf>,
+    /// The catalogue (default: tests/corpora/faults.toml)
+    #[arg(long, value_name = "FILE")]
+    catalogue: Option<PathBuf>,
+}
+
+/// The arguments of `corpus codes`.
+#[derive(clap::Args, Debug)]
+pub struct CodesArgs {
+    /// The engine: python, the oracle
+    #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(ENGINES))]
+    engine: Option<String>,
+    /// The oracle executable
+    #[arg(long, value_name = "BIN")]
+    oracle: Option<String>,
+    /// Write tests/corpora/codes.toml instead of printing
+    #[arg(long)]
+    write: bool,
+}
+
+/// The arguments of `corpus coverage`.
+#[derive(clap::Args, Debug)]
+pub struct CoverageArgs {
+    /// Fail when COVERAGE.md is stale
+    #[arg(long, conflicts_with = "write")]
+    check: bool,
+    /// Write COVERAGE.md
+    #[arg(long)]
+    write: bool,
+    /// The corpora directory (default: tests/corpora)
+    #[arg(long, value_name = "DIR")]
+    dir: Option<PathBuf>,
+}
+
+/// The arguments of `corpus clean`.
+#[derive(clap::Args, Debug)]
+pub struct CleanArgs {
+    /// The engine: python, the oracle
+    #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(ENGINES))]
+    engine: Option<String>,
+    /// The oracle executable
+    #[arg(long, value_name = "BIN")]
+    oracle: Option<String>,
+    /// The workspace to run on
+    #[arg(long, value_name = "DIR")]
+    repo: Option<PathBuf>,
+}
+
+/// Runs `corpus <args>` (the arguments after `corpus`, as a fixture's `argv`
+/// names them); the process exit status.
 pub fn run(args: &[String]) -> Result<u8> {
-    let Some((command, rest)) = args.split_first() else {
-        bail!("missing command\n\n{USAGE}");
-    };
-    match command.as_str() {
-        "generate" => generate_command(rest),
-        "faults" => faults_command(rest),
-        "codes" => codes_command(rest),
-        "clean" => clean_command(rest),
-        "coverage" => coverage_command(rest),
-        "help" | "--help" | "-h" => {
-            print!("{USAGE}");
+    use clap::Parser;
+    #[derive(Parser)]
+    #[command(name = "corpus", bin_name = "cargo xtask corpus")]
+    struct Cli {
+        #[command(subcommand)]
+        command: Cmd,
+    }
+    match Cli::try_parse_from(std::iter::once(&"corpus".to_owned()).chain(args)) {
+        Ok(cli) => run_command(&cli.command),
+        // Help is printed and succeeds; a usage error is the caller's to report.
+        Err(error) if !error.use_stderr() => {
+            error.print()?;
             Ok(0)
         }
-        other => bail!("unknown command `{other}`\n\n{USAGE}"),
+        Err(error) => Err(error.into()),
     }
 }
 
-fn value<'a>(args: &mut impl Iterator<Item = &'a String>, flag: &str) -> Result<&'a str> {
-    args.next()
-        .map(String::as_str)
-        .with_context(|| format!("{flag} needs a value"))
-}
-
-fn number(text: &str, flag: &str) -> Result<usize> {
-    text.parse()
-        .with_context(|| format!("{flag}: `{text}` is not a whole number"))
-}
-
-/// Parses the generator's options.
-pub fn parse_options(args: &[String]) -> Result<(Options, Option<String>, bool)> {
-    let mut seed = None;
-    let mut scale = None;
-    let mut counts = [None, None, None];
-    let mut layout = Layout::Explicit;
-    let mut out = None;
-    let mut digest = false;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--seed" => {
-                let text = value(&mut args, arg)?;
-                seed = Some(
-                    text.parse::<u64>()
-                        .with_context(|| format!("--seed: `{text}` is not a whole number"))?,
-                );
-            }
-            "--scale" => {
-                let text = value(&mut args, arg)?;
-                let factor: f64 = text
-                    .parse()
-                    .with_context(|| format!("--scale: `{text}` is not a number"))?;
-                scale = Some(
-                    Counts::scaled(factor)
-                        .with_context(|| format!("--scale: `{text}` is not in (0, 1000]"))?,
-                );
-            }
-            "--threats" => counts[0] = Some(number(value(&mut args, arg)?, arg)?),
-            "--objectives" => counts[1] = Some(number(value(&mut args, arg)?, arg)?),
-            "--rules" => counts[2] = Some(number(value(&mut args, arg)?, arg)?),
-            "--layout" => {
-                let text = value(&mut args, arg)?;
-                layout = Layout::parse(text).with_context(|| {
-                    format!("--layout: `{text}` is not standard, explicit or custom")
-                })?;
-            }
-            "--out" => out = Some(value(&mut args, arg)?.to_string()),
-            "--digest" => digest = true,
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        }
+/// Runs a parsed `corpus` command; the process exit status.
+pub fn run_command(command: &Cmd) -> Result<u8> {
+    match command {
+        Cmd::Generate(args) => generate_command(args),
+        Cmd::Faults(args) => faults_command(args),
+        Cmd::Codes(args) => codes_command(args),
+        Cmd::Clean(args) => clean_command(args),
+        Cmd::Coverage(args) => coverage_command(args),
     }
-    let seed = seed.context("--seed is required")?;
-    if scale.is_some() && counts.iter().any(Option::is_some) {
-        bail!("--scale and --threats/--objectives/--rules exclude each other");
-    }
-    let base = scale.unwrap_or(generate::DEFAULT_COUNTS);
-    let counts = Counts {
-        threats: counts[0].unwrap_or(base.threats),
-        objectives: counts[1].unwrap_or(base.objectives),
-        rules: counts[2].unwrap_or(base.rules),
-    };
-    Ok((
-        Options {
-            platforms: crate::corpus::vocab::PLATFORMS,
-            seed,
-            counts,
-            layout,
-        },
-        out,
-        digest,
-    ))
 }
 
-fn generate_command(args: &[String]) -> Result<u8> {
-    let (options, out, digest) = parse_options(args)?;
+fn generate_command(args: &GenerateArgs) -> Result<u8> {
+    let (options, out, digest) = args.options();
     let started = Instant::now();
     let workspace = generate::generate(&options);
     if digest {
@@ -347,17 +391,53 @@ fn object_files(workspace: &Workspace) -> usize {
         .count()
 }
 
-/// Removes the scratch directory however the run ends, unless `--keep`.
+/// A command's working directory: a fresh temporary directory removed when
+/// this is dropped, however the run ends, or the directory `--keep` names,
+/// which stays.
 pub(crate) struct Scratch {
+    /// The directory, absolute.
     pub(crate) path: PathBuf,
-    pub(crate) keep: bool,
+    /// The temporary directory `path` is, removed on drop; `None` for `--keep`.
+    _temp: Option<tempfile::TempDir>,
 }
 
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        if !self.keep {
-            let _ = std::fs::remove_dir_all(&self.path);
+impl Scratch {
+    /// A new directory named `prefix` and a unique suffix under the system's
+    /// temporary directory, or `keep`, which must not exist yet (a kept run
+    /// never writes over another).
+    pub(crate) fn new(prefix: &str, keep: Option<&Path>) -> Result<Scratch> {
+        Self::create(prefix, keep, false)
+    }
+
+    /// Like [`Scratch::new`], but a `keep` that exists is used as it is.
+    pub(crate) fn reusing(prefix: &str, keep: Option<&Path>) -> Result<Scratch> {
+        Self::create(prefix, keep, true)
+    }
+
+    fn create(prefix: &str, keep: Option<&Path>, reuse: bool) -> Result<Scratch> {
+        let Some(dir) = keep else {
+            let temp = tempfile::Builder::new()
+                .prefix(prefix)
+                .tempdir()
+                .context("cannot create a temporary directory")?;
+            return Ok(Scratch {
+                path: temp.path().to_path_buf(),
+                _temp: Some(temp),
+            });
+        };
+        // Absolute, so that a path handed to the oracle (XDG_STATE_HOME) is one
+        // it honours.
+        let path = std::path::absolute(dir)
+            .with_context(|| format!("cannot resolve {}", dir.display()))?;
+        if !reuse && path.exists() {
+            bail!(
+                "{} exists; remove it or name another --keep",
+                path.display()
+            );
         }
+        std::fs::create_dir_all(&path)
+            .with_context(|| format!("cannot create {}", path.display()))?;
+        Ok(Scratch { path, _temp: None })
     }
 }
 
@@ -402,6 +482,7 @@ fn run_oracle(
     })
 }
 
+/// A `faults` command line, resolved.
 #[derive(Clone)]
 struct FaultArgs {
     check: bool,
@@ -415,41 +496,27 @@ struct FaultArgs {
     catalogue: PathBuf,
 }
 
-fn parse_fault_args(args: &[String]) -> Result<FaultArgs> {
-    let mut parsed = FaultArgs {
-        check: false,
-        engine: None,
-        oracle: None,
-        only: None,
-        jobs: std::thread::available_parallelism().map_or(2, |n| n.get()),
-        keep: None,
-        report: None,
-        out: None,
-        catalogue: corpora_dir().join("faults.toml"),
-    };
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--check" => parsed.check = true,
-            "--engine" => parsed.engine = Some(value(&mut args, arg)?.to_string()),
-            "--oracle" => parsed.oracle = Some(value(&mut args, arg)?.to_string()),
-            "--only" => {
-                parsed.only = Some(
-                    value(&mut args, arg)?
-                        .split(',')
-                        .map(str::to_string)
-                        .collect(),
-                );
-            }
-            "--jobs" => parsed.jobs = number(value(&mut args, arg)?, arg)?.max(1),
-            "--keep" => parsed.keep = Some(PathBuf::from(value(&mut args, arg)?)),
-            "--report" => parsed.report = Some(PathBuf::from(value(&mut args, arg)?)),
-            "--out" => parsed.out = Some(PathBuf::from(value(&mut args, arg)?)),
-            "--catalogue" => parsed.catalogue = PathBuf::from(value(&mut args, arg)?),
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
+impl FaultsArgs {
+    /// The arguments with their defaults.
+    fn resolve(&self) -> FaultArgs {
+        FaultArgs {
+            check: self.check,
+            engine: self.engine.clone(),
+            oracle: self.oracle.clone(),
+            only: self.only.as_ref().map(|ids| ids.iter().cloned().collect()),
+            jobs: self
+                .jobs
+                .unwrap_or_else(|| std::thread::available_parallelism().map_or(2, |n| n.get()))
+                .max(1),
+            keep: self.keep.clone(),
+            report: self.report.clone(),
+            out: self.out.clone(),
+            catalogue: self
+                .catalogue
+                .clone()
+                .unwrap_or_else(|| corpora_dir().join("faults.toml")),
         }
     }
-    Ok(parsed)
 }
 
 pub(crate) fn load_catalogue(path: &Path) -> Result<Catalogue> {
@@ -475,14 +542,14 @@ fn require_python(engine: Option<&str>) -> Result<Option<u8>> {
 }
 
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-fn faults_command(args: &[String]) -> Result<u8> {
-    let parsed = parse_fault_args(args)?;
+fn faults_command(args: &FaultsArgs) -> Result<u8> {
+    let parsed = args.resolve();
     let catalogue = load_catalogue(&parsed.catalogue)?;
     if let Some(out) = &parsed.out {
         return materialise(&catalogue, out);
     }
     if !parsed.check {
-        bail!("faults needs --check or --out\n\n{USAGE}");
+        bail!("faults needs --check or --out");
     }
     if parsed.engine.as_deref() == Some("rust") {
         return rust_check(&parsed, &catalogue);
@@ -505,23 +572,8 @@ fn faults_command(args: &[String]) -> Result<u8> {
             }
         }
     }
-    let scratch = match &parsed.keep {
-        Some(dir) => dir.clone(),
-        None => std::env::temp_dir().join(format!("opentide-corpus-faults-{}", std::process::id())),
-    };
-    // Absolute, so that XDG_STATE_HOME below is one the oracle honours.
-    let scratch = std::path::absolute(&scratch)
-        .with_context(|| format!("cannot resolve {}", scratch.display()))?;
-    if scratch.exists() {
-        bail!(
-            "{} exists; remove it or name another --keep",
-            scratch.display()
-        );
-    }
-    let guard = Scratch {
-        path: scratch.clone(),
-        keep: parsed.keep.is_some(),
-    };
+    let guard = Scratch::new("opentide-corpus-faults-", parsed.keep.as_deref())?;
+    let scratch = guard.path.clone();
     let started = Instant::now();
     // The clean base must be clean under every command the kinds use.
     let commands: BTreeSet<(Vec<String>, BTreeMap<String, String>)> = kinds
@@ -551,34 +603,17 @@ fn faults_command(args: &[String]) -> Result<u8> {
             );
         }
     }
-    let verdicts: Mutex<Vec<(Verdict, Vec<String>)>> = Mutex::new(Vec::new());
-    let errors: Mutex<Vec<String>> = Mutex::new(Vec::new());
-    let next = AtomicUsize::new(0);
-    std::thread::scope(|scope| {
-        for _ in 0..parsed.jobs.min(kinds.len().max(1)) {
-            scope.spawn(|| {
-                loop {
-                    let index = next.fetch_add(1, Ordering::SeqCst);
-                    let Some(kind) = kinds.get(index) else { break };
-                    match run_kind(&bin, &base, kind, &scratch) {
-                        Ok(result) => {
-                            if let Ok(mut v) = verdicts.lock() {
-                                v.push(result);
-                            }
-                        }
-                        Err(error) => {
-                            if let Ok(mut e) = errors.lock() {
-                                e.push(format!("{}: {error:#}", kind.id));
-                            }
-                        }
-                    }
-                }
-            });
+    let mut verdicts: Vec<(Verdict, Vec<String>)> = Vec::new();
+    let mut errors: Vec<String> = Vec::new();
+    for outcome in crate::parallel::in_order_on(parsed.jobs, &kinds, |kind| {
+        run_kind(&bin, &base, kind, &scratch).map_err(|error| format!("{}: {error:#}", kind.id))
+    }) {
+        match outcome {
+            Ok(result) => verdicts.push(result),
+            Err(error) => errors.push(error),
         }
-    });
-    let mut verdicts = verdicts.into_inner().unwrap_or_default();
+    }
     verdicts.sort_by(|a, b| a.0.id.cmp(&b.0.id));
-    let mut errors = errors.into_inner().unwrap_or_default();
     drop(guard);
     if verdicts.len() + errors.len() != kinds.len() {
         errors.push(format!(
@@ -720,24 +755,9 @@ fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<Strin
     let bin = oracle_bin(parsed.oracle.as_deref());
     check_oracle_version(&bin, &catalogue.oracle)?;
     let base = generate::generate(&catalogue.base.options()?);
-    let scratch = match &parsed.keep {
-        Some(dir) => dir.join("queries"),
-        None => {
-            std::env::temp_dir().join(format!("opentide-corpus-queries-{}", std::process::id()))
-        }
-    };
-    let scratch = std::path::absolute(&scratch)
-        .with_context(|| format!("cannot resolve {}", scratch.display()))?;
-    if scratch.exists() {
-        bail!(
-            "{} exists; remove it or name another --keep",
-            scratch.display()
-        );
-    }
-    let guard = Scratch {
-        path: scratch.clone(),
-        keep: parsed.keep.is_some(),
-    };
+    let keep = parsed.keep.as_ref().map(|dir| dir.join("queries"));
+    let guard = Scratch::new("opentide-corpus-queries-", keep.as_deref())?;
+    let scratch = guard.path.clone();
     let started = Instant::now();
     let mut failed = 0usize;
     let mut used = BTreeSet::new();
@@ -952,7 +972,6 @@ fn workspace_folders(dir: &Path) -> Result<Folders> {
 /// `faults --check --engine rust --only configuration`: the configuration
 /// kinds, the Rust resolution and checks against the oracle
 /// ([`configuration`]).
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn configuration_check(
     parsed: &FaultArgs,
     catalogue: &Catalogue,
@@ -966,25 +985,9 @@ fn configuration_check(
     let bin = oracle_bin(parsed.oracle.as_deref());
     check_oracle_version(&bin, &catalogue.oracle)?;
     let base = generate::generate(&catalogue.base.options()?);
-    let scratch = match &parsed.keep {
-        Some(dir) => dir.join("configuration"),
-        None => std::env::temp_dir().join(format!(
-            "opentide-corpus-configuration-{}",
-            std::process::id()
-        )),
-    };
-    let scratch = std::path::absolute(&scratch)
-        .with_context(|| format!("cannot resolve {}", scratch.display()))?;
-    if scratch.exists() {
-        bail!(
-            "{} exists; remove it or name another --keep",
-            scratch.display()
-        );
-    }
-    let guard = Scratch {
-        path: scratch.clone(),
-        keep: parsed.keep.is_some(),
-    };
+    let keep = parsed.keep.as_ref().map(|dir| dir.join("configuration"));
+    let guard = Scratch::new("opentide-corpus-configuration-", keep.as_deref())?;
+    let scratch = guard.path.clone();
     let changelog = std::fs::read_to_string(repo_root().join("CHANGELOG.md"))
         .context("reading CHANGELOG.md for the approved differences")?;
     let started = Instant::now();
@@ -1103,24 +1106,8 @@ fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
     let bin = oracle_bin(parsed.oracle.as_deref());
     check_oracle_version(&bin, &catalogue.oracle)?;
     let base = generate::generate(&catalogue.base.options()?);
-    let scratch = match &parsed.keep {
-        Some(dir) => dir.clone(),
-        None => {
-            std::env::temp_dir().join(format!("opentide-corpus-structural-{}", std::process::id()))
-        }
-    };
-    let scratch = std::path::absolute(&scratch)
-        .with_context(|| format!("cannot resolve {}", scratch.display()))?;
-    if scratch.exists() {
-        bail!(
-            "{} exists; remove it or name another --keep",
-            scratch.display()
-        );
-    }
-    let guard = Scratch {
-        path: scratch.clone(),
-        keep: parsed.keep.is_some(),
-    };
+    let guard = Scratch::new("opentide-corpus-structural-", parsed.keep.as_deref())?;
+    let scratch = guard.path.clone();
     let changelog = std::fs::read_to_string(repo_root().join("CHANGELOG.md"))
         .context("reading CHANGELOG.md for the approved differences")?;
     let started = Instant::now();
@@ -1393,19 +1380,12 @@ fn oracle_python(bin: &Path) -> Result<PathBuf> {
     Ok(PathBuf::from(python))
 }
 
-fn codes_command(args: &[String]) -> Result<u8> {
-    let mut engine = None;
-    let mut oracle = None;
-    let mut write = false;
-    let mut iter = args.iter();
-    while let Some(arg) = iter.next() {
-        match arg.as_str() {
-            "--engine" => engine = Some(value(&mut iter, arg)?.to_string()),
-            "--oracle" => oracle = Some(value(&mut iter, arg)?.to_string()),
-            "--write" => write = true,
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        }
-    }
+fn codes_command(args: &CodesArgs) -> Result<u8> {
+    let CodesArgs {
+        engine,
+        oracle,
+        write,
+    } = args;
     if let Some(code) = require_python(engine.as_deref())? {
         return Ok(code);
     }
@@ -1428,7 +1408,7 @@ fn codes_command(args: &[String]) -> Result<u8> {
     let inventory: coverage::Inventory = serde_json::from_slice(&output.stdout)
         .context("the inventory script printed no inventory")?;
     let text = coverage::render_codes(&inventory, &catalogue.oracle);
-    if write {
+    if *write {
         let path = corpora_dir().join("codes.toml");
         std::fs::write(&path, &text).with_context(|| format!("cannot write {}", path.display()))?;
         eprintln!(
@@ -1442,18 +1422,15 @@ fn codes_command(args: &[String]) -> Result<u8> {
     Ok(0)
 }
 
-fn coverage_command(args: &[String]) -> Result<u8> {
-    let mut mode = "print";
-    let mut dir = corpora_dir();
-    let mut iter = args.iter();
-    while let Some(arg) = iter.next() {
-        match arg.as_str() {
-            "--check" => mode = "check",
-            "--write" => mode = "write",
-            "--dir" => dir = PathBuf::from(value(&mut iter, arg)?),
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        }
-    }
+fn coverage_command(args: &CoverageArgs) -> Result<u8> {
+    let mode = if args.write {
+        "write"
+    } else if args.check {
+        "check"
+    } else {
+        "print"
+    };
+    let dir = args.dir.clone().unwrap_or_else(corpora_dir);
     let catalogue = load_catalogue(&dir.join("faults.toml"))?;
     let codes_path = dir.join("codes.toml");
     let codes_text = std::fs::read_to_string(&codes_path)
@@ -1486,30 +1463,23 @@ fn coverage_command(args: &[String]) -> Result<u8> {
     ))
 }
 
-fn clean_command(args: &[String]) -> Result<u8> {
-    let mut engine = None;
-    let mut oracle = None;
-    let mut repo = None;
-    let mut iter = args.iter();
-    while let Some(arg) = iter.next() {
-        match arg.as_str() {
-            "--engine" => engine = Some(value(&mut iter, arg)?.to_string()),
-            "--oracle" => oracle = Some(value(&mut iter, arg)?.to_string()),
-            "--repo" => repo = Some(PathBuf::from(value(&mut iter, arg)?)),
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        }
-    }
+fn clean_command(args: &CleanArgs) -> Result<u8> {
+    let CleanArgs {
+        engine,
+        oracle,
+        repo,
+    } = args;
     if let Some(code) = require_python(engine.as_deref())? {
         return Ok(code);
     }
-    let repo = repo.context("--repo is required")?;
+    let repo = repo.as_ref().context("--repo is required")?;
     let catalogue = load_catalogue(&corpora_dir().join("faults.toml"))?;
     let bin = oracle_bin(oracle.as_deref());
     check_oracle_version(&bin, &catalogue.oracle)?;
     let mut total = 0;
     for command in ["validate", "lint"] {
         let started = Instant::now();
-        let document = run_oracle(&bin, &repo, &[command.to_string()], &BTreeMap::new())?;
+        let document = run_oracle(&bin, repo, &[command.to_string()], &BTreeMap::new())?;
         let elapsed = started.elapsed().as_secs_f64();
         let found = faults::findings(&document, &repo.to_string_lossy())?;
         let summary = document.get("summary").cloned().unwrap_or_default();
@@ -1603,9 +1573,8 @@ mod tests {
 
     #[test]
     fn the_oracles_python_is_the_venvs() {
-        let dir = std::env::temp_dir().join(format!("xtask-oracle-python-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().to_path_buf();
         let bin = dir.join("opentide");
         std::fs::write(&bin, "#!/opt/elsewhere/python3\n").unwrap();
         // The shebang, when no interpreter sits beside the script.
@@ -1619,21 +1588,26 @@ mod tests {
         assert_eq!(super::oracle_python(&bin).unwrap(), dir.join("python.exe"));
         std::fs::write(&bin, "no interpreter line").unwrap();
         assert_eq!(super::oracle_python(&bin).unwrap(), dir.join("python.exe"));
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
     fn scratch_is_removed_unless_kept() {
-        let base = std::env::temp_dir().join(format!("xtask-scratch-test-{}", std::process::id()));
-        for keep in [false, true] {
-            std::fs::create_dir_all(base.join("_base")).unwrap();
-            drop(Scratch {
-                path: base.clone(),
-                keep,
-            });
-            assert_eq!(base.exists(), keep);
-        }
-        std::fs::remove_dir_all(&base).unwrap();
+        let base = tempfile::tempdir().unwrap();
+        let kept = base.path().join("kept");
+        let scratch = Scratch::new("xtask-scratch-test-", Some(&kept)).unwrap();
+        assert_eq!(scratch.path, kept);
+        drop(scratch);
+        assert!(kept.is_dir(), "--keep keeps it");
+        assert!(
+            Scratch::new("xtask-scratch-test-", Some(&kept)).is_err(),
+            "a kept run is never written over"
+        );
+        drop(Scratch::reusing("xtask-scratch-test-", Some(&kept)).unwrap());
+        let scratch = Scratch::new("xtask-scratch-test-", None).unwrap();
+        let path = scratch.path.clone();
+        assert!(path.is_dir() && path.is_absolute());
+        drop(scratch);
+        assert!(!path.exists(), "a temporary directory goes with its guard");
     }
 
     #[test]

@@ -415,3 +415,46 @@ fn pure_rust_parser_matches_tree_sitter() {
     }
     assert_gates(&report);
 }
+
+/// The highlight golden (`crates/testdata/highlight/kuery/query.json`, the
+/// query of `goldens.rs`' `kuery_golden`): both engines give its tokens,
+/// span and capture, and the query is among the differential's sources.
+#[test]
+fn the_highlight_golden_is_covered() {
+    let root = repo();
+    let goldens = std::fs::read_to_string(root.join("crates/opentide-analysis/tests/goldens.rs"))
+        .expect("goldens.rs");
+    let block = &goldens[goldens.find("fn kuery_golden").expect("kuery_golden")..];
+    let query = rust_strings(&block[..block.find("\n}").expect("its end")])
+        .into_iter()
+        .last()
+        .expect("the golden query");
+    let golden = std::fs::read_to_string(root.join("crates/testdata/highlight/kuery/query.json"))
+        .expect("the golden");
+    // `"start": n, "end": m` of each span, then its capture, in order.
+    let numbers = regex::Regex::new(
+        r#""span":\s*\{\s*"start":\s*(\d+),\s*"end":\s*(\d+)[\s\S]*?"capture":\s*"([^"]+)""#,
+    )
+    .expect("regex");
+    let expected = numbers
+        .captures_iter(&golden)
+        .fold(String::new(), |mut out, c| {
+            let _ = write!(out, "{}..{}={} ", &c[1], &c[2], &c[3]);
+            out
+        });
+    assert!(!expected.is_empty());
+    assert_eq!(
+        tokens(&legacy::analyze(&query).tokens),
+        expected,
+        "old engine"
+    );
+    assert_eq!(
+        tokens(&opentide_kuery::analyze(&query).tokens),
+        expected,
+        "new engine"
+    );
+    assert!(
+        sources().iter().any(|s| s.text == query),
+        "the golden query is a source"
+    );
+}

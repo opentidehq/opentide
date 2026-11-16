@@ -11,15 +11,26 @@ Usage errors exit 2:
 ```
 $ xtask corpus generate --threats 2
 ? 2
-xtask corpus: --seed is required
+error: the following required arguments were not provided:
+  --seed <SEED>
+
+Usage: cargo xtask corpus generate --seed <SEED> --threats <N>
+
+For more information, try '--help'.
 
 $ xtask corpus generate --seed 1 --scale 2 --rules 3 --digest
 ? 2
-xtask corpus: --scale and --threats/--objectives/--rules exclude each other
+error: the argument '--scale <F>' cannot be used with '--rules <N>'
+
+Usage: cargo xtask corpus generate --seed <SEED> --scale <F> --digest
+
+For more information, try '--help'.
 
 $ xtask corpus generate --seed 1 --layout flat --digest
 ? 2
-xtask corpus: --layout: `flat` is not standard, explicit or custom
+error: invalid value 'flat' for '--layout <LAYOUT>': `flat` is not standard, explicit or custom
+
+For more information, try '--help'.
 
 $ xtask corpus faults --check
 ? 2

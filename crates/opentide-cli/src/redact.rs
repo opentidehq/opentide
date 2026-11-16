@@ -353,6 +353,21 @@ pub fn url_secrets(value: &str) -> (Vec<String>, Vec<String>) {
     (password, host)
 }
 
+/// Why a configuration file is not read as text: its bytes are not UTF-8.
+pub(crate) const NOT_UTF8: &str = "the file is not valid UTF-8";
+
+/// Where a configuration file's parse error is, never its message: that may
+/// quote the file, and with it a credential.
+pub(crate) fn toml_position(error: &opentide_schema::configuration::toml::ParseError) -> String {
+    if error.too_deep {
+        return "nested too deep".to_owned();
+    }
+    match (error.line, error.column) {
+        (Some(line), Some(column)) => format!("line {line}, column {column}"),
+        _ => "position unknown".to_owned(),
+    }
+}
+
 fn expand(value: &str, env: &Env) -> String {
     match patterns().env_reference.captures(value.trim()) {
         Some(caps) => env.get(&caps["name"]).unwrap_or_default().to_owned(),

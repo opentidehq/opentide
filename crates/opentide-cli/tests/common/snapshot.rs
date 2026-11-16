@@ -220,11 +220,14 @@ fn substitute(args: &[String], vars: &BTreeMap<String, String>) -> Option<Vec<St
 /// discard port, which refuses it.
 const REFUSING_PROXY: &str = "http://127.0.0.1:9";
 
+/// Every case's `PATH`: the programs a case finds, `doctor`'s git among them.
+const CASE_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
+
 /// The environment every case starts from (nothing inherited): the goldens'
 /// (`xtask/src/golden/case.rs` `base_env`), less the Python oracle's own.
 fn base_env(mode: &str) -> BTreeMap<String, String> {
     let mut env: BTreeMap<String, String> = [
-        ("PATH", "/usr/local/bin:/usr/bin:/bin"),
+        ("PATH", CASE_PATH),
         ("HOME", "<HOME>"),
         ("TMPDIR", "<TMP>/tmp"),
         ("USER", "golden"),
@@ -550,11 +553,15 @@ pub fn clock_dates(candidates: Vec<String>, held: &[&str]) -> Vec<String> {
 /// What `git --version` says after `git version `, which `doctor` reports
 /// whole (the case's `host-git` rule replaces it): `2.43.0` on Linux, `2.54.0
 /// (Apple Git-157)` on macOS, so the vendor's suffix goes with the number.
+/// The git asked is the one a case finds on [`CASE_PATH`], not the test's
+/// own: a macOS runner's Homebrew git comes first on the test's `PATH`, while
+/// a case's `doctor` reports `/usr/bin/git`, Apple's.
 fn git_version() -> Option<String> {
     static VERSION: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
     VERSION
         .get_or_init(|| {
             let out = std::process::Command::new("git")
+                .env("PATH", CASE_PATH)
                 .arg("--version")
                 .output()
                 .ok()?;
