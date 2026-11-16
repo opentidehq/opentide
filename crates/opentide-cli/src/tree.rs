@@ -186,35 +186,32 @@ pub enum ReportFormat {
     Codequality,
 }
 
-/// The values of `Platform`, as the command line spells them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-pub enum Platform {
-    #[value(name = "sentinel")]
-    Sentinel,
-    #[value(name = "defender_for_endpoint")]
-    DefenderForEndpoint,
-    #[value(name = "splunk")]
-    Splunk,
-    #[value(name = "sentinel_one")]
-    SentinelOne,
-    #[value(name = "crowdstrike")]
-    Crowdstrike,
-    #[value(name = "harfanglab")]
-    Harfanglab,
-    #[value(name = "carbon_black_cloud")]
-    CarbonBlackCloud,
-    #[value(name = "elastic")]
-    Elastic,
-    #[value(name = "sysdig")]
-    Sysdig,
-    #[value(name = "bitdefender")]
-    Bitdefender,
-    #[value(name = "graylog")]
-    Graylog,
-    #[value(name = "exabeam")]
-    Exabeam,
-    #[value(name = "google_secops")]
-    GoogleSecops,
+/// The values of `Platform`, as the command line spells them: the built-in
+/// platforms of the registry ([`opentide_schema::platforms::PlatformId`]),
+/// in its order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Platform(pub opentide_schema::platforms::PlatformId);
+
+/// Every [`Platform`], in the registry's order.
+const PLATFORM_VALUES: [Platform; opentide_schema::platforms::COUNT] = {
+    use opentide_schema::platforms::{COUNT, PlatformId};
+    let mut out = [Platform(PlatformId::Sentinel); COUNT];
+    let mut index = 0;
+    while index < COUNT {
+        out[index] = Platform(PlatformId::ALL[index]);
+        index += 1;
+    }
+    out
+};
+
+impl ValueEnum for Platform {
+    fn value_variants<'a>() -> &'a [Self] {
+        &PLATFORM_VALUES
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        Some(clap::builder::PossibleValue::new(self.0.as_str()))
+    }
 }
 
 /// The values of `RowFormat`, as the command line spells them.

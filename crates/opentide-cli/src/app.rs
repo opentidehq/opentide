@@ -3802,8 +3802,7 @@ mod tests {
             "{}",
             bare.stdout
         );
-        // `-h` is no option, as in the Python CLI (#841): `--help` is the
-        // one help option.
+        // `-h` is no option (#841): `--help` is the one help option.
         let short = dispatched("--json -h", &[], false);
         assert_eq!(short.code, 2, "{}", short.stdout);
         assert!(
@@ -3876,7 +3875,7 @@ mod tests {
         );
         let home = tempfile::tempdir().unwrap();
         let home_text = home.path().display().to_string();
-        // The home folder is USERPROFILE on Windows, as Python's Path.home().
+        // The home folder is USERPROFILE on Windows, HOME elsewhere.
         let home_variable = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
         let installed = dispatched(
             "--json --install-completion bash",

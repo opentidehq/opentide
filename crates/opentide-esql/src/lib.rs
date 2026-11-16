@@ -45,6 +45,15 @@ mod lexer;
 mod parser;
 mod syntax;
 mod tree;
+
+// What the generated typed AST names from the crate root (`use crate::{..}`).
+#[doc(hidden)]
+pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
+
+/// The typed AST `cargo xtask codegen` writes from `esql.ungram`.
+#[doc(hidden)]
+#[path = "generated/ast.rs"]
+pub mod ast;
 pub mod version;
 
 pub use catalog::{Catalog, CommandRow, FunctionRow, Lifecycle, StackVersion, TypeRow};
@@ -100,6 +109,13 @@ pub fn debug_kinds(source: &str) -> (bool, Vec<&'static str>) {
 #[doc(hidden)]
 pub fn parses() -> usize {
     tree::parses()
+}
+
+/// The lossless tree of `source`, for the typed AST's tests
+/// (`tests/ast_accessors.rs`). Not API.
+#[doc(hidden)]
+pub fn syntax_tree(source: &str) -> SyntaxNode {
+    SyntaxNode::new_root(parser::parse(source).green)
 }
 
 /// Analyze against every supported stack (8.19 and 9.x). Same as

@@ -333,7 +333,7 @@ fn key_text(node: &Node) -> String {
         NodeValue::Float(float) => float_key(*float),
         NodeValue::Bool(flag) => if *flag { "true" } else { "false" }.to_owned(),
         NodeValue::Null => "null".to_owned(),
-        // A collection cannot key a Python dict; the oracle could not load it.
+        // No JSON key is a collection: its compact JSON text stands in.
         NodeValue::Seq(_) | NodeValue::Map(_) => Json::from_node(node).to_compact(),
     }
 }

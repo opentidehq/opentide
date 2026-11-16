@@ -10,6 +10,7 @@
 //! and walked without recursion, so a 20,000-term chain costs no stack. Fields are the
 //! grammar's, given by position. `Node` is `Copy`, as tree-sitter's is.
 
+use crate::highlight::{is_leaf, token_name};
 use crate::parser;
 use crate::syntax::{SyntaxKind as K, SyntaxNode};
 use opentide_core::ByteSpan;
@@ -38,12 +39,19 @@ struct Data {
     parent: Option<u32>,
     children: Vec<u32>,
     field: Option<&'static str>,
+    /// The parser's node this one stands for (none for a token, a comment, or a level of a
+    /// re-nested run).
+    syntax: Option<SyntaxNode>,
 }
 
 /// A parsed query.
 pub(crate) struct Tree {
     data: Vec<Data>,
     pub(crate) problems: Vec<Problem>,
+    /// The parser's tree, which this one stands over.
+    pub(crate) syntax: SyntaxNode,
+    /// The node of this tree each node of the parser's stands for (none inside a leaf).
+    by_syntax: std::collections::HashMap<SyntaxNode, u32>,
     /// A small value an analysis pass computed for a node, kept so that a pass over a long
     /// left-nested run reads each node once (`semantics`' operand types).
     memo: std::cell::RefCell<std::collections::HashMap<u32, u8>>,
@@ -102,24 +110,6 @@ fn node_name(kind: K) -> &'static str {
     }
 }
 
-/// Nodes that are one token in tree-sitter: no children. (`boolean` is not one: tree-sitter
-/// keeps its `true` or `false` as an anonymous child.)
-fn is_leaf(kind: K) -> bool {
-    matches!(
-        kind,
-        K::ANY
-            | K::MISSING_EVENT_OPEN
-            | K::CASE_INSENSITIVE_NAME
-            | K::OPTIONAL_MARKER
-            | K::INDEX
-            | K::IDENTIFIER
-            | K::QUOTED_IDENTIFIER
-            | K::NULL
-            | K::NUMBER
-            | K::STRING
-    )
-}
-
 /// The flat runs tree-sitter nested to the left, as `(left, right)` children of one node each.
 fn is_run(kind: K) -> bool {
     matches!(
@@ -164,6 +154,8 @@ pub(crate) fn parse(source: &str) -> Tree {
     let mut tree = Tree {
         data: Vec::new(),
         problems,
+        syntax: root.clone(),
+        by_syntax: std::collections::HashMap::new(),
         memo: std::cell::RefCell::default(),
     };
     let mut open: Vec<u32> = Vec::new();
@@ -190,6 +182,8 @@ pub(crate) fn parse(source: &str) -> Tree {
                     usize::from(r.start()),
                     usize::from(r.end()),
                 );
+                tree.data[id as usize].syntax = Some(node.clone());
+                tree.by_syntax.insert(node.clone(), id);
                 if is_leaf(kind) {
                     skip = 1;
                 }
@@ -239,54 +233,6 @@ pub(crate) fn parse(source: &str) -> Tree {
     tree
 }
 
-/// The name of an anonymous token: its text (a keyword, an operator, a bracket).
-fn token_name(kind: K, text: &str) -> &'static str {
-    match kind {
-        K::IN_TILDE => "in~",
-        K::LIKE_TILDE => "like~",
-        K::REGEX_TILDE => "regex~",
-        K::PIPE => "|",
-        K::EQ => "=",
-        K::EQ_EQ => "==",
-        K::NOT_EQ => "!=",
-        K::LT => "<",
-        K::LT_EQ => "<=",
-        K::GT => ">",
-        K::GT_EQ => ">=",
-        K::PLUS => "+",
-        K::MINUS => "-",
-        K::STAR => "*",
-        K::SLASH => "/",
-        K::PERCENT => "%",
-        K::L_PAREN => "(",
-        K::R_PAREN => ")",
-        K::L_BRACK => "[",
-        K::R_BRACK => "]",
-        K::COMMA => ",",
-        K::DOT => ".",
-        K::COLON => ":",
-        K::QUESTION => "?",
-        K::BANG_L_BRACK => "![",
-        // A keyword is lower case: its text is its name.
-        _ if let Some(keyword) = crate::KEYWORD_WORDS.iter().find(|k| **k == text) => keyword,
-        // A name or a literal with no node of its own stands in an error region; it is named by
-        // what it is, so that highlighting still reads it.
-        K::WORD => ERROR_WORD,
-        K::TILDE_WORD => ERROR_TILDE_WORD,
-        K::QUOTED_IDENT_TOKEN => ERROR_QUOTED,
-        K::STRING_TOKEN => ERROR_STRING,
-        K::NUMBER_TOKEN => ERROR_NUMBER,
-        _ => "ERROR",
-    }
-}
-
-/// Anonymous tokens in an error region, by what the lexer cut.
-const ERROR_WORD: &str = "ERROR word";
-const ERROR_TILDE_WORD: &str = "ERROR tilde_word";
-const ERROR_QUOTED: &str = "ERROR quoted_identifier";
-const ERROR_STRING: &str = "ERROR string";
-const ERROR_NUMBER: &str = "ERROR number";
-
 impl Tree {
     fn push(
         &mut self,
@@ -305,6 +251,7 @@ impl Tree {
             parent,
             children: Vec::new(),
             field: None,
+            syntax: None,
         });
         if let Some(p) = parent {
             self.data[p as usize].children.push(id);
@@ -417,6 +364,11 @@ impl Tree {
             }
             node = c;
         }
+    }
+
+    /// The node of this tree that stands for `node` of the parser's.
+    pub(crate) fn view(&self, node: &SyntaxNode) -> Option<Node<'_>> {
+        self.by_syntax.get(node).map(|&id| Node { tree: self, id })
     }
 
     pub(crate) fn root_node(&self) -> Node<'_> {
@@ -597,16 +549,17 @@ impl<'t> Node<'t> {
         self.tree.memo.borrow_mut().insert(self.id, value);
     }
 
+    /// The parser's node this one stands for.
+    pub(crate) fn syntax(&self) -> Option<SyntaxNode> {
+        self.d().syntax.clone()
+    }
+
     pub(crate) fn kind(&self) -> &'static str {
         self.d().kind
     }
 
     pub(crate) fn is_named(&self) -> bool {
         self.d().named
-    }
-
-    pub(crate) fn field_name(&self) -> Option<&'static str> {
-        self.d().field
     }
 
     pub(crate) fn id(&self) -> usize {
@@ -635,20 +588,12 @@ impl<'t> Node<'t> {
         self.d().parent.map(|p| self.at(p))
     }
 
-    pub(crate) fn child_count(&self) -> usize {
-        self.d().children.len()
-    }
-
     pub(crate) fn child(&self, i: usize) -> Option<Node<'t>> {
         self.d().children.get(i).map(|&c| self.at(c))
     }
 
     pub(crate) fn named_child(&self, i: usize) -> Option<Node<'t>> {
         self.named_children(&mut Cursor).nth(i)
-    }
-
-    pub(crate) fn named_child_count(&self) -> usize {
-        self.named_children(&mut Cursor).count()
     }
 
     pub(crate) fn walk(&self) -> Cursor {
@@ -726,48 +671,4 @@ pub(crate) fn walk_with_ancestors<'t>(root: Node<'t>, mut f: impl FnMut(Node<'t>
         let kids = &node.d().children;
         stack.extend(kids.iter().rev().map(|&c| (node.at(c), depth + 1)));
     }
-}
-
-/// The highlight capture of a leaf, by the patterns of `highlights.scm` in their order (the
-/// first that matches wins): what `capture(token, parent)` becomes on this tree.
-pub(crate) fn capture(node: Node<'_>) -> Option<&'static str> {
-    let kind = node.kind();
-    // A name or a literal in an error region reads as it would in a query that parses.
-    match kind {
-        ERROR_WORD | ERROR_QUOTED => return Some("variable"),
-        ERROR_TILDE_WORD => return Some("function"),
-        ERROR_STRING => return Some("string"),
-        ERROR_NUMBER => return Some("number"),
-        _ => {}
-    }
-    // `(boolean) @boolean`: the node is not a leaf here, its `true` or `false` is.
-    if !node.is_named() && node.parent().is_some_and(|p| p.kind() == "boolean") {
-        return Some("boolean");
-    }
-    if !node.is_named() {
-        return opentide_highlight::keywords(opentide_core::LanguageId::Eql)?
-            .iter()
-            .find(|(token, _)| *token == kind)
-            .map(|(_, capture)| capture.name());
-    }
-    let parent = node.parent().map(|p| p.kind());
-    let field = node.field_name();
-    let under = |p: &str, f: &str| parent == Some(p) && field == Some(f);
-    Some(match kind {
-        "identifier" if under("relationship", "relation") => "error",
-        "identifier" if under("pipe", "name") || under("term_option", "key") => "keyword",
-        "identifier" if under("time_unit", "unit") => "constant",
-        "identifier" | "string" if parent == Some("event_category") => "type",
-        "any" => "type",
-        "identifier" | "case_insensitive_name" if under("function_call", "name") => "function",
-        "identifier" | "quoted_identifier" if parent == Some("field") => "property",
-        "index" | "number" => "number",
-        "optional_marker" | "missing_event_open" => "operator",
-        "identifier" | "quoted_identifier" => "variable",
-        "string" => "string",
-        "boolean" => "boolean",
-        "null" => "constant",
-        "comment" => "comment",
-        _ => return None,
-    })
 }

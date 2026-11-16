@@ -14,9 +14,9 @@
 //! The platforms built on it: [`crowdstrike`], [`defender`], [`elastic`],
 //! [`harfanglab`], [`sentinel_one`] and [`sysdig`] (UC-4.2, #832), the REST
 //! platforms, and [`splunk`], [`carbon_black`] and [`sentinel`] (UC-4.3,
-//! #833), which Python reaches through vendor SDKs; each a request-for-request
-//! port of its Python client, deployer and query runner, on one set of query
-//! types ([`connector::QueryRequest`], [`connector::QueryOutcome`]);
+//! #833), whose vendors ship SDKs; each a client, deployer and query runner
+//! that speaks its vendor's API directly, on one set of query types
+//! ([`connector::QueryRequest`], [`connector::QueryOutcome`]);
 //! [`builtin`] registers them, and [`plugin::with_plugins`] adds the platforms
 //! a Python package registers (UC-4.5, #835) after them.
 //!
@@ -69,8 +69,8 @@ pub use http::{HttpClient, HttpSettings};
 pub use plugin::{PluginError, PluginHost};
 pub use tenant::{Tenant, TenantLabel};
 
-/// The HTTP settings *platform*'s client mounts: its timeout and retries,
-/// as its Python client mounts them. *timeout* is the read timeout of the
+/// The HTTP settings *platform*'s client mounts: its timeout and retries.
+/// *timeout* is the read timeout of the
 /// clients that take the caller's (Elastic, Splunk, Carbon Black Cloud and
 /// Google SecOps; Sentinel's at least 300 s, azure-core's read); the others
 /// keep their own.

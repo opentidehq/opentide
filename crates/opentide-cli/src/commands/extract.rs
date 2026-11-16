@@ -2243,8 +2243,10 @@ mod elastic_tests {
         );
     }
 
-    /// The derived ids are those of Python's `uuid.uuid5`, which the
-    /// importer this ports used: the values below come from it.
+    /// The derived ids are version-5 UUIDs (SHA-1, RFC 9562) of the
+    /// migration namespace. The expected values are the ids the Python
+    /// importer produced (`uuid.uuid5`), so a re-import keeps the ids earlier
+    /// imports created: the test checks against that outside source.
     #[test]
     fn prebuilt_rule_ids_match_python_uuid5() {
         assert_eq!(
@@ -2267,7 +2269,7 @@ mod elastic_tests {
 
     /// A field Kibana holds as one string where it usually holds a list is a
     /// list of that one string: `index: "logs-*"` is `["logs-*"]`, not one
-    /// item per character (the Python importer's `list(str)`).
+    /// item per character.
     #[test]
     fn a_single_string_is_a_one_item_list() {
         let converted = kibana_to_opentide(

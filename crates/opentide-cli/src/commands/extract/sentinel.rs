@@ -1013,7 +1013,7 @@ mod tests {
 
     /// A single string where a list is expected is the one item it is: a
     /// rule's `tactics: "Execution"` is `- Execution`, not one item per
-    /// character (the Python importer iterated the string).
+    /// character.
     #[test]
     fn a_single_string_is_one_item_of_a_list() {
         let rule = RULE.replace(

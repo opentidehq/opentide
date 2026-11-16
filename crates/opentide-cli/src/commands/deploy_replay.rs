@@ -16,8 +16,7 @@
 //! When a concurrent run changed the same binding to a different id, this
 //! run's id is kept (the newest record of what this run created) and both ids
 //! are printed as `deployment_state_conflict`, so the duplicate can be
-//! cleaned up. The Python implementation was `opentide.ci.state_replay`
-//! (UC-6.2, #841 ports it); its output is the same.
+//! cleaned up.
 
 use std::collections::BTreeSet;
 use std::io::Write;

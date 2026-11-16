@@ -283,7 +283,7 @@ fn sentinel_rules_are_extracted_as_the_recorded_run_extracted_them() {
 
 /// A rule whose field is of the wrong type is skipped and listed with the
 /// rule's id and the field; the other rules are still imported (one such
-/// rule used to fail the whole import with a Python exception).
+/// rule used to fail the whole import).
 #[test]
 fn a_rule_with_a_mistyped_field_is_skipped_and_the_others_imported() {
     let typed = r#""queryPeriod": "PT2H""#;

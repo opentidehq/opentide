@@ -38,7 +38,7 @@ pub struct DirEntry {
     /// What it names, links followed.
     pub kind: EntryKind,
     /// Whether the entry itself is a symbolic link. A walk does not descend
-    /// into a linked directory, as Python's `Path.rglob` does not.
+    /// into a linked directory, so a link cannot make it loop.
     pub symlink: bool,
 }
 
@@ -67,8 +67,8 @@ pub trait FileSystem: Send + Sync {
     fn read_dir(&self, path: &Path) -> io::Result<Vec<DirEntry>>;
 
     /// `path` made absolute and its symbolic links resolved as far as the
-    /// path exists, as Python's `Path.resolve()` does: a path that does not
-    /// exist (yet) still resolves, lexically past its last existing parent.
+    /// path exists: a path that does not exist (yet) still resolves,
+    /// lexically past its last existing parent.
     fn resolve(&self, path: &Path) -> PathBuf;
 
     /// What `path` holds now, as cheaply as the filesystem can tell: two

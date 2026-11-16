@@ -721,8 +721,8 @@ fn block_advisories(
         .collect()
 }
 
-/// `bytes` as Python's `read_text(encoding="utf-8-sig")` reads them: without
-/// a byte-order mark, every line ending a `\n`.
+/// `bytes` as UTF-8 text: without a leading byte-order mark, every line
+/// ending a `\n`.
 ///
 /// # Errors
 ///
