@@ -55,7 +55,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
-- **`opentide_schema::platforms::PlatformId`**. An enum of the thirteen built-in platforms, in `PLATFORMS`' order: `ALL`, `spec()` (its row), `as_str()` (the identifier), `parse(id)` (`None` for a plugin's identifier or any other text) and `Display`. Code that chose by a platform's identifier text matches on it now, so a platform added to the registry is a compile error wherever it needs a decision; the command line's `--platform` choices (`opentide_cli::tree::Platform`) and `deploy`'s per-platform dispatch read it.
+- **`opentide_schema::platforms::PlatformId`**. An enum of the thirteen built-in platforms, in `PLATFORMS`' order: `ALL`, `spec()` (its row), `as_str()` (the identifier), `parse(id)` (`None` for a plugin's identifier or any other text) and `Display`. A row of `PLATFORMS` moved or added without the enum following fails the build. `deploy` chooses each platform's path by an exhaustive match on it, so a new built-in platform must be given one; its inner matches and other code still have fallbacks. `opentide_cli::tree::Platform`, the `--platform` choice, is now a struct wrapping it (`Platform(PlatformId)`) instead of an enum of its own.
 
 - **`opentide_compile::bitdefender::YARA_RULE_LIMIT`, `YARA_RULE_LIMIT_CODE`, `is_yara` and `yara_rule_limit`** ([opentide#1252](https://github.com/opentidehq/opentide/issues/1252)). GravityZone's maximum of 50 YARA rules per company, the code `bitdefender_yara_rule_limit`, whether a rule's block deploys a YARA rule, and the message for a deploy that would pass the limit (recorded and created YARA rules). `deploy` refuses a tenant's YARA creates with it before anything is sent.
 

@@ -452,6 +452,26 @@ impl PlatformId {
         self.spec().id
     }
 
+    /// The identifier the variant is written for; [`PLATFORMS`]' row must
+    /// hold it, which a compile-time check below makes sure of.
+    const fn written(self) -> &'static str {
+        match self {
+            Self::Sentinel => "sentinel",
+            Self::DefenderForEndpoint => "defender_for_endpoint",
+            Self::Splunk => "splunk",
+            Self::SentinelOne => "sentinel_one",
+            Self::Crowdstrike => "crowdstrike",
+            Self::Harfanglab => "harfanglab",
+            Self::CarbonBlackCloud => "carbon_black_cloud",
+            Self::Elastic => "elastic",
+            Self::Sysdig => "sysdig",
+            Self::Bitdefender => "bitdefender",
+            Self::Graylog => "graylog",
+            Self::Exabeam => "exabeam",
+            Self::GoogleSecops => "google_secops",
+        }
+    }
+
     /// The built-in platform `id` names; `None` for any other text, a
     /// plugin's identifier included.
     pub fn parse(id: &str) -> Option<Self> {
@@ -460,6 +480,38 @@ impl PlatformId {
             .find(|platform| platform.as_str() == id)
     }
 }
+
+/// [`PlatformId::spec`] indexes [`PLATFORMS`] by the variant: a row moved,
+/// added or removed without the enum following fails the build here.
+const _: () = {
+    const fn same(a: &str, b: &str) -> bool {
+        let (a, b) = (a.as_bytes(), b.as_bytes());
+        if a.len() != b.len() {
+            return false;
+        }
+        let mut i = 0;
+        while i < a.len() {
+            if a[i] != b[i] {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+    let mut index = 0;
+    while index < COUNT {
+        let platform = PlatformId::ALL[index];
+        assert!(
+            platform as usize == index,
+            "PlatformId::ALL is out of the enum's order"
+        );
+        assert!(
+            same(PLATFORMS[index].id, platform.written()),
+            "PLATFORMS and PlatformId disagree on a row"
+        );
+        index += 1;
+    }
+};
 
 impl std::fmt::Display for PlatformId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
