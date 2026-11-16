@@ -12,7 +12,8 @@
 //! highlight spans and fields, and a clean tree from the new parser; a
 //! broken one keeps its verdict: the new parser reports an error exactly when
 //! tree-sitter does. `OPENTIDE_FALCO_DIFF=<file>` writes
-//! the JSON report; `OPENTIDE_FALCO_SEED=<n>` picks another seed (default 1).
+//! the JSON report; `OPENTIDE_FALCO_SEED=<n>` picks the first seed (default 1)
+//! and `OPENTIDE_DIFF_SEEDS=<k>` how many run from it.
 
 #![expect(
     clippy::expect_used,
@@ -427,6 +428,10 @@ fn pure_rust_tree_matches_tree_sitter() {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(1);
+    let first: u64 = std::env::var("OPENTIDE_FALCO_SEED")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1);
     let mut files = sources();
     if !full {
         // Every fourth generated condition: the pairs cover the same constructs.
@@ -436,7 +441,7 @@ fn pure_rust_tree_matches_tree_sitter() {
             f.name != "generated" || n.is_multiple_of(4)
         });
     }
-    for seed in 1..=seeds {
+    for seed in first..first + seeds {
         let config = config_for(seed, full);
         let report = run(&Old, &New, &files, &config);
         eprintln!(
