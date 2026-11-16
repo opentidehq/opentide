@@ -337,6 +337,14 @@ fn blank_or_comment(line: &str) -> bool {
 /// (`_with_local_hook`); `None` when the layout is not one this extends. A
 /// file whose every line ends in CRLF keeps CRLF, the added lines too.
 fn with_local_hook(text: &str, relative: &str) -> Option<String> {
+    // A CRLF cut after its CR: complete it.
+    let completed;
+    let text = if text.ends_with('\r') {
+        completed = format!("{text}\n");
+        completed.as_str()
+    } else {
+        text
+    };
     let crlf = text.contains("\r\n") && text.matches('\n').count() == text.matches("\r\n").count();
     if crlf {
         let added = with_local_hook_lf(&text.replace("\r\n", "\n"), relative)?;
@@ -831,6 +839,10 @@ mod tests {
         let added = with_local_hook(unterminated, "").unwrap();
         assert!(added.starts_with(before), "{added:?}");
         assert_eq!(added.matches('\n').count(), added.matches("\r\n").count());
+        // Cut after the last CR: the CRLF is completed, not doubled.
+        let added = with_local_hook(&format!("{unterminated}\r"), "").unwrap();
+        assert!(added.starts_with(before), "{added:?}");
+        assert!(!added.contains("\r\r"), "{added:?}");
         // A file of no repos yet.
         let added = with_local_hook("ci:\r\n  skip: []\r\n", "").unwrap();
         assert!(

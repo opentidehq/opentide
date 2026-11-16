@@ -195,6 +195,14 @@ fn keep_fields(
             own.append(name, input(value));
             continue;
         };
+        // `null` is no value, as at the top level: the template's fills it.
+        if prop
+            .value()
+            .is_some_and(|node| node.as_null_keyword().is_some())
+        {
+            prop.set_value(input(value));
+            continue;
+        }
         if prefix.is_empty()
             && let (Some(inner), Json::Object(inner_fields)) = (prop.object_value(), value)
         {
@@ -386,6 +394,39 @@ mod tests {
         let value = parse(&after).unwrap();
         assert_eq!(value["servers"]["opentide"]["command"], "opentide");
         assert_eq!(after.lines().last(), Some("}"));
+    }
+
+    #[test]
+    fn a_kept_entry_keeps_its_fields_and_gains_the_missing_ones() {
+        let before = "\u{feff}{\r\n  \"servers\": {\r\n    // mine\r\n    \"opentide\": {\"command\": \"/x/opentide\", \"env\": {\"A\": \"1\", \"OPENTIDE_REPO_ROOT\": null}, \"args\": null}\r\n  }\r\n}\r\n";
+        let (after, kept) = merge_keeping_entries(before, &template()).unwrap();
+        assert!(
+            after.starts_with("\u{feff}{\r\n  \"servers\": {\r\n    // mine\r\n"),
+            "{after:?}"
+        );
+        let value = parse(&after).unwrap();
+        let server = &value["servers"]["opentide"];
+        assert_eq!(server["command"], "/x/opentide");
+        assert_eq!(server["env"]["A"], "1");
+        // `null` is filled from the template, as a missing field is.
+        assert_eq!(server["args"], serde_json::json!(["mcp", "start"]));
+        assert_eq!(kept, ["command"]);
+        // An entry that is not an object is no one's: the template's.
+        for entry in ["null", "\"x\"", "[1]"] {
+            let before = format!("{{\"servers\": {{\"opentide\": {entry}}}}}");
+            let (after, kept) = merge_keeping_entries(&before, &template()).unwrap();
+            assert_eq!(
+                parse(&after).unwrap()["servers"]["opentide"]["command"],
+                "opentide"
+            );
+            assert!(kept.is_empty());
+        }
+        // `merge` still replaces the entry (other callers' behaviour).
+        let after = merge(before, &template()).unwrap();
+        assert_eq!(
+            parse(&after).unwrap()["servers"]["opentide"]["command"],
+            "opentide"
+        );
     }
 
     #[test]

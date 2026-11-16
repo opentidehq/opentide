@@ -186,6 +186,9 @@ pub fn env(stage: &mut Stage, target: &Path) -> Result<StepResult, String> {
             let newline = jsonc::newline(&existing);
             let suffix = if existing.is_empty() || existing.ends_with('\n') {
                 ""
+            } else if existing.ends_with('\r') {
+                // A CRLF cut after its CR: complete it.
+                "\n"
             } else {
                 newline
             };
@@ -620,23 +623,15 @@ pub fn recommends_extension(stage: &Stage, target: &Path) -> bool {
     })
 }
 
-/// Writes or merges `host`'s configuration; its path relative to `target`.
+/// Writes or merges `host`'s configuration: its path relative to `target`,
+/// and the warning for an `opentide` entry the file already had that keeps
+/// fields opentide would write otherwise: re-running setup
+/// never resets a customised server (its `command`, `args`, `env`).
 ///
 /// # Errors
 ///
 /// The existing file cannot be merged: the reason, for the warning.
-pub fn write_mcp_config(stage: &mut Stage, target: &Path, host: &str) -> Result<String, String> {
-    write_mcp_config_noting(stage, target, host).map(|(relative, _)| relative)
-}
-
-/// [`write_mcp_config`], with the warning for an `opentide` entry the file
-/// already had and that keeps fields opentide would write otherwise: re-running
-/// setup never resets a customised server (its `command`, `args`, `env`).
-///
-/// # Errors
-///
-/// As [`write_mcp_config`].
-pub fn write_mcp_config_noting(
+pub fn write_mcp_config(
     stage: &mut Stage,
     target: &Path,
     host: &str,
@@ -734,7 +729,7 @@ pub fn mcp(
 ) -> StepResult {
     let (mut written, mut skipped, mut warnings) = (Vec::new(), Vec::new(), Vec::new());
     for host in hosts {
-        match write_mcp_config_noting(stage, target, host) {
+        match write_mcp_config(stage, target, host) {
             Ok((relative, kept)) => {
                 written.push(relative);
                 warnings.extend(kept);
@@ -976,6 +971,38 @@ mod tests {
         );
     }
 
+    /// `setup vscode --mcp` writes through [`write_mcp_config`] too: a
+    /// customised entry is kept, and the warning comes back to the caller.
+    #[test]
+    fn write_mcp_config_returns_the_kept_entry_warning() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join(".vscode")).unwrap();
+        std::fs::write(
+            root.join(".vscode/mcp.json"),
+            r#"{"servers": {"opentide": {"command": "/x/opentide", "env": null}}}"#,
+        )
+        .unwrap();
+        let mut stage = Stage::new();
+        let (relative, warning) = write_mcp_config(&mut stage, root, "vscode").unwrap();
+        assert_eq!(relative, ".vscode/mcp.json");
+        let after = jsonc::parse(
+            &String::from_utf8(stage.read(&root.join(".vscode/mcp.json")).unwrap().unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+        let server = &after["servers"]["opentide"];
+        assert_eq!(server["command"], "/x/opentide");
+        // `null` is no value: the template's `env` fills it, without a warning.
+        assert_eq!(server["env"]["OPENTIDE_REPO_ROOT"], "${workspaceFolder}");
+        assert_eq!(
+            warning.as_deref(),
+            Some(
+                ".vscode/mcp.json: kept the opentide server's own command (opentide writes command \"opentide\"); remove the entry and re-run setup mcp to reset it."
+            )
+        );
+    }
+
     #[test]
     fn an_mcp_file_with_comments_is_merged_in_place() {
         let dir = tempfile::tempdir().unwrap();
@@ -1027,6 +1054,7 @@ mod tests {
         for (before, after) in [
             ("A=1\r\n", "A=1\r\nOPENTIDE_REPO_ROOT=.\r\n"),
             ("A=1\r\nB=2", "A=1\r\nB=2\r\nOPENTIDE_REPO_ROOT=.\r\n"),
+            ("A=1\r\nB=2\r", "A=1\r\nB=2\r\nOPENTIDE_REPO_ROOT=.\r\n"),
         ] {
             std::fs::write(root.join(".env.example"), before).unwrap();
             let mut stage = Stage::new();
