@@ -1,0 +1,8 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/star__valid.lucene
+---
+SourceFile@0..1
+  TermQuery@0..1
+    Star@0..1 "*"

@@ -1,0 +1,34 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"rule r { events: $e, $f condition: $e }\")"
+---
+SOURCE_FILE@0..39
+  RULE_DECLARATION@0..39
+    RULE_KW@0..4 "rule"
+    WHITESPACE@4..5 " "
+    RULE_NAME@5..6
+      IDENT@5..6 "r"
+    WHITESPACE@6..7 " "
+    L_BRACE@7..8 "{"
+    WHITESPACE@8..9 " "
+    EVENTS_SECTION@9..19
+      EVENTS_KW@9..15 "events"
+      COLON@15..16 ":"
+      WHITESPACE@16..17 " "
+      VARIABLE@17..19
+        VAR_TOKEN@17..19 "$e"
+    ERROR@19..23
+      COMMA@19..20 ","
+      WHITESPACE@20..21 " "
+      VAR_TOKEN@21..23 "$f"
+    WHITESPACE@23..24 " "
+    CONDITION_SECTION@24..37
+      CONDITION_KW@24..33 "condition"
+      COLON@33..34 ":"
+      WHITESPACE@34..35 " "
+      VARIABLE@35..37
+        VAR_TOKEN@35..37 "$e"
+    WHITESPACE@37..38 " "
+    R_BRACE@38..39 "}"
+errors:
+19..19: expected a section such as `events:` (expected `rule`, `}`)

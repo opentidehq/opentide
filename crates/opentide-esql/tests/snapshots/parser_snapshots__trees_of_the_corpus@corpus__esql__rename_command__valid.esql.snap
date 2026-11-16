@@ -1,0 +1,54 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/rename_command__valid.esql
+---
+SOURCE_FILE@0..92
+  COMMENT@0..28 "// prod:rename_command valid"
+  WHITESPACE@28..29 "\n"
+  QUERY@29..91
+    FROM_COMMAND@29..53
+      FROM_KW@29..33 "FROM"
+      WHITESPACE@33..34 " "
+      INDEX_PATTERN@34..40
+        INDEX_NAME@34..40
+          SOURCE_TEXT@34..40 "logs-*"
+      WHITESPACE@40..41 " "
+      METADATA@41..53
+        METADATA_KW@41..49 "METADATA"
+        WHITESPACE@49..50 " "
+        METADATA_FIELD@50..53
+          SOURCE_TEXT@50..53 "_id"
+    WHITESPACE@53..54 "\n"
+    PIPE@54..55 "|"
+    WHITESPACE@55..56 " "
+    RENAME_COMMAND@56..91
+      RENAME_KW@56..62 "RENAME"
+      WHITESPACE@62..63 " "
+      RENAME_CLAUSE@63..80
+        NAME_PATTERN@63..72
+          ID_PATTERN@63..67
+            ID_PATTERN_TEXT@63..67 "user"
+          DOT@67..68 "."
+          ID_PATTERN@68..72
+            ID_PATTERN_TEXT@68..72 "name"
+        WHITESPACE@72..73 " "
+        AS_KW@73..75 "AS"
+        WHITESPACE@75..76 " "
+        NAME_PATTERN@76..80
+          ID_PATTERN@76..80
+            ID_PATTERN_TEXT@76..80 "user"
+      COMMA@80..81 ","
+      WHITESPACE@81..82 " "
+      RENAME_CLAUSE@82..91
+        NAME_PATTERN@82..85
+          ID_PATTERN@82..85
+            ID_PATTERN_TEXT@82..85 "new"
+        WHITESPACE@85..86 " "
+        EQ@86..87 "="
+        WHITESPACE@87..88 " "
+        NAME_PATTERN@88..91
+          ID_PATTERN@88..91
+            ID_PATTERN_TEXT@88..91 "old"
+  WHITESPACE@91..92 "\n"
+--- errors

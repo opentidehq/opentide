@@ -1,0 +1,32 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/data_table_column__valid.yaral
+---
+SOURCE_FILE@0..71
+  COMMENT@0..31 "// prod:data_table_column valid"
+  WHITESPACE@31..32 "\n"
+  SEARCH_QUERY@32..70
+    SEARCH_EVENTS@32..70
+      COMPARISON@32..70
+        UDM_FIELD@32..53
+          VARIABLE@32..34
+            VAR_TOKEN@32..34 "$e"
+          MEMBER@34..41
+            ACCESS_DOT@34..35 "."
+            FIELD_NAME@35..41 "target"
+          MEMBER@41..46
+            ACCESS_DOT@41..42 "."
+            FIELD_NAME@42..46 "user"
+          MEMBER@46..53
+            ACCESS_DOT@46..47 "."
+            FIELD_NAME@47..53 "userid"
+        WHITESPACE@53..54 " "
+        EQ@54..55 "="
+        WHITESPACE@55..56 " "
+        DATA_TABLE_COLUMN@56..70
+          REFERENCE_LIST@56..63
+            REF_LIST_TOKEN@56..63 "%admins"
+          DOT@63..64 "."
+          IDENT@64..70 "userid"
+  WHITESPACE@70..71 "\n"

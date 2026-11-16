@@ -1,0 +1,11 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/field_query__invalid.lucene
+---
+SourceFile@0..13
+  FieldQuery@0..13
+    FieldName@0..12
+      Term@0..12 "process.name"
+    Colon@12..13 ":"
+13..13: missing a clause (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, AmpAmp, PipePipe, LParen, LBracket, LBrace)

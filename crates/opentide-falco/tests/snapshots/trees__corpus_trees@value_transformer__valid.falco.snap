@@ -1,0 +1,34 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/value_transformer__valid.falco
+---
+source_file@0..64
+  and_expression@0..64
+    comparison@0..27
+      field@0..10
+        field_name@0..10 "proc.pname"
+      whitespace@10..11 " "
+      comparison_operator@11..12
+        =@11..12 "="
+      whitespace@12..13 " "
+      value_transformer@13..27
+        transformer_name@13..17 "val("
+        field@17..26
+          field_name@17..26 "proc.name"
+        )@26..27 ")"
+    whitespace@27..28 " "
+    and@28..31 "and"
+    whitespace@31..32 " "
+    comparison@32..64
+      field@32..39
+        field_name@32..39 "fd.name"
+      whitespace@39..40 " "
+      comparison_operator@40..50
+        identifier@40..50 "startswith"
+      whitespace@50..51 " "
+      value_transformer@51..64
+        transformer_name@51..55 "val("
+        field@55..63
+          field_name@55..63 "proc.cwd"
+        )@63..64 ")"

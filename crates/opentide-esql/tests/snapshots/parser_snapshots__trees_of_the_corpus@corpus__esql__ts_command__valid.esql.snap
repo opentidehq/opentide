@@ -1,0 +1,42 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/ts_command__valid.esql
+---
+SOURCE_FILE@0..68
+  COMMENT@0..24 "// prod:ts_command valid"
+  WHITESPACE@24..25 "\n"
+  QUERY@25..67
+    TS_COMMAND@25..37
+      TS_KW@25..27 "TS"
+      WHITESPACE@27..28 " "
+      INDEX_PATTERN@28..37
+        INDEX_NAME@28..37
+          SOURCE_TEXT@28..37 "metrics-*"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    STATS_COMMAND@40..67
+      STATS_KW@40..45 "STATS"
+      WHITESPACE@45..46 " "
+      AGGREGATE_FIELD@46..54
+        FUNCTION_CALL@46..54
+          IDENTIFIER@46..49
+            IDENT@46..49 "max"
+          L_PAREN@49..50 "("
+          QUALIFIED_NAME@50..53
+            IDENTIFIER@50..53
+              IDENT@50..53 "cpu"
+          R_PAREN@53..54 ")"
+      WHITESPACE@54..55 " "
+      BY_KW@55..57 "BY"
+      WHITESPACE@57..58 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@58..67
+        QUALIFIED_NAME@58..67
+          IDENTIFIER@58..62
+            IDENT@58..62 "host"
+          DOT@62..63 "."
+          IDENTIFIER@63..67
+            IDENT@63..67 "name"
+  WHITESPACE@67..68 "\n"
+--- errors

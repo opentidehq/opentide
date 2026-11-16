@@ -1,0 +1,39 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/dense_vector_command__invalid.esql
+---
+SOURCE_FILE@0..92
+  COMMENT@0..36 "// prod:dense_vector_command invalid"
+  WHITESPACE@36..37 "\n"
+  QUERY@37..92
+    FROM_COMMAND@37..59
+      FROM_KW@37..41 "FROM"
+      WHITESPACE@41..42 " "
+      INDEX_PATTERN@42..46
+        INDEX_NAME@42..46
+          SOURCE_TEXT@42..46 "docs"
+      WHITESPACE@46..47 " "
+      METADATA@47..59
+        METADATA_KW@47..55 "METADATA"
+        WHITESPACE@55..56 " "
+        METADATA_FIELD@56..59
+          SOURCE_TEXT@56..59 "_id"
+    WHITESPACE@59..60 "\n"
+    PIPE@60..61 "|"
+    WHITESPACE@61..62 " "
+    DENSE_VECTOR_COMMAND@62..92
+      DENSE_VECTOR_KW@62..74 "DENSE_VECTOR"
+      WHITESPACE@74..75 " "
+      QUALIFIED_NAME@75..84
+        IDENTIFIER@75..84
+          IDENT@75..84 "embedding"
+      WHITESPACE@84..85 " "
+      EQ@85..86 "="
+      WHITESPACE@86..87 " "
+      NAMED_PARAMETERS@87..92
+        WITH_KW@87..91 "WITH"
+        WHITESPACE@91..92 "\n"
+        MAP_EXPRESSION@92..92
+--- errors
+91..92: expected `{` (expected L_BRACE)

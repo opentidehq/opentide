@@ -1,0 +1,40 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{source}\\n{tree}--- errors\\n{errors}\")"
+---
+FROM a | WHERE (x == 1 | LIMIT 1
+SOURCE_FILE@0..32
+  QUERY@0..32
+    FROM_COMMAND@0..6
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "a"
+    WHITESPACE@6..7 " "
+    PIPE@7..8 "|"
+    WHITESPACE@8..9 " "
+    WHERE_COMMAND@9..22
+      WHERE_KW@9..14 "WHERE"
+      WHITESPACE@14..15 " "
+      PARENTHESIZED_EXPRESSION@15..22
+        L_PAREN@15..16 "("
+        COMPARISON@16..22
+          QUALIFIED_NAME@16..17
+            IDENTIFIER@16..17
+              IDENT@16..17 "x"
+          WHITESPACE@17..18 " "
+          EQ_EQ@18..20 "=="
+          WHITESPACE@20..21 " "
+          NUMBER@21..22
+            NUMBER_LIT@21..22 "1"
+    WHITESPACE@22..23 " "
+    PIPE@23..24 "|"
+    WHITESPACE@24..25 " "
+    LIMIT_COMMAND@25..32
+      LIMIT_KW@25..30 "LIMIT"
+      WHITESPACE@30..31 " "
+      NUMBER@31..32
+        NUMBER_LIT@31..32 "1"
+--- errors
+22..23: expected `)` (expected AND_KW, OR_KW, COMMA, R_PAREN)

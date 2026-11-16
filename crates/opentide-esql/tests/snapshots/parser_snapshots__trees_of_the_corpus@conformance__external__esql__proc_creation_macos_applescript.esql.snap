@@ -1,0 +1,158 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/proc_creation_macos_applescript.esql
+---
+SOURCE_FILE@0..370
+  QUERY@0..369
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    WHERE_COMMAND@40..369
+      WHERE_KW@40..45 "where"
+      WHITESPACE@45..46 " "
+      AND_EXPRESSION@46..369
+        FUNCTION_CALL@46..76
+          IDENTIFIER@46..55
+            IDENT@46..55 "ends_with"
+          L_PAREN@55..56 "("
+          QUALIFIED_NAME@56..61
+            IDENTIFIER@56..61
+              IDENT@56..61 "Image"
+          COMMA@61..62 ","
+          WHITESPACE@62..63 " "
+          STRING@63..75
+            STRING_LIT@63..75 "\"/osascript\""
+          R_PAREN@75..76 ")"
+        WHITESPACE@76..77 " "
+        AND_KW@77..80 "and"
+        WHITESPACE@80..81 " "
+        PARENTHESIZED_EXPRESSION@81..166
+          L_PAREN@81..82 "("
+          OR_EXPRESSION@82..165
+            LIKE_EXPRESSION@82..107
+              QUALIFIED_NAME@82..93
+                IDENTIFIER@82..93
+                  IDENT@82..93 "CommandLine"
+              WHITESPACE@93..94 " "
+              LIKE_KW@94..98 "like"
+              WHITESPACE@98..99 " "
+              STRING@99..107
+                STRING_LIT@99..107 "\"* -e *\""
+            WHITESPACE@107..108 " "
+            OR_KW@108..110 "or"
+            WHITESPACE@110..111 " "
+            LIKE_EXPRESSION@111..137
+              QUALIFIED_NAME@111..122
+                IDENTIFIER@111..122
+                  IDENT@111..122 "CommandLine"
+              WHITESPACE@122..123 " "
+              LIKE_KW@123..127 "like"
+              WHITESPACE@127..128 " "
+              STRING@128..137
+                STRING_LIT@128..137 "\"*.scpt*\""
+            WHITESPACE@137..138 " "
+            OR_KW@138..140 "or"
+            WHITESPACE@140..141 " "
+            LIKE_EXPRESSION@141..165
+              QUALIFIED_NAME@141..152
+                IDENTIFIER@141..152
+                  IDENT@141..152 "CommandLine"
+              WHITESPACE@152..153 " "
+              LIKE_KW@153..157 "like"
+              WHITESPACE@157..158 " "
+              STRING@158..165
+                STRING_LIT@158..165 "\"*.js*\""
+          R_PAREN@165..166 ")"
+        WHITESPACE@166..167 " "
+        AND_KW@167..170 "and"
+        WHITESPACE@170..171 " "
+        NOT_EXPRESSION@171..369
+          NOT_KW@171..174 "not"
+          WHITESPACE@174..175 " "
+          PARENTHESIZED_EXPRESSION@175..369
+            L_PAREN@175..176 "("
+            AND_EXPRESSION@176..368
+              FUNCTION_CALL@176..210
+                IDENTIFIER@176..185
+                  IDENT@176..185 "ends_with"
+                L_PAREN@185..186 "("
+                QUALIFIED_NAME@186..197
+                  IDENTIFIER@186..197
+                    IDENT@186..197 "ParentImage"
+                COMMA@197..198 ","
+                WHITESPACE@198..199 " "
+                STRING@199..209
+                  STRING_LIT@199..209 "\"opencode\""
+                R_PAREN@209..210 ")"
+              WHITESPACE@210..211 " "
+              AND_KW@211..214 "and"
+              WHITESPACE@214..215 " "
+              LIKE_EXPRESSION@215..245
+                QUALIFIED_NAME@215..226
+                  IDENTIFIER@215..226
+                    IDENT@215..226 "CommandLine"
+                WHITESPACE@226..227 " "
+                LIKE_KW@227..231 "like"
+                WHITESPACE@231..232 " "
+                STRING@232..245
+                  STRING_LIT@232..245 "\"*osascript*\""
+              WHITESPACE@245..246 " "
+              AND_KW@246..249 "and"
+              WHITESPACE@249..250 " "
+              LIKE_EXPRESSION@250..275
+                QUALIFIED_NAME@250..261
+                  IDENTIFIER@250..261
+                    IDENT@250..261 "CommandLine"
+                WHITESPACE@261..262 " "
+                LIKE_KW@262..266 "like"
+                WHITESPACE@266..267 " "
+                STRING@267..275
+                  STRING_LIT@267..275 "\"* -e *\""
+              WHITESPACE@275..276 " "
+              AND_KW@276..279 "and"
+              WHITESPACE@279..280 " "
+              LIKE_EXPRESSION@280..331
+                QUALIFIED_NAME@280..291
+                  IDENTIFIER@280..291
+                    IDENT@280..291 "CommandLine"
+                WHITESPACE@291..292 " "
+                LIKE_KW@292..296 "like"
+                WHITESPACE@296..297 " "
+                STRING@297..331
+                  STRING_LIT@297..331 "\"*set imageData to the clipboard*\""
+              WHITESPACE@331..332 " "
+              AND_KW@332..335 "and"
+              WHITESPACE@335..336 " "
+              LIKE_EXPRESSION@336..368
+                QUALIFIED_NAME@336..347
+                  IDENTIFIER@336..347
+                    IDENT@336..347 "CommandLine"
+                WHITESPACE@347..348 " "
+                LIKE_KW@348..352 "like"
+                WHITESPACE@352..353 " "
+                STRING@353..368
+                  STRING_LIT@353..368 "\"*set fileRef*\""
+            R_PAREN@368..369 ")"
+  WHITESPACE@369..370 "\n"
+--- errors

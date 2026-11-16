@@ -1,0 +1,70 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/posh_ps_active_directory_module_dll_import.esql
+---
+SOURCE_FILE@0..230
+  QUERY@0..229
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    WHERE_COMMAND@40..229
+      WHERE_KW@40..45 "where"
+      WHITESPACE@45..46 " "
+      OR_EXPRESSION@46..229
+        AND_EXPRESSION@46..155
+          LIKE_EXPRESSION@46..85
+            QUALIFIED_NAME@46..61
+              IDENTIFIER@46..61
+                IDENT@46..61 "ScriptBlockText"
+            WHITESPACE@61..62 " "
+            LIKE_KW@62..66 "like"
+            WHITESPACE@66..67 " "
+            STRING@67..85
+              STRING_LIT@67..85 "\"*Import-Module *\""
+          WHITESPACE@85..86 " "
+          AND_KW@86..89 "and"
+          WHITESPACE@89..90 " "
+          LIKE_EXPRESSION@90..155
+            QUALIFIED_NAME@90..105
+              IDENTIFIER@90..105
+                IDENT@90..105 "ScriptBlockText"
+            WHITESPACE@105..106 " "
+            LIKE_KW@106..110 "like"
+            WHITESPACE@110..111 " "
+            STRING@111..155
+              STRING_LIT@111..155 "\"*Microsoft.ActiveDirectory.Management.dll*\""
+        WHITESPACE@155..156 " "
+        OR_KW@156..158 "or"
+        WHITESPACE@158..159 " "
+        LIKE_EXPRESSION@159..229
+          QUALIFIED_NAME@159..174
+            IDENTIFIER@159..174
+              IDENT@159..174 "ScriptBlockText"
+          WHITESPACE@174..175 " "
+          LIKE_KW@175..179 "like"
+          WHITESPACE@179..180 " "
+          STRING@180..229
+            STRING_LIT@180..229 "\"*ipmo Microsoft.ActiveDirectory.Management.dll*\""
+  WHITESPACE@229..230 "\n"
+--- errors

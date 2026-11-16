@@ -1,0 +1,35 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | extend d = a - parse - b\")"
+---
+SOURCE_FILE@0..28
+  QUERY@0..28
+    TABULAR_EXPRESSION@0..28
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      EXTEND_OPERATOR@4..28
+        EXTEND_KW@4..10 "extend"
+        WHITESPACE@10..11 " "
+        ASSIGNMENT@11..28
+          NAME_REF@11..12
+            IDENT@11..12 "d"
+          WHITESPACE@12..13 " "
+          EQ@13..14 "="
+          WHITESPACE@14..15 " "
+          ADDITIVE_EXPR@15..28
+            NAME_REF@15..16
+              IDENT@15..16 "a"
+            WHITESPACE@16..17 " "
+            MINUS@17..18 "-"
+            WHITESPACE@18..19 " "
+            NAME_REF@19..24
+              IDENT@19..24 "parse"
+            WHITESPACE@24..25 " "
+            MINUS@25..26 "-"
+            WHITESPACE@26..27 " "
+            NAME_REF@27..28
+              IDENT@27..28 "b"

@@ -1,6 +1,191 @@
-//! Kusto Query Language (KQL).
+//! Kusto Query Language (KQL): `highlights/queries/kql/highlights.scm`,
+//! read by capture. The lexer of `opentide-kql` knows each token (its tests
+//! hold it to this table).
 
-use super::Keywords;
+use super::{Capture, Keywords};
 
-/// `None` until the engine moves to `opentide-parse`.
-pub(super) const KEYWORDS: Option<Keywords> = None;
+pub(super) const KEYWORDS: Option<Keywords> = Some(&[
+    // @keyword
+    ("let", Capture::KEYWORD),
+    ("where", Capture::KEYWORD),
+    ("filter", Capture::KEYWORD),
+    ("project", Capture::KEYWORD),
+    ("project-away", Capture::KEYWORD),
+    ("project-rename", Capture::KEYWORD),
+    ("project-keep", Capture::KEYWORD),
+    ("project-reorder", Capture::KEYWORD),
+    ("extend", Capture::KEYWORD),
+    ("summarize", Capture::KEYWORD),
+    ("join", Capture::KEYWORD),
+    ("union", Capture::KEYWORD),
+    ("parse", Capture::KEYWORD),
+    ("parse-where", Capture::KEYWORD),
+    ("parse-kv", Capture::KEYWORD),
+    ("lookup", Capture::KEYWORD),
+    ("take", Capture::KEYWORD),
+    ("limit", Capture::KEYWORD),
+    ("sort", Capture::KEYWORD),
+    ("order", Capture::KEYWORD),
+    ("distinct", Capture::KEYWORD),
+    ("render", Capture::KEYWORD),
+    ("print", Capture::KEYWORD),
+    ("top", Capture::KEYWORD),
+    ("mv-expand", Capture::KEYWORD),
+    ("mvexpand", Capture::KEYWORD),
+    ("search", Capture::KEYWORD),
+    ("find", Capture::KEYWORD),
+    ("invoke", Capture::KEYWORD),
+    ("evaluate", Capture::KEYWORD),
+    ("serialize", Capture::KEYWORD),
+    ("scan", Capture::KEYWORD),
+    ("as", Capture::KEYWORD),
+    ("getschema", Capture::KEYWORD),
+    ("make-series", Capture::KEYWORD),
+    ("sample", Capture::KEYWORD),
+    ("sample-distinct", Capture::KEYWORD),
+    ("mv-apply", Capture::KEYWORD),
+    ("datatable", Capture::KEYWORD),
+    ("externaldata", Capture::KEYWORD),
+    ("external_data", Capture::KEYWORD),
+    ("with", Capture::KEYWORD),
+    ("from", Capture::KEYWORD),
+    ("to", Capture::KEYWORD),
+    ("step", Capture::KEYWORD),
+    ("asc", Capture::KEYWORD),
+    ("desc", Capture::KEYWORD),
+    ("granny-asc", Capture::KEYWORD),
+    ("granny-desc", Capture::KEYWORD),
+    ("of", Capture::KEYWORD),
+    ("others", Capture::KEYWORD),
+    ("by", Capture::KEYWORD),
+    ("partition", Capture::KEYWORD),
+    ("declare", Capture::KEYWORD),
+    ("optional", Capture::KEYWORD),
+    ("output", Capture::KEYWORD),
+    ("last", Capture::KEYWORD),
+    ("range", Capture::KEYWORD),
+    ("fork", Capture::KEYWORD),
+    ("facet", Capture::KEYWORD),
+    ("consume", Capture::KEYWORD),
+    ("reduce", Capture::KEYWORD),
+    ("make-graph", Capture::KEYWORD),
+    ("graph-match", Capture::KEYWORD),
+    ("graph-shortest-paths", Capture::KEYWORD),
+    ("graph-to-table", Capture::KEYWORD),
+    ("graph-mark-components", Capture::KEYWORD),
+    ("top-hitters", Capture::KEYWORD),
+    ("top-nested", Capture::KEYWORD),
+    ("typeof", Capture::KEYWORD),
+    ("on", Capture::KEYWORD),
+    ("nulls", Capture::KEYWORD),
+    ("first", Capture::KEYWORD),
+    ("default", Capture::KEYWORD),
+    ("and", Capture::KEYWORD),
+    ("kind", Capture::KEYWORD),
+    // @function.builtin
+    ("materialize", Capture::FUNCTION_BUILTIN),
+    ("toscalar", Capture::FUNCTION_BUILTIN),
+    // @type
+    ("dynamic", Capture::TYPE),
+    // @error
+    (".", Capture::ERROR),
+    // @operator.pipe
+    ("|", Capture::PIPE),
+    // @operator
+    ("or", Capture::OPERATOR),
+    ("not", Capture::OPERATOR),
+    ("==", Capture::OPERATOR),
+    ("!=", Capture::OPERATOR),
+    ("=~", Capture::OPERATOR),
+    ("!~", Capture::OPERATOR),
+    ("<>", Capture::OPERATOR),
+    ("<", Capture::OPERATOR),
+    (">", Capture::OPERATOR),
+    ("<=", Capture::OPERATOR),
+    (">=", Capture::OPERATOR),
+    ("+", Capture::OPERATOR),
+    ("-", Capture::OPERATOR),
+    ("*", Capture::OPERATOR),
+    ("/", Capture::OPERATOR),
+    ("%", Capture::OPERATOR),
+    ("has", Capture::OPERATOR),
+    ("!has", Capture::OPERATOR),
+    ("has_cs", Capture::OPERATOR),
+    ("!has_cs", Capture::OPERATOR),
+    ("has_any", Capture::OPERATOR),
+    ("has_all", Capture::OPERATOR),
+    ("contains", Capture::OPERATOR),
+    ("!contains", Capture::OPERATOR),
+    ("contains_cs", Capture::OPERATOR),
+    ("!contains_cs", Capture::OPERATOR),
+    ("containscs", Capture::OPERATOR),
+    ("notcontains", Capture::OPERATOR),
+    ("notcontainscs", Capture::OPERATOR),
+    ("=>", Capture::OPERATOR),
+    ("startswith", Capture::OPERATOR),
+    ("!startswith", Capture::OPERATOR),
+    ("startswith_cs", Capture::OPERATOR),
+    ("!startswith_cs", Capture::OPERATOR),
+    ("endswith", Capture::OPERATOR),
+    ("!endswith", Capture::OPERATOR),
+    ("endswith_cs", Capture::OPERATOR),
+    ("!endswith_cs", Capture::OPERATOR),
+    ("hasprefix", Capture::OPERATOR),
+    ("!hasprefix", Capture::OPERATOR),
+    ("hasprefix_cs", Capture::OPERATOR),
+    ("!hasprefix_cs", Capture::OPERATOR),
+    ("hassuffix", Capture::OPERATOR),
+    ("!hassuffix", Capture::OPERATOR),
+    ("hassuffix_cs", Capture::OPERATOR),
+    ("!hassuffix_cs", Capture::OPERATOR),
+    ("has_ipv4", Capture::OPERATOR),
+    ("has_ipv4_prefix", Capture::OPERATOR),
+    ("has_any_ipv4", Capture::OPERATOR),
+    ("has_any_ipv4_prefix", Capture::OPERATOR),
+    ("in", Capture::OPERATOR),
+    ("!in", Capture::OPERATOR),
+    ("in~", Capture::OPERATOR),
+    ("!in~", Capture::OPERATOR),
+    ("between", Capture::OPERATOR),
+    ("!between", Capture::OPERATOR),
+    ("..", Capture::OPERATOR),
+    ("matches", Capture::OPERATOR),
+    ("regex", Capture::OPERATOR),
+    ("=", Capture::OPERATOR),
+    // @punctuation.bracket
+    ("(", Capture::BRACKET),
+    (")", Capture::BRACKET),
+    ("[", Capture::BRACKET),
+    ("]", Capture::BRACKET),
+    ("{", Capture::BRACKET),
+    ("}", Capture::BRACKET),
+    // @punctuation.delimiter
+    (",", Capture::DELIMITER),
+    (";", Capture::DELIMITER),
+]);
+
+#[cfg(test)]
+mod tests {
+    use super::super::{by_capture, scm_pairs, table_pairs};
+    use super::KEYWORDS;
+    use crate::{HighlightSpec, generate_tm_language, generate_tm_language_from};
+    use opentide_core::LanguageId;
+
+    #[test]
+    fn the_kql_table_says_what_its_scm_says() {
+        // Until the tree-sitter grammar goes, the `.scm` is still a source:
+        // the table holds the same pairs, so the generated bytes are the same.
+        let scm = crate::highlights_scm(LanguageId::Kql);
+        let table = KEYWORDS.expect("a KQL table");
+        assert_eq!(
+            by_capture(table_pairs(table)),
+            by_capture(scm_pairs(scm)),
+            "the KQL table and highlights.scm differ"
+        );
+        let spec = HighlightSpec::load().expect("spec");
+        assert_eq!(
+            generate_tm_language(LanguageId::Kql, &spec),
+            generate_tm_language_from(LanguageId::Kql, &spec, scm_pairs(scm)),
+        );
+    }
+}

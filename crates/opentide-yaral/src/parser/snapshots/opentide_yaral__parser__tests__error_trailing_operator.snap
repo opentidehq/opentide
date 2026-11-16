@@ -1,0 +1,14 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"$a or\")"
+---
+SOURCE_FILE@0..5
+  SEARCH_QUERY@0..5
+    SEARCH_EVENTS@0..5
+      OR_EXPR@0..5
+        VARIABLE@0..2
+          VAR_TOKEN@0..2 "$a"
+        WHITESPACE@2..3 " "
+        OR_KW@3..5 "or"
+errors:
+5..5: expected an expression

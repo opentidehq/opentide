@@ -1,0 +1,34 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-syntax/grok_several_patterns.esql
+---
+SOURCE_FILE@0..59
+  QUERY@0..58
+    FROM_COMMAND@0..11
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..11
+        INDEX_NAME@5..11
+          SOURCE_TEXT@5..11 "logs-*"
+    WHITESPACE@11..12 " "
+    PIPE@12..13 "|"
+    WHITESPACE@13..14 " "
+    GROK_COMMAND@14..58
+      GROK_KW@14..18 "GROK"
+      WHITESPACE@18..19 " "
+      QUALIFIED_NAME@19..31
+        IDENTIFIER@19..26
+          IDENT@19..26 "process"
+        DOT@26..27 "."
+        IDENTIFIER@27..31
+          IDENT@27..31 "name"
+      WHITESPACE@31..32 " "
+      STRING@32..43
+        STRING_LIT@32..43 "\"%{WORD:a}\""
+      COMMA@43..44 ","
+      WHITESPACE@44..45 " "
+      STRING@45..58
+        STRING_LIT@45..58 "\"%{NUMBER:b}\""
+  WHITESPACE@58..59 "\n"
+--- errors

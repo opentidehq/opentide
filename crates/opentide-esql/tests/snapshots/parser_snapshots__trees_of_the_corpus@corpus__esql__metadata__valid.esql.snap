@@ -1,0 +1,41 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/metadata__valid.esql
+---
+SOURCE_FILE@0..84
+  COMMENT@0..22 "// prod:metadata valid"
+  WHITESPACE@22..23 "\n"
+  QUERY@23..83
+    FROM_COMMAND@23..47
+      FROM_KW@23..27 "FROM"
+      WHITESPACE@27..28 " "
+      INDEX_PATTERN@28..34
+        INDEX_NAME@28..34
+          SOURCE_TEXT@28..34 "logs-*"
+      WHITESPACE@34..35 " "
+      METADATA@35..47
+        METADATA_KW@35..43 "METADATA"
+        WHITESPACE@43..44 " "
+        METADATA_FIELD@44..47
+          SOURCE_TEXT@44..47 "_id"
+    WHITESPACE@47..48 "\n"
+    PIPE@48..49 "|"
+    WHITESPACE@49..50 " "
+    WHERE_COMMAND@50..83
+      WHERE_KW@50..55 "WHERE"
+      WHITESPACE@55..56 " "
+      COMPARISON@56..83
+        QUALIFIED_NAME@56..70
+          IDENTIFIER@56..61
+            IDENT@56..61 "event"
+          DOT@61..62 "."
+          IDENTIFIER@62..70
+            IDENT@62..70 "category"
+        WHITESPACE@70..71 " "
+        EQ_EQ@71..73 "=="
+        WHITESPACE@73..74 " "
+        STRING@74..83
+          STRING_LIT@74..83 "\"process\""
+  WHITESPACE@83..84 "\n"
+--- errors

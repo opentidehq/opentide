@@ -1,0 +1,27 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/and_expression__valid.falco
+---
+source_file@0..47
+  and_expression@0..47
+    macro_reference@0..15
+      identifier@0..15 "spawned_process"
+    whitespace@15..16 " "
+    and@16..19 "and"
+    whitespace@19..20 " "
+    macro_reference@20..29
+      identifier@20..29 "container"
+    whitespace@29..30 " "
+    and@30..33 "and"
+    whitespace@33..34 " "
+    comparison@34..47
+      field@34..42
+        field_name@34..42 "proc.tty"
+      whitespace@42..43 " "
+      comparison_operator@43..45
+        other@43..44 "!"
+        =@44..45 "="
+      whitespace@45..46 " "
+      bare_string@46..47
+        number@46..47 "0"
