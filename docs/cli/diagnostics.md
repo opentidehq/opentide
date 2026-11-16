@@ -7480,7 +7480,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_duplicate_string
 
@@ -7496,7 +7496,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_duplicate_tag
 
@@ -7512,7 +7512,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_empty_signature
 
@@ -7528,13 +7528,13 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_entrypoint_deprecated
 
 entrypoint is deprecated in libyara and refused by YARA-X (yara_undefined_identifier); use pe.entry_point or elf.entry_point.
 
-Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
+Reported by the analysis engine in a YARA rule query, at the place in the query, as a warning that names the replacement, together with the error `yara_undefined_identifier` at the same place: YARA-X refuses `entrypoint`, so `opentide validate` (its `queries` check) and `opentide validate query` fail on the rule; `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show both.
 
 ### Example
 
@@ -7544,7 +7544,7 @@ opentide lint --check queries
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_hex_string
 
@@ -7560,7 +7560,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_include
 
@@ -7576,7 +7576,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_meta_missing
 
@@ -7628,7 +7628,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_module_unconfirmed
 
@@ -7644,7 +7644,7 @@ opentide lint --check queries
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_number_out_of_range
 
@@ -7660,7 +7660,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_parse_error
 
@@ -7676,7 +7676,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_regexp
 
@@ -7692,7 +7692,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_rule_identifier_conflict
 
@@ -7708,7 +7708,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_signature_alias
 
@@ -7758,7 +7758,7 @@ opentide lint --check queries
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_string_modifier
 
@@ -7774,7 +7774,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_suspicious_expression
 
@@ -7790,7 +7790,7 @@ opentide lint --check queries
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_type
 
@@ -7806,7 +7806,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_undefined_identifier
 
@@ -7822,7 +7822,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_undefined_string
 
@@ -7838,7 +7838,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_unknown_module
 
@@ -7854,7 +7854,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_unknown_module_member
 
@@ -7870,7 +7870,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_unreferenced_string
 
@@ -7886,7 +7886,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_x_incompatible
 
@@ -7920,7 +7920,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yaral_condition_shape
 
