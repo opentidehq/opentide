@@ -603,17 +603,24 @@ fn parse_errors_name_the_fault() {
     }
 }
 
-/// `syntax::PRODUCTIONS` names every node a parse builds: on each file of the corpus and
-/// the conformance sets, valid or broken, each node kind other than `ERROR` is in it, so the
-/// corpus gate cannot miss a production the parser grows.
+/// `syntax::PRODUCTIONS` is exactly what a parse builds: on every `.cql` file of
+/// `crates/testdata`, valid or broken, the node kinds other than `ERROR`, and the two comment
+/// tokens tree-sitter named. A production the parser grows, or one dropped from the list
+/// (a comment included), fails here before the corpus gate can miss it.
 #[test]
-fn every_node_built_is_a_production() {
+fn the_productions_are_what_a_parse_builds() {
+    use crate::syntax::{PRODUCTIONS, SyntaxKind as K};
+    use std::collections::BTreeSet;
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata");
     let mut stack = vec![root];
     let mut files = 0;
+    let mut built = BTreeSet::new();
     while let Some(dir) = stack.pop() {
-        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
-            let path = entry.path();
+        let entries = std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display()));
+        for entry in entries {
+            let path = entry
+                .unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
+                .path();
             if path.is_dir() {
                 stack.push(path);
                 continue;
@@ -622,18 +629,29 @@ fn every_node_built_is_a_production() {
                 continue;
             }
             files += 1;
-            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
             let (tree, _) = crate::parser::parse(&text);
-            for node in tree.descendants() {
-                let kind = node.kind();
-                assert!(
-                    kind == crate::syntax::SyntaxKind::ERROR
-                        || crate::syntax::PRODUCTIONS.contains(&kind),
-                    "{kind:?} in {}",
-                    path.display()
-                );
+            for element in tree.descendants_with_tokens() {
+                let kind = element.kind();
+                let named = match element {
+                    rowan::NodeOrToken::Node(_) => kind != K::ERROR,
+                    rowan::NodeOrToken::Token(_) => {
+                        matches!(kind, K::LINE_COMMENT | K::BLOCK_COMMENT)
+                    }
+                };
+                if named {
+                    assert!(
+                        PRODUCTIONS.contains(&kind),
+                        "{kind:?} in {}",
+                        path.display()
+                    );
+                    built.insert(format!("{kind:?}"));
+                }
             }
         }
     }
     assert!(files > 100, "{files} files");
+    let listed: BTreeSet<String> = PRODUCTIONS.iter().map(|k| format!("{k:?}")).collect();
+    assert_eq!(listed, built, "listed, never built on the corpus");
 }

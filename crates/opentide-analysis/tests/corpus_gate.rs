@@ -536,8 +536,10 @@ fn cql_corpus_gate() {
         id: "cql",
         // Keywords and leaf tokens: every fixture that tags a production contains
         // them, so they need no fixture of their own. The names after
-        // `argument_list` were aliases or scanner tokens in tree-sitter's grammar,
-        // never a rule of its own, and are one-token nodes of the pure-Rust tree.
+        // `argument_list` were never a rule of tree-sitter's grammar: aliases or
+        // scanner tokens, which are one-token nodes of the pure-Rust tree, and
+        // `parameter_default`, a field of `query_parameter` there and a node of
+        // its own here. The fixtures of their parents hold each.
         structural: &[
             "source_file",
             "and",
