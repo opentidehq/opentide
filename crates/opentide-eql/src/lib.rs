@@ -21,7 +21,7 @@
     reason = "engine dispatchers match every node kind in one function"
 )]
 /// The typed AST `cargo xtask codegen` writes from `eql.ungram`. Public but hidden, as SPL's
-/// and KQL's: `tests/ast_conformance.rs` reads it on the corpus's trees.
+/// and KQL's, so that the accessors no check reads yet are not dead code.
 #[doc(hidden)]
 #[path = "generated/ast.rs"]
 pub mod ast;
