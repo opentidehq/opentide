@@ -33,7 +33,7 @@ Commit the generated files. Do not hand-edit them. Editor repos copy the zip pro
 
 ## Captures
 
-A capture a language uses must be a legend member: each language crate colours its tree with HighlightSpec captures (its `highlight`), and its `KEYWORDS` table (`crates/opentide-highlight/src/keywords/<lang>.rs`, which the TextMate grammar is generated from) names spec captures only (`keyword_tables_name_spec_captures`). The query languages have no `.scm`; Tide's `highlights/queries/tide/highlights.scm` (for tree-sitter-yaml in editors) is held to the spec by a test.
+A capture a language uses must be a legend member: each language crate colours its tree with HighlightSpec captures (its `highlight`), and its `KEYWORDS` table (`crates/opentide-highlight/src/keywords/<lang>.rs`, which the TextMate grammar is generated from) names spec captures only (`keyword_tables_name_spec_captures`). There are no `.scm` queries (#1231).
 
 A new capture needs all of:
 
