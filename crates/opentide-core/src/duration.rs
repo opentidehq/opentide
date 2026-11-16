@@ -43,7 +43,7 @@ pub enum DurationError {
 }
 
 /// The duration in seconds, saturated at `u128::MAX` (any number of digits
-/// is a duration, as Python's integers are unbounded; only zero matters).
+/// is a duration, however large; only zero matters).
 pub fn duration_seconds(value: &str, allow_zero: bool) -> Result<u128, DurationError> {
     let (short, iso) = patterns();
     let captures = if value.is_empty() {

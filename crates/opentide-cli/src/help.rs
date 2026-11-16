@@ -1,9 +1,9 @@
 //! `--help`: clap's long help of a command path (#841, decision D1).
 //!
-//! The layout is clap's, never a copy of Typer's panels; what the help says
-//! is the command tree's, as the Python CLI said it. Three things the tree
-//! holds that clap's default layout cannot say are added here, on a copy of
-//! the command made for the help alone (the copy never parses anything):
+//! The layout is clap's; what the help says is the command tree's text.
+//! Three things the tree holds that clap's default layout cannot say are
+//! added here, on a copy of the command made for the help alone (the copy
+//! never parses anything):
 //!
 //! - the root's commands under the headings people find them by
 //!   ([`ROOT_HEADINGS`]: Author, Ship, Workspace, Agents and integrations),

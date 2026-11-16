@@ -32,7 +32,7 @@ pub const NOT_PROMOTED_ADVICE: &str =
 /// `[promotion]` of `deployment.toml`, with the statuses it is checked against.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
-    /// `enabled`, read as Python reads its truth.
+    /// `enabled`: on only when it is the boolean `true`.
     pub enabled: bool,
     /// `promotion_target`, when it is a string.
     pub target: Option<String>,

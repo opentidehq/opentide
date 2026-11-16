@@ -1,9 +1,7 @@
-//! Splunk's management API (UC-4.3, #833): what `platforms/splunk/client.py`
-//! sends through the Python Splunk client on opentide's urllib handler, request for request:
-//! the saved searches its `deployer.py` writes (`_apply_saved_search`),
-//! `runner.py`'s one-shot searches (`opentide query`) and its `search/parser`
-//! check (`validate query --live`), and the `server/info` reads the Python Splunk client
-//! makes to choose between the v1 and v2 search endpoints.
+//! Splunk's management API (UC-4.3, #833): the saved searches deploy writes
+//! (`_apply_saved_search`), the one-shot searches of `opentide query`, the
+//! `search/parser` check (`validate query --live`), and the `server/info`
+//! reads that choose between the v1 and v2 search endpoints.
 //!
 //! Every call carries `Authorization: Splunk <token>` (the token as is when
 //! it already starts with `Splunk `); a body is a form, with
@@ -357,9 +355,8 @@ fn form(pairs: &[(String, Json)]) -> String {
 }
 
 /// The Splunk connector. A tenant's search endpoints (v1 or v2) are read
-/// from `server/info` once per tenant and kind of client, as the Python Splunk client reads
-/// them once per `Service` (the runner keeps one for searches and one for
-/// the parser).
+/// from `server/info` once per tenant and kind of client (one for searches,
+/// one for the parser).
 #[derive(Debug, Default)]
 pub struct Splunk {
     v2: Mutex<BTreeMap<(TenantLabel, &'static str), bool>>,
@@ -793,8 +790,9 @@ impl Splunk {
         if reply.failed() {
             return reply.check_failure(&tenant);
         }
-        // Another 2xx is neither a refusal nor an acceptance: Python logs it
-        // (`unexpected_splunk_validation_response`) and passes the query.
+        // Another 2xx is neither a refusal nor an acceptance: the query
+        // passes, and nothing is reported (the oracle only logged it, as
+        // `unexpected_splunk_validation_response`).
         Ok(LiveCheck::default())
     }
 }

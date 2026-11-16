@@ -39,8 +39,8 @@ pub enum Parsed {
 }
 
 /// Why a file that is not UTF-8 cannot be read, with the byte at fault
-/// (`core/io.py` `not_utf8_problem`). Offsets count from after a byte order
-/// mark, as Python's `utf-8-sig` decoder counts them.
+/// (`core/io.py` `not_utf8_problem`). Offsets count from after a leading
+/// byte order mark.
 pub fn not_utf8_problem(bytes: &[u8], offset: usize) -> String {
     match bytes.get(offset) {
         Some(byte) => format!(

@@ -648,7 +648,7 @@ pub fn normalise(text: &str) -> String {
     replaced.trim_start().to_owned()
 }
 
-/// The first `limit` characters of `text` (Python's `text[:limit]`).
+/// The first `limit` characters of `text`, counted in code points.
 pub fn cut(text: &str, limit: usize) -> String {
     text.chars().take(limit).collect()
 }
