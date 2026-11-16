@@ -1,0 +1,43 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..25
+  PIPELINE@0..25
+    MATCH_STATEMENT@0..25
+      FIELD_NAME@0..1
+        WORD@0..1 "x"
+      WHITESPACE@1..2 " "
+      MATCH_KW@2..7 "match"
+      WHITESPACE@7..8 " "
+      L_BRACE@8..9 "{"
+      WHITESPACE@9..10 " "
+      MATCH_BRANCH@10..16
+        UNQUOTED_PATTERN@10..11
+          WORD@10..11 "a"
+        WHITESPACE@11..12 " "
+        FAT_ARROW@12..14 "=>"
+        WHITESPACE@14..15 " "
+        PIPELINE@15..16
+          FREE_TEXT@15..16
+            UNQUOTED_PATTERN@15..16
+              WORD@15..16 "b"
+      WHITESPACE@16..17 " "
+      SEMI@17..18 ";"
+      WHITESPACE@18..19 " "
+      MATCH_BRANCH@19..23
+        PIPELINE@19..23
+          ERROR@19..20
+            EQ@19..20 "="
+          ERROR@20..21
+            GT@20..21 ">"
+          WHITESPACE@21..22 " "
+          FREE_TEXT@22..23
+            UNQUOTED_PATTERN@22..23
+              WORD@22..23 "c"
+      WHITESPACE@23..24 " "
+      R_BRACE@24..25 "}"
+
+18..19: expected a value (expected R_BRACE)
+18..19: unexpected (expected PIPE, FAT_ARROW, R_BRACE)
+20..20: unexpected

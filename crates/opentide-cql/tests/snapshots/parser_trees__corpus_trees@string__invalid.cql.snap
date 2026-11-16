@@ -24,4 +24,4 @@ SOURCE_FILE@0..20
   WHITESPACE@19..20 "\n"
 
 6..7: expected a value
-6..7: unexpected (expected PIPE)
+6..7: unexpected

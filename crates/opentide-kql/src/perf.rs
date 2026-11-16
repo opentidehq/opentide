@@ -7,12 +7,11 @@
 
 use crate::schema::{Analysis, Known};
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
-use tree_sitter::Node;
 
 const CITE: &str = "https://learn.microsoft.com/en-us/kusto/query/best-practices";
 
 /// One tabular expression as the checks read it: its span, and its
-/// operators (the tree-sitter node name of each, and its span).
+/// operators (the legacy node name of each, and its span).
 pub(crate) struct Pipeline {
     pub(crate) span: ByteSpan,
     pub(crate) ops: Vec<Op>,
@@ -25,14 +24,7 @@ pub(crate) struct Op {
     pub(crate) span: ByteSpan,
 }
 
-pub(crate) fn collect(root: Node, source: &str, columns: &Analysis, out: &mut Vec<Diagnostic>) {
-    let mut pipelines = Vec::new();
-    walk(root, &mut pipelines);
-    check(&pipelines, source, columns, out);
-}
-
-/// The checks over the pipelines of a query, in source order, and over its
-/// text.
+/// The checks over the pipelines of a query, in source order.
 pub(crate) fn check(
     pipelines: &[Pipeline],
     source: &str,
@@ -43,50 +35,17 @@ pub(crate) fn check(
     for pipeline in pipelines {
         warn_pipeline(pipeline, &lines, columns, out);
     }
-    warn_scope(source, &lines, out);
 }
 
-fn walk(node: Node, out: &mut Vec<Pipeline>) {
-    if node.kind() == "tabular_expression" {
-        out.push(Pipeline {
-            span: span(node),
-            ops: operators(node),
-        });
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        walk(child, out);
-    }
-}
-
-fn operators(expr: Node<'_>) -> Vec<Op> {
-    let mut ops = Vec::new();
-    let mut cursor = expr.walk();
-    for child in expr.children(&mut cursor) {
-        if child.kind() != "tabular_operator" {
-            continue;
-        }
-        let mut inner = child.walk();
-        for grand in child.children(&mut inner) {
-            if grand.kind().ends_with("_operator") {
-                ops.push(Op {
-                    kind: grand.kind(),
-                    span: span(grand),
-                });
-                break;
-            }
-        }
-    }
-    ops
+/// The checks over the text of a query (`search`, `union *`, a wildcard
+/// table): a token scan that reads no tree, so it runs on broken input too.
+pub(crate) fn check_scope(source: &str, out: &mut Vec<Diagnostic>) {
+    warn_scope(source, &LineIndex::new(source), out);
 }
 
 /// The pipeline starts from a table (or ASIM parser), not a `let`.
 fn source_is_table(expr: ByteSpan, columns: &Analysis) -> bool {
     columns.pipeline(expr).is_some_and(|p| p.reads_dataset())
-}
-
-fn span(node: Node) -> ByteSpan {
-    ByteSpan::new(node.start_byte(), node.end_byte())
 }
 
 /// The filter reads a column an operator before it makes, so it cannot move

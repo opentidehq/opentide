@@ -1,0 +1,33 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/relationship__valid.eql
+---
+SOURCE_FILE@0..76
+  LINE_COMMENT@0..26 "// prod:relationship valid"
+  WHITESPACE@26..27 "\n"
+  EVENT_QUERY@27..75
+    EVENT_CATEGORY@27..34
+      IDENTIFIER@27..34
+        WORD@27..34 "process"
+    WHITESPACE@34..35 " "
+    WHERE_KW@35..40 "where"
+    WHITESPACE@40..41 " "
+    RELATIONSHIP@41..75
+      IDENTIFIER@41..51
+        WORD@41..51 "descendant"
+      WHITESPACE@51..52 " "
+      OF_KW@52..54 "of"
+      WHITESPACE@54..55 " "
+      SUBQUERY@55..75
+        L_BRACK@55..56 "["
+        EVENT_CATEGORY@56..63
+          IDENTIFIER@56..63
+            WORD@56..63 "process"
+        WHITESPACE@63..64 " "
+        WHERE_KW@64..69 "where"
+        WHITESPACE@69..70 " "
+        BOOLEAN@70..74
+          TRUE_KW@70..74 "true"
+        R_BRACK@74..75 "]"
+  WHITESPACE@75..76 "\n"

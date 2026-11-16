@@ -136,9 +136,11 @@ hand; the Rust tests that replay the oracle's recordings are
 ([`tests/golden/README.md`](../tests/golden/README.md)). The vendor-parser oracles (Kusto.Language,
 Splunk, Elasticsearch, Lucene, Falco) are real products' parsers: they run nightly.
 
-Every Rust job installs the release `rust-toolchain.toml` pins (`rustup toolchain install` with no
-name, never floating `stable`), then its targets with `rustup target add`: that install drops
-`--target` and `--component` silently. `changes` alone
+Every Rust job in `ci.yml` sets Rust up with one composite action,
+[`actions/rust-setup`](actions/rust-setup/action.yml): the release `rust-toolchain.toml` pins
+(`rustup toolchain install` with no name, never floating `stable`), then its `targets` with
+`rustup target add` (that install drops `--target` and `--component` silently), its prebuilt
+`tools` (taiki-e/install-action) and, given a `cache` family, the compiler cache restored (below). `changes` alone
 uses the runner's stable cargo, for `cargo metadata --no-deps`. Only the fuzz jobs name a
 toolchain, the dated nightly `fuzz/NIGHTLY` pins. The npm addons are stricter
 (`build-packages.yml`): `scripts/build/install-rust.sh` installs the pinned release by name with
@@ -151,7 +153,12 @@ directory's override, so rustup installs nothing mid-build either. Every job tha
 **Compiler caches** (#841, #1047): sccache (`RUSTC_WRAPPER`,
 0.19.0) in `.sccache/`, kept by actions/cache under
 `sccache-<family>-<hash of rust-toolchain.toml>-<ISO week>`, restored with the family and
-toolchain as `restore-keys`, saved by exactly one job when the key missed: once a week. sccache is
+toolchain as `restore-keys` (by `rust-setup`, whose step has the id `sccache`), saved by exactly
+one job when the key missed: once a week. The save is
+[`actions/sccache-save`](actions/sccache-save/action.yml) (the statistics, then the save), called
+with `if: ${{ !cancelled() }}` and the job's policy in `save`, `job.status == 'success'` first: a
+composite cannot see whether the job's steps passed; `rust-setup`'s `save` output is the base-branch
+policy below. sccache is
 content-addressed, so a copy a few days old still serves every crate that did not change; a key
 on the sources or `Cargo.lock` saved every family on each merge and evicted what pull requests
 restore. The families: `build` (the tests' build), `native` (the extension) and `engine-check` (`engine-lint`), saved
@@ -318,9 +325,11 @@ scripts/ci-local.sh --full     # + nextest ci, doctests, rustdoc, crate packages
 
 ## CodeQL, Dependabot
 
-**CodeQL:** Python and Actions via [`workflows/codeql.yml`](workflows/codeql.yml)
-(`/language:python` + `/language:actions`): on a pull request that changes a Python file or a
-workflow, on every push to a base branch, and nightly; not a required check. Code Quality may
+**CodeQL:** Python, Rust and Actions via [`workflows/codeql.yml`](workflows/codeql.yml)
+(`/language:python`, `/language:rust`, `/language:actions`, `security-extended`; Rust with
+`build-mode: none`, no cargo build): each language on a pull request that changes its files
+(Python sources; `crates/`, `bindings/`, `xtask/`, `vendor/`, `fuzz/`, `Cargo.toml`, `Cargo.lock`,
+`rust-toolchain.toml`, `.cargo/`; the workflows and actions; every language when `codeql.yml` changes), every language on every push to a base branch and nightly; not a required check. Code Quality may
 also run dynamic Python on push. Local Python: `scripts/codeql-local.sh`. Skill:
 [codeql](../.agents/skills/codeql/SKILL.md).
 

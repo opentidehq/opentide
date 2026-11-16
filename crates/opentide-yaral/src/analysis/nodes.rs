@@ -5,10 +5,10 @@ use super::checker::{Checker, section_name};
 use super::nav::{
     At, at, at_token, field_segments, is_literal, is_string, literal_kind, literal_text, unparen,
 };
+use super::support::{GROUPED_FIELDS, closest, leading_wildcard, regex_problem};
 use crate::Profile;
 use crate::ast::{Comparison, FunctionCall, InExpr, QuantifiedField, TableCall};
 use crate::catalog::{Functions, Segment, TypeKind, Udm, is_keyword};
-use crate::check::{GROUPED_FIELDS, closest, leading_wildcard, regex_problem};
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use opentide_core::{Severity, codes};
 use opentide_parse::ast::AstNode;

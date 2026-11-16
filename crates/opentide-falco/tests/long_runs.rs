@@ -7,7 +7,7 @@
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]
 
-use opentide_falco::{highlight_captures, tree_fields};
+use opentide_falco::{Context, highlight_captures, hover, hover_target, tree_fields};
 
 /// Runs `f` on a thread with a 1 MB stack, as the browser module has.
 fn on_small_stack(f: impl FnOnce() + Send + 'static) {
@@ -81,5 +81,31 @@ fn nesting_past_the_limit_is_one_error_and_never_a_stack_overflow() {
         let deep = format!("{}a.b = 1{}", "(".repeat(2_000), ")".repeat(2_000));
         let dump = opentide_falco::debug_parse(&deep);
         assert_eq!(dump.matches("nesting deeper than 512 levels").count(), 1);
+    });
+}
+
+/// Raised by review (#1404): hover found its token with rowan's
+/// `token_at_offset`, which recurses once per tree level. 600 nested
+/// `m or m and not (` give the deepest tree the parser builds, about 2,050
+/// levels (or, and, not, parentheses per level). Hover, highlight and fields
+/// on the innermost `m` must fit the 1 MB stack. (On x86-64 debug builds the
+/// recursive lookup used about 520 KB here; `cst`'s unit test shows it
+/// overflowing on a deeper tree.)
+#[test]
+fn hover_in_a_deep_tree_fits_a_small_stack() {
+    on_small_stack(|| {
+        let source = "m or m and not (".repeat(600) + "m";
+        let innermost = source.len() - 1;
+        assert_eq!(
+            hover_target(&source, innermost),
+            Some(("identifier", "m".to_owned()))
+        );
+        let _ = hover(&source, innermost, &Context::default());
+        // The first `m`, a keyword in the middle, a blank, and the end.
+        for at in [0, source.len() / 2, 1, source.len()] {
+            let _ = hover_target(&source, at);
+        }
+        assert!(!highlight_captures(&source).is_empty());
+        assert!(tree_fields(&source).is_empty());
     });
 }

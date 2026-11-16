@@ -118,11 +118,7 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 13] = [
         "CQL",
         "https://library.humio.com/crowdstrike-query-language/",
     ),
-    (
-        "yara_",
-        "YARA rule",
-        "https://yara.readthedocs.io/en/v4.5.2/writingrules.html",
-    ),
+    ("yara_", "YARA rule", "https://virustotal.github.io/yara-x/"),
     (
         "graylog_",
         "Graylog search query",

@@ -61,6 +61,21 @@ pub const RETIRED: &[Retired] = &[
         level: "warning",
     },
     Retired {
+        code: "yara_x_incompatible",
+        retired_in: "opentide 0.29.0",
+        successor: "YARA-X is the YARA language: what it refuses is an error with its own \
+            code (`yara_regexp`, `yara_type`, `yara_parse_error`, ...), and syntax only YARA-X \
+            has is `yara_x_only_syntax` under a profile that refuses it",
+        meaning: "libyara 4.5 compiled the YARA signature, but YARA-X 1.x refused it.",
+        reported_by: "Until opentide 0.29.0, the analysis engine reported it as a warning on a \
+            YARA signature (a HarfangLab or Bitdefender `yara` block, a `.yar` file), where \
+            libyara 4.5 was the language and YARA-X a second opinion. YARA-X is the language \
+            now (#1225): the same signature gets an error with the code of what is wrong, \
+            and `opentide validate` fails on it. No command reports `yara_x_incompatible` now.",
+        example: "opentide explain yara_x_only_syntax",
+        level: "warning",
+    },
+    Retired {
         code: "filename_slug",
         retired_in: "opentide 0.24.0",
         successor: "`opentide lint` reports a file name that is not the object's as \
@@ -246,6 +261,18 @@ pub fn all() -> Vec<Page> {
 /// Where a query code is reported. A code the engine only ever warns about
 /// (opentide-yara's `WARNING_CODES`, #1015) never fails `opentide validate`.
 fn query_reported_by(code: &str, article: &str, language: &str) -> String {
+    if code == opentide_core::codes::YARA_ENTRYPOINT_DEPRECATED {
+        // The one warning that comes with an error: YARA-X refuses
+        // `entrypoint` (#1225).
+        return format!(
+            "Reported by the analysis engine in {article} {language} query, at the place in \
+             the query, as a warning that names the replacement, together with the error \
+             `yara_undefined_identifier` at the same place: YARA-X refuses `entrypoint`, so \
+             `opentide validate` (its `queries` check) and `opentide validate query` fail on \
+             the rule; `opentide lint` (its `queries` check) and an editor running `opentide \
+             lsp start` show both."
+        );
+    }
     if opentide_yara::always_warning(code) {
         format!(
             "Reported by the analysis engine in {article} {language} query, at the place in \
@@ -741,7 +768,6 @@ mod tests {
     #[test]
     fn a_warning_only_yara_code_is_not_described_as_an_error() {
         for code in [
-            "yara_entrypoint_deprecated",
             "yara_module_unconfirmed",
             "yara_slow_pattern",
             "yara_suspicious_expression",
@@ -764,9 +790,20 @@ mod tests {
         }
     }
 
+    /// `entrypoint` is a warning that names the replacement, but YARA-X
+    /// refuses it: the error `yara_undefined_identifier` comes with it, so
+    /// its page must not say `opentide validate` passes (#1405 review).
+    #[test]
+    fn the_entrypoint_page_names_the_error_that_comes_with_it() {
+        let page = page("yara_entrypoint_deprecated").expect("a page");
+        assert!(page.markdown.contains("`yara_undefined_identifier`"));
+        assert!(page.markdown.contains("fail on"));
+        assert!(!page.markdown.contains("does not fail on it"));
+    }
+
     #[test]
     fn a_yara_error_keeps_the_generic_query_page() {
-        for code in ["yara_unknown_module", "yara_x_incompatible"] {
+        for code in ["yara_unknown_module", "yara_x_only_syntax"] {
             let page = page(code).unwrap();
             assert!(
                 page.markdown

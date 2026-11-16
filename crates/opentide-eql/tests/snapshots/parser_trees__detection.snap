@@ -1,0 +1,102 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(source)"
+---
+SOURCE_FILE@0..164
+  SEQUENCE@0..155
+    SEQUENCE_KW@0..8 "sequence"
+    WHITESPACE@8..9 " "
+    JOIN_KEYS@9..19
+      BY_KW@9..11 "by"
+      WHITESPACE@11..12 " "
+      FIELD@12..19
+        IDENTIFIER@12..16
+          WORD@12..16 "host"
+        DOT@16..17 "."
+        IDENTIFIER@17..19
+          WORD@17..19 "id"
+    WHITESPACE@19..20 " "
+    SEQUENCE_PARAMS@20..35
+      WITH_KW@20..24 "with"
+      WHITESPACE@24..25 " "
+      MAXSPAN_KW@25..32 "maxspan"
+      EQ@32..33 "="
+      TIME_UNIT@33..35
+        NUMBER@33..34
+          NUMBER_TOKEN@33..34 "1"
+        IDENTIFIER@34..35
+          WORD@34..35 "m"
+    WHITESPACE@35..38 "\n  "
+    SEQUENCE_TERM@38..104
+      SUBQUERY@38..104
+        L_BRACK@38..39 "["
+        EVENT_CATEGORY@39..46
+          IDENTIFIER@39..46
+            WORD@39..46 "process"
+        WHITESPACE@46..47 " "
+        WHERE_KW@47..52 "where"
+        WHITESPACE@52..53 " "
+        AND_EXPRESSION@53..103
+          COMPARISON@53..74
+            FIELD@53..63
+              IDENTIFIER@53..58
+                WORD@53..58 "event"
+              DOT@58..59 "."
+              IDENTIFIER@59..63
+                WORD@59..63 "type"
+            WHITESPACE@63..64 " "
+            EQ_EQ@64..66 "=="
+            WHITESPACE@66..67 " "
+            STRING@67..74
+              STRING_TOKEN@67..74 "\"start\""
+          WHITESPACE@74..75 " "
+          AND_KW@75..78 "and"
+          WHITESPACE@78..79 " "
+          PREDICATE_EXPRESSION@79..103
+            FIELD@79..91
+              IDENTIFIER@79..86
+                WORD@79..86 "process"
+              DOT@86..87 "."
+              IDENTIFIER@87..91
+                WORD@87..91 "name"
+            WHITESPACE@91..92 " "
+            COLON@92..93 ":"
+            WHITESPACE@93..94 " "
+            STRING@94..103
+              STRING_TOKEN@94..103 "\"cmd.exe\""
+        R_BRACK@103..104 "]"
+    WHITESPACE@104..107 "\n  "
+    SEQUENCE_TERM@107..155
+      SUBQUERY@107..155
+        L_BRACK@107..108 "["
+        EVENT_CATEGORY@108..115
+          IDENTIFIER@108..115
+            WORD@108..115 "network"
+        WHITESPACE@115..116 " "
+        WHERE_KW@116..121 "where"
+        WHITESPACE@121..122 " "
+        FUNCTION_CALL@122..154
+          CASE_INSENSITIVE_NAME@122..133
+            TILDE_WORD@122..133 "startsWith~"
+          L_PAREN@133..134 "("
+          FIELD@134..146
+            IDENTIFIER@134..141
+              WORD@134..141 "process"
+            DOT@141..142 "."
+            IDENTIFIER@142..146
+              WORD@142..146 "name"
+          COMMA@146..147 ","
+          WHITESPACE@147..148 " "
+          STRING@148..153
+            STRING_TOKEN@148..153 "\"cmd\""
+          R_PAREN@153..154 ")"
+        R_BRACK@154..155 "]"
+  WHITESPACE@155..156 " "
+  PIPE_STAGE@156..164
+    PIPE@156..157 "|"
+    WHITESPACE@157..158 " "
+    IDENTIFIER@158..162
+      WORD@158..162 "head"
+    WHITESPACE@162..163 " "
+    NUMBER@163..164
+      NUMBER_TOKEN@163..164 "5"

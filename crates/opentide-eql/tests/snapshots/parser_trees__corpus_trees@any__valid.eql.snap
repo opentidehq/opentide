@@ -1,0 +1,27 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/any__valid.eql
+---
+SOURCE_FILE@0..56
+  LINE_COMMENT@0..17 "// prod:any valid"
+  WHITESPACE@17..18 "\n"
+  EVENT_QUERY@18..55
+    ANY@18..21
+      ANY_KW@18..21 "any"
+    WHITESPACE@21..22 " "
+    WHERE_KW@22..27 "where"
+    WHITESPACE@27..28 " "
+    COMPARISON@28..55
+      FIELD@28..42
+        IDENTIFIER@28..33
+          WORD@28..33 "event"
+        DOT@33..34 "."
+        IDENTIFIER@34..42
+          WORD@34..42 "category"
+      WHITESPACE@42..43 " "
+      EQ_EQ@43..45 "=="
+      WHITESPACE@45..46 " "
+      STRING@46..55
+        STRING_TOKEN@46..55 "\"process\""
+  WHITESPACE@55..56 "\n"

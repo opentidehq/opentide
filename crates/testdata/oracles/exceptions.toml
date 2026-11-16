@@ -151,30 +151,14 @@ reason = "Lucene's QueryParser reads `~0.7` as a legacy similarity; Elasticsearc
 paths = ["crates/testdata/conformance/external/lucene-queryparser/cases.tsv:61"]
 
 # ---------------------------------------------------------------------------
-# YARA: libyara 4.5.4 (yara-python) and YARA-X 1.23.0 (the yara-x wheel)
-# (scripts/engine/oracles/yara/oracle.py). A [[yara]] entry also has `check`: the
-# verdict that differs, `libyara` (an error where libyara has none, or the
-# reverse), `yara_x` (`yara_x_incompatible` against YARA-X's verdict) or
-# `both`. A `cases.json#<origin>` path is a case of
+# YARA: YARA-X 1.23.0 (the yara-x wheel), the language (#1225)
+# (scripts/engine/oracles/yara/oracle.py). A [[yara]] entry also has `check`:
+# `yara_x` (the engine's verdict against YARA-X's) or `portable` (an error a
+# refusing profile reports on a case libyara and YARA-X both compile). A
+# `cases.json#<origin>` path is a case of
 # crates/testdata/conformance/yara/cases.json; crates/opentide-yara/tests/
 # conformance.rs reads those entries and fails on one that agrees.
 # ---------------------------------------------------------------------------
-
-[[yara]]
-id = "yara-unterminated-block-comment"
-check = "both"
-reason = "An unterminated `/*`: libyara drops the rest of the text silently and compiles what came before; the engine reports it as YARA-X does (yara_parse_error)."
-paths = [
-  "crates/testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/128.in",
-  "crates/testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/129.in",
-  "crates/testdata/corpus/yara/comment__invalid.yar",
-]
-
-[[yara]]
-id = "yara-libyara-out-of-memory"
-check = "libyara"
-reason = "Sixteen nested `{4}` repetitions: libyara runs out of memory compiling it. Nothing in the text is invalid."
-paths = ["crates/testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/167.in"]
 
 [[yara]]
 id = "yara-x-regexp-size-limit"
@@ -183,17 +167,16 @@ reason = "Nested repetitions whose product passes YARA-X's regexp size limit. Th
 paths = [
   "crates/testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/138.in",
   "crates/testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/156.in",
+  "crates/testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/167.in",
 ]
 
 [[yara]]
-id = "yara-tests-module"
-check = "both"
-reason = "`import \"tests\"`: libyara's test-only module, built into yara-python but not one of yara-1.0's 13 modules, so the engine reports yara_unknown_module."
+id = "yara-x-too-many-variables"
+check = "yara_x"
+reason = "More than about 2,048 variables in one condition (`with` declarations and loop variables): YARA-X's own frame limit (E047), which is not modelled."
 paths = [
-  "crates/testdata/conformance/yara/cases.json#libyara:tests/test-rules.c:86",
-  "crates/testdata/conformance/yara/cases.json#libyara:tests/test-rules.c:89",
-  "crates/testdata/conformance/yara/cases.json#libyara:tests/test-rules.c:92",
-  "crates/testdata/conformance/yara/cases.json#libyara:tests/test-rules.c:96",
-  "crates/testdata/conformance/yara/cases.json#libyara:tests/test-rules.c:100",
-  "crates/testdata/conformance/yara/cases.json#libyara:tests/test-rules.c:104",
+  "crates/testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/157.in",
+  "crates/testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/158.in",
+  "crates/testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/159.in",
+  "crates/testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/160.in",
 ]

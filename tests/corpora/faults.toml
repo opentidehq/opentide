@@ -3358,6 +3358,10 @@ reason = "an engine warning lint's query filter drops; language server only (KG-
 code = "yaral_meta_duplicate"
 reason = "deploy writes a Google SecOps rule's meta: a block's meta keys are YAML keys (a repeated one is yaml_parse), the keys deploy writes itself and values that are not strings are google_secops_meta_key, and the oracle reports nothing in the meta it generates (contributors repeat author there); a search's meta is not checked (yara-l engine: Google ignores it), so only a YARA-L rule the language server reads on its own reports it"
 
+[[unreachable]]
+code = "yara_x_incompatible"
+reason = "retired with #1225: YARA-X is the YARA language, so nothing reports it; what libyara compiled and YARA-X refuses is an error with its own code (the former fault, a rule named like an imported module, is yara_rule_identifier_conflict: crates/opentide-yara/tests/codes.rs RAW, crates/opentide-tide/tests/yara.rs), and opentide explain keeps its page as a retired code"
+
 [[kind]]
 id = "graylog-aggregation"
 codes = ["graylog_aggregation"]
@@ -4818,37 +4822,6 @@ rule Fault_{n} {
 ]
 isolated = true
 note = "a module libyara has that HarfangLab is not confirmed to; isolated so the combined workspace the goldens record stays as it was"
-
-[[kind]]
-id = "yara-x-incompatible"
-codes = ["yara_x_incompatible"]
-severity = "warning"
-command = ["lint"]
-target = { family = "rule", platform = "harfanglab", tags = ["harfanglab:yara"] }
-ops = [
-    { op = "delete", path = "configurations.harfanglab.yara.meta" },
-    { op = "delete", path = "configurations.harfanglab.yara.strings" },
-    { op = "delete", path = "configurations.harfanglab.yara.condition" },
-    { op = "set", path = "configurations.harfanglab.yara.signature", value = '''
-import "pe"
-
-rule Fault_{n} {
-  meta:
-    context = "file"
-  condition:
-    true
-}
-
-rule pe {
-  meta:
-    context = "file"
-  condition:
-    true
-}
-''' },
-]
-isolated = true
-note = "a rule named after an imported module; isolated so the combined workspace the goldens record stays as it was"
 
 [[kind]]
 id = "yara-meta-missing"
