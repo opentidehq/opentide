@@ -29,12 +29,10 @@ fn inputs(dir: &Path, ext: &str) -> Vec<PathBuf> {
 }
 
 /// Valid libyara fixtures YARA-X refuses, by design.
-const EXPECTED: &[(&str, &str)] = &[
-    (
-        "rule_wildcard__valid.yar",
-        "a rule wildcard in `of` (libyara 4.3): YARA-X reads `base*` as a product",
-    ),
-];
+const EXPECTED: &[(&str, &str)] = &[(
+    "rule_wildcard__valid.yar",
+    "a rule wildcard in `of` (libyara 4.3): YARA-X reads `base*` as a product",
+)];
 
 /// A corpus fixture's verdict is its name, except where [`EXPECTED`] says
 /// why not; a listed fixture YARA-X comes to accept fails too.

@@ -346,8 +346,7 @@ pub fn check(table: &LayerTable, metadata: &Metadata) -> Report {
                 continue;
             }
             // A dev-dependency of a crate on itself turns a feature on for its
-            // own tests (opentide-parse's `differential`): no edge between
-            // two crates, so nothing to place.
+            // own tests: no edge between two crates, so nothing to place.
             if dependency.name == *name && DepKind::of(dependency) == DepKind::Dev {
                 continue;
             }

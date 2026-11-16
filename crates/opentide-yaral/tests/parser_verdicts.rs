@@ -311,3 +311,27 @@ fn the_verdicts_hold() {
     }
     assert!(different.is_empty(), "{}", different.join("\n"));
 }
+
+/// A byte order mark before a rule or a search is blank, as tree-sitter read
+/// it: one trivia lexeme and no syntax error (#1227 review: the new lexer
+/// refused it).
+#[test]
+fn a_byte_order_mark_is_blank() {
+    let spray = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../testdata/conformance/specifications-google-secops/rule-google-secops-spray-1.0.yaral"
+    ));
+    for text in [
+        format!("\u{feff}{spray}"),
+        "\u{feff}principal.hostname = \"x\"".to_owned(),
+    ] {
+        let bom = '\u{feff}'.len_utf8();
+        assert_eq!(
+            opentide_yaral::parse_facts::lex_spans(&text).first(),
+            Some(&(0, bom, true)),
+            "{text:.40}"
+        );
+        assert_eq!(parse_error_count(&text), 0, "{text:.40}");
+        assert!(parse_is_lossless(&text), "{text:.40}");
+    }
+}
