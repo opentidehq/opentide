@@ -116,6 +116,10 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("scripts/engine/check-grammars.sh", ("grammars",), ()),
     # The engine's scripts (the invariants, the WASI build, the release).
     ("scripts/engine/build-wasm.sh", ("wasm",), ()),
+    # What the `wasm` job runs besides the build: its smoke tests and packs.
+    ("scripts/engine/wasm-smoke.mjs", ("wasm",), ()),
+    ("scripts/engine/wasi-run.mjs", ("wasm",), ()),
+    ("scripts/engine/check-npm-packs.mjs", ("wasm",), ()),
     ("scripts/engine/*.py", ("pylint",), ALL),
     ("scripts/engine/*", (), ALL),
     ("scripts/build/*", ("python", "pylint"), ()),
@@ -187,7 +191,9 @@ CRATE_PATHS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("bindings/node/*", ("node",)),
     # The WebAssembly crate (the WASI and the browser build) and the WASI shims
     # of the crates that have one.
-    ("crates/opentide-wasm/*", ("wasm",)),
+    # The browser module's exports are what lsp-worker and lsp-client load:
+    # its change runs their tests too.
+    ("crates/opentide-wasm/*", ("wasm", "ts_packages")),
     ("crates/*wasi*", ("wasm",)),
     # The parser layer and the query languages: their C (or its absence) and
     # their stack depth show only in the WebAssembly builds (ADR 0012).

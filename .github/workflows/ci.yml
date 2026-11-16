@@ -233,7 +233,9 @@ jobs:
   engine-lint:
     name: Engine lint (fmt, clippy, doc)
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    # The wasm32 clippy alone when only build-wasm.sh or what the `wasm` job
+    # reads changed (`wasm` without `rust`).
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.wasm == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -260,14 +262,17 @@ jobs:
           cache: engine-check
 
       - name: rustfmt
+        if: needs.changes.outputs.rust == 'true'
         run: cargo fmt --all --check
 
       - name: clippy
+        if: needs.changes.outputs.rust == 'true'
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       # opentide-cli as xtask and the WASI build compile it, without its
       # `terminal` feature: the workspace-wide run above unifies it on.
       - name: clippy without the terminal feature
+        if: needs.changes.outputs.rust == 'true'
         run: cargo clippy --package opentide-cli --no-default-features --locked -- -D warnings
 
       # The code only wasm32 compiles (libc_syscalls.rs, the wasip1 paths of
@@ -279,6 +284,7 @@ jobs:
 
       # Broken intra-doc links and the like fail the build.
       - name: rustdoc
+        if: needs.changes.outputs.rust == 'true'
         env:
           RUSTDOCFLAGS: "-D warnings"
         run: cargo doc --no-deps --workspace --locked
@@ -1013,7 +1019,7 @@ jobs:
   # the stack a deep parse needs show only here), and on every push and
   # nightly. The native language server and command line, and the TypeScript
   # client's tests against the native, worker and WASI servers, only when
-  # packages/ changes (`ts_packages`) and on every push and nightly: they check
+  # packages/ or the browser module change (`ts_packages`) and on every push and nightly: they check
   # the client, not the parser. The WebAssembly targets' clippy is
   # `engine-lint`'s. (`cargo xtask golden check --runner wasi`, every golden
   # case through the module, is no gate since the oracle policing left CI; it
