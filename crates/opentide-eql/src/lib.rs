@@ -311,7 +311,8 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
     }
     let mut translated = std::collections::HashMap::new();
     // The parser's tree in document order; a run of `or`, `and` or arithmetic is first checked
-    // at each level the view nests it in, the outermost first, as the view's own walk did.
+    // at each level the view nests it in, the outermost first, as the view's own walk did. (That
+    // walk visited a broken run's last operand twice, under two levels; this one visits it once.)
     for event in tree.syntax.preorder() {
         let rowan::WalkEvent::Enter(syntax) = event else {
             continue;

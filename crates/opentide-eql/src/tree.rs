@@ -50,7 +50,7 @@ pub(crate) struct Tree {
     pub(crate) problems: Vec<Problem>,
     /// The parser's tree, which this one stands over.
     pub(crate) syntax: SyntaxNode,
-    /// The node of this tree each node of the parser's stands for.
+    /// The node of this tree each node of the parser's stands for (none inside a leaf).
     by_syntax: std::collections::HashMap<SyntaxNode, u32>,
     /// A small value an analysis pass computed for a node, kept so that a pass over a long
     /// left-nested run reads each node once (`semantics`' operand types).
