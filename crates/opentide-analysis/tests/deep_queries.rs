@@ -114,12 +114,29 @@ const SMALL_STACK: usize = 1 << 20;
 #[cfg(any(coverage, windows))]
 const SMALL_STACK: usize = 8 << 20;
 
+/// The stack KQL's floors run on: [`SMALL_STACK`] less 16 KiB. glibc carves a
+/// thread's static TLS out of its stack, so a test at the very edge of 1 MB
+/// passed or aborted with the thread-locals the binary happened to link (the
+/// tree-sitter KQL engine needed about 1,049,344 bytes for 35 levels, and an
+/// 80-byte thread-local elsewhere aborted it on CI). The pure-Rust engine
+/// (#1230) needs about 80 KB for 35 levels and 404 KB for 254 in a debug build.
+const KQL_STACK: usize = SMALL_STACK - (16 << 10);
+
 /// Run `run` on a [`SMALL_STACK`] and fail on an overflow, a panic or a blown time budget.
 fn on_small_stack<T: Send + 'static>(name: &str, run: impl FnOnce() -> T + Send + 'static) -> T {
+    on_stack(name, SMALL_STACK, run)
+}
+
+/// [`on_small_stack`] on a stack of `size` bytes.
+fn on_stack<T: Send + 'static>(
+    name: &str,
+    size: usize,
+    run: impl FnOnce() -> T + Send + 'static,
+) -> T {
     let started = Instant::now();
     let out = thread::Builder::new()
         .name(name.into())
-        .stack_size(SMALL_STACK)
+        .stack_size(size)
         .spawn(run)
         .unwrap()
         .join()
@@ -142,7 +159,17 @@ const VENDOR_DEPTH_CODES: [&str; 2] = ["esql_expression_depth", "eql_expression_
 /// no depth limit of the engine itself (a new parser's `max_depth` diagnostic must not
 /// pass this gate silently); only the vendor's depth checks are tolerated.
 fn analyzes_cleanly(name: &str, query: String, analyze: fn(&str) -> Vec<Diagnostic>) {
-    let diagnostics = on_small_stack(name, move || analyze(&query));
+    analyzes_cleanly_on(name, SMALL_STACK, query, analyze);
+}
+
+/// [`analyzes_cleanly`] on a stack of `size` bytes.
+fn analyzes_cleanly_on(
+    name: &str,
+    size: usize,
+    query: String,
+    analyze: fn(&str) -> Vec<Diagnostic>,
+) {
+    let diagnostics = on_stack(name, size, move || analyze(&query));
     let failures: Vec<_> = diagnostics
         .iter()
         .map(|d| d.code.as_str())
@@ -221,13 +248,14 @@ fn long_or_chains_do_not_overflow_the_stack() {
 #[test]
 fn kql_chain_floor() {
     let q = kql(&chain("a == 1", " or ", KQL_CHAIN_FLOOR));
-    analyzes_cleanly("kql chain", q, kql_diagnostics);
+    analyzes_cleanly_on("kql chain", KQL_STACK, q, kql_diagnostics);
 }
 
 #[test]
 fn kql_nest_floor() {
-    analyzes_cleanly(
+    analyzes_cleanly_on(
         "kql nest",
+        KQL_STACK,
         kql(&nest("a == 1", KQL_NEST_FLOOR)),
         kql_diagnostics,
     );
