@@ -19,12 +19,15 @@ const RECOVERY: TokenSet = K::set(&[
     K::R_BRACE,
 ]);
 
-/// Words that follow a number as keywords, not as the unit of an interval
-/// (`LIMIT 10 BY x`, `x > 1 AND y`): a word the grammar can take there as a
-/// keyword is one, whatever else it may be.
-const NOT_A_UNIT: [&str; 14] = [
-    "and", "or", "not", "in", "is", "like", "rlike", "by", "asc", "desc", "nulls", "on", "with",
-    "where",
+/// The words Elasticsearch's lexer reserves in an expression: after a number
+/// they are keywords (or an error), never the unit of an interval; every other
+/// word is a unit (`5 foo`, `5 from`, `5 minutes`). Checked against
+/// `@elastic/esql` 4.33.0 for every keyword of the grammar after `EVAL x = 5`.
+/// tree-sitter lexed by parser state and took some of these as units
+/// (`LIMIT 1 LIKE`, `x > 1 on`), which Elasticsearch rejects.
+const NOT_A_UNIT: [&str; 19] = [
+    "and", "asc", "by", "desc", "false", "first", "in", "is", "last", "like", "not", "null",
+    "nulls", "on", "or", "rlike", "true", "where", "with",
 ];
 
 /// Nodes that are not an operand of `+`, `==`, `like` ... : a boolean
@@ -127,7 +130,7 @@ fn expr_bp(p: &mut Parser<'_>, min: u8) -> Option<CompletedMarker> {
 }
 
 fn operators(p: &mut Parser<'_>, min: u8) -> Option<CompletedMarker> {
-    let mut lhs = prefix(p)?;
+    let mut lhs = prefix(p, min)?;
     loop {
         let Some((bp, op)) = infix(p) else {
             let _ = p.at_set(K::set(&[K::OR_KW, K::AND_KW]));
@@ -229,8 +232,11 @@ fn rest(p: &mut Parser<'_>, lhs: CompletedMarker, op: Infix) -> CompletedMarker 
 }
 
 /// `not x`, `-x`, `+x`, or an atom.
-fn prefix(p: &mut Parser<'_>) -> Option<CompletedMarker> {
-    if at_kw(p, K::NOT_KW) {
+fn prefix(p: &mut Parser<'_>, min: u8) -> Option<CompletedMarker> {
+    // `not` is a keyword only where a boolean expression may start: as the
+    // operand of an arithmetic or comparison operator it is a name
+    // (`a == not 2` is an error, and so is `a / not in (...)`).
+    if min <= 3 && at_kw(p, K::NOT_KW) {
         let m = p.start();
         p.bump_as(K::NOT_KW.raw());
         expr_bp(p, 3);
@@ -380,16 +386,8 @@ fn cast_chain(p: &mut Parser<'_>, mut lhs: CompletedMarker) {
     }
 }
 
-/// `name(args)`, `?param(args)`.
-#[inline(never)]
-fn function_call(p: &mut Parser<'_>) -> CompletedMarker {
-    let m = p.start();
-    if p.current() == K::PARAM.raw() {
-        token_node(p, K::PARAM, K::PARAMETER);
-    } else {
-        token_node(p, K::IDENT, K::IDENTIFIER);
-    }
-    p.bump();
+/// The arguments of a call, and its `)`.
+fn call_arguments(p: &mut Parser<'_>) {
     if p.at(K::STAR_TOKEN.raw()) {
         token_node(p, K::STAR_TOKEN, K::STAR);
     } else if !p.at(K::R_PAREN.raw()) {
@@ -405,13 +403,33 @@ fn function_call(p: &mut Parser<'_>) -> CompletedMarker {
         }
     }
     p.expect(K::R_PAREN.raw(), "expected `)` after the arguments");
+}
+
+/// `name(args)`, `?param(args)`.
+#[inline(never)]
+fn function_call(p: &mut Parser<'_>) -> CompletedMarker {
+    let m = p.start();
+    if p.current() == K::PARAM.raw() {
+        token_node(p, K::PARAM, K::PARAMETER);
+    } else {
+        token_node(p, K::IDENT, K::IDENTIFIER);
+    }
+    p.bump();
+    // A call is charged two levels (this and its argument's): its frames are
+    // twice a parenthesis's, and `max_depth` is set for parentheses.
+    if p.enter() {
+        call_arguments(p);
+        p.exit();
+    }
     m.complete(p, K::FUNCTION_CALL.raw())
 }
 
 /// `{ "key": value, ... }`.
 pub(super) fn map_expression(p: &mut Parser<'_>) {
     let m = p.start();
-    if p.enter() {
+    if !p.at(K::L_BRACE.raw()) {
+        p.error("expected `{`");
+    } else if p.enter() {
         p.bump();
         if !p.at(K::R_BRACE.raw()) {
             comma_list(p, |p| {
@@ -425,7 +443,7 @@ pub(super) fn map_expression(p: &mut Parser<'_>) {
                 if p.at(K::L_BRACE.raw()) {
                     map_expression(p);
                 } else {
-                    constant_before(p, &[]);
+                    constant(p);
                 }
                 entry.complete(p, K::MAP_ENTRY.raw());
             });
@@ -438,13 +456,6 @@ pub(super) fn map_expression(p: &mut Parser<'_>) {
 
 /// `_constant`: null, an interval, a number, a boolean, a parameter, a string or an array.
 pub(super) fn constant(p: &mut Parser<'_>) -> Option<CompletedMarker> {
-    constant_before(p, &NOT_A_UNIT)
-}
-
-/// A constant, where the words `follow` are keywords after a number and not
-/// its unit: tree-sitter lexed a word as a keyword only where the grammar
-/// could take it, so `LIMIT 5 WITH` reads `WITH` as the unit of `5`.
-pub(super) fn constant_before(p: &mut Parser<'_>, follow: &[&str]) -> Option<CompletedMarker> {
     let kind = p.current();
     let word = |p: &Parser<'_>, w: &str| p.current_text().eq_ignore_ascii_case(w);
     if kind == K::WORD.raw() && word(p, "null") {
@@ -465,7 +476,7 @@ pub(super) fn constant_before(p: &mut Parser<'_>, follow: &[&str]) -> Option<Com
     } else if kind == K::NUMBER_LIT.raw() {
         let number = number(p);
         let unit = p.current() == K::WORD.raw()
-            && !follow
+            && !NOT_A_UNIT
                 .iter()
                 .any(|w| p.current_text().eq_ignore_ascii_case(w));
         if !unit {

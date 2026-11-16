@@ -39,4 +39,4 @@ SOURCE_FILE@0..82
         R_PAREN@80..81 ")"
   WHITESPACE@81..82 "\n"
 --- errors
-80..80: expected an expression (expected NOT_KW, PLUS, MINUS)
+80..80: expected an expression (expected PLUS, MINUS)
