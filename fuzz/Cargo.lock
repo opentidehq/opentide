@@ -2817,9 +2817,12 @@ dependencies = [
 name = "opentide-cql"
 version = "0.12.0"
 dependencies = [
+ "logos",
  "opentide-core",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
+ "rowan",
  "serde",
  "toml",
  "tree-sitter",
@@ -2974,6 +2977,14 @@ dependencies = [
  "strsim",
  "toml",
  "tree-sitter",
+]
+
+[[package]]
+name = "opentide-parse"
+version = "0.12.0"
+dependencies = [
+ "logos",
+ "rowan",
 ]
 
 [[package]]
