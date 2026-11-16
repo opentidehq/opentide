@@ -297,3 +297,15 @@ def test_a_stubs_input_builds_the_wheel_job_without_the_python_tests() -> None:
     assert outputs["stubs"] == "true"
     assert outputs["native"] == "true"
     assert outputs["python"] == "false"
+
+
+def test_a_wasm_script_alone_runs_the_wasm_job_and_its_clippy() -> None:
+    """`wasm` without `rust`: engine-lint runs its wasm32 clippy alone (ci.yml)."""
+    for path in ("scripts/engine/build-wasm.sh", "scripts/engine/wasm-smoke.mjs"):
+        outputs = plan(path)
+        assert outputs["wasm"] == "true", path
+        assert outputs["rust"] == "false", path
+
+
+def test_the_browser_module_runs_the_typescript_client_tests() -> None:
+    assert plan("crates/opentide-wasm/src/lib.rs")["ts_packages"] == "true"
