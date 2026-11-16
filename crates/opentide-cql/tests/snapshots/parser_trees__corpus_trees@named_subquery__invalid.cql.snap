@@ -30,7 +30,7 @@ SOURCE_FILE@0..26
       R_PAREN@24..25 ")"
   WHITESPACE@25..26 "\n"
 
-12..13: missing `)` (expected R_PAREN, COMMA)
-12..13: unexpected (expected PIPE, R_PAREN, COMMA)
-22..23: unexpected (expected PIPE)
-24..24: unexpected (expected PIPE)
+12..13: unexpected (expected R_PAREN, COMMA)
+12..13: unexpected (expected R_PAREN, COMMA)
+22..23: unexpected
+24..24: unexpected

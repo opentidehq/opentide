@@ -21,4 +21,4 @@ SOURCE_FILE@0..9
       UNQUOTED_PATTERN@8..9
         WORD@8..9 "2"
 
-3..4: unexpected (expected PIPE)
+3..4: unexpected

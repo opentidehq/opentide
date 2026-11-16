@@ -1,0 +1,266 @@
+// The SPL tree (epic #1219, #1229), as rust-analyzer's ungrammar spells it:
+// the readable spec of what the parser builds, beside the vendor grammar it
+// replaces (`grammars/tree-sitter-opentide-spl/grammar.js`, whose node types
+// these are). `cargo xtask codegen` turns it into `generated/ast.rs`, and a
+// corpus test checks every parsed tree against it.
+//
+// Tokens are the lexer's kinds: `'ident'` is a name, `'field_word'` a field
+// name that is no name (`a-b`), `'search_word'` any other word, and the
+// quoted words (`'where'`, `'by'`) are keywords the parser reads out of
+// names where the grammar has them. A rule is loose where SPL is: lists
+// separated by spaces or commas are `(Item | ',')*`, because Splunk takes a
+// doubled or trailing comma, and the analysis, not the tree, checks the
+// count. No wrapper nodes: a `search_term` or an `expression` level is the
+// node it wraps, and the operators of an expression are one `BinExpr`.
+
+// ---- The query -----------------------------------------------------------
+
+SourceFile = Pipeline
+
+// `a | b`, with an optional leading `|` and a trailing `|`; a subsearch
+// body is one too.
+Pipeline = (Stage | '|')*
+
+Stage =
+  BareSearch
+| SearchCommand
+| WhereCommand
+| EvalCommand
+| StatsCommand
+| RexCommand
+| TableCommand
+| RenameCommand
+| FieldsCommand
+| DedupCommand
+| SortCommand
+| HeadCommand
+| TailCommand
+| JoinCommand
+| LookupCommand
+| MakemvCommand
+| MvexpandCommand
+| TstatsCommand
+| FillnullCommand
+| ForeachCommand
+| SpathCommand
+| TojsonCommand
+| InputlookupCommand
+| OutputlookupCommand
+| CatalogCommand
+| UnknownCommand
+| MacroCall
+
+// ---- Search terms --------------------------------------------------------
+
+// Terms with no `search` keyword: `index=main sourcetype=foo`.
+BareSearch = SearchItem*
+
+SearchCommand = 'search' SearchExpression?
+
+// Adjacent terms are ANDed; `AND` and `OR` sit between two terms and `NOT`
+// before one. The parse is flat: it accepts what Splunk accepts.
+SearchExpression = SearchItem*
+
+SearchItem =
+  SearchBoolean
+| SearchGroup
+| InClause
+| TermClause
+| CaseClause
+| MacroCall
+| Subsearch
+| FieldValue
+| Str
+| Glob
+| Identifier
+| Number
+| SearchWord
+
+SearchBoolean = 'AND' | 'OR' | 'NOT'
+
+SearchGroup = '(' SearchExpression ')'
+
+// `app IN ("a", "b")`
+InClause = field:FieldRef 'IN' ValueList
+
+ValueList = '(' (Value | ',')* ')'
+
+Value = Str | Glob | Identifier | Number | MacroCall | SearchWord
+
+// `TERM(EventID=4688)`, `CASE(Ab)`: the `)` may be missing.
+TermClause = 'TERM' '(' TermText? ')'?
+
+CaseClause = 'CASE' '(' TermText? ')'?
+
+// tstats `PREFIX(src=)`, in a `by` clause or an aggregate.
+PrefixClause = 'PREFIX' '(' TermText? ')'?
+
+TermText = 'term_text'
+
+// `field=value`, and Splunk's loose comparisons (`x==1`), which may lack a
+// field or a value.
+FieldValue =
+  field:FieldRef?
+  operator:('=' | '!=' | '<' | '>' | '<=' | '>=' | '==' | '<>' | '=>' | '=<' | '!~')
+  value:FieldValueRhs?
+
+// A field compared in a search: a name, a quoted name, or any other run of
+// non-breaking characters (`alert.attack-time`, `{}.Id`). Wrapped in a node
+// of its own so the field and the value tell apart where both are words.
+FieldRef = FieldTarget
+
+FieldTarget = Identifier | Str | SearchWord
+
+FieldValueRhs = FieldValueRhsItem
+
+FieldValueRhsItem = Value | ValueList
+
+Subsearch = '[' Pipeline ']'
+
+// ---- Commands ------------------------------------------------------------
+
+WhereCommand = 'where' predicate:Expr?
+
+EvalCommand = 'eval' (Assignment | ',')*
+
+Assignment = name:NameOrString '=' value:Expr
+
+NameOrString = Identifier | Str
+
+// stats, eventstats, streamstats, sistats, chart, timechart, sichart,
+// sitimechart, geostats.
+StatsCommand =
+  ('stats' | 'chart' | 'geostats')
+  (CommandOption | AggregateItem | MacroCall | ',')*
+  OverClause? ByClause? ChartWhere?
+
+OverClause = 'over' (Identifier | Glob | Str | PrefixClause | MacroCall | Subsearch) CommandOption*
+
+// where count in top5, where count > 10: a name or call, the operator, a name or number.
+ChartWhere = 'where' (FunctionCall | Identifier | Number | 'in' | 'notin' | '=' | '!=' | '<' | '>' | '<=' | '>=')*
+
+ChartValue = Identifier | Number
+
+ByClause = 'by' (Identifier | Glob | Str | PrefixClause | MacroCall | Subsearch | CommandOption | ',')*
+
+// `count`, `dc(src) as c`, `values(*) as *`: the function or name, then the
+// alias after `as`.
+AggregateItem = (FunctionCall | Identifier | Glob | Str | 'as')*
+
+AggFunction = FunctionCall | Identifier
+
+AliasName = Identifier | Glob | Str
+
+// The first child is the name; the rest are the arguments.
+FunctionCall = (Expr | PrefixClause | Glob | '(' | ')' | ',')*
+
+RexCommand = 'rex' (CommandOption | 'field' | ',' | Str)*
+
+TableCommand = 'table' (FieldName | ',')*
+
+FieldName = Identifier | Glob | Str | MacroCall
+
+RenameCommand = 'rename' (RenameItem | ',')*
+
+RenameItem = (Identifier | Glob | Str | FunctionCall | ',' | 'as')*
+
+RenameOld = Identifier | Glob | Str | FunctionCall
+
+FieldsCommand = 'fields' ('-' | '+')? (FieldName | ',')*
+
+DedupCommand = 'dedup' Number? (DedupOption | FieldName | ',')* ('sortby' (SortItem | ',')*)?
+
+DedupOption = ('keepevents' | 'keepempty' | 'consecutive') '=' (Boolean | Identifier)
+
+SortCommand = 'sort' Number? (CommandOption | SortItem | ',')* ('desc' | 'd')?
+
+SortItem = ('+' | '-')? (Identifier | FunctionCall)
+
+HeadCommand = 'head' Number? CommandOption*
+
+TailCommand = 'tail' Number?
+
+JoinCommand = 'join' (CommandOption | Identifier | ',')* Subsearch
+
+LookupCommand = 'lookup' (CommandOption | Identifier | Str | MacroCall | LookupField | 'output' | 'outputnew' | ',')*
+
+LookupField = field:NameOrString LookupAlias?
+
+LookupAlias = 'as' NameOrString
+
+MakemvCommand = 'makemv' (CommandOption | 'delim' | '=' | Str | Identifier)*
+
+MvexpandCommand = 'mvexpand' (CommandOption | Identifier | '(' | ')')*
+
+TstatsCommand =
+  'tstats' (TstatsPreamble | AggregateItem | ',')* ('from' 'datamodel'? '='? (Identifier | Str))?
+  ('where' SearchExpression)? ByClause?
+
+// Options before and after the aggregates; the four named ones are keywords.
+TstatsPreamble = MacroCall | TstatsOption | CommandOption
+
+TstatsOption = name:('summariesonly' | 'prestats' | 'allow_old_summaries' | 'fillnull_value') '=' value:OptionValue
+
+FillnullCommand = 'fillnull' (CommandOption | FieldName | ',')*
+
+ForeachCommand = 'foreach' (CommandOption | FieldName | ',')* body:Subsearch
+
+SpathCommand = 'spath' (CommandOption | Identifier | Str | MacroCall | Subsearch)*
+
+TojsonCommand = 'tojson' (CommandOption | FieldName | FunctionCall | ',')*
+
+InputlookupCommand =
+  'inputlookup' (CommandOption | Identifier | Str | MacroCall | Subsearch)*
+  ('where' SearchExpression)?
+
+OutputlookupCommand = 'outputlookup' (CommandOption | Identifier | Str | MacroCall)*
+
+// A command the catalog knows and the grammar has no rule for: any
+// arguments.
+CatalogCommand = CatalogCommandName ArgumentList?
+
+CatalogCommandName = 'catalog_command_word'
+
+// A word that is no command: Splunk's "unknown command", reported by the
+// analysis.
+UnknownCommand = name:Identifier ArgumentList?
+
+ArgumentList =
+  (MacroCall | Subsearch | SearchBoolean | CommandOption | Comparison | FunctionCall | Str
+  | Identifier | Number | Glob | SearchWord | ',')*
+
+// `limit=0`, `span=1h`, `timeformat="%Y"`.
+CommandOption = name:NameOrString '=' value:OptionValue
+
+OptionValue = FunctionCall | Str | Number | Boolean | Identifier | Glob | SearchWord | MacroCall | ValueList
+
+// `x!=y`, `x>5` in a command with no rule of its own.
+Comparison = field:Identifier operator:('!=' | '<' | '>' | '<=' | '>=') value:OptionValue
+
+// ---- Expressions (eval, where, function arguments) -----------------------
+
+Expr = BinExpr | UnaryExpr | ParenExpr | FunctionCall | MacroCall | Subsearch | Identifier | Str | Number | Boolean
+
+// `or`, `and`, comparisons, `IN (...)`, `+ - .`, `* / %`, by precedence. A run
+// of one level is one node: `a or b or c` is three operands and two `or`s.
+BinExpr = (Expr | ValueList | 'or' | 'and' | '==' | '!=' | '<' | '>' | '<=' | '>=' | '=' | 'LIKE' | 'like' | 'IN' | '+' | '-' | '.' | '*' | '/' | '%')*
+
+UnaryExpr = operator:('NOT' | 'not' | '!' | '-' | '+') Expr
+
+ParenExpr = '(' Expr ')'
+
+// ---- Leaves --------------------------------------------------------------
+
+Identifier = 'ident' | 'number' | 'bool' | 'field_word' | 'dynamic_name' | 'token_name' | 'template_name' | 'prefix_field'
+
+Number = 'number'
+
+Str = 'string'
+
+Boolean = 'bool'
+
+Glob = 'glob'
+
+SearchWord = 'search_word' | 'call_word' | 'field_word'
+
+MacroCall = 'macro'

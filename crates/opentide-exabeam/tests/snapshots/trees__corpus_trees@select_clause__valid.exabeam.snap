@@ -1,0 +1,36 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/select_clause__valid.exabeam
+---
+source_file@0..53
+  statement@0..53
+    select_clause@0..28
+      keyword@0..6
+        letters@0..6 "SELECT"
+      whitespace@6..7 " "
+      keyword@7..15
+        letters@7..15 "DISTINCT"
+      whitespace@15..16 " "
+      column@16..20
+        field_name@16..20
+          identifier@16..20
+            letters@16..20 "user"
+      ,@20..21 ","
+      whitespace@21..22 " "
+      column@22..28
+        field_name@22..28
+          identifier@22..28
+            letters@22..28 "src_ip"
+    whitespace@28..29 " "
+    where_clause@29..53
+      keyword@29..34
+        letters@29..34 "WHERE"
+      whitespace@34..35 " "
+      filter@35..53
+        field_term@35..53
+          field_name@35..41
+            identifier@35..41
+              letters@35..41 "vendor"
+          :@41..42 ":"
+          string@42..53 "\"Microsoft\""

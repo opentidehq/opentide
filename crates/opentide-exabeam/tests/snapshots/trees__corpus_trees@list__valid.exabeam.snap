@@ -1,0 +1,63 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/list__valid.exabeam
+---
+source_file@0..72
+  statement@0..72
+    filter@0..72
+      and_expression@0..72
+        field_term@0..20
+          field_name@0..4
+            identifier@0..4
+              letters@0..4 "user"
+          :@4..5 ":"
+          list@5..20
+            (@5..6 "("
+            string@6..11 "\"joe\""
+            ,@11..12 ","
+            whitespace@12..13 " "
+            string@13..19 "\"jane\""
+            )@19..20 ")"
+        whitespace@20..21 " "
+        keyword@21..24
+          letters@21..24 "AND"
+        whitespace@24..25 " "
+        field_term@25..45
+          field_name@25..34
+            identifier@25..34
+              letters@25..34 "dest_port"
+          :@34..35 ":"
+          list@35..45
+            (@35..36 "("
+            number@36..39
+              digits@36..39 "139"
+            ,@39..40 ","
+            whitespace@40..41 " "
+            number@41..44
+              digits@41..44 "445"
+            )@44..45 ")"
+        whitespace@45..46 " "
+        keyword@46..49
+          letters@46..49 "AND"
+        whitespace@49..50 " "
+        field_term@50..72
+          field_name@50..56
+            identifier@50..56
+              letters@50..56 "src_ip"
+          :@56..57 ":"
+          list@57..72
+            (@57..58 "("
+            bare_word@58..65
+              digits@58..59 "0"
+              .@59..60 "."
+              digits@60..61 "0"
+              .@61..62 "."
+              digits@62..63 "0"
+              .@63..64 "."
+              digits@64..65 "0"
+            ,@65..66 ","
+            whitespace@66..67 " "
+            identifier@67..71
+              letters@67..71 "null"
+            )@71..72 ")"
