@@ -632,6 +632,80 @@ fn kql_invalid_fixtures_exist_per_required_rule() {
             "missing invalid fixture for {rule}"
         );
     }
+    let dir = "crates/testdata/corpus/kql";
+    let fixtures = invalid_fixtures(dir, kql_body);
+    assert_invalid_fixtures_rejected(
+        dir,
+        LanguageId::Kql,
+        &*kind_names(LanguageId::Kql),
+        &fixtures,
+    );
+}
+
+fn kql_body(src: &str) -> String {
+    src.lines()
+        .filter(|l| !l.starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn spl_body(src: &str) -> String {
+    src.lines()
+        .filter(|l| !l.starts_with("``` prod:"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn spl_invalid_fixtures_are_rejected() {
+    let dir = "crates/testdata/corpus/spl";
+    let fixtures = invalid_fixtures(dir, spl_body);
+    assert!(
+        fixtures.len() > 10,
+        "{} invalid spl fixtures",
+        fixtures.len()
+    );
+    assert_invalid_fixtures_rejected(
+        dir,
+        LanguageId::Spl,
+        &*kind_names(LanguageId::Spl),
+        &fixtures,
+    );
+}
+
+/// The gate fails on an invalid fixture the language accepts, and passes one it rejects
+/// by its parser or by its analysis (#1426).
+#[test]
+fn an_invalid_fixture_the_language_accepts_fails_the_gate() {
+    let fixture = |name: &str, body: &str| (name.to_string(), body.to_string());
+    for (language, accepted, syntax, semantic) in [
+        (LanguageId::Kuery, "a:1", "a:(", "not(user.name:SYSTEM)"),
+        (
+            LanguageId::Esql,
+            "FROM logs | LIMIT 1",
+            "FROM logs | WHERE",
+            "FROM logs | WEHRE x == 1",
+        ),
+    ] {
+        let names = kind_names(language);
+        let fixtures = [
+            fixture("accepted__invalid", accepted),
+            fixture("syntax__invalid", syntax),
+            fixture("semantic__invalid", semantic),
+        ];
+        assert_eq!(
+            accepted_invalid_fixtures(language, &*names, &fixtures),
+            ["accepted__invalid"],
+            "{language:?}"
+        );
+        let gate = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            assert_invalid_fixtures_rejected("test", language, &*names, &fixtures[..1]);
+        }));
+        assert!(
+            gate.is_err(),
+            "{language:?}: an accepted invalid fixture must fail"
+        );
+    }
 }
 
 #[test]
@@ -678,6 +752,70 @@ struct ElasticGate {
     unparsed: &'static [&'static str],
 }
 
+/// The `__invalid` fixtures (file name, query) that the language accepts: no syntax
+/// error, and no error from its analysis. An invalid fixture is the gate's proof that
+/// the production is checked, so one that passes proves nothing (#1426).
+fn accepted_invalid_fixtures(
+    language: LanguageId,
+    names: &dyn KindNames,
+    fixtures: &[(String, String)],
+) -> Vec<String> {
+    fixtures
+        .iter()
+        .filter(|(_, body)| !names.parse(body).has_error && !engine_rejects(language, body))
+        .map(|(name, _)| name.clone())
+        .collect()
+}
+
+fn assert_invalid_fixtures_rejected(
+    dir: &str,
+    language: LanguageId,
+    names: &dyn KindNames,
+    fixtures: &[(String, String)],
+) {
+    let accepted = accepted_invalid_fixtures(language, names, fixtures);
+    assert!(
+        accepted.is_empty(),
+        "invalid fixtures in {dir} that parse and analyse without an error: {accepted:?}"
+    );
+}
+
+/// The `__invalid` fixtures of `dir` (file name, query), the query as `body` reads it.
+fn invalid_fixtures(dir: &str, body: fn(&str) -> String) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = fs::read_dir(repo_root().join(dir))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter_map(|path| {
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            name.contains("__invalid")
+                .then(|| (name, body(&fs::read_to_string(&path).unwrap())))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// Whether the language's analysis reports an error for `body`: a fixture that parses is
+/// still invalid when the engine rejects what it means (an unknown command, an escape the
+/// language does not have).
+fn engine_rejects(language: LanguageId, body: &str) -> bool {
+    let host = opentide_analysis::MemoryWorkspace {
+        files: vec![("fixture".to_string(), body.to_string())],
+    };
+    let response = opentide_analysis::analyze(
+        &host,
+        opentide_analysis::AnalyzeRequest {
+            uri: "fixture".to_string(),
+            language,
+            text: body.to_string(),
+        },
+    );
+    response
+        .diagnostics
+        .iter()
+        .any(|d| d.severity == opentide_core::Severity::Error)
+}
+
 fn fixture_body(text: &str) -> String {
     text.lines().skip(1).collect::<Vec<_>>().join("\n")
 }
@@ -702,6 +840,7 @@ fn check_gate_with(gate: &ElasticGate, names: &dyn KindNames) {
         required.push(rule);
     }
     let mut kinds: BTreeSet<(String, String)> = BTreeSet::new();
+    let mut invalid = Vec::new();
     for entry in fs::read_dir(repo_root().join(&dir)).unwrap() {
         let path = entry.unwrap().path();
         let name = path.file_name().unwrap().to_string_lossy().into_owned();
@@ -729,8 +868,11 @@ fn check_gate_with(gate: &ElasticGate, names: &dyn KindNames) {
                 tree.has_kind(rule),
                 "{dir}/{name} does not contain a `{rule}` node"
             );
+        } else if kind == "invalid" {
+            invalid.push((name, fixture_body(&fs::read_to_string(&path).unwrap())));
         }
     }
+    assert_invalid_fixtures_rejected(&dir, gate.language, names, &invalid);
     for rule in &required {
         for kind in ["valid", "invalid"] {
             assert!(
