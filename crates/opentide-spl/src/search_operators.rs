@@ -21,7 +21,7 @@
 
 use super::Catalog;
 use super::scan::{Order, closing_bracket, walk_pipelines};
-use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
+use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
 
 /// Where a search clause sits, which decides what Splunk does with the
 /// operator.
@@ -62,11 +62,22 @@ fn replacement(op: &str) -> Option<&'static str> {
     }
 }
 
-pub(crate) fn collect(source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    walk(source, 0, source.len(), catalog, out);
+pub(crate) fn collect(
+    source: &str,
+    catalog: &Catalog,
+    lines: &LineIndex<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
+    walk(source, (0, source.len()), catalog, lines, out);
 }
 
-fn walk(source: &str, start: usize, end: usize, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+fn walk(
+    source: &str,
+    (start, end): (usize, usize),
+    catalog: &Catalog,
+    lines: &LineIndex<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
     walk_pipelines(
         source,
         (start, end),
@@ -77,7 +88,7 @@ fn walk(source: &str, start: usize, end: usize, catalog: &Catalog, out: &mut Vec
             if let Some((clause, from, to)) =
                 clause_of(source, seg_start, seg_end, index == 0, catalog)
             {
-                scan(source, from, to, clause, out);
+                scan(source, (from, to), clause, lines, out);
             }
         },
     );
@@ -185,7 +196,13 @@ fn top_level_words(source: &str, start: usize, end: usize) -> Vec<(usize, usize)
 
 /// Reports every operator in `OPERATORS` used as a comparison in the search
 /// clause `start..end`.
-fn scan(source: &str, start: usize, end: usize, clause: Clause, out: &mut Vec<Diagnostic>) {
+fn scan(
+    source: &str,
+    (start, end): (usize, usize),
+    clause: Clause,
+    lines: &LineIndex<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
     let bytes = source.as_bytes();
     let mut i = start;
     // The previous bare term, when it can be the field of a spaced comparison
@@ -253,7 +270,14 @@ fn scan(source: &str, start: usize, end: usize, clause: Clause, out: &mut Vec<Di
             continue;
         }
         let term_end = i;
-        field_before = check_term(source, term_start, term_end, end, field_before, clause, out);
+        field_before = check_term(
+            source,
+            (term_start, term_end, end),
+            field_before,
+            clause,
+            lines,
+            out,
+        );
     }
 }
 
@@ -261,11 +285,10 @@ fn scan(source: &str, start: usize, end: usize, clause: Clause, out: &mut Vec<Di
 /// comparison that follows it.
 fn check_term(
     source: &str,
-    start: usize,
-    end: usize,
-    clause_end: usize,
+    (start, end, clause_end): (usize, usize, usize),
     field_before: bool,
     clause: Clause,
+    lines: &LineIndex<'_>,
     out: &mut Vec<Diagnostic>,
 ) -> bool {
     let bytes = source.as_bytes();
@@ -293,20 +316,20 @@ fn check_term(
         is_field_name(&source[start..op_start]) && has_value
     };
     if reported {
-        push(out, source, op, clause, op_start, op_end);
+        push(out, lines, op, clause, op_start, op_end);
     }
     false
 }
 
 fn push(
     out: &mut Vec<Diagnostic>,
-    source: &str,
+    lines: &LineIndex<'_>,
     op: &str,
     clause: Clause,
     start: usize,
     end: usize,
 ) {
-    let range = span_to_range(source, ByteSpan::new(start, end));
+    let range = lines.range(ByteSpan::new(start, end));
     let diagnostic = match (op, replacement(op)) {
         ("=~", _) => Diagnostic::warning(
             codes::SPL_SEARCH_OPERATOR,

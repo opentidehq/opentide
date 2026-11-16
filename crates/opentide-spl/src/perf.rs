@@ -20,7 +20,8 @@ use super::scan::{
     Order, base_search, command_word, end_of_macro, end_quoted, read_word, skip_comment,
     skip_hidden, skip_ws_and_comments, walk_pipelines,
 };
-use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
+use opentide_core::{ByteSpan, Diagnostic, LineIndex, Range, codes};
+use std::collections::HashSet;
 
 const WILDCARD_CITE: &str =
     "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search";
@@ -31,11 +32,27 @@ const SUBSEARCH_CITE: &str =
 const TRANSACTION_CITE: &str =
     "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Transaction";
 
-pub(crate) fn collect(source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+/// Where the lints' findings go: the analysis's line index (one per
+/// analysis, not a scan from the start per finding) and the findings
+/// already made, by code and range (a finding is reported once).
+struct Sink<'o, 'l> {
+    out: &'o mut Vec<Diagnostic>,
+    lines: &'l LineIndex<'l>,
+    seen: HashSet<(String, Range)>,
+}
+
+pub(crate) fn collect(
+    source: &str,
+    catalog: &Catalog,
+    lines: &LineIndex<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
     if source.is_empty() {
         return;
     }
-    walk_pipeline(source, 0, source.len(), catalog, out);
+    let seen = out.iter().map(|d| (d.code.clone(), d.range)).collect();
+    let mut sink = Sink { out, lines, seen };
+    walk_pipeline(source, 0, source.len(), catalog, &mut sink);
 }
 
 fn walk_pipeline(
@@ -43,7 +60,7 @@ fn walk_pipeline(
     start: usize,
     end: usize,
     catalog: &Catalog,
-    out: &mut Vec<Diagnostic>,
+    out: &mut Sink<'_, '_>,
 ) {
     walk_pipelines(
         source,
@@ -92,7 +109,7 @@ fn truncation_message(word: &str) -> Option<String> {
     }
 }
 
-fn scan_search(source: &str, start: usize, end: usize, out: &mut Vec<Diagnostic>) {
+fn scan_search(source: &str, start: usize, end: usize, out: &mut Sink<'_, '_>) {
     if let Some((not_start, not_end)) = leading_not_span(source, start, end) {
         push(
             out,
@@ -362,7 +379,7 @@ fn is_inefficient_wildcard(value: &str) -> bool {
 }
 
 fn push(
-    out: &mut Vec<Diagnostic>,
+    out: &mut Sink<'_, '_>,
     source: &str,
     code: &str,
     message: String,
@@ -374,14 +391,10 @@ fn push(
     if start >= end {
         return;
     }
-    let range = span_to_range(source, ByteSpan::new(start, end));
-    if out
-        .iter()
-        .any(|diag| diag.code == code && diag.range == range)
-    {
-        return;
+    let range = out.lines.range(ByteSpan::new(start, end));
+    if out.seen.insert((code.to_string(), range)) {
+        out.out.push(Diagnostic::warning(code, message, range));
     }
-    out.push(Diagnostic::warning(code, message, range));
 }
 
 #[cfg(test)]

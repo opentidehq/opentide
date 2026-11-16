@@ -24,7 +24,7 @@ use super::scan::{
     skip_ws, split_segments, walk_pipelines,
 };
 use super::{Catalog, DatamodelRow};
-use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
+use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
 
@@ -160,7 +160,7 @@ struct Prefix<'a> {
     model: &'a Model,
 }
 
-pub(crate) fn collect(source: &str, out: &mut Vec<Diagnostic>) {
+pub(crate) fn collect(source: &str, lines: &LineIndex<'_>, out: &mut Vec<Diagnostic>) {
     if source.is_empty() {
         return;
     }
@@ -171,7 +171,9 @@ pub(crate) fn collect(source: &str, out: &mut Vec<Diagnostic>) {
         skip_hidden,
         Order::SubsearchesFirst,
         |_| Vec::new(),
-        |prefixes, _, (seg_start, seg_end)| stage(source, seg_start, seg_end, cim, prefixes, out),
+        |prefixes, _, (seg_start, seg_end)| {
+            stage(source, (seg_start, seg_end), cim, lines, prefixes, out);
+        },
     );
 }
 
@@ -179,16 +181,16 @@ pub(crate) fn collect(source: &str, out: &mut Vec<Diagnostic>) {
 /// stages before it activated.
 fn stage<'c>(
     source: &str,
-    seg_start: usize,
-    seg_end: usize,
+    (seg_start, seg_end): (usize, usize),
     cim: &'c Cim,
+    lines: &LineIndex<'_>,
     prefixes: &mut Vec<Prefix<'c>>,
     out: &mut Vec<Diagnostic>,
 ) {
     let word = command(source, seg_start, seg_end);
     let refs = refs_in_segment(source, seg_start, seg_end, &word);
     for r in &refs {
-        if let Some(diag) = check_ref(source, r, cim) {
+        if let Some(diag) = check_ref(r, cim, lines) {
             out.push(diag);
             continue;
         }
@@ -205,7 +207,7 @@ fn stage<'c>(
         if refs.iter().any(|r| tok_start < r.end && r.start < tok_end) {
             continue;
         }
-        if let Some(diag) = check_field(source, tok_start, tok_end, prefixes) {
+        if let Some(diag) = check_field(source, (tok_start, tok_end), prefixes, lines) {
             out.push(diag);
         }
     }
@@ -438,13 +440,13 @@ pub(crate) fn near_miss<'a>(
     opentide_core::suggest::best(name, near)
 }
 
-fn range(source: &str, start: usize, end: usize) -> opentide_core::Range {
-    span_to_range(source, ByteSpan::new(start, end.max(start + 1)))
+fn range(lines: &LineIndex<'_>, start: usize, end: usize) -> opentide_core::Range {
+    lines.range(ByteSpan::new(start, end.max(start + 1)))
 }
 
 /// An error when the reference names a data model or dataset that is a near
 /// miss of a CIM one.
-fn check_ref(source: &str, r: &DatamodelRef, cim: &Cim) -> Option<Diagnostic> {
+fn check_ref(r: &DatamodelRef, cim: &Cim, lines: &LineIndex<'_>) -> Option<Diagnostic> {
     let mut parts = r.text.split('.');
     let model_name = parts.next()?;
     let path: Vec<&str> = parts.collect();
@@ -462,7 +464,7 @@ fn check_ref(source: &str, r: &DatamodelRef, cim: &Cim) -> Option<Diagnostic> {
             Diagnostic::error(
                 codes::SPL_UNKNOWN_DATAMODEL,
                 format!("`{model_name}` is not a CIM data model; did you mean `{best}`?"),
-                range(source, r.start, r.end),
+                range(lines, r.start, r.end),
             )
             .with_suggestion(fixed(best, &path)),
         );
@@ -484,7 +486,7 @@ fn check_ref(source: &str, r: &DatamodelRef, cim: &Cim) -> Option<Diagnostic> {
                     "`{segment}` is not a dataset of the CIM {} data model; did you mean `{best}`?",
                     model.name
                 ),
-                range(source, r.start, r.end),
+                range(lines, r.start, r.end),
             )
             .with_suggestion(fixed(model_name, &corrected)),
         );
@@ -620,7 +622,12 @@ fn field_tokens(source: &str, start: usize, end: usize, word: &str) -> Vec<(usiz
 }
 
 /// An error when `Prefix.field` names a near miss of a field the dataset has.
-fn check_field(source: &str, start: usize, end: usize, prefixes: &[Prefix]) -> Option<Diagnostic> {
+fn check_field(
+    source: &str,
+    (start, end): (usize, usize),
+    prefixes: &[Prefix],
+    lines: &LineIndex<'_>,
+) -> Option<Diagnostic> {
     let token = &source[start..end];
     let segments: Vec<&str> = token.split('.').collect();
     let prefix = prefixes.iter().find(|p| p.alias == segments[0])?;
@@ -660,7 +667,7 @@ fn check_field(source: &str, start: usize, end: usize, prefixes: &[Prefix]) -> O
             format!(
                 "`{field}` is not a field of the CIM {dataset} dataset; did you mean `{fixed}`?"
             ),
-            range(source, start, end),
+            range(lines, start, end),
         )
         .with_suggestion(fixed),
     )

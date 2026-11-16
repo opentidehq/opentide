@@ -52,9 +52,9 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     parse_errors(&root, &index, &parsed.errors, &lines, &mut diagnostics);
     let broken = broken_regions(&root, &index, &parsed.errors);
     unknown_commands(&root, catalog, &lines, &mut diagnostics);
-    crate::perf::collect(source, catalog, &mut diagnostics);
-    crate::search_operators::collect(source, catalog, &mut diagnostics);
-    crate::parens::refine(source, &mut diagnostics);
+    crate::perf::collect(source, catalog, &lines, &mut diagnostics);
+    crate::search_operators::collect(source, catalog, &lines, &mut diagnostics);
+    crate::parens::refine(source, &lines, &mut diagnostics);
     stages(
         &root,
         source,
@@ -64,8 +64,8 @@ pub fn analyze(source: &str) -> AnalyzeResult {
         &mut diagnostics,
     );
     rejects(&root, &lines, &mut diagnostics);
-    crate::cim::collect(source, &mut diagnostics);
-    crate::declared::collect(source, catalog, &mut diagnostics);
+    crate::cim::collect(source, &lines, &mut diagnostics);
+    crate::declared::collect(source, catalog, &lines, &mut diagnostics);
     // No hint in a broken stage at or after its syntax error, nor over it:
     // recovery leaves fragments there. Splunk splits stages at `|` whatever
     // the parentheses, so the stages after a broken one are read as written.
@@ -342,17 +342,22 @@ fn unknown_commands(
     lines: &LineIndex<'_>,
     out: &mut Vec<Diagnostic>,
 ) {
+    // The finding of each name, made once: its typo check and "did you mean"
+    // scan the whole catalog, and a query can repeat one unknown command.
+    let mut made: std::collections::HashMap<String, Diagnostic> = std::collections::HashMap::new();
     for node in root
         .descendants()
         .filter(|n| n.kind() == K::UNKNOWN_COMMAND)
     {
         let name = first_token_text(&node);
         if catalog.command(&name).is_none() {
-            out.push(crate::unknown_command(
-                &name,
-                lines.range(shown(node.text_range())),
-                catalog,
-            ));
+            let range = lines.range(shown(node.text_range()));
+            let mut finding = made
+                .entry(name)
+                .or_insert_with_key(|name| crate::unknown_command(name, range, catalog))
+                .clone();
+            finding.range = range;
+            out.push(finding);
         }
     }
 }
