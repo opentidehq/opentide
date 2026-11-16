@@ -1,4 +1,5 @@
-# Dumps YARA-X's module reflection as JSON for scripts/engine/sync_yara_modules.py
+# Dumps YARA-X's module reflection (its default modules) as JSON into
+# data/catalogs/yara/yara-x-modules.json, which `cargo xtask codegen` reads
 # (#165). Not a workspace member, and never shipped: `yara-x` (wasmtime) must
 # stay out of the root Cargo.lock (scripts/engine/ci-oracle.sh checks it). Its
 # own lock is not committed: `yara-x` is pinned exactly, and nothing ships.

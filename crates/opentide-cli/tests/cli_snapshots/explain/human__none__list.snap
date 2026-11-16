@@ -830,7 +830,9 @@ exit: 0
                                           function named without a call, or `entrypoint`.
 ␛[1myara_undefined_string                     ␛[0mA YARA condition names a string ($id, #id, @id, !id or
                                           $prefix*) that the rule does not define.
-␛[1myara_unknown_module                       ␛[0mA YARA import names a module outside yara-1.0's 13.
+␛[1myara_unknown_module                       ␛[0mA YARA import names a module opentide does not know: it
+                                          knows YARA-X's default modules except vt, and refuses
+                                          magic, which YARA-X does not build by default.
 ␛[1myara_unknown_module_member                ␛[0mThe YARA module has no such field or function, or the
                                           function takes other arguments.
 ␛[1myara_unreferenced_string                  ␛[0mA YARA string is never used in the condition, which YARA-X
