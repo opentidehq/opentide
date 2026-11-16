@@ -8,8 +8,8 @@
 
 use logos::Logos;
 use opentide_parse::{
-    ErrorKind, Grammar, Input, Lexeme, MAX_TREE_DEPTH, Parser, SyntaxError, TokenSet, build,
-    debug_errors, debug_tree, lex,
+    ErrorKind, Event, Grammar, Input, Lexeme, MAX_TREE_DEPTH, Parser, SyntaxError, TREE_BUDGET,
+    TokenSet, build, debug_errors, debug_tree, lex,
 };
 use rowan::{SyntaxKind, TextRange, TextSize};
 use std::thread;
@@ -376,10 +376,11 @@ fn preceding_a_node_twice_panics_in_debug_builds() {
 
 /// A left-associative loop (`a b c …` as `((a b) c) …`, one `precede` per
 /// word) nests the tree without calling `enter`. 30 000 levels overflow a
-/// 1 MB stack when rowan drops the tree; `build` flattens everything past
-/// `MAX_TREE_DEPTH` instead, with one diagnostic and no byte lost.
+/// 1 MB stack when rowan drops the tree; `precede` stops the parse at
+/// `TREE_BUDGET` nodes instead, with one `TooDeep` naming that limit and no
+/// byte lost (#1427).
 #[test]
-fn a_long_left_associative_chain_is_flattened_not_overflowed() {
+fn a_long_left_associative_chain_ends_in_one_too_deep() {
     const N: usize = 30_000;
     on_small_stack(|| {
         let source = "a ".repeat(N);
@@ -396,10 +397,87 @@ fn a_long_left_associative_chain_is_flattened_not_overflowed() {
         }
         root.complete(&mut p, ROOT);
         let parse = build(&input, p.finish());
+        assert!(parse.depth <= MAX_TREE_DEPTH, "{}", parse.depth);
+        assert_eq!(parse.errors.len(), 1, "{:?}", parse.errors);
+        let limit = u32::try_from(TREE_BUDGET).unwrap();
+        assert_eq!(parse.errors[0].kind, ErrorKind::TooDeep { limit });
+        assert_eq!(
+            parse.errors[0].message,
+            format!("nesting deeper than the syntax tree allows ({limit} nodes)")
+        );
+        let node = rowan::SyntaxNode::<Toy>::new_root(parse.green);
+        assert_eq!(node.to_string(), source, "lossless");
+    });
+}
+
+/// `build` keeps its own bound for events no `Parser` checked: past
+/// `MAX_TREE_DEPTH` it flattens, with one `TreeTooDeep`, no byte lost.
+#[test]
+fn build_flattens_events_past_the_tree_limit() {
+    const N: usize = 30_000;
+    on_small_stack(|| {
+        let source = "a ".repeat(N);
+        let input = Input::new(&source, toy_lex(&source), grammar(8));
+        let mut events = Vec::new();
+        events.push(Event::Start {
+            kind: ROOT,
+            forward_parent: None,
+        });
+        for _ in 0..N {
+            events.push(Event::Start {
+                kind: PAIR,
+                forward_parent: None,
+            });
+            events.push(Event::Token { kind: WORD });
+        }
+        events.extend(std::iter::repeat_n(Event::Finish, N + 1));
+        let parse = build(&input, events);
         assert_eq!(parse.depth, MAX_TREE_DEPTH);
         assert_eq!(parse.errors.len(), 1, "{:?}", parse.errors);
         let limit = u32::try_from(MAX_TREE_DEPTH).unwrap();
         assert_eq!(parse.errors[0].kind, ErrorKind::TreeTooDeep { limit });
+        let node = rowan::SyntaxNode::<Toy>::new_root(parse.green);
+        assert_eq!(node.to_string(), source, "lossless");
+    });
+}
+
+/// A level that opens many nodes is charged them: nested groups of eight
+/// nodes a level end in one `TooDeep` naming the node limit, well before
+/// `max_depth` levels, and the tree stays under `MAX_TREE_DEPTH` (#1427).
+#[test]
+fn levels_that_open_many_nodes_end_in_one_too_deep() {
+    fn group(p: &mut Parser<'_>) {
+        if !p.enter() {
+            return;
+        }
+        let outer: Vec<_> = (0..7).map(|_| p.start()).collect();
+        let m = p.start();
+        p.bump();
+        if p.at(L) {
+            group(p);
+        }
+        if p.at(R) {
+            p.bump();
+        }
+        m.complete(p, GROUP);
+        for o in outer.into_iter().rev() {
+            o.complete(p, PAIR);
+        }
+        p.exit();
+    }
+    on_small_stack(|| {
+        let n = 1_000;
+        let source = format!("{}{}", "(".repeat(n), ")".repeat(n));
+        let input = Input::new(&source, toy_lex(&source), grammar(10_000));
+        let mut p = Parser::new(&input);
+        let root = p.start();
+        group(&mut p);
+        root.complete(&mut p, ROOT);
+        let parse = build(&input, p.finish());
+        assert!(parse.depth <= MAX_TREE_DEPTH, "{}", parse.depth);
+        let kinds: Vec<_> = parse.errors.iter().map(|e| e.kind).collect();
+        let limit = u32::try_from(TREE_BUDGET).unwrap();
+        assert_eq!(kinds, [ErrorKind::TooDeep { limit }]);
         let node = rowan::SyntaxNode::<Toy>::new_root(parse.green);
         assert_eq!(node.to_string(), source, "lossless");
     });

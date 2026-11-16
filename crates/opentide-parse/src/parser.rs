@@ -11,10 +11,12 @@ use std::cell::Cell;
 pub enum ErrorKind {
     /// The grammar's error (`expect`, `error`, `err_*`).
     Syntax,
-    /// Nesting went past [`Grammar::max_depth`](crate::Grammar::max_depth);
-    /// the rest of the input is one error node.
+    /// Nesting went past [`Grammar::max_depth`](crate::Grammar::max_depth),
+    /// or the tree would have gone past [`TREE_BUDGET`] nodes first (a level
+    /// that opens many nodes: a call in an operand of each precedence); the
+    /// rest of the input is one error node. The message says which.
     TooDeep {
-        /// The limit.
+        /// The limit hit: `max_depth` levels, or [`TREE_BUDGET`] nodes.
         limit: u32,
     },
     /// The tree went past [`MAX_TREE_DEPTH`](crate::MAX_TREE_DEPTH) nodes
@@ -72,6 +74,16 @@ pub enum Event {
 /// above what unwinding the deepest legitimate nesting at end of input costs.
 const FUEL: u32 = 1 << 24;
 
+/// The deepest tree [`Parser::enter`] and [`CompletedMarker::precede`] let a
+/// grammar build, in nodes: [`MAX_TREE_DEPTH`](crate::MAX_TREE_DEPTH) less
+/// room for the few nodes a level opens before its next `enter`, and for the
+/// error node. A level is charged the nodes it opens, so a grammar whose
+/// levels open many nodes ends in one [`ErrorKind::TooDeep`], never in
+/// [`ErrorKind::TreeTooDeep`]: the floor `max_depth` promises holds for
+/// parenthesised nesting, and a shape that opens more nodes a level stops
+/// earlier, cleanly (#1427).
+pub const TREE_BUDGET: usize = crate::MAX_TREE_DEPTH - 64;
+
 /// The message of [`ErrorKind::Stalled`].
 const STALLED: &str =
     "the parser stopped making progress here (an engine bug: please report this query)";
@@ -93,6 +105,10 @@ pub struct Parser<'i> {
     panic_on_stall: bool,
     depth: u32,
     poisoned: bool,
+    /// One entry per open node, root first: the height of its tallest
+    /// completed child (0 for none). Its length is the depth of the next
+    /// node opened; with the heights it is how deep a `precede` pushes a node.
+    open: Vec<u32>,
 }
 
 impl<'i> Parser<'i> {
@@ -116,6 +132,7 @@ impl<'i> Parser<'i> {
             panic_on_stall: cfg!(debug_assertions),
             depth: 0,
             poisoned: false,
+            open: Vec::new(),
         }
     }
 
@@ -283,11 +300,27 @@ impl<'i> Parser<'i> {
         self.check_stall();
         let pos = u32::try_from(self.events.len()).unwrap_or(u32::MAX);
         self.events.push(Event::Tombstone);
+        let frame = u32::try_from(self.open.len()).unwrap_or(u32::MAX);
+        self.open.push(0);
         Marker {
             pos,
+            frame,
             child: None,
             armed: true,
         }
+    }
+
+    /// Closes the open nodes from `frame` up; the height of the node at
+    /// `frame` (its tallest child plus one), which its parent records. A
+    /// marker closed out of order closes the ones opened after it too.
+    fn close_frame(&mut self, frame: u32, own: bool) -> u32 {
+        let at = (frame as usize).min(self.open.len());
+        let tallest = self.open.drain(at..).max().unwrap_or(0);
+        let height = if own { tallest + 1 } else { tallest };
+        if let Some(parent) = self.open.last_mut() {
+            *parent = (*parent).max(height);
+        }
+        height
     }
 
     /// One level deeper. Past `max_depth` it records one error, wraps the
@@ -300,26 +333,45 @@ impl<'i> Parser<'i> {
     /// one ([`CompletedMarker::precede`]) nests the tree without recursing:
     /// [`build`](crate::build) bounds that at
     /// [`MAX_TREE_DEPTH`](crate::MAX_TREE_DEPTH).
+    ///
+    /// A level is also charged the tree nodes open above it: past
+    /// [`TREE_BUDGET`] it is the same one error, naming that limit.
     pub fn enter(&mut self) -> bool {
         self.check_stall();
         self.depth = self.depth.saturating_add(1);
         let limit = self.input.grammar.max_depth;
-        if self.depth <= limit {
-            return true;
+        if self.depth > limit {
+            self.too_deep(limit, format!("nesting deeper than {limit} levels"));
+            return false;
         }
-        if !self.poisoned {
-            let m = self.start();
-            self.push_error(
-                ErrorKind::TooDeep { limit },
-                format!("nesting deeper than {limit} levels"),
-            );
-            while !self.at_eof() {
-                self.bump();
-            }
-            m.complete(self, self.input.grammar.error);
-            self.poisoned = true;
+        if self.open.len() >= TREE_BUDGET {
+            self.too_many_nodes();
+            return false;
         }
-        false
+        true
+    }
+
+    /// Stops the parse: one [`ErrorKind::TooDeep`] error and the rest of the
+    /// input in an error node.
+    fn too_deep(&mut self, limit: u32, message: String) {
+        if self.poisoned {
+            return;
+        }
+        let m = self.start();
+        self.push_error(ErrorKind::TooDeep { limit }, message);
+        while !self.at_eof() {
+            self.bump();
+        }
+        m.complete(self, self.input.grammar.error);
+        self.poisoned = true;
+    }
+
+    fn too_many_nodes(&mut self) {
+        let limit = u32::try_from(TREE_BUDGET).unwrap_or(u32::MAX);
+        self.too_deep(
+            limit,
+            format!("nesting deeper than the syntax tree allows ({limit} nodes)"),
+        );
     }
 
     /// One level up, after an [`Parser::enter`] that returned `true`.
@@ -376,6 +428,8 @@ impl<'i> Parser<'i> {
 #[must_use = "a node is complete()d or abandon()ed"]
 pub struct Marker {
     pos: u32,
+    /// Its entry in [`Parser`]'s open nodes.
+    frame: u32,
     /// The node [`CompletedMarker::precede`] opened this one around: its
     /// `forward_parent` points here until [`Marker::abandon`] clears it.
     child: Option<u32>,
@@ -393,9 +447,11 @@ impl Marker {
             };
         }
         p.events.push(Event::Finish);
+        let height = p.close_frame(self.frame, true);
         CompletedMarker {
             pos: self.pos,
             kind,
+            height,
         }
     }
 
@@ -404,6 +460,8 @@ impl Marker {
     /// enclose, which can be preceded again.
     pub fn abandon(mut self, p: &mut Parser<'_>) {
         self.armed = false;
+        // Its children belong to the enclosing node, one level up.
+        p.close_frame(self.frame, false);
         if let Some(child) = self.child
             && let Some(Event::Start { forward_parent, .. }) = p.events.get_mut(child as usize)
         {
@@ -429,6 +487,8 @@ impl Drop for Marker {
 pub struct CompletedMarker {
     pos: u32,
     kind: SyntaxKind,
+    /// How many nodes deep its subtree is (1 for a leaf node).
+    height: u32,
 }
 
 impl CompletedMarker {
@@ -439,8 +499,21 @@ impl CompletedMarker {
     ///
     /// In debug builds, when this node is already preceded by a marker that
     /// was not abandoned (a grammar bug: two nodes would claim it).
+    ///
+    /// The wrap pushes this node one level down, after the levels inside it
+    /// were charged: past [`TREE_BUDGET`] it ends the parse with one
+    /// [`ErrorKind::TooDeep`] (after which no token is left to wrap on).
     pub fn precede(self, p: &mut Parser<'_>) -> Marker {
+        // The wrapper opens where this node was; this node and its subtree
+        // go one deeper.
+        let bottom = p.open.len() + 1 + self.height as usize;
+        if bottom > TREE_BUDGET {
+            p.too_many_nodes();
+        }
         let mut m = p.start();
+        if let Some(frame) = p.open.last_mut() {
+            *frame = self.height;
+        }
         if let Some(Event::Start { forward_parent, .. }) = p.events.get_mut(self.pos as usize) {
             debug_assert!(
                 forward_parent.is_none(),
