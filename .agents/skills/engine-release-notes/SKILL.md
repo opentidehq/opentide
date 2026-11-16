@@ -68,7 +68,7 @@ and for most readers it is the only thing they read.
 | Instead of | Write |
 |------------|-------|
 | Graylog event definitions deploy from a `configurations.graylog` block on Graylog 6.3 to 7.2, checked by `validate`, the editor and `opentide tui`. Generated documentation is redesigned, with kill-chain maps and ATT&CK coverage. The engine is language-server 0.14.0. | Graylog support: deploy rules to Graylog 6.3–7.2 as event definitions. Generated documentation is redesigned, with kill-chain maps and ATT&CK coverage. |
-| YARA is a language: `.yar` files and the YARA in HarfangLab and Bitdefender rules are checked as YARA-X 1.x compiles them, with the syntax only YARA-X has refused under those platforms' profiles, and Bitdefender GravityZone rules are checked against GravityZone's criteria. | YARA support: `.yar` files and the YARA in HarfangLab and Bitdefender rules are checked as you type. |
+| YARA is a language: `.yar` files and the YARA in HarfangLab and Bitdefender rules are checked as YARA-X 1.x compiles them, and syntax only YARA-X takes is refused under those platforms' profiles, and Bitdefender GravityZone rules are checked against GravityZone's criteria. | YARA support: `.yar` files and the YARA in HarfangLab and Bitdefender rules are checked as you type. |
 | `npx @opentide/explorer serve` works: 0.5.0 shipped two commands, so npx could not tell which to run and stopped with "could not determine executable to run". | Fixes `npx @opentide/explorer serve`, which failed with "could not determine executable to run". |
 
 ## The parts of a version
