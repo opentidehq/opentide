@@ -20,7 +20,6 @@ kuery_parse_error error 0:11-0:12 KQL syntax error: a query is missing after `an
 13..14 punctuation.bracket
 == corpus/kuery/and_query__invalid.kuery
 kuery_parse_error error 0:23-0:26 Kibana needs whitespace around `and`
-kuery_parse_error error 0:23-0:26 Kibana needs whitespace around `and`
 0..14 property
 14..15 operator
 15..22 string
@@ -39,8 +38,8 @@ kuery_parse_error error 0:23-0:26 Kibana needs whitespace around `and`
 37..38 operator
 38..43 string
 == corpus/kuery/field__invalid.kuery
-kuery_parse_error error 0:7-0:8 KQL syntax error near `\`
-0..7 property
+kuery_parse_error error 0:7-0:8 KQL syntax error near `\`; expected `or`, `and`, `:`, a range operator, or end of input
+0..7 string
 8..13 property
 13..14 operator
 14..21 string
@@ -109,7 +108,7 @@ kuery_parse_error error 0:18-0:18 KQL syntax error: a nested query `field:{` is 
 28..33 string
 34..35 punctuation.bracket
 == corpus/kuery/not_list__invalid.kuery
-kuery_parse_error error 0:17-0:18 KQL syntax error: the query ends too early
+kuery_parse_error error 0:17-0:18 KQL syntax error: a query is missing after `not`
 0..12 property
 12..13 operator
 13..14 punctuation.bracket
@@ -123,7 +122,6 @@ kuery_parse_error error 0:17-0:18 KQL syntax error: the query ends too early
 18..25 string
 25..26 punctuation.bracket
 == corpus/kuery/not_query__invalid.kuery
-kuery_parse_error error 0:0-0:3 Kibana needs whitespace after `not`
 kuery_parse_error error 0:0-0:3 Kibana needs whitespace after `not`
 0..3 keyword
 3..4 punctuation.bracket
@@ -153,7 +151,7 @@ kuery_parse_error error 0:24-0:25 KQL syntax error: a query is missing after `or
 25..30 string
 30..31 punctuation.bracket
 == corpus/kuery/or_query__invalid.kuery
-kuery_parse_error error 0:21-0:25 KQL syntax error near `or`
+kuery_parse_error error 0:23-0:24 KQL syntax error: a query is missing after `or`
 0..12 property
 12..13 operator
 13..20 string
@@ -168,9 +166,11 @@ kuery_parse_error error 0:21-0:25 KQL syntax error near `or`
 36..37 operator
 37..51 string
 == corpus/kuery/quoted_string__invalid.kuery
-kuery_parse_error error 0:0-0:21 KQL syntax error: a quoted string is never closed
+kuery_parse_error error 0:8-0:21 KQL syntax error: a quoted string is never closed
 0..7 property
 7..8 operator
+9..15 string
+16..21 string
 == corpus/kuery/quoted_string__valid.kuery
 0..7 property
 7..8 operator
