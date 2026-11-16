@@ -138,7 +138,6 @@ exit: 1
 {
   "event": "refusing_to_modify_prebuilt_rule",
   "level": "error",
-  "logger": "opentide.platforms.elastic.deployer",
   "name": "Elastic prebuilt rule",
   "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004",
   "timestamp": "0000-00-00 00:00:00"
