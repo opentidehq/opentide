@@ -15,4 +15,4 @@ SOURCE_FILE@0..12
         PATTERN@10..11 "*"
   WHITESPACE@11..12 "\n"
 
-9..9: unexpected (expected PIPE)
+9..9: unexpected
