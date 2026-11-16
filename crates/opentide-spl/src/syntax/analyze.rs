@@ -48,8 +48,9 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     let lines = LineIndex::new(source);
     let (root, parsed) = parse(source);
     let mut diagnostics = Vec::new();
-    parse_errors(&root, &parsed.errors, &lines, &mut diagnostics);
-    let broken = broken_regions(&root, &parsed.errors);
+    let index = TreeIndex::new(&root);
+    parse_errors(&root, &index, &parsed.errors, &lines, &mut diagnostics);
+    let broken = broken_regions(&root, &index, &parsed.errors);
     unknown_commands(&root, catalog, &lines, &mut diagnostics);
     crate::perf::collect(source, catalog, &mut diagnostics);
     crate::search_operators::collect(source, catalog, &mut diagnostics);
@@ -69,16 +70,29 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     // recovery leaves fragments there. Splunk splits stages at `|` whatever
     // the parentheses, so the stages after a broken one are read as written.
     let key = |p: opentide_core::Position| (p.line, p.character);
-    let broken: Vec<_> = broken
+    // The regions, sorted and merged where they overlap, so that each
+    // diagnostic is checked against one of them, not all.
+    let mut regions: Vec<_> = broken
         .into_iter()
         .map(|(from, to)| (key(lines.position(from)), key(lines.position(to))))
         .collect();
+    regions.sort_unstable();
+    let mut merged: Vec<(_, _)> = Vec::with_capacity(regions.len());
+    for (from, to) in regions {
+        match merged.last_mut() {
+            Some((_, last_to)) if from <= *last_to => *last_to = (*last_to).max(to),
+            _ => merged.push((from, to)),
+        }
+    }
     diagnostics.retain(|d| {
+        let (start, end) = (key(d.range.start), key(d.range.end));
+        // The last region that starts before the diagnostic ends.
+        let before = merged.partition_point(|&(from, _)| from < end);
         d.code == codes::SPL_PARSE_ERROR
-            || !broken.iter().any(|&(from, to)| {
-                let (start, end) = (key(d.range.start), key(d.range.end));
-                end > from && start <= to
-            })
+            || before
+                .checked_sub(1)
+                .and_then(|i| merged.get(i))
+                .is_none_or(|&(_, to)| start > to)
     });
     let tokens = highlight(&root, source, &spec, catalog).unwrap_or_default();
     AnalyzeResult {
@@ -89,39 +103,79 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 
 // ---------------------------------------------------------------- errors
 
-/// The first significant token at or after `offset`.
-fn token_at_or_after(root: &SyntaxNode, offset: usize) -> Option<SyntaxToken> {
-    root.descendants_with_tokens()
-        .filter_map(NodeOrToken::into_token)
-        .find(|t| usize::from(t.text_range().start()) >= offset && !trivia(t.kind()))
+/// The significant tokens and the error nodes of a tree, in source order,
+/// read once: each syntax error looks them up by offset, and a broken query
+/// can have one error per stage, so a walk of the tree per error is
+/// quadratic.
+struct TreeIndex {
+    tokens: Vec<SyntaxToken>,
+    errors: Vec<SyntaxNode>,
+}
+
+impl TreeIndex {
+    fn new(root: &SyntaxNode) -> Self {
+        Self {
+            tokens: root
+                .descendants_with_tokens()
+                .filter_map(NodeOrToken::into_token)
+                .filter(|t| !trivia(t.kind()))
+                .collect(),
+            errors: root
+                .descendants()
+                .filter(|n| n.kind() == K::ERROR)
+                .collect(),
+        }
+    }
+
+    /// The first significant token at or after `offset`.
+    fn token_at_or_after(&self, offset: usize) -> Option<SyntaxToken> {
+        let at = self
+            .tokens
+            .partition_point(|t| usize::from(t.text_range().start()) < offset);
+        self.tokens.get(at).cloned()
+    }
+
+    /// The last significant token that ends at or before `offset`.
+    fn token_before(&self, offset: usize) -> Option<SyntaxToken> {
+        let at = self
+            .tokens
+            .partition_point(|t| usize::from(t.text_range().end()) <= offset);
+        at.checked_sub(1).and_then(|i| self.tokens.get(i)).cloned()
+    }
+
+    /// The outermost error node that starts at `offset`, if any (nodes come
+    /// in preorder, so the first of those starting there).
+    fn error_node_at(&self, offset: usize) -> Option<SyntaxNode> {
+        let at = self
+            .errors
+            .partition_point(|n| usize::from(n.text_range().start()) < offset);
+        self.errors
+            .get(at)
+            .filter(|n| usize::from(n.text_range().start()) == offset)
+            .cloned()
+    }
 }
 
 fn trivia(kind: K) -> bool {
     matches!(kind, K::WHITESPACE | K::COMMENT)
 }
 
-/// The error node that starts at `offset`, if any.
-fn error_node_at(root: &SyntaxNode, offset: usize) -> Option<SyntaxNode> {
-    root.descendants()
-        .find(|n| n.kind() == K::ERROR && usize::from(n.text_range().start()) == offset)
-}
-
 /// Where hints are not run: from each syntax error to the end of the stage
 /// it is in (the end of the input when it is in none), and every error node.
-fn broken_regions(root: &SyntaxNode, errors: &[SyntaxError]) -> Vec<(usize, usize)> {
+fn broken_regions(
+    root: &SyntaxNode,
+    index: &TreeIndex,
+    errors: &[SyntaxError],
+) -> Vec<(usize, usize)> {
     let end = usize::from(root.text_range().end());
     errors
         .iter()
         .map(|error| {
             let from = usize::from(error.gap.start());
             // The stage of the last token before the error, else of the next.
-            let before = root
-                .descendants_with_tokens()
-                .filter_map(NodeOrToken::into_token)
-                .filter(|t| usize::from(t.text_range().end()) <= from && !trivia(t.kind()))
-                .last();
-            let stage = before
-                .or_else(|| token_at_or_after(root, from))
+            let stage = index
+                .token_before(from)
+                .or_else(|| index.token_at_or_after(from))
                 .and_then(|t| t.parent())
                 .and_then(|n| {
                     n.ancestors()
@@ -133,16 +187,12 @@ fn broken_regions(root: &SyntaxNode, errors: &[SyntaxError]) -> Vec<(usize, usiz
             (from, to.max(from))
         })
         // And every error node: the tokens recovery skipped.
-        .chain(
-            root.descendants()
-                .filter(|n| n.kind() == K::ERROR)
-                .map(|n| {
-                    (
-                        usize::from(n.text_range().start()),
-                        usize::from(n.text_range().end()),
-                    )
-                }),
-        )
+        .chain(index.errors.iter().map(|n| {
+            (
+                usize::from(n.text_range().start()),
+                usize::from(n.text_range().end()),
+            )
+        }))
         .collect()
 }
 
@@ -150,6 +200,7 @@ fn broken_regions(root: &SyntaxNode, errors: &[SyntaxError]) -> Vec<(usize, usiz
 /// the error node recovery made there), at most [`MAX_PARSE_ERRORS`].
 fn parse_errors(
     root: &SyntaxNode,
+    index: &TreeIndex,
     errors: &[SyntaxError],
     lines: &LineIndex<'_>,
     out: &mut Vec<Diagnostic>,
@@ -157,7 +208,9 @@ fn parse_errors(
     let mut regions: Vec<(&SyntaxError, usize)> = Vec::new();
     for error in errors {
         let at = usize::from(error.gap.end());
-        let end = error_node_at(root, at).map_or(at, |n| usize::from(n.text_range().end()));
+        let end = index
+            .error_node_at(at)
+            .map_or(at, |n| usize::from(n.text_range().end()));
         if let Some((kept, last_end)) = regions.last_mut()
             && usize::from(error.gap.start()) <= *last_end
         {
@@ -171,7 +224,7 @@ fn parse_errors(
         regions.push((error, end));
     }
     for (error, _) in regions.into_iter().take(MAX_PARSE_ERRORS) {
-        let (where_, message) = describe(root, error);
+        let (where_, message) = describe(root, index, error);
         out.push(Diagnostic::error(
             codes::SPL_PARSE_ERROR,
             message,
@@ -181,7 +234,7 @@ fn parse_errors(
 }
 
 /// Where and what to report for one error region.
-fn describe(root: &SyntaxNode, error: &SyntaxError) -> (ByteSpan, String) {
+fn describe(root: &SyntaxNode, index: &TreeIndex, error: &SyntaxError) -> (ByteSpan, String) {
     let gap_start = usize::from(error.gap.start());
     for (closer, opener, open) in [("`)`", "(", K::L_PAREN), ("`]`", "[", K::L_BRACKET)] {
         if error.message == format!("missing {closer}")
@@ -194,8 +247,8 @@ fn describe(root: &SyntaxNode, error: &SyntaxError) -> (ByteSpan, String) {
         }
     }
     let skipped = error.message == "unexpected token"
-        || error_node_at(root, usize::from(error.gap.end())).is_some();
-    match token_at_or_after(root, usize::from(error.gap.end())) {
+        || index.error_node_at(usize::from(error.gap.end())).is_some();
+    match index.token_at_or_after(usize::from(error.gap.end())) {
         // A token recovery had to skip: name it, as before.
         Some(token) if skipped => (
             shown(token.text_range()),
@@ -692,6 +745,21 @@ mod tests {
         assert!(q.ends_with('…'), "{q}");
         assert_eq!(q.chars().count(), super::MAX_QUOTED + 1);
         assert_eq!(super::quoted("a\nb"), "a");
+    }
+
+    #[test]
+    fn many_broken_stages_stay_linear() {
+        // One syntax error per stage: a walk of the tree per error took
+        // 16 s for 5,000 stages in a debug build; the old engine 0.1 s.
+        let source = "| ( ".repeat(20_000);
+        let started = std::time::Instant::now();
+        let result = analyze(&source);
+        assert!(!result.diagnostics.is_empty());
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(10),
+            "{:?}",
+            started.elapsed()
+        );
     }
 
     #[test]
