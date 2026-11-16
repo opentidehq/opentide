@@ -32,11 +32,11 @@ mod highlight;
 mod lexer;
 mod lexical;
 mod nav;
+mod parsed;
 mod parser;
 mod regex;
 mod semantics;
 mod syntax;
-mod tree;
 
 pub use ecs::ecs_diagnostics;
 
@@ -51,7 +51,6 @@ use std::sync::OnceLock;
 use syntax::SyntaxKind as K;
 #[doc(hidden)]
 pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
-use tree::{Node, node_span, walk};
 
 const FUNCTIONS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
@@ -263,9 +262,9 @@ pub struct AnalyzeResult {
 
 /// Parses `source` as Elasticsearch reads it (the lexer ends a block comment where its lexer
 /// does, nested ones too), with what `lexical` finds about its comments.
-fn parse_prepared(source: &str) -> Option<(tree::Tree, lexical::Prepared)> {
+fn parse_prepared(source: &str) -> Option<(parsed::Parsed, lexical::Prepared)> {
     let prepared = lexical::prepare(source);
-    Some((tree::parse(source), prepared))
+    Some((parsed::parse(source), prepared))
 }
 
 /// Analyze an EQL query: its diagnostics and highlight tokens. The findings'
@@ -281,7 +280,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 fn analyze_lines(source: &str) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let catalog = Catalog::cached();
-    let Some((tree, prepared)) = parse_prepared(source) else {
+    let Some((parsed, prepared)) = parse_prepared(source) else {
         return AnalyzeResult {
             diagnostics: vec![Diagnostic::error(
                 codes::EQL_PARSE_ERROR,
@@ -292,7 +291,7 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
         };
     };
     let mut out = Vec::new();
-    if let Some(problem) = tree.problems.first() {
+    if let Some(problem) = parsed.problems.first() {
         out.push(Diagnostic::error(
             codes::EQL_PARSE_ERROR,
             parse_error_message(problem, source),
@@ -300,7 +299,7 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
         ));
     }
     check_comments(&prepared.comments, source, &mut out);
-    if let Some(span) = highlight::expression_depth_exceeded(&tree.syntax) {
+    if let Some(span) = highlight::expression_depth_exceeded(&parsed.syntax) {
         out.push(Diagnostic::warning(
             codes::EQL_EXPRESSION_DEPTH,
             format!(
@@ -311,22 +310,15 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
         ));
     }
     let mut translated = semantics::Translated::default();
-    for event in tree.syntax.preorder() {
+    for event in parsed.syntax.preorder() {
         if let rowan::WalkEvent::Enter(node) = event {
-            check_node(
-                &node,
-                &tree.problems,
-                &mut translated,
-                source,
-                catalog,
-                &mut out,
-            );
+            check_node(&node, &parsed, &mut translated, source, catalog, &mut out);
         }
     }
-    if let Some(root) = ast::SourceFile::cast(tree.syntax.clone()) {
+    if let Some(root) = ast::SourceFile::cast(parsed.syntax.clone()) {
         builder::check_pipes(&root, source, catalog, &mut out);
     }
-    let tokens = highlight(&spec, source, &tree.syntax);
+    let tokens = highlight(&spec, source, &parsed.syntax);
     AnalyzeResult {
         diagnostics: out,
         tokens,
@@ -352,7 +344,7 @@ fn check_comments(found: &[lexical::CommentFinding], source: &str, out: &mut Vec
 
 /// The parser's first error, worded for a reader: the token it stopped at and what it
 /// expected there.
-fn parse_error_message(problem: &tree::Problem, source: &str) -> String {
+fn parse_error_message(problem: &parsed::Problem, source: &str) -> String {
     if problem.too_deep {
         return format!("EQL syntax error: {}", problem.message);
     }
@@ -399,19 +391,9 @@ fn with_ast<N: AstNode<Language = Lang>>(node: &SyntaxNode, check: impl FnOnce(N
     }
 }
 
-/// Whether the parser reported a problem in `at`, or right after it: an expression it could
-/// not finish (`startsWith(a, `) is not checked further, as its arity and types are those of a
-/// fragment and the syntax error already says what is wrong.
-fn broken(problems: &[tree::Problem], at: ByteSpan) -> bool {
-    problems.iter().any(|p| {
-        (p.token.start >= at.start && p.token.start < at.end)
-            || (p.span.start > at.start && p.span.start <= at.end)
-    })
-}
-
 fn check_node(
     node: &SyntaxNode,
-    problems: &[tree::Problem],
+    parsed: &parsed::Parsed,
     translated: &mut semantics::Translated,
     source: &str,
     catalog: &Catalog,
@@ -426,7 +408,9 @@ fn check_node(
             | K::NOT_EXPRESSION
             | K::FUNCTION_CALL
     );
-    if expression && broken(problems, nav::span(node)) {
+    // An expression the parser could not finish (`startsWith(a, `) is not checked further: its
+    // arity and types are those of a fragment, and the syntax error already says what is wrong.
+    if expression && parsed.broken(nav::span(node)) {
         return;
     }
     match kind {
@@ -449,7 +433,7 @@ fn check_node(
         K::BINARY_EXPRESSION | K::AND_EXPRESSION | K::OR_EXPRESSION => {
             let run = semantics::Run::of(node);
             for level in (0..run.len()).rev() {
-                if broken(problems, run.span(level)) {
+                if parsed.broken(run.span(level)) {
                     continue;
                 }
                 if kind == K::BINARY_EXPRESSION {
@@ -483,18 +467,8 @@ fn check_node(
     }
 }
 
-/// The span of a node's first child (its keyword).
-fn keyword_span(node: Node) -> ByteSpan {
-    let first = node.child(0).unwrap_or(node);
-    node_span(first)
-}
-
 fn range(source: &str, span: ByteSpan) -> Range {
     span_to_range(source, span)
-}
-
-fn text<'a>(node: Node, source: &'a str) -> &'a str {
-    source.get(node.start_byte()..node.end_byte()).unwrap_or("")
 }
 
 /// Each token's capture (`highlight::captures`), a known function's as `function.builtin`.
@@ -532,36 +506,36 @@ pub struct Maxspan {
 
 /// Every `sequence` in the query, with its `maxspan` in milliseconds.
 pub fn sequences(source: &str) -> Vec<SequenceInfo> {
-    let Some((tree, _)) = parse_prepared(source) else {
+    let Some((parsed, _)) = parse_prepared(source) else {
         return Vec::new();
     };
-    let mut out = Vec::new();
-    walk(tree.root_node(), |node| {
-        if node.kind() != "sequence" || !node.is_named() {
-            return;
-        }
-        let maxspan = node
-            .named_children(&mut node.walk())
-            .find(|c| c.kind() == "sequence_params")
-            .and_then(|p| p.child_by_field_name("maxspan"))
-            .map(|unit| Maxspan {
-                span: node_span(unit),
-                millis: maxspan_millis(unit, source),
-            });
-        out.push(SequenceInfo {
-            span: keyword_span(node),
-            maxspan,
-        });
-    });
-    out
+    parsed
+        .syntax
+        .descendants()
+        .filter_map(ast::Sequence::cast)
+        .map(|sequence| {
+            let maxspan = sequence
+                .params()
+                .next()
+                .and_then(|p| p.maxspan())
+                .map(|unit| Maxspan {
+                    span: nav::span(unit.syntax()),
+                    millis: maxspan_millis(&unit, source),
+                });
+            SequenceInfo {
+                span: nav::first_child_span(sequence.syntax()),
+                maxspan,
+            }
+        })
+        .collect()
 }
 
-fn maxspan_millis(unit: Node, source: &str) -> Option<u64> {
+fn maxspan_millis(unit: &ast::TimeUnit, source: &str) -> Option<u64> {
     let value = unit
-        .child_by_field_name("value")
-        .and_then(|v| text(v, source).parse::<u64>().ok())
+        .value()
+        .and_then(|v| nav::text(v.syntax(), source).parse::<u64>().ok())
         .filter(|v| *v > 0)?;
-    let suffix = text(unit.child_by_field_name("unit")?, source);
+    let suffix = nav::text(unit.unit()?.syntax(), source);
     let factor = MAXSPAN_UNITS.iter().find(|(n, _)| *n == suffix)?.1;
     Some(value.saturating_mul(factor))
 }
@@ -587,18 +561,17 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
     if !source.is_char_boundary(offset) {
         return None;
     }
-    let (tree, _) = parse_prepared(source)?;
-    let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
+    let (parsed, _) = parse_prepared(source)?;
+    let (word, parent) = nav::element_at(&parsed.syntax, offset, source);
     let catalog = Catalog::cached();
-    let parent = node.parent();
-    if parent.is_some_and(|p| p.kind() == "function_call") {
-        let name = text(node, source).trim_end_matches('~');
+    if parent == Some(K::FUNCTION_CALL) {
+        let name = word.trim_end_matches('~');
         if let Some(row) = catalog.function(name) {
             return Some(function_hover(row));
         }
     }
-    if parent.is_some_and(|p| p.kind() == "pipe")
-        && let Some(row) = catalog.pipe(text(node, source))
+    if parent == Some(K::PIPE_STAGE)
+        && let Some(row) = catalog.pipe(word)
     {
         let mut md = format!(
             "**{}** (pipe)\n\n```eql\n{}\n```\n\n{}",
@@ -609,11 +582,6 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
         }
         return Some(md);
     }
-    let word = match node.kind() {
-        "missing_event_open" => "![",
-        "optional_marker" => "?",
-        _ => text(node, source),
-    };
     KEYWORDS
         .iter()
         .find(|(k, _, _)| *k == word)
@@ -762,15 +730,15 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
 }
 
 fn fields_in(source: &str) -> Vec<String> {
-    let Some((tree, _)) = parse_prepared(source) else {
+    let Some((parsed, _)) = parse_prepared(source) else {
         return Vec::new();
     };
-    let mut names = std::collections::BTreeSet::new();
-    walk(tree.root_node(), |node| {
-        if node.kind() == "field" && !node.has_error() {
-            names.insert(text(node, source).trim_start_matches('?').to_string());
-        }
-    });
+    let names: std::collections::BTreeSet<String> = parsed
+        .syntax
+        .descendants()
+        .filter(|node| node.kind() == K::FIELD && !parsed.broken(nav::span(node)))
+        .map(|node| nav::text(&node, source).trim_start_matches('?').to_string())
+        .collect();
     names.into_iter().collect()
 }
 

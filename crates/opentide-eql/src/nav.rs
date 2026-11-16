@@ -77,3 +77,49 @@ pub(crate) fn first_child_span(node: &SyntaxNode) -> ByteSpan {
         None => span(node),
     }
 }
+
+/// What stands at byte `offset`, for hover: the text of the deepest node or token whose span
+/// holds it (a node standing for one token as a whole), and the kind of the node it stands in.
+/// Each level takes the first visible child that starts at or before `offset` and ends after
+/// it; between children, the node itself.
+pub(crate) fn element_at<'a>(
+    root: &SyntaxNode,
+    offset: usize,
+    source: &'a str,
+) -> (&'a str, Option<K>) {
+    let mut node = root.clone();
+    loop {
+        if node != *root && is_leaf(node.kind()) {
+            return (text(&node, source), node.parent().map(|p| p.kind()));
+        }
+        let mut next = None;
+        for child in node.children_with_tokens() {
+            let range = match &child {
+                NodeOrToken::Node(n) => span(n),
+                NodeOrToken::Token(t) if t.kind() != K::WHITESPACE => {
+                    let r = t.text_range();
+                    ByteSpan::new(usize::from(r.start()), usize::from(r.end()))
+                }
+                NodeOrToken::Token(_) => continue,
+            };
+            if range.end <= offset {
+                continue;
+            }
+            if offset < range.start {
+                break;
+            }
+            next = Some((child, range));
+            break;
+        }
+        match next {
+            Some((NodeOrToken::Node(child), _)) => node = child,
+            Some((NodeOrToken::Token(_), range)) => {
+                return (
+                    source.get(range.start..range.end).unwrap_or(""),
+                    Some(node.kind()),
+                );
+            }
+            None => return (text(&node, source), node.parent().map(|p| p.kind())),
+        }
+    }
+}

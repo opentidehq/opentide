@@ -201,3 +201,30 @@ fn a_broken_run_reports_each_finding_once() {
         );
     }
 }
+
+/// Broken input with a problem at every step stays linear on every surface: each problem's
+/// token is found by a binary search (a call with 20,000 empty arguments took about a minute
+/// when each was looked up from the root), and so is whether a node holds one.
+#[test]
+fn many_problems_are_linear() {
+    for source in [
+        format!("process where foo({}a)", ", ".repeat(20_000)),
+        format!(
+            "process where {}",
+            vec!["a == b or or c == d"; 10_000].join(" or ")
+        ),
+    ] {
+        let started = Instant::now();
+        on_small_stack(move || {
+            let _ = analyze(&source);
+            let _ = ecs_diagnostics(&source);
+            let _ = hover(&source, source.len() / 2);
+            let _ = completions(&source, source.len());
+        });
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "{:?}",
+            started.elapsed()
+        );
+    }
+}
