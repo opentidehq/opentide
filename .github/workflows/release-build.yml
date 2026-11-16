@@ -259,6 +259,11 @@ jobs:
   smoke:
     name: Smoke (${{ matrix.name }})
     needs: [release-versions, packages, engine-assets, sdist, crate-packages]
+    # Every cell runs once the builds are done, whichever failed: a cell whose
+    # artifact is missing fails at its download, and a failed build fails the
+    # workflow (and so publish.yml's `build`) on its own. One broken build no
+    # longer hides every other artifact's smoke result.
+    if: ${{ !cancelled() && needs.release-versions.result == 'success' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
