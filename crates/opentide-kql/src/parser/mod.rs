@@ -368,10 +368,8 @@ impl<'i> P<'i> {
             | K::FIND_KW => true,
             K::MATERIALIZE_KW => self.nth(from + 1) == K::L_PAREN,
             K::RANGE_KW if self.name_at(from + 1) && self.nth(from + 2) == K::FROM_KW => true,
-            // `dynamic` and `toscalar` open their literal and call, and name
-            // no table in a group (`(dynamic | take 1)` is broken, as in the
-            // old grammar; full differential, seed 3).
-            K::DYNAMIC_KW | K::TOSCALAR_KW | K::BOOLEAN | K::NULL_KW => false,
+            K::DYNAMIC_KW | K::TOSCALAR_KW if self.nth(from + 1) == K::L_PAREN => false,
+            K::BOOLEAN | K::NULL_KW => false,
             _ if self.name_at(from) => {
                 from + 1 == close
                     || (self.nth(from + 1) == K::L_PAREN && self.after_group(from + 1) == close)

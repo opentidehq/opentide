@@ -363,9 +363,10 @@ fn a_hyphen_keyword_that_starts_an_expression_is_a_subtraction() {
 }
 
 /// Found by the switch's full differential (seed 3): in an expression or as
-/// the name an assignment makes, `dynamic` and `toscalar` are no column, as
-/// the old grammar read them (`split(a, "b", dynamic -1)` is broken); they
-/// still open their literal and call, and `dynamic` is still a table name.
+/// the name an assignment makes, and as a `let` value, `dynamic` and
+/// `toscalar` are no column or table, as the old grammar read them
+/// (`split(a, "b", dynamic -1)` is broken); they still open their literal
+/// and call, and `dynamic` is still a table name elsewhere.
 #[test]
 fn dynamic_and_toscalar_are_not_columns() {
     for source in [
@@ -375,12 +376,16 @@ fn dynamic_and_toscalar_are_not_columns() {
         "T | extend dynamic = 1",
         "T | extend x = split(a, \"b\", dynamic -1)[-1]",
         "let t = (\ndynamic\n| where a == 1);\nt",
-        "(toscalar | take 1)",
+        "let t = dynamic;\nt",
+        "let t = toscalar;\nt",
     ] {
         assert!(!errors(source).is_empty(), "{source}");
     }
     for source in [
         "dynamic",
+        "(dynamic | take 1)",
+        "T | join (dynamic | take 1) on a",
+        "let t = dynamic([1]);\nprint t",
         "T | extend x = dynamic([1]), y = toscalar(T | count)",
         "datatable(a: dynamic) [dynamic(1)]",
     ] {
