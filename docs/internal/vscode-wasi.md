@@ -15,7 +15,7 @@ does not do. The decision is [ADR 0007's amendment](./adr/0007-vscode-extension-
 
 | Unit | What | Where |
 |------|------|-------|
-| W1 ([#1097](https://github.com/opentidehq/opentide/pull/1097)) | The `opentide` CLI on `wasm32-wasip1`, held to the goldens under wasmtime; git read with gix (no `git` program) | `scripts/engine/build-wasm.sh cli`, ci.yml `wasi` |
+| W1 ([#1097](https://github.com/opentidehq/opentide/pull/1097)) | The `opentide` CLI on `wasm32-wasip1`, held to the goldens under wasmtime; git read with gix (no `git` program) | `scripts/engine/build-wasm.sh cli`, ci.yml `wasm` |
 | W2 ([#1103](https://github.com/opentidehq/opentide/pull/1103)) | Tenant requests made by the client: `opentide/fetch`, and its extension-host half | `docs/cli/serve.md`, `packages/wasi-host` |
 
 ## The module
@@ -97,7 +97,7 @@ Three long-lived processes, one per protocol, each started from the same compile
 
 ## Held to the goldens
 
-CI's `wasi` job (WASI command line (size, golden)) builds the module, checks its size and runs
+CI's `wasm` job builds the module, checks its size and runs
 `cargo xtask golden check --runner wasi`: every golden case that needs no network, under wasmtime,
 compared with the oracle's recordings. The cases it leaves out are in
 `tests/golden/WASI_EXCLUDED.toml`, each with its reason: network cases, and the two capabilities

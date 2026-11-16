@@ -126,7 +126,7 @@ def test_a_leaf_crate_runs_itself_and_its_reverse_dependencies() -> None:
     # A Rust-only change builds no wheel and runs no pytest: the Rust tests
     # cover it (the maintainer's rule); of the specialised jobs, the parser
     # layer runs the WebAssembly builds (WASI and browser) alone.
-    assert on(outputs) == {"rust", "lint", "wasi", "wasm"}
+    assert on(outputs) == {"rust", "lint", "wasm"}
     # The anchors are built, so the third-party features resolve as on the
     # push that saved the compiler cache; only the affected crates' tests run.
     built = set(outputs["packages"].replace("-p ", "").split())
@@ -147,11 +147,12 @@ def test_a_leaf_crate_runs_itself_and_its_reverse_dependencies() -> None:
     ],
 )
 def test_the_parser_layer_runs_the_webassembly_builds(path: str) -> None:
-    # A known path, not the fail-open of an unknown one: the WASI build and
-    # the browser build (engine-wasm), and no other specialised job.
+    # A known path, not the fail-open of an unknown one: the `wasm` job
+    # (browser, WASI server and command line) without the TypeScript client's
+    # native tests, and no other specialised job.
     outputs = plan(path)
-    assert outputs["wasi"] == "true"
     assert outputs["wasm"] == "true"
+    assert outputs["ts_packages"] == "false"
     assert outputs["node"] == "false"
 
 
@@ -166,16 +167,27 @@ def test_the_parser_layer_runs_the_webassembly_builds(path: str) -> None:
 )
 def test_other_changes_skip_the_webassembly_builds(path: str) -> None:
     outputs = plan(path)
-    assert outputs["wasi"] == "false"
     assert outputs["wasm"] == "false"
+    assert outputs["ts_packages"] == "false"
 
 
 @pytest.mark.parametrize(
     "path",
-    ["crates/opentide-wasm/src/lib.rs", "scripts/engine/build-wasm.sh"],
+    [
+        "crates/opentide-wasm/src/lib.rs",
+        "scripts/engine/build-wasm.sh",
+        "vendor/memmap2/src/lib.rs",
+    ],
 )
-def test_the_browser_build_runs_on_its_own_paths(path: str) -> None:
+def test_the_webassembly_job_runs_on_its_own_paths(path: str) -> None:
     assert plan(path)["wasm"] == "true"
+
+
+def test_the_typescript_packages_run_their_native_tests() -> None:
+    outputs = plan("packages/lsp-client/src/index.ts")
+    assert outputs["wasm"] == "true"
+    assert outputs["ts_packages"] == "true"
+    assert outputs["rust"] == "false"
 
 
 def test_a_pull_request_that_changes_a_workflow_runs_the_browser_build() -> None:
@@ -210,7 +222,8 @@ def test_a_test_only_dependency_counts() -> None:
 def test_shared_configuration_and_unknown_paths_mark_everything(path: str) -> None:
     outputs = plan(path)
     assert outputs["packages"] == "--workspace"
-    assert {"rust", "python", "node", "wasi", "wasm", "docs", "deny", "facade"} <= on(outputs)
+    expected = {"rust", "python", "node", "wasm", "ts_packages", "docs", "deny", "facade"}
+    assert expected <= on(outputs)
 
 
 @pytest.mark.parametrize(

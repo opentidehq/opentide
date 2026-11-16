@@ -48,8 +48,8 @@ AREAS = (
     "python",  # the wheel and the Python job: the Python surface changed
     "docs",  # docs validation
     "node",  # the Node package
-    "wasi",  # the WASI command line
-    "wasm",  # the browser WebAssembly build (engine-wasm)
+    "wasm",  # the WebAssembly modules (browser, WASI server and command line)
+    "ts_packages",  # the TypeScript client's tests against the native servers
     "grammars",  # grammars regenerate
     "textmate",  # TextMate grammars
     "gitlab",  # GitLab CI lint
@@ -115,21 +115,21 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("scripts/validate-docs.sh", ("docs",), ()),
     ("scripts/engine/check-grammars.sh", ("grammars",), ()),
     # The engine's scripts (the invariants, the WASI build, the release).
-    ("scripts/engine/build-wasm.sh", ("wasi", "wasm"), ()),
+    ("scripts/engine/build-wasm.sh", ("wasm",), ()),
     ("scripts/engine/*.py", ("pylint",), ALL),
     ("scripts/engine/*", (), ALL),
     ("scripts/build/*", ("python", "pylint"), ()),
     ("scripts/*.py", ("python", "pylint"), ()),
     ("scripts/*.sh", ("ci",), ()),
     # What the engine compiles in, and its hosts.
-    ("grammars/*", ("grammars", "wasi", "wasm"), ("opentide-syntax",)),
+    ("grammars/*", ("grammars", "wasm"), ("opentide-syntax",)),
     ("highlights/test/*", ("textmate",), ()),
-    ("highlights/*", ("textmate", "wasi", "wasm"), ALL),
+    ("highlights/*", ("textmate", "wasm"), ALL),
     ("editors/*", ("textmate",), ()),
-    ("packages/*", ("wasi",), ()),
+    ("packages/*", ("wasm", "ts_packages"), ()),
     ("data/*", (), ALL),
     # The WASI shims of memmap2 and filetime (vendor/README.md).
-    ("vendor/*", ("deny", "wasi"), ALL),
+    ("vendor/*", ("deny", "wasm"), ALL),
     ("crates/testdata/*", (), ALL),
     ("crates/*.md", ("docs",), ()),
     ("fuzz/*", ("deny",), ()),
@@ -187,11 +187,11 @@ CRATE_PATHS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("bindings/node/*", ("node",)),
     # The WebAssembly crate (the WASI and the browser build) and the WASI shims
     # of the crates that have one.
-    ("crates/opentide-wasm/*", ("wasi", "wasm")),
-    ("crates/*wasi*", ("wasi",)),
+    ("crates/opentide-wasm/*", ("wasm",)),
+    ("crates/*wasi*", ("wasm",)),
     # The parser layer and the query languages: their C (or its absence) and
     # their stack depth show only in the WebAssembly builds (ADR 0012).
-    *((f"crates/{crate}/*", ("wasi", "wasm")) for crate in PARSER_CRATES),
+    *((f"crates/{crate}/*", ("wasm",)) for crate in PARSER_CRATES),
     ("crates/opentide-cli/src/render/ci.rs", ("gitlab",)),
     ("crates/opentide-cli/src/commands/setup/*", ("gitlab",)),
     ("crates/*/Cargo.toml", ("deny",)),
