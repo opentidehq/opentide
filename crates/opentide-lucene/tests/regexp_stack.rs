@@ -52,12 +52,12 @@ fn shapes(n: usize) -> Vec<(String, String, bool)> {
             format!("{}a{}", "(".repeat(n), ")".repeat(n)),
             n > MAX_DEPTH,
         ),
-        (format!("{n} `&`"), "a&".repeat(n) + "a", n >= MAX_DEPTH),
-        (format!("{n} `~`"), "~".repeat(n) + "a", n >= MAX_DEPTH),
+        (format!("{n} `&`"), "a&".repeat(n) + "a", n > MAX_DEPTH),
+        (format!("{n} `~`"), "~".repeat(n) + "a", n > MAX_DEPTH),
         (
             format!("{n} `*`"),
             "a".to_string() + &"*".repeat(n),
-            n >= MAX_DEPTH,
+            n > MAX_DEPTH,
         ),
         (format!("{n} `|`"), "a|".repeat(n) + "b", false),
         (format!("{n} `ab.`"), "ab.".repeat(n), false),
@@ -96,5 +96,57 @@ fn through_a_lucene_query() {
     for (name, body, _) in shapes(400).into_iter().chain(shapes(100_000)) {
         let query = format!("a:/{body}/");
         let _ = on_small_stack(&name, move || opentide_lucene::analyze(&query).diagnostics);
+    }
+}
+
+/// Shapes that mix operators, each level more than one: too deep well
+/// before 250 of them, and checked at a few dozen.
+#[test]
+fn mixed_shapes_nest_by_their_operators() {
+    let mixed = |n: usize| {
+        [
+            format!("{}b{}", "~(a*&".repeat(n), ")".repeat(n)),
+            format!("{}b{}", "(a|".repeat(n), ")c".repeat(n)),
+            format!("{}a{}", "(".repeat(n), "|b)+".repeat(n)),
+        ]
+    };
+    for (n, too_deep) in [(40, false), (200, true), (100_000, true)] {
+        for body in mixed(n) {
+            let name = format!("{n}: {}", &body[..12]);
+            let problems = on_small_stack(&name, move || elasticsearch_problems(&body));
+            let deep = problems
+                .iter()
+                .any(|p| p.message.contains("does not check it"));
+            assert_eq!(deep, too_deep, "{name}: {problems:?}");
+            if too_deep {
+                assert_eq!(problems.len(), 1, "{name}: {problems:?}");
+            }
+        }
+    }
+}
+
+/// Lucene 9 and 10 read `[\x-y]` differently: the stack that stops on the
+/// syntax error stops before the depth limit, and its error is still the
+/// finding, a warning that says the other stack is past the limit.
+#[test]
+fn a_syntax_error_before_the_limit_is_still_found() {
+    let deep = format!(
+        "{}a{}",
+        "(".repeat(MAX_DEPTH + 1),
+        ")".repeat(MAX_DEPTH + 1)
+    );
+    for (class, rejects) in [("[\\.-#]", "8.19"), ("[\\#--#]", "9.x")] {
+        let body = format!("{class}{deep}");
+        let problems = on_small_stack(class, move || elasticsearch_problems(&body));
+        assert_eq!(problems.len(), 1, "{class}: {problems:?}");
+        let p = &problems[0];
+        assert!(p.syntax && p.at.is_some(), "{class}: {p:?}");
+        assert_eq!(p.severity, Severity::Warning, "{class}");
+        assert!(
+            p.message
+                .contains(&format!("Elasticsearch {rejects} rejects it"))
+                && p.message.contains("does not check"),
+            "{class}: {p:?}"
+        );
     }
 }

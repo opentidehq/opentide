@@ -67,12 +67,13 @@ pub enum Verdict {
     TooDeep,
 }
 
-/// The deepest expression the checker reads: groups, `~`, repetitions and
-/// `&` chains each count a level (`|` and concatenation chains are read flat).
-/// Past it, one warning and no other finding: the parser and the automaton
-/// construction recurse once per level, and the browser module has a 1 MB
-/// stack. 250 levels is far more than a detection's regexp uses, and the same
-/// bound as the YARA checker's.
+/// The deepest expression the checker reads, in levels of operators: each
+/// group, `~`, repetition and `&`, and each `|` or concatenation chain
+/// (however long), is one level over what it holds. Past it, one warning and
+/// no other finding. The checker runs in loops at any depth; the bound keeps
+/// its work on pathological bodies predictable, and it is the bound
+/// Elasticsearch puts on EQL (`eql_expression_depth`) and the YARA checker
+/// puts on groups. A detection's regexp nests a handful of levels.
 pub const MAX_DEPTH: usize = 250;
 
 /// The Lucene line an Elasticsearch stack builds regexps with. Syntax is the
@@ -173,20 +174,36 @@ pub struct Problem {
 pub fn elasticsearch_problems(body: &str) -> Vec<Problem> {
     use opentide_core::Severity;
     let es9 = check(body, Stack::Es9);
-    // Both stacks parse alike: a body too deep for one is too deep for both.
-    if es9 == Verdict::TooDeep {
-        return vec![Problem {
-            severity: Severity::Warning,
-            at: None,
-            message: format!(
-                "this regular expression nests more than {MAX_DEPTH} levels of groups, `~`, repetitions or `&`; opentide does not check it"
-            ),
-            syntax: false,
-        }];
-    }
     let es8 = check(body, Stack::Es8);
+    let deep = |stack: &str| {
+        format!(
+            "{stack} reads it this far, but it nests more than {MAX_DEPTH} levels, which opentide does not check"
+        )
+    };
     // Lucene 9 and 10 read `[\x-y]` differently; everything else parses alike.
+    // So one stack can stop on a syntax error before the depth the other
+    // reaches: that error is still a finding.
     let invalid = match (&es8, &es9) {
+        (Verdict::Invalid { at, message }, Verdict::TooDeep) => Some((
+            Severity::Warning,
+            *at,
+            format!("{message} (Elasticsearch 8.19 rejects it; {})", deep("9.x")),
+        )),
+        (Verdict::TooDeep, Verdict::Invalid { at, message }) => Some((
+            Severity::Warning,
+            *at,
+            format!("{message} (Elasticsearch 9.x rejects it; {})", deep("8.19")),
+        )),
+        (Verdict::TooDeep, _) | (_, Verdict::TooDeep) => {
+            return vec![Problem {
+                severity: Severity::Warning,
+                at: None,
+                message: format!(
+                    "this regular expression nests more than {MAX_DEPTH} levels (each group, `~`, repetition, `&`, and `|` or concatenation counts one); opentide does not check it"
+                ),
+                syntax: false,
+            }];
+        }
         (Verdict::Invalid { at, message }, Verdict::Invalid { .. }) => {
             Some((Severity::Error, *at, message.clone()))
         }
@@ -436,12 +453,13 @@ impl Re {
         None
     }
 
-    /// The levels of [`Re::build`]'s operand tree: a `|` or a
+    /// The levels of operators in [`Re::build`]'s operand tree: a `|` or a
     /// concatenation chain is one level over its leaves ([`Re::leaves`]),
-    /// any other node one level over its children. A loop.
+    /// any other operator one level over its children, a character, string
+    /// or class none. A loop.
     fn depth(&self) -> usize {
         let mut deepest = 0;
-        let mut stack = vec![(self, 1)];
+        let mut stack = vec![(self, 0)];
         while let Some((re, level)) = stack.pop() {
             deepest = deepest.max(level);
             match re {
@@ -929,7 +947,7 @@ impl<'a> Parser<'a> {
             if self.eat(')') {
                 return Ok(Re::Str(Vec::new()));
             }
-            return self.err("a group is read by the loop of `union`");
+            return self.err("expected `)`");
         }
         if self.eat('<') {
             let open = self.pos - 1;
