@@ -134,7 +134,7 @@ hand; the Rust tests that replay the oracle's recordings are
 ([`tests/golden/README.md`](../tests/golden/README.md)). The vendor-parser oracles (Kusto.Language,
 Splunk, Elasticsearch, Lucene, Falco) are real products' parsers: they run nightly.
 
-Every Rust job in `ci.yml` and `engine-release-build.yml` sets Rust up with one composite action,
+Every Rust job in `ci.yml` sets Rust up with one composite action,
 [`actions/rust-setup`](actions/rust-setup/action.yml): the release `rust-toolchain.toml` pins
 (`rustup toolchain install` with no name, never floating `stable`), then its `targets` with
 `rustup target add` (that install drops `--target` and `--component` silently), its prebuilt
