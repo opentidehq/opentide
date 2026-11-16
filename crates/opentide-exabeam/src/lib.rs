@@ -27,14 +27,13 @@ pub mod catalog;
 pub mod check;
 // The pure-Rust parser (#1223, ADR 0012) grows beside the tree-sitter path,
 // which serves until the last PR of the series switches highlighting to it.
-#[expect(
-    dead_code,
-    reason = "the pure-Rust lexer is reached from its unit tests until the parser of the next PR of #1223 reads it"
-)]
+mod cst;
 mod syntax;
 
 pub use assist::{completions, hover};
 pub use check::{Profile, check};
+#[doc(hidden)]
+pub use cst::debug_parse;
 
 pub(crate) use opentide_core::codes;
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, LineIndex};
