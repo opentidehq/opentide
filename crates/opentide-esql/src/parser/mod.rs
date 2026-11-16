@@ -229,23 +229,6 @@ mod tests {
     }
 
     #[test]
-    fn a_word_is_a_unit_where_no_keyword_is_valid() {
-        // tree-sitter lexed a word as a keyword only where the grammar takes it.
-        for source in [
-            "FROM a | LIMIT 1 LIKE",
-            "FROM a | LIMIT 5WITH",
-            "FROM a | SAMPLE 1 BY",
-        ] {
-            let t = clean(source);
-            assert!(t.contains("QUALIFIED_INTERVAL@"), "{source}\n{t}");
-        }
-        let t = clean("FROM a | LIMIT 1 BY x");
-        assert!(!t.contains("QUALIFIED_INTERVAL@"), "{t}");
-        let t = clean("FROM a | WHERE x > 1 AND y");
-        assert!(!t.contains("QUALIFIED_INTERVAL@"), "{t}");
-    }
-
-    #[test]
     fn nesting_past_the_limit_is_one_diagnostic() {
         let deep = format!("ROW x = {}1{}", "(".repeat(2_000), ")".repeat(2_000));
         let (_, errors) = tree(&deep);
