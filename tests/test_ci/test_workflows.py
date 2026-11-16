@@ -24,6 +24,7 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 CI = WORKFLOWS / "ci.yml"
 PUBLISH = WORKFLOWS / "publish.yml"
 ALL = sorted(WORKFLOWS.glob("*.yml"))
+COMPOSITES = sorted((ROOT / ".github" / "actions").glob("*/action.yml"))
 
 NIGHTLY = "needs.changes.outputs.mode == 'nightly'"
 
@@ -140,6 +141,12 @@ def test_the_changes_job_exports_what_changes_py_writes() -> None:
     assert set(ci_jobs()["changes"]["outputs"]) == written
 
 
+def test_each_changes_output_reads_its_own_plan_output() -> None:
+    """A swapped mapping (`vocab: ${{ steps.plan.outputs.fields }}`) reads as valid."""
+    for name, value in ci_jobs()["changes"]["outputs"].items():
+        assert value == f"${{{{ steps.plan.outputs.{name} }}}}", name
+
+
 def test_the_pr_gates_jobs_run_on_linux() -> None:
     for job_id, job in ci_jobs().items():
         release_or_nightly = "release" in str(job.get("if", "")) or nightly_only(job)
@@ -186,9 +193,11 @@ def test_the_oracle_workflows_and_the_full_ci_label_are_gone() -> None:
         assert "full-ci" not in path.read_text(encoding="utf-8"), path.name
 
 
-@pytest.mark.parametrize("path", ALL, ids=lambda p: p.name)
+@pytest.mark.parametrize("path", ALL + COMPOSITES, ids=lambda p: f"{p.parent.name}/{p.name}")
 def test_actions_are_pinned_by_commit(path: Path) -> None:
-    for job in load(path)["jobs"].values():
+    document = load(path)
+    jobs = document["jobs"].values() if "jobs" in document else [document["runs"]]
+    for job in jobs:
         uses = [job["uses"]] if "uses" in job else []
         uses += [s["uses"] for s in job.get("steps") or [] if "uses" in s]
         for action in uses:
@@ -249,6 +258,20 @@ def test_only_the_rust_benchmark_is_held_to_a_last_result() -> None:
     check = next(s for s in steps if s.get("name") == "Check against the budgets")
     assert "--previous" in check["run"]  # still given to rust, only when a reference exists
     assert "--require-reference" in check["run"]  # python stays held to its oracle baseline
+
+
+def test_every_local_action_a_workflow_uses_exists() -> None:
+    """A typo in `uses: ./.github/actions/<x>` fails only when the step runs."""
+    used = {
+        str(step["uses"]).removeprefix("./")
+        for path in ALL
+        for job in load(path)["jobs"].values()
+        for step in job.get("steps") or []
+        if str(step.get("uses", "")).startswith("./.github/actions/")
+    }
+    assert used, "ci.yml sets Rust up with .github/actions/rust-setup"
+    for action in used:
+        assert (ROOT / action / "action.yml").is_file(), action
 
 
 def test_no_workflow_runs_on_a_tag() -> None:

@@ -125,7 +125,7 @@ fn severities_follow_the_spec() {
 }
 
 /// The goldens are the reference checker's tokens; the engine's verdict
-/// parser and its tree-sitter highlighting must both produce them.
+/// parser and the tree's highlighting must both produce them.
 #[test]
 fn highlight_goldens() {
     let paths = files("highlight", ".exabeam");
@@ -164,6 +164,11 @@ fn highlight_goldens() {
         .iter()
         .map(|t| (t.span.start, t.span.end, t.capture.clone()))
         .collect();
-        assert_eq!(highlighted, expected, "tree-sitter, {}", path.display());
+        assert_eq!(
+            highlighted,
+            expected,
+            "tree highlighting, {}",
+            path.display()
+        );
     }
 }

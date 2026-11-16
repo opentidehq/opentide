@@ -16,10 +16,10 @@
 //!
 //! A replacement parser must keep every floor (its `max_depth` sits at or
 //! above it). A floor equal to the cap means the engine passed at the cap, so
-//! the true limit is higher. Two floors are set below the measured edge on
-//! purpose: kql is quadratic in the chain length on tree-sitter (yaral was too,
-//! and in the nesting depth, until its parser was replaced), so the edge sits
-//! near the time budget and a test there would be flaky.
+//! the true limit is higher. No floor sits below its measured edge any more:
+//! kql and yaral were quadratic on tree-sitter (yaral in the nesting depth
+//! too), and both were measured again on their pure-Rust parsers (#1230,
+//! #1227).
 
 #![expect(
     clippy::unwrap_used,
@@ -37,10 +37,10 @@ const CHAIN_CAP: usize = 20_000;
 
 // Chain floors. Measured edge (the largest size that finished within 60 s, or
 // the cap), in a debug build under a host load average of 15 to 25.
-/// kql: 2,000 terms took 21 s locally but 63 s on a CI runner, 3,000 took 41 s,
-/// 4,000 took 72 s (quadratic). Set at 1,000 (about a quarter of the 2,000 time)
-/// so that a loaded runner cannot flip the test.
-const KQL_CHAIN_FLOOR: usize = 1_000;
+/// kql: on tree-sitter, 2,000 terms took 21 s (quadratic: each highlighted name
+/// rescanned the query for its tables); on the pure-Rust parser (#1230), which
+/// scans once, the cap passed in 8 s.
+const KQL_CHAIN_FLOOR: usize = CHAIN_CAP;
 /// yaral passed the cap on the pure-Rust parser (#1227). On tree-sitter 1,000
 /// terms took 6 s and 2,500 took 87 s (quadratic), so the floor was 1,000.
 const YARAL_CHAIN_FLOOR: usize = CHAIN_CAP;
@@ -72,8 +72,11 @@ const LUCENE_CHAIN_FLOOR: usize = CHAIN_CAP;
 /// debug build). 1,000 is above every vendor's own limit known (ES|QL 400, EQL 250,
 /// Falco 100); past it a new parser reports one `TooDeep` diagnostic.
 const NESTING_CEILING: usize = 1_000;
-/// kql: 35 levels passed; 36 overflows the 1 MB stack (abort).
-const KQL_NEST_FLOOR: usize = 35;
+/// kql: tree-sitter passed 35 levels and overflowed the 1 MB stack at 36 (abort).
+/// The pure-Rust parser (#1230) passes 254 and reports the nesting past its
+/// `MAX_DEPTH` (256 levels; `T | where` takes two) as one error; with a higher
+/// limit, a debug build overflowed 1 MB between 500 and 700 levels.
+const KQL_NEST_FLOOR: usize = 254;
 /// spl passed the 10,000 cap in 0.2 s; held at the ceiling.
 const SPL_NEST_FLOOR: usize = NESTING_CEILING;
 /// cql passed the 10,000 cap in 0.1 s; held at the ceiling.
@@ -111,12 +114,29 @@ const SMALL_STACK: usize = 1 << 20;
 #[cfg(any(coverage, windows))]
 const SMALL_STACK: usize = 8 << 20;
 
+/// The stack KQL's floors run on: [`SMALL_STACK`] less 16 KiB. glibc carves a
+/// thread's static TLS out of its stack, so a test at the very edge of 1 MB
+/// passed or aborted with the thread-locals the binary happened to link (the
+/// tree-sitter KQL engine needed about 1,049,344 bytes for 35 levels, and an
+/// 80-byte thread-local elsewhere aborted it on CI). The pure-Rust engine
+/// (#1230) needs about 80 KB for 35 levels and 404 KB for 254 in a debug build.
+const KQL_STACK: usize = SMALL_STACK - (16 << 10);
+
 /// Run `run` on a [`SMALL_STACK`] and fail on an overflow, a panic or a blown time budget.
 fn on_small_stack<T: Send + 'static>(name: &str, run: impl FnOnce() -> T + Send + 'static) -> T {
+    on_stack(name, SMALL_STACK, run)
+}
+
+/// [`on_small_stack`] on a stack of `size` bytes.
+fn on_stack<T: Send + 'static>(
+    name: &str,
+    size: usize,
+    run: impl FnOnce() -> T + Send + 'static,
+) -> T {
     let started = Instant::now();
     let out = thread::Builder::new()
         .name(name.into())
-        .stack_size(SMALL_STACK)
+        .stack_size(size)
         .spawn(run)
         .unwrap()
         .join()
@@ -139,7 +159,17 @@ const VENDOR_DEPTH_CODES: [&str; 2] = ["esql_expression_depth", "eql_expression_
 /// no depth limit of the engine itself (a new parser's `max_depth` diagnostic must not
 /// pass this gate silently); only the vendor's depth checks are tolerated.
 fn analyzes_cleanly(name: &str, query: String, analyze: fn(&str) -> Vec<Diagnostic>) {
-    let diagnostics = on_small_stack(name, move || analyze(&query));
+    analyzes_cleanly_on(name, SMALL_STACK, query, analyze);
+}
+
+/// [`analyzes_cleanly`] on a stack of `size` bytes.
+fn analyzes_cleanly_on(
+    name: &str,
+    size: usize,
+    query: String,
+    analyze: fn(&str) -> Vec<Diagnostic>,
+) {
+    let diagnostics = on_stack(name, size, move || analyze(&query));
     let failures: Vec<_> = diagnostics
         .iter()
         .map(|d| d.code.as_str())
@@ -218,13 +248,14 @@ fn long_or_chains_do_not_overflow_the_stack() {
 #[test]
 fn kql_chain_floor() {
     let q = kql(&chain("a == 1", " or ", KQL_CHAIN_FLOOR));
-    analyzes_cleanly("kql chain", q, kql_diagnostics);
+    analyzes_cleanly_on("kql chain", KQL_STACK, q, kql_diagnostics);
 }
 
 #[test]
 fn kql_nest_floor() {
-    analyzes_cleanly(
+    analyzes_cleanly_on(
         "kql nest",
+        KQL_STACK,
         kql(&nest("a == 1", KQL_NEST_FLOOR)),
         kql_diagnostics,
     );
