@@ -2,7 +2,7 @@
 //! token for token what tree-sitter reads on the files it reads cleanly.
 
 use opentide_core::LanguageId;
-use opentide_kql::testing::lex_spans;
+use opentide_kql::inspect::lex_spans;
 mod common;
 use common::corpus;
 

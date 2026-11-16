@@ -9,7 +9,7 @@
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]
 
-use opentide_kql::testing::lex_spans;
+use opentide_kql::inspect::lex_spans;
 
 /// Lexes `source` on a 1 MB stack thread; the process aborts on an overflow.
 fn lex_on_small_stack(source: String) -> Vec<(usize, usize, bool)> {

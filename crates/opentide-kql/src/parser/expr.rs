@@ -175,7 +175,10 @@ fn primary(p: &mut P<'_>) -> Option<CompletedMarker> {
                 name_ref(p)
             }
         }
-        _ => return None,
+        _ => {
+            p.hyphen_keyword_in_expression();
+            return None;
+        }
     };
     loop {
         p.quoted_name_after_value();

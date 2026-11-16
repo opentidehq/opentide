@@ -326,3 +326,38 @@ fn a_hyphen_keyword_after_with_is_an_operator_only_in_facet() {
     assert!(errors("SigninLogs | with project-reorder * asc").is_empty());
     assert!(errors("T | facet by a with project-away b").is_empty());
 }
+
+/// Found by the switch's full differential (seed 2, scale 2): after the `(`
+/// of a call or a parenthesised expression, a hyphen keyword is a
+/// subtraction of names, as tree-sitter read it; the lexer takes it for an
+/// operator after any `(`, so the parser has it lexed again.
+#[test]
+fn a_hyphen_keyword_that_starts_an_expression_is_a_subtraction() {
+    for source in [
+        "SecurityEvent | summarize count(project-away ) by bin(TimeGenerated, 1h), Computer",
+        "T | extend z = strlen(mv-expand)",
+        "T | extend a = (project-away)",
+        "T | extend a = f(b, parse-where)",
+    ] {
+        assert!(errors(source).is_empty(), "{source}: {:?}", errors(source));
+        let tree = SyntaxNode::new_root(parse(source).green);
+        assert!(
+            tree.descendants().any(|n| n.kind() == K::ADDITIVE_EXPR),
+            "{source}"
+        );
+    }
+    // Where a sub-pipeline starts, it is still an operator.
+    for source in [
+        "T | fork (project-away y) (take 1)",
+        "T | mv-apply x on (project-away y)",
+        "T | partition by x (project-away y)",
+    ] {
+        assert!(errors(source).is_empty(), "{source}: {:?}", errors(source));
+        let tree = SyntaxNode::new_root(parse(source).green);
+        assert!(
+            tree.descendants()
+                .any(|n| n.kind() == K::PROJECT_AWAY_OPERATOR),
+            "{source}"
+        );
+    }
+}

@@ -35,7 +35,10 @@ pub(crate) const GRAMMAR: Grammar = Grammar {
 /// (`where step ['x']`, `step` a column). It reads a quoted name; where the
 /// parser then finds one right after an expression, the text is lexed again
 /// with an index there and parsed again (rare: a keyword used as a column and
-/// indexed), as the old grammar read it.
+/// indexed), as the old grammar read it. A hyphen keyword where an
+/// expression starts is lexed again the same way: the lexer takes
+/// `project-away` after a `(` for an operator, which it is in
+/// `fork (project-away x)` and is not in `count(project-away)`.
 pub(crate) fn parse(source: &str) -> Parse {
     PARSES.with(|n| n.set(n.get() + 1));
     let mut index_at = Vec::new();
@@ -99,7 +102,8 @@ pub(crate) struct P<'i>(Parser<'i>, Flood);
 pub(crate) struct Flood {
     consumed: u64,
     last_error: Option<u64>,
-    /// Where a quoted name stands right after an expression ([`parse`]).
+    /// Where a quoted name stands right after an expression, or a hyphen
+    /// keyword starts one ([`parse`]): the places the lexer reads again.
     pub(crate) index_at: Vec<rowan::TextSize>,
 }
 
@@ -148,6 +152,18 @@ impl<'i> P<'i> {
     /// it as an index ([`parse`]).
     pub(crate) fn quoted_name_after_value(&mut self) {
         if self.current() == K::QUOTED_IDENT
+            && let Some(range) = self.current_range()
+        {
+            self.1.index_at.push(range.start());
+        }
+    }
+
+    /// Notes a hyphen keyword where an expression starts (`count(project-away)`,
+    /// after a `(` the lexer took for a sub-pipeline's): the old grammar read
+    /// names and a minus there ([`parse`]).
+    pub(crate) fn hyphen_keyword_in_expression(&mut self) {
+        if self.current().is_word()
+            && self.0.current_text().contains('-')
             && let Some(range) = self.current_range()
         {
             self.1.index_at.push(range.start());

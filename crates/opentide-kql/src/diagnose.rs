@@ -58,6 +58,10 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
         let boundary = lines.position(usize::from(quiet_from(&root, error)));
         quiet_after_the_error(&mut diagnostics, boundary);
     }
+    // The scope checks scan tokens, not the tree: the old engine gave them on
+    // broken input too, and `union *` and `search *`, which both engines
+    // reject, are the shapes they exist for.
+    perf::check_scope(source, &mut diagnostics);
     let spec = HighlightSpec::load().expect("highlight spec");
     let mut spans = highlight_spans(&root);
     overlay_catalog_captures(source, &mut spans, catalog);
@@ -98,7 +102,7 @@ fn quiet_from(root: &SyntaxNode, error: &SyntaxError) -> rowan::TextSize {
 /// operator that holds it, the parser's recovery has made nodes of fragments
 /// (`| summ` is an unknown operator, a half-typed word a table), so only the
 /// findings that end before `boundary` (and before the error) are kept with
-/// the error (the first diagnostic).
+/// the error (the first diagnostic), and the other `kql_parse_error`s.
 fn quiet_after_the_error(diagnostics: &mut Vec<Diagnostic>, boundary: opentide_core::Position) {
     let key = |p: opentide_core::Position| (p.line, p.character);
     let Some(error) = diagnostics.first().map(|d| d.range.start) else {
@@ -111,7 +115,10 @@ fn quiet_after_the_error(diagnostics: &mut Vec<Diagnostic>, boundary: opentide_c
     };
     let mut first = true;
     diagnostics.retain(|d| {
-        let keep = first || key(d.range.end) <= key(boundary);
+        // A finding about the syntax error itself (`datetime(` without its
+        // `)` on the line) says more than the error: kept, as the old engine
+        // kept it.
+        let keep = first || d.code == codes::KQL_PARSE_ERROR || key(d.range.end) <= key(boundary);
         first = false;
         keep
     });

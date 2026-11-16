@@ -1,10 +1,13 @@
-//! A window on the new parser for the crate's integration tests, which read
-//! the corpus (a library source never touches the filesystem). Not an API:
-//! it goes with the old engine in the last PR of the series (#1230).
+//! The parser's tokens and tree as plain data, for the crate's corpus and
+//! differential tests and `opentide-analysis`'s corpus gate, which read
+//! files (a library source never touches the filesystem). Not an API: hidden
+//! from the docs, like `opentide_kuery::debug_parse`.
 
 use crate::lexer::lex_kql;
 use crate::parser::parse;
-use crate::syntax::{SyntaxKind as K, SyntaxNode};
+use crate::syntax::{ALL, SyntaxKind as K, SyntaxNode};
+use rowan::NodeOrToken;
+use std::collections::BTreeSet;
 
 /// The lexemes of `source` as `(start, end, is_trivia)`: whitespace and
 /// comments are trivia.
@@ -46,43 +49,6 @@ pub fn token_kinds(source: &str) -> Vec<String> {
         .collect()
 }
 
-/// An analysis on the new parser: what `analyze_with_catalog` gives.
-pub struct NewAnalysis {
-    /// The diagnostics, in the old order.
-    pub diagnostics: Vec<opentide_core::Diagnostic>,
-    /// The HIR.
-    pub hir: crate::Hir,
-    /// The highlight tokens.
-    pub tokens: Vec<opentide_highlight::HighlightToken>,
-}
-
-/// [`crate::analyze_with_catalog`] on the new parser.
-#[must_use]
-pub fn analyze_new(source: &str, catalog: &crate::Catalog) -> NewAnalysis {
-    let analysis = crate::diagnose::analyze(source, catalog);
-    NewAnalysis {
-        diagnostics: analysis.diagnostics,
-        hir: analysis.hir,
-        tokens: analysis.tokens,
-    }
-}
-
-/// [`crate::columns`] on the new parser.
-#[must_use]
-pub fn columns_new(source: &str, profile: crate::Profile) -> crate::schema::Analysis {
-    let catalog = crate::Catalog::for_workspace(profile, source);
-    crate::diagnose::columns(source, &catalog)
-}
-
-/// [`crate::hover`] on the new parser (its column hover reads the new
-/// column pass; the rest of hover reads no tree).
-#[must_use]
-pub fn hover_new(source: &str, offset: usize, profile: crate::Profile) -> Option<String> {
-    crate::hover_with(source, offset, profile, |source, catalog| {
-        Some(crate::diagnose::columns(source, catalog))
-    })
-}
-
 /// How many times this thread has parsed a text with the new parser.
 #[must_use]
 pub fn parse_count() -> u64 {
@@ -118,4 +84,33 @@ pub fn pipeline_parts(source: &str) -> Vec<(String, Vec<String>)> {
             Some((text(source, &head).to_owned(), ops))
         })
         .collect()
+}
+
+/// The names of the tree's node kinds, lower-case (`where_operator`,
+/// `let_statement`): the productions of `opentide-analysis`'s corpus gate.
+#[must_use]
+pub fn node_kinds() -> Vec<String> {
+    ALL.iter()
+        .filter(|k| !k.is_token())
+        .map(|k| format!("{k:?}").to_ascii_lowercase())
+        .collect()
+}
+
+/// What the corpus gate reads of the tree of `source`: whether the parser
+/// reported a syntax error, the lower-case names of the kinds of its nodes
+/// and tokens, and the tree as indented text (for a failure message).
+#[must_use]
+pub fn tree_kinds(source: &str) -> (bool, BTreeSet<String>, String) {
+    let parsed = parse(source);
+    let root = SyntaxNode::new_root(parsed.green);
+    let kinds = root
+        .preorder_with_tokens()
+        .filter_map(|event| match event {
+            rowan::WalkEvent::Enter(NodeOrToken::Node(n)) => Some(n.kind()),
+            rowan::WalkEvent::Enter(NodeOrToken::Token(t)) => Some(t.kind()),
+            rowan::WalkEvent::Leave(_) => None,
+        })
+        .map(|k| format!("{k:?}").to_ascii_lowercase())
+        .collect();
+    (!parsed.errors.is_empty(), kinds, format!("{root:#?}"))
 }
