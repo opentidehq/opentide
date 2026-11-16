@@ -73,8 +73,10 @@ struct ModulesFile {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProfileData {
     pub dialect: String,
-    /// `allowed` or `refused`: whether YARA-X-only syntax is taken.
-    pub yara_x_syntax: String,
+    /// `allowed` or `refused`: whether YARA-X-only syntax is taken. Any
+    /// other value fails the catalog's load (and its tests), never a silent
+    /// `refused`.
+    pub yara_x_syntax: crate::YaraXSyntax,
     pub ascii_only: bool,
     #[serde(default)]
     pub max_characters: Option<usize>,
@@ -189,6 +191,32 @@ mod tests {
         assert!(c.children("pe", "").any(|m| m.path == "number_of_sections"));
         assert!(c.keywords.contains("condition"));
         assert_eq!(c.profiles["bitdefender"].max_characters, Some(30000));
+    }
+
+    /// `yara_x_syntax` is `allowed` or `refused`; a misspelt value is an
+    /// error, not a profile that silently refuses.
+    #[test]
+    fn yara_x_syntax_takes_only_its_two_values() {
+        let profile = |value: &str| {
+            toml::from_str::<ProfileData>(&format!(
+                "dialect = \"libyara4\"\nyara_x_syntax = \"{value}\"\nascii_only = false\n\
+                 confirmed_modules = []\nrecommended_meta = []\n"
+            ))
+        };
+        assert_eq!(
+            profile("allowed").expect("allowed").yara_x_syntax,
+            crate::YaraXSyntax::Allowed
+        );
+        assert_eq!(
+            profile("refused").expect("refused").yara_x_syntax,
+            crate::YaraXSyntax::Refused
+        );
+        assert!(profile("allow").is_err());
+        assert!(profile("Allowed").is_err());
+        let c = Catalog::cached();
+        for name in ["harfanglab", "bitdefender"] {
+            assert_eq!(c.profiles[name].yara_x_syntax, crate::YaraXSyntax::Refused);
+        }
     }
 
     /// The checker lets a YARA-X boolean through an argument where a YARA-X

@@ -65,7 +65,8 @@ pub enum Dialect {
 /// separators, float meta values, `\"\"\"` strings, booleans in `of` tuples, hex or octal
 /// jump bounds, `.len()`). While `Refused`, using it is the error
 /// `yara_x_only_syntax`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum YaraXSyntax {
     /// YARA-X's syntax is the language: a raw `.yar` file.
     #[default]
@@ -124,15 +125,10 @@ impl Context {
         } else {
             Dialect::Libyara4
         };
-        let yara_x_syntax = if data.yara_x_syntax == "allowed" {
-            YaraXSyntax::Allowed
-        } else {
-            YaraXSyntax::Refused
-        };
         Self {
             dialect,
             profile: Some(profile),
-            yara_x_syntax,
+            yara_x_syntax: data.yara_x_syntax,
         }
     }
 }
