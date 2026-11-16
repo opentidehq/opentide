@@ -54,6 +54,32 @@ pub struct AnalyzeResult {
     pub tokens: Vec<HighlightToken>,
 }
 
+/// The node and token kinds of a parse of `source`, by their `snake_case` names, and
+/// whether it has a syntax error: what the corpus gate reads
+/// (`crates/opentide-analysis/tests/corpus_gate.rs`). Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
+    let (root, parse) = parser::parse(source);
+    let kinds = root
+        .descendants_with_tokens()
+        .map(|e| syntax::snake_case(e.kind()))
+        .collect();
+    (!parse.errors.is_empty(), kinds)
+}
+
+/// The `snake_case` names of the tree's named productions: the nodes of `cql.ungram`
+/// a parse builds (an enum of the ungram, such as `filter` or `expr`, is no node).
+/// Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_productions() -> Vec<String> {
+    syntax::PRODUCTIONS
+        .iter()
+        .map(|&k| syntax::snake_case(k))
+        .collect()
+}
+
 /// Analyze a CQL query on its own (a raw `.cql` file or a hunt search).
 pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_with(source, &Context::default())
