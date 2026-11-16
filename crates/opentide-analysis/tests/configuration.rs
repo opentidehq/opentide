@@ -134,7 +134,7 @@ fn a_parse_error_is_placed_where_toml_breaks() {
             "config_parse",
             &[],
             Severity::Error,
-            "Not valid TOML: TOMLDecodeError.",
+            "Not valid TOML: expected `=`.",
         )],
     );
     assert_eq!(found.len(), 1);

@@ -119,14 +119,15 @@ fn validate_and_the_language_server_report_the_same_codes_on_the_same_lines() {
     // What the command line reports: (code, 1-based line) per file.
     let mut command_line: BTreeMap<String, Vec<(String, u64)>> = BTreeMap::new();
     for issue in document["report"]["issues"].as_array().unwrap() {
-        let file = issue["file_path"].as_str().unwrap();
-        let file = Path::new(file).strip_prefix(&ws).unwrap_or(Path::new(file));
+        // `ws` is canonical (`\\?\C:\...` on Windows); so is the file.
+        let file = std::fs::canonicalize(issue["file_path"].as_str().unwrap()).unwrap();
+        let file = file.strip_prefix(&ws).unwrap();
         command_line
             .entry(file.display().to_string())
             .or_default()
             .push((
                 issue["code"].as_str().unwrap().to_owned(),
-                issue["line"].as_u64().unwrap_or(1),
+                issue["line"].as_u64().expect("an issue carries its line"),
             ));
     }
 

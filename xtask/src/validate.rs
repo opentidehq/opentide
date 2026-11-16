@@ -29,6 +29,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::diff_args::{DiffArgs, DiffCmd};
+
 use anyhow::{Context, Result, bail};
 use serde_json::{Value as Json, json};
 
@@ -37,21 +39,13 @@ use crate::golden::case::{Case, Spec};
 use crate::golden::recording::Recording;
 use crate::golden::snapshot::{ChangeKind, Snapshot};
 use crate::lint::unquoted_json;
+use opentide_cli::commands::validate::{Args as CliArgs, refuse};
+use opentide_cli::mode::Mode;
+use opentide_cli::render::report::ReportFormat;
+use opentide_cli::tree::RootCommand;
 use opentide_workspace::fix::FixRun;
 use opentide_workspace::validate::{Check, Options, QueriesMode, Selection};
 use opentide_workspace::{OsFs, RootOptions, Workspace};
-
-/// The usage of `cargo xtask validate`.
-pub const USAGE: &str = "\
-usage: cargo xtask validate diff [--filter GLOB] [--keep DIR] [--show-approved]
-
-  run opentide-workspace's validate on every recorded `validate --json`
-  case that checks or fixes (no --format, --watch) and compare its
-  report, checks and summary with the oracle's recording; a --fix case
-  also what it fixed, its diff and the files it wrote. GLOB filters
-  the case ids (validate/json/<fixture>/<variant>). --show-approved
-  prints each approved difference too.
-";
 
 /// An approved class of difference: where it applies, and why.
 pub struct Approved {
@@ -421,45 +415,28 @@ pub(crate) struct Args {
     pub(crate) fix: Option<bool>,
 }
 
-/// `argv`'s `validate` options; `None` when it holds another (`--format`,
-/// `--watch`, ...) or no `validate`.
+/// `argv`'s `validate` options, as the product reads them; `None` when it
+/// holds another (`--format`, `--output`, `--watch`, a global flag, ...), the
+/// command line's usage errors (UC-3.5: `--dry-run` without `--fix`, another
+/// `--type` spelling, `--queries` with another `--check`: the product's
+/// `refuse`) or no `validate`.
 pub(crate) fn parse_args(argv: &[String]) -> Option<Args> {
-    let rest = argv.iter().skip_while(|arg| *arg != "validate").skip(1);
-    let mut parsed = Args::default();
-    let mut rest = rest.peekable();
-    while let Some(arg) = rest.next() {
-        let mut value = || rest.next().cloned();
-        match arg.as_str() {
-            "--strict" => parsed.strict = true,
-            "--fix" => parsed.fix = Some(parsed.fix.unwrap_or(false)),
-            "--dry-run" => parsed.fix = Some(true),
-            "--check" => parsed.check = Some(Check::parse(&value()?)?),
-            "--type" => {
-                // Another spelling is the command line's usage error (UC-3.5).
-                let family = value()?;
-                if !["rule", "threat", "objective"].contains(&family.as_str()) {
-                    return None;
-                }
-                parsed.selection.types.push(family);
-            }
-            "--uuid" => parsed.selection.uuids.push(value()?),
-            "--file" => parsed.selection.files.push(value()?),
-            "--queries" => {
-                parsed.queries = match value()?.as_str() {
-                    "error" => QueriesMode::Error,
-                    "warn" => QueriesMode::Warn,
-                    "off" => QueriesMode::Off,
-                    _ => return None,
-                };
-            }
-            _ => return None,
-        }
-    }
-    // `--dry-run` without `--fix` is the command line's usage error (UC-3.5).
-    if parsed.fix == Some(true) && !argv.iter().any(|arg| arg == "--fix") {
+    let Some(RootCommand::Validate(parsed)) = crate::recorded::command(argv, "validate") else {
         return None;
-    }
-    Some(parsed)
+    };
+    let flags = CliArgs::from(&parsed);
+    let replayed = parsed.command.is_none()
+        && !flags.watch
+        && flags.format == ReportFormat::Text
+        && flags.output.is_none()
+        && refuse(&flags, Mode::Json).is_none();
+    replayed.then(|| Args {
+        check: flags.check,
+        selection: flags.selection,
+        strict: flags.strict,
+        queries: flags.queries.unwrap_or_default(),
+        fix: flags.fix.then_some(flags.dry_run),
+    })
 }
 
 /// The difference in the number of queries checked.
@@ -902,27 +879,12 @@ fn show(value: Option<&Json>) -> String {
 ///
 /// A recording or the fixtures cannot be read.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-pub fn run(args: &[String]) -> Result<u8> {
-    let mut filter = None;
-    let mut keep = None;
-    let mut show_approved = false;
-    let mut rest = args.iter();
-    match rest.next().map(String::as_str) {
-        Some("diff") => {}
-        Some("help" | "--help") | None => {
-            print!("{USAGE}");
-            return Ok(0);
-        }
-        Some(other) => bail!("unknown subcommand `{other}`\n{USAGE}"),
-    }
-    while let Some(arg) = rest.next() {
-        match arg.as_str() {
-            "--filter" => filter = Some(rest.next().context("--filter needs a glob")?.clone()),
-            "--keep" => keep = Some(PathBuf::from(rest.next().context("--keep needs a dir")?)),
-            "--show-approved" => show_approved = true,
-            other => bail!("unknown option `{other}`\n{USAGE}"),
-        }
-    }
+pub fn run(command: &DiffCmd) -> Result<u8> {
+    let DiffCmd::Diff(DiffArgs {
+        filter,
+        keep,
+        show_approved,
+    }) = command;
     let repo = repo_root();
     let spec = Spec::parse(&std::fs::read_to_string(
         repo.join("tests/golden/cases.toml"),
@@ -939,13 +901,7 @@ pub fn run(args: &[String]) -> Result<u8> {
     if cases.is_empty() {
         bail!("no recorded validate case matches");
     }
-    let scratch = Scratch {
-        path: keep.clone().unwrap_or_else(|| {
-            std::env::temp_dir().join(format!("xtask-validate-{}", std::process::id()))
-        }),
-        keep: keep.is_some(),
-    };
-    std::fs::create_dir_all(&scratch.path)?;
+    let scratch = Scratch::reusing("xtask-validate-", keep.as_deref())?;
     let mut laid_out: BTreeMap<String, PathBuf> = BTreeMap::new();
     let mut differences = Vec::new();
     for (number, (case, recorded, files)) in cases.iter().enumerate() {
@@ -1019,7 +975,7 @@ pub fn run(args: &[String]) -> Result<u8> {
                 used[index] += 1;
                 APPROVED[index].id
             });
-            if !show_approved {
+            if !*show_approved {
                 continue;
             }
             println!("approved ({id}): {} {}", difference.case, difference.what);
@@ -1079,6 +1035,19 @@ mod tests {
         assert!(parse_args(&argv(&["--dry-run"])).is_none());
         assert!(parse_args(&argv(&["--format", "sarif"])).is_none());
         assert!(parse_args(&argv(&["--check", "nope"])).is_none());
+        // The usage errors the product reports are not cases to replay.
+        assert!(parse_args(&argv(&["--type", "RULE"])).is_none());
+        assert!(parse_args(&argv(&["--check", "schema", "--queries", "warn"])).is_none());
+        assert!(parse_args(&argv(&["--watch"])).is_none());
+        assert!(parse_args(&argv(&["--output", "r.sarif"])).is_none());
+        assert!(parse_args(&argv(&["--verbose"])).is_none());
+        assert!(parse_args(&argv(&["query"])).is_none());
+        assert_eq!(
+            parse_args(&argv(&["--type", "rule", "--queries", "off"]))
+                .unwrap()
+                .queries,
+            QueriesMode::Off
+        );
     }
 
     #[test]
@@ -1359,7 +1328,30 @@ mod tests {
 
     #[test]
     fn the_fix_cases_agree_with_their_recordings() {
-        let args = ["diff", "--filter", "validate/json/*/fix*"].map(str::to_owned);
-        assert_eq!(run(&args).unwrap(), 0);
+        let command = DiffCmd::Diff(DiffArgs {
+            filter: Some("validate/json/*/fix*".to_owned()),
+            ..DiffArgs::default()
+        });
+        assert_eq!(run(&command).unwrap(), 0);
+    }
+
+    #[test]
+    fn the_command_line_is_checked() {
+        for bad in [
+            &[][..],
+            &["check"],
+            &["diff", "--nope"],
+            &["diff", "--filter"],
+            &["diff", "--keep"],
+        ] {
+            let error = crate::parse_subcommand::<DiffCmd>(bad).unwrap_err();
+            assert_eq!(error.exit_code(), 2, "{bad:?}");
+        }
+        // A bare `validate` is clap's help for a missing subcommand, exit 2.
+        let error = crate::parse_subcommand::<DiffCmd>(&[]).unwrap_err();
+        assert_eq!(
+            error.kind(),
+            clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+        );
     }
 }

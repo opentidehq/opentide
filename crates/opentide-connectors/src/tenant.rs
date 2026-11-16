@@ -59,11 +59,10 @@ pub struct Tenant {
 impl Tenant {
     /// The tenant *name* of *platform* from its `setup` table.
     ///
-    /// `ssl` is read as Python's loader and `tenant_tls_verify` read it: a
-    /// boolean, a boolean word, or a `$NAME` whose value is one; an unset
+    /// `ssl` is read as a boolean, a boolean word, or a `$NAME` whose value is one; an unset
     /// `$NAME` is refused before anything is sent. Every other string value
     /// is resolved as a credential in *mode*. *defaults* are the platform's
-    /// timeout and retries: no tenant key sets them, as none does in Python.
+    /// timeout and retries: no tenant key sets them.
     pub fn from_setup(
         platform: &str,
         name: &str,

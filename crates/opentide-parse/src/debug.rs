@@ -63,7 +63,7 @@ pub fn debug_errors<D: Display>(errors: &[SyntaxError], name: impl Fn(SyntaxKind
 
 /// What a message says the parser expected: each kind of `expected`, in
 /// kind order, spelled by `describe` (`""` leaves a kind out), each spelling
-/// once, joined as "a", "a, or b", "a, b, or c". `None` when nothing is left.
+/// once, joined as "a", "a or b", "a, b, or c". `None` when nothing is left.
 ///
 /// For "near `)`; expected `or`, `and`, or end of input".
 pub fn describe_expected<'a>(
@@ -77,10 +77,10 @@ pub fn describe_expected<'a>(
         }
     }
     let (last, rest) = names.split_last()?;
-    Some(if rest.is_empty() {
-        (*last).to_owned()
-    } else {
-        format!("{}, or {last}", rest.join(", "))
+    Some(match rest {
+        [] => (*last).to_owned(),
+        [one] => format!("{one} or {last}"),
+        _ => format!("{}, or {last}", rest.join(", ")),
     })
 }
 
@@ -117,7 +117,12 @@ mod tests {
         );
         assert_eq!(
             describe_expected(set(&[5, 1]), describe).as_deref(),
-            Some("`or`, or end of input")
+            Some("`or` or end of input"),
+            "two items take no comma"
+        );
+        assert_eq!(
+            describe_expected(set(&[1, 2, 5]), describe).as_deref(),
+            Some("`or`, `and`, or end of input")
         );
         assert_eq!(
             describe_expected(set(&[1, 2, 3, 4, 5, 0]), describe).as_deref(),
