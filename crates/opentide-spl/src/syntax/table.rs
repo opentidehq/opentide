@@ -171,7 +171,9 @@ fn dedup_option(p: &mut Parser<'_>) {
         .map_or(K::KEEPEVENTS_KW, |(_, k)| *k);
     p.bump_as(keyword.raw());
     p.bump();
-    if at_field(p) {
+    // `choice($.boolean, $.identifier)` in grammar.js: a name, not a number
+    // or a field word (`keepevents=1` is an error there).
+    if p.current() == K::IDENT.raw() {
         expr::name_or_call(p);
     } else {
         p.error("expected a value");
@@ -369,6 +371,10 @@ mod tests {
         assert!(render("| rename a as b, DNS.* as *").ends_with("--\n"));
         assert!(render("| rename a").contains("expected `as`"));
         assert!(render("| dedup 2 keepempty=true a b sortby -c").ends_with("--\n"));
+        // An option's value is a name or a boolean, as in grammar.js.
+        assert!(render("| dedup keepevents=x a").ends_with("--\n"));
+        assert!(render("| dedup keepevents=1 a").contains("expected a value"));
+        assert!(render("| dedup keepevents=a-b a").contains("expected a value"));
         assert!(render("| sort 0 -a, +b num(c) desc").ends_with("--\n"));
         assert!(render("| sort limit=0 a d").ends_with("--\n"));
         assert!(render("| head 5 keeplast=t").ends_with("--\n"));
