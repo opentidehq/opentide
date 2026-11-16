@@ -1,14 +1,12 @@
-//! The verdict of the new parser against tree-sitter's on seeded word
-//! mutations of every corpus file (the corpus alone is how B1 of the review
-//! of #1375 slipped through): delete, duplicate, swap, replace a token, insert
-//! a sample, drop or add a bracket, drop a quote.
+//! The parser on seeded word mutations of every corpus file: it does not panic
+//! and its tree is lossless. A mutation deletes, duplicates, swaps or replaces
+//! a token, inserts a sample, drops or adds a bracket, or drops a quote.
 //!
 //! Forty mutations per file and three seeds with `OPENTIDE_DIFF_SCALE=full`
 //! (`OPENTIDE_DIFF_SEEDS` picks the seeds); a sample of one seed by default,
 //! well under CI's limit.
 
-use opentide_core::LanguageId;
-use opentide_yaral::parse_facts::{lex_spans, parse_error_count, parse_is_lossless};
+use opentide_yaral::parse_facts::{lex_spans, parse_is_lossless};
 use std::path::{Path, PathBuf};
 
 const SAMPLES: &[&str] = &[
@@ -185,25 +183,12 @@ fn mutate(text: &str, rng: &mut Rng) -> String {
     out
 }
 
-/// What the mutation changed: the text around the first byte that differs.
-fn window(original: &str, mutated: &str) -> String {
-    let at = original
-        .bytes()
-        .zip(mutated.bytes())
-        .position(|(a, b)| a != b)
-        .unwrap_or(original.len().min(mutated.len()));
-    let start = mutated.floor_char_boundary(at.saturating_sub(120));
-    let end = mutated.ceil_char_boundary((at + 160).min(mutated.len()));
-    mutated[start..end].to_owned()
-}
-
 #[test]
-fn mutations_of_the_corpus_get_the_verdict_of_tree_sitter() {
+fn mutations_of_the_corpus_parse_losslessly() {
     let full = std::env::var("OPENTIDE_DIFF_SCALE").is_ok_and(|v| v == "full");
     let seeds = std::env::var("OPENTIDE_DIFF_SEEDS").unwrap_or_else(|_| "1".to_owned());
     let (stride, per_file) = if full { (1, 40) } else { (3, 8) };
     let mut checked = 0usize;
-    let mut different = Vec::new();
     for seed in seeds
         .split(',')
         .filter_map(|s| s.trim().parse::<u64>().ok())
@@ -213,32 +198,14 @@ fn mutations_of_the_corpus_get_the_verdict_of_tree_sitter() {
             let mut rng = Rng(seed.wrapping_mul(0x2545_F491_4F6C_DD1D) ^ n as u64);
             for _ in 0..per_file {
                 let mutated = mutate(&text, &mut rng);
-                let old = opentide_syntax::parse(LanguageId::Yaral, &mutated)
-                    .is_none_or(|tree| tree.root_node().has_error());
-                let new = parse_error_count(&mutated) > 0;
                 assert!(
                     parse_is_lossless(&mutated),
                     "{}: not lossless",
                     path.display()
                 );
                 checked += 1;
-                if old != new && different.len() < 12 {
-                    different.push(format!(
-                        "{} (seed {seed}): tree-sitter {}, here {}\n{:?}",
-                        path.display(),
-                        if old { "errors" } else { "accepts" },
-                        if new { "errors" } else { "accepts" },
-                        window(&text, &mutated)
-                    ));
-                }
             }
         }
     }
     assert!(checked > 100, "{checked} mutations");
-    assert!(
-        different.is_empty(),
-        "{} of {checked}:\n{}",
-        different.len(),
-        different.join("\n")
-    );
 }

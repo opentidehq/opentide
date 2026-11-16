@@ -3412,11 +3412,9 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "rowan",
  "serde",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3440,12 +3438,10 @@ dependencies = [
  "opentide-highlight",
  "opentide-lucene",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "rowan",
  "serde",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3459,11 +3455,9 @@ dependencies = [
  "opentide-highlight",
  "opentide-lucene",
  "opentide-parse",
- "opentide-syntax",
  "rowan",
  "serde",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3475,7 +3469,6 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "regex-syntax",
  "rowan",
@@ -3493,13 +3486,11 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "rowan",
  "serde",
  "serde_json",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3523,13 +3514,11 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "rowan",
  "serde",
  "strsim",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3542,10 +3531,8 @@ dependencies = [
  "opentide-ecs",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "rowan",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3581,13 +3568,11 @@ dependencies = [
  "opentide-highlight",
  "opentide-kuery",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "rowan",
  "serde",
  "strsim",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3624,9 +3609,7 @@ version = "0.12.0"
 dependencies = [
  "insta",
  "logos",
- "opentide-parse",
  "rowan",
- "serde_json",
 ]
 
 [[package]]
@@ -3674,12 +3657,10 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "rowan",
  "serde",
  "strsim",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3760,11 +3741,9 @@ version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
- "opentide-syntax",
  "serde",
  "serde_json",
  "toml 0.8.23",
- "tree-sitter",
  "yara-x-fmt",
  "yara-x-parser",
 ]
@@ -3778,12 +3757,10 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex-syntax",
  "rowan",
  "serde",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
