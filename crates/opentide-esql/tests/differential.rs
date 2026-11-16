@@ -104,7 +104,7 @@ struct Side {
 }
 
 /// The words Elasticsearch's lexer reserves in an expression: never the unit
-/// of an interval (`@elastic/esql` 4.33.0 rejects `5 on`, `LIMIT 1 LIKE`).
+/// of an interval (Elastic's reference ES|QL parser rejects `5 on`, `LIMIT 1 LIKE`).
 const RESERVED: [&str; 19] = [
     "and", "asc", "by", "desc", "false", "first", "in", "is", "last", "like", "not", "null",
     "nulls", "on", "or", "rlike", "true", "where", "with",
@@ -411,7 +411,7 @@ fn pinned_regressions() {
         assert!(errors(&old) && errors(&new), "{query}");
     }
     // Class (b): tree-sitter reads a reserved word as the unit of a number;
-    // Elasticsearch (`@elastic/esql` 4.33.0) and the new parser reject it.
+    // Elasticsearch (its reference ES|QL parser) and the new parser reject it.
     for query in [
         "FROM a | LIMIT 1 LIKE /* c */\n",
         "FROM a | FORK (WHERE a == 1) (WHERE b == 2 | LIMIT 5WITH )\n",

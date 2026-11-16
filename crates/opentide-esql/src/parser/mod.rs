@@ -176,7 +176,7 @@ mod tests {
         }
     }
 
-    /// Every query here is rejected by `@elastic/esql` 4.33.0 (run by hand with
+    /// Every query here is rejected by Elastic's reference ES|QL parser (run by hand with
     /// `scripts/engine/oracles/elastic/esql.cjs`). The old engine rejected them
     /// too, except `LIMIT 1 LIKE`, `LIMIT 5WITH`, `LIMIT 10 not BY x`,
     /// `x > 1 on`, `EVAL x = 5 where` and `LIMIT 10 or BY x`: tree-sitter lexed
@@ -212,7 +212,7 @@ mod tests {
         }
     }
 
-    /// Accepted by `@elastic/esql`, and by the old engine.
+    /// Accepted by Elastic's reference ES|QL parser, and by the old engine.
     #[test]
     fn a_parameter_names_an_assignment_and_a_word_is_a_unit() {
         for source in [
