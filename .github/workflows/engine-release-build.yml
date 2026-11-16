@@ -137,10 +137,9 @@ jobs:
           }
       # Installing the file's toolchain (no name) ignores `--target`: add it after.
       - name: Set up Rust
-        shell: bash
-        run: |
-          rustup toolchain install --profile minimal --no-self-update
-          rustup target add ${{ matrix.target }}
+        uses: ./.github/actions/rust-setup
+        with:
+          targets: ${{ matrix.target }}
       # The dry run only (a release builds from nothing): sccache, by content,
       # one family per Linux runner, which the cell marked `saves` saves on
       # development and by the nightly. macOS and Windows keep none: their
@@ -247,9 +246,9 @@ jobs:
       # The release rust-toolchain.toml pins, which cargo runs in this checkout
       # (`rustup toolchain install` with no name), with the targets the job builds.
       - name: Set up Rust
-        run: |
-          rustup toolchain install --profile minimal --no-self-update
-          rustup target add wasm32-unknown-unknown wasm32-wasip1
+        uses: ./.github/actions/rust-setup
+        with:
+          targets: wasm32-unknown-unknown wasm32-wasip1
       # The dry run only (a release builds from nothing): sccache, by content,
       # under one stable key per runner (tests/test_ci/test_workflows.py).
       - name: Install sccache
@@ -325,7 +324,7 @@ jobs:
           persist-credentials: false
       # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
+        uses: ./.github/actions/rust-setup
       - run: cargo run --locked -p opentide-lsp -- generate-highlights
       - name: zip
         run: |
@@ -355,7 +354,7 @@ jobs:
           persist-credentials: false
       # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
+        uses: ./.github/actions/rust-setup
       - name: licences and notices
         run: |
           set -euo pipefail
@@ -393,9 +392,9 @@ jobs:
       # The release rust-toolchain.toml pins (`rustup toolchain install` with no
       # name), with the browser build's target cargo-cyclonedx resolves for.
       - name: Set up Rust
-        run: |
-          rustup toolchain install --profile minimal --no-self-update
-          rustup target add wasm32-unknown-unknown
+        uses: ./.github/actions/rust-setup
+        with:
+          targets: wasm32-unknown-unknown
       # setup-uv caches by default on GitHub's runners ("auto"); a release
       # builds from nothing (tests/test_ci/test_workflows.py).
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5

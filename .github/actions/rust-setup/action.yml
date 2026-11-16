@@ -1,0 +1,91 @@
+# The release rust-toolchain.toml pins (`rustup toolchain install` with no name,
+# with the rustfmt and clippy it lists), the targets a job builds, its prebuilt
+# tools and, given a family, its compiler cache restored.
+#
+# The cache (ci.yml's header lists the families): sccache's directory
+# (SCCACHE_DIR, which the job sets with RUSTC_WRAPPER) under
+# `sccache-<family>-<hash of rust-toolchain.toml>-<ISO week>`, restored with the
+# family and toolchain as restore-keys. The key is the one every job wrote
+# before this action, so a week's saved copy stays warm. Give the step the id
+# `sccache`: `steps.sccache.outputs.cache-hit` and `.cache-matched-key` read as
+# actions/cache/restore's. Saving is the job's (./.github/actions/sccache-save),
+# behind the policy the job states.
+name: Rust setup
+description: The pinned toolchain, targets, tools and the restored compiler cache.
+
+inputs:
+  targets:
+    description: Targets to add to the pinned toolchain, separated by spaces.
+    required: false
+    default: ""
+  tools:
+    description: taiki-e/install-action's `tool` list (sccache@0.19.0 with a cache).
+    required: false
+    default: ""
+  fallback:
+    description: taiki-e/install-action's `fallback`.
+    required: false
+    default: cargo-binstall
+  cache:
+    description: The compiler cache family to restore; empty restores none.
+    required: false
+    default: ""
+
+outputs:
+  key:
+    description: The family's key this week; empty without a cache.
+    value: ${{ steps.key.outputs.key }}
+  cache-hit:
+    description: actions/cache/restore's `cache-hit`.
+    value: ${{ steps.restore.outputs.cache-hit }}
+  cache-matched-key:
+    description: actions/cache/restore's `cache-matched-key`.
+    value: ${{ steps.restore.outputs.cache-matched-key }}
+  save:
+    description: >-
+      Whether the base-branch policy saves the family: the key missed, and
+      this is a push or Run workflow, or no copy of the family was found.
+    value: ${{ inputs.cache != '' && steps.restore.outputs.cache-hit != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.restore.outputs.cache-matched-key == '') }}
+
+runs:
+  using: composite
+  steps:
+    # Installing the file's toolchain (no name) ignores `--target`: add after.
+    - name: Toolchain
+      shell: bash
+      env:
+        TARGETS: ${{ inputs.targets }}
+      run: |
+        rustup toolchain install --profile minimal --no-self-update
+        if [[ -n "${TARGETS}" ]]; then
+          # shellcheck disable=SC2086 # one target a word
+          rustup target add ${TARGETS}
+        fi
+
+    - name: Tools
+      if: inputs.tools != ''
+      uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+      with:
+        tool: ${{ inputs.tools }}
+        fallback: ${{ inputs.fallback }}
+
+    - name: Compiler cache key
+      id: key
+      if: inputs.cache != ''
+      shell: bash
+      env:
+        PREFIX: sccache-${{ inputs.cache }}-${{ hashFiles('rust-toolchain.toml') }}-
+      run: |
+        {
+          echo "prefix=${PREFIX}"
+          echo "key=${PREFIX}$(date -u +%G-W%V)"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Restore the compiler cache
+      id: restore
+      if: inputs.cache != ''
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ env.SCCACHE_DIR }}
+        key: ${{ steps.key.outputs.key }}
+        restore-keys: ${{ steps.key.outputs.prefix }}
