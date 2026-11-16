@@ -3368,7 +3368,10 @@ impl ReorderItem {
     }
     /// The token child.
     pub fn order(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![asc])
+        support::token_in(
+            &self.syntax,
+            &[T![asc], T![desc], T![granny - asc], T![granny - desc]],
+        )
     }
 }
 
@@ -3452,9 +3455,9 @@ impl AstNode for ColumnPattern {
 }
 
 impl ColumnPattern {
-    /// The token child.
-    pub fn pieces(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![ident])
+    /// The token children, in order.
+    pub fn pieces(&self) -> Vec<SyntaxToken> {
+        support::tokens_in(&self.syntax, &[T![ident], T![number], T![timespan], T![*]])
     }
 }
 
@@ -3744,7 +3747,7 @@ impl SortItem {
     }
     /// The token child.
     pub fn order(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![asc])
+        support::token_in(&self.syntax, &[T![asc], T![desc]])
     }
     /// The token child.
     pub fn nulls_token(&self) -> Option<SyntaxToken> {
@@ -4032,7 +4035,7 @@ impl TopNestedBy {
     }
     /// The token child.
     pub fn order(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![asc])
+        support::token_in(&self.syntax, &[T![asc], T![desc]])
     }
     /// The token child.
     pub fn nulls_token(&self) -> Option<SyntaxToken> {
@@ -4380,9 +4383,9 @@ impl AdditiveExpr {
     pub fn exprs(&self) -> AstChildren<Expr> {
         support::children(&self.syntax)
     }
-    /// The token child.
-    pub fn op(&self) -> Option<SyntaxToken> {
-        support::token_in(&self.syntax, &[T![+], T![-]])
+    /// The token children, in order.
+    pub fn op(&self) -> Vec<SyntaxToken> {
+        support::tokens_in(&self.syntax, &[T![+], T![-]])
     }
 }
 
@@ -4410,9 +4413,9 @@ impl MultiplicativeExpr {
     pub fn exprs(&self) -> AstChildren<Expr> {
         support::children(&self.syntax)
     }
-    /// The token child.
-    pub fn op(&self) -> Option<SyntaxToken> {
-        support::token_in(&self.syntax, &[T![*], T![/], T![%]])
+    /// The token children, in order.
+    pub fn op(&self) -> Vec<SyntaxToken> {
+        support::tokens_in(&self.syntax, &[T![*], T![/], T![%]])
     }
 }
 
