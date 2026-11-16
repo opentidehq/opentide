@@ -104,19 +104,22 @@ checked before the next pull request builds on it.
 | `deny` | `cargo deny check` against [`deny.toml`](../deny.toml) for the workspace, `fuzz/` and the `publishing/` placeholder crate ([`docs/internal/supply-chain.md`](../docs/internal/supply-chain.md)) |
 | `gate` (**`PR gate`**) | The one required check (below) |
 
-**The release tier** (a release pull request, `scope: release`; the packaging jobs nightly too):
-`sdist` (`maturin sdist`, then twine's check) and `smoke-sdist` (a build from the sdist with the runner's stable Rust); `packages`
-([`build-packages.yml`](workflows/build-packages.yml): every wheel, built by maturin
-(PyO3/maturin-action), each installed and run on its own platform (`wheel-smoke`), and every npm tarball, at `X.Y.Z.devN` / `X.Y.Z-dev.N`, kept 14 days:
-[`docs/internal/publishing.md`](../docs/internal/publishing.md#testing-a-build-without-publishing));
-`smoke-wheel` (pip install on Linux x64 and arm64, macOS, Windows); `smoke-npm` (a throwaway local
-registry, Linux, macOS, Windows); `engine-release-dry-run`
+**The release tier** (a release pull request, `scope: release`, and the nightly): one job,
+`release` ([`release-build.yml`](workflows/release-build.yml), which publish.yml calls too, so
+each build and smoke test exists once): `packages` ([`build-packages.yml`](workflows/build-packages.yml):
+every wheel, built by maturin (PyO3/maturin-action), each installed and run on its own platform
+(`wheel-smoke`), and every npm tarball, one `npm-packages` artifact), `engine-assets`
 ([`engine-release-build.yml`](workflows/engine-release-build.yml): every binary, installer,
-WebAssembly build, SBOM and SHA256SUMS); `smoke-installer` (the installers on Linux x64 and
-arm64, macOS, Windows); `engine-package` (every crate packaged and built as crates.io builds it,
-and the licence scan) and `smoke-cargo` (`cargo install opentide --features cli` from those
-packages); `publish-dry-run` ([`publish-dry-run.yml`](workflows/publish-dry-run.yml)); and `docs`.
-The smoke tests are publish.yml's own.
+WebAssembly build, SBOM and SHA256SUMS), `sdist` (`maturin sdist`, twine's check) and
+`crate-packages` (every crate packaged and built as crates.io builds it, and the licence scan),
+at `X.Y.Z.devN` / `X.Y.Z-dev.N`, kept 14 days
+([`docs/internal/publishing.md`](../docs/internal/publishing.md#testing-a-build-without-publishing));
+then one `smoke` matrix running [`scripts/build/smoke_release.sh`](../scripts/build/smoke_release.sh):
+the installer and `npm install` from a throwaway local registry on each of the six platforms
+(Linux x64 and arm64, macOS arm64 and x64, Windows x64 and arm64), a build from the sdist with the
+runner's stable Rust after the PyPI dist's shape (one version, six cp310-abi3 wheels, one sdist),
+and `cargo install opentide --features cli` from the crate packages. Also `publish-dry-run`
+([`publish-dry-run.yml`](workflows/publish-dry-run.yml): the registry placeholders) and `docs`.
 
 **The nightly set** (`mode == 'nightly'`): `engine-test-os` (the workspace's tests on macOS and
 Windows, built there), `test-full` (Python 3.10 to 3.13 on the build's abi3 extension), `e2e-full`
@@ -252,8 +255,11 @@ merging** → add `PR gate`, remove the others → **Save changes**.
   references (Lucene's jars from Maven Central, the EQL and kuery grammars) are cached under
   `oracle.py`'s pins and saved by the scheduled run; `oracle.py` checks each file's SHA-256, a
   restored one too.
-- [`publish-dry-run.yml`](workflows/publish-dry-run.yml) (every publish rehearsed, nothing
-  published): in a release pull request's checks and the nightly (ci.yml calls it), and on demand.
+- [`publish-dry-run.yml`](workflows/publish-dry-run.yml) (the registry placeholders rehearsed,
+  nothing published): in a release pull request's checks and the nightly (ci.yml calls it), and on
+  demand. The PyPI dist's shape is `release-build.yml`'s (`smoke_release.sh sdist`).
+- [`release-build.yml`](workflows/release-build.yml): every artifact a release ships, built and
+  smoke-tested once; ci.yml's `release` and publish.yml's `build` call it (above).
 - Deleted (2026-11-14): `docs.yml` (now ci.yml's `docs` job), `stack-comment.yml`, `golden.yml`
   and `golden-preview.yml` (`cargo xtask golden check --engine python` and `golden record
   --check-determinism` run by hand: `tests/golden/README.md`).

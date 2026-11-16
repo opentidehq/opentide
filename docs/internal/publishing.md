@@ -119,7 +119,7 @@ Every artifact (the Release's assets, the wheels and sdist, the `.crate` files, 
 
 `internal_candidate: N` cuts `vX.Y.Z-rc.N` of the workspace version (the Rust core's `1.0.0-rc.N`) for the maintainer to test before anything reaches a package manager. **Nothing reaches a registry:** no PyPI, crates.io or npm upload, no OIDC token and no attestation (`attest`, `release`, `verify-assets`, `pypi`, `crates`, `npm` and `smoke-registries` are skipped for channel `internal`, each by its own `if`).
 
-- **The run.** Actions, Publish, Run workflow on `integration/unified-core` (or `development`), `internal_candidate` `1` (then `2`, ...), every other input left empty. The guard refuses another branch, a combination with `release_candidate`, `dry_run` or `checkout_ref`, a tag that already exists (or a Release of that name), crates at another version (lockstep), and, as for a candidate, a version not above the newest dated `CHANGELOG.md` heading (`release.py check-candidate`). The run builds everything from scratch as a release does (`checks`, `release-assets`, `packages`, `sdist`) and every smoke test runs.
+- **The run.** Actions, Publish, Run workflow on `integration/unified-core` (or `development`), `internal_candidate` `1` (then `2`, ...), every other input left empty. The guard refuses another branch, a combination with `release_candidate`, `dry_run` or `checkout_ref`, a tag that already exists (or a Release of that name), crates at another version (lockstep), and, as for a candidate, a version not above the newest dated `CHANGELOG.md` heading (`release.py check-candidate`). The run builds everything from scratch as a release does (`build`: [`release-build.yml`](../../.github/workflows/release-build.yml)) and every smoke test runs.
 - **What it creates.** Only once every smoke test passed, the job `internal-release` (`contents: write`, `GITHUB_TOKEN`, no `id-token`) pushes the tag `vX.Y.Z-rc.N` on the commit built (through the API: a draft does not create its tag) and creates a **draft pre-release**, never Latest, titled `X.Y.Z-rc.N (internal)`, carrying every binary and release asset (with their `SHA256SUMS` and the SBOMs), every wheel and the sdist (`X.Y.ZrcN`), every crate package (`X.Y.Z-rc.N`), and every npm tarball (flattened out of their directories; two files of one name fail the job), plus **`PACKAGES-SHA256SUMS`** over the added package files (`SHA256SUMS` stays the release assets' own). Its notes are `release.py notes --internal`: what it is, then `## [Unreleased]`.
 - **Where to find it.** The repository's **Releases** page, at the top, marked **Draft** (visible only to people with write access), or `gh release view v1.0.0-rc.1` / `gh release download v1.0.0-rc.1 --dir rc1`. Install from the downloads: `pip install opentide-1.0.0rc1-cp310-abi3-<platform>.whl`, `npm install ./opentide-opentide-1.0.0-rc.1.tgz` (with its native package), the binaries' installers with `OPENTIDE_DOWNLOAD_URL` pointing at the download directory, and `sha256sum --check PACKAGES-SHA256SUMS` / `SHA256SUMS`.
 - **Promote or delete it.** The tag is real (on `origin`) even while the release is a draft. To share it, edit the draft and **Publish release** (it stays a pre-release; still nothing on a registry). To drop it, `gh release delete vX.Y.Z-rc.N --cleanup-tag --yes` (deletes the draft and the tag); a rerun of the same `N` is then possible, otherwise cut `N+1`. A candidate never goes to PyPI or crates.io from here: that is the final release (no input, from `development`) or, if re-enabled, a public candidate.
@@ -136,7 +136,7 @@ For the Rust-core transition ([#790](https://github.com/opentidehq/opentide/issu
 | GitHub | The tag `vX.Y.Z-rc.N` and a **pre-release** (never Latest) with every asset: the binaries, the installers, the engine assets, the SBOMs, `SHA256SUMS`, and the attestations, signed by `publish.yml` on the branch it ran from |
 | PyPI | `X.Y.ZrcN`, a pre-release on **pypi.org** (environment `pypi`, the same trusted publisher as a release; no TestPyPI). pip and uv skip it unless asked: `pip install --pre opentide`, `uv pip install --prerelease=allow opentide`, or the exact version (`opentide==1.0.0rc1`) |
 | crates.io | Every crate at `X.Y.Z-rc.N`, a SemVer pre-release, in dependency order: the workflow runs `release.py bump X.Y.Z-rc.N` in its own checkout (the branch keeps `X.Y.Z`) before it packages and publishes. Cargo skips a pre-release unless it is asked for (`cargo install opentide --version 1.0.0-rc.1 --features cli`). **A crates.io version can be yanked, never deleted**, and the first candidate **claims every new crate name** (`opentide-schema`, `-schema-derive`, `-workspace`, `-compile`, `-connectors`, `-cli`) |
-| npm | **Nothing.** The npm tarballs are built and smoke-tested as for a release, and ci.yml's `packages` artifacts carry them to test ([Testing a build without publishing](#testing-a-build-without-publishing)) |
+| npm | **Nothing.** The npm tarballs are built and smoke-tested as for a release, and ci.yml's `release` artifacts carry them to test ([Testing a build without publishing](#testing-a-build-without-publishing)) |
 
 The guard runs `scripts/build/release.py check-candidate`, which refuses a candidate whose version is not above the newest dated `CHANGELOG.md` heading, and every smoke test passes before anything is attested or published. A candidate's GitHub notes quote `## [Unreleased]`.
 
@@ -158,21 +158,21 @@ CI proves the connectors against recorded cassettes and stand-in servers, never 
 
 ### Testing a build without publishing
 
-ci.yml's nightly set (nightly, and Run workflow on any branch) runs [`build-packages.yml`](../../.github/workflows/build-packages.yml), the build `publish.yml` uses, as its `packages` job, at a development version of the workspace's (PyPI `X.Y.Z.devN`, npm `X.Y.Z-dev.N`, N the run number), and keeps the result for 14 days as the run's artifacts:
+ci.yml's `release` job (the nightly, a release pull request, and Run workflow with `scope: release` on any branch) runs [`release-build.yml`](../../.github/workflows/release-build.yml), the build `publish.yml` uses, at a development version of the workspace's (PyPI `X.Y.Z.devN`, npm `X.Y.Z-dev.N`, N the run number), and keeps the result for 14 days as the run's artifacts:
 
 | Artifact | Holds |
 |----------|-------|
 | `wheels-linux-x64`, `wheels-linux-arm64`, `wheels-macos-x64`, `wheels-macos-arm64`, `wheels-windows-x64`, `wheels-windows-arm64` | One `cp310-abi3` wheel (Python 3.10 and later) |
-| `npm-linux-x64-gnu`, `npm-linux-arm64-gnu`, `npm-darwin-x64`, `npm-darwin-arm64`, `npm-win32-x64-msvc`, `npm-win32-arm64-msvc` | `@opentide/opentide` and that platform's native package |
+| `npm-packages` | Every npm tarball: `1-native/` (one native package per platform), `2-package/` (`@opentide/opentide`), `3-alias/`, `4-lsp/` |
 
 ```bash
-# A run of ci.yml that ran the nightly set: Actions, CI, the run's page (its id is in the URL)
+# A run of ci.yml that ran the release job (nightly, release PR, scope: release): Actions, CI, the run's page (its id is in the URL)
 gh run download <run-id> -R opentidehq/opentide -n wheels-linux-x64
 uv venv && uv pip install opentide-*.whl        # or: python -m pip install opentide-*.whl
 .venv/bin/opentide --version
 
-gh run download <run-id> -R opentidehq/opentide -n npm-linux-x64-gnu
-npm install ./opentide-opentide-*.tgz           # the package and its native package
+gh run download <run-id> -R opentidehq/opentide -n npm-packages
+npm install ./2-package/opentide-opentide-*.tgz ./1-native/opentide-opentide-linux-x64-gnu-*.tgz
 npx opentide --version
 ```
 
@@ -206,7 +206,7 @@ npm resolves the native package from the local tarball; it may print a warning f
 
 Verdaccio and TypeScript come from the test's own [`package-lock.json`](../../scripts/engine/npm-local-registry/package-lock.json) (`npm ci --ignore-scripts`, from the default registry, into the work folder). Nothing is published anywhere else, and the work folder is deleted afterwards (`--keep` leaves it).
 
-It runs in `publish.yml`'s `smoke-npm`, on Linux, macOS and Windows, against the tarballs `build-packages.yml`'s `npm-pack` built, before `attest` and so before anything is published; and in ci.yml's full set (`npm-install`), on linux-x64-gnu only: the tree's packages at the workspace version, the other five native packages packed as stand-ins without an addon, so that npm still has to choose. To run it locally (Node.js 22 or later), from the repository root:
+It runs in `release-build.yml`'s `smoke` (which `publish.yml` and ci.yml's `release` call), on each of the six platforms, against the tarballs `build-packages.yml`'s `npm-pack` built, before `attest` and so before anything is published; and in ci.yml's full set (`npm-install`), on linux-x64-gnu only: the tree's packages at the workspace version, the other five native packages packed as stand-ins without an addon, so that npm still has to choose. To run it locally (Node.js 22 or later), from the repository root:
 
 ```bash
 cd bindings/node && npm ci && cd ../..

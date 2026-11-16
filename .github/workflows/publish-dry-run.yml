@@ -1,12 +1,14 @@
-# Rehearses every publish this repository makes, without publishing anything:
-# the opentide crate placeholder (crates.io), the @opentide/opentide and
-# opentide placeholders (npm), and the wheels and sdist (PyPI), built the way
-# publish.yml builds them. publish.yml's own `dry_run` input rehearses the
-# whole release train (every platform, every package, the smoke tests).
+# Rehearses the registry placeholders, without publishing anything: the
+# opentide crate placeholder (crates.io) and the @opentide/opentide and
+# opentide placeholders (npm). The wheels and the sdist PyPI receives are
+# release-build.yml's, which the same ci.yml run builds, smoke-tests and holds
+# to the PyPI dist's shape (scripts/build/smoke_release.sh sdist).
+# publish.yml's own `dry_run` input rehearses the whole release train (every
+# platform, every package, the smoke tests).
 #
 # Nothing here can publish. The token is read-only (contents: read), no job may
-# mint an OIDC token (no id-token: write), which trusted publishing on all
-# three registries needs, no secret is read, and every publish command runs
+# mint an OIDC token (no id-token: write), which trusted publishing on the
+# registries needs, no secret is read, and every publish command runs
 # with --dry-run. tests/test_ci/test_workflows.py keeps it so.
 #
 # What it leaves out on purpose: the release guard's checks on the state of
@@ -136,96 +138,3 @@ jobs:
             fi
             echo "::endgroup::"
           done
-
-  # The artifacts publish.yml uploads to PyPI, built the same way: maturin
-  # (PyO3/maturin-action, which compiles bindings/python/ into the wheel) at
-  # the version the release guard reads from CHANGELOG.md, and `maturin
-  # sdist`. One runner: the Linux x86_64 wheel (manylinux_2_28; no musllinux,
-  # the maintainer's decision) and the sdist. The release builds the other
-  # platforms itself and refuses to publish when one is missing
-  # (docs/internal/publishing.md, "The release train").
-  pypi:
-    name: PyPI (wheels and sdist)
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-
-      - name: The version a release from this commit builds
-        id: version
-        run: |
-          set -euo pipefail
-          version="$(python scripts/build/release.py version)"
-          echo "Building ${version}, the newest dated version in CHANGELOG.md"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-
-      # maturin takes the version from bindings/python/'s crate, as
-      # build-packages.yml writes it (scripts/engine/release.py pypi-version).
-      - name: The packages at that version
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: python scripts/engine/release.py pypi-version "${VERSION}"
-
-      # The sdist first, on the runner; then the wheel, in the manylinux container.
-      - name: Build sdist
-        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
-        with:
-          maturin-version: v1.16.0
-          command: sdist
-          args: --out dist
-
-      - name: Build the wheel
-        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
-        with:
-          maturin-version: v1.16.0
-          command: build
-          target: x86_64-unknown-linux-gnu
-          manylinux: "2_28"
-          args: --locked --out dist
-
-      - name: Twine check
-        run: |
-          python -m pip install twine
-          python -m twine check dist/*
-
-      # The publish job's own checks, for the platforms built here.
-      - name: One version, cp310-abi3 wheels, one sdist
-        env:
-          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          set -euo pipefail
-          ls -l dist
-          python3 - <<'PY'
-          import os
-          import sys
-          from pathlib import Path
-
-          built = sorted(p.name for p in Path("dist").iterdir() if p.is_file())
-          wheels = [name for name in built if name.endswith(".whl")]
-          sdists = [name for name in built if name.endswith(".tar.gz")]
-          versions = {name.split("-")[1] for name in wheels} | {
-              name.removesuffix(".tar.gz").rsplit("-", 1)[1] for name in sdists
-          }
-          problems = []
-          if len(sdists) != 1:
-              problems.append(f"expected one sdist, found {sdists}")
-          if len(versions) != 1 or any("dev" in v or "+" in v for v in versions):
-              problems.append(f"expected one release version, found {sorted(versions)}")
-          elif versions != {os.environ["EXPECTED_VERSION"]}:
-              problems.append(f"built {sorted(versions)}, expected {os.environ['EXPECTED_VERSION']}")
-          if not any("manylinux" in name for name in wheels):
-              problems.append("no manylinux wheel")
-          if any("musllinux" in name for name in wheels):
-              problems.append(f"a musllinux wheel: {wheels}")
-          if not all("-cp310-abi3-" in name for name in wheels):
-              problems.append(f"a wheel is not cp310-abi3: {wheels}")
-          for problem in problems:
-              print(f"::error::{problem}")
-          sys.exit(1 if problems else 0)
-          PY
