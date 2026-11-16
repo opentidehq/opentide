@@ -285,7 +285,14 @@ fn ty_of(node: &SyntaxNode, source: &str) -> Ty {
         | K::AND_EXPRESSION
         | K::OR_EXPRESSION
         | K::NOT_EXPRESSION => Ty::Bool,
-        K::BINARY_EXPRESSION => run_ty(&Run::of(node), source),
+        K::BINARY_EXPRESSION => {
+            if let Some(known) = TYPES.with(|t| t.borrow().get(node).copied()) {
+                return known;
+            }
+            let t = run_ty(&Run::of(node), source);
+            TYPES.with(|types| types.borrow_mut().insert(node.clone(), t));
+            t
+        }
         K::FUNCTION_CALL => {
             let Some(call) = ast::FunctionCall::cast(node.clone()) else {
                 return Ty::Unknown;
@@ -308,6 +315,19 @@ fn ty_of(node: &SyntaxNode, source: &str) -> Ty {
         }
         _ => Ty::Unknown,
     }
+}
+
+thread_local! {
+    /// Each run of arithmetic's type, while one query is analysed: a run nested in
+    /// parentheses is the left operand of the run around it, and each level of each run checks
+    /// its operands' types, so without it `((1 + 1) + 1) …` would be typed again at every depth.
+    static TYPES: std::cell::RefCell<HashMap<SyntaxNode, Ty>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+/// Forgets the types of the last query's runs (its tree is gone).
+pub(crate) fn forget_types() {
+    TYPES.with(|t| t.borrow_mut().clear());
 }
 
 /// The type of a run of `+ - * / %`: each level's right operand folded in, from the innermost

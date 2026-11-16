@@ -311,6 +311,7 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
         ));
     }
     let mut translated = semantics::Translated::default();
+    semantics::forget_types();
     for event in tree.syntax.preorder() {
         if let rowan::WalkEvent::Enter(node) = event {
             check_node(
@@ -323,6 +324,7 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
             );
         }
     }
+    semantics::forget_types();
     if let Some(root) = ast::SourceFile::cast(tree.syntax.clone()) {
         builder::check_pipes(&root, source, catalog, &mut out);
     }
@@ -426,7 +428,8 @@ fn check_node(
             | K::NOT_EXPRESSION
             | K::FUNCTION_CALL
     );
-    if expression && broken(problems, nav::span(node)) {
+    // (A span is a walk down the node's edges: worth it only when the parser found a problem.)
+    if expression && !problems.is_empty() && broken(problems, nav::span(node)) {
         return;
     }
     match kind {

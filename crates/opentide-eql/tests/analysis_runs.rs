@@ -220,3 +220,32 @@ fn a_broken_run_reports_each_finding_once() {
         );
     }
 }
+
+/// Arithmetic nested in parentheses, `((1 + 1) + 1) …`, is typed once per run: each run is the
+/// left operand of the run around it, and was typed again at each depth.
+#[test]
+fn nested_arithmetic_is_linear() {
+    let nested = format!("{}1{} == 1", "(".repeat(500), " + 1)".repeat(500));
+    let source = format!("process where {}", vec![nested.as_str(); 200].join(" or "));
+    let started = Instant::now();
+    on_small_stack(move || analyze(&source).diagnostics.len());
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "{:?}",
+        started.elapsed()
+    );
+}
+
+/// A chain of `not` is spanned only when the parser found a problem.
+#[test]
+fn a_long_chain_of_not_is_linear() {
+    let chained = format!("{}a == 1", "not ".repeat(500));
+    let source = format!("process where {}", vec![chained.as_str(); 200].join(" or "));
+    let started = Instant::now();
+    on_small_stack(move || analyze(&source).diagnostics.len());
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "{:?}",
+        started.elapsed()
+    );
+}
