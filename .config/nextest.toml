@@ -33,6 +33,7 @@ not (
     | binary_id(opentide-lsp::protocol)
     | binary_id(opentide-analysis::tide_corpus)
     | binary_id(opentide-analysis::deep_queries)
+    | binary_id(opentide-yaral::long_runs)
     | binary_id(/::external_/)
     | binary_id(opentide-analysis::live_elasticsearch_probes)
     | binary_id(opentide-analysis::elastic_detection_rules)

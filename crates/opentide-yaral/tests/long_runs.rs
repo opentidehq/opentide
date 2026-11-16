@@ -22,7 +22,7 @@ fn every_entry_point(source: String) -> Vec<opentide_core::Diagnostic> {
             let mut file = Vec::new();
             for ctx in [Context::FILE, Context::SECTIONS, Context::SEARCH] {
                 let analysis = analyze_with(&source, &ctx);
-                if matches!(ctx.profile, None) {
+                if ctx.profile.is_none() {
                     file = analysis.diagnostics;
                 }
             }
@@ -42,57 +42,64 @@ fn every_entry_point(source: String) -> Vec<opentide_core::Diagnostic> {
 
 /// In a rule's `events`.
 fn rule(expr: &str) -> String {
-    format!("rule r {{\n  meta:\n    author = \"x\"\n  events:\n    {expr}\n  condition:\n    $e\n}}\n")
+    format!(
+        "rule r {{\n  meta:\n    author = \"x\"\n  events:\n    {expr}\n  condition:\n    $e\n}}\n"
+    )
 }
 
-/// A million repeats of each token class (the lexer's list), whole texts.
-#[test]
-fn a_million_repeats_of_every_token_class() {
-    let n = 1_000_000;
-    let started = Instant::now();
-    for source in [
-        format!("\"{}\"", "\\a".repeat(n)),
-        format!("/{}/", "\\a".repeat(n)),
-        format!("`{}`", "a".repeat(n)),
-        format!("/*{}*/", "a".repeat(n)),
-        format!("// {}", "a".repeat(n)),
-        "a ".repeat(n),
-        "$a ".repeat(n),
-        "#e ".repeat(n),
-        "%l ".repeat(n),
-        "1 ".repeat(n),
-        "1.5 ".repeat(n),
-        "10m ".repeat(n),
-        " ".repeat(n),
-        "\u{a0}".repeat(n),
-        "\"\u{e9}".repeat(n),
-        "\u{e9}".repeat(n),
-        "rule ".repeat(n),
-        "events: ".repeat(n),
-        "and ".repeat(n),
-        "( ".repeat(n),
-        ") ".repeat(n),
-        "{ ".repeat(n),
-        "} ".repeat(n),
-        "[ ".repeat(n),
-        ", ".repeat(n),
-        ". ".repeat(n),
-        "= ".repeat(n),
-        "!= ".repeat(n),
-        "<= ".repeat(n),
-        "- ".repeat(n),
-        "! ".repeat(n),
-        "f( ".repeat(n),
-    ] {
-        every_entry_point(source);
-    }
-    // Linear: a quadratic step (the UTF-16 columns of one long line were)
-    // takes minutes here.
-    assert!(
-        started.elapsed() < Duration::from_secs(600),
-        "{:?}",
-        started.elapsed()
-    );
+/// A million repeats of each token class, one test each (nextest runs them
+/// in parallel; each takes 10 to 30 s in a debug build). Linear: a quadratic
+/// step, as the UTF-16 columns of one long line were, takes minutes.
+const N: usize = 1_000_000;
+
+macro_rules! a_million {
+    ($($name:ident: $source:expr;)*) => {$(
+        #[test]
+        fn $name() {
+            let started = Instant::now();
+            every_entry_point($source);
+            assert!(
+                started.elapsed() < Duration::from_secs(240),
+                "{:?}",
+                started.elapsed()
+            );
+        }
+    )*};
+}
+
+a_million! {
+    string_escapes: format!("\"{}\"", "\\a".repeat(N));
+    regex_escapes: format!("/{}/", "\\a".repeat(N));
+    raw_string: format!("`{}`", "a".repeat(N));
+    block_comment: format!("/*{}*/", "a".repeat(N));
+    line_comment: format!("// {}", "a".repeat(N));
+    names: "a ".repeat(N);
+    variables: "$a ".repeat(N);
+    counts: "#e ".repeat(N);
+    reference_lists: "%l ".repeat(N);
+    integers: "1 ".repeat(N);
+    floats: "1.5 ".repeat(N);
+    durations: "10m ".repeat(N);
+    spaces: " ".repeat(N);
+    no_break_spaces: "\u{a0}".repeat(N);
+    unterminated_strings: "\"\u{e9}".repeat(N);
+    non_ascii_letters: "\u{e9}".repeat(N);
+    rule_keywords: "rule ".repeat(N);
+    section_labels: "events: ".repeat(N);
+    and_keywords: "and ".repeat(N);
+    open_parentheses: "( ".repeat(N);
+    close_parentheses: ") ".repeat(N);
+    open_braces: "{ ".repeat(N);
+    close_braces: "} ".repeat(N);
+    open_brackets: "[ ".repeat(N);
+    commas: ", ".repeat(N);
+    dots: ". ".repeat(N);
+    equals: "= ".repeat(N);
+    not_equals: "!= ".repeat(N);
+    less_or_equal: "<= ".repeat(N);
+    minus_signs: "- ".repeat(N);
+    bangs: "! ".repeat(N);
+    open_calls: "f( ".repeat(N);
 }
 
 /// Deep valid input analyses with no syntax error.
