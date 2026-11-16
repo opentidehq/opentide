@@ -12,7 +12,6 @@ names the few the toolkit needs in a `Grammar`. I/O-free, no `unsafe`, no worksp
 | `tree.rs` | `build`: events to a lossless rowan `GreenNode` and `SyntaxError`s, iteratively, no deeper than `MAX_TREE_DEPTH` |
 | `ast.rs` | `AstNode` and `support`: the runtime of the typed AST `cargo xtask codegen` generates from a language's `.ungram` (below) |
 | `conformance.rs` | `check`/`assert_conforms`: every node's children against its `.ungram` rule (`NodeRule`s, data the generated `RULES` holds), every mismatch reported with its range |
-| `differential.rs` | feature `differential`: the old-versus-new harness (below) |
 | `debug.rs` | `debug_tree`/`debug_errors` for insta snapshots, `describe_expected` for messages |
 
 ## Place
@@ -78,30 +77,6 @@ what you need apart. A label also overrides the default plural (`day` -> `days`,
 by the common English rules only). A Rust keyword becomes a raw identifier (`r#use`; `self`,
 `Self`, `crate` and `super` take a trailing `_`). The toolkit's own test language
 (`tests/ast_fixture/`) shows the whole loop.
-
-## Differential harness (feature `differential`)
-
-`differential::run(old, new, files, &config)` compares two `Engine`s (`observe` for whole-input
-surfaces, `observe_at` for offset-indexed ones: hover, completions) over each file, its prefixes,
-seeded token mutations (delete, duplicate, swap, insert a sample, duplicate a line, drop a
-bracket or insert a stray one, drop a quote) and random sentences. It knows no language: the
-caller's `Config` carries the `verdict` (valid, judged from an observation), the lexer's token
-ranges and the token samples.
-
-- Gates (`assert_gates`): valid input, zero differences on every surface (`Class::Valid`); broken
-  input, the same verdict (`Class::Verdict`). Message and range changes on broken input
-  (`Class::Broken`) are counted and listed, never failed: review them as snapshot diffs.
-- Every difference is counted; `max_examples` caps only the listed examples per (surface, class).
-  A surface an engine reports more than once is compared as the ordered list of its values.
-- Offsets: every char boundary up to `max_offsets` per input, else an even stride (always with `0`
-  and the end), so the sample is the same on every run. Prefixes are sampled the same way.
-- Deterministic from `Config::seed`, which is mixed (splitmix64), so nearby seeds give unrelated
-  inputs. `Report::to_json`/`to_json_string` render the report; the caller writes the file (the
-  crate is I/O-free).
-- Only dev-dependencies enable the feature (`opentide-parse = { workspace = true, features =
-  ["differential"] }`): production code never links both engines. The crate's own tests turn it
-  on through a dev-dependency on itself, so a plain `cargo test -p opentide-parse` (what CI runs)
-  includes them; `cargo xtask check-layers` does not count that self-edge.
 
 ## Test
 

@@ -27,6 +27,3 @@ toml.workspace = true
 [dev-dependencies]
 serde_json.workspace = true
 insta.workspace = true
-opentide-parse = { workspace = true, features = ["differential"] }
-# The tree-sitter grammar, read by tests/legacy for the differential.
-opentide-syntax.workspace = true

@@ -1,14 +1,14 @@
 //! The field-list commands (`table`, `fields`, `rename`, `dedup`, `sort`,
 //! `head`, `tail`, `rex`, `fillnull`, `mvexpand`, `makemv`) against every
-//! file under the test data: wherever tree-sitter accepts a file the
-//! pure-Rust parser does too and reads these commands as such; the fixtures'
-//! trees are snapshots.
+//! file under the test data: every file the parser accepts reads these
+//! commands as such, a few queries keep the verdicts tree-sitter gave them,
+//! and the fixtures' trees are snapshots.
 
 mod support;
 
 use opentide_spl::syntax::{SyntaxKind, parse};
 use std::path::Path;
-use support::{body, old_accepts, render, walk};
+use support::{body, render, walk};
 
 const COMMANDS: [&str; 11] = [
     "table", "fields", "rename", "dedup", "sort", "head", "tail", "rex", "fillnull", "mvexpand",
@@ -23,15 +23,12 @@ fn no_table_command_is_left_to_the_placeholder() {
         &mut files,
     );
     files.sort();
-    let (mut seen, mut failures) = (0, Vec::new());
+    let mut seen = 0;
     for path in files {
         let source = body(&path);
-        if !old_accepts(&source) {
-            continue;
-        }
         let (tree, parsed) = parse(&source);
         if !parsed.errors.is_empty() {
-            failures.push(format!("{}: {}", path.display(), parsed.errors[0].message));
+            continue;
         }
         for node in tree.descendants() {
             if node.kind() == SyntaxKind::UNKNOWN_COMMAND {
@@ -59,7 +56,6 @@ fn no_table_command_is_left_to_the_placeholder() {
         }
     }
     assert!(seen > 25, "{seen} commands");
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 #[test]
@@ -91,47 +87,47 @@ fn the_table_fixtures_are_snapshots() {
 }
 
 #[test]
-fn table_verdicts_follow_the_old_parser() {
-    for query in [
-        "index=a | table",
-        "index=a | table a, , b*",
-        "index=a | table a,",
-        "index=a | fields",
-        "index=a | fields - a",
-        "index=a | fields + ",
-        "index=a | rename a",
-        "index=a | rename a as",
-        "index=a | rename a b as c",
-        "index=a | rename",
-        "index=a | dedup",
-        "index=a | dedup 3",
-        "index=a | dedup a sortby",
-        "index=a | dedup a sortby -b",
-        "index=a | sort",
-        "index=a | sort 0",
-        "index=a | sort a desc",
-        "index=a | sort desc",
-        "index=a | head",
-        "index=a | head 5",
-        "index=a | head x",
-        "index=a | tail 5",
-        "index=a | tail 5 6",
-        "index=a | rex",
-        "index=a | rex \"x\"",
-        "index=a | rex field=a",
-        "index=a | rex \"x\" \"y\"",
-        "index=a | fillnull",
-        "index=a | fillnull value=0",
-        "index=a | mvexpand",
-        "index=a | mvexpand x",
-        "index=a | mvexpand limit=2",
-        "index=a | makemv",
-        "index=a | makemv x",
-        "index=a | makemv delim=\",\"",
+fn table_verdicts_are_pinned() {
+    for (query, accepted) in [
+        ("index=a | table", false),
+        ("index=a | table a, , b*", true),
+        ("index=a | table a,", true),
+        ("index=a | fields", true),
+        ("index=a | fields - a", true),
+        ("index=a | fields + ", true),
+        ("index=a | rename a", false),
+        ("index=a | rename a as", false),
+        ("index=a | rename a b as c", false),
+        ("index=a | rename", false),
+        ("index=a | dedup", false),
+        ("index=a | dedup 3", false),
+        ("index=a | dedup a sortby", false),
+        ("index=a | dedup a sortby -b", true),
+        ("index=a | sort", false),
+        ("index=a | sort 0", false),
+        ("index=a | sort a desc", true),
+        ("index=a | sort desc", true),
+        ("index=a | head", true),
+        ("index=a | head 5", true),
+        ("index=a | head x", false),
+        ("index=a | tail 5", true),
+        ("index=a | tail 5 6", false),
+        ("index=a | rex", false),
+        ("index=a | rex \"x\"", true),
+        ("index=a | rex field=a", false),
+        ("index=a | rex \"x\" \"y\"", false),
+        ("index=a | fillnull", true),
+        ("index=a | fillnull value=0", true),
+        ("index=a | mvexpand", false),
+        ("index=a | mvexpand x", true),
+        ("index=a | mvexpand limit=2", false),
+        ("index=a | makemv", false),
+        ("index=a | makemv x", true),
+        ("index=a | makemv delim=\",\"", false),
     ] {
         assert_eq!(
             parse(query).1.errors.is_empty(),
-            old_accepts(query),
+            accepted,
             "{query:?}: {}",
             render(query)
         );

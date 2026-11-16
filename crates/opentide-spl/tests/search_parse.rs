@@ -1,6 +1,6 @@
 //! The pipeline and search-term grammar of the pure-Rust parser against the
 //! corpus: every valid file parses without an error and losslessly, a few
-//! broken queries get the old parser's verdict, and the search fixtures'
+//! queries keep the verdicts tree-sitter gave them, and the search fixtures'
 //! trees are snapshots.
 
 #![expect(
@@ -8,7 +8,6 @@
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]
 
-use opentide_core::LanguageId;
 use opentide_parse::{debug_errors, debug_tree};
 use opentide_spl::syntax::{Lang, SyntaxKind, parse};
 use std::path::Path;
@@ -36,12 +35,6 @@ fn render(source: &str) -> String {
 
 fn corpus() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/corpus/spl")
-}
-
-/// The old parser's verdict on `source`.
-fn tree_sitter_accepts(source: &str) -> bool {
-    let tree = opentide_syntax::parse(LanguageId::Spl, source).expect("parser");
-    !opentide_syntax::has_error(&tree)
 }
 
 #[test]
@@ -92,24 +85,19 @@ fn a_valid_fixture_has_no_error() {
 }
 
 #[test]
-fn the_old_parsers_search_verdicts_hold() {
-    for query in [
-        "index=main error",
-        "a AND OR b",
-        "a (b",
-        "a b)",
-        "NOT",
-        "a OR",
-        "index=main |",
-        "[ search a |]",
-        "a [ b ]",
+fn search_verdicts_are_pinned() {
+    for (query, accepted) in [
+        ("index=main error", true),
+        ("a AND OR b", false),
+        ("a (b", false),
+        ("a b)", false),
+        ("NOT", false),
+        ("a OR", false),
+        ("index=main |", true),
+        ("[ search a |]", false),
+        ("a [ b ]", true),
     ] {
         let ours = parse(query).1.errors.is_empty();
-        assert_eq!(
-            ours,
-            tree_sitter_accepts(query),
-            "{query:?}: {}",
-            render(query)
-        );
+        assert_eq!(ours, accepted, "{query:?}: {}", render(query));
     }
 }

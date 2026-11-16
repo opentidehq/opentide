@@ -1,5 +1,5 @@
-//! The lexer over every ES|QL file of the corpora: it tiles them, and reads
-//! the tokens tree-sitter's context-aware lexer read.
+//! The lexer over every ES|QL file of the corpora: it tiles them, and a valid
+//! one has no error token.
 //!
 //! The lexer is private to the crate, so
 //! this test includes its source.
@@ -59,34 +59,6 @@ fn lexemes_tile_every_corpus_file_and_valid_ones_have_no_error_token() {
             .count();
         assert!(broken || errors == 0, "{name}: {errors} error tokens");
     }
-}
-
-/// The modes reproduce what tree-sitter's lexer read, token for token, on
-/// every corpus file it parses without an error.
-#[test]
-fn tokens_are_the_leaves_tree_sitter_read() {
-    let mut compared = 0;
-    for path in corpus() {
-        let source = std::fs::read_to_string(&path).unwrap_or_default();
-        let tree = opentide_syntax::parse(opentide_core::LanguageId::Esql, &source).unwrap();
-        if opentide_syntax::first_error(tree.root_node()).is_some() {
-            continue;
-        }
-        let mut leaves = Vec::new();
-        opentide_syntax::walk(tree.root_node(), |node| {
-            if node.child_count() == 0 && node.end_byte() > node.start_byte() {
-                leaves.push((node.start_byte(), node.end_byte()));
-            }
-        });
-        let ours: Vec<_> = lexer::lex(&source)
-            .iter()
-            .filter(|l| l.kind != K::WHITESPACE.raw())
-            .map(|l| (usize::from(l.range.start()), usize::from(l.range.end())))
-            .collect();
-        assert_eq!(ours, leaves, "{}", path.display());
-        compared += 1;
-    }
-    assert!(compared > 120, "compared {compared} files");
 }
 
 /// A logos regex with a repeated group of alternatives recurses once per

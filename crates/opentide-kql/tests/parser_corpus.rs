@@ -1,9 +1,8 @@
-//! The new parser over every `.kql` of `crates/testdata`: lossless on every
-//! file and prefix, and the same verdict as tree-sitter on every file.
+//! The parser over every `.kql` of `crates/testdata`: lossless on every file
+//! and prefix, and every valid tree conforms to `kql.ungram`.
 
 mod common;
 use common::corpus;
-use opentide_core::LanguageId;
 use opentide_kql::inspect::{conformance, lex_spans, parse_error_count, parse_is_lossless};
 
 /// Every corpus file, and its prefixes, parses without a panic and into a
@@ -55,43 +54,6 @@ fn a_deleted_or_doubled_token_never_breaks_the_parser() {
             );
         }
     }
-}
-
-/// Against tree-sitter, on every corpus file:
-/// what it reads without error, the new parser reads without error, and
-/// what it reads with one, the new parser does too (the verdicts agree).
-#[test]
-fn the_verdicts_agree_with_tree_sitter() {
-    let (mut valid, mut broken) = (0, 0);
-    let mut disagree = Vec::new();
-    for path in corpus() {
-        let source = std::fs::read_to_string(&path).expect("corpus file");
-        let Some(tree) = opentide_syntax::parse(LanguageId::Kql, &source) else {
-            continue;
-        };
-        let old_error = opentide_syntax::has_error(&tree);
-        let new_error = parse_error_count(&source) > 0;
-        if old_error {
-            broken += 1;
-        } else {
-            valid += 1;
-        }
-        if old_error != new_error {
-            disagree.push(format!(
-                "{}: tree-sitter {old_error}, here {new_error}",
-                path.file_name()
-                    .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
-            ));
-        }
-    }
-    assert!(valid > 20 && broken > 0, "{valid} valid, {broken} broken");
-    assert!(
-        disagree.is_empty(),
-        "{} of {}:\n{}",
-        disagree.len(),
-        valid + broken,
-        disagree.join("\n")
-    );
 }
 
 /// Every tree of a corpus file that parses without error has the shape

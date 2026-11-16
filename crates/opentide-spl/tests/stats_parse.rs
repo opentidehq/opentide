@@ -1,12 +1,13 @@
 //! The stats family and `tstats` against every file under the test data:
-//! wherever tree-sitter accepts a file the pure-Rust parser does too, and
-//! reads the stats commands as such; the fixtures' trees are snapshots.
+//! every file the parser accepts reads the stats commands as such, a few
+//! queries keep the verdicts tree-sitter gave them, and the fixtures' trees
+//! are snapshots.
 
 mod support;
 
 use opentide_spl::syntax::{SyntaxKind, parse};
 use std::path::Path;
-use support::{body, old_accepts, render, walk};
+use support::{body, render, walk};
 
 #[test]
 fn no_stats_command_is_left_to_the_placeholder() {
@@ -16,15 +17,12 @@ fn no_stats_command_is_left_to_the_placeholder() {
         &mut files,
     );
     files.sort();
-    let (mut stats, mut failures) = (0, Vec::new());
+    let mut stats = 0;
     for path in files {
         let source = body(&path);
-        if !old_accepts(&source) {
-            continue;
-        }
         let (tree, parsed) = parse(&source);
         if !parsed.errors.is_empty() {
-            failures.push(format!("{}: {}", path.display(), parsed.errors[0].message));
+            continue;
         }
         for node in tree.descendants() {
             if node.kind() == SyntaxKind::STATS_COMMAND || node.kind() == SyntaxKind::TSTATS_COMMAND
@@ -57,7 +55,6 @@ fn no_stats_command_is_left_to_the_placeholder() {
         }
     }
     assert!(stats > 100, "{stats} stats commands");
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 #[test]
@@ -78,35 +75,38 @@ fn the_stats_fixtures_are_snapshots() {
 }
 
 #[test]
-fn stats_verdicts_follow_the_old_parser() {
-    for query in [
-        "index=a | stats",
-        "index=a | stats count",
-        "index=a | stats count by",
-        "index=a | stats by x",
-        "index=a | stats count as",
-        "index=a | stats dc(x",
-        "index=a | stats limit=5 count by x",
-        "index=a | stats count, , dc(x) by a, , b,",
-        "index=a | chart",
-        "index=a | chart count",
-        "index=a | chart count by x where count > 5",
-        "index=a | chart count by x where count in",
-        "index=a | timechart span=1d count by host limit=0",
-        "index=a | geostats",
-        "index=a | geostats latfield=la",
-        "index=a | geostats by x",
-        "index=a | tstats",
-        "index=a | tstats count",
-        "index=a | tstats count from",
-        "index=a | tstats count from datamodel=X where a=1 by b",
-        "index=a | tstats count where by b",
-        "index=a | tstats count by PREFIX(dst=)",
-        "index=a | stats values(PREFIX(a=)) as p",
+fn stats_verdicts_are_pinned() {
+    for (query, accepted) in [
+        ("index=a | stats", true),
+        ("index=a | stats count", true),
+        ("index=a | stats count by", false),
+        ("index=a | stats by x", true),
+        ("index=a | stats count as", false),
+        ("index=a | stats dc(x", false),
+        ("index=a | stats limit=5 count by x", true),
+        ("index=a | stats count, , dc(x) by a, , b,", true),
+        ("index=a | chart", false),
+        ("index=a | chart count", true),
+        ("index=a | chart count by x where count > 5", true),
+        ("index=a | chart count by x where count in", false),
+        ("index=a | timechart span=1d count by host limit=0", true),
+        ("index=a | geostats", false),
+        ("index=a | geostats latfield=la", true),
+        ("index=a | geostats by x", true),
+        ("index=a | tstats", false),
+        ("index=a | tstats count", true),
+        ("index=a | tstats count from", false),
+        (
+            "index=a | tstats count from datamodel=X where a=1 by b",
+            true,
+        ),
+        ("index=a | tstats count where by b", true),
+        ("index=a | tstats count by PREFIX(dst=)", true),
+        ("index=a | stats values(PREFIX(a=)) as p", true),
     ] {
         assert_eq!(
             parse(query).1.errors.is_empty(),
-            old_accepts(query),
+            accepted,
             "{query:?}: {}",
             render(query)
         );

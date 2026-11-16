@@ -22,9 +22,5 @@ yara-x-parser.workspace = true
 yara-x-fmt.workspace = true
 
 [dev-dependencies]
-# The tree-sitter grammar's tests only (tree_sitter_agreement.rs,
-# cst_differential.rs and tests/legacy), until the grammar goes (#1225).
-opentide-syntax.workspace = true
 serde_json.workspace = true
-tree-sitter.workspace = true
 toml.workspace = true

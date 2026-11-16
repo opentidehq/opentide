@@ -1,18 +1,16 @@
-//! The lexer on every EQL file of the corpora, against tree-sitter's tokens, their ranges and
-//! kinds (the engine it replaces), and on the hand-written cases of each token's regex: the five
-//! string forms, numbers, indexes, quoted names and the nested block comments.
+//! The lexer on every EQL file of the corpora (the lexemes tile it), and on the hand-written
+//! cases of each token's regex: the five string forms, numbers, indexes, quoted names and the
+//! nested block comments.
 
 #![expect(dead_code, reason = "the included modules are used in part")]
-#![expect(clippy::expect_used, reason = "a test")]
 
 #[path = "../src/lexer.rs"]
 mod lexer;
-#[path = "legacy/lexical.rs"]
+#[path = "../src/lexical.rs"]
 mod lexical;
 #[path = "../src/syntax.rs"]
 mod syntax;
 
-use opentide_core::LanguageId;
 use std::path::{Path, PathBuf};
 use syntax::SyntaxKind as K;
 
@@ -48,6 +46,7 @@ fn kinds(source: &str) -> Vec<K> {
     tokens(source).into_iter().map(|(kind, _)| kind).collect()
 }
 
+/// Every `.eql` file under `crates/testdata`.
 fn eql_files() -> Vec<PathBuf> {
     fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
         let Ok(entries) = std::fs::read_dir(dir) else {
@@ -71,172 +70,15 @@ fn eql_files() -> Vec<PathBuf> {
     out
 }
 
-/// The leaves of a tree-sitter tree, with the kind of each.
-fn leaves(node: tree_sitter::Node<'_>, out: &mut Vec<(&'static str, usize, usize)>) {
-    if node.child_count() == 0 {
-        if node.end_byte() > node.start_byte() {
-            out.push((node.kind(), node.start_byte(), node.end_byte()));
-        }
-        return;
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        leaves(child, out);
-    }
-}
-
-/// Each token's kind, start and end.
-type Cuts = Vec<(K, usize, usize)>;
-
-/// The lexer's kind of a tree-sitter leaf: a keyword, `any`, `null` and the booleans are words
-/// (the parser re-kinds them), `in~` and a case-insensitive name a `TILDE_WORD`, the others by
-/// their node or their text.
-fn lexer_kind(leaf: &str, text: &str) -> K {
-    match leaf {
-        "identifier" | "any" | "null" | "boolean" => K::WORD,
-        "case_insensitive_name" | "in~" | "like~" | "regex~" => K::TILDE_WORD,
-        "number" => K::NUMBER_TOKEN,
-        "string" => K::STRING_TOKEN,
-        "quoted_identifier" => K::QUOTED_IDENT_TOKEN,
-        "index" => K::INDEX_TOKEN,
-        "comment" if text.starts_with("//") => K::LINE_COMMENT,
-        "comment" => K::BLOCK_COMMENT,
-        "missing_event_open" => K::BANG_L_BRACK,
-        "optional_marker" => K::QUESTION,
-        _ if leaf.bytes().all(|b| b.is_ascii_lowercase()) => K::WORD,
-        _ => punctuation(leaf),
-    }
-}
-
-/// The kind of a punctuation leaf, from a table of its own: lexing the leaf's text would compare
-/// the lexer with itself.
-fn punctuation(leaf: &str) -> K {
-    match leaf {
-        "|" => K::PIPE,
-        "=" => K::EQ,
-        "==" => K::EQ_EQ,
-        "!=" => K::NOT_EQ,
-        "<" => K::LT,
-        "<=" => K::LT_EQ,
-        ">" => K::GT,
-        ">=" => K::GT_EQ,
-        "+" => K::PLUS,
-        "-" => K::MINUS,
-        "*" => K::STAR,
-        "/" => K::SLASH,
-        "%" => K::PERCENT,
-        "(" => K::L_PAREN,
-        ")" => K::R_PAREN,
-        "[" => K::L_BRACK,
-        "]" => K::R_BRACK,
-        "![" => K::BANG_L_BRACK,
-        "," => K::COMMA,
-        "." => K::DOT,
-        ":" => K::COLON,
-        "?" => K::QUESTION,
-        _ => panic!("a tree-sitter leaf the test does not know: {leaf:?}"),
-    }
-}
-
-/// The tokens of `source` that tree-sitter and the lexer cut, each with its kind, when
-/// tree-sitter parses it without an error (a broken query is lexed by what the parser accepts
-/// next, which a lexer without a parser cannot follow).
-fn both_cut(source: &str) -> Option<(Cuts, Cuts)> {
-    let prepared = lexical::prepare(source);
-    let tree = opentide_syntax::parse(LanguageId::Eql, &prepared.text).expect("tree");
-    if opentide_syntax::has_error(&tree) {
-        return None;
-    }
-    let mut expected = Vec::new();
-    leaves(tree.root_node(), &mut expected);
-    let mut at = 0;
-    let found = tokens(source)
-        .iter()
-        .map(|(kind, text)| {
-            let start = at + source[at..].find(text).expect("in order");
-            at = start + text.len();
-            (*kind, start, at)
-        })
-        .collect();
-    let expected = expected
-        .iter()
-        .map(|&(leaf, s, e)| (lexer_kind(leaf, &source[s..e]), s, e))
-        .collect();
-    Some((found, expected))
-}
-
+/// The lexemes tile every EQL file of the corpora ([`all`] asserts it).
 #[test]
-fn the_lexer_cuts_the_tokens_tree_sitter_does_on_every_file() {
+fn the_lexemes_tile_every_corpus_file() {
     let files = eql_files();
     assert!(files.len() > 150, "{} files", files.len());
-    let mut compared = 0;
     for path in &files {
         let source = std::fs::read_to_string(path).expect("read");
-        let Some((found, expected)) = both_cut(&source) else {
-            continue;
-        };
-        compared += 1;
-        assert_eq!(found, expected, "{}: the tokens differ", path.display());
+        all(&source);
     }
-    assert!(compared > 100, "{compared} files compared");
-}
-
-/// How many characters longer the enumerations go: `OPENTIDE_LEX_SCALE=2` is the full run (a
-/// few minutes in a debug build), the default keeps CI well under its 300 s test limit.
-fn scale() -> usize {
-    std::env::var("OPENTIDE_LEX_SCALE")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(0)
-}
-
-/// Every string over `alphabet` up to `len` characters, as a literal in a valid query: the
-/// lexer cuts what tree-sitter cuts wherever tree-sitter accepts the query.
-fn every_literal(alphabet: &[&str], len: usize, wrap: impl Fn(&str) -> String) -> usize {
-    let mut compared = 0;
-    let mut stack = vec![String::new()];
-    while let Some(literal) = stack.pop() {
-        let source = wrap(&literal);
-        if let Some((found, expected)) = both_cut(&source) {
-            compared += 1;
-            assert_eq!(found, expected, "{source:?}");
-        }
-        if literal.chars().count() < len {
-            for c in alphabet {
-                stack.push(format!("{literal}{c}"));
-            }
-        }
-    }
-    compared
-}
-
-#[test]
-fn the_lexer_cuts_every_short_string_as_tree_sitter_does() {
-    let alphabet = ["\"", "'", "\\", "?", "a", " ", "\n"];
-    let wrap = |s: &str| format!("any where a == {s}");
-    assert!(every_literal(&alphabet, 5 + scale(), wrap) > 300);
-    let wrap = |s: &str| format!("any where a == {s} or b");
-    assert!(every_literal(&alphabet, 4 + scale(), wrap) > 100);
-}
-
-#[test]
-fn the_lexer_cuts_every_short_name_and_number_as_tree_sitter_does() {
-    let alphabet = ["`", "a", "1", ".", "e", "+", "[", "]", " ", "~"];
-    let wrap = |s: &str| format!("any where {s} == 1");
-    assert!(every_literal(&alphabet, 4 + scale(), wrap) > 100);
-    let wrap = |s: &str| format!("any where a == {s}");
-    assert!(every_literal(&alphabet, 4 + scale(), wrap) > 100);
-    let wrap = |s: &str| format!("any where a{s} == 1");
-    assert!(every_literal(&alphabet, 4 + scale(), wrap) > 50);
-}
-
-#[test]
-fn the_lexer_cuts_every_short_comment_as_tree_sitter_does() {
-    let alphabet = ["/", "*", "a", " ", "\n"];
-    let wrap = |s: &str| format!("any where a == 1 {s}\n");
-    assert!(every_literal(&alphabet, 6 + scale(), wrap) > 200);
-    let wrap = |s: &str| format!("any where {s} a == 1");
-    assert!(every_literal(&alphabet, 5 + scale(), wrap) > 100);
 }
 
 #[test]
@@ -406,7 +248,7 @@ fn block_comments_end_where_elasticsearch_ends_them() {
 
 #[test]
 fn a_comment_ends_where_the_nested_reading_says_over_the_lexical_scan() {
-    // `lexical::prepare` is the old engine's reading of the same comments.
+    // `lexical::prepare` is the analysis's own scan of the same comments.
     for source in [
         "process where /* a /* b */ c */ true",
         "a /* x /* y */ b */ c /* d */ e",
