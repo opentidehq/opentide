@@ -279,7 +279,7 @@ fn quoted(lex: &mut logos::Lexer<'_, Token>, delimiter: u8) -> bool {
 
 /// Lexes `source`.
 pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
-    opentide_parse::lex::<Token>(source, |token, text| {
+    split_glued_transformers(opentide_parse::lex::<Token>(source, |token, text| {
         match token {
             Ok(Token::Whitespace) => K::Whitespace,
             Ok(Token::QuotedString) => K::QuotedString,
@@ -303,7 +303,38 @@ pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
             Err(()) => K::ErrorToken,
         }
         .raw()
-    })
+    }))
+}
+
+/// A transformer's name that touches a character of a bare string (`{val(`,
+/// `5len(`) is the end of that string and a `(`: the grammar's bare string
+/// stops at `(`, and a transformer's name starts a token.
+fn split_glued_transformers(lexemes: Vec<Lexeme>) -> Vec<Lexeme> {
+    let glues = |kind: rowan::SyntaxKind| {
+        [K::Other, K::Number, K::LBracket, K::RBracket]
+            .map(K::raw)
+            .contains(&kind)
+    };
+    let mut out: Vec<Lexeme> = Vec::with_capacity(lexemes.len());
+    for l in lexemes {
+        let touching = out
+            .last()
+            .is_some_and(|prev| prev.range.end() == l.range.start() && glues(prev.kind));
+        if l.kind == K::TransformerName.raw() && touching {
+            let paren = l.range.end() - rowan::TextSize::from(1);
+            out.push(Lexeme {
+                kind: K::Identifier.raw(),
+                range: rowan::TextRange::new(l.range.start(), paren),
+            });
+            out.push(Lexeme {
+                kind: K::LParen.raw(),
+                range: rowan::TextRange::new(paren, l.range.end()),
+            });
+        } else {
+            out.push(l);
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -343,6 +374,20 @@ mod tests {
         );
         // `xtolower(` is one word, not a transformer.
         assert_eq!(kinds("xtolower(")[0], (K::Identifier, "xtolower"));
+    }
+
+    #[test]
+    fn a_transformer_touching_a_string_is_its_end_and_a_paren() {
+        assert_eq!(
+            kinds("{val(x"),
+            vec![
+                (K::Other, "{"),
+                (K::Identifier, "val"),
+                (K::LParen, "("),
+                (K::Identifier, "x"),
+            ]
+        );
+        assert_eq!(kinds(" val(")[1], (K::TransformerName, "val("));
     }
 
     #[test]

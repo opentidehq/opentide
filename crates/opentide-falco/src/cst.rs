@@ -249,9 +249,18 @@ fn comparison(p: &mut Parser<'_>) {
 fn operand(p: &mut Parser<'_>) {
     if at(p, K::FieldName) {
         field(p);
+    } else if is_val(p) {
+        p.err_and_bump(VAL_ONLY_RIGHT);
     } else {
         call(p);
     }
+}
+
+const VAL_ONLY_RIGHT: &str = "`val(` takes a field on the right of an operator only";
+
+/// `val(`, which libsinsp reads on the right of an operator only.
+fn is_val(p: &Parser<'_>) -> bool {
+    at(p, K::TransformerName) && p.nth_text(0) == "val("
 }
 
 /// `name`, with its `[argument]` when the `[` follows at once.
@@ -463,6 +472,7 @@ fn call(p: &mut Parser<'_>) {
 fn transformer_argument(p: &mut Parser<'_>) {
     match p.nth(0) {
         k if k == K::FieldName.raw() => field(p),
+        _ if is_val(p) => p.err_and_bump(VAL_ONLY_RIGHT),
         k if k == K::TransformerName.raw() => call(p),
         k if k == K::LParen.raw() => transformer_list(p),
         k if k == K::QuotedString.raw() || k == K::Number.raw() => p.bump(),
@@ -480,6 +490,7 @@ fn transformer_list(p: &mut Parser<'_>) {
         loop {
             match p.nth(0) {
                 k if k == K::FieldName.raw() => field(p),
+                _ if is_val(p) => p.err_and_bump(VAL_ONLY_RIGHT),
                 k if k == K::TransformerName.raw() => call(p),
                 k if k == K::QuotedString.raw() || k == K::Number.raw() => p.bump(),
                 _ => p.err_recover("expected a list item", K::set(&[K::Comma, K::RParen])),
