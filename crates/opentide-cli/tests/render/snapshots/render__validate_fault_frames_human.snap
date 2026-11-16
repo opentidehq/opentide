@@ -198,7 +198,7 @@ expression: candidate
    [34m╭─▶[0m ]8;;file://<WS>/objects/rules/encoded-dropper-rule-0057.yaml\objects/rules/encoded-dropper-rule-0057.yaml:55:7]8;;\
 [34m   │[0m
 [34m54 │[0m     query: |
-[34m55 │[0m       index[35m=[0mmain [1m[35m|[0m eval x[35m=[0m(
+[34m55 │[0m       index[35m=[0mmain [1m[35m|[0m [1m[35meval[0m x[35m=[0m(
 [34m   │[0m       [1m[31m━━━━━[0m
 [34m   │[0m
    [34m╰─[0m [1m[36mhelp:[0m the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
