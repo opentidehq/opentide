@@ -2067,9 +2067,12 @@ fold 0..65
 fold 11..34
 fold 46..63
 == corpus/yara/base64_modifier__valid.yar
-fold 0..170
-fold 11..139
-fold 142..168
+fold 0..167
+fold 11..136
+fold 139..165
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+symbol string $b 3:4-3:6
 == corpus/yara/call_expression__invalid.yar
 fold 0..46
 fold 11..44
@@ -2331,9 +2334,11 @@ fold 40..83
 fold 51..81
 symbol rule base1 0:13-0:18
 == corpus/yara/rule_set__valid.yar
-fold 40..89
-fold 51..87
+fold 79..128
+fold 90..126
 symbol rule base1 0:13-0:18
+symbol rule base2 1:13-1:18
+symbol rule r 3:5-3:6
 == corpus/yara/rule_wildcard__invalid.yar
 fold 40..78
 fold 51..76
