@@ -1,0 +1,2 @@
+// prod:parse_kv_operator valid
+Syslog | parse-kv SyslogMessage | take 10
