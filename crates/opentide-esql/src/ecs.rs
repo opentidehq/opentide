@@ -103,6 +103,10 @@ pub(crate) fn dataset_diagnostics(root: Node, source: &str) -> Vec<Diagnostic> {
 /// it reads held ECS documents. `analyze` adds them itself when the `FROM`
 /// indices do; this entry point is for callers that know more.
 pub fn ecs_diagnostics(source: &str) -> Vec<Diagnostic> {
+    crate::with_lines(source, || field_diagnostics(source))
+}
+
+fn field_diagnostics(source: &str) -> Vec<Diagnostic> {
     let Some(tree) = crate::tree::parse_tree(source) else {
         return Vec::new();
     };

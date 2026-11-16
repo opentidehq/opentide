@@ -113,3 +113,17 @@ fn deep_and_long_input() {
     every_entry_point(format!("FROM a{}", " | WHERE a".repeat(10_000)));
     every_entry_point(format!("FROM a | KEEP {}", vec!["a"; 10_000].join(", ")));
 }
+
+/// Broken or noisy input: many parse problems and many findings. A name check
+/// over every problem, and a scan from the start for every finding's line,
+/// made these quadratic (minutes at 20,000).
+#[test]
+fn many_problems_and_many_findings() {
+    let n = 20_000;
+    every_entry_point(format!("FROM a | KEEP {}", "x,, ".repeat(n)));
+    every_entry_point(format!("FROM a{}", " | WHERE x ==".repeat(n)));
+    every_entry_point(format!("FROM a | EVAL {}", "x = , ".repeat(n)));
+    every_entry_point(format!("ROW a = 1{}", " | SAMPLE 0.5".repeat(n)));
+    every_entry_point(format!("FROM a | EVAL {}", vec!["f(x)"; n].join(", ")));
+    every_entry_point(format!("FROM a | EVAL {}", vec!["f(x)"; n].join(",\n")));
+}

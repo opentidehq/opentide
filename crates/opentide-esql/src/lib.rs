@@ -107,11 +107,15 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 /// form). With `Some(target)`, a name or form that target lacks is a warning;
 /// what other stacks lack is not reported. Snapshot-only names are an error
 /// either way.
+pub fn analyze_for(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
+    with_lines(source, || analyze_with_lines(source, target))
+}
+
 #[expect(
     clippy::expect_used,
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
-pub fn analyze_for(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
+fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let catalog = Catalog::cached();
     let Some(tree) = tree::parse_tree(source) else {
@@ -465,7 +469,15 @@ fn parse_problem(tree: &tree::Tree, source: &str) -> Option<Diagnostic> {
     let problem = tree.problems.first()?;
     let at = problem.at.min(source.len());
     let rest = source.get(at..).unwrap_or("");
-    let word_len = rest.find(char::is_whitespace).unwrap_or(rest.len());
+    // A bracket, pipe or operator is quoted alone; a word with its dots
+    // (`host.name`) up to the next one: a whitespace-delimited chunk ran on
+    // over `("a",`, or to the end of a query written without spaces.
+    let chunk_len = rest.find(char::is_whitespace).unwrap_or(rest.len());
+    let stop = |c: char| "()[]{},|;=<>!+%".contains(c);
+    let word_len = match rest.chars().next() {
+        Some(c) if stop(c) => c.len_utf8(),
+        _ => rest[..chunk_len].find(stop).unwrap_or(chunk_len),
+    };
     let word = &rest[..word_len];
     let near = if word.is_empty() {
         "ES|QL syntax error at the end of the query".to_string()
@@ -480,8 +492,85 @@ fn parse_problem(tree: &tree::Tree, source: &str) -> Option<Diagnostic> {
     ))
 }
 
+/// The line and UTF-16 column of `span` in `source`: from the line table of
+/// [`with_lines`] when one is installed for this very `source`, else by
+/// [`span_to_range`]'s scan from the start (one scan per finding made a
+/// query with many findings quadratic).
 fn range(source: &str, span: ByteSpan) -> Range {
-    span_to_range(source, span)
+    LINES.with(|lines| match &*lines.borrow() {
+        Some(table) if table.source == (source.as_ptr() as usize, source.len()) => Range {
+            start: table.position(source, span.start),
+            end: table.position(source, span.end),
+        },
+        _ => span_to_range(source, span),
+    })
+}
+
+/// The line starts of the source an entry point is analyzing.
+struct Lines {
+    /// The source's address and length: the table is used for it only.
+    source: (usize, usize),
+    starts: Vec<usize>,
+    /// Lines that are pure ASCII, where a column is a byte distance.
+    ascii: Vec<bool>,
+}
+
+impl Lines {
+    fn new(source: &str) -> Self {
+        let mut starts = vec![0];
+        starts.extend(source.match_indices('\n').map(|(i, _)| i + 1));
+        let ascii = starts
+            .iter()
+            .enumerate()
+            .map(|(i, &start)| {
+                let end = starts.get(i + 1).copied().unwrap_or(source.len());
+                source.as_bytes()[start..end].is_ascii()
+            })
+            .collect();
+        Lines {
+            source: (source.as_ptr() as usize, source.len()),
+            starts,
+            ascii,
+        }
+    }
+
+    /// What [`opentide_core::offset_to_position`] answers, by a binary search.
+    fn position(&self, source: &str, offset: usize) -> opentide_core::Position {
+        let offset = source.floor_char_boundary(offset);
+        let line = self
+            .starts
+            .partition_point(|&s| s <= offset)
+            .saturating_sub(1);
+        let start = self.starts.get(line).copied().unwrap_or(0);
+        let character = if self.ascii.get(line).copied().unwrap_or(false) {
+            offset - start
+        } else {
+            source[start..offset].chars().map(char::len_utf16).sum()
+        };
+        opentide_core::Position {
+            line: u32::try_from(line).unwrap_or(u32::MAX),
+            character: u32::try_from(character).unwrap_or(u32::MAX),
+        }
+    }
+}
+
+thread_local! {
+    static LINES: std::cell::RefCell<Option<Lines>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Runs `run` with the line table of `source` installed for [`range`], and
+/// puts back whatever was installed before, even on a panic.
+fn with_lines<T>(source: &str, run: impl FnOnce() -> T) -> T {
+    struct Restore(Option<Lines>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let previous = self.0.take();
+            LINES.with(|lines| *lines.borrow_mut() = previous);
+        }
+    }
+    let previous = LINES.with(|lines| lines.replace(Some(Lines::new(source))));
+    let _restore = Restore(previous);
+    run()
 }
 
 pub(crate) fn text<'a>(node: Node, source: &'a str) -> &'a str {
@@ -1663,5 +1752,61 @@ mod tests {
         assert_eq!(maps("FROM docs | DENSE_VECTOR embedding = WITH"), 0);
         // A written empty map keeps its gate.
         assert_eq!(maps("FROM docs | DENSE_VECTOR embedding = WITH {}"), 1);
+    }
+
+    #[test]
+    fn a_name_before_a_stray_token_is_still_a_column() {
+        // The problem is at `)`, after the name: `foo)` reads as `foo )` does.
+        for src in [
+            "FROM a | WHERE foo)",
+            "FROM a | WHERE foo )",
+            "FROM a | KEEP foo)",
+        ] {
+            let labels: Vec<String> = completions(src, src.len())
+                .into_iter()
+                .map(|c| c.label)
+                .collect();
+            assert!(labels.iter().any(|l| l == "foo"), "{src}: {labels:?}");
+        }
+    }
+
+    #[test]
+    fn the_line_table_answers_as_the_scan_does() {
+        for source in [
+            "",
+            "FROM a",
+            "FROM a\n| WHERE b == \"\u{e9}\u{1f600}x\"\r\n| KEEP c\n",
+            "\u{e9}\n\n\u{1f600}\u{1f600}\na",
+        ] {
+            let lines = Lines::new(source);
+            for offset in 0..=source.len() + 2 {
+                let span = ByteSpan::new(offset.min(source.len()), offset);
+                let expected = span_to_range(source, span);
+                assert_eq!(
+                    (
+                        lines.position(source, span.start),
+                        lines.position(source, span.end)
+                    ),
+                    (expected.start, expected.end),
+                    "{source:?} at {offset}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_syntax_error_quotes_the_token_not_the_chunk() {
+        let message = |src: &str| {
+            analyze(src)
+                .diagnostics
+                .into_iter()
+                .find(|d| d.code == codes::ESQL_PARSE_ERROR)
+                .map(|d| d.message)
+                .unwrap_or_default()
+        };
+        let m = message("FROM a | WHERE x == 1)| KEEP a,b,c,d");
+        assert!(m.contains("near `)`"), "{m}");
+        let m = message("FROM a | WHERE (\"a\", \"b\") IN (1)");
+        assert!(!m.contains("`(\"a\",`"), "{m}");
     }
 }

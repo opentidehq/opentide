@@ -37,6 +37,8 @@ struct Data {
 pub(crate) struct Tree {
     data: Vec<Data>,
     pub(crate) problems: Vec<Problem>,
+    /// Where the problems are, sorted: [`Node::has_error`] searches it.
+    error_at: Vec<usize>,
 }
 
 /// Stands where tree-sitter's cursor stood: iteration needs none.
@@ -140,7 +142,7 @@ fn token_name(kind: K, text: &str) -> &'static str {
 /// Parses `source` into the arena.
 pub(crate) fn parse(source: &str) -> Tree {
     let parse = parser::parse(source);
-    let problems = parse
+    let problems: Vec<Problem> = parse
         .errors
         .iter()
         .map(|e| Problem {
@@ -222,7 +224,13 @@ pub(crate) fn parse(source: &str) -> Tree {
             WalkEvent::Leave(NodeOrToken::Token(_)) => {}
         }
     }
-    Tree { data, problems }
+    let mut error_at: Vec<usize> = problems.iter().map(|p| p.at).collect();
+    error_at.sort_unstable();
+    Tree {
+        data,
+        problems,
+        error_at,
+    }
 }
 
 fn push(
@@ -767,13 +775,17 @@ impl<'t> Node<'t> {
         self.d().end
     }
 
-    /// Whether the parser reported a problem inside this node.
+    /// Whether the parser reported a problem inside this node: at or after
+    /// its start and before its end (a problem at the token right after it,
+    /// `foo)`, is not in it, as `foo )` is not); a node recovery left empty
+    /// holds a problem at its place. A binary search: a name check per node
+    /// over every problem made completions quadratic on broken input.
     pub(crate) fn has_error(&self) -> bool {
         let d = self.d();
-        self.tree
-            .problems
-            .iter()
-            .any(|p| p.at >= d.start && p.at <= d.end)
+        let end = d.end.max(d.start + 1);
+        let errors = &self.tree.error_at;
+        let first = errors.partition_point(|&at| at < d.start);
+        errors.get(first).is_some_and(|&at| at < end)
     }
 
     pub(crate) fn parent(&self) -> Option<Node<'t>> {
