@@ -1,0 +1,37 @@
+---
+source: crates/opentide-spl/tests/search_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/in_clause__valid.spl
+---
+SOURCE_FILE@0..31
+  PIPELINE@0..31
+    BARE_SEARCH@0..31
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+      WHITESPACE@10..11 " "
+      IN_CLAUSE@11..31
+        FIELD_REF@11..14
+          IDENTIFIER@11..14
+            IDENT@11..14 "app"
+        WHITESPACE@14..15 " "
+        IN_KW@15..17 "IN"
+        WHITESPACE@17..18 " "
+        VALUE_LIST@18..31
+          L_PAREN@18..19 "("
+          STR@19..22
+            STRING_TOKEN@19..22 "\"a\""
+          WHITESPACE@22..23 " "
+          STR@23..26
+            STRING_TOKEN@23..26 "\"b\""
+          COMMA@26..27 ","
+          WHITESPACE@27..28 " "
+          GLOB@28..30
+            GLOB_TOKEN@28..30 "c*"
+          R_PAREN@30..31 ")"
+--

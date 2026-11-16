@@ -2304,7 +2304,7 @@ spl_wildcard warning 0:23-0:28 leading wildcard `*fail` cannot use the term inde
 62..64 keyword
 65..69 property
 == corpus/spl/assignment__invalid.spl
-spl_parse_error error 0:24-0:25 SPL syntax error: unexpected '.'
+spl_parse_error error 0:25-0:25 SPL syntax error: expected an expression after the operator
 0..5 property
 5..6 operator
 6..10 variable
@@ -2424,11 +2424,12 @@ spl_empty_stage warning 0:11-0:12 empty pipeline stage: Splunk ignores a trailin
 47..52 keyword
 53..58 function.builtin
 == corpus/spl/dedup_command__invalid.spl
-spl_parse_error error 0:13-0:18 SPL syntax error: unexpected 'dedup'
+spl_parse_error error 0:18-0:18 SPL syntax error: expected a field
 0..5 property
 5..6 operator
 6..10 variable
 11..12 operator.pipe
+13..18 keyword
 == corpus/spl/dedup_command__valid.spl
 0..5 property
 5..6 operator
@@ -2450,11 +2451,12 @@ spl_parse_error error 0:13-0:18 SPL syntax error: unexpected 'dedup'
 44..50 keyword
 52..57 property
 == corpus/spl/eval_command__invalid.spl
-spl_parse_error error 0:13-0:17 SPL syntax error: unexpected 'eval'
+spl_parse_error error 0:17-0:17 SPL syntax error: expected a field name
 0..5 property
 5..6 operator
 6..10 variable
 11..12 operator.pipe
+13..17 keyword
 == corpus/spl/eval_command__valid.spl
 0..5 property
 5..6 operator
@@ -2742,12 +2744,13 @@ spl_empty_command error 0:2-0:13 `inputlookup` with no arguments fails at run ti
 57..59 operator
 59..61 number
 == corpus/spl/join_command__invalid.spl
-spl_parse_error error 0:13-0:17 SPL syntax error: unexpected 'join'
+spl_parse_error error 0:17-0:17 SPL syntax error: expected a subsearch
 spl_subsearch_truncation warning 0:13-0:17 `join` silently truncates at 50,000 events or 60 seconds without an error (https://docs.splunk.com/Documentation/Splunk/latest/Search/Aboutsubsearches)
 0..5 property
 5..6 operator
 6..10 variable
 11..12 operator.pipe
+13..17 keyword
 == corpus/spl/join_command__valid.spl
 spl_subsearch_truncation warning 0:13-0:17 `join` silently truncates at 50,000 events or 60 seconds without an error (https://docs.splunk.com/Documentation/Splunk/latest/Search/Aboutsubsearches)
 0..5 property
@@ -2763,7 +2766,7 @@ spl_subsearch_truncation warning 0:13-0:17 `join` silently truncates at 50,000 e
 38..43 variable
 44..45 punctuation.bracket
 == corpus/spl/lookup_command__invalid.spl
-spl_parse_error error 0:20-0:25 SPL syntax error: unexpected 'local'
+spl_parse_error error 0:27-0:27 SPL syntax error: expected a lookup table
 0..5 property
 5..6 operator
 6..10 variable
@@ -2815,11 +2818,12 @@ spl_empty_command warning 0:13-0:19 `lookup` with no arguments does nothing
 100..101 operator.pipe
 102..134 macro
 == corpus/spl/makemv_command__invalid.spl
-spl_parse_error error 0:13-0:19 SPL syntax error: unexpected 'makemv'
+spl_parse_error error 0:19-0:19 SPL syntax error: expected a field
 0..5 property
 5..6 operator
 6..10 variable
 11..12 operator.pipe
+13..19 keyword
 == corpus/spl/makemv_command__valid.spl
 0..5 property
 5..6 operator
@@ -2830,11 +2834,12 @@ spl_parse_error error 0:13-0:19 SPL syntax error: unexpected 'makemv'
 26..29 string
 30..35 variable
 == corpus/spl/mvexpand_command__invalid.spl
-spl_parse_error error 0:13-0:21 SPL syntax error: unexpected 'mvexpand'
+spl_parse_error error 0:21-0:21 SPL syntax error: expected a field
 0..5 property
 5..6 operator
 6..10 variable
 11..12 operator.pipe
+13..21 keyword
 == corpus/spl/mvexpand_command__valid.spl
 0..5 property
 5..6 operator
@@ -2870,11 +2875,12 @@ spl_parse_error error 0:13-0:21 SPL syntax error: unexpected 'mvexpand'
 58..59 operator
 59..61 variable
 == corpus/spl/rename_command__invalid.spl
-spl_parse_error error 0:13-0:19 SPL syntax error: unexpected 'rename'
+spl_parse_error error 0:19-0:19 SPL syntax error: expected a field to rename
 0..5 property
 5..6 operator
 6..10 variable
 11..12 operator.pipe
+13..19 keyword
 == corpus/spl/rename_command__valid.spl
 0..5 property
 5..6 operator
@@ -2898,11 +2904,12 @@ spl_parse_error error 0:13-0:19 SPL syntax error: unexpected 'rename'
 37..39 keyword
 40..41 variable
 == corpus/spl/rex_command__invalid.spl
-spl_parse_error error 0:13-0:16 SPL syntax error: unexpected 'rex'
+spl_parse_error error 0:16-0:16 SPL syntax error: expected a regular expression
 0..5 property
 5..6 operator
 6..10 variable
 11..12 operator.pipe
+13..16 keyword
 == corpus/spl/rex_command__valid.spl
 0..5 property
 5..6 operator
@@ -2913,7 +2920,7 @@ spl_parse_error error 0:13-0:16 SPL syntax error: unexpected 'rex'
 23..27 property
 28..40 string
 == corpus/spl/search_command__invalid.spl
-spl_parse_error error 0:9-0:10 SPL syntax error: unexpected '|'
+spl_parse_error error 0:11-0:12 SPL syntax error: expected a command before '|'
 0..6 keyword
 7..8 variable
 9..10 operator.pipe
@@ -3007,11 +3014,12 @@ spl_parse_error error 0:15-0:17 SPL syntax error: unexpected 'OR'
 54..55 operator
 55..61 variable
 == corpus/spl/sort_command__invalid.spl
-spl_parse_error error 0:13-0:17 SPL syntax error: unexpected 'sort'
+spl_parse_error error 0:17-0:17 SPL syntax error: expected a sort key
 0..5 property
 5..6 operator
 6..10 variable
 11..12 operator.pipe
+13..17 keyword
 == corpus/spl/sort_command__valid.spl
 0..5 property
 5..6 operator
@@ -3035,7 +3043,7 @@ spl_parse_error error 0:13-0:17 SPL syntax error: unexpected 'sort'
 44..45 operator
 45..46 variable
 == corpus/spl/stats_command__invalid.spl
-spl_parse_error error 0:25-0:27 SPL syntax error: unexpected 'by'
+spl_parse_error error 0:27-0:27 SPL syntax error: expected a field after `by`
 0..5 property
 5..6 operator
 6..10 variable
@@ -3117,7 +3125,7 @@ spl_empty_command error 0:13-0:18 `stats` with no arguments returns no results
 75..79 property
 80..84 property
 == corpus/spl/table_command__invalid.spl
-spl_parse_error error 0:13-0:18 SPL syntax error: unexpected 'table'
+spl_parse_error error 0:18-0:18 SPL syntax error: expected a field
 0..5 property
 5..6 operator
 6..10 variable
@@ -3251,7 +3259,7 @@ spl_parse_error error 0:42-0:44 SPL syntax error: `tstats ... where` does not ta
 46..48 keyword
 49..53 property
 == corpus/spl/tstats_command__invalid.spl
-spl_parse_error error 0:8-0:8 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:8-0:8 SPL syntax error: expected an aggregate
 0..1 operator.pipe
 2..8 keyword
 == corpus/spl/tstats_command__valid.equals_tilde.spl
@@ -3353,7 +3361,7 @@ spl_empty_command warning 0:13-0:18 `where` with no arguments does nothing
 24..25 operator
 25..26 number
 == oracles/spl/append_without_arguments.broken.spl
-spl_parse_error error 0:16-0:17 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:17-0:18 SPL syntax error: this command needs arguments before '|'
 spl_subsearch_truncation warning 0:10-0:16 `append` silently truncates at 50,000 events or 60 seconds without an error (https://docs.splunk.com/Documentation/Splunk/latest/Search/Aboutsubsearches)
 0..5 property
 5..6 operator
@@ -3366,7 +3374,7 @@ spl_subsearch_truncation warning 0:10-0:16 `append` silently truncates at 50,000
 31..33 keyword
 34..38 property
 == oracles/spl/bin_without_arguments.broken.spl
-spl_parse_error error 0:13-0:14 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:14-0:15 SPL syntax error: this command needs arguments before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -3417,7 +3425,7 @@ spl_parse_error error 0:13-0:14 SPL syntax error: missing 'identifier'
 45..46 operator
 47..49 number
 == oracles/spl/chart_without_arguments.broken.spl
-spl_parse_error error 0:15-0:16 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:16-0:17 SPL syntax error: expected an aggregate before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -3486,7 +3494,7 @@ spl_parse_error error 0:11-0:12 unbalanced parentheses: this '(' is never closed
 50..52 keyword
 53..54 variable
 == oracles/spl/dedup_without_arguments.broken.spl
-spl_parse_error error 0:15-0:16 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:16-0:17 SPL syntax error: expected a field before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -3520,7 +3528,7 @@ spl_parse_error error 0:15-0:16 SPL syntax error: missing 'identifier'
 54..55 number
 55..56 punctuation.bracket
 == oracles/spl/eval_concatenation.broken.spl
-spl_parse_error error 0:29-1:0 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:29-1:0 SPL syntax error: expected an expression after the operator
 0..5 property
 5..6 operator
 6..10 variable
@@ -3570,7 +3578,7 @@ spl_parse_error error 0:29-1:0 SPL syntax error: missing 'identifier'
 40..41 number
 41..42 punctuation.bracket
 == oracles/spl/eval_dynamic_name.broken.spl
-spl_parse_error error 0:25-1:0 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:25-1:0 SPL syntax error: expected an expression
 0..5 property
 5..6 operator
 6..10 variable
@@ -3606,7 +3614,7 @@ spl_parse_error error 0:25-1:0 SPL syntax error: missing 'identifier'
 50..51 number
 51..52 punctuation.bracket
 == oracles/spl/eval_like_operator.broken.spl
-spl_parse_error error 0:32-0:33 SPL syntax error: unexpected ','
+spl_parse_error error 0:32-0:33 SPL syntax error: expected an expression after the operator before ','
 0..5 property
 5..6 operator
 6..10 variable
@@ -3642,7 +3650,7 @@ spl_parse_error error 0:32-0:33 SPL syntax error: unexpected ','
 42..43 number
 43..44 punctuation.bracket
 == oracles/spl/eval_not_bang.broken.spl
-spl_parse_error error 0:24-0:25 SPL syntax error: unexpected ','
+spl_parse_error error 0:24-0:25 SPL syntax error: expected an expression after the operator before ','
 0..5 property
 5..6 operator
 6..10 variable
@@ -3679,7 +3687,7 @@ spl_parse_error error 0:24-0:25 SPL syntax error: unexpected ','
 45..46 number
 46..47 punctuation.bracket
 == oracles/spl/eval_quoted_name.broken.spl
-spl_parse_error error 0:24-1:0 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:24-1:0 SPL syntax error: expected an expression
 0..5 property
 5..6 operator
 6..10 variable
@@ -3697,7 +3705,7 @@ spl_parse_error error 0:24-1:0 SPL syntax error: missing 'identifier'
 23..24 operator
 24..29 string
 == oracles/spl/eval_true_function.broken.spl
-spl_parse_error error 0:41-0:42 SPL syntax error: unexpected '('
+spl_parse_error error 0:41-0:42 SPL syntax error: '(' is never closed
 0..5 property
 5..6 operator
 6..10 variable
@@ -3713,7 +3721,7 @@ spl_parse_error error 0:41-0:42 SPL syntax error: unexpected '('
 32..33 punctuation.delimiter
 34..35 number
 35..36 punctuation.delimiter
-37..41 boolean
+37..41 function.builtin
 41..42 punctuation.bracket
 42..43 punctuation.delimiter
 44..45 number
@@ -3741,11 +3749,12 @@ spl_parse_error error 0:41-0:42 SPL syntax error: unexpected '('
 45..46 number
 46..47 punctuation.bracket
 == oracles/spl/eval_without_arguments.broken.spl
-spl_parse_error error 0:8-0:9 SPL syntax error: unexpected '|'
+spl_parse_error error 0:15-0:16 SPL syntax error: expected a field name before '|'
 0..5 property
 5..6 operator
 6..7 variable
 8..9 operator.pipe
+10..14 keyword
 15..16 operator.pipe
 17..22 keyword
 23..28 function.builtin
@@ -3969,7 +3978,7 @@ spl_parse_error error 0:23-0:24 SPL syntax error: '[' is never closed
 57..58 punctuation.bracket
 59..60 punctuation.bracket
 == oracles/spl/foreach_without_arguments.broken.spl
-spl_parse_error error 0:8-0:9 SPL syntax error: unexpected '|'
+spl_parse_error error 0:18-0:19 SPL syntax error: expected a field before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -3990,7 +3999,7 @@ spl_parse_error error 0:8-0:9 SPL syntax error: unexpected '|'
 33..34 operator
 34..37 variable
 == oracles/spl/geostats_without_arguments.broken.spl
-spl_parse_error error 0:18-0:19 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:19-0:20 SPL syntax error: expected an aggregate before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -4043,7 +4052,7 @@ spl_parse_error error 0:18-0:19 unbalanced parentheses: this '(' is never closed
 46..47 operator
 47..49 variable
 == oracles/spl/inputlookup_not_first.broken.spl
-spl_parse_error error 0:21-0:22 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:22-0:23 SPL syntax error: expected a lookup table before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -4092,12 +4101,13 @@ spl_subsearch_truncation warning 0:13-0:17 `join` silently truncates at 50,000 e
 56..60 variable
 61..62 punctuation.bracket
 == oracles/spl/join_type_field.broken.spl
-spl_parse_error error 0:13-0:17 SPL syntax error: unexpected 'join'
+spl_parse_error error 0:32-1:0 SPL syntax error: expected a subsearch
 spl_subsearch_truncation warning 0:13-0:17 `join` silently truncates at 50,000 events or 60 seconds without an error (https://docs.splunk.com/Documentation/Splunk/latest/Search/Aboutsubsearches)
 0..5 property
 5..6 operator
 6..10 variable
 11..12 operator.pipe
+13..17 keyword
 18..22 property
 22..23 operator
 23..27 variable
@@ -4123,12 +4133,13 @@ spl_subsearch_truncation warning 0:13-0:17 `join` silently truncates at 50,000 e
 62..66 property
 67..68 punctuation.bracket
 == oracles/spl/join_without_arguments.broken.spl
-spl_parse_error error 0:8-0:9 SPL syntax error: unexpected '|'
+spl_parse_error error 0:15-0:16 SPL syntax error: expected a subsearch before '|'
 spl_subsearch_truncation warning 0:10-0:14 `join` silently truncates at 50,000 events or 60 seconds without an error (https://docs.splunk.com/Documentation/Splunk/latest/Search/Aboutsubsearches)
 0..5 property
 5..6 operator
 6..7 variable
 8..9 operator.pipe
+10..14 keyword
 15..16 operator.pipe
 17..22 keyword
 23..28 function.builtin
@@ -4145,7 +4156,7 @@ spl_subsearch_truncation warning 0:10-0:14 `join` silently truncates at 50,000 e
 35..37 keyword
 38..42 property
 == oracles/spl/leading_not_macro.broken.spl
-spl_parse_error error 0:24-0:27 SPL syntax error: unexpected 'NOT'
+spl_parse_error error 0:27-1:0 SPL syntax error: expected a search term after `NOT`
 spl_leading_not warning 0:0-0:3 leading `NOT` used as the search filter scans events before excluding them (https://docs.splunk.com/Documentation/Splunk/latest/Search/Booleanexpressions)
 0..3 operator
 4..12 macro
@@ -4161,7 +4172,7 @@ spl_leading_not warning 0:0-0:3 leading `NOT` used as the search filter scans ev
 18..19 operator
 19..23 variable
 == oracles/spl/leading_quoted_phrase.broken.spl
-spl_parse_error error 0:22-0:24 SPL syntax error: unexpected 'OR'
+spl_parse_error error 0:24-1:0 SPL syntax error: expected a search term
 0..10 string
 11..16 property
 16..17 operator
@@ -4253,7 +4264,7 @@ spl_empty_command warning 0:10-0:16 `lookup` with no arguments does nothing
 29..30 operator
 30..32 number
 == oracles/spl/mvexpand_without_arguments.broken.spl
-spl_parse_error error 0:18-0:19 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:19-0:20 SPL syntax error: expected a field before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -4265,7 +4276,7 @@ spl_parse_error error 0:18-0:19 SPL syntax error: missing 'identifier'
 33..35 keyword
 36..40 property
 == oracles/spl/outputlookup_without_arguments.broken.spl
-spl_parse_error error 0:22-0:23 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:23-0:24 SPL syntax error: expected a lookup table before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -4293,7 +4304,7 @@ spl_parse_error error 0:11-0:12 unbalanced parentheses: this '(' is never closed
 36..37 operator
 37..38 variable
 == oracles/spl/rare_without_arguments.broken.spl
-spl_parse_error error 0:14-0:15 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:15-0:16 SPL syntax error: this command needs arguments before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -4314,7 +4325,7 @@ spl_parse_error error 0:14-0:15 SPL syntax error: missing 'identifier'
 26..28 keyword
 29..30 variable
 == oracles/spl/rename_lowercase_as.broken.spl
-spl_parse_error error 0:27-1:0 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:27-1:0 SPL syntax error: expected a new name after `as`
 0..5 property
 5..6 operator
 6..10 variable
@@ -4332,11 +4343,12 @@ spl_parse_error error 0:27-1:0 SPL syntax error: missing 'identifier'
 25..27 keyword
 28..29 variable
 == oracles/spl/rename_without_arguments.broken.spl
-spl_parse_error error 0:8-0:9 SPL syntax error: unexpected '|'
+spl_parse_error error 0:17-0:18 SPL syntax error: expected a field to rename before '|'
 0..5 property
 5..6 operator
 6..7 variable
 8..9 operator.pipe
+10..16 keyword
 17..18 operator.pipe
 19..24 keyword
 25..30 function.builtin
@@ -4360,7 +4372,7 @@ spl_parse_error error 0:8-0:9 SPL syntax error: unexpected '|'
 24..25 punctuation.delimiter
 26..35 string
 == oracles/spl/rex_max_match.broken.spl
-spl_parse_error error 0:36-1:0 SPL syntax error: missing 'string'
+spl_parse_error error 0:36-1:0 SPL syntax error: expected a regular expression
 0..5 property
 5..6 operator
 6..10 variable
@@ -4405,7 +4417,7 @@ spl_parse_error error 0:36-1:0 SPL syntax error: missing 'string'
 32..33 variable
 34..43 string
 == oracles/spl/rex_without_arguments.broken.spl
-spl_parse_error error 0:13-0:14 SPL syntax error: missing 'string'
+spl_parse_error error 0:14-0:15 SPL syntax error: expected a regular expression before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -4482,7 +4494,7 @@ spl_empty_command warning 0:10-0:16 `search` with no arguments does nothing
 31..33 keyword
 34..38 property
 == oracles/spl/sichart_without_arguments.broken.spl
-spl_parse_error error 0:17-0:18 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:18-0:19 SPL syntax error: expected an aggregate before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -4506,7 +4518,7 @@ spl_empty_command warning 0:10-0:17 `sistats` with no arguments computes nothing
 32..34 keyword
 35..39 property
 == oracles/spl/sitimechart_without_arguments.broken.spl
-spl_parse_error error 0:21-0:22 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:22-0:23 SPL syntax error: expected an aggregate before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -4537,7 +4549,7 @@ spl_parse_error error 0:21-0:22 SPL syntax error: missing 'identifier'
 27..28 operator
 28..29 number
 == oracles/spl/sort_without_arguments.broken.spl
-spl_parse_error error 0:14-0:15 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:15-0:16 SPL syntax error: expected a sort key before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -4626,6 +4638,7 @@ spl_parse_error error 0:25-0:26 unbalanced parentheses: this '(' is never closed
 19..25 function.builtin
 25..26 punctuation.bracket
 27..29 keyword
+30..31 variable
 32..34 keyword
 35..39 property
 == oracles/spl/stats_glob_alias.spl
@@ -4753,7 +4766,7 @@ spl_empty_command warning 0:10-0:21 `streamstats` with no arguments does nothing
 25..29 property
 30..34 property
 == oracles/spl/table_without_arguments.broken.spl
-spl_parse_error error 0:15-0:16 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:16-0:17 SPL syntax error: expected a field before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -4936,7 +4949,7 @@ spl_parse_error error 0:15-0:16 unbalanced parentheses: this ')' has no matching
 47..49 keyword
 50..54 variable
 == oracles/spl/timechart_without_arguments.broken.spl
-spl_parse_error error 0:19-0:20 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:20-0:21 SPL syntax error: expected an aggregate before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -4984,7 +4997,7 @@ spl_parse_error error 0:19-0:20 SPL syntax error: missing 'identifier'
 31..33 keyword
 34..38 property
 == oracles/spl/top_without_arguments.broken.spl
-spl_parse_error error 0:13-0:14 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:14-0:15 SPL syntax error: this command needs arguments before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -4996,7 +5009,7 @@ spl_parse_error error 0:13-0:14 SPL syntax error: missing 'identifier'
 28..30 keyword
 31..35 property
 == oracles/spl/trailing_pipe.broken.spl
-spl_parse_error error 0:8-0:9 SPL syntax error: unexpected '|'
+spl_parse_error error 0:10-0:11 SPL syntax error: expected a command before '|'
 0..5 property
 5..6 operator
 6..7 variable
@@ -5018,7 +5031,7 @@ spl_empty_stage warning 0:30-0:31 empty pipeline stage: Splunk ignores a trailin
 25..29 property
 30..31 operator.pipe
 == oracles/spl/transaction_without_arguments.broken.spl
-spl_parse_error error 0:21-0:22 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:22-0:23 SPL syntax error: this command needs arguments before '|'
 spl_subsearch_truncation warning 0:10-0:21 `transaction` holds events in memory until the group closes and drops events past maxopentxn (https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Transaction)
 0..5 property
 5..6 operator
@@ -5031,7 +5044,7 @@ spl_subsearch_truncation warning 0:10-0:21 `transaction` holds events in memory 
 36..38 keyword
 39..43 property
 == oracles/spl/tstats_by_prefix.broken.spl
-spl_parse_error error 0:43-0:44 SPL syntax error: missing 'identifier'
+spl_parse_error error 0:43-0:44 SPL syntax error: missing the value of the comparison before ')'
 0..1 operator.pipe
 2..8 keyword
 9..14 function.builtin

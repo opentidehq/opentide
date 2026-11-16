@@ -1,0 +1,41 @@
+---
+source: crates/opentide-spl/tests/table_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/field_name__valid.spl
+---
+SOURCE_FILE@0..51
+  PIPELINE@0..51
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    TABLE_COMMAND@13..35
+      TABLE_KW@13..18 "table"
+      WHITESPACE@18..19 " "
+      IDENTIFIER@19..24
+        IDENT@19..24 "_time"
+      WHITESPACE@24..25 " "
+      IDENTIFIER@25..29
+        IDENT@25..29 "host"
+      WHITESPACE@29..30 " "
+      GLOB@30..35
+        GLOB_TOKEN@30..35 "user*"
+    WHITESPACE@35..36 " "
+    PIPE@36..37 "|"
+    WHITESPACE@37..38 " "
+    FIELDS_COMMAND@38..51
+      FIELDS_KW@38..44 "fields"
+      WHITESPACE@44..45 " "
+      MINUS@45..46 "-"
+      WHITESPACE@46..47 " "
+      IDENTIFIER@47..51
+        IDENT@47..51 "_raw"
+--
