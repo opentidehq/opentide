@@ -40,7 +40,8 @@
 #                                 reference. All five go together
 #
 # Every run is also held to the last result of the base branch (--previous, BASE_BRANCH): more than
-# policy.regression above it fails. A difference within the noise floor never does.
+# policy.regression above it fails. A difference within the noise floor never does. A last
+# result measured before the recorded reference (policy.reference_unix) is not compared with.
 # To re-record the baseline: run the Benchmarks workflow on development, check the run's
 # runner and numbers, and copy its medians here in a change of its own that says why.
 
@@ -61,6 +62,18 @@ noise_floor_rss_mib = 2.0
 # the fastest recorded median (the 7763 is 1.78x slower than the 9V45 on validate). RSS
 # keeps 10% on every CPU. CI (--require-reference) also fails a report with no CPU model.
 cross_cpu_regression = 0.20
+# The recorded reference: bench run 43748171977 (5732728, both engines green), its report's
+# created_unix. Each CPU model's newest green result is the reference, and one model's can
+# be many merges old: in nightly 43794001108 the 8573C's was run 43468976703, before 0.28,
+# and five commands were +23-31% against it (with validate_clean, the 9V45's in
+# 43779975577: #1384). A red run never becomes the reference, so that model would stay
+# red. A last result older than this is not compared with; the run is held to its budgets,
+# and the first green run since records each model's reference.
+# Move it only to a run recorded as the reference on purpose (green on both engines,
+# its numbers checked), in a change of its own that says why: moved forward to dodge a
+# red run, it would hide the regression.
+reference_unix = 1794769371
+reference_run = "https://github.com/opentidehq/opentide/actions/runs/43748171977"
 
 [baseline]
 engine = "python"
@@ -105,22 +118,6 @@ target_rss_mib = 95.4
 # EPYC 7763, run 43450448595 (PR #1055).
 rss_waiver = "#1071, the catalogs' loading redesign"
 waived_rss_mib = 140.3
-# Re-recorded at the reference run 43748171977 (5732728, EPYC 9V74; #1252, the 1.0
-# in-flight work): what the code adds since 0.27 is the 0.28 checks' platform engines
-# (#1122), +3.5% instructions on the heavy workspace (old 841e53b6e^1 6.90 G, current
-# 7.14 G). On the 9V74, whose runs follow each other, validate_clean held at 0.504 s
-# before 0.28, 0.514 s (43706440600) and 0.496 s (43748171977); a local A/B of
-# 5732728 against d095a1310 (30 interleaved rounds, both orders) is within ±5%. The
-# other CPU models' last results are older: the 9V45's from cf8e65f3 (0.414 s, then
-# 0.478 s in 43779975577) and the 8370C's from 2d417849 (0.599 s, then 0.679 s in
-# 43728231039), 100-plus merges apart, measure that interval and the runner instance,
-# not a change. accepted_s / accepted_rss_mib are the slowest medians measured since 0.28
-# (the 8370C's time in 43728231039, the 9V45's peak RSS in 43779975577), as for lint.
-accepted = "#1252, the 1.0 work since the CPU models' last results: the 0.28 engines (#1122)"
-accepted_engine = "rust"
-accepted_unix = 1794769371
-accepted_s = 0.679
-accepted_rss_mib = 147.7
 
 [commands.validate_warnings]
 label = "validate, platforms disabled (a warning per platform block)"
@@ -147,14 +144,8 @@ baseline_rss_mib = 133.6
 # (+12.5%; the advisories' parse +0.69 G, the engines +0.19 G, the recommended notes
 # +0.12 G). `cargo xtask bench`, three alternating rounds on one 4-vCPU machine (develop
 # profile, shared, load about 6): 1.13-1.40 s to 1.21-1.62 s, peak RSS 148-150 to
-# 156-158 MiB. accepted_s / accepted_rss_mib are the slowest of those medians: CI's CPUs
-# are faster, so they are a ceiling until the next run on the base branch records the
-# reference. Accepted at #1173's merge, after the lost caches it restored.
-accepted = "#1122, the 0.28 checks: platform advisories, recommended fields, YARA"
-accepted_engine = "rust"
-accepted_unix = 1794680173
-accepted_s = 1.615
-accepted_rss_mib = 157.5
+# 156-158 MiB. Accepted at #1173's merge (#1217); the recorded reference
+# (policy.reference_unix), measured after it, now holds it.
 
 [commands.lint_file]
 label = "lint --file"
@@ -192,13 +183,8 @@ target_s = 1.5
 # diagrams. The docs grow from 9.7 MB to 12.7 MB (+31%) on the heavy workspace.
 # Callgrind, one thread, c915b8fd to c0dd0be2: 2.91 to 3.66 G instructions (+25.6%), all
 # of it in the new sections' rendering. `cargo xtask bench`, three alternating rounds as
-# for lint: 0.70-0.92 s to 0.73-0.86 s, peak RSS 85 to 102 MiB. accepted_s /
-# accepted_rss_mib are the slowest of those medians, as for lint.
-accepted = "#1122, the 0.28 pages: coverage, ATT&CK tables, settings, diagrams"
-accepted_engine = "rust"
-accepted_unix = 1794680173
-accepted_s = 0.860
-accepted_rss_mib = 102.2
+# for lint: 0.70-0.92 s to 0.73-0.86 s, peak RSS 85 to 102 MiB. Accepted as lint was; the
+# recorded reference now holds it.
 
 [commands.generate_exports_navigator]
 label = "generate exports navigator"
