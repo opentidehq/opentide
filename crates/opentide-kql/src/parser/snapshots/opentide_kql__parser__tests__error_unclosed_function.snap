@@ -32,4 +32,3 @@ SOURCE_FILE@0..20
           R_PAREN@19..20 ")"
 errors:
 16..17: expected `}` (expected `}`)
-16..17: expected `;` (expected `}`, `;`)

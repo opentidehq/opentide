@@ -32,7 +32,7 @@ pub(crate) const GRAMMAR: Grammar = Grammar {
 pub(crate) fn parse(source: &str) -> Parse {
     PARSES.with(|n| n.set(n.get() + 1));
     let input = Input::new(source, lex_kql(source), GRAMMAR);
-    let mut p = P(Parser::new(&input));
+    let mut p = P::new(Parser::new(&input));
     statement::source_file(&mut p);
     build(&input, p.0.finish())
 }
@@ -68,9 +68,41 @@ pub(crate) fn parse_count() -> u64 {
 }
 
 /// The toolkit's parser, spoken in this language's kinds.
-pub(crate) struct P<'i>(Parser<'i>);
+pub(crate) struct P<'i>(Parser<'i>, Flood);
 
-impl P<'_> {
+/// What keeps a run of unexpected tokens to one error: the tokens consumed
+/// so far, and how many had been when the last error was recorded.
+#[derive(Default)]
+pub(crate) struct Flood {
+    consumed: u64,
+    last_error: Option<u64>,
+}
+
+impl<'i> P<'i> {
+    fn new(parser: Parser<'i>) -> Self {
+        Self(parser, Flood::default())
+    }
+
+    /// Records `message`, unless it continues a run of errors ([`P::flooding`]):
+    /// `- - - a`, `,,,,` and `++++` are one error, not one per token (the
+    /// first says where the query went wrong, the rest only repeat it).
+    fn report(&mut self, message: &str) {
+        if !self.flooding() {
+            self.0.error(message);
+        }
+    }
+
+    /// Whether an error here continues the run of the last one (it came at
+    /// most two tokens later); either way, the run now ends here.
+    fn flooding(&mut self) -> bool {
+        let flooding = self
+            .1
+            .last_error
+            .is_some_and(|at| self.1.consumed <= at + 2);
+        self.1.last_error = Some(self.1.consumed);
+        flooding
+    }
+
     pub(crate) fn nth(&self, n: usize) -> K {
         K::from_raw(self.0.nth(n))
     }
@@ -92,32 +124,46 @@ impl P<'_> {
     }
 
     pub(crate) fn eat(&mut self, kind: K) -> bool {
-        self.0.eat(kind.raw())
+        let found = self.0.eat(kind.raw());
+        self.1.consumed += u64::from(found);
+        found
     }
 
     pub(crate) fn bump(&mut self) {
+        self.1.consumed += 1;
         self.0.bump();
     }
 
     pub(crate) fn bump_as(&mut self, kind: K) {
+        self.1.consumed += 1;
         self.0.bump_as(kind.raw());
     }
 
     /// Consumes `kind`, or records "expected ..." without consuming.
     pub(crate) fn expect(&mut self, kind: K) -> bool {
-        let found = self.0.eat(kind.raw());
+        let found = self.eat(kind);
         if !found {
-            self.0.error(format!("expected {}", kind.describe()));
+            self.report(&format!("expected {}", kind.describe()));
         }
         found
     }
 
     pub(crate) fn error(&mut self, message: &str) {
-        self.0.error(message);
+        self.report(message);
     }
 
+    /// Records `message` (unless [`P::report`] would not) and wraps the tokens
+    /// up to one in `stop` in an error node.
     pub(crate) fn err_until(&mut self, message: &str, stop: TokenSet) {
-        self.0.err_until(message, stop);
+        if self.flooding() {
+            let m = self.0.start();
+            while !self.0.at_eof() && !stop.contains(self.0.current()) {
+                self.0.bump();
+            }
+            m.complete(&mut self.0, K::ERROR.raw());
+        } else {
+            self.0.err_until(message, stop);
+        }
     }
 
     pub(crate) fn start(&mut self) -> Marker {
@@ -161,7 +207,7 @@ impl P<'_> {
             self.bump_as(K::IDENT);
             true
         } else {
-            self.0.error("expected a name");
+            self.report("expected a name");
             false
         }
     }
