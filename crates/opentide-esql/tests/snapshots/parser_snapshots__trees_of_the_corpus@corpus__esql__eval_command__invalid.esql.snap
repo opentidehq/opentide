@@ -1,0 +1,36 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/eval_command__invalid.esql
+---
+SOURCE_FILE@0..65
+  COMMENT@0..28 "// prod:eval_command invalid"
+  WHITESPACE@28..29 "\n"
+  QUERY@29..64
+    FROM_COMMAND@29..53
+      FROM_KW@29..33 "FROM"
+      WHITESPACE@33..34 " "
+      INDEX_PATTERN@34..40
+        INDEX_NAME@34..40
+          SOURCE_TEXT@34..40 "logs-*"
+      WHITESPACE@40..41 " "
+      METADATA@41..53
+        METADATA_KW@41..49 "METADATA"
+        WHITESPACE@49..50 " "
+        METADATA_FIELD@50..53
+          SOURCE_TEXT@50..53 "_id"
+    WHITESPACE@53..54 "\n"
+    PIPE@54..55 "|"
+    WHITESPACE@55..56 " "
+    EVAL_COMMAND@56..64
+      EVAL_KW@56..60 "EVAL"
+      WHITESPACE@60..61 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@61..64
+        QUALIFIED_NAME@61..62
+          IDENTIFIER@61..62
+            IDENT@61..62 "x"
+        WHITESPACE@62..63 " "
+        EQ@63..64 "="
+  WHITESPACE@64..65 "\n"
+--- errors
+64..65: expected an expression (expected NOT_KW, PLUS, MINUS)

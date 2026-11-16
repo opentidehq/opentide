@@ -1,0 +1,83 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/win_security_access_token_abuse.esql
+---
+SOURCE_FILE@0..184
+  QUERY@0..183
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    WHERE_COMMAND@40..183
+      WHERE_KW@40..45 "where"
+      WHITESPACE@45..46 " "
+      AND_EXPRESSION@46..183
+        COMPARISON@46..59
+          QUALIFIED_NAME@46..53
+            IDENTIFIER@46..53
+              IDENT@46..53 "EventID"
+          EQ_EQ@53..55 "=="
+          NUMBER@55..59
+            NUMBER_LIT@55..59 "4624"
+        WHITESPACE@59..60 " "
+        AND_KW@60..63 "and"
+        WHITESPACE@63..64 " "
+        COMPARISON@64..76
+          QUALIFIED_NAME@64..73
+            IDENTIFIER@64..73
+              IDENT@64..73 "LogonType"
+          EQ_EQ@73..75 "=="
+          NUMBER@75..76
+            NUMBER_LIT@75..76 "9"
+        WHITESPACE@76..77 " "
+        AND_KW@77..80 "and"
+        WHITESPACE@80..81 " "
+        COMPARISON@81..107
+          QUALIFIED_NAME@81..97
+            IDENTIFIER@81..97
+              IDENT@81..97 "LogonProcessName"
+          EQ_EQ@97..99 "=="
+          STRING@99..107
+            STRING_LIT@99..107 "\"Advapi\""
+        WHITESPACE@107..108 " "
+        AND_KW@108..111 "and"
+        WHITESPACE@111..112 " "
+        COMPARISON@112..150
+          QUALIFIED_NAME@112..137
+            IDENTIFIER@112..137
+              IDENT@112..137 "AuthenticationPackageName"
+          EQ_EQ@137..139 "=="
+          STRING@139..150
+            STRING_LIT@139..150 "\"Negotiate\""
+        WHITESPACE@150..151 " "
+        AND_KW@151..154 "and"
+        WHITESPACE@154..155 " "
+        COMPARISON@155..183
+          QUALIFIED_NAME@155..173
+            IDENTIFIER@155..173
+              IDENT@155..173 "ImpersonationLevel"
+          EQ_EQ@173..175 "=="
+          STRING@175..183
+            STRING_LIT@175..183 "\"%%1833\""
+  WHITESPACE@183..184 "\n"
+--- errors

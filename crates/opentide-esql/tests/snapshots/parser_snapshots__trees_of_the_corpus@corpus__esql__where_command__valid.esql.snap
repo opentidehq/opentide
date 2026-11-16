@@ -1,0 +1,63 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/where_command__valid.esql
+---
+SOURCE_FILE@0..119
+  COMMENT@0..27 "// prod:where_command valid"
+  WHITESPACE@27..28 "\n"
+  QUERY@28..118
+    FROM_COMMAND@28..52
+      FROM_KW@28..32 "FROM"
+      WHITESPACE@32..33 " "
+      INDEX_PATTERN@33..39
+        INDEX_NAME@33..39
+          SOURCE_TEXT@33..39 "logs-*"
+      WHITESPACE@39..40 " "
+      METADATA@40..52
+        METADATA_KW@40..48 "METADATA"
+        WHITESPACE@48..49 " "
+        METADATA_FIELD@49..52
+          SOURCE_TEXT@49..52 "_id"
+    WHITESPACE@52..53 "\n"
+    PIPE@53..54 "|"
+    WHITESPACE@54..55 " "
+    WHERE_COMMAND@55..118
+      WHERE_KW@55..60 "WHERE"
+      WHITESPACE@60..61 " "
+      AND_EXPRESSION@61..118
+        COMPARISON@61..86
+          QUALIFIED_NAME@61..73
+            IDENTIFIER@61..68
+              IDENT@61..68 "process"
+            DOT@68..69 "."
+            IDENTIFIER@69..73
+              IDENT@69..73 "name"
+          WHITESPACE@73..74 " "
+          EQ_EQ@74..76 "=="
+          WHITESPACE@76..77 " "
+          STRING@77..86
+            STRING_LIT@77..86 "\"cmd.exe\""
+        WHITESPACE@86..87 " "
+        AND_KW@87..90 "AND"
+        WHITESPACE@90..91 " "
+        NOT_EXPRESSION@91..118
+          NOT_KW@91..94 "NOT"
+          WHITESPACE@94..95 " "
+          COMPARISON@95..118
+            QUALIFIED_NAME@95..107
+              IDENTIFIER@95..99
+                IDENT@95..99 "host"
+              DOT@99..100 "."
+              IDENTIFIER@100..102
+                IDENT@100..102 "os"
+              DOT@102..103 "."
+              IDENTIFIER@103..107
+                IDENT@103..107 "type"
+            WHITESPACE@107..108 " "
+            EQ_EQ@108..110 "=="
+            WHITESPACE@110..111 " "
+            STRING@111..118
+              STRING_LIT@111..118 "\"linux\""
+  WHITESPACE@118..119 "\n"
+--- errors

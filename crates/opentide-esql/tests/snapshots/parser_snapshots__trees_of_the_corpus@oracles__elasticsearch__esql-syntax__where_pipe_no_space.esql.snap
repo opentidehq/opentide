@@ -1,0 +1,27 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-syntax/where_pipe_no_space.esql
+---
+SOURCE_FILE@0..28
+  QUERY@0..27
+    FROM_COMMAND@0..11
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..11
+        INDEX_NAME@5..11
+          SOURCE_TEXT@5..11 "logs-*"
+    WHITESPACE@11..12 " "
+    PIPE@12..13 "|"
+    WHITESPACE@13..14 " "
+    WHERE_COMMAND@14..19
+      WHERE_KW@14..19 "where"
+    PIPE@19..20 "|"
+    LIMIT_COMMAND@20..27
+      LIMIT_KW@20..25 "limit"
+      WHITESPACE@25..26 " "
+      NUMBER@26..27
+        NUMBER_LIT@26..27 "1"
+  WHITESPACE@27..28 "\n"
+--- errors
+19..19: expected an expression (expected NOT_KW, PLUS, MINUS)
