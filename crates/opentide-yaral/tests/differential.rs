@@ -3,8 +3,8 @@
 //! mutations, random sentences and generated valid rules and searches
 //! (`opentide_parse::differential`, #1227).
 //!
-//! The old engine is the production one, reached through its public API; the
-//! new one is `opentide_yaral::testing`. Compared: the diagnostics of the
+//! The old engine is the tree-sitter one, kept verbatim in `tests/legacy`; the
+//! new one is production, reached through the crate's public API. Compared: the diagnostics of the
 //! three contexts (a file, a Tide block's sections, a hunt), the highlight
 //! tokens, and at offsets the hover and the completions. Completions and
 //! signature help read the text, not the tree, so both sides run the same
@@ -22,9 +22,17 @@
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]
 
+#[expect(
+    dead_code,
+    clippy::too_many_lines,
+    clippy::trivially_copy_pass_by_ref,
+    reason = "the tree-sitter engine, kept verbatim: its public API and its long dispatchers (the library's crate-level expectations)"
+)]
+mod legacy;
+
 use opentide_parse::differential::{Class, Config, Engine, Source, Surfaces, assert_gates, run};
 use opentide_yaral::editor::{completions, hover};
-use opentide_yaral::testing::{analyze_new, hover_new, lex_spans};
+use opentide_yaral::parse_facts::lex_spans;
 use opentide_yaral::{Context, analyze_with};
 use std::path::{Path, PathBuf};
 
@@ -63,7 +71,7 @@ impl Engine for Old {
     fn observe(&self, input: &str) -> Surfaces {
         let mut out = Vec::new();
         for (name, ctx) in CONTEXTS {
-            let analysis = analyze_with(input, &ctx);
+            let analysis = legacy::analyze_with(input, &ctx);
             let lines: Vec<String> = analysis.diagnostics.iter().map(line).collect();
             out.push((format!("diagnostics.{name}"), lines.join("\n")));
             if name == "file" {
@@ -75,7 +83,10 @@ impl Engine for Old {
 
     fn observe_at(&self, input: &str, offset: usize) -> Surfaces {
         vec![
-            ("hover".to_owned(), hover(input, offset).unwrap_or_default()),
+            (
+                "hover".to_owned(),
+                legacy::hover(input, offset).unwrap_or_default(),
+            ),
             (
                 "completions".to_owned(),
                 completions(input, offset)
@@ -92,7 +103,7 @@ impl Engine for New {
     fn observe(&self, input: &str) -> Surfaces {
         let mut out = Vec::new();
         for (name, ctx) in CONTEXTS {
-            let analysis = analyze_new(input, &ctx);
+            let analysis = analyze_with(input, &ctx);
             let lines: Vec<String> = analysis.diagnostics.iter().map(line).collect();
             out.push((format!("diagnostics.{name}"), lines.join("\n")));
             if name == "file" {
@@ -104,10 +115,7 @@ impl Engine for New {
 
     fn observe_at(&self, input: &str, offset: usize) -> Surfaces {
         vec![
-            (
-                "hover".to_owned(),
-                hover_new(input, offset).unwrap_or_default(),
-            ),
+            ("hover".to_owned(), hover(input, offset).unwrap_or_default()),
             (
                 "completions".to_owned(),
                 completions(input, offset)

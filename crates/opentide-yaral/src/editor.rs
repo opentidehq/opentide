@@ -3,9 +3,7 @@
 //! signature help. Offsets are bytes; the host converts editor positions.
 
 use crate::catalog::{Field, Function, Functions, Segment, TypeKind, Udm, is_keyword};
-use opentide_core::{
-    CompletionItem, LanguageId, ParameterInformation, SignatureHelp, SignatureInformation,
-};
+use opentide_core::{CompletionItem, ParameterInformation, SignatureHelp, SignatureInformation};
 
 /// Outcome names Google gives a meaning (yara-l-1.0 "outcome").
 const PLATFORM_OUTCOMES: &[(&str, &str)] = &[
@@ -98,97 +96,6 @@ fn field_markdown(udm: &Udm, path: &str, field: &Field) -> String {
     out
 }
 
-/// Hover at byte `offset`.
-pub fn hover(source: &str, offset: usize) -> Option<String> {
-    // An offset inside a character (a decoded escape) has nothing to show.
-    if !source.is_char_boundary(offset.min(source.len())) {
-        return None;
-    }
-    let tree = opentide_syntax::parse(LanguageId::Yaral, source)?;
-    let node = tree
-        .root_node()
-        .named_descendant_for_byte_range(offset, offset)?;
-    let parent = node.parent();
-    let text = |n: tree_sitter::Node<'_>| &source[n.byte_range()];
-    match (node.kind(), parent.map(|p| p.kind())) {
-        ("field_name", Some("udm_field" | "bare_field")) => {
-            let field = parent?;
-            let mut segs = Vec::new();
-            if field.kind() == "bare_field"
-                && let Some(root) = field.child_by_field_name("root")
-            {
-                segs.push(Segment::Name(
-                    text(root).to_string(),
-                    (root.start_byte(), root.end_byte()),
-                ));
-            }
-            for s in crate::check::segments(field, source) {
-                if matches!(&s, Segment::Name(_, at) if at.0 == segs.first().map_or(usize::MAX, |f: &Segment| match f { Segment::Name(_, a) => a.0, _ => usize::MAX }))
-                {
-                    continue;
-                }
-                let past = match &s {
-                    Segment::Name(_, at) | Segment::Key(at) | Segment::Position(at) => {
-                        at.0 > node.start_byte()
-                    }
-                };
-                if past {
-                    break;
-                }
-                segs.push(s);
-            }
-            let udm = Udm::cached();
-            let path: Vec<&str> = segs
-                .iter()
-                .filter_map(|s| match s {
-                    Segment::Name(n, _) => Some(n.as_str()),
-                    _ => None,
-                })
-                .collect();
-            if path.len() == 1
-                && let Some((name, doc)) = Udm::SOURCES.iter().find(|(n, _)| *n == path[0])
-            {
-                return Some(format!("**{name}**: {doc}"));
-            }
-            let resolution = udm.resolve(&segs);
-            let field_row = resolution.field?;
-            if resolution.unknown.is_some() {
-                return None;
-            }
-            Some(field_markdown(udm, &path.join("."), field_row))
-        }
-        ("name" | "namespace", Some("function_name")) | ("function_name", _) => {
-            let call = if node.kind() == "function_name" {
-                node
-            } else {
-                parent?
-            };
-            let name: String = text(call).split_whitespace().collect();
-            let functions = Functions::cached();
-            if node.kind() == "namespace" && functions.get(&name).is_none() {
-                return None;
-            }
-            functions.get(&name).map(function_markdown)
-        }
-        ("variable", _) => {
-            let name = text(node);
-            PLATFORM_OUTCOMES
-                .iter()
-                .find(|(n, _)| {
-                    *n == name
-                        || (name.starts_with("$risk_entity_to_score_")
-                            && *n == "$risk_entity_to_score")
-                })
-                .map(|(n, doc)| format!("**{n}**: {doc}"))
-        }
-        ("reference_list", _) => Some(format!(
-            "**{}**: a reference list. Google retires reference lists in 2027: use a data table (`%table.column`). Its contents live in the tenant.",
-            text(node)
-        )),
-        _ => None,
-    }
-}
-
 /// The token that holds the byte at `offset`, as rowan's
 /// `token_at_offset(offset).right_biased()` finds it, but in a loop: rowan
 /// descends by recursion, one frame per level, and a tree at the depth limit
@@ -210,8 +117,8 @@ fn token_at(
     }
 }
 
-/// Hover at byte `offset`, read from the pure-Rust tree.
-pub(crate) fn hover_in_tree(source: &str, offset: usize) -> Option<String> {
+/// Hover at byte `offset`.
+pub fn hover(source: &str, offset: usize) -> Option<String> {
     use crate::syntax::{SyntaxKind as K, SyntaxNode};
     // An offset inside a character (a decoded escape) has nothing to show.
     if !source.is_char_boundary(offset.min(source.len())) || offset >= source.len() {
@@ -565,8 +472,8 @@ mod tests {
         let hovers = std::thread::Builder::new()
             .stack_size(1 << 20)
             .spawn(move || {
-                assert_eq!(crate::testing::parse_error_count(&source), 0);
-                [deepest, deepest + 1, middle].map(|at| hover_in_tree(&source, at))
+                assert_eq!(crate::parse_facts::parse_error_count(&source), 0);
+                [deepest, deepest + 1, middle].map(|at| hover(&source, at))
             })
             .unwrap()
             .join()
@@ -582,8 +489,8 @@ mod tests {
         // `hostname` starts, the segment; on the dot, nothing to show.
         let source = "rule r {\n events:\n  $e.principal.hostname = \"x\"\n condition:\n  $e\n}\n";
         let segment = source.find("hostname").unwrap_or(0);
-        assert_eq!(hover_in_tree(source, segment - 1), None, "on the dot");
-        let field = hover_in_tree(source, segment).unwrap_or_default();
+        assert_eq!(hover(source, segment - 1), None, "on the dot");
+        let field = hover(source, segment).unwrap_or_default();
         assert!(field.contains("hostname"), "{field}");
     }
 

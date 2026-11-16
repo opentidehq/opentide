@@ -10,11 +10,11 @@ use super::nav::{
     At, accessor_segments, at, at_token, dollar_name, is_literal, literal_kind, root_variable,
     unparen,
 };
-use crate::ast::{Comparison, MatchWindow, UnaryExpr};
-use crate::catalog::{Functions, Segment, is_keyword};
-use crate::check::{
+use super::support::{
     DAY, MAX_OUTCOMES, duration, format_minutes, in_profile, reference_limits, section_rank,
 };
+use crate::ast::{Comparison, MatchWindow, UnaryExpr};
+use crate::catalog::{Functions, Segment, is_keyword};
 use crate::syntax::{SyntaxKind as K, SyntaxNode};
 use crate::{Finding, Profile};
 use opentide_core::{Severity, codes};

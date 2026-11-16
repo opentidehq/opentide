@@ -6,12 +6,12 @@
 //! reports what Google's pages say the compiler refuses, and never claims a
 //! compile. A text goes through:
 //!
-//! 1. the tree-sitter grammar (`grammars/tree-sitter-opentide-yaral`), whose
-//!    errors are `yaral_parse_error`;
-//! 2. `check::Checker`: sections and their order for the profile, scope
-//!    (event variables, placeholders, outcomes), `match` windows, outcome
-//!    aggregation, condition shape, options, the UDM and function catalogues,
-//!    literals and limits.
+//! 1. the pure-Rust parser (`lexer`, `parser`: a lossless rowan tree, ADR
+//!    0012), whose first error is `yaral_parse_error`;
+//! 2. `analysis::checker::Checker`, on the typed tree: sections and their
+//!    order for the profile, scope (event variables, placeholders, outcomes),
+//!    `match` windows, outcome aggregation, condition shape, options, the UDM
+//!    and function catalogues, literals and limits.
 //!
 //! Two profiles: a rule (`YaraLRule`, or a Tide block's sections assembled
 //! into one) and a search (`YaraLSearch`, a hunt). Reference lists, data
@@ -32,22 +32,10 @@
 )]
 mod analysis;
 pub mod catalog;
-mod check;
 pub mod editor;
-// The pure-Rust parser (#1227, ADR 0012) grows beside the tree-sitter path,
-// which serves until the last PR of the series switches production to it.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the pure-Rust lexer is reached from tests until the last PR of #1227 switches production to it"
-    )
-)]
 mod lexer;
 mod parser;
 mod syntax;
-#[doc(hidden)]
-pub mod testing;
 // The typed AST names the kinds from the crate root.
 use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 // Generated from yaral.ungram by `cargo xtask codegen`: an accessor for every
@@ -61,8 +49,8 @@ use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 #[path = "generated/ast.rs"]
 mod ast;
 
-use opentide_core::{ByteSpan, Diagnostic, LanguageId, LineIndex, Range, Severity, codes};
-use opentide_highlight::{HighlightSpec, HighlightToken, YARAL_HIGHLIGHTS_SCM, tokens_from_spans};
+use opentide_core::{Diagnostic, Severity};
+use opentide_highlight::HighlightToken;
 
 /// Which sections, functions and limits a text may use (yara-l-1.0
 /// "Profiles").
@@ -148,19 +136,7 @@ pub struct AnalyzeResult {
 
 /// The profile of `source`: a rule when it holds a `rule` declaration.
 pub fn infer_profile(source: &str) -> Profile {
-    let Some(tree) = opentide_syntax::parse(LanguageId::Yaral, source) else {
-        return Profile::Rule;
-    };
-    let root = tree.root_node();
-    let mut cursor = root.walk();
-    let rule = root
-        .named_children(&mut cursor)
-        .any(|n| n.kind() == "rule_declaration");
-    if rule || source.trim_start().to_ascii_lowercase().starts_with("rule") {
-        Profile::Rule
-    } else {
-        Profile::Search
-    }
+    analysis::infer_profile(source)
 }
 
 /// Analyze a YARA-L file (`.yaral`, `.yl2`).
@@ -168,131 +144,94 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_with(source, &Context::FILE)
 }
 
-/// Analyze YARA-L text where `ctx` says it runs.
+/// Analyze YARA-L text where `ctx` says it runs: one parse for the
+/// diagnostics and the highlight tokens.
 pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
+    let parsed = parser::parse(source);
+    let root = SyntaxNode::new_root(parsed.green.clone());
     AnalyzeResult {
-        diagnostics: diagnostics(source, ctx),
-        tokens: highlight(source),
+        diagnostics: analysis::diagnostics_of(source, *ctx, &parsed, &root),
+        tokens: analysis::highlight(&root, source),
     }
 }
 
 /// Every diagnostic of a text, in source order.
 pub fn diagnostics(source: &str, ctx: &Context) -> Vec<Diagnostic> {
-    let profile = ctx.profile.unwrap_or_else(|| infer_profile(source));
-    let mut findings = Vec::new();
-    match opentide_syntax::parse(LanguageId::Yaral, source) {
-        None => findings.push(Finding::new(
-            codes::YARAL_PARSE_ERROR,
-            Severity::Error,
-            "the YARA-L parser could not read this text".into(),
-            0,
-            source.len().max(1),
-        )),
-        Some(tree) if tree.root_node().has_error() => {
-            findings.push(parse_error(source, &tree));
-            // String escapes are lexical: still reported.
-            let mut checker = check::Checker::new(source, profile, ctx.meta_required);
-            opentide_syntax::walk_with_ancestors(tree.root_node(), |n, _| {
-                if n.kind() == "string" && !n.has_error() {
-                    checker_escapes(&mut checker, n);
-                }
-            });
-            findings.extend(checker.findings);
-        }
-        Some(tree) => {
-            let mut checker = check::Checker::new(source, profile, ctx.meta_required);
-            checker.run(&tree);
-            findings.extend(checker.findings);
-        }
-    }
-    findings.sort_by_key(|f| (f.start, f.end));
-    findings.dedup();
-    let lines = LineIndex::new(source);
-    findings
-        .into_iter()
-        .map(|f| Diagnostic {
-            code: f.code.to_string(),
-            severity: f.severity,
-            message: f.message,
-            range: Range::new(
-                lines.position(f.start.min(source.len())),
-                lines.position(f.end.max(f.start).min(source.len())),
-            ),
-            field_path: None,
-            suggestion: None,
-            object_uuid: None,
-            object_type: None,
-        })
-        .collect()
+    analysis::diagnostics(source, *ctx)
 }
 
-fn checker_escapes(checker: &mut check::Checker<'_>, node: tree_sitter::Node<'_>) {
-    checker.string_escapes(node);
-}
-
-/// The first syntax error. A comma between condition terms is
-/// `yaral_condition_shape`: Google refuses commas there.
-fn parse_error(source: &str, tree: &tree_sitter::Tree) -> Finding {
-    let root = tree.root_node();
-    let node = opentide_syntax::first_error(root).unwrap_or(root);
-    let span = opentide_syntax::node_span(node);
-    let mut in_condition = false;
-    let mut cursor = node;
-    while let Some(parent) = cursor.parent() {
-        if parent.kind() == "condition_section" {
-            in_condition = true;
-            break;
-        }
-        cursor = parent;
-    }
-    let text = source.get(span.start..span.end).unwrap_or("");
-    if in_condition && text.contains(',') {
-        let comma = span.start + text.find(',').unwrap_or(0);
-        return Finding::new(
-            codes::YARAL_CONDITION_SHAPE,
-            Severity::Error,
-            "`condition` terms are joined with `and` or `or`, never a comma".into(),
-            comma,
-            comma + 1,
-        );
-    }
-    let message = if node.is_missing() {
-        format!("YARA-L expects `{}` here", node.kind())
-    } else {
-        let shown: String = text.chars().take(40).collect();
-        let shown = shown.split('\n').next().unwrap_or("").trim();
-        if shown.is_empty() {
-            "the YARA-L text does not parse here".to_string()
-        } else {
-            format!("the YARA-L text does not parse at `{shown}`")
-        }
-    };
-    Finding::new(
-        codes::YARAL_PARSE_ERROR,
-        Severity::Error,
-        message,
-        span.start,
-        span.end,
-    )
-}
-
-/// Semantic tokens from the grammar and `highlights.scm`.
+/// Semantic tokens from the tree.
 pub fn highlight(source: &str) -> Vec<HighlightToken> {
-    let Ok(spec) = HighlightSpec::load() else {
-        return Vec::new();
-    };
-    let Ok(spans) =
-        opentide_syntax::query_captures(LanguageId::Yaral, source, YARAL_HIGHLIGHTS_SCM)
-    else {
-        return Vec::new();
-    };
-    let spans: Vec<(ByteSpan, &str)> = spans.iter().map(|(s, c)| (*s, c.as_str())).collect();
-    tokens_from_spans(&spec, source, &spans).unwrap_or_default()
+    analysis::highlight(&SyntaxNode::new_root(parser::parse(source).green), source)
+}
+
+/// The tree of `source` and its errors as indented text, for the snapshot
+/// tests of the parser (`tests/trees.rs`). Not part of the API.
+#[doc(hidden)]
+pub fn debug_parse(source: &str) -> String {
+    let parsed = parser::parse(source);
+    let tree = SyntaxNode::new_root(parsed.green);
+    let mut out = opentide_parse::debug_tree(&tree, |k| format!("{k:?}"));
+    let errors =
+        opentide_parse::debug_errors(&parsed.errors, |k| SyntaxKind::from_raw(k).describe());
+    if !errors.is_empty() {
+        out.push_str("errors:\n");
+        out.push_str(&errors);
+    }
+    out
+}
+
+/// What the parser tests read of `source` (a library source never touches
+/// the corpus files they walk). Not part of the API.
+#[doc(hidden)]
+pub mod parse_facts {
+    use crate::syntax::{SyntaxKind as K, SyntaxNode};
+
+    /// The lexemes as `(start, end, is_trivia)`: whitespace and comments
+    /// are trivia.
+    #[must_use]
+    pub fn lex_spans(source: &str) -> Vec<(usize, usize, bool)> {
+        crate::lexer::lex(source)
+            .iter()
+            .map(|l| {
+                let trivia = matches!(K::from_raw(l.kind), K::WHITESPACE | K::COMMENT);
+                (
+                    usize::from(l.range.start()),
+                    usize::from(l.range.end()),
+                    trivia,
+                )
+            })
+            .collect()
+    }
+
+    /// Whether the tree prints back as `source`.
+    #[must_use]
+    pub fn parse_is_lossless(source: &str) -> bool {
+        SyntaxNode::new_root(crate::parser::parse(source).green).to_string() == source
+    }
+
+    /// How many syntax errors `source` has.
+    #[must_use]
+    pub fn parse_error_count(source: &str) -> usize {
+        crate::parser::parse(source).errors.len()
+    }
+
+    /// The places the tree does not conform to `yaral.ungram`, one line each
+    /// (`opentide_parse::conformance`); empty when it conforms.
+    #[must_use]
+    pub fn conformance(source: &str) -> Vec<String> {
+        let root = SyntaxNode::new_root(crate::parser::parse(source).green);
+        opentide_parse::conformance::check(&root, crate::ast::RULES, crate::parser::GRAMMAR)
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opentide_core::codes;
 
     fn codes_of(source: &str) -> Vec<String> {
         analyze(source)
