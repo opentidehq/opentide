@@ -286,9 +286,19 @@ pub struct LineIndex<'a> {
     starts: Vec<usize>,
     /// Lines that are pure ASCII, where a column is a byte distance.
     ascii: Vec<bool>,
+    /// On the other lines, `(byte offset, UTF-16 column)` at each line's
+    /// start and then every [`LineIndex::MARK_EVERY`] bytes, in text order: a
+    /// conversion counts UTF-16 units from the nearest mark, not from the
+    /// line's start, so converting every token of one long non-ASCII line
+    /// stays linear (#1227).
+    marks: Vec<(usize, u32)>,
 }
 
 impl<'a> LineIndex<'a> {
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a char is one or two UTF-16 units; a line past 4 GiB is out of scope (#843)"
+    )]
     pub fn new(source: &'a str) -> Self {
         let mut starts = vec![0];
         starts.extend(source.match_indices('\n').map(|(i, _)| i + 1));
@@ -297,12 +307,41 @@ impl<'a> LineIndex<'a> {
                 let end = starts.get(line + 1).copied().unwrap_or(source.len());
                 source[starts[line]..end].is_ascii()
             })
-            .collect();
+            .collect::<Vec<bool>>();
+        let mut marks = Vec::new();
+        for (line, _) in ascii.iter().enumerate().filter(|(_, ascii)| !**ascii) {
+            let start = starts[line];
+            let end = starts.get(line + 1).copied().unwrap_or(source.len());
+            let (mut last, mut column) = (start, 0u32);
+            marks.push((start, 0));
+            for (i, ch) in source[start..end].char_indices() {
+                if start + i - last >= Self::MARK_EVERY {
+                    last = start + i;
+                    marks.push((last, column));
+                }
+                column += ch.len_utf16() as u32;
+            }
+        }
         Self {
             source,
             starts,
             ascii,
+            marks,
         }
+    }
+
+    /// The distance in bytes between two marks of a non-ASCII line.
+    const MARK_EVERY: usize = 64;
+
+    /// The last mark at or before `offset`, on a non-ASCII line starting at
+    /// `start`: its line's first mark at worst.
+    fn mark_before(&self, start: usize, offset: usize) -> (usize, u32) {
+        let at = self.marks.partition_point(|&(o, _)| o <= offset);
+        self.marks
+            .get(at.wrapping_sub(1))
+            .copied()
+            .filter(|&(o, _)| o >= start)
+            .unwrap_or((start, 0))
     }
 
     /// Same result as [`offset_to_position`].
@@ -317,7 +356,8 @@ impl<'a> LineIndex<'a> {
         let character = if self.ascii[line] {
             (offset - start) as u32
         } else {
-            utf16_len(&self.source[start..offset])
+            let (mark, column) = self.mark_before(start, offset);
+            column + utf16_len(&self.source[mark..offset])
         };
         Position {
             line: line as u32,
@@ -345,10 +385,18 @@ impl<'a> LineIndex<'a> {
         if self.ascii[line] {
             return (start + position.character as usize).min(end);
         }
-        let mut col = 0u32;
-        for (i, ch) in self.source[start..end].char_indices() {
+        // The last mark of the line at or before the column.
+        let first = self.marks.partition_point(|&(o, _)| o < start);
+        let last = self.marks.partition_point(|&(o, _)| o <= end);
+        let line_marks = &self.marks[first..last];
+        let at = line_marks.partition_point(|&(_, c)| c <= position.character);
+        let (mark, mut col) = line_marks
+            .get(at.wrapping_sub(1))
+            .copied()
+            .unwrap_or((start, 0));
+        for (i, ch) in self.source[mark..end].char_indices() {
             if col >= position.character {
-                return start + i;
+                return mark + i;
             }
             col += ch.len_utf16() as u32;
         }
@@ -1993,6 +2041,54 @@ mod tests {
                 "{offset}"
             );
         }
+    }
+
+    /// Long non-ASCII lines, where conversions start from a mark every 64
+    /// bytes (#1227): the same answers as the scans at every offset and every
+    /// column, marks landing on every byte of a multi-byte character.
+    #[test]
+    fn line_index_marks_agree_with_the_scans() {
+        for text in [
+            "\u{e9}\u{1F600}a\u{65e5}".repeat(50),
+            format!("x\n{}\r\n{}", "\u{e9}b".repeat(70), "z\u{1F600}".repeat(33)),
+            format!("{}\u{e9}", "a".repeat(200)),
+        ] {
+            let index = LineIndex::new(&text);
+            for offset in 0..=text.len() + 2 {
+                assert_eq!(
+                    index.position(offset),
+                    offset_to_position(&text, offset),
+                    "{text:?} @ {offset}"
+                );
+            }
+            for line in 0..4 {
+                for character in 0..=420 {
+                    let p = Position::new(line, character);
+                    assert_eq!(
+                        index.offset(p),
+                        position_to_offset(&text, p),
+                        "{line}:{character}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// One long non-ASCII line converts in linear time: 200,000 tokens of a
+    /// 400,000-character line took minutes when each scanned from the line's
+    /// start (#1227).
+    #[test]
+    fn line_index_is_linear_on_one_long_non_ascii_line() {
+        let text = "\"\u{e9}".repeat(200_000);
+        let index = LineIndex::new(&text);
+        let started = std::time::Instant::now();
+        let last = (0..text.len()).step_by(3).map(|o| index.position(o)).last();
+        assert_eq!(last, Some(Position::new(0, 399_998)));
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(20),
+            "{:?}",
+            started.elapsed()
+        );
     }
 
     /// `LineIndex` gives exactly what the scanning functions give, at every
