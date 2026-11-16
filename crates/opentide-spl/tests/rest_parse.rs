@@ -1,13 +1,14 @@
 //! `join`, `lookup`, `inputlookup`, `outputlookup`, `foreach`, `spath`,
 //! `tojson`, the catalog commands and unknown commands against every file
-//! under the test data: wherever tree-sitter accepts a file the pure-Rust
-//! parser does too; the fixtures' trees are snapshots.
+//! under the test data: every file the parser accepts reads each command by
+//! its rule, a few queries keep the verdicts tree-sitter gave them, and the
+//! fixtures' trees are snapshots.
 
 mod support;
 
 use opentide_spl::syntax::{SyntaxKind, parse};
 use std::path::Path;
-use support::{body, old_accepts, render, walk};
+use support::{body, render, walk};
 
 #[test]
 fn every_command_is_read_by_its_rule() {
@@ -17,15 +18,12 @@ fn every_command_is_read_by_its_rule() {
         &mut files,
     );
     files.sort();
-    let (mut seen, mut failures) = (0, Vec::new());
+    let mut seen = 0;
     for path in files {
         let source = body(&path);
-        if !old_accepts(&source) {
-            continue;
-        }
         let (tree, parsed) = parse(&source);
         if !parsed.errors.is_empty() {
-            failures.push(format!("{}: {}", path.display(), parsed.errors[0].message));
+            continue;
         }
         seen += tree
             .descendants()
@@ -46,7 +44,6 @@ fn every_command_is_read_by_its_rule() {
             .count();
     }
     assert!(seen > 40, "{seen} commands");
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 #[test]
@@ -77,53 +74,53 @@ fn the_command_fixtures_are_snapshots() {
 }
 
 #[test]
-fn command_verdicts_follow_the_old_parser() {
-    for query in [
-        "| index=main",
-        "| inputlookup",
-        "| inputlookup | head 1",
-        "| inputlookup t.csv",
-        "| inputlookup append=t t.csv where x=1",
-        "index=a | inputlookup",
-        "index=a | inputlookup t.csv",
-        "index=a | join",
-        "index=a | join a [ search b ]",
-        "index=a | join type=left a, b [ search c ]",
-        "index=a | lookup",
-        "index=a | lookup t",
-        "index=a | lookup t a as b output c",
-        "index=a | lookup t a output",
-        "index=a | lookup local=t",
-        "index=a | outputlookup",
-        "index=a | outputlookup t.csv append=t",
-        "index=a | foreach",
-        "index=a | foreach * [ eval x=1 ]",
-        "index=a | foreach a b",
-        "index=a | spath",
-        "index=a | spath input=x path=a{}.b output=y",
-        "index=a | tojson",
-        "index=a | tojson fill_null=true a, b*, str(c)",
-        "index=a | makeresults",
-        "index=a | makeresults count=5",
-        "index=a | top",
-        "index=a | top limit=5 x",
-        "index=a | bin",
-        "index=a | bin span=1h _time",
-        "index=a | regex _raw!=\"a\"",
-        "index=a | foo",
-        "index=a | foo bar=1 baz",
-        "index=a | foo (",
-        "index=a | foo ]",
-        "index=a | foo AND bar",
-        "index=a | foo x<5",
-        "index=a | foo [ search b ]",
-        "index=a | foo `m`",
-        "index=a | foo f(1)",
-        "index=a | foo =",
+fn command_verdicts_are_pinned() {
+    for (query, accepted) in [
+        ("| index=main", false),
+        ("| inputlookup", true),
+        ("| inputlookup | head 1", true),
+        ("| inputlookup t.csv", true),
+        ("| inputlookup append=t t.csv where x=1", true),
+        ("index=a | inputlookup", false),
+        ("index=a | inputlookup t.csv", true),
+        ("index=a | join", false),
+        ("index=a | join a [ search b ]", true),
+        ("index=a | join type=left a, b [ search c ]", true),
+        ("index=a | lookup", true),
+        ("index=a | lookup t", false),
+        ("index=a | lookup t a as b output c", true),
+        ("index=a | lookup t a output", true),
+        ("index=a | lookup local=t", false),
+        ("index=a | outputlookup", false),
+        ("index=a | outputlookup t.csv append=t", true),
+        ("index=a | foreach", false),
+        ("index=a | foreach * [ eval x=1 ]", true),
+        ("index=a | foreach a b", false),
+        ("index=a | spath", true),
+        ("index=a | spath input=x path=a{}.b output=y", true),
+        ("index=a | tojson", true),
+        ("index=a | tojson fill_null=true a, b*, str(c)", true),
+        ("index=a | makeresults", true),
+        ("index=a | makeresults count=5", true),
+        ("index=a | top", false),
+        ("index=a | top limit=5 x", true),
+        ("index=a | bin", false),
+        ("index=a | bin span=1h _time", true),
+        ("index=a | regex _raw!=\"a\"", true),
+        ("index=a | foo", true),
+        ("index=a | foo bar=1 baz", true),
+        ("index=a | foo (", false),
+        ("index=a | foo ]", false),
+        ("index=a | foo AND bar", true),
+        ("index=a | foo x<5", true),
+        ("index=a | foo [ search b ]", true),
+        ("index=a | foo `m`", true),
+        ("index=a | foo f(1)", true),
+        ("index=a | foo =", false),
     ] {
         assert_eq!(
             parse(query).1.errors.is_empty(),
-            old_accepts(query),
+            accepted,
             "{query:?}: {}",
             render(query)
         );

@@ -4,16 +4,7 @@
 
 ## unsafe extern
 
-Extern blocks are `unsafe`. The syntax crate already uses the required form:
-
-```rust
-unsafe extern "C" {
-    fn tree_sitter_opentide_kql() -> *const ();
-    fn tree_sitter_opentide_spl() -> *const ();
-}
-```
-
-A bare `extern "C" { ... }` is an edition error (`missing_unsafe_on_extern`). The author of the block is responsible for the signatures matching the generated C. `tree-sitter generate` emits `tree_sitter_<grammar_name>` where the grammar `name` uses underscores (`opentide_kql`).
+Extern blocks are `unsafe` (`unsafe extern "C" { ... }`); a bare `extern "C" { ... }` is an edition error (`missing_unsafe_on_extern`). The workspace has none: it forbids `unsafe` (`docs/internal/unsafe.md`), and the engine calls no C.
 
 ## unsafe attributes
 
@@ -47,6 +38,6 @@ Bind the value you need to return. Do not "fix" it by leaking (`Box::leak`) or b
 
 ## unsafe review
 
-New `unsafe` needs a comment that states the invariant the compiler cannot check. The tree-sitter FFI in `crates/opentide-syntax` is the model: `LanguageFn::from_raw` receives a function the tree-sitter CLI generated, which returns a static `TSLanguage` valid for the life of the process. One unsafe operation per block (`clippy::multiple_unsafe_ops_per_block`), and a row in `docs/internal/unsafe.md`, which `xtask/tests/unsafe_listing.rs` keeps complete. Do not use `unsafe` to silence a lifetime error.
+The workspace forbids `unsafe`, and no crate holds any. A crate that came to need it (an FFI a binding must export) copies the workspace lints with `deny`, and each site needs a comment that states the invariant the compiler cannot check. One unsafe operation per block (`clippy::multiple_unsafe_ops_per_block`), and a row in `docs/internal/unsafe.md`, which `xtask/tests/unsafe_listing.rs` keeps complete. Do not use `unsafe` to silence a lifetime error.
 
 `cargo clippy --workspace --all-targets -- -D warnings` includes `clippy::all` plus the warning-deny flag. `#[allow(dead_code)]` needs a reason on the same item. Unused imports fail the build.

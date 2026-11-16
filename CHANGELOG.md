@@ -101,6 +101,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Changed
 
+- **Every query language is parsed in Rust; tree-sitter is gone** ([#1231](https://github.com/opentidehq/opentide/issues/1231)). KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, Falco, CQL, Exabeam and YARA-L each have a parser of their own in Rust, and YARA is read by YARA-X's. Valid queries get the same findings and colours as before. The language server (`opentide-lsp`) and the browser build of the editor engine compile without a C compiler, and the editors' TextMate grammars are unchanged.
 - **EQL syntax errors say what was expected** ([#1224](https://github.com/opentidehq/opentide/issues/1224)). EQL queries are parsed by a Rust parser, no longer by tree-sitter. A valid query gets exactly the findings it got before. In a broken one, the error sits on the token where the query went wrong and names what could come there: `process wehre true` reads ``near `wehre`; expected `where` ``, where it marked the whole query as ``near `any` ``; an unclosed `/*`, string or quoted name says so. The case-sensitivity warnings that tree-sitter's error recovery produced for a broken query are gone, and the `=` and upper-case keyword hints stay. A long run of `+`, `-`, `*`, `/` or `%` (3,000 terms or more) no longer overflows the stack, and its analysis is linear. Nesting deeper than 1,024 levels is one error, `nesting deeper than 1024 levels`, where tree-sitter went on; Elasticsearch stops at 250 (`eql_expression_depth`).
 
 #### The Rust core
@@ -294,6 +295,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 - **`opentide serve` names a run's missing working directory in the system's words** ([#1140](https://github.com/opentidehq/opentide/issues/1140)). A `run` whose `cwd` is not a directory fails with `cannot run in the working directory <path>: No such file or directory (os error 2)`, or `… <path>: not a directory`, not `[Errno 2] No such file or directory: '<path>'`.
 
 ### Fixed
+- **`parse-kv` takes its keys and options** ([#1230](https://github.com/opentidehq/opentide/issues/1230)). A KQL query with `parse-kv Message as (Level: string) with (pair_delimiter = " ")`, Kusto's documented form, was a `kql_parse_error`: only `parse-kv Message` parsed.
 
 - **`--json` log lines no longer carry a `logger` field** ([#1140](https://github.com/opentidehq/opentide/issues/1140)). The notes above already said so; the lines still ended with the name of a Python module (`"logger":"opentide.cli.services.deploy"`) after the event. They hold the event's fields, `event`, `level` and `timestamp`, as documented.
 - **Splunk `schedule_offset` takes an integer, not a placeholder** ([#1140](https://github.com/opentidehq/opentide/issues/1140)). `opentide validate` and the editor accepted `schedule_offset = "$NAME"`, which `deploy` then refused with `schedule_offset must be an integer`: `deploy` resolves placeholders in credentials and `ssl` only. They now refuse it at its key; write the number of minutes.

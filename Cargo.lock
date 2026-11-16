@@ -3412,11 +3412,9 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "rowan",
  "serde",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3440,12 +3438,10 @@ dependencies = [
  "opentide-highlight",
  "opentide-lucene",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "rowan",
  "serde",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3459,11 +3455,9 @@ dependencies = [
  "opentide-highlight",
  "opentide-lucene",
  "opentide-parse",
- "opentide-syntax",
  "rowan",
  "serde",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3475,7 +3469,6 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "regex-syntax",
  "rowan",
@@ -3493,13 +3486,11 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "rowan",
  "serde",
  "serde_json",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3523,13 +3514,11 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "rowan",
  "serde",
  "strsim",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3542,10 +3531,8 @@ dependencies = [
  "opentide-ecs",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "rowan",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3581,13 +3568,11 @@ dependencies = [
  "opentide-highlight",
  "opentide-kuery",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "rowan",
  "serde",
  "strsim",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3624,9 +3609,7 @@ version = "0.12.0"
 dependencies = [
  "insta",
  "logos",
- "opentide-parse",
  "rowan",
- "serde_json",
 ]
 
 [[package]]
@@ -3674,23 +3657,10 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "rowan",
  "serde",
  "strsim",
  "toml 0.8.23",
- "tree-sitter",
-]
-
-[[package]]
-name = "opentide-syntax"
-version = "0.12.0"
-dependencies = [
- "cc",
- "opentide-core",
- "serde_json",
- "tree-sitter",
- "tree-sitter-language",
 ]
 
 [[package]]
@@ -3760,11 +3730,9 @@ version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
- "opentide-syntax",
  "serde",
  "serde_json",
  "toml 0.8.23",
- "tree-sitter",
  "yara-x-fmt",
  "yara-x-parser",
 ]
@@ -3778,12 +3746,10 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex-syntax",
  "rowan",
  "serde",
  "toml 0.8.23",
- "tree-sitter",
 ]
 
 [[package]]
@@ -4951,7 +4917,6 @@ version = "1.0.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
 dependencies = [
- "indexmap",
  "itoa",
  "memchr",
  "serde",
@@ -5252,12 +5217,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "streaming-iterator"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b2231b7c3057d5e4ad0156fb3dc807d900806020c5ffa3ee6ff2c8c76fb8520"
 
 [[package]]
 name = "string_cache"
@@ -5860,26 +5819,6 @@ dependencies = [
  "thread_local",
  "tracing-core",
 ]
-
-[[package]]
-name = "tree-sitter"
-version = "0.25.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78f873475d258561b06f1c595d93308a7ed124d9977cb26b148c2084a4a3cc87"
-dependencies = [
- "cc",
- "regex",
- "regex-syntax",
- "serde_json",
- "streaming-iterator",
- "tree-sitter-language",
-]
-
-[[package]]
-name = "tree-sitter-language"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca0d1bf6fdd806e43ae5198f82f527056d359def39e54e67a0f478ac09dac081"
 
 [[package]]
 name = "try-lock"

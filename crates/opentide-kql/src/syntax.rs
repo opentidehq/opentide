@@ -16,7 +16,6 @@ use std::sync::OnceLock;
 #[repr(u16)]
 #[expect(
     non_camel_case_types,
-    clippy::upper_case_acronyms,
     reason = "the kinds are the grammar's names, as rust-analyzer spells them"
 )]
 pub enum SyntaxKind {
@@ -337,10 +336,6 @@ impl SyntaxKind {
     }
 
     /// A set of kinds, for the parser's expected and recovery sets.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the parser builds its sets with `TokenSet::new`")
-    )]
     pub const fn set(kinds: &[SyntaxKind]) -> TokenSet {
         let mut raw = [rowan::SyntaxKind(0); 32];
         let mut i = 0;

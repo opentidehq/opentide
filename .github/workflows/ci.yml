@@ -16,8 +16,8 @@ run-name: >-
 #   The changed workspace crates and their reverse dependencies are built
 #   ONCE (`build`: their tests, which it runs), and the `_native` extension
 #   once (`native`), on which the Python suite and E2E run. Each
-#   specialised job (Node, WASI, grammars, TextMate, GitLab CI
-#   lint, the facade's semver checks, cargo deny, docs) runs only when its
+#   specialised job (Node, WASI, TextMate, GitLab CI lint,
+#   the facade's semver checks, cargo deny, docs) runs only when its
 #   paths change. One required check, `PR gate`, passes when every job that
 #   was needed passed and every other was skipped.
 # - A push to a base branch, and Run workflow (scope `full`): the same jobs
@@ -130,7 +130,6 @@ jobs:
       node: ${{ steps.plan.outputs.node }}
       wasm: ${{ steps.plan.outputs.wasm }}
       ts_packages: ${{ steps.plan.outputs.ts_packages }}
-      grammars: ${{ steps.plan.outputs.grammars }}
       textmate: ${{ steps.plan.outputs.textmate }}
       gitlab: ${{ steps.plan.outputs.gitlab }}
       facade: ${{ steps.plan.outputs.facade }}
@@ -283,9 +282,9 @@ jobs:
         if: needs.changes.outputs.rust == 'true'
         run: cargo clippy --package opentide-cli --no-default-features --locked -- -D warnings
 
-      # The code only wasm32 compiles (libc_syscalls.rs, the wasip1 paths of
+      # The code only wasm32 compiles (opentide-wasm's, the wasip1 paths of
       # opentide-lsp and opentide-cli), which the native clippy never sees:
-      # when the `wasm` job runs, with build-wasm.sh's wasi-sdk.
+      # when the `wasm` job runs (wasi-sdk only for the command line's ring).
       - name: clippy on the WebAssembly targets
         if: needs.changes.outputs.wasm == 'true'
         run: bash scripts/engine/build-wasm.sh clippy
@@ -1041,7 +1040,7 @@ jobs:
         run: npm test
 
 
-  # Every WebAssembly artifact in one job, one wasi-sdk and one compiler cache:
+  # Every WebAssembly artifact in one job and one compiler cache:
   # scripts/engine/build-wasm.sh builds the browser module (opentide-wasm,
   # wasm-bindgen), the WASI language server and the WASI command line, the
   # one module the VS Code extension runs (ADR 0007's amendment), whose
@@ -1049,8 +1048,8 @@ jobs:
   # that module with @opentide/wasi-host performing their requests from the
   # cassettes, and the npm packages build and pack. When the parser layer, a
   # query-language crate, the WebAssembly crate, a WASI shim or the scripts
-  # change (the `wasm` area of changes.py: a C dependency gained or lost and
-  # the stack a deep parse needs show only here), and on every push and
+  # change (the `wasm` area of changes.py: a C dependency gained and the
+  # stack a deep parse needs show only here), and on every push and
   # nightly. The native language server and command line, and the TypeScript
   # client's tests against the native, worker and WASI servers, only when
   # packages/ or the browser module change (`ts_packages`) and on every push and nightly: they check
@@ -1096,9 +1095,9 @@ jobs:
         with:
           node-version: "22"
 
-      # One wasi-sdk for the three: the browser module and the WASI language
-      # server (smoke-tested), then the command line, which fails over its
-      # budget; the sizes go to the step summary.
+      # The browser module and the WASI language server (smoke-tested; pure
+      # Rust, no C toolchain), then the command line (wasi-sdk, for ring's C),
+      # which fails over its budget; the sizes go to the step summary.
       - name: The WebAssembly modules (browser, WASI server, WASI command line)
         run: bash scripts/engine/build-wasm.sh browser wasi cli
 
@@ -1150,25 +1149,6 @@ jobs:
         with:
           key: ${{ steps.sccache.outputs.key }}
           save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
-
-  # The vendored parser.c of every grammar is what tree-sitter-cli generates
-  # from its grammar.js (crates/AGENTS.md: never hand-edited).
-  grammars:
-    name: Grammars regenerate
-    needs: changes
-    if: needs.changes.outputs.grammars == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-      - run: npm install --prefix /tmp/ts-cli tree-sitter-cli@0.25.10
-      - run: bash scripts/engine/check-grammars.sh
 
   # The generated grammars as VS Code reads them (language-server#171).
   textmate:
@@ -1503,7 +1483,6 @@ jobs:
       - facade
       - node
       - wasm
-      - grammars
       - textmate
       - deny
       - release

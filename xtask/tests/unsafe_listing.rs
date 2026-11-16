@@ -226,9 +226,23 @@ fn found() -> Result<BTreeMap<String, usize>, Box<dyn Error>> {
 fn every_unsafe_is_listed_with_its_reason() -> TestResult {
     let listed = listed()?;
     let found = found()?;
+    // The workspace holds no `unsafe` since tree-sitter and the browser
+    // build's libc left (#1231): the scan proves itself on a sample instead.
+    let sample = "unsafe { f() } // unsafe\nlet s = \"unsafe\"; let unsafety = 1;\n";
+    assert_eq!(
+        unsafe_lines(&code_only(sample)),
+        [1],
+        "the scan is broken: it finds the keyword in code only"
+    );
+    assert_eq!(unsafe_keywords(&code_only(sample)), 1, "the scan is broken");
+    let mut files = Vec::new();
+    for dir in DIRECTORIES {
+        rust_files(&root().join(dir), &mut files)?;
+    }
     assert!(
-        !found.is_empty(),
-        "no unsafe found: the scan is broken (the FFI in opentide-syntax has some)"
+        files.len() > 100,
+        "the walk is broken: {} Rust files",
+        files.len()
     );
     assert_eq!(
         found, listed,

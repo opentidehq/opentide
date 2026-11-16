@@ -66,9 +66,9 @@ closed). Then:
 - each specialised job runs only when its own paths change: `node` (`bindings/node/`), `wasm`
   (`crates/opentide-wasm/`, the WASI shims: `crates/*wasi*`, `vendor/`, `packages/`,
   `build-wasm.sh`; the parser layer, where a C dependency and a parse's stack show only in
-  WebAssembly: `crates/opentide-syntax/`, `crates/opentide-parse/`, the eleven query-language
-  crates (`PARSER_CRATES` in `scripts/ci/changes.py`), `grammars/`, `highlights/`; its native
-  TypeScript-client tests only when `packages/` or `crates/opentide-wasm/` changes, `ts_packages`), `grammars` (`grammars/`), `textmate` (`highlights/`,
+  WebAssembly: `crates/opentide-parse/`, the eleven query-language crates (`PARSER_CRATES` in
+  `scripts/ci/changes.py`), `highlights/`; its native TypeScript-client tests only when
+  `packages/` or `crates/opentide-wasm/` changes, `ts_packages`), `textmate` (`highlights/`,
   `editors/`),
   `gitlab-ci-lint` (opentide-cli's CI renderer and `setup` commands, the linters' installer, its
   test), `facade` (`crates/opentide/`: the public API), `deny` (`Cargo.lock`, `deny.toml`, a
@@ -93,8 +93,8 @@ checked before the next pull request builds on it.
 | `docs` | `scripts/validate-docs.sh` (the site builds in opentidehq/website) and the docs tests that need no wheel (`tests/test_docs` but `test_docs_commands_golden.py` and `test_sdk_snippets.py`, the Python job's) |
 | `facade` | The `opentide` facade with every feature: tests and doctests, rustdoc as docs.rs builds it, `cargo semver-checks` (0.51.0) against the first parent |
 | `node` | `@opentide/opentide` (`bindings/node`): the napi-rs addon for linux-x64-gnu, the generated `index.js` and `index.d.ts` against the committed ones, and `npm test`; it compiles its own addon, so it starts beside `build`. Node's parity with the Python and Rust SDKs, byte for byte, is the conformance suite's (nightly and release pull requests) |
-| `wasm` | Every WebAssembly artifact, one wasi-sdk, one compiler cache (`wasm`): `build-wasm.sh browser wasi cli` (the browser module and the WASI language server, smoke-tested; the WASI command line the VS Code extension runs, its size held to the .vsix's 15 MiB), tenant commands through `@opentide/wasi-host` in the WASI module, the npm packs; when `packages/` changes (`ts_packages`) and on every push and nightly also the native language server and command line and the TypeScript client against the native, worker and WASI servers. The WebAssembly targets' clippy is `engine-lint`'s |
-| `grammars`, `textmate` | Every vendored `parser.c` is what tree-sitter-cli 0.25.10 generates; the TextMate grammars as VS Code reads them |
+| `wasm` | Every WebAssembly artifact, one compiler cache (`wasm`): `build-wasm.sh browser wasi cli` (the browser module and the WASI language server, pure Rust, smoke-tested; wasi-sdk only for the command line's C, `ring`; the WASI command line the VS Code extension runs, its size held to the .vsix's 15 MiB), tenant commands through `@opentide/wasi-host` in the WASI module, the npm packs; when `packages/` changes (`ts_packages`) and on every push and nightly also the native language server and command line and the TypeScript client against the native, worker and WASI servers. The WebAssembly targets' clippy is `engine-lint`'s |
+| `textmate` | The TextMate grammars as VS Code reads them |
 | `deny` | `cargo deny check` against [`deny.toml`](../deny.toml) for the workspace, `fuzz/` and the `publishing/` placeholder crate ([`docs/internal/supply-chain.md`](../docs/internal/supply-chain.md)) |
 | `gate` (**`PR gate`**) | The one required check (below) |
 
@@ -331,8 +331,8 @@ ran from: `development` or `integration/unified-core`).
 scripts/ci-local.sh --quick    # ruff, ty, cargo fmt + clippy, crate layers, engine checks, uv build
 scripts/ci-local.sh            # lint + cargo test + pytest
 scripts/ci-local.sh --full     # + nextest ci, doctests, rustdoc, crate packages and licence scan,
-                               #   coverage gate, E2E, GitLab CI lint, and WebAssembly, grammars and
-                               #   fuzz smoke when their tools are installed: before push
+                               #   coverage gate, E2E, GitLab CI lint, and WebAssembly and fuzz
+                               #   smoke when their tools are installed: before push
 ```
 
 `--full` says which optional step it skipped and what to install for it. `FUZZ_SMOKE_SECONDS`

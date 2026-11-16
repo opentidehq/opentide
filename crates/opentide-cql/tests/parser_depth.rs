@@ -1,4 +1,5 @@
-//! The parser at its limits, on a 1 MB stack in a debug build (the browser WASM module's):
+//! The parser at its limits, on a 1 MB stack in a debug build (the browser WASM module's;
+//! more on Windows and under coverage, [`SMALL_STACK`]):
 //! every recursive construct parses at the nesting floor (1,000 levels) with no error, past
 //! `max_depth` it is one `TooDeep` error and no overflow, and a long chain is flat.
 
@@ -19,11 +20,23 @@ const FLOOR: usize = 1_000;
 /// The chain floor.
 const CHAIN: usize = 20_000;
 
-/// Parses on a 1 MB stack: the error kinds and the depth of the tree.
+/// The stack the depth checks run on: the browser WASM module's 1 MB.
+#[cfg(not(any(coverage, windows)))]
+const SMALL_STACK: usize = 1 << 20;
+/// A Windows debug build's frames are larger, and `cargo llvm-cov`'s
+/// instrumentation enlarges every frame: the depths that fit 1 MB on Linux
+/// overflowed the nightly's Windows engine tests. Neither binary is the WASM
+/// budget, which the Linux and macOS test jobs keep enforcing at 1 MB; 8 MB is
+/// a generous bound, not a measurement. The same rule as `SMALL_STACK` in
+/// `crates/opentide-analysis/tests/deep_queries.rs`.
+#[cfg(any(coverage, windows))]
+const SMALL_STACK: usize = 8 << 20;
+
+/// Parses on a [`SMALL_STACK`]: the error kinds and the depth of the tree.
 fn parse_on_small_stack(name: &'static str, source: String) -> (Vec<ErrorKind>, usize) {
     let started = Instant::now();
     let out = std::thread::Builder::new()
-        .stack_size(1 << 20)
+        .stack_size(SMALL_STACK)
         .spawn(move || {
             let (root, parse) = parser::parse(&source);
             assert_eq!(root.text().to_string(), source, "{name}: lossless");

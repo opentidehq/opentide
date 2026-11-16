@@ -59,6 +59,8 @@ Not operators (correctly elsewhere): `materialize()` (function); `workspace()`/`
 
 Equality, string (`has` / `contains` / `startswith` / `endswith` / `hasprefix` / `hassuffix` + `_cs` / `!` variants), `in` / `in~`, `matches regex`, IPv4 text ops, `and` / `or` / `not()`, arithmetic `+ - * / %`, comparisons, `between` / `!between`.
 
+> Measured against the tree-sitter grammar and its `highlights.scm`, both deleted in [#1231](https://github.com/opentidehq/opentide/issues/1231) (last at `5608d3c7`, in git history). The pure-Rust parser that replaced them kept their verdicts (epic #1219): re-measure against it before acting on a row.
+
 ### Grammar (`grammars/tree-sitter-opentide-kql/grammar.js`) gaps
 
 Parsed today: equality, `has`/`contains`/`startswith`/`endswith` (+ many `_cs` / `!` forms), `in`/`in~`, `between`, `matches regex`, arithmetic.
@@ -72,9 +74,9 @@ Parsed today: equality, `has`/`contains`/`startswith`/`endswith` (+ many `_cs` /
 
 ### Highlights
 
-Canonical: [`highlights/queries/kql/highlights.scm`](../../../highlights/queries/kql/highlights.scm) (synced to grammar `queries/`).
+Canonical: the `KEYWORDS` table, [`crates/opentide-highlight/src/keywords/kql.rs`](../../../crates/opentide-highlight/src/keywords/kql.rs) (the tree-sitter `highlights.scm` it was written from is gone, #1231).
 
-Literal `@operator` rules include `startswith_cs` / `endswith_cs` / `hasprefix*` / `hassuffix*` / `has_ipv4*`. Rules for tokens absent from the grammar will not match until `grammar.js` + generated parser are updated.
+Literal operator rows include `startswith_cs` / `endswith_cs` / `hasprefix*` / `hassuffix*` / `has_ipv4*`. A row for a token the lexer does not cut colours nothing: `opentide-kql`'s tests hold the lexer to the table.
 
 ---
 

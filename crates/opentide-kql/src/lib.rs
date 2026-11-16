@@ -25,23 +25,25 @@ pub mod tables;
 // descent on opentide-parse, a rowan tree. Generated from kql.ungram by `cargo xtask codegen`: an accessor for every
 // child of every node, most of which the engine never calls, and names the
 // grammar chooses (`TabularOperator::WhereOperator`, `RenameItem::new`).
+// Public but hidden, as SPL's: `tests/ast_accessors.rs` calls every accessor
+// on the corpus's trees, which keeps them right and measured.
+#[doc(hidden)]
 #[expect(
-    dead_code,
-    clippy::enum_variant_names,
-    clippy::wrong_self_convention,
     clippy::new_ret_no_self,
     reason = "generated from kql.ungram: every accessor of every node, named by the grammar"
 )]
 #[path = "generated/ast.rs"]
-mod ast;
+pub mod ast;
 mod diagnose;
 mod highlight;
 mod lexer;
 mod parser;
-mod syntax;
+#[doc(hidden)]
+pub mod syntax;
 mod syntax_util;
 // The typed AST names the kinds from the crate root.
-use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
+#[doc(hidden)]
+pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 #[doc(hidden)]
 pub mod inspect;
 

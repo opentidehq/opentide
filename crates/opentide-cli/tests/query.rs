@@ -155,12 +155,11 @@ fn elasticsearch(status: &str, body: &'static str) -> (String, Arc<Mutex<Vec<Str
     (address, seen)
 }
 
-/// An address nobody listens at.
+/// An address nobody listens at: port 1 of the loopback, below every
+/// system's ephemeral range, so no stand-in server of a test running at the
+/// same time can take it (a port bound and then released could be).
 fn nobody() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = format!("http://{}", listener.local_addr().unwrap());
-    drop(listener);
-    address
+    "http://127.0.0.1:1".to_string()
 }
 
 const ANSWER: &str = r#"{"columns":[{"name":"host.name","type":"keyword"},{"name":"count","type":"long"}],"values":[["pc-1",3],["pc-2",null]],"is_partial":false}"#;

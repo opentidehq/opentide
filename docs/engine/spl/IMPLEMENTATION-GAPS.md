@@ -7,6 +7,8 @@ description: "The exact SPL tokens still missing or miswired in the catalog, gra
 
 Machine-oriented punch list. Inventory prose lives in the other `docs/engine/spl/*.md` files; this file names **exact tokens** still missing or miswired in the opentide SPL stack.
 
+> Measured against the tree-sitter grammar and its `highlights.scm`, both deleted in [#1231](https://github.com/opentidehq/opentide/issues/1231) (last at `5608d3c7`, in git history). The pure-Rust parser that replaced them kept their verdicts (epic #1219): re-measure against it before acting on a row.
+
 Measured against:
 
 - `data/catalogs/spl/commands.toml` — **150** commands, **148** functions (**109** eval + **39** aggregate, including aggregate `sum` / `avg` / `min` / `max`)

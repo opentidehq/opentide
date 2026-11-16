@@ -2,15 +2,9 @@
 //! language server itself ([`LanguageServer`]) for a browser worker. Do not
 //! mix WASI in this artifact.
 //!
-//! Build it with `scripts/engine/build-wasm.sh`, which links wasi-sdk's libc for the
-//! C parsers; `libc_syscalls` keeps that libc from importing anything.
-
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-#[expect(
-    unsafe_code,
-    reason = "exports the libc syscall symbols (#[unsafe(no_mangle)]) and writes the clock's answer"
-)]
-mod libc_syscalls;
+//! Build it with `scripts/engine/build-wasm.sh`. The engine is pure Rust (ADR
+//! 0012), so the module needs no C toolchain and no libc, and imports nothing
+//! but wasm-bindgen's glue.
 
 use opentide::analysis::{self, LanguageId};
 use wasm_bindgen::prelude::*;

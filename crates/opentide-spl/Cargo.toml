@@ -24,8 +24,4 @@ serde.workspace = true
 toml.workspace = true
 
 [dev-dependencies]
-# The tree-sitter engine, kept in tests/legacy for the differential test.
-opentide-syntax.workspace = true
-tree-sitter.workspace = true
-opentide-parse = { workspace = true, features = ["differential"] }
 insta.workspace = true

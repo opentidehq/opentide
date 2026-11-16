@@ -102,10 +102,7 @@ cache-keys = [
     # What the engine crates compile in (include_str!, build.rs).
     { file = "data/catalogs/**" },
     { file = "src/opentide/data/**" },
-    { file = "grammars/*/src/**" },
-    { file = "grammars/*/queries/**" },
     { file = "highlights/spec.toml" },
-    { file = "highlights/queries/**" },
     { file = "highlights/generated/**" },
 ]
 
@@ -164,15 +161,11 @@ exclude = [
 # package` files) with the workspace manifest and lock; the data the crates
 # compile in from the repository root is added here. The rest of the engine's
 # tree stays out: test data, the fuzz targets, editors, npm packages, the
-# engine's docs and scripts, the grammar sources tree-sitter generates parser.c
-# from, the reference Tide schemas, and rust-toolchain.toml, so a build from the
+# engine's docs and scripts, the reference Tide schemas, and rust-toolchain.toml, so a build from the
 # sdist uses the toolchain it finds instead of asking rustup for components.
 include = [
     { path = "data/catalogs/**/*", format = "sdist" },
-    { path = "grammars/*/src/**/*", format = "sdist" },
-    { path = "grammars/*/queries/**/*", format = "sdist" },
     { path = "highlights/spec.toml", format = "sdist" },
-    { path = "highlights/queries/**/*", format = "sdist" },
     { path = "highlights/generated/**/*", format = "sdist" },
     # The crates the workspace patches in ([patch.crates-io], vendor/README.md).
     { path = "vendor/**/*", format = "sdist" },

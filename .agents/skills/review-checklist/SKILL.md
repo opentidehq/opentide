@@ -120,9 +120,9 @@ and the lint policy: [`rust`](../rust/SKILL.md), [`crates/AGENTS.md`](../../../c
       LSP position, a column or a search panics inside a multi-byte character. Convert through
       `opentide_core` ([`rust-engine`](../rust-engine/SKILL.md)), and test with `é`, a CJK and a
       non-BMP character.
-- [ ] **`unsafe` only where allowed**, in `opentide-syntax` or `opentide-wasm`, each block with a
-      `// SAFETY:` comment that states the invariant. Anywhere else, `unsafe` fails review even if
-      the crate's lints were changed to accept it.
+- [ ] **No `unsafe`**: the workspace forbids it and no crate holds any. A change that adds it
+      (or a C dependency to the engine) fails review even if the crate's lints were changed to
+      accept it.
 - [ ] **Every suppression names its reason**: `#[expect(lint, reason = "...")]` on the narrowest
       item, rather than `#[allow]`, and never a crate-wide allow to quiet one site. Growing the
       workspace allow-list in `Cargo.toml` is a decision of its own, never part of a fix.

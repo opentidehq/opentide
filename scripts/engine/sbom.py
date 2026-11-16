@@ -13,7 +13,7 @@
 - `opentide-lsp.cdx.json`: the `opentide-lsp` binaries and its WASI build
   (the crate, every target).
 - `opentide-wasm.cdx.json`: the browser build (the `opentide-wasm-web` zip):
-  the crate for wasm32-unknown-unknown, and the wasi-libc it links.
+  the crate for wasm32-unknown-unknown, pure Rust (it links no libc).
 - `opentide.cdx.json`: the `opentide` binaries and crate, as `cargo install
   opentide --features cli` builds them (the facade with its `cli` feature,
   every target).
@@ -92,42 +92,6 @@ def relative_refs(bom: Bom, root: Path) -> Bom:
     prefix = root.resolve().as_posix().rstrip("/")
     text = text.replace(f"file://{prefix}/", "file:").replace(f"file://{prefix}", "file:.")
     return json.loads(text)
-
-
-def wasi_libc_component(build_script: str) -> Bom:
-    """The wasi-libc that ``build-wasm.sh`` links into the browser build: C,
-    so no Cargo dependency names it."""
-    match = re.search(r"^version=([0-9.]+)$", build_script, re.MULTILINE)
-    if match is None:
-        raise SystemExit("sbom.py: no `version=` in scripts/engine/build-wasm.sh")
-    version = match.group(1)
-    major = version.split(".")[0]
-    return {
-        "type": "library",
-        "bom-ref": f"wasi-libc@wasi-sdk-{version}",
-        "name": "wasi-libc",
-        "version": f"wasi-sdk-{version}",
-        "description": "wasi-sdk's libc.a, linked into the wasm32-unknown-unknown build "
-        "(licenses/wasi-libc, shipped as WASI-LIBC-LICENSES.txt)",
-        "scope": "required",
-        "licenses": [{"expression": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"}],
-        "purl": f"pkg:github/WebAssembly/wasi-sdk@wasi-sdk-{major}",
-    }
-
-
-def add_component(bom: Bom, component: Bom) -> Bom:
-    """``bom`` with ``component`` listed and depended on by its subject."""
-    bom = json.loads(json.dumps(bom))
-    bom.setdefault("components", []).append(component)
-    root = bom["metadata"]["component"]["bom-ref"]
-    dependencies = bom.setdefault("dependencies", [])
-    entry = next((d for d in dependencies if d.get("ref") == root), None)
-    if entry is None:
-        entry = {"ref": root, "dependsOn": []}
-        dependencies.append(entry)
-    entry.setdefault("dependsOn", []).append(component["bom-ref"])
-    dependencies.append({"ref": component["bom-ref"], "dependsOn": []})
-    return bom
 
 
 def wheel_version(explicit: str | None, root: Path) -> str | None:
@@ -309,11 +273,8 @@ def generate(out: Path, version: str | None = None, npm_version: str | None = No
         by_target: dict[str, Path] = {}
         for target in sorted({target for _, target, _ in RUST_SBOMS} | {"all"}):
             by_target[target] = _cargo_sboms(target, scratch)
-        build_wasm = (ROOT / "scripts/engine/build-wasm.sh").read_text(encoding="utf-8")
         for crate, target, name in RUST_SBOMS:
             bom = _read(by_target[target] / f"{crate.replace('/', '__')}.json")
-            if crate == "crates/opentide-wasm":
-                bom = add_component(bom, wasi_libc_component(build_wasm))
             _check_dependencies(name, bom)
             _write(out / name, bom)
             written.append(out / name)

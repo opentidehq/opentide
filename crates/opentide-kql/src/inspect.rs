@@ -114,3 +114,9 @@ pub fn tree_kinds(source: &str) -> (bool, BTreeSet<String>, String) {
         .collect();
     (!parsed.errors.is_empty(), kinds, format!("{root:#?}"))
 }
+
+/// The tree of `source`, for the tests of the typed AST (`tests/ast_accessors.rs`).
+#[must_use]
+pub fn tree(source: &str) -> SyntaxNode {
+    SyntaxNode::new_root(parse(source).green)
+}

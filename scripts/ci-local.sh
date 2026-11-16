@@ -83,7 +83,7 @@ tree_unchanged() {
   fi
 }
 
-# CI's Rust jobs (engine-lint, build, release-build's crate-packages, wasm, grammars,
+# CI's Rust jobs (engine-lint, build, release-build's crate-packages, wasm,
 # engine-fuzz.yml, briefly) for --full; rustfmt, clippy and the layers ran above.
 rust_jobs() {
   echo "==> Cargo workspace: nextest (profile ci)"
@@ -133,14 +133,6 @@ rust_jobs() {
     echo "==> wasi-host (opentide/fetch against opentide serve)"
     cargo build --locked -p opentide-cli
     OPENTIDE_BIN=target/debug/opentide-cli node --experimental-strip-types --test packages/wasi-host/src/index.test.ts
-  fi
-
-  if [[ -n "${TREE_SITTER_CLI:-}" || -x /tmp/ts-cli/node_modules/.bin/tree-sitter ]] \
-    || command -v tree-sitter >/dev/null; then
-    echo "==> Grammars regenerate (check-grammars.sh)"
-    bash scripts/engine/check-grammars.sh
-  else
-    skip "grammar drift check: npm install --prefix /tmp/ts-cli tree-sitter-cli@0.25.10"
   fi
 
   local seconds="${FUZZ_SMOKE_SECONDS:-60}"

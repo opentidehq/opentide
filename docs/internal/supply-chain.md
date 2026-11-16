@@ -83,7 +83,7 @@ checks each against the schema (cyclonedx-python-lib, pinned) and for references
 |------|----------|-----------|
 | `opentide-wheel.cdx.json` | the PyPI wheel this commit builds (its version the release's, or the Cargo workspace's; no wheel is built for the SBOM, and maturin also writes the Rust crates' SBOM into the wheel's `.dist-info/sboms/`) | `uv export` (the Python dependencies, no dev group) and the crates compiled into `opentide._native` |
 | `opentide-lsp.cdx.json` | the `opentide-lsp` binaries and the WASI build | cargo-cyclonedx, every target |
-| `opentide-wasm.cdx.json` | the browser build | cargo-cyclonedx for wasm32-unknown-unknown, and the wasi-libc it links |
+| `opentide-wasm.cdx.json` | the browser build | cargo-cyclonedx for wasm32-unknown-unknown (pure Rust: it links no libc) |
 | `opentide-lsp-client.cdx.json`, `opentide-lsp-worker.cdx.json`, `opentide-wasi-host.cdx.json` | the npm packages | `npm sbom`, no dev dependencies |
 | `opentide.cdx.json` | the `opentide` binaries and crate (`cargo install opentide --features cli`) | cargo-cyclonedx for the facade with `cli`, every target |
 | `opentide-node.cdx.json` | the npm package `@opentide/opentide` and its native packages | `npm sbom`, no dev dependencies, with the facade's crates |

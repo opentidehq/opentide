@@ -7,13 +7,12 @@ the `opentide-wasm-web` zip on each GitHub Release.
 
 ## Place
 
-bindings: depends on opentide-core, -analysis, -highlight and -lsp. Nothing depends on it. One
-of the two crates allowed `unsafe` (the libc shims): its `[lints]` copy the workspace's with
-`unsafe_code = "deny"`.
+bindings: depends on the facade, `opentide` (`analysis` and `lsp`). Nothing depends on it. It
+inherits the workspace's lints, `unsafe_code = "forbid"` included.
 
 ## Invariants
 
-- Never mix WASI into this artifact: `libc_syscalls.rs` answers the seven WASI syscalls wasi-libc can reach inside the module, so it imports nothing but wasm-bindgen's glue.
+- Never mix WASI into this artifact: it imports nothing but wasm-bindgen's glue (`build-wasm.sh` checks). The engine is pure Rust, so no C toolchain or libc is linked.
 - No logic here: each export wraps one engine call.
 - The host is JavaScript: no files, no clock (parse timeouts never fire).
 
@@ -21,18 +20,18 @@ of the two crates allowed `unsafe` (the libc shims): its `[lints]` copy the work
 
 ```bash
 cargo nextest run --profile fast -p opentide-wasm        # native unit tests
-bash scripts/engine/build-wasm.sh browser                # the real artifact (fetches wasi-sdk)
+bash scripts/engine/build-wasm.sh browser                # the real artifact (no C toolchain)
 bash scripts/engine/build-wasm.sh clippy                 # clippy for wasm32 (and wasip1 lsp)
 ```
 
-Code under `cfg(target_arch = "wasm32")` is linted only by clippy for that target, which needs a
-wasm C compiler and libc headers for the grammars: `build-wasm.sh clippy` sets them up (or reuses
-`WASI_SDK_PATH`). CI's `engine-lint` job runs it, and the `wasm` job builds the artifact with
+Code under `cfg(target_arch = "wasm32")` is linted only by clippy for that target: `build-wasm.sh
+clippy` runs it (and the wasip1 language server and command line; wasi-sdk only for the command
+line's `ring`). CI's `engine-lint` job runs it, and the `wasm` job builds the artifact with
 `-Dwarnings` and smoke-tests it in Node.
 
 ## Do not
 
-- Add `unsafe` outside `libc_syscalls.rs`, or a WASI import.
+- Add `unsafe` (the workspace forbids it), a C dependency, or a WASI import.
 
 ## Work items that change this crate
 

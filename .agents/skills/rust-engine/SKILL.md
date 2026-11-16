@@ -20,7 +20,7 @@ Read `references/crates.md` before adding a dependency or a new crate. Read `ref
 | --- | --- | --- | --- |
 | `opentide-core` | no | `thiserror` | `LanguageId`, ranges, `codes` |
 | `opentide-highlight` | no | `thiserror` | HighlightSpec, semantic tokens |
-| `opentide-syntax` | no | strings at the query boundary | tree-sitter 0.25 bindings |
+| `opentide-parse` | no | `SyntaxError` (data, no enum of errors) | the parsing toolkit: logos token source, event parser, lossless rowan trees, the `.ungram` runtime. See `parser` |
 | `opentide-kql` | no | `Diagnostic` | KQL catalog, HIR, profiles (`thiserror` is declared and unused) |
 | `opentide-spl` | no | `Diagnostic` | SPL catalog |
 | `opentide-esql` | no | `Diagnostic` | ES\|QL catalog, stack-version lifecycle |
@@ -31,7 +31,7 @@ Read `references/crates.md` before adding a dependency or a new crate. Read `ref
 | `opentide-cql` | no | `Diagnostic` | CrowdStrike Query Language: function signatures, Falcon events, LogScale/Falcon/CPS fields (`OnceLock`), Next-Gen SIEM correlation checks |
 | `opentide-exabeam` | no | `Diagnostic` | Exabeam Query Language: the verdict parser (a port of the spec's reference checker), RE2 checks over `regex-syntax`, CIM fields (`OnceLock`) |
 | `opentide-yara` | no | `Diagnostic` | YARA signatures (yara-1.0): `yara-x-parser` is the verdict parser, `yara-x-fmt` formats `.yar` files |
-| `opentide-yaral` | no | `Diagnostic` | YARA-L 2.0 (yara-l-1.0, Google SecOps): the tree-sitter grammar is the verdict parser; UDM and function catalogs (`OnceLock`); `regex-syntax` checks RE2 patterns |
+| `opentide-yaral` | no | `Diagnostic` | YARA-L 2.0 (yara-l-1.0, Google SecOps): its parser on `opentide-parse` is the verdict parser; UDM and function catalogs (`OnceLock`); `regex-syntax` checks RE2 patterns |
 | `opentide-ecs` | no | `Diagnostic` | ECS field catalog (`OnceLock`), ECS-index detection, the ECS type and near-miss helpers the Elastic engines share |
 | `opentide-schema` | no | `thiserror` (`SchemaError`) | The Tide model as code: serde, garde, schemars, PyO3 (UC-1.1, ADR 0001) |
 | `opentide-tide` | no | `Diagnostic` | Tide YAML, UUID graph, injection |
@@ -61,7 +61,7 @@ Pinned stack (do not bump in passing):
 | `regex` 1 | lockfile | compile once |
 | `regex-syntax` 0.8 | lockfile (`regex`'s own parser) | `opentide-exabeam` only: RE2 syntax checks of Exabeam patterns, parsed, never compiled |
 | `uuid` 1 (`v4` feature) | 1.26 | Tide object ids in `opentide-tide` |
-| `tree-sitter` | 0.25.10 | `opentide-syntax` and the query engines. See `tree-sitter` |
+| `logos`, `rowan` 0.17 | workspace | the query parsers, on `opentide-parse`. See `parser` |
 | `yara-x-parser`, `yara-x-fmt` | `=1.23.0` | `opentide-yara` only. Never the `yara-x` compiler crate (wasmtime, no WASI): it is an oracle (`scripts/engine/oracles`) |
 
 `Cargo.lock` is exactly what cargo resolves for the workspace: CI passes `--locked` (`ci.yml`, every Rust job), so a lock that needs rewriting fails it. Commit a re-resolved lock only with a change that means to change dependencies, and check with `cargo tree` that nothing else moved. If a command rewrites `Cargo.lock` for any other change, restore the committed file (`git checkout -- Cargo.lock`). `scripts/engine/cloud-agent-install.sh` restores it after warming the build. `fuzz/` keeps its own lock.
@@ -109,8 +109,8 @@ Catalogs and the highlight spec load through `std::sync::OnceLock` (`Catalog::ca
 - Assert diagnostic **codes** (and field paths when the contract says so). Snapshot (insta, `insta::assert_snapshot!`) what a contract fixes, such as a diagnostic's code, range and message or a renderer's output, rendered as text; never a whole struct. Conventions: `crates/AGENTS.md`, "Tests".
 - While iterating, `cargo nextest run --profile fast -p <crate>` (`.config/nextest.toml`); name the test binary with `cargo test -p opentide-kql --lib`. `cargo test --workspace` stays the plain full check.
 - CI runs `cargo nextest run --profile ci` and `cargo test --doc` on Linux for the affected crates on a pull request and the whole workspace on a push (`ci.yml`, job `build`, `INSTA_UPDATE=no`), and the workspace's tests on macOS and Windows nightly (`nightly.yml`, job `engine-test-os`); nextest does not run doctests (`cargo test --workspace --doc` does). Each test gets its own process under nextest, so a test cannot rely on a `OnceLock` or other static that another test filled. `cargo nextest run --workspace --profile ci` is the same check as CI's.
-- The dev and test profiles build dependencies at `opt-level = 1` with line tables (`[profile.dev.package."*"]`); workspace crates stay at 0 with full debuginfo. The tests spend most of their time in `toml`, `serde`, `regex` and tree-sitter, which run about four times slower unoptimised. Do not drop it to speed up a cold build.
-- `crates/opentide-syntax/build.rs` watches each grammar's `src/` directory. Never print `rerun-if-changed` for a path that may not exist: cargo then treats the build script as stale on every run and rebuilds every crate.
+- The dev and test profiles build dependencies at `opt-level = 1` with line tables (`[profile.dev.package."*"]`); workspace crates stay at 0 with full debuginfo. The tests spend most of their time in `toml`, `serde`, `regex`, `logos` and `rowan`, which run several times slower unoptimised. Do not drop it to speed up a cold build.
+- A build script never prints `rerun-if-changed` for a path that may not exist: cargo then treats it as stale on every run and rebuilds every crate.
 - `cargo fmt --all` before finishing. rustfmt is not optional.
 
 ## What not to add
@@ -119,4 +119,4 @@ Catalogs and the highlight spec load through `std::sync::OnceLock` (`Catalog::ca
 - `std::fs` in an engine `src/` tree. Pass the text in.
 - `async` / `tokio` in the engine. The server is a blocking stdio loop.
 - A new `LanguageId` without the `add-language` skill.
-- `unsafe` except the existing tree-sitter FFI and a documented invariant. Edition 2024 requires `unsafe extern` and `#[unsafe(no_mangle)]`. See `references/edition-2024.md`.
+- `unsafe`: the workspace forbids it and no crate holds any. A C dependency (`cc`, a `*-sys` crate) in the engine: it is pure Rust (ADR 0012). See `references/edition-2024.md`.
