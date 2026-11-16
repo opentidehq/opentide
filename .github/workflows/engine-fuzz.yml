@@ -1,16 +1,21 @@
 name: Engine fuzz
 
-# Every fuzz target (fuzz/fuzz_targets/) under cargo-fuzz for ten minutes a
-# night (#843; language-server#182). A crash or a timeout fails its cell and
-# uploads the input; fix it with a regression test, then save the input under
-# fuzz/regressions/<target>/ (fuzz/README.md), where the normal test run
-# replays it. The corpus each target learns is kept in the Actions cache from
-# night to night. Pull requests run every target for 60 s (ci.yml,
-# `fuzz-smoke`); tests/test_ci/test_workflows.py keeps both matrices
-# complete.
+# Every fuzz target (fuzz/fuzz_targets/) under cargo-fuzz for ten minutes
+# (#843; language-server#182), in the nightly: ci.yml's `nightly` job calls
+# nightly.yml, which calls this workflow, so a failure here is the nightly's
+# and `nightly-report` files it. Run workflow runs it alone. A crash or a
+# timeout fails its cell and uploads the input; fix it with a regression
+# test, then save the input under fuzz/regressions/<target>/ (fuzz/README.md),
+# where the normal test run replays it. The corpus each target learns is kept
+# in the Actions cache from night to night; tests/test_ci/test_workflows.py
+# keeps the matrix complete.
 on:
-  schedule:
-    - cron: "43 2 * * *"
+  workflow_call:
+    inputs:
+      seconds:
+        description: seconds per target
+        type: number
+        default: 600
   workflow_dispatch:
     inputs:
       seconds:
@@ -37,10 +42,26 @@ jobs:
           persist-credentials: false
       # The dated nightly fuzz/NIGHTLY pins, which scripts/engine/fuzz.sh also reads.
       - name: Set up Rust (nightly)
+        id: nightly
         run: |
           echo "FUZZ_TOOLCHAIN=$(cat fuzz/NIGHTLY)" >> "$GITHUB_ENV"
           FUZZ_TOOLCHAIN="$(cat fuzz/NIGHTLY)"
           rustup toolchain install "${FUZZ_TOOLCHAIN}" --profile minimal --no-self-update
+          echo "version=$(rustc +"${FUZZ_TOOLCHAIN}" -V | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
+      # fuzz/ is a workspace of its own; cargo-fuzz builds into fuzz/target.
+      # rust-cache also keeps ~/.cargo/bin, so cargo-fuzz installs once. Its
+      # key hashes the pinned stable (rust-toolchain.toml), not the nightly
+      # that builds here: `key` names the nightly, so a new one saves a new
+      # tree. Saved by one cell of the scheduled nightly only (on
+      # development, the default branch, whose caches every pull request
+      # reads): a target tree per run evicted the compiler caches pull
+      # requests restore (#841).
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ matrix.target == 'kql' && github.event_name == 'schedule' }}
+          shared-key: fuzz
+          key: ${{ steps.nightly.outputs.version }}
+          workspaces: fuzz -> target
       - run: cargo +"${FUZZ_TOOLCHAIN}" install cargo-fuzz --locked --version 0.13.2
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

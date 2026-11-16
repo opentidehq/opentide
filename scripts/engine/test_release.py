@@ -864,11 +864,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
         pack = workflow_jobs(PACKAGES)["npm-pack"]
         self.assertIn('cp bindings/node/LICENSE "${dir}"', pack)
         self.assertIn("grep -qx 'package/LICENSE'", pack)
-        # ci.yml's full set runs the same test on the tree's packages.
-        ci = workflow_jobs(WORKFLOWS / "ci.yml")["npm-install"]
-        self.assertIn("node scripts/engine/npm-local-registry/test.mjs", ci)
-        self.assertIn('--pack "${RUNNER_TEMP}/npm"', ci)
-        self.assertIn('release.py npm-version "${version}"', ci)
+        # ci.yml runs this smoke on the release tier and the nightly: its
+        # `release` job is this build, so no job of its own repeats the test.
+        ci = workflow_jobs(WORKFLOWS / "ci.yml")
+        self.assertIn("uses: ./.github/workflows/release-build.yml", ci["release"])
+        self.assertIn("needs.changes.outputs.mode == 'nightly'", ci["release"])
+        self.assertNotIn("npm-local-registry/test.mjs", "\n".join(ci.values()))
 
     def test_the_local_registry_has_no_uplink_and_pinned_tools(self) -> None:
         here = Path(__file__).resolve().parent / "npm-local-registry"

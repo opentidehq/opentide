@@ -1,8 +1,11 @@
 # The plan section 11 benchmarks with their budgets (UC-0.8, #806): `cargo xtask bench`
 # (xtask/src/bench/) on the heavy workspace, held by `cargo xtask bench --check` to
-# tests/bench/budgets.toml and, for the rust engine, to the last result of the comparison base.
+# tests/bench/budgets.toml and to the last result of the comparison base. The rust engine
+# only: the python engine (the oracle, opentide 0.23.0 from PyPI) is frozen, and its
+# baselines in budgets.toml are recorded once; nothing here measures it any more.
 #
-# When: in the nightly (ci.yml's `benchmarks` job calls this workflow; the schedule
+# When: in the nightly (ci.yml's `nightly` job calls nightly.yml, whose `benchmarks`
+# job calls this workflow; the schedule
 # runs on the default branch, and Run workflow on ci.yml with scope `nightly` runs it
 # on another) and on demand (Run workflow on this one, which on a branch is how a
 # change is measured); never on a pull request or a push. A run measures each command as
@@ -16,7 +19,7 @@
 # BASE_BRANCH, of ci.yml's nightly or of this workflow run alone, whose job for that
 # engine succeeded on the same CPU model (scripts/ci/bench_reference.py). A job that failed its check is never the
 # reference, so a regression stays red until it is fixed or the budgets are
-# re-recorded on purpose. Each run keeps its own results as the bench-<engine>
+# re-recorded on purpose. Each run keeps its own results as the bench-rust
 # artifact for 90 days.
 #
 # Safety: no `pull_request_target`; a run has a read-only token and no secrets.
@@ -25,7 +28,7 @@
 name: Benchmarks
 
 on:
-  # Part of the nightly: ci.yml calls this workflow (its `nightly` scope,
+  # Part of the nightly: nightly.yml calls this workflow (ci.yml's `nightly` scope,
   # .github/AGENTS.md); Run workflow runs it alone. Never on a pull request
   # or a push, so it never blocks a merge.
   workflow_call:
@@ -40,12 +43,13 @@ env:
 
 jobs:
   bench:
-    name: Benchmarks (${{ matrix.engine }})
-    # Per engine and per run: a run's two jobs never wait for each other, and
-    # every run (the nightly through ci.yml, or Run workflow) keeps a complete
-    # result. Called from ci.yml, github.run_id is ci.yml's run.
+    # `Benchmarks (<engine>)`: the name scripts/ci/bench_reference.py looks
+    # for in the earlier runs.
+    name: Benchmarks (rust)
+    # Per run: every run (the nightly through ci.yml, or Run workflow) keeps a
+    # complete result. Called from ci.yml, github.run_id is ci.yml's run.
     concurrency:
-      group: bench-${{ github.run_id }}-${{ matrix.engine }}
+      group: bench-${{ github.run_id }}-rust
       cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -58,12 +62,9 @@ jobs:
       RUSTC_WRAPPER: sccache
       SCCACHE_DIR: ${{ github.workspace }}/.sccache
       SCCACHE_CACHE_SIZE: 2G
-    strategy:
-      fail-fast: false
-      matrix:
-        # python: the oracle, opentide 0.23.0 from PyPI. rust: the Rust command line
-        # (the opentide binary), the language server and the workspace load.
-        engine: [python, rust]
+      # The Rust command line (the opentide binary), the language server and the
+      # workspace load.
+      ENGINE: rust
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -107,33 +108,24 @@ jobs:
       # the console script, opentide._cli:main (UC-3.8b, #960): `uv sync` installs it
       # in .venv, with the engine built in the develop profile (release without LTO).
       - name: Install the console script
-        if: matrix.engine == 'rust'
         run: uv sync --locked --no-dev
 
       - name: Run the benchmarks
-        env:
-          ENGINE: ${{ matrix.engine }}
         run: cargo xtask bench --engine "$ENGINE" --scale 1 --json --out bench.json > /dev/null
 
       # `deploy --dry-run` and `generate docs` on the heavy workspace (which declares
-      # tenants for five platforms) under strace, with the engine's own opentide (the
-      # oracle, or the release binary the benchmark built): neither may open a network
+      # tenants for five platforms) under strace, with the release binary the
+      # benchmark built: neither may open a network
       # connection nor send a datagram to a network address (every network syscall
       # traced: connect, sendto, sendmsg, sendmmsg). `generate docs` looks CVEs up
       # online by default ([cve] retrieve_details): the heavy workspace names none, and
       # the measured runs get proxies that lead nowhere besides.
       - name: Prove that the dry run and generate docs reach no network
-        env:
-          ENGINE: ${{ matrix.engine }}
         run: |
           command -v strace >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q strace; }
           heavy="$RUNNER_TEMP/heavy"
           cargo xtask corpus generate --seed 20261107 --out "$heavy"
-          if [ "$ENGINE" = python ]; then
-            opentide="$GITHUB_WORKSPACE/target/xtask-bench/oracle/bin/opentide"
-          else
-            opentide="$GITHUB_WORKSPACE/target/release/opentide"
-          fi
+          opentide="$GITHUB_WORKSPACE/target/release/opentide"
           mkdir -p "$RUNNER_TEMP/home"
           traced() {
             (cd "$heavy" && env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP/home" LANG=C.UTF-8 \
@@ -158,17 +150,9 @@ jobs:
       # workflow, so the run and its artifacts are ci.yml's) or of this workflow
       # run alone, whose job for this engine succeeded on this run's CPU: its
       # bench-<engine> artifact is the reference (scripts/ci/bench_reference.py).
-      #
-      # Only for the rust engine: the python engine is a fixed PyPI wheel (the
-      # oracle) that no change to this repository touches, so its last result
-      # differs from this one by the runner alone (the same wheel moved up to 27%
-      # between two runs on one CPU model, all commands together) and the 10% rule
-      # would measure the hardware. It is held to the oracle baseline of its CPU.
       - name: Find the base branch's last result
-        if: matrix.engine == 'rust'
         env:
           GH_TOKEN: ${{ github.token }}
-          ENGINE: ${{ matrix.engine }}
         run: python3 scripts/ci/bench_reference.py bench.json previous
 
       - name: Check against the budgets
@@ -178,7 +162,7 @@ jobs:
             previous=(--previous previous/bench.json)
           fi
           # --require-reference: a command no baseline, target or previous result
-          # applies to fails, so an oracle bump or a changed default cannot turn the
+          # applies to fails, so a changed default cannot turn the
           # gate off silently (and that run never becomes the reference).
           cargo xtask bench --check tests/bench/budgets.toml bench.json "${previous[@]}" \
             --require-reference \
@@ -187,7 +171,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
-          name: bench-${{ matrix.engine }}
+          name: bench-rust
           path: bench.json
           if-no-files-found: ignore
           retention-days: 90

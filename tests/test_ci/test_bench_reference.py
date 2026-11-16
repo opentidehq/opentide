@@ -55,6 +55,8 @@ class FakeGh:
             )
         if args[0] == "api":
             run_id = args[2].split("/runs/")[1].split("/")[0]
+            if self.runs[run_id]["jobs"] is None:
+                raise subprocess.CalledProcessError(1, args, stderr="HTTP 502: Bad Gateway")
             return "\n".join(json.dumps(job) for job in self.runs[run_id]["jobs"])
         if args[:2] == ("run", "download"):
             run_id, target = args[2], Path(args[args.index("--dir") + 1])
@@ -145,6 +147,13 @@ def test_a_failed_job_another_cpu_or_a_lost_artifact_is_never_the_reference(
     assert fake.downloads == ["4", "3", "1"]
 
 
+def test_a_run_whose_jobs_cannot_be_listed_is_skipped(tmp_path: Path) -> None:
+    """One failed jobs request (a rate limit, a 502) must not fail the search."""
+    runs = {"1": bench_alone("2026-11-10T00:00:00Z"), "2": ci_push("2026-11-11T00:00:00Z")}
+    runs["2"]["jobs"] = None
+    assert find(tmp_path, runs)[0] == "1"
+
+
 def test_this_run_and_pull_requests_are_never_the_reference(tmp_path: Path) -> None:
     runs = {"900": ci_nightly("2026-11-15T00:00:00Z"), "5": bench_alone("2026-11-14T00:00:00Z")}
     runs["5"]["event"] = "pull_request"
@@ -165,16 +174,24 @@ def test_the_job_names_of_both_workflows(name: str, matches: bool) -> None:
 
 
 def test_the_workflows_agree_with_the_names_it_looks_for() -> None:
-    """ci.yml's `benchmarks` job is named `Benchmarks`; bench.yml's jobs `Benchmarks (<engine>)`."""
+    """ci.yml's `nightly` job calls nightly.yml's `benchmarks` (`Benchmarks`), which
+    calls bench.yml, whose job is `Benchmarks (rust)`: `Nightly / Benchmarks /
+    Benchmarks (rust)` in ci.yml's run."""
     import yaml
 
     workflows = Path(__file__).resolve().parents[2] / ".github" / "workflows"
-    ci = yaml.safe_load((workflows / "ci.yml").read_text(encoding="utf-8"))["jobs"]
-    caller = next(job for job in ci.values() if job.get("uses") == "./.github/workflows/bench.yml")
+
+    def caller(path: str, uses: str) -> dict[str, Any]:
+        jobs = yaml.safe_load((workflows / path).read_text(encoding="utf-8"))["jobs"]
+        return next(job for job in jobs.values() if job.get("uses") == uses)
+
+    nightly = caller("ci.yml", "./.github/workflows/nightly.yml")
+    benchmarks = caller("nightly.yml", "./.github/workflows/bench.yml")
     bench = yaml.safe_load((workflows / "bench.yml").read_text(encoding="utf-8"))
     job = bench["jobs"]["bench"]
-    assert job["name"] == "Benchmarks (${{ matrix.engine }})"
-    assert bench_reference.is_bench_job(f"{caller['name']} / Benchmarks (python)", "python")
+    assert job["name"] == "Benchmarks (rust)"
+    name = f"{nightly['name']} / {benchmarks['name']} / {job['name']}"
+    assert bench_reference.is_bench_job(name, "rust")
     assert "scripts/ci/bench_reference.py" in "\n".join(
         str(step.get("run", "")) for step in job["steps"]
     )

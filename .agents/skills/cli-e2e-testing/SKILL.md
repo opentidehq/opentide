@@ -73,10 +73,13 @@ uv run pytest tests/ -m full_set --no-cov
   suite together, `tests/ --ignore=tests/test_ci -m "not full_set and not gitlab_ci_lint" -n 4`,
   with the coverage gate, on the gate build's prebuilt `_native` (no shards). Whole tree, so a
   new E2E directory is picked up by its marker alone. It runs when Python or a crate the binding
-  depends on changes. 3.10–3.13 run the same nightly (`test-full`).
-- **`e2e-full` job** (the nightly): `tests/ -m full_set` — E2E tests too slow for every pull
-  request, such as a wheel built and installed per test (`test_wheel_plugin_platform.py`)
-- **`cli-windows-smoke` job**: `test_console_script_smoke.py -m cli_smoke` — the only coverage of `spawn` platforms; `test_launcher_signals_e2e.py`, Ctrl-C (CTRL_BREAK_EVENT) through the console script
+  depends on changes.
+- **`python-matrix` job** (release pull requests and the nightly): the same run on 3.10–3.13, one
+  after another, then `tests/ -m full_set` on 3.14 — E2E tests too slow for every pull request,
+  such as a wheel built and installed per test (`test_wheel_plugin_platform.py`)
+- **`cli-windows-smoke` job** (the nightly, on the release build's windows-x64 wheel):
+  `test_console_script_smoke.py -m cli_smoke` — the only coverage of `spawn` platforms;
+  `test_launcher_signals_e2e.py`, Ctrl-C (CTRL_BREAK_EVENT) through the console script
 
 E2E does not contribute to coverage metrics.
 

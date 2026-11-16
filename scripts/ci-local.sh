@@ -50,7 +50,8 @@ Options:
 Environment:
   FUZZ_SMOKE_SECONDS
                   Seconds per fuzz target in --full's fuzz smoke run (default
-                  60, as ci.yml's fuzz-smoke); 0 skips it.
+                  60; the nightly's engine-fuzz.yml runs each for 600); 0
+                  skips it.
   PYTEST_WORKERS  xdist worker count for the E2E suite (default: 4, matching
                   ci.yml). 0 runs it serially, which is what you want to read a
                   failure. More is not reliably faster -- each worker holds an
@@ -81,8 +82,8 @@ tree_unchanged() {
   fi
 }
 
-# ci.yml's Rust jobs (engine, engine-test, release-build's crate-packages, wasm,
-# fuzz-smoke) for --full; rustfmt, clippy and the layers ran above.
+# CI's Rust jobs (engine, engine-test, release-build's crate-packages, wasm,
+# engine-fuzz.yml, briefly) for --full; rustfmt, clippy and the layers ran above.
 rust_jobs() {
   echo "==> Cargo workspace: nextest (profile ci)"
   if ! cargo nextest --version >/dev/null 2>&1; then
