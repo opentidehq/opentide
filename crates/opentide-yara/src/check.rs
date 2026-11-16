@@ -8,7 +8,8 @@ use crate::atoms::{self, MaskedByte};
 use crate::catalog::{Catalog, Kind, Member};
 use crate::{Context, Finding, Profile, regexp};
 use opentide_core::{Severity, codes};
-use std::collections::{BTreeMap, BTreeSet};
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use yara_x_parser::Span;
 use yara_x_parser::ast::{
     AST, Expr, HexSubPattern, HexToken, Ident, Iterable, MatchAnchor, MetaValue, OfItems, Pattern,
@@ -166,6 +167,8 @@ pub struct Checker<'a> {
     in_for_of: usize,
     rule: RuleState,
     pub findings: Vec<Finding>,
+    /// Constant folds, one per node.
+    folds: Folds,
 }
 
 fn span(s: &Span) -> (usize, usize) {
@@ -194,6 +197,7 @@ impl<'a> Checker<'a> {
                 uses_them: false,
             },
             findings: Vec::new(),
+            folds: Folds::default(),
         }
     }
 
@@ -1040,7 +1044,7 @@ impl<'a> Checker<'a> {
                         "a string index is an integer",
                         span(&index.span()),
                     );
-                    if let Some(v) = const_value(index).filter(|&v| v < 1) {
+                    if let Some(v) = self.folds.value(index).filter(|&v| v < 1) {
                         self.error(
                             codes::YARA_NUMBER_OUT_OF_RANGE,
                             format!("a string's matches are numbered from 1; `{v}` is no index"),
@@ -1210,7 +1214,7 @@ impl<'a> Checker<'a> {
                 let separators = [&b.lhs, &b.rhs]
                     .iter()
                     .any(|e| self.text(span(&e.span())).contains('_'));
-                if let Some(always) = constant_comparison(op, &b.lhs, &b.rhs)
+                if let Some(always) = constant_comparison(&self.folds, op, &b.lhs, &b.rhs)
                     && !separators
                 {
                     self.warn(
@@ -1492,7 +1496,7 @@ impl<'a> Checker<'a> {
 
     fn quantifier(&mut self, q: &Quantifier, size: Option<usize>) {
         if let Quantifier::Expr(e) | Quantifier::Percentage(e) = q
-            && let Some(v) = const_value(e)
+            && let Some(v) = self.folds.value(e)
             && v < 0
         {
             self.error(
@@ -1563,7 +1567,7 @@ impl<'a> Checker<'a> {
                     "`at` takes an integer offset",
                     span(&a.expr.span()),
                 );
-                if const_value(&a.expr).is_some_and(|v| v < 0) || is_unsigned(&a.expr) {
+                if self.folds.value(&a.expr).is_some_and(|v| v < 0) || is_unsigned(&a.expr) {
                     self.error(
                         codes::YARA_NUMBER_OUT_OF_RANGE,
                         "an offset is between 0 and 2^63 - 1".to_string(),
@@ -1596,7 +1600,10 @@ impl<'a> Checker<'a> {
             );
             return;
         }
-        match (const_value(&range.lower_bound), const_value(&range.upper_bound)) {
+        match (
+            self.folds.value(&range.lower_bound),
+            self.folds.value(&range.upper_bound),
+        ) {
             (Some(lo), _) if lo < 0 => self.error(
                 codes::YARA_NUMBER_OUT_OF_RANGE,
                 "invalid value in condition: a range lower bound can not be negative".to_string(),
@@ -1615,7 +1622,7 @@ impl<'a> Checker<'a> {
     /// bits and a negative shift (a division by zero is `undefined`, no
     /// error). Reported on the operation that fails, not the ones around it.
     fn fold(&mut self, e: &Expr, at: (usize, usize)) {
-        if let Err(problem) = fold_step(e) {
+        if let Err(problem) = self.folds.step(e).0 {
             let text = self.text(at).to_string();
             self.error(
                 codes::YARA_NUMBER_OUT_OF_RANGE,
@@ -2091,12 +2098,6 @@ fn unescaped_len(literal: &str) -> usize {
 
 /// The value of a constant integer expression that fits `i64`, as YARA-X
 /// folds it; `None` when it is not one or does not fold.
-fn const_value(e: &Expr) -> Option<i64> {
-    fold_step(e)
-        .ok()
-        .flatten()
-        .and_then(|v| i64::try_from(v).ok())
-}
 
 #[derive(Clone, Copy)]
 enum Cmp {
@@ -2136,13 +2137,13 @@ impl Cmp {
 /// constants (`1 == 1`), or of `filesize`, never negative, with a constant
 /// that decides it (`filesize < 0`, `filesize >= 0`). `Some(result)` when
 /// the comparison does not depend on the scanned data.
-fn constant_comparison(op: Cmp, lhs: &Expr, rhs: &Expr) -> Option<bool> {
-    if let (Some(a), Some(b)) = (const_value(lhs), const_value(rhs)) {
+fn constant_comparison(folds: &Folds, op: Cmp, lhs: &Expr, rhs: &Expr) -> Option<bool> {
+    if let (Some(a), Some(b)) = (folds.value(lhs), folds.value(rhs)) {
         return Some(op.eval(a, b));
     }
     let (op, c) = match (lhs, rhs) {
-        (Expr::Filesize { .. }, other) => (op, const_value(other)?),
-        (other, Expr::Filesize { .. }) => (op.swapped(), const_value(other)?),
+        (Expr::Filesize { .. }, other) => (op, folds.value(other)?),
+        (other, Expr::Filesize { .. }) => (op.swapped(), folds.value(other)?),
         _ => return None,
     };
     // `filesize op c` for every filesize >= 0.
@@ -2157,99 +2158,139 @@ fn constant_comparison(op: Cmp, lhs: &Expr, rhs: &Expr) -> Option<bool> {
     }
 }
 
-/// Whether `e` folds YARA-X's unsigned integers: it is, or computes from, a
-/// literal above `i64::MAX` (`(0xFFFFFFFFFFFFFFFF \\ 2) * 2` reaches
-/// `u64::MAX`).
-fn has_unsigned(e: &Expr) -> bool {
-    match e {
-        Expr::LiteralInteger(i) => i.is_unsigned,
-        Expr::Minus(u) | Expr::BitwiseNot(u) => has_unsigned(&u.operand),
-        Expr::Add(n) | Expr::Sub(n) | Expr::Mul(n) | Expr::Div(n) | Expr::Mod(n) => {
-            n.as_slice().iter().any(has_unsigned)
-        }
-        _ => false,
-    }
-}
-
 /// A literal above `i64::MAX` (`0xFFFFFFFFFFFFFFFF`), which YARA-X reads as
 /// the `i64` of the same bits.
 fn is_unsigned(e: &Expr) -> bool {
     matches!(e, Expr::LiteralInteger(i) if i.is_unsigned)
 }
 
-/// One folding step, as YARA-X folds: `Ok(Some(v))` the value, `Ok(None)`
-/// not constant (or an operand that fails on its own), `Err` this operation
-/// fails. Values are `i128`: a literal above `i64::MAX`
-/// (`0xFFFFFFFFFFFFFFFF`) is YARA-X's unsigned integer, and a sum,
-/// difference or product with one may reach `u64::MAX`; without one, and
-/// for a negation, the result must fit `i64`.
-fn fold_step(e: &Expr) -> Result<Option<i128>, &'static str> {
-    const SIGNED: (i128, i128) = (i64::MIN as i128, i64::MAX as i128);
-    const UNSIGNED: (i128, i128) = (i64::MIN as i128, u64::MAX as i128);
-    let value = |e: &Expr| fold_step(e).ok().flatten();
-    let nary = |operands: &[Expr], op: fn(i128, i128) -> Option<i128>| {
-        let values: Option<Vec<i128>> = operands.iter().map(value).collect();
-        let Some(values) = values else {
-            return Ok(None);
-        };
-        let (lo, hi) = if operands.iter().any(has_unsigned) {
-            UNSIGNED
-        } else {
-            SIGNED
-        };
-        let mut acc = values[0];
-        for &v in &values[1..] {
-            acc = op(acc, v)
-                .filter(|r| (lo..=hi).contains(r))
-                .ok_or("integer overflow")?;
+/// One folding step's result: `Ok(Some(v))` the value, `Ok(None)` not
+/// constant (or an operand that fails on its own), `Err` this operation
+/// fails; and whether the expression computes from YARA-X's unsigned
+/// integers (a literal above `i64::MAX`: `(0xFFFFFFFFFFFFFFFF \\ 2) * 2`
+/// reaches `u64::MAX`).
+type Folded = (Result<Option<i128>, &'static str>, bool);
+
+/// Constant folding, as YARA-X folds, with each node folded once: the
+/// checker folds at every arithmetic node, and each fold reads its
+/// operands' folds, so without the memo a nested expression is folded
+/// once per level above it (#1405 review). Keyed by node address: a
+/// checker reads one AST, which outlives it.
+#[derive(Default)]
+struct Folds(RefCell<HashMap<usize, Folded>>);
+
+#[cfg(test)]
+thread_local! {
+    static COMPUTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+impl Folds {
+    /// `e`'s constant value as YARA-X's `i64`.
+    fn value(&self, e: &Expr) -> Option<i64> {
+        self.step(e)
+            .0
+            .ok()
+            .flatten()
+            .and_then(|v| i64::try_from(v).ok())
+    }
+
+    /// One folding step. Values are `i128`: a literal above `i64::MAX`
+    /// (`0xFFFFFFFFFFFFFFFF`) is YARA-X's unsigned integer, and a sum,
+    /// difference or product with one may reach `u64::MAX`; without one,
+    /// and for a negation, the result must fit `i64`.
+    fn step(&self, e: &Expr) -> Folded {
+        let key = std::ptr::from_ref(e) as usize;
+        if let Some(done) = self.0.borrow().get(&key) {
+            return *done;
         }
-        Ok(Some(acc))
-    };
-    let int = |e: &Expr| const_value(e);
-    let binary = |l: &Expr, r: &Expr| match (int(l), int(r)) {
-        (Some(a), Some(b)) => Some((a, b)),
-        _ => None,
-    };
-    let wide = |v: Option<i64>| Ok(v.map(i128::from));
-    match e {
-        Expr::LiteralInteger(i) if i.is_unsigned => {
-            Ok(Some(i128::from(u64::from_ne_bytes(i.value.to_ne_bytes()))))
+        let done = self.compute(e);
+        self.0.borrow_mut().insert(key, done);
+        done
+    }
+
+    fn compute(&self, e: &Expr) -> Folded {
+        #[cfg(test)]
+        COMPUTES.set(COMPUTES.get() + 1);
+        const SIGNED: (i128, i128) = (i64::MIN as i128, i64::MAX as i128);
+        const UNSIGNED: (i128, i128) = (i64::MIN as i128, u64::MAX as i128);
+        let nary = |operands: &[Expr], op: fn(i128, i128) -> Option<i128>| -> Folded {
+            let folded: Vec<Folded> = operands.iter().map(|o| self.step(o)).collect();
+            let unsigned = folded.iter().any(|f| f.1);
+            let values: Option<Vec<i128>> = folded.iter().map(|f| f.0.ok().flatten()).collect();
+            let Some(values) = values else {
+                return (Ok(None), unsigned);
+            };
+            let (lo, hi) = if unsigned { UNSIGNED } else { SIGNED };
+            let mut acc = values[0];
+            for &v in &values[1..] {
+                match op(acc, v).filter(|r| (lo..=hi).contains(r)) {
+                    Some(r) => acc = r,
+                    None => return (Err("integer overflow"), unsigned),
+                }
+            }
+            (Ok(Some(acc)), unsigned)
+        };
+        let signed = |v: Folded| {
+            (
+                v.0.map(|v| v.filter(|v| (SIGNED.0..=SIGNED.1).contains(v))),
+                v.1,
+            )
+        };
+        let binary = |l: &Expr, r: &Expr| match (self.value(l), self.value(r)) {
+            (Some(a), Some(b)) => Some((a, b)),
+            _ => None,
+        };
+        let wide = |v: Option<i64>| (Ok(v.map(i128::from)), false);
+        match e {
+            Expr::LiteralInteger(i) if i.is_unsigned => (
+                Ok(Some(i128::from(u64::from_ne_bytes(i.value.to_ne_bytes())))),
+                true,
+            ),
+            Expr::LiteralInteger(i) => (Ok(Some(i128::from(i.value))), false),
+            Expr::Minus(u) => {
+                let (v, unsigned) = self.step(&u.operand);
+                let v = match v.ok().flatten() {
+                    Some(v) if (SIGNED.0..=SIGNED.1).contains(&-v) => Ok(Some(-v)),
+                    Some(_) => Err("integer overflow"),
+                    None => Ok(None),
+                };
+                (v, unsigned)
+            }
+            Expr::BitwiseNot(u) => (
+                Ok(self.value(&u.operand).map(|v| i128::from(!v))),
+                self.step(&u.operand).1,
+            ),
+            Expr::Add(n) => nary(n.as_slice(), i128::checked_add),
+            Expr::Sub(n) => nary(n.as_slice(), i128::checked_sub),
+            Expr::Mul(n) => nary(n.as_slice(), i128::checked_mul),
+            // A division by zero or `i64::MIN \\ -1` is `undefined`, no error.
+            Expr::Div(n) => {
+                let (v, u) = nary(n.as_slice(), |a, b| a.checked_div(b));
+                signed((Ok(v.unwrap_or(None)), u))
+            }
+            Expr::Mod(n) => {
+                let (v, u) = nary(n.as_slice(), |a, b| a.checked_rem(b));
+                signed((Ok(v.unwrap_or(None)), u))
+            }
+            Expr::Shl(b) | Expr::Shr(b) => match binary(&b.lhs, &b.rhs) {
+                Some((_, s)) if s < 0 => (Err("a negative shift"), false),
+                Some((a, s)) if s >= 64 => wide(Some(if matches!(e, Expr::Shr(_)) && a < 0 {
+                    -1
+                } else {
+                    0
+                })),
+                Some((a, s)) => wide(Some(if matches!(e, Expr::Shl(_)) {
+                    a << s
+                } else {
+                    a >> s
+                })),
+                None => wide(None),
+            },
+            Expr::BitwiseAnd(b) => wide(binary(&b.lhs, &b.rhs).map(|(x, y)| x & y)),
+            Expr::BitwiseOr(b) => wide(binary(&b.lhs, &b.rhs).map(|(x, y)| x | y)),
+            Expr::BitwiseXor(b) => wide(binary(&b.lhs, &b.rhs).map(|(x, y)| x ^ y)),
+            _ => wide(None),
         }
-        Expr::LiteralInteger(i) => Ok(Some(i128::from(i.value))),
-        Expr::Minus(u) => match value(&u.operand) {
-            Some(v) if (SIGNED.0..=SIGNED.1).contains(&-v) => Ok(Some(-v)),
-            Some(_) => Err("integer overflow"),
-            None => Ok(None),
-        },
-        Expr::BitwiseNot(u) => wide(int(&u.operand).map(|v| !v)),
-        Expr::Add(n) => nary(n.as_slice(), i128::checked_add),
-        Expr::Sub(n) => nary(n.as_slice(), i128::checked_sub),
-        Expr::Mul(n) => nary(n.as_slice(), i128::checked_mul),
-        // A division by zero or `i64::MIN \\ -1` is `undefined`, no error.
-        Expr::Div(n) => Ok(nary(n.as_slice(), |a, b| a.checked_div(b))
-            .unwrap_or(None)
-            .filter(|v| (SIGNED.0..=SIGNED.1).contains(v))),
-        Expr::Mod(n) => Ok(nary(n.as_slice(), |a, b| a.checked_rem(b))
-            .unwrap_or(None)
-            .filter(|v| (SIGNED.0..=SIGNED.1).contains(v))),
-        Expr::Shl(b) | Expr::Shr(b) => match binary(&b.lhs, &b.rhs) {
-            Some((_, s)) if s < 0 => Err("a negative shift"),
-            Some((a, s)) if s >= 64 => wide(Some(if matches!(e, Expr::Shr(_)) && a < 0 {
-                -1
-            } else {
-                0
-            })),
-            Some((a, s)) => wide(Some(if matches!(e, Expr::Shl(_)) {
-                a << s
-            } else {
-                a >> s
-            })),
-            None => Ok(None),
-        },
-        Expr::BitwiseAnd(b) => wide(binary(&b.lhs, &b.rhs).map(|(x, y)| x & y)),
-        Expr::BitwiseOr(b) => wide(binary(&b.lhs, &b.rhs).map(|(x, y)| x | y)),
-        Expr::BitwiseXor(b) => wide(binary(&b.lhs, &b.rhs).map(|(x, y)| x ^ y)),
-        _ => Ok(None),
     }
 }
 
@@ -2300,6 +2341,28 @@ fn hex_fragments(sub: &HexSubPattern) -> Vec<Vec<Vec<MaskedByte>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Each arithmetic node is folded once, however deep it nests: the
+    /// checker folds at every level, and folding read the whole subtree
+    /// each time (a 4 KB condition took 1.6 s).
+    #[test]
+    fn a_nested_expression_is_folded_once_per_node() {
+        let depth = 100;
+        let condition = format!("{}1{} == 1", "(".repeat(depth), " + 1 - 1)".repeat(depth));
+        let source = format!("rule a {{ condition: {condition} }}");
+        let before = COMPUTES.get();
+        let diagnostics = crate::diagnostics(&source, &crate::Context::default());
+        let folds = COMPUTES.get() - before;
+        // One `1` and one `+ 1 - 1` (an add, a sub, two literals) per level,
+        // and the `== 1`.
+        assert!(folds <= 4 * depth + 4, "{folds} folds");
+        assert!(
+            diagnostics
+                .iter()
+                .all(|d| d.severity != opentide_core::Severity::Error),
+            "{diagnostics:?}"
+        );
+    }
 
     #[test]
     fn unescaped_lengths() {
