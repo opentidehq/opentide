@@ -36,7 +36,10 @@ fn summary(root: &rowan::SyntaxNode<Lang>, source: &str, errors: &str) -> String
             rowan::WalkEvent::Leave(_) => depth -= 1,
         }
     }
-    let kinds: String = counts.iter().map(|(k, n)| format!("{k}: {n}\n")).collect();
+    let kinds = counts.iter().fold(String::new(), |mut out, (k, n)| {
+        out.push_str(&format!("{k}: {n}\n"));
+        out
+    });
     format!(
         "{} bytes, {deepest} levels deep\n{kinds}--- errors\n{errors}",
         source.len()
