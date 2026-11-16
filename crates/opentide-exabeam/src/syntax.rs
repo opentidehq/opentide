@@ -12,6 +12,7 @@
 use logos::Logos;
 use opentide_parse::{Lexeme, TokenSet};
 use rowan::{TextRange, TextSize};
+use std::cell::Cell;
 use std::collections::BTreeSet;
 
 /// A piece of the source, a token of the grammar glued from pieces, or a node
@@ -330,28 +331,77 @@ enum Piece {
     Other,
 }
 
+thread_local! {
+    /// Per delimiter (`"`, `'`), the last scan that found no closing quote,
+    /// as `(remaining, stop)`: the bytes left after the opening quote, and
+    /// where it stopped (bytes left; `0` at the end of the text). Lengths
+    /// to the end, because opentide-parse restarts logos on the rest of the
+    /// text after an error: the offset of a fresh lexer is not the source's.
+    static UNCLOSED: Cell<[(usize, usize); 2]> = const { Cell::new([(0, 0); 2]) };
+}
+
 /// The rest of a quoted string after its opening `delimiter`: a backslash
-/// escapes the character after it, whatever it is. Scanned by a loop, for
-/// the reason of [`Piece`]. Unclosed, the quote alone is an error.
+/// escapes the character after it, whatever it is; a NUL ends no string, as
+/// the grammar's lexer reads it. Scanned by a loop, for the reason of
+/// [`Piece`]. Unclosed, the quote alone is an error.
+///
+/// Whether a quote byte is escaped depends on its place alone (the run of
+/// backslashes before it), and every scan starts after a quote: a scan from
+/// a quote inside a failed scan's range reaches the same stop, and fails.
+/// So a failure is remembered, and `\"\"\"…` without a closing quote, an
+/// error at each quote, is read once rather than once per quote.
 fn quoted(lex: &mut logos::Lexer<'_, Piece>, delimiter: u8) -> bool {
     let rest = lex.remainder().as_bytes();
+    let slot = usize::from(delimiter == b'\'');
+    let (failed_from, failed_stop) = UNCLOSED.with(Cell::get)[slot];
+    if rest.len() <= failed_from && rest.len() > failed_stop {
+        return false;
+    }
     let mut i = 0;
     while let Some(&b) = rest.get(i) {
         if b == delimiter {
             lex.bump(i + 1);
             return true;
         }
+        if b == 0 {
+            break;
+        }
         // A backslash takes the next character, which may be several bytes:
         // skipping one byte lands inside it, and a continuation byte is
-        // never a delimiter.
-        i += if b == b'\\' { 2 } else { 1 };
+        // never a delimiter. It takes no NUL.
+        i += if b == b'\\' && rest.get(i + 1) != Some(&0) {
+            2
+        } else {
+            1
+        };
     }
+    let stop = rest.len() - i.min(rest.len());
+    UNCLOSED.with(|u| {
+        let mut all = u.get();
+        all[slot] = (rest.len(), stop);
+        u.set(all);
+    });
     false
 }
 
-/// Lexes `source`.
+/// Lexes `source`. A byte-order mark at its start is whitespace: tree-sitter
+/// skips one there.
 pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
-    let pieces = opentide_parse::lex::<Piece>(source, |piece, _| {
+    UNCLOSED.with(|u| u.set([(0, 0); 2]));
+    let bom = if source.starts_with('\u{feff}') {
+        '\u{feff}'.len_utf8()
+    } else {
+        0
+    };
+    let mut pieces = Vec::new();
+    if bom > 0 {
+        pieces.push(Lexeme {
+            kind: K::Whitespace.raw(),
+            range: range(0, bom),
+        });
+    }
+    let shift = TextSize::from(u32::try_from(bom).unwrap_or(0));
+    let rest = opentide_parse::lex::<Piece>(source.get(bom..).unwrap_or(""), |piece, _| {
         match piece {
             Ok(Piece::Whitespace) => K::Whitespace,
             Ok(Piece::String) => K::String,
@@ -379,6 +429,10 @@ pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
         }
         .raw()
     });
+    pieces.extend(rest.into_iter().map(|l| Lexeme {
+        kind: l.kind,
+        range: l.range + shift,
+    }));
     cut_after_keywords(source, pieces)
 }
 
@@ -440,12 +494,11 @@ fn cut_after_keywords(source: &str, pieces: Vec<Lexeme>) -> Vec<Lexeme> {
     out
 }
 
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "opentide-parse lexes only sources under 4 GiB (`TextSize`)"
-)]
+/// A range of byte offsets, clamped to `u32` as opentide-parse clamps its
+/// own (`TextSize`).
 fn range(start: usize, end: usize) -> TextRange {
-    TextRange::new(TextSize::from(start as u32), TextSize::from(end as u32))
+    let size = |n: usize| TextSize::from(u32::try_from(n).unwrap_or(u32::MAX));
+    TextRange::new(size(start), size(end))
 }
 
 #[cfg(test)]
@@ -511,6 +564,89 @@ mod tests {
         assert_eq!(pieces("\"abc")[0], (K::ErrorToken, "\""));
         assert_eq!(pieces("'it's'")[0], (K::String, "'it'"));
         assert_eq!(pieces("\"a\nb\"")[0], (K::String, "\"a\nb\""));
+    }
+
+    #[test]
+    fn a_nul_ends_no_string() {
+        assert_eq!(pieces("\"a\0b\"")[0], (K::ErrorToken, "\""));
+        assert_eq!(pieces("\"a\\\0\"")[0], (K::ErrorToken, "\""));
+        // A quote past the NUL opens a string of its own.
+        let after = pieces("\"\0 'b'");
+        assert_eq!(after.last(), Some(&(K::String, "'b'")));
+        assert_eq!(pieces("'\0' \"x\"")[4], (K::String, "\"x\""));
+    }
+
+    /// An unclosed quote is an error and lexing restarts after it: without
+    /// the memory of a failed scan, each of these quotes scanned to the end.
+    #[test]
+    fn escaped_quotes_never_closed_are_read_once() {
+        for quote in ['"', '\''] {
+            let source = format!("\\{quote}").repeat(500_000);
+            let started = std::time::Instant::now();
+            let lexed = lex(&source);
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(20),
+                "{quote}: {:?}",
+                started.elapsed()
+            );
+            assert_eq!(lexed.len(), 1_000_000);
+            assert!(
+                lexed
+                    .iter()
+                    .all(|l| SyntaxKind::from_raw(l.kind) != K::String)
+            );
+        }
+        // The other delimiter's strings still close.
+        assert_eq!(pieces("\\\" 'a'").last(), Some(&(K::String, "'a'")));
+    }
+
+    #[test]
+    fn keyword_cuts_follow_order_by_and_chain_across_runs() {
+        assert_eq!(
+            pieces("ORDER-BYDESC"),
+            vec![
+                (K::Letters, "OR"),
+                (K::Letters, "DER"),
+                (K::Minus, "-"),
+                (K::Letters, "BY"),
+                (K::Letters, "DESC"),
+            ]
+        );
+        assert_eq!(
+            pieces("group-byASx"),
+            vec![
+                (K::Letters, "group"),
+                (K::Minus, "-"),
+                (K::Letters, "by"),
+                (K::Letters, "AS"),
+                (K::Letters, "x"),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_pieces_tile_the_source() {
+        let source = "é\u{a0}a:\"x\" 'y AND«ORDER-BY» \u{3000}1.5";
+        let mut end = 0;
+        for l in lex(source) {
+            assert_eq!(usize::from(l.range.start()), end);
+            end = usize::from(l.range.end());
+        }
+        assert_eq!(end, source.len());
+    }
+
+    #[test]
+    fn a_byte_order_mark_at_the_start_is_whitespace() {
+        assert_eq!(
+            pieces("\u{feff}AS x"),
+            vec![
+                (K::Whitespace, "\u{feff}"),
+                (K::Letters, "AS"),
+                (K::Whitespace, " "),
+                (K::Letters, "x"),
+            ]
+        );
+        assert_eq!(pieces("a\u{feff}")[1], (K::Other, "\u{feff}"));
     }
 
     #[test]
