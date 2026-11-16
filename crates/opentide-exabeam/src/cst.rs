@@ -894,7 +894,7 @@ pub fn highlight_captures(source: &str) -> Vec<(ByteSpan, &'static str)> {
 }
 
 /// Whether the parser found a syntax error in `source`. Not the verdict of
-/// the analysis (that is [`crate::check`]): whether the tree is clean.
+/// the analysis (that is [`check`](mod@crate::check)): whether the tree is clean.
 #[must_use]
 pub fn tree_has_error(source: &str) -> bool {
     !parse_memo(source).1.errors.is_empty()
