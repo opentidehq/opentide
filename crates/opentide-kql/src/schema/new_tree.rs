@@ -1497,6 +1497,54 @@ mod tests {
         }
     }
 
+    /// A chain longer than the depth budget allowed when each call re-read
+    /// the body (about 20 functions) still carries its columns to the last
+    /// call: before #1424 the schema went open there and `Nope` passed.
+    #[test]
+    fn a_long_chain_keeps_its_columns() {
+        for n in [19, 40, 200] {
+            pass_over(&chain(n, 1), |pass| {
+                assert!(
+                    pass.out
+                        .diagnostics
+                        .iter()
+                        .any(|d| d.message.contains("'Nope'")),
+                    "{n}: {:?}",
+                    pass.out.diagnostics
+                );
+            });
+        }
+    }
+
+    /// Functions defined inside function bodies, `n` deep, each calling the
+    /// one it defines: each body is still read once (it was exponential).
+    #[test]
+    fn nested_definitions_are_read_once() {
+        let n = 30;
+        let mut source = String::new();
+        for i in 0..n {
+            source.push_str(&format!("let f{i} = () {{ "));
+        }
+        source.push_str("SigninLogs | project AppId");
+        for i in (0..n).rev() {
+            if i + 1 < n {
+                source.push_str(&format!(" }}; f{}() | extend c{i} = 1", i + 1));
+            }
+        }
+        source.push_str(" };\nf0() | where Nope == 1");
+        pass_over(&source, |pass| {
+            assert_eq!(pass.bodies_read, n, "{source}");
+            assert!(
+                pass.out
+                    .diagnostics
+                    .iter()
+                    .any(|d| d.message.contains("'Nope'")),
+                "{:?}",
+                pass.out.diagnostics
+            );
+        });
+    }
+
     /// A body binds the names in scope where it is defined, as Kusto does:
     /// a name rebound after the definition does not change what it returns.
     #[test]
@@ -1519,8 +1567,11 @@ mod tests {
         });
     }
 
-    /// A parameter shadows a name of the scope the function is defined in,
-    /// in its own map only, as when the body's scope was a copy.
+    /// A layer shadows the scope under it map by map, exactly as the copy
+    /// it replaces did: a scalar parameter `T` does not hide an outer table
+    /// `T` from a tabular lookup. That is a quirk the copy already had
+    /// (Kusto's parameter would win), kept so this change alters no result;
+    /// fixing it is a change of its own.
     #[test]
     fn a_layer_shadows_map_by_map() {
         let mut outer = Scope::default();
