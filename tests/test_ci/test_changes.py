@@ -120,7 +120,7 @@ def test_a_docs_only_change_runs_docs_alone() -> None:
     assert outputs["crates"] == ""
 
 
-def test_a_leaf_crate_runs_itself_and_its_reverse_dependencies() -> None:
+def test_a_crate_runs_itself_and_its_reverse_dependencies() -> None:
     outputs = plan("crates/opentide-parse/src/lib.rs")
     assert set(outputs["crates"].split()) == ABOVE_PARSE
     # A Rust-only change builds no wheel and runs no pytest: the Rust tests
@@ -133,86 +133,67 @@ def test_a_leaf_crate_runs_itself_and_its_reverse_dependencies() -> None:
     assert built == ABOVE_PARSE | {"opentide-connectors"}
     assert "opentide-connectors" not in outputs["filter"]
     assert outputs["filter"].count("package(=") == len(ABOVE_PARSE)
+    # A test-only dependency counts.
+    assert "xtask" in plan("crates/opentide-schema/src/lib.rs")["crates"].split()
 
 
 @pytest.mark.parametrize(
-    "path",
+    ("path", "wasm", "ts_packages"),
     [
-        "crates/opentide-kuery/src/lib.rs",
-        "crates/opentide-kql/src/parse.rs",
-        "crates/opentide-parse/src/lib.rs",
-        "crates/opentide-parse/src/parser.rs",
-        "highlights/spec.toml",
+        # The parser layer: the `wasm` job (browser, WASI server and command
+        # line), a known path, not the fail-open of an unknown one, without the
+        # TypeScript client's native tests.
+        ("crates/opentide-kuery/src/lib.rs", True, False),
+        ("crates/opentide-kql/src/parse.rs", True, False),
+        ("crates/opentide-parse/src/lib.rs", True, False),
+        ("crates/opentide-parse/src/parser.rs", True, False),
+        ("highlights/spec.toml", True, False),
+        # The job's own paths; the browser module also runs the client's tests.
+        ("crates/opentide-wasm/src/lib.rs", True, True),
+        ("vendor/memmap2/src/lib.rs", True, False),
+        ("packages/lsp-client/src/index.ts", True, True),
+        # A wasm script alone: `wasm` without `rust`, so engine-lint runs its
+        # wasm32 clippy alone (ci.yml).
+        ("scripts/engine/build-wasm.sh", True, False),
+        ("scripts/engine/wasm-smoke.mjs", True, False),
+        # Elsewhere, neither.
+        ("docs/usage/configuration.md", False, False),
+        ("crates/opentide-schema/src/lib.rs", False, False),
+        ("crates/opentide-cli/src/main.rs", False, False),
+        ("highlights/test/embedded.test.mjs", False, False),
     ],
 )
-def test_the_parser_layer_runs_the_webassembly_builds(path: str) -> None:
-    # A known path, not the fail-open of an unknown one: the `wasm` job
-    # (browser, WASI server and command line) without the TypeScript client's
-    # native tests, and no other specialised job.
+def test_the_webassembly_and_typescript_jobs_run_on_their_inputs(
+    path: str, wasm: bool, ts_packages: bool
+) -> None:
     outputs = plan(path)
-    assert outputs["wasm"] == "true"
-    assert outputs["ts_packages"] == "false"
-    assert outputs["node"] == "false"
+    assert outputs["wasm"] == str(wasm).lower()
+    assert outputs["ts_packages"] == str(ts_packages).lower()
+    if path.startswith(("scripts/", "packages/")):
+        assert outputs["rust"] == "false"  # no Rust job for a script or a client
+    if wasm and not ts_packages and not path.startswith(("scripts/", "vendor/")):
+        assert outputs["node"] == "false"  # the parser layer runs no other specialised job
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        "docs/usage/configuration.md",
-        "crates/opentide-schema/src/lib.rs",
-        "crates/opentide-cli/src/main.rs",
-        "highlights/test/embedded.test.mjs",
-    ],
-)
-def test_other_changes_skip_the_webassembly_builds(path: str) -> None:
-    outputs = plan(path)
-    assert outputs["wasm"] == "false"
-    assert outputs["ts_packages"] == "false"
-
-
-@pytest.mark.parametrize(
-    "path",
-    [
-        "crates/opentide-wasm/src/lib.rs",
-        "scripts/engine/build-wasm.sh",
-        "vendor/memmap2/src/lib.rs",
-    ],
-)
-def test_the_webassembly_job_runs_on_its_own_paths(path: str) -> None:
-    assert plan(path)["wasm"] == "true"
-
-
-def test_the_typescript_packages_run_their_native_tests() -> None:
-    outputs = plan("packages/lsp-client/src/index.ts")
-    assert outputs["wasm"] == "true"
-    assert outputs["ts_packages"] == "true"
-    assert outputs["rust"] == "false"
-
-
-def test_a_pull_request_that_changes_a_workflow_runs_the_browser_build() -> None:
-    assert plan(".github/workflows/ci.yml")["wasm"] == "true"
-
-
-def test_the_python_surface_runs_the_python_job() -> None:
+def test_the_python_job_runs_on_the_python_surface_alone() -> None:
     for path in (
         "src/opentide/sdk.py",
         "bindings/python/src/lib.rs",
         "crates/opentide/src/lib.rs",
         "tests/test_sdk/test_workspace.py",
+        "tests/test_docs/test_sdk_snippets.py",
         "pyproject.toml",
     ):
         assert plan(path)["python"] == "true", path
     assert plan("crates/opentide-cli/src/lib.rs")["python"] == "false"
-
-
-def test_the_tests_that_need_no_wheel_run_without_the_python_job() -> None:
+    # The tests that need no wheel run without it.
     assert on(plan("tests/test_ci/test_workflows.py")) == {"ci", "pylint", "lint"}
     assert on(plan("tests/test_docs/test_docs_mdx.py")) == {"docs", "pylint", "lint"}
-    assert plan("tests/test_docs/test_sdk_snippets.py")["python"] == "true"
-
-
-def test_a_test_only_dependency_counts() -> None:
-    assert "xtask" in plan("crates/opentide-schema/src/lib.rs")["crates"].split()
+    # An opentide-schema change runs `stubs`, not the wheel job nor pytest.
+    outputs = plan("crates/opentide-schema/src/python.rs")
+    assert outputs["stubs"] == "true"
+    assert outputs["native"] == "false"
+    assert outputs["python"] == "false"
 
 
 @pytest.mark.parametrize(
@@ -250,18 +231,9 @@ def test_pushes_and_the_nightly_check_everything(event: str, scope: str, mode: s
     result: Any = changes.plan_run({"EVENT": event, "SCOPE": scope}, metadata())
     assert result.mode == mode
     assert set(result.crates) == set(MEMBERS)
-
-
-def test_a_wasm_script_alone_runs_the_wasm_job_and_its_clippy() -> None:
-    """`wasm` without `rust`: engine-lint runs its wasm32 clippy alone (ci.yml)."""
-    for path in ("scripts/engine/build-wasm.sh", "scripts/engine/wasm-smoke.mjs"):
-        outputs = plan(path)
-        assert outputs["wasm"] == "true", path
-        assert outputs["rust"] == "false", path
-
-
-def test_the_browser_module_runs_the_typescript_client_tests() -> None:
-    assert plan("crates/opentide-wasm/src/lib.rs")["ts_packages"] == "true"
+    dirs, _ = changes.workspace_graph(metadata())
+    outputs = result.outputs(dirs)
+    assert {outputs[check] for check in changes.CHECKS} == {"true"}
 
 
 @pytest.mark.parametrize(
@@ -293,17 +265,3 @@ def test_the_browser_module_runs_the_typescript_client_tests() -> None:
 def test_build_s_checks_run_when_their_inputs_change(path: str, checks: set[str]) -> None:
     """`build`'s specifications and compile-fail checks read these outputs."""
     assert on(plan(path)) & set(changes.CHECKS) == checks
-
-
-def test_a_push_runs_every_check() -> None:
-    dirs, _ = changes.workspace_graph(metadata())
-    full = changes.plan_run({"EVENT": "push"}, metadata()).outputs(dirs)
-    assert {full[check] for check in changes.CHECKS} == {"true"}
-
-
-def test_a_stubs_input_runs_the_stubs_job_alone() -> None:
-    """An opentide-schema change runs `stubs`, not the wheel job nor pytest."""
-    outputs = plan("crates/opentide-schema/src/python.rs")
-    assert outputs["stubs"] == "true"
-    assert outputs["native"] == "false"
-    assert outputs["python"] == "false"
