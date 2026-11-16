@@ -1,0 +1,37 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/and_expression__valid.exabeam
+---
+source_file@0..70
+  statement@0..70
+    filter@0..70
+      and_expression@0..70
+        field_term@0..30
+          field_name@0..13
+            identifier@0..13
+              letters@0..13 "activity_type"
+          :@13..14 ":"
+          string@14..30 "\"process-create\""
+        whitespace@30..31 " "
+        keyword@31..34
+          letters@31..34 "AND"
+        whitespace@34..35 " "
+        not_expression@35..54
+          keyword@35..38
+            letters@35..38 "NOT"
+          whitespace@38..39 " "
+          field_term@39..54
+            field_name@39..43
+              identifier@39..43
+                letters@39..43 "user"
+            :@43..44 ":"
+            string@44..54 "\"`SYSTEM`\""
+        whitespace@54..55 " "
+        free_text@55..58
+          identifier@55..58
+            letters@55..58 "web"
+        whitespace@58..59 " "
+        free_text@59..70
+          identifier@59..70
+            letters@59..70 "application"

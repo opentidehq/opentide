@@ -3469,10 +3469,14 @@ dependencies = [
 name = "opentide-exabeam"
 version = "0.12.0"
 dependencies = [
+ "insta",
+ "logos",
  "opentide-core",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
  "regex-syntax",
+ "rowan",
  "serde",
  "serde_json",
  "toml 0.8.23",

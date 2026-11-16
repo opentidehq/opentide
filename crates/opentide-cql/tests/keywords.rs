@@ -105,3 +105,28 @@ fn the_lexer_cuts_no_fixed_token_the_table_lacks() {
         }
     }
 }
+
+/// The analysis colours every table token, in its sample, with a capture the table gives
+/// it (`/` is the regex's string or the division's operator): the tree's highlight and
+/// the TextMate grammars the table generates agree.
+#[test]
+fn every_table_token_is_highlighted_with_its_capture() {
+    let table = keywords(LanguageId::Cql).expect("cql has a KEYWORDS table");
+    for (token, _) in table {
+        let source = sample(token);
+        let captures: Vec<&str> = table
+            .iter()
+            .filter(|(t, _)| t == token)
+            .map(|(_, c)| c.name())
+            .collect();
+        let highlighted = opentide_cql::analyze(source).tokens;
+        let found = highlighted.iter().any(|t| {
+            source.get(t.span.start..t.span.end) == Some(*token)
+                && captures.contains(&t.capture.as_str())
+        });
+        assert!(
+            found,
+            "`{token}` in `{source}` is not highlighted as {captures:?}: {highlighted:?}"
+        );
+    }
+}

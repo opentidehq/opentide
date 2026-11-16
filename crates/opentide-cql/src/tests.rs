@@ -251,44 +251,55 @@ fn signature_help_tracks_the_parameter() {
 
 /// A range counts lines from the start of the text, so it is computed only
 /// for a finding: 3000 nested calls stay linear.
+///
+/// The parser nests 1,000 levels (`parser::MAX_DEPTH`): 990 calls are clean, and
+/// 3,000 are one syntax error, as fast.
 #[test]
 fn deep_nesting_stays_fast() {
-    let q = format!(
-        "{}count(){}",
-        "groupBy(a, function=".repeat(3000),
-        ")".repeat(3000)
-    );
-    let t = std::time::Instant::now();
-    let r = analyze(&q);
-    assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
-    // Debug builds are slow; the quadratic version took seconds even in release.
-    assert!(
-        t.elapsed() < std::time::Duration::from_secs(2),
-        "{:?}",
-        t.elapsed()
-    );
+    for (n, clean) in [(990, true), (3000, false)] {
+        let q = format!(
+            "{}count(){}",
+            "groupBy(a, function=".repeat(n),
+            ")".repeat(n)
+        );
+        let t = std::time::Instant::now();
+        let r = analyze(&q);
+        if clean {
+            assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+        } else {
+            let codes: Vec<&str> = r.diagnostics.iter().map(|d| d.code.as_str()).collect();
+            assert_eq!(codes, [codes::CQL_PARSE_ERROR], "{n}");
+            assert!(r.diagnostics[0].message.contains("1000 levels"));
+        }
+        // Debug builds are slow; the quadratic version took seconds even in release.
+        assert!(
+            t.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            t.elapsed()
+        );
+    }
 }
 
 /// No check scans the ancestors of each node: an aggregate looked for an
-/// enclosing correlate() through all of them, which took seconds at this
-/// depth. The correlation-rule checks and nested `case` blocks read the same
-/// summary of the ancestors.
+/// enclosing correlate() through all of them, which took seconds at 3,000
+/// levels (now past the parser's 1,000). The correlation-rule checks and
+/// nested `case` blocks read the same summary of the ancestors.
 #[test]
 fn deep_nesting_stays_fast_in_every_check() {
     let aggregates = format!(
         "{}count(){}",
-        "groupBy(a, function=".repeat(3000),
-        ")".repeat(3000)
+        "groupBy(a, function=".repeat(990),
+        ")".repeat(990)
     );
     let cases = format!(
         "{}x := 1{}",
-        "case { a=1 | ".repeat(3000),
-        "; * }".repeat(3000)
+        "case { a=1 | ".repeat(990),
+        "; * }".repeat(990)
     );
     let linked = format!(
         "correlate(A: {{ a=1 }}, B: {{ {}b=1{} | aid <=> A.aid }}, within=5m)",
-        "(".repeat(3000),
-        " c=1)".repeat(3000)
+        "(".repeat(990),
+        " c=1)".repeat(990)
     );
     for q in [&aggregates, &cases, &linked] {
         for ctx in [Context::default(), Context::CORRELATION_RULE] {
@@ -489,8 +500,38 @@ fn values_are_exact() {
 
 #[test]
 fn a_syntax_error_does_not_cascade() {
-    let d = analyze("groupBy(x) | foo(( | bar baz").diagnostics;
-    assert!(d.iter().all(|d| d.code == codes::CQL_PARSE_ERROR), "{d:#?}");
+    // The call is unfinished (two `)` missing at its end), and a call with a fault inside.
+    for q in ["groupBy(x) | foo(( | bar baz", "foo(a, , b) | bar"] {
+        let d = analyze(q).diagnostics;
+        assert!(
+            d.iter().all(|d| d.code == codes::CQL_PARSE_ERROR),
+            "{q}: {d:#?}"
+        );
+    }
+}
+
+/// A call whose only fault is its missing `)` is still checked, as with tree-sitter.
+#[test]
+fn a_call_missing_only_its_paren_is_still_checked() {
+    let d = analyze("rdns(field=ipaddress,as=hostname").diagnostics;
+    let codes: Vec<&str> = d.iter().map(|d| d.code.as_str()).collect();
+    assert_eq!(
+        codes,
+        [codes::CQL_PARSE_ERROR, codes::CQL_REMOVED_FUNCTION],
+        "{d:#?}"
+    );
+}
+
+/// A finished node before a stray token is still checked: the fault is not its own.
+#[test]
+fn a_stray_token_after_a_call_leaves_the_call_checked() {
+    let d = analyze("foo() )").diagnostics;
+    let codes: Vec<&str> = d.iter().map(|d| d.code.as_str()).collect();
+    assert_eq!(
+        codes,
+        [codes::CQL_PARSE_ERROR, codes::CQL_UNKNOWN_FUNCTION],
+        "{d:#?}"
+    );
 }
 
 #[test]
@@ -498,4 +539,66 @@ fn event_suggestions_need_one_edit() {
     let d = analyze("#event_simpleName=XzFileWritten").diagnostics;
     assert_eq!(d[0].code, codes::CQL_UNKNOWN_EVENT);
     assert_eq!(d[0].suggestion, None, "{d:#?}");
+}
+
+/// A subquery in an argument whose `}` is missing says so, at the `,` where it was due; and
+/// what follows is not misread (no `<=>` reported outside the correlate() it is in).
+#[test]
+fn a_subquery_missing_its_brace_says_so() {
+    let d = analyze("join({ a=1 | b=/x/, field=y, include=z)").diagnostics;
+    assert_eq!(d[0].code, codes::CQL_PARSE_ERROR, "{d:#?}");
+    assert!(d[0].message.contains("missing `}`"), "{d:#?}");
+    let q = "correlate(A: { a=1 | x <=> B.x , B: { b=1 | y <=> A.y }, within=5m)";
+    let d = analyze_with(q, &Context::CORRELATION_RULE).diagnostics;
+    assert!(d[0].message.contains("missing `}`"), "{d:#?}");
+    assert!(
+        d.iter()
+            .all(|d| d.code != codes::CQL_LINK_OUTSIDE_CORRELATE),
+        "{d:#?}"
+    );
+}
+
+/// The first error names the fix where there is one, and no wrong one.
+#[test]
+fn parse_errors_name_the_fault() {
+    for (q, message) in [
+        ("parseJson( | a=1", "CQL syntax error: missing `)`"),
+        (
+            "x := lower(\"a\"\n| y := 1",
+            "CQL syntax error: missing `)`",
+        ),
+        ("count(", "CQL syntax error: missing `)`"),
+        (
+            "case { a=1 | x := (b ; * }",
+            "CQL syntax error: missing `)`",
+        ),
+        ("rdns (field=ip,as=host)", "CQL syntax error near `,`"),
+        ("test(a > 1 and b > 2)", "CQL syntax error near `and`"),
+        ("test((a, b))", "CQL syntax error near `,`"),
+        ("(a=1 | b=2)", "CQL syntax error near `|`"),
+        (
+            "/* unterminated comment",
+            "CQL syntax error: the block comment is never closed",
+        ),
+        (
+            "a=1 /* x",
+            "CQL syntax error: the block comment is never closed",
+        ),
+        (
+            "a=/x",
+            "CQL syntax error: the regular expression is never closed",
+        ),
+        (
+            "user = \"Alan Turing",
+            "CQL syntax error: the string is never closed",
+        ),
+        ("x := \"abc", "CQL syntax error: the string is never closed"),
+        (
+            "statuscode >= error",
+            "CQL syntax error near `error`: expected a value",
+        ),
+    ] {
+        let d = analyze(q).diagnostics;
+        assert_eq!(d[0].message, message, "{q}: {d:#?}");
+    }
 }

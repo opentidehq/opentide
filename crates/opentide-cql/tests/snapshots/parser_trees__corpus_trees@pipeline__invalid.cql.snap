@@ -30,4 +30,4 @@ SOURCE_FILE@0..52
       R_PAREN@50..51 ")"
   WHITESPACE@51..52 "\n"
 
-34..35: expected a step (expected PIPE)
+34..35: expected a step

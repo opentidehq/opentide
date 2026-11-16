@@ -1,0 +1,37 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/limit_clause__invalid.exabeam
+---
+source_file@0..45
+  statement@0..38
+    select_clause@0..11
+      keyword@0..6
+        letters@0..6 "SELECT"
+      whitespace@6..7 " "
+      column@7..11
+        field_name@7..11
+          identifier@7..11
+            letters@7..11 "user"
+    whitespace@11..12 " "
+    where_clause@12..32
+      keyword@12..17
+        letters@12..17 "WHERE"
+      whitespace@17..18 " "
+      filter@18..32
+        field_term@18..32
+          field_name@18..25
+            identifier@18..25
+              letters@18..25 "outcome"
+          :@25..26 ":"
+          string@26..32 "\"fail\""
+    whitespace@32..33 " "
+    limit_clause@33..38
+      keyword@33..38
+        letters@33..38 "LIMIT"
+  whitespace@38..39 " "
+  ERROR@39..45
+    letters@39..45 "twenty"
+errors:
+38..39: expected a number
+38..39: unexpected

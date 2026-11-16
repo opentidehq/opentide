@@ -1,0 +1,64 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(\"GROUP-BY a ASx | SELECT a LIMIT5 | a AND or OR SELECT\")"
+---
+source_file@0..53
+  statement@0..14
+    group_by_clause@0..10
+      keyword@0..8
+        letters@0..5 "GROUP"
+        -@5..6 "-"
+        letters@6..8 "BY"
+      whitespace@8..9 " "
+      field_name@9..10
+        identifier@9..10
+          letters@9..10 "a"
+    whitespace@10..11 " "
+    as_clause@11..14
+      keyword@11..13
+        letters@11..13 "AS"
+      table_name@13..14
+        identifier@13..14
+          letters@13..14 "x"
+  whitespace@14..15 " "
+  |@15..16 "|"
+  whitespace@16..17 " "
+  statement@17..32
+    select_clause@17..25
+      keyword@17..23
+        letters@17..23 "SELECT"
+      whitespace@23..24 " "
+      column@24..25
+        field_name@24..25
+          identifier@24..25
+            letters@24..25 "a"
+    whitespace@25..26 " "
+    limit_clause@26..32
+      keyword@26..31
+        letters@26..31 "LIMIT"
+      number@31..32
+        digits@31..32 "5"
+  whitespace@32..33 " "
+  |@33..34 "|"
+  whitespace@34..35 " "
+  statement@35..53
+    filter@35..53
+      or_expression@35..53
+        and_expression@35..43
+          free_text@35..36
+            identifier@35..36
+              letters@35..36 "a"
+          whitespace@36..37 " "
+          keyword@37..40
+            letters@37..40 "AND"
+          whitespace@40..41 " "
+          free_text@41..43
+            identifier@41..43
+              letters@41..43 "or"
+        whitespace@43..44 " "
+        keyword@44..46
+          letters@44..46 "OR"
+        whitespace@46..47 " "
+        free_text@47..53
+          identifier@47..53
+            letters@47..53 "SELECT"

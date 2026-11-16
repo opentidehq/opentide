@@ -1,0 +1,64 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/order_by_clause__valid.exabeam
+---
+source_file@0..66
+  statement@0..66
+    select_clause@0..26
+      keyword@0..6
+        letters@0..6 "SELECT"
+      whitespace@6..7 " "
+      column@7..11
+        field_name@7..11
+          identifier@7..11
+            letters@7..11 "user"
+      ,@11..12 ","
+      whitespace@12..13 " "
+      column@13..26
+        aggregate@13..21
+          identifier@13..18
+            letters@13..18 "COUNT"
+          (@18..19 "("
+          *@19..20 "*"
+          )@20..21 ")"
+        whitespace@21..22 " "
+        keyword@22..24
+          letters@22..24 "AS"
+        whitespace@24..25 " "
+        alias@25..26
+          identifier@25..26
+            letters@25..26 "n"
+    whitespace@26..27 " "
+    group_by_clause@27..40
+      keyword@27..35
+        letters@27..32 "GROUP"
+        -@32..33 "-"
+        letters@33..35 "BY"
+      whitespace@35..36 " "
+      field_name@36..40
+        identifier@36..40
+          letters@36..40 "user"
+    whitespace@40..41 " "
+    order_by_clause@41..66
+      keyword@41..49
+        letters@41..43 "OR"
+        letters@43..46 "DER"
+        -@46..47 "-"
+        letters@47..49 "BY"
+      whitespace@49..50 " "
+      field_name@50..51
+        identifier@50..51
+          letters@50..51 "n"
+      whitespace@51..52 " "
+      keyword@52..56
+        letters@52..56 "DESC"
+      ,@56..57 ","
+      whitespace@57..58 " "
+      field_name@58..62
+        identifier@58..62
+          letters@58..62 "user"
+      whitespace@62..63 " "
+      keyword@63..66
+        letters@63..65 "AS"
+        letters@65..66 "C"
