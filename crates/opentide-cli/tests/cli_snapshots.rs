@@ -134,6 +134,24 @@ fn root_and_groups() {
     group("root_and_groups");
 }
 
+/// The cases on the generated fixtures, whose workspaces `cargo xtask
+/// corpus` writes: run when `OPENTIDE_REPLAY_FIXTURES` names them, as the
+/// CI jobs do. One test each, for the time they take.
+#[test]
+fn generated_fault() {
+    snapshot::check_generated("fault", 58);
+}
+
+#[test]
+fn generated_fault_lint() {
+    snapshot::check_generated("fault-lint", 23);
+}
+
+#[test]
+fn generated_heavy_small() {
+    snapshot::check_generated("heavy-small", 20);
+}
+
 #[test]
 fn explain() {
     group("explain");
@@ -204,6 +222,7 @@ fn every_case_has_a_group_and_every_snapshot_a_case() {
                 snapshot::snapshot_name(case)
             )
         })
+        .chain(snapshot::session_snapshots())
         .collect();
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/cli_snapshots");
     let mut stale = Vec::new();

@@ -1,0 +1,69 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: migrate.vocab-scope/json/fault/default
+---
+args: opentide --json migrate vocab-scope
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "applied": false,
+  "changed_files": [],
+  "command": "migrate vocab-scope",
+  "duration_ms": 0,
+  "error": "3 file(s) could not be migrated safely and were left unchanged.",
+  "exit_code": 1,
+  "failed_files": {
+    "objects/rules/encoded-beacon-rule-0034.yaml": "unreadable: while parsing a flow sequence, expected ',' or ']' (line 83, column 1)",
+    "objects/rules/hidden-loader-rule-0024.yaml": "unreadable: while scanning a plain scalar, found a tab (line 44, column 18)",
+    "objects/rules/staged-exfiltration-rule-0021.yaml": "unreadable: while parsing a flow sequence, expected ',' or ']' (line 72, column 1)"
+  },
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "3 file(s) could not be migrated safely and were left unchanged.",
+    "suggestion": null
+  },
+  "fields": {
+    "entities": {
+      "blocked": {
+        "Host::Gizmo": "\"Host::Gizmo\" is not a known vocabulary value"
+      },
+      "by_status": {
+        "scoped": 229,
+        "unknown": 1
+      },
+      "rewrites": {},
+      "values": 230,
+      "vocab": "signal.entities"
+    },
+    "surface": {
+      "blocked": {},
+      "by_status": {
+        "scoped": 176
+      },
+      "rewrites": {},
+      "values": 176,
+      "vocab": "surface"
+    }
+  },
+  "message": "3 file(s) could not be migrated safely and were left unchanged.",
+  "next_actions": [],
+  "ok": true,
+  "scanned": 877,
+  "schema_version": 1,
+  "status": "issues",
+  "summary": {
+    "files": 0,
+    "scanned": 877
+  },
+  "warnings": [
+    "entities: \"Host::Gizmo\" is not a known vocabulary value",
+    "objects/rules/encoded-beacon-rule-0034.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 83, column 1)",
+    "objects/rules/hidden-loader-rule-0024.yaml: unreadable: while scanning a plain scalar, found a tab (line 44, column 18)",
+    "objects/rules/staged-exfiltration-rule-0021.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 72, column 1)"
+  ]
+}
+
+━━━ stderr · empty

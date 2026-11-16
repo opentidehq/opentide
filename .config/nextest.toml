@@ -14,6 +14,12 @@
 # and one that hangs would otherwise hold the run until the job times out.
 slow-timeout = { period = "60s", terminate-after = 5 }
 
+# The cases on the generated workspaces (`fault` has 800 objects) run every
+# lint and validate check in a debug build: minutes of CPU, a few cores wide.
+[[profile.default.overrides]]
+filter = 'binary_id(opentide-cli::cli_snapshots) and test(/^generated_/)'
+slow-timeout = { period = "120s", terminate-after = 5 }
+
 [profile.fast]
 # Leaves out what spawns a server, runs Python or walks a long corpus: the
 # language server over stdio, the Pydantic comparison (it needs `uv sync`), the

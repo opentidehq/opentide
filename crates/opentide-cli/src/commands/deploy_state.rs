@@ -484,7 +484,7 @@ impl Shard {
             })
             .collect();
         payload.insert("platforms".into(), serde_json::Value::Object(platforms));
-        let mut text = python_dumps(&serde_json::Value::Object(payload))?;
+        let mut text = pretty_state(&serde_json::Value::Object(payload))?;
         text.push('\n');
         Ok(text)
     }
@@ -509,7 +509,7 @@ impl Shard {
 }
 
 /// The shard's platforms and tenants in the file's order (serde_json's map
-/// sorts its keys; Python's dictionary keeps them as written).
+/// sorts its keys; a shard keeps them as written).
 fn ordered_platforms(path: &Path) -> Option<IndexMap<String, IndexMap<String, serde_json::Value>>> {
     #[derive(serde::Deserialize)]
     struct Ordered {
@@ -534,11 +534,10 @@ fn ordered_keys(
     keys
 }
 
-/// *value* as `json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False)`
-/// writes it: serde_json's map sorts its keys, and its pretty printer
-/// indents by two spaces with `": "` and `","` between items. A failure is
+/// *value* pretty-printed: serde_json's map sorts its keys, and its pretty
+/// printer indents by two spaces with `": "` and `","` between items. A failure is
 /// an error, never an empty text that would replace the state.
-fn python_dumps(value: &serde_json::Value) -> std::io::Result<String> {
+fn pretty_state(value: &serde_json::Value) -> std::io::Result<String> {
     serde_json::to_string_pretty(value).map_err(std::io::Error::other)
 }
 
@@ -686,7 +685,7 @@ mod tests {
 
     #[test]
     fn a_patterned_platforms_id_is_text_of_its_shape() {
-        // The oracle refuses a number outright, before its sign.
+        // A number is refused outright, before its sign is looked at.
         for number in [12, -1] {
             let error = normalise_external_id(PATTERNED, &ExternalId::Int(number)).unwrap_err();
             assert_eq!(error.code, "external_id_shape");

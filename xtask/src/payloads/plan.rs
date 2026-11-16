@@ -13,6 +13,8 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{Context as _, Result};
+use opentide_cli::commands::deploy::Args as DeployOptions;
+use opentide_cli::tree::RootCommand;
 use opentide_compile::Owned;
 use opentide_compile::dry_run::{self, Request};
 use opentide_compile::plan::Scope;
@@ -51,27 +53,24 @@ struct Recorded {
     exit_code: i32,
 }
 
-/// The request a case's argv makes.
-pub fn request(argv: &[String], cwd: &Path) -> Request {
-    let mut request = Request {
-        cwd: cwd.to_path_buf(),
-        ..Request::default()
+/// The request a case's argv makes: the `deploy` options as the product
+/// reads them.
+pub fn request(argv: &[String], cwd: &Path) -> Result<Request> {
+    let Some(RootCommand::Deploy(parsed)) = crate::recorded::command(argv, "deploy") else {
+        anyhow::bail!("not a plain `deploy` command line: {argv:?}");
     };
-    let mut words = argv.iter().skip_while(|arg| *arg != "deploy").skip(1);
-    while let Some(arg) = words.next() {
-        match arg.as_str() {
-            "--strategy" => request.strategies.extend(words.next().cloned()),
-            "--uuid" => request.uuids.extend(words.next().cloned()),
-            "--file" => request.files.extend(words.next().cloned()),
-            "--platform" => request.platform = words.next().cloned(),
-            "--all" => request.all = true,
-            "--wide" => request.wide = true,
-            "--keep-deprecated" => request.keep_deprecated = Some(true),
-            "--drop-deprecated" => request.keep_deprecated = Some(false),
-            _ => {}
-        }
-    }
-    request
+    let flags = DeployOptions::from(&parsed);
+    Ok(Request {
+        cwd: cwd.to_path_buf(),
+        strategies: flags.strategies,
+        all: flags.all,
+        uuids: flags.uuids,
+        files: flags.files,
+        platform: flags.platform,
+        wide: flags.wide,
+        keep_deprecated: flags.keep_deprecated,
+        ..Request::default()
+    })
 }
 
 /// One case's differences, each `key: oracle != candidate`, and the payload
@@ -92,7 +91,7 @@ pub fn compare_case(
         &Vocabularies::bundled(),
         &workspace.configuration().resolved,
     );
-    let request = request(&case.argv, ws);
+    let request = request(&case.argv, ws).with_context(|| case.id.clone())?;
     // The case's environment with its workspace placeholder expanded, as the
     // golden runner expands it (`GITHUB_WORKSPACE = "<WS>"`).
     let env = |name: &str| {
@@ -356,7 +355,7 @@ mod tests {
         .iter()
         .map(|arg| (*arg).to_owned())
         .collect();
-        let request = request(&argv, Path::new("/ws"));
+        let request = request(&argv, Path::new("/ws")).unwrap();
         assert!(request.all && request.wide);
         assert_eq!(request.strategies, ["PREVIEW"]);
         assert_eq!(request.uuids, ["u"]);

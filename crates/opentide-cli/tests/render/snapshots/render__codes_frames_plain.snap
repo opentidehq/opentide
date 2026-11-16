@@ -1,6 +1,6 @@
 ---
 source: crates/opentide-cli/tests/render.rs
-expression: codes_frames_plain
+expression: candidate
 ---
 == analysis_engine
 error[analysis_engine]: The analysis engine loads: the Rust module compiled into opentide (`opentide._native`) behind the `queries` checks of `opentide validate` and `opentide lint`, `opentide validate query` and `opentide lsp`.
@@ -4668,7 +4668,7 @@ error[vocab_unknown]: 'clearr' is not a tlp value
   │
   ├─ expected: one of clear, green, amber
   ├─ note: a second note
-  ╰─ fix: replace with 'clear'
+  ╰─ fix: replace with "clear"
 
 == kql_parse_error
 warning[kql_parse_error]: a span that ends two lines further down a span that ends two lines further down a span that ends two lines further down a span that ends two lines further down 
@@ -4691,5 +4691,3 @@ note[filename_mismatch]: the file name does not match the object's name
 == schema_validation
 error[schema_validation]: nothing at this line
   ╰─▶ objects/rules/frame-shapes.yaml:400:1
-
-

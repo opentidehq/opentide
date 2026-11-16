@@ -30,6 +30,7 @@ fn reply(status: u16, body: &str) -> Reply {
             content_type: Some("application/json".to_owned()),
             body: body.as_bytes().to_vec(),
             elapsed: Duration::from_millis(5),
+            credentials: crate::answer::Credentials::default(),
         },
         retry_after: None,
         challenge: None,
@@ -132,6 +133,23 @@ fn a_429_waits_as_retry_after_asks_else_a_minute() {
         RATE_LIMIT.rate_limit_wait(Some("7"), MAX_RATE_LIMITED, now),
         None
     );
+}
+
+#[test]
+fn api_errors_do_not_quote_the_bearer() {
+    use crate::answer::{TEST_BEARER, answer_to_bearer};
+    let answer = answer_to_bearer(&format!(
+        r#"{{"errors": [{{"code": "DENIED", "message": "for {TEST_BEARER}"}}]}}"#
+    ));
+    let reply = Reply {
+        answer,
+        retry_after: None,
+        challenge: None,
+    };
+    let error = api_error("POST /x", &reply);
+    assert!(error.to_string().contains("DENIED: for ***"), "{error}");
+    assert!(!error.to_string().contains(TEST_BEARER), "{error}");
+    assert!(!format!("{:?}", error.errors).contains(TEST_BEARER));
 }
 
 #[test]

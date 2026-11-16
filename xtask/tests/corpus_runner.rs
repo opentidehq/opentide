@@ -8,7 +8,7 @@
 #[cfg(test)]
 mod runner {
 
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
     use xtask::corpus::cli::run;
     use xtask::corpus::faults::Catalogue;
     use xtask::corpus::generate::generate;
@@ -34,30 +34,34 @@ layout = "explicit"
 "#;
 
     struct Lab {
-        dir: PathBuf,
+        dir: tempfile::TempDir,
     }
 
     impl Lab {
         fn new(name: &str) -> Self {
-            let dir = std::env::temp_dir()
-                .join(format!("xtask-corpus-runner-{name}-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&dir);
-            std::fs::create_dir_all(&dir).unwrap();
-            let script = dir.join("opentide");
+            let dir = tempfile::Builder::new()
+                .prefix(&format!("xtask-corpus-runner-{name}-"))
+                .tempdir()
+                .unwrap();
+            let script = dir.path().join("opentide");
             xtask::script::write_executable(&script, SCRIPT).unwrap();
             Self { dir }
         }
 
         fn oracle(&self) -> String {
-            self.dir.join("opentide").to_string_lossy().into_owned()
+            self.dir
+                .path()
+                .join("opentide")
+                .to_string_lossy()
+                .into_owned()
         }
 
         fn path(&self, name: &str) -> String {
-            self.dir.join(name).to_string_lossy().into_owned()
+            self.dir.path().join(name).to_string_lossy().into_owned()
         }
 
         fn write(&self, name: &str, text: &str) {
-            std::fs::write(self.dir.join(name), text).unwrap();
+            std::fs::write(self.dir.path().join(name), text).unwrap();
         }
 
         /// The document the fake prints for `command`, on the base or on a kind.
@@ -109,12 +113,6 @@ layout = "explicit"
                 &self.path("scratch"),
             ];
             run(&args.map(str::to_string))
-        }
-    }
-
-    impl Drop for Lab {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.dir);
         }
     }
 
@@ -352,7 +350,7 @@ ops = [{ op = "set", path = "status", value = "NOPE" }]
     fn a_wrong_oracle_version_is_refused() {
         let lab = Lab::new("version");
         std::fs::write(
-            lab.dir.join("opentide"),
+            lab.dir.path().join("opentide"),
             "#!/bin/sh\necho \"opentide 0.22.0\"\n",
         )
         .unwrap();

@@ -2,9 +2,8 @@
 //! is reported with.
 //!
 //! The messages name the platform, the tenant and the tenant's address
-//! (scheme, host and port: never a path, a query or credentials), as the
-//! Python transport layer's `TenantUnreachableError` does. A credential never
-//! reaches a message: the request's URL is dropped from every reqwest error
+//! (scheme, host and port: never a path, a query or credentials). A
+//! credential never reaches a message: the request's URL is dropped from every reqwest error
 //! before its text is read ([`describe`]).
 
 #[cfg(not(target_os = "wasi"))]
@@ -24,7 +23,7 @@ pub const NETWORK_UNAVAILABLE: &str = "network_unavailable";
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectorError {
     /// The connection, DNS, TLS or the proxy failed before the tenant took
-    /// the request (Python's `_CONNECT_ERRORS`).
+    /// the request.
     #[error("Cannot reach {platform} tenant '{tenant}' at {address}: {reason}")]
     Unreachable {
         /// The platform's identifier.
@@ -98,8 +97,7 @@ pub enum ConnectorError {
         message: String,
     },
     /// The tenant answered and refused: a query it cannot run, a rule it
-    /// will not take, a credential it does not accept (Python's
-    /// `QueryRefused` and the deployers' `DetectionRule*Failed`). The
+    /// will not take, a credential it does not accept. The
     /// message names the tenant; *detail* is the tenant's own words.
     #[error("{message}")]
     Refused {
@@ -112,8 +110,8 @@ pub enum ConnectorError {
         /// The tenant's reason, when it gave one.
         detail: Option<String>,
     },
-    /// The tenant refused the credentials (Python's
-    /// `TenantConnectionError`): every call to the tenant fails alike. The
+    /// The tenant refused the credentials: every call to the tenant fails
+    /// alike. The
     /// message is the client's (`Cannot authenticate with the tenant
     /// configuration`); *detail* is what it logged.
     #[error("{message}")]
@@ -128,7 +126,7 @@ pub enum ConnectorError {
         detail: Option<String>,
     },
     /// An asynchronous search outlived its timeout and was stopped
-    /// (Python's `QueryTimedOut`).
+    /// (a query that timed out, not a tenant that is down).
     #[error("{message}")]
     QueryTimedOut {
         /// The platform's identifier.
@@ -144,8 +142,7 @@ pub enum ConnectorError {
     },
     /// A gateway or proxy in front of the tenant answered for it (HTTP 502,
     /// 503 or 504, or a page that is not the API's after a slow request:
-    /// Python's `GatewayTimeoutError`): one query timed out there, the tenant
-    /// is not down.
+    /// a gateway timeout): one query timed out there, the tenant is not down.
     #[error("{message}")]
     Gateway {
         /// The platform's identifier.
@@ -175,7 +172,7 @@ pub enum ConnectorError {
 }
 
 impl ConnectorError {
-    /// A refusal by the tenant *tenant* of *platform* (Python's `QueryRefused`).
+    /// A refusal by the tenant *tenant* of *platform* (a [`ConnectorError::Refused`]).
     pub fn refused(
         platform: &str,
         tenant: &str,
@@ -235,8 +232,7 @@ impl ConnectorError {
     }
 }
 
-/// `scheme://host[:port]` of *url*, without credentials, path or query
-/// (Python's `transport._origin`).
+/// `scheme://host[:port]` of *url*, without credentials, path or query.
 pub fn origin(url: &url::Url) -> String {
     let host = url.host_str().unwrap_or_default();
     match url.port() {

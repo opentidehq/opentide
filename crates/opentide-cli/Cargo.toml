@@ -118,7 +118,6 @@ walkdir = "2.5"
 percent-encoding = "2.3"
 # `opentide explain <code>` in human mode: the page's Markdown, parsed for the terminal.
 pulldown-cmark = { version = "0.13", default-features = false }
-humantime = "2.4"
 regex.workspace = true
 url.workspace = true
 serde.workspace = true
@@ -205,7 +204,7 @@ opentide-cassette.workspace = true
 # deployed and checked through the CLI flow against wiremock, no recording
 # of a real instance being shareable.
 wiremock.workspace = true
-# The goldens' normalisation, for the generate cases (tests/generate_goldens.rs).
+# The goldens' normalisation and comparator (tests/common/snapshot.rs, tests/extract_sentinel.rs).
 opentide-compare.workspace = true
 tempfile = "3"
 # A scratch folder's canonical path without Windows' `\\?\` prefix, which
@@ -215,8 +214,6 @@ dunce.workspace = true
 # wezterm's portable-pty: a pty on Unix, ConPTY on Windows. The one crate
 # that drives a run at a terminal.
 portable-pty = "0.9"
-# The goldens' case.toml and outcome.toml (tests/framework_goldens.rs).
-
-# The renderers' snapshots, written by the oracle (tests/render.rs).
+# The renderers' snapshots (tests/render.rs, tests/cli_snapshots.rs).
 insta.workspace = true
 trycmd.workspace = true

@@ -226,3 +226,48 @@ fn a_powerquery_answered_without_json_or_without_an_id_is_refused() {
         assert_eq!(message, expected);
     }
 }
+
+#[test]
+fn a_2xx_json_answer_an_error_quotes_never_shows_the_token() {
+    // The console echoes the request's `Authorization` in a 2xx JSON answer
+    // the connector cannot use: each error quoting it shows `***`.
+    let echo = |status: u16| {
+        move |request: &wiremock::Request| {
+            let seen = request
+                .headers
+                .get("authorization")
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default()
+                .to_owned();
+            ResponseTemplate::new(status).set_body_json(json!({"data": {"seen": seen}}))
+        }
+    };
+    let api = wait(async {
+        let api = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path(RULES_PATH))
+            .respond_with(echo(200))
+            .mount(&api)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(QUERY_PATH))
+            .respond_with(echo(201))
+            .mount(&api)
+            .await;
+        api
+    });
+    let created = deploy(&api, Operation::Create, "r1", br#"{"data": {}}"#).unwrap_err();
+    let shown = format!("{created} {created:?} {}", created.text());
+    assert!(shown.contains("ApiToken ***"), "{shown}");
+    assert!(!shown.contains(TOKEN), "{shown}");
+    let now = jiff::Timestamp::from_second(1_800_000_000).unwrap();
+    let checked = with_tenant(&api, |cx| {
+        wait(SentinelOne.validate_query(cx, "src.x = 1", now))
+    });
+    let Err(SentinelOneError::Unforeseen { status, context }) = checked else {
+        panic!("{checked:?}")
+    };
+    assert_eq!(status, 201);
+    assert!(context.contains("ApiToken ***"), "{context}");
+    assert!(!context.contains(TOKEN), "{context}");
+}
