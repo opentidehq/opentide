@@ -330,7 +330,7 @@ fn source_file(p: &mut Parser<'_>) {
         // What cannot continue a statement: skip a piece, and read on.
         p.err_and_bump("unexpected");
         if next(p, &statement_start(true)).is_some() {
-            statement(p);
+            statement_or_foreach(p);
         }
     }
     m.complete(p, K::SourceFile.raw());
