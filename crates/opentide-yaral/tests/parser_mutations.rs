@@ -176,7 +176,7 @@ fn mutate(text: &str, rng: &mut Rng) -> String {
                 }
                 None => {
                     out.push_str(&text[..end]);
-                    out.push_str(&[")", "(", "]", "\"", "`"][rng.below(5)]);
+                    out.push_str([")", "(", "]", "\"", "`"][rng.below(5)]);
                     out.push_str(&text[end..]);
                 }
             }
