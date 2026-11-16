@@ -430,36 +430,55 @@ const SAMPLES: &[&str] = &[
 #[test]
 fn pure_rust_parser_matches_tree_sitter() {
     let files = sources();
-    let mut config = Config::new(&verdict, &token_ranges, SAMPLES);
-    config.sentences = 3_000;
-    config.mutations_per_input = 40;
-    config.max_prefixes = 40;
-    config.max_offsets = 32;
-    // `OPENTIDE_KUERY_SEED=<n>` runs another round (the default is the committed seed 1).
-    if let Some(seed) = std::env::var("OPENTIDE_KUERY_SEED")
-        .ok()
-        .and_then(|s| s.parse().ok())
-    {
+    // `OPENTIDE_DIFF_SCALE=full`: 40 mutations a file, 3,000 sentences, 40
+    // prefixes and 32 offsets, run before every push. The default is a sample
+    // that keeps CI well under its 300 s test limit. `OPENTIDE_DIFF_SEEDS=1,2,3`
+    // runs several seeds (default 1).
+    let full = std::env::var("OPENTIDE_DIFF_SCALE").is_ok_and(|s| s == "full");
+    let seeds: Vec<u64> = std::env::var("OPENTIDE_DIFF_SEEDS")
+        .or_else(|_| std::env::var("OPENTIDE_KUERY_SEED"))
+        .map_or_else(
+            |_| vec![1],
+            |s| s.split(',').filter_map(|n| n.trim().parse().ok()).collect(),
+        );
+    for seed in seeds {
+        let mut config = Config::new(&verdict, &token_ranges, SAMPLES);
         config.seed = seed;
+        if full {
+            config.sentences = 3_000;
+            config.mutations_per_input = 40;
+            config.max_prefixes = 40;
+            config.max_offsets = 32;
+        } else {
+            config.sentences = 200;
+            config.mutations_per_input = 2;
+            config.max_prefixes = 4;
+            config.max_offsets = 4;
+        }
+        let report = run(&Old, &New, &files, &config);
+        eprintln!(
+            "seed {seed}, scale {}",
+            if full { "full" } else { "sample" }
+        );
+        eprintln!(
+            "kuery differential: {} inputs, {} valid, {} broken; valid differences {}, verdict changes {}, broken-input changes {}",
+            report.inputs,
+            report.valid,
+            report.inputs - report.valid,
+            report.total(opentide_parse::differential::Class::Valid),
+            report.total(opentide_parse::differential::Class::Verdict),
+            report.total(opentide_parse::differential::Class::Broken),
+        );
+        eprintln!(
+            "old duplicate keyword-spacing diagnostics collapsed: {}",
+            COLLAPSED.load(Ordering::Relaxed)
+        );
+        if let Ok(path) = std::env::var("OPENTIDE_KUERY_DIFF") {
+            std::fs::write(format!("{path}.{seed}"), report.to_json_string())
+                .expect("the report file");
+        }
+        assert_gates(&report);
     }
-    let report = run(&Old, &New, &files, &config);
-    eprintln!(
-        "kuery differential: {} inputs, {} valid, {} broken; valid differences {}, verdict changes {}, broken-input changes {}",
-        report.inputs,
-        report.valid,
-        report.inputs - report.valid,
-        report.total(opentide_parse::differential::Class::Valid),
-        report.total(opentide_parse::differential::Class::Verdict),
-        report.total(opentide_parse::differential::Class::Broken),
-    );
-    eprintln!(
-        "old duplicate keyword-spacing diagnostics collapsed: {}",
-        COLLAPSED.load(Ordering::Relaxed)
-    );
-    if let Ok(path) = std::env::var("OPENTIDE_KUERY_DIFF") {
-        std::fs::write(path, report.to_json_string()).expect("the report file");
-    }
-    assert_gates(&report);
 }
 
 /// The highlight golden (`crates/testdata/highlight/kuery/query.json`, the
