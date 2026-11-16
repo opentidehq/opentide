@@ -78,7 +78,7 @@ fn field<'j>(table: &'j Json, key: &str) -> Option<&'j Json> {
     table.get(key).filter(|value| !value.is_null())
 }
 
-/// A string field that is set and not empty (Python's `if value:`).
+/// A string field that is set and not empty.
 fn text<'j>(table: &'j Json, key: &str) -> Option<&'j str> {
     field(table, key)
         .and_then(Json::as_str)

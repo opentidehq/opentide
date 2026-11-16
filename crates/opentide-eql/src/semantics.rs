@@ -509,7 +509,7 @@ pub(crate) fn check_conditions(node: Node, source: &str, out: &mut Vec<Diagnosti
     }
 }
 
-/// Whether a node under `ancestors` is a condition Elasticsearch translates
+/// Whether `node` is a condition Elasticsearch translates
 /// to a query on its own: reached from the event filter through `and`, `or`,
 /// `not`, and parentheses only. Comparisons elsewhere (function arguments)
 /// run as scripts, which may compare fields. An `and`/`or` with a
@@ -517,10 +517,12 @@ pub(crate) fn check_conditions(node: Node, source: &str, out: &mut Vec<Diagnosti
 ///
 /// `cache` maps an ancestor's id to the answer for its children, so a long
 /// `or` chain is not rescanned for every comparison in it.
-fn translated_as_query(ancestors: &[Node], cache: &mut HashMap<usize, bool>) -> bool {
+fn translated_as_query(node: Node, cache: &mut HashMap<usize, bool>) -> bool {
     let mut passed = Vec::new();
     let mut result = false;
-    for &parent in ancestors.iter().rev() {
+    let mut next = node.parent();
+    while let Some(parent) = next {
+        next = parent.parent();
         if let Some(&known) = cache.get(&parent.id()) {
             result = known;
             break;
@@ -601,13 +603,12 @@ fn field_comparison(
 /// constants wherever it appears.
 pub(crate) fn check_field_comparisons(
     node: Node,
-    ancestors: &[Node],
     translated: &mut HashMap<usize, bool>,
     source: &str,
     out: &mut Vec<Diagnostic>,
 ) {
     match node.kind() {
-        "comparison" if translated_as_query(ancestors, translated) => {
+        "comparison" if translated_as_query(node, translated) => {
             let (Some(left), Some(right)) = (
                 node.child_by_field_name("left"),
                 node.child_by_field_name("right"),
@@ -655,7 +656,7 @@ pub(crate) fn check_field_comparisons(
                         }
                     }
                 }
-                "in~" if translated_as_query(ancestors, translated) => {
+                "in~" if translated_as_query(node, translated) => {
                     let Some(subject) = node.child_by_field_name("subject") else {
                         return;
                     };

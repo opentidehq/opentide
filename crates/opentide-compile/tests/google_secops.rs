@@ -119,7 +119,7 @@ fn strategy(status: &str) -> opentide_compile::strategy::StatusStrategy {
 }
 
 /// A rule without `metadata.version` deploys without `opentide_version` in
-/// its meta: Python's `str(None)` sent the string `"None"` to the tenant.
+/// its meta, never the string `"None"`.
 #[test]
 fn a_rule_without_a_version_sends_no_opentide_version() {
     let text = std::fs::read_to_string(fixtures().join("rule-google-secops-process-1.0.yaml"))

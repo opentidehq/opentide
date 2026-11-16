@@ -12,8 +12,8 @@
 //! ([`super::generate::run_phases`]). At an interactive terminal (`human`
 //! mode, stdin a terminal) a missing name is asked for (`<Family> name`),
 //! and a rule without `--platform` asks which of the enabled platforms get
-//! a block (`Platform blocks`), as the Python CLI does (`_ask_name`,
-//! `_ask_platforms`), through the setup wizards' [`Prompter`] (UC-6.0d).
+//! a block (`Platform blocks`), through the setup wizards' [`Prompter`]
+//! (UC-6.0d).
 
 pub mod scaffold;
 

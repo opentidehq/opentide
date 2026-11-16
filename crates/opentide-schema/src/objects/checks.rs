@@ -145,8 +145,8 @@ fn review_patterns() -> &'static (Regex, Regex) {
 /// (`2026-09-01T15:04:05Z`, `2026-09-01 15:04:05.5+02:00`), as the oracle's
 /// `parse_review_instant` accepts them, and one that exists: jiff checks the
 /// calendar, the clock and the offset. The year is 0001 to 9999, and so is
-/// the instant in UTC, as Python's `datetime` holds them (the oracle refused
-/// year 0, and crashed on an offset that moved the instant out of range).
+/// the instant in UTC (year 0 is refused, and so is an offset that moves the
+/// instant out of that range).
 pub fn check_reviewed(text: &str) -> Result<(), Violation> {
     let (date, datetime) = review_patterns();
     let number = |capture: Option<regex::Match<'_>>| -> i32 {
@@ -210,7 +210,7 @@ pub fn check_reviewed(text: &str) -> Result<(), Violation> {
         };
         // The instant in UTC, on the civil calendar (years -9999 to 9999):
         // jiff's `Timestamp` stops a day short of 9999-12-31 in UTC, which
-        // Python's `datetime` holds.
+        // is still a valid instant here.
         let offset =
             jiff::SignedDuration::from_secs(i64::from(sign * (hours * 3600 + minutes * 60)));
         let utc = day
@@ -227,7 +227,7 @@ pub fn check_reviewed(text: &str) -> Result<(), Violation> {
     Ok(())
 }
 
-/// A date of the calendar Python's `datetime` holds: years 0001 to 9999
+/// A date of the proleptic Gregorian calendar, years 0001 to 9999
 /// (jiff's own go back to -9999, and include year 0).
 fn civil_date(year: i32, month: i32, day: i32) -> Result<jiff::civil::Date, String> {
     if !(1..=9999).contains(&year) {
@@ -432,7 +432,7 @@ mod tests {
             "2026-09-01T15:04:05.123456789123Z",
             "2024-02-29",
             "2026-01-01T23:59:59+23:59",
-            // The ends of Python's calendar, in UTC too.
+            // The ends of the calendar (0001 and 9999), in UTC too.
             "0001-01-01",
             "9999-12-31",
             "0001-01-01T00:00:00Z",

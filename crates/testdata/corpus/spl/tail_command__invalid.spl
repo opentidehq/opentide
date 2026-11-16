@@ -1,2 +1,2 @@
 ``` prod:tail_command invalid
-index=main | tail
+index=main | tail abc
