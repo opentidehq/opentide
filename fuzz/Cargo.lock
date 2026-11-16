@@ -3113,10 +3113,8 @@ version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
- "opentide-syntax",
  "serde",
  "toml",
- "tree-sitter",
  "yara-x-fmt",
  "yara-x-parser",
 ]
