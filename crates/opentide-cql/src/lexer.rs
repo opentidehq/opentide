@@ -487,10 +487,15 @@ fn scan(s: &str, start: usize, flags: Flags) -> Option<(K, usize)> {
             } else {
                 Shape::Other
             };
-            if !want_pattern && !want_assign && shape == Shape::Other {
+            has_pattern_char = true;
+            // Without a pattern to read, only an assignment's field (no
+            // pattern character) or a call's name (`a` or `a:b`) is a token:
+            // past a second colon neither can be, so reading on to the end of
+            // the run would find nothing, and the word stops at this colon:
+            // the run's next segment would re-read the rest (quadratic).
+            if !want_pattern && shape == Shape::Other {
                 break;
             }
-            has_pattern_char = true;
         } else if is_scan_char(c) || (want_pattern && is_pattern_only(c)) {
             if !is_ident(c) {
                 shape = Shape::Other;
@@ -1112,16 +1117,28 @@ mod tests {
             "f(x) ",
         ] {
             let source = unit.repeat(n);
-            SCANNED.with(|count| count.set(0));
-            let lexemes = lex(&source);
-            let read = SCANNED.with(std::cell::Cell::get);
-            let chars = source.chars().count();
-            assert!(
-                read <= 3 * chars,
-                "{unit:?} x {n}: the scanner read {read} characters of {chars}"
-            );
-            assert!(!lexemes.is_empty());
+            assert_bounded_reads(&source);
         }
+        // After `:=` the scanner reads for an assignment or a call, not a
+        // pattern: a run of colon segments was re-read at each colon.
+        for unit in ["a:", "\u{1F600}:", "\u{e9}:", "a:b:"] {
+            assert_bounded_reads(&format!("x := {}", unit.repeat(n)));
+            assert_bounded_reads(&format!("x := f({})", unit.repeat(n)));
+        }
+    }
+
+    /// Lexing `source` reads at most three characters per character.
+    fn assert_bounded_reads(source: &str) {
+        SCANNED.with(|count| count.set(0));
+        let lexemes = lex(source);
+        let read = SCANNED.with(std::cell::Cell::get);
+        let chars = source.chars().count();
+        let head: String = source.chars().take(12).collect();
+        assert!(
+            read <= 3 * chars,
+            "`{head}…`: the scanner read {read} characters of {chars}"
+        );
+        assert!(!lexemes.is_empty());
     }
 
     /// A character above U+FFFF is a field character, as the scanner and
