@@ -32,6 +32,9 @@ struct Data {
     parent: Option<u32>,
     children: Vec<u32>,
     field: Option<&'static str>,
+    /// The rowan node of a named node (a token's arena node has none): the
+    /// checks being moved to the typed AST read it (#1415).
+    syntax: Option<SyntaxNode<Lang>>,
 }
 
 /// A parsed query.
@@ -190,6 +193,7 @@ pub(crate) fn parse(source: &str) -> Tree {
                     usize::from(r.start()),
                     usize::from(r.end()),
                 );
+                data[id as usize].syntax = Some(node.clone());
                 if options && kind == K::MAP_EXPRESSION {
                     data[id as usize].field = Some("options");
                 }
@@ -263,6 +267,7 @@ fn push(
         parent,
         children: Vec::new(),
         field: None,
+        syntax: None,
     });
     if let Some(p) = parent {
         data[p as usize].children.push(id);
@@ -761,6 +766,11 @@ impl<'t> Node<'t> {
             tree: self.tree,
             id,
         }
+    }
+
+    /// The rowan node of a named node; `None` for a token or a comment.
+    pub(crate) fn syntax(&self) -> Option<&'t SyntaxNode<Lang>> {
+        self.d().syntax.as_ref()
     }
 
     pub(crate) fn kind(&self) -> &'static str {

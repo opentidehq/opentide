@@ -8,8 +8,13 @@
 //! release branch's `x-pack/plugin/esql/src/main/antlr` grammar and, where
 //! noted, its Java builder.
 
-use crate::text;
-use crate::tree::{Node, node_span};
+use crate::syntax::SyntaxKind as K;
+use crate::tree::Node;
+use crate::{SyntaxNode, ast};
+use opentide_parse::ast::AstNode;
+use rowan::NodeOrToken;
+
+type SyntaxElement = rowan::SyntaxElement<crate::Lang>;
 use crate::version::{Availability, StackTarget};
 use opentide_core::{ByteSpan, Diagnostic, Range, Severity, codes};
 
@@ -119,39 +124,83 @@ impl Gate {
 /// Lines with 8.19 plus 9.1 and later: forms 9.0 does not have.
 const NOT_9_0: Availability = Availability::with_8_19_since_9(1);
 
-fn has_child(node: Node, kind: &str) -> bool {
-    let mut cursor = node.walk();
-    node.children(&mut cursor).any(|c| c.kind() == kind)
+/// A rowan node's span.
+fn span_of(node: &SyntaxNode) -> ByteSpan {
+    let range = node.text_range();
+    ByteSpan::new(usize::from(range.start()), usize::from(range.end()))
 }
 
-fn fields<'t>(node: Node<'t>, name: &str) -> Vec<Node<'t>> {
-    let mut cursor = node.walk();
-    node.children_by_field_name(name, &mut cursor).collect()
+/// A rowan node's text in `source`.
+fn text_of<'s>(node: &SyntaxNode, source: &'s str) -> &'s str {
+    let span = span_of(node);
+    source.get(span.start..span.end).unwrap_or("")
+}
+
+/// A node's children as the checks read them: its nodes and tokens in order,
+/// without whitespace and comments, and with `WITH {…}` (`NamedParameters`)
+/// read in place, as one part of the command.
+fn parts(node: &SyntaxNode) -> Vec<SyntaxElement> {
+    let mut out = Vec::new();
+    for child in node.children_with_tokens() {
+        match &child {
+            NodeOrToken::Node(n) if n.kind() == K::NAMED_PARAMETERS => {
+                out.extend(n.children_with_tokens().filter(|c| !trivia(c.kind())));
+            }
+            _ if trivia(child.kind()) => {}
+            _ => out.push(child),
+        }
+    }
+    out
+}
+
+fn trivia(kind: K) -> bool {
+    matches!(kind, K::WHITESPACE | K::COMMENT)
+}
+
+/// The position of the first token of `kinds` in `parts`.
+fn first_token(parts: &[SyntaxElement], kinds: &[K]) -> Option<usize> {
+    parts
+        .iter()
+        .position(|p| p.as_token().is_some() && kinds.contains(&p.kind()))
+}
+
+/// The nodes of `parts` after position `at`.
+fn nodes_after(parts: &[SyntaxElement], at: usize) -> impl Iterator<Item = &SyntaxNode> {
+    parts.iter().skip(at + 1).filter_map(|p| p.as_node())
+}
+
+/// The command nodes: what a subquery's enclosing check stops at.
+fn is_command(kind: K) -> bool {
+    ast::Command::can_cast(kind) || kind == K::SET_COMMAND
 }
 
 /// Version gates for one node (not names: those come from the catalog).
-pub(crate) fn syntax_gates(node: Node, source: &str) -> Vec<Gate> {
+pub(crate) fn syntax_gates(node: &SyntaxNode, source: &str) -> Vec<Gate> {
     let mut out = Vec::new();
-    let span = node_span(node);
+    let span = span_of(node);
+    let parts = parts(node);
+    let nodes: Vec<&SyntaxNode> = parts.iter().filter_map(|p| p.as_node()).collect();
     match node.kind() {
-        "rename_clause" if has_child(node, "=") => {
+        K::RENAME_CLAUSE if first_token(&parts, &[K::EQ]).is_some() => {
             let mut gate = Gate::new("`RENAME new = old`", NOT_9_0, span)
                 .note("`RENAME old AS new` works everywhere");
-            if let (Some(old), Some(new)) = (
-                node.child_by_field_name("old"),
-                node.child_by_field_name("new"),
-            ) {
-                gate = gate.suggest(format!("{} AS {}", text(old, source), text(new, source)));
+            // `old AS new`, or `new = old`.
+            let as_first = first_token(&parts, &[K::AS_KW]).is_some();
+            if let (Some(a), Some(b)) = (nodes.first(), nodes.get(1)) {
+                let (old, new) = if as_first { (a, b) } else { (b, a) };
+                gate = gate.suggest(format!(
+                    "{} AS {}",
+                    text_of(old, source),
+                    text_of(new, source)
+                ));
             }
             out.push(gate);
         }
-        "like_expression" => {
-            let rlike = node
-                .child_by_field_name("operator")
-                .is_some_and(|o| text(o, source).eq_ignore_ascii_case("rlike"));
+        K::LIKE_EXPRESSION => {
+            let op = first_token(&parts, &[K::LIKE_KW, K::RLIKE_KW]);
+            let rlike = op.is_some_and(|at| parts[at].kind() == K::RLIKE_KW);
             let word = if rlike { "RLIKE" } else { "LIKE" };
-            let patterns = fields(node, "pattern");
-            if has_child(node, "(") {
+            if first_token(&parts, &[K::L_PAREN]).is_some() {
                 let available = if rlike {
                     Availability::since_9(2)
                 } else {
@@ -163,25 +212,38 @@ pub(crate) fn syntax_gates(node: Node, source: &str) -> Vec<Gate> {
                     ),
                 );
             }
+            // The patterns follow the operator; the first node is the
+            // operand wherever it stands.
+            let first = nodes.first().copied();
+            let patterns = op.map_or_else(Vec::new, |at| {
+                nodes_after(&parts, at)
+                    .filter(|n| Some(*n) != first)
+                    .collect()
+            });
             for pattern in patterns {
                 match pattern.kind() {
-                    "string" => {}
-                    "parameter" => out.push(Gate::new(
+                    K::STRING => {}
+                    K::PARAMETER => out.push(Gate::new(
                         format!("a parameter as a {word} pattern"),
                         Availability::since_9(3),
-                        node_span(pattern),
+                        span_of(pattern),
                     )),
                     _ => out.push(Gate::new(
                         format!("a {word} pattern that is not a string literal"),
                         Availability::since_9(6),
-                        node_span(pattern),
+                        span_of(pattern),
                     )),
                 }
             }
         }
-        "index_pattern" => {
-            if let Some(selector) = node.child_by_field_name("selector") {
-                if node.child_by_field_name("cluster").is_some() {
+        K::INDEX_PATTERN => {
+            let pattern = ast::IndexPattern::cast(node.clone());
+            if let Some(selector) = pattern.as_ref().and_then(ast::IndexPattern::selector) {
+                if pattern
+                    .as_ref()
+                    .and_then(ast::IndexPattern::cluster)
+                    .is_some()
+                {
                     out.push(Gate::new(
                         "a `cluster:index::selector` pattern",
                         Availability::since_9(4),
@@ -189,19 +251,19 @@ pub(crate) fn syntax_gates(node: Node, source: &str) -> Vec<Gate> {
                     ));
                 } else {
                     out.push(Gate::new(
-                        format!("the `::{}` selector", text(selector, source)),
+                        format!("the `::{}` selector", text_of(selector.syntax(), source)),
                         NOT_9_0,
-                        node_span(selector),
+                        span_of(selector.syntax()),
                     ));
                 }
             }
         }
-        "parameter" if text(node, source).starts_with("??") => {
+        K::PARAMETER if text_of(node, source).starts_with("??") => {
             out.push(Gate::new("a `??` identifier parameter", NOT_9_0, span));
         }
-        "qualified_interval" => {
-            if let Some(unit) = node.child_by_field_name("unit")
-                && text(unit, source).eq_ignore_ascii_case("m")
+        K::QUALIFIED_INTERVAL => {
+            if let Some(unit) = nodes.iter().find(|n| n.kind() != K::NUMBER)
+                && text_of(unit, source).eq_ignore_ascii_case("m")
             {
                 // EsqlDataTypeConverter.INTERVALS gains `M` on 9.3; earlier
                 // lines reject `5 m` and `5m` ("Unexpected temporal unit").
@@ -209,43 +271,55 @@ pub(crate) fn syntax_gates(node: Node, source: &str) -> Vec<Gate> {
                     Gate::new(
                         "the minute unit `m`",
                         Availability::since_9(3),
-                        node_span(unit),
+                        span_of(unit),
                     )
                     .note("`min` or `minute` works everywhere")
                     .suggest("min"),
                 );
             }
         }
-        "source_subquery" => out.extend(subquery_gate(node)),
-        "in_tuple" => out.push(Gate::new(
+        K::SOURCE_SUBQUERY => out.extend(subquery_gate(node, &nodes)),
+        K::IN_TUPLE => out.push(Gate::new(
             "an `(a, b) IN (subquery)` tuple",
             Availability::since_9(6),
             span,
         )),
-        "limit_command" if !fields(node, "by").is_empty() => {
+        K::LIMIT_COMMAND
+            if first_token(&parts, &[K::BY_KW])
+                .is_some_and(|by| nodes_after(&parts, by).next().is_some()) =>
+        {
             out.push(Gate::new(
                 "`LIMIT … BY`",
                 Availability::since_9(4),
-                crate::keyword_span(node),
+                crate::keyword_span_of(node),
             ));
         }
-        "grok_command" if fields(node, "pattern").len() > 1 => {
+        K::GROK_COMMAND if nodes.len() > 2 => {
             out.push(Gate::new(
                 "`GROK` with several patterns",
                 Availability::since_9(3),
                 span,
             ));
         }
-        "change_point_command" if !fields(node, "by").is_empty() => {
+        K::CHANGE_POINT_COMMAND
+            if first_token(&parts, &[K::BY_KW])
+                .is_some_and(|by| nodes_after(&parts, by).next().is_some()) =>
+        {
             out.push(Gate::new(
                 "`CHANGE_POINT … BY`",
                 Availability::since_9(5),
                 span,
             ));
         }
-        "join_command" => {
-            let conditions = fields(node, "condition");
-            let simple = conditions.len() == 1 && conditions[0].kind() == "qualified_name";
+        K::JOIN_COMMAND => {
+            let conditions: Vec<&SyntaxNode> = first_token(&parts, &[K::ON_KW])
+                .map(|on| {
+                    nodes_after(&parts, on)
+                        .filter(|n| n.kind() != K::INDEX_PATTERN)
+                        .collect()
+                })
+                .unwrap_or_default();
+            let simple = conditions.len() == 1 && conditions[0].kind() == K::QUALIFIED_NAME;
             if !simple && !conditions.is_empty() {
                 // One field only through 9.1 ("JOIN ON clause only supports one
                 // field"); fields lists and expressions from 9.2.
@@ -258,16 +332,15 @@ pub(crate) fn syntax_gates(node: Node, source: &str) -> Vec<Gate> {
         }
         // A map recovery made up where `{` is missing (`WITH` at the end) is
         // not one the query wrote: no gate on it.
-        "map_expression" if span.start < span.end => {
-            let nested = node.parent().is_some_and(|p| p.kind() == "map_entry");
-            let mut cursor = node.walk();
-            let entries: Vec<Node> = node
-                .named_children(&mut cursor)
-                .filter(|c| c.kind() == "map_entry")
-                .collect();
+        K::MAP_EXPRESSION if span.start < span.end => {
+            let nested = node.parent().is_some_and(|p| p.kind() == K::MAP_ENTRY);
+            let entries: Vec<&&SyntaxNode> =
+                nodes.iter().filter(|c| c.kind() == K::MAP_ENTRY).collect();
+            // An entry's value is its second node (`key: value`).
             let has_nested = entries.iter().any(|e| {
-                e.child_by_field_name("value")
-                    .is_some_and(|v| v.kind() == "map_expression")
+                e.children()
+                    .nth(1)
+                    .is_some_and(|v| v.kind() == K::MAP_EXPRESSION)
             });
             if !nested && (entries.is_empty() || has_nested) {
                 out.push(Gate::new(
@@ -277,20 +350,35 @@ pub(crate) fn syntax_gates(node: Node, source: &str) -> Vec<Gate> {
                 ));
             }
         }
-        "completion_command" => {
-            if let Some(endpoint) = node.child_by_field_name("inference_id") {
-                let id = text(endpoint, source).trim_matches('`');
+        K::COMPLETION_COMMAND => {
+            // 8.19 and 9.1: `COMPLETION prompt WITH endpoint`; the first node
+            // after `WITH` that is not the `{…}` map, and not a target before
+            // `=`.
+            let eq = first_token(&parts, &[K::EQ]);
+            let endpoint = first_token(&parts, &[K::WITH_KW]).and_then(|with| {
+                parts.iter().enumerate().find_map(|(i, p)| {
+                    let n = p.as_node()?;
+                    (i > with && n.kind() != K::MAP_EXPRESSION && eq.is_none_or(|eq| i >= eq))
+                        .then_some(n)
+                })
+            });
+            if let Some(endpoint) = endpoint {
+                let id = text_of(endpoint, source).trim_matches('`');
                 out.push(
                     Gate::new(
                         "`COMPLETION … WITH endpoint`",
                         Availability::from_versions(&["8.19", "9.1"]),
-                        node_span(endpoint),
+                        span_of(endpoint),
                     )
                     .note(format!(
                         "9.2 and later take `WITH {{\"inference_id\": \"{id}\"}}`"
                     )),
                 );
-            } else if node.child_by_field_name("options").is_some() {
+            } else if node
+                .children()
+                .filter(|c| c.kind() == K::NAMED_PARAMETERS)
+                .any(|n| n.children().any(|m| m.kind() == K::MAP_EXPRESSION))
+            {
                 out.push(Gate::new(
                     "`COMPLETION … WITH {…}`",
                     Availability::since_9(2),
@@ -298,10 +386,11 @@ pub(crate) fn syntax_gates(node: Node, source: &str) -> Vec<Gate> {
                 ));
             }
         }
-        "metadata" if node.child_by_field_name("bracket").is_some() => {
-            let fields: Vec<&str> = fields(node, "field")
-                .into_iter()
-                .map(|f| text(f, source))
+        K::METADATA if first_token(&parts, &[K::L_BRACK]).is_some() => {
+            let fields: Vec<&str> = nodes
+                .iter()
+                .filter(|n| n.kind() == K::METADATA_FIELD)
+                .map(|f| text_of(f, source))
                 .collect();
             out.push(
                 Gate::new("`[METADATA …]` in brackets", Availability::ONLY_8_19, span)
@@ -316,34 +405,30 @@ pub(crate) fn syntax_gates(node: Node, source: &str) -> Vec<Gate> {
 
 /// FROM subqueries are 9.4 (snapshot-only on 9.3); a ROW or TS subquery is
 /// 9.5. `IN (subquery)` is 9.5 in WHERE and EVAL, and 9.6 inside an
-/// aggregate filter, a function, a comparison, or `IS NULL`.
-fn subquery_gate(node: Node) -> Option<Gate> {
+/// aggregate filter, a function, a comparison, or `IS NULL`. `nodes` are the
+/// subquery's own: its source command first.
+fn subquery_gate(node: &SyntaxNode, nodes: &[&SyntaxNode]) -> Option<Gate> {
     let parent = node.parent()?;
-    let span = node_span(node);
-    let source_kind = node.child_by_field_name("source").map(|s| s.kind());
-    if parent.kind() == "in_expression" {
+    let span = span_of(node);
+    if parent.kind() == K::IN_EXPRESSION {
         if parent
-            .child_by_field_name("left")
-            .is_some_and(|l| l.kind() == "in_tuple")
+            .children()
+            .next()
+            .is_some_and(|l| l.kind() == K::IN_TUPLE)
         {
             // The tuple form has its own (later) gate.
             return None;
         }
-        let mut nested = false;
-        let mut cur = parent.parent();
-        while let Some(n) = cur {
-            if n.kind().ends_with("_command") {
-                break;
-            }
-            if matches!(
-                n.kind(),
-                "aggregate_field" | "function_call" | "comparison" | "is_null_expression"
-            ) {
-                nested = true;
-                break;
-            }
-            cur = n.parent();
-        }
+        let nested = parent
+            .ancestors()
+            .skip(1)
+            .take_while(|n| !is_command(n.kind()))
+            .any(|n| {
+                matches!(
+                    n.kind(),
+                    K::AGGREGATE_FIELD | K::FUNCTION_CALL | K::COMPARISON | K::IS_NULL_EXPRESSION
+                )
+            });
         return Some(if nested {
             Gate::new(
                 "an `IN (subquery)` inside an aggregate filter, function, comparison, or `IS NULL`",
@@ -354,8 +439,8 @@ fn subquery_gate(node: Node) -> Option<Gate> {
             Gate::new("an `IN (subquery)`", Availability::since_9(5), span)
         });
     }
-    if matches!(parent.kind(), "from_command" | "ts_command") {
-        if source_kind != Some("from_command") {
+    if matches!(parent.kind(), K::FROM_COMMAND | K::TS_COMMAND) {
+        if nodes.first().map(|n| n.kind()) != Some(K::FROM_COMMAND) {
             return Some(Gate::new(
                 "a `ROW` or `TS` subquery",
                 Availability::since_9(5),
@@ -424,5 +509,25 @@ pub(crate) fn spacing_gate(
             range,
         )
         .with_suggestion(format!("{word} {c}")))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::syntax::Lang;
+
+    /// The arena stopped a subquery's ancestors at a node whose name ends in
+    /// `_command`; the typed check stops at the same kinds.
+    #[test]
+    fn the_command_kinds_are_the_command_nodes() {
+        for raw in 0..=u16::MAX {
+            let kind = <Lang as rowan::Language>::kind_from_raw(rowan::SyntaxKind(raw));
+            if kind == K::ERROR && raw != K::ERROR as u16 {
+                break;
+            }
+            let named = format!("{kind:?}").ends_with("_COMMAND");
+            assert_eq!(is_command(kind), named, "{kind:?}");
+        }
     }
 }
