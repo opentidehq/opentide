@@ -1,6 +1,6 @@
 //! The differential of the ES|QL port (epic #1219, #1228): the tree-sitter
-//! engine (`tests/legacy`, `src/lib.rs` copied verbatim) against the
-//! pure-Rust one (`src/engine`, on `src/parser`), over every ES|QL file of the
+//! engine (`tests/legacy`, the old `src/lib.rs` copied verbatim) against the
+//! pure-Rust one the crate runs (`src/lib.rs`, on `src/parser`), over every ES|QL file of the
 //! corpora, its prefixes, token mutations and random sentences, on every
 //! surface the engine has: diagnostics (for no target and for each stack),
 //! highlight tokens, output columns, indices and ECS findings, and hover,
@@ -20,8 +20,8 @@
 //! `OPENTIDE_DIFF_SEEDS=1,2,3 OPENTIDE_DIFF_SCALE=4 OPENTIDE_MUT_SEEDS=21,22,23
 //! OPENTIDE_MUT_PER_FILE=40`, and its numbers are in the PR body and NOTES.md.
 //!
-//! The new engine is private to the crate (production still runs
-//! tree-sitter), so this test includes its source.
+//! The lexer is private to the crate, so this test includes its source to
+//! mutate inputs token by token.
 
 #![expect(
     dead_code,
@@ -33,13 +33,9 @@
     reason = "the engine dispatchers match every node kind in one function, as src/lib.rs does"
 )]
 
-#[path = "../src/engine/mod.rs"]
-mod engine;
 mod legacy;
 #[path = "../src/lexer.rs"]
 mod lexer;
-#[path = "../src/parser/mod.rs"]
-mod parser;
 #[path = "support/rng.rs"]
 mod rng;
 #[path = "../src/syntax.rs"]
@@ -204,15 +200,15 @@ fn old() -> Side {
 fn new() -> Side {
     Side {
         analyze: |s, t| {
-            let r = engine::analyze_for(s, t);
+            let r = opentide_esql::analyze_for(s, t);
             (r.diagnostics, r.tokens)
         },
-        columns: engine::output_columns,
-        indices: engine::source_indices,
-        ecs: engine::ecs_diagnostics,
-        hover: engine::hover,
-        completions: engine::completions,
-        signature: engine::signature_help,
+        columns: opentide_esql::output_columns,
+        indices: opentide_esql::source_indices,
+        ecs: opentide_esql::ecs_diagnostics,
+        hover: opentide_esql::hover,
+        completions: opentide_esql::completions,
+        signature: opentide_esql::signature_help,
     }
 }
 

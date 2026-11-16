@@ -1,7 +1,7 @@
 //! The lexer over every ES|QL file of the corpora: it tiles them, and reads
 //! the tokens tree-sitter's context-aware lexer read.
 //!
-//! The lexer is private to the crate (production still runs tree-sitter), so
+//! The lexer is private to the crate, so
 //! this test includes its source.
 
 #![expect(dead_code, reason = "the included modules are used in part")]

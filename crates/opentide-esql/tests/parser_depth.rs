@@ -3,7 +3,7 @@
 //! (1,000 nesting levels, a 10,000-term chain) must parse without a
 //! diagnostic, and deeper nesting is one diagnostic, never an overflow.
 //!
-//! The parser is private to the crate (production still runs tree-sitter), so
+//! The parser is private to the crate, so
 //! this test includes its source.
 
 #![expect(dead_code, reason = "the included modules are used in part")]

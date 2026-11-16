@@ -9,10 +9,8 @@
 //! unnamed expression Kibana may re-print) makes it unknown again, and the
 //! function returns `None` rather than guess.
 
+use crate::tree::Node;
 use crate::{string_value, text};
-use opentide_core::LanguageId;
-use opentide_syntax::parse as ts_parse;
-use tree_sitter::Node;
 
 /// Column names a query outputs, in order, when they can be known without the
 /// index mappings; `None` otherwise.
@@ -37,7 +35,7 @@ use tree_sitter::Node;
 /// Unnamed `STATS` aggregates are named by their exact text, as Elasticsearch
 /// does (`count(*)`); aggregating queries reach Elasticsearch unchanged.
 pub fn output_columns(source: &str) -> Option<Vec<String>> {
-    let tree = ts_parse(LanguageId::Esql, source)?;
+    let tree = crate::tree::parse_tree(source)?;
     let root = tree.root_node();
     if root.has_error() {
         return None;
