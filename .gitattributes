@@ -71,10 +71,12 @@ crates/testdata/conformance/specifications-yara/** -text
 crates/testdata/conformance/external/exabeam/** -text
 crates/testdata/conformance/external/yara/** -text
 crates/testdata/conformance/external/yaral/** -text
-# The query corpora (crates/testdata/corpus/<language>/): the pure-Rust parsers'
-# tree snapshots record byte spans, and the highlight and baseline tests compare
-# offsets, so a Windows checkout holds the committed LF bytes of every language.
-crates/testdata/corpus/** -text
+# All of crates/testdata (the query corpora, the conformance fixtures and oracles, the
+# workspaces): the pure-Rust parsers' tree snapshots record byte spans, and their
+# differentials and the baselines compare offsets, so a Windows checkout holds the
+# committed LF bytes of every language. The lines above predate it and say why each was
+# needed first.
+crates/testdata/** -text
 crates/testdata/oracles/graylog/** -text
 # HarfangLab's YARA fixtures: their tests edit them by LF patterns and compare
 # findings by line, so a Windows checkout holds the committed LF bytes too.
