@@ -301,13 +301,11 @@ async fn a_cancelled_operation_stops() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn an_unreachable_tenant_is_named_by_its_address() {
-    // A port nothing listens on: bound, then released.
-    let port = std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port();
-    let url = format!("http://127.0.0.1:{port}");
+    // Port 1 of the loopback: nothing listens there, and no test can take it,
+    // since it is below every system's ephemeral range. A port bound and then
+    // released could be taken by a stand-in server of a test running at the
+    // same time, which answered: `tenant_refused` on a CI runner (#1433).
+    let url = "http://127.0.0.1:1".to_string();
     let connection = Connection::open(&harfanglab(&url, "Sigma"), &options()).unwrap();
     let error = connection
         .query(&QueryRequest::new("processes", "telemetry", window()))
