@@ -558,12 +558,12 @@ error[external_id_in_rule]: Vendor rule id key "rule_id" is not allowed on the s
    │
    ╰─ help: Run 'opentide deploy migrate-state' and commit the rule together with .opentide/states/deployment/
 
-error[spl_parse_error]: SPL syntax error: unexpected 'index'
-   ╭─▶ objects/rules/rogue-harvest-rule-0056.yaml:70:7
+error[spl_parse_error]: unbalanced parentheses: this '(' is never closed
+   ╭─▶ objects/rules/rogue-harvest-rule-0056.yaml:70:27
    │
 69 │     query: |
 70 │       index=main | eval x=(
-   │       ━━━━━
+   │                           ━
    │
    ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
 
