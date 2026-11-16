@@ -119,7 +119,6 @@ exit: 1
   "error": "Cannot reach sysdig tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
   "event": "sysdig_tenant_deployment_failed",
   "level": "critical",
-  "logger": "opentide.platforms.sysdig.deployer",
   "tenant": "***",
   "timestamp": "0000-00-00 00:00:00"
 }

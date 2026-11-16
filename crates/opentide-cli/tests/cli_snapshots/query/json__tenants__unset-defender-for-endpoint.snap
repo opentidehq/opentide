@@ -57,6 +57,5 @@ exit: 1
   "detail": "Unset configuration variables: $DEFENDER_CLIENT_SECRET",
   "event": "environment_variable_missing",
   "level": "critical",
-  "logger": "opentide.core.environment",
   "timestamp": "0000-00-00 00:00:00"
 }

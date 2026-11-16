@@ -225,7 +225,7 @@ fn error_entry(entry: &Object) -> String {
 pub fn api_error(action: &str, reply: &Reply) -> ApiError {
     let mut error = ApiError::new(action, reply.answer.status, "");
     let mut message = String::new();
-    if let Some(Json::Object(payload)) = reply.answer.json() {
+    if let Some(Json::Object(payload)) = reply.answer.quotable_json() {
         if let Some(Json::Array(entries)) = payload.get("errors") {
             error.errors = entries
                 .iter()

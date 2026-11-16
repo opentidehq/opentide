@@ -248,6 +248,10 @@ fn check_writes_nothing_apply_writes_and_syncs_and_then_check_passes() {
 #[test]
 fn the_options_are_checked() {
     let words = |args: &[&str]| args.iter().map(|a| (*a).to_owned()).collect::<Vec<_>>();
+    let parse = |args: &[String]| {
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        crate::parse_args::<Options>(&args)
+    };
     assert!(parse(&words(&["--check", "--apply"])).is_err());
     assert!(parse(&words(&["--stix-dir"])).is_err());
     assert!(parse(&words(&["--frobnicate"])).is_err());
@@ -300,6 +304,17 @@ fn timestamps_and_tags_are_the_old_ingests() {
     assert_eq!(format_utc(0, 0), "1970-01-01T00:00:00.000Z");
     assert_eq!(format_utc(1_793_092_207, 420), "2026-10-27T09:10:07.420Z");
     assert_eq!(format_utc(951_782_400, 5), "2000-02-29T00:00:00.005Z");
+    // The dates where a hand-written calendar goes wrong (checked against
+    // Python's `datetime`): 2100 is not a leap year, and a year rolls over.
+    assert_eq!(format_utc(1_709_210_096, 789), "2024-02-29T12:34:56.789Z");
+    assert_eq!(format_utc(4_107_542_399, 0), "2100-02-28T23:59:59.000Z");
+    assert_eq!(format_utc(4_107_542_400, 0), "2100-03-01T00:00:00.000Z");
+    assert_eq!(format_utc(1_798_761_599, 999), "2026-12-31T23:59:59.999Z");
+    assert_eq!(format_utc(1_798_761_600, 0), "2027-01-01T00:00:00.000Z");
+    // The end of jiff's range, and past it.
+    assert_eq!(format_utc(253_402_207_200, 0), "9999-12-30T22:00:00.000Z");
+    assert_eq!(format_utc(253_402_207_201, 0), "9999-12-30T22:00:00.999Z");
+    assert_eq!(format_utc(u64::MAX, 0), "9999-12-30T22:00:00.999Z");
     assert_eq!(release_version("ATT&CK-v18.1"), "18.1");
     assert_eq!(release_version("v20.0"), "20.0");
     assert_eq!(release_version("20.0"), "20.0");
