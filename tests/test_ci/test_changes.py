@@ -254,6 +254,18 @@ def test_pushes_and_the_nightly_check_everything(event: str, scope: str, mode: s
     assert set(result.crates) == set(MEMBERS)
 
 
+def test_a_wasm_script_alone_runs_the_wasm_job_and_its_clippy() -> None:
+    """`wasm` without `rust`: engine-lint runs its wasm32 clippy alone (ci.yml)."""
+    for path in ("scripts/engine/build-wasm.sh", "scripts/engine/wasm-smoke.mjs"):
+        outputs = plan(path)
+        assert outputs["wasm"] == "true", path
+        assert outputs["rust"] == "false", path
+
+
+def test_the_browser_module_runs_the_typescript_client_tests() -> None:
+    assert plan("crates/opentide-wasm/src/lib.rs")["ts_packages"] == "true"
+
+
 @pytest.mark.parametrize(
     ("path", "checks"),
     [
@@ -297,15 +309,3 @@ def test_a_stubs_input_runs_the_stubs_job_alone() -> None:
     assert outputs["stubs"] == "true"
     assert outputs["native"] == "false"
     assert outputs["python"] == "false"
-
-
-def test_a_wasm_script_alone_runs_the_wasm_job_and_its_clippy() -> None:
-    """`wasm` without `rust`: engine-lint runs its wasm32 clippy alone (ci.yml)."""
-    for path in ("scripts/engine/build-wasm.sh", "scripts/engine/wasm-smoke.mjs"):
-        outputs = plan(path)
-        assert outputs["wasm"] == "true", path
-        assert outputs["rust"] == "false", path
-
-
-def test_the_browser_module_runs_the_typescript_client_tests() -> None:
-    assert plan("crates/opentide-wasm/src/lib.rs")["ts_packages"] == "true"

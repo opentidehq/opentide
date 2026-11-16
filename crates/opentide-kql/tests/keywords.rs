@@ -3,7 +3,7 @@
 //! the lexer reads as a keyword or an operator, and nothing it reads as a name.
 
 use opentide_core::LanguageId;
-use opentide_kql::testing::token_kinds;
+use opentide_kql::inspect::token_kinds;
 
 /// Every token of the table lexes as one token that is not a name and not an
 /// error, after a pipe (where a hyphen keyword starts an operator).

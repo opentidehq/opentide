@@ -1,0 +1,48 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/time_unit__invalid.eql
+---
+SOURCE_FILE@0..81
+  LINE_COMMENT@0..25 "// prod:time_unit invalid"
+  WHITESPACE@25..26 "\n"
+  SEQUENCE@26..80
+    SEQUENCE_KW@26..34 "sequence"
+    WHITESPACE@34..35 " "
+    SEQUENCE_PARAMS@35..50
+      WITH_KW@35..39 "with"
+      WHITESPACE@39..40 " "
+      MAXSPAN_KW@40..47 "maxspan"
+      EQ@47..48 "="
+      TIME_UNIT@48..50
+        NUMBER@48..49
+          NUMBER_TOKEN@48..49 "5"
+        IDENTIFIER@49..50
+          WORD@49..50 "w"
+    WHITESPACE@50..51 " "
+    SEQUENCE_TERM@51..65
+      SUBQUERY@51..65
+        L_BRACK@51..52 "["
+        EVENT_CATEGORY@52..53
+          IDENTIFIER@52..53
+            WORD@52..53 "a"
+        WHITESPACE@53..54 " "
+        WHERE_KW@54..59 "where"
+        WHITESPACE@59..60 " "
+        BOOLEAN@60..64
+          TRUE_KW@60..64 "true"
+        R_BRACK@64..65 "]"
+    WHITESPACE@65..66 " "
+    SEQUENCE_TERM@66..80
+      SUBQUERY@66..80
+        L_BRACK@66..67 "["
+        EVENT_CATEGORY@67..68
+          IDENTIFIER@67..68
+            WORD@67..68 "b"
+        WHITESPACE@68..69 " "
+        WHERE_KW@69..74 "where"
+        WHITESPACE@74..75 " "
+        BOOLEAN@75..79
+          TRUE_KW@75..79 "true"
+        R_BRACK@79..80 "]"
+  WHITESPACE@80..81 "\n"

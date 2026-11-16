@@ -72,7 +72,6 @@ struct ModulesFile {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProfileData {
-    pub dialect: String,
     /// `allowed` or `refused`: whether YARA-X-only syntax is taken. Any
     /// other value fails the catalog's load (and its tests), never a silent
     /// `refused`.
@@ -199,7 +198,7 @@ mod tests {
     fn yara_x_syntax_takes_only_its_two_values() {
         let profile = |value: &str| {
             toml::from_str::<ProfileData>(&format!(
-                "dialect = \"libyara4\"\nyara_x_syntax = \"{value}\"\nascii_only = false\n\
+                "yara_x_syntax = \"{value}\"\nascii_only = false\n\
                  confirmed_modules = []\nrecommended_meta = []\n"
             ))
         };

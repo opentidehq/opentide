@@ -2846,11 +2846,9 @@ dependencies = [
  "opentide-highlight",
  "opentide-lucene",
  "opentide-parse",
- "opentide-syntax",
  "rowan",
  "serde",
  "toml",
- "tree-sitter",
 ]
 
 [[package]]
@@ -2878,7 +2876,6 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "regex-syntax",
  "rowan",
@@ -2894,12 +2891,10 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "rowan",
  "serde",
  "toml",
- "tree-sitter",
 ]
 
 [[package]]
@@ -2936,13 +2931,11 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex",
  "rowan",
  "serde",
  "strsim",
  "toml",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3115,10 +3108,8 @@ version = "0.12.0"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
- "opentide-syntax",
  "serde",
  "toml",
- "tree-sitter",
  "yara-x-fmt",
  "yara-x-parser",
 ]
@@ -3131,12 +3122,10 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex-syntax",
  "rowan",
  "serde",
  "toml",
- "tree-sitter",
 ]
 
 [[package]]

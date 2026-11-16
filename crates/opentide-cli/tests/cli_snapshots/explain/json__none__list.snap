@@ -1658,7 +1658,7 @@ exit: 0
     },
     {
       "code": "yara_entrypoint_deprecated",
-      "meaning": "entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point."
+      "meaning": "entrypoint is deprecated in libyara and refused by YARA-X (yara_undefined_identifier); use pe.entry_point or elf.entry_point."
     },
     {
       "code": "yara_hex_string",
@@ -1682,11 +1682,11 @@ exit: 0
     },
     {
       "code": "yara_number_out_of_range",
-      "meaning": "A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts."
+      "meaning": "A YARA integer, size suffix, jump bound or string index is outside the range YARA-X accepts."
     },
     {
       "code": "yara_parse_error",
-      "meaning": "The YARA signature does not parse as libyara 4.5 reads it."
+      "meaning": "The YARA signature does not parse as YARA-X 1.x reads it."
     },
     {
       "code": "yara_regexp",
@@ -1694,7 +1694,7 @@ exit: 0
     },
     {
       "code": "yara_rule_identifier_conflict",
-      "meaning": "A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible."
+      "meaning": "A YARA rule is named like a keyword, a built-in or an imported module."
     },
     {
       "code": "yara_signature_alias",
@@ -1706,7 +1706,7 @@ exit: 0
     },
     {
       "code": "yara_string_modifier",
-      "meaning": "libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range."
+      "meaning": "YARA-X refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range."
     },
     {
       "code": "yara_suspicious_expression",
@@ -1718,7 +1718,7 @@ exit: 0
     },
     {
       "code": "yara_undefined_identifier",
-      "meaning": "A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds."
+      "meaning": "A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as YARA-X refuses: a module field called as a function, a module function named without a call, or `entrypoint`."
     },
     {
       "code": "yara_undefined_string",
@@ -1726,7 +1726,7 @@ exit: 0
     },
     {
       "code": "yara_unknown_module",
-      "meaning": "A YARA import names a module libyara does not ship."
+      "meaning": "A YARA import names a module outside yara-1.0's 13."
     },
     {
       "code": "yara_unknown_module_member",
@@ -1734,11 +1734,11 @@ exit: 0
     },
     {
       "code": "yara_unreferenced_string",
-      "meaning": "A YARA string is never used in the condition, which libyara refuses unless the condition uses them."
+      "meaning": "A YARA string is never used in the condition, which YARA-X refuses unless the condition uses them."
     },
     {
       "code": "yara_x_incompatible",
-      "meaning": "libyara 4.5 compiles this YARA but YARA-X 1.x refuses it."
+      "meaning": "Retired in opentide 0.29.0; YARA-X is the YARA language: what it refuses is an error with its own code (`yara_regexp`, `yara_type`, `yara_parse_error`, ...), and syntax only YARA-X has is `yara_x_only_syntax` under a profile that refuses it."
     },
     {
       "code": "yara_x_only_syntax",

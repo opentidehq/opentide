@@ -2,10 +2,10 @@
 //! file unmodified, plus a twin with one injected fault.
 //!
 //! Sources and licences: `crates/testdata/conformance/external/SOURCES.md`. The
-//! files are written by `scripts/engine/sync_yara_corpus.py`. libyara 4.5 and
-//! YARA-X 1.x compile every public file without a warning, so the engine
-//! must report nothing under either dialect. libyara refuses every twin, so
-//! the engine must report an error.
+//! files are written by `scripts/engine/sync_yara_corpus.py`. YARA-X 1.x (and
+//! libyara 4.5) compile every public file without a warning, so the engine
+//! must report nothing, whether the context allows YARA-X-only syntax or
+//! refuses it. Every twin is refused, so the engine must report an error.
 
 #![expect(
     clippy::unwrap_used,
@@ -13,7 +13,7 @@
 )]
 
 use opentide_core::Severity;
-use opentide_yara::{Context, Dialect, YaraXSyntax, analyze_with};
+use opentide_yara::{Context, YaraXSyntax, analyze_with};
 use std::fs;
 use std::path::PathBuf;
 
@@ -50,16 +50,15 @@ fn every_public_rule_file_is_clean() {
         assert!(corpus.iter().any(|(s, ..)| s == source), "no {source} file");
     }
     for (source, name, text, _) in &corpus {
-        for dialect in [Dialect::Libyara4, Dialect::YaraX] {
+        for yara_x_syntax in [YaraXSyntax::Allowed, YaraXSyntax::Refused] {
             let ctx = Context {
-                dialect,
                 profile: None,
-                yara_x_syntax: YaraXSyntax::Allowed,
+                yara_x_syntax,
             };
             let found = analyze_with(text, &ctx).diagnostics;
             assert!(
                 found.is_empty(),
-                "{source}/{name} ({dialect:?}): {:?}",
+                "{source}/{name} ({yara_x_syntax:?}): {:?}",
                 found
                     .iter()
                     .map(|d| (d.code.as_str(), d.message.as_str()))

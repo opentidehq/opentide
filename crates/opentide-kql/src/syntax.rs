@@ -265,7 +265,7 @@ use SyntaxKind as K;
 
 /// The kinds in declaration order: `kind_from_raw` indexes it.
 #[rustfmt::skip]
-const ALL: &[SyntaxKind] = &[
+pub(crate) const ALL: &[SyntaxKind] = &[
     K::WHITESPACE, K::COMMENT, K::ERROR_TOKEN, K::EOF, K::IDENT, K::QUOTED_IDENT, K::STRING,
     K::NUMBER, K::TIMESPAN, K::TYPED_LITERAL, K::HINT_NAME, K::BOOLEAN, K::NULL_KW, K::CMP_OP,
     K::SET_OP, K::BETWEEN_OP, K::PIPE, K::L_PAREN, K::R_PAREN, K::L_BRACKET, K::R_BRACKET,
@@ -337,6 +337,10 @@ impl SyntaxKind {
     }
 
     /// A set of kinds, for the parser's expected and recovery sets.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the parser builds its sets with `TokenSet::new`")
+    )]
     pub const fn set(kinds: &[SyntaxKind]) -> TokenSet {
         let mut raw = [rowan::SyntaxKind(0); 32];
         let mut i = 0;

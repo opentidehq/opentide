@@ -3,7 +3,7 @@
 //! one) and a valid file's tree conforms to `yaral.ungram`.
 
 use opentide_core::LanguageId;
-use opentide_yaral::testing::{conformance, parse_error_count, parse_is_lossless};
+use opentide_yaral::parse_facts::{conformance, parse_error_count, parse_is_lossless};
 use std::path::{Path, PathBuf};
 
 /// Every `.yaral` file under `crates/testdata`.

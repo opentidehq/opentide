@@ -52,7 +52,15 @@ kinds! {
     ],
     nodes: [
         ERROR,
+        // One per node of `eql.ungram`, named as tree-sitter's (`PIPE_STAGE` is its `pipe`).
         SOURCE_FILE,
+        EVENT_QUERY, ANY, EVENT_CATEGORY, SEQUENCE, SEQUENCE_PARAMS, TIME_UNIT, SAMPLE, JOIN,
+        JOIN_KEYS, JOIN_TERM, SEQUENCE_TERM, TERM_OPTION, SUBQUERY, MISSING_EVENT_OPEN,
+        PIPE_STAGE,
+        OR_EXPRESSION, AND_EXPRESSION, NOT_EXPRESSION, RELATIONSHIP, COMPARISON,
+        UNARY_EXPRESSION, BINARY_EXPRESSION, PREDICATE_EXPRESSION, PARENTHESIZED_EXPRESSION,
+        FUNCTION_CALL, CASE_INSENSITIVE_NAME, FIELD, OPTIONAL_MARKER, INDEX, IDENTIFIER,
+        QUOTED_IDENTIFIER, NULL, BOOLEAN, NUMBER, STRING,
     ],
 }
 
@@ -62,9 +70,76 @@ impl SyntaxKind {
         rowan::SyntaxKind(self as u16)
     }
 
+    /// Whitespace or a comment.
+    pub const fn is_trivia(self) -> bool {
+        matches!(
+            self,
+            Self::WHITESPACE | Self::LINE_COMMENT | Self::BLOCK_COMMENT
+        )
+    }
+
     /// The kind of a raw rowan kind (`ERROR` for one that is none of ours).
     pub fn from_raw(raw: rowan::SyntaxKind) -> Self {
         ALL.get(usize::from(raw.0)).copied().unwrap_or(Self::ERROR)
+    }
+
+    /// How an error message spells a token the parser expected; `""` for a kind a message
+    /// never names.
+    pub fn describe(self) -> &'static str {
+        match self {
+            Self::WORD => "a name",
+            Self::TILDE_WORD => "a function",
+            Self::NUMBER_TOKEN => "a number",
+            Self::STRING_TOKEN => "a string",
+            Self::QUOTED_IDENT_TOKEN => "a quoted name",
+            Self::INDEX_TOKEN => "an index",
+            Self::AND_KW => "`and`",
+            Self::ANY_KW => "`any`",
+            Self::BY_KW => "`by`",
+            Self::FALSE_KW => "`false`",
+            Self::IN_KW => "`in`",
+            Self::JOIN_KW => "`join`",
+            Self::LIKE_KW => "`like`",
+            Self::MAXSPAN_KW => "`maxspan`",
+            Self::NOT_KW => "`not`",
+            Self::NULL_KW => "`null`",
+            Self::OF_KW => "`of`",
+            Self::OR_KW => "`or`",
+            Self::REGEX_KW => "`regex`",
+            Self::SAMPLE_KW => "`sample`",
+            Self::SEQUENCE_KW => "`sequence`",
+            Self::TRUE_KW => "`true`",
+            Self::UNTIL_KW => "`until`",
+            Self::WHERE_KW => "`where`",
+            Self::WITH_KW => "`with`",
+            Self::IN_TILDE => "`in~`",
+            Self::LIKE_TILDE => "`like~`",
+            Self::REGEX_TILDE => "`regex~`",
+            Self::PIPE => "`|`",
+            Self::EQ => "`=`",
+            Self::EQ_EQ => "`==`",
+            Self::NOT_EQ => "`!=`",
+            Self::LT => "`<`",
+            Self::LT_EQ => "`<=`",
+            Self::GT => "`>`",
+            Self::GT_EQ => "`>=`",
+            Self::PLUS => "`+`",
+            Self::MINUS => "`-`",
+            Self::STAR => "`*`",
+            Self::SLASH => "`/`",
+            Self::PERCENT => "`%`",
+            Self::L_PAREN => "`(`",
+            Self::R_PAREN => "`)`",
+            Self::L_BRACK => "`[`",
+            Self::R_BRACK => "`]`",
+            Self::BANG_L_BRACK => "`![`",
+            Self::COMMA => "`,`",
+            Self::DOT => "`.`",
+            Self::COLON => "`:`",
+            Self::QUESTION => "`?`",
+            Self::EOF => "end of input",
+            _ => "",
+        }
     }
 
     /// A set of token kinds.
@@ -93,7 +168,17 @@ impl rowan::Language for Lang {
     }
 }
 
-/// The kind of each token of the grammar.
+/// A node of an EQL tree.
+pub type SyntaxNode = rowan::SyntaxNode<Lang>;
+
+/// A token of an EQL tree.
+#[allow(
+    dead_code,
+    reason = "the typed AST (src/generated/ast.rs) uses it; the analysis does not yet"
+)]
+pub type SyntaxToken = rowan::SyntaxToken<Lang>;
+
+/// The kind of each token of `eql.ungram`.
 #[macro_export]
 macro_rules! T {
     [and] => { $crate::SyntaxKind::AND_KW };
