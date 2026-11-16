@@ -357,12 +357,8 @@ fn joined(node: &Node) -> String {
             .map(|item| node_text(item))
             .collect::<Vec<_>>()
             .join(", "),
-        // `", ".join` of a string joins its characters.
-        Value::Str(text) => text
-            .chars()
-            .map(String::from)
-            .collect::<Vec<_>>()
-            .join(", "),
+        // Only a list names techniques, as `attack::resolve` reads it: a
+        // string alone is no technique list.
         _ => String::new(),
     }
 }
@@ -409,7 +405,7 @@ fn row(
             let objective = required(root, "objective")?;
             if let Some(techniques) = objective
                 .get("mitre_attack")
-                .filter(|techniques| has_items(techniques) || holds_name(techniques))
+                .filter(|techniques| has_items(techniques))
             {
                 attack = joined(techniques);
             }
@@ -721,8 +717,23 @@ mod tests {
     }
 
     #[test]
-    fn a_string_joins_its_characters() {
-        assert_eq!(joined(&node("T1")), "T, 1");
+    fn a_string_alone_names_no_technique() {
+        assert_eq!(joined(&node("T1")), "");
         assert_eq!(joined(&node("[T1, T2]")), "T1, T2");
+    }
+
+    #[test]
+    fn a_scalar_mitre_attack_names_no_technique_in_the_navigator_either() {
+        let index = index_of(&[(
+            "objective",
+            "o1",
+            "name: Objective\nmetadata: {uuid: o1}\nobjective: {mitre_attack: T1059}\n",
+        )]);
+        assert_eq!(
+            crate::attack::techniques(&index, "o1").unwrap(),
+            Vec::<String>::new()
+        );
+        let layer = rendered(Target::Navigator, &index, &settings(&[]));
+        assert_eq!(layer["techniques"], serde_json::json!([]));
     }
 }

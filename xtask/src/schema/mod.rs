@@ -21,7 +21,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use opentide_schema::objects;
 use opentide_schema::objects::platform;
 use serde_json::{Value, json};
@@ -31,48 +31,42 @@ use normalise::{Side, differences, normalise};
 
 const PROBE: &str = include_str!("probe.py");
 
-/// The usage.
-pub const USAGE: &str = "\
-usage: cargo xtask schema <command> [options]
-
-commands:
-  diff --against python [--only schemas|objects] [--fixture NAME ...]
-       [--python PATH] [--report FILE]
-                 compare the object models (opentide-schema, UC-1.3) with the
-                 oracle's Pydantic models: each model's JSON Schema, structurally
-                 after normalisation (schemas), and the findings on every object
-                 file of the corpora: the fixtures of tests/golden/cases.toml and
-                 the heavy workspace (objects). --python is the oracle's
-                 interpreter, else it is installed from tests/golden/ORACLE
-  help           print this message
-
-exit status: 0 passed, 1 a check failed, 2 usage error or the check could not run
-";
-
 /// The fixtures `objects` reads, and the heavy workspace.
 pub const FIXTURES: [&str; 5] = crate::vocab::diff::FIXTURES;
 
 /// The seed of the heavy workspace CI checks (`corpus generate`).
 pub const HEAVY_SEED: u64 = 20_261_107;
 
-/// Runs `cargo xtask schema ARGS`.
-pub fn main(args: &[String]) -> ExitCode {
-    let Some((command, rest)) = args.split_first() else {
-        eprint!("{USAGE}");
-        return ExitCode::from(2);
-    };
-    let result = match command.as_str() {
-        "diff" => parse(rest).and_then(|options| run(&options)),
-        "help" | "--help" | "-h" => {
-            print!("{USAGE}");
-            return ExitCode::SUCCESS;
-        }
-        other => {
-            eprint!("xtask schema: unknown command `{other}`\n\n{USAGE}");
-            return ExitCode::from(2);
-        }
-    };
-    match result {
+/// `cargo xtask schema <command>`.
+#[derive(clap::Subcommand, Debug)]
+#[command(
+    after_help = "Exit status: 0 passed, 1 a check failed, 2 usage error or the check \
+    could not run."
+)]
+pub enum Cmd {
+    /// Compare the object models (opentide-schema, UC-1.3) with the oracle's
+    /// Pydantic models: each model's JSON Schema, structurally after
+    /// normalisation (schemas), and the findings on every object file of the
+    /// corpora: the fixtures of tests/golden/cases.toml and the heavy workspace
+    /// (objects)
+    Diff(DiffArgs),
+}
+
+/// The arguments of `schema diff`.
+#[derive(clap::Args, Debug)]
+pub struct DiffArgs {
+    /// What to compare with
+    #[arg(long, value_enum)]
+    pub against: crate::diff_args::Against,
+    /// What to compare, and where to write the report
+    #[command(flatten)]
+    pub options: Options,
+}
+
+/// Runs `cargo xtask schema <command>`.
+pub fn main(command: &Cmd) -> ExitCode {
+    let Cmd::Diff(DiffArgs { options, .. }) = command;
+    match run(options) {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::FAILURE,
         Err(error) => {
@@ -83,7 +77,7 @@ pub fn main(args: &[String]) -> ExitCode {
 }
 
 /// What `diff` compares.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Only {
     /// The JSON Schemas.
     Schemas,
@@ -92,50 +86,22 @@ pub enum Only {
 }
 
 /// The options of `diff`.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, clap::Args)]
 pub struct Options {
-    /// The oracle's Python; installed from `tests/golden/ORACLE` when `None`.
+    /// The oracle's interpreter; installed from tests/golden/ORACLE when not
+    /// given
+    #[arg(long, value_name = "PATH")]
     pub python: Option<PathBuf>,
-    /// One comparison, or both.
+    /// One comparison, or both
+    #[arg(long, value_enum)]
     pub only: Option<Only>,
-    /// The fixtures; [`FIXTURES`] and the heavy workspace when empty.
+    /// Only this fixture; repeat for several (default: the fixtures and the
+    /// heavy workspace)
+    #[arg(long = "fixture", value_name = "NAME")]
     pub fixtures: Vec<String>,
-    /// Where to write the JSON report.
+    /// Where to write the JSON report
+    #[arg(long, value_name = "FILE")]
     pub report: Option<PathBuf>,
-}
-
-/// Parses `diff`'s arguments.
-pub fn parse(args: &[String]) -> Result<Options> {
-    let mut options = Options::default();
-    let mut against = false;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let mut value = || {
-            args.next()
-                .cloned()
-                .with_context(|| format!("{arg} needs a value"))
-        };
-        match arg.as_str() {
-            "--against" => {
-                let engine = value()?;
-                ensure!(engine == "python", "--against: only `python` (the oracle)");
-                against = true;
-            }
-            "--python" => options.python = Some(PathBuf::from(value()?)),
-            "--report" => options.report = Some(PathBuf::from(value()?)),
-            "--fixture" => options.fixtures.push(value()?),
-            "--only" => {
-                options.only = Some(match value()?.as_str() {
-                    "schemas" => Only::Schemas,
-                    "objects" => Only::Objects,
-                    other => bail!("--only: `{other}` is neither schemas nor objects"),
-                });
-            }
-            other => bail!("unknown option `{other}`"),
-        }
-    }
-    ensure!(against, "--against python is required");
-    Ok(options)
 }
 
 /// Each object model's schemars output, under its Pydantic class name.
@@ -600,12 +566,23 @@ mod tests {
 
     #[test]
     fn options() {
-        let args = |list: &[&str]| list.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
-        assert!(parse(&args(&[])).is_err());
-        assert!(parse(&args(&["--against", "rust"])).is_err());
-        let options = parse(&args(&["--against", "python", "--only", "schemas"])).unwrap();
-        assert_eq!(options.only, Some(Only::Schemas));
-        assert!(parse(&args(&["--against", "python", "--only", "x"])).is_err());
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Cli {
+            #[command(subcommand)]
+            command: Cmd,
+        }
+        let parse = |list: &[&str]| {
+            Cli::try_parse_from(std::iter::once("schema").chain(list.iter().copied()))
+        };
+        assert!(parse(&[]).is_err());
+        assert!(parse(&["diff"]).is_err(), "no --against");
+        assert!(parse(&["diff", "--against", "rust"]).is_err());
+        let Cmd::Diff(args) = parse(&["diff", "--against", "python", "--only", "schemas"])
+            .unwrap()
+            .command;
+        assert_eq!(args.options.only, Some(Only::Schemas));
+        assert!(parse(&["diff", "--against", "python", "--only", "x"]).is_err());
     }
 
     #[test]

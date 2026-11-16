@@ -40,6 +40,16 @@ pub struct Args {
     pub force: bool,
 }
 
+impl From<&crate::tree::MigrateVocabScopeArgs> for Args {
+    fn from(args: &crate::tree::MigrateVocabScopeArgs) -> Self {
+        Self {
+            apply: args.apply,
+            fields: args.field.clone(),
+            force: args.force,
+        }
+    }
+}
+
 /// What one scoped field needed across the corpus.
 #[derive(Debug, Default)]
 struct FieldReport {
@@ -74,7 +84,7 @@ pub fn run(args: &Args, repo: Option<&str>, env: &Env, cwd: &Path) -> Report {
                 ),
             );
         }
-        // In the order given, once each, as the oracle's dict keeps them.
+        // In the order given, once each.
         fields = Vec::new();
         for name in &args.fields {
             if let Some(field) = SCOPED_FIELDS.iter().find(|field| field.name == name)

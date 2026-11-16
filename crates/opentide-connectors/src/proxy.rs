@@ -82,10 +82,11 @@ impl ProxySettings {
         })
     }
 
-    /// Whether `no_proxy` sends *url* direct, as reqwest decides it: the
-    /// list is read by the proxy matcher reqwest's transport uses (`*`, a
-    /// host or an IP address, a CIDR range such as `10.0.0.0/8`, a domain and
-    /// its subdomains; an entry with a port matches no host).
+    /// Whether `no_proxy` sends *url* direct: `*`, a host or an IP address,
+    /// a CIDR range such as `10.0.0.0/8`, a domain and its subdomains, as the
+    /// proxy matcher of reqwest's transport reads them; and an entry with a
+    /// port (`splunk.internal:8089`, `[fd00::7]:8089`) for that port only,
+    /// as curl and Go's `httpproxy` read it.
     pub fn bypassed(&self, url: &url::Url) -> bool {
         let Some(list) = self.no_proxy.as_deref() else {
             return false;
@@ -93,43 +94,41 @@ impl ProxySettings {
         let Some(destination) = destination(url) else {
             return false;
         };
+        let list = for_port(list, url.port_or_known_default());
         // The matcher answers for the list alone: its proxy is a stand-in
         // that always parses, so `None` means the list sends *url* direct.
         Matcher::builder()
             .all("http://proxy.invalid")
-            .no(list)
+            .no(&list)
             .build()
             .intercept(&destination)
             .is_none()
     }
 
-    /// The reqwest proxies, each with the `no_proxy` list.
+    /// The reqwest proxy: each request goes through its scheme's proxy
+    /// unless [`bypassed`](Self::bypassed) sends it direct, so the transport
+    /// and `doctor` read `no_proxy` the same way.
     #[cfg(not(target_os = "wasi"))]
     pub fn proxies(&self) -> Result<Vec<reqwest::Proxy>, String> {
-        let no_proxy = || {
-            self.no_proxy
-                .as_deref()
-                .and_then(reqwest::NoProxy::from_string)
-        };
-        let mut proxies = Vec::new();
-        for url in [&self.https, &self.http].into_iter().flatten() {
-            parse(url).map_err(|_| invalid(url))?;
+        let mut parsed = [None, None];
+        for (slot, url) in parsed.iter_mut().zip([&self.https, &self.http]) {
+            if let Some(url) = url {
+                *slot = Some(parse(url).map_err(|_| invalid(url))?);
+            }
         }
-        if let Some(url) = &self.https {
-            proxies.push(
-                reqwest::Proxy::https(url.as_str())
-                    .map_err(|_| invalid(url))?
-                    .no_proxy(no_proxy()),
-            );
+        if parsed.iter().all(Option::is_none) {
+            return Ok(Vec::new());
         }
-        if let Some(url) = &self.http {
-            proxies.push(
-                reqwest::Proxy::http(url.as_str())
-                    .map_err(|_| invalid(url))?
-                    .no_proxy(no_proxy()),
-            );
-        }
-        Ok(proxies)
+        let [https, http] = parsed;
+        let settings = self.clone();
+        Ok(vec![reqwest::Proxy::custom(move |url| {
+            let proxy = match url.scheme() {
+                "https" => https.as_ref(),
+                "http" => http.as_ref(),
+                _ => None,
+            }?;
+            (!settings.bypassed(url)).then(|| proxy.clone())
+        })])
     }
 }
 
@@ -148,6 +147,31 @@ fn destination(url: &url::Url) -> Option<http::Uri> {
         .ok()
 }
 
+/// *list* for a request to *port*: an entry with a port is its host when the
+/// port is the request's, and is left out when it is not; every other entry
+/// is kept as written.
+fn for_port(list: &str, port: Option<u16>) -> String {
+    list.split(',')
+        .map(str::trim)
+        .filter_map(|entry| match split_port(entry) {
+            Some((host, entry_port)) => (Some(entry_port) == port).then_some(host),
+            None => Some(entry),
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// *entry*'s host and port when it names one: `host:8089` or
+/// `[fd00::7]:8089`, never a bare IPv6 address (`fd00::7`) nor a CIDR range.
+fn split_port(entry: &str) -> Option<(&str, u16)> {
+    let (host, port) = entry.rsplit_once(':')?;
+    let port = port.parse().ok()?;
+    if let Some(inner) = host.strip_prefix('[') {
+        return Some((inner.strip_suffix(']')?, port));
+    }
+    (!host.is_empty() && !host.contains([':', '/'])).then_some((host, port))
+}
+
 #[cfg(not(target_os = "wasi"))]
 /// The message for a proxy URL that is not one, without its credentials.
 fn invalid(url: &str) -> String {
@@ -160,12 +184,13 @@ fn invalid(url: &str) -> String {
 /// A proxy URL as the transport reads it: one written without a scheme
 /// (`proxy.internal:8080`) is an HTTP proxy.
 ///
-/// A URL whose text after its host holds an `@` is refused: its user or
-/// password has an unencoded `/`, `?`, `#` or `\`, so a URL parser ends
+/// A URL whose text after its host holds an `@` is refused. Either its user
+/// or password has an unencoded `/`, `?`, `#` or `\`, so a URL parser ends
 /// the host there and reads part of the password as the host
-/// (`http://user:p@ss/w#rd@proxy:8080` would name the host `ss`). Reading it
-/// any other way would be a guess, and sending the request would hand that
-/// piece of the password to the wrong host.
+/// (`http://user:p@ss/w#rd@proxy:8080` would name the host `ss`), or it is a
+/// path, which a proxy URL has no use for. Telling the two apart would be a
+/// guess, and guessing wrong would hand a piece of the password to the
+/// wrong host.
 ///
 /// # Errors
 ///
@@ -179,8 +204,9 @@ pub fn parse(proxy: &str) -> Result<url::Url, String> {
     let end = rest.find(['/', '?', '#', '\\']).unwrap_or(rest.len());
     if rest[end..].contains('@') {
         return Err(
-            "its user or password holds an unencoded `/`, `?`, `#` or `\\`: \
-             percent-encode them (`%2F`, `%3F`, `%23`, `%5C`, and `%40` for `@`)"
+            "an `@` follows a `/`, `?`, `#` or `\\`: if it ends a user or password, \
+             percent-encode those characters in it (`%2F`, `%3F`, `%23`, `%5C`, and \
+             `%40` for `@`); no path is needed"
                 .to_owned(),
         );
     }
@@ -222,7 +248,7 @@ mod tests {
             route(&proxies, "https://splunk.example.com:8089/services"),
             Some("http://proxy.corp:3128".to_owned())
         );
-        // A proxy written without a scheme is an HTTP proxy, as urllib reads it.
+        // A proxy written without a scheme is an HTTP proxy.
         assert_eq!(
             route(&proxies, "http://splunk.example.com/x"),
             Some("http://gateway.corp:8080".to_owned())
@@ -277,7 +303,7 @@ mod tests {
             {
                 let refused = proxies.proxies().unwrap_err();
                 assert!(
-                    refused.starts_with("the proxy is not a proxy URL: its user or password"),
+                    refused.starts_with("the proxy is not a proxy URL: an `@` follows"),
                     "{refused}"
                 );
             }
@@ -295,14 +321,49 @@ mod tests {
         assert!(direct("https://splunk.example.com:8089/x"));
         assert!(direct("https://example.com/x"));
         assert!(direct("https://10.0.0.7:8089/x"));
-        // An entry with a port matches no host (the transport reads the list
-        // so); a lookalike domain: through the proxy.
-        assert!(!direct("https://other.org:8089/x"));
+        // An entry with a port covers its host on that port only, as curl
+        // and Go's `httpproxy` read it; a lookalike domain: through the proxy.
+        assert!(direct("https://other.org:8089/x"));
         assert!(!direct("https://other.org/x"));
+        assert!(!direct("https://other.org:8090/x"));
         assert!(!direct("https://notexample.com/x"));
         assert!(!direct("https://example.com.evil.net/x"));
         let everything = settings(Some("http://proxy.corp:3128"), None, Some("*"));
         assert_eq!(route(&everything, "https://any.where/x"), None);
+    }
+
+    #[test]
+    fn a_no_proxy_port_is_the_requests_own_or_its_schemes_default() {
+        let proxies = settings(
+            Some("http://proxy.corp:3128"),
+            Some("http://proxy.corp:3128"),
+            Some("secure.corp:443, plain.corp:80, [fd00::7]:8089, fd00::9, .corp.example:8089"),
+        );
+        let direct = |url: &str| route(&proxies, url).is_none();
+        assert!(direct("https://secure.corp/x"));
+        assert!(!direct("http://secure.corp/x"));
+        assert!(direct("http://plain.corp/x"));
+        assert!(!direct("https://plain.corp/x"));
+        assert!(direct("https://[fd00::7]:8089/x"));
+        assert!(!direct("https://[fd00::7]/x"));
+        // A bare IPv6 address is no host and port.
+        assert!(direct("https://[fd00::9]:8089/x"));
+        assert!(direct("https://splunk.corp.example:8089/x"));
+        assert!(!direct("https://splunk.corp.example/x"));
+        assert_eq!(for_port("a:1, b, c:2", Some(1)), "a,b");
+        assert_eq!(split_port("10.0.0.0/8"), None);
+        assert_eq!(split_port("fd00::7"), None);
+        assert_eq!(split_port("host:http"), None);
+    }
+
+    #[test]
+    fn a_proxy_url_with_an_at_after_its_host_is_refused_naming_both_readings() {
+        let reason = parse("http://proxy.corp:3128/p@th").unwrap_err();
+        assert!(reason.contains("no path is needed"), "{reason}");
+        assert!(
+            !reason.contains("p@th") && !reason.contains("proxy.corp"),
+            "{reason}"
+        );
     }
 
     #[test]

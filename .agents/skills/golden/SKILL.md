@@ -27,7 +27,7 @@ behaviour change against the oracle (`tests/golden/README.md`).
 
 **`tests/golden/README.md` is the reference** for the commands, the case and recording layout,
 the fixtures and the normalisation rules. Where this skill and the README disagree, the README is
-right: fix this skill. Never use a flag that neither names (`cargo xtask golden help` prints the
+right: fix this skill. Never use a flag that neither names (`cargo xtask golden --help` prints the
 usage).
 
 ## Snapshots first (#1139)
@@ -64,12 +64,10 @@ hide a difference. A new behaviour gets a `[[case]]` in `cases.toml`, and so a s
 4. **Never loosen the comparison** to get green: no widened normalisation rule, no broader ledger
    entry, no skipped case, no deleted recording. Normalisation hides only what differs between two
    runs of the same case; each rule is code in `crates/opentide-compare/src/normalise.rs` (which
-   `xtask::golden::normalise` re-exports) with a unit test. The crates' tests that replay the
-   oracle's recordings byte for byte (`command_goldens.rs`, `framework_goldens.rs`,
-   `generate_goldens.rs` and the others #1121 marked) carry
-   `#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]`
-   by the maintainer's decision; run them with `cargo nextest run --run-ignored only`. Any other
-   new `#[ignore]` is a loosened comparison.
+   `xtask::golden::normalise` re-exports) with a unit test. No Rust test replays `tests/golden/cases` any more (#1139): the commands' behaviour is
+   held by the reviewed snapshots of `crates/opentide-cli/tests/cli_snapshots.rs`
+   ([golden README](../../../tests/golden/README.md), "Snapshots"), and a new `#[ignore]` is a
+   loosened comparison.
 5. **The plan's invariants (§3) do not move.** If a port seems to need a change to the CLI
    contract, the command tree, a diagnostic code, a cross-repository contract, MCP, a workspace
    format, an SDK import path, the supported platforms or the security posture, stop and raise it

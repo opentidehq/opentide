@@ -232,7 +232,7 @@ ignore = [
 allowed-confusables = ["–", "×"]
 
 [tool.ruff.lint.isort]
-# The oracle's scripts (tests/cassettes/, scripts/golden/) import modules this
+# The oracle's scripts (tests/cassettes/) import modules this
 # checkout no longer has: opentide is first-party wherever it comes from.
 known-first-party = ["opentide"]
 

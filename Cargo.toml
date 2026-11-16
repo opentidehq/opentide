@@ -148,6 +148,9 @@ yara-x-fmt = "=1.23.0"
 # rowan stays on 0.17: 0.18 is an alpha.
 logos = "0.16.1"
 rowan = "0.17.0"
+# The grammar DSL the typed-AST codegen reads (`cargo xtask codegen`, #1221 item i):
+# rust-analyzer's, zero dependencies, a dependency of xtask only.
+ungrammar = "=1.16.1"
 # The Tide model as code (plan D-2, docs/internal/adr/0001-tide-model-as-rust-code.md):
 # JSON Schema 2020-12 from the structs, and their constraints. garde has no
 # default features; a model that needs one (`regex` for `pattern`) adds it then.
@@ -168,9 +171,11 @@ quote = "1"
 syn = { version = "3", features = ["full", "extra-traits"] }
 # Test tools, for dev-dependencies only. insta: snapshot assertions, reviewed
 # with `cargo insta review` and committed beside the test (tests/snapshots/);
-# without its `colors` feature, which only colours a failing diff. trycmd:
+# without its `colors` feature, which only colours a failing diff; with `glob`,
+# for one snapshot per corpus file (`insta::glob!`, the pure-Rust parsers'
+# tree snapshots, epic #1219). trycmd:
 # command-line cases (tests/cmd/*.trycmd). Conventions: crates/AGENTS.md.
-insta = { version = "1.49", default-features = false }
+insta = { version = "1.49", default-features = false, features = ["glob"] }
 trycmd = "1.2"
 # Compile-fail cases (tests/ui/*.rs with the expected .stderr beside them).
 trybuild = "1.0"
@@ -226,8 +231,9 @@ unsafe_code = "forbid"
 # until they are documented (crates/AGENTS.md, "Lints").
 missing_docs = "warn"
 # cargo-fuzz builds with `--cfg fuzzing` (opentide-lsp leaves its debug test
-# hooks out of fuzz builds).
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
+# hooks out of fuzz builds); cargo-llvm-cov builds with `--cfg coverage`
+# (the deep_queries stack model grows its stack there).
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)", "cfg(coverage)"] }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

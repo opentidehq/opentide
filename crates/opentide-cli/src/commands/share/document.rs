@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 
 use opentide_compile::json::{Json, Object};
 use opentide_workspace::Workspace;
-use sha2::{Digest, Sha256};
 
 use super::OBJECT_FAMILIES;
 
@@ -36,12 +35,7 @@ impl TideDocument {
 
     /// The SHA-256 of the text, lowercase hex (`content_hash`).
     pub fn content_hash(&self) -> String {
-        use std::fmt::Write as _;
-        let digest = Sha256::digest(self.text.as_bytes());
-        digest.iter().fold(String::new(), |mut out, byte| {
-            let _ = write!(out, "{byte:02x}");
-            out
-        })
+        crate::digest::sha256_hex(self.text.as_bytes())
     }
 
     /// `metadata`, when it is a mapping.

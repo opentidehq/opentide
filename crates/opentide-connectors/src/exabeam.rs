@@ -225,7 +225,7 @@ fn error_entry(entry: &Object) -> String {
 pub fn api_error(action: &str, reply: &Reply) -> ApiError {
     let mut error = ApiError::new(action, reply.answer.status, "");
     let mut message = String::new();
-    if let Some(Json::Object(payload)) = reply.answer.json() {
+    if let Some(Json::Object(payload)) = reply.answer.quotable_json() {
         if let Some(Json::Array(entries)) = payload.get("errors") {
             error.errors = entries
                 .iter()
@@ -476,6 +476,7 @@ impl<'a> Session<'a> {
             tenant: self.tenant().to_owned(),
             message: error.describe(),
         })?;
+        let credentials = crate::answer::Credentials::of(&request);
         let started = std::time::Instant::now();
         let response = self.cx.http.send(request, self.cx.cancel).await?;
         let elapsed = started.elapsed();
@@ -492,12 +493,7 @@ impl<'a> Session<'a> {
         let status = response.status().as_u16();
         let body = self.cx.http.bytes(response, self.cx.cancel).await?;
         Ok(Reply {
-            answer: Answer {
-                status,
-                content_type,
-                body,
-                elapsed,
-            },
+            answer: Answer::new(status, content_type, body, elapsed, &credentials),
             retry_after,
             challenge,
         })

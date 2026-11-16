@@ -106,7 +106,6 @@ exit: 0
   "event": "external_id_unused",
   "file": "Objects/Detection Rules/rule-0001-sentinel-kql.yaml",
   "level": "warning",
-  "logger": "opentide.cli.services.migrate_state",
   "platform": "sentinel",
   "tenant": "soc",
   "timestamp": "0000-00-00 00:00:00",

@@ -1,0 +1,30 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/kuery/field__invalid.kuery
+---
+SourceFile@0..43
+  FieldValueExpression@0..28
+    Field@0..6
+      UnquotedLiteral@0..6
+        Word@0..1 "#"
+        Whitespace@1..2 " "
+        Word@2..6 "prod"
+    Colon@6..7 ":"
+    UnquotedLiteral@7..28
+      Word@7..12 "field"
+      Whitespace@12..13 " "
+      Word@13..20 "invalid"
+      Whitespace@20..21 "\n"
+      Word@21..28 "process"
+  Error@28..29
+    ErrorToken@28..29 "\\"
+  FieldValueExpression@29..42
+    Field@29..34
+      UnquotedLiteral@29..34
+        Word@29..34 "-name"
+    Colon@34..35 ":"
+    UnquotedLiteral@35..42
+      Word@35..42 "cmd.exe"
+  Whitespace@42..43 "\n"
+28..28: unexpected (expected `or`, `and`, end of input)

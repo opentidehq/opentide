@@ -3,131 +3,52 @@ no script can take one for a check that passed.
 
 ```console
 $ xtask help
-usage: cargo xtask <command> [options]
+The repository's Rust tooling.
 
-commands:
-  check-layers [--metadata FILE] [--layers FILE]
-                 check that every dependency between workspace crates points
-                 down the layer table (xtask/layers.toml, plan section 4).
-                 --metadata reads `cargo metadata --format-version 1` output
-                 from FILE instead of running cargo; --layers reads another table
-  coverage gate --report FILE [--policy FILE] [--metadata FILE]
-                 check each workspace crate's line coverage against its gate
-                 (xtask/coverage.toml, plan section 5.4). FILE is the export of
-                 `cargo llvm-cov report --json --summary-only`; prints a
-                 Markdown table for the job summary
-  mutants crates [--policy FILE] [--metadata FILE]
-                 print the crates the weekly mutation run mutates, one per line
-                 (xtask/mutants.toml)
-  mutants report --outcomes FILE [--outcomes FILE ...] [--policy FILE]
-                 [--baseline FILE] [--issues DIR] [--run-url URL]
-                 [--write-baseline FILE --commit SHA]
-                 merge cargo-mutants' outcomes.json of every shard and print the
-                 scores against the baseline; --issues writes DIR/<crate>.md for
-                 each crate whose surviving mutants exceed its threshold;
-                 --write-baseline records this run as the baseline
-  compare --oracle DIR --candidate DIR --command PATH [--case ID]
-          [--ledger FILE] [--report FILE]
-                 compare a candidate's run with the oracle's, applying the
-                 approved-diffs ledger (tests/golden/APPROVED_DIFFS.toml); a
-                 run is a folder with exit_code, stdout, stderr, files/ and
-                 deleted. --report writes the JSON report to FILE
-  compare --check-ledger [--ledger FILE] [--changelog FILE]
-                 check the ledger's schema, and that CHANGELOG.md holds each
-                 entry's changelog reference
-  conformance [--runners rust,python,node] [--corpus NAME,...] [--out DIR]
-              [--diverge RUNNER] [--keep]
-                 run every operation of tests/conformance/manifest.json on every
-                 corpus through the Rust, Python and Node SDKs and require
-                 byte-identical documents; a difference is named by its JSON
-                 pointer. --diverge is the suite's own test (UC-5.4, #839)
-  corpus <command>
-                 generate the heavy workspace, run the fault catalogue
-                 against the oracle, report coverage (UC-0.6, #804);
-                 `cargo xtask corpus help` lists its commands
-  config diff --against python [--oracle BIN]
-              [--corpus all|fixtures|generated]
-                 resolve every fixture and generated workspace's configuration
-                 with opentide-schema and compare it, as JSON, and its
-                 configuration findings with the oracle's (UC-1.5, #811)
-  registry diff --against python [--oracle BIN]
-                [--corpus all|fixtures|generated|faults]
-                 load every corpus with opentide-workspace and compare its
-                 index (objects, UUIDs, types, paths, load errors, references,
-                 signals), as JSON, with the Python registry's (UC-2.1, #816)
-  lsp parity --corpus faults [--only ID,...] [--keep DIR]
-                 for each fault kind `opentide validate` reports, the
-                 language server's published diagnostics against validate's
-                 findings: codes, severities, ranges in UTF-16 (UC-2.6, #821)
-  validate diff [--filter GLOB] [--keep DIR] [--show-approved]
-                 run opentide-workspace's validate on every recorded
-                 `validate --json` case that checks or fixes, and compare its
-                 report, checks and summary with the recording (UC-2.2, #817)
-                 and, for --fix and --fix --dry-run, what it fixed, the diff
-                 and the files written (UC-2.3, #818)
-  lint diff [--filter GLOB] [--keep DIR] [--show-approved]
-                 run opentide-workspace's lint on every recorded `lint --json`
-                 case and compare its findings, verdict, next steps and the
-                 files --fix renamed with the recording (UC-2.3, #818)
-  codegen [--check]
-                 write the artifacts generated from the Rust model (the
-                 platform templates); --check compares them, and what
-                 `opentide generate` writes with each golden recording of an
-                 `opentide generate` that ran its schemas, templates and
-                 snippets phases and exited 0 (UC-1.8, #814)
-  mcp record --python PATH [--only NAME]
-  mcp replay --engine rust FILE...
-                 record the MCP sessions of tests/golden/mcp/sessions.toml from
-                 the Python server of an opentide release that has one, and
-                 replay them against the Rust server (UC-3.7, #829)
-  cassettes <check|record|list>
-                 the recorded-HTTP cassettes of tests/cassettes (UC-4.1,
-                 #831): record a scenario from the oracle through the
-                 recording proxy, or check every cassette's digest and
-                 redaction
-  golden <record|check|diff|lock|coverage> [options]
-                 record what the frozen Python CLI does, and check an engine
-                 against the recordings (tests/golden/README.md);
-                 `cargo xtask golden help` lists the options
-  bench          run the benchmarks against their budgets (UC-0.8, #806)
-  payloads diff --against python [--corpus NAME|all]
-                 the deploy compile's request bodies against the oracle's, on
-                 every corpus (UC-3.1, #823); `cargo xtask payloads help`
-  vocab <sync|sentinel-attack|diff|ingest|malapi> [options]
-                 the vocabularies: sync and check them against specifications,
-                 generate Sentinel's ATT&CK list, compare with the oracle
-                 (UC-1.6, #812), ingest ATT&CK, MISP and MalAPI into
-                 specifications; `cargo xtask vocab help` lists the options
-  schema diff --against python [options]
-                 the object models against the oracle: their JSON Schemas,
-                 and their verdict on every object file of every corpus
-                 (UC-1.3, #809); `cargo xtask schema help` lists the options
-  spec-fields [--specifications DIR] [--list]
-                 check every model field's description against its row in the
-                 field tables of the specifications checkout (DIR, else
-                 $OPENTIDE_SPECIFICATIONS_ROOT, else ../specifications)
-  stubs [--check] [--library FILE]
-                 generate src/opentide/_native/models.pyi and sdk.pyi, the
-                 stubs of the Tide models' Python classes and of the SDK's
-                 core, from the extension's introspection data (UC-1.9,
-                 #815; UC-5.2b, #837); --check fails on drift
-  help           print this message
+Exit status: 0 passed, 1 a check failed or the command is not implemented yet, 2 a usage error or the check could not run.
 
-exit status: 0 passed, 1 check failed or not implemented yet,
-2 usage error or the check could not run
+Usage: cargo xtask <COMMAND>
+
+Commands:
+  check-layers  Check that every dependency between workspace crates points down the layer table (xtask/layers.toml, plan section 4)
+  coverage      Check each workspace crate's line coverage against its gate (xtask/coverage.toml, plan section 5.4)
+  mutants       The crates the weekly mutation run mutates, and its report (xtask/mutants.toml)
+  compare       Compare a candidate's run with the oracle's, applying the approved-diffs ledger (tests/golden/APPROVED_DIFFS.toml), or check the ledger itself
+  conformance   Run every operation of tests/conformance/manifest.json on every corpus through the Rust, Python and Node SDKs and require byte-identical documents (UC-5.4, #839)
+  corpus        Generate the heavy workspace, run the fault catalogue against the oracle, report coverage (UC-0.6, #804); `corpus help` lists its commands
+  config        Resolve every fixture and generated workspace's configuration with opentide-schema and compare it with the oracle's (UC-1.5, #811)
+  registry      Load every corpus with opentide-workspace and compare its index with the Python registry's (UC-2.1, #816)
+  lsp           For each fault kind `opentide validate` reports, the language server's published diagnostics against validate's findings (UC-2.6, #821)
+  validate      Run opentide-workspace's validate on every recorded `validate --json` case and compare it with the recording (UC-2.2, #817; UC-2.3, #818)
+  lint          Run opentide-workspace's lint on every recorded `lint --json` case and compare it with the recording (UC-2.3, #818)
+  codegen       Write the artifacts generated from the Rust model (the platform templates); `--check` compares them (UC-1.8, #814)
+  mcp           Record the MCP sessions from the Python server and replay them against the Rust server (UC-3.7, #829)
+  cassettes     The recorded-HTTP cassettes of tests/cassettes (UC-4.1, #831)
+  golden        Record what the frozen Python CLI does, and check an engine against the recordings (tests/golden/README.md); `golden --help` lists the commands
+  bench         Run the benchmarks against their budgets (UC-0.8, #806)
+  payloads      The deploy compile's request bodies against the oracle's (UC-3.1, #823)
+  vocab         The vocabularies: sync, generate, compare and ingest (UC-1.6, #812); `vocab --help` lists the commands
+  schema        The object models against the oracle: their JSON Schemas, and their verdict on every object file of every corpus (UC-1.3, #809)
+  spec-fields   Check every model field's description against its row in the field tables of the specifications checkout
+  stubs         Generate src/opentide/_native/models.pyi and sdk.pyi from the extension's introspection data (UC-1.9, #815; UC-5.2b, #837)
+  help          Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help
+          Print help (see a summary with '-h')
 
 $ xtask codegen --frobnicate
 ? 2
-xtask codegen: unknown option `--frobnicate`
+error: unexpected argument '--frobnicate' found
 
-usage: cargo xtask codegen [--check [--oracle]]
+Usage: cargo xtask codegen [OPTIONS]
 ...
 
 $ xtask frobnicate
 ? 2
-xtask: unknown command `frobnicate`
+error: unrecognized subcommand 'frobnicate'
 
-usage: cargo xtask <command> [options]
+Usage: cargo xtask <COMMAND>
 ...
 
 ```

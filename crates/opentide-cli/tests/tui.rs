@@ -992,7 +992,7 @@ fn an_invalid_sharing_toml_is_a_finding_and_the_catalogue_loads() {
         ),
         (
             &b"\xff\xfe[x]\n"[..],
-            "sharing.toml: the file could not be read (UnicodeDecodeError)",
+            "sharing.toml: the file is not valid UTF-8",
         ),
     ] {
         let (_base, repo) = configured();

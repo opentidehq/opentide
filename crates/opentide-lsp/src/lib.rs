@@ -11,10 +11,6 @@
 //! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead (its
 //! `lsp` feature).
 
-#![expect(
-    clippy::too_many_lines,
-    reason = "engine dispatchers match every node kind in one function"
-)]
 mod checks;
 mod handlers;
 mod index;

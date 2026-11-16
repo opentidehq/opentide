@@ -2,7 +2,7 @@
 //!
 //! Looked up by name, so a renderer never hard-codes a character. The Rust
 //! CLI writes UTF-8 on every stream (the Windows console through its wide
-//! API), so there is no ASCII fallback as the oracle had for a cp1252 pipe.
+//! API), so there is no ASCII fallback.
 
 /// `✓`: an outcome or step that succeeded.
 pub const OK: &str = "✓";

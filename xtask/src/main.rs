@@ -5,286 +5,300 @@
 //! not run (no `cargo metadata`, an unreadable file).
 
 use anyhow::{Context, Result, bail};
+use clap::{Args, Parser, Subcommand};
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use xtask::compare;
 use xtask::layers::{self, LayerTable, Metadata};
 use xtask::{coverage, mutants};
 
-const USAGE: &str = "\
-usage: cargo xtask <command> [options]
+/// The repository's Rust tooling.
+///
+/// Exit status: 0 passed, 1 a check failed or the command is not implemented
+/// yet, 2 a usage error or the check could not run.
+#[derive(Parser)]
+#[command(
+    name = "xtask",
+    bin_name = "cargo xtask",
+    arg_required_else_help = true
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Cmd,
+}
 
-commands:
-  check-layers [--metadata FILE] [--layers FILE]
-                 check that every dependency between workspace crates points
-                 down the layer table (xtask/layers.toml, plan section 4).
-                 --metadata reads `cargo metadata --format-version 1` output
-                 from FILE instead of running cargo; --layers reads another table
-  coverage gate --report FILE [--policy FILE] [--metadata FILE]
-                 check each workspace crate's line coverage against its gate
-                 (xtask/coverage.toml, plan section 5.4). FILE is the export of
-                 `cargo llvm-cov report --json --summary-only`; prints a
-                 Markdown table for the job summary
-  mutants crates [--policy FILE] [--metadata FILE]
-                 print the crates the weekly mutation run mutates, one per line
-                 (xtask/mutants.toml)
-  mutants report --outcomes FILE [--outcomes FILE ...] [--policy FILE]
-                 [--baseline FILE] [--issues DIR] [--run-url URL]
-                 [--write-baseline FILE --commit SHA]
-                 merge cargo-mutants' outcomes.json of every shard and print the
-                 scores against the baseline; --issues writes DIR/<crate>.md for
-                 each crate whose surviving mutants exceed its threshold;
-                 --write-baseline records this run as the baseline
-  compare --oracle DIR --candidate DIR --command PATH [--case ID]
-          [--ledger FILE] [--report FILE]
-                 compare a candidate's run with the oracle's, applying the
-                 approved-diffs ledger (tests/golden/APPROVED_DIFFS.toml); a
-                 run is a folder with exit_code, stdout, stderr, files/ and
-                 deleted. --report writes the JSON report to FILE
-  compare --check-ledger [--ledger FILE] [--changelog FILE]
-                 check the ledger's schema, and that CHANGELOG.md holds each
-                 entry's changelog reference
-  conformance [--runners rust,python,node] [--corpus NAME,...] [--out DIR]
-              [--diverge RUNNER] [--keep]
-                 run every operation of tests/conformance/manifest.json on every
-                 corpus through the Rust, Python and Node SDKs and require
-                 byte-identical documents; a difference is named by its JSON
-                 pointer. --diverge is the suite's own test (UC-5.4, #839)
-  corpus <command>
-                 generate the heavy workspace, run the fault catalogue
-                 against the oracle, report coverage (UC-0.6, #804);
-                 `cargo xtask corpus help` lists its commands
-  config diff --against python [--oracle BIN]
-              [--corpus all|fixtures|generated]
-                 resolve every fixture and generated workspace's configuration
-                 with opentide-schema and compare it, as JSON, and its
-                 configuration findings with the oracle's (UC-1.5, #811)
-  registry diff --against python [--oracle BIN]
-                [--corpus all|fixtures|generated|faults]
-                 load every corpus with opentide-workspace and compare its
-                 index (objects, UUIDs, types, paths, load errors, references,
-                 signals), as JSON, with the Python registry's (UC-2.1, #816)
-  lsp parity --corpus faults [--only ID,...] [--keep DIR]
-                 for each fault kind `opentide validate` reports, the
-                 language server's published diagnostics against validate's
-                 findings: codes, severities, ranges in UTF-16 (UC-2.6, #821)
-  validate diff [--filter GLOB] [--keep DIR] [--show-approved]
-                 run opentide-workspace's validate on every recorded
-                 `validate --json` case that checks or fixes, and compare its
-                 report, checks and summary with the recording (UC-2.2, #817)
-                 and, for --fix and --fix --dry-run, what it fixed, the diff
-                 and the files written (UC-2.3, #818)
-  lint diff [--filter GLOB] [--keep DIR] [--show-approved]
-                 run opentide-workspace's lint on every recorded `lint --json`
-                 case and compare its findings, verdict, next steps and the
-                 files --fix renamed with the recording (UC-2.3, #818)
-  codegen [--check]
-                 write the artifacts generated from the Rust model (the
-                 platform templates); --check compares them, and what
-                 `opentide generate` writes with each golden recording of an
-                 `opentide generate` that ran its schemas, templates and
-                 snippets phases and exited 0 (UC-1.8, #814)
-  mcp record --python PATH [--only NAME]
-  mcp replay --engine rust FILE...
-                 record the MCP sessions of tests/golden/mcp/sessions.toml from
-                 the Python server of an opentide release that has one, and
-                 replay them against the Rust server (UC-3.7, #829)
-  cassettes <check|record|list>
-                 the recorded-HTTP cassettes of tests/cassettes (UC-4.1,
-                 #831): record a scenario from the oracle through the
-                 recording proxy, or check every cassette's digest and
-                 redaction
-  golden <record|check|diff|lock|coverage> [options]
-                 record what the frozen Python CLI does, and check an engine
-                 against the recordings (tests/golden/README.md);
-                 `cargo xtask golden help` lists the options
-  bench          run the benchmarks against their budgets (UC-0.8, #806)
-  payloads diff --against python [--corpus NAME|all]
-                 the deploy compile's request bodies against the oracle's, on
-                 every corpus (UC-3.1, #823); `cargo xtask payloads help`
-  vocab <sync|sentinel-attack|diff|ingest|malapi> [options]
-                 the vocabularies: sync and check them against specifications,
-                 generate Sentinel's ATT&CK list, compare with the oracle
-                 (UC-1.6, #812), ingest ATT&CK, MISP and MalAPI into
-                 specifications; `cargo xtask vocab help` lists the options
-  schema diff --against python [options]
-                 the object models against the oracle: their JSON Schemas,
-                 and their verdict on every object file of every corpus
-                 (UC-1.3, #809); `cargo xtask schema help` lists the options
-  spec-fields [--specifications DIR] [--list]
-                 check every model field's description against its row in the
-                 field tables of the specifications checkout (DIR, else
-                 $OPENTIDE_SPECIFICATIONS_ROOT, else ../specifications)
-  stubs [--check] [--library FILE]
-                 generate src/opentide/_native/models.pyi and sdk.pyi, the
-                 stubs of the Tide models' Python classes and of the SDK's
-                 core, from the extension's introspection data (UC-1.9,
-                 #815; UC-5.2b, #837); --check fails on drift
-  help           print this message
+#[derive(Subcommand)]
+enum Cmd {
+    /// Check that every dependency between workspace crates points down the
+    /// layer table (xtask/layers.toml, plan section 4)
+    CheckLayers(CheckLayersArgs),
+    /// Check each workspace crate's line coverage against its gate
+    /// (xtask/coverage.toml, plan section 5.4)
+    Coverage {
+        #[command(subcommand)]
+        command: CoverageCmd,
+    },
+    /// The crates the weekly mutation run mutates, and its report
+    /// (xtask/mutants.toml)
+    Mutants {
+        #[command(subcommand)]
+        command: MutantsCmd,
+    },
+    /// Compare a candidate's run with the oracle's, applying the approved-diffs
+    /// ledger (tests/golden/APPROVED_DIFFS.toml), or check the ledger itself
+    Compare(CompareArgs),
+    /// Run every operation of tests/conformance/manifest.json on every corpus
+    /// through the Rust, Python and Node SDKs and require byte-identical
+    /// documents (UC-5.4, #839)
+    Conformance(xtask::conformance::cli::ConformanceArgs),
+    /// Generate the heavy workspace, run the fault catalogue against the
+    /// oracle, report coverage (UC-0.6, #804); `corpus help` lists its commands
+    Corpus {
+        #[command(subcommand)]
+        command: xtask::corpus::cli::Cmd,
+    },
+    /// Resolve every fixture and generated workspace's configuration with
+    /// opentide-schema and compare it with the oracle's (UC-1.5, #811)
+    Config {
+        #[command(subcommand)]
+        command: xtask::config::Cmd,
+    },
+    /// Load every corpus with opentide-workspace and compare its index with
+    /// the Python registry's (UC-2.1, #816)
+    Registry {
+        #[command(subcommand)]
+        command: xtask::registry::Cmd,
+    },
+    /// For each fault kind `opentide validate` reports, the language server's
+    /// published diagnostics against validate's findings (UC-2.6, #821)
+    Lsp {
+        #[command(subcommand)]
+        command: xtask::lsp::Cmd,
+    },
+    /// Run opentide-workspace's validate on every recorded `validate --json`
+    /// case and compare it with the recording (UC-2.2, #817; UC-2.3, #818)
+    Validate {
+        #[command(subcommand)]
+        command: xtask::diff_args::DiffCmd,
+    },
+    /// Run opentide-workspace's lint on every recorded `lint --json` case and
+    /// compare it with the recording (UC-2.3, #818)
+    Lint {
+        #[command(subcommand)]
+        command: xtask::diff_args::DiffCmd,
+    },
+    /// Write the artifacts generated from the Rust model (the platform
+    /// templates); `--check` compares them (UC-1.8, #814)
+    Codegen(xtask::codegen::CodegenArgs),
+    /// Record the MCP sessions from the Python server and replay them against
+    /// the Rust server (UC-3.7, #829)
+    Mcp {
+        #[command(subcommand)]
+        command: xtask::mcp::Cmd,
+    },
+    /// The recorded-HTTP cassettes of tests/cassettes (UC-4.1, #831)
+    Cassettes {
+        #[command(subcommand)]
+        command: xtask::cassettes::Cmd,
+    },
+    /// Record what the frozen Python CLI does, and check an engine against the
+    /// recordings (tests/golden/README.md); `golden --help` lists the commands
+    Golden {
+        #[command(subcommand)]
+        command: xtask::golden::Cmd,
+    },
+    /// Run the benchmarks against their budgets (UC-0.8, #806)
+    Bench(xtask::bench::BenchArgs),
+    /// The deploy compile's request bodies against the oracle's (UC-3.1, #823)
+    Payloads {
+        #[command(subcommand)]
+        command: xtask::payloads::Cmd,
+    },
+    /// The vocabularies: sync, generate, compare and ingest (UC-1.6, #812);
+    /// `vocab --help` lists the commands
+    Vocab {
+        #[command(subcommand)]
+        command: xtask::vocab::Cmd,
+    },
+    /// The object models against the oracle: their JSON Schemas, and their
+    /// verdict on every object file of every corpus (UC-1.3, #809)
+    Schema {
+        #[command(subcommand)]
+        command: xtask::schema::Cmd,
+    },
+    /// Check every model field's description against its row in the field
+    /// tables of the specifications checkout
+    ///
+    /// The checkout is DIR, else $OPENTIDE_SPECIFICATIONS_ROOT, else
+    /// ../specifications: specs/platforms/*.md, specs/objects/*-1.0.md and
+    /// specs/metadata.md. --list prints each row it matched with a model field.
+    ///
+    /// Exit status: 0 no drift, 1 drift (or fewer rows matched than the
+    /// floor), 2 usage error or no checkout.
+    SpecFields(xtask::spec_fields::SpecFieldsArgs),
+    /// Generate src/opentide/_native/models.pyi and sdk.pyi from the
+    /// extension's introspection data (UC-1.9, #815; UC-5.2b, #837)
+    Stubs(xtask::stubs::StubsArgs),
+}
 
-exit status: 0 passed, 1 check failed or not implemented yet,
-2 usage error or the check could not run
-";
+#[derive(Args)]
+struct CheckLayersArgs {
+    /// Read `cargo metadata --format-version 1` output from FILE instead of
+    /// running cargo
+    #[arg(long, value_name = "FILE")]
+    metadata: Option<PathBuf>,
+    /// Read another layer table than the workspace's xtask/layers.toml
+    #[arg(long, value_name = "FILE")]
+    layers: Option<PathBuf>,
+}
 
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+#[derive(Subcommand)]
+enum CoverageCmd {
+    /// Print a Markdown table of every crate's coverage and fail below a gate
+    Gate {
+        /// The export of `cargo llvm-cov report --json --summary-only`
+        #[arg(long, value_name = "FILE")]
+        report: PathBuf,
+        #[arg(long, value_name = "FILE")]
+        policy: Option<PathBuf>,
+        #[arg(long, value_name = "FILE")]
+        metadata: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum MutantsCmd {
+    /// Print the crates the weekly mutation run mutates, one per line
+    Crates {
+        #[arg(long, value_name = "FILE")]
+        policy: Option<PathBuf>,
+        #[arg(long, value_name = "FILE")]
+        metadata: Option<PathBuf>,
+    },
+    /// Merge cargo-mutants' outcomes.json of every shard and print the scores
+    /// against the baseline
+    Report {
+        /// One shard's outcomes.json; repeat for every shard
+        #[arg(long, value_name = "FILE", required = true)]
+        outcomes: Vec<PathBuf>,
+        #[arg(long, value_name = "FILE")]
+        policy: Option<PathBuf>,
+        #[arg(long, value_name = "FILE")]
+        baseline: Option<PathBuf>,
+        /// Write DIR/<crate>.md for each crate whose surviving mutants exceed
+        /// its threshold
+        #[arg(long, value_name = "DIR")]
+        issues: Option<PathBuf>,
+        #[arg(long, value_name = "URL")]
+        run_url: Option<String>,
+        /// Record this run as the baseline
+        #[arg(long, value_name = "FILE", requires = "commit")]
+        write_baseline: Option<PathBuf>,
+        #[arg(long, value_name = "SHA", requires = "write_baseline")]
+        commit: Option<String>,
+    },
+}
+
+#[derive(Args)]
+struct CompareArgs {
+    /// Check the ledger's schema, and that CHANGELOG.md holds each entry's
+    /// changelog reference, instead of comparing two runs
+    #[arg(
+        long,
+        conflicts_with_all = ["oracle", "candidate", "command", "case", "report"]
+    )]
+    check_ledger: bool,
+    /// The oracle's run: a folder with exit_code, stdout, stderr, files/ and
+    /// deleted
+    #[arg(long, value_name = "DIR", required_unless_present = "check_ledger")]
+    oracle: Option<PathBuf>,
+    #[arg(long, value_name = "DIR", required_unless_present = "check_ledger")]
+    candidate: Option<PathBuf>,
+    #[arg(long, value_name = "PATH", required_unless_present = "check_ledger")]
+    command: Option<String>,
+    #[arg(long, value_name = "ID", default_value = "")]
+    case: String,
+    #[arg(long, value_name = "FILE")]
+    ledger: Option<PathBuf>,
+    /// Write the JSON report to FILE
+    #[arg(long, value_name = "FILE")]
+    report: Option<PathBuf>,
+    #[arg(long, value_name = "FILE")]
+    changelog: Option<PathBuf>,
+}
+
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let Some((command, rest)) = args.split_first() else {
-        eprint!("{USAGE}");
-        return ExitCode::from(2);
-    };
-    match command.as_str() {
-        "check-layers" => match check_layers(rest) {
-            Ok(true) => ExitCode::SUCCESS,
-            Ok(false) => ExitCode::FAILURE,
-            Err(error) => {
-                eprintln!("xtask check-layers: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "coverage" => match coverage_command(rest) {
-            Ok(true) => ExitCode::SUCCESS,
-            Ok(false) => ExitCode::FAILURE,
-            Err(error) => {
-                eprintln!("xtask coverage: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "mutants" => match mutants_command(rest) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => {
-                eprintln!("xtask mutants: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "compare" => match run_compare(rest) {
-            Ok(true) => ExitCode::SUCCESS,
-            Ok(false) => ExitCode::FAILURE,
-            Err(error) => {
-                eprintln!("xtask compare: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "conformance" => match xtask::conformance::cli::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask conformance: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "corpus" => match xtask::corpus::cli::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask corpus: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "config" => match xtask::config::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask config: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "registry" => match xtask::registry::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask registry: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "lsp" => match xtask::lsp::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask lsp: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "validate" => match xtask::validate::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask validate: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "mcp" => match xtask::mcp::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask mcp: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "lint" => match xtask::lint::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask lint: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "codegen" => match xtask::codegen::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask codegen: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "cassettes" => match xtask::cassettes::run(rest) {
-            Ok(code) => ExitCode::from(code),
-            Err(error) => {
-                eprintln!("xtask cassettes: {error:#}");
-                ExitCode::from(2)
-            }
-        },
-        "golden" => xtask::golden::main(rest),
-        "bench" => xtask::bench::main(rest),
-        "payloads" => xtask::payloads::main(rest),
-        "vocab" => xtask::vocab::main(rest),
-        "schema" => xtask::schema::main(rest),
-        "spec-fields" => xtask::spec_fields::main(rest),
-        "stubs" => xtask::stubs::main(rest),
-        "help" | "--help" | "-h" => {
-            print!("{USAGE}");
-            ExitCode::SUCCESS
+    // The benchmarks call this binary for their child processes; those modes are
+    // not part of the command line.
+    let raw: Vec<String> = std::env::args().skip(1).collect();
+    if let [verb, rest @ ..] = raw.as_slice()
+        && verb == "bench"
+        && let Some(code) = xtask::bench::internal(rest)
+    {
+        return code;
+    }
+    let command = Cli::parse().command;
+    match command {
+        Cmd::CheckLayers(args) => verdict("check-layers", check_layers(&args)),
+        Cmd::Coverage { command } => verdict("coverage", coverage_command(&command)),
+        Cmd::Mutants { command } => verdict("mutants", mutants_command(&command).map(|()| true)),
+        Cmd::Compare(args) => verdict("compare", run_compare(&args)),
+        Cmd::Conformance(args) => status("conformance", xtask::conformance::cli::run(&args)),
+        Cmd::Corpus { command } => status("corpus", xtask::corpus::cli::run_command(&command)),
+        Cmd::Config { command } => status("config", xtask::config::run(&command)),
+        Cmd::Registry { command } => status("registry", xtask::registry::run(&command)),
+        Cmd::Lsp { command } => status("lsp", xtask::lsp::run(&command)),
+        Cmd::Validate { command } => status("validate", xtask::validate::run(&command)),
+        Cmd::Lint { command } => status("lint", xtask::lint::run(&command)),
+        Cmd::Codegen(args) => status("codegen", xtask::codegen::run(&args)),
+        Cmd::Mcp { command } => status("mcp", xtask::mcp::run(&command)),
+        Cmd::Cassettes { command } => status("cassettes", xtask::cassettes::run(&command)),
+        Cmd::Golden { command } => xtask::golden::main(command),
+        Cmd::Bench(args) => xtask::bench::main(args),
+        Cmd::Payloads { command } => xtask::payloads::main(&command),
+        Cmd::Vocab { command } => xtask::vocab::main(&command),
+        Cmd::Schema { command } => xtask::schema::main(&command),
+        Cmd::SpecFields(args) => xtask::spec_fields::main(&args),
+        Cmd::Stubs(args) => xtask::stubs::main(&args),
+    }
+}
+
+/// A check's result as the exit status: 0 passed, 1 failed, 2 could not run.
+fn verdict(name: &str, result: Result<bool>) -> ExitCode {
+    match result {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::FAILURE,
+        Err(error) => {
+            eprintln!("xtask {name}: {error:#}");
+            ExitCode::from(2)
         }
-        other => {
-            eprint!("xtask: unknown command `{other}`\n\n{USAGE}");
+    }
+}
+
+/// A command's own exit code, or 2 when it could not run.
+fn status(name: &str, result: Result<u8>) -> ExitCode {
+    match result {
+        Ok(code) => ExitCode::from(code),
+        Err(error) => {
+            eprintln!("xtask {name}: {error:#}");
             ExitCode::from(2)
         }
     }
 }
 
 /// `compare`: whether the runs are equal, or the ledger is valid.
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-fn run_compare(args: &[String]) -> Result<bool> {
-    let mut options: std::collections::BTreeMap<&str, PathBuf> = std::collections::BTreeMap::new();
-    let mut check_ledger = false;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let name = match arg.as_str() {
-            "--check-ledger" => {
-                check_ledger = true;
-                continue;
-            }
-            name @ ("--oracle" | "--candidate" | "--command" | "--case" | "--ledger"
-            | "--report" | "--changelog") => name,
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        };
-        let value = args
-            .next()
-            .map(PathBuf::from)
-            .with_context(|| format!("{name} needs a value"))?;
-        options.insert(name, value);
-    }
+fn run_compare(args: &CompareArgs) -> Result<bool> {
     let root = workspace_root()?;
-    let ledger_path = options
-        .remove("--ledger")
+    let ledger_path = args
+        .ledger
+        .clone()
         .unwrap_or_else(|| root.join(compare::LEDGER));
-    let changelog_path = options
-        .remove("--changelog")
+    let changelog_path = args
+        .changelog
+        .clone()
         .unwrap_or_else(|| root.join("CHANGELOG.md"));
-    let changelog = std::fs::read_to_string(&changelog_path)
-        .with_context(|| format!("read {}", changelog_path.display()))?;
+    let changelog = read(&changelog_path)?;
     let ledger = match compare::read_ledger(&ledger_path, &changelog) {
         Ok(ledger) => ledger,
         Err(error) => {
@@ -292,10 +306,7 @@ fn run_compare(args: &[String]) -> Result<bool> {
             return Ok(false);
         }
     };
-    if check_ledger {
-        if let Some(extra) = options.keys().next() {
-            bail!("--check-ledger takes only --ledger and --changelog, not {extra}");
-        }
+    if args.check_ledger {
         println!(
             "compare: {} holds {} approved difference(s), each with every field",
             ledger_path.display(),
@@ -303,35 +314,51 @@ fn run_compare(args: &[String]) -> Result<bool> {
         );
         return Ok(true);
     }
-    let required = |name: &str, options: &mut std::collections::BTreeMap<&str, PathBuf>| {
-        options
-            .remove(name)
-            .with_context(|| format!("{name} is required\n\n{USAGE}"))
+    // clap requires all three unless `--check-ledger` is given.
+    let (Some(oracle_dir), Some(candidate_dir), Some(command)) =
+        (&args.oracle, &args.candidate, &args.command)
+    else {
+        bail!("--oracle, --candidate and --command are required");
     };
-    let oracle_dir = required("--oracle", &mut options)?;
-    let candidate_dir = required("--candidate", &mut options)?;
-    let command = required("--command", &mut options)?
-        .to_string_lossy()
-        .into_owned();
-    let case = options
-        .remove("--case")
-        .map(|case| case.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let report_path = options.remove("--report");
+    let case = &args.case;
+    let report_path = args.report.as_deref();
 
-    let oracle = compare::read_run(&oracle_dir)?;
-    let candidate = compare::read_run(&candidate_dir)?;
+    let oracle = compare::read_run(oracle_dir)?;
+    let candidate = compare::read_run(candidate_dir)?;
     let mut usage = opentide_compare::ledger::Usage::default();
     let report = opentide_compare::compare(
-        opentide_compare::Case {
-            command: &command,
-            id: &case,
-        },
+        opentide_compare::Case { command, id: case },
         &oracle,
         &candidate,
         &ledger,
         &mut usage,
     );
+    print_differences(&report);
+    if let Some(path) = report_path {
+        let text = serde_json::to_string_pretty(&report).context("serialise the report")?;
+        std::fs::write(path, text + "\n").with_context(|| format!("write {}", path.display()))?;
+    }
+    if report.equal {
+        println!(
+            "compare: `{command}` is equal ({} approved difference(s))",
+            report.approved.len()
+        );
+    } else {
+        eprintln!(
+            "compare: `{command}` differs: {} difference(s){}",
+            report.differences.len() + report.omitted,
+            if report.approved.is_empty() {
+                String::new()
+            } else {
+                format!(", {} approved", report.approved.len())
+            }
+        );
+    }
+    Ok(report.equal)
+}
+
+/// Each difference of a comparison, on stderr.
+fn print_differences(report: &opentide_compare::CaseReport) {
     for difference in &report.differences {
         let pointer = difference
             .pointer
@@ -360,27 +387,6 @@ fn run_compare(args: &[String]) -> Result<bool> {
             difference.candidate
         );
     }
-    if let Some(path) = &report_path {
-        let text = serde_json::to_string_pretty(&report).context("serialise the report")?;
-        std::fs::write(path, text + "\n").with_context(|| format!("write {}", path.display()))?;
-    }
-    if report.equal {
-        println!(
-            "compare: `{command}` is equal ({} approved difference(s))",
-            report.approved.len()
-        );
-    } else {
-        eprintln!(
-            "compare: `{command}` differs: {} difference(s){}",
-            report.differences.len() + report.omitted,
-            if report.approved.is_empty() {
-                String::new()
-            } else {
-                format!(", {} approved", report.approved.len())
-            }
-        );
-    }
-    Ok(report.equal)
 }
 
 /// The workspace root, found at run time: the parent of `CARGO_MANIFEST_DIR`
@@ -389,48 +395,29 @@ fn workspace_root() -> Result<PathBuf> {
     match std::env::var_os("CARGO_MANIFEST_DIR") {
         Some(dir) => PathBuf::from(dir)
             .parent()
-            .map(std::path::Path::to_path_buf)
+            .map(Path::to_path_buf)
             .context("CARGO_MANIFEST_DIR has no parent"),
         None => std::env::current_dir().context("read the working directory"),
     }
 }
 
 /// Runs the check and prints its report: whether the workspace passed.
-fn check_layers(args: &[String]) -> Result<bool> {
-    let mut metadata_file: Option<PathBuf> = None;
-    let mut layers_file: Option<PathBuf> = None;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let slot = match arg.as_str() {
-            "--metadata" => &mut metadata_file,
-            "--layers" => &mut layers_file,
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        };
-        *slot = Some(
-            args.next()
-                .map(PathBuf::from)
-                .with_context(|| format!("{arg} needs a FILE"))?,
-        );
-    }
-
-    let metadata_text = match &metadata_file {
-        Some(path) => {
-            std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?
-        }
+fn check_layers(args: &CheckLayersArgs) -> Result<bool> {
+    let metadata_text = match &args.metadata {
+        Some(path) => read(path)?,
         None => cargo_metadata()?,
     };
     let metadata = Metadata::parse(&metadata_text).context("parse the cargo metadata")?;
     // The table of the workspace being checked, never a path compiled in: with
     // a CARGO_TARGET_DIR shared between worktrees, cargo may run a binary that
     // another worktree built.
-    let layers_file = match layers_file {
-        Some(path) => path,
+    let layers_file = match &args.layers {
+        Some(path) => path.clone(),
         None => metadata
             .layer_table()
             .context("the metadata names no workspace_root: pass --layers FILE")?,
     };
-    let table_text = std::fs::read_to_string(&layers_file)
-        .with_context(|| format!("read {}", layers_file.display()))?;
+    let table_text = read(&layers_file)?;
     let table = LayerTable::parse(&table_text)
         .with_context(|| format!("parse {}", layers_file.display()))?;
 
@@ -455,36 +442,19 @@ fn check_layers(args: &[String]) -> Result<bool> {
 
 /// `coverage gate`: prints the report and returns whether every crate met
 /// its gate.
-fn coverage_command(args: &[String]) -> Result<bool> {
-    let Some(("gate", args)) = args.split_first().map(|(c, r)| (c.as_str(), r)) else {
-        bail!("expected `coverage gate`\n\n{USAGE}");
-    };
-    let mut report_file: Option<PathBuf> = None;
-    let mut policy_file: Option<PathBuf> = None;
-    let mut metadata_file: Option<PathBuf> = None;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let slot = match arg.as_str() {
-            "--report" => &mut report_file,
-            "--policy" => &mut policy_file,
-            "--metadata" => &mut metadata_file,
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        };
-        *slot = Some(
-            args.next()
-                .map(PathBuf::from)
-                .with_context(|| format!("{arg} needs a FILE"))?,
-        );
-    }
-    let report_file = report_file.context("--report FILE is required")?;
-
-    let metadata_text = match &metadata_file {
+fn coverage_command(command: &CoverageCmd) -> Result<bool> {
+    let CoverageCmd::Gate {
+        report: report_file,
+        policy: policy_file,
+        metadata: metadata_file,
+    } = command;
+    let metadata_text = match metadata_file {
         Some(path) => read(path)?,
         None => cargo_metadata()?,
     };
     let members = coverage::members(&metadata_text).context("parse the cargo metadata")?;
     let policy_file = match policy_file {
-        Some(path) => path,
+        Some(path) => path.clone(),
         None => Metadata::parse(&metadata_text)
             .context("parse the cargo metadata")?
             .workspace_root
@@ -506,7 +476,7 @@ fn coverage_command(args: &[String]) -> Result<bool> {
         );
         return Ok(false);
     }
-    let files = coverage::files(&read(&report_file)?)
+    let files = coverage::files(&read(report_file)?)
         .with_context(|| format!("parse {} as llvm-cov's JSON export", report_file.display()))?;
     let report = coverage::gate(&policy, &members, &files);
     print!("{}", report.markdown());
@@ -515,53 +485,26 @@ fn coverage_command(args: &[String]) -> Result<bool> {
 
 /// `mutants crates` and `mutants report`. Surviving mutants are not a
 /// failure here: the weekly job files them as issues.
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-fn mutants_command(args: &[String]) -> Result<()> {
-    let Some((sub, args)) = args.split_first() else {
-        bail!("expected `mutants crates` or `mutants report`\n\n{USAGE}");
+fn mutants_command(command: &MutantsCmd) -> Result<()> {
+    let policy_arg = match command {
+        MutantsCmd::Crates { policy, .. } | MutantsCmd::Report { policy, .. } => policy,
     };
-    let mut outcomes: Vec<PathBuf> = Vec::new();
-    let mut options: std::collections::BTreeMap<&str, String> = std::collections::BTreeMap::new();
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let name = match (sub.as_str(), arg.as_str()) {
-            (_, "--policy")
-            | ("crates", "--metadata")
-            | (
-                "report",
-                "--outcomes" | "--baseline" | "--issues" | "--run-url" | "--write-baseline"
-                | "--commit",
-            ) => arg.as_str(),
-            _ => bail!("unknown option `{arg}` for `mutants {sub}`\n\n{USAGE}"),
-        };
-        let value = args
-            .next()
-            .with_context(|| format!("{arg} needs a value"))?
-            .clone();
-        if name == "--outcomes" {
-            outcomes.push(PathBuf::from(value));
-        } else {
-            options.insert(name, value);
-        }
-    }
-
-    let root = || -> Result<PathBuf> {
-        Metadata::parse(&cargo_metadata()?)
+    let policy_file = match policy_arg {
+        Some(path) => path.clone(),
+        None => Metadata::parse(&cargo_metadata()?)
             .context("parse the cargo metadata")?
             .workspace_root
-            .context("the metadata names no workspace_root")
-    };
-    let policy_file = match options.get("--policy") {
-        Some(path) => PathBuf::from(path),
-        None => root()?.join("xtask").join("mutants.toml"),
+            .context("the metadata names no workspace_root")?
+            .join("xtask")
+            .join("mutants.toml"),
     };
     let policy = mutants::Policy::parse(&read(&policy_file)?)
         .with_context(|| format!("parse {}", policy_file.display()))?;
 
-    match sub.as_str() {
-        "crates" => {
-            let metadata_text = match options.get("--metadata") {
-                Some(path) => read(std::path::Path::new(path))?,
+    match command {
+        MutantsCmd::Crates { metadata, .. } => {
+            let metadata_text = match metadata {
+                Some(path) => read(path)?,
                 None => cargo_metadata()?,
             };
             let members = coverage::members(&metadata_text)
@@ -575,57 +518,66 @@ fn mutants_command(args: &[String]) -> Result<()> {
             }
             Ok(())
         }
-        "report" => {
-            if outcomes.is_empty() {
-                bail!("--outcomes FILE is required");
-            }
-            if options.contains_key("--write-baseline") != options.contains_key("--commit") {
-                bail!("--write-baseline FILE and --commit SHA go together");
-            }
-            let runs = outcomes
-                .iter()
-                .map(|path| {
-                    mutants::parse_run(&read(path)?)
-                        .with_context(|| format!("parse {} as outcomes.json", path.display()))
-                })
-                .collect::<Result<Vec<_>>>()?;
-            let report = mutants::merge(&policy, &runs).map_err(anyhow::Error::msg)?;
-            let baseline = match options.get("--baseline") {
-                Some(path) => {
-                    let path = PathBuf::from(path);
-                    Some(
-                        mutants::Baseline::parse(&read(&path)?)
-                            .with_context(|| format!("parse {}", path.display()))?,
-                    )
-                }
-                None => None,
-            };
-            print!("{}", report.markdown(&policy, baseline.as_ref()));
-            if let Some(dir) = options.get("--issues") {
-                let dir = PathBuf::from(dir);
-                std::fs::create_dir_all(&dir)
-                    .with_context(|| format!("create {}", dir.display()))?;
-                let run_url = options.get("--run-url").map_or("this run", String::as_str);
-                for (krate, body) in report.issues(&policy, run_url) {
-                    let path = dir.join(format!("{krate}.md"));
-                    std::fs::write(&path, body)
-                        .with_context(|| format!("write {}", path.display()))?;
-                }
-            }
-            if let Some(path) = options.get("--write-baseline") {
-                let commit = options
-                    .get("--commit")
-                    .context("--write-baseline FILE and --commit SHA go together")?;
-                let text = report.baseline(commit).to_toml()?;
-                std::fs::write(path, text).with_context(|| format!("write {path}"))?;
-            }
-            Ok(())
-        }
-        other => bail!("unknown subcommand `mutants {other}`\n\n{USAGE}"),
+        MutantsCmd::Report {
+            outcomes,
+            baseline,
+            issues,
+            run_url,
+            write_baseline,
+            commit,
+            ..
+        } => report_mutants(
+            &policy,
+            outcomes,
+            baseline.as_deref(),
+            issues.as_deref(),
+            run_url.as_deref(),
+            write_baseline.as_deref().zip(commit.as_deref()),
+        ),
     }
 }
 
-fn read(path: &std::path::Path) -> Result<String> {
+/// `mutants report`: the shards merged and scored against the baseline.
+fn report_mutants(
+    policy: &mutants::Policy,
+    outcomes: &[PathBuf],
+    baseline: Option<&Path>,
+    issues: Option<&Path>,
+    run_url: Option<&str>,
+    write_baseline: Option<(&Path, &str)>,
+) -> Result<()> {
+    let runs = outcomes
+        .iter()
+        .map(|path| {
+            mutants::parse_run(&read(path)?)
+                .with_context(|| format!("parse {} as outcomes.json", path.display()))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let report = mutants::merge(policy, &runs).map_err(anyhow::Error::msg)?;
+    let baseline = match baseline {
+        Some(path) => Some(
+            mutants::Baseline::parse(&read(path)?)
+                .with_context(|| format!("parse {}", path.display()))?,
+        ),
+        None => None,
+    };
+    print!("{}", report.markdown(policy, baseline.as_ref()));
+    if let Some(dir) = issues {
+        std::fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
+        for (krate, body) in report.issues(policy, run_url.unwrap_or("this run")) {
+            let path = dir.join(format!("{krate}.md"));
+            std::fs::write(&path, body).with_context(|| format!("write {}", path.display()))?;
+        }
+    }
+    // clap makes `--write-baseline` and `--commit` require each other.
+    if let Some((path, commit)) = write_baseline {
+        let text = report.baseline(commit).to_toml()?;
+        std::fs::write(path, text).with_context(|| format!("write {}", path.display()))?;
+    }
+    Ok(())
+}
+
+fn read(path: &Path) -> Result<String> {
     std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))
 }
 

@@ -15,9 +15,14 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+clap.workspace = true
+# `parallel::in_order`: the cases of a comparison on every core, in order.
+rayon.workspace = true
 # Workspace paths without Windows' verbatim prefix (`\\?\`): a path joined
 # with `/` does not resolve under it, and the oracle names no such path.
 dunce = "1"
+# `vocab ingest`'s UTC time stamps (no time zone database).
+jiff.workspace = true
 opentide-compare.workspace = true
 # `cargo xtask cassettes` (UC-4.1, #831): the recording proxy and the cassettes.
 opentide-cassette.workspace = true
@@ -40,6 +45,7 @@ schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
+ungrammar.workspace = true
 wait4.workspace = true
 regex.workspace = true
 # xtask golden (src/golden/): only the tooling uses these, at the versions

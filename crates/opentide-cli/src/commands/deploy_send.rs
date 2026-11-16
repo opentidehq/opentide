@@ -18,8 +18,9 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
+use super::interrupt::watched;
 use indexmap::IndexMap;
 use opentide_compile::Json as CJson;
 use opentide_compile::plan::{self, Change, Scope, SelectOptions};
@@ -77,9 +78,6 @@ const VERBS: [(&str, &str); 5] = [
 ];
 /// Codes that skip the rule on that tenant without failing the run.
 const WARNING_CODES: [&str; 1] = ["external_id_missing"];
-/// The loggers of the modules a port logs for.
-const DEPLOY_LOGGER: &str = "opentide.cli.services.deploy";
-const IDS_LOGGER: &str = "opentide.deployment.external_ids";
 
 /// The command's arguments.
 #[derive(Clone, Debug, Default)]
@@ -951,7 +949,6 @@ fn deploy(
             tracing::debug!(
                 system = system.as_str(),
                 detail = error.as_str(),
-                logger = DEPLOY_LOGGER,
                 "platform_deployment_failed"
             );
             set(
@@ -972,7 +969,6 @@ fn deploy(
             tracing::error!(
                 system = system.as_str(),
                 detail = error.as_str(),
-                logger = DEPLOY_LOGGER,
                 "platform_deployment_failed"
             );
         }
@@ -1680,19 +1676,7 @@ impl Sender<'_, '_> {
         };
         let cancel = &self.cancel;
         let interrupted = self.cx.interrupted;
-        runtime.block_on(async {
-            let watch = async {
-                while !interrupted() {
-                    tokio::time::sleep(Duration::from_millis(50)).await;
-                }
-                cancel.cancel();
-                std::future::pending::<()>().await;
-            };
-            tokio::select! {
-                result = work => result,
-                () = watch => Err(ConnectorError::Cancelled),
-            }
-        })
+        runtime.block_on(watched(work, cancel, interrupted))
     }
 
     fn context<'a>(&'a self, connection: &'a Connection) -> TenantContext<'a> {
@@ -1821,7 +1805,6 @@ impl Sender<'_, '_> {
                     if block.is_none() {
                         tracing::warn!(
                             detail = rule.name.as_str(),
-                            logger = "opentide.platforms.harfanglab.deployer",
                             "skipping_rule_no_harfanglab_config"
                         );
                         log.skipped(
@@ -1900,7 +1883,6 @@ impl Sender<'_, '_> {
                 let request = if deletion {
                     tracing::warn!(
                         arg0 = rule.name.as_str(),
-                        logger = "opentide.platforms.sentinel.deployer",
                         "the_rule_will_be_removed_from_the_sentinel_workspace"
                     );
                     DeployRequest {
@@ -1958,11 +1940,7 @@ impl Sender<'_, '_> {
                     if found.is_some() {
                         self.block(splunk.delete_saved_search(context, &name))
                             .map_err(|error| raised(&error))?;
-                        tracing::warn!(
-                            name = name.as_str(),
-                            logger = "opentide.platforms.splunk.deployer",
-                            "splunk_alert_deleted"
-                        );
+                        tracing::warn!(name = name.as_str(), "splunk_alert_deleted");
                     }
                     return Ok(());
                 }
@@ -2003,23 +1981,14 @@ impl Sender<'_, '_> {
                             .deploy_report(context, &plan),
                     )
                     .map_err(|error| raised(&error))?;
-                let logger = "opentide.platforms.carbon_black.deployer";
                 match change {
                     opentide_connectors::carbon_black::ReportChange::Deleted
                         if report.report == plan.name =>
                     {
-                        tracing::warn!(
-                            report = report.report.as_str(),
-                            logger,
-                            "report_deleted_with_rule"
-                        );
+                        tracing::warn!(report = report.report.as_str(), "report_deleted_with_rule");
                     }
                     opentide_connectors::carbon_black::ReportChange::Deleted => {
-                        tracing::warn!(
-                            report = report.report.as_str(),
-                            logger,
-                            "report_auto_deleted"
-                        );
+                        tracing::warn!(report = report.report.as_str(), "report_auto_deleted");
                     }
                     _ => {}
                 }
@@ -2066,7 +2035,6 @@ impl Sender<'_, '_> {
                 uuid,
                 platform,
                 tenant,
-                logger = IDS_LOGGER,
                 "{}",
                 error.code
             );
@@ -2079,7 +2047,6 @@ impl Sender<'_, '_> {
             uuid,
             platform,
             tenant,
-            logger = IDS_LOGGER,
             "{}",
             error.code
         );
@@ -2143,7 +2110,6 @@ impl Sender<'_, '_> {
                     object_uuid = uuid,
                     platform,
                     tenant,
-                    logger = IDS_LOGGER,
                     "deployment_state_ignored"
                 );
             }
@@ -2237,7 +2203,6 @@ impl Sender<'_, '_> {
                     platform,
                     tenant = tenant.trim(),
                     external_id = stored.as_str(),
-                    logger = IDS_LOGGER,
                     "external_id_recorded"
                 );
             }
@@ -2466,7 +2431,6 @@ impl Sender<'_, '_> {
         .map_err(compile_error)?;
         match platform {
             "defender_for_endpoint" => {
-                let logger = "opentide.platforms.defender_for_endpoint.client";
                 let advice = opentide_connectors::text::json_text(&body);
                 let refused = |error: DefenderError, action: &Planned| match error {
                     DefenderError::Refused { message, context } => {
@@ -2476,7 +2440,6 @@ impl Sender<'_, '_> {
                                 detail = message.as_str(),
                                 context = context.as_str(),
                                 critical = true,
-                                logger,
                                 "fatal_error"
                             ),
                             Planned::Update(_) => tracing::error!(
@@ -2484,14 +2447,12 @@ impl Sender<'_, '_> {
                                 context = context.as_str(),
                                 advice = advice.as_str(),
                                 critical = true,
-                                logger,
                                 "fatal_error"
                             ),
                             Planned::Delete(_) => tracing::error!(
                                 detail = message.as_str(),
                                 context_1 = "Double check scope permissions, and whether the ID actually exists",
                                 critical = true,
-                                logger,
                                 "fatal_error"
                             ),
                         }
@@ -2527,7 +2488,6 @@ impl Sender<'_, '_> {
                         if created.partial {
                             self.warned = true;
                             tracing::warn!(
-                                logger = "opentide.platforms.defender_for_endpoint.client",
                                 "this_is_a_partial_deployment_check_the_mde_gui_to_see_the_availa"
                             );
                         }
@@ -2536,13 +2496,11 @@ impl Sender<'_, '_> {
                 }
             }
             "sentinel_one" => {
-                let logger = "opentide.platforms.sentinel_one.client";
                 let refused = |error: SentinelOneError, action: &Planned| {
                     match &error {
                         SentinelOneError::Invalid { detail } => tracing::error!(
                             detail = detail.as_str(),
                             critical = true,
-                            logger,
                             "received_code_400_invalid_user_input_received"
                         ),
                         SentinelOneError::Unauthorized { detail } => {
@@ -2550,7 +2508,6 @@ impl Sender<'_, '_> {
                                 detail = detail.as_str(),
                                 advice = "Check your configuration and API permissions again",
                                 critical = true,
-                                logger,
                                 "received_code_401_unauthorized_access"
                             );
                             return Raised::new(format!(
@@ -2562,14 +2519,12 @@ impl Sender<'_, '_> {
                             detail = detail.as_str(),
                             advice = "Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
                             critical = true,
-                            logger,
                             "fatal_error"
                         ),
                         SentinelOneError::Unforeseen { status, context } => tracing::error!(
                             detail = format!("Unforeseen error with code [{status}]").as_str(),
                             context = context.as_str(),
                             critical = true,
-                            logger,
                             "fatal_error"
                         ),
                         SentinelOneError::Connector(error) => return raised(error),
@@ -2617,7 +2572,6 @@ impl Sender<'_, '_> {
                         "{platform} tenant '{tenant}': Cannot authenticate with the tenant configuration"
                     )));
                 };
-                let logger = "opentide.platforms.crowdstrike.client";
                 let refused = |error: ConnectorError, action: &Planned| match &error {
                     ConnectorError::Refused {
                         message, detail, ..
@@ -2631,7 +2585,6 @@ impl Sender<'_, '_> {
                             detail = message.as_str(),
                             context = context.as_str(),
                             critical = true,
-                            logger,
                             "fatal_error"
                         );
                         Raised::new(format!(
@@ -2677,7 +2630,6 @@ impl Sender<'_, '_> {
         use opentide_connectors::elastic::{
             Deployed, Elastic, ElasticError, ElasticRule, Strategy,
         };
-        let logger = "opentide.platforms.elastic.deployer";
         for batch in batches {
             let tenant = batch.tenant.name.clone();
             let connection = self.connect("elastic", batch)?;
@@ -2727,7 +2679,6 @@ impl Sender<'_, '_> {
                         rule = rule.name.as_str(),
                         rule_id = rule.uuid.as_str(),
                         tenant = tenant.as_str(),
-                        logger,
                         "suppression_omitted_basic_license"
                     );
                     warned_rules.push(rule.uuid.clone());
@@ -2786,7 +2737,6 @@ impl Sender<'_, '_> {
                                 rule_id = rule.uuid.as_str(),
                                 rule = rule.name.as_str(),
                                 warning = warning.as_str(),
-                                logger,
                                 "elasticsearch_check_warning"
                             );
                         }
@@ -2822,7 +2772,6 @@ impl Sender<'_, '_> {
                     tenant = tenant.as_str(),
                     error = error.as_str(),
                     critical = true,
-                    logger,
                     "elastic_tenant_deployment_failed"
                 );
             }
@@ -2839,27 +2788,21 @@ impl Sender<'_, '_> {
         status: Option<u16>,
         error: &str,
     ) {
-        let logger = "opentide.platforms.elastic.deployer";
         let rule_id = rule.uuid.as_str();
         match (event, status) {
-            ("elasticsearch_checks_failed", _) => tracing::error!(
-                rule_id,
-                rule = rule.name.as_str(),
-                error,
-                logger,
-                "{}",
-                event
-            ),
+            ("elasticsearch_checks_failed", _) => {
+                tracing::error!(rule_id, rule = rule.name.as_str(), error, "{}", event);
+            }
             ("refusing_to_modify_prebuilt_rule", _) => {
-                tracing::error!(rule_id, name = rule.name.as_str(), logger, "{}", event);
+                tracing::error!(rule_id, name = rule.name.as_str(), "{}", event);
             }
             (_, Some(status)) => {
-                tracing::error!(rule_id, status_code = status, error, logger, "{}", event);
+                tracing::error!(rule_id, status_code = status, error, "{}", event);
             }
-            (_, None) => tracing::error!(rule_id, error, logger, "{}", event),
+            (_, None) => tracing::error!(rule_id, error, "{}", event),
         }
         if event == "recreate_elastic_rule_failed" {
-            tracing::error!(rule_id, logger, "elastic_rule_deleted_not_recreated");
+            tracing::error!(rule_id, "elastic_rule_deleted_not_recreated");
         }
         let message = match status {
             Some(status) => format!("HTTP {status}: {error}"),
@@ -2875,7 +2818,6 @@ impl Sender<'_, '_> {
     #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn sysdig(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         use opentide_connectors::sysdig::{Action, RuleDeploy, StateChange, deploy_rule};
-        let logger = "opentide.platforms.sysdig.deployer";
         for batch in batches {
             let tenant = batch.tenant.name.clone();
             let planned = self.screen("sysdig", batch, log);
@@ -2949,7 +2891,6 @@ impl Sender<'_, '_> {
                                 uuid = rule.uuid.as_str(),
                                 tenant = tenant.as_str(),
                                 detail = warning.detail,
-                                logger,
                                 "{}",
                                 warning.event
                             );
@@ -2959,7 +2900,6 @@ impl Sender<'_, '_> {
                                 tracing::info!(
                                     uuid = rule.uuid.as_str(),
                                     rule_id = id.as_str(),
-                                    logger,
                                     "sysdig_rule_created"
                                 );
                                 let external = id
@@ -2982,24 +2922,13 @@ impl Sender<'_, '_> {
                                     result.fail(&refusal.message);
                                 }
                                 None => {
-                                    match failure.status {
-                                        Some(status) => tracing::error!(
-                                            uuid = rule.uuid.as_str(),
-                                            tenant = tenant.as_str(),
-                                            status_code = status,
-                                            error = failure.message.as_str(),
-                                            logger,
-                                            "sysdig_request_failed"
-                                        ),
-                                        None => tracing::error!(
-                                            uuid = rule.uuid.as_str(),
-                                            tenant = tenant.as_str(),
-                                            status_code = "None",
-                                            error = failure.message.as_str(),
-                                            logger,
-                                            "sysdig_request_failed"
-                                        ),
-                                    }
+                                    tracing::error!(
+                                        uuid = rule.uuid.as_str(),
+                                        tenant = tenant.as_str(),
+                                        status_code = failure.status,
+                                        error = failure.message.as_str(),
+                                        "sysdig_request_failed"
+                                    );
                                     self.rule_error(&mut result, &failure.message);
                                 }
                             }
@@ -3012,7 +2941,6 @@ impl Sender<'_, '_> {
                             tenant = tenant.as_str(),
                             error = text.as_str(),
                             critical = true,
-                            logger,
                             "sysdig_tenant_deployment_failed"
                         );
                         self.failed = true;
@@ -3036,7 +2964,6 @@ impl Sender<'_, '_> {
             Action, Failure, RuleDeploy, StateChange, deploy_rule,
         };
         const PLATFORM: &str = "bitdefender";
-        let logger = "opentide.platforms.bitdefender.deployer";
         for batch in batches {
             let tenant = batch.tenant.name.clone();
             let planned = self.screen(PLATFORM, batch, log);
@@ -3079,7 +3006,6 @@ impl Sender<'_, '_> {
                                 tenant = tenant.as_str(),
                                 name = rule.name.as_str(),
                                 error = message.as_str(),
-                                logger,
                                 "{}",
                                 error.code
                             );
@@ -3126,7 +3052,6 @@ impl Sender<'_, '_> {
                                 uuid = rule.uuid.as_str(),
                                 tenant = tenant.as_str(),
                                 detail = warning.detail.as_str(),
-                                logger,
                                 "{}",
                                 warning.event
                             );
@@ -3136,7 +3061,6 @@ impl Sender<'_, '_> {
                                 tracing::info!(
                                     uuid = rule.uuid.as_str(),
                                     rule_id = id.as_str(),
-                                    logger,
                                     "bitdefender_rule_created"
                                 );
                                 let external = ExternalId::Text(id.clone());
@@ -3145,7 +3069,6 @@ impl Sender<'_, '_> {
                             StateChange::Forget => {
                                 tracing::info!(
                                     uuid = rule.uuid.as_str(),
-                                    logger,
                                     "bitdefender_rule_deleted"
                                 );
                                 self.record_deleted(&mut result, PLATFORM, &tenant);
@@ -3174,7 +3097,6 @@ impl Sender<'_, '_> {
                                     tenant = tenant.as_str(),
                                     error = error.as_str(),
                                     detail = detail.as_deref().unwrap_or_default(),
-                                    logger,
                                     "{}",
                                     code
                                 );
@@ -3190,7 +3112,6 @@ impl Sender<'_, '_> {
                             tenant = tenant.as_str(),
                             error = text.as_str(),
                             critical = true,
-                            logger,
                             "bitdefender_tenant_deployment_failed"
                         );
                         self.failed = true;
@@ -3215,7 +3136,6 @@ impl Sender<'_, '_> {
         };
         use opentide_connectors::google_secops::{GoogleSecops, Instance};
         let platform = "google_secops";
-        let logger = "opentide.platforms.google_secops.deployer";
         let connector = GoogleSecops::new(self.environment.clone());
         for batch in batches {
             let tenant = batch.tenant.name.clone();
@@ -3233,7 +3153,7 @@ impl Sender<'_, '_> {
                 Ok(ready) => ready,
                 Err(error) => {
                     // Unset or unreadable credentials: no rule on the tenant can deploy.
-                    self.google_secops_tenant_failed(&tenant, &error.text(), logger);
+                    self.google_secops_tenant_failed(&tenant, &error.text());
                     continue;
                 }
             };
@@ -3257,7 +3177,6 @@ impl Sender<'_, '_> {
                             tenant = tenant.as_str(),
                             name = rule.name.as_str(),
                             error = error.reason.as_str(),
-                            logger,
                             "compile_failed"
                         );
                         self.rule_error(&mut result, &format!("compile_failed: {}", error.reason));
@@ -3314,7 +3233,6 @@ impl Sender<'_, '_> {
                                 tenant = tenant.as_str(),
                                 code = warning.code,
                                 detail = warning.detail.as_str(),
-                                logger,
                                 "{}",
                                 warning.code
                             );
@@ -3324,7 +3242,6 @@ impl Sender<'_, '_> {
                                 tracing::info!(
                                     uuid = rule.uuid.as_str(),
                                     rule_id = id.as_str(),
-                                    logger,
                                     "google_secops_rule_created"
                                 );
                                 let external = ExternalId::Text(id.clone());
@@ -3351,7 +3268,6 @@ impl Sender<'_, '_> {
                                         name = rule.name.as_str(),
                                         code = failure.code.as_str(),
                                         error = failure.message.as_str(),
-                                        logger,
                                         "{}",
                                         failure.code
                                     );
@@ -3367,7 +3283,7 @@ impl Sender<'_, '_> {
                     Err(error) => {
                         // Refused credentials or an unreachable instance fail every rule on it.
                         let text = error.text();
-                        self.google_secops_tenant_failed(&tenant, &text, logger);
+                        self.google_secops_tenant_failed(&tenant, &text);
                         result.fail(&text);
                         log.finished(result);
                         break;
@@ -3382,7 +3298,7 @@ impl Sender<'_, '_> {
     /// code (`google_secops_credentials_missing`,
     /// `google_secops_tenant_unauthorized`) when the error names one, else
     /// `google_secops_tenant_unreachable`.
-    fn google_secops_tenant_failed(&mut self, tenant: &str, text: &str, logger: &str) {
+    fn google_secops_tenant_failed(&mut self, tenant: &str, text: &str) {
         let code = text
             .split_once(": ")
             .map(|(code, _)| code)
@@ -3393,7 +3309,6 @@ impl Sender<'_, '_> {
             tenant,
             error = text,
             critical = true,
-            logger,
             "google_secops_tenant_deployment_failed"
         );
         self.failed = true;
@@ -3405,7 +3320,6 @@ impl Sender<'_, '_> {
     #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn graylog(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         use opentide_connectors::graylog::{Action, Client, RuleDeploy, StateChange, deploy_rule};
-        let logger = "opentide.platforms.graylog.deployer";
         for batch in batches {
             let tenant = batch.tenant.name.clone();
             let planned = self.screen("graylog", batch, log);
@@ -3429,7 +3343,6 @@ impl Sender<'_, '_> {
                         code,
                         error = error.reason().as_str(),
                         critical = true,
-                        logger,
                         "graylog_tenant_deployment_failed"
                     );
                     continue;
@@ -3446,7 +3359,6 @@ impl Sender<'_, '_> {
                         code,
                         error = error.text().as_str(),
                         critical = true,
-                        logger,
                         "graylog_tenant_deployment_failed"
                     );
                     continue;
@@ -3461,7 +3373,6 @@ impl Sender<'_, '_> {
                          to 6.3.12, 7.0.16, 7.1.12 or later",
                         opentide_compile::graylog::ADVISORY
                     ),
-                    logger,
                     "graylog_version_vulnerable"
                 );
             }
@@ -3490,7 +3401,6 @@ impl Sender<'_, '_> {
                                         uuid = rule.uuid.as_str(),
                                         tenant = tenant.as_str(),
                                         detail = message.as_str(),
-                                        logger,
                                         "{code}"
                                     );
                                 }
@@ -3506,7 +3416,6 @@ impl Sender<'_, '_> {
                                     name = rule.name.as_str(),
                                     code = error.code,
                                     error = error.reason.as_str(),
-                                    logger,
                                     "{}",
                                     error.code
                                 );
@@ -3553,7 +3462,6 @@ impl Sender<'_, '_> {
                                 uuid = rule.uuid.as_str(),
                                 tenant = tenant.as_str(),
                                 detail = warning.detail.as_str(),
-                                logger,
                                 "{}",
                                 warning.event
                             );
@@ -3562,7 +3470,6 @@ impl Sender<'_, '_> {
                             tracing::info!(
                                 uuid = rule.uuid.as_str(),
                                 definition_id = definition_id.as_str(),
-                                logger,
                                 "{event}"
                             );
                         }
@@ -3588,7 +3495,6 @@ impl Sender<'_, '_> {
                                     status_code = status,
                                     code = failure.code,
                                     error = failure.reason.as_str(),
-                                    logger,
                                     "{}",
                                     failure.code
                                 ),
@@ -3598,7 +3504,6 @@ impl Sender<'_, '_> {
                                     code = failure.code,
                                     error = failure.reason.as_str(),
                                     detail = failure.detail.as_deref().unwrap_or_default(),
-                                    logger,
                                     "{}",
                                     failure.code
                                 ),
@@ -3621,7 +3526,6 @@ impl Sender<'_, '_> {
                             code,
                             error = text.as_str(),
                             critical = true,
-                            logger,
                             "graylog_tenant_deployment_failed"
                         );
                         result.fail(&text);
@@ -3643,7 +3547,6 @@ impl Sender<'_, '_> {
     #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn exabeam(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         use opentide_connectors::exabeam::{Action, Exabeam, RuleDeploy, StateChange, deploy_rule};
-        let logger = "opentide.platforms.exabeam.deployer";
         let platform = opentide_compile::exabeam::PLATFORM;
         let exabeam = Exabeam::new();
         for batch in batches {
@@ -3668,7 +3571,6 @@ impl Sender<'_, '_> {
                         tenant = tenant.as_str(),
                         error = text.as_str(),
                         critical = true,
-                        logger,
                         "exabeam_tenant_deployment_failed"
                     );
                     self.failed = true;
@@ -3752,7 +3654,6 @@ impl Sender<'_, '_> {
                                 tenant = tenant.as_str(),
                                 name = named.then_some(rule.name.as_str()),
                                 detail = warning.message.as_str(),
-                                logger,
                                 "{}",
                                 warning.code
                             );
@@ -3761,7 +3662,6 @@ impl Sender<'_, '_> {
                             tracing::info!(
                                 uuid = rule.uuid.as_str(),
                                 rule_id = rule_id.as_str(),
-                                logger,
                                 "{}",
                                 event
                             );
@@ -3804,7 +3704,6 @@ impl Sender<'_, '_> {
                                         uuid = rule.uuid.as_str(),
                                         tenant = tenant.as_str(),
                                         name = field("name").or(object_name),
-                                        logger,
                                         "{}",
                                         failure.code
                                     );
@@ -3823,7 +3722,6 @@ impl Sender<'_, '_> {
                             tenant = tenant.as_str(),
                             error = failure.message.as_str(),
                             critical = true,
-                            logger,
                             "exabeam_tenant_deployment_failed"
                         );
                         self.failed = true;
