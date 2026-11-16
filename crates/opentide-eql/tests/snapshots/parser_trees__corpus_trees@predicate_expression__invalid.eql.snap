@@ -1,0 +1,29 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/predicate_expression__invalid.eql
+---
+SOURCE_FILE@0..70
+  LINE_COMMENT@0..36 "// prod:predicate_expression invalid"
+  WHITESPACE@36..37 "\n"
+  EVENT_QUERY@37..69
+    EVENT_CATEGORY@37..44
+      IDENTIFIER@37..44
+        WORD@37..44 "process"
+    WHITESPACE@44..45 " "
+    WHERE_KW@45..50 "where"
+    WHITESPACE@50..51 " "
+    PREDICATE_EXPRESSION@51..69
+      FIELD@51..63
+        IDENTIFIER@51..58
+          WORD@51..58 "process"
+        DOT@58..59 "."
+        IDENTIFIER@59..63
+          WORD@59..63 "name"
+      WHITESPACE@63..64 " "
+      IN_KW@64..66 "in"
+      WHITESPACE@66..67 " "
+      L_PAREN@67..68 "("
+      R_PAREN@68..69 ")"
+  WHITESPACE@69..70 "\n"
+68..68: an expression is missing (expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `true`, `+`, `-`, `(`, `?`)
