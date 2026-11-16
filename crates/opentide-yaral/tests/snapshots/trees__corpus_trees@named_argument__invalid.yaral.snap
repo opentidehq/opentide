@@ -1,0 +1,44 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/named_argument__invalid.yaral
+---
+SOURCE_FILE@0..87
+  COMMENT@0..30 "// prod:named_argument invalid"
+  WHITESPACE@30..31 "\n"
+  RULE_DECLARATION@31..86
+    RULE_KW@31..35 "rule"
+    WHITESPACE@35..36 " "
+    RULE_NAME@36..37
+      IDENT@36..37 "r"
+    WHITESPACE@37..38 " "
+    L_BRACE@38..39 "{"
+    WHITESPACE@39..42 "\n  "
+    EXPORT_SECTION@42..75
+      EXPORT_KW@42..48 "export"
+      COLON@48..49 ":"
+      WHITESPACE@49..54 "\n    "
+      TABLE_CALL@54..75
+        REFERENCE_LIST@54..59
+          REF_LIST_TOKEN@54..59 "%seen"
+        DOT@59..60 "."
+        IDENT@60..69 "write_row"
+        L_PAREN@69..70 "("
+        ARGUMENTS@70..75
+          NAMED_ARGUMENT@70..75
+            ARGUMENT_NAME@70..74
+              IDENT@70..74 "user"
+            COLON@74..75 ":"
+    WHITESPACE@75..76 " "
+    ERROR@76..84
+      COLON@76..77 ":"
+      WHITESPACE@77..78 " "
+      VAR_TOKEN@78..83 "$user"
+      R_PAREN@83..84 ")"
+    WHITESPACE@84..85 "\n"
+    R_BRACE@85..86 "}"
+  WHITESPACE@86..87 "\n"
+errors:
+75..76: expected an expression (expected `*`)
+75..76: expected `)` (expected `)`, `,`, `*`)
+75..76: expected a section such as `events:` (expected `rule`, `}`, `)`, `,`, `*`)

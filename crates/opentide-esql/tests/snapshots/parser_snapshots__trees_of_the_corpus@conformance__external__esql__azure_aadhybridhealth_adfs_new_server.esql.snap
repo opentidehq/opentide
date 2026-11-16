@@ -1,0 +1,65 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/azure_aadhybridhealth_adfs_new_server.esql
+---
+SOURCE_FILE@0..201
+  QUERY@0..200
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    WHERE_COMMAND@40..200
+      WHERE_KW@40..45 "where"
+      WHITESPACE@45..46 " "
+      AND_EXPRESSION@46..200
+        COMPARISON@46..72
+          QUALIFIED_NAME@46..54
+            IDENTIFIER@46..54
+              IDENT@46..54 "category"
+          EQ_EQ@54..56 "=="
+          STRING@56..72
+            STRING_LIT@56..72 "\"Administrative\""
+        WHITESPACE@72..73 " "
+        AND_KW@73..76 "and"
+        WHITESPACE@76..77 " "
+        LIKE_EXPRESSION@77..116
+          QUALIFIED_NAME@77..87
+            IDENTIFIER@77..87
+              IDENT@77..87 "resourceId"
+          WHITESPACE@87..88 " "
+          LIKE_KW@88..92 "like"
+          WHITESPACE@92..93 " "
+          STRING@93..116
+            STRING_LIT@93..116 "\"*AdFederationService*\""
+        WHITESPACE@116..117 " "
+        AND_KW@117..120 "and"
+        WHITESPACE@120..121 " "
+        COMPARISON@121..200
+          QUALIFIED_NAME@121..134
+            IDENTIFIER@121..134
+              IDENT@121..134 "operationName"
+          EQ_EQ@134..136 "=="
+          STRING@136..200
+            STRING_LIT@136..200 "\"MICROSOFT.ADHYBRIDHEALTHSERVICE/SERVICES/SERVICEMEMBERS/ACTION\""
+  WHITESPACE@200..201 "\n"
+--- errors

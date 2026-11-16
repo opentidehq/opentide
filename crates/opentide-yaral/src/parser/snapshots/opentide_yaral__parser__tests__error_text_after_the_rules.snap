@@ -1,0 +1,19 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"rule r { } garbage\")"
+---
+SOURCE_FILE@0..18
+  RULE_DECLARATION@0..10
+    RULE_KW@0..4 "rule"
+    WHITESPACE@4..5 " "
+    RULE_NAME@5..6
+      IDENT@5..6 "r"
+    WHITESPACE@6..7 " "
+    L_BRACE@7..8 "{"
+    WHITESPACE@8..9 " "
+    R_BRACE@9..10 "}"
+  WHITESPACE@10..11 " "
+  ERROR@11..18
+    IDENT@11..18 "garbage"
+errors:
+10..11: unexpected text (expected `rule`)

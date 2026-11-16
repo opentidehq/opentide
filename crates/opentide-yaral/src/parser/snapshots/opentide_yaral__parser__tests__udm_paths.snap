@@ -1,0 +1,50 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"$e.network.dhcp.options = $e.additional.fields[\\\"k\\\"] $e.target.ip[0]\")"
+---
+SOURCE_FILE@0..67
+  SEARCH_QUERY@0..67
+    SEARCH_EVENTS@0..67
+      COMPARISON@0..51
+        UDM_FIELD@0..23
+          VARIABLE@0..2
+            VAR_TOKEN@0..2 "$e"
+          MEMBER@2..10
+            ACCESS_DOT@2..3 "."
+            FIELD_NAME@3..10 "network"
+          MEMBER@10..15
+            ACCESS_DOT@10..11 "."
+            FIELD_NAME@11..15 "dhcp"
+          MEMBER@15..23
+            ACCESS_DOT@15..16 "."
+            FIELD_NAME@16..23 "options"
+        WHITESPACE@23..24 " "
+        EQ@24..25 "="
+        WHITESPACE@25..26 " "
+        UDM_FIELD@26..51
+          VARIABLE@26..28
+            VAR_TOKEN@26..28 "$e"
+          MEMBER@28..39
+            ACCESS_DOT@28..29 "."
+            FIELD_NAME@29..39 "additional"
+          MEMBER@39..46
+            ACCESS_DOT@39..40 "."
+            FIELD_NAME@40..46 "fields"
+          INDEX@46..51
+            INDEX_L_BRACK@46..47 "["
+            STRING@47..50 "\"k\""
+            R_BRACK@50..51 "]"
+      WHITESPACE@51..52 " "
+      UDM_FIELD@52..67
+        VARIABLE@52..54
+          VAR_TOKEN@52..54 "$e"
+        MEMBER@54..61
+          ACCESS_DOT@54..55 "."
+          FIELD_NAME@55..61 "target"
+        MEMBER@61..64
+          ACCESS_DOT@61..62 "."
+          FIELD_NAME@62..64 "ip"
+        INDEX@64..67
+          INDEX_L_BRACK@64..65 "["
+          INTEGER@65..66 "0"
+          R_BRACK@66..67 "]"

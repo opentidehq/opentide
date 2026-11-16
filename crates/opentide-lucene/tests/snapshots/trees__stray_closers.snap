@@ -1,0 +1,31 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(\"a) b] c} AND OR\")"
+---
+SourceFile@0..15
+  BooleanQuery@0..15
+    TermQuery@0..1
+      Term@0..1 "a"
+    Error@1..2
+      RParen@1..2 ")"
+    Whitespace@2..3 " "
+    TermQuery@3..4
+      Term@3..4 "b"
+    Error@4..5
+      RBracket@4..5 "]"
+    Whitespace@5..6 " "
+    TermQuery@6..7
+      Term@6..7 "c"
+    Error@7..8
+      RBrace@7..8 "}"
+    Whitespace@8..9 " "
+    And@9..12
+      AndKw@9..12 "AND"
+    Whitespace@12..13 " "
+    Error@13..15
+      OrKw@13..15 "OR"
+1..1: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, Boost, Fuzzy, BareOperator, AndKw, OrKw, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)
+4..4: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, Boost, Fuzzy, BareOperator, AndKw, OrKw, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)
+7..7: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, Boost, Fuzzy, BareOperator, AndKw, OrKw, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)
+12..13: missing a clause (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)
+12..13: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)

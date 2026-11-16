@@ -1,0 +1,60 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/azure_aadhybridhealth_adfs_new_server.broken.esql
+---
+SOURCE_FILE@0..206
+  QUERY@0..205
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    UNKNOWN_COMMAND@40..205
+      COMMAND_NAME@40..50
+        COMMAND_WORD@40..50 "frobnicate"
+      WHITESPACE@50..51 " "
+      UNKNOWN_TEXT@51..61
+        UNKNOWN_WORD@51..61 "category=="
+      STRING@61..77
+        STRING_LIT@61..77 "\"Administrative\""
+      WHITESPACE@77..78 " "
+      UNKNOWN_TEXT@78..81
+        UNKNOWN_WORD@78..81 "and"
+      WHITESPACE@81..82 " "
+      UNKNOWN_TEXT@82..92
+        UNKNOWN_WORD@82..92 "resourceId"
+      WHITESPACE@92..93 " "
+      UNKNOWN_TEXT@93..97
+        UNKNOWN_WORD@93..97 "like"
+      WHITESPACE@97..98 " "
+      STRING@98..121
+        STRING_LIT@98..121 "\"*AdFederationService*\""
+      WHITESPACE@121..122 " "
+      UNKNOWN_TEXT@122..125
+        UNKNOWN_WORD@122..125 "and"
+      WHITESPACE@125..126 " "
+      UNKNOWN_TEXT@126..141
+        UNKNOWN_WORD@126..141 "operationName=="
+      STRING@141..205
+        STRING_LIT@141..205 "\"MICROSOFT.ADHYBRIDHEALTHSERVICE/SERVICES/SERVICEMEMBERS/ACTION\""
+  WHITESPACE@205..206 "\n"
+--- errors

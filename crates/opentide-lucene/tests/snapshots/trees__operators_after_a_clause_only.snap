@@ -1,0 +1,32 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(\"&& a && b || c &&:d\")"
+---
+SourceFile@0..19
+  BooleanQuery@0..19
+    TermQuery@0..2
+      Term@0..2 "&&"
+    Whitespace@2..3 " "
+    TermQuery@3..4
+      Term@3..4 "a"
+    Whitespace@4..5 " "
+    And@5..7
+      AmpAmp@5..7 "&&"
+    Whitespace@7..8 " "
+    TermQuery@8..9
+      Term@8..9 "b"
+    Whitespace@9..10 " "
+    Or@10..12
+      PipePipe@10..12 "||"
+    Whitespace@12..13 " "
+    TermQuery@13..14
+      Term@13..14 "c"
+    Whitespace@14..15 " "
+    And@15..17
+      AmpAmp@15..17 "&&"
+    Error@17..18
+      Colon@17..18 ":"
+    TermQuery@18..19
+      Term@18..19 "d"
+17..17: missing a clause (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)
+17..17: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)

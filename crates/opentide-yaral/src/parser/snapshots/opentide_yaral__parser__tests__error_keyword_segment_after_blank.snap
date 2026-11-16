@@ -1,0 +1,16 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"$e . a\")"
+---
+SOURCE_FILE@0..6
+  SEARCH_QUERY@0..6
+    SEARCH_EVENTS@0..2
+      VARIABLE@0..2
+        VAR_TOKEN@0..2 "$e"
+    WHITESPACE@2..3 " "
+    ERROR@3..6
+      DOT@3..4 "."
+      WHITESPACE@4..5 " "
+      IDENT@5..6 "a"
+errors:
+2..3: expected a section such as `events:`

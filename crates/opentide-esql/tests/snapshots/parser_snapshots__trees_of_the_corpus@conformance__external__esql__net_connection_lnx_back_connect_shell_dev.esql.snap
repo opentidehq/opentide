@@ -1,0 +1,72 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/net_connection_lnx_back_connect_shell_dev.esql
+---
+SOURCE_FILE@0..128
+  QUERY@0..127
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    WHERE_COMMAND@40..127
+      WHERE_KW@40..45 "where"
+      WHITESPACE@45..46 " "
+      AND_EXPRESSION@46..127
+        FUNCTION_CALL@46..75
+          IDENTIFIER@46..55
+            IDENT@46..55 "ends_with"
+          L_PAREN@55..56 "("
+          QUALIFIED_NAME@56..61
+            IDENTIFIER@56..61
+              IDENT@56..61 "Image"
+          COMMA@61..62 ","
+          WHITESPACE@62..63 " "
+          STRING@63..74
+            STRING_LIT@63..74 "\"/bin/bash\""
+          R_PAREN@74..75 ")"
+        WHITESPACE@75..76 " "
+        AND_KW@76..79 "and"
+        WHITESPACE@79..80 " "
+        NOT_EXPRESSION@80..127
+          NOT_KW@80..83 "not"
+          WHITESPACE@83..84 " "
+          PARENTHESIZED_EXPRESSION@84..127
+            L_PAREN@84..85 "("
+            IN_EXPRESSION@85..126
+              QUALIFIED_NAME@85..98
+                IDENTIFIER@85..98
+                  IDENT@85..98 "DestinationIp"
+              WHITESPACE@98..99 " "
+              IN_KW@99..101 "in"
+              WHITESPACE@101..102 " "
+              L_PAREN@102..103 "("
+              STRING@103..114
+                STRING_LIT@103..114 "\"127.0.0.1\""
+              COMMA@114..115 ","
+              WHITESPACE@115..116 " "
+              STRING@116..125
+                STRING_LIT@116..125 "\"0.0.0.0\""
+              R_PAREN@125..126 ")"
+            R_PAREN@126..127 ")"
+  WHITESPACE@127..128 "\n"
+--- errors

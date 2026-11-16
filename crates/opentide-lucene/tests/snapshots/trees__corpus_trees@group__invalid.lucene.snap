@@ -1,0 +1,24 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/group__invalid.lucene
+---
+SourceFile@0..13
+  Group@0..13
+    LParen@0..1 "("
+    BooleanQuery@1..13
+      TermQuery@1..2
+        Term@1..2 "a"
+      Whitespace@2..3 " "
+      Or@3..5
+        OrKw@3..5 "OR"
+      Whitespace@5..6 " "
+      TermQuery@6..7
+        Term@6..7 "b"
+      Whitespace@7..8 " "
+      And@8..11
+        AndKw@8..11 "AND"
+      Whitespace@11..12 " "
+      TermQuery@12..13
+        Term@12..13 "c"
+13..13: missing `)` (expected Boost, Fuzzy, RParen)

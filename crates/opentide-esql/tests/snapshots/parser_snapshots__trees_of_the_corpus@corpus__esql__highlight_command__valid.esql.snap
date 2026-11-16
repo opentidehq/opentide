@@ -1,0 +1,42 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/highlight_command__valid.esql
+---
+SOURCE_FILE@0..91
+  COMMENT@0..31 "// prod:highlight_command valid"
+  WHITESPACE@31..32 "\n"
+  QUERY@32..90
+    FROM_COMMAND@32..54
+      FROM_KW@32..36 "FROM"
+      WHITESPACE@36..37 " "
+      INDEX_PATTERN@37..41
+        INDEX_NAME@37..41
+          SOURCE_TEXT@37..41 "docs"
+      WHITESPACE@41..42 " "
+      METADATA@42..54
+        METADATA_KW@42..50 "METADATA"
+        WHITESPACE@50..51 " "
+        METADATA_FIELD@51..54
+          SOURCE_TEXT@51..54 "_id"
+    WHITESPACE@54..55 "\n"
+    PIPE@55..56 "|"
+    WHITESPACE@56..57 " "
+    HIGHLIGHT_COMMAND@57..90
+      HIGHLIGHT_KW@57..66 "HIGHLIGHT"
+      WHITESPACE@66..67 " "
+      STRING@67..75
+        STRING_LIT@67..75 "\"breach\""
+      WHITESPACE@75..76 " "
+      ON_KW@76..78 "ON"
+      WHITESPACE@78..79 " "
+      NAME_PATTERN@79..84
+        ID_PATTERN@79..84
+          ID_PATTERN_TEXT@79..84 "title"
+      COMMA@84..85 ","
+      WHITESPACE@85..86 " "
+      NAME_PATTERN@86..90
+        ID_PATTERN@86..90
+          ID_PATTERN_TEXT@86..90 "body"
+  WHITESPACE@90..91 "\n"
+--- errors

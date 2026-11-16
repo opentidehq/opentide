@@ -1,0 +1,25 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"principal.hostname = labels[\\\"k\\\"] ip\")"
+---
+SOURCE_FILE@0..35
+  SEARCH_QUERY@0..35
+    SEARCH_EVENTS@0..35
+      COMPARISON@0..32
+        BARE_FIELD@0..18
+          IDENT@0..9 "principal"
+          MEMBER@9..18
+            ACCESS_DOT@9..10 "."
+            FIELD_NAME@10..18 "hostname"
+        WHITESPACE@18..19 " "
+        EQ@19..20 "="
+        WHITESPACE@20..21 " "
+        BARE_FIELD@21..32
+          IDENT@21..27 "labels"
+          INDEX@27..32
+            INDEX_L_BRACK@27..28 "["
+            STRING@28..31 "\"k\""
+            R_BRACK@31..32 "]"
+      WHITESPACE@32..33 " "
+      NAME_REF@33..35
+        IDENT@33..35 "ip"

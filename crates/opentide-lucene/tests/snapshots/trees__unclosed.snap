@@ -1,0 +1,21 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(\"a:(b OR c\")"
+---
+SourceFile@0..9
+  FieldQuery@0..9
+    FieldName@0..1
+      Term@0..1 "a"
+    Colon@1..2 ":"
+    Group@2..9
+      LParen@2..3 "("
+      BooleanQuery@3..9
+        TermQuery@3..4
+          Term@3..4 "b"
+        Whitespace@4..5 " "
+        Or@5..7
+          OrKw@5..7 "OR"
+        Whitespace@7..8 " "
+        TermQuery@8..9
+          Term@8..9 "c"
+9..9: missing `)` (expected Boost, Fuzzy, RParen)

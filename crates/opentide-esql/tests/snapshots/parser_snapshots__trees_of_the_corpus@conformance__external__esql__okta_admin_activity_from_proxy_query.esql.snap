@@ -1,0 +1,64 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/okta_admin_activity_from_proxy_query.esql
+---
+SOURCE_FILE@0..131
+  QUERY@0..130
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    WHERE_COMMAND@40..130
+      WHERE_KW@40..45 "where"
+      WHITESPACE@45..46 " "
+      AND_EXPRESSION@46..130
+        LIKE_EXPRESSION@46..94
+          QUALIFIED_NAME@46..79
+            IDENTIFIER@46..58
+              IDENT@46..58 "debugContext"
+            DOT@58..59 "."
+            IDENTIFIER@59..68
+              IDENT@59..68 "debugData"
+            DOT@68..69 "."
+            IDENTIFIER@69..79
+              IDENT@69..79 "requestUri"
+          WHITESPACE@79..80 " "
+          LIKE_KW@80..84 "like"
+          WHITESPACE@84..85 " "
+          STRING@85..94
+            STRING_LIT@85..94 "\"*admin*\""
+        WHITESPACE@94..95 " "
+        AND_KW@95..98 "and"
+        WHITESPACE@98..99 " "
+        COMPARISON@99..130
+          QUALIFIED_NAME@99..122
+            IDENTIFIER@99..114
+              IDENT@99..114 "securityContext"
+            DOT@114..115 "."
+            IDENTIFIER@115..122
+              IDENT@115..122 "isProxy"
+          EQ_EQ@122..124 "=="
+          STRING@124..130
+            STRING_LIT@124..130 "\"true\""
+  WHITESPACE@130..131 "\n"
+--- errors

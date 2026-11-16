@@ -1,0 +1,110 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | scan order by t partition by k declare (n: long = 0) with (step s output = last: x == 1 => n = s.n + 1; step t optional: y == 2;)\")"
+---
+SOURCE_FILE@0..133
+  QUERY@0..133
+    TABULAR_EXPRESSION@0..133
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      SCAN_OPERATOR@4..133
+        SCAN_KW@4..8 "scan"
+        WHITESPACE@8..9 " "
+        ORDER_KW@9..14 "order"
+        WHITESPACE@14..15 " "
+        BY_KW@15..17 "by"
+        WHITESPACE@17..18 " "
+        SORT_ITEM@18..19
+          NAME_REF@18..19
+            IDENT@18..19 "t"
+        WHITESPACE@19..20 " "
+        PARTITION_KW@20..29 "partition"
+        WHITESPACE@29..30 " "
+        BY_KW@30..32 "by"
+        WHITESPACE@32..33 " "
+        NAME_REF@33..34
+          IDENT@33..34 "k"
+        WHITESPACE@34..35 " "
+        DECLARE_KW@35..42 "declare"
+        WHITESPACE@42..43 " "
+        L_PAREN@43..44 "("
+        PARAMETER@44..55
+          IDENT@44..45 "n"
+          COLON@45..46 ":"
+          WHITESPACE@46..47 " "
+          TYPE@47..51
+            IDENT@47..51 "long"
+          WHITESPACE@51..52 " "
+          EQ@52..53 "="
+          WHITESPACE@53..54 " "
+          LITERAL@54..55
+            NUMBER@54..55 "0"
+        R_PAREN@55..56 ")"
+        WHITESPACE@56..57 " "
+        WITH_KW@57..61 "with"
+        WHITESPACE@61..62 " "
+        L_PAREN@62..63 "("
+        SCAN_STEP@63..107
+          STEP_KW@63..67 "step"
+          WHITESPACE@67..68 " "
+          IDENT@68..69 "s"
+          WHITESPACE@69..70 " "
+          OUTPUT_KW@70..76 "output"
+          WHITESPACE@76..77 " "
+          EQ@77..78 "="
+          WHITESPACE@78..79 " "
+          LAST_KW@79..83 "last"
+          COLON@83..84 ":"
+          WHITESPACE@84..85 " "
+          COMPARISON_EXPR@85..91
+            NAME_REF@85..86
+              IDENT@85..86 "x"
+            WHITESPACE@86..87 " "
+            CMP_OP@87..89 "=="
+            WHITESPACE@89..90 " "
+            LITERAL@90..91
+              NUMBER@90..91 "1"
+          WHITESPACE@91..92 " "
+          FAT_ARROW@92..94 "=>"
+          WHITESPACE@94..95 " "
+          ASSIGNMENT@95..106
+            NAME_REF@95..96
+              IDENT@95..96 "n"
+            WHITESPACE@96..97 " "
+            EQ@97..98 "="
+            WHITESPACE@98..99 " "
+            ADDITIVE_EXPR@99..106
+              MEMBER_EXPR@99..102
+                NAME_REF@99..100
+                  IDENT@99..100 "s"
+                DOT@100..101 "."
+                IDENT@101..102 "n"
+              WHITESPACE@102..103 " "
+              PLUS@103..104 "+"
+              WHITESPACE@104..105 " "
+              LITERAL@105..106
+                NUMBER@105..106 "1"
+          SEMICOLON@106..107 ";"
+        WHITESPACE@107..108 " "
+        SCAN_STEP@108..132
+          STEP_KW@108..112 "step"
+          WHITESPACE@112..113 " "
+          IDENT@113..114 "t"
+          WHITESPACE@114..115 " "
+          OPTIONAL_KW@115..123 "optional"
+          COLON@123..124 ":"
+          WHITESPACE@124..125 " "
+          COMPARISON_EXPR@125..131
+            NAME_REF@125..126
+              IDENT@125..126 "y"
+            WHITESPACE@126..127 " "
+            CMP_OP@127..129 "=="
+            WHITESPACE@129..130 " "
+            LITERAL@130..131
+              NUMBER@130..131 "2"
+          SEMICOLON@131..132 ";"
+        R_PAREN@132..133 ")"

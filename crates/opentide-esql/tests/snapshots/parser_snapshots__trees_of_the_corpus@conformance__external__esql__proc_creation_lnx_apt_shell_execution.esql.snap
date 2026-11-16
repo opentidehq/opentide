@@ -1,0 +1,79 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/proc_creation_lnx_apt_shell_execution.esql
+---
+SOURCE_FILE@0..157
+  QUERY@0..156
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    WHERE_COMMAND@40..156
+      WHERE_KW@40..45 "where"
+      WHITESPACE@45..46 " "
+      AND_EXPRESSION@46..156
+        PARENTHESIZED_EXPRESSION@46..104
+          L_PAREN@46..47 "("
+          OR_EXPRESSION@47..103
+            FUNCTION_CALL@47..71
+              IDENTIFIER@47..56
+                IDENT@47..56 "ends_with"
+              L_PAREN@56..57 "("
+              QUALIFIED_NAME@57..62
+                IDENTIFIER@57..62
+                  IDENT@57..62 "Image"
+              COMMA@62..63 ","
+              WHITESPACE@63..64 " "
+              STRING@64..70
+                STRING_LIT@64..70 "\"/apt\""
+              R_PAREN@70..71 ")"
+            WHITESPACE@71..72 " "
+            OR_KW@72..74 "or"
+            WHITESPACE@74..75 " "
+            FUNCTION_CALL@75..103
+              IDENTIFIER@75..84
+                IDENT@75..84 "ends_with"
+              L_PAREN@84..85 "("
+              QUALIFIED_NAME@85..90
+                IDENTIFIER@85..90
+                  IDENT@85..90 "Image"
+              COMMA@90..91 ","
+              WHITESPACE@91..92 " "
+              STRING@92..102
+                STRING_LIT@92..102 "\"/apt-get\""
+              R_PAREN@102..103 ")"
+          R_PAREN@103..104 ")"
+        WHITESPACE@104..105 " "
+        AND_KW@105..108 "and"
+        WHITESPACE@108..109 " "
+        LIKE_EXPRESSION@109..156
+          QUALIFIED_NAME@109..120
+            IDENTIFIER@109..120
+              IDENT@109..120 "CommandLine"
+          WHITESPACE@120..121 " "
+          LIKE_KW@121..125 "like"
+          WHITESPACE@125..126 " "
+          STRING@126..156
+            STRING_LIT@126..156 "\"*APT::Update::Pre-Invoke::=*\""
+  WHITESPACE@156..157 "\n"
+--- errors

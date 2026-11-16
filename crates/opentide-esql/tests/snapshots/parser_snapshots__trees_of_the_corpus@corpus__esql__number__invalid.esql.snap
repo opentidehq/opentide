@@ -1,0 +1,26 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/number__invalid.esql
+---
+SOURCE_FILE@0..36
+  COMMENT@0..22 "// prod:number invalid"
+  WHITESPACE@22..23 "\n"
+  QUERY@23..35
+    ROW_COMMAND@23..33
+      ROW_KW@23..26 "ROW"
+      WHITESPACE@26..27 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@27..33
+        QUALIFIED_NAME@27..28
+          IDENTIFIER@27..28
+            IDENT@27..28 "a"
+        WHITESPACE@28..29 " "
+        EQ@29..30 "="
+        WHITESPACE@30..31 " "
+        NUMBER@31..33
+          NUMBER_LIT@31..33 "1."
+    ERROR@33..35
+      NUMBER_LIT@33..35 ".5"
+  WHITESPACE@35..36 "\n"
+--- errors
+33..33: expected `|` or the end of the query (expected AND_KW, OR_KW, PIPE, COMMA, R_PAREN)

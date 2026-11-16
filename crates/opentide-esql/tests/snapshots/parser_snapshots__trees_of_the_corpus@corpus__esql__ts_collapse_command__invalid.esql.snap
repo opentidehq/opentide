@@ -1,0 +1,30 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/ts_collapse_command__invalid.esql
+---
+SOURCE_FILE@0..80
+  COMMENT@0..35 "// prod:ts_collapse_command invalid"
+  WHITESPACE@35..36 "\n"
+  QUERY@36..79
+    PROMQL_COMMAND@36..63
+      PROMQL_KW@36..42 "PROMQL"
+      WHITESPACE@42..43 " "
+      PROMQL_TEXT@43..58
+        PROMQL_WORD@43..58 "index=metrics-*"
+      WHITESPACE@58..59 " "
+      L_PAREN@59..60 "("
+      PROMQL_TEXT@60..62
+        PROMQL_WORD@60..62 "up"
+      R_PAREN@62..63 ")"
+    WHITESPACE@63..64 "\n"
+    PIPE@64..65 "|"
+    WHITESPACE@65..66 " "
+    TS_COLLAPSE_COMMAND@66..77
+      TS_COLLAPSE_KW@66..77 "TS_COLLAPSE"
+    WHITESPACE@77..78 " "
+    ERROR@78..79
+      L_PAREN@78..79 "("
+  WHITESPACE@79..80 "\n"
+--- errors
+77..78: expected `|` or the end of the query (expected PIPE, R_PAREN)

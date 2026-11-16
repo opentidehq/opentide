@@ -1,0 +1,21 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"stage a { $e }\")"
+---
+SOURCE_FILE@0..14
+  SEARCH_QUERY@0..14
+    STAGE@0..14
+      STAGE_KW@0..5 "stage"
+      WHITESPACE@5..6 " "
+      STAGE_NAME@6..7
+        IDENT@6..7 "a"
+      WHITESPACE@7..8 " "
+      L_BRACE@8..9 "{"
+      WHITESPACE@9..10 " "
+      SEARCH_EVENTS@10..12
+        VARIABLE@10..12
+          VAR_TOKEN@10..12 "$e"
+      WHITESPACE@12..13 " "
+      R_BRACE@13..14 "}"
+errors:
+14..14: expected the events or a section of the search after its stages (expected `stage`)

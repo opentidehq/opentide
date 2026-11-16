@@ -1,0 +1,59 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"strings.to_lower($e.a) = \\\"x\\\" nocase count($e) re.regex($e.f, `x`) nocase\")"
+---
+SOURCE_FILE@0..72
+  SEARCH_QUERY@0..72
+    SEARCH_EVENTS@0..72
+      COMPARISON@0..35
+        FUNCTION_CALL@0..22
+          FUNCTION_NAME@0..16
+            IDENT@0..7 "strings"
+            ACCESS_DOT@7..8 "."
+            FIELD_NAME@8..16 "to_lower"
+          L_PAREN@16..17 "("
+          ARGUMENTS@17..21
+            UDM_FIELD@17..21
+              VARIABLE@17..19
+                VAR_TOKEN@17..19 "$e"
+              MEMBER@19..21
+                ACCESS_DOT@19..20 "."
+                FIELD_NAME@20..21 "a"
+          R_PAREN@21..22 ")"
+        WHITESPACE@22..23 " "
+        EQ@23..24 "="
+        WHITESPACE@24..25 " "
+        LITERAL@25..28
+          STRING@25..28 "\"x\""
+        WHITESPACE@28..29 " "
+        NOCASE_KW@29..35 "nocase"
+      WHITESPACE@35..36 " "
+      FUNCTION_CALL@36..45
+        FUNCTION_NAME@36..41
+          IDENT@36..41 "count"
+        L_PAREN@41..42 "("
+        ARGUMENTS@42..44
+          VARIABLE@42..44
+            VAR_TOKEN@42..44 "$e"
+        R_PAREN@44..45 ")"
+      WHITESPACE@45..46 " "
+      FUNCTION_CALL@46..72
+        FUNCTION_NAME@46..54
+          IDENT@46..48 "re"
+          ACCESS_DOT@48..49 "."
+          FIELD_NAME@49..54 "regex"
+        L_PAREN@54..55 "("
+        ARGUMENTS@55..64
+          UDM_FIELD@55..59
+            VARIABLE@55..57
+              VAR_TOKEN@55..57 "$e"
+            MEMBER@57..59
+              ACCESS_DOT@57..58 "."
+              FIELD_NAME@58..59 "f"
+          COMMA@59..60 ","
+          WHITESPACE@60..61 " "
+          LITERAL@61..64
+            RAW_STRING@61..64 "`x`"
+        R_PAREN@64..65 ")"
+        WHITESPACE@65..66 " "
+        NOCASE_KW@66..72 "nocase"

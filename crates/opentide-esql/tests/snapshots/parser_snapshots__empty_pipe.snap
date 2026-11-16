@@ -1,0 +1,25 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{source}\\n{tree}--- errors\\n{errors}\")"
+---
+FROM a | | LIMIT 1
+SOURCE_FILE@0..18
+  QUERY@0..18
+    FROM_COMMAND@0..6
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "a"
+    WHITESPACE@6..7 " "
+    PIPE@7..8 "|"
+    WHITESPACE@8..9 " "
+    PIPE@9..10 "|"
+    WHITESPACE@10..11 " "
+    LIMIT_COMMAND@11..18
+      LIMIT_KW@11..16 "LIMIT"
+      WHITESPACE@16..17 " "
+      NUMBER@17..18
+        NUMBER_LIT@17..18 "1"
+--- errors
+8..9: expected a command

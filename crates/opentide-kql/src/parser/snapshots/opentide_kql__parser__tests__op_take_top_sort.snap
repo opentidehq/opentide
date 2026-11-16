@@ -1,0 +1,84 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | take 5 | limit 3 | top 5 by a desc nulls last, b | count | sort by a asc nulls first, b | order a\")"
+---
+SOURCE_FILE@0..101
+  QUERY@0..101
+    TABULAR_EXPRESSION@0..101
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      TAKE_OPERATOR@4..10
+        TAKE_KW@4..8 "take"
+        WHITESPACE@8..9 " "
+        NUMBER@9..10 "5"
+      WHITESPACE@10..11 " "
+      PIPE@11..12 "|"
+      WHITESPACE@12..13 " "
+      LIMIT_OPERATOR@13..20
+        LIMIT_KW@13..18 "limit"
+        WHITESPACE@18..19 " "
+        NUMBER@19..20 "3"
+      WHITESPACE@20..21 " "
+      PIPE@21..22 "|"
+      WHITESPACE@22..23 " "
+      TOP_OPERATOR@23..52
+        TOP_KW@23..26 "top"
+        WHITESPACE@26..27 " "
+        NUMBER@27..28 "5"
+        WHITESPACE@28..29 " "
+        BY_KW@29..31 "by"
+        WHITESPACE@31..32 " "
+        SORT_ITEM@32..49
+          NAME_REF@32..33
+            IDENT@32..33 "a"
+          WHITESPACE@33..34 " "
+          DESC_KW@34..38 "desc"
+          WHITESPACE@38..39 " "
+          NULLS_KW@39..44 "nulls"
+          WHITESPACE@44..45 " "
+          LAST_KW@45..49 "last"
+        COMMA@49..50 ","
+        WHITESPACE@50..51 " "
+        SORT_ITEM@51..52
+          NAME_REF@51..52
+            IDENT@51..52 "b"
+      WHITESPACE@52..53 " "
+      PIPE@53..54 "|"
+      WHITESPACE@54..55 " "
+      COUNT_OPERATOR@55..60
+        COUNT_KW@55..60 "count"
+      WHITESPACE@60..61 " "
+      PIPE@61..62 "|"
+      WHITESPACE@62..63 " "
+      SORT_OPERATOR@63..91
+        SORT_KW@63..67 "sort"
+        WHITESPACE@67..68 " "
+        BY_KW@68..70 "by"
+        WHITESPACE@70..71 " "
+        SORT_ITEM@71..88
+          NAME_REF@71..72
+            IDENT@71..72 "a"
+          WHITESPACE@72..73 " "
+          ASC_KW@73..76 "asc"
+          WHITESPACE@76..77 " "
+          NULLS_KW@77..82 "nulls"
+          WHITESPACE@82..83 " "
+          FIRST_KW@83..88 "first"
+        COMMA@88..89 ","
+        WHITESPACE@89..90 " "
+        SORT_ITEM@90..91
+          NAME_REF@90..91
+            IDENT@90..91 "b"
+      WHITESPACE@91..92 " "
+      PIPE@92..93 "|"
+      WHITESPACE@93..94 " "
+      SORT_OPERATOR@94..101
+        ORDER_KW@94..99 "order"
+        WHITESPACE@99..100 " "
+        SORT_ITEM@100..101
+          NAME_REF@100..101
+            IDENT@100..101 "a"

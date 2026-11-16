@@ -1,0 +1,14 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"cross $a\")"
+---
+SOURCE_FILE@0..8
+  SEARCH_QUERY@0..8
+    SEARCH_EVENTS@0..8
+      CROSS_JOIN@0..8
+        CROSS_KW@0..5 "cross"
+        WHITESPACE@5..6 " "
+        VARIABLE@6..8
+          VAR_TOKEN@6..8 "$a"
+errors:
+5..6: expected `join`

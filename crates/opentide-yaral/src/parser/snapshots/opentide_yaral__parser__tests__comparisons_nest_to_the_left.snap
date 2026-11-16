@@ -1,0 +1,23 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"$a = 1 != 2 nocase\")"
+---
+SOURCE_FILE@0..18
+  SEARCH_QUERY@0..18
+    SEARCH_EVENTS@0..18
+      COMPARISON@0..18
+        COMPARISON@0..6
+          VARIABLE@0..2
+            VAR_TOKEN@0..2 "$a"
+          WHITESPACE@2..3 " "
+          EQ@3..4 "="
+          WHITESPACE@4..5 " "
+          LITERAL@5..6
+            INTEGER@5..6 "1"
+        WHITESPACE@6..7 " "
+        NOT_EQ@7..9 "!="
+        WHITESPACE@9..10 " "
+        LITERAL@10..11
+          INTEGER@10..11 "2"
+        WHITESPACE@11..12 " "
+        NOCASE_KW@12..18 "nocase"
