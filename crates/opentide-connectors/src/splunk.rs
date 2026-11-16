@@ -942,6 +942,7 @@ impl Deployer for Splunk {
             Ok(DeployOutcome {
                 remote_id: (!deletion).then(|| request.rule_id.clone()),
                 operation: request.operation,
+                warnings: Vec::new(),
             })
         })
     }

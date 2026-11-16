@@ -208,6 +208,7 @@ def test_a_deploy_creates_the_rule(connection: Connection) -> None:
     assert outcome.operation == "create"
     assert outcome.remote_id is not None
     assert outcome.remote_id.startswith("19000000000000000")
+    assert outcome.warnings == []
 
 
 @pytest.mark.parametrize("policies", [["Default policy"], []])

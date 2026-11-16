@@ -229,6 +229,11 @@ export interface DeployOutcome {
   remoteId: string | null
   /** What was done. */
   operation: 'create' | 'update' | 'disable' | 'delete'
+  /**
+   * What the deploy raised without failing: the rule is deployed, and
+   * these say what to check, as `opentide deploy` warns of them.
+   */
+  warnings: Array<DeployWarning>
 }
 
 /** What `Workspace.deployPlan` plans: `opentide deploy --dry-run`'s options. */
@@ -252,6 +257,14 @@ export interface DeployPlanOptions {
  * What `Workspace.lint` runs: `opentide lint`'s options, without `--fix`
  * and `--changed` (the command line's).
  */
+/** A warning a deploy raised: the rule is deployed, with something to check. */
+export interface DeployWarning {
+  /** The event `opentide deploy` logs it as (`sysdig_rule_recreated`). */
+  code: string
+  /** What happened. */
+  message: string
+}
+
 export interface LintOptions {
   /** `--check`; empty runs the checks `lint.toml` enables. */
   checks?: Array<'filenames' | 'metadata' | 'recommended' | 'placeholders' | 'queries'>
