@@ -690,3 +690,24 @@ pub fn hover_target(source: &str, offset: usize) -> Option<(&'static str, String
         ),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::is_number;
+
+    /// The grammar's `number`, byte for byte: what its regex accepts and what
+    /// it does not.
+    #[test]
+    fn numbers_are_the_grammars() {
+        for yes in [
+            "0", "+1", "-12", "1.", "1.5", "-1.5e+3", "2E-1", "0x1F", "0XaB",
+        ] {
+            assert!(is_number(yes.as_bytes()), "{yes}");
+        }
+        for no in [
+            "", "+", "-", ".5", "1e5", "1e+", "1.5.", "0x", "0xg", "1x", "1 ", "1e+3x", "x1",
+        ] {
+            assert!(!is_number(no.as_bytes()), "{no}");
+        }
+    }
+}
