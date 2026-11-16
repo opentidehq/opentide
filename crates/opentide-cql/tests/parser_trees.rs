@@ -83,9 +83,36 @@ fn recovery() {
         ("missing_regex_close", "a=/abc"),
         ("saved_query_space", "$q (a=b)"),
         ("call_as_operand", "a and f()"),
+        ("empty_match", "x match { }"),
+        ("match_guard_without_arrow", "x match { a }"),
+        ("double_unary", "x := !!a"),
     ] {
         insta::assert_snapshot!(name, debug_parse(source));
     }
+}
+
+/// The review's noisy recoveries: each of these is one error, and an empty step expects no
+/// `|` (it found one).
+#[test]
+fn one_error_per_fault() {
+    for source in [
+        "x match { }",
+        "x match { a }",
+        "x := !!a",
+        "x := - - a",
+        "a=1 | | b=2",
+    ] {
+        let (_, parse) = parser::parse(source);
+        assert_eq!(parse.errors.len(), 1, "{source}: {:?}", parse.errors);
+    }
+    let (_, parse) = parser::parse("a=1 | | b=2");
+    assert!(
+        !parse.errors[0]
+            .expected
+            .contains(syntax::SyntaxKind::PIPE.raw()),
+        "{:?}",
+        parse.errors
+    );
 }
 
 /// Past `max_depth` the rest of the input is one error node and one error (not snapshotted:

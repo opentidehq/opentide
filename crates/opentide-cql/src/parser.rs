@@ -16,8 +16,10 @@ use crate::syntax::{SyntaxKind as K, SyntaxNode};
 use opentide_parse::{CompletedMarker, Grammar, Input, Parse, Parser, TokenSet, build};
 
 /// Nesting deeper than this is one error. tree-sitter took 10,000 levels; the floor every
-/// language keeps is `deep_queries`' `NESTING_CEILING` (1,000).
-pub(crate) const MAX_DEPTH: u32 = 1_024;
+/// language keeps is `deep_queries`' `NESTING_CEILING` (1,000), and no more: the deepest
+/// construct (`!f(` in an argument) opens four tree nodes per level, so 1,000 levels stay under
+/// the toolkit's `MAX_TREE_DEPTH` (4,096 nodes) and only `TooDeep` ever fires.
+pub(crate) const MAX_DEPTH: u32 = 1_000;
 
 pub(crate) const UNEXPECTED: &str = "unexpected";
 pub(crate) const MISSING_PAREN: &str = "missing `)`";
@@ -32,6 +34,7 @@ pub(crate) const EXPECTED_FIELD: &str = "expected a field";
 pub(crate) const EXPECTED_ARGUMENT: &str = "expected an argument";
 pub(crate) const EXPECTED_REGEX: &str = "expected a regular expression";
 pub(crate) const EXPECTED_NAME: &str = "expected a name";
+pub(crate) const EXPECTED_BRANCH: &str = "expected a match branch (`guard => pipeline`)";
 pub(crate) const FILTER_AFTER_ASSIGNMENT: &str =
     "a filter cannot follow an assignment without a pipe";
 
@@ -252,7 +255,8 @@ fn run(p: &mut Parser<'_>, top: bool) -> bool {
     let end = if top { TokenSet::EMPTY } else { NESTED_END };
     let mut any = false;
     let mut prev = None;
-    while !p.at_eof() && !end.contains(p.current()) && !at(p, K::PIPE) {
+    // `kind`, not `at`: an empty step expects a step, not the `|` it found.
+    while !p.at_eof() && !end.contains(p.current()) && kind(p, 0) != K::PIPE {
         any = true;
         prev = Some(step(p, prev));
     }
@@ -682,10 +686,15 @@ fn match_statement(p: &mut Parser<'_>) {
     field(p);
     p.bump_as(K::MATCH_KW.raw());
     if expect(p, K::L_BRACE, "expected `{` after `match`") {
-        loop {
-            match_branch(p);
-            if !eat(p, K::SEMI) || at(p, K::R_BRACE) || p.at_eof() {
-                break;
+        // `x match { }`: one error, not a guard, a `=>` and a body missing.
+        if kind(p, 0) == K::R_BRACE {
+            err(p, EXPECTED_BRANCH);
+        } else {
+            loop {
+                match_branch(p);
+                if !eat(p, K::SEMI) || at(p, K::R_BRACE) || p.at_eof() {
+                    break;
+                }
             }
         }
     }
@@ -694,19 +703,30 @@ fn match_statement(p: &mut Parser<'_>) {
     m.complete(p, K::MATCH_STATEMENT.raw());
 }
 
+/// `guard => pipeline`. A guard that is missing where no `=>` follows is the branch's one
+/// error: the body is not read as a second one.
 fn match_branch(p: &mut Parser<'_>) {
     let m = p.start();
-    match_guard(p);
+    if !match_guard(p) && kind(p, 0) != K::FAT_ARROW {
+        m.complete(p, K::MATCH_BRANCH.raw());
+        return;
+    }
     if !p.eat(K::FAT_ARROW.raw()) {
         err(p, "expected `=>`");
+        // `x match { a }`: no body either, and that is the same error.
+        if p.at_eof() || NESTED_END.contains(p.current()) {
+            m.complete(p, K::MATCH_BRANCH.raw());
+            return;
+        }
     }
     pipeline(p, false);
     m.complete(p, K::MATCH_BRANCH.raw());
 }
 
-/// The guard of a match branch: `*` and `**` (patterns), a string, a regex, a call, a parameter.
+/// The guard of a match branch: `*` and `**` (patterns), a string, a regex, a call, a parameter;
+/// whether there was one.
 #[inline(never)]
-fn match_guard(p: &mut Parser<'_>) {
+fn match_guard(p: &mut Parser<'_>) -> bool {
     match kind(p, 0) {
         K::STRING_TOKEN => wrap(p, K::STRING, K::STRING_TOKEN),
         K::SLASH => {
@@ -729,10 +749,17 @@ fn match_guard(p: &mut Parser<'_>) {
             p.bump_as(kw.raw());
             b.complete(p, K::BOOLEAN.raw());
         }
-        K::WORD if reserved(p, 0).is_some() => p.error(EXPECTED_VALUE),
+        K::WORD if reserved(p, 0).is_some() => {
+            p.error(EXPECTED_VALUE);
+            return false;
+        }
         k if PATTERN_TOKENS.contains(k.raw()) => unquoted_pattern(p),
-        _ => p.error(EXPECTED_VALUE),
+        _ => {
+            p.error(EXPECTED_VALUE);
+            return false;
+        }
     }
+    true
 }
 
 /// `$name(argument=value, ...)`.
@@ -973,8 +1000,15 @@ fn named_subquery_at(p: &Parser<'_>) -> bool {
 fn unary_expr(p: &mut Parser<'_>) -> CompletedMarker {
     let m = p.start();
     p.bump();
-    // The operand is not itself unary (`- - x` is an error).
-    if matches!(kind(p, 0), K::MINUS | K::BANG) || primary_expr(p).is_none() {
+    // The operand is not itself unary (`- - x` is an error): one error, then the operators
+    // and the operand are read into this node, so `x := !!a` is not a second error too.
+    if matches!(kind(p, 0), K::MINUS | K::BANG) {
+        err(p, EXPECTED_EXPR);
+        while matches!(kind(p, 0), K::MINUS | K::BANG) {
+            p.bump();
+        }
+        primary_expr(p);
+    } else if primary_expr(p).is_none() {
         err(p, EXPECTED_EXPR);
     }
     m.complete(p, K::UNARY_EXPRESSION.raw())
