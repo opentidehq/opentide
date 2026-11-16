@@ -112,7 +112,6 @@ exit: 0
   "event": "external_id_recorded",
   "external_id": "cs-rule-1",
   "level": "warning",
-  "logger": "opentide.deployment.external_ids",
   "platform": "crowdstrike",
   "tenant": "***",
   "timestamp": "0000-00-00 00:00:00",

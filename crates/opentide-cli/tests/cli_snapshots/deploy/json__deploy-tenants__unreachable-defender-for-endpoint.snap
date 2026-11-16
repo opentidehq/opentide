@@ -117,7 +117,6 @@ exit: 1
   "detail": "Cannot reach defender_for_endpoint tenant '***' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
   "event": "platform_deployment_failed",
   "level": "error",
-  "logger": "opentide.cli.services.deploy",
   "system": "defender_for_endpoint",
   "timestamp": "0000-00-00 00:00:00"
 }

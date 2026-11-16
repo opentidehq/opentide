@@ -1200,6 +1200,11 @@ pub struct RulesUnreviewedArgs {
 pub struct GenerateArgs {
     #[command(subcommand)]
     pub command: Option<GenerateCommand>,
+    /// The phases named as words (`generate schemas templates`), in the
+    /// order given; none runs the whole pipeline. An unknown one is refused
+    /// by the run, which lists the phases.
+    #[arg(value_name = "PHASE", hide = true)]
+    pub phases: Vec<String>,
 }
 
 /// `opentide generate inflight`.
@@ -1728,7 +1733,8 @@ pub enum RootCommand {
         about = "Generate schemas, templates, docs and exports",
         long_about = "Generate schemas, templates, docs and exports\n\nRun with no argument for the full pipeline, or name one or more phases to run only those, in the order given: schemas, templates, vocabs, snippets.\n\nRegenerate editor schemas without paying for documentation: `opentide generate schemas templates vocabs snippets`.",
         after_help = "Examples:\n  $ opentide generate\n  $ opentide generate schemas templates",
-        subcommand_value_name = "COMMAND"
+        subcommand_value_name = "COMMAND",
+        subcommand_precedence_over_arg = true
     )]
     Generate(GenerateArgs),
     #[command(
@@ -2114,11 +2120,6 @@ pub enum GenerateCommand {
         subcommand_value_name = "COMMAND"
     )]
     Inflight(GenerateInflightArgs),
-    /// The phases named as words (`generate schemas templates`): a word that
-    /// is not a subcommand starts them (`GeneratePhaseGroup`). Not a
-    /// subcommand, so not in the catalogue.
-    #[command(external_subcommand)]
-    Phases(Vec<String>),
 }
 
 /// The subcommands of `opentide generate inflight`.

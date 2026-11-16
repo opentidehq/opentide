@@ -29,6 +29,7 @@ use regex::Regex;
 use serde_json::Value as JsonValue;
 
 use crate::env::Env;
+use crate::redact::{NOT_UTF8, toml_position};
 
 /// What a hidden value reads as. Never the value, its length or a part of it.
 pub const HIDDEN: &str = "•••• hidden";
@@ -984,17 +985,6 @@ fn proven(document: &Node, redacted: &str) -> bool {
         .any(|secret| redacted.contains(secret.as_str()))
 }
 
-/// Where a parse error is, never its message: that may quote the file.
-fn toml_position(error: &config_toml::ParseError) -> String {
-    if error.too_deep {
-        return "nested too deep".to_owned();
-    }
-    match (error.line, error.column) {
-        (Some(line), Some(column)) => format!("line {line}, column {column}"),
-        _ => "position unknown".to_owned(),
-    }
-}
-
 /// `text` with every secret value replaced, as the raw view shows it
 /// (`redact_toml`): a value with a `setup` table or a secret-named key on
 /// its key path reads as its variable reference and whether it is set, or as
@@ -1032,15 +1022,6 @@ fn has(document: &Node, parts: &[String]) -> bool {
     at(document, parts).is_some()
 }
 
-fn io_error_name(error: &std::io::Error) -> &'static str {
-    match error.kind() {
-        std::io::ErrorKind::NotFound => "FileNotFoundError",
-        std::io::ErrorKind::PermissionDenied => "PermissionError",
-        std::io::ErrorKind::IsADirectory => "IsADirectoryError",
-        _ => "OSError",
-    }
-}
-
 /// One configuration file (`_file`).
 fn file(
     file_key: &str,
@@ -1057,17 +1038,13 @@ fn file(
     if let Some(file_path) = &path {
         match std::fs::read(file_path) {
             Err(error) => {
-                raw_problem = Some(format!(
-                    "the file could not be read ({})",
-                    io_error_name(&error)
-                ));
+                raw_problem = Some(format!("the file could not be read: {error}"));
             }
             Ok(bytes) => {
                 let bytes = bytes.strip_prefix("\u{feff}".as_bytes()).unwrap_or(&bytes);
                 match std::str::from_utf8(bytes) {
                     Err(_) => {
-                        raw_problem =
-                            Some("the file could not be read (UnicodeDecodeError)".to_owned());
+                        raw_problem = Some(NOT_UTF8.to_owned());
                     }
                     Ok(text) => {
                         own = config_toml::parse(text).ok();
