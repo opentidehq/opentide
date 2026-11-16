@@ -371,3 +371,49 @@ fn no_guard_fires_on_small_inputs() {
         );
     }
 }
+
+/// Inputs the mutation runs found tree-sitter and the parser disagreeing on, each reduced to
+/// a minimal source: `(source, tree-sitter and the parser report an error)`. Each fails
+/// without the fix it pins.
+#[test]
+fn pinned_regressions() {
+    for (source, fails) in [
+        // A negated call, `match`, `<=>` after a filter are filters there, and fail.
+        ("foo !in(x)", true),
+        ("foo | !in(x)", false),
+        ("foo not in(x)", true),
+        ("foo x match { * => a }", true),
+        // `%` is an operator after an operand.
+        ("x := (p * 1) % t", false),
+        // A saved query's `(` and a parameter's name touch the sigil.
+        ("$q (a=b)", true),
+        ("? \"x\"", true),
+        // The scanner reads any word before `:=` as an assignment field.
+        ("#type OR:= \"fortigate\"", false),
+        ("case := (@timestamp)", false),
+        ("x a like := 1", false),
+        // After a filter only a plain word starts an assignment.
+        ("ERROR \"Success\":= \"fortigate\"", true),
+        ("upperhost a[0]:= upper", true),
+        ("a b := 1", false),
+        // A call after an assignment's parenthesised value, then a filter.
+        ("x := (a + b)f(a1, b) *", false),
+        // `true` and `false` are keywords, not names.
+        ("true = x", true),
+        ("a=~f(true=1)", true),
+        ("f(a: { }, false: { })", true),
+        // `case` is a word inside parentheses.
+        ("(x case )", false),
+        // A reserved word is no parameter default.
+        ("?{a=and}", true),
+        // A comment longer than a saved query name wins.
+        ("f({$/*x y()}, a)\n/* c */", true),
+    ] {
+        assert_eq!(
+            tree_sitter_fails(source),
+            fails,
+            "tree-sitter on {source:?}"
+        );
+        assert_eq!(ours_fails(source), fails, "the parser on {source:?}");
+    }
+}
