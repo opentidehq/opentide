@@ -5,7 +5,7 @@
 //! warnings follow libyara's and YARA-X's.
 
 use crate::atoms::{self, MaskedByte};
-use crate::catalog::{Catalog, Kind, Member};
+use crate::catalog::{Catalog, Kind};
 use crate::{Context, Finding, Profile, regexp};
 use opentide_core::{Severity, codes};
 use std::cell::RefCell;
@@ -113,7 +113,6 @@ fn scalar(kind: Kind) -> Ty {
         Kind::Integer => Ty::Int,
         Kind::Float => Ty::Float,
         Kind::String => Ty::Str,
-        // libyara has no boolean fields; YARA-X's are its own.
         Kind::Boolean => Ty::Bool,
         Kind::Regexp => Ty::Regexp,
         _ => Ty::Unknown,
@@ -292,19 +291,22 @@ impl<'a> Checker<'a> {
             let at = span(&import.span());
             let name = import.module_name;
             if !self.catalog.known_modules.contains(name) {
-                self.error(
-                    codes::YARA_UNKNOWN_MODULE,
-                    format!(
-                        "YARA has no module `{name}`: yara-1.0 knows {}",
-                        self.catalog
-                            .known_modules
-                            .iter()
-                            .cloned()
-                            .collect::<Vec<_>>()
-                            .join(", ")
+                let known = self
+                    .catalog
+                    .known_modules
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let message = match self.catalog.unsupported.get(name) {
+                    Some(why) => format!(
+                        "opentide does not support the YARA module `{name}`: {why}. The modules it knows are YARA-X's defaults: {known}"
                     ),
-                    at,
-                );
+                    None => format!(
+                        "YARA has no module `{name}`: the modules opentide knows are YARA-X's defaults, {known}"
+                    ),
+                };
+                self.error(codes::YARA_UNKNOWN_MODULE, message, at);
                 continue;
             }
             self.import_at.push((name.to_string(), at.0));
@@ -1682,18 +1684,6 @@ impl<'a> Checker<'a> {
         Ty::Unknown
     }
 
-    /// Whether a catalogue member is YARA-X's, reporting it when it is not.
-    fn available(&mut self, m: &Member, shown: &str, at: (usize, usize)) -> bool {
-        if !m.yara_x {
-            self.error(
-                codes::YARA_UNKNOWN_MODULE_MEMBER,
-                format!("YARA-X does not have `{shown}`"),
-                at,
-            );
-        }
-        m.yara_x
-    }
-
     fn member(&mut self, base: Ty, name: &str, at: (usize, usize)) -> Ty {
         let (module, path) = match base {
             Ty::Object { module, path } => (module, path),
@@ -1724,11 +1714,12 @@ impl<'a> Checker<'a> {
             );
             return Ty::Unknown;
         };
-        if !self.available(m, &shown, at) {
-            return Ty::Unknown;
-        }
-        self.last_member_yara_x_bool = m.yara_x_kind.as_deref() == Some("boolean");
+        // YARA-X's module booleans compare with `==` like an integer but are
+        // refused in arithmetic, an ordering and `!=` (checked against the
+        // 1.23.0 wheel): an integer the checker tags as YARA-X's boolean.
+        self.last_member_yara_x_bool = m.kind == Kind::Boolean;
         match m.kind {
+            Kind::Boolean => Ty::Int,
             Kind::Struct => Ty::Object {
                 module,
                 path: child,
@@ -1857,7 +1848,7 @@ impl<'a> Checker<'a> {
         let Some(m) = self.catalog.member(&module, &path) else {
             return Ty::Unknown;
         };
-        let candidates: Vec<_> = m.overloads.iter().filter(|o| o.yara_x).collect();
+        let candidates: Vec<_> = m.overloads.iter().collect();
         let found = candidates.iter().find(|o| {
             o.args.len() == args.len()
                 && o.args.chars().zip(&args).all(|(want, got)| {
@@ -1871,16 +1862,17 @@ impl<'a> Checker<'a> {
                 // overload takes a boolean there (`console.log(pe.is_dll())`).
                 for (k, (want, a)) in o.args.chars().zip(&call.args).enumerate() {
                     let boolean_overload = m.overloads.iter().any(|x| {
-                        x.yara_x
-                            && x.args.len() == call.args.len()
-                            && x.args.chars().nth(k) == Some('b')
+                        x.args.len() == call.args.len() && x.args.chars().nth(k) == Some('b')
                     });
                     if matches!(want, 'i' | 'f') && !boolean_overload {
                         self.yara_x_number(a, "as a function argument");
                     }
                 }
-                if o.yara_x_ret.as_deref() == Some("boolean") {
+                // A boolean YARA-X returns, as a field: an integer tagged as
+                // YARA-X's boolean.
+                if o.ret == "boolean" {
                     self.yara_x_bool.insert(span(&call.span()));
+                    return Ty::Int;
                 }
                 ret_ty(&o.ret)
             }

@@ -153,6 +153,31 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
         "import \"foo\" rule a { condition: true }",
         &[("yara_unknown_module", E)],
     ),
+    // The modules are YARA-X's defaults less `vt` (#1225): `magic` is no
+    // default, `vt` is excluded; `crx` and `zip` are known.
+    (
+        "import \"magic\" rule a { condition: true }",
+        &[("yara_unknown_module", E)],
+    ),
+    (
+        "import \"vt\" rule a { condition: true }",
+        &[("yara_unknown_module", E)],
+    ),
+    (
+        "import \"crx\" import \"zip\" rule a { condition: crx.is_crx or zip.is_zip }",
+        &[],
+    ),
+    // Every YARA-X module boolean compares with `==` (YARA-X warns,
+    // `bool_int_comparison`) and is refused in an ordering, as
+    // `pe.is_signed` is (checked against the 1.23.0 wheel).
+    (
+        "import \"lnk\" rule a { condition: lnk.is_lnk == 1 }",
+        &[("yara_suspicious_expression", W)],
+    ),
+    (
+        "import \"lnk\" rule a { condition: lnk.is_lnk > 0 }",
+        &[("yara_type", E)],
+    ),
     (
         "rule a { condition: pe.number_of_sections > 1 }",
         &[("yara_module_not_imported", E)],
@@ -801,6 +826,23 @@ fn every_code_on_a_raw_signature() {
         failures.len(),
         failures.join("\n")
     );
+}
+
+/// A refused module's message says why (#1225).
+#[test]
+fn a_refused_module_says_why() {
+    for (module, why) in [("magic", "magic-module"), ("vt", "VirusTotal")] {
+        let source = format!("import \"{module}\" rule a {{ condition: true }}");
+        let found = opentide_yara::analyze_with(&source, &raw()).diagnostics;
+        let message = &found
+            .iter()
+            .find(|d| d.code == "yara_unknown_module")
+            .unwrap_or_else(|| panic!("{module}: {found:?}"))
+            .message;
+        assert!(message.contains("does not support"), "{message}");
+        assert!(message.contains(why), "{message}");
+        assert!(!message.contains(", vt,"), "{message}");
+    }
 }
 
 #[test]

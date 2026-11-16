@@ -148,6 +148,7 @@ pub fn run(args: &CodegenArgs) -> Result<u8> {
     let mut problems = committed(&root, check)?;
     problems.extend(engine_catalog(&root, check)?);
     problems.extend(crate::astgen::sync(&root, check)?);
+    problems.extend(crate::yara_modules::sync(&root, check)?);
     let mut compared = 0;
     let mut judged = 0;
     let mut differences = Vec::new();

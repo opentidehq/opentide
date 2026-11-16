@@ -1,6 +1,7 @@
 //! Print every YARA-X module's fields and functions as JSON.
 //!
-//! `cargo run --release --manifest-path scripts/yara-modules/Cargo.toml > yara-x-modules.json`
+//! `cargo run --release --manifest-path scripts/engine/yara-modules/Cargo.toml > data/catalogs/yara/yara-x-modules.json`,
+//! then `cargo xtask codegen` (xtask/src/yara_modules.rs).
 
 use serde_json::{Value, json};
 use yara_x::mods::reflect::{Struct, Type};

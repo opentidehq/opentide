@@ -49,7 +49,7 @@ Errors are what YARA-X 1.x refuses to compile (each checked against the `yara-x`
 | `yara_unreferenced_string` | A string the condition never uses, without `them` (`$_name` excepted) | `parser.c` `yr_parser_reduce_rule_declaration_phase_2` | `RAW`: `$b` unused; `$_x` clean |
 | `yara_undefined_identifier` | A bare name that is neither an earlier rule, a loop or `with` variable, nor a module; a call that is not a module function or a reader; a module field called as a function ("is not a function"); a module function named and not called ("wrong usage of identifier"); `entrypoint` (YARA-X E017). A loop variable an enclosing loop binds shadows it, as in YARA-X | `grammar.y` `identifier` | `RAW`: `b`, `b` defined later, `foo(1)`, `pe.number_of_sections(0)`, `pe.sections[0].name(0)`, `s.name(0)` in a loop, `pe.signatures[0].valid_on`, `pe.imphash and true`, `entrypoint == 0`; nested loops binding one name clean |
 | `yara_rule_identifier_conflict` | A rule named like a reserved word or built-in (YARA-X's `with` and readers among them), or like an imported module | `lexer.l`; YARA-X E013 | `RAW`: `rule uint8`, `rule int64`, `import "pe" rule pe` |
-| `yara_unknown_module` | `import` of a module outside yara-1.0's 13 | yara-1.0 | `RAW`: `import "foo"` |
+| `yara_unknown_module` | `import` of a module outside YARA-X's default modules less `vt` (below); for `magic`, `vt` and YARA-X's experimental modules the message says why | YARA-X's default modules; #1225 | `RAW`: `import "foo"`, `import "magic"`, `import "vt"`; `a_refused_module_says_why` |
 | `yara_module_not_imported` | A module member used without its `import`, or above it: the compiler reads the signature top to bottom | `grammar.y` `identifier` | `RAW`: `pe.number_of_sections`, a rule above `import "pe"` |
 | `yara_unknown_module_member` | A member YARA-X's module lacks, or arguments no overload takes | `modules/*/*.c` `begin_declarations`; `parser.c` `yr_parser_check_types` | `RAW`: `pe.nonexistent`, `pe.exports(1, 2)`, `math.entropy("a", "b")` |
 | `yara_type` | An operator or function on the wrong type; a boolean where YARA wants a `primary_expression`; a module member YARA-X types as boolean where a number is needed (arithmetic, an ordering, `!=`, a comparison with a float, an offset, an index, a range bound, a quantifier, an enumeration among integers, a function argument no overload takes a boolean for), once per comparison; a regexp as a condition; a string index that is a string; an enumeration mixing types | `grammar.y` `check_type`; YARA-X E002, E003 | `RAW`: `filesize contains "a"`, `"a" + 1`, `filesize matches "x"`, `pe.is_dll() > 0`, `1 != pe.is_dll()`, `uint8(pe.is_dll())`, `for all x in (1, 2.0)`; `ranges_cover_the_expression_as_written` |
@@ -101,7 +101,7 @@ In `.yar` files, and in `yara.signature` and HarfangLab's decomposed fragments i
 
 | Feature | What it does |
 |---------|--------------|
-| Hover | Module members (signature, type, documentation, which engine has it), modules, strings (`$a`, `#a`, `@a`, `!a` show the definition), rules, integer readers and built-in words |
+| Hover | Module members (signature, type, documentation), modules, strings (`$a`, `#a`, `@a`, `!a` show the definition), rules, integer readers and built-in words |
 | Completion | Modules after `import "`, members after `pe.` (and after `pe.sections[0].`), the rule's strings after `$`, `#`, `@` or `!`, and keywords, readers, imported modules and earlier rules elsewhere |
 | Signature help | Each overload of a module function, and the integer readers |
 | Symbols | Rules and their strings |
@@ -112,7 +112,13 @@ In `.yar` files, and in `yara.signature` and HarfangLab's decomposed fragments i
 
 ## Modules
 
-`data/catalogs/yara/modules.toml` has every member of the 13 modules, generated from libyara 4.5.4's module declarations and YARA-X 1.23.0's module reflection (`.agents/skills/catalogs/SKILL.md`). Each row says which engine has it, so a member only one engine knows is reported as above. Where YARA-X types a member differently, the row records it (`yara_x_ret` for a function, `yara_x_kind` for a field). **libyara 4.5.4 ships no `lnk` module**, though yara-1.0 lists it among the 13: importing it is allowed as the spec says, and its members are checked against YARA-X's.
+The modules opentide knows are **YARA-X's documented default module set, less `vt`** (#1225): `console`, `crx`, `cuckoo`, `dex`, `dotnet`, `elf`, `hash`, `lnk`, `macho`, `math`, `pe`, `string`, `time`, `zip`. Importing any other is `yara_unknown_module`:
+
+- `magic` is not one of YARA-X's defaults: YARA-X builds it only with its `magic-module` feature and libmagic, because it can be slow and its output varies across libmagic versions ([YARA-X: magic](https://virustotal.github.io/yara-x/docs/modules/magic/)). A rule that imports it is not portable.
+- `vt` is a YARA-X default that opentide refuses on purpose (a maintainer decision): it describes VirusTotal's own scan metadata, which only VirusTotal's scanning fills in. YARA-X compiles `import "vt"`: the `[[yara]]` entry `vt-module-not-supported` records the difference.
+- `msi`, `olecf` and `vba` are experimental in YARA-X and off by default.
+
+`data/catalogs/yara/modules.toml` has every member of those modules, by path, generated by `cargo xtask codegen` (`xtask/src/yara_modules.rs`; CI runs `--check`) from `data/catalogs/yara/yara-x-modules.json`, YARA-X 1.23.0's reflection of its default modules (`scripts/engine/yara-modules`; `.agents/skills/catalogs/SKILL.md`). libyara is no input. A member YARA-X types as boolean, a field or a function's return, is checked as YARA-X checks it: compared with `==` to an integer it is taken (YARA-X warns, `yara_suspicious_expression`), in arithmetic, an ordering or `!=` it is `yara_type`. Under a profile, a known module outside the profile's confirmed set is the warning `yara_module_unconfirmed`, `crx` and `zip` included; no other gate applies.
 
 ## Verified against the engines
 
@@ -120,13 +126,13 @@ The reference is the `yara-x` 1.23.0 wheel, which never ships (`scripts/engine/o
 
 ### In every `cargo test`
 
-- **Conformance cases**: `crates/testdata/conformance/yara/cases.json` holds 1,762 cases with both engines' recorded verdicts. They come from YARA-X's `lib/src/tests/mod.rs` and its compiler `errors`/`warnings` suites, and from libyara's `tests/test-rules.c`, extracted by `scripts/engine/sync_yara_conformance.py`. Verdict pairs (libyara, YARA-X):
+- **Conformance cases**: `crates/testdata/conformance/yara/cases.json` holds 1,766 cases with both engines' recorded verdicts. They come from YARA-X's `lib/src/tests/mod.rs` and its compiler `errors`/`warnings` suites, from libyara's `tests/test-rules.c`, and four of opentide's own (`opentide:modules/*`: `magic`, `vt`, `crx`, `zip`), extracted by `scripts/engine/sync_yara_conformance.py`. Verdict pairs (libyara, YARA-X):
 
   | Pair | Cases |
   |------|-------|
   | ok, ok | 828 |
-  | error, error | 506 |
-  | error, ok | 222 |
+  | error, error | 507 |
+  | error, ok | 225 |
   | warning, ok | 171 |
   | ok, error | 27 |
   | warning, error | 8 |
@@ -135,9 +141,10 @@ The reference is the `yara-x` 1.23.0 wheel, which never ships (`scripts/engine/o
   - an error exactly where YARA-X refuses (`agrees_with_yara_x`, every case with a YARA-X verdict);
   - under a context that refuses YARA-X-only syntax, no error on a case both engines compile (`the_portability_check_takes_what_both_engines_compile`).
 
-  The differences are the `[[yara]]` entries of `crates/testdata/oracles/exceptions.toml`. There are two, both YARA-X limits that are not modelled:
+  The differences are the `[[yara]]` entries of `crates/testdata/oracles/exceptions.toml`. There are three: two YARA-X limits that are not modelled, and one decision:
   - its regexp size limit (nested repetitions);
-  - its variable frame limit, about 2,048 variables in one condition (E047).
+  - its variable frame limit, about 2,048 variables in one condition (E047);
+  - `import "vt"`, which YARA-X compiles and opentide refuses (`vt-module-not-supported`).
 - **External corpus**: 50 public files with their `.broken.` twins, under `crates/testdata/conformance/external/yara`. 25 come from ReversingLabs (MIT) and 25 from signature-base (DRL 1.1). `crates/opentide-yara/tests/external_corpus.rs` requires no finding on each file, whether the context allows YARA-X-only syntax or refuses it, and an error on each twin.
 
 ### In CI

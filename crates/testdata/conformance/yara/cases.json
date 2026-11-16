@@ -13783,6 +13783,39 @@
    "yara_x": "error",
    "libyara_message": "line 1: syntax error, unexpected '\\\\', expecting <condition>",
    "yara_x_message": "error[E001]: syntax error"
+  },
+  {
+   "origin": "opentide:modules/magic",
+   "kind": "opentide",
+   "source": "import \"magic\"\nrule t { condition: true }",
+   "libyara": "error",
+   "yara_x": "error",
+   "libyara_message": "line 1: unknown module \"magic\"",
+   "yara_x_message": "error[E010]: unknown module `magic`"
+  },
+  {
+   "origin": "opentide:modules/vt",
+   "kind": "opentide",
+   "source": "import \"vt\"\nrule t { condition: true }",
+   "libyara": "error",
+   "yara_x": "ok",
+   "libyara_message": "line 1: unknown module \"vt\""
+  },
+  {
+   "origin": "opentide:modules/crx",
+   "kind": "opentide",
+   "source": "import \"crx\"\nrule t { condition: crx.is_crx or true }",
+   "libyara": "error",
+   "yara_x": "ok",
+   "libyara_message": "line 2: invalid field name \"is_crx\""
+  },
+  {
+   "origin": "opentide:modules/zip",
+   "kind": "opentide",
+   "source": "import \"zip\"\nrule t { condition: zip.is_zip or true }",
+   "libyara": "error",
+   "yara_x": "ok",
+   "libyara_message": "line 2: invalid field name \"is_zip\""
   }
  ]
 }
