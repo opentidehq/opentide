@@ -228,6 +228,39 @@ mod tests {
         assert!(t.contains("QUALIFIED_NAME@4..6"), "{t}");
     }
 
+    /// The cast of a primary expression (the pattern of `LIKE`, the input of
+    /// `GROK`, `DISSECT` and the extract commands) names a `TypeName`, as any
+    /// other cast does, and a missing type is an error: the old engine said
+    /// `missing identifier` and coloured the type `type`.
+    #[test]
+    fn the_cast_of_a_primary_names_a_type() {
+        for source in [
+            "FROM a | WHERE x LIKE \"a\"::keyword::text",
+            "FROM a | GROK x::keyword \"%{WORD:a}\"",
+            "FROM a | DISSECT a.b::keyword \"%{x}\"",
+            "FROM a | DENSE_VECTOR t::keyword",
+        ] {
+            let t = clean(source);
+            assert_eq!(
+                t.matches("TYPE_NAME@").count(),
+                t.matches("INLINE_CAST@").count(),
+                "{source}\n{t}"
+            );
+        }
+        for source in [
+            "FROM a | WHERE x LIKE \"a\"::",
+            "FROM a | WHERE x LIKE \"a\"::\"b\"",
+            "FROM a | URI_PARTS p = x::",
+            "FROM a | GROK x:: \"%{a}\"",
+        ] {
+            let (tree, errors) = tree(source);
+            assert!(errors > 0, "{source}\n{tree}");
+        }
+        // The pipe after a missing type is the pipeline's, not a type name.
+        let (t, _) = tree("FROM a | WHERE x LIKE \"a\"::| LIMIT 1");
+        assert!(t.contains("LIMIT_COMMAND@"), "{t}");
+    }
+
     #[test]
     fn nesting_past_the_limit_is_one_diagnostic() {
         let deep = format!("ROW x = {}1{}", "(".repeat(2_000), ")".repeat(2_000));

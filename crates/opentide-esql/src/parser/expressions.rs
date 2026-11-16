@@ -208,13 +208,7 @@ fn operators(p: &mut Parser<'_>, min: u8) -> Option<CompletedMarker> {
             }
             Infix::Cast => {
                 p.bump();
-                let t = p.start();
-                if p.at(K::IDENT.raw()) || p.current() == K::WORD.raw() {
-                    token_node(p, K::IDENT, K::IDENTIFIER);
-                } else {
-                    p.error("expected a type name after `::`");
-                }
-                t.complete(p, K::TYPE_NAME.raw());
+                type_name(p);
                 m.complete(p, K::INLINE_CAST.raw())
             }
         };
@@ -362,9 +356,21 @@ fn cast_chain(p: &mut Parser<'_>, mut lhs: CompletedMarker) {
     while p.at(K::COLON_COLON.raw()) {
         let m = lhs.precede(p);
         p.bump();
-        token_node(p, K::IDENT, K::IDENTIFIER);
+        type_name(p);
         lhs = m.complete(p, K::INLINE_CAST.raw());
     }
+}
+
+/// `TypeName = Identifier`: the type after `::`. Anything else is an error,
+/// and is left for the enclosing rule (a `|`, a string, the end).
+fn type_name(p: &mut Parser<'_>) {
+    let t = p.start();
+    if p.at(K::IDENT.raw()) || p.current() == K::WORD.raw() {
+        token_node(p, K::IDENT, K::IDENTIFIER);
+    } else {
+        p.error("expected a type name after `::`");
+    }
+    t.complete(p, K::TYPE_NAME.raw());
 }
 
 /// The arguments of a call, and its `)`.
