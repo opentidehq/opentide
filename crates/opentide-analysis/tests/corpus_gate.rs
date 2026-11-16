@@ -2,10 +2,10 @@
 //! in `crates/testdata/corpus/<language>/` tagged `prod:<rule>`.
 //!
 //! The gate does not know a parser. It names productions, and reads a parsed
-//! tree, through a per-language [`KindNames`] table ([`kind_names`]): every
-//! language has the tree-sitter names today, and a language that moves to
-//! `opentide-parse` keeps its gate by supplying the names of its
-//! `SyntaxKind`s instead (#1219).
+//! tree, through a per-language [`KindNames`] table ([`kind_names`]): a
+//! language has the tree-sitter names until it moves to `opentide-parse`, and
+//! keeps its gate by supplying the names of its `SyntaxKind`s instead (#1219),
+//! as CQL does.
 
 #![expect(
     clippy::expect_used,
@@ -105,11 +105,33 @@ impl KindNames for TreeSitterNames {
     }
 }
 
-/// The kind-name table of `language`. Every language has the tree-sitter
-/// names; a language that moves to `opentide-parse` returns its `SyntaxKind`
-/// names here.
+/// The names of CQL's pure-Rust parser: its node kinds in `snake_case`, which
+/// are tree-sitter's names of the same productions (`opentide_cql::debug_productions`),
+/// and the node and token kinds of a parse (`opentide_cql::debug_kinds`).
+struct CqlNames;
+
+impl KindNames for CqlNames {
+    fn productions(&self) -> BTreeSet<String> {
+        opentide_cql::debug_productions().into_iter().collect()
+    }
+
+    fn parse(&self, body: &str) -> Parsed {
+        let (has_error, kinds) = opentide_cql::debug_kinds(body);
+        Parsed {
+            has_error,
+            dump: kinds.join(" "),
+            kinds: kinds.into_iter().collect(),
+        }
+    }
+}
+
+/// The kind-name table of `language`: the `SyntaxKind` names of a language
+/// that moved to `opentide-parse`, else the tree-sitter names.
 fn kind_names(language: LanguageId, id: &'static str) -> Box<dyn KindNames> {
-    Box::new(TreeSitterNames { language, id })
+    match language {
+        LanguageId::Cql => Box::new(CqlNames),
+        _ => Box::new(TreeSitterNames { language, id }),
+    }
 }
 
 const KQL_REQUIRED: &[&str] = &[
@@ -513,7 +535,9 @@ fn cql_corpus_gate() {
         language: LanguageId::Cql,
         id: "cql",
         // Keywords and leaf tokens: every fixture that tags a production contains
-        // them, so they need no fixture of their own.
+        // them, so they need no fixture of their own. The names after
+        // `argument_list` were aliases or scanner tokens in tree-sitter's grammar,
+        // never a rule of its own, and are one-token nodes of the pure-Rust tree.
         structural: &[
             "source_file",
             "and",
@@ -526,6 +550,12 @@ fn cql_corpus_gate() {
             "regex_flags",
             "saved_query_name",
             "argument_list",
+            "argument_name",
+            "parameter_name",
+            "parameter_default",
+            "identifier",
+            "function_name",
+            "unquoted_pattern",
         ],
     });
 }
@@ -654,4 +684,19 @@ fn the_gate_reads_productions_and_trees_only_through_its_table() {
     );
     assert_eq!(names.productions.get(), 1);
     assert!(names.parses.get() > 0);
+}
+
+#[test]
+fn cql_names_are_the_pure_rust_tree() {
+    let names = kind_names(LanguageId::Cql, "cql");
+    let tree = names.parse("a=1 or groupBy(x) // note");
+    assert!(!tree.has_error, "{}", tree.dump);
+    for kind in ["or_filter", "field_filter", "function_call", "line_comment"] {
+        assert!(tree.has_kind(kind), "{kind}: {}", tree.dump);
+    }
+    assert!(names.parse("a=1 | (").has_error);
+    let productions = names.productions();
+    assert!(productions.contains("match_statement"));
+    // An enum of the ungram is no node, and no production.
+    assert!(!productions.contains("filter") && !productions.contains("expr"));
 }
