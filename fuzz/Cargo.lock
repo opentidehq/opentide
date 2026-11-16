@@ -2935,12 +2935,14 @@ dependencies = [
 name = "opentide-kuery"
 version = "0.12.0"
 dependencies = [
+ "logos",
  "opentide-core",
  "opentide-ecs",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
  "regex",
- "tree-sitter",
+ "rowan",
 ]
 
 [[package]]

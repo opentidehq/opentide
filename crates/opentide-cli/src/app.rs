@@ -2671,11 +2671,19 @@ mod tests {
         let past = utc_at(std::time::UNIX_EPOCH + Duration::from_secs(last + 1));
         assert_eq!(past.0, "9999-12-30T22:00:00Z");
         assert_eq!(past.1, "99991230T220000999999Z");
-        let first = utc_at(std::time::UNIX_EPOCH - Duration::from_secs(377_705_023_202));
-        assert_eq!(
-            first,
-            utc_at(std::time::UNIX_EPOCH - Duration::from_secs(377_705_023_201))
+        // Before jiff's start (year -9999). Windows' SystemTime begins in
+        // 1601, so there no such moment exists to stop.
+        let before = std::time::UNIX_EPOCH.checked_sub(Duration::from_secs(377_705_023_202));
+        assert!(
+            before.is_some() || cfg!(windows),
+            "only Windows starts after -9999"
         );
+        if let Some(before) = before {
+            assert_eq!(
+                utc_at(before),
+                utc_at(std::time::UNIX_EPOCH - Duration::from_secs(377_705_023_201))
+            );
+        }
     }
 
     #[test]
