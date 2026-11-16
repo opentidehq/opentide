@@ -89,7 +89,7 @@ impl From<ApiError> for Failure {
 /// Sysdig's error message from a body, else the raw text (`api_error`).
 /// A message that is not a string is written as JSON.
 fn api_error(answer: &Answer) -> String {
-    if let Some(Json::Object(body)) = answer.json() {
+    if let Some(Json::Object(body)) = answer.quotable_json() {
         for key in ["message", "error", "errors"] {
             match body.get(key) {
                 Some(Json::Str(text)) if !text.is_empty() => return text.clone(),
@@ -735,5 +735,19 @@ impl Platform for Sysdig {
 
     fn deployer(&self) -> Option<&dyn Deployer> {
         Some(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_api_error_does_not_quote_the_bearer() {
+        use crate::answer::{TEST_BEARER, answer_to_bearer};
+        let answer = answer_to_bearer(&format!(r#"{{"message":"denied {TEST_BEARER}"}}"#));
+        assert_eq!(api_error(&answer), "denied ***");
+        let answer = answer_to_bearer(&format!(r#"{{"errors":["{TEST_BEARER}"]}}"#));
+        assert_eq!(api_error(&answer), r#"["***"]"#);
     }
 }

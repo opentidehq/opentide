@@ -1,0 +1,35 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/kuery/value_list__valid.kuery
+---
+SourceFile@0..68
+  FieldValueExpression@0..36
+    Field@0..6
+      UnquotedLiteral@0..6
+        Word@0..1 "#"
+        Whitespace@1..2 " "
+        Word@2..6 "prod"
+    Colon@6..7 ":"
+    UnquotedLiteral@7..36
+      Word@7..17 "value_list"
+      Whitespace@17..18 " "
+      Word@18..23 "valid"
+      Whitespace@23..24 "\n"
+      Word@24..36 "process.name"
+  Error@36..37
+    Colon@36..37 ":"
+  Group@37..67
+    LParen@37..38 "("
+    OrQuery@38..66
+      ValueExpression@38..45
+        UnquotedLiteral@38..45
+          Word@38..45 "cmd.exe"
+      Whitespace@45..46 " "
+      OrKw@46..48 "or"
+      Whitespace@48..49 " "
+      ValueExpression@49..66
+        QuotedString@49..66 "\"power shell.exe\""
+    RParen@66..67 ")"
+  Whitespace@67..68 "\n"
+36..36: unexpected (expected `or`, `and`, end of input)

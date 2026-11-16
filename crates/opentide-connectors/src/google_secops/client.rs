@@ -4,7 +4,7 @@
 //! Every request goes to `<endpoint>/v1/projects/<project>/locations/
 //! <location>/instances/<instance>` with an access token ([`super::auth`]).
 //! HTTP 401 and 403 stop the tenant. HTTP 429, and 503 on any call but a
-//! create, are waited out: `Retry-After` (at most 300 seconds), else the
+//! create, are waited out: `Retry-After` (at most 120 seconds), else the
 //! `RetryInfo.retryDelay` of `error.details`, else 5, 15 and 60 seconds, and
 //! the same request is sent again, at most three times; then the call
 //! fails. Any other error is an [`ApiError`] with Google's `error.status` and
@@ -130,7 +130,7 @@ pub fn retry_after(
 /// Google's `error.status` and `error.message`, or a description of the
 /// answer.
 pub fn error_of(answer: &Answer) -> (String, String) {
-    let Some(body) = answer.json() else {
+    let Some(body) = answer.quotable_json() else {
         return (
             String::new(),
             answer
@@ -542,6 +542,15 @@ impl<'a> Client<'a> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn an_error_message_does_not_quote_the_bearer() {
+        use crate::answer::{TEST_BEARER, answer_to_bearer};
+        let answer = answer_to_bearer(&format!(
+            r#"{{"error":{{"status":"X","message":"bad {TEST_BEARER}"}}}}"#
+        ));
+        assert_eq!(error_of(&answer).1, "bad ***");
+    }
+
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 

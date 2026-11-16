@@ -19,4 +19,10 @@ opentide-ecs.workspace = true
 opentide-syntax.workspace = true
 opentide-highlight.workspace = true
 tree-sitter.workspace = true
+opentide-parse.workspace = true
+logos.workspace = true
+rowan.workspace = true
 regex.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
