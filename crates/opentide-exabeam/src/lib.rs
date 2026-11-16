@@ -7,9 +7,9 @@
 //! publishes no grammar and no parser, so the verdicts come from [`check`](mod@check), a
 //! port of the specification's reference checker
 //! (`scripts/exabeam_language.py`), and the field catalogue from Exabeam's
-//! Common Information Model ([`catalog`]). The tree-sitter grammar
-//! (`grammars/tree-sitter-opentide-exabeam`) drives highlighting and editor
-//! structure. See `docs/engine/EXABEAM.md`.
+//! Common Information Model ([`catalog`]). A parser on `opentide-parse`
+//! (`cst`), which accepts what `grammars/tree-sitter-opentide-exabeam` accepts,
+//! drives highlighting. See `docs/engine/EXABEAM.md`.
 //!
 //! Internal to opentide, with no stability promise: depend on the
 //! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
@@ -34,7 +34,7 @@ pub use check::{Profile, check};
 pub use cst::{debug_parse, highlight_captures, tree_has_error};
 
 pub(crate) use opentide_core::codes;
-use opentide_core::{ByteSpan, Diagnostic, LanguageId, LineIndex};
+use opentide_core::{ByteSpan, Diagnostic, LineIndex};
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 
 /// Where the query runs.
@@ -113,17 +113,9 @@ pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
     }
 }
 
-/// Highlight tokens from the tree-sitter grammar and the highlight query.
+/// Highlight tokens from the parser's tree.
 pub fn highlight(spec: &HighlightSpec, source: &str) -> Vec<HighlightToken> {
-    let Ok(spans) = opentide_syntax::query_captures(
-        LanguageId::Exabeam,
-        source,
-        opentide_highlight::EXABEAM_HIGHLIGHTS_SCM,
-    ) else {
-        return Vec::new();
-    };
-    let refs: Vec<(ByteSpan, &str)> = spans.iter().map(|(s, c)| (*s, c.as_str())).collect();
-    tokens_from_spans(spec, source, &refs).unwrap_or_default()
+    tokens_from_spans(spec, source, &highlight_captures(source)).unwrap_or_default()
 }
 
 #[cfg(test)]

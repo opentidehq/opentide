@@ -135,7 +135,7 @@ fn the_engine_agrees_with_the_reference_checker() {
 /// reference reports it as `exabeam_clause_order`.
 const HIGHLIGHT_DIFFERENCES: &[&str] = &[];
 
-/// The tree-sitter grammar's highlighting matches the reference checker's
+/// The tree's highlighting (the parser on `opentide-parse`) matches the reference checker's
 /// tokens on every query the reference finds no error in.
 #[test]
 fn tree_sitter_highlighting_agrees_on_error_free_queries() {
@@ -176,7 +176,7 @@ fn tree_sitter_highlighting_agrees_on_error_free_queries() {
             .collect();
         if got != expected {
             failures.push(format!(
-                "{} ({text:?}):\n  tree-sitter {got:?}\n  reference   {expected:?}",
+                "{} ({text:?}):\n  tree        {got:?}\n  reference   {expected:?}",
                 q["name"]
             ));
         }

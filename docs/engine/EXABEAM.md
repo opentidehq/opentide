@@ -14,7 +14,7 @@ The contract is opentidehq/specifications [`specs/languages/exabeam-1.0.md`](htt
 | Syntax, profiles, every language code | exabeam-1.0 and its reference checker | `src/check.rs`: a step-for-step port of the reference checker |
 | Regular expressions (`RGX`, `RGXi`, `RGX_EXTRACT`) | RE2 | the `regex` crate's syntax parser (RE2 syntax), after RE2's own rules and refusals (below) |
 | Fields, subjects, activity types, outcomes | Exabeam's Common Information Model, ExabeamLabs/CIMLibrary@e72bfa2 (Apache-2.0) | `data/catalogs/exabeam/` (`scripts/engine/sync_exabeam_catalog.py`), `src/catalog.rs` |
-| Highlighting | the spec's highlight table (existing HighlightSpec captures only) | `grammars/tree-sitter-opentide-exabeam`, `highlights/queries/exabeam/highlights.scm` |
+| Highlighting | the spec's highlight table (existing HighlightSpec captures only) | `crates/opentide-exabeam/src/cst.rs` (the tree, on `opentide-parse`; it accepts what `grammars/tree-sitter-opentide-exabeam` accepts and highlights as `highlights/queries/exabeam/highlights.scm` did) |
 | Block constraints and advisories | exabeam-1.0 platform "Constraints", "Advisories" and `validate_exabeam_block` | `crates/opentide-tide/src/exabeam.rs` |
 
 ## The SQL-like layer
@@ -32,9 +32,9 @@ The repository's rule that "SQL is out of scope" is about a generic SQL dialect:
 
 | Suite | Queries | Agreement | Harness |
 |-------|---------|-----------|---------|
-| The spec's fixtures (`crates/testdata/conformance/exabeam/{valid,invalid,highlight}/`) | 9 valid, 32 invalid (one per catalogue-free code), 3 highlight goldens | every valid query clean (the catalogue warnings included), every invalid one exactly its code, every golden token for token (the verdict parser and the tree-sitter highlighting) | `crates/opentide-exabeam/tests/conformance.rs` |
+| The spec's fixtures (`crates/testdata/conformance/exabeam/{valid,invalid,highlight}/`) | 9 valid, 32 invalid (one per catalogue-free code), 3 highlight goldens | every valid query clean (the catalogue warnings included), every invalid one exactly its code, every golden token for token (the verdict parser and the tree's highlighting) | `crates/opentide-exabeam/tests/conformance.rs` |
 | The reference checker's recorded verdicts (`reference.json`): the fixtures above, `crates/testdata/conformance/external/exabeam/` and 255 probes (`probes.tsv`) | 331 | codes, ranges and highlight tokens identical, but for the narrowed ranges of two codes (below) | `crates/opentide-exabeam/tests/reference.rs` |
-| Tree-sitter highlighting against the reference's tokens | every error-free query of `reference.json` | identical | `tests/reference.rs` |
+| The tree's highlighting against the reference's tokens | every error-free query of `reference.json` | identical | `tests/reference.rs` |
 | Queries written for opentide (`crates/testdata/conformance/external/exabeam/`) | 16 (12 rule, 4 search), each with a `.broken.` twin | 16 / 16 clean under their profile; every twin reports the code `FAULTS.toml` names (16 fault kinds) | `crates/opentide-analysis/tests/external_exabeam.rs` |
 | The block checker's recorded verdicts: 51 block cases written for opentide and the spec's 8 object fixtures | 59 | every error, code and field path, identical, but for the block without `status` (below) | `crates/opentide-tide/tests/exabeam_spec.rs` |
 | Grammar productions | 21 rules, one valid and one invalid fixture each | 21 / 21 | `crates/opentide-syntax/tests/corpus_gate.rs` |
@@ -94,7 +94,7 @@ The catalogue is Exabeam's CIM: the 1,130 typed fields of `Fields_Descriptions.m
 | Where | Reference | Engine | Why |
 |-------|-----------|--------|-----|
 | RE2's program-size limit (`(a{100}){100}`), `[a--b]`, a leading-zero count (`a{01}`) | as Python's `re` reads them | as the `regex` crate reads them | rare; neither is RE2's own parser |
-| tree-sitter highlighting (editors only) of a Unicode space other than U+0020, a lone `AS` or `LIMIT`, a `WHERE` inside a filter, an IPv6-looking word that is not an address | — | the grammar's tokens; the verdict parser's semantic tokens are the reference's | highlighting only, never a diagnostic |
+| the tree's highlighting (editors only) of a Unicode space other than U+0020, a lone `AS` or `LIMIT`, a `WHERE` inside a filter, an IPv6-looking word that is not an address | — | the grammar's tokens; the verdict parser's semantic tokens are the reference's | highlighting only, never a diagnostic |
 | a bad threshold or outcome value in the editor | — | `vocab_unknown` from the Tide catalogue and the `exabeam_*` code, as on Bitdefender blocks | the opentide CLI reports the `exabeam_*` code only |
 | `exabeam_group_by_column`, `exabeam_group_by_select_star` ranges | from the start of the query to the end of the statement | the column, or the `*` | a usable range; the codes are the same |
 | unknown fields, numbers on string fields, unknown `activity_type`, `subject` and `outcome` values | not reported (no catalogue) | the catalogue warnings | exabeam-1.0 "Field catalogue" |

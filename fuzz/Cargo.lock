@@ -2873,10 +2873,13 @@ dependencies = [
 name = "opentide-exabeam"
 version = "0.12.0"
 dependencies = [
+ "logos",
  "opentide-core",
  "opentide-highlight",
- "opentide-syntax",
+ "opentide-parse",
+ "regex",
  "regex-syntax",
+ "rowan",
  "serde",
  "toml",
 ]
