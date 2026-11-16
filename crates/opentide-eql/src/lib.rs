@@ -290,7 +290,6 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
             tokens: Vec::new(),
         };
     };
-    let root = tree.root_node();
     let mut out = Vec::new();
     if let Some(problem) = tree.problems.first() {
         out.push(Diagnostic::error(
@@ -311,9 +310,26 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
         ));
     }
     let mut translated = std::collections::HashMap::new();
-    tree::walk_with_ancestors(root, |node, ancestors| {
-        check_node(node, ancestors, &mut translated, source, catalog, &mut out);
-    });
+    // The parser's tree in document order; a run of `or`, `and` or arithmetic is first checked
+    // at each level the view nests it in, the outermost first, as the view's own walk did. (That
+    // walk visited a broken run's last operand twice, under two levels; this one visits it once.)
+    for event in tree.syntax.preorder() {
+        let rowan::WalkEvent::Enter(syntax) = event else {
+            continue;
+        };
+        let Some(node) = tree.view(&syntax) else {
+            continue;
+        };
+        check_node(node, &mut translated, source, catalog, &mut out);
+        let mut level = node;
+        while let Some(inner) = level
+            .child(0)
+            .filter(|c| c.kind() == level.kind() && c.syntax().is_none())
+        {
+            check_node(inner, &mut translated, source, catalog, &mut out);
+            level = inner;
+        }
+    }
     if let Some(root) = ast::SourceFile::cast(tree.syntax.clone()) {
         builder::check_pipes(&root, source, catalog, &mut out);
     }
@@ -392,7 +408,6 @@ fn with_ast<N: AstNode<Language = Lang>>(syntax: Option<&SyntaxNode>, check: imp
 
 fn check_node(
     node: Node,
-    ancestors: &[Node],
     translated: &mut std::collections::HashMap<usize, bool>,
     source: &str,
     catalog: &Catalog,
@@ -438,7 +453,7 @@ fn check_node(
             with_ast(syntax.as_ref(), |n| {
                 builder::check_comparison_wildcard(&n, source, out);
             });
-            semantics::check_field_comparisons(node, ancestors, translated, source, out);
+            semantics::check_field_comparisons(node, translated, source, out);
         }
         "predicate_expression" => {
             with_ast(syntax.as_ref(), |n| {
@@ -446,7 +461,7 @@ fn check_node(
             });
             regex::check_regex(node, source, out);
             semantics::check_types(node, source, out);
-            semantics::check_field_comparisons(node, ancestors, translated, source, out);
+            semantics::check_field_comparisons(node, translated, source, out);
         }
         "binary_expression" | "unary_expression" => semantics::check_types(node, source, out),
         "and_expression" | "or_expression" | "not_expression" | "event_query" => {
