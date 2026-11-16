@@ -1,0 +1,41 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"RULE Limit { META: And = 1 EVENTS: $e CONDITION: $e }\")"
+---
+SOURCE_FILE@0..53
+  RULE_DECLARATION@0..53
+    RULE_KW@0..4 "RULE"
+    WHITESPACE@4..5 " "
+    RULE_NAME@5..10
+      IDENT@5..10 "Limit"
+    WHITESPACE@10..11 " "
+    L_BRACE@11..12 "{"
+    WHITESPACE@12..13 " "
+    META_SECTION@13..26
+      META_KW@13..17 "META"
+      COLON@17..18 ":"
+      WHITESPACE@18..19 " "
+      META_ENTRY@19..26
+        META_KEY@19..22
+          IDENT@19..22 "And"
+        WHITESPACE@22..23 " "
+        EQ@23..24 "="
+        WHITESPACE@24..25 " "
+        LITERAL@25..26
+          INTEGER@25..26 "1"
+    WHITESPACE@26..27 " "
+    EVENTS_SECTION@27..37
+      EVENTS_KW@27..33 "EVENTS"
+      COLON@33..34 ":"
+      WHITESPACE@34..35 " "
+      VARIABLE@35..37
+        VAR_TOKEN@35..37 "$e"
+    WHITESPACE@37..38 " "
+    CONDITION_SECTION@38..51
+      CONDITION_KW@38..47 "CONDITION"
+      COLON@47..48 ":"
+      WHITESPACE@48..49 " "
+      VARIABLE@49..51
+        VAR_TOKEN@49..51 "$e"
+    WHITESPACE@51..52 " "
+    R_BRACE@52..53 "}"

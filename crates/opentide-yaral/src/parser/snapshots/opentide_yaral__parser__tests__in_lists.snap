@@ -1,0 +1,42 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"$a in %l $b in regex %l nocase $c in cidr %t.col\")"
+---
+SOURCE_FILE@0..48
+  SEARCH_QUERY@0..48
+    SEARCH_EVENTS@0..48
+      IN_EXPR@0..8
+        VARIABLE@0..2
+          VAR_TOKEN@0..2 "$a"
+        WHITESPACE@2..3 " "
+        IN_KW@3..5 "in"
+        WHITESPACE@5..6 " "
+        REFERENCE_LIST@6..8
+          REF_LIST_TOKEN@6..8 "%l"
+      WHITESPACE@8..9 " "
+      IN_EXPR@9..30
+        VARIABLE@9..11
+          VAR_TOKEN@9..11 "$b"
+        WHITESPACE@11..12 " "
+        IN_KW@12..14 "in"
+        WHITESPACE@14..15 " "
+        REGEX_KW@15..20 "regex"
+        WHITESPACE@20..21 " "
+        REFERENCE_LIST@21..23
+          REF_LIST_TOKEN@21..23 "%l"
+        WHITESPACE@23..24 " "
+        NOCASE_KW@24..30 "nocase"
+      WHITESPACE@30..31 " "
+      IN_EXPR@31..48
+        VARIABLE@31..33
+          VAR_TOKEN@31..33 "$c"
+        WHITESPACE@33..34 " "
+        IN_KW@34..36 "in"
+        WHITESPACE@36..37 " "
+        CIDR_KW@37..41 "cidr"
+        WHITESPACE@41..42 " "
+        DATA_TABLE_COLUMN@42..48
+          REFERENCE_LIST@42..44
+            REF_LIST_TOKEN@42..44 "%t"
+          DOT@44..45 "."
+          IDENT@45..48 "col"

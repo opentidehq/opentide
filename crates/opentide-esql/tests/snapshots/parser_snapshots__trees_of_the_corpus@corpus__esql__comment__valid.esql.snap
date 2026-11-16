@@ -1,0 +1,35 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/comment__valid.esql
+---
+SOURCE_FILE@0..89
+  COMMENT@0..21 "// prod:comment valid"
+  WHITESPACE@21..22 "\n"
+  COMMENT@22..40 "// leading comment"
+  WHITESPACE@40..41 "\n"
+  QUERY@41..88
+    FROM_COMMAND@41..65
+      FROM_KW@41..45 "FROM"
+      WHITESPACE@45..46 " "
+      INDEX_PATTERN@46..52
+        INDEX_NAME@46..52
+          SOURCE_TEXT@46..52 "logs-*"
+      WHITESPACE@52..53 " "
+      METADATA@53..65
+        METADATA_KW@53..61 "METADATA"
+        WHITESPACE@61..62 " "
+        METADATA_FIELD@62..65
+          SOURCE_TEXT@62..65 "_id"
+    WHITESPACE@65..66 " "
+    COMMENT@66..78 "/* inline */"
+    WHITESPACE@78..79 "\n"
+    PIPE@79..80 "|"
+    WHITESPACE@80..81 " "
+    LIMIT_COMMAND@81..88
+      LIMIT_KW@81..86 "LIMIT"
+      WHITESPACE@86..87 " "
+      NUMBER@87..88
+        NUMBER_LIT@87..88 "1"
+  WHITESPACE@88..89 "\n"
+--- errors

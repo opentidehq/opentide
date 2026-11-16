@@ -1,0 +1,30 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/outcome_section__invalid.yaral
+---
+SOURCE_FILE@0..72
+  COMMENT@0..31 "// prod:outcome_section invalid"
+  WHITESPACE@31..32 "\n"
+  RULE_DECLARATION@32..71
+    RULE_KW@32..36 "rule"
+    WHITESPACE@36..37 " "
+    RULE_NAME@37..38
+      IDENT@37..38 "r"
+    WHITESPACE@38..39 " "
+    L_BRACE@39..40 "{"
+    WHITESPACE@40..43 "\n  "
+    OUTCOME_SECTION@43..69
+      OUTCOME_KW@43..50 "outcome"
+      COLON@50..51 ":"
+      WHITESPACE@51..56 "\n    "
+      COMPARISON@56..69
+        VARIABLE@56..67
+          VAR_TOKEN@56..67 "$risk_score"
+        WHITESPACE@67..68 " "
+        EQ@68..69 "="
+    WHITESPACE@69..70 "\n"
+    R_BRACE@70..71 "}"
+  WHITESPACE@71..72 "\n"
+errors:
+69..70: expected an expression

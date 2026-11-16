@@ -1,0 +1,66 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/named_subquery__valid.cql
+---
+SOURCE_FILE@0..63
+  PIPELINE@0..62
+    FUNCTION_CALL@0..62
+      FUNCTION_NAME@0..9
+        FUNCTION_NAME_TOKEN@0..9 "correlate"
+      L_PAREN@9..10 "("
+      ARGUMENT_LIST@10..61
+        NAMED_ARGUMENT@10..31
+          ARGUMENT_NAME@10..15
+            WORD@10..15 "query"
+          EQ@15..16 "="
+          NAMED_SUBQUERY@16..31
+            IDENTIFIER@16..18
+              WORD@16..18 "Q1"
+            COLON@18..19 ":"
+            WHITESPACE@19..20 " "
+            SUBQUERY@20..31
+              L_BRACE@20..21 "{"
+              WHITESPACE@21..22 " "
+              PIPELINE@22..29
+                FIELD_FILTER@22..29
+                  TAG@22..27
+                    TAG_TOKEN@22..27 "#type"
+                  EQ@27..28 "="
+                  UNQUOTED_PATTERN@28..29
+                    WORD@28..29 "a"
+              WHITESPACE@29..30 " "
+              R_BRACE@30..31 "}"
+        COMMA@31..32 ","
+        WHITESPACE@32..33 " "
+        ARGUMENT@33..61
+          NAMED_SUBQUERY@33..61
+            IDENTIFIER@33..35
+              WORD@33..35 "Q2"
+            COLON@35..36 ":"
+            WHITESPACE@36..37 " "
+            SUBQUERY@37..61
+              L_BRACE@37..38 "{"
+              WHITESPACE@38..39 " "
+              PIPELINE@39..59
+                FIELD_FILTER@39..46
+                  TAG@39..44
+                    TAG_TOKEN@39..44 "#type"
+                  EQ@44..45 "="
+                  UNQUOTED_PATTERN@45..46
+                    WORD@45..46 "b"
+                WHITESPACE@46..47 " "
+                PIPE@47..48 "|"
+                WHITESPACE@48..49 " "
+                LINK_CONSTRAINT@49..59
+                  FIELD_NAME@49..50
+                    WORD@49..50 "x"
+                  WHITESPACE@50..51 " "
+                  LT_EQ_GT@51..54 "<=>"
+                  WHITESPACE@54..55 " "
+                  FIELD_NAME@55..59
+                    WORD@55..59 "Q1.x"
+              WHITESPACE@59..60 " "
+              R_BRACE@60..61 "}"
+      R_PAREN@61..62 ")"
+  WHITESPACE@62..63 "\n"

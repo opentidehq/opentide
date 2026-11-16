@@ -1,0 +1,76 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"$a = \\\"s\\\" or $b = `r` or $c = /x\\\\/y/ or $d = 1.5 or $e = 10m or $f = true or window_start\")"
+---
+SOURCE_FILE@0..88
+  SEARCH_QUERY@0..88
+    SEARCH_EVENTS@0..88
+      OR_EXPR@0..88
+        COMPARISON@0..8
+          VARIABLE@0..2
+            VAR_TOKEN@0..2 "$a"
+          WHITESPACE@2..3 " "
+          EQ@3..4 "="
+          WHITESPACE@4..5 " "
+          LITERAL@5..8
+            STRING@5..8 "\"s\""
+        WHITESPACE@8..9 " "
+        OR_KW@9..11 "or"
+        WHITESPACE@11..12 " "
+        COMPARISON@12..20
+          VARIABLE@12..14
+            VAR_TOKEN@12..14 "$b"
+          WHITESPACE@14..15 " "
+          EQ@15..16 "="
+          WHITESPACE@16..17 " "
+          LITERAL@17..20
+            RAW_STRING@17..20 "`r`"
+        WHITESPACE@20..21 " "
+        OR_KW@21..23 "or"
+        WHITESPACE@23..24 " "
+        COMPARISON@24..35
+          VARIABLE@24..26
+            VAR_TOKEN@24..26 "$c"
+          WHITESPACE@26..27 " "
+          EQ@27..28 "="
+          WHITESPACE@28..29 " "
+          LITERAL@29..35
+            REGEX_LIT@29..35 "/x\\/y/"
+        WHITESPACE@35..36 " "
+        OR_KW@36..38 "or"
+        WHITESPACE@38..39 " "
+        COMPARISON@39..47
+          VARIABLE@39..41
+            VAR_TOKEN@39..41 "$d"
+          WHITESPACE@41..42 " "
+          EQ@42..43 "="
+          WHITESPACE@43..44 " "
+          LITERAL@44..47
+            FLOAT@44..47 "1.5"
+        WHITESPACE@47..48 " "
+        OR_KW@48..50 "or"
+        WHITESPACE@50..51 " "
+        COMPARISON@51..59
+          VARIABLE@51..53
+            VAR_TOKEN@51..53 "$e"
+          WHITESPACE@53..54 " "
+          EQ@54..55 "="
+          WHITESPACE@55..56 " "
+          LITERAL@56..59
+            DURATION@56..59 "10m"
+        WHITESPACE@59..60 " "
+        OR_KW@60..62 "or"
+        WHITESPACE@62..63 " "
+        COMPARISON@63..72
+          VARIABLE@63..65
+            VAR_TOKEN@63..65 "$f"
+          WHITESPACE@65..66 " "
+          EQ@66..67 "="
+          WHITESPACE@67..68 " "
+          LITERAL@68..72
+            TRUE_KW@68..72 "true"
+        WHITESPACE@72..73 " "
+        OR_KW@73..75 "or"
+        WHITESPACE@75..76 " "
+        WINDOW_BOUND@76..88
+          WINDOW_START_KW@76..88 "window_start"

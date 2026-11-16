@@ -1,0 +1,169 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | fork a = (where x > 1 | take 5) (count) | facet by a, b with (where x > 1 | take 5) | facet by c with take 5 | partition hint.strategy = native by k (top 1 by t) | partition by k in dynamic([1]) { U | take 1 }\")"
+---
+SOURCE_FILE@0..213
+  QUERY@0..213
+    TABULAR_EXPRESSION@0..213
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      FORK_OPERATOR@4..43
+        FORK_KW@4..8 "fork"
+        WHITESPACE@8..9 " "
+        FORK_BRANCH@9..35
+          IDENT@9..10 "a"
+          WHITESPACE@10..11 " "
+          EQ@11..12 "="
+          WHITESPACE@12..13 " "
+          L_PAREN@13..14 "("
+          SUBQUERY@14..34
+            WHERE_OPERATOR@14..25
+              WHERE_KW@14..19 "where"
+              WHITESPACE@19..20 " "
+              COMPARISON_EXPR@20..25
+                NAME_REF@20..21
+                  IDENT@20..21 "x"
+                WHITESPACE@21..22 " "
+                CMP_OP@22..23 ">"
+                WHITESPACE@23..24 " "
+                LITERAL@24..25
+                  NUMBER@24..25 "1"
+            WHITESPACE@25..26 " "
+            PIPE@26..27 "|"
+            WHITESPACE@27..28 " "
+            TAKE_OPERATOR@28..34
+              TAKE_KW@28..32 "take"
+              WHITESPACE@32..33 " "
+              NUMBER@33..34 "5"
+          R_PAREN@34..35 ")"
+        WHITESPACE@35..36 " "
+        FORK_BRANCH@36..43
+          L_PAREN@36..37 "("
+          SUBQUERY@37..42
+            COUNT_OPERATOR@37..42
+              COUNT_KW@37..42 "count"
+          R_PAREN@42..43 ")"
+      WHITESPACE@43..44 " "
+      PIPE@44..45 "|"
+      WHITESPACE@45..46 " "
+      FACET_OPERATOR@46..87
+        FACET_KW@46..51 "facet"
+        WHITESPACE@51..52 " "
+        BY_KW@52..54 "by"
+        WHITESPACE@54..55 " "
+        IDENT@55..56 "a"
+        COMMA@56..57 ","
+        WHITESPACE@57..58 " "
+        IDENT@58..59 "b"
+        WHITESPACE@59..60 " "
+        WITH_KW@60..64 "with"
+        WHITESPACE@64..65 " "
+        L_PAREN@65..66 "("
+        SUBQUERY@66..86
+          WHERE_OPERATOR@66..77
+            WHERE_KW@66..71 "where"
+            WHITESPACE@71..72 " "
+            COMPARISON_EXPR@72..77
+              NAME_REF@72..73
+                IDENT@72..73 "x"
+              WHITESPACE@73..74 " "
+              CMP_OP@74..75 ">"
+              WHITESPACE@75..76 " "
+              LITERAL@76..77
+                NUMBER@76..77 "1"
+          WHITESPACE@77..78 " "
+          PIPE@78..79 "|"
+          WHITESPACE@79..80 " "
+          TAKE_OPERATOR@80..86
+            TAKE_KW@80..84 "take"
+            WHITESPACE@84..85 " "
+            NUMBER@85..86 "5"
+        R_PAREN@86..87 ")"
+      WHITESPACE@87..88 " "
+      PIPE@88..89 "|"
+      WHITESPACE@89..90 " "
+      FACET_OPERATOR@90..112
+        FACET_KW@90..95 "facet"
+        WHITESPACE@95..96 " "
+        BY_KW@96..98 "by"
+        WHITESPACE@98..99 " "
+        IDENT@99..100 "c"
+        WHITESPACE@100..101 " "
+        WITH_KW@101..105 "with"
+        WHITESPACE@105..106 " "
+        TAKE_OPERATOR@106..112
+          TAKE_KW@106..110 "take"
+          WHITESPACE@110..111 " "
+          NUMBER@111..112 "5"
+      WHITESPACE@112..113 " "
+      PIPE@113..114 "|"
+      WHITESPACE@114..115 " "
+      PARTITION_OPERATOR@115..165
+        PARTITION_KW@115..124 "partition"
+        WHITESPACE@124..125 " "
+        HINT_OPTION@125..147
+          HINT_NAME@125..138 "hint.strategy"
+          WHITESPACE@138..139 " "
+          EQ@139..140 "="
+          WHITESPACE@140..141 " "
+          OPTION_VALUE@141..147
+            IDENT@141..147 "native"
+        WHITESPACE@147..148 " "
+        BY_KW@148..150 "by"
+        WHITESPACE@150..151 " "
+        IDENT@151..152 "k"
+        WHITESPACE@152..153 " "
+        L_PAREN@153..154 "("
+        SUBQUERY@154..164
+          TOP_OPERATOR@154..164
+            TOP_KW@154..157 "top"
+            WHITESPACE@157..158 " "
+            NUMBER@158..159 "1"
+            WHITESPACE@159..160 " "
+            BY_KW@160..162 "by"
+            WHITESPACE@162..163 " "
+            SORT_ITEM@163..164
+              NAME_REF@163..164
+                IDENT@163..164 "t"
+        R_PAREN@164..165 ")"
+      WHITESPACE@165..166 " "
+      PIPE@166..167 "|"
+      WHITESPACE@167..168 " "
+      PARTITION_OPERATOR@168..213
+        PARTITION_KW@168..177 "partition"
+        WHITESPACE@177..178 " "
+        BY_KW@178..180 "by"
+        WHITESPACE@180..181 " "
+        IDENT@181..182 "k"
+        WHITESPACE@182..183 " "
+        IN_KW@183..185 "in"
+        WHITESPACE@185..186 " "
+        DYNAMIC_LITERAL@186..198
+          DYNAMIC_KW@186..193 "dynamic"
+          L_PAREN@193..194 "("
+          JSON_ARRAY@194..197
+            L_BRACKET@194..195 "["
+            JSON_SCALAR@195..196
+              NUMBER@195..196 "1"
+            R_BRACKET@196..197 "]"
+          R_PAREN@197..198 ")"
+        WHITESPACE@198..199 " "
+        L_BRACE@199..200 "{"
+        WHITESPACE@200..201 " "
+        TABULAR_EXPRESSION@201..211
+          TABULAR_SOURCE@201..202
+            TABLE_REF@201..202
+              IDENT@201..202 "U"
+          WHITESPACE@202..203 " "
+          PIPE@203..204 "|"
+          WHITESPACE@204..205 " "
+          TAKE_OPERATOR@205..211
+            TAKE_KW@205..209 "take"
+            WHITESPACE@209..210 " "
+            NUMBER@210..211 "1"
+        WHITESPACE@211..212 " "
+        R_BRACE@212..213 "}"

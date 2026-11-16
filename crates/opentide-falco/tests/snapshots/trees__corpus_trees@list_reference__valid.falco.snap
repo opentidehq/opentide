@@ -1,0 +1,15 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/list_reference__valid.falco
+---
+source_file@0..24
+  comparison@0..24
+    field@0..8
+      field_name@0..8 "evt.type"
+    whitespace@8..9 " "
+    list_operator@9..11
+      identifier@9..11 "in"
+    whitespace@11..12 " "
+    list_reference@12..24
+      identifier@12..24 "shell_events"

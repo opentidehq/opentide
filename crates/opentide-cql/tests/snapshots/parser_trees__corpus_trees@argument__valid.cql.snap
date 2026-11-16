@@ -1,0 +1,57 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/argument__valid.cql
+---
+SOURCE_FILE@0..79
+  PIPELINE@0..78
+    FUNCTION_CALL@0..8
+      FUNCTION_NAME@0..4
+        FUNCTION_NAME_TOKEN@0..4 "head"
+      L_PAREN@4..5 "("
+      ARGUMENT_LIST@5..7
+        ARGUMENT@5..7
+          NUMBER@5..7
+            NUMBER_TOKEN@5..7 "10"
+      R_PAREN@7..8 ")"
+    WHITESPACE@8..9 " "
+    PIPE@9..10 "|"
+    WHITESPACE@10..11 " "
+    FUNCTION_CALL@11..47
+      FUNCTION_NAME@11..18
+        FUNCTION_NAME_TOKEN@11..18 "groupBy"
+      L_PAREN@18..19 "("
+      ARGUMENT_LIST@19..46
+        ARGUMENT@19..30
+          FIELD_NAME@19..30
+            WORD@19..30 "status_code"
+        COMMA@30..31 ","
+        WHITESPACE@31..32 " "
+        NAMED_ARGUMENT@32..46
+          ARGUMENT_NAME@32..40
+            WORD@32..40 "function"
+          EQ@40..41 "="
+          FIELD_NAME@41..46
+            WORD@41..46 "count"
+      R_PAREN@46..47 ")"
+    WHITESPACE@47..48 " "
+    PIPE@48..49 "|"
+    WHITESPACE@49..50 " "
+    FUNCTION_CALL@50..78
+      FUNCTION_NAME@50..59
+        FUNCTION_NAME_TOKEN@50..59 "timeChart"
+      L_PAREN@59..60 "("
+      ARGUMENT_LIST@60..77
+        ARGUMENT@60..66
+          FIELD_NAME@60..66
+            WORD@60..66 "method"
+        COMMA@66..67 ","
+        WHITESPACE@67..68 " "
+        NAMED_ARGUMENT@68..77
+          ARGUMENT_NAME@68..72
+            WORD@68..72 "span"
+          EQ@72..73 "="
+          FIELD_NAME@73..77
+            WORD@73..77 "5min"
+      R_PAREN@77..78 ")"
+  WHITESPACE@78..79 "\n"

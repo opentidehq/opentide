@@ -1,0 +1,24 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"$a AnD $b oR NOT $c\")"
+---
+SOURCE_FILE@0..19
+  SEARCH_QUERY@0..19
+    SEARCH_EVENTS@0..19
+      OR_EXPR@0..19
+        AND_EXPR@0..9
+          VARIABLE@0..2
+            VAR_TOKEN@0..2 "$a"
+          WHITESPACE@2..3 " "
+          AND_KW@3..6 "AnD"
+          WHITESPACE@6..7 " "
+          VARIABLE@7..9
+            VAR_TOKEN@7..9 "$b"
+        WHITESPACE@9..10 " "
+        OR_KW@10..12 "oR"
+        WHITESPACE@12..13 " "
+        NOT_EXPR@13..19
+          NOT_KW@13..16 "NOT"
+          WHITESPACE@16..17 " "
+          VARIABLE@17..19
+            VAR_TOKEN@17..19 "$c"

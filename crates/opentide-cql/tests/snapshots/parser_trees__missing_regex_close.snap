@@ -1,0 +1,16 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..6
+  PIPELINE@0..6
+    FIELD_FILTER@0..6
+      FIELD_NAME@0..1
+        WORD@0..1 "a"
+      EQ@1..2 "="
+      REGEX@2..6
+        SLASH@2..3 "/"
+        REGEX_PATTERN@3..6
+          REGEX_PATTERN_TOKEN@3..6 "abc"
+
+6..6: the regular expression is never closed (expected SLASH)

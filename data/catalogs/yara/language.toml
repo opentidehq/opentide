@@ -22,6 +22,11 @@ keywords = [
 # yara-1.0 "Platform profiles".
 [profile.harfanglab]
 dialect = "libyara4"
+# Whether the platform is known to accept YARA-X-only syntax (`with`, digit
+# separators, float meta, `"""` strings, booleans in `of` tuples, hex or octal
+# jump bounds, `.len()`): "refused" until a live deploy confirms it
+# (docs/internal/publishing.md, live-tenant checklist).
+yara_x_syntax = "refused"
 ascii_only = false
 confirmed_modules = ["pe", "elf", "math", "hash", "time"]
 recommended_meta = ["context"]
@@ -31,6 +36,11 @@ context_values = ["file", "memory", "file.pe", "file.elf", "file.macho"]
 
 [profile.bitdefender]
 dialect = "libyara4"
+# Whether the platform is known to accept YARA-X-only syntax (`with`, digit
+# separators, float meta, `"""` strings, booleans in `of` tuples, hex or octal
+# jump bounds, `.len()`): "refused" until a live deploy confirms it
+# (docs/internal/publishing.md, live-tenant checklist).
+yara_x_syntax = "refused"
 ascii_only = true
 max_characters = 30000
 confirmed_modules = ["pe", "elf", "math", "hash", "time"]

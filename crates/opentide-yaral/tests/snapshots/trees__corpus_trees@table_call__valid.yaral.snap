@@ -1,0 +1,98 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/table_call__valid.yaral
+---
+SOURCE_FILE@0..226
+  COMMENT@0..24 "// prod:table_call valid"
+  WHITESPACE@24..25 "\n"
+  RULE_DECLARATION@25..225
+    RULE_KW@25..29 "rule"
+    WHITESPACE@29..30 " "
+    RULE_NAME@30..31
+      IDENT@30..31 "r"
+    WHITESPACE@31..32 " "
+    L_BRACE@32..33 "{"
+    WHITESPACE@33..36 "\n  "
+    META_SECTION@36..58
+      META_KW@36..40 "meta"
+      COLON@40..41 ":"
+      WHITESPACE@41..46 "\n    "
+      META_ENTRY@46..58
+        META_KEY@46..52
+          IDENT@46..52 "author"
+        WHITESPACE@52..53 " "
+        EQ@53..54 "="
+        WHITESPACE@54..55 " "
+        LITERAL@55..58
+          STRING@55..58 "\"a\""
+    WHITESPACE@58..61 "\n  "
+    EVENTS_SECTION@61..110
+      EVENTS_KW@61..67 "events"
+      COLON@67..68 ":"
+      WHITESPACE@68..73 "\n    "
+      COMPARISON@73..110
+        UDM_FIELD@73..95
+          VARIABLE@73..75
+            VAR_TOKEN@73..75 "$e"
+          MEMBER@75..84
+            ACCESS_DOT@75..76 "."
+            FIELD_NAME@76..84 "metadata"
+          MEMBER@84..95
+            ACCESS_DOT@84..85 "."
+            FIELD_NAME@85..95 "event_type"
+        WHITESPACE@95..96 " "
+        EQ@96..97 "="
+        WHITESPACE@97..98 " "
+        LITERAL@98..110
+          STRING@98..110 "\"USER_LOGIN\""
+    WHITESPACE@110..113 "\n  "
+    OUTCOME_SECTION@113..155
+      OUTCOME_KW@113..120 "outcome"
+      COLON@120..121 ":"
+      WHITESPACE@121..126 "\n    "
+      COMPARISON@126..155
+        VARIABLE@126..131
+          VAR_TOKEN@126..131 "$host"
+        WHITESPACE@131..132 " "
+        EQ@132..133 "="
+        WHITESPACE@133..134 " "
+        UDM_FIELD@134..155
+          VARIABLE@134..136
+            VAR_TOKEN@134..136 "$e"
+          MEMBER@136..146
+            ACCESS_DOT@136..137 "."
+            FIELD_NAME@137..146 "principal"
+          MEMBER@146..155
+            ACCESS_DOT@146..147 "."
+            FIELD_NAME@147..155 "hostname"
+    WHITESPACE@155..158 "\n  "
+    CONDITION_SECTION@158..175
+      CONDITION_KW@158..167 "condition"
+      COLON@167..168 ":"
+      WHITESPACE@168..173 "\n    "
+      VARIABLE@173..175
+        VAR_TOKEN@173..175 "$e"
+    WHITESPACE@175..178 "\n  "
+    EXPORT_SECTION@178..223
+      EXPORT_KW@178..184 "export"
+      COLON@184..185 ":"
+      WHITESPACE@185..190 "\n    "
+      TABLE_CALL@190..223
+        REFERENCE_LIST@190..196
+          REF_LIST_TOKEN@190..196 "%hosts"
+        DOT@196..197 "."
+        IDENT@197..206 "write_row"
+        L_PAREN@206..207 "("
+        ARGUMENTS@207..222
+          NAMED_ARGUMENT@207..222
+            ARGUMENT_NAME@207..215
+              IDENT@207..215 "hostname"
+            COLON@215..216 ":"
+            WHITESPACE@216..217 " "
+            VARIABLE@217..222
+              VAR_TOKEN@217..222 "$host"
+        R_PAREN@222..223 ")"
+    WHITESPACE@223..224 "\n"
+    R_BRACE@224..225 "}"
+  WHITESPACE@225..226 "\n"

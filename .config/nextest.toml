@@ -20,6 +20,18 @@ slow-timeout = { period = "60s", terminate-after = 5 }
 filter = 'binary_id(opentide-cli::cli_snapshots) and test(/^generated_/)'
 slow-timeout = { period = "120s", terminate-after = 5 }
 
+# The parsers' differentials against tree-sitter and their long-run inputs:
+# each test is one thread of CPU for up to two minutes in a debug build. CI
+# runs eight tests at a time on four cores (NEXTEST_TEST_THREADS, for the
+# tests that wait on processes), so when six of them met at the end of the
+# run each had about half a core, and `opentide-kql::differential seeds`
+# (91 s on one core) passed the five-minute kill (run 43819465494). Two
+# slots each: the CPU-bound tests running together never outnumber the cores.
+# Their modules' unit tests (`lexer::tests::…`) are short and keep one slot.
+[[profile.default.overrides]]
+filter = '(binary_id(/::differential$/) | binary_id(/::long_runs$/)) and not test(/::/)'
+threads-required = 2
+
 [profile.fast]
 # Leaves out what spawns a server, runs Python or walks a long corpus: the
 # language server over stdio, the Pydantic comparison (it needs `uv sync`), the

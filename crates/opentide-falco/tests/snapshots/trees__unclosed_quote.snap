@@ -1,0 +1,32 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(\"a.b = \\\"c and d.e = f\")"
+---
+source_file@0..20
+  comparison@0..5
+    field@0..3
+      field_name@0..3 "a.b"
+    whitespace@3..4 " "
+    comparison_operator@4..5
+      =@4..5 "="
+  whitespace@5..6 " "
+  ERROR@6..7
+    error_token@6..7 "\""
+  and_expression@7..20
+    macro_reference@7..8
+      identifier@7..8 "c"
+    whitespace@8..9 " "
+    and@9..12 "and"
+    whitespace@12..13 " "
+    comparison@13..20
+      field@13..16
+        field_name@13..16 "d.e"
+      whitespace@16..17 " "
+      comparison_operator@17..18
+        =@17..18 "="
+      whitespace@18..19 " "
+      bare_string@19..20
+        identifier@19..20 "f"
+errors:
+5..6: expected a value (expected quoted_string)
+5..6: unexpected (expected quoted_string)

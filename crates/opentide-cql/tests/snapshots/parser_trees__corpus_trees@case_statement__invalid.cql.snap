@@ -1,0 +1,61 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/case_statement__invalid.cql
+---
+SOURCE_FILE@0..42
+  PIPELINE@0..41
+    CASE_STATEMENT@0..41
+      CASE_KW@0..4 "case"
+      WHITESPACE@4..5 " "
+      L_BRACE@5..6 "{"
+      WHITESPACE@6..7 " "
+      CASE_BRANCH@7..36
+        PIPELINE@7..36
+          FIELD_FILTER@7..12
+            FIELD_NAME@7..8
+              WORD@7..8 "a"
+            EQ@8..9 "="
+            STRING@9..12
+              STRING_TOKEN@9..12 "\"1\""
+          WHITESPACE@12..13 " "
+          PIPE@13..14 "|"
+          WHITESPACE@14..15 " "
+          ASSIGNMENT@15..21
+            FIELD_NAME@15..16
+              WORD@15..16 "x"
+            WHITESPACE@16..17 " "
+            COLON_EQ@17..19 ":="
+            WHITESPACE@19..20 " "
+            NUMBER@20..21
+              NUMBER_TOKEN@20..21 "1"
+          WHITESPACE@21..22 " "
+          FIELD_FILTER@22..27
+            FIELD_NAME@22..23
+              WORD@22..23 "b"
+            EQ@23..24 "="
+            STRING@24..27
+              STRING_TOKEN@24..27 "\"2\""
+          WHITESPACE@27..28 " "
+          PIPE@28..29 "|"
+          WHITESPACE@29..30 " "
+          ASSIGNMENT@30..36
+            FIELD_NAME@30..31
+              WORD@30..31 "x"
+            WHITESPACE@31..32 " "
+            COLON_EQ@32..34 ":="
+            WHITESPACE@34..35 " "
+            NUMBER@35..36
+              NUMBER_TOKEN@35..36 "2"
+      SEMI@36..37 ";"
+      WHITESPACE@37..38 " "
+      CASE_BRANCH@38..39
+        PIPELINE@38..39
+          FREE_TEXT@38..39
+            UNQUOTED_PATTERN@38..39
+              PATTERN@38..39 "*"
+      WHITESPACE@39..40 " "
+      R_BRACE@40..41 "}"
+  WHITESPACE@41..42 "\n"
+
+21..22: a filter cannot follow an assignment without a pipe (expected PIPE)

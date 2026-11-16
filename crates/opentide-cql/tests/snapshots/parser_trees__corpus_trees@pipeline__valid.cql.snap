@@ -1,0 +1,101 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/pipeline__valid.cql
+---
+SOURCE_FILE@0..193
+  PIPELINE@0..192
+    AND_FILTER@0..51
+      FIELD_FILTER@0..32
+        TAG@0..17
+          TAG_TOKEN@0..17 "#event_simpleName"
+        EQ@17..18 "="
+        UNQUOTED_PATTERN@18..32
+          WORD@18..32 "ProcessRollup2"
+      WHITESPACE@32..33 " "
+      FIELD_FILTER@33..51
+        FIELD_NAME@33..47
+          WORD@33..47 "event_platform"
+        EQ@47..48 "="
+        UNQUOTED_PATTERN@48..51
+          WORD@48..51 "Win"
+    WHITESPACE@51..52 "\n"
+    PIPE@52..53 "|"
+    WHITESPACE@53..54 " "
+    FIELD_FILTER@54..89
+      FIELD_NAME@54..67
+        WORD@54..67 "ImageFileName"
+      EQ@67..68 "="
+      REGEX@68..89
+        SLASH@68..69 "/"
+        REGEX_PATTERN@69..87
+          REGEX_PATTERN_TOKEN@69..87 "\\\\powershell\\.exe$"
+        SLASH@87..88 "/"
+        REGEX_FLAGS@88..89
+          REGEX_FLAGS_TOKEN@88..89 "i"
+    WHITESPACE@89..90 "\n"
+    PIPE@90..91 "|"
+    WHITESPACE@91..92 " "
+    FUNCTION_CALL@92..151
+      FUNCTION_NAME@92..99
+        FUNCTION_NAME_TOKEN@92..99 "groupBy"
+      L_PAREN@99..100 "("
+      ARGUMENT_LIST@100..150
+        ARGUMENT@100..119
+          ARRAY@100..119
+            L_BRACK@100..101 "["
+            FIELD_NAME@101..104
+              WORD@101..104 "aid"
+            COMMA@104..105 ","
+            WHITESPACE@105..106 " "
+            FIELD_NAME@106..118
+              WORD@106..118 "ComputerName"
+            R_BRACK@118..119 "]"
+        COMMA@119..120 ","
+        WHITESPACE@120..121 " "
+        NAMED_ARGUMENT@121..150
+          ARGUMENT_NAME@121..129
+            WORD@121..129 "function"
+          EQ@129..130 "="
+          FUNCTION_CALL@130..150
+            FUNCTION_NAME@130..135
+              FUNCTION_NAME_TOKEN@130..135 "count"
+            L_PAREN@135..136 "("
+            ARGUMENT_LIST@136..149
+              NAMED_ARGUMENT@136..149
+                ARGUMENT_NAME@136..138
+                  WORD@136..138 "as"
+                EQ@138..139 "="
+                FIELD_NAME@139..149
+                  WORD@139..149 "executions"
+            R_PAREN@149..150 ")"
+      R_PAREN@150..151 ")"
+    WHITESPACE@151..152 "\n"
+    PIPE@152..153 "|"
+    WHITESPACE@153..154 " "
+    FUNCTION_CALL@154..192
+      FUNCTION_NAME@154..158
+        FUNCTION_NAME_TOKEN@154..158 "sort"
+      L_PAREN@158..159 "("
+      ARGUMENT_LIST@159..191
+        ARGUMENT@159..169
+          FIELD_NAME@159..169
+            WORD@159..169 "executions"
+        COMMA@169..170 ","
+        WHITESPACE@170..171 " "
+        NAMED_ARGUMENT@171..181
+          ARGUMENT_NAME@171..176
+            WORD@171..176 "order"
+          EQ@176..177 "="
+          FIELD_NAME@177..181
+            WORD@177..181 "desc"
+        COMMA@181..182 ","
+        WHITESPACE@182..183 " "
+        NAMED_ARGUMENT@183..191
+          ARGUMENT_NAME@183..188
+            WORD@183..188 "limit"
+          EQ@188..189 "="
+          NUMBER@189..191
+            NUMBER_TOKEN@189..191 "20"
+      R_PAREN@191..192 ")"
+  WHITESPACE@192..193 "\n"

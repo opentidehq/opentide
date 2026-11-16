@@ -1,0 +1,31 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..22
+  PIPELINE@0..22
+    AND_FILTER@0..22
+      FIELD_FILTER@0..8
+        FIELD_NAME@0..1
+          WORD@0..1 "a"
+        EQ@1..2 "="
+        QUERY_PARAMETER@2..8
+          QUESTION_L_BRACE@2..4 "?{"
+          PARAMETER_NAME@4..5
+            WORD@4..5 "b"
+          PARAMETER_DEFAULT@5..8
+            EQ@5..6 "="
+            UNQUOTED_PATTERN@6..7
+              WORD@6..7 "c"
+            R_BRACE@7..8 "}"
+      WHITESPACE@8..9 " "
+      FIELD_FILTER@9..22
+        FIELD_NAME@9..10
+          WORD@9..10 "d"
+        WHITESPACE@10..11 " "
+        LIKE_KW@11..15 "like"
+        WHITESPACE@15..16 " "
+        QUERY_PARAMETER@16..22
+          QUESTION@16..17 "?"
+          STRING@17..22
+            STRING_TOKEN@17..22 "\"e f\""

@@ -1,0 +1,20 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..8
+  PIPELINE@0..8
+    ASSIGNMENT@0..6
+      FIELD_NAME@0..1
+        WORD@0..1 "x"
+      WHITESPACE@1..2 " "
+      COLON_EQ@2..4 ":="
+      WHITESPACE@4..5 " "
+      NUMBER@5..6
+        NUMBER_TOKEN@5..6 "1"
+    WHITESPACE@6..7 " "
+    FREE_TEXT@7..8
+      UNQUOTED_PATTERN@7..8
+        WORD@7..8 "y"
+
+6..7: a filter cannot follow an assignment without a pipe (expected PIPE)

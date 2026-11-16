@@ -1,0 +1,79 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/case_branch__valid.cql
+---
+SOURCE_FILE@0..110
+  PIPELINE@0..109
+    CASE_STATEMENT@0..109
+      CASE_KW@0..4 "case"
+      WHITESPACE@4..5 " "
+      L_BRACE@5..6 "{"
+      WHITESPACE@6..7 " "
+      CASE_BRANCH@7..50
+        PIPELINE@7..50
+          FIELD_FILTER@7..19
+            FIELD_NAME@7..13
+              WORD@7..13 "HookId"
+            WHITESPACE@13..14 " "
+            EQ@14..15 "="
+            WHITESPACE@15..16 " "
+            STRING@16..19
+              STRING_TOKEN@16..19 "\"0\""
+          WHITESPACE@19..20 " "
+          PIPE@20..21 "|"
+          WHITESPACE@21..22 " "
+          ASSIGNMENT@22..50
+            FIELD_NAME@22..28
+              WORD@22..28 "HookId"
+            WHITESPACE@28..29 " "
+            COLON_EQ@29..31 ":="
+            WHITESPACE@31..32 " "
+            STRING@32..50
+              STRING_TOKEN@32..50 "\"WH_JOURNALRECORD\""
+      WHITESPACE@50..51 " "
+      SEMI@51..52 ";"
+      WHITESPACE@52..53 " "
+      CASE_BRANCH@53..103
+        PIPELINE@53..103
+          NEGATED_FUNCTION_CALL@53..83
+            BANG@53..54 "!"
+            FUNCTION_CALL@54..83
+              FUNCTION_NAME@54..58
+                FUNCTION_NAME_TOKEN@54..58 "cidr"
+              L_PAREN@58..59 "("
+              ARGUMENT_LIST@59..82
+                ARGUMENT@59..61
+                  FIELD_NAME@59..61
+                    WORD@59..61 "ip"
+                COMMA@61..62 ","
+                WHITESPACE@62..63 " "
+                NAMED_ARGUMENT@63..82
+                  ARGUMENT_NAME@63..69
+                    WORD@63..69 "subnet"
+                  EQ@69..70 "="
+                  STRING@70..82
+                    STRING_TOKEN@70..82 "\"10.0.0.0/8\""
+              R_PAREN@82..83 ")"
+          WHITESPACE@83..84 " "
+          PIPE@84..85 "|"
+          WHITESPACE@85..86 " "
+          ASSIGNMENT@86..103
+            FIELD_NAME@86..91
+              WORD@86..91 "scope"
+            WHITESPACE@91..92 " "
+            COLON_EQ@92..94 ":="
+            WHITESPACE@94..95 " "
+            STRING@95..103
+              STRING_TOKEN@95..103 "\"public\""
+      WHITESPACE@103..104 " "
+      SEMI@104..105 ";"
+      WHITESPACE@105..106 " "
+      CASE_BRANCH@106..107
+        PIPELINE@106..107
+          FREE_TEXT@106..107
+            UNQUOTED_PATTERN@106..107
+              PATTERN@106..107 "*"
+      WHITESPACE@107..108 " "
+      R_BRACE@108..109 "}"
+  WHITESPACE@109..110 "\n"

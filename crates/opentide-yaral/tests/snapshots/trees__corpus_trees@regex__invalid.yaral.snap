@@ -1,0 +1,44 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/regex__invalid.yaral
+---
+SOURCE_FILE@0..77
+  COMMENT@0..21 "// prod:regex invalid"
+  WHITESPACE@21..22 "\n"
+  SEARCH_QUERY@22..76
+    SEARCH_EVENTS@22..58
+      BINARY_EXPR@22..58
+        COMPARISON@22..56
+          UDM_FIELD@22..54
+            VARIABLE@22..24
+              VAR_TOKEN@22..24 "$e"
+            MEMBER@24..31
+              ACCESS_DOT@24..25 "."
+              FIELD_NAME@25..31 "target"
+            MEMBER@31..39
+              ACCESS_DOT@31..32 "."
+              FIELD_NAME@32..39 "process"
+            MEMBER@39..44
+              ACCESS_DOT@39..40 "."
+              FIELD_NAME@40..44 "file"
+            MEMBER@44..54
+              ACCESS_DOT@44..45 "."
+              FIELD_NAME@45..54 "full_path"
+          WHITESPACE@54..55 " "
+          EQ@55..56 "="
+        WHITESPACE@56..57 " "
+        SLASH@57..58 "/"
+    ERROR@58..76
+      ERROR_TOKEN@58..59 "\\"
+      ERROR_TOKEN@59..60 "\\"
+      IDENT@60..70 "powershell"
+      ERROR_TOKEN@70..71 "\\"
+      DOT@71..72 "."
+      IDENT@72..75 "exe"
+      ERROR_TOKEN@75..76 "$"
+  WHITESPACE@76..77 "\n"
+errors:
+56..57: expected an expression
+58..58: expected an expression
+58..58: expected a section such as `events:`

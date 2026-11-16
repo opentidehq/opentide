@@ -1,0 +1,12 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"()\")"
+---
+SOURCE_FILE@0..2
+  SEARCH_QUERY@0..2
+    SEARCH_EVENTS@0..2
+      PAREN_EXPR@0..2
+        L_PAREN@0..1 "("
+        R_PAREN@1..2 ")"
+errors:
+1..1: expected an expression

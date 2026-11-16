@@ -1,0 +1,27 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/unary_expression__valid.yaral
+---
+SOURCE_FILE@0..46
+  COMMENT@0..30 "// prod:unary_expression valid"
+  WHITESPACE@30..31 "\n"
+  SEARCH_QUERY@31..45
+    SEARCH_EVENTS@31..45
+      AND_EXPR@31..45
+        COMPARISON@31..37
+          COUNT_REF@31..33
+            COUNT_TOKEN@31..33 "#e"
+          WHITESPACE@33..34 " "
+          GT@34..35 ">"
+          WHITESPACE@35..36 " "
+          LITERAL@36..37
+            INTEGER@36..37 "0"
+        WHITESPACE@37..38 " "
+        AND_KW@38..41 "and"
+        WHITESPACE@41..42 " "
+        UNARY_EXPR@42..45
+          BANG@42..43 "!"
+          VARIABLE@43..45
+            VAR_TOKEN@43..45 "$f"
+  WHITESPACE@45..46 "\n"

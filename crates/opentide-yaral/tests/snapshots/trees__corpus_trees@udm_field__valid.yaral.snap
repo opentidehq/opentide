@@ -1,0 +1,50 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/udm_field__valid.yaral
+---
+SOURCE_FILE@0..105
+  COMMENT@0..23 "// prod:udm_field valid"
+  WHITESPACE@23..24 "\n"
+  SEARCH_QUERY@24..104
+    SEARCH_EVENTS@24..104
+      COMPARISON@24..75
+        UDM_FIELD@24..69
+          VARIABLE@24..26
+            VAR_TOKEN@24..26 "$e"
+          MEMBER@26..42
+            ACCESS_DOT@26..27 "."
+            FIELD_NAME@27..42 "security_result"
+          MEMBER@42..59
+            ACCESS_DOT@42..43 "."
+            FIELD_NAME@43..59 "detection_fields"
+          INDEX@59..69
+            INDEX_L_BRACK@59..60 "["
+            STRING@60..68 "\"status\""
+            R_BRACK@68..69 "]"
+        WHITESPACE@69..70 " "
+        EQ@70..71 "="
+        WHITESPACE@71..72 " "
+        LITERAL@72..75
+          STRING@72..75 "\"7\""
+      WHITESPACE@75..76 "\n"
+      COMPARISON@76..104
+        UDM_FIELD@76..91
+          VARIABLE@76..78
+            VAR_TOKEN@76..78 "$e"
+          MEMBER@78..85
+            ACCESS_DOT@78..79 "."
+            FIELD_NAME@79..85 "target"
+          MEMBER@85..88
+            ACCESS_DOT@85..86 "."
+            FIELD_NAME@86..88 "ip"
+          INDEX@88..91
+            INDEX_L_BRACK@88..89 "["
+            INTEGER@89..90 "0"
+            R_BRACK@90..91 "]"
+        WHITESPACE@91..92 " "
+        EQ@92..93 "="
+        WHITESPACE@93..94 " "
+        LITERAL@94..104
+          STRING@94..104 "\"10.0.0.1\""
+  WHITESPACE@104..105 "\n"

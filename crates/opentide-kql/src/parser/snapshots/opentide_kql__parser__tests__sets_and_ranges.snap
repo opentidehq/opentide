@@ -1,0 +1,102 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | where a in (1, 2) and b !in~ (\\\"x\\\") and c between (1 .. 3) and d matches regex \\\"x\\\" and e in (T2 | project x)\")"
+---
+SOURCE_FILE@0..111
+  QUERY@0..111
+    TABULAR_EXPRESSION@0..111
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      WHERE_OPERATOR@4..111
+        WHERE_KW@4..9 "where"
+        WHITESPACE@9..10 " "
+        AND_EXPR@10..111
+          IN_EXPR@10..21
+            NAME_REF@10..11
+              IDENT@10..11 "a"
+            WHITESPACE@11..12 " "
+            IN_KW@12..14 "in"
+            WHITESPACE@14..15 " "
+            EXPRESSION_LIST@15..21
+              L_PAREN@15..16 "("
+              LITERAL@16..17
+                NUMBER@16..17 "1"
+              COMMA@17..18 ","
+              WHITESPACE@18..19 " "
+              LITERAL@19..20
+                NUMBER@19..20 "2"
+              R_PAREN@20..21 ")"
+          WHITESPACE@21..22 " "
+          AND_KW@22..25 "and"
+          WHITESPACE@25..26 " "
+          IN_EXPR@26..38
+            NAME_REF@26..27
+              IDENT@26..27 "b"
+            WHITESPACE@27..28 " "
+            SET_OP@28..32 "!in~"
+            WHITESPACE@32..33 " "
+            EXPRESSION_LIST@33..38
+              L_PAREN@33..34 "("
+              LITERAL@34..37
+                STRING@34..37 "\"x\""
+              R_PAREN@37..38 ")"
+          WHITESPACE@38..39 " "
+          AND_KW@39..42 "and"
+          WHITESPACE@42..43 " "
+          BETWEEN_EXPR@43..61
+            NAME_REF@43..44
+              IDENT@43..44 "c"
+            WHITESPACE@44..45 " "
+            BETWEEN_OP@45..52 "between"
+            WHITESPACE@52..53 " "
+            RANGE@53..61
+              L_PAREN@53..54 "("
+              LITERAL@54..55
+                NUMBER@54..55 "1"
+              WHITESPACE@55..56 " "
+              DOT_DOT@56..58 ".."
+              WHITESPACE@58..59 " "
+              LITERAL@59..60
+                NUMBER@59..60 "3"
+              R_PAREN@60..61 ")"
+          WHITESPACE@61..62 " "
+          AND_KW@62..65 "and"
+          WHITESPACE@65..66 " "
+          COMPARISON_EXPR@66..85
+            NAME_REF@66..67
+              IDENT@66..67 "d"
+            WHITESPACE@67..68 " "
+            MATCHES_KW@68..75 "matches"
+            WHITESPACE@75..76 " "
+            REGEX_KW@76..81 "regex"
+            WHITESPACE@81..82 " "
+            LITERAL@82..85
+              STRING@82..85 "\"x\""
+          WHITESPACE@85..86 " "
+          AND_KW@86..89 "and"
+          WHITESPACE@89..90 " "
+          IN_EXPR@90..111
+            NAME_REF@90..91
+              IDENT@90..91 "e"
+            WHITESPACE@91..92 " "
+            IN_KW@92..94 "in"
+            WHITESPACE@94..95 " "
+            EXPRESSION_LIST@95..111
+              L_PAREN@95..96 "("
+              TABULAR_EXPRESSION@96..110
+                TABULAR_SOURCE@96..98
+                  TABLE_REF@96..98
+                    IDENT@96..98 "T2"
+                WHITESPACE@98..99 " "
+                PIPE@99..100 "|"
+                WHITESPACE@100..101 " "
+                PROJECT_OPERATOR@101..110
+                  PROJECT_KW@101..108 "project"
+                  WHITESPACE@108..109 " "
+                  NAME_REF@109..110
+                    IDENT@109..110 "x"
+              R_PAREN@110..111 ")"

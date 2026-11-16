@@ -1,0 +1,70 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/in_expression__valid.yaral
+---
+SOURCE_FILE@0..154
+  COMMENT@0..27 "// prod:in_expression valid"
+  WHITESPACE@27..28 "\n"
+  SEARCH_QUERY@28..153
+    SEARCH_EVENTS@28..153
+      IN_EXPR@28..64
+        UDM_FIELD@28..43
+          VARIABLE@28..30
+            VAR_TOKEN@28..30 "$e"
+          MEMBER@30..40
+            ACCESS_DOT@30..31 "."
+            FIELD_NAME@31..40 "principal"
+          MEMBER@40..43
+            ACCESS_DOT@40..41 "."
+            FIELD_NAME@41..43 "ip"
+        WHITESPACE@43..44 " "
+        IN_KW@44..46 "in"
+        WHITESPACE@46..47 " "
+        CIDR_KW@47..51 "cidr"
+        WHITESPACE@51..52 " "
+        REFERENCE_LIST@52..64
+          REF_LIST_TOKEN@52..64 "%corp_ranges"
+      WHITESPACE@64..65 "\n"
+      IN_EXPR@65..110
+        UDM_FIELD@65..83
+          VARIABLE@65..67
+            VAR_TOKEN@65..67 "$e"
+          MEMBER@67..74
+            ACCESS_DOT@67..68 "."
+            FIELD_NAME@68..74 "target"
+          MEMBER@74..83
+            ACCESS_DOT@74..75 "."
+            FIELD_NAME@75..83 "hostname"
+        WHITESPACE@83..84 " "
+        IN_KW@84..86 "in"
+        WHITESPACE@86..87 " "
+        REGEX_KW@87..92 "regex"
+        WHITESPACE@92..93 " "
+        REFERENCE_LIST@93..103
+          REF_LIST_TOKEN@93..103 "%bad_hosts"
+        WHITESPACE@103..104 " "
+        NOCASE_KW@104..110 "nocase"
+      WHITESPACE@110..111 "\n"
+      IN_EXPR@111..153
+        UDM_FIELD@111..135
+          VARIABLE@111..113
+            VAR_TOKEN@111..113 "$e"
+          MEMBER@113..123
+            ACCESS_DOT@113..114 "."
+            FIELD_NAME@114..123 "principal"
+          MEMBER@123..128
+            ACCESS_DOT@123..124 "."
+            FIELD_NAME@124..128 "user"
+          MEMBER@128..135
+            ACCESS_DOT@128..129 "."
+            FIELD_NAME@129..135 "userid"
+        WHITESPACE@135..136 " "
+        IN_KW@136..138 "in"
+        WHITESPACE@138..139 " "
+        DATA_TABLE_COLUMN@139..153
+          REFERENCE_LIST@139..146
+            REF_LIST_TOKEN@139..146 "%admins"
+          DOT@146..147 "."
+          IDENT@147..153 "userid"
+  WHITESPACE@153..154 "\n"

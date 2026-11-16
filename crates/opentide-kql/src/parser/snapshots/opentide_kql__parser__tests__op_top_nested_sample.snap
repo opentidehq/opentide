@@ -1,0 +1,84 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | top-nested 3 of x with others = \\\"o\\\" by count() desc, top-nested of y by sum(z) asc nulls last | sample-distinct 10 of a\")"
+---
+SOURCE_FILE@0..123
+  QUERY@0..123
+    TABULAR_EXPRESSION@0..123
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      TOP_NESTED_OPERATOR@4..97
+        TOP_NESTED_CLAUSE@4..55
+          TOP_NESTED_KW@4..14 "top-nested"
+          WHITESPACE@14..15 " "
+          LITERAL@15..16
+            NUMBER@15..16 "3"
+          WHITESPACE@16..17 " "
+          TOP_NESTED_OF@17..21
+            OF_KW@17..19 "of"
+            WHITESPACE@19..20 " "
+            NAME_REF@20..21
+              IDENT@20..21 "x"
+          WHITESPACE@21..22 " "
+          TOP_NESTED_OTHERS@22..39
+            WITH_KW@22..26 "with"
+            WHITESPACE@26..27 " "
+            OTHERS_KW@27..33 "others"
+            WHITESPACE@33..34 " "
+            EQ@34..35 "="
+            WHITESPACE@35..36 " "
+            LITERAL@36..39
+              STRING@36..39 "\"o\""
+          WHITESPACE@39..40 " "
+          TOP_NESTED_BY@40..55
+            BY_KW@40..42 "by"
+            WHITESPACE@42..43 " "
+            FUNCTION_CALL@43..50
+              IDENT@43..48 "count"
+              L_PAREN@48..49 "("
+              R_PAREN@49..50 ")"
+            WHITESPACE@50..51 " "
+            DESC_KW@51..55 "desc"
+        COMMA@55..56 ","
+        WHITESPACE@56..57 " "
+        TOP_NESTED_CLAUSE@57..97
+          TOP_NESTED_KW@57..67 "top-nested"
+          WHITESPACE@67..68 " "
+          TOP_NESTED_OF@68..72
+            OF_KW@68..70 "of"
+            WHITESPACE@70..71 " "
+            NAME_REF@71..72
+              IDENT@71..72 "y"
+          WHITESPACE@72..73 " "
+          TOP_NESTED_BY@73..97
+            BY_KW@73..75 "by"
+            WHITESPACE@75..76 " "
+            FUNCTION_CALL@76..82
+              IDENT@76..79 "sum"
+              L_PAREN@79..80 "("
+              NAME_REF@80..81
+                IDENT@80..81 "z"
+              R_PAREN@81..82 ")"
+            WHITESPACE@82..83 " "
+            ASC_KW@83..86 "asc"
+            WHITESPACE@86..87 " "
+            NULLS_KW@87..92 "nulls"
+            WHITESPACE@92..93 " "
+            LAST_KW@93..97 "last"
+      WHITESPACE@97..98 " "
+      PIPE@98..99 "|"
+      WHITESPACE@99..100 " "
+      SAMPLE_DISTINCT_OPERATOR@100..123
+        SAMPLE_DISTINCT_KW@100..115 "sample-distinct"
+        WHITESPACE@115..116 " "
+        LITERAL@116..118
+          NUMBER@116..118 "10"
+        WHITESPACE@118..119 " "
+        OF_KW@119..121 "of"
+        WHITESPACE@121..122 " "
+        NAME_REF@122..123
+          IDENT@122..123 "a"
