@@ -315,12 +315,12 @@ impl WriteFs for OsFs {
 /// The folder or the file cannot be written.
 pub fn write_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
     use std::io::Write as _;
-    let target = match dunce::canonicalize(path) {
+    let target = match settled(|| dunce::canonicalize(path)) {
         Ok(target) => target,
         Err(error) if error.kind() == io::ErrorKind::NotFound => path.to_path_buf(),
         Err(error) => return Err(error),
     };
-    let existing = match std::fs::metadata(&target) {
+    let existing = match settled(|| std::fs::metadata(&target)) {
         Ok(metadata) => Some(metadata),
         Err(error) if error.kind() == io::ErrorKind::NotFound => None,
         Err(error) => return Err(error),
@@ -405,13 +405,43 @@ fn persist_over(temporary: tempfile::NamedTempFile, target: &Path) -> io::Result
 /// Whether `error` from replacing `target` is one Windows clears by itself.
 #[cfg(windows)]
 fn replace_may_succeed_later(error: &io::Error, target: &Path) -> bool {
+    clears_by_itself(error)
+        && !std::fs::metadata(target).is_ok_and(|metadata| metadata.permissions().readonly())
+}
+
+/// Whether `error` is one Windows answers while another writer's replace of
+/// the same file is under way (see [`persist_over`]).
+#[cfg(windows)]
+fn clears_by_itself(error: &io::Error) -> bool {
     const ERROR_ACCESS_DENIED: i32 = 5;
     const ERROR_SHARING_VIOLATION: i32 = 32;
     const ERROR_LOCK_VIOLATION: i32 = 33;
     matches!(
         error.raw_os_error(),
         Some(ERROR_ACCESS_DENIED | ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION)
-    ) && !std::fs::metadata(target).is_ok_and(|metadata| metadata.permissions().readonly())
+    )
+}
+
+/// `look` at the target of a write. On Windows, while another writer's
+/// replace of that file is under way, the file being replaced cannot be
+/// opened for a moment (it answers as [`clears_by_itself`] says): the look
+/// is tried again for a bounded time, as the replace itself is. Elsewhere it
+/// runs once.
+fn settled<T>(mut look: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+    #[cfg(windows)]
+    {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            match look() {
+                Err(error) if clears_by_itself(&error) && std::time::Instant::now() < deadline => {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                done => return done,
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    look()
 }
 
 /// `path` with `.` and `..` folded away, lexically.
