@@ -43,5 +43,5 @@ SOURCE_FILE@0..52
       R_PAREN@50..51 ")"
   WHITESPACE@51..52 "\n"
 
-32..32: unexpected
+32..32: missing `}`
 50..50: missing `}` (expected PIPE, R_BRACE)

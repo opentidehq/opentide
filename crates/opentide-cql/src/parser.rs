@@ -85,6 +85,21 @@ pub(crate) fn parse(source: &str) -> (SyntaxNode, Parse) {
 /// build gives every temporary of every call its own stack slot, and the recursion path is
 /// what a 1 MB stack holds 1,000 levels of).
 /// Consumes the closing token, or records `message`.
+/// The `)` of a group, a call or a parenthesised expression. Where it is not, the token there
+/// says which fault it is: the end, or the closer of an enclosing construct, is a missing `)`;
+/// anything else (`test(a > 1 and b)`, `eval(x := a)`, `(a=1 | b=2)`, `rdns (a=1, b)`) is a
+/// token that does not fit, and `)` would be the wrong fix. A `|` ends a call (`f( | g()`)
+/// when `pipe_ends`.
+fn close_paren(p: &mut Parser<'_>, pipe_ends: bool) {
+    if p.eat(K::R_PAREN.raw()) {
+        return;
+    }
+    let k = kind(p, 0);
+    let missing =
+        p.at_eof() || matches!(k, K::R_BRACE | K::R_BRACK | K::SEMI) || (pipe_ends && k == K::PIPE);
+    err(p, if missing { MISSING_PAREN } else { UNEXPECTED });
+}
+
 fn close(p: &mut Parser<'_>, k: K, message: &'static str) {
     if !p.eat(k.raw()) {
         err(p, message);
@@ -237,11 +252,16 @@ enum Step {
 
 /// `|`? step (`|` step)*. The whole query may end with `|` (`top`); a nested pipeline may not.
 fn pipeline(p: &mut Parser<'_>, top: bool) {
+    pipeline_in(p, top, false);
+}
+
+/// [`pipeline`]; `subquery`: the body of `{ ... }`.
+fn pipeline_in(p: &mut Parser<'_>, top: bool, subquery: bool) {
     let m = p.start();
     let mut steps = false;
     eat(p, K::PIPE);
     loop {
-        if run(p, top) {
+        if run(p, top, subquery) {
             steps = true;
         } else if !(top && steps && p.at_eof()) {
             err(p, EXPECTED_STEP);
@@ -254,13 +274,21 @@ fn pipeline(p: &mut Parser<'_>, top: bool) {
 }
 
 /// Steps with no pipe between them; whether there was one.
-fn run(p: &mut Parser<'_>, top: bool) -> bool {
+fn run(p: &mut Parser<'_>, top: bool, subquery: bool) -> bool {
     let end = if top { TokenSet::EMPTY } else { NESTED_END };
     let mut any = false;
     let mut prev = None;
     // `kind`, not `at`: an empty step expects a step, not the `|` it found.
     while !p.at_eof() && !end.contains(p.current()) && kind(p, 0) != K::PIPE {
         any = true;
+        // A `,` starts no step: in a subquery (`join({ a | b, field=x)`) it is where the `}`
+        // was due. The comma is skipped as any stray token is, so the subquery still ends at
+        // the `}` the lexer's modes expect, and nothing after it is misread.
+        if subquery && kind(p, 0) == K::COMMA {
+            p.err_and_bump(MISSING_BRACE);
+            prev = Some(Step::Filter);
+            continue;
+        }
         prev = Some(step(p, prev));
     }
     any
@@ -490,7 +518,7 @@ fn paren_filter(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     if and_chain(p, false).is_none() {
         err(p, EXPECTED_FILTER);
     }
-    close(p, K::R_PAREN, MISSING_PAREN);
+    close_paren(p, false);
     p.exit();
     Some(m.complete(p, K::PARENTHESIZED_FILTER.raw()))
 }
@@ -554,13 +582,19 @@ fn unquoted_pattern(p: &mut Parser<'_>) {
 fn regex(p: &mut Parser<'_>) -> CompletedMarker {
     let m = p.start();
     p.bump();
+    // `/* ...` with no `*/` is read as a regular expression, which is not what was meant.
+    let comment = p.current_text().starts_with('*');
     if at(p, K::REGEX_PATTERN_TOKEN) {
         wrap(p, K::REGEX_PATTERN, K::REGEX_PATTERN_TOKEN);
     } else {
         p.error(EXPECTED_REGEX);
     }
-    if expect(p, K::SLASH, "the regular expression is never closed") && at(p, K::REGEX_FLAGS_TOKEN)
-    {
+    let never_closed = if comment {
+        "the block comment is never closed"
+    } else {
+        "the regular expression is never closed"
+    };
+    if expect(p, K::SLASH, never_closed) && at(p, K::REGEX_FLAGS_TOKEN) {
         wrap(p, K::REGEX_FLAGS, K::REGEX_FLAGS_TOKEN);
     }
     m.complete(p, K::REGEX.raw())
@@ -832,10 +866,11 @@ fn function_call(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     let m = p.start();
     wrap(p, K::FUNCTION_NAME, K::FUNCTION_NAME_TOKEN);
     if p.eat(K::L_PAREN.raw()) {
-        if !at(p, K::R_PAREN) {
+        // `f( | ...` and `f(` at the end: no argument starts; it is the `)` that is missing.
+        if !at(p, K::R_PAREN) && kind(p, 0) != K::PIPE && !p.at_eof() {
             argument_list(p);
         }
-        close(p, K::R_PAREN, MISSING_PAREN);
+        close_paren(p, true);
     } else {
         err(p, "expected `(` after the function name");
     }
@@ -1053,7 +1088,7 @@ fn paren_expr(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     if expr(p, true).is_none() {
         err(p, EXPECTED_EXPR);
     }
-    close(p, K::R_PAREN, MISSING_PAREN);
+    close_paren(p, false);
     p.exit();
     Some(m.complete(p, K::PARENTHESIZED_EXPRESSION.raw()))
 }
@@ -1066,7 +1101,7 @@ fn subquery(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     let m = p.start();
     p.bump();
     if !at(p, K::R_BRACE) {
-        pipeline(p, false);
+        pipeline_in(p, false, true);
     }
     close(p, K::R_BRACE, MISSING_BRACE);
     p.exit();
