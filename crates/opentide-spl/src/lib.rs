@@ -1058,6 +1058,31 @@ fn push_param(out: &mut Vec<ParameterInformation>, raw: &str) {
     });
 }
 
+/// Whether the grammar reports an error in `source`, and the `Debug` names of
+/// the kinds of its tree, nodes and tokens in preorder: what the corpus gate of
+/// `opentide-analysis` reads. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
+    opentide_parse::debug_kinds::<Lang>(&syntax::parse(source).1)
+}
+
+/// The `Debug` names of the node kinds the grammar declares, the error node
+/// left out: the productions the corpus gate of `opentide-analysis` asks a
+/// fixture of. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_node_kinds() -> Vec<String> {
+    (SyntaxKind::SOURCE_FILE as u16..SyntaxKind::ERROR as u16)
+        .map(|raw| {
+            format!(
+                "{:?}",
+                <Lang as rowan::Language>::kind_from_raw(rowan::SyntaxKind(raw))
+            )
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

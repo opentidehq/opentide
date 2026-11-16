@@ -34,7 +34,7 @@ fn json_string(s: &str) -> String {
 }
 
 fn has_error(query: &str) -> bool {
-    opentide_kuery::analyze(query)
+    opentide_kuery::analyze(query, |_| false)
         .diagnostics
         .iter()
         .any(|d| d.severity == Severity::Error)

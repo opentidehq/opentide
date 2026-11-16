@@ -45,14 +45,6 @@ fn inputs(dir: &Path, ext: &str) -> Vec<PathBuf> {
 /// those as errors, #1225).
 const EXPECTED: &[(&str, &str)] = &[
     (
-        "base64_modifier__valid.yar",
-        "an escape in a base64 alphabet: libyara accepts it (its docs' example), YARA-X does not",
-    ),
-    (
-        "rule_set__valid.yar",
-        "a rule wildcard in `of` (libyara 4.3): YARA-X reads `base*` as a product",
-    ),
-    (
         "rule_wildcard__valid.yar",
         "a rule wildcard in `of` (libyara 4.3): YARA-X reads `base*` as a product",
     ),

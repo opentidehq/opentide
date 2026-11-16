@@ -4,6 +4,23 @@ use crate::{SyntaxError, TokenSet};
 use rowan::{NodeOrToken, SyntaxKind, WalkEvent};
 use std::fmt::{Display, Write as _};
 
+/// Whether `parse` reported an error, and the `Debug` names of its tree's
+/// kinds, nodes and tokens in preorder: what the corpus gate of
+/// `opentide-analysis` reads of every language (`debug_kinds` in each query
+/// crate). Iterative, so any depth is read.
+#[must_use]
+pub fn debug_kinds<L: rowan::Language>(parse: &crate::Parse) -> (bool, Vec<String>)
+where
+    L::Kind: std::fmt::Debug,
+{
+    let root = rowan::SyntaxNode::<L>::new_root(parse.green.clone());
+    let kinds = root
+        .descendants_with_tokens()
+        .map(|e| format!("{:?}", e.kind()))
+        .collect();
+    (!parse.errors.is_empty(), kinds)
+}
+
 /// A tree as indented text, one element per line (`KIND@start..end`, and a
 /// token's text), for insta snapshots. `name` spells a kind. Iterative, so
 /// any depth renders.

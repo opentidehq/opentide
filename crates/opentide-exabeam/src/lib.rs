@@ -118,5 +118,23 @@ pub fn highlight(spec: &HighlightSpec, source: &str) -> Vec<HighlightToken> {
     tokens_from_spans(spec, source, &highlight_captures(source)).unwrap_or_default()
 }
 
+/// Whether the grammar reports an error in `source`, and the `Debug` names of
+/// the kinds of its tree, nodes and tokens in preorder: what the corpus gate of
+/// `opentide-analysis` reads. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
+    opentide_parse::debug_kinds::<syntax::Exabeam>(&cst::parse(source).1)
+}
+
+/// The `Debug` names of the node kinds the grammar declares, the error node
+/// left out: the productions the corpus gate of `opentide-analysis` asks a
+/// fixture of. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_node_kinds() -> Vec<String> {
+    syntax::node_kinds()
+}
+
 #[cfg(test)]
 mod tests;
