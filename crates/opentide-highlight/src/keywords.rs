@@ -46,6 +46,7 @@ pub type Keywords = &'static [(&'static str, Capture)];
 #[must_use]
 pub const fn keywords(language: LanguageId) -> Option<Keywords> {
     match language {
+        LanguageId::Falco => Some(FALCO),
         LanguageId::Kql
         | LanguageId::Spl
         | LanguageId::TideYaml
@@ -54,13 +55,30 @@ pub const fn keywords(language: LanguageId) -> Option<Keywords> {
         | LanguageId::Kuery
         | LanguageId::Lucene
         | LanguageId::Config
-        | LanguageId::Falco
         | LanguageId::Cql
         | LanguageId::Yara
         | LanguageId::Exabeam
         | LanguageId::Yaral => None,
     }
 }
+
+const KEYWORD: Capture = Capture::new("keyword");
+const BRACKET: Capture = Capture::new("punctuation.bracket");
+const DELIMITER: Capture = Capture::new("punctuation.delimiter");
+
+/// Falco conditions: exactly the quoted tokens of the `.scm` the TextMate
+/// generator scraped before. Operators and transformer names are words the
+/// parser classifies by context, so they were never in it.
+const FALCO: Keywords = &[
+    ("and", KEYWORD),
+    ("or", KEYWORD),
+    ("not", KEYWORD),
+    ("(", BRACKET),
+    (")", BRACKET),
+    ("[", BRACKET),
+    ("]", BRACKET),
+    (",", DELIMITER),
+];
 
 /// `(token, capture name)` pairs of a table.
 pub(crate) fn table_pairs(table: &[(&str, Capture)]) -> Vec<(String, String)> {

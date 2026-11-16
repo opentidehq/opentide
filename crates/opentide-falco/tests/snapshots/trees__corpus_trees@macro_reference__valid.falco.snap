@@ -1,0 +1,19 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/macro_reference__valid.falco
+---
+source_file@0..50
+  and_expression@0..50
+    macro_reference@0..9
+      identifier@0..9 "open_read"
+    whitespace@9..10 " "
+    and@10..13 "and"
+    whitespace@13..14 " "
+    macro_reference@14..29
+      identifier@14..29 "sensitive_files"
+    whitespace@29..30 " "
+    and@30..33 "and"
+    whitespace@33..34 " "
+    macro_reference@34..50
+      identifier@34..50 "proc_name_exists"
