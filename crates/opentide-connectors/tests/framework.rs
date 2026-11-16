@@ -1143,9 +1143,9 @@ fn framework_no_credential_in_errors_or_debug() {
     assert_eq!(format!("{}", Secret::new(secret)), "***");
     // A refused connection to a URL carrying credentials in its user info
     // and its query: the error names the origin only.
-    let closed = TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = closed.local_addr().unwrap().port();
-    drop(closed);
+    // Port 1: nothing listens there, and no stand-in server of a test running
+    // at the same time can take it (it is below every ephemeral range).
+    let port = 1;
     let url = format!("http://user:{secret}@127.0.0.1:{port}/api?token={secret}");
     let error = get(
         "prod",

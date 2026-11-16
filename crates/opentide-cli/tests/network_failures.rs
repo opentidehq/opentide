@@ -151,12 +151,11 @@ fn stand_in(answer: Answer, ctrl_c: Option<Interrupt>) -> String {
     address
 }
 
-/// An address on the loopback nothing listens on.
+/// An address on the loopback nothing listens on: port 1, below every
+/// system's ephemeral range, so no stand-in server of a test running at the
+/// same time can take it (a port bound and then released could be).
 fn closed_port() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap().to_string();
-    drop(listener);
-    address
+    "127.0.0.1:1".to_string()
 }
 
 fn repo() -> PathBuf {
