@@ -1212,243 +1212,26 @@ jobs:
   # target, then each installed on its OS as a user installs it.
   # ---------------------------------------------------------------------------
 
-  # The sdist (`maturin sdist`, as publish.yml builds it), for its build smoke
-  # test, and twine's check of its metadata.
-  sdist:
-    name: Sdist
-    needs: changes
-    if: needs.changes.outputs.release == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Build sdist
-        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
-        with:
-          maturin-version: v1.16.0
-          command: sdist
-          args: --out dist
-      - name: Twine check
-        run: pipx run twine check dist/*
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: sdist
-          path: dist/*.tar.gz
-          if-no-files-found: error
-          retention-days: 14
-
-  # A build from the sdist, with the runner image's stable Rust (the sdist
-  # leaves rust-toolchain.toml out), as on a platform without a wheel; as
-  # publish.yml's smoke-sdist.
-  smoke-sdist:
-    name: Smoke build from the sdist
-    needs: [changes, sdist]
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: sdist
-          path: ${{ runner.temp }}/sdist
-      - name: pip install the sdist, then the version, validate on the tide corpus and the SDK
-        run: |
-          set -euo pipefail
-          cargo --version
-          python -m venv "${RUNNER_TEMP}/venv"
-          "${RUNNER_TEMP}/venv/bin/python" -m pip install --quiet --no-binary opentide "${RUNNER_TEMP}"/sdist/opentide-*.tar.gz
-          version="$("${RUNNER_TEMP}/venv/bin/python" -c 'import importlib.metadata as m; print(m.version("opentide"))')"
-          "${RUNNER_TEMP}/venv/bin/python" -I scripts/build/smoke_package.py "${version}"
-
-  # The wheels and the npm tarballs a release builds (build-packages.yml,
-  # which publish.yml calls too), at a development version of the
-  # workspace's (PyPI X.Y.Z.devN, npm X.Y.Z-dev.N), kept 14 days as this run's
-  # artifacts (docs/internal/publishing.md, "Testing a build without
-  # publishing"). Each wheel is installed and run on its own platform
-  # (build-packages.yml's wheel-smoke).
-  packages:
-    name: Installable packages
+  # Everything a release ships, built and smoke-tested as publish.yml builds
+  # it (release-build.yml, which publish.yml calls too): the wheels (each run
+  # on its own OS), the npm packages, the GitHub Release's assets (binaries,
+  # installers, WebAssembly, SBOMs), the sdist and the crate packages, at a
+  # development version of the workspace's (PyPI X.Y.Z.devN, npm
+  # X.Y.Z-dev.N), kept 14 days as this run's artifacts
+  # (docs/internal/publishing.md, "Testing a build without publishing"); then
+  # one smoke matrix: the installer and `npm install` on each of the six
+  # platforms, a build from the sdist and `cargo install` from the crates.
+  release:
+    name: Release build
     needs: changes
     if: needs.changes.outputs.release == 'true' || needs.changes.outputs.mode == 'nightly'
     permissions:
       contents: read
-    uses: ./.github/workflows/build-packages.yml
+    uses: ./.github/workflows/release-build.yml
     with:
       revision: ${{ github.sha }}
-      retention-days: 14
-
-  # `pip install` each wheel on its OS, then scripts/build/smoke_package.py,
-  # as publish.yml's smoke-wheel.
-  smoke-wheel:
-    name: Smoke pip install (${{ matrix.os }})
-    needs: [changes, packages]
-    if: needs.changes.outputs.release == 'true'
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
-    env:
-      PYPI_VERSION: ${{ needs.packages.outputs.pypi }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          path: ${{ runner.temp }}/wheels
-          pattern: wheels-*
-          merge-multiple: true
-      - name: pip install, then the version, validate on the tide corpus and the SDK
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m venv "${RUNNER_TEMP}/venv"
-          if [[ -x "${RUNNER_TEMP}/venv/Scripts/python.exe" ]]; then bin="${RUNNER_TEMP}/venv/Scripts"; else bin="${RUNNER_TEMP}/venv/bin"; fi
-          "${bin}/python" -m pip install --quiet --find-links "${RUNNER_TEMP}/wheels" --only-binary opentide "opentide==${PYPI_VERSION}"
-          "${bin}/python" -I scripts/build/smoke_package.py "${PYPI_VERSION}"
-
-  # The npm packages installed from a throwaway local registry on each OS, as
-  # publish.yml's smoke-npm (scripts/engine/npm-local-registry/test.mjs).
-  smoke-npm:
-    name: Smoke npm install (${{ matrix.os }})
-    needs: [changes, packages]
-    if: needs.changes.outputs.release == 'true'
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    env:
-      NPM_VERSION: ${{ needs.packages.outputs.npm }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          package-manager-cache: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: npm-packages
-          path: ${{ runner.temp }}/npm
-      - name: Publish to a local registry, npm install, npx, SDK and types
-        shell: bash
-        run: node scripts/engine/npm-local-registry/test.mjs --version "${NPM_VERSION}" --tarballs "${RUNNER_TEMP}/npm"
-
-  # The GitHub Release's assets (the `opentide` and `opentide-lsp` binaries per
-  # target, their installers, the WebAssembly builds, the SBOMs, SHA256SUMS),
-  # built as publish.yml builds them, with the workspace version's tag.
-  engine-release-dry-run:
-    name: Engine release (dry run)
-    needs: changes
-    if: needs.changes.outputs.release == 'true' || needs.changes.outputs.mode == 'nightly'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/engine-release-build.yml
-    with:
       dry-run: true
-
-  # The binary installers against the assets this run built, on each OS, as
-  # publish.yml's smoke-installer.
-  smoke-installer:
-    name: Smoke binary installer (${{ matrix.os }})
-    needs: [changes, engine-release-dry-run]
-    if: needs.changes.outputs.release == 'true'
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
-    env:
-      VERSION: ${{ needs.engine-release-dry-run.outputs.version }}
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-assets
-          path: release-assets
-      - name: opentide-installer.sh, then opentide --version
-        if: runner.os != 'Windows'
-        run: |
-          set -euo pipefail
-          OPENTIDE_DOWNLOAD_URL="file://$(pwd)/release-assets" OPENTIDE_INSTALL_DIR="${RUNNER_TEMP}/bin" \
-            sh release-assets/opentide-installer.sh
-          out="$("${RUNNER_TEMP}/bin/opentide" --version)"
-          echo "${out}"
-          grep -qF "${VERSION}" <<< "${out}"
-          "${RUNNER_TEMP}/bin/opentide-lsp" --version
-      - name: opentide-installer.ps1, then opentide --version
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $true
-          $env:OPENTIDE_DOWNLOAD_URL = (Resolve-Path release-assets).Path
-          $env:OPENTIDE_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'bin'
-          & ./release-assets/opentide-installer.ps1
-          $out = & (Join-Path $env:OPENTIDE_INSTALL_DIR 'opentide.exe') --version
-          Write-Output $out
-          if (-not ($out -like "*$env:VERSION*")) { throw "opentide --version printed $out, not $env:VERSION" }
-          & (Join-Path $env:OPENTIDE_INSTALL_DIR 'opentide-lsp.exe') --version
-
-  # `cargo install opentide --features cli` from the crates' packages
-  # (engine-package), before crates.io has this version, as publish.yml's
-  # smoke-cargo.
-  smoke-cargo:
-    name: Smoke cargo install opentide --features cli
-    needs: [changes, engine-package]
-    if: needs.changes.outputs.release == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Rust
-        uses: ./.github/actions/rust-setup
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: crates
-          path: crates-packages
-      - name: cargo install from the packages, then opentide --version
-        run: |
-          set -euo pipefail
-          version="$(python3 scripts/engine/release.py version)"
-          config="$(python3 scripts/engine/release.py crate-patch crates-packages "${RUNNER_TEMP}/packages")"
-          cargo install --config "${config}" --path "${RUNNER_TEMP}/packages/opentide-${version}" \
-            --features cli --debug --root "${RUNNER_TEMP}/cargo"
-          out="$("${RUNNER_TEMP}/cargo/bin/opentide" --version)"
-          echo "${out}"
-          grep -qF "${version}" <<< "${out}"
+      retention-days: 14
 
   # Every publish this repository makes, rehearsed with --dry-run and no
   # token (publish-dry-run.yml).
@@ -1647,67 +1430,6 @@ jobs:
       contents: read
     uses: ./.github/workflows/oracle.yml
     secrets: inherit
-
-  # Every engine crate builds from its packaged sources, as it will from
-  # crates.io: a crate that reads a file outside OPENTIDE_ASSETS fails here, not
-  # at release. The binding (bindings/python/, opentide-native), the tooling (xtask)
-  # and the differential comparator (opentide-compare, which only they use)
-  # are not crates to publish. The packages carry the embedded catalogs, so the licence scan
-  # catches an oracle reference here rather than at release time.
-  engine-package:
-    name: Engine crates package and licence scan
-    needs: changes
-    if: needs.changes.outputs.release == 'true' || needs.changes.outputs.mode == 'nightly'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      # A compiler warning fails the build, as in engine-ci.yml (workflow-wide there).
-      RUSTFLAGS: "-Dwarnings"
-      RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 2G
-      # The server stays up for the whole job: its statistics are the run's.
-      SCCACHE_IDLE_TIMEOUT: "0"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # The full set's compiler cache for this OS; `conformance` saves it.
-      # By content: a stale one still serves every crate that did not change.
-      - name: Set up Rust
-        id: sccache
-        uses: ./.github/actions/rust-setup
-        with:
-          tools: sccache@0.19.0
-          cache: full-set-${{ runner.os }}
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - run: python3 scripts/engine/release.py vendor
-      # Every crate the release train publishes (publish.yml, UC-5.5), built
-      # from its package. Left out: the members with `publish = false` (the
-      # PyO3 and Node.js bindings, xtask, the test harnesses opentide-compare
-      # and opentide-cassette, and opentide-wasm, which ships as a release
-      # asset), whose sources are scanned instead
-      # (tests/test_ci/test_workflows.py holds both to it). opentide-cli
-      # carries opentide's package data, its explain pages, as the wheel does:
-      # scanned as a product (license-scan.sh --product).
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-cassette --exclude opentide-wasm --exclude opentide-node --allow-dirty
-      - name: license scan (no oracle references)
-        run: |
-          set -euo pipefail
-          find target/package -maxdepth 1 -name '*.crate' ! -name 'opentide-cli-*' -print0 | xargs -0 bash scripts/engine/license-scan.sh
-          bash scripts/engine/license-scan.sh --product target/package/opentide-cli-*.crate
-          bash scripts/engine/license-scan.sh crates/opentide-compare crates/opentide-cassette crates/opentide-wasm bindings/node bindings/python
-      # For smoke-cargo, in the release tier.
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: crates
-          path: target/package/*.crate
-          if-no-files-found: error
-          retention-days: 14
-
 
   # The cross-SDK conformance suite (UC-5.4, #839): every operation of
   # tests/conformance/manifest.json on the tide corpus, the heavy workspace,
@@ -2150,8 +1872,11 @@ jobs:
   # they would a release of this repository.
   engine-release-consumers:
     name: Engine release assets in vscode-extension
-    needs: [changes, engine-release-dry-run]
-    if: needs.changes.outputs.mode == 'nightly'
+    needs: [changes, release]
+    # Whatever else in `release` failed (a smoke cell, the crates' licence
+    # scan): this needs only its engine assets, and the download fails when
+    # they were not built.
+    if: always() && needs.changes.outputs.mode == 'nightly'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -2203,15 +1928,7 @@ jobs:
       - wasm
       - textmate
       - deny
-      - sdist
-      - smoke-sdist
-      - packages
-      - smoke-wheel
-      - smoke-npm
-      - engine-release-dry-run
-      - smoke-installer
-      - engine-package
-      - smoke-cargo
+      - release
       - publish-dry-run
       - test-full
       - e2e-full

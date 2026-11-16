@@ -1,24 +1,23 @@
-# The installable packages: the PyPI wheels and the npm tarballs, built once
-# for both callers (UC-5.5, #840).
+# The installable packages: the PyPI wheels and the npm tarballs (UC-5.5,
+# #840). release-build.yml calls it, for both of its callers:
 #
 #   - publish.yml, the release train: at the release's version (or a
-#     candidate's), then smoke-tested, attested and published by its own jobs.
-#   - ci.yml's `packages` job, in the full set only: a development build of
-#     the workspace version (PyPI X.Y.Z.devN, npm X.Y.Z-dev.N, N the run
-#     number), uploaded as run artifacts for a maintainer to install and test
-#     without publishing anything (docs/internal/publishing.md, "Testing a
-#     build without publishing").
+#     candidate's), then smoke-tested, attested and published;
+#   - ci.yml's `release` job (a release pull request, `scope: release`, the
+#     nightly): a development build of the workspace version (PyPI X.Y.Z.devN,
+#     npm X.Y.Z-dev.N, N the run number), uploaded as run artifacts for a
+#     maintainer to install and test without publishing anything
+#     (docs/internal/publishing.md, "Testing a build without publishing").
 #
 # Artifacts:
 #
 #   - wheels-<platform>: one cp310-abi3 wheel, built by maturin (linux-x64,
 #     linux-arm64, macos-x64, macos-arm64, windows-x64, windows-arm64), each
 #     installed and run on its own OS before the build passes (`wheel-smoke`);
-#   - npm-<platform>: @opentide/opentide's tarball and the native package of
-#     one platform (linux-x64-gnu, linux-arm64-gnu, darwin-x64, darwin-arm64,
-#     win32-x64-msvc, win32-arm64-msvc), for `npm install ./opentide-opentide-*.tgz`;
 #   - npm-packages: every npm tarball in publishing order (1-native, 2-package,
-#     3-alias, 4-lsp), which publish.yml smoke-tests, attests and publishes;
+#     3-alias, 4-lsp), which release-build.yml smoke-tests and publish.yml
+#     attests and publishes; a tester installs
+#     `npm install ./2-package/opentide-opentide-*.tgz ./1-native/<platform>.tgz`;
 #   - npm-native-<platform>: each addon with the loader napi-rs wrote (an
 #     intermediate of npm-pack).
 #
@@ -29,8 +28,7 @@
 #
 # Nothing here publishes or holds a token: `contents: read`, no OIDC token, no
 # secret, and no compiler cache for a release (a release builds from
-# nothing): only a development build (ci.yml, no pypi-version) compiles
-# through sccache.
+# nothing): only a development build (`sccache`) compiles through sccache.
 name: Build packages
 
 on:
@@ -50,6 +48,11 @@ on:
         required: false
         default: ""
         type: string
+      sccache:
+        description: "Compile the wheels through sccache: a development build only (a release builds from nothing)."
+        required: false
+        default: false
+        type: boolean
       retention-days:
         description: "How long the artifacts are kept; 0 is the repository's default."
         required: false
@@ -178,8 +181,8 @@ jobs:
       # rust-toolchain.toml's release, which maturin-action installs (in the
       # manylinux container on Linux) and sets as the directory's override,
       # so rustup installs nothing mid-build. The compiler cache only for a
-      # development build (ci.yml): a release (publish.yml) builds from
-      # nothing.
+      # development build (`sccache`, ci.yml's): a release (publish.yml)
+      # builds from nothing.
       - name: Build the wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
@@ -187,7 +190,7 @@ jobs:
           command: build
           target: ${{ matrix.target }}
           manylinux: "2_28"
-          sccache: ${{ inputs.pypi-version == '' }}
+          sccache: ${{ inputs.sccache }}
           args: --locked --out wheelhouse
 
       # One wheel, tagged cp310-abi3 for the platform, at the build's version.
@@ -434,42 +437,5 @@ jobs:
         with:
           name: npm-packages
           path: npm
-          if-no-files-found: error
-          retention-days: ${{ inputs.retention-days }}
-
-  # What a tester downloads for one platform: @opentide/opentide and that
-  # platform's native package, side by side, so that
-  # `npm install ./opentide-opentide-*.tgz` installs both.
-  npm-platforms:
-    name: npm (${{ matrix.platform }})
-    needs: npm-pack
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        platform:
-          - linux-x64-gnu
-          - linux-arm64-gnu
-          - darwin-x64
-          - darwin-arm64
-          - win32-x64-msvc
-          - win32-arm64-msvc
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: npm-packages
-          path: npm
-      - name: The package and the platform's native package
-        env:
-          PLATFORM: ${{ matrix.platform }}
-        run: |
-          set -euo pipefail
-          mkdir out
-          cp npm/2-package/opentide-opentide-*.tgz "npm/1-native/opentide-opentide-${PLATFORM}-"*.tgz out/
-          test "$(find out -name '*.tgz' | wc -l)" -eq 2
-          ls -l out
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: npm-${{ matrix.platform }}
-          path: out/*.tgz
           if-no-files-found: error
           retention-days: ${{ inputs.retention-days }}

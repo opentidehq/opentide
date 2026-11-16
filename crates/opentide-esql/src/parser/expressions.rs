@@ -22,7 +22,7 @@ const RECOVERY: TokenSet = K::set(&[
 /// The words Elasticsearch's lexer reserves in an expression: after a number
 /// they are keywords (or an error), never the unit of an interval; every other
 /// word is a unit (`5 foo`, `5 from`, `5 minutes`). Checked against
-/// `@elastic/esql` 4.33.0 for every keyword of the grammar after `EVAL x = 5`.
+/// Elastic's reference ES|QL parser for every keyword of the grammar after `EVAL x = 5`.
 /// tree-sitter lexed by parser state and took some of these as units
 /// (`LIMIT 1 LIKE`, `x > 1 on`), which Elasticsearch rejects.
 const NOT_A_UNIT: [&str; 19] = [
