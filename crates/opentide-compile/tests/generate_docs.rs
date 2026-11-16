@@ -158,7 +158,73 @@ fn check(flavor: &str) {
         "{flavor}: the files written"
     );
     for (path, text) in &written {
-        assert_eq!(text, &expected[path], "{flavor}: {path}");
+        assert_eq!(text, &quote_title(&expected[path]), "{flavor}: {path}");
+    }
+}
+
+/// The one deliberate difference from 0.28's pages: GitLab wiki front
+/// matter quotes the title (a YAML double-quoted scalar), which 0.28 wrote
+/// bare, so a name with `: ` or ` #` broke the front matter or lost its end.
+fn quote_title(page: &str) -> String {
+    let Some(rest) = page.strip_prefix("---\ntitle: ") else {
+        return page.to_owned();
+    };
+    let (title, rest) = rest.split_once('\n').unwrap();
+    format!(
+        "---\ntitle: {}\n{rest}",
+        opentide_schema::node::double_quoted(title)
+    )
+}
+
+/// GitLab wiki front matter is YAML that reads back as the object's name,
+/// whatever the name holds: `: `, `#`, `[`, words YAML reads as other
+/// types, quotes, a leading `-`.
+#[test]
+fn gitlab_front_matter_reads_back_as_the_name() {
+    let names = [
+        "Mimikatz: dump [x] #1",
+        "yes",
+        "null",
+        "it's \"quoted\"",
+        "- leading dash",
+        "{a: b} & *alias",
+    ];
+    for name in names {
+        let (_dir, workspace) = open_edited("tide-corpus", |ws| {
+            let rule = ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml");
+            let text = std::fs::read_to_string(&rule).unwrap();
+            let mut lines = text.lines().map(str::to_owned).collect::<Vec<_>>();
+            let at = lines
+                .iter()
+                .position(|line| line.starts_with("name:"))
+                .unwrap();
+            lines[at] = format!("name: {}", opentide_schema::node::double_quoted(name));
+            std::fs::write(&rule, lines.join("\n") + "\n").unwrap();
+        });
+        let written = render_with(
+            &workspace,
+            None,
+            &FlavorHints {
+                gitlab: true,
+                ..FlavorHints::default()
+            },
+        )
+        .unwrap();
+        let page = &written["docs/rules/00000000-0000-4000-8003-000000000001.md"];
+        let yaml = page
+            .strip_prefix("---\n")
+            .and_then(|rest| rest.split_once("\n---\n"))
+            .unwrap()
+            .0;
+        let document = opentide_schema::node::load(yaml).unwrap();
+        let title = document
+            .root()
+            .unwrap()
+            .get("title")
+            .unwrap()
+            .value
+            .as_str();
+        assert_eq!(title, Some(name), "{yaml}");
     }
 }
 
