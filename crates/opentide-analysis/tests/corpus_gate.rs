@@ -2,10 +2,10 @@
 //! in `crates/testdata/corpus/<language>/` tagged `prod:<rule>`.
 //!
 //! The gate does not know a parser. It names productions, and reads a parsed
-//! tree, through a per-language [`KindNames`] table ([`kind_names`]): a
-//! language has the tree-sitter names until it moves to `opentide-parse`, and
-//! keeps its gate by supplying the names of its `SyntaxKind`s instead (#1219),
-//! as CQL and KQL (#1230) do.
+//! tree, through a per-language [`KindNames`] table ([`kind_names`]): the
+//! names of the language's `SyntaxKind`s (#1219), in `snake_case`, with the
+//! few the corpus tags under another name (the tree-sitter rule the fixture
+//! was written for) translated.
 
 #![expect(
     clippy::expect_used,
@@ -14,7 +14,6 @@
 )]
 
 use opentide_core::LanguageId;
-use opentide_syntax::{has_error, parse};
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
@@ -55,7 +54,7 @@ impl Parsed {
 }
 
 /// How one language names its productions and reads its trees: the table the
-/// gate goes through, so that it does not depend on tree-sitter.
+/// gate goes through, so that it depends on no one parser.
 trait KindNames {
     /// The names of the language's named productions: what `prod:<rule>` tags.
     fn productions(&self) -> BTreeSet<String>;
@@ -63,44 +62,69 @@ trait KindNames {
     fn parse(&self, body: &str) -> Parsed;
 }
 
-/// The tree-sitter names: the rules of the grammar's `grammar.json` and the
-/// named nodes of its tree.
-struct TreeSitterNames {
-    language: LanguageId,
-    /// The grammar's directory name: `grammars/tree-sitter-opentide-<id>`.
-    id: &'static str,
+/// The `snake_case` spelling of a kind's `Debug` name: `FieldValueExpression`
+/// and `FIELD_VALUE_EXPRESSION` are both `field_value_expression`.
+fn snake_case(name: &str) -> String {
+    if !name.chars().any(|c| c.is_ascii_lowercase()) {
+        return name.to_ascii_lowercase();
+    }
+    let mut out = String::new();
+    for (i, c) in name.chars().enumerate() {
+        if c.is_ascii_uppercase() {
+            if i > 0 {
+                out.push('_');
+            }
+            out.push(c.to_ascii_lowercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
-impl KindNames for TreeSitterNames {
+/// The names of a language's pure-Rust parser (#1219): its node kinds and the
+/// kinds of a parse (`debug_node_kinds`, `debug_kinds` in its crate), in
+/// `snake_case`. `tags` translates the kinds the corpus tags under another
+/// name (the tree-sitter rule a fixture was written for), and `tokens` are the
+/// tags that only a token kind stands for, productions of their own.
+struct RustNames {
+    node_kinds: fn() -> Vec<String>,
+    kinds: fn(&str) -> (bool, Vec<String>),
+    tags: &'static [(&'static str, &'static str)],
+    tokens: &'static [&'static str],
+}
+
+impl RustNames {
+    /// The tags of `kind`: the ones [`RustNames::tags`] gives it (a coarse
+    /// kind can stand for several tree-sitter productions), else its name.
+    fn tags_of(&self, kind: &str) -> Vec<String> {
+        let kind = snake_case(kind);
+        let tags: Vec<String> = self
+            .tags
+            .iter()
+            .filter(|(k, _)| *k == kind)
+            .map(|(_, tag)| (*tag).to_string())
+            .collect();
+        if tags.is_empty() { vec![kind] } else { tags }
+    }
+}
+
+impl KindNames for RustNames {
     fn productions(&self) -> BTreeSet<String> {
-        let json = fs::read_to_string(repo_root().join(format!(
-            "grammars/tree-sitter-opentide-{}/src/grammar.json",
-            self.id
-        )))
-        .unwrap();
-        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
-        v["rules"].as_object().unwrap().keys().cloned().collect()
+        (self.node_kinds)()
+            .iter()
+            .flat_map(|k| self.tags_of(k))
+            .chain(self.tokens.iter().map(ToString::to_string))
+            .collect()
     }
 
     fn parse(&self, body: &str) -> Parsed {
-        let tree = parse(self.language, body).expect("parser");
-        let dump = tree.root_node().to_sexp();
-        // `(kind` opens a named node in the s-expression; a field's `name:`
-        // is not followed by a parenthesis of its own.
-        let kinds = dump
-            .split('(')
-            .skip(1)
-            .map(|rest| {
-                rest.split(|c: char| c.is_whitespace() || c == ')')
-                    .next()
-                    .unwrap_or("")
-                    .to_string()
-            })
-            .collect();
+        let (has_error, kinds) = (self.kinds)(body);
+        let kinds: Vec<String> = kinds.iter().flat_map(|k| self.tags_of(k)).collect();
         Parsed {
-            has_error: has_error(&tree),
-            kinds,
-            dump,
+            has_error,
+            dump: kinds.join(" "),
+            kinds: kinds.into_iter().collect(),
         }
     }
 }
@@ -202,16 +226,213 @@ impl KindNames for CqlNames {
     }
 }
 
-/// The kind-name table of `language`: the `SyntaxKind` names of a language
-/// that moved to `opentide-parse` (CQL, KQL), else the tree-sitter names.
-fn kind_names(language: LanguageId, id: &'static str) -> Box<dyn KindNames> {
+/// The kind-name table of `language`.
+fn kind_names(language: LanguageId) -> Box<dyn KindNames> {
+    let rust = |node_kinds, kinds, tags, tokens| -> Box<dyn KindNames> {
+        Box::new(RustNames {
+            node_kinds,
+            kinds,
+            tags,
+            tokens,
+        })
+    };
     match language {
         LanguageId::Cql => Box::new(CqlNames),
         LanguageId::Kql => Box::new(KqlNames),
         LanguageId::Esql => Box::new(EsqlNames),
-        _ => Box::new(TreeSitterNames { language, id }),
+        LanguageId::Spl => rust(
+            opentide_spl::debug_node_kinds,
+            opentide_spl::debug_kinds,
+            SPL_TAGS,
+            SPL_TOKENS,
+        ),
+        LanguageId::Eql => rust(
+            opentide_eql::debug_node_kinds,
+            opentide_eql::debug_kinds,
+            EQL_TAGS,
+            EQL_TOKENS,
+        ),
+        LanguageId::Kuery => rust(
+            opentide_kuery::debug_node_kinds,
+            opentide_kuery::debug_kinds,
+            KUERY_TAGS,
+            KUERY_TOKENS,
+        ),
+        LanguageId::Lucene => rust(
+            opentide_lucene::debug_node_kinds,
+            opentide_lucene::debug_kinds,
+            LUCENE_TAGS,
+            LUCENE_TOKENS,
+        ),
+        LanguageId::Falco => rust(
+            opentide_falco::debug_node_kinds,
+            opentide_falco::debug_kinds,
+            FALCO_TAGS,
+            FALCO_TOKENS,
+        ),
+        LanguageId::Exabeam => rust(
+            opentide_exabeam::debug_node_kinds,
+            opentide_exabeam::debug_kinds,
+            EXABEAM_TAGS,
+            EXABEAM_TOKENS,
+        ),
+        LanguageId::Yaral => rust(
+            opentide_yaral::debug_node_kinds,
+            opentide_yaral::debug_kinds,
+            YARAL_TAGS,
+            YARAL_TOKENS,
+        ),
+        LanguageId::Yara => rust(
+            opentide_yara::debug_node_kinds,
+            opentide_yara::debug_kinds,
+            YARA_TAGS,
+            YARA_TOKENS,
+        ),
+        other => panic!("no corpus gate for {other:?}"),
     }
 }
+
+// SPL, kuery, Lucene, Falco and Exabeam name every kind as the corpus tags it.
+const SPL_TAGS: &[(&str, &str)] = &[];
+const SPL_TOKENS: &[&str] = &[];
+const KUERY_TAGS: &[(&str, &str)] = &[];
+const KUERY_TOKENS: &[&str] = &[];
+const LUCENE_TAGS: &[(&str, &str)] = &[];
+const LUCENE_TOKENS: &[&str] = &[];
+const FALCO_TAGS: &[(&str, &str)] = &[];
+const FALCO_TOKENS: &[&str] = &[];
+const EXABEAM_TAGS: &[(&str, &str)] = &[];
+const EXABEAM_TOKENS: &[&str] = &[];
+
+/// EQL: a pipe stage is tree-sitter's `pipe`; the two comment tokens its `comment`.
+const EQL_TAGS: &[(&str, &str)] = &[
+    ("pipe_stage", "pipe"),
+    ("line_comment", "comment"),
+    ("block_comment", "comment"),
+];
+const EQL_TOKENS: &[&str] = &["comment"];
+
+/// YARA-L: the expression kinds are spelt shorter than tree-sitter's rules;
+/// both graph operations are its `graph_operation`.
+const YARAL_TAGS: &[(&str, &str)] = &[
+    ("and_expr", "and_expression"),
+    ("or_expr", "or_expression"),
+    ("not_expr", "not_expression"),
+    ("binary_expr", "binary_expression"),
+    ("unary_expr", "unary_expression"),
+    ("paren_expr", "parenthesized_expression"),
+    ("if_expr", "if_expression"),
+    ("in_expr", "in_expression"),
+    ("of_expr", "of_expression"),
+    ("array_expr", "array"),
+    ("graph_append", "graph_operation"),
+    ("graph_join", "graph_operation"),
+    ("regex_lit", "regex"),
+];
+const YARAL_TOKENS: &[&str] = &["comment", "duration", "raw_string", "regex"];
+
+/// YARA: `yara-x-parser`'s CST (#1225) is coarser than the tree-sitter grammar
+/// the fixtures were tagged for. Its blocks and declarations are nodes under
+/// other names; an expression is a generic `expr` or `boolean_expr`, told by its
+/// operator token. A token that can stand for two productions (`(`, `[`, `-`,
+/// a pattern identifier) gives both tags, and a hex byte (`~5A` included) is
+/// `hex_not`'s, so those fixtures are checked only for the token.
+const YARA_TAGS: &[(&str, &str)] = &[
+    ("rule_decl", "rule"),
+    ("rule_mods", "rule_modifier"),
+    ("rule_tags", "tags"),
+    ("meta_blk", "meta_section"),
+    ("meta_def", "meta_definition"),
+    ("patterns_blk", "strings_section"),
+    ("pattern_def", "string_definition"),
+    ("pattern_mod", "string_modifier"),
+    ("hex_pattern", "hex_string"),
+    ("condition_blk", "condition_section"),
+    ("import_stmt", "import"),
+    ("include_stmt", "include"),
+    ("func_call", "call_expression"),
+    ("for_expr", "for_expression"),
+    ("of_expr", "of_expression"),
+    ("expr_tuple", "integer_enumeration"),
+    ("pattern_ident_tuple", "string_set"),
+    ("and_kw", "and_expression"),
+    ("or_kw", "or_expression"),
+    ("not_kw", "not_expression"),
+    ("add", "arithmetic_expression"),
+    ("sub", "arithmetic_expression"),
+    ("mul", "arithmetic_expression"),
+    ("div", "arithmetic_expression"),
+    ("mod", "arithmetic_expression"),
+    ("shl", "arithmetic_expression"),
+    ("shr", "arithmetic_expression"),
+    ("bitwise_and", "arithmetic_expression"),
+    ("bitwise_or", "arithmetic_expression"),
+    ("bitwise_xor", "arithmetic_expression"),
+    ("minus", "unary_expression"),
+    ("minus", "negative_integer"),
+    ("bitwise_not", "unary_expression"),
+    ("hex_byte", "hex_not"),
+    ("eq", "comparison"),
+    ("ne", "comparison"),
+    ("lt", "comparison"),
+    ("le", "comparison"),
+    ("gt", "comparison"),
+    ("ge", "comparison"),
+    ("contains_kw", "comparison"),
+    ("icontains_kw", "comparison"),
+    ("startswith_kw", "comparison"),
+    ("istartswith_kw", "comparison"),
+    ("endswith_kw", "comparison"),
+    ("iendswith_kw", "comparison"),
+    ("iequals_kw", "comparison"),
+    ("matches_kw", "comparison"),
+    ("base64_kw", "base64_modifier"),
+    ("base64wide_kw", "base64_modifier"),
+    ("xor_kw", "xor_modifier"),
+    ("entrypoint_kw", "entrypoint"),
+    ("filesize_kw", "filesize"),
+    ("float_lit", "float"),
+    ("dot", "member_expression"),
+    ("l_bracket", "index_expression"),
+    ("l_bracket", "indexed_string"),
+    ("l_paren", "parenthesized_expression"),
+    ("l_paren", "parenthesized_primary"),
+    ("pattern_count", "string_count"),
+    ("pattern_count", "string_count_in_range"),
+    ("pattern_length", "string_length"),
+    ("pattern_offset", "string_offset"),
+    ("pattern_ident", "string_match"),
+    ("pattern_ident", "string_wildcard"),
+    ("percent", "percent_quantifier"),
+];
+const YARA_TOKENS: &[&str] = &[
+    "and_expression",
+    "or_expression",
+    "not_expression",
+    "arithmetic_expression",
+    "unary_expression",
+    "negative_integer",
+    "hex_not",
+    "comparison",
+    "base64_modifier",
+    "xor_modifier",
+    "entrypoint",
+    "filesize",
+    "float",
+    "comment",
+    "member_expression",
+    "index_expression",
+    "indexed_string",
+    "parenthesized_expression",
+    "parenthesized_primary",
+    "string_count",
+    "string_count_in_range",
+    "string_length",
+    "string_offset",
+    "string_match",
+    "string_wildcard",
+    "percent_quantifier",
+];
 
 const KQL_REQUIRED: &[&str] = &[
     "let_statement",
@@ -286,7 +507,7 @@ fn spl_corpus_tags_cover_required_productions() {
 
 #[test]
 fn kql_named_rules_in_grammar_json_are_known() {
-    let rules = kind_names(LanguageId::Kql, "kql").productions();
+    let rules = kind_names(LanguageId::Kql).productions();
     let tags = tags_in("crates/testdata/corpus/kql");
     // The kinds of the pure-Rust parser (#1230) the corpus does not tag.
     let skip: BTreeSet<&str> = [
@@ -372,7 +593,7 @@ fn kql_valid_fixtures_parse() {
             .filter(|l| !l.starts_with("//"))
             .collect::<Vec<_>>()
             .join("\n");
-        let tree = kind_names(LanguageId::Kql, "kql").parse(&body);
+        let tree = kind_names(LanguageId::Kql).parse(&body);
         assert!(!tree.has_error, "{name} tree={}", tree.dump);
     }
 }
@@ -410,14 +631,14 @@ fn spl_valid_fixtures_parse() {
             .filter(|l| !l.starts_with("``` prod:"))
             .collect::<Vec<_>>()
             .join("\n");
-        let tree = kind_names(LanguageId::Spl, "spl").parse(&body);
+        let tree = kind_names(LanguageId::Spl).parse(&body);
         assert!(!tree.has_error, "{name} sexp={}", tree.dump);
     }
 }
 
 #[test]
 fn spl_valid_bare_search_and_unknown_command_parse() {
-    let names = kind_names(LanguageId::Spl, "spl");
+    let names = kind_names(LanguageId::Spl);
     let tree = names.parse("index=main | head 1");
     assert!(!tree.has_error, "{}", tree.dump);
     let tree = names.parse("index=main | bogus foo=bar");
@@ -433,6 +654,10 @@ struct ElasticGate {
     language: LanguageId,
     id: &'static str,
     structural: &'static [&'static str],
+    /// Valid fixtures of a production the parser does not have, which it
+    /// rejects: each with its reason where the gate is declared. They must
+    /// stay rejected, so one the parser comes to accept is given back.
+    unparsed: &'static [&'static str],
 }
 
 fn fixture_body(text: &str) -> String {
@@ -440,7 +665,7 @@ fn fixture_body(text: &str) -> String {
 }
 
 fn check_gate(gate: &ElasticGate) {
-    check_gate_with(gate, &*kind_names(gate.language, gate.id));
+    check_gate_with(gate, &*kind_names(gate.language));
 }
 
 fn check_gate_with(gate: &ElasticGate, names: &dyn KindNames) {
@@ -470,6 +695,13 @@ fn check_gate_with(gate: &ElasticGate, names: &dyn KindNames) {
         if kind == "valid" {
             let body = fixture_body(&fs::read_to_string(&path).unwrap());
             let tree = names.parse(&body);
+            if gate.unparsed.contains(&name.as_str()) {
+                assert!(
+                    tree.has_error,
+                    "{dir}/{name} parses now: take it off the gate's `unparsed`"
+                );
+                continue;
+            }
             assert!(
                 !tree.has_error,
                 "{dir}/{name} must parse; sexp={}",
@@ -542,6 +774,7 @@ const ESQL_GATE: ElasticGate = ElasticGate {
         "time_unit",
         "unknown_text",
     ],
+    unparsed: &[],
 };
 
 #[test]
@@ -570,6 +803,7 @@ fn eql_corpus_gate() {
             "binary_expression",
             "parenthesized_expression",
         ],
+        unparsed: &[],
     });
 }
 
@@ -578,7 +812,8 @@ fn kuery_corpus_gate() {
     check_gate(&ElasticGate {
         language: LanguageId::Kuery,
         id: "kuery",
-        structural: &["source_file", "word", "or", "and", "not"],
+        structural: &["source_file"],
+        unparsed: &[],
     });
 }
 
@@ -590,17 +825,13 @@ fn lucene_corpus_gate() {
         structural: &[
             "source_file",
             "field_name",
-            "term",
-            "phrase",
-            "regexp",
-            "range_term",
-            "bare_operator",
             "required",
             "prohibited",
             "or",
             "and",
             "not",
         ],
+        unparsed: &[],
     });
 }
 
@@ -611,16 +842,13 @@ fn falco_corpus_gate() {
         id: "falco",
         structural: &[
             "source_file",
-            "identifier",
-            "field_name",
             "argument_value",
-            "transformer_name",
             "unary_operator",
             "comparison_operator",
             "list_operator",
             "bare_string",
-            "number",
         ],
+        unparsed: &[],
     });
 }
 
@@ -654,6 +882,7 @@ fn cql_corpus_gate() {
             "function_name",
             "unquoted_pattern",
         ],
+        unparsed: &[],
     });
 }
 
@@ -662,22 +891,29 @@ fn yara_corpus_gate() {
     check_gate(&ElasticGate {
         language: LanguageId::Yara,
         id: "yara",
-        // Leaf tokens and keyword choices: every fixture that tags a
-        // production contains them.
+        // yara-x's grouping nodes, which every fixture that tags an
+        // expression contains, and YARA-X's `with` (no fixture yet).
         structural: &[
             "source_file",
-            "identifier",
-            "integer",
-            "boolean",
-            "text_string",
-            "string_identifier",
-            "tag",
-            "hex_byte",
-            "hex_jump_bound",
-            "hex_alternative_branch",
-            "quantifier_keyword",
-            "them",
-            "loop_variables",
+            "boolean_expr",
+            "boolean_term",
+            "expr",
+            "term",
+            "primary_expr",
+            "pattern_mods",
+            "hex_sub_pattern",
+            "iterable",
+            "quantifier",
+            "with_expr",
+            "with_decls",
+            "with_decl",
+            "boolean_expr_tuple",
+        ],
+        unparsed: &[
+            // libyara's rule wildcards (`any of (base*)`): YARA-X 1.23 parses
+            // no rule set with a wildcard in it.
+            "rule_set__valid.yar",
+            "rule_wildcard__valid.yar",
         ],
     });
 }
@@ -695,13 +931,9 @@ fn exabeam_corpus_gate() {
             "field_name",
             "alias",
             "table_name",
-            "string",
-            "number",
-            "identifier",
-            "bare_word",
-            "text_word",
-            "bound",
+            "context_table",
         ],
+        unparsed: &[],
     });
 }
 
@@ -714,28 +946,32 @@ fn yaral_corpus_gate() {
         // that tags a production contains them.
         structural: &[
             "source_file",
-            "identifier",
-            "field_name",
-            "integer",
-            "float",
-            "string",
-            "boolean",
             "window_bound",
             "variable",
-            "count",
             "arguments",
             "function_name",
             "match_clause",
             "order_item",
             "meta_entry",
             "option_entry",
+            "argument_name",
+            "count_ref",
+            "literal",
+            "member",
+            "meta_key",
+            "name_ref",
+            "option_key",
+            "rule_name",
+            "stage_name",
+            "time_unit",
         ],
+        unparsed: &[],
     });
 }
 
 #[test]
-fn tree_sitter_names_read_the_named_nodes_of_a_tree() {
-    let names = kind_names(LanguageId::Spl, "spl");
+fn rust_names_read_the_kinds_of_a_tree() {
+    let names = kind_names(LanguageId::Spl);
     let tree = names.parse("index=main | bogus foo=bar");
     assert!(!tree.has_error, "{}", tree.dump);
     assert!(tree.has_kind("unknown_command"), "{}", tree.dump);
@@ -746,10 +982,60 @@ fn tree_sitter_names_read_the_named_nodes_of_a_tree() {
 }
 
 #[test]
+fn snake_case_spells_both_kind_styles() {
+    assert_eq!(snake_case("FieldValueExpression"), "field_value_expression");
+    assert_eq!(
+        snake_case("FIELD_VALUE_EXPRESSION"),
+        "field_value_expression"
+    );
+    assert_eq!(snake_case("BASE64WIDE_KW"), "base64wide_kw");
+    assert_eq!(snake_case("Or"), "or");
+}
+
+/// A coarse kind gives every tag the table lists for it, and a kind the table
+/// does not list keeps its own name.
+#[test]
+fn a_kind_gives_every_tag_listed_for_it() {
+    let names = kind_names(LanguageId::Yara);
+    let tree = names.parse("rule r { condition: (1 + 2) == 3 }");
+    assert!(!tree.has_error, "{}", tree.dump);
+    for tag in [
+        "rule",
+        "parenthesized_expression",
+        "parenthesized_primary",
+        "arithmetic_expression",
+        "comparison",
+        "boolean_expr",
+    ] {
+        assert!(tree.has_kind(tag), "{tag}: {}", tree.dump);
+    }
+    assert!(!tree.has_kind("rule_decl"), "{}", tree.dump);
+    assert!(names.parse("rule r { condition: }").has_error);
+}
+
+/// A fixture listed as `unparsed` must stay rejected: one the parser accepts
+/// fails the gate.
+#[test]
+fn an_unparsed_fixture_that_parses_fails_the_gate() {
+    let gate = std::panic::catch_unwind(|| {
+        check_gate(&ElasticGate {
+            language: LanguageId::Kuery,
+            id: "kuery",
+            structural: &["source_file"],
+            unparsed: &["group__valid.kuery"],
+        });
+    });
+    assert!(
+        gate.is_err(),
+        "a listed fixture that parses must fail the gate"
+    );
+}
+
+#[test]
 fn the_gate_reads_productions_and_trees_only_through_its_table() {
     use std::cell::Cell;
 
-    /// A table that counts its calls and hands them to the tree-sitter names.
+    /// A table that counts its calls and hands them to the kuery names.
     struct Counting {
         inner: Box<dyn KindNames>,
         productions: Cell<usize>,
@@ -767,7 +1053,7 @@ fn the_gate_reads_productions_and_trees_only_through_its_table() {
     }
 
     let names = Counting {
-        inner: kind_names(LanguageId::Kuery, "kuery"),
+        inner: kind_names(LanguageId::Kuery),
         productions: Cell::new(0),
         parses: Cell::new(0),
     };
@@ -775,7 +1061,8 @@ fn the_gate_reads_productions_and_trees_only_through_its_table() {
         &ElasticGate {
             language: LanguageId::Kuery,
             id: "kuery",
-            structural: &["source_file", "word", "or", "and", "not"],
+            structural: &["source_file"],
+            unparsed: &[],
         },
         &names,
     );
@@ -788,7 +1075,7 @@ fn the_gate_reads_productions_and_trees_only_through_its_table() {
 /// fixture fails the gate.
 #[test]
 fn the_esql_table_flags_what_the_gate_must() {
-    let names = kind_names(LanguageId::Esql, "esql");
+    let names = kind_names(LanguageId::Esql);
     let valid = names.parse("FROM logs-* | WHERE a == 1 | KEEP a");
     assert!(!valid.has_error, "{}", valid.dump);
     for kind in [
@@ -816,16 +1103,16 @@ fn the_esql_table_flags_what_the_gate_must() {
         }
     }
     let gate = std::panic::catch_unwind(|| {
-        check_gate_with(&ESQL_GATE, &Extra(kind_names(LanguageId::Esql, "esql")));
+        check_gate_with(&ESQL_GATE, &Extra(kind_names(LanguageId::Esql)));
     });
     // The real table passes; the one extra production alone fails it.
-    check_gate_with(&ESQL_GATE, &*kind_names(LanguageId::Esql, "esql"));
+    check_gate_with(&ESQL_GATE, &*kind_names(LanguageId::Esql));
     assert!(gate.is_err(), "an untagged production must fail the gate");
 }
 
 #[test]
 fn kql_names_read_the_pure_rust_tree() {
-    let names = kind_names(LanguageId::Kql, "kql");
+    let names = kind_names(LanguageId::Kql);
     let tree = names.parse("T | where a.b == 1 | project ['x y'] // c");
     assert!(!tree.has_error, "{}", tree.dump);
     for kind in [
@@ -847,7 +1134,7 @@ fn kql_names_read_the_pure_rust_tree() {
 
 #[test]
 fn cql_names_are_the_pure_rust_tree() {
-    let names = kind_names(LanguageId::Cql, "cql");
+    let names = kind_names(LanguageId::Cql);
     let tree = names.parse("a=1 or b=2 | groupBy(x) // note");
     assert!(!tree.has_error, "{}", tree.dump);
     for kind in ["or_filter", "field_filter", "function_call", "line_comment"] {

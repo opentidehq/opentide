@@ -313,6 +313,78 @@ pub fn format(source: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
+/// Whether `yara-x-parser` reports a syntax error in `source`, and the
+/// `Debug` names of the kinds of its CST, nodes and tokens in preorder: what
+/// the corpus gate of `opentide-analysis` reads. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
+    use yara_x_parser::cst::{CST, Event};
+    let mut error = false;
+    let kinds = CST::from(source)
+        .iter()
+        .filter_map(|event| match event {
+            Event::Begin { kind, .. } | Event::Token { kind, .. } => Some(format!("{kind:?}")),
+            Event::Error { .. } => {
+                error = true;
+                None
+            }
+            Event::End { .. } => None,
+        })
+        .collect();
+    (error, kinds)
+}
+
+/// The `Debug` names of the node kinds of `yara-x-parser`'s CST, the error
+/// node left out: the productions the corpus gate of `opentide-analysis` asks
+/// a fixture of. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_node_kinds() -> Vec<String> {
+    use yara_x_parser::cst::SyntaxKind as K;
+    [
+        K::SOURCE_FILE,
+        K::IMPORT_STMT,
+        K::INCLUDE_STMT,
+        K::RULE_DECL,
+        K::RULE_MODS,
+        K::RULE_TAGS,
+        K::META_BLK,
+        K::META_DEF,
+        K::PATTERNS_BLK,
+        K::PATTERN_DEF,
+        K::PATTERN_MODS,
+        K::PATTERN_MOD,
+        K::HEX_PATTERN,
+        K::HEX_SUB_PATTERN,
+        K::HEX_ALTERNATIVE,
+        K::HEX_JUMP,
+        K::HEX_BYTE,
+        K::REGEXP,
+        K::CONDITION_BLK,
+        K::BOOLEAN_EXPR,
+        K::BOOLEAN_TERM,
+        K::EXPR,
+        K::TERM,
+        K::PRIMARY_EXPR,
+        K::FUNC_CALL,
+        K::RANGE,
+        K::FOR_EXPR,
+        K::OF_EXPR,
+        K::WITH_EXPR,
+        K::WITH_DECLS,
+        K::WITH_DECL,
+        K::ITERABLE,
+        K::QUANTIFIER,
+        K::EXPR_TUPLE,
+        K::BOOLEAN_EXPR_TUPLE,
+        K::PATTERN_IDENT_TUPLE,
+    ]
+    .iter()
+    .map(|k| format!("{k:?}"))
+    .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
