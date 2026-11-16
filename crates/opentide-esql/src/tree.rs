@@ -13,6 +13,7 @@ use crate::parser;
 use crate::syntax::{Lang, SyntaxKind as K};
 use opentide_core::ByteSpan;
 use rowan::{NodeOrToken, SyntaxNode, WalkEvent};
+use std::rc::Rc;
 use std::sync::OnceLock;
 
 /// What the parser reported: where, and what it said.
@@ -139,8 +140,19 @@ fn token_name(kind: K, text: &str) -> &'static str {
     }
 }
 
+thread_local! {
+    /// The parses on this thread: [`parses`].
+    static PARSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many queries this thread has parsed.
+pub(crate) fn parses() -> usize {
+    PARSES.get()
+}
+
 /// Parses `source` into the arena.
 pub(crate) fn parse(source: &str) -> Tree {
+    PARSES.set(PARSES.get() + 1);
     let parse = parser::parse(source);
     let problems: Vec<Problem> = parse
         .errors
@@ -875,13 +887,28 @@ impl<'t> Node<'t> {
 
 /// The highlight capture of a leaf, by the patterns of `highlights.scm` in
 /// their order (first wins): what `capture(token, parent)` becomes on the rowan tree.
+/// The capture of each keyword and symbol of the highlight table, by text:
+/// built once (a scan of the table per token was a tenth of a long query's
+/// analysis).
+fn keyword_captures() -> &'static std::collections::HashMap<&'static str, &'static str> {
+    static CAPTURES: OnceLock<std::collections::HashMap<&'static str, &'static str>> =
+        OnceLock::new();
+    CAPTURES.get_or_init(|| {
+        let mut captures = std::collections::HashMap::new();
+        for (token, capture) in
+            opentide_highlight::keywords(opentide_core::LanguageId::Esql).unwrap_or_default()
+        {
+            // The table's first row for a text wins, as the scan's did.
+            captures.entry(*token).or_insert(capture.name());
+        }
+        captures
+    })
+}
+
 pub(crate) fn capture(node: Node<'_>) -> Option<&'static str> {
     let kind = node.kind();
     if !node.is_named() {
-        return opentide_highlight::keywords(opentide_core::LanguageId::Esql)?
-            .iter()
-            .find(|(token, _)| *token == kind)
-            .map(|(_, capture)| capture.name());
+        return keyword_captures().get(kind).copied();
     }
     let parent = node.parent().map(|p| p.kind());
     let field = node.field_name();
@@ -930,8 +957,30 @@ pub(crate) fn walk<'t>(root: Node<'t>, mut f: impl FnMut(Node<'t>)) {
 }
 
 /// The parse of `source`, as the analysis asks for it.
-pub(crate) fn parse_tree(source: &str) -> Option<Tree> {
-    Some(parse(source))
+/// The tree of `source`, parsed once per text: an editor asks for the
+/// analysis, hover and completions of one text in a row, and every entry
+/// point read its own parse (a tenth of a second per megabyte in a release
+/// build, a second and a half in a debug one). A tree is a function of its
+/// text, so the last one is kept per thread and reused while the text is
+/// the same.
+pub(crate) fn parse_tree(source: &str) -> Option<Rc<Tree>> {
+    LAST.with(|last| {
+        let mut last = last.borrow_mut();
+        if let Some((text, tree)) = last.as_ref()
+            && text.as_str() == source
+        {
+            return Some(Rc::clone(tree));
+        }
+        let tree = Rc::new(parse(source));
+        *last = Some((source.to_string(), Rc::clone(&tree)));
+        Some(tree)
+    })
+}
+
+thread_local! {
+    /// The last text [`parse_tree`] parsed on this thread, and its tree.
+    static LAST: std::cell::RefCell<Option<(String, Rc<Tree>)>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 /// The production names of the tree's named nodes (`from_command`): the
