@@ -2879,6 +2879,7 @@ dependencies = [
  "opentide-highlight",
  "opentide-parse",
  "opentide-syntax",
+ "regex",
  "regex-syntax",
  "rowan",
  "serde",
