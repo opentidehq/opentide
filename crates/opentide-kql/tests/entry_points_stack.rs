@@ -122,3 +122,24 @@ fn deep_input() {
         );
     }
 }
+
+/// Found on CI (#1411): a quoted name of a million characters that is no
+/// column of a documented table was measured (Levenshtein) against every
+/// column, 9 s per analysis in a debug build; a candidate whose length is too
+/// far off is no longer measured.
+#[test]
+fn a_long_unknown_column_is_not_measured_against_every_column() {
+    let source = format!(
+        "SecurityEvent | where Account == ['{}'] | take 1",
+        "a".repeat(N)
+    );
+    let started = Instant::now();
+    let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
+    let _ = analyze_with_catalog(&source, &catalog);
+    let _ = hover(&source, 0, Profile::Sentinel);
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        started.elapsed()
+    );
+}

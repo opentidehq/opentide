@@ -795,12 +795,18 @@ pub(crate) fn unknown_column(
     // whether a documented table reports the column at all
     // (`Known::Typos`). Among the columns within it, the shared rule
     // chooses ([`opentide_core::suggest::best`]).
+    // The distance is at least the difference in length: a candidate more
+    // than two characters longer or shorter is never measured (a name of a
+    // million characters was measured against every column, quadratically).
     let lower = name.to_ascii_lowercase();
+    let chars = lower.chars().count();
     let suggestion = opentide_core::suggest::best(
         name,
         schema.columns.iter().map(|c| c.name.as_str()).filter(|c| {
-            let d = strsim::levenshtein(&c.to_ascii_lowercase(), &lower);
-            d <= 2 && d * 2 < name.len()
+            c.chars().count().abs_diff(chars) <= 2 && {
+                let d = strsim::levenshtein(&c.to_ascii_lowercase(), &lower);
+                d <= 2 && d * 2 < name.len()
+            }
         }),
     )
     .map(str::to_string);
