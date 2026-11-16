@@ -3195,6 +3195,7 @@ dependencies = [
  "opentide-kuery",
  "opentide-lucene",
  "opentide-spl",
+ "opentide-syntax",
  "opentide-tide",
  "opentide-yara",
  "opentide-yaral",
@@ -3407,9 +3408,12 @@ dependencies = [
 name = "opentide-cql"
 version = "0.12.0"
 dependencies = [
+ "logos",
  "opentide-core",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
+ "rowan",
  "serde",
  "toml 0.8.23",
  "tree-sitter",

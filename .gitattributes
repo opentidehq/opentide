@@ -71,10 +71,18 @@ crates/testdata/conformance/specifications-yara/** -text
 crates/testdata/conformance/external/exabeam/** -text
 crates/testdata/conformance/external/yara/** -text
 crates/testdata/conformance/external/yaral/** -text
-crates/testdata/corpus/yara/** -text
-crates/testdata/corpus/yaral/** -text
-crates/testdata/corpus/exabeam/** -text
+# All of crates/testdata (the query corpora, the conformance fixtures and oracles, the
+# workspaces): the pure-Rust parsers' tree snapshots record byte spans, and their
+# differentials and the baselines compare offsets, so a Windows checkout holds the
+# committed LF bytes of every language. The lines above predate it and say why each was
+# needed first.
+crates/testdata/** -text
 crates/testdata/oracles/graylog/** -text
 # HarfangLab's YARA fixtures: their tests edit them by LF patterns and compare
 # findings by line, so a Windows checkout holds the committed LF bytes too.
 tests/fixtures/harfanglab/** -text
+# The typed-AST grammars and what `cargo xtask codegen` generates from them
+# (xtask/src/astgen.rs): ungrammar refuses a `\r`, and the check compares the
+# generated file byte for byte, so a Windows checkout holds the LF bytes too.
+*.ungram -text
+**/generated/ast.rs -text
