@@ -26,6 +26,7 @@ use opentide_parse::Lexeme;
 
 /// The tokens of YARA-L; a word that is not reserved is [`Tok::Word`].
 #[derive(Logos, Clone, Copy, Debug, PartialEq, Eq)]
+#[logos(extras = Context)]
 enum Tok {
     #[regex(
         r"[ \t\n\x0B\x0C\r\u{85}\u{a0}\u{1680}\u{2000}-\u{200a}\u{2028}\u{2029}\u{202f}\u{205f}\u{3000}]+"
@@ -84,8 +85,6 @@ enum Tok {
     Variable,
     #[regex(r"#[A-Za-z_][A-Za-z0-9_]*")]
     Count,
-    #[regex(r"%[A-Za-z_][A-Za-z0-9_]*")]
-    ReferenceList,
     #[regex(r"[0-9]+")]
     Integer,
     #[regex(r"[0-9]+\.[0-9]+")]
@@ -128,10 +127,62 @@ enum Tok {
     Minus,
     #[token("*")]
     Star,
-    #[token("%")]
-    Percent,
+    #[token("%", percent)]
+    Percent(bool),
     #[token("!")]
     Bang,
+}
+
+/// What the lexer knows of the text before: tree-sitter lexed what the parser
+/// could take next, and inside a group (parentheses, brackets) a new statement
+/// cannot start, so after an operand a `/` is a division and `%name` is a
+/// modulo and a name. At the top of a section both start a statement (a
+/// regex, a reference list), the longer match.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Context {
+    /// Open parentheses and brackets.
+    depth: u32,
+    /// Whether the last significant token ends an operand.
+    operand: bool,
+}
+
+impl Context {
+    /// Whether the next token can only continue the expression.
+    fn continues(self) -> bool {
+        self.depth > 0 && self.operand
+    }
+
+    /// The context after a token of `kind`.
+    fn after(mut self, kind: K) -> Self {
+        match kind {
+            K::WHITESPACE | K::COMMENT => {}
+            K::L_PAREN | K::L_BRACK => {
+                self.depth += 1;
+                self.operand = false;
+            }
+            K::R_PAREN | K::R_BRACK => {
+                self.depth = self.depth.saturating_sub(1);
+                self.operand = true;
+            }
+            K::L_BRACE | K::R_BRACE => self = Self::default(),
+            K::IDENT
+            | K::VAR_TOKEN
+            | K::COUNT_TOKEN
+            | K::REF_LIST_TOKEN
+            | K::STRING
+            | K::RAW_STRING
+            | K::REGEX_LIT
+            | K::INTEGER
+            | K::FLOAT
+            | K::DURATION
+            | K::TRUE_KW
+            | K::FALSE_KW
+            | K::WINDOW_START_KW
+            | K::WINDOW_END_KW => self.operand = true,
+            _ => self.operand = false,
+        }
+        self
+    }
 }
 
 /// What a `/` starts.
@@ -154,7 +205,6 @@ impl Tok {
             Self::Keyword(kind) => kind,
             Self::Variable => K::VAR_TOKEN,
             Self::Count => K::COUNT_TOKEN,
-            Self::ReferenceList => K::REF_LIST_TOKEN,
             Self::Integer => K::INTEGER,
             Self::Float => K::FLOAT,
             Self::Duration => K::DURATION,
@@ -176,7 +226,8 @@ impl Tok {
             Self::Plus => K::PLUS,
             Self::Minus => K::MINUS,
             Self::Star => K::STAR,
-            Self::Percent => K::PERCENT,
+            Self::Percent(true) => K::REF_LIST_TOKEN,
+            Self::Percent(false) => K::PERCENT,
             Self::Bang => K::BANG,
         }
     }
@@ -253,7 +304,7 @@ fn regex_rest(rest: &str) -> Option<usize> {
 }
 
 fn slash(lex: &mut logos::Lexer<'_, Tok>) -> Slash {
-    match regex_rest(lex.remainder()) {
+    match regex_rest(lex.remainder()).filter(|_| !lex.extras.continues()) {
         Some(n) => {
             lex.bump(n);
             Slash::Regex
@@ -262,39 +313,97 @@ fn slash(lex: &mut logos::Lexer<'_, Tok>) -> Slash {
     }
 }
 
-/// The lexemes of `source`: they tile it, trivia included.
+/// `start..end` as a range; a source past 4 GiB is clamped.
+fn text_range(start: usize, end: usize) -> rowan::TextRange {
+    let size = |n: usize| rowan::TextSize::from(u32::try_from(n).unwrap_or(u32::MAX));
+    rowan::TextRange::new(size(start), size(end.max(start)))
+}
+
+/// `%name` is a reference list, unless the expression goes on (a modulo).
+fn percent(lex: &mut logos::Lexer<'_, Tok>) -> bool {
+    let rest = lex.remainder();
+    let starts = rest
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
+    if !starts || lex.extras.continues() {
+        return false;
+    }
+    let n = rest
+        .bytes()
+        .take_while(|b| b.is_ascii_alphanumeric() || *b == b'_')
+        .count();
+    lex.bump(n);
+    true
+}
+
+/// The lexemes of `source`: they tile it, trivia included. As the toolkit's
+/// `lex` (an error is one character, and lexing resumes after it), with the
+/// context of the text before each token.
 pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
-    let mut lexemes = opentide_parse::lex::<Tok>(source, |token, _| match token {
-        Ok(token) => token.kind().raw(),
-        Err(()) => K::ERROR_TOKEN.raw(),
-    });
-    mark_paths(&mut lexemes);
-    lexemes
+    let mut out: Vec<Lexeme> = Vec::new();
+    let mut context = Context::default();
+    let mut base = 0;
+    'restart: while base < source.len() {
+        let mut lexer = Tok::lexer_with_extras(&source[base..], context);
+        while let Some(token) = lexer.next() {
+            let span = lexer.span();
+            let start = base + span.start;
+            let (kind, end) = match token {
+                Ok(token) => (token.kind(), base + span.end),
+                Err(()) => (K::ERROR_TOKEN, source.ceil_char_boundary(start + 1)),
+            };
+            out.push(Lexeme {
+                kind: kind.raw(),
+                range: text_range(start, end),
+            });
+            context = context.after(kind);
+            if kind == K::ERROR_TOKEN {
+                base = end;
+                continue 'restart;
+            }
+            lexer.extras = context;
+        }
+        break;
+    }
+    mark_paths(&mut out);
+    out
 }
 
 /// Re-kinds what only the neighbours decide: a dot or an index bracket with
-/// no blank before it, after a variable, a name or `]`, belongs to a path,
-/// and the word right after the dot is its segment.
+/// no blank before it, after a variable, a name or `]`, belongs to a path;
+/// the word after the dot is its segment, with blanks or comments between
+/// them or not (tree-sitter's `token.immediate` bound the dot to what comes
+/// before it, not the segment to the dot).
 fn mark_paths(lexemes: &mut [Lexeme]) {
+    // The last significant token's kind and end, and whether trivia came since.
     let mut prev: Option<(K, rowan::TextSize)> = None;
+    // The kind before `prev`: the name after a plain dot is a table column,
+    // and no path continues it.
+    let mut before: Option<K> = None;
+    let mut touching = false;
     for lexeme in lexemes {
         let kind = K::from_raw(lexeme.kind);
         if matches!(kind, K::WHITESPACE | K::COMMENT) {
-            prev = None;
+            touching = false;
             continue;
         }
-        let touching = prev.filter(|&(_, end)| end == lexeme.range.start());
-        let after_path = touching.is_some_and(|(k, _)| {
-            matches!(k, K::VAR_TOKEN | K::IDENT | K::FIELD_NAME | K::R_BRACK)
-        });
+        let after_path = touching
+            && prev.is_some_and(|(k, end)| {
+                end == lexeme.range.start()
+                    && matches!(k, K::VAR_TOKEN | K::IDENT | K::FIELD_NAME | K::R_BRACK)
+                    && !(k == K::IDENT && before == Some(K::DOT))
+            });
         let kind = match kind {
             K::DOT if after_path => K::ACCESS_DOT,
             K::L_BRACK if after_path => K::INDEX_L_BRACK,
-            k if k.is_word() && touching.is_some_and(|(p, _)| p == K::ACCESS_DOT) => K::FIELD_NAME,
+            k if k.is_word() && prev.is_some_and(|(p, _)| p == K::ACCESS_DOT) => K::FIELD_NAME,
             k => k,
         };
         lexeme.kind = kind.raw();
+        before = prev.map(|(k, _)| k);
         prev = Some((kind, lexeme.range.end()));
+        touching = true;
     }
 }
 
@@ -356,8 +465,26 @@ mod tests {
         assert_eq!(kinds("$e .x")[1].0, K::DOT);
         assert_eq!(kinds("$e\n[1]")[1].0, K::L_BRACK);
         assert_eq!(kinds("%t.col")[1].0, K::DOT);
+        // A table column is no path: a bracket after it opens an array.
+        assert_eq!(kinds("%t .col[1]")[3].0, K::L_BRACK);
+        // Inside a group an operand goes on: a modulo, a division.
+        let k: Vec<K> = kinds("($a = %x %y.z)").iter().map(|k| k.0).collect();
+        assert!(
+            k.contains(&K::PERCENT) && k.iter().filter(|k| **k == K::REF_LIST_TOKEN).count() == 1
+        );
+        assert_eq!(
+            kinds("($a / $b / $c)")
+                .iter()
+                .filter(|k| k.0 == K::SLASH)
+                .count(),
+            2
+        );
+        assert_eq!(kinds("f($a, /x/)")[4].0, K::REGEX_LIT);
         assert_eq!(kinds("any of[$a]")[2].0, K::L_BRACK);
         assert_eq!(kinds("strings.to_lower(x)")[2].0, K::FIELD_NAME);
+        // The segment after a dot may follow a blank (tree-sitter accepted it).
+        assert_eq!(kinds("$e. and")[2].0, K::FIELD_NAME);
+        assert_eq!(kinds("a.\n b")[2].0, K::FIELD_NAME);
         // A comment is a blank too.
         assert_eq!(kinds("$e/**/.x")[2].0, K::DOT);
     }
@@ -371,6 +498,50 @@ mod tests {
         assert_eq!(kinds("/* a */ x")[0], (K::COMMENT, "/* a */"));
         assert_eq!(kinds("/* a")[0].0, K::ERROR_TOKEN, "never closed");
         assert_eq!(kinds("/*/ x */")[0], (K::COMMENT, "/*/ x */"));
+    }
+
+    /// B1 of the review of #1375: tree-sitter lexed `/`, `%name` and the
+    /// segment after a dot by what the parser took next.
+    #[test]
+    fn what_the_parser_takes_next_decides_a_slash_a_percent_and_a_segment() {
+        let kinds_of = |s: &str| kinds(s).iter().map(|k| k.0).collect::<Vec<_>>();
+        for source in [
+            "$z = ($e.a/$e.b/2)",
+            "($a/b/2)",
+            "(f($a) /re/ 2)",
+            "f($a / $b / $c)",
+            "[$a / $b / 1]",
+        ] {
+            let k = kinds_of(source);
+            assert!(!k.contains(&K::REGEX_LIT), "{source}: {k:?}");
+            assert_eq!(k.iter().filter(|k| **k == K::SLASH).count(), 2, "{source}");
+        }
+        for source in [
+            "$z = if($a %b, 1, 2)",
+            "($a %b)",
+            "f($a %b)",
+            "[$a %b]",
+            "($g.graph.entity.ip  %hosts.ip)",
+        ] {
+            let k = kinds_of(source);
+            assert!(!k.contains(&K::REF_LIST_TOKEN), "{source}: {k:?}");
+            assert!(k.contains(&K::PERCENT), "{source}");
+        }
+        // At the top of a section both start a statement.
+        assert!(kinds_of("$a %b").contains(&K::REF_LIST_TOKEN));
+        assert!(kinds_of("$a / $b / $c").contains(&K::REGEX_LIT));
+        // Operands start a regex or a list again after an operator or a comma.
+        assert!(kinds_of("f($a, %l)").contains(&K::REF_LIST_TOKEN));
+        assert!(kinds_of("($a = /x/)").contains(&K::REGEX_LIT));
+        // The segment after a dot may follow blanks and newlines.
+        for source in [
+            "$e.principal. hostname = 1",
+            "$e.principal.\n hostname",
+            "a.\n/*c*/b",
+        ] {
+            assert!(kinds_of(source).contains(&K::FIELD_NAME), "{source}");
+            assert!(!kinds_of(source).contains(&K::ERROR_TOKEN), "{source}");
+        }
     }
 
     #[test]
