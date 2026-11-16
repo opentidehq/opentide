@@ -12,20 +12,15 @@
     reason = "engine dispatchers match every node kind in one function"
 )]
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, SignatureHelp,
-    SignatureInformation, codes, span_to_range, suggest,
+    CompletionItem, Diagnostic, ParameterInformation, Range, SignatureHelp, SignatureInformation,
+    codes, suggest,
 };
-use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use opentide_highlight::HighlightToken;
 mod cim;
 mod declared;
-mod parse_errors;
 mod perf;
 mod scan;
 mod search_operators;
-#[expect(
-    dead_code,
-    reason = "the pure-Rust parser is reached from tests until the series' last PR switches production to it (#1229)"
-)]
 #[doc(hidden)]
 pub mod syntax;
 
@@ -38,14 +33,10 @@ pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 #[path = "generated/ast.rs"]
 pub mod ast;
 
-use opentide_syntax::{parse as ts_parse, walk_with_ancestors};
 use serde::Deserialize;
 use std::sync::OnceLock;
-use tree_sitter::Node;
 
 mod parens;
-mod rejects;
-mod stages;
 
 const COMMANDS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
@@ -369,115 +360,11 @@ pub struct AnalyzeResult {
     pub tokens: Vec<HighlightToken>,
 }
 
-#[expect(
-    clippy::expect_used,
-    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
-)]
+/// Analyzes `source`: syntax errors, the catalog checks, and highlighting,
+/// on the pure-Rust parser (`syntax`).
 pub fn analyze(source: &str) -> AnalyzeResult {
-    let catalog = Catalog::cached();
-    let spec = HighlightSpec::load().expect("spec");
-    let mut diagnostics = Vec::new();
-    let Some(tree) = ts_parse(LanguageId::Spl, source) else {
-        return AnalyzeResult {
-            diagnostics: vec![Diagnostic::error(
-                codes::SPL_PARSE_ERROR,
-                "failed to initialize SPL parser",
-                Range::point(0, 0),
-            )],
-            tokens: Vec::new(),
-        };
-    };
-    parse_errors::collect(tree.root_node(), source, &mut diagnostics);
-    collect_unknown_commands(tree.root_node(), source, catalog, &mut diagnostics);
-    perf::collect(source, catalog, &mut diagnostics);
-    search_operators::collect(source, catalog, &mut diagnostics);
-    parens::refine(source, &mut diagnostics);
-    stages::collect(tree.root_node(), source, catalog, &mut diagnostics);
-    rejects::collect(tree.root_node(), source, &mut diagnostics);
-    cim::collect(source, &mut diagnostics);
-    declared::collect(source, catalog, &mut diagnostics);
-    let tokens = highlight_tree(&spec, source, tree.root_node()).unwrap_or_default();
-    AnalyzeResult {
-        diagnostics,
-        tokens,
-    }
+    syntax::analyze(source)
 }
-
-fn node_range(source: &str, node: Node) -> Range {
-    span_to_range(
-        source,
-        ByteSpan::new(
-            node.start_byte(),
-            node.end_byte().max(node.start_byte() + 1),
-        ),
-    )
-}
-
-/// `spl_unknown_command` for a name in command position only: after a `|`,
-/// at the start of a subsearch, or first in the query. A word that error
-/// recovery strands mid-command is not a command, and nothing inside an
-/// `ERROR` region is reported. An app on the search head can add commands the
-/// catalog cannot know (MLTK, DECRYPT2, MISP42), so an unknown name is a
-/// warning; one edit from a known command it is almost certainly a typo
-/// (`statz`), which Splunk rejects, so it stays an error.
-fn collect_unknown_commands(
-    root: Node,
-    source: &str,
-    catalog: &Catalog,
-    out: &mut Vec<Diagnostic>,
-) {
-    walk_with_ancestors(root, |node, ancestors| {
-        if node.kind() != "unknown_command"
-            || ancestors.iter().any(|a| a.is_error())
-            || !in_command_position(node)
-        {
-            return;
-        }
-        let name = node
-            .child_by_field_name("name")
-            .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-            .unwrap_or("");
-        if catalog.command(name).is_none() {
-            out.push(unknown_command(name, node_range(source, node), catalog));
-        }
-    });
-}
-
-fn in_command_position(node: Node) -> bool {
-    match previous_token(node) {
-        None => true,
-        Some(token) => matches!(token.kind(), "|" | "[") && !token.is_missing(),
-    }
-}
-
-/// The token before `node` in document order, skipping comments and the
-/// zero-width tokens error recovery inserts.
-fn previous_token(node: Node) -> Option<Node> {
-    let mut at = node;
-    // Each step moves strictly backwards in the tree, so this ends; the bound
-    // only guards against a malformed recovered tree.
-    for _ in 0..MAX_TOKEN_STEPS {
-        let sibling = loop {
-            if let Some(s) = opentide_syntax::prev_sibling(at) {
-                break s;
-            }
-            at = at.parent()?;
-        };
-        let mut leaf = sibling;
-        while leaf.child_count() > 0 {
-            leaf = leaf.child(leaf.child_count() - 1)?;
-        }
-        if leaf.is_extra() || leaf.is_missing() || leaf.start_byte() == leaf.end_byte() {
-            at = leaf;
-            continue;
-        }
-        return Some(leaf);
-    }
-    None
-}
-
-/// More steps than any query has tokens.
-const MAX_TOKEN_STEPS: usize = 1 << 20;
 
 pub(crate) fn unknown_command(name: &str, range: Range, catalog: &Catalog) -> Diagnostic {
     let message = format!(
@@ -492,179 +379,6 @@ pub(crate) fn unknown_command(name: &str, range: Range, catalog: &Catalog) -> Di
         d = d.with_suggestion(suggestion);
     }
     d
-}
-
-#[expect(
-    clippy::manual_assert,
-    reason = "a broken highlights.scm panics in debug builds (the tests) and falls back to the tree walk in release builds"
-)]
-fn highlight_tree(
-    spec: &HighlightSpec,
-    source: &str,
-    root: Node,
-) -> Result<Vec<HighlightToken>, opentide_highlight::HighlightError> {
-    let catalog = Catalog::cached();
-    match opentide_syntax::query_captures(
-        LanguageId::Spl,
-        source,
-        opentide_highlight::SPL_HIGHLIGHTS_SCM,
-    ) {
-        Ok(mut owned) => {
-            for (span, capture) in &mut owned {
-                let end = span.end.min(source.len());
-                if span.start >= end {
-                    continue;
-                }
-                let text = &source[span.start..end];
-                if catalog.function(text).is_some()
-                    && (*capture == "variable" || *capture == "function")
-                {
-                    *capture = "function.builtin".into();
-                } else if (matches!(
-                    text,
-                    "by" | "AS"
-                        | "as"
-                        | "from"
-                        | "datamodel"
-                        | "summariesonly"
-                        | "where"
-                        | "prestats"
-                        | "allow_old_summaries"
-                        | "fillnull_value"
-                ) && *capture == "variable")
-                    || (catalog.command(text).is_some()
-                        && (*capture == "variable" || *capture == "error"))
-                {
-                    *capture = "keyword".into();
-                } else if looks_like_macro(text)
-                    || (*capture == "comment" && looks_like_macro(text))
-                {
-                    *capture = "macro".into();
-                } else if catalog.datamodel(text).is_some() && *capture == "variable" {
-                    *capture = "type".into();
-                } else if catalog.field(text).is_some() && *capture == "variable" {
-                    *capture = "property".into();
-                }
-            }
-            let refs: Vec<(ByteSpan, &str)> = owned
-                .iter()
-                .map(|(span, cap)| (*span, cap.as_str()))
-                .collect();
-            tokens_from_spans(spec, source, &refs)
-        }
-        Err(err) => {
-            if cfg!(debug_assertions) {
-                panic!("SPL highlights.scm query failed: {err}");
-            }
-            let mut spans = Vec::new();
-            collect_highlights(root, source, &mut spans);
-            tokens_from_spans(spec, source, &spans)
-        }
-    }
-}
-
-#[expect(
-    clippy::used_underscore_binding,
-    reason = "`_source` only passes through the recursion (clippy::only_used_in_recursion)"
-)]
-fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'static str)>) {
-    let kind = node.kind();
-    let capture = match kind {
-        "comment" => Some("comment"),
-        "string" => Some("string"),
-        "number" => Some("number"),
-        "boolean" => Some("boolean"),
-        "|" => Some("operator.pipe"),
-        "catalog_command_name" => Some("keyword"),
-        "macro" => Some("macro"),
-        "search"
-        | "where"
-        | "eval"
-        | "stats"
-        | "rex"
-        | "table"
-        | "rename"
-        | "fields"
-        | "dedup"
-        | "sort"
-        | "head"
-        | "tail"
-        | "join"
-        | "lookup"
-        | "makemv"
-        | "mvexpand"
-        | "tstats"
-        | "eventstats"
-        | "streamstats"
-        | "sistats"
-        | "chart"
-        | "timechart"
-        | "sichart"
-        | "sitimechart"
-        | "geostats"
-        | "fillnull"
-        | "foreach"
-        | "spath"
-        | "tojson"
-        | "inputlookup"
-        | "outputlookup"
-        | "as"
-        | "by"
-        | "over"
-        | "output"
-        | "outputnew"
-        | "desc"
-        | "in"
-        | "notin"
-        | "from"
-        | "datamodel"
-        | "summariesonly"
-        | "prestats"
-        | "allow_old_summaries"
-        | "fillnull_value"
-        | "TERM"
-        | "CASE"
-        | "PREFIX"
-        | "IN" => Some("keyword"),
-        "glob" | "search_word" => Some("variable"),
-        "term_text" => Some("string"),
-        "search_boolean" => Some("operator"),
-        "identifier" => {
-            if node.parent().map(|p| p.kind()) == Some("function_call") {
-                Some("function")
-            } else if node.parent().map(|p| p.kind()) == Some("field_value")
-                && node
-                    .parent()
-                    .and_then(|p| p.child_by_field_name("field"))
-                    .map(|n| n.id())
-                    == Some(node.id())
-            {
-                Some("property")
-            } else if node.parent().map(|p| p.kind()) == Some("unknown_command") {
-                Some("error")
-            } else {
-                Some("variable")
-            }
-        }
-        "AND" | "OR" | "NOT" | "and" | "or" | "not" | "=" | "==" | "!=" => Some("operator"),
-        "(" | ")" | "[" | "]" => Some("punctuation.bracket"),
-        "," => Some("punctuation.delimiter"),
-        _ => None,
-    };
-    if let Some(capture) = capture
-        && (node.child_count() == 0 || matches!(kind, "string" | "comment" | "number" | "macro"))
-    {
-        out.push((ByteSpan::new(node.start_byte(), node.end_byte()), capture));
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_highlights(child, _source, out);
-    }
-}
-
-fn looks_like_macro(text: &str) -> bool {
-    let t = text.trim();
-    t.starts_with('`') && t.ends_with('`') && !t.starts_with("```") && t.len() >= 3
 }
 
 fn complete_item(

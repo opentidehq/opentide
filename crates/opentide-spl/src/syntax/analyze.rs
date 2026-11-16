@@ -48,7 +48,8 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     let lines = LineIndex::new(source);
     let (root, parsed) = parse(source);
     let mut diagnostics = Vec::new();
-    let first_error = parse_errors(&root, &parsed.errors, &lines, &mut diagnostics);
+    parse_errors(&root, &parsed.errors, &lines, &mut diagnostics);
+    let broken = broken_regions(&root, &parsed.errors);
     unknown_commands(&root, catalog, &lines, &mut diagnostics);
     crate::perf::collect(source, catalog, &mut diagnostics);
     crate::search_operators::collect(source, catalog, &mut diagnostics);
@@ -64,12 +65,21 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     rejects(&root, &lines, &mut diagnostics);
     crate::cim::collect(source, &mut diagnostics);
     crate::declared::collect(source, catalog, &mut diagnostics);
-    if let Some(at) = first_error {
-        // No hint at or after the first syntax error, nor over it.
-        let at = lines.position(at);
-        let key = |p: opentide_core::Position| (p.line, p.character);
-        diagnostics.retain(|d| d.code == codes::SPL_PARSE_ERROR || key(d.range.end) <= key(at));
-    }
+    // No hint in a broken stage at or after its syntax error, nor over it:
+    // recovery leaves fragments there. Splunk splits stages at `|` whatever
+    // the parentheses, so the stages after a broken one are read as written.
+    let key = |p: opentide_core::Position| (p.line, p.character);
+    let broken: Vec<_> = broken
+        .into_iter()
+        .map(|(from, to)| (key(lines.position(from)), key(lines.position(to))))
+        .collect();
+    diagnostics.retain(|d| {
+        d.code == codes::SPL_PARSE_ERROR
+            || !broken.iter().any(|&(from, to)| {
+                let (start, end) = (key(d.range.start), key(d.range.end));
+                end > from && start <= to
+            })
+    });
     let tokens = highlight(&root, source, &spec, catalog).unwrap_or_default();
     AnalyzeResult {
         diagnostics,
@@ -96,38 +106,78 @@ fn error_node_at(root: &SyntaxNode, offset: usize) -> Option<SyntaxNode> {
         .find(|n| n.kind() == K::ERROR && usize::from(n.text_range().start()) == offset)
 }
 
+/// Where hints are not run: from each syntax error to the end of the stage
+/// it is in (the end of the input when it is in none), and every error node.
+fn broken_regions(root: &SyntaxNode, errors: &[SyntaxError]) -> Vec<(usize, usize)> {
+    let end = usize::from(root.text_range().end());
+    errors
+        .iter()
+        .map(|error| {
+            let from = usize::from(error.gap.start());
+            // The stage of the last token before the error, else of the next.
+            let before = root
+                .descendants_with_tokens()
+                .filter_map(NodeOrToken::into_token)
+                .filter(|t| usize::from(t.text_range().end()) <= from && !trivia(t.kind()))
+                .last();
+            let stage = before
+                .or_else(|| token_at_or_after(root, from))
+                .and_then(|t| t.parent())
+                .and_then(|n| {
+                    n.ancestors()
+                        .find(|a| a.parent().is_some_and(|p| p.kind() == K::PIPELINE))
+                });
+            let to = stage
+                .filter(|s| s.kind() != K::ERROR)
+                .map_or(end, |s| usize::from(s.text_range().end()));
+            (from, to.max(from))
+        })
+        // And every error node: the tokens recovery skipped.
+        .chain(
+            root.descendants()
+                .filter(|n| n.kind() == K::ERROR)
+                .map(|n| {
+                    (
+                        usize::from(n.text_range().start()),
+                        usize::from(n.text_range().end()),
+                    )
+                }),
+        )
+        .collect()
+}
+
 /// `spl_parse_error`s: one per error region (the errors of one place and of
-/// the error node recovery made there), at most [`MAX_PARSE_ERRORS`]. The
-/// offset of the first is returned.
+/// the error node recovery made there), at most [`MAX_PARSE_ERRORS`].
 fn parse_errors(
     root: &SyntaxNode,
     errors: &[SyntaxError],
     lines: &LineIndex<'_>,
     out: &mut Vec<Diagnostic>,
-) -> Option<usize> {
+) {
     let mut regions: Vec<(&SyntaxError, usize)> = Vec::new();
     for error in errors {
         let at = usize::from(error.gap.end());
         let end = error_node_at(root, at).map_or(at, |n| usize::from(n.text_range().end()));
-        if let Some((_, last_end)) = regions.last_mut()
+        if let Some((kept, last_end)) = regions.last_mut()
             && usize::from(error.gap.start()) <= *last_end
         {
             *last_end = (*last_end).max(end);
+            // An unclosed bracket names the cause: it wins over what follows it.
+            if error.message.starts_with("missing `") && !kept.message.starts_with("missing `") {
+                *kept = error;
+            }
             continue;
         }
         regions.push((error, end));
     }
-    let mut first = None;
     for (error, _) in regions.into_iter().take(MAX_PARSE_ERRORS) {
         let (where_, message) = describe(root, error);
-        first = Some(first.map_or(where_.start, |f: usize| f.min(where_.start)));
         out.push(Diagnostic::error(
             codes::SPL_PARSE_ERROR,
             message,
             lines.range(where_),
         ));
     }
-    first
 }
 
 /// Where and what to report for one error region.
@@ -143,10 +193,22 @@ fn describe(root: &SyntaxNode, error: &SyntaxError) -> (ByteSpan, String) {
             );
         }
     }
+    let skipped = error.message == "unexpected token"
+        || error_node_at(root, usize::from(error.gap.end())).is_some();
     match token_at_or_after(root, usize::from(error.gap.end())) {
-        Some(token) => (
+        // A token recovery had to skip: name it, as before.
+        Some(token) if skipped => (
             shown(token.text_range()),
             format!("SPL syntax error: unexpected '{}'", quoted(token.text())),
+        ),
+        // Something is missing before the token: say what, and where.
+        Some(token) => (
+            shown(token.text_range()),
+            format!(
+                "SPL syntax error: {} before '{}'",
+                error.message,
+                quoted(token.text())
+            ),
         ),
         None => (
             ByteSpan::new(gap_start, gap_start + 1),
@@ -465,6 +527,17 @@ fn loose_operators(node: &SyntaxNode, lines: &LineIndex<'_>, out: &mut Vec<Diagn
 fn capture(token: &SyntaxToken) -> Option<&'static str> {
     let kind = token.kind();
     let parent = token.parent()?;
+    // Recovery's tokens: what tree-sitter's `(identifier)`, `(number)`, ... say.
+    if parent.kind() == K::ERROR {
+        match kind {
+            K::IDENT if matches!(token.text(), "AND" | "OR" | "NOT") => return Some("operator"),
+            K::IDENT | K::FIELD_WORD | K::GLOB_TOKEN | K::SEARCH_WORD_TOKEN | K::CALL_WORD => {
+                return Some("variable");
+            }
+            K::NUMBER_TOKEN => return Some("number"),
+            _ => {}
+        }
+    }
     let grand = parent.parent();
     let parent_kind = parent.kind();
     let grand_kind = grand.as_ref().map(SyntaxNode::kind);
@@ -612,6 +685,16 @@ mod tests {
     use opentide_core::codes;
 
     #[test]
+    fn long_tokens_are_shortened_in_the_message() {
+        assert_eq!(super::quoted("abc"), "abc");
+        let long = "x".repeat(super::MAX_QUOTED + 5);
+        let q = super::quoted(&long);
+        assert!(q.ends_with('…'), "{q}");
+        assert_eq!(q.chars().count(), super::MAX_QUOTED + 1);
+        assert_eq!(super::quoted("a\nb"), "a");
+    }
+
+    #[test]
     fn one_diagnostic_per_error_region() {
         let errors: Vec<_> = analyze("a AND OR b")
             .diagnostics
@@ -637,11 +720,20 @@ mod tests {
     }
 
     #[test]
-    fn no_hint_after_the_first_syntax_error() {
-        let all = analyze("index=a | where (x | notacommand y").diagnostics;
+    fn no_hint_in_a_broken_stage_after_its_error() {
+        let all = analyze("index=* x ) *foo | notacommand y").diagnostics;
         assert!(
-            all.iter().all(|d| d.code == codes::SPL_PARSE_ERROR),
-            "{all:?}"
+            !all.iter().any(|d| d.code == codes::SPL_WILDCARD),
+            "a fragment after the error: {all:?}"
+        );
+        assert!(
+            all.iter().any(|d| d.code == codes::SPL_UNKNOWN_COMMAND),
+            "the next stage is read as written: {all:?}"
+        );
+        let clean = analyze("index=* *foo | notacommand y").diagnostics;
+        assert!(
+            clean.iter().any(|d| d.code == codes::SPL_WILDCARD),
+            "{clean:?}"
         );
     }
 }

@@ -3023,12 +3023,10 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "rowan",
  "serde",
  "strsim",
  "toml",
- "tree-sitter",
 ]
 
 [[package]]

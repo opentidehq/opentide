@@ -15,8 +15,6 @@ const FIELD_WORDS: TokenSet = K::set(&[
     K::SEARCH_WORD_TOKEN,
     K::CALL_WORD,
 ]);
-/// Search words that are neither names, numbers nor wildcards.
-const WORDS: TokenSet = K::set(&[K::FIELD_WORD, K::SEARCH_WORD_TOKEN, K::CALL_WORD]);
 /// What can be compared (`=`, `<`, ...) with a field and a value.
 const COMPARISONS: TokenSet = K::set(&[K::EQ, K::NE, K::LT, K::GT, K::LE, K::GE]);
 /// Splunk parses these too, with or without a term on either side.

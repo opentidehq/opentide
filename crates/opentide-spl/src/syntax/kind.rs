@@ -363,8 +363,6 @@ impl rowan::Language for Lang {
 pub type SyntaxNode = rowan::SyntaxNode<Lang>;
 /// A token of the tree.
 pub type SyntaxToken = rowan::SyntaxToken<Lang>;
-/// A node or a token.
-pub type SyntaxElement = rowan::SyntaxElement<Lang>;
 
 /// The kind of each token of `spl.ungram`: `T![where]`, `T!['(']`.
 #[macro_export]

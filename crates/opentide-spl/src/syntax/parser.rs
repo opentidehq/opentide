@@ -7,12 +7,12 @@
 use super::kind::{SyntaxKind as K, SyntaxNode};
 use super::lexer::lex;
 use super::{expr, rest, search, stats, table};
-use opentide_parse::{Grammar, Input, Parse, Parser, TokenSet, build};
+use opentide_parse::{Grammar, Input, Parse, Parser, build};
 
 /// Nesting (groups, subsearches) deeper than this is one error: the floor
 /// of `crates/opentide-analysis/tests/deep_queries.rs`, which tree-sitter
 /// met and `NESTING_CEILING` caps.
-pub const MAX_DEPTH: u32 = 1_000;
+pub const MAX_DEPTH: u32 = 1_024;
 
 /// The cost of one subsearch in levels of [`MAX_DEPTH`] (see `search.rs`).
 pub(super) const SUBSEARCH_WEIGHT_LEVELS: u32 = 4;
@@ -181,9 +181,6 @@ fn command_stage(p: &mut Parser<'_>, first: bool) {
         }
     }
 }
-
-/// The tokens a search term, and so a stage, cannot continue past.
-pub(super) const STAGE_END: TokenSet = K::set(&[K::PIPE, K::R_BRACKET, K::R_PAREN]);
 
 #[cfg(test)]
 pub(super) mod tests {
