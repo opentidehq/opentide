@@ -28,4 +28,4 @@ SOURCE_FILE@0..29
   WHITESPACE@28..29 "\n"
 
 13..14: expected a filter
-13..14: unexpected (expected PIPE)
+13..14: unexpected

@@ -1,0 +1,50 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(source)"
+---
+SOURCE_FILE@0..51
+  SAMPLE@0..41
+    SAMPLE_KW@0..6 "sample"
+    WHITESPACE@6..7 " "
+    JOIN_KEYS@7..11
+      BY_KW@7..9 "by"
+      WHITESPACE@9..10 " "
+      FIELD@10..11
+        IDENTIFIER@10..11
+          WORD@10..11 "a"
+    WHITESPACE@11..12 " "
+    JOIN_TERM@12..26
+      SUBQUERY@12..26
+        L_BRACK@12..13 "["
+        EVENT_CATEGORY@13..14
+          IDENTIFIER@13..14
+            WORD@13..14 "x"
+        WHITESPACE@14..15 " "
+        WHERE_KW@15..20 "where"
+        WHITESPACE@20..21 " "
+        BOOLEAN@21..25
+          TRUE_KW@21..25 "true"
+        R_BRACK@25..26 "]"
+    WHITESPACE@26..27 " "
+    JOIN_TERM@27..41
+      SUBQUERY@27..41
+        L_BRACK@27..28 "["
+        EVENT_CATEGORY@28..29
+          IDENTIFIER@28..29
+            WORD@28..29 "y"
+        WHITESPACE@29..30 " "
+        WHERE_KW@30..35 "where"
+        WHITESPACE@35..36 " "
+        BOOLEAN@36..40
+          TRUE_KW@36..40 "true"
+        R_BRACK@40..41 "]"
+  WHITESPACE@41..42 " "
+  PIPE_STAGE@42..50
+    PIPE@42..43 "|"
+    WHITESPACE@43..44 " "
+    IDENTIFIER@44..48
+      WORD@44..48 "tail"
+    WHITESPACE@48..49 " "
+    NUMBER@49..50
+      NUMBER_TOKEN@49..50 "1"
+  WHITESPACE@50..51 "\n"

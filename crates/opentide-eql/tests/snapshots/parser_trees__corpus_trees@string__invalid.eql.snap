@@ -1,0 +1,28 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/string__invalid.eql
+---
+SOURCE_FILE@0..63
+  LINE_COMMENT@0..22 "// prod:string invalid"
+  WHITESPACE@22..23 "\n"
+  EVENT_QUERY@23..62
+    EVENT_CATEGORY@23..30
+      IDENTIFIER@23..30
+        WORD@23..30 "process"
+    WHITESPACE@30..31 " "
+    WHERE_KW@31..36 "where"
+    WHITESPACE@36..37 " "
+    COMPARISON@37..62
+      FIELD@37..46
+        IDENTIFIER@37..41
+          WORD@37..41 "file"
+        DOT@41..42 "."
+        IDENTIFIER@42..46
+          WORD@42..46 "path"
+      WHITESPACE@46..47 " "
+      EQ_EQ@47..49 "=="
+      WHITESPACE@49..50 " "
+      STRING@50..62
+        STRING_TOKEN@50..62 "'C:\\Windows'"
+  WHITESPACE@62..63 "\n"

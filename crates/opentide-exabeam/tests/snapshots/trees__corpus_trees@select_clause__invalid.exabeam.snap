@@ -1,0 +1,32 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/select_clause__invalid.exabeam
+---
+source_file@0..38
+  statement@0..38
+    select_clause@0..13
+      keyword@0..6
+        letters@0..6 "SELECT"
+      whitespace@6..7 " "
+      column@7..7
+      ,@7..8 ","
+      whitespace@8..9 " "
+      column@9..13
+        field_name@9..13
+          identifier@9..13
+            letters@9..13 "user"
+    whitespace@13..14 " "
+    where_clause@14..38
+      keyword@14..19
+        letters@14..19 "WHERE"
+      whitespace@19..20 " "
+      filter@20..38
+        field_term@20..38
+          field_name@20..26
+            identifier@20..26
+              letters@20..26 "vendor"
+          :@26..27 ":"
+          string@27..38 "\"Microsoft\""
+errors:
+6..7: expected a column

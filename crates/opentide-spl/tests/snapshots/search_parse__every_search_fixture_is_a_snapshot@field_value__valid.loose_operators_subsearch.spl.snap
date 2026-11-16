@@ -1,0 +1,54 @@
+---
+source: crates/opentide-spl/tests/search_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/field_value__valid.loose_operators_subsearch.spl
+---
+SOURCE_FILE@0..60
+  PIPELINE@0..60
+    BARE_SEARCH@0..60
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+      WHITESPACE@10..11 " "
+      SUBSEARCH@11..60
+        L_BRACKET@11..12 "["
+        PIPELINE@12..59
+          SEARCH_COMMAND@12..43
+            SEARCH_KW@12..18 "search"
+            WHITESPACE@18..19 " "
+            SEARCH_EXPRESSION@19..43
+              FIELD_VALUE@19..30
+                FIELD_REF@19..25
+                  IDENTIFIER@19..25
+                    IDENT@19..25 "status"
+                EQ2@25..27 "=="
+                FIELD_VALUE_RHS@27..30
+                  NUMBER@27..30
+                    NUMBER_TOKEN@27..30 "200"
+              WHITESPACE@30..31 " "
+              SEARCH_BOOLEAN@31..33
+                OR_KW@31..33 "OR"
+              WHITESPACE@33..34 " "
+              FIELD_VALUE@34..43
+                FIELD_REF@34..38
+                  IDENTIFIER@34..38
+                    IDENT@34..38 "code"
+                LT_GT@38..40 "<>"
+                FIELD_VALUE_RHS@40..43
+                  NUMBER@40..43
+                    NUMBER_TOKEN@40..43 "404"
+          WHITESPACE@43..44 " "
+          PIPE@44..45 "|"
+          WHITESPACE@45..46 " "
+          FIELDS_COMMAND@46..59
+            FIELDS_KW@46..52 "fields"
+            WHITESPACE@52..53 " "
+            IDENTIFIER@53..59
+              IDENT@53..59 "status"
+        R_BRACKET@59..60 "]"
+--

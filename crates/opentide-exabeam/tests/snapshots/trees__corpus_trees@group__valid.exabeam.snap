@@ -1,0 +1,39 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/group__valid.exabeam
+---
+source_file@0..59
+  statement@0..59
+    filter@0..59
+      and_expression@0..59
+        group@0..46
+          (@0..1 "("
+          or_expression@1..45
+            field_term@1..21
+              field_name@1..13
+                identifier@1..13
+                  letters@1..13 "process_name"
+              :@13..14 ":"
+              string@14..21 "\"a.exe\""
+            whitespace@21..22 " "
+            keyword@22..24
+              letters@22..24 "OR"
+            whitespace@24..25 " "
+            field_term@25..45
+              field_name@25..37
+                identifier@25..37
+                  letters@25..37 "process_name"
+              :@37..38 ":"
+              string@38..45 "\"b.exe\""
+          )@45..46 ")"
+        whitespace@46..47 " "
+        keyword@47..50
+          letters@47..50 "AND"
+        whitespace@50..51 " "
+        field_term@51..59
+          field_name@51..55
+            identifier@51..55
+              letters@51..55 "user"
+          :@55..56 ":"
+          string@56..59 "\"x\""

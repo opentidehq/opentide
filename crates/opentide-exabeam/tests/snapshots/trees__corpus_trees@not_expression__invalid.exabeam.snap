@@ -1,0 +1,24 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/not_expression__invalid.exabeam
+---
+source_file@0..26
+  statement@0..26
+    filter@0..26
+      and_expression@0..26
+        field_term@0..18
+          field_name@0..6
+            identifier@0..6
+              letters@0..6 "vendor"
+          :@6..7 ":"
+          string@7..18 "\"Microsoft\""
+        whitespace@18..19 " "
+        keyword@19..22
+          letters@19..22 "AND"
+        whitespace@22..23 " "
+        not_expression@23..26
+          keyword@23..26
+            letters@23..26 "NOT"
+errors:
+26..26: expected a term

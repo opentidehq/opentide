@@ -20,4 +20,4 @@ SOURCE_FILE@0..42
           WORD@30..41 "base_sensor"
   WHITESPACE@41..42 "\n"
 
-23..24: the regular expression is never closed (expected SLASH)
+23..24: the block comment is never closed (expected SLASH)
