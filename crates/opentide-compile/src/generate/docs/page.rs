@@ -20,7 +20,7 @@
 use std::collections::HashMap;
 
 use super::flavor::Flavor;
-use super::text::{join, markdown_text, table_cell};
+use super::text::{escape_pipes, join, markdown_text, table_cell};
 
 /// A page with fewer listed sections than this gets no contents line.
 pub const CONTENTS_THRESHOLD: usize = 4;
@@ -312,17 +312,7 @@ pub fn table_of_contents(flavor: Flavor) -> &'static str {
 /// a bare `|` the cell.
 pub fn cell(text: &str) -> String {
     let lines: Vec<&str> = text.lines().collect();
-    let joined = lines.join(" ");
-    let mut out = String::with_capacity(joined.len());
-    let mut previous = '\0';
-    for c in joined.chars() {
-        if c == '|' && previous != '\\' {
-            out.push('\\');
-        }
-        out.push(c);
-        previous = c;
-    }
-    out
+    escape_pipes(&lines.join(" "))
 }
 
 /// A Markdown table.

@@ -1209,7 +1209,7 @@ impl Pages<'_, '_> {
             .actors
             .iter()
             .flatten()
-            .map(|actor| self.vocab.enrich("actors", &actor.name).label)
+            .map(|actor| self.vocab.enrich("actors", &actor.name).text_label())
             .collect();
         let rows = [
             (
@@ -1471,7 +1471,7 @@ impl Pages<'_, '_> {
             return String::new();
         }
         let links = &self.settings.cve;
-        let link = |id: &str| Flavor::link(id, &links.page_url(id));
+        let link = |id: &str| Flavor::link(&markdown_text(id), &links.page_url(id));
         let note = paragraph(
             "Identifiers link to [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu), \
              which aggregates CVE, GHSA, CSAF, NVD, and related feeds.",
@@ -1560,7 +1560,7 @@ impl Pages<'_, '_> {
         let mut label = if record.page_url.is_empty() {
             link(ident)
         } else {
-            Flavor::link(ident, &record.page_url)
+            Flavor::link(&markdown_text(ident), &record.page_url)
         };
         let aliases: Vec<String> = record
             .aliases
@@ -1574,16 +1574,16 @@ impl Pages<'_, '_> {
         let severity = match &record.cvss {
             Some(cvss) => format!(
                 "{}<br>CVSS {}",
-                format!("**{:.1}** {}", cvss.score, cvss.severity).trim(),
-                cvss.version
+                format!("**{:.1}** {}", cvss.score, markdown_text(&cvss.severity)).trim(),
+                markdown_text(&cvss.version)
             ),
-            None => table_cell(
+            None => table_cell(&markdown_text(
                 record
                     .severity
                     .as_deref()
                     .or(record.state.as_deref())
                     .unwrap_or("-"),
-            ),
+            )),
         };
         let likelihood = match &record.epss {
             cve::EpssDetail::Score(epss) => format!(
@@ -1595,13 +1595,14 @@ impl Pages<'_, '_> {
         };
         let weakness = join_lines(record.weaknesses.iter().map(|weakness| {
             let url = weakness.url();
+            let identifier = table_cell(&markdown_text(&weakness.identifier));
             let mut cell = if url.is_empty() {
-                weakness.identifier.clone()
+                identifier
             } else {
-                Flavor::link(&weakness.identifier, &url)
+                Flavor::link(&identifier, &url)
             };
             if !weakness.name.is_empty() {
-                cell = format!("{cell} {}", table_cell(&weakness.name));
+                cell = format!("{cell} {}", table_cell(&markdown_text(&weakness.name)));
             }
             cell
         }));
@@ -1615,7 +1616,10 @@ impl Pages<'_, '_> {
             } else {
                 weakness
             },
-            record.published.clone().unwrap_or_else(|| "-".to_owned()),
+            record
+                .published
+                .as_deref()
+                .map_or_else(|| "-".to_owned(), |date| table_cell(&markdown_text(date))),
         ]
     }
 
@@ -2500,11 +2504,17 @@ fn reference_value(value: &str) -> String {
 fn entry_link(entry: &Enriched, fallback: &str, label: Option<&str>) -> String {
     let text = label.map_or_else(
         || {
-            table_cell(if entry.label.is_empty() {
+            let label = if entry.label.is_empty() {
                 fallback
             } else {
                 &entry.label
-            })
+            };
+            // A value the vocabulary lacks is the object's own text.
+            if entry.found {
+                table_cell(label)
+            } else {
+                table_cell(&markdown_text(label))
+            }
         },
         str::to_owned,
     );

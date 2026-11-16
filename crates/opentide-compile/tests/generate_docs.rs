@@ -432,62 +432,122 @@ fn without_mermaid(page: &str) -> String {
     out
 }
 
-/// A rule's or a signal's name is text on every page: it cannot open a
-/// link (`[x](javascript:…)`) or raw HTML (`<b>`), in a heading, a link's
-/// text, a table or an index.
+/// Whether `text` holds `raw` with its first character not escaped: not
+/// after an odd run of backslashes.
+fn unescaped(text: &str, raw: &str) -> bool {
+    // Code spans (single backticks here) are not Markdown.
+    let text: String = text.split('`').step_by(2).collect::<Vec<_>>().join(" ");
+    text.match_indices(raw).any(|(at, _)| {
+        let before = &text[..at];
+        let run = before.len() - before.trim_end_matches('\\').len();
+        run.is_multiple_of(2)
+    })
+}
+
+/// An object's or a signal's name, a value the vocabulary lacks and a CVE
+/// record's text are text on every page: they cannot open a link
+/// (`[x](javascript:…)`) or raw HTML (`<b>`), in a heading, a link's text, a
+/// table or an index. A `\|` in a name stays in its cell, and a code span
+/// in a name renders as it did.
 #[test]
 fn names_are_escaped_where_they_become_markdown() {
     const RULE: &str = "Evil [x](javascript:alert(1)) <b>bold</b>";
     const SIGNAL: &str = "Signal [y](javascript:alert(2)) <i>it</i>";
+    const OBJECTIVE: &str = "Pipe a\\|b [o](javascript:6) `<code>` and `C:\\x`";
+    const THREAT: &str = "Threat [t](javascript:7) <u>u</u>";
+    const ACTOR: &str = "Actor [a](javascript:5) <s>a</s>";
     let rename = |file: &Path, from: &str, to: &str| {
         let text = std::fs::read_to_string(file).unwrap();
         assert!(text.contains(from), "{}", file.display());
-        let quoted = opentide_schema::node::double_quoted(to);
-        std::fs::write(file, text.replacen(from, &quoted, 1)).unwrap();
+        std::fs::write(file, text.replacen(from, to, 1)).unwrap();
     };
+    let quoted = opentide_schema::node::double_quoted;
     let (_dir, workspace) = open_edited("tide-corpus", |ws| {
         let objects = ws.join("Objects");
         rename(
             &objects.join("Detection Rules/rule-0001-sentinel-kql.yaml"),
             "Sentinel KQL Rule",
-            RULE,
+            &quoted(RULE),
         );
+        let objective = objects.join("Detection Objectives/objective-0001-credential-access.yaml");
+        rename(&objective, "Suspicious logon signal", &quoted(SIGNAL));
         rename(
-            &objects.join("Detection Objectives/objective-0001-credential-access.yaml"),
-            "Suspicious logon signal",
-            SIGNAL,
+            &objective,
+            "Credential Access Objective",
+            &quoted(OBJECTIVE),
+        );
+        let threat = objects.join("Threat Vectors/threat-0001-simulated-actor.yaml");
+        rename(&threat, "Simulated Actor", &quoted(THREAT));
+        rename(
+            &threat,
+            "    - name: att&ck::G0006\n",
+            &format!("    - name: att&ck::G0006\n    - name: {}\n", quoted(ACTOR)),
+        );
+        append(
+            ws,
+            "Objects/Threat Vectors/threat-0001-simulated-actor.yaml",
+            "  cve:\n    - CVE-2023-0001\n",
         );
     });
+    let source = || {
+        CveSource::new(|id: &str| {
+            CveDetail::Found(Box::new(CveRecord {
+                identifier: id.into(),
+                title: Some("Title [c](javascript:8) <em>e</em>".into()),
+                severity: Some("HIGH [sev](javascript:2) <i>s</i>".into()),
+                aliases: vec!["GHSA-[al](javascript:3)".into()],
+                weaknesses: vec![Weakness {
+                    identifier: "CWE-79".into(),
+                    name: "Weak [w](javascript:4) <u>w</u>".into(),
+                }],
+                affected: vec!["<b>ADC</b>".into()],
+                ..CveRecord::default()
+            }))
+        })
+    };
+    let names = [RULE, SIGNAL, THREAT, ACTOR];
     for flavor in ["generic", "github", "gitlab", "azure-devops"] {
-        let written = render(&workspace, Some(flavor)).unwrap();
-        let mut seen_rule = 0;
-        let mut seen_signal = 0;
+        let written = render_cves(
+            &workspace,
+            Some(flavor),
+            &FlavorHints::default(),
+            Some(source()),
+        )
+        .unwrap();
+        let mut seen = [0; 4];
+        let mut code_spans = 0;
         for (path, text) in &written {
             // Mermaid labels are not Markdown: their own escaping is tested
             // with the diagrams.
             let text = &without_mermaid(text);
-            for raw in ["[x](javascript", "[y](javascript", "<b>", "<i>"] {
-                for (at, _) in text.match_indices(raw) {
-                    assert!(
-                        text[..at].ends_with('\\'),
-                        "{flavor}: {path} holds an unescaped {raw:?}:\n{text}"
-                    );
-                }
+            for raw in [
+                "[x](", "[y](", "[o](", "[t](", "[a](", "[c](", "[sev](", "[al](", "[w](", "<b>",
+                "<i>", "<u>", "<s>", "<em>",
+            ] {
+                assert!(
+                    !unescaped(text, raw),
+                    "{flavor}: {path} holds an unescaped {raw:?}:\n{text}"
+                );
             }
-            seen_rule += text
-                .matches("Evil \\[x\\](javascript:alert(1)) \\<b\\>bold\\</b\\>")
-                .count();
-            seen_signal += text
-                .matches("Signal \\[y\\](javascript:alert(2)) \\<i\\>it\\</i\\>")
-                .count();
+            // `a\|b`: the backslash escaped and the pipe too, so the cell
+            // does not end there.
+            for row in text.lines().filter(|line| line.starts_with('|')) {
+                assert!(!row.contains("a\\\\|b"), "{flavor}: {path}: {row}");
+            }
+            for (count, name) in seen.iter_mut().zip(names) {
+                let escaped = name
+                    .replace('[', "\\[")
+                    .replace(']', "\\]")
+                    .replace('<', "\\<")
+                    .replace('>', "\\>");
+                *count += text.matches(&escaped).count();
+            }
+            code_spans += text.matches("`<code>` and `C:\\x`").count();
         }
+        assert!(seen.iter().all(|count| *count > 0), "{flavor}: {seen:?}");
         assert!(
-            seen_rule > 3,
-            "{flavor}: the rule's name, escaped, {seen_rule} times"
-        );
-        assert!(
-            seen_signal > 1,
-            "{flavor}: the signal's name, escaped, {seen_signal} times"
+            code_spans > 1,
+            "{flavor}: the code spans, kept, {code_spans} times"
         );
     }
 }
