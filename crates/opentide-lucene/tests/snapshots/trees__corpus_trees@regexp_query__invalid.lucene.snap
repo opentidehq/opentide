@@ -1,0 +1,17 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/regexp_query__invalid.lucene
+---
+SourceFile@0..22
+  BooleanQuery@0..22
+    FieldQuery@0..13
+      FieldName@0..12
+        Term@0..12 "process.name"
+      Colon@12..13 ":"
+    Error@13..14
+      ErrorToken@13..14 "/"
+    TermQuery@14..22
+      Term@14..22 "cmd\\.exe"
+13..13: missing a clause (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, AmpAmp, PipePipe, LParen, LBracket, LBrace)
+13..13: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, AndKw, OrKw, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)

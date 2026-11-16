@@ -1,0 +1,15 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/boost__invalid.lucene
+---
+SourceFile@0..12
+  FieldQuery@0..11
+    FieldName@0..5
+      Term@0..5 "title"
+    Colon@5..6 ":"
+    TermQuery@6..11
+      Term@6..11 "alert"
+  Error@11..12
+    ErrorToken@11..12 "^"
+11..11: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, Boost, Fuzzy, BareOperator, AndKw, OrKw, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)

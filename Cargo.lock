@@ -3565,10 +3565,14 @@ dependencies = [
 name = "opentide-lucene"
 version = "0.12.0"
 dependencies = [
+ "insta",
  "opentide-core",
  "opentide-ecs",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
+ "regex",
+ "rowan",
  "serde",
  "strsim",
  "toml 0.8.23",

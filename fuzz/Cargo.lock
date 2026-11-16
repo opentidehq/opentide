@@ -2983,11 +2983,12 @@ dependencies = [
  "opentide-core",
  "opentide-ecs",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
+ "rowan",
  "serde",
  "strsim",
  "toml",
- "tree-sitter",
 ]
 
 [[package]]
