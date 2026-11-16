@@ -253,7 +253,7 @@ yara_parse_error error 2:22-2:23 YARA syntax error: expecting STRING, found `)`
 61..63 variable
 64..65 punctuation.bracket
 == corpus/yara/base64_modifier__valid.yar
-yara_x_incompatible warning 3:27-3:96 YARA-X refuses escape sequences in a base64 alphabet
+yara_parse_error error 3:27-3:96 escape sequences are not allowed in this string
 0..4 keyword
 5..6 type
 7..8 punctuation.bracket
@@ -407,6 +407,7 @@ yara_parse_error error 3:0-3:1 YARA syntax error: expecting expression or identi
 40..41 punctuation.bracket
 == corpus/yara/entrypoint__valid.yar
 yara_entrypoint_deprecated warning 2:4-2:14 `entrypoint` is deprecated in libyara and refused by YARA-X: use `pe.entry_point` or `elf.entry_point`
+yara_undefined_identifier error 2:4-2:14 `entrypoint` is unsupported: use `pe.entry_point` or `elf.entry_point`
 0..4 keyword
 5..6 type
 7..8 punctuation.bracket
@@ -1369,7 +1370,7 @@ yara_parse_error error 4:18-4:19 YARA syntax error: expecting expression or iden
 80..81 punctuation.bracket
 82..83 punctuation.bracket
 == corpus/yara/rule_set__valid.yar
-yara_x_incompatible warning 4:19-4:24 YARA-X refuses rule wildcards in `of`: it reads `name*` as a product
+yara_parse_error error 4:19-4:24 YARA syntax error: expecting expression or identifier, found `)`: a rule wildcard in `of` (`name*`) is not YARA-X; list the rules instead, `any of (rule_a, rule_b)`
 0..7 keyword
 8..12 keyword
 13..18 type
@@ -1414,7 +1415,7 @@ yara_parse_error error 4:12-4:13 YARA syntax error: expecting pattern identifier
 75..76 punctuation.bracket
 77..78 punctuation.bracket
 == corpus/yara/rule_wildcard__valid.yar
-yara_x_incompatible warning 4:12-4:17 YARA-X refuses rule wildcards in `of`: it reads `name*` as a product
+yara_parse_error error 4:12-4:17 YARA syntax error: expecting expression or identifier, found `)`: a rule wildcard in `of` (`name*`) is not YARA-X; list the rules instead, `any of (rule_a, rule_b)`
 0..7 keyword
 8..12 keyword
 13..18 type
