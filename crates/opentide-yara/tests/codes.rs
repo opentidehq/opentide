@@ -8,7 +8,9 @@
 )]
 
 use opentide_core::Severity;
-use opentide_yara::{Context, Dialect, Profile, WARNING_CODES, always_warning, analyze_with};
+use opentide_yara::{
+    Context, Dialect, Profile, WARNING_CODES, YaraXSyntax, always_warning, analyze_with,
+};
 
 fn codes(source: &str, ctx: &Context) -> Vec<(String, Severity)> {
     let mut out: Vec<_> = analyze_with(source, ctx)
@@ -20,8 +22,12 @@ fn codes(source: &str, ctx: &Context) -> Vec<(String, Severity)> {
     out
 }
 
+/// A raw context that refuses YARA-X-only syntax, as a platform profile does.
 fn raw() -> Context {
-    Context::default()
+    Context {
+        yara_x_syntax: YaraXSyntax::Refused,
+        ..Context::default()
+    }
 }
 
 const E: Severity = Severity::Error;
@@ -240,27 +246,27 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
     // YARA-X-only syntax: errors under libyara.
     (
         "rule a { strings: $a = \"abcd\" condition: for 50% of them : ( $ ) }",
-        &[("yara_parse_error", E)],
+        &[("yara_x_only_syntax", E)],
     ),
     (
         "rule a { condition: with x = 1 : ( x == 1 ) }",
-        &[("yara_parse_error", E)],
+        &[("yara_x_only_syntax", E)],
     ),
     (
         "rule a { condition: 1_000 == 1000 }",
-        &[("yara_parse_error", E)],
+        &[("yara_x_only_syntax", E)],
     ),
     (
         "rule a { meta: f = 1.5 condition: true }",
-        &[("yara_parse_error", E)],
+        &[("yara_x_only_syntax", E)],
     ),
     (
         "rule a { strings: $h = { 01 02 [0x2-0x4] 03 04 } condition: $h }",
-        &[("yara_parse_error", E)],
+        &[("yara_x_only_syntax", E)],
     ),
     (
         "rule a { condition: 1 of (true, false) }",
-        &[("yara_parse_error", E), ("yara_parse_error", E)],
+        &[("yara_x_only_syntax", E), ("yara_x_only_syntax", E)],
     ),
     // Warnings.
     (
@@ -356,7 +362,7 @@ const RAW: &[(&str, &[(&str, Severity)])] = &[
     // `.len()` is YARA-X's.
     (
         "import \"pe\"\nrule a { condition: pe.sections.len() > 1 }",
-        &[("yara_parse_error", E)],
+        &[("yara_x_only_syntax", E)],
     ),
     // Invariant and unsatisfiable conditions.
     (
@@ -761,6 +767,7 @@ fn yara_x_dialect_accepts_its_syntax_and_refuses_libyara_only() {
     let yx = Context {
         dialect: Dialect::YaraX,
         profile: None,
+        yara_x_syntax: YaraXSyntax::Allowed,
     };
     assert_eq!(
         codes("rule a { condition: with x = 1 : ( x == 1 ) }", &yx),
@@ -803,6 +810,7 @@ fn warning_codes_are_warnings_in_every_context() {
         Context {
             dialect: Dialect::YaraX,
             profile: None,
+            yara_x_syntax: YaraXSyntax::Allowed,
         },
         Context::for_profile(Profile::Harfanglab),
         Context::for_profile(Profile::Bitdefender),
@@ -916,6 +924,7 @@ fn identifiers_over_128_characters() {
     let yx = Context {
         dialect: Dialect::YaraX,
         profile: None,
+        yara_x_syntax: YaraXSyntax::Allowed,
     };
     assert_eq!(
         codes(
@@ -1038,4 +1047,51 @@ fn every_range_is_balanced() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// YARA-X's own syntax, one case per construct the portability check lists.
+const YARA_X_ONLY: [&str; 6] = [
+    "rule a { condition: with x = 1 : ( x == 1 ) }",
+    "rule a { condition: 1_000 == 1000 }",
+    "rule a { meta: f = 1.5 condition: true }",
+    "rule a { strings: $h = { 01 02 [0x2-0x4] 03 04 } condition: $h }",
+    "rule a { condition: 1 of (true, false) }",
+    "import \"pe\"\nrule a { condition: pe.sections.len() > 1 }",
+];
+
+/// `yara_x_syntax: allowed` (a raw file, #1225): YARA-X syntax is the language.
+#[test]
+fn yara_x_syntax_is_taken_when_allowed() {
+    for source in YARA_X_ONLY {
+        let found = analyze_with(source, &Context::default()).diagnostics;
+        assert!(
+            found.iter().all(|d| d.severity != Severity::Error),
+            "{source}: {found:?}"
+        );
+    }
+}
+
+/// Both profiles start at `refused`: an error naming the construct and the profile.
+#[test]
+fn yara_x_syntax_is_refused_by_both_profiles() {
+    for profile in [Profile::Harfanglab, Profile::Bitdefender] {
+        for source in YARA_X_ONLY {
+            let found = analyze_with(source, &Context::for_profile(profile)).diagnostics;
+            let hit: Vec<_> = found
+                .iter()
+                .filter(|d| d.code == "yara_x_only_syntax")
+                .collect();
+            assert!(
+                !hit.is_empty(),
+                "{source} under {}: {found:?}",
+                profile.key()
+            );
+            assert!(
+                hit.iter()
+                    .all(|d| d.severity == E && d.message.contains(profile.display())),
+                "{source}: {hit:?}"
+            );
+            assert!(!always_warning("yara_x_only_syntax"));
+        }
+    }
 }

@@ -61,6 +61,19 @@ pub enum Dialect {
     YaraX,
 }
 
+/// Whether the platform takes syntax only YARA-X has (`with`, digit
+/// separators, float meta values, `\"\"\"` strings, booleans in `of` tuples, hex or octal
+/// jump bounds, `.len()`). While `Refused`, using it is the error
+/// `yara_x_only_syntax`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum YaraXSyntax {
+    /// YARA-X's syntax is the language: a raw `.yar` file.
+    #[default]
+    Allowed,
+    /// The platform's engine is not known to take it: the profile's start.
+    Refused,
+}
+
 /// A platform's YARA profile (yara-1.0 "Platform profiles").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Profile {
@@ -94,11 +107,12 @@ impl Profile {
 }
 
 /// Where the signature runs. A raw `.yar` file has no profile: libyara 4.5,
-/// no module set to confirm, no recommended meta.
+/// YARA-X syntax allowed, no module set to confirm, no recommended meta.
 #[derive(Debug, Clone, Default)]
 pub struct Context {
     pub dialect: Dialect,
     pub profile: Option<Profile>,
+    pub yara_x_syntax: YaraXSyntax,
 }
 
 impl Context {
@@ -110,9 +124,15 @@ impl Context {
         } else {
             Dialect::Libyara4
         };
+        let yara_x_syntax = if data.yara_x_syntax == "allowed" {
+            YaraXSyntax::Allowed
+        } else {
+            YaraXSyntax::Refused
+        };
         Self {
             dialect,
             profile: Some(profile),
+            yara_x_syntax,
         }
     }
 }

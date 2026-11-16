@@ -73,6 +73,8 @@ struct ModulesFile {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProfileData {
     pub dialect: String,
+    /// `allowed` or `refused`: whether YARA-X-only syntax is taken.
+    pub yara_x_syntax: String,
     pub ascii_only: bool,
     #[serde(default)]
     pub max_characters: Option<usize>,

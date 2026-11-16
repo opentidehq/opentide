@@ -15,7 +15,7 @@
 )]
 
 use opentide_core::Severity;
-use opentide_yara::{Context, Dialect, analyze_with};
+use opentide_yara::{Context, Dialect, YaraXSyntax, analyze_with};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -51,6 +51,8 @@ fn verdict(source: &str, dialect: Dialect) -> (bool, bool) {
     let ctx = Context {
         dialect,
         profile: None,
+        // libyara refuses what only YARA-X has: the portability check.
+        yara_x_syntax: YaraXSyntax::Refused,
     };
     let d = analyze_with(source, &ctx).diagnostics;
     // `yara_empty_signature` is the spec's rule for a signature, not a
