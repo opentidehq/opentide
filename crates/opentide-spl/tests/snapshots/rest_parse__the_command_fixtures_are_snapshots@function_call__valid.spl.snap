@@ -1,0 +1,80 @@
+---
+source: crates/opentide-spl/tests/rest_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/function_call__valid.spl
+---
+SOURCE_FILE@0..75
+  PIPELINE@0..75
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    EVAL_COMMAND@13..75
+      EVAL_KW@13..17 "eval"
+      WHITESPACE@17..18 " "
+      ASSIGNMENT@18..47
+        IDENTIFIER@18..19
+          IDENT@18..19 "s"
+        EQ@19..20 "="
+        FUNCTION_CALL@20..47
+          IDENTIFIER@20..24
+            IDENT@20..24 "case"
+          L_PAREN@24..25 "("
+          BIN_EXPR@25..32
+            IDENTIFIER@25..30
+              IDENT@25..30 "bytes"
+            GT@30..31 ">"
+            NUMBER@31..32
+              NUMBER_TOKEN@31..32 "1"
+          COMMA@32..33 ","
+          WHITESPACE@33..34 " "
+          NUMBER@34..35
+            NUMBER_TOKEN@34..35 "1"
+          COMMA@35..36 ","
+          WHITESPACE@36..37 " "
+          FUNCTION_CALL@37..43
+            IDENTIFIER@37..41
+              BOOL_KW@37..41 "true"
+            L_PAREN@41..42 "("
+            R_PAREN@42..43 ")"
+          COMMA@43..44 ","
+          WHITESPACE@44..45 " "
+          NUMBER@45..46
+            NUMBER_TOKEN@45..46 "0"
+          R_PAREN@46..47 ")"
+      COMMA@47..48 ","
+      WHITESPACE@48..49 " "
+      ASSIGNMENT@49..75
+        IDENTIFIER@49..50
+          IDENT@49..50 "t"
+        EQ@50..51 "="
+        FUNCTION_CALL@51..75
+          IDENTIFIER@51..53
+            IDENT@51..53 "if"
+          L_PAREN@53..54 "("
+          BIN_EXPR@54..68
+            IDENTIFIER@54..58
+              IDENT@54..58 "user"
+            WHITESPACE@58..59 " "
+            LIKE_LOWER_KW@59..63 "like"
+            WHITESPACE@63..64 " "
+            STR@64..68
+              STRING_TOKEN@64..68 "\"a%\""
+          COMMA@68..69 ","
+          WHITESPACE@69..70 " "
+          NUMBER@70..71
+            NUMBER_TOKEN@70..71 "1"
+          COMMA@71..72 ","
+          WHITESPACE@72..73 " "
+          NUMBER@73..74
+            NUMBER_TOKEN@73..74 "0"
+          R_PAREN@74..75 ")"
+--

@@ -1,0 +1,62 @@
+---
+source: crates/opentide-spl/tests/search_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/search_command__valid.loose_operators.spl
+---
+SOURCE_FILE@0..68
+  PIPELINE@0..68
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    SEARCH_COMMAND@13..54
+      SEARCH_KW@13..19 "search"
+      WHITESPACE@19..20 " "
+      SEARCH_EXPRESSION@20..54
+        FIELD_VALUE@20..31
+          FIELD_REF@20..26
+            IDENTIFIER@20..26
+              IDENT@20..26 "status"
+          EQ2@26..28 "=="
+          FIELD_VALUE_RHS@28..31
+            NUMBER@28..31
+              NUMBER_TOKEN@28..31 "200"
+        WHITESPACE@31..32 " "
+        SEARCH_BOOLEAN@32..34
+          OR_KW@32..34 "OR"
+        WHITESPACE@34..35 " "
+        FIELD_VALUE@35..44
+          FIELD_REF@35..39
+            IDENTIFIER@35..39
+              IDENT@35..39 "code"
+          LT_GT@39..41 "<>"
+          FIELD_VALUE_RHS@41..44
+            NUMBER@41..44
+              NUMBER_TOKEN@41..44 "404"
+        WHITESPACE@44..45 " "
+        FIELD_VALUE@45..54
+          FIELD_REF@45..50
+            IDENTIFIER@45..50
+              IDENT@45..50 "bytes"
+          EQ_GT@50..52 "=>"
+          FIELD_VALUE_RHS@52..54
+            NUMBER@52..54
+              NUMBER_TOKEN@52..54 "10"
+    WHITESPACE@54..55 " "
+    PIPE@55..56 "|"
+    WHITESPACE@56..57 " "
+    STATS_COMMAND@57..68
+      STATS_KW@57..62 "stats"
+      WHITESPACE@62..63 " "
+      AGGREGATE_ITEM@63..68
+        IDENTIFIER@63..68
+          IDENT@63..68 "count"
+--

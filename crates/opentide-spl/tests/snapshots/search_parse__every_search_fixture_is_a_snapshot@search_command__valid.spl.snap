@@ -1,0 +1,20 @@
+---
+source: crates/opentide-spl/tests/search_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/search_command__valid.spl
+---
+SOURCE_FILE@0..17
+  PIPELINE@0..17
+    SEARCH_COMMAND@0..17
+      SEARCH_KW@0..6 "search"
+      WHITESPACE@6..7 " "
+      SEARCH_EXPRESSION@7..17
+        FIELD_VALUE@7..17
+          FIELD_REF@7..12
+            IDENTIFIER@7..12
+              IDENT@7..12 "index"
+          EQ@12..13 "="
+          FIELD_VALUE_RHS@13..17
+            IDENTIFIER@13..17
+              IDENT@13..17 "main"
+--
