@@ -281,7 +281,7 @@ pub(crate) fn lex_kql(source: &str) -> Vec<Lexeme> {
     lex_kql_indexing(source, &[])
 }
 
-/// [`lex_kql`], reading the brackets that open at `index_at` as an index
+/// [`lex_kql`], reading the brackets that open at `index_at` (sorted) as an index
 /// (`[`, a string, `]`), never as a quoted name: where the parser found a
 /// quoted name right after an expression, which the old grammar read as
 /// `step['x']`.
@@ -328,7 +328,7 @@ fn fix_up(source: &str, lexemes: Vec<Lexeme>, index_at: &[TextSize]) -> Vec<Lexe
         }
         if kind == K::L_BRACKET
             && !previous.is_some_and(|p| ENDS_A_VALUE.contains(&p))
-            && !index_at.contains(&lexeme.range.start())
+            && index_at.binary_search(&lexeme.range.start()).is_err()
             && let Some(range) = quoted_name(source, &lexemes[i - 1..])
         {
             // `['Display Name']`: three tokens that touch, a name.

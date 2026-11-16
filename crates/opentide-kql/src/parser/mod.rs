@@ -49,6 +49,10 @@ pub(crate) fn parse(source: &str) -> Parse {
             return parse;
         }
         index_at.extend(found);
+        // Sorted, so that the lexer finds a place by binary search: a query
+        // with many of them is not re-lexed in quadratic time.
+        index_at.sort_unstable();
+        index_at.dedup();
     }
     let input = Input::new(source, lex_kql_indexing(source, &index_at), GRAMMAR);
     let mut p = P::new(Parser::new(&input));
