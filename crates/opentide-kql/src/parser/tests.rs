@@ -200,3 +200,43 @@ fn a_long_member_chain_does_not_overflow() {
     let source = format!("T | where {}", vec!["a"; 10_000].join("."));
     let _ = parse(&source);
 }
+
+/// Runs `run` on a 1 MB stack, as the browser's WASM module has: a recursion
+/// the nesting guard misses aborts the test process.
+fn on_small_stack<T: Send + 'static>(run: impl FnOnce() -> T + Send + 'static) -> T {
+    std::thread::Builder::new()
+        .stack_size(1 << 20)
+        .spawn(run)
+        .expect("spawn")
+        .join()
+        .expect("the parser panicked")
+}
+
+/// Found by review (#1314): function definitions nest through `let` without
+/// the nesting guard; 15,000 of them aborted on a 1 MB stack, and 2,000 gave
+/// 6,000 errors. Now: one `TooDeep`.
+#[test]
+fn nested_function_definitions_stop_at_the_limit() {
+    let errors = on_small_stack(|| {
+        let source = "let f = () { ".repeat(15_000);
+        parse(&source).errors
+    });
+    assert_eq!(errors.len(), 1, "{:?}", &errors[..errors.len().min(3)]);
+    assert!(matches!(errors[0].kind, ErrorKind::TooDeep { .. }));
+}
+
+/// Found by review (#1314): a long run of unexpected tokens is one error, not
+/// one per token (`-` x200,000 then `a` gave 100,000).
+#[test]
+fn a_run_of_unexpected_tokens_is_one_error() {
+    for source in [
+        format!("{}a", "-".repeat(200_000)),
+        format!("T | where {}a", "-".repeat(200_000)),
+        format!("T | where a == {}", "+".repeat(200_000)),
+        format!("T | project {}", ",".repeat(200_000)),
+        format!("T {}", ")".repeat(200_000)),
+    ] {
+        let errors = on_small_stack(move || parse(&source).errors.len());
+        assert!(errors <= 3, "{errors} errors");
+    }
+}

@@ -18,15 +18,18 @@ use rowan::{TextRange, TextSize};
 
 /// What logos reads, before a word is looked up.
 #[derive(Logos, Clone, Copy, Debug, PartialEq, Eq)]
+#[logos(extras = TypedMiss)]
 enum Token {
     /// What tree-sitter's `\s` was: the Unicode white space.
     #[regex(r"[\t\n\x0B\x0C\r \u{85}\u{A0}\u{1680}\u{2000}-\u{200A}\u{2028}\u{2029}\u{202F}\u{205F}\u{3000}]+")]
     Whitespace,
     #[regex(r"//[^\n]*", allow_greedy = true)]
     Comment,
-    /// A word, `$left` included.
-    #[regex(r"\$?[A-Za-z_][A-Za-z0-9_]*")]
-    Word,
+    /// A word, `$left` included; `true` for a typed literal
+    /// (`datetime(2024-01-01 10:00)`: a type name, then raw text up to `)` on
+    /// the same line, as Kusto's lexer reads it).
+    #[regex(r"\$?[A-Za-z_][A-Za-z0-9_]*", typed_literal)]
+    Word(bool),
     /// The keywords with a hyphen: read as one token, split by [`fix_up`]
     /// where they are not an operator.
     #[regex(
@@ -44,12 +47,6 @@ enum Token {
         r"[0-9]+(\.[0-9]+)?(days?|d|hours?|hrs?|h|minutes?|min|m|seconds?|sec|s|milliseconds?|ms|microseconds?|tick|ticks)"
     )]
     Timespan,
-    /// `datetime(2024-01-01 10:00)`: the value is raw text up to `)` on the
-    /// same line, as Kusto's lexer reads it.
-    #[regex(
-        r"(bool|date|datetime|decimal|double|guid|int|int32|int64|long|real|time|timespan)\([^)\r\n]*\)"
-    )]
-    TypedLiteral,
     /// `"a\"b"`, `'a'`, `@"a""b"`, `@'a''b'`, and the multi-line
     /// ```` ```a``` ```` and `~~~a~~~`, which hold anything but their own
     /// closing fence.
@@ -168,6 +165,46 @@ fn fenced(lex: &mut logos::Lexer<'_, Token>, fence: u8) -> bool {
     false
 }
 
+/// The type names that start a typed literal.
+const TYPED_LITERAL_TYPES: [&str; 13] = [
+    "bool", "date", "datetime", "decimal", "double", "guid", "int", "int32", "int64", "long",
+    "real", "time", "timespan",
+];
+
+/// Where the scan for a typed literal's `)` last found the end of a line
+/// first: a later `datetime(` before it cannot close either, so each line is
+/// scanned once, however many unclosed literals it holds.
+#[derive(Default)]
+struct TypedMiss(usize);
+
+/// After a word: a typed literal when it is a type name and `(`, raw text
+/// and `)` follow on the same line (the word and the literal become one
+/// token), else a word.
+fn typed_literal(lex: &mut logos::Lexer<'_, Token>) -> bool {
+    if !TYPED_LITERAL_TYPES.contains(&lex.slice()) || !lex.remainder().starts_with('(') {
+        return false;
+    }
+    let at = lex.span().end;
+    if at < lex.extras.0 {
+        return false;
+    }
+    let rest = lex.remainder().as_bytes();
+    match rest.iter().position(|&b| matches!(b, b')' | b'\r' | b'\n')) {
+        Some(end) if rest[end] == b')' => {
+            lex.bump(end + 1);
+            true
+        }
+        Some(end) => {
+            lex.extras.0 = at + end;
+            false
+        }
+        None => {
+            lex.extras.0 = at + rest.len();
+            false
+        }
+    }
+}
+
 /// The kind of a logos token and its text.
 fn kind_of(token: Result<Token, ()>, text: &str) -> K {
     let Ok(token) = token else {
@@ -176,12 +213,12 @@ fn kind_of(token: Result<Token, ()>, text: &str) -> K {
     match token {
         Token::Whitespace => K::WHITESPACE,
         Token::Comment => K::COMMENT,
-        Token::Word | Token::HyphenWord => word_kind(text).unwrap_or(K::IDENT),
+        Token::Word(true) => K::TYPED_LITERAL,
+        Token::Word(false) | Token::HyphenWord => word_kind(text).unwrap_or(K::IDENT),
         Token::BangWord => word_kind(text).unwrap_or(K::ERROR_TOKEN),
         Token::HintName => K::HINT_NAME,
         Token::Number => K::NUMBER,
         Token::Timespan => K::TIMESPAN,
-        Token::TypedLiteral => K::TYPED_LITERAL,
         Token::String(true) => K::STRING,
         Token::String(false) => K::ERROR_TOKEN,
         Token::CmpOp => K::CMP_OP,

@@ -38,6 +38,11 @@ fn let_statement(p: &mut P<'_>) {
 /// name or call (`let x = T;`, `let x = f(1);`) is tabular, as it was in the
 /// tree-sitter grammar; `T + 1` is a scalar.
 pub(super) fn let_value(p: &mut P<'_>) {
+    // A function body holds `let`s whose values are functions again: the
+    // nesting guard bounds that recursion as it bounds expressions.
+    if !p.enter() {
+        return;
+    }
     if p.current() == K::L_PAREN && p.nth(p.after_group(0)) == K::L_BRACE {
         function_definition(p);
     } else if is_tabular(p) {
@@ -45,6 +50,7 @@ pub(super) fn let_value(p: &mut P<'_>) {
     } else {
         expr::expr(p);
     }
+    p.exit();
 }
 
 /// Whether the value that starts here is a tabular expression.
