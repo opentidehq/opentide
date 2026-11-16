@@ -651,6 +651,28 @@ mod generated {
             self.0.pick(FIELDS).to_string()
         }
 
+        /// A primary expression where the grammar takes only one (the
+        /// input of `GROK`, `DISSECT` and the extract commands), with casts.
+        fn primary(&mut self) -> String {
+            match self.0.below(6) {
+                0 => format!("{}::{}", self.field(), self.0.pick(TYPES)),
+                1 => format!("{}({})", self.0.pick(CALLS), self.field()),
+                2 => format!(
+                    "{}({})::{}",
+                    self.0.pick(CALLS),
+                    self.field(),
+                    self.0.pick(TYPES)
+                ),
+                3 => format!(
+                    "{}::{}::{}",
+                    self.field(),
+                    self.0.pick(TYPES),
+                    self.0.pick(TYPES)
+                ),
+                _ => self.field(),
+            }
+        }
+
         fn constant(&mut self) -> String {
             match self.0.below(9) {
                 0 => self.0.below(1000).to_string(),
@@ -712,11 +734,14 @@ mod generated {
                 4 => format!("{v} NOT IN ({})", self.constant()),
                 5 => format!("{v} IS NULL"),
                 6 => format!("{v} IS NOT NULL"),
-                7 => format!(
-                    "{v} {}LIKE {}",
-                    self.0.pick(&["", "NOT ", "R"]),
-                    self.0.pick(STRINGS)
-                ),
+                7 => {
+                    let pattern = match self.0.below(4) {
+                        0 => format!("{}::{}", self.0.pick(STRINGS), self.0.pick(TYPES)),
+                        1 => format!("({}, ?p)", self.0.pick(STRINGS)),
+                        _ => self.0.pick(STRINGS).to_string(),
+                    };
+                    format!("{v} {}LIKE {pattern}", self.0.pick(&["", "NOT ", "R"]))
+                }
                 8 => format!("{} : {}", self.field(), self.0.pick(STRINGS)),
                 _ => v,
             }
@@ -783,7 +808,7 @@ mod generated {
         }
 
         fn command(&mut self, allow_fork: bool) -> String {
-            let e = self.0.below(26);
+            let e = self.0.below(36);
             match e {
                 0..=2 => format!("WHERE {}", self.expr(2)),
                 3 | 4 => format!(
@@ -838,8 +863,8 @@ mod generated {
                         aggs.join(", ")
                     )
                 }
-                15 => format!("DISSECT {} \"%{{a}} %{{b}}\"", self.field()),
-                16 => format!("GROK {} \"%{{IP:ip}}\"", self.field()),
+                15 => format!("DISSECT {} \"%{{a}} %{{b}}\"", self.primary()),
+                16 => format!("GROK {} \"%{{IP:ip}}\"", self.primary()),
                 17 => format!(
                     "ENRICH {} ON {} WITH {}",
                     self.0.pick(&["policy", "ctx:policy", "\"p\""]),
@@ -865,6 +890,62 @@ mod generated {
                 24 => format!(
                     "COMPLETION {} WITH {{\"inference_id\": \"m\"}}",
                     self.field()
+                ),
+                25 => format!(
+                    "{} {} = {}",
+                    self.0.pick(&[
+                        "URI_PARTS",
+                        "REGISTERED_DOMAIN",
+                        "USER_AGENT",
+                        "IP_LOCATION"
+                    ]),
+                    self.0.pick(&["p", "d.x"]),
+                    self.primary()
+                ),
+                26 => format!(
+                    "DISSECT {} \"%{{a}} %{{b}}\" APPEND_SEPARATOR = \",\"",
+                    self.primary()
+                ),
+                27 => format!(
+                    "HIGHLIGHT {} ON {} WITH {{\"k\": 1}}",
+                    self.0.pick(STRINGS),
+                    self.names()
+                ),
+                28 => format!(
+                    "MMR {} ON {} LIMIT {}",
+                    self.0.pick(&["?q", "\"q\""]),
+                    self.field(),
+                    self.0.below(9) + 1
+                ),
+                29 => format!(
+                    "RERANK r = {} ON {}, b = {} WITH {{\"inference_id\": \"m\"}}",
+                    self.0.pick(STRINGS),
+                    self.field(),
+                    self.value(1)
+                ),
+                30 => format!(
+                    "DENSE_VECTOR e = {} WITH {{\"inference_id\": \"m\"}}",
+                    self.primary()
+                ),
+                31 => format!(
+                    "WHERE {} IN (FROM {} | KEEP {})",
+                    self.field(),
+                    self.0.pick(INDICES),
+                    self.field()
+                ),
+                32 => format!(
+                    "WHERE ({}, {}) {}IN (FROM {} | KEEP a, b)",
+                    self.field(),
+                    self.field(),
+                    self.0.pick(&["", "NOT "]),
+                    self.0.pick(INDICES)
+                ),
+                33 => format!("EVAL {} = {}", self.0.pick(&["?p", "??q"]), self.expr(1)),
+                34 => format!(
+                    "{} JOIN {} AS q ON {}",
+                    self.0.pick(&["LOOKUP", "LEFT"]),
+                    self.0.pick(&["idx", "lookup-*"]),
+                    self.expr(1)
                 ),
                 _ => self
                     .0
