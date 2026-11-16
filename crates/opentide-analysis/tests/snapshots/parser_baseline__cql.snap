@@ -16133,7 +16133,7 @@ cql_parse_error error 0:51-0:52 CQL syntax error near `)`: expected an expressio
 170..173 number
 173..174 punctuation.bracket
 == corpus/cql/binary_expression__invalid.cql
-cql_parse_error error 0:11-0:11 CQL syntax error: missing `)`
+cql_parse_error error 0:11-0:14 CQL syntax error near `and`
 0..4 function.builtin
 4..5 punctuation.bracket
 5..6 property
@@ -16188,7 +16188,7 @@ cql_parse_error error 0:11-0:11 CQL syntax error: missing `)`
 159..160 operator
 161..166 property
 == corpus/cql/block_comment__invalid.cql
-cql_parse_error error 1:0-1:0 CQL syntax error: the regular expression is never closed
+cql_parse_error error 1:0-1:0 CQL syntax error: the block comment is never closed
 0..1 string
 1..23 string
 24..29 type
@@ -16316,7 +16316,7 @@ cql_parse_error error 0:22-0:23 CQL syntax error near `b`: a filter cannot follo
 210..211 punctuation.delimiter
 212..213 punctuation.bracket
 == corpus/cql/expression_attribute__invalid.cql
-cql_parse_error error 0:37-0:37 CQL syntax error: missing `)`
+cql_parse_error error 0:37-0:44 CQL syntax error near `include`
 0..9 function.builtin
 9..10 punctuation.bracket
 10..15 variable
@@ -16381,7 +16381,7 @@ cql_parse_error error 0:37-0:37 CQL syntax error: missing `)`
 218..219 punctuation.bracket
 219..220 punctuation.bracket
 == corpus/cql/field_filter__invalid.cql
-cql_parse_error error 0:14-0:15 CQL syntax error near `e`: expected a value
+cql_parse_error error 0:14-0:19 CQL syntax error near `error`: expected a value
 0..10 property
 11..13 operator
 == corpus/cql/field_filter__valid.cql
@@ -16794,7 +16794,7 @@ cql_removed_function error 0:0-0:4 `rdns` was removed from CQL in 1.249
 121..126 string
 126..127 punctuation.bracket
 == corpus/cql/named_subquery__invalid.cql
-cql_parse_error error 0:13-0:13 CQL syntax error: missing `)`
+cql_parse_error error 0:13-0:14 CQL syntax error near `{`
 0..9 function.builtin
 9..10 punctuation.bracket
 10..12 property
@@ -17217,7 +17217,7 @@ cql_parse_error error 0:15-0:15 CQL syntax error: missing `]`
 87..88 punctuation.bracket
 88..89 punctuation.bracket
 == corpus/cql/string__invalid.cql
-cql_parse_error error 0:7-0:8 CQL syntax error near `"`: expected a value
+cql_parse_error error 0:7-0:8 CQL syntax error: the string is never closed
 0..4 property
 5..6 operator
 8..12 string
