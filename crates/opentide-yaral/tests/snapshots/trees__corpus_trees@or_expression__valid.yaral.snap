@@ -1,0 +1,45 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/or_expression__valid.yaral
+---
+SOURCE_FILE@0..108
+  COMMENT@0..27 "// prod:or_expression valid"
+  WHITESPACE@27..28 "\n"
+  SEARCH_QUERY@28..107
+    SEARCH_EVENTS@28..107
+      OR_EXPR@28..107
+        COMPARISON@28..65
+          UDM_FIELD@28..50
+            VARIABLE@28..30
+              VAR_TOKEN@28..30 "$e"
+            MEMBER@30..39
+              ACCESS_DOT@30..31 "."
+              FIELD_NAME@31..39 "metadata"
+            MEMBER@39..50
+              ACCESS_DOT@39..40 "."
+              FIELD_NAME@40..50 "event_type"
+          WHITESPACE@50..51 " "
+          EQ@51..52 "="
+          WHITESPACE@52..53 " "
+          LITERAL@53..65
+            STRING@53..65 "\"USER_LOGIN\""
+        WHITESPACE@65..66 " "
+        OR_KW@66..68 "or"
+        WHITESPACE@68..69 " "
+        COMPARISON@69..107
+          UDM_FIELD@69..91
+            VARIABLE@69..71
+              VAR_TOKEN@69..71 "$e"
+            MEMBER@71..80
+              ACCESS_DOT@71..72 "."
+              FIELD_NAME@72..80 "metadata"
+            MEMBER@80..91
+              ACCESS_DOT@80..81 "."
+              FIELD_NAME@81..91 "event_type"
+          WHITESPACE@91..92 " "
+          EQ@92..93 "="
+          WHITESPACE@93..94 " "
+          LITERAL@94..107
+            STRING@94..107 "\"USER_LOGOUT\""
+  WHITESPACE@107..108 "\n"

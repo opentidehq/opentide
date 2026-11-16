@@ -1,0 +1,32 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/parenthesized_expression__invalid.cql
+---
+SOURCE_FILE@0..16
+  PIPELINE@0..15
+    ASSIGNMENT@0..15
+      FIELD_NAME@0..1
+        WORD@0..1 "x"
+      WHITESPACE@1..2 " "
+      COLON_EQ@2..4 ":="
+      WHITESPACE@4..5 " "
+      PARENTHESIZED_EXPRESSION@5..15
+        L_PAREN@5..6 "("
+        BINARY_EXPRESSION@6..15
+          FIELD_NAME@6..7
+            WORD@6..7 "a"
+          WHITESPACE@7..8 " "
+          PLUS@8..9 "+"
+          WHITESPACE@9..10 " "
+          BINARY_EXPRESSION@10..15
+            FIELD_NAME@10..11
+              WORD@10..11 "b"
+            WHITESPACE@11..12 " "
+            STAR@12..13 "*"
+            WHITESPACE@13..14 " "
+            NUMBER@14..15
+              NUMBER_TOKEN@14..15 "2"
+  WHITESPACE@15..16 "\n"
+
+15..16: missing `)` (expected R_PAREN)

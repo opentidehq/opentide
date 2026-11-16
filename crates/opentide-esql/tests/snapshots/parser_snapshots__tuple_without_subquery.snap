@@ -1,0 +1,44 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{source}\\n{tree}--- errors\\n{errors}\")"
+---
+FROM a | WHERE (x, y) IN (1, 2)
+SOURCE_FILE@0..31
+  QUERY@0..31
+    FROM_COMMAND@0..6
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "a"
+    WHITESPACE@6..7 " "
+    PIPE@7..8 "|"
+    WHITESPACE@8..9 " "
+    WHERE_COMMAND@9..31
+      WHERE_KW@9..14 "WHERE"
+      WHITESPACE@14..15 " "
+      IN_EXPRESSION@15..31
+        IN_TUPLE@15..21
+          L_PAREN@15..16 "("
+          QUALIFIED_NAME@16..17
+            IDENTIFIER@16..17
+              IDENT@16..17 "x"
+          COMMA@17..18 ","
+          WHITESPACE@18..19 " "
+          QUALIFIED_NAME@19..20
+            IDENTIFIER@19..20
+              IDENT@19..20 "y"
+          R_PAREN@20..21 ")"
+        WHITESPACE@21..22 " "
+        IN_KW@22..24 "IN"
+        WHITESPACE@24..25 " "
+        L_PAREN@25..26 "("
+        NUMBER@26..27
+          NUMBER_LIT@26..27 "1"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        NUMBER@29..30
+          NUMBER_LIT@29..30 "2"
+        R_PAREN@30..31 ")"
+--- errors
+24..25: a tuple compares only against a subquery: `(a, b) in (from ...)`

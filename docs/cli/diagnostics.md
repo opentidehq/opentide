@@ -445,6 +445,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`yara_unknown_module_member`](#yara_unknown_module_member) | The YARA module has no such field or function, or the function takes other arguments. |
 | [`yara_unreferenced_string`](#yara_unreferenced_string) | A YARA string is never used in the condition, which libyara refuses unless the condition uses them. |
 | [`yara_x_incompatible`](#yara_x_incompatible) | libyara 4.5 compiles this YARA but YARA-X 1.x refuses it. |
+| [`yara_x_only_syntax`](#yara_x_only_syntax) | This YARA uses syntax only YARA-X has, and the platform profile has yara_x_syntax refused: the platform may not accept it. |
 | [`yaral_condition_shape`](#yaral_condition_shape) | The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event. |
 | [`yaral_deprecated_field`](#yaral_deprecated_field) | The UDM field is deprecated. |
 | [`yaral_enum_value`](#yaral_enum_value) | The value is not one of the enumerated UDM field's values. |
@@ -7890,6 +7891,22 @@ Change the query where the frame points, then run `opentide validate query` (`--
 ## yara_x_incompatible
 
 libyara 4.5 compiles this YARA but YARA-X 1.x refuses it.
+
+Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+
+## yara_x_only_syntax
+
+This YARA uses syntax only YARA-X has, and the platform profile has yara_x_syntax refused: the platform may not accept it.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 

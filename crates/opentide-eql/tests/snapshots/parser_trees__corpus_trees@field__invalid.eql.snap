@@ -1,0 +1,30 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/field__invalid.eql
+---
+SOURCE_FILE@0..58
+  LINE_COMMENT@0..21 "// prod:field invalid"
+  WHITESPACE@21..22 "\n"
+  EVENT_QUERY@22..45
+    EVENT_CATEGORY@22..29
+      IDENTIFIER@22..29
+        WORD@22..29 "process"
+    WHITESPACE@29..30 " "
+    WHERE_KW@30..35 "where"
+    WHITESPACE@35..36 " "
+    FIELD@36..45
+      IDENTIFIER@36..43
+        WORD@36..43 "process"
+      DOT@43..44 "."
+      ERROR@44..45
+        QUESTION@44..45 "?"
+  ERROR@45..57
+    WORD@45..49 "name"
+    WHITESPACE@49..50 " "
+    EQ_EQ@50..52 "=="
+    WHITESPACE@52..53 " "
+    NULL_KW@53..57 "null"
+  WHITESPACE@57..58 "\n"
+44..44: a field name is missing (expected a name, a quoted name)
+45..45: unexpected token (expected an index, `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `|`, `.`, `:`)

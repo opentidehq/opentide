@@ -154,6 +154,7 @@ CI proves the connectors against recorded cassettes and stand-in servers, never 
 - **A corporate proxy and a custom CA reach `login.microsoftonline.com`**: a tenant with `proxy` and a CA bundle signs in through them (the sign-in uses the tenant's own client), and a TLS failure there is reported once, not retried.
 - **Resume from suspend**: a run suspended past its token's lifetime (on Linux the monotonic clock does not count the suspension) recovers through the `401` rule after resuming.
 - **CrowdStrike renews its token on every cloud**: a run longer than the token's lifetime on `us-1`, `us-2`, `eu-1` and `us-gov-1` signs in again at `{base_url}/oauth2/token` and carries on.
+- **HarfangLab and Bitdefender take YARA-X-only syntax, or not**: `deploy` a rule using each construct `yara_x_only_syntax` names (`with`, a digit separator, a float meta value, a `"""` string, a boolean in an `of` tuple, a hex or octal jump bound, `.len()`, a percentage with `at` or `in`, regexp modifiers other than `i`, `s` and `is`) to each platform. Where the platform takes all of them, set its profile's `yara_x_syntax` to `allowed` in `data/catalogs/yara/language.toml` ([#1225](https://github.com/opentidehq/opentide/issues/1225)); both start at `refused`.
 
 ### Testing a build without publishing
 

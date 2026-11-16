@@ -621,6 +621,9 @@ fn unclosed_quote(source: &str) -> Option<usize> {
     let mut i = 0;
     while i < bytes.len() {
         match bytes[i] {
+            // In a quoted string a backslash escapes any character but a
+            // line break, as the lexer reads it: `"x\<LF>` never closes.
+            b'\\' if open.is_some() && bytes.get(i + 1) == Some(&b'\n') => return open,
             b'\\' => i += 1,
             b'"' => open = if open.is_some() { None } else { Some(i) },
             _ => {}
@@ -1040,6 +1043,20 @@ mod tests {
     }
 
     #[test]
+    fn an_escaped_line_break_leaves_the_quote_open() {
+        // The lexer takes no `\` before a line break inside quotes, so the
+        // string never closes; the message says so, from its quote.
+        let d = find("a:\"x\\\ny\"", codes::KUERY_PARSE_ERROR).expect("an error");
+        assert!(
+            d.message.ends_with("a quoted string is never closed"),
+            "{}",
+            d.message
+        );
+        assert_eq!(d.range.start.character, 2);
+        assert!(find("a:\"x\\ny\"", codes::KUERY_PARSE_ERROR).is_none());
+    }
+
+    #[test]
     fn a_missing_value_names_the_field_not_the_bracket() {
         let d = find("a and (b:", codes::KUERY_PARSE_ERROR).expect("an error");
         assert_eq!(d.message, "KQL syntax error: a value is missing after `b:`");
@@ -1048,15 +1065,20 @@ mod tests {
     #[test]
     fn many_diagnostics_convert_their_spans_in_linear_time() {
         // Each diagnostic's range used to scan from the start of the text.
-        let src = format!("a:{}", "\"x ".repeat(8_000));
-        let started = std::time::Instant::now();
-        let n = analyze(&src).diagnostics.len();
-        assert!(n >= 1);
-        assert!(
-            started.elapsed() < std::time::Duration::from_secs(2),
-            "{n} diagnostics took {:?}",
-            started.elapsed()
-        );
+        // A non-ASCII line too: its columns came from a scan of the line.
+        for src in [
+            format!("a:{}", "\"x ".repeat(8_000)),
+            "\u{e9}:\"\u{fc} ".repeat(8_000),
+        ] {
+            let started = std::time::Instant::now();
+            let n = analyze(&src).diagnostics.len();
+            assert!(n >= 1);
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(2),
+                "{n} diagnostics took {:?}",
+                started.elapsed()
+            );
+        }
     }
 
     #[test]
@@ -1066,6 +1088,10 @@ mod tests {
         let _ = (analyze(src), fields(src), ecs_diagnostics(src));
         assert!(std::rc::Rc::ptr_eq(&first, &parser::parse_memo(src)));
         assert!(!std::rc::Rc::ptr_eq(&first, &parser::parse_memo("a:1")));
+        // A text past the cap is parsed but not kept.
+        let large = "a:1 or ".repeat(parser::MEMO_MAX / 7 + 1) + "b:2";
+        let once = parser::parse_memo(&large);
+        assert!(!std::rc::Rc::ptr_eq(&once, &parser::parse_memo(&large)));
     }
 
     #[test]

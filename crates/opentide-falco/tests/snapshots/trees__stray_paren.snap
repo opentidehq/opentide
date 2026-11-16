@@ -1,0 +1,25 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(\"a.b = c) and d\")"
+---
+source_file@0..14
+  comparison@0..7
+    field@0..3
+      field_name@0..3 "a.b"
+    whitespace@3..4 " "
+    comparison_operator@4..5
+      =@4..5 "="
+    whitespace@5..6 " "
+    bare_string@6..7
+      identifier@6..7 "c"
+  ERROR@7..8
+    )@7..8 ")"
+  whitespace@8..9 " "
+  macro_reference@9..12
+    identifier@9..12 "and"
+  whitespace@12..13 " "
+  ERROR@13..14
+    identifier@13..14 "d"
+errors:
+7..7: unexpected
+12..13: unexpected

@@ -1,0 +1,55 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(source)"
+---
+SOURCE_FILE@0..60
+  JOIN@0..60
+    JOIN_KW@0..4 "join"
+    WHITESPACE@4..5 " "
+    JOIN_TERM@5..24
+      SUBQUERY@5..19
+        L_BRACK@5..6 "["
+        EVENT_CATEGORY@6..7
+          IDENTIFIER@6..7
+            WORD@6..7 "x"
+        WHITESPACE@7..8 " "
+        WHERE_KW@8..13 "where"
+        WHITESPACE@13..14 " "
+        BOOLEAN@14..18
+          TRUE_KW@14..18 "true"
+        R_BRACK@18..19 "]"
+      WHITESPACE@19..20 " "
+      JOIN_KEYS@20..24
+        BY_KW@20..22 "by"
+        WHITESPACE@22..23 " "
+        FIELD@23..24
+          IDENTIFIER@23..24
+            WORD@23..24 "k"
+    WHITESPACE@24..25 " "
+    JOIN_TERM@25..39
+      SUBQUERY@25..39
+        L_BRACK@25..26 "["
+        EVENT_CATEGORY@26..27
+          IDENTIFIER@26..27
+            WORD@26..27 "y"
+        WHITESPACE@27..28 " "
+        WHERE_KW@28..33 "where"
+        WHITESPACE@33..34 " "
+        BOOLEAN@34..38
+          TRUE_KW@34..38 "true"
+        R_BRACK@38..39 "]"
+    WHITESPACE@39..40 " "
+    UNTIL_KW@40..45 "until"
+    WHITESPACE@45..46 " "
+    JOIN_TERM@46..60
+      SUBQUERY@46..60
+        L_BRACK@46..47 "["
+        EVENT_CATEGORY@47..48
+          IDENTIFIER@47..48
+            WORD@47..48 "z"
+        WHITESPACE@48..49 " "
+        WHERE_KW@49..54 "where"
+        WHITESPACE@54..55 " "
+        BOOLEAN@55..59
+          TRUE_KW@55..59 "true"
+        R_BRACK@59..60 "]"

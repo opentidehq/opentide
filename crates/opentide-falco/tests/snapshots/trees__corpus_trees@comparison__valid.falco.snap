@@ -1,0 +1,50 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/comparison__valid.falco
+---
+source_file@0..81
+  and_expression@0..81
+    comparison@0..15
+      field@0..8
+        field_name@0..8 "fd.sport"
+      whitespace@8..9 " "
+      comparison_operator@9..10
+        other@9..10 ">"
+      whitespace@10..11 " "
+      bare_string@11..15
+        number@11..15 "1024"
+    whitespace@15..16 " "
+    and@16..19 "and"
+    whitespace@19..20 " "
+    comparison@20..43
+      field@20..27
+        field_name@20..27 "fd.name"
+      whitespace@27..28 " "
+      comparison_operator@28..38
+        identifier@28..38 "startswith"
+      whitespace@38..39 " "
+      bare_string@39..43
+        other@39..40 "/"
+        identifier@40..43 "etc"
+    whitespace@43..44 " "
+    and@44..47 "and"
+    whitespace@47..48 " "
+    comparison@48..65
+      field@48..58
+        field_name@48..58 "proc.pname"
+      whitespace@58..59 " "
+      unary_operator@59..65
+        identifier@59..65 "exists"
+    whitespace@65..66 " "
+    and@66..69 "and"
+    whitespace@69..70 " "
+    comparison@70..81
+      field@70..77
+        field_name@70..77 "evt.dir"
+      whitespace@77..78 " "
+      comparison_operator@78..79
+        =@78..79 "="
+      whitespace@79..80 " "
+      bare_string@80..81
+        other@80..81 "<"

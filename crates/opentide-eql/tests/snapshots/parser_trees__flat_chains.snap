@@ -1,0 +1,78 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(source)"
+---
+SOURCE_FILE@0..58
+  EVENT_QUERY@0..58
+    ANY@0..3
+      ANY_KW@0..3 "any"
+    WHITESPACE@3..4 " "
+    WHERE_KW@4..9 "where"
+    WHITESPACE@9..10 " "
+    OR_EXPRESSION@10..58
+      FIELD@10..11
+        IDENTIFIER@10..11
+          WORD@10..11 "a"
+      WHITESPACE@11..12 " "
+      OR_KW@12..14 "or"
+      WHITESPACE@14..15 " "
+      FIELD@15..16
+        IDENTIFIER@15..16
+          WORD@15..16 "b"
+      WHITESPACE@16..17 " "
+      OR_KW@17..19 "or"
+      WHITESPACE@19..20 " "
+      AND_EXPRESSION@20..33
+        FIELD@20..21
+          IDENTIFIER@20..21
+            WORD@20..21 "c"
+        WHITESPACE@21..22 " "
+        AND_KW@22..25 "and"
+        WHITESPACE@25..26 " "
+        FIELD@26..27
+          IDENTIFIER@26..27
+            WORD@26..27 "d"
+        WHITESPACE@27..28 " "
+        AND_KW@28..31 "and"
+        WHITESPACE@31..32 " "
+        FIELD@32..33
+          IDENTIFIER@32..33
+            WORD@32..33 "e"
+      WHITESPACE@33..34 " "
+      OR_KW@34..36 "or"
+      WHITESPACE@36..37 " "
+      BINARY_EXPRESSION@37..58
+        FIELD@37..38
+          IDENTIFIER@37..38
+            WORD@37..38 "f"
+        WHITESPACE@38..39 " "
+        PLUS@39..40 "+"
+        WHITESPACE@40..41 " "
+        FIELD@41..42
+          IDENTIFIER@41..42
+            WORD@41..42 "g"
+        WHITESPACE@42..43 " "
+        MINUS@43..44 "-"
+        WHITESPACE@44..45 " "
+        BINARY_EXPRESSION@45..58
+          FIELD@45..46
+            IDENTIFIER@45..46
+              WORD@45..46 "h"
+          WHITESPACE@46..47 " "
+          STAR@47..48 "*"
+          WHITESPACE@48..49 " "
+          FIELD@49..50
+            IDENTIFIER@49..50
+              WORD@49..50 "i"
+          WHITESPACE@50..51 " "
+          SLASH@51..52 "/"
+          WHITESPACE@52..53 " "
+          FIELD@53..54
+            IDENTIFIER@53..54
+              WORD@53..54 "j"
+          WHITESPACE@54..55 " "
+          PERCENT@55..56 "%"
+          WHITESPACE@56..57 " "
+          FIELD@57..58
+            IDENTIFIER@57..58
+              WORD@57..58 "k"

@@ -1,0 +1,29 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-syntax/cluster_selector.esql
+---
+SOURCE_FILE@0..39
+  QUERY@0..38
+    FROM_COMMAND@0..28
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..28
+        CLUSTER@5..11
+          SOURCE_TEXT@5..11 "remote"
+        COLON@11..12 ":"
+        INDEX_NAME@12..18
+          SOURCE_TEXT@12..18 "logs-*"
+        COLON_COLON@18..20 "::"
+        SELECTOR@20..28
+          SOURCE_TEXT@20..28 "failures"
+    WHITESPACE@28..29 " "
+    PIPE@29..30 "|"
+    WHITESPACE@30..31 " "
+    LIMIT_COMMAND@31..38
+      LIMIT_KW@31..36 "LIMIT"
+      WHITESPACE@36..37 " "
+      NUMBER@37..38
+        NUMBER_LIT@37..38 "1"
+  WHITESPACE@38..39 "\n"
+--- errors

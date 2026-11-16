@@ -1,0 +1,20 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/modified_clause__invalid.lucene
+---
+SourceFile@0..24
+  BooleanQuery@0..24
+    ModifiedClause@0..1
+      Required@0..1
+        Plus@0..1 "+"
+    ModifiedClause@1..24
+      Prohibited@1..2
+        Minus@1..2 "-"
+      FieldQuery@2..24
+        FieldName@2..16
+          Term@2..16 "event.category"
+        Colon@16..17 ":"
+        TermQuery@17..24
+          Term@17..24 "process"
+1..1: missing a clause (expected Term, WildcardTerm, Star, Phrase, Regexp, BareOperator, AmpAmp, PipePipe, LParen, LBracket, LBrace)

@@ -1,0 +1,43 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/line_comment__valid.cql
+---
+SOURCE_FILE@0..92
+  PIPELINE@0..72
+    AND_FILTER@0..25
+      FIELD_FILTER@0..12
+        TAG@0..5
+          TAG_TOKEN@0..5 "#host"
+        EQ@5..6 "="
+        UNQUOTED_PATTERN@6..12
+          WORD@6..12 "github"
+      WHITESPACE@12..13 " "
+      FIELD_FILTER@13..25
+        TAG@13..20
+          TAG_TOKEN@13..20 "#parser"
+        EQ@20..21 "="
+        UNQUOTED_PATTERN@21..25
+          WORD@21..25 "json"
+    WHITESPACE@25..26 " "
+    PIPE@26..27 "|"
+    WHITESPACE@27..28 " "
+    LINE_COMMENT@28..32 "// c"
+    WHITESPACE@32..33 "\n"
+    FIELD_FILTER@33..51
+      FIELD_NAME@33..42
+        WORD@33..42 "repo.name"
+      EQ@42..43 "="
+      UNQUOTED_PATTERN@43..51
+        PATTERN@43..51 "docker/*"
+    WHITESPACE@51..52 " "
+    LINE_COMMENT@52..63 "// trailing"
+    WHITESPACE@63..64 "\n"
+    PIPE@64..65 "|"
+    WHITESPACE@65..66 " "
+    FREE_TEXT@66..72
+      UNQUOTED_PATTERN@66..72
+        PATTERN@66..72 "https:"
+  WHITESPACE@72..73 " "
+  LINE_COMMENT@73..91 "//www.example.com/"
+  WHITESPACE@91..92 "\n"

@@ -1,0 +1,50 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | where by == on and has != count and kind has_any (1)\")"
+---
+SOURCE_FILE@0..56
+  QUERY@0..56
+    TABULAR_EXPRESSION@0..56
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      WHERE_OPERATOR@4..56
+        WHERE_KW@4..9 "where"
+        WHITESPACE@9..10 " "
+        AND_EXPR@10..56
+          COMPARISON_EXPR@10..18
+            NAME_REF@10..12
+              IDENT@10..12 "by"
+            WHITESPACE@12..13 " "
+            CMP_OP@13..15 "=="
+            WHITESPACE@15..16 " "
+            NAME_REF@16..18
+              IDENT@16..18 "on"
+          WHITESPACE@18..19 " "
+          AND_KW@19..22 "and"
+          WHITESPACE@22..23 " "
+          COMPARISON_EXPR@23..35
+            NAME_REF@23..26
+              IDENT@23..26 "has"
+            WHITESPACE@26..27 " "
+            CMP_OP@27..29 "!="
+            WHITESPACE@29..30 " "
+            NAME_REF@30..35
+              IDENT@30..35 "count"
+          WHITESPACE@35..36 " "
+          AND_KW@36..39 "and"
+          WHITESPACE@39..40 " "
+          IN_EXPR@40..56
+            NAME_REF@40..44
+              IDENT@40..44 "kind"
+            WHITESPACE@44..45 " "
+            SET_OP@45..52 "has_any"
+            WHITESPACE@52..53 " "
+            EXPRESSION_LIST@53..56
+              L_PAREN@53..54 "("
+              LITERAL@54..55
+                NUMBER@54..55 "1"
+              R_PAREN@55..56 ")"

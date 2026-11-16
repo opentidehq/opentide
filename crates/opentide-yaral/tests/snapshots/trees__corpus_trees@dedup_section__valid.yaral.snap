@@ -1,0 +1,42 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/dedup_section__valid.yaral
+---
+SOURCE_FILE@0..105
+  COMMENT@0..27 "// prod:dedup_section valid"
+  WHITESPACE@27..28 "\n"
+  SEARCH_QUERY@28..104
+    SEARCH_EVENTS@28..62
+      COMPARISON@28..62
+        BARE_FIELD@28..47
+          IDENT@28..36 "metadata"
+          MEMBER@36..47
+            ACCESS_DOT@36..37 "."
+            FIELD_NAME@37..47 "event_type"
+        WHITESPACE@47..48 " "
+        EQ@48..49 "="
+        WHITESPACE@49..50 " "
+        LITERAL@50..62
+          STRING@50..62 "\"USER_LOGIN\""
+    WHITESPACE@62..63 "\n"
+    DEDUP_SECTION@63..104
+      DEDUP_KW@63..68 "dedup"
+      COLON@68..69 ":"
+      WHITESPACE@69..72 "\n  "
+      BARE_FIELD@72..90
+        IDENT@72..78 "target"
+        MEMBER@78..83
+          ACCESS_DOT@78..79 "."
+          FIELD_NAME@79..83 "user"
+        MEMBER@83..90
+          ACCESS_DOT@83..84 "."
+          FIELD_NAME@84..90 "userid"
+      COMMA@90..91 ","
+      WHITESPACE@91..92 " "
+      BARE_FIELD@92..104
+        IDENT@92..101 "principal"
+        MEMBER@101..104
+          ACCESS_DOT@101..102 "."
+          FIELD_NAME@102..104 "ip"
+  WHITESPACE@104..105 "\n"
