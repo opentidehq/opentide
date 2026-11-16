@@ -181,10 +181,17 @@ pub fn env(stage: &mut Stage, target: &Path) -> Result<StepResult, String> {
     let changed = match read_text(stage, &example)? {
         Some(existing) if existing.contains("OPENTIDE_REPO_ROOT") => false,
         Some(existing) => {
-            let suffix = if existing.ends_with('\n') { "" } else { "\n" };
+            // The file's own line endings, and a line break before the new
+            // line when its last line has none.
+            let newline = jsonc::newline(&existing);
+            let suffix = if existing.is_empty() || existing.ends_with('\n') {
+                ""
+            } else {
+                newline
+            };
             stage.write(
                 &example,
-                format!("{existing}{suffix}OPENTIDE_REPO_ROOT=.\n"),
+                format!("{existing}{suffix}OPENTIDE_REPO_ROOT=.{newline}"),
             );
             true
         }
@@ -619,11 +626,27 @@ pub fn recommends_extension(stage: &Stage, target: &Path) -> bool {
 ///
 /// The existing file cannot be merged: the reason, for the warning.
 pub fn write_mcp_config(stage: &mut Stage, target: &Path, host: &str) -> Result<String, String> {
+    write_mcp_config_noting(stage, target, host).map(|(relative, _)| relative)
+}
+
+/// [`write_mcp_config`], with the warning for an `opentide` entry the file
+/// already had and that keeps fields opentide would write otherwise: re-running
+/// setup never resets a customised server (its `command`, `args`, `env`).
+///
+/// # Errors
+///
+/// As [`write_mcp_config`].
+pub fn write_mcp_config_noting(
+    stage: &mut Stage,
+    target: &Path,
+    host: &str,
+) -> Result<(String, Option<String>), String> {
     let Some((_, relative, template)) = MCP_HOSTS.iter().find(|(name, _, _)| *name == host) else {
         return Err(format!("unknown MCP host {host}"));
     };
     let template = Json::parse(template).unwrap_or(Json::Null);
     let dest = target.join(relative);
+    let mut warning = None;
     let text = if stage.is_file(&dest) {
         let existing = match stage.read(&dest) {
             Ok(Some(bytes)) => String::from_utf8(bytes)
@@ -631,12 +654,48 @@ pub fn write_mcp_config(stage: &mut Stage, target: &Path, host: &str) -> Result<
             Ok(None) => String::new(),
             Err(error) => return Err(format!("is not valid JSON ({error})")),
         };
-        jsonc::merge(&existing, &template).map_err(|error| error.to_string())?
+        let (merged, kept) = jsonc::merge_keeping_entries(&existing, &template)
+            .map_err(|error| error.to_string())?;
+        if !kept.is_empty() {
+            warning = Some(format!(
+                "{relative}: kept the opentide server's own {} (opentide writes {}); remove the entry and re-run setup mcp to reset it.",
+                kept.join(", "),
+                kept_defaults(&template, &kept)
+            ));
+        }
+        merged
     } else {
         crate::json::document_text(&template, true)
     };
     stage.write(&dest, text);
-    Ok((*relative).to_owned())
+    Ok(((*relative).to_owned(), warning))
+}
+
+/// What the template writes for each of `fields` (`command`,
+/// `env.OPENTIDE_REPO_ROOT`), in the server entry it holds.
+fn kept_defaults(template: &Json, fields: &[String]) -> String {
+    let server = match template {
+        Json::Object(members) => members.values().find_map(|servers| match servers {
+            Json::Object(entries) => entries.values().next(),
+            _ => None,
+        }),
+        _ => None,
+    };
+    fields
+        .iter()
+        .map(|field| {
+            let mut value = server;
+            for part in field.split('.') {
+                value = match value {
+                    Some(Json::Object(members)) => members.get(part),
+                    _ => None,
+                };
+            }
+            let shown = value.map_or_else(|| "nothing".to_owned(), Json::to_compact);
+            format!("{field} {shown}")
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// The warning for an MCP configuration left unchanged.
@@ -675,8 +734,11 @@ pub fn mcp(
 ) -> StepResult {
     let (mut written, mut skipped, mut warnings) = (Vec::new(), Vec::new(), Vec::new());
     for host in hosts {
-        match write_mcp_config(stage, target, host) {
-            Ok(relative) => written.push(relative),
+        match write_mcp_config_noting(stage, target, host) {
+            Ok((relative, kept)) => {
+                written.push(relative);
+                warnings.extend(kept);
+            }
             Err(problem) => {
                 let relative = MCP_HOSTS
                     .iter()
@@ -862,6 +924,59 @@ mod tests {
     }
 
     #[test]
+    fn a_customised_opentide_server_is_kept_with_a_warning() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let before = "{\n  \"mcpServers\": {\n    \"opentide\": {\n      \"command\": \"/opt/venv/bin/opentide\",\n      \"args\": [\"--repo\", \"x\", \"mcp\", \"start\"],\n      \"env\": {\"OPENTIDE_LOG\": \"debug\"}\n    }\n  }\n}\n";
+        std::fs::write(root.join(".mcp.json"), before).unwrap();
+        let mut stage = Stage::new();
+        let result = mcp(&mut stage, root, &["claude-code".into()], None);
+        assert_eq!(result.strings("files"), [".mcp.json"]);
+        let after =
+            String::from_utf8(stage.read(&root.join(".mcp.json")).unwrap().unwrap()).unwrap();
+        let value = jsonc::parse(&after).unwrap();
+        let server = &value["mcpServers"]["opentide"];
+        assert_eq!(server["command"], "/opt/venv/bin/opentide", "{after}");
+        assert_eq!(
+            server["args"],
+            serde_json::json!(["--repo", "x", "mcp", "start"]),
+            "{after}"
+        );
+        // The entry's own environment stays; what it lacks is added.
+        assert_eq!(server["env"]["OPENTIDE_LOG"], "debug", "{after}");
+        assert_eq!(
+            server["env"]["OPENTIDE_REPO_ROOT"], "${CLAUDE_PROJECT_DIR}",
+            "{after}"
+        );
+        assert_eq!(
+            result.strings("warnings"),
+            [
+                ".mcp.json: kept the opentide server's own command, args (opentide writes command \"opentide\", args [\"mcp\",\"start\"]); remove the entry and re-run setup mcp to reset it."
+            ]
+        );
+        // A second run changes nothing, and an entry as opentide writes it
+        // warns of nothing.
+        std::fs::write(root.join(".mcp.json"), &after).unwrap();
+        let mut stage = Stage::new();
+        mcp(&mut stage, root, &["claude-code".into()], None);
+        assert_eq!(
+            String::from_utf8(stage.read(&root.join(".mcp.json")).unwrap().unwrap()).unwrap(),
+            after
+        );
+        std::fs::remove_file(root.join(".mcp.json")).unwrap();
+        let mut stage = Stage::new();
+        mcp(&mut stage, root, &["claude-code".into()], None);
+        let fresh = stage.read(&root.join(".mcp.json")).unwrap().unwrap();
+        std::fs::write(root.join(".mcp.json"), fresh).unwrap();
+        let again = mcp(&mut Stage::new(), root, &["claude-code".into()], None);
+        assert!(
+            again.get("warnings").is_none(),
+            "{:?}",
+            again.get("warnings")
+        );
+    }
+
+    #[test]
     fn an_mcp_file_with_comments_is_merged_in_place() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
@@ -908,6 +1023,20 @@ mod tests {
             stage.read(&root.join(".env.example")).unwrap().unwrap(),
             b"A=1\nOPENTIDE_REPO_ROOT=.\n"
         );
+        // A CRLF file keeps CRLF, with or without its last line ended.
+        for (before, after) in [
+            ("A=1\r\n", "A=1\r\nOPENTIDE_REPO_ROOT=.\r\n"),
+            ("A=1\r\nB=2", "A=1\r\nB=2\r\nOPENTIDE_REPO_ROOT=.\r\n"),
+        ] {
+            std::fs::write(root.join(".env.example"), before).unwrap();
+            let mut stage = Stage::new();
+            env(&mut stage, root).unwrap();
+            assert_eq!(
+                String::from_utf8(stage.read(&root.join(".env.example")).unwrap().unwrap())
+                    .unwrap(),
+                after
+            );
+        }
         // One that names the root already is left alone.
         let mut stage = Stage::new();
         std::fs::write(root.join(".env.example"), "OPENTIDE_REPO_ROOT=x").unwrap();
