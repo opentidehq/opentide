@@ -5,9 +5,10 @@
 //! The lexer reads every reserved word as its keyword and the contextual ones
 //! (`every`, `first`, `cross`, `join`, `graph_*`) as names; where the grammar
 //! takes a contextual word the parser re-kinds it ([`P::bump_word`]), and
-//! where it wants a name it takes any word (in the sections).
+//! where it wants a name it takes any word ([`P::bump_name`]).
 
 mod expr;
+mod section;
 #[cfg(test)]
 mod tests;
 
@@ -20,7 +21,7 @@ use opentide_parse::{CompletedMarker, Grammar, Input, Marker, Parse, Parser, Tok
 /// Past it: one error and the rest of the input in one error node.
 const MAX_DEPTH: u32 = 1_100;
 
-const GRAMMAR: Grammar = Grammar {
+pub(crate) const GRAMMAR: Grammar = Grammar {
     eof: K::EOF.raw(),
     error: K::ERROR.raw(),
     trivia: TokenSet::new(&[K::WHITESPACE.raw(), K::COMMENT.raw()]),
@@ -31,7 +32,7 @@ const GRAMMAR: Grammar = Grammar {
 pub(crate) fn parse(source: &str) -> Parse {
     let input = Input::new(source, lex(source), GRAMMAR);
     let mut p = P(Parser::new(&input));
-    source_file(&mut p);
+    section::source_file(&mut p);
     build(&input, p.0.finish())
 }
 
@@ -109,26 +110,13 @@ impl P<'_> {
         self.nth(n) == K::IDENT && self.0.nth_text(n).eq_ignore_ascii_case(word)
     }
 
+    /// Consumes any word (a name, or a keyword spelled like one) as a name.
+    pub(crate) fn bump_name(&mut self) {
+        self.0.bump_as(K::IDENT.raw());
+    }
+
     /// Consumes the contextual word at the cursor as the keyword `kind`.
     pub(crate) fn bump_word(&mut self, kind: K) {
         self.0.bump_as(kind.raw());
     }
-}
-
-/// `SourceFile`. A search for now: its events, with no `events:` label.
-fn source_file(p: &mut P<'_>) {
-    let file = p.start();
-    if expr::at_statement_start(p) {
-        let query = p.start();
-        let events = p.start();
-        while expr::at_statement_start(p) {
-            expr::statement(p);
-        }
-        p.done(events, K::SEARCH_EVENTS);
-        p.done(query, K::SEARCH_QUERY);
-    }
-    if !p.at_eof() {
-        p.err_until("unexpected text", TokenSet::EMPTY);
-    }
-    p.done(file, K::SOURCE_FILE);
 }

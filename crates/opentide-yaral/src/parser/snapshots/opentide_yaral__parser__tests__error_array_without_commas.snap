@@ -3,7 +3,7 @@ source: crates/opentide-yaral/src/parser/tests.rs
 expression: "show(\"[\\\"a\\\" \\\"b\\\"]\")"
 ---
 SOURCE_FILE@0..9
-  SEARCH_QUERY@0..8
+  SEARCH_QUERY@0..9
     SEARCH_EVENTS@0..8
       ARRAY_EXPR@0..4
         L_BRACK@0..1 "["
@@ -12,8 +12,8 @@ SOURCE_FILE@0..9
       WHITESPACE@4..5 " "
       LITERAL@5..8
         STRING@5..8 "\"b\""
-  ERROR@8..9
-    R_BRACK@8..9 "]"
+    ERROR@8..9
+      R_BRACK@8..9 "]"
 errors:
 4..5: expected `]` (expected `]`, `,`)
-8..8: unexpected text
+8..8: expected a section such as `events:`

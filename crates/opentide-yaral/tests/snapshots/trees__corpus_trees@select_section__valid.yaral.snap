@@ -1,0 +1,42 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/select_section__valid.yaral
+---
+SOURCE_FILE@0..107
+  COMMENT@0..28 "// prod:select_section valid"
+  WHITESPACE@28..29 "\n"
+  SEARCH_QUERY@29..106
+    SEARCH_EVENTS@29..63
+      COMPARISON@29..63
+        BARE_FIELD@29..48
+          IDENT@29..37 "metadata"
+          MEMBER@37..48
+            ACCESS_DOT@37..38 "."
+            FIELD_NAME@38..48 "event_type"
+        WHITESPACE@48..49 " "
+        EQ@49..50 "="
+        WHITESPACE@50..51 " "
+        LITERAL@51..63
+          STRING@51..63 "\"USER_LOGIN\""
+    WHITESPACE@63..64 "\n"
+    SELECT_SECTION@64..106
+      SELECT_KW@64..70 "select"
+      COLON@70..71 ":"
+      WHITESPACE@71..74 "\n  "
+      BARE_FIELD@74..86
+        IDENT@74..83 "principal"
+        MEMBER@83..86
+          ACCESS_DOT@83..84 "."
+          FIELD_NAME@84..86 "ip"
+      COMMA@86..87 ","
+      WHITESPACE@87..88 " "
+      BARE_FIELD@88..106
+        IDENT@88..94 "target"
+        MEMBER@94..99
+          ACCESS_DOT@94..95 "."
+          FIELD_NAME@95..99 "user"
+        MEMBER@99..106
+          ACCESS_DOT@99..100 "."
+          FIELD_NAME@100..106 "userid"
+  WHITESPACE@106..107 "\n"

@@ -78,7 +78,7 @@ fn cross_join(p: &mut P<'_>) {
     }
     loop {
         if p.at(K::VAR_TOKEN) {
-            variable(p);
+            leaf(p, K::VARIABLE);
         } else {
             p.error("expected a variable such as `$e`");
         }
@@ -231,7 +231,7 @@ pub(super) fn field_ref(p: &mut P<'_>) -> bool {
     }
 }
 
-fn is_accessor(kind: K) -> bool {
+pub(super) fn is_accessor(kind: K) -> bool {
     matches!(kind, K::ACCESS_DOT | K::INDEX_L_BRACK)
 }
 
@@ -312,7 +312,7 @@ fn primary(p: &mut P<'_>) -> Option<CompletedMarker> {
 }
 
 /// A token wrapped in a node of `kind`.
-fn leaf(p: &mut P<'_>, kind: K) -> CompletedMarker {
+pub(super) fn leaf(p: &mut P<'_>, kind: K) -> CompletedMarker {
     let m = p.start();
     p.bump();
     p.done(m, kind)
@@ -439,7 +439,7 @@ fn if_expr(p: &mut P<'_>) -> CompletedMarker {
 }
 
 /// `[a, b,]`.
-fn array(p: &mut P<'_>) -> CompletedMarker {
+pub(super) fn array(p: &mut P<'_>) -> CompletedMarker {
     let m = p.start();
     p.bump();
     while !p.at(K::R_BRACK) {

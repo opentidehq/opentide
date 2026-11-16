@@ -3,7 +3,7 @@ source: crates/opentide-yaral/src/parser/tests.rs
 expression: "show(\"f(*)\")"
 ---
 SOURCE_FILE@0..4
-  SEARCH_QUERY@0..3
+  SEARCH_QUERY@0..4
     SEARCH_EVENTS@0..3
       BINARY_EXPR@0..3
         FUNCTION_CALL@0..2
@@ -12,10 +12,10 @@ SOURCE_FILE@0..4
           L_PAREN@1..2 "("
           ARGUMENTS@2..2
         STAR@2..3 "*"
-  ERROR@3..4
-    R_PAREN@3..4 ")"
+    ERROR@3..4
+      R_PAREN@3..4 ")"
 errors:
 2..2: expected an expression (expected `)`)
 2..2: expected `)` (expected `)`, `,`)
 3..3: expected an expression
-3..3: unexpected text
+3..3: expected a section such as `events:`

@@ -3,13 +3,13 @@ source: crates/opentide-yaral/src/parser/tests.rs
 expression: "show(\"$a, $b\")"
 ---
 SOURCE_FILE@0..6
-  SEARCH_QUERY@0..2
+  SEARCH_QUERY@0..6
     SEARCH_EVENTS@0..2
       VARIABLE@0..2
         VAR_TOKEN@0..2 "$a"
-  ERROR@2..6
-    COMMA@2..3 ","
-    WHITESPACE@3..4 " "
-    VAR_TOKEN@4..6 "$b"
+    ERROR@2..6
+      COMMA@2..3 ","
+      WHITESPACE@3..4 " "
+      VAR_TOKEN@4..6 "$b"
 errors:
-2..2: unexpected text
+2..2: expected a section such as `events:`

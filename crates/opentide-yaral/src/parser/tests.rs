@@ -49,6 +49,16 @@ snapshots! {
 }
 
 snapshots! {
+    rule_with_every_section: "rule r {\n meta: author = \"a\" n = 1 d = 5m ok = true ref = x\n events: $e.a = 1\n match: $e.u over 5m before $e\n outcome: $risk_score = max($e.s)\n condition: #e > 1 and $e\n options: allow_zero_values = true\n export: $e.a\n}";
+    keywords_as_names_and_in_any_case: "RULE Limit { META: And = 1 EVENTS: $e CONDITION: $e }";
+    two_rules: "rule a { events: $e } rule b { events: $f }";
+    search_with_stages: "stage s { $e.x = 1 match: $e.x over 1h } $e.y = 2 order: $e.y desc limit: 10";
+    search_sections: "dedup: a, b select: c, d unselect: e order: f asc, g";
+    setup_section: "rule r { setup: graph_override ($a = $b) graph_exclude ($c) graph_append [$g, %t] cross join $a }";
+    match_windows: "match: $a, b.c by first every 1 hour after $p";
+}
+
+snapshots! {
     error_missing_operand: "$a = ";
     error_trailing_operator: "$a or";
     error_unclosed_paren: "($a = 1";
@@ -65,6 +75,15 @@ snapshots! {
     error_if_arity: "if($a)";
     error_quantifier_alone: "any [$a]";
     error_cross_without_join: "cross $a";
+    error_unclosed_rule: "rule r { events: $e";
+    error_unclosed_rule_before_the_next: "rule r { events: $e rule s { events: $f }";
+    error_stray_text_in_a_rule: "rule r { events: $e, $f condition: $e }";
+    error_keyword_meta_key: "rule r { meta: limit = 1 }";
+    error_label_without_colon: "rule r { events $e }";
+    error_window_without_unit: "rule r { match: $a over 5 }";
+    error_stages_only: "stage a { $e }";
+    error_text_after_the_rules: "rule r { } garbage";
+    error_missing_rule_name: "rule { }";
 }
 
 #[test]

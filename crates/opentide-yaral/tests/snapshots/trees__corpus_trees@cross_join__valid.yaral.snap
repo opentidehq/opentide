@@ -1,0 +1,100 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/cross_join__valid.yaral
+---
+SOURCE_FILE@0..237
+  COMMENT@0..24 "// prod:cross_join valid"
+  WHITESPACE@24..25 "\n"
+  SEARCH_QUERY@25..236
+    STAGE@25..116
+      STAGE_KW@25..30 "stage"
+      WHITESPACE@30..31 " "
+      STAGE_NAME@31..42
+        IDENT@31..42 "total_users"
+      WHITESPACE@42..43 " "
+      L_BRACE@43..44 "{"
+      WHITESPACE@44..47 "\n  "
+      OUTCOME_SECTION@47..99
+        OUTCOME_KW@47..54 "outcome"
+        COLON@54..55 ":"
+        WHITESPACE@55..60 "\n    "
+        COMPARISON@60..99
+          VARIABLE@60..66
+            VAR_TOKEN@60..66 "$count"
+          WHITESPACE@66..67 " "
+          EQ@67..68 "="
+          WHITESPACE@68..69 " "
+          FUNCTION_CALL@69..99
+            FUNCTION_NAME@69..74
+              IDENT@69..74 "count"
+            L_PAREN@74..75 "("
+            ARGUMENTS@75..98
+              UDM_FIELD@75..98
+                VARIABLE@75..93
+                  VAR_TOKEN@75..93 "$user_login_counts"
+                MEMBER@93..98
+                  ACCESS_DOT@93..94 "."
+                  FIELD_NAME@94..98 "user"
+            R_PAREN@98..99 ")"
+      WHITESPACE@99..102 "\n  "
+      LIMIT_SECTION@102..114
+        LIMIT_KW@102..107 "limit"
+        COLON@107..108 ":"
+        WHITESPACE@108..113 "\n    "
+        INTEGER@113..114 "1"
+      WHITESPACE@114..115 "\n"
+      R_BRACE@115..116 "}"
+    WHITESPACE@116..117 "\n"
+    SEARCH_EVENTS@117..160
+      CROSS_JOIN@117..160
+        CROSS_KW@117..122 "cross"
+        WHITESPACE@122..123 " "
+        JOIN_KW@123..127 "join"
+        WHITESPACE@127..128 " "
+        VARIABLE@128..140
+          VAR_TOKEN@128..140 "$total_users"
+        COMMA@140..141 ","
+        WHITESPACE@141..142 " "
+        VARIABLE@142..160
+          VAR_TOKEN@142..160 "$user_login_counts"
+    WHITESPACE@160..161 "\n"
+    OUTCOME_SECTION@161..236
+      OUTCOME_KW@161..168 "outcome"
+      COLON@168..169 ":"
+      WHITESPACE@169..172 "\n  "
+      COMPARISON@172..236
+        VARIABLE@172..178
+          VAR_TOKEN@172..178 "$share"
+        WHITESPACE@178..179 " "
+        EQ@179..180 "="
+        WHITESPACE@180..181 " "
+        BINARY_EXPR@181..236
+          FUNCTION_CALL@181..210
+            FUNCTION_NAME@181..184
+              IDENT@181..184 "max"
+            L_PAREN@184..185 "("
+            ARGUMENTS@185..209
+              UDM_FIELD@185..209
+                VARIABLE@185..203
+                  VAR_TOKEN@185..203 "$user_login_counts"
+                MEMBER@203..209
+                  ACCESS_DOT@203..204 "."
+                  FIELD_NAME@204..209 "count"
+            R_PAREN@209..210 ")"
+          WHITESPACE@210..211 " "
+          SLASH@211..212 "/"
+          WHITESPACE@212..213 " "
+          FUNCTION_CALL@213..236
+            FUNCTION_NAME@213..216
+              IDENT@213..216 "max"
+            L_PAREN@216..217 "("
+            ARGUMENTS@217..235
+              UDM_FIELD@217..235
+                VARIABLE@217..229
+                  VAR_TOKEN@217..229 "$total_users"
+                MEMBER@229..235
+                  ACCESS_DOT@229..230 "."
+                  FIELD_NAME@230..235 "count"
+            R_PAREN@235..236 ")"
+  WHITESPACE@236..237 "\n"
