@@ -99,6 +99,8 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Changed
 
+- **Falco conditions are highlighted by opentide's own parser** ([#1223](https://github.com/opentidehq/opentide/issues/1223)). The editor's colours, hover and the fields a condition names come from a parser written in Rust instead of a tree-sitter grammar. They are the same on every condition: a comparison of the two over the repository's conditions and hundreds of thousands of variations of them found no difference. On a condition with a syntax error, the colours after the error can differ. What `opentide validate` reports is unchanged.
+
 #### The Rust core
 - **The command line, MCP server, language server, `opentide tui` and `opentide serve` run on one Rust core** ([#790](https://github.com/opentidehq/opentide/issues/790), [#841](https://github.com/opentidehq/opentide/issues/841)). Every command keeps its options, `--json` documents, files, exit codes and `failure.code`s; each difference from the Python implementation was compared and approved, and is listed in this section. The npm package's `opentide` and `cargo install opentide --features cli` run the same program ([The implementation](docs/cli/json-output.md#the-implementation)).
   - **A crash names the build**: the crash log and the issue link say `build: rust (<target>)` where they said `python:`, and a panic reads `error[internal]: panic: <message>`.

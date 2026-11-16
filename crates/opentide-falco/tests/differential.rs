@@ -3,10 +3,10 @@
 //! Falco condition in the repository's corpora, every prefix, seeded token
 //! mutations and random sentences.
 //!
-//! What tree-sitter did here is highlight (the spans of `highlights.scm`) and
-//! `fields()`. Diagnostics, hover and completions read libsinsp's parser
-//! (`src/parser.rs`), not a tree, so they are the same code on both sides and
-//! not compared.
+//! What tree-sitter did here is highlight (the spans of `highlights.scm`),
+//! `fields()` and the node `hover` reads (compared at sampled offsets).
+//! Diagnostics and completions read libsinsp's parser (`src/parser.rs`), not a
+//! tree, so they are the same code on both sides and not compared.
 //!
 //! Gates: a condition whose tree-sitter parse has no error gives identical
 //! highlight spans and fields, and a clean tree from the new parser; a
@@ -289,6 +289,25 @@ impl Engine for Old {
             ("fields".to_owned(), format!("{:?}", legacy::fields(input))),
         ]
     }
+
+    fn observe_at(&self, input: &str, offset: usize) -> Surfaces {
+        hover_surface(legacy::hover_target(input, offset))
+    }
+}
+
+/// What `hover` dispatches on. Text with whitespace in it names nothing
+/// `hover` knows (no field, list, macro or keyword holds a space), so only
+/// that it is such text is compared: tree-sitter and the new tree attach the
+/// whitespace at the edges of the text to different nodes.
+fn hover_surface(target: Option<(&str, String)>) -> Surfaces {
+    let target = target.map(|(kind, word)| {
+        if word.chars().any(char::is_whitespace) {
+            ("other", "<spaced>".to_owned())
+        } else {
+            (kind, word)
+        }
+    });
+    vec![("hover".to_owned(), format!("{target:?}"))]
 }
 
 /// The pure-Rust engine, through the crate's public functions.
@@ -314,6 +333,10 @@ impl Engine for New {
                 format!("{:?}", opentide_falco::tree_fields(input)),
             ),
         ]
+    }
+
+    fn observe_at(&self, input: &str, offset: usize) -> Surfaces {
+        hover_surface(opentide_falco::hover_target(input, offset))
     }
 }
 

@@ -30,13 +30,9 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
-use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, Range, Severity, codes, span_to_range,
-};
+use opentide_core::{ByteSpan, CompletionItem, Diagnostic, Range, Severity, codes, span_to_range};
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
-use opentide_syntax::parse as ts_parse;
 use std::collections::{BTreeMap, BTreeSet};
-use tree_sitter::Node;
 
 mod cst;
 mod syntax;
@@ -48,7 +44,7 @@ pub mod parser;
 
 pub use catalog::{Catalog, DEFAULT_SOURCE, Field, Kind, Lookup};
 #[doc(hidden)]
-pub use cst::{debug_parse, highlight_captures, tree_fields, tree_has_error};
+pub use cst::{debug_parse, highlight_captures, hover_target, tree_fields, tree_has_error};
 
 /// The operators a modifier (`oneof`, `anyof`, `allof`) can follow: Falco's
 /// `cmpop_supports_modifier`.
@@ -791,27 +787,16 @@ fn range(text: &str, span: ByteSpan) -> Range {
     span_to_range(text, span)
 }
 
-fn node_text<'a>(node: Node, text: &'a str) -> &'a str {
-    text.get(node.start_byte()..node.end_byte()).unwrap_or("")
-}
-
 fn highlight(spec: &HighlightSpec, text: &str, ctx: &Context) -> Vec<HighlightToken> {
-    let Ok(spans) = opentide_syntax::query_captures(
-        LanguageId::Falco,
-        text,
-        opentide_highlight::FALCO_HIGHLIGHTS_SCM,
-    ) else {
-        return Vec::new();
-    };
     // A bare value-list item that names a list is a reference, not text.
-    let refs: Vec<(ByteSpan, &str)> = spans
-        .iter()
+    let refs: Vec<(ByteSpan, &str)> = highlight_captures(text)
+        .into_iter()
         .map(|(span, capture)| {
             let raw = text.get(span.start..span.end).unwrap_or("");
             if capture == "string" && ctx.is_list(raw) {
-                (*span, "variable")
+                (span, "variable")
             } else {
-                (*span, capture.as_str())
+                (span, capture)
             }
         })
         .collect();
@@ -820,20 +805,7 @@ fn highlight(spec: &HighlightSpec, text: &str, ctx: &Context) -> Vec<HighlightTo
 
 /// Every field a condition mentions, in source order, deduplicated.
 pub fn fields(text: &str) -> Vec<String> {
-    let Some(tree) = ts_parse(LanguageId::Falco, text) else {
-        return Vec::new();
-    };
-    let mut seen = BTreeSet::new();
-    let mut out = Vec::new();
-    opentide_syntax::walk_with_ancestors(tree.root_node(), |node, _| {
-        if node.kind() == "field_name" {
-            let name = node_text(node, text).to_string();
-            if seen.insert(name.clone()) {
-                out.push(name);
-            }
-        }
-    });
-    out
+    tree_fields(text)
 }
 
 // ---------------------------------------------------------------------------
@@ -1077,11 +1049,10 @@ pub fn hover(text: &str, offset: usize, ctx: &Context) -> Option<String> {
     if !text.is_char_boundary(offset) {
         return None;
     }
-    let tree = ts_parse(LanguageId::Falco, text)?;
-    let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
-    let word = node_text(node, text);
+    let (kind, word) = hover_target(text, offset)?;
+    let word = word.as_str();
     let catalog = Catalog::cached();
-    match node.kind() {
+    match kind {
         "field_name" => field_hover(word, ctx),
         "identifier" | "bare_string" => {
             if let Some(condition) = ctx.macros.get(word) {
@@ -1095,7 +1066,7 @@ pub fn hover(text: &str, offset: usize, ctx: &Context) -> Option<String> {
                     items.join(", ")
                 ));
             }
-            if node.kind() == "identifier"
+            if kind == "identifier"
                 && let Some(m) = catalog.macros.get(word)
             {
                 return Some(format!(
