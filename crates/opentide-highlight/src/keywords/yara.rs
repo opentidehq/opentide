@@ -1,6 +1,62 @@
-//! YARA.
+//! YARA (YARA-X's grammar): the words and punctuation the TextMate grammar
+//! lists. The words that only a position makes a keyword (`all`, `any`, `them`,
+//! the string modifiers) and the division operator are not here, as they were not
+//! in `highlights.scm`: the generated grammar is byte for byte what it was.
+//! `opentide-yara`'s `cst.rs` colours every token and checks its table.
 
-use super::Keywords;
+use super::{Capture, Keywords};
 
-/// `None` until the engine moves to `opentide-parse`.
-pub(super) const KEYWORDS: Option<Keywords> = None;
+pub(super) const KEYWORDS: Option<Keywords> = Some(&[
+    ("xor", Capture::KEYWORD),
+    ("base64", Capture::KEYWORD),
+    ("base64wide", Capture::KEYWORD),
+    ("~", Capture::OPERATOR),
+    ("rule", Capture::KEYWORD),
+    ("meta", Capture::KEYWORD),
+    ("strings", Capture::KEYWORD),
+    ("condition", Capture::KEYWORD),
+    ("import", Capture::KEYWORD),
+    ("include", Capture::KEYWORD),
+    ("and", Capture::KEYWORD),
+    ("or", Capture::KEYWORD),
+    ("not", Capture::KEYWORD),
+    ("defined", Capture::KEYWORD),
+    ("at", Capture::KEYWORD),
+    ("in", Capture::KEYWORD),
+    ("of", Capture::KEYWORD),
+    ("for", Capture::KEYWORD),
+    ("matches", Capture::KEYWORD),
+    ("contains", Capture::KEYWORD),
+    ("icontains", Capture::KEYWORD),
+    ("startswith", Capture::KEYWORD),
+    ("istartswith", Capture::KEYWORD),
+    ("endswith", Capture::KEYWORD),
+    ("iendswith", Capture::KEYWORD),
+    ("iequals", Capture::KEYWORD),
+    ("==", Capture::OPERATOR),
+    ("!=", Capture::OPERATOR),
+    ("<", Capture::OPERATOR),
+    ("<=", Capture::OPERATOR),
+    (">", Capture::OPERATOR),
+    (">=", Capture::OPERATOR),
+    ("+", Capture::OPERATOR),
+    ("-", Capture::OPERATOR),
+    ("*", Capture::OPERATOR),
+    ("%", Capture::OPERATOR),
+    ("&", Capture::OPERATOR),
+    ("|", Capture::OPERATOR),
+    ("^", Capture::OPERATOR),
+    ("<<", Capture::OPERATOR),
+    (">>", Capture::OPERATOR),
+    ("=", Capture::OPERATOR),
+    ("..", Capture::OPERATOR),
+    ("(", Capture::BRACKET),
+    (")", Capture::BRACKET),
+    ("[", Capture::BRACKET),
+    ("]", Capture::BRACKET),
+    ("{", Capture::BRACKET),
+    ("}", Capture::BRACKET),
+    (",", Capture::DELIMITER),
+    (":", Capture::DELIMITER),
+    (".", Capture::DELIMITER),
+]);

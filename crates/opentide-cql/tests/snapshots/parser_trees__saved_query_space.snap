@@ -1,0 +1,21 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..8
+  PIPELINE@0..8
+    SAVED_QUERY@0..8
+      DOLLAR@0..1 "$"
+      SAVED_QUERY_NAME@1..2
+        SAVED_QUERY_NAME_TOKEN@1..2 "q"
+      WHITESPACE@2..3 " "
+      L_PAREN@3..4 "("
+      SAVED_QUERY_ARGUMENT@4..7
+        ARGUMENT_NAME@4..5
+          WORD@4..5 "a"
+        EQ@5..6 "="
+        UNQUOTED_PATTERN@6..7
+          WORD@6..7 "b"
+      R_PAREN@7..8 ")"
+
+2..3: expected `(` directly after the saved query name

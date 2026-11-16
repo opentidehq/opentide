@@ -1741,6 +1741,10 @@ exit: 0
       "meaning": "libyara 4.5 compiles this YARA but YARA-X 1.x refuses it."
     },
     {
+      "code": "yara_x_only_syntax",
+      "meaning": "This YARA uses syntax only YARA-X has, and the platform profile has yara_x_syntax refused: the platform may not accept it."
+    },
+    {
       "code": "yaral_condition_shape",
       "meaning": "The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event."
     },
@@ -1877,13 +1881,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "466 diagnostic codes",
+  "message": "467 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 466
+    "codes": 467
   }
 }
 

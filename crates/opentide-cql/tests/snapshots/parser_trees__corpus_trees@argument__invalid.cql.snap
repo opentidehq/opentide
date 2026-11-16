@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/argument__invalid.cql
+---
+SOURCE_FILE@0..38
+  PIPELINE@0..37
+    FUNCTION_CALL@0..37
+      FUNCTION_NAME@0..7
+        FUNCTION_NAME_TOKEN@0..7 "groupBy"
+      L_PAREN@7..8 "("
+      ARGUMENT_LIST@8..36
+        ARGUMENT@8..19
+          FIELD_NAME@8..19
+            WORD@8..19 "status_code"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        NAMED_ARGUMENT@21..35
+          ARGUMENT_NAME@21..29
+            WORD@21..29 "function"
+          EQ@29..30 "="
+          FIELD_NAME@30..35
+            WORD@30..35 "count"
+        COMMA@35..36 ","
+        ARGUMENT@36..36
+      R_PAREN@36..37 ")"
+  WHITESPACE@37..38 "\n"
+
+36..36: expected an argument

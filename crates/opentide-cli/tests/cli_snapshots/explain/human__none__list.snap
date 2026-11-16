@@ -837,6 +837,9 @@ exit: 0
 ␛[1myara_unreferenced_string                  ␛[0mA YARA string is never used in the condition, which
                                           libyara refuses unless the condition uses them.
 ␛[1myara_x_incompatible                       ␛[0mlibyara 4.5 compiles this YARA but YARA-X 1.x refuses it.
+␛[1myara_x_only_syntax                        ␛[0mThis YARA uses syntax only YARA-X has, and the platform
+                                          profile has yara_x_syntax refused: the platform may not
+                                          accept it.
 ␛[1myaral_condition_shape                     ␛[0mThe condition is not one Google compiles: `not` or a comma
                                           on event terms, `or` across too many event variables or in
                                           an unbounded condition, or non-existence without a window
@@ -905,6 +908,6 @@ exit: 0
 ␛[1myaral_unknown_udm_field                   ␛[0mThe field path is not in the Unified Data Model.
 ␛[1myaral_window_bound                        ␛[0m`window_start` or `window_end` is used in `events`, or in
                                           a rule or search with no `match` window.
-␛[1m␛[32m✓␛[0m 466 diagnostic codes
+␛[1m␛[32m✓␛[0m 467 diagnostic codes
 
 ━━━ stderr · empty

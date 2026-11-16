@@ -2842,11 +2842,14 @@ dependencies = [
 name = "opentide-eql"
 version = "0.12.0"
 dependencies = [
+ "logos",
  "opentide-core",
  "opentide-ecs",
  "opentide-highlight",
  "opentide-lucene",
+ "opentide-parse",
  "opentide-syntax",
+ "rowan",
  "serde",
  "toml",
  "tree-sitter",

@@ -1,0 +1,37 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/case_branch__invalid.cql
+---
+SOURCE_FILE@0..28
+  PIPELINE@0..27
+    CASE_STATEMENT@0..27
+      CASE_KW@0..4 "case"
+      WHITESPACE@4..5 " "
+      L_BRACE@5..6 "{"
+      WHITESPACE@6..7 " "
+      CASE_BRANCH@7..21
+        PIPELINE@7..21
+          FIELD_FILTER@7..19
+            FIELD_NAME@7..13
+              WORD@7..13 "HookId"
+            WHITESPACE@13..14 " "
+            EQ@14..15 "="
+            WHITESPACE@15..16 " "
+            STRING@16..19
+              STRING_TOKEN@16..19 "\"0\""
+          WHITESPACE@19..20 " "
+          PIPE@20..21 "|"
+      WHITESPACE@21..22 " "
+      SEMI@22..23 ";"
+      WHITESPACE@23..24 " "
+      CASE_BRANCH@24..25
+        PIPELINE@24..25
+          FREE_TEXT@24..25
+            UNQUOTED_PATTERN@24..25
+              PATTERN@24..25 "*"
+      WHITESPACE@25..26 " "
+      R_BRACE@26..27 "}"
+  WHITESPACE@27..28 "\n"
+
+21..22: expected a step

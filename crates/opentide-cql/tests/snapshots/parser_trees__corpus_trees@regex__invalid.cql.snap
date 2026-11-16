@@ -1,0 +1,18 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/regex__invalid.cql
+---
+SOURCE_FILE@0..27
+  PIPELINE@0..26
+    FIELD_FILTER@0..26
+      FIELD_NAME@0..13
+        WORD@0..13 "ImageFileName"
+      EQ@13..14 "="
+      REGEX@14..26
+        SLASH@14..15 "/"
+        REGEX_PATTERN@15..26
+          REGEX_PATTERN_TOKEN@15..26 "\\\\cmd\\.exe$"
+  WHITESPACE@26..27 "\n"
+
+26..27: the regular expression is never closed (expected SLASH)
