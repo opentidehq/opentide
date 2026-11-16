@@ -1,0 +1,1 @@
+index=a | notacommand x | stats count by host

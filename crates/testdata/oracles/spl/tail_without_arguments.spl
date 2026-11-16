@@ -1,0 +1,1 @@
+index=a | tail | stats count by host
