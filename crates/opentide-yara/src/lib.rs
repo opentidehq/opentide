@@ -33,6 +33,7 @@
 mod atoms;
 pub mod catalog;
 mod check;
+mod cst;
 pub mod editor;
 pub mod regexp;
 mod syntax;
@@ -40,11 +41,11 @@ mod syntax;
 /// The parser's parenthesis pairs of `source`, for the range tests.
 #[doc(hidden)]
 pub fn paren_pairs(source: &str) -> Vec<(usize, usize)> {
-    syntax::paren_pairs(source)
+    cst::paren_pairs(source)
 }
 
-use opentide_core::{ByteSpan, Diagnostic, LanguageId, LineIndex, Range, Severity, codes};
-use opentide_highlight::{HighlightSpec, HighlightToken, YARA_HIGHLIGHTS_SCM, tokens_from_spans};
+use opentide_core::{Diagnostic, LineIndex, Range, Severity, codes};
+use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use yara_x_parser::Parser;
 use yara_x_parser::ast::AST;
 
@@ -58,6 +59,20 @@ pub enum Dialect {
     /// YARA-X 1.x: its syntax is accepted, and `yara_x_incompatible` is an
     /// error.
     YaraX,
+}
+
+/// Whether the platform takes syntax only YARA-X has (`with`, digit
+/// separators, float meta values, `\"\"\"` strings, booleans in `of` tuples, hex or octal
+/// jump bounds, `.len()`). While `Refused`, using it is the error
+/// `yara_x_only_syntax`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum YaraXSyntax {
+    /// YARA-X's syntax is the language: a raw `.yar` file.
+    #[default]
+    Allowed,
+    /// The platform's engine is not known to take it: the profile's start.
+    Refused,
 }
 
 /// A platform's YARA profile (yara-1.0 "Platform profiles").
@@ -93,11 +108,12 @@ impl Profile {
 }
 
 /// Where the signature runs. A raw `.yar` file has no profile: libyara 4.5,
-/// no module set to confirm, no recommended meta.
+/// YARA-X syntax allowed, no module set to confirm, no recommended meta.
 #[derive(Debug, Clone, Default)]
 pub struct Context {
     pub dialect: Dialect,
     pub profile: Option<Profile>,
+    pub yara_x_syntax: YaraXSyntax,
 }
 
 impl Context {
@@ -112,6 +128,7 @@ impl Context {
         Self {
             dialect,
             profile: Some(profile),
+            yara_x_syntax: data.yara_x_syntax,
         }
     }
 }
@@ -305,18 +322,13 @@ fn profile_findings(source: &str, ctx: &Context) -> Vec<Finding> {
     out
 }
 
-/// Semantic tokens from the tree-sitter grammar and `highlights.scm`. The
-/// grammar only colours; verdicts are `yara-x-parser`'s.
+/// Semantic tokens from `yara-x-parser`'s CST: every token's capture is
+/// decided by its kind and the node around it (`cst.rs`).
 pub fn highlight(source: &str) -> Vec<HighlightToken> {
     let Ok(spec) = HighlightSpec::load() else {
         return Vec::new();
     };
-    let Ok(spans) = opentide_syntax::query_captures(LanguageId::Yara, source, YARA_HIGHLIGHTS_SCM)
-    else {
-        return Vec::new();
-    };
-    let spans: Vec<(ByteSpan, &str)> = spans.iter().map(|(s, c)| (*s, c.as_str())).collect();
-    tokens_from_spans(&spec, source, &spans).unwrap_or_default()
+    tokens_from_spans(&spec, source, &cst::highlight_spans(source)).unwrap_or_default()
 }
 
 /// Format a YARA signature with `yara-x-fmt`'s defaults. `None` when the text

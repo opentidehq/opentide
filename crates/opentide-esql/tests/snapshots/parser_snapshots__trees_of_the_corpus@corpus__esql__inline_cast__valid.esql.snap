@@ -1,0 +1,47 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/inline_cast__valid.esql
+---
+SOURCE_FILE@0..91
+  COMMENT@0..25 "// prod:inline_cast valid"
+  WHITESPACE@25..26 "\n"
+  QUERY@26..90
+    FROM_COMMAND@26..50
+      FROM_KW@26..30 "FROM"
+      WHITESPACE@30..31 " "
+      INDEX_PATTERN@31..37
+        INDEX_NAME@31..37
+          SOURCE_TEXT@31..37 "logs-*"
+      WHITESPACE@37..38 " "
+      METADATA@38..50
+        METADATA_KW@38..46 "METADATA"
+        WHITESPACE@46..47 " "
+        METADATA_FIELD@47..50
+          SOURCE_TEXT@47..50 "_id"
+    WHITESPACE@50..51 "\n"
+    PIPE@51..52 "|"
+    WHITESPACE@52..53 " "
+    EVAL_COMMAND@53..90
+      EVAL_KW@53..57 "EVAL"
+      WHITESPACE@57..58 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@58..90
+        QUALIFIED_NAME@58..62
+          IDENTIFIER@58..62
+            IDENT@58..62 "port"
+        WHITESPACE@62..63 " "
+        EQ@63..64 "="
+        WHITESPACE@64..65 " "
+        INLINE_CAST@65..90
+          QUALIFIED_NAME@65..81
+            IDENTIFIER@65..76
+              IDENT@65..76 "destination"
+            DOT@76..77 "."
+            IDENTIFIER@77..81
+              IDENT@77..81 "port"
+          COLON_COLON@81..83 "::"
+          TYPE_NAME@83..90
+            IDENTIFIER@83..90
+              IDENT@83..90 "integer"
+  WHITESPACE@90..91 "\n"
+--- errors

@@ -1,0 +1,194 @@
+// YARA-L 2.0 (Google Security Operations rules and searches): the shape of
+// the tree the parser on `opentide-parse` builds (epic #1219, #1227), read as
+// the spec of the grammar beside `specs/languages/yara-l-1.0.md`. `cargo xtask
+// codegen` turns it into the typed AST over rowan.
+//
+// Conventions
+// - A node is a CamelCase name; its `SyntaxKind` is the UPPER_SNAKE of it.
+//   `A = B | C` is a choice of nodes: it is not a node of the tree.
+// - A token is written as its text (`'rule'`, `'('`) or, for a class of
+//   them, by name: `'ident'` (a name; a keyword in a name position is read as
+//   one), `'field_name'` (a segment after `.`, whatever it is spelled like),
+//   `'variable'` (`$e`), `'count_ref'` (`#e`), `'reference_list'` (`%list`),
+//   `'string'`, `'raw_string'` (backquoted), `'regex_lit'` (`/re/`), `'integer'`,
+//   `'float'`, `'duration'` (`10m`).
+// - `'.'` is a dot written with no blank before it, after a variable, a name
+//   or `]` (a path); `'table_dot'` is the dot of `%table.column`.
+//   `'index_bracket'` is the `[` of a path's index (no blank before it);
+//   `'['` opens an array.
+// - Keywords are case-insensitive. `every`, `first`, `cross`, `join` and
+//   `graph_*` are keywords only where the grammar takes them: the lexer reads
+//   them as names and the parser re-kinds them.
+// - `or`, `and` and `+`/`*` chains are one flat n-ary node.
+// - Statements are written one after the other (a blank, a newline); the
+//   engine joins the predicates of `events` with an implicit `and`.
+// - Comments and whitespace are trivia tokens, in no rule.
+// - Broken input is an `Error` node in place, in no rule.
+
+// A rule file holds rules; any other text is a search (with or without
+// `stage` blocks and an `events:` label).
+SourceFile = RuleDeclaration* SearchQuery?
+
+RuleDeclaration = 'rule' RuleName '{' Section* '}'
+RuleName = 'ident'
+
+Section =
+  MetaSection
+| SetupSection
+| EventsSection
+| MatchSection
+| OutcomeSection
+| ConditionSection
+| OptionsSection
+| ExportSection
+| DedupSection
+| OrderSection
+| LimitSection
+| SelectSection
+| UnselectSection
+
+// ------------------------------------------------------------- sections
+
+MetaSection = 'meta' ':' MetaEntry*
+MetaEntry = MetaKey '=' value:SettingValue
+MetaKey = 'ident'
+SettingValue = Literal | NameRef
+
+OptionsSection = 'options' ':' OptionEntry*
+OptionEntry = OptionKey '=' value:SettingValue
+OptionKey = 'ident'
+
+SetupSection = 'setup' ':' (GraphOperation | Statement)*
+// `graph_override (join)`, `graph_exclude (join)`, `graph_append [$g, %t]`.
+GraphOperation = GraphJoin | GraphAppend
+GraphJoin = name:('graph_override' | 'graph_exclude') '(' join:Expr ')'
+GraphAppend = 'graph_append' terms:ArrayExpr
+
+EventsSection = 'events' ':' Statement*
+OutcomeSection = 'outcome' ':' Statement*
+ConditionSection = 'condition' ':' Statement*
+ExportSection = 'export' ':' Statement*
+
+MatchSection = 'match' ':' MatchClause?
+MatchClause = FieldRef (',' FieldRef)* MatchWindow?
+FieldRef = Variable | UdmField | BareField
+// `over 5m`, `by 1h`, `over 5m before $pivot`; a search also takes
+// `over every`, `by first` and a unit word (`by day`, `by 1 hour`).
+MatchWindow =
+  kind:('over' | 'by') 'every'? 'first'?
+  ('duration' | 'integer'? TimeUnit)
+  (direction:('before' | 'after') pivot:Variable)?
+TimeUnit = 'ident'
+
+DedupSection = 'dedup' ':' (Expr (',' Expr)*)?
+OrderSection = 'order' ':' (OrderItem (',' OrderItem)*)?
+OrderItem = value:Expr direction:('asc' | 'desc')?
+LimitSection = 'limit' ':' 'integer'?
+SelectSection = 'select' ':' (Expr (',' Expr)*)?
+UnselectSection = 'unselect' ':' (Expr (',' Expr)*)?
+
+// ------------------------------------------------------------- searches
+
+// Stages, then the events of the root stage (with no `events:` label), then
+// its other sections.
+SearchQuery = Stage* SearchEvents? Section*
+SearchEvents = Statement*
+Stage = 'stage' StageName '{' SearchEvents? Section* '}'
+StageName = 'ident'
+
+// `cross join $total, $per_user`.
+CrossJoin = 'cross' 'join' Variable (',' Variable)*
+
+// ---------------------------------------------------------- expressions
+
+Statement = Expr | CrossJoin
+
+Expr =
+  OrExpr
+| AndExpr
+| NotExpr
+| Comparison
+| InExpr
+| BinaryExpr
+| UnaryExpr
+| OfExpr
+| ParenExpr
+| QuantifiedField
+| UdmField
+| BareField
+| Variable
+| CountRef
+| FunctionCall
+| IfExpr
+| TableCall
+| ReferenceList
+| DataTableColumn
+| ArrayExpr
+| Literal
+| WindowBound
+| NameRef
+
+OrExpr = Expr ('or' Expr)*
+AndExpr = Expr ('and' Expr)*
+NotExpr = 'not' operand:Expr
+
+// `$e.a = "x" nocase`, with a regex, a list or another field on the right.
+Comparison = left:Expr op:('=' | '!=' | '<' | '<=' | '>' | '>=') right:Expr 'nocase'?
+
+// `$e.a in %list`, `in regex %list`, `in cidr %list`, `in %table.column`: the
+// right side is a ReferenceList or a DataTableColumn.
+InExpr = left:Expr 'in' kind:('regex' | 'cidr')? right:Expr 'nocase'?
+
+// One run of `+ -` or of `* / %`: `a + b + c` is one node.
+BinaryExpr = Expr (op:('+' | '-' | '*' | '/' | '%') Expr)*
+UnaryExpr = op:('-' | '!') operand:Expr
+
+// `any of [$a, $b]`, `all of [...]`, `2 of [...]`.
+OfExpr = quantifier:('any' | 'all' | 'integer') 'of' terms:ArrayExpr
+ParenExpr = '(' Expr ')'
+
+// `any $e.ip = "x"`, `all $e.ip != "x"`: a repeated field's quantifier.
+QuantifiedField = quantifier:('any' | 'all') field:FieldRef
+
+// `$e.metadata.event_type`, `$e.additional.fields["k"]`, `$e.target.ip[0]`.
+UdmField = Variable Accessor*
+// A search names fields with no event variable: `principal.hostname`,
+// `labels["k"]`.
+BareField = root:'ident' Accessor*
+Accessor = Member | Index
+Member = '.' 'field_name'
+Index = 'index_bracket' key:('string' | 'raw_string' | 'integer') ']'
+
+// `strings.to_lower(x)`, `count(x)`, `re.regex($e.f, /x/) nocase`.
+FunctionCall = FunctionName '(' Arguments? ')' 'nocase'?
+// A namespace (`strings`) before the dot, or the name alone.
+FunctionName = 'ident' ('.' 'field_name')?
+Arguments = Argument (',' Argument)*
+Argument = NamedArgument | Expr
+// `write_row(column: $v)`, `metrics.*(period: 1d, principal.user.userid: $u)`.
+NamedArgument = name:ArgumentName ':' (value:Expr | wildcard:'*')
+ArgumentName = 'ident' | BareField
+
+// `%table.write_row(col: $v)`, `%table.column`.
+TableCall = table:ReferenceList 'table_dot' function:'ident' '(' Arguments? ')'
+DataTableColumn = table:ReferenceList 'table_dot' column:'ident'
+
+// `if(condition, then[, else])`: the operands are the condition, then, else.
+IfExpr = 'if' '(' Expr (',' Expr)* ')'
+ArrayExpr = '[' (Expr (',' Expr)* ','?)? ']'
+
+Variable = 'variable'
+CountRef = 'count_ref'
+ReferenceList = 'reference_list'
+// A search's grouped field (`ip`), `raw`, or a metric field (`value_sum`).
+NameRef = 'ident'
+WindowBound = 'window_start' | 'window_end'
+Literal =
+  'string'
+| 'raw_string'
+| 'regex_lit'
+| 'integer'
+| 'float'
+| 'duration'
+| 'true'
+| 'false'

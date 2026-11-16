@@ -1,0 +1,58 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/function_call__valid.yaral
+---
+SOURCE_FILE@0..123
+  COMMENT@0..27 "// prod:function_call valid"
+  WHITESPACE@27..28 "\n"
+  SEARCH_QUERY@28..122
+    SEARCH_EVENTS@28..122
+      COMPARISON@28..77
+        FUNCTION_CALL@28..67
+          FUNCTION_NAME@28..44
+            IDENT@28..35 "strings"
+            ACCESS_DOT@35..36 "."
+            FIELD_NAME@36..44 "to_lower"
+          L_PAREN@44..45 "("
+          ARGUMENTS@45..66
+            UDM_FIELD@45..66
+              VARIABLE@45..47
+                VAR_TOKEN@45..47 "$e"
+              MEMBER@47..57
+                ACCESS_DOT@47..48 "."
+                FIELD_NAME@48..57 "principal"
+              MEMBER@57..66
+                ACCESS_DOT@57..58 "."
+                FIELD_NAME@58..66 "hostname"
+          R_PAREN@66..67 ")"
+        WHITESPACE@67..68 " "
+        EQ@68..69 "="
+        WHITESPACE@69..70 " "
+        LITERAL@70..77
+          STRING@70..77 "\"web01\""
+      WHITESPACE@77..78 "\n"
+      FUNCTION_CALL@78..122
+        FUNCTION_NAME@78..86
+          IDENT@78..80 "re"
+          ACCESS_DOT@80..81 "."
+          FIELD_NAME@81..86 "regex"
+        L_PAREN@86..87 "("
+        ARGUMENTS@87..114
+          UDM_FIELD@87..100
+            VARIABLE@87..89
+              VAR_TOKEN@87..89 "$e"
+            MEMBER@89..96
+              ACCESS_DOT@89..90 "."
+              FIELD_NAME@90..96 "target"
+            MEMBER@96..100
+              ACCESS_DOT@96..97 "."
+              FIELD_NAME@97..100 "url"
+          COMMA@100..101 ","
+          WHITESPACE@101..102 " "
+          LITERAL@102..114
+            RAW_STRING@102..114 "`login\\.php`"
+        R_PAREN@114..115 ")"
+        WHITESPACE@115..116 " "
+        NOCASE_KW@116..122 "nocase"
+  WHITESPACE@122..123 "\n"

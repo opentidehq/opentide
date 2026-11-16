@@ -1,0 +1,33 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/limit_section__invalid.yaral
+---
+SOURCE_FILE@0..86
+  COMMENT@0..29 "// prod:limit_section invalid"
+  WHITESPACE@29..30 "\n"
+  SEARCH_QUERY@30..85
+    SEARCH_EVENTS@30..64
+      COMPARISON@30..64
+        BARE_FIELD@30..49
+          IDENT@30..38 "metadata"
+          MEMBER@38..49
+            ACCESS_DOT@38..39 "."
+            FIELD_NAME@39..49 "event_type"
+        WHITESPACE@49..50 " "
+        EQ@50..51 "="
+        WHITESPACE@51..52 " "
+        LITERAL@52..64
+          STRING@52..64 "\"USER_LOGIN\""
+    WHITESPACE@64..65 "\n"
+    LIMIT_SECTION@65..71
+      LIMIT_KW@65..70 "limit"
+      COLON@70..71 ":"
+    WHITESPACE@71..74 "\n  "
+    ERROR@74..85
+      IDENT@74..79 "fifty"
+      WHITESPACE@79..80 " "
+      IDENT@80..85 "fifty"
+  WHITESPACE@85..86 "\n"
+errors:
+71..74: expected a section such as `events:` (expected an integer)

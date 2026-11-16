@@ -16,9 +16,12 @@ use crate::syntax::{SyntaxKind as K, SyntaxNode};
 use opentide_parse::{CompletedMarker, Grammar, Input, Parse, Parser, TokenSet, build};
 
 /// Nesting deeper than this is one error. tree-sitter took 10,000 levels; the floor every
-/// language keeps is `deep_queries`' `NESTING_CEILING` (1,000), and no more: the deepest
-/// construct (`!f(` in an argument) opens four tree nodes per level, so 1,000 levels stay under
-/// the toolkit's `MAX_TREE_DEPTH` (4,096 nodes) and only `TooDeep` ever fires.
+/// language keeps is `deep_queries`' `NESTING_CEILING` (1,000), and no more: a call with a
+/// negated call in its argument (`f(!`) opens four tree nodes per level, so 1,000 such levels
+/// stay under the toolkit's `MAX_TREE_DEPTH` (4,096 nodes). Binary operators are not levels
+/// (a chain is one flat node), so a call in an operand of each precedence in turn
+/// (`f(a == b + c * !`) is up to seven nodes a level and reaches `MAX_TREE_DEPTH` first, at
+/// about 580 levels: one `TreeTooDeep` error, never an overflow (`parser_depth`).
 pub(crate) const MAX_DEPTH: u32 = 1_000;
 
 pub(crate) const UNEXPECTED: &str = "unexpected";
@@ -234,11 +237,16 @@ enum Step {
 
 /// `|`? step (`|` step)*. The whole query may end with `|` (`top`); a nested pipeline may not.
 fn pipeline(p: &mut Parser<'_>, top: bool) {
+    pipeline_in(p, top, false);
+}
+
+/// [`pipeline`]; `subquery`: the body of `{ ... }`.
+fn pipeline_in(p: &mut Parser<'_>, top: bool, subquery: bool) {
     let m = p.start();
     let mut steps = false;
     eat(p, K::PIPE);
     loop {
-        if run(p, top) {
+        if run(p, top, subquery) {
             steps = true;
         } else if !(top && steps && p.at_eof()) {
             err(p, EXPECTED_STEP);
@@ -251,13 +259,21 @@ fn pipeline(p: &mut Parser<'_>, top: bool) {
 }
 
 /// Steps with no pipe between them; whether there was one.
-fn run(p: &mut Parser<'_>, top: bool) -> bool {
+fn run(p: &mut Parser<'_>, top: bool, subquery: bool) -> bool {
     let end = if top { TokenSet::EMPTY } else { NESTED_END };
     let mut any = false;
     let mut prev = None;
     // `kind`, not `at`: an empty step expects a step, not the `|` it found.
     while !p.at_eof() && !end.contains(p.current()) && kind(p, 0) != K::PIPE {
         any = true;
+        // A `,` starts no step: in a subquery (`join({ a | b, field=x)`) it is where the `}`
+        // was due. The comma is skipped as any stray token is, so the subquery still ends at
+        // the `}` the lexer's modes expect, and nothing after it is misread.
+        if subquery && kind(p, 0) == K::COMMA {
+            p.err_and_bump(MISSING_BRACE);
+            prev = Some(Step::Filter);
+            continue;
+        }
         prev = Some(step(p, prev));
     }
     any
@@ -487,7 +503,13 @@ fn paren_filter(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     if and_chain(p, false).is_none() {
         err(p, EXPECTED_FILTER);
     }
-    close(p, K::R_PAREN, MISSING_PAREN);
+    // A `,` in a group of filters is the fault, not a `)` missing before it: `rdns (a=1, b)`
+    // (a space before the call's `(`) is a group, and `)` would be the wrong fix.
+    if kind(p, 0) == K::COMMA {
+        err(p, UNEXPECTED);
+    } else {
+        close(p, K::R_PAREN, MISSING_PAREN);
+    }
     p.exit();
     Some(m.complete(p, K::PARENTHESIZED_FILTER.raw()))
 }
@@ -703,18 +725,21 @@ fn match_statement(p: &mut Parser<'_>) {
     m.complete(p, K::MATCH_STATEMENT.raw());
 }
 
-/// `guard => pipeline`. A guard that is missing where no `=>` follows is the branch's one
-/// error: the body is not read as a second one.
+/// `guard => pipeline`. A missing guard is the branch's one error: where the branch ends there
+/// (`x match { ; }`) nothing more is read, and otherwise what follows is read as its body, with
+/// no second error for the `=>` (`x match { a => b ; => c }`: the `=>` after `;` lexes as `=`).
 fn match_branch(p: &mut Parser<'_>) {
     let m = p.start();
-    if !match_guard(p) && kind(p, 0) != K::FAT_ARROW {
+    let guard = match_guard(p);
+    let ends = |p: &Parser<'_>| p.at_eof() || NESTED_END.contains(p.current());
+    if !guard && kind(p, 0) != K::FAT_ARROW && ends(p) {
         m.complete(p, K::MATCH_BRANCH.raw());
         return;
     }
-    if !p.eat(K::FAT_ARROW.raw()) {
+    if !p.eat(K::FAT_ARROW.raw()) && guard {
         err(p, "expected `=>`");
         // `x match { a }`: no body either, and that is the same error.
-        if p.at_eof() || NESTED_END.contains(p.current()) {
+        if ends(p) {
             m.complete(p, K::MATCH_BRANCH.raw());
             return;
         }
@@ -826,7 +851,8 @@ fn function_call(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     let m = p.start();
     wrap(p, K::FUNCTION_NAME, K::FUNCTION_NAME_TOKEN);
     if p.eat(K::L_PAREN.raw()) {
-        if !at(p, K::R_PAREN) {
+        // `f( | ...`: a `|` starts no argument; it is the `)` that is missing.
+        if !at(p, K::R_PAREN) && kind(p, 0) != K::PIPE {
             argument_list(p);
         }
         close(p, K::R_PAREN, MISSING_PAREN);
@@ -1060,7 +1086,7 @@ fn subquery(p: &mut Parser<'_>) -> Option<CompletedMarker> {
     let m = p.start();
     p.bump();
     if !at(p, K::R_BRACE) {
-        pipeline(p, false);
+        pipeline_in(p, false, true);
     }
     close(p, K::R_BRACE, MISSING_BRACE);
     p.exit();

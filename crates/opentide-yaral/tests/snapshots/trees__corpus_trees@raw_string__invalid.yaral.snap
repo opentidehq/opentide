@@ -1,0 +1,40 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/raw_string__invalid.yaral
+---
+SOURCE_FILE@0..80
+  COMMENT@0..26 "// prod:raw_string invalid"
+  WHITESPACE@26..27 "\n"
+  SEARCH_QUERY@27..79
+    SEARCH_EVENTS@27..59
+      COMPARISON@27..59
+        UDM_FIELD@27..57
+          VARIABLE@27..29
+            VAR_TOKEN@27..29 "$e"
+          MEMBER@29..36
+            ACCESS_DOT@29..30 "."
+            FIELD_NAME@30..36 "target"
+          MEMBER@36..44
+            ACCESS_DOT@36..37 "."
+            FIELD_NAME@37..44 "process"
+          MEMBER@44..57
+            ACCESS_DOT@44..45 "."
+            FIELD_NAME@45..57 "command_line"
+        WHITESPACE@57..58 " "
+        EQ@58..59 "="
+    WHITESPACE@59..60 " "
+    ERROR@60..79
+      ERROR_TOKEN@60..61 "`"
+      IDENT@61..62 "C"
+      COLON@62..63 ":"
+      ERROR_TOKEN@63..64 "\\"
+      IDENT@64..71 "Windows"
+      ERROR_TOKEN@71..72 "\\"
+      IDENT@72..75 "cmd"
+      ACCESS_DOT@75..76 "."
+      FIELD_NAME@76..79 "exe"
+  WHITESPACE@79..80 "\n"
+errors:
+59..60: expected an expression
+59..60: expected a section such as `events:` (expected `nocase`)

@@ -1,0 +1,21 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..13
+  PIPELINE@0..13
+    MATCH_STATEMENT@0..13
+      FIELD_NAME@0..1
+        WORD@0..1 "x"
+      WHITESPACE@1..2 " "
+      MATCH_KW@2..7 "match"
+      WHITESPACE@7..8 " "
+      L_BRACE@8..9 "{"
+      WHITESPACE@9..10 " "
+      MATCH_BRANCH@10..11
+        UNQUOTED_PATTERN@10..11
+          WORD@10..11 "a"
+      WHITESPACE@11..12 " "
+      R_BRACE@12..13 "}"
+
+11..12: expected `=>` (expected FAT_ARROW)

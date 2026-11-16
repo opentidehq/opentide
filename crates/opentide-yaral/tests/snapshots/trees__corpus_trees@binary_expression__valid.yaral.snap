@@ -1,0 +1,50 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/binary_expression__valid.yaral
+---
+SOURCE_FILE@0..100
+  COMMENT@0..31 "// prod:binary_expression valid"
+  WHITESPACE@31..32 "\n"
+  SEARCH_QUERY@32..99
+    SEARCH_EVENTS@32..99
+      COMPARISON@32..99
+        BINARY_EXPR@32..81
+          UDM_FIELD@32..53
+            VARIABLE@32..34
+              VAR_TOKEN@32..34 "$e"
+            MEMBER@34..42
+              ACCESS_DOT@34..35 "."
+              FIELD_NAME@35..42 "network"
+            MEMBER@42..53
+              ACCESS_DOT@42..43 "."
+              FIELD_NAME@43..53 "sent_bytes"
+          WHITESPACE@53..54 " "
+          PLUS@54..55 "+"
+          WHITESPACE@55..56 " "
+          UDM_FIELD@56..81
+            VARIABLE@56..58
+              VAR_TOKEN@56..58 "$e"
+            MEMBER@58..66
+              ACCESS_DOT@58..59 "."
+              FIELD_NAME@59..66 "network"
+            MEMBER@66..81
+              ACCESS_DOT@66..67 "."
+              FIELD_NAME@67..81 "received_bytes"
+        WHITESPACE@81..82 " "
+        GT@82..83 ">"
+        WHITESPACE@83..84 " "
+        BINARY_EXPR@84..99
+          LITERAL@84..88
+            INTEGER@84..88 "1000"
+          WHITESPACE@88..89 " "
+          STAR@89..90 "*"
+          WHITESPACE@90..91 " "
+          LITERAL@91..95
+            INTEGER@91..95 "1024"
+          WHITESPACE@95..96 " "
+          SLASH@96..97 "/"
+          WHITESPACE@97..98 " "
+          LITERAL@98..99
+            INTEGER@98..99 "2"
+  WHITESPACE@99..100 "\n"

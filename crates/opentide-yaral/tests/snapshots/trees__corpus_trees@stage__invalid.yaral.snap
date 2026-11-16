@@ -1,0 +1,33 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/stage__invalid.yaral
+---
+SOURCE_FILE@0..82
+  COMMENT@0..21 "// prod:stage invalid"
+  WHITESPACE@21..22 "\n"
+  SEARCH_QUERY@22..80
+    STAGE@22..80
+      STAGE_KW@22..27 "stage"
+      WHITESPACE@27..28 " "
+      STAGE_NAME@28..33
+        IDENT@28..33 "daily"
+      WHITESPACE@33..34 " "
+      L_BRACE@34..35 "{"
+      WHITESPACE@35..38 "\n  "
+      SEARCH_EVENTS@38..80
+        COMPARISON@38..80
+          BARE_FIELD@38..57
+            IDENT@38..46 "metadata"
+            MEMBER@46..57
+              ACCESS_DOT@46..47 "."
+              FIELD_NAME@47..57 "event_type"
+          WHITESPACE@57..58 " "
+          EQ@58..59 "="
+          WHITESPACE@59..60 " "
+          LITERAL@60..80
+            STRING@60..80 "\"NETWORK_CONNECTION\""
+  WHITESPACE@80..82 "\n\n"
+errors:
+80..82: expected `}` (expected `nocase`, `}`)
+80..82: expected the events or a section of the search after its stages (expected `stage`, `nocase`, `}`)

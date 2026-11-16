@@ -3,7 +3,7 @@ source: crates/opentide-analysis/tests/parser_baseline.rs
 expression: baseline(language)
 ---
 == conformance/external/cql/crowdstrike-query-language-map/bucket-l14.broken.cql
-cql_parse_error error 1:0-1:3 CQL syntax error near `and`
+cql_parse_error error 2:0-2:1 CQL syntax error near `|`: expected a filter
 0..17 type
 17..18 operator
 18..31 string
@@ -437,7 +437,7 @@ cql_parse_error error 15:25-15:25 CQL syntax error: missing `)`
 740..742 number
 742..743 punctuation.bracket
 == conformance/external/cql/crowdstrike-query-language-map/join-l8.broken.cql
-cql_parse_error error 4:105-4:106 CQL syntax error: missing `}`
+cql_parse_error error 4:105-4:105 CQL syntax error: missing `}`
 0..17 type
 17..18 operator
 18..32 string
@@ -494,17 +494,17 @@ cql_parse_error error 4:105-4:106 CQL syntax error: missing `}`
 296..332 string
 332..333 string
 333..334 punctuation.delimiter
-335..340 variable
+335..340 property
 340..341 operator
-341..348 property
+341..348 string
 348..349 punctuation.delimiter
-350..357 variable
+350..357 property
 357..358 operator
-358..366 property
+358..366 string
 366..367 punctuation.delimiter
-368..372 variable
+368..372 property
 372..373 operator
-373..377 property
+373..377 string
 377..378 punctuation.bracket
 379..380 operator.pipe
 381..389 property
@@ -891,7 +891,7 @@ cql_free_text_after_aggregate error 12:2-12:12 free-text search cannot follow an
 296..297 punctuation.bracket
 297..298 punctuation.bracket
 == conformance/external/cql/dashboards-only/cve-2025-42701-cve-2025-42706-l219.broken.cql
-cql_parse_error error 43:65-44:0 CQL syntax error: missing `)`
+cql_parse_error error 44:0-44:0 CQL syntax error: missing `)`
 0..151 comment
 153..203 comment
 204..221 type
@@ -2587,7 +2587,7 @@ cql_unnamed_argument error 7:32-7:35 `count` takes at most one argument without 
 760..769 property
 769..770 punctuation.bracket
 == conformance/external/cql/log-sources/fluentbit.broken.cql
-cql_parse_error error 1:10-1:11 CQL syntax error: missing `)`
+cql_parse_error error 1:11-1:11 CQL syntax error: missing `)`
 0..25 comment
 26..35 function.builtin
 35..36 punctuation.bracket
@@ -4941,7 +4941,7 @@ cql_unknown_parameter error 7:82-7:89 `match` has no parameter `stricts`
 1355..1360 number
 1360..1361 punctuation.bracket
 == conformance/external/cql/next-gen-siem/cisco-firepower-dashboard-l37.broken.cql
-cql_parse_error error 8:50-8:51 CQL syntax error: missing `}`
+cql_parse_error error 8:50-8:50 CQL syntax error: missing `}`
 0..22 comment
 23..40 type
 40..41 operator
@@ -5018,15 +5018,15 @@ cql_parse_error error 8:50-8:51 CQL syntax error: missing `}`
 397..398 operator
 399..413 string
 413..414 punctuation.delimiter
-415..419 variable
+415..419 property
 420..421 operator
-422..427 property
+422..427 string
 427..428 punctuation.delimiter
-429..434 variable
+429..434 property
 435..436 operator
 437..443 number
 443..444 punctuation.delimiter
-445..450 variable
+445..450 property
 450..451 operator
 451..452 punctuation.bracket
 452..455 property
@@ -5034,7 +5034,7 @@ cql_parse_error error 8:50-8:51 CQL syntax error: missing `}`
 456..472 property
 472..473 punctuation.bracket
 473..474 punctuation.delimiter
-475..478 variable
+475..478 property
 478..479 operator
 479..480 punctuation.bracket
 480..483 property
@@ -5042,7 +5042,7 @@ cql_parse_error error 8:50-8:51 CQL syntax error: missing `}`
 484..499 property
 499..500 punctuation.bracket
 500..501 punctuation.delimiter
-502..509 variable
+502..509 property
 509..510 operator
 510..511 punctuation.bracket
 511..514 property
@@ -6756,7 +6756,7 @@ cql_missing_parameter error 2:2-2:4 `in` needs `field`
 1151..1152 punctuation.bracket
 1152..1153 punctuation.bracket
 == conformance/external/cql/next-gen-siem/crowdstrikenext-gensiemdiscoverydashboard-l1492.broken.cql
-cql_parse_error error 12:45-13:0 CQL syntax error: missing `}`
+cql_parse_error error 13:4-13:4 CQL syntax error: missing `}`
 0..245 comment
 246..255 function.builtin
 255..256 punctuation.bracket
@@ -6774,8 +6774,7 @@ cql_parse_error error 12:45-13:0 CQL syntax error: missing `}`
 353..356 operator
 357..378 property
 383..384 punctuation.delimiter
-389..407 variable
-407..408 punctuation.delimiter
+389..408 string
 409..410 punctuation.bracket
 419..424 type
 424..425 operator
@@ -6793,8 +6792,7 @@ cql_parse_error error 12:45-13:0 CQL syntax error: missing `}`
 547..571 property
 576..577 punctuation.bracket
 577..578 punctuation.delimiter
-583..594 variable
-594..595 punctuation.delimiter
+583..595 string
 596..597 punctuation.bracket
 606..611 type
 611..612 operator
@@ -6804,17 +6802,17 @@ cql_parse_error error 12:45-13:0 CQL syntax error: missing `}`
 644..656 string
 661..662 punctuation.bracket
 662..663 punctuation.delimiter
-668..674 variable
+668..674 property
 675..676 operator
-677..681 number
+677..681 string
 681..682 punctuation.delimiter
-687..695 variable
+687..695 property
 696..697 operator
-698..703 boolean
+698..703 string
 703..704 punctuation.delimiter
-709..731 variable
+709..731 property
 731..732 operator
-732..736 boolean
+732..736 string
 737..738 punctuation.bracket
 == conformance/external/cql/next-gen-siem/crowdstrikenext-gensiemdiscoverydashboard-l1492.cql
 0..245 comment
@@ -7906,7 +7904,7 @@ cql_link_outside_correlate error 0:2-0:20 `<=>` links the queries of correlate()
 1883..1884 punctuation.bracket
 1884..1885 punctuation.bracket
 == conformance/external/cql/next-gen-siem/netskope-dashboard-en-us-l257.broken.cql
-cql_parse_error error 1:0-1:3 CQL syntax error near `and`
+cql_parse_error error 2:0-2:1 CQL syntax error near `|`: expected a filter
 0..7 type
 8..9 operator
 10..18 string
@@ -10475,7 +10473,7 @@ cql_missing_parameter error 42:4-42:6 `in` needs `field`
 3280..3281 string
 3282..3283 punctuation.bracket
 == conformance/external/cql/queries-only/2023-09-08-cool-query-friday-reflective-net.broken.cql
-cql_parse_error error 5:0-5:1 CQL syntax error near `|`
+cql_parse_error error 5:0-5:1 CQL syntax error near `|`: expected a filter
 0..73 comment
 74..91 type
 91..92 operator
@@ -11205,7 +11203,7 @@ cql_regex_flag error 1:49-1:50 unknown regex flag `x`: CQL takes d, g, i, m and 
 1436..1452 string
 1452..1453 punctuation.bracket
 == conformance/external/cql/queries-only/check-for-falcon-acuninstallconfirmation-event.broken.cql
-cql_parse_error error 4:0-4:10 CQL syntax error near `|`
+cql_parse_error error 4:2-4:10 CQL syntax error near `https://`
 0..37 comment
 38..55 type
 55..56 operator
@@ -11623,7 +11621,7 @@ cql_parse_error error 4:0-4:10 CQL syntax error near `|`
 1537..1538 punctuation.bracket
 1538..1539 punctuation.bracket
 == conformance/external/cql/queries-only/cve-2025-53770-sharepoint-toolshell-l2.broken.cql
-cql_parse_error error 8:0-8:3 CQL syntax error near `and`
+cql_parse_error error 9:10-9:11 CQL syntax error near `|`: expected a filter
 0..52 comment
 54..63 function.builtin
 63..64 punctuation.bracket
@@ -12894,7 +12892,7 @@ cql_assignment_as error 4:52-4:54 `as` names the output of `concat` a second tim
 849..850 punctuation.bracket
 850..851 punctuation.bracket
 == conformance/external/cql/queries-only/httprequestdetect.broken.cql
-cql_parse_error error 1:0-1:10 CQL syntax error near `|`
+cql_parse_error error 1:2-1:10 CQL syntax error near `https://`
 0..17 type
 17..18 operator
 18..35 string
@@ -14248,7 +14246,7 @@ cql_unnamed_argument error 37:20-37:33 `in` takes at most one argument without a
 2321..2322 punctuation.bracket
 2322..2323 punctuation.bracket
 == conformance/external/cql/queries-only/t1012-query-registry-l10.broken.cql
-cql_parse_error error 2:28-2:29 CQL syntax error: missing `)`
+cql_parse_error error 3:0-3:0 CQL syntax error: missing `)`
 0..17 type
 17..18 operator
 18..32 string
@@ -14651,7 +14649,7 @@ cql_regex_flag error 2:54-2:56 unknown regex flag `x`: CQL takes d, g, i, m and 
 521..524 property
 524..525 punctuation.bracket
 == conformance/external/cql/queries-only/user-added-to-group-l2.broken.cql
-cql_parse_error error 7:56-7:57 CQL syntax error: missing `}`
+cql_parse_error error 7:56-7:56 CQL syntax error: missing `}`
 0..17 type
 17..18 operator
 18..41 string
@@ -14775,15 +14773,15 @@ cql_parse_error error 7:56-7:57 CQL syntax error: missing `}`
 544..545 punctuation.bracket
 545..546 punctuation.bracket
 546..547 punctuation.delimiter
-548..553 variable
+548..553 property
 553..554 operator
 554..555 punctuation.bracket
 555..562 property
 562..563 punctuation.bracket
 563..564 punctuation.delimiter
-565..572 variable
+565..572 property
 572..573 operator
-573..581 property
+573..581 string
 581..582 punctuation.bracket
 583..656 comment
 657..658 operator.pipe
@@ -14995,7 +14993,7 @@ cql_parse_error error 7:56-7:57 CQL syntax error: missing `}`
 1105..1106 punctuation.bracket
 1106..1107 punctuation.bracket
 == conformance/external/cql/queries-only/user-added-to-group-l22.broken.cql
-cql_parse_error error 4:0-4:10 CQL syntax error near `|`
+cql_parse_error error 4:2-4:10 CQL syntax error near `https://`
 0..29 comment
 30..44 property
 44..45 operator
@@ -15505,7 +15503,7 @@ cql_parse_error error 4:0-4:10 CQL syntax error near `|`
 1606..1607 operator
 1607..1608 string
 == conformance/external/cql/queries-only/using-correlate-to-hunt-process-lineage.broken.cql
-cql_parse_error error 8:0-8:10 CQL syntax error near `|`
+cql_parse_error error 8:2-8:10 CQL syntax error near `https://`
 0..9 function.builtin
 9..10 punctuation.bracket
 15..48 comment
@@ -15909,7 +15907,7 @@ cql_parse_error error 8:0-8:10 CQL syntax error near `|`
 1576..1592 string
 1592..1593 punctuation.bracket
 == corpus/cql/and_filter__invalid.cql
-cql_parse_error error 0:37-0:40 CQL syntax error near `and`
+cql_parse_error error 0:37-0:40 CQL syntax error near `and`: expected a filter
 0..17 type
 17..18 operator
 18..32 string
@@ -15932,7 +15930,7 @@ cql_parse_error error 0:37-0:40 CQL syntax error near `and`
 82..83 string
 83..84 constant
 == corpus/cql/argument__invalid.cql
-cql_parse_error error 0:35-0:36 CQL syntax error near `,`
+cql_parse_error error 0:36-0:37 CQL syntax error near `)`: expected an argument
 0..7 function.builtin
 7..8 punctuation.bracket
 8..19 property
@@ -15966,14 +15964,12 @@ cql_parse_error error 0:35-0:36 CQL syntax error near `,`
 73..77 number
 77..78 punctuation.bracket
 == corpus/cql/array__invalid.cql
-cql_parse_error error 0:19-0:39 CQL syntax error near `=["critical",`
-cql_unnamed_argument error 0:13-0:19 `in` takes at most one argument without a name
-cql_missing_parameter error 0:0-0:2 `in` needs `values`
+cql_parse_error error 0:39-0:39 CQL syntax error: missing `]`
 0..2 function.builtin
 2..3 punctuation.bracket
 3..11 property
 11..12 punctuation.delimiter
-13..19 property
+13..19 variable
 19..20 operator
 20..21 punctuation.bracket
 21..31 string
@@ -16042,13 +16038,13 @@ cql_missing_parameter error 0:0-0:2 `in` needs `values`
 151..152 punctuation.bracket
 152..153 punctuation.bracket
 == corpus/cql/assignment__invalid.cql
-cql_parse_error error 0:4-0:5 CQL syntax error: missing `field_name`
+cql_parse_error error 0:5-0:6 CQL syntax error near `/`: expected an expression
 0..1 property
 2..4 operator
-5..6 operator
-6..10 property
-10..11 operator
-11..12 property
+5..6 string
+6..10 string
+10..11 string
+11..12 string
 == corpus/cql/assignment__valid.cql
 0..3 property
 4..6 operator
@@ -16085,7 +16081,7 @@ cql_parse_error error 0:4-0:5 CQL syntax error: missing `field_name`
 92..94 operator
 95..106 string
 == corpus/cql/attributed_expression__invalid.cql
-cql_parse_error error 0:43-0:51 CQL syntax error near `include:`
+cql_parse_error error 0:51-0:52 CQL syntax error near `)`: expected an expression
 0..9 function.builtin
 9..10 punctuation.bracket
 10..20 variable
@@ -16095,6 +16091,7 @@ cql_parse_error error 0:43-0:51 CQL syntax error near `include:`
 31..32 operator
 33..40 string
 41..42 punctuation.bracket
+43..50 variable
 50..51 punctuation.delimiter
 51..52 punctuation.bracket
 == corpus/cql/attributed_expression__valid.cql
@@ -16136,12 +16133,13 @@ cql_parse_error error 0:43-0:51 CQL syntax error near `include:`
 170..173 number
 173..174 punctuation.bracket
 == corpus/cql/binary_expression__invalid.cql
-cql_parse_error error 0:11-0:16 CQL syntax error near `and`
+cql_parse_error error 0:11-0:11 CQL syntax error: missing `)`
 0..4 function.builtin
 4..5 punctuation.bracket
 5..6 property
 7..8 operator
 9..10 number
+15..16 property
 17..18 operator
 19..20 number
 20..21 punctuation.bracket
@@ -16190,7 +16188,7 @@ cql_parse_error error 0:11-0:16 CQL syntax error near `and`
 159..160 operator
 161..166 property
 == corpus/cql/block_comment__invalid.cql
-cql_parse_error error 0:23-1:0 CQL syntax error: missing `/`
+cql_parse_error error 1:0-1:0 CQL syntax error: the regular expression is never closed
 0..1 string
 1..23 string
 24..29 type
@@ -16213,7 +16211,7 @@ cql_parse_error error 0:23-1:0 CQL syntax error: missing `/`
 100..101 macro
 101..107 macro
 == corpus/cql/case_branch__invalid.cql
-cql_parse_error error 0:22-0:23 CQL syntax error near `;`
+cql_parse_error error 0:22-0:23 CQL syntax error near `;`: expected a step
 0..4 keyword
 5..6 punctuation.bracket
 7..13 property
@@ -16251,7 +16249,7 @@ cql_parse_error error 0:22-0:23 CQL syntax error near `;`
 106..107 string
 108..109 punctuation.bracket
 == corpus/cql/case_statement__invalid.cql
-cql_parse_error error 0:22-0:27 CQL syntax error near `b="2"`
+cql_parse_error error 0:22-0:23 CQL syntax error near `b`: a filter cannot follow an assignment without a pipe
 0..4 keyword
 5..6 punctuation.bracket
 7..8 property
@@ -16318,7 +16316,7 @@ cql_parse_error error 0:22-0:27 CQL syntax error near `b="2"`
 210..211 punctuation.delimiter
 212..213 punctuation.bracket
 == corpus/cql/expression_attribute__invalid.cql
-cql_parse_error error 0:10-0:44 CQL syntax error near `Login:`
+cql_parse_error error 0:37-0:37 CQL syntax error: missing `)`
 0..9 function.builtin
 9..10 punctuation.bracket
 10..15 variable
@@ -16328,6 +16326,7 @@ cql_parse_error error 0:10-0:44 CQL syntax error near `Login:`
 26..27 operator
 27..34 string
 35..36 punctuation.bracket
+37..44 string
 45..46 punctuation.bracket
 46..52 property
 52..53 punctuation.bracket
@@ -16382,10 +16381,9 @@ cql_parse_error error 0:10-0:44 CQL syntax error near `Login:`
 218..219 punctuation.bracket
 219..220 punctuation.bracket
 == corpus/cql/field_filter__invalid.cql
-cql_parse_error error 0:13-0:14 CQL syntax error: missing `string`
+cql_parse_error error 0:14-0:15 CQL syntax error near `e`: expected a value
 0..10 property
 11..13 operator
-14..19 string
 == corpus/cql/field_filter__valid.cql
 0..3 property
 4..5 operator
@@ -16457,7 +16455,7 @@ cql_parse_error error 0:9-0:10 CQL syntax error near `=`
 97..132 property
 132..133 punctuation.bracket
 == corpus/cql/field_shorthand__invalid.cql
-cql_parse_error error 0:0-0:11 CQL syntax error near `loglevel`
+cql_parse_error error 0:12-0:19 CQL syntax error near `"ERROR"`: expected a function call
 0..8 property
 9..11 operator
 12..19 string
@@ -16599,7 +16597,7 @@ cql_parse_error error 0:0-0:7 CQL syntax error near `ERROR//`
 66..72 string
 73..91 comment
 == corpus/cql/link_constraint__invalid.cql
-cql_parse_error error 0:60-0:61 CQL syntax error
+cql_parse_error error 0:61-0:62 CQL syntax error near `}`: expected a field
 0..9 function.builtin
 9..10 punctuation.bracket
 10..15 variable
@@ -16649,7 +16647,7 @@ cql_parse_error error 0:60-0:61 CQL syntax error
 120..123 number
 123..124 punctuation.bracket
 == corpus/cql/match_branch__invalid.cql
-cql_parse_error error 0:45-0:61 CQL syntax error near `=>`
+cql_parse_error error 0:45-0:46 CQL syntax error near `=`: expected a value
 0..8 property
 9..14 keyword
 15..16 punctuation.bracket
@@ -16688,11 +16686,12 @@ cql_parse_error error 0:45-0:61 CQL syntax error near `=>`
 84..85 string
 86..87 punctuation.bracket
 == corpus/cql/match_statement__invalid.cql
-cql_parse_error error 0:8-0:33 CQL syntax error near `match`
+cql_parse_error error 0:14-0:25 CQL syntax error near `"accesslog"`: expected `{` after `match`
 0..7 property
 8..13 keyword
 14..25 string
 26..28 operator
+29..33 property
 33..35 operator
 35..48 property
 == corpus/cql/match_statement__valid.cql
@@ -16795,9 +16794,10 @@ cql_removed_function error 0:0-0:4 `rdns` was removed from CQL in 1.249
 121..126 string
 126..127 punctuation.bracket
 == corpus/cql/named_subquery__invalid.cql
-cql_parse_error error 0:10-0:12 CQL syntax error near `Q1`
+cql_parse_error error 0:13-0:13 CQL syntax error: missing `)`
 0..9 function.builtin
 9..10 punctuation.bracket
+10..12 property
 13..14 punctuation.bracket
 15..20 type
 20..21 operator
@@ -16830,7 +16830,7 @@ cql_parse_error error 0:10-0:12 CQL syntax error near `Q1`
 60..61 punctuation.bracket
 61..62 punctuation.bracket
 == corpus/cql/negated_function_call__invalid.cql
-cql_parse_error error 0:4-0:5 CQL syntax error near `!`
+cql_parse_error error 0:4-0:5 CQL syntax error near `!`: expected a filter
 0..3 string
 4..5 operator
 5..7 function.builtin
@@ -16880,7 +16880,7 @@ cql_parse_error error 0:4-0:5 CQL syntax error near `!`
 131..132 punctuation.bracket
 132..133 punctuation.bracket
 == corpus/cql/not_filter__invalid.cql
-cql_parse_error error 0:19-0:22 CQL syntax error near `not`
+cql_parse_error error 0:22-0:22 CQL syntax error at the end of the query: expected a filter
 0..14 property
 14..15 operator
 15..18 string
@@ -16903,7 +16903,7 @@ cql_parse_error error 0:19-0:22 CQL syntax error near `not`
 72..75 string
 75..76 string
 == corpus/cql/or_filter__invalid.cql
-cql_parse_error error 0:14-0:16 CQL syntax error near `or`
+cql_parse_error error 0:14-0:16 CQL syntax error near `or`: expected a filter
 0..6 property
 6..7 operator
 7..10 string
@@ -16992,7 +16992,7 @@ cql_parse_error error 0:63-0:63 CQL syntax error: missing `)`
 118..119 constant
 119..120 punctuation.bracket
 == corpus/cql/pipeline__invalid.cql
-cql_parse_error error 1:0-1:1 CQL syntax error near `|`
+cql_parse_error error 1:2-1:3 CQL syntax error near `|`: expected a step
 0..17 type
 17..18 operator
 18..32 string
@@ -17050,9 +17050,11 @@ cql_parse_error error 1:0-1:1 CQL syntax error near `|`
 189..191 number
 191..192 punctuation.bracket
 == corpus/cql/query_parameter__invalid.cql
-cql_parse_error error 0:0-0:14 CQL syntax error near `host`
+cql_parse_error error 0:13-0:14 CQL syntax error near `}`: expected `=` and a default value
 0..4 property
 5..6 operator
+7..9 macro
+9..13 macro
 13..14 punctuation.bracket
 == corpus/cql/query_parameter__valid.cql
 0..4 property
@@ -17084,7 +17086,7 @@ cql_parse_error error 0:0-0:14 CQL syntax error near `host`
 127..128 string
 128..129 punctuation.bracket
 == corpus/cql/regex__invalid.cql
-cql_parse_error error 0:26-0:26 CQL syntax error: missing `/`
+cql_parse_error error 0:26-0:26 CQL syntax error: the regular expression is never closed
 0..13 property
 13..14 operator
 14..15 string
@@ -17108,9 +17110,11 @@ cql_parse_error error 0:26-0:26 CQL syntax error: missing `/`
 82..83 string
 83..84 constant
 == corpus/cql/saved_query__invalid.cql
-cql_parse_error error 0:0-0:21 CQL syntax error near `$falcon/helper:enrich`
+cql_parse_error error 0:22-0:23 CQL syntax error near `(`: expected `(` directly after the saved query name
+0..1 macro
+1..21 macro
 22..23 punctuation.bracket
-23..28 property
+23..28 variable
 28..29 operator
 29..38 string
 38..39 punctuation.bracket
@@ -17138,10 +17142,11 @@ cql_parse_error error 0:0-0:21 CQL syntax error near `$falcon/helper:enrich`
 117..118 punctuation.bracket
 118..119 punctuation.bracket
 == corpus/cql/saved_query_argument__invalid.cql
-cql_parse_error error 0:14-0:24 CQL syntax error near `mvArgument`
+cql_parse_error error 0:24-0:25 CQL syntax error near `)`: expected `=` after the argument name
 0..1 macro
 1..13 macro
 13..14 punctuation.bracket
+14..24 variable
 24..25 punctuation.bracket
 == corpus/cql/saved_query_argument__valid.cql
 0..1 macro
@@ -17212,9 +17217,11 @@ cql_parse_error error 0:15-0:15 CQL syntax error: missing `]`
 87..88 punctuation.bracket
 88..89 punctuation.bracket
 == corpus/cql/string__invalid.cql
-cql_parse_error error 0:0-0:19 CQL syntax error near `user`
+cql_parse_error error 0:7-0:8 CQL syntax error near `"`: expected a value
 0..4 property
 5..6 operator
+8..12 string
+13..19 string
 == corpus/cql/string__valid.cql
 0..18 string
 19..20 operator.pipe
@@ -17231,7 +17238,7 @@ cql_parse_error error 0:0-0:19 CQL syntax error near `user`
 88..102 property
 102..103 punctuation.bracket
 == corpus/cql/subquery__invalid.cql
-cql_parse_error error 0:32-0:33 CQL syntax error: missing `}`
+cql_parse_error error 0:32-0:32 CQL syntax error: missing `}`
 0..4 function.builtin
 4..5 punctuation.bracket
 5..10 variable
@@ -17244,9 +17251,9 @@ cql_parse_error error 0:32-0:33 CQL syntax error: missing `}`
 30..31 operator
 31..32 string
 32..33 punctuation.delimiter
-34..39 variable
+34..39 property
 39..40 operator
-40..50 property
+40..50 string
 50..51 punctuation.bracket
 == corpus/cql/subquery__valid.cql
 0..11 function.builtin
@@ -17314,7 +17321,7 @@ cql_parse_error error 0:32-0:33 CQL syntax error: missing `}`
 197..198 punctuation.bracket
 198..199 punctuation.bracket
 == corpus/cql/unary_expression__invalid.cql
-cql_parse_error error 0:9-0:10 CQL syntax error near `-`
+cql_parse_error error 0:11-0:12 CQL syntax error near `-`: expected an expression
 0..5 property
 6..8 operator
 9..10 operator

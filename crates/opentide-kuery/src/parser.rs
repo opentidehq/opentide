@@ -43,10 +43,16 @@ pub(crate) fn parse_memo(source: &str) -> Rc<Parsed> {
             return Rc::clone(parsed);
         }
         let parsed = Rc::new(parse(source, true));
-        *last = Some((source.to_owned(), Rc::clone(&parsed)));
+        // A text past the cap is not kept: an idle thread would hold it and
+        // its tree until its next query.
+        *last = (source.len() <= MEMO_MAX).then(|| (source.to_owned(), Rc::clone(&parsed)));
         parsed
     })
 }
+
+/// The largest text [`parse_memo`] keeps, in bytes. Detection queries are a
+/// few kilobytes.
+pub(crate) const MEMO_MAX: usize = 64 * 1024;
 
 /// Parses `source` (with Kibana's trailing-keyword masking when `mask`).
 pub(crate) fn parse(source: &str, mask: bool) -> (SyntaxNode, Parse) {

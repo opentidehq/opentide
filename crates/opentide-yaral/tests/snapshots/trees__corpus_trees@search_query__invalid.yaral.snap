@@ -1,0 +1,30 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/search_query__invalid.yaral
+---
+SOURCE_FILE@0..77
+  COMMENT@0..28 "// prod:search_query invalid"
+  WHITESPACE@28..29 "\n"
+  SEARCH_QUERY@29..76
+    EVENTS_SECTION@29..76
+      EVENTS_KW@29..35 "events"
+      COLON@35..36 ":"
+      WHITESPACE@36..39 "\n  "
+      COMPARISON@39..76
+        COMPARISON@39..60
+          BARE_FIELD@39..58
+            IDENT@39..47 "metadata"
+            MEMBER@47..58
+              ACCESS_DOT@47..48 "."
+              FIELD_NAME@48..58 "event_type"
+          WHITESPACE@58..59 " "
+          EQ@59..60 "="
+        WHITESPACE@60..61 " "
+        EQ@61..62 "="
+        WHITESPACE@62..63 " "
+        LITERAL@63..76
+          STRING@63..76 "\"NETWORK_DNS\""
+  WHITESPACE@76..77 "\n"
+errors:
+60..61: expected an expression

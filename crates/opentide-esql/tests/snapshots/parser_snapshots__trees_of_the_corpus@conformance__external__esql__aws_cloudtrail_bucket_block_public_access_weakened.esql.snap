@@ -1,0 +1,146 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/aws_cloudtrail_bucket_block_public_access_weakened.esql
+---
+SOURCE_FILE@0..490
+  QUERY@0..489
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    WHERE_COMMAND@40..489
+      WHERE_KW@40..45 "where"
+      WHITESPACE@45..46 " "
+      AND_EXPRESSION@46..489
+        COMPARISON@46..77
+          QUALIFIED_NAME@46..57
+            IDENTIFIER@46..57
+              IDENT@46..57 "eventSource"
+          EQ_EQ@57..59 "=="
+          STRING@59..77
+            STRING_LIT@59..77 "\"s3.amazonaws.com\""
+        WHITESPACE@77..78 " "
+        AND_KW@78..81 "and"
+        WHITESPACE@81..82 " "
+        COMPARISON@82..121
+          QUALIFIED_NAME@82..91
+            IDENTIFIER@82..91
+              IDENT@82..91 "eventName"
+          EQ_EQ@91..93 "=="
+          STRING@93..121
+            STRING_LIT@93..121 "\"PutBucketPublicAccessBlock\""
+        WHITESPACE@121..122 " "
+        AND_KW@122..125 "and"
+        WHITESPACE@125..126 " "
+        PARENTHESIZED_EXPRESSION@126..441
+          L_PAREN@126..127 "("
+          OR_EXPRESSION@127..440
+            COMPARISON@127..206
+              QUALIFIED_NAME@127..197
+                IDENTIFIER@127..144
+                  IDENT@127..144 "requestParameters"
+                DOT@144..145 "."
+                IDENTIFIER@145..175
+                  IDENT@145..175 "PublicAccessBlockConfiguration"
+                DOT@175..176 "."
+                IDENTIFIER@176..197
+                  IDENT@176..197 "RestrictPublicBuckets"
+              EQ_EQ@197..199 "=="
+              STRING@199..206
+                STRING_LIT@199..206 "\"false\""
+            WHITESPACE@206..207 " "
+            OR_KW@207..209 "or"
+            WHITESPACE@209..210 " "
+            COMPARISON@210..283
+              QUALIFIED_NAME@210..274
+                IDENTIFIER@210..227
+                  IDENT@210..227 "requestParameters"
+                DOT@227..228 "."
+                IDENTIFIER@228..258
+                  IDENT@228..258 "PublicAccessBlockConfiguration"
+                DOT@258..259 "."
+                IDENTIFIER@259..274
+                  IDENT@259..274 "BlockPublicAcls"
+              EQ_EQ@274..276 "=="
+              STRING@276..283
+                STRING_LIT@276..283 "\"false\""
+            WHITESPACE@283..284 " "
+            OR_KW@284..286 "or"
+            WHITESPACE@286..287 " "
+            COMPARISON@287..362
+              QUALIFIED_NAME@287..353
+                IDENTIFIER@287..304
+                  IDENT@287..304 "requestParameters"
+                DOT@304..305 "."
+                IDENTIFIER@305..335
+                  IDENT@305..335 "PublicAccessBlockConfiguration"
+                DOT@335..336 "."
+                IDENTIFIER@336..353
+                  IDENT@336..353 "BlockPublicPolicy"
+              EQ_EQ@353..355 "=="
+              STRING@355..362
+                STRING_LIT@355..362 "\"false\""
+            WHITESPACE@362..363 " "
+            OR_KW@363..365 "or"
+            WHITESPACE@365..366 " "
+            COMPARISON@366..440
+              QUALIFIED_NAME@366..431
+                IDENTIFIER@366..383
+                  IDENT@366..383 "requestParameters"
+                DOT@383..384 "."
+                IDENTIFIER@384..414
+                  IDENT@384..414 "PublicAccessBlockConfiguration"
+                DOT@414..415 "."
+                IDENTIFIER@415..431
+                  IDENT@415..431 "IgnorePublicAcls"
+              EQ_EQ@431..433 "=="
+              STRING@433..440
+                STRING_LIT@433..440 "\"false\""
+          R_PAREN@440..441 ")"
+        WHITESPACE@441..442 " "
+        AND_KW@442..445 "and"
+        WHITESPACE@445..446 " "
+        PARENTHESIZED_EXPRESSION@446..489
+          L_PAREN@446..447 "("
+          OR_EXPRESSION@447..488
+            COMPARISON@447..467
+              QUALIFIED_NAME@447..456
+                IDENTIFIER@447..456
+                  IDENT@447..456 "errorCode"
+              EQ_EQ@456..458 "=="
+              STRING@458..467
+                STRING_LIT@458..467 "\"Success\""
+            WHITESPACE@467..468 " "
+            OR_KW@468..470 "or"
+            WHITESPACE@470..471 " "
+            IS_NULL_EXPRESSION@471..488
+              QUALIFIED_NAME@471..480
+                IDENTIFIER@471..480
+                  IDENT@471..480 "errorCode"
+              WHITESPACE@480..481 " "
+              IS_KW@481..483 "is"
+              WHITESPACE@483..484 " "
+              NULL_KW@484..488 "null"
+          R_PAREN@488..489 ")"
+  WHITESPACE@489..490 "\n"
+--- errors

@@ -7,8 +7,11 @@
 //! Gates: a query tree-sitter parses without an error gives identical
 //! diagnostics (as a hunt and as a correlation rule), highlight tokens, hover
 //! and completions (at sampled offsets); a broken one keeps its verdict.
-//! `OPENTIDE_CQL_DIFF=<file>` writes the JSON report of the last seed;
-//! `OPENTIDE_CQL_SEEDS=4,5` runs other seeds than the committed 1, 2 and 3.
+//! The default is a sample sized for CI (seed 1). `OPENTIDE_DIFF_SCALE=full`
+//! runs 40 mutations a file, 2,000 sentences, 24 prefixes and 12 offsets (about
+//! 6 minutes a seed in a debug build), before a push that changes the engine;
+//! `OPENTIDE_DIFF_SEEDS=1,2,3` (or `OPENTIDE_CQL_SEEDS`) picks the seeds.
+//! `OPENTIDE_CQL_DIFF=<file>` writes the JSON report of each seed to `<file>.<seed>`.
 
 #![expect(
     clippy::expect_used,
@@ -17,7 +20,10 @@
 
 #[allow(
     dead_code,
-    reason = "a verbatim copy of the old crate; not every item is compared"
+    unused_imports,
+    clippy::trivially_copy_pass_by_ref,
+    clippy::too_many_lines,
+    reason = "a verbatim copy of the old crate (its public items were not linted so); not every item is compared"
 )]
 mod legacy;
 
@@ -27,6 +33,10 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
+
+/// Valid inputs the sample must reach: the corpus, the old tests' literals and the joined
+/// pairs are valid at any scale.
+const VALID_SAMPLE_FLOOR: usize = 1_000;
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -372,28 +382,39 @@ const SAMPLES: &[&str] = &[
     "{ a | b }",
 ];
 
-/// The committed seeds, or `OPENTIDE_CQL_SEEDS` (comma-separated).
+/// Seed 1, or `OPENTIDE_DIFF_SEEDS` / `OPENTIDE_CQL_SEEDS` (comma-separated).
 fn seeds() -> Vec<u64> {
-    std::env::var("OPENTIDE_CQL_SEEDS").map_or_else(
-        |_| vec![1, 2, 3],
-        |s| s.split(',').filter_map(|n| n.trim().parse().ok()).collect(),
-    )
+    std::env::var("OPENTIDE_DIFF_SEEDS")
+        .or_else(|_| std::env::var("OPENTIDE_CQL_SEEDS"))
+        .map_or_else(
+            |_| vec![1],
+            |s| s.split(',').filter_map(|n| n.trim().parse().ok()).collect(),
+        )
 }
 
 #[test]
 fn pure_rust_engine_matches_tree_sitter() {
     let files = sources();
     assert!(files.len() > 300, "{} sources", files.len());
+    let full = std::env::var("OPENTIDE_DIFF_SCALE").is_ok_and(|s| s == "full");
     for seed in seeds() {
         let mut config = Config::new(&verdict, &token_ranges, SAMPLES);
         config.seed = seed;
-        config.sentences = 2_000;
-        config.mutations_per_input = 40;
-        config.max_prefixes = 24;
-        config.max_offsets = 12;
+        if full {
+            config.sentences = 2_000;
+            config.mutations_per_input = 40;
+            config.max_prefixes = 24;
+            config.max_offsets = 12;
+        } else {
+            config.sentences = 200;
+            config.mutations_per_input = 2;
+            config.max_prefixes = 4;
+            config.max_offsets = 4;
+        }
         let report = run(&Old, &New, &files, &config);
         eprintln!(
-            "cql differential, seed {seed}: {} inputs, {} valid, {} broken; valid differences {}, verdict changes {}, broken-input changes {}",
+            "cql differential, seed {seed}, scale {}: {} inputs, {} valid, {} broken; valid differences {}, verdict changes {}, broken-input changes {}",
+            if full { "full" } else { "sample" },
             report.inputs,
             report.valid,
             report.inputs - report.valid,
@@ -402,9 +423,11 @@ fn pure_rust_engine_matches_tree_sitter() {
             report.total(Class::Broken),
         );
         if let Ok(path) = std::env::var("OPENTIDE_CQL_DIFF") {
-            std::fs::write(path, report.to_json_string()).expect("the report file");
+            std::fs::write(format!("{path}.{seed}"), report.to_json_string())
+                .expect("the report file");
         }
-        assert!(report.valid > 2_000, "seed {seed}: {} valid", report.valid);
+        let floor = if full { 2_000 } else { VALID_SAMPLE_FLOOR };
+        assert!(report.valid > floor, "seed {seed}: {} valid", report.valid);
         assert_gates(&report);
     }
 }

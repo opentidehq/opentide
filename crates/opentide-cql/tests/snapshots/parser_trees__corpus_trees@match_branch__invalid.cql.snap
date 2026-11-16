@@ -55,7 +55,6 @@ SOURCE_FILE@0..64
   WHITESPACE@63..64 "\n"
 
 44..45: expected a value (expected R_BRACE)
-44..45: expected `=>` (expected FAT_ARROW, R_BRACE)
 44..45: unexpected (expected PIPE, FAT_ARROW, R_BRACE)
-46..46: unexpected (expected PIPE)
-49..50: unexpected (expected PIPE)
+46..46: unexpected
+49..50: unexpected

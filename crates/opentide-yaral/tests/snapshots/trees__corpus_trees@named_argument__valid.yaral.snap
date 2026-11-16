@@ -1,0 +1,272 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/named_argument__valid.yaral
+---
+SOURCE_FILE@0..569
+  COMMENT@0..28 "// prod:named_argument valid"
+  WHITESPACE@28..29 "\n"
+  RULE_DECLARATION@29..568
+    RULE_KW@29..33 "rule"
+    WHITESPACE@33..34 " "
+    RULE_NAME@34..35
+      IDENT@34..35 "r"
+    WHITESPACE@35..36 " "
+    L_BRACE@36..37 "{"
+    WHITESPACE@37..40 "\n  "
+    META_SECTION@40..62
+      META_KW@40..44 "meta"
+      COLON@44..45 ":"
+      WHITESPACE@45..50 "\n    "
+      META_ENTRY@50..62
+        META_KEY@50..56
+          IDENT@50..56 "author"
+        WHITESPACE@56..57 " "
+        EQ@57..58 "="
+        WHITESPACE@58..59 " "
+        LITERAL@59..62
+          STRING@59..62 "\"a\""
+    WHITESPACE@62..65 "\n  "
+    EVENTS_SECTION@65..140
+      EVENTS_KW@65..71 "events"
+      COLON@71..72 ":"
+      WHITESPACE@72..77 "\n    "
+      COMPARISON@77..114
+        UDM_FIELD@77..99
+          VARIABLE@77..79
+            VAR_TOKEN@77..79 "$e"
+          MEMBER@79..88
+            ACCESS_DOT@79..80 "."
+            FIELD_NAME@80..88 "metadata"
+          MEMBER@88..99
+            ACCESS_DOT@88..89 "."
+            FIELD_NAME@89..99 "event_type"
+        WHITESPACE@99..100 " "
+        EQ@100..101 "="
+        WHITESPACE@101..102 " "
+        LITERAL@102..114
+          STRING@102..114 "\"USER_LOGIN\""
+      WHITESPACE@114..119 "\n    "
+      COMPARISON@119..140
+        VARIABLE@119..122
+          VAR_TOKEN@119..122 "$ip"
+        WHITESPACE@122..123 " "
+        EQ@123..124 "="
+        WHITESPACE@124..125 " "
+        UDM_FIELD@125..140
+          VARIABLE@125..127
+            VAR_TOKEN@125..127 "$e"
+          MEMBER@127..137
+            ACCESS_DOT@127..128 "."
+            FIELD_NAME@128..137 "principal"
+          MEMBER@137..140
+            ACCESS_DOT@137..138 "."
+            FIELD_NAME@138..140 "ip"
+    WHITESPACE@140..143 "\n  "
+    MATCH_SECTION@143..165
+      MATCH_KW@143..148 "match"
+      COLON@148..149 ":"
+      WHITESPACE@149..154 "\n    "
+      MATCH_CLAUSE@154..165
+        VARIABLE@154..157
+          VAR_TOKEN@154..157 "$ip"
+        WHITESPACE@157..158 " "
+        MATCH_WINDOW@158..165
+          OVER_KW@158..162 "over"
+          WHITESPACE@162..163 " "
+          DURATION@163..165 "1h"
+    WHITESPACE@165..168 "\n  "
+    OUTCOME_SECTION@168..501
+      OUTCOME_KW@168..175 "outcome"
+      COLON@175..176 ":"
+      WHITESPACE@176..181 "\n    "
+      COMPARISON@181..342
+        VARIABLE@181..187
+          VAR_TOKEN@181..187 "$fails"
+        WHITESPACE@187..188 " "
+        EQ@188..189 "="
+        WHITESPACE@189..190 " "
+        FUNCTION_CALL@190..342
+          FUNCTION_NAME@190..193
+            IDENT@190..193 "max"
+          L_PAREN@193..194 "("
+          ARGUMENTS@194..341
+            FUNCTION_CALL@194..341
+              FUNCTION_NAME@194..220
+                IDENT@194..201 "metrics"
+                ACCESS_DOT@201..202 "."
+                FIELD_NAME@202..220 "auth_attempts_fail"
+              L_PAREN@220..221 "("
+              ARGUMENTS@221..340
+                NAMED_ARGUMENT@221..230
+                  ARGUMENT_NAME@221..227
+                    IDENT@221..227 "period"
+                  COLON@227..228 ":"
+                  LITERAL@228..230
+                    DURATION@228..230 "1d"
+                COMMA@230..231 ","
+                WHITESPACE@231..232 " "
+                NAMED_ARGUMENT@232..242
+                  ARGUMENT_NAME@232..238
+                    IDENT@232..238 "window"
+                  COLON@238..239 ":"
+                  LITERAL@239..242
+                    DURATION@239..242 "30d"
+                COMMA@242..243 ","
+                WHITESPACE@243..244 " "
+                NAMED_ARGUMENT@244..260
+                  ARGUMENT_NAME@244..250
+                    IDENT@244..250 "metric"
+                  COLON@250..251 ":"
+                  NAME_REF@251..260
+                    IDENT@251..260 "value_sum"
+                COMMA@260..261 ","
+                WHITESPACE@261..262 " "
+                NAMED_ARGUMENT@262..269
+                  ARGUMENT_NAME@262..265
+                    IDENT@262..265 "agg"
+                  COLON@265..266 ":"
+                  NAME_REF@266..269
+                    IDENT@266..269 "max"
+                COMMA@269..270 ","
+                WHITESPACE@270..271 " "
+                NAMED_ARGUMENT@271..316
+                  ARGUMENT_NAME@271..277
+                    IDENT@271..277 "filter"
+                  COLON@277..278 ":"
+                  AND_EXPR@278..316
+                    COMPARISON@278..292
+                      NAME_REF@278..287
+                        IDENT@278..287 "value_sum"
+                      WHITESPACE@287..288 " "
+                      GT@288..289 ">"
+                      WHITESPACE@289..290 " "
+                      LITERAL@290..292
+                        INTEGER@290..292 "10"
+                    WHITESPACE@292..293 " "
+                    AND_KW@293..296 "AND"
+                    WHITESPACE@296..297 " "
+                    COMPARISON@297..316
+                      NAME_REF@297..312
+                        IDENT@297..312 "event_count_sum"
+                      WHITESPACE@312..313 " "
+                      GT@313..314 ">"
+                      WHITESPACE@314..315 " "
+                      LITERAL@315..316
+                        INTEGER@315..316 "2"
+                COMMA@316..317 ","
+                WHITESPACE@317..318 " "
+                NAMED_ARGUMENT@318..340
+                  ARGUMENT_NAME@318..336
+                    BARE_FIELD@318..336
+                      IDENT@318..327 "principal"
+                      MEMBER@327..333
+                        ACCESS_DOT@327..328 "."
+                        FIELD_NAME@328..333 "asset"
+                      MEMBER@333..336
+                        ACCESS_DOT@333..334 "."
+                        FIELD_NAME@334..336 "ip"
+                  COLON@336..337 ":"
+                  VARIABLE@337..340
+                    VAR_TOKEN@337..340 "$ip"
+              R_PAREN@340..341 ")"
+          R_PAREN@341..342 ")"
+      WHITESPACE@342..347 "\n    "
+      COMPARISON@347..501
+        VARIABLE@347..357
+          VAR_TOKEN@347..357 "$countries"
+        WHITESPACE@357..358 " "
+        EQ@358..359 "="
+        WHITESPACE@359..360 " "
+        FUNCTION_CALL@360..501
+          FUNCTION_NAME@360..363
+            IDENT@360..363 "max"
+          L_PAREN@363..364 "("
+          ARGUMENTS@364..500
+            FUNCTION_CALL@364..500
+              FUNCTION_NAME@364..393
+                IDENT@364..371 "metrics"
+                ACCESS_DOT@371..372 "."
+                FIELD_NAME@372..393 "auth_attempts_success"
+              L_PAREN@393..394 "("
+              ARGUMENTS@394..499
+                NAMED_ARGUMENT@394..403
+                  ARGUMENT_NAME@394..400
+                    IDENT@394..400 "period"
+                  COLON@400..401 ":"
+                  LITERAL@401..403
+                    DURATION@401..403 "1d"
+                COMMA@403..404 ","
+                WHITESPACE@404..405 " "
+                NAMED_ARGUMENT@405..415
+                  ARGUMENT_NAME@405..411
+                    IDENT@405..411 "window"
+                  COLON@411..412 ":"
+                  LITERAL@412..415
+                    DURATION@412..415 "30d"
+                COMMA@415..416 ","
+                WHITESPACE@416..417 " "
+                NAMED_ARGUMENT@417..433
+                  ARGUMENT_NAME@417..423
+                    IDENT@417..423 "metric"
+                  COLON@423..424 ":"
+                  NAME_REF@424..433
+                    IDENT@424..433 "value_sum"
+                COMMA@433..434 ","
+                WHITESPACE@434..435 " "
+                NAMED_ARGUMENT@435..442
+                  ARGUMENT_NAME@435..438
+                    IDENT@435..438 "agg"
+                  COLON@438..439 ":"
+                  NAME_REF@439..442
+                    IDENT@439..442 "max"
+                COMMA@442..443 ","
+                WHITESPACE@443..444 " "
+                NAMED_ARGUMENT@444..499
+                  ARGUMENT_NAME@444..496
+                    BARE_FIELD@444..496
+                      IDENT@444..453 "principal"
+                      MEMBER@453..469
+                        ACCESS_DOT@453..454 "."
+                        FIELD_NAME@454..469 "ip_geo_artifact"
+                      MEMBER@469..478
+                        ACCESS_DOT@469..470 "."
+                        FIELD_NAME@470..478 "location"
+                      MEMBER@478..496
+                        ACCESS_DOT@478..479 "."
+                        FIELD_NAME@479..496 "country_or_region"
+                  COLON@496..497 ":"
+                  WHITESPACE@497..498 " "
+                  STAR@498..499 "*"
+              R_PAREN@499..500 ")"
+          R_PAREN@500..501 ")"
+    WHITESPACE@501..504 "\n  "
+    CONDITION_SECTION@504..521
+      CONDITION_KW@504..513 "condition"
+      COLON@513..514 ":"
+      WHITESPACE@514..519 "\n    "
+      VARIABLE@519..521
+        VAR_TOKEN@519..521 "$e"
+    WHITESPACE@521..524 "\n  "
+    EXPORT_SECTION@524..566
+      EXPORT_KW@524..530 "export"
+      COLON@530..531 ":"
+      WHITESPACE@531..536 "\n    "
+      TABLE_CALL@536..566
+        REFERENCE_LIST@536..541
+          REF_LIST_TOKEN@536..541 "%seen"
+        DOT@541..542 "."
+        IDENT@542..551 "write_row"
+        L_PAREN@551..552 "("
+        ARGUMENTS@552..565
+          NAMED_ARGUMENT@552..565
+            ARGUMENT_NAME@552..557
+              IDENT@552..557 "fails"
+            COLON@557..558 ":"
+            WHITESPACE@558..559 " "
+            VARIABLE@559..565
+              VAR_TOKEN@559..565 "$fails"
+        R_PAREN@565..566 ")"
+    WHITESPACE@566..567 "\n"
+    R_BRACE@567..568 "}"
+  WHITESPACE@568..569 "\n"

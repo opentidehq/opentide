@@ -1,0 +1,54 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/rerank_command__valid.esql
+---
+SOURCE_FILE@0..115
+  COMMENT@0..28 "// prod:rerank_command valid"
+  WHITESPACE@28..29 "\n"
+  QUERY@29..114
+    FROM_COMMAND@29..54
+      FROM_KW@29..33 "FROM"
+      WHITESPACE@33..34 " "
+      INDEX_PATTERN@34..38
+        INDEX_NAME@34..38
+          SOURCE_TEXT@34..38 "docs"
+      WHITESPACE@38..39 " "
+      METADATA@39..54
+        METADATA_KW@39..47 "METADATA"
+        WHITESPACE@47..48 " "
+        METADATA_FIELD@48..54
+          SOURCE_TEXT@48..54 "_score"
+    WHITESPACE@54..55 "\n"
+    PIPE@55..56 "|"
+    WHITESPACE@56..57 " "
+    RERANK_COMMAND@57..114
+      RERANK_KW@57..63 "RERANK"
+      WHITESPACE@63..64 " "
+      STRING@64..76
+        STRING_LIT@64..76 "\"query text\""
+      WHITESPACE@76..77 " "
+      ON_KW@77..79 "ON"
+      WHITESPACE@79..80 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@80..85
+        QUALIFIED_NAME@80..85
+          IDENTIFIER@80..85
+            IDENT@80..85 "title"
+      WHITESPACE@85..86 " "
+      NAMED_PARAMETERS@86..114
+        WITH_KW@86..90 "WITH"
+        WHITESPACE@90..91 " "
+        MAP_EXPRESSION@91..114
+          L_BRACE@91..92 "{"
+          WHITESPACE@92..93 " "
+          MAP_ENTRY@93..112
+            STRING@93..107
+              STRING_LIT@93..107 "\"inference_id\""
+            COLON@107..108 ":"
+            WHITESPACE@108..109 " "
+            STRING@109..112
+              STRING_LIT@109..112 "\"r\""
+          WHITESPACE@112..113 " "
+          R_BRACE@113..114 "}"
+  WHITESPACE@114..115 "\n"
+--- errors

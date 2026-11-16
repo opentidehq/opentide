@@ -1,0 +1,80 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/options_section__valid.yaral
+---
+SOURCE_FILE@0..206
+  COMMENT@0..29 "// prod:options_section valid"
+  WHITESPACE@29..30 "\n"
+  RULE_DECLARATION@30..205
+    RULE_KW@30..34 "rule"
+    WHITESPACE@34..35 " "
+    RULE_NAME@35..36
+      IDENT@35..36 "r"
+    WHITESPACE@36..37 " "
+    L_BRACE@37..38 "{"
+    WHITESPACE@38..41 "\n  "
+    META_SECTION@41..63
+      META_KW@41..45 "meta"
+      COLON@45..46 ":"
+      WHITESPACE@46..51 "\n    "
+      META_ENTRY@51..63
+        META_KEY@51..57
+          IDENT@51..57 "author"
+        WHITESPACE@57..58 " "
+        EQ@58..59 "="
+        WHITESPACE@59..60 " "
+        LITERAL@60..63
+          STRING@60..63 "\"a\""
+    WHITESPACE@63..66 "\n  "
+    EVENTS_SECTION@66..115
+      EVENTS_KW@66..72 "events"
+      COLON@72..73 ":"
+      WHITESPACE@73..78 "\n    "
+      COMPARISON@78..115
+        UDM_FIELD@78..100
+          VARIABLE@78..80
+            VAR_TOKEN@78..80 "$e"
+          MEMBER@80..89
+            ACCESS_DOT@80..81 "."
+            FIELD_NAME@81..89 "metadata"
+          MEMBER@89..100
+            ACCESS_DOT@89..90 "."
+            FIELD_NAME@90..100 "event_type"
+        WHITESPACE@100..101 " "
+        EQ@101..102 "="
+        WHITESPACE@102..103 " "
+        LITERAL@103..115
+          STRING@103..115 "\"USER_LOGIN\""
+    WHITESPACE@115..118 "\n  "
+    CONDITION_SECTION@118..135
+      CONDITION_KW@118..127 "condition"
+      COLON@127..128 ":"
+      WHITESPACE@128..133 "\n    "
+      VARIABLE@133..135
+        VAR_TOKEN@133..135 "$e"
+    WHITESPACE@135..138 "\n  "
+    OPTIONS_SECTION@138..203
+      OPTIONS_KW@138..145 "options"
+      COLON@145..146 ":"
+      WHITESPACE@146..151 "\n    "
+      OPTION_ENTRY@151..175
+        OPTION_KEY@151..168
+          IDENT@151..168 "allow_zero_values"
+        WHITESPACE@168..169 " "
+        EQ@169..170 "="
+        WHITESPACE@170..171 " "
+        LITERAL@171..175
+          TRUE_KW@171..175 "true"
+      WHITESPACE@175..180 "\n    "
+      OPTION_ENTRY@180..203
+        OPTION_KEY@180..198
+          IDENT@180..198 "suppression_window"
+        WHITESPACE@198..199 " "
+        EQ@199..200 "="
+        WHITESPACE@200..201 " "
+        LITERAL@201..203
+          DURATION@201..203 "1h"
+    WHITESPACE@203..204 "\n"
+    R_BRACE@204..205 "}"
+  WHITESPACE@205..206 "\n"

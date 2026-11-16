@@ -1,0 +1,57 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/is_null_expression__valid.esql
+---
+SOURCE_FILE@0..108
+  COMMENT@0..32 "// prod:is_null_expression valid"
+  WHITESPACE@32..33 "\n"
+  QUERY@33..107
+    FROM_COMMAND@33..57
+      FROM_KW@33..37 "FROM"
+      WHITESPACE@37..38 " "
+      INDEX_PATTERN@38..44
+        INDEX_NAME@38..44
+          SOURCE_TEXT@38..44 "logs-*"
+      WHITESPACE@44..45 " "
+      METADATA@45..57
+        METADATA_KW@45..53 "METADATA"
+        WHITESPACE@53..54 " "
+        METADATA_FIELD@54..57
+          SOURCE_TEXT@54..57 "_id"
+    WHITESPACE@57..58 "\n"
+    PIPE@58..59 "|"
+    WHITESPACE@59..60 " "
+    WHERE_COMMAND@60..107
+      WHERE_KW@60..65 "WHERE"
+      WHITESPACE@65..66 " "
+      AND_EXPRESSION@66..107
+        IS_NULL_EXPRESSION@66..87
+          QUALIFIED_NAME@66..75
+            IDENTIFIER@66..70
+              IDENT@66..70 "user"
+            DOT@70..71 "."
+            IDENTIFIER@71..75
+              IDENT@71..75 "name"
+          WHITESPACE@75..76 " "
+          IS_KW@76..78 "IS"
+          WHITESPACE@78..79 " "
+          NOT_KW@79..82 "NOT"
+          WHITESPACE@82..83 " "
+          NULL_KW@83..87 "NULL"
+        WHITESPACE@87..88 " "
+        AND_KW@88..91 "AND"
+        WHITESPACE@91..92 " "
+        IS_NULL_EXPRESSION@92..107
+          QUALIFIED_NAME@92..99
+            IDENTIFIER@92..96
+              IDENT@92..96 "host"
+            DOT@96..97 "."
+            IDENTIFIER@97..99
+              IDENT@97..99 "ip"
+          WHITESPACE@99..100 " "
+          IS_KW@100..102 "IS"
+          WHITESPACE@102..103 " "
+          NULL_KW@103..107 "NULL"
+  WHITESPACE@107..108 "\n"
+--- errors

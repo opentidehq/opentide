@@ -1,0 +1,71 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/in_expression__valid.subquery.esql
+---
+SOURCE_FILE@0..153
+  COMMENT@0..56 "// prod:in_expression valid (IN subquery, 9.5 and later)"
+  WHITESPACE@56..57 "\n"
+  QUERY@57..152
+    FROM_COMMAND@57..81
+      FROM_KW@57..61 "FROM"
+      WHITESPACE@61..62 " "
+      INDEX_PATTERN@62..68
+        INDEX_NAME@62..68
+          SOURCE_TEXT@62..68 "logs-*"
+      WHITESPACE@68..69 " "
+      METADATA@69..81
+        METADATA_KW@69..77 "METADATA"
+        WHITESPACE@77..78 " "
+        METADATA_FIELD@78..81
+          SOURCE_TEXT@78..81 "_id"
+    WHITESPACE@81..82 "\n"
+    PIPE@82..83 "|"
+    WHITESPACE@83..84 " "
+    WHERE_COMMAND@84..152
+      WHERE_KW@84..89 "WHERE"
+      WHITESPACE@89..90 " "
+      IN_EXPRESSION@90..152
+        QUALIFIED_NAME@90..99
+          IDENTIFIER@90..94
+            IDENT@90..94 "user"
+          DOT@94..95 "."
+          IDENTIFIER@95..99
+            IDENT@95..99 "name"
+        WHITESPACE@99..100 " "
+        NOT_KW@100..103 "NOT"
+        WHITESPACE@103..104 " "
+        IN_KW@104..106 "IN"
+        WHITESPACE@106..107 " "
+        SOURCE_SUBQUERY@107..152
+          L_PAREN@107..108 "("
+          FROM_COMMAND@108..119
+            FROM_KW@108..112 "FROM"
+            WHITESPACE@112..113 " "
+            INDEX_PATTERN@113..119
+              INDEX_NAME@113..119
+                SOURCE_TEXT@113..119 "admins"
+          WHITESPACE@119..120 " "
+          PIPE@120..121 "|"
+          WHITESPACE@121..122 " "
+          WHERE_COMMAND@122..134
+            WHERE_KW@122..127 "WHERE"
+            WHITESPACE@127..128 " "
+            QUALIFIED_NAME@128..134
+              IDENTIFIER@128..134
+                IDENT@128..134 "active"
+          WHITESPACE@134..135 " "
+          PIPE@135..136 "|"
+          WHITESPACE@136..137 " "
+          KEEP_COMMAND@137..151
+            KEEP_KW@137..141 "KEEP"
+            WHITESPACE@141..142 " "
+            NAME_PATTERN@142..151
+              ID_PATTERN@142..146
+                ID_PATTERN_TEXT@142..146 "user"
+              DOT@146..147 "."
+              ID_PATTERN@147..151
+                ID_PATTERN_TEXT@147..151 "name"
+          R_PAREN@151..152 ")"
+  WHITESPACE@152..153 "\n"
+--- errors

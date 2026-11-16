@@ -1,0 +1,39 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/array__invalid.yaral
+---
+SOURCE_FILE@0..72
+  COMMENT@0..21 "// prod:array invalid"
+  WHITESPACE@21..22 "\n"
+  SEARCH_QUERY@22..71
+    SEARCH_EVENTS@22..46
+      FUNCTION_CALL@22..42
+        FUNCTION_NAME@22..37
+          IDENT@22..28 "arrays"
+          ACCESS_DOT@28..29 "."
+          FIELD_NAME@29..37 "contains"
+        L_PAREN@37..38 "("
+        ARGUMENTS@38..42
+          ARRAY_EXPR@38..42
+            L_BRACK@38..39 "["
+            LITERAL@39..42
+              STRING@39..42 "\"a\""
+      WHITESPACE@42..43 " "
+      LITERAL@43..46
+        STRING@43..46 "\"b\""
+    ERROR@46..71
+      R_BRACK@46..47 "]"
+      COMMA@47..48 ","
+      WHITESPACE@48..49 " "
+      VAR_TOKEN@49..51 "$e"
+      ACCESS_DOT@51..52 "."
+      FIELD_NAME@52..61 "principal"
+      ACCESS_DOT@61..62 "."
+      FIELD_NAME@62..70 "hostname"
+      R_PAREN@70..71 ")"
+  WHITESPACE@71..72 "\n"
+errors:
+42..43: expected `]` (expected `]`, `,`)
+42..43: expected `)` (expected `)`, `]`, `,`)
+46..46: expected a section such as `events:`
