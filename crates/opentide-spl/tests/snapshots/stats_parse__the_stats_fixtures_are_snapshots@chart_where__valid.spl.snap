@@ -1,0 +1,50 @@
+---
+source: crates/opentide-spl/tests/stats_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/chart_where__valid.spl
+---
+SOURCE_FILE@0..61
+  PIPELINE@0..61
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    STATS_COMMAND@13..61
+      CHART_KW@13..22 "timechart"
+      WHITESPACE@22..23 " "
+      COMMAND_OPTION@23..30
+        IDENTIFIER@23..27
+          IDENT@23..27 "span"
+        EQ@27..28 "="
+        IDENTIFIER@28..30
+          FIELD_WORD@28..30 "1h"
+      WHITESPACE@30..31 " "
+      AGGREGATE_ITEM@31..36
+        IDENTIFIER@31..36
+          IDENT@31..36 "count"
+      WHITESPACE@36..37 " "
+      BY_CLAUSE@37..44
+        BY_KW@37..39 "by"
+        WHITESPACE@39..40 " "
+        IDENTIFIER@40..44
+          IDENT@40..44 "host"
+      WHITESPACE@44..45 " "
+      CHART_WHERE@45..61
+        WHERE_KW@45..50 "where"
+        WHITESPACE@50..51 " "
+        IDENTIFIER@51..56
+          IDENT@51..56 "count"
+        WHITESPACE@56..57 " "
+        GT@57..58 ">"
+        WHITESPACE@58..59 " "
+        NUMBER@59..61
+          NUMBER_TOKEN@59..61 "10"
+--

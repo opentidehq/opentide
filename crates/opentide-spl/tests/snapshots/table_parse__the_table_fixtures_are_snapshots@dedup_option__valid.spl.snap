@@ -1,0 +1,41 @@
+---
+source: crates/opentide-spl/tests/table_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/dedup_option__valid.spl
+---
+SOURCE_FILE@0..57
+  PIPELINE@0..57
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    DEDUP_COMMAND@13..57
+      DEDUP_KW@13..18 "dedup"
+      WHITESPACE@18..19 " "
+      IDENTIFIER@19..23
+        IDENT@19..23 "host"
+      WHITESPACE@23..24 " "
+      IDENTIFIER@24..28
+        IDENT@24..28 "user"
+      WHITESPACE@28..29 " "
+      DEDUP_OPTION@29..43
+        KEEPEMPTY_KW@29..38 "keepempty"
+        EQ@38..39 "="
+        BOOLEAN@39..43
+          BOOL_KW@39..43 "true"
+      WHITESPACE@43..44 " "
+      SORTBY_KW@44..50 "sortby"
+      WHITESPACE@50..51 " "
+      SORT_ITEM@51..57
+        MINUS@51..52 "-"
+        IDENTIFIER@52..57
+          IDENT@52..57 "_time"
+--

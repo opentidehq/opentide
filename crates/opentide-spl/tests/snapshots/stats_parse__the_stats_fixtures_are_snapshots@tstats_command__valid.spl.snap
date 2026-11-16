@@ -1,0 +1,32 @@
+---
+source: crates/opentide-spl/tests/stats_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/tstats_command__valid.spl
+---
+SOURCE_FILE@0..37
+  PIPELINE@0..37
+    BARE_SEARCH@0..37
+      IDENTIFIER@0..6
+        IDENT@0..6 "tstats"
+      WHITESPACE@6..7 " "
+      IDENTIFIER@7..12
+        IDENT@7..12 "count"
+      WHITESPACE@12..13 " "
+      IDENTIFIER@13..18
+        IDENT@13..18 "where"
+      WHITESPACE@18..19 " "
+      FIELD_VALUE@19..29
+        FIELD_REF@19..24
+          IDENTIFIER@19..24
+            IDENT@19..24 "index"
+        EQ@24..25 "="
+        FIELD_VALUE_RHS@25..29
+          IDENTIFIER@25..29
+            IDENT@25..29 "main"
+      WHITESPACE@29..30 " "
+      IDENTIFIER@30..32
+        IDENT@30..32 "by"
+      WHITESPACE@32..33 " "
+      IDENTIFIER@33..37
+        IDENT@33..37 "host"
+--

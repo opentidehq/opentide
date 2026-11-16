@@ -1,0 +1,47 @@
+---
+source: crates/opentide-spl/tests/rest_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/lookup_field__valid.spl
+---
+SOURCE_FILE@0..71
+  PIPELINE@0..71
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    LOOKUP_COMMAND@13..71
+      LOOKUP_KW@13..19 "lookup"
+      WHITESPACE@19..20 " "
+      IDENTIFIER@20..29
+        IDENT@20..29 "dnslookup"
+      WHITESPACE@29..30 " "
+      LOOKUP_FIELD@30..45
+        IDENTIFIER@30..38
+          IDENT@30..38 "clientip"
+        WHITESPACE@38..39 " "
+        LOOKUP_ALIAS@39..45
+          AS_KW@39..41 "as"
+          WHITESPACE@41..42 " "
+          IDENTIFIER@42..45
+            IDENT@42..45 "src"
+      WHITESPACE@45..46 " "
+      OUTPUTNEW_KW@46..55 "OUTPUTNEW"
+      WHITESPACE@55..56 " "
+      LOOKUP_FIELD@56..71
+        IDENTIFIER@56..66
+          IDENT@56..66 "clienthost"
+        WHITESPACE@66..67 " "
+        LOOKUP_ALIAS@67..71
+          AS_KW@67..69 "AS"
+          WHITESPACE@69..70 " "
+          IDENTIFIER@70..71
+            IDENT@70..71 "h"
+--
