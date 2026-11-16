@@ -234,6 +234,16 @@ fn every_unsafe_is_listed_with_its_reason() -> TestResult {
         [1],
         "the scan is broken: it finds the keyword in code only"
     );
+    assert_eq!(unsafe_keywords(&code_only(sample)), 1, "the scan is broken");
+    let mut files = Vec::new();
+    for dir in DIRECTORIES {
+        rust_files(&root().join(dir), &mut files)?;
+    }
+    assert!(
+        files.len() > 100,
+        "the walk is broken: {} Rust files",
+        files.len()
+    );
     assert_eq!(
         found, listed,
         "left: the `unsafe` keywords in each file; right: the rows docs/internal/unsafe.md \
