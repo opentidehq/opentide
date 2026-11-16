@@ -176,4 +176,27 @@ fn a_long_run_of_field_comparisons_is_linear() {
         "{:?}",
         started.elapsed()
     );
+
+/// A run with a trailing or doubled operator reports each finding once: the tree-sitter-shaped
+/// view nested such a run so that its last operand stood under two levels, and checked it
+/// twice.
+#[test]
+fn a_broken_run_reports_each_finding_once() {
+    for source in [
+        "process where a == 1 or b == c or",
+        "process where a == b or c == d or e == f or",
+        "process where a == b and c == d and",
+        "process where (c == d or or e == f) or",
+    ] {
+        let diagnostics = analyze(source).diagnostics;
+        let mut seen: Vec<String> = diagnostics.iter().map(|d| format!("{d:?}")).collect();
+        let all = seen.len();
+        seen.sort();
+        seen.dedup();
+        assert_eq!(seen.len(), all, "{source}: {diagnostics:#?}");
+        assert!(
+            diagnostics.iter().any(|d| d.code == "eql_field_comparison"),
+            "{source}: {diagnostics:#?}"
+        );
+    }
 }
