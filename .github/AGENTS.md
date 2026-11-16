@@ -318,9 +318,11 @@ scripts/ci-local.sh --full     # + nextest ci, doctests, rustdoc, crate packages
 
 ## CodeQL, Dependabot
 
-**CodeQL:** Python and Actions via [`workflows/codeql.yml`](workflows/codeql.yml)
-(`/language:python` + `/language:actions`): on a pull request that changes a Python file or a
-workflow, on every push to a base branch, and nightly; not a required check. Code Quality may
+**CodeQL:** Python, Rust and Actions via [`workflows/codeql.yml`](workflows/codeql.yml)
+(`/language:python`, `/language:rust`, `/language:actions`, `security-extended`; Rust with
+`build-mode: none`, no cargo build): each language on a pull request that changes its files
+(Python sources; `crates/`, `bindings/`, `xtask/`, `Cargo.toml`, `Cargo.lock`; the workflows and
+actions), every language on every push to a base branch and nightly; not a required check. Code Quality may
 also run dynamic Python on push. Local Python: `scripts/codeql-local.sh`. Skill:
 [codeql](../.agents/skills/codeql/SKILL.md).
 

@@ -1,4 +1,4 @@
-# CodeQL for python + GitHub Actions workflows. Restores /language:python in this
+# CodeQL for Python, Rust and the GitHub Actions workflows. Restores /language:python in this
 # workflow so PR code-scanning comparison matches the configuration registered on
 # development (Code Quality dynamic scans alone do not satisfy that category).
 name: CodeQL
@@ -8,7 +8,7 @@ on:
     # integration/unified-core: the Unified Core PRs merge there before development.
     branches: [main, development, integration/unified-core]
   # A pull request is analysed when it changes what CodeQL reads: Python
-  # sources and the workflows. Pushes and the nightly analyse everything. Not a
+  # sources, the Rust workspace and the workflows. Pushes and the nightly analyse everything. Not a
   # required check (a path-filtered workflow does not report when it does not
   # run): its alerts gate through code scanning (.github/AGENTS.md).
   pull_request:
@@ -18,6 +18,11 @@ on:
       - "uv.lock"
       - ".github/workflows/**"
       - ".github/actions/**"
+      - "crates/**"
+      - "bindings/**"
+      - "xtask/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
   schedule:
     - cron: "30 5 * * *"
 
@@ -42,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [python, actions]
+        language: [python, rust, actions]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,9 +57,10 @@ jobs:
           persist-credentials: false
 
       # On a pull request, a language is analysed only when its files change:
-      # Python (*.py, pyproject.toml, uv.lock) or the workflows and actions.
+      # Python (*.py, pyproject.toml, uv.lock), Rust (the workspace's crates,
+      # bindings, xtask and its manifest and lockfile) or the workflows and actions.
       # The job still starts, so its required check reports either way. Every
-      # push and the weekly run analyse both;
+      # push and the nightly analyse every language;
       # so does a checkout that is not a pull request's merge commit (it fails
       # open). Bash patterns, one a line; `*` matches `/` too.
       - name: Whether this language's files changed
@@ -66,6 +72,12 @@ jobs:
             *.py
             pyproject.toml
             uv.lock
+          RUST_PATHS: |
+            crates/*
+            bindings/*
+            xtask/*
+            Cargo.toml
+            Cargo.lock
           ACTIONS_PATHS: |
             .github/workflows/*
             .github/actions/*
@@ -99,6 +111,9 @@ jobs:
         uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           languages: ${{ matrix.language }}
+          # Every language here is extracted from source: Rust without a
+          # cargo build (CodeQL 2.23.3+, GA), Python and Actions as before.
+          build-mode: none
           queries: security-extended
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5

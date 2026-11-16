@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Optional local CodeQL — mirrors .github/workflows/codeql.yml (python + actions).
+# Optional local CodeQL — the Python half of .github/workflows/codeql.yml
+# (CI also analyses rust and actions).
 # (~15–25s) and evaluates all queries (~20–40s). No incremental analysis yet.
 #
 # Usage:
