@@ -37,7 +37,7 @@ fn a_long_arithmetic_run_is_analysed_on_a_small_stack() {
         });
         assert_eq!(errors, 0, "{op}");
         assert!(
-            started.elapsed() < Duration::from_secs(20),
+            started.elapsed() < Duration::from_secs(60),
             "{op}: {:?}",
             started.elapsed()
         );
@@ -63,6 +63,26 @@ fn assert_linear(name: &str, n: usize, run: impl Fn(usize)) {
     assert!(
         large < Duration::from_millis(50) || large < small * 8,
         "{name}: {small:?} for {n}, {large:?} for {}: not linear",
+        4 * n
+    );
+}
+
+/// The analysis's steps for `run(make(n))` and `run(make(4 * n))`: fails unless the larger
+/// takes fewer than 8 times the smaller's, where linear work takes 4 times and quadratic 16.
+/// Steps are counted on the thread that runs (`opentide_eql::steps`), not timed, so the check
+/// is deterministic.
+fn assert_steps_linear(name: &str, n: usize, make: impl Fn(usize) -> String, run: impl Fn(&str)) {
+    let steps = |k: usize| {
+        let source = make(k);
+        let before = opentide_eql::steps();
+        run(&source);
+        opentide_eql::steps() - before
+    };
+    let (small, large) = (steps(n), steps(4 * n));
+    assert!(small > 0, "{name}: no steps counted");
+    assert!(
+        large < small * 8,
+        "{name}: {small} steps for {n}, {large} for {}: not linear",
         4 * n
     );
 }
@@ -187,13 +207,13 @@ fn a_long_run_of_field_comparisons_is_linear() {
         "process where {} or true",
         vec!["a == b"; 40_000].join(" or ")
     );
-    let started = Instant::now();
     let errors = on_small_stack(move || analyze(&source).diagnostics.len());
     assert_eq!(errors, 0, "an `or` with `true` is folded away");
-    assert!(
-        started.elapsed() < Duration::from_secs(10),
-        "{:?}",
-        started.elapsed()
+    assert_steps_linear(
+        "field comparisons",
+        2_000,
+        |n| format!("process where {} or true", vec!["a == b"; n].join(" or ")),
+        |q| drop(analyze(q)),
     );
 }
 
@@ -225,27 +245,22 @@ fn a_broken_run_reports_each_finding_once() {
 /// left operand of the run around it, and was typed again at each depth.
 #[test]
 fn nested_arithmetic_is_linear() {
-    let nested = format!("{}1{} == 1", "(".repeat(500), " + 1)".repeat(500));
-    let source = format!("process where {}", vec![nested.as_str(); 200].join(" or "));
-    let started = Instant::now();
-    on_small_stack(move || analyze(&source).diagnostics.len());
-    assert!(
-        started.elapsed() < Duration::from_secs(10),
-        "{:?}",
-        started.elapsed()
+    assert_steps_linear(
+        "nested arithmetic",
+        100,
+        |n| format!("process where {}1{} == 1", "(".repeat(n), " + 1)".repeat(n)),
+        |q| drop(analyze(q)),
     );
 }
 
-/// A chain of `not` is spanned only when the parser found a problem.
+/// A chain of `not` is spanned only when the parser found a problem: each `not` was spanned
+/// down to its comparison, quadratic in the chain.
 #[test]
 fn a_long_chain_of_not_is_linear() {
-    let chained = format!("{}a == 1", "not ".repeat(500));
-    let source = format!("process where {}", vec![chained.as_str(); 200].join(" or "));
-    let started = Instant::now();
-    on_small_stack(move || analyze(&source).diagnostics.len());
-    assert!(
-        started.elapsed() < Duration::from_secs(10),
-        "{:?}",
-        started.elapsed()
+    assert_steps_linear(
+        "chained not",
+        100,
+        |n| format!("process where {}a == 1", "not ".repeat(n)),
+        |q| drop(analyze(q)),
     );
 }

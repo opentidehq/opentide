@@ -10,6 +10,7 @@ use rowan::{NodeOrToken, TextRange};
 
 /// A child the analysis sees: a node, or a token that is not trivia.
 fn visible(element: &rowan::SyntaxElement<crate::syntax::Lang>) -> bool {
+    crate::step();
     match element {
         NodeOrToken::Node(_) => true,
         NodeOrToken::Token(t) => !t.kind().is_trivia(),

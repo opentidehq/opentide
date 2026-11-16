@@ -245,6 +245,7 @@ fn ty(node: &SyntaxNode, source: &str) -> Ty {
     let mut node = node.clone();
     let mut signed = false;
     loop {
+        crate::step();
         match node.kind() {
             K::PARENTHESIZED_EXPRESSION | K::UNARY_EXPRESSION => {
                 signed |= node.kind() == K::UNARY_EXPRESSION;
@@ -336,6 +337,7 @@ fn run_ty(run: &Run, source: &str) -> Ty {
     let side = |slot: Option<&Slot>| node_of(slot).map_or(Ty::Unknown, |n| ty(n, source));
     let mut acc = side(run.sides(0).0);
     for level in 0..run.len() {
+        crate::step();
         acc = arithmetic(acc, side(run.sides(level).1));
     }
     acc
@@ -654,6 +656,7 @@ impl Translated {
             let mut folded = vec![false; levels.len()];
             let mut any = false;
             for level in (0..levels.len()).rev() {
+                crate::step();
                 let (left, right) = levels.sides(level);
                 any |= [left, right].into_iter().any(|side| {
                     node_of(side).is_some_and(|n| strip_parens(n.clone()).kind() == K::BOOLEAN)
@@ -674,6 +677,7 @@ fn translated_as_query(node: &SyntaxNode, cache: &mut Translated) -> bool {
     let mut passed = Vec::new();
     let mut child = node.clone();
     let result = loop {
+        crate::step();
         let Some(parent) = child.parent() else {
             break false;
         };

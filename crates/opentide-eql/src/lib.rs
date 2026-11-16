@@ -268,6 +268,25 @@ fn parse_prepared(source: &str) -> Option<(tree::Tree, lexical::Prepared)> {
     Some((tree::parse(source), prepared))
 }
 
+thread_local! {
+    /// The steps of the analysis's inner loops on this thread: [`steps`].
+    static STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts one step of an inner loop: a child looked at for a span or hover, an operand typed,
+/// a run level folded, a parent climbed.
+pub(crate) fn step() {
+    STEPS.set(STEPS.get().wrapping_add(1));
+}
+
+/// How many steps of its inner loops the analysis has taken on this thread. For the tests that
+/// hold the work to linear in the query (`tests/analysis_runs.rs`): counted, not timed, so the
+/// checks are deterministic. Not API.
+#[doc(hidden)]
+pub fn steps() -> usize {
+    STEPS.get()
+}
+
 /// Analyze an EQL query: its diagnostics and highlight tokens. The findings'
 /// ranges come from one line table ([`opentide_core::with_line_index`]).
 pub fn analyze(source: &str) -> AnalyzeResult {
