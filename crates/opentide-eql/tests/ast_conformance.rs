@@ -8,6 +8,8 @@
 
 #[path = "../src/generated/ast.rs"]
 mod ast;
+#[path = "../src/ast_ext.rs"]
+mod ast_ext;
 #[path = "../src/lexer.rs"]
 mod lexer;
 #[path = "../src/parser.rs"]
@@ -202,7 +204,11 @@ fn assert_conforms(root: &SyntaxNode) {
 #[test]
 fn every_node_kind_has_a_rule() {
     let first = K::SOURCE_FILE as u16;
-    let last = K::STRING as u16;
+    // The last kind: past it, `from_raw` falls back to `ERROR`.
+    let last = (first..u16::MAX)
+        .take_while(|&raw| SyntaxKind::from_raw(rowan::SyntaxKind(raw)) as u16 == raw)
+        .last()
+        .unwrap_or(first);
     for raw in first..=last {
         assert!(
             ast::RULES.iter().any(|rule| rule.kind == raw),
@@ -269,6 +275,14 @@ fn a_sequence_conforms_and_reads() {
     assert_eq!(unit.value().expect("a value").syntax().to_string(), "5");
     assert_eq!(unit.unit().expect("a unit").syntax().to_string(), "m");
     assert_eq!(sequence.sequence_terms().count(), 2);
+    let terms: Vec<String> = sequence
+        .terms()
+        .iter()
+        .map(|t| t.syntax().to_string())
+        .collect();
+    assert_eq!(terms, ["[any where true] by k2"]);
+    let until = sequence.until().expect("an until term");
+    assert_eq!(until.syntax().to_string(), "[file where f~(x)]");
 }
 
 #[test]
@@ -376,4 +390,39 @@ fn the_parser_builds_the_hand_built_trees() {
         let parsed = SyntaxNode::new_root(parse.green);
         assert_eq!(format!("{parsed:#?}"), format!("{hand:#?}"));
     }
+}
+
+#[test]
+fn a_join_without_until_has_no_until_term() {
+    let term = |name: &'static str| {
+        node(
+            K::JOIN_TERM,
+            vec![node(
+                K::SUBQUERY,
+                vec![
+                    tok(K::L_BRACK, "["),
+                    node(K::EVENT_CATEGORY, vec![ident(name)]),
+                    ws(),
+                    tok(K::WHERE_KW, "where"),
+                    ws(),
+                    node(K::BOOLEAN, vec![tok(K::TRUE_KW, "true")]),
+                    tok(K::R_BRACK, "]"),
+                ],
+            )],
+        )
+    };
+    let root = build(node(
+        K::SOURCE_FILE,
+        vec![node(
+            K::JOIN,
+            vec![tok(K::JOIN_KW, "join"), ws(), term("a"), ws(), term("b")],
+        )],
+    ));
+    assert_conforms(&root);
+    let file = ast::SourceFile::cast(root).expect("a source file");
+    let Some(ast::Query::Join(join)) = file.query() else {
+        panic!("a join");
+    };
+    assert_eq!(join.terms().len(), 2);
+    assert!(join.until().is_none());
 }

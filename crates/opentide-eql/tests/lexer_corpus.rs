@@ -104,7 +104,37 @@ fn lexer_kind(leaf: &str, text: &str) -> K {
         "missing_event_open" => K::BANG_L_BRACK,
         "optional_marker" => K::QUESTION,
         _ if leaf.bytes().all(|b| b.is_ascii_lowercase()) => K::WORD,
-        _ => all(leaf).first().map_or(K::ERROR_TOKEN, |(kind, _)| *kind),
+        _ => punctuation(leaf),
+    }
+}
+
+/// The kind of a punctuation leaf, from a table of its own: lexing the leaf's text would compare
+/// the lexer with itself.
+fn punctuation(leaf: &str) -> K {
+    match leaf {
+        "|" => K::PIPE,
+        "=" => K::EQ,
+        "==" => K::EQ_EQ,
+        "!=" => K::NOT_EQ,
+        "<" => K::LT,
+        "<=" => K::LT_EQ,
+        ">" => K::GT,
+        ">=" => K::GT_EQ,
+        "+" => K::PLUS,
+        "-" => K::MINUS,
+        "*" => K::STAR,
+        "/" => K::SLASH,
+        "%" => K::PERCENT,
+        "(" => K::L_PAREN,
+        ")" => K::R_PAREN,
+        "[" => K::L_BRACK,
+        "]" => K::R_BRACK,
+        "![" => K::BANG_L_BRACK,
+        "," => K::COMMA,
+        "." => K::DOT,
+        ":" => K::COLON,
+        "?" => K::QUESTION,
+        _ => panic!("a tree-sitter leaf the test does not know: {leaf:?}"),
     }
 }
 
