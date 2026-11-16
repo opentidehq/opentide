@@ -17,6 +17,16 @@ on:
   # .github/AGENTS.md); Run workflow runs it alone. Never on a pull request
   # or a push, so it never blocks a merge.
   workflow_call:
+    secrets:
+      OPENTIDE_CBC_URL:
+        description: "The Carbon Black Cloud tenant (oracle.yml's live check)."
+        required: false
+      OPENTIDE_CBC_ORG_KEY:
+        description: "The Carbon Black Cloud org key."
+        required: false
+      OPENTIDE_CBC_TOKEN:
+        description: "The Carbon Black Cloud API token."
+        required: false
   workflow_dispatch:
 
 permissions:

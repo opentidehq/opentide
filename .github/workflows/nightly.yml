@@ -21,6 +21,16 @@ on:
         description: "The workspace's test features (changes.py's `features` output)"
         type: string
         default: ""
+    secrets:
+      OPENTIDE_CBC_URL:
+        description: "The Carbon Black Cloud tenant (oracle.yml's live check)."
+        required: false
+      OPENTIDE_CBC_ORG_KEY:
+        description: "The Carbon Black Cloud org key."
+        required: false
+      OPENTIDE_CBC_TOKEN:
+        description: "The Carbon Black Cloud API token."
+        required: false
   workflow_dispatch:
     inputs:
       features:
@@ -325,8 +335,11 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/oracle.yml
-    # The Carbon Black Cloud tenant's (oracle.yml).
-    secrets: inherit
+    # The Carbon Black Cloud tenant's (oracle.yml): those three only.
+    secrets:
+      OPENTIDE_CBC_URL: ${{ secrets.OPENTIDE_CBC_URL }}
+      OPENTIDE_CBC_ORG_KEY: ${{ secrets.OPENTIDE_CBC_ORG_KEY }}
+      OPENTIDE_CBC_TOKEN: ${{ secrets.OPENTIDE_CBC_TOKEN }}
 
   # Every fuzz target for ten minutes from the corpus engine-fuzz.yml keeps:
   # the nightly's one fuzz pass.

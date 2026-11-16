@@ -1368,8 +1368,11 @@ jobs:
     uses: ./.github/workflows/nightly.yml
     with:
       features: ${{ needs.changes.outputs.features }}
-    # oracle.yml's Carbon Black Cloud tenant.
-    secrets: inherit
+    # oracle.yml's Carbon Black Cloud tenant: those three only.
+    secrets:
+      OPENTIDE_CBC_URL: ${{ secrets.OPENTIDE_CBC_URL }}
+      OPENTIDE_CBC_ORG_KEY: ${{ secrets.OPENTIDE_CBC_ORG_KEY }}
+      OPENTIDE_CBC_TOKEN: ${{ secrets.OPENTIDE_CBC_TOKEN }}
 
   # The console script on Windows (the only `spawn` platform): the launcher
   # and redirect smoke and Ctrl-C (opentide._cli:main, UC-3.8b, #960: a
