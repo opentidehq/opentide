@@ -87,3 +87,18 @@ fn other_long_tokens() {
     lex_on_small_stack(format!("| eval {}", "{f}".repeat(N)));
     lex_on_small_stack(format!("a {}", "*x".repeat(N)));
 }
+
+#[test]
+fn every_other_token_class_at_a_million() {
+    // Numbers, names, call words, dynamic and token names, in search and in
+    // expressions; white space in an expression.
+    lex_on_small_stack("1".repeat(N));
+    lex_on_small_stack(format!("| eval x={}", "1".repeat(N)));
+    lex_on_small_stack(format!("| eval x={}", "a".repeat(N)));
+    lex_on_small_stack(format!("{}()", "a".repeat(N)));
+    lex_on_small_stack(format!("| eval {}{{f}}=1", "a".repeat(N)));
+    lex_on_small_stack(format!("| eval {{f}}{}=1", "a".repeat(N)));
+    lex_on_small_stack(format!("| eval x=${}$", "a".repeat(N)));
+    lex_on_small_stack(format!("| eval x={}1", " ".repeat(N)));
+    lex_on_small_stack(format!("a {}", "*".repeat(N)));
+}
