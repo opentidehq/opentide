@@ -16,20 +16,25 @@ use crate::syntax_util::{
     simple_primary, span, text, token_span, tokens,
 };
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
+use rowan::TextRange;
 use std::collections::{BTreeSet, HashMap};
 
 /// Runs the pass over a parsed query; diagnostics only when it parsed
 /// without an error (`clean`).
 pub(crate) fn analyze(root: &SyntaxNode, source: &str, catalog: &Catalog, clean: bool) -> Analysis {
+    run(root, source, catalog, clean).out
+}
+
+fn run<'a>(root: &SyntaxNode, source: &'a str, catalog: &'a Catalog, clean: bool) -> Pass<'a> {
     let mut pass = Pass {
         source,
         catalog,
         lines: LineIndex::new(source),
         out: Analysis::default(),
-        quiet: 0,
         diagnose: clean,
         depth: 0,
-        expanding: Vec::new(),
+        function_schemas: HashMap::new(),
+        bodies_read: 0,
     };
     let mut scope = Scope::default();
     for child in root.children() {
@@ -43,22 +48,50 @@ pub(crate) fn analyze(root: &SyntaxNode, source: &str, catalog: &Catalog, clean:
             _ => {}
         }
     }
-    pass.out
+    pass
 }
 
-/// Names a scope binds: they are never columns.
-#[derive(Clone, Default)]
-struct Scope {
+/// Names a scope binds: they are never columns. A function body's scope is
+/// a layer over the scope it is defined in ([`Scope::inner`]), not a copy of
+/// it: copying made a chain of `n` functions quadratic (#1424). A name is
+/// looked up in each layer, innermost first, map by map, as in a copy that
+/// the body's bindings were inserted into.
+#[derive(Default)]
+struct Scope<'p> {
+    outer: Option<&'p Scope<'p>>,
     tabular: HashMap<String, Schema>,
     functions: HashMap<String, SyntaxNode>,
     scalars: BTreeSet<String>,
 }
 
-impl Scope {
+impl<'p> Scope<'p> {
+    /// An empty layer over `outer`.
+    fn inner(outer: &'p Scope<'p>) -> Self {
+        Scope {
+            outer: Some(outer),
+            ..Scope::default()
+        }
+    }
+
+    /// This layer and the ones it is over, innermost first.
+    fn layers(&self) -> impl Iterator<Item = &Scope<'p>> {
+        std::iter::successors(Some(self), |s| s.outer)
+    }
+
+    fn tabular(&self, name: &str) -> Option<&Schema> {
+        self.layers().find_map(|s| s.tabular.get(name))
+    }
+
+    fn function(&self, name: &str) -> Option<&SyntaxNode> {
+        self.layers().find_map(|s| s.functions.get(name))
+    }
+
     fn binds(&self, name: &str) -> bool {
-        self.scalars.contains(name)
-            || self.tabular.contains_key(name)
-            || self.functions.contains_key(name)
+        self.layers().any(|s| {
+            s.scalars.contains(name)
+                || s.tabular.contains_key(name)
+                || s.functions.contains_key(name)
+        })
     }
 }
 
@@ -68,14 +101,18 @@ struct Pass<'a> {
     /// One line index for every range of the analysis.
     lines: LineIndex<'a>,
     out: Analysis,
-    /// Above zero while re-reading a function body for its schema.
-    quiet: u32,
     diagnose: bool,
     /// What the walk down the tree has spent of [`BUDGET`].
     depth: u32,
-    /// The functions whose bodies are being read for a call's schema: a call
-    /// to one of them inside its own body is not read again.
-    expanding: Vec<String>,
+    /// What each `let` function's body returns, read once where the
+    /// function is defined (with the names in scope there, as Kusto binds
+    /// them) and keyed by the definition's range: a call reuses it. Reading
+    /// the body again at each call made a chain of functions that call the
+    /// one before quadratic, and exponential when each calls it twice (#1424).
+    function_schemas: HashMap<TextRange, Option<Schema>>,
+    /// How many function bodies the pass has read: the work counter the
+    /// tests hold to one per definition.
+    bodies_read: usize,
 }
 
 /// How deep the pass walks, so that it never overflows a 1 MB stack (the
@@ -147,7 +184,10 @@ impl<'a> Pass<'a> {
     }
 
     fn named_source(&self, word: &str, scope: &Scope) -> Option<Schema> {
-        source_schema(self.catalog, word, &scope.tabular, scope.binds(word))
+        if let Some(schema) = scope.tabular(word) {
+            return Some(schema.clone());
+        }
+        source_schema(self.catalog, word, &HashMap::new(), scope.binds(word))
     }
 
     // --- bindings ---------------------------------------------------------
@@ -166,7 +206,8 @@ impl<'a> Pass<'a> {
                 scope.tabular.insert(name, schema);
             }
             K::FUNCTION_DEFINITION => {
-                self.function_schema(&value, scope);
+                let schema = self.function_schema(&value, scope);
+                self.function_schemas.insert(value.text_range(), schema);
                 scope.functions.insert(name, value);
             }
             _ => {
@@ -201,7 +242,8 @@ impl<'a> Pass<'a> {
     }
 
     fn function_schema_at(&mut self, def: &SyntaxNode, outer: &Scope) -> Option<Schema> {
-        let mut scope = outer.clone();
+        self.bodies_read += 1;
+        let mut scope = Scope::inner(outer);
         let mut body = None;
         for child in def.children() {
             match child.kind() {
@@ -255,23 +297,19 @@ impl<'a> Pass<'a> {
         for op in nodes_but(expr, &[K::TABULAR_SOURCE, K::ERROR]) {
             let input = schema;
             let output = self.operator(&op, input.clone(), scope);
-            if self.quiet == 0 {
-                stages.push(Stage {
-                    operator: legacy_kind(op.kind()),
-                    span: span(&op),
-                    input,
-                    output: output.clone(),
-                });
-            }
+            stages.push(Stage {
+                operator: legacy_kind(op.kind()),
+                span: span(&op),
+                input,
+                output: output.clone(),
+            });
             schema = output;
         }
-        if self.quiet == 0 {
-            self.out.pipelines.push(Pipeline {
-                span: expr_span,
-                source: start,
-                stages,
-            });
-        }
+        self.out.pipelines.push(Pipeline {
+            span: expr_span,
+            source: start,
+            stages,
+        });
         schema
     }
 
@@ -355,17 +393,14 @@ impl<'a> Pass<'a> {
             }
             return Schema::open();
         }
-        if let Some(def) = scope.functions.get(&name).cloned() {
-            if self.expanding.contains(&name) {
-                // A function that calls itself: Kusto has no recursion.
-                return Schema::open();
-            }
-            self.expanding.push(name.clone());
-            self.quiet += 1;
-            let schema = self.function_schema(&def, scope);
-            self.quiet -= 1;
-            self.expanding.pop();
-            return schema
+        if let Some(def) = scope.function(&name) {
+            // Its body was read where it was defined. A function cannot call
+            // itself: its name is bound after its body is read.
+            return self
+                .function_schemas
+                .get(&def.text_range())
+                .cloned()
+                .flatten()
                 .map(|mut s| {
                     s.source = Source::Let(name.clone());
                     s
@@ -1293,15 +1328,13 @@ impl<'a> Pass<'a> {
             Ctx::Join(l, r) => vec![l, r],
         };
         let found = resolve_column(name, &schemas);
-        if self.quiet == 0 {
-            self.out.references.push(Reference {
-                name: name.to_string(),
-                span: name_span,
-                column: found.clone(),
-                operator: op,
-            });
-        }
-        if found.is_some() || self.quiet > 0 || !self.diagnose {
+        self.out.references.push(Reference {
+            name: name.to_string(),
+            span: name_span,
+            column: found.clone(),
+            operator: op,
+        });
+        if found.is_some() || !self.diagnose {
             return;
         }
         if let Some(d) = unknown_column(name, &schemas, self.lines.range(name_span)) {
@@ -1310,18 +1343,16 @@ impl<'a> Pass<'a> {
     }
 
     fn define(&mut self, at: ByteSpan, column: &Column) {
-        if self.quiet == 0 {
-            self.out.definitions.push(Definition {
-                column: column.clone(),
-                span: at,
-            });
-        }
+        self.out.definitions.push(Definition {
+            column: column.clone(),
+            span: at,
+        });
     }
 
     // --- types --------------------------------------------------------------
 
     fn check_types(&mut self, node: &SyntaxNode, schema: &Schema, scope: &Scope) {
-        if self.quiet > 0 || !self.diagnose || schema.known == Known::Open {
+        if !self.diagnose || schema.known == Known::Open {
             return;
         }
         let elements: Vec<rowan::SyntaxElement<crate::syntax::Lang>> = node
@@ -1413,4 +1444,93 @@ fn aggregate_call(item: &SyntaxNode) -> Option<SyntaxNode> {
         return value_of(item).as_ref().and_then(simple_call);
     }
     simple_call(item)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Profile;
+
+    /// The pass over `source`, against the Sentinel catalog.
+    fn pass_over(source: &str, check: impl FnOnce(&Pass<'_>)) {
+        let parsed = crate::parser::parse(source);
+        let root = SyntaxNode::new_root(parsed.green);
+        let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+        check(&run(&root, source, &catalog, parsed.errors.is_empty()));
+    }
+
+    /// `n` functions, each calling the one before `calls` times.
+    fn chain(n: usize, calls: usize) -> String {
+        let mut out = String::from("let f0 = () { SigninLogs | project UserPrincipalName };\n");
+        for i in 1..n {
+            let call = format!("f{}()", i - 1);
+            let body = if calls == 1 {
+                call
+            } else {
+                format!("union {}", vec![call; calls].join(", "))
+            };
+            out.push_str(&format!("let f{i} = () {{ {body} }};\n"));
+        }
+        out.push_str(&format!("f{}() | where Nope == 1", n - 1));
+        out
+    }
+
+    /// Each body is read once, where it is defined, however often it is
+    /// called (#1424): re-reading it at each call was quadratic on a chain
+    /// and exponential when each function calls the one before twice.
+    #[test]
+    fn each_function_body_is_read_once() {
+        for (n, calls) in [(1, 1), (200, 1), (40, 2), (40, 3)] {
+            pass_over(&chain(n, calls), |pass| {
+                assert_eq!(pass.bodies_read, n, "{n} functions, {calls} calls each");
+                // The first body's schema reaches the last call: `Nope` is
+                // not a column after its `project`.
+                assert!(
+                    pass.out
+                        .diagnostics
+                        .iter()
+                        .any(|d| d.message.contains("'Nope'")),
+                    "{n}, {calls}: {:?}",
+                    pass.out.diagnostics
+                );
+            });
+        }
+    }
+
+    /// A body binds the names in scope where it is defined, as Kusto does:
+    /// a name rebound after the definition does not change what it returns.
+    #[test]
+    fn a_body_binds_the_names_of_its_definition() {
+        let source = "let X = SigninLogs | project q = 1;\n\
+                      let f = () { X | extend z = 2 };\n\
+                      let X = SecurityEvent;\n\
+                      f() | where z == 1 | where q == 2 | where w == 3";
+        pass_over(source, |pass| {
+            let unknown: Vec<&str> = pass
+                .out
+                .diagnostics
+                .iter()
+                .map(|d| d.message.as_str())
+                .collect();
+            assert!(
+                unknown.len() == 1 && unknown[0].contains("'w'"),
+                "{unknown:?}"
+            );
+        });
+    }
+
+    /// A parameter shadows a name of the scope the function is defined in,
+    /// in its own map only, as when the body's scope was a copy.
+    #[test]
+    fn a_layer_shadows_map_by_map() {
+        let mut outer = Scope::default();
+        outer.tabular.insert("T".into(), Schema::open());
+        outer.scalars.insert("s".into());
+        let mut inner = Scope::inner(&outer);
+        inner.scalars.insert("T".into());
+        assert!(inner.tabular("T").is_some());
+        assert!(inner.binds("T") && inner.binds("s"));
+        assert!(!inner.binds("u"));
+        assert!(outer.function("T").is_none());
+    }
 }
