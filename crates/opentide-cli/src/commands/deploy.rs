@@ -141,7 +141,8 @@ impl DryRun {
     }
 
     /// The JSON document, `duration_ms` as given: the command's keys, then
-    /// `ok`, `status`, `message`, `warnings`, then `error` when the run
+    /// `ok`, `status`, `message`, `warnings` (the run's, with the command's
+    /// own merged in by `put_warnings`), then `error` when the run
     /// exits non-zero and its keys hold none, then the envelope's keys.
     pub fn document(&self, duration_ms: i64) -> Json {
         let had_error = self.outcome.data.iter().any(|(key, _)| key == "error");
@@ -153,18 +154,15 @@ impl DryRun {
         } else {
             members.shift_remove("error")
         };
-        let mut at = members
-            .get_index_of("message")
-            .map_or(members.len(), |at| at + 1);
-        if !self.warnings.is_empty() {
-            members.shift_insert(
-                at,
-                "warnings".into(),
-                Json::Array(self.warnings.iter().map(Json::str).collect()),
-            );
-            at += 1;
-        }
+        crate::envelope::put_warnings(&mut members, &self.warnings);
         if let Some(error) = error {
+            let at = members
+                .get_index_of(if self.warnings.is_empty() {
+                    "message"
+                } else {
+                    "warnings"
+                })
+                .map_or(members.len(), |at| at + 1);
             members.shift_insert(at, "error".into(), error);
         }
         Json::Object(members)

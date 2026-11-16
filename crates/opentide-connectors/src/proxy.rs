@@ -248,7 +248,7 @@ mod tests {
             route(&proxies, "https://splunk.example.com:8089/services"),
             Some("http://proxy.corp:3128".to_owned())
         );
-        // A proxy written without a scheme is an HTTP proxy, as urllib reads it.
+        // A proxy written without a scheme is an HTTP proxy.
         assert_eq!(
             route(&proxies, "http://splunk.example.com/x"),
             Some("http://gateway.corp:8080".to_owned())

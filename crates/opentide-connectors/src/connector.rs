@@ -79,7 +79,7 @@ pub const DEFAULT_LIMIT: usize = 100;
 /// (`query.models.DEFAULT_TIMEOUT`).
 pub const DEFAULT_QUERY_TIMEOUT: Duration = Duration::from_secs(120);
 
-/// A UTC interval, `start` inclusive (Python's `TimeWindow`).
+/// A UTC interval, `start` inclusive.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TimeWindow {
     /// Where it starts.
@@ -134,7 +134,7 @@ pub fn utc_z(at: jiff::Timestamp) -> String {
     TimeWindow::utc_z(at)
 }
 
-/// One query to run or check on one tenant (Python's `query.models.QueryRequest`).
+/// One query to run or check on one tenant.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QueryRequest {
     /// The query text.
@@ -203,7 +203,7 @@ impl QueryColumn {
 /// ordered JSON, since serde_json's map sorts its keys).
 pub type Row = opentide_compile::json::Object;
 
-/// What a query returned (Python's `query.models.QueryResult`).
+/// What a query returned.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct QueryOutcome {
     /// The columns, in order.
@@ -337,9 +337,8 @@ pub fn kql_with_limit(query: &str, limit: usize) -> String {
     format!("{text}\n| take {}", limit.saturating_add(1))
 }
 
-/// What a live check learns from a tenant that accepted a query (Python's
-/// `query.models.LiveCheck`, with what the platform's validator's `inspect`
-/// adds). A refusal is an error instead: [`ConnectorError::Refused`], or
+/// What a live check learns from a tenant that accepted a query, with what
+/// the platform's validator's `inspect` adds. A refusal is an error instead: [`ConnectorError::Refused`], or
 /// [`ConnectorError::QueryTimedOut`] for a search that outlived the check
 /// timeout.
 #[derive(Clone, Debug, PartialEq, Default)]
