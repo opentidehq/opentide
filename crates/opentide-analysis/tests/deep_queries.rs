@@ -99,12 +99,24 @@ const KUERY_NEST_FLOOR: usize = NESTING_CEILING;
 /// lucene passed the 10,000 cap in 0.04 s; held at the ceiling.
 const LUCENE_NEST_FLOOR: usize = NESTING_CEILING;
 
-/// Run `run` on a 1 MB stack and fail on an overflow, a panic or a blown time budget.
+/// The stack the floors are measured against: the browser WASM module's 1 MB.
+#[cfg(not(any(coverage, windows)))]
+const SMALL_STACK: usize = 1 << 20;
+/// Under `cargo llvm-cov` (`--cfg coverage`) the instrumentation enlarges every frame,
+/// so the depths measured on an ordinary debug build overflow 1 MB (`kql nest` aborted
+/// the nightly Coverage job). A Windows debug build's frames are larger too (`kql nest`
+/// aborted the nightly's Windows engine tests: the floors sit at the edge measured on
+/// Linux and macOS). Neither binary is the WASM budget; the 1 MB model stays enforced
+/// by the Linux and macOS test jobs. 8 MB is a generous bound, not a measurement.
+#[cfg(any(coverage, windows))]
+const SMALL_STACK: usize = 8 << 20;
+
+/// Run `run` on a [`SMALL_STACK`] and fail on an overflow, a panic or a blown time budget.
 fn on_small_stack<T: Send + 'static>(name: &str, run: impl FnOnce() -> T + Send + 'static) -> T {
     let started = Instant::now();
     let out = thread::Builder::new()
         .name(name.into())
-        .stack_size(1 << 20)
+        .stack_size(SMALL_STACK)
         .spawn(run)
         .unwrap()
         .join()

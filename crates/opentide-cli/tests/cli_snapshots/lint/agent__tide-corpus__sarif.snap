@@ -7267,8 +7267,8 @@ exit: 0
                 "text": "The command line names a command that does not exist."
               },
               "help": {
-                "markdown": "# usage_unknown_command\n\nThe command line names a command that does not exist.\n\nExit 2, as `failure.code`. `failure.suggestion` names the closest command.\n\n## Example\n\n```text\nopentide valdiate\n```\n\n## How to fix\n\nRun the command `did you mean` names, or `opentide --help` for the list. In an agent, `opentide commands --json` prints the whole command tree.\n",
-                "text": "usage_unknown_command\n\nThe command line names a command that does not exist.\n\nExit 2, as failure.code. failure.suggestion names the closest command.\n\nExample\n\nopentide valdiate\n\nHow to fix\n\nRun the command did you mean names, or opentide --help for the list. In an agent, opentide commands --json prints the whole command tree."
+                "markdown": "# usage_unknown_command\n\nThe command line names a command that does not exist.\n\nExit 2, as `failure.code`. `failure.suggestion` names the closest command.\n\n## Example\n\n```text\nopentide valdiate\n```\n\n## How to fix\n\nRun the command named by the tip (`a similar subcommand exists`) or by `failure.suggestion`, or `opentide --help` for the list. In an agent, `opentide commands --json` prints the whole command tree.\n",
+                "text": "usage_unknown_command\n\nThe command line names a command that does not exist.\n\nExit 2, as failure.code. failure.suggestion names the closest command.\n\nExample\n\nopentide valdiate\n\nHow to fix\n\nRun the command named by the tip (a similar subcommand exists) or by failure.suggestion, or opentide --help for the list. In an agent, opentide commands --json prints the whole command tree."
               },
               "helpUri": "https://opentide.org/docs/cli/diagnostics#usage_unknown_command",
               "id": "usage_unknown_command",

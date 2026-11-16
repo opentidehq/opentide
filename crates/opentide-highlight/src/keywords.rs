@@ -40,8 +40,12 @@ impl Capture {
 /// A language's keywords and punctuation, each with its capture.
 pub type Keywords = &'static [(&'static str, Capture)];
 
+const MACRO: Capture = Capture::new("macro");
+const STRING: Capture = Capture::new("string");
 const OPERATOR: Capture = Capture::new("operator");
+const PIPE: Capture = Capture::new("operator.pipe");
 const BRACKET: Capture = Capture::new("punctuation.bracket");
+const DELIMITER: Capture = Capture::new("punctuation.delimiter");
 const KEYWORD: Capture = Capture::new("keyword");
 
 /// Kibana KQL: the operators and brackets its lexer cuts as tokens. `or`,
@@ -73,6 +77,47 @@ const LUCENE: Keywords = &[
     ("}", BRACKET),
 ];
 
+/// CrowdStrike Query Language: the contextual keywords, the operators, the brackets and the
+/// delimiters, and the sigils of saved queries and parameters. `/` is both the division and
+/// the delimiter of a regex, which is a string. `and`, `or` and `not` are node patterns in the
+/// `.scm`, never in the TextMate grammar: the analysis colours them from the tree.
+const CQL: Keywords = &[
+    ("$", MACRO),
+    ("?", MACRO),
+    ("?{", MACRO),
+    ("/", STRING),
+    ("case", KEYWORD),
+    ("match", KEYWORD),
+    ("like", KEYWORD),
+    ("|", PIPE),
+    ("=", OPERATOR),
+    ("!=", OPERATOR),
+    ("<", OPERATOR),
+    ("<=", OPERATOR),
+    (">", OPERATOR),
+    (">=", OPERATOR),
+    ("==", OPERATOR),
+    ("<=>", OPERATOR),
+    (":=", OPERATOR),
+    ("=~", OPERATOR),
+    ("=>", OPERATOR),
+    ("!", OPERATOR),
+    ("+", OPERATOR),
+    ("-", OPERATOR),
+    ("*", OPERATOR),
+    ("/", OPERATOR),
+    ("%", OPERATOR),
+    ("(", BRACKET),
+    (")", BRACKET),
+    ("[", BRACKET),
+    ("]", BRACKET),
+    ("{", BRACKET),
+    ("}", BRACKET),
+    (",", DELIMITER),
+    (";", DELIMITER),
+    (":", DELIMITER),
+];
+
 /// The `KEYWORDS` table of `language`, or `None` while it is generated from
 /// its `highlights.scm`. A language adds an arm when its engine
 /// moves to `opentide-parse`.
@@ -81,6 +126,7 @@ pub const fn keywords(language: LanguageId) -> Option<Keywords> {
     match language {
         LanguageId::Kuery => Some(KUERY),
         LanguageId::Lucene => Some(LUCENE),
+        LanguageId::Cql => Some(CQL),
         LanguageId::Kql
         | LanguageId::Spl
         | LanguageId::TideYaml
@@ -88,7 +134,6 @@ pub const fn keywords(language: LanguageId) -> Option<Keywords> {
         | LanguageId::Eql
         | LanguageId::Config
         | LanguageId::Falco
-        | LanguageId::Cql
         | LanguageId::Yara
         | LanguageId::Exabeam
         | LanguageId::Yaral => None,

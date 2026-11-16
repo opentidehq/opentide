@@ -3240,7 +3240,6 @@ dependencies = [
  "ctrlc",
  "dunce",
  "form_urlencoded",
- "humantime",
  "indexmap",
  "inquire",
  "insta",
@@ -3298,6 +3297,7 @@ dependencies = [
 name = "opentide-compare"
 version = "0.12.0"
 dependencies = [
+ "jiff",
  "regex",
  "serde",
  "serde_json",
@@ -3369,6 +3369,7 @@ dependencies = [
  "regex",
  "reqwest",
  "ring",
+ "roxmltree",
  "rustls",
  "rustls-native-certs",
  "serde",
@@ -3406,9 +3407,12 @@ dependencies = [
 name = "opentide-cql"
 version = "0.12.0"
 dependencies = [
+ "logos",
  "opentide-core",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
+ "rowan",
  "serde",
  "toml 0.8.23",
  "tree-sitter",
@@ -4594,6 +4598,15 @@ dependencies = [
  "memoffset",
  "rustc-hash 1.1.0",
  "text-size",
+]
+
+[[package]]
+name = "roxmltree"
+version = "0.21.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9da7f59328b09405b181fee1018925fad50f157afb43c0c0f5c522c256dd5907"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
@@ -5893,6 +5906,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
 
 [[package]]
+name = "ungrammar"
+version = "1.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3e5df347f0bf3ec1d670aad6ca5c6a1859cd9ea61d2113125794654ccced68f"
+
+[[package]]
 name = "unicase"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6565,6 +6584,7 @@ dependencies = [
  "glob",
  "html5ever",
  "indexmap",
+ "jiff",
  "jsonschema",
  "markup5ever_rcdom",
  "opentide-analysis",
@@ -6577,6 +6597,7 @@ dependencies = [
  "opentide-schema",
  "opentide-workspace",
  "pyo3-introspection",
+ "rayon",
  "regex",
  "rustix",
  "schemars",
@@ -6587,6 +6608,7 @@ dependencies = [
  "tempfile",
  "toml 0.8.23",
  "trycmd",
+ "ungrammar",
  "wait4",
 ]
 

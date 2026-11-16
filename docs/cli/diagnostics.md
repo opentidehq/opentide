@@ -7324,7 +7324,7 @@ opentide valdiate
 
 ### How to fix
 
-Run the command `did you mean` names, or `opentide --help` for the list. In an agent, `opentide commands --json` prints the whole command tree.
+Run the command named by the tip (`a similar subcommand exists`) or by `failure.suggestion`, or `opentide --help` for the list. In an agent, `opentide commands --json` prints the whole command tree.
 
 ## usage_unknown_option
 

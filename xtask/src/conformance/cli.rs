@@ -19,33 +19,6 @@ use crate::corpus::cli::{corpora_dir, load_catalogue, materialise, repo_root, wr
 use crate::corpus::{configuration, faults, generate};
 use crate::golden::fixture::copy_tree;
 
-const USAGE: &str = "\
-usage: cargo xtask conformance [--runners rust,python,node] [--corpus NAME,...]
-                               [--out DIR] [--diverge RUNNER] [--keep]
-
-Lays out the corpora of tests/conformance/manifest.json under DIR (default
-<target>/conformance), runs every operation on each through every runner (the
-Rust SDK's `cargo test -p opentide --features cli,connectors --test
-conformance`, the Python SDK's pytest under `uv run`, the Node SDK's
-`node --test`), and requires
-their documents byte-identical; a difference is reported by its JSON pointer.
-The first runner is the reference. The stand-in tenants of the manifest
-(tests/cassettes/<name>/tenant.py, run with $PYTHON, else python3) start once,
-on loopback, and every runner talks to them; each is reset before each runner.
-
-  --runners   the runners, at least two (default rust,python,node). The Python
-              runner needs `uv sync`; the Node runner the addon `npm run build`
-              writes in bindings/node
-  --corpus    only these corpora of the manifest
-  --diverge   the suite's own test: RUNNER (not the first) diverges on purpose
-              (OPENTIDE_CONFORMANCE_DIVERGE), and the run passes only when the
-              comparator catches it, in that runner alone
-  --keep      keep the corpora and documents of a run that passed (a failed
-              run keeps them)
-
-exit status: 0 identical (or, with --diverge, caught), 1 a difference (or a
-divergence missed, or a runner failed), 2 a usage error";
-
 /// The variables no runner sees: the CI providers', the coding agents', and
 /// opentide's own, which change what a command writes. The runners run as a
 /// person's shell would, and all three in the same environment.
@@ -63,49 +36,53 @@ const CLEARED: [&str; 8] = [
 /// The marker of a folder this command made, which it may remove.
 const MARKER: &str = ".xtask-conformance";
 
-#[derive(Debug)]
-struct Args {
-    runners: Vec<String>,
-    corpora: Option<Vec<String>>,
-    out: Option<PathBuf>,
-    diverge: Option<String>,
-    keep: bool,
+/// The arguments of `cargo xtask conformance`.
+///
+/// Lays out the corpora of tests/conformance/manifest.json under DIR (default
+/// `<target>/conformance`), runs every operation on each through every runner
+/// (the Rust SDK's `cargo test -p opentide --features cli,connectors --test
+/// conformance`, the Python SDK's pytest under `uv run`, the Node SDK's `node
+/// --test`), and requires their documents byte-identical; a difference is
+/// reported by its JSON pointer. The first runner is the reference. The
+/// stand-in tenants of the manifest (`tests/cassettes/<name>/tenant.py`, run with
+/// $PYTHON, else python3) start once, on loopback, and every runner talks to
+/// them; each is reset before each runner.
+///
+/// Exit status: 0 identical (or, with --diverge, caught), 1 a difference (or a
+/// divergence missed, or a runner failed), 2 a usage error.
+#[derive(clap::Args, Debug)]
+pub struct ConformanceArgs {
+    /// The runners, at least two. The Python runner needs `uv sync`; the Node
+    /// runner the addon `npm run build` writes in bindings/node
+    #[arg(
+        long,
+        value_delimiter = ',',
+        default_value = "rust,python,node",
+        value_parser = clap::builder::PossibleValuesParser::new(RUNNERS)
+    )]
+    pub runners: Vec<String>,
+    /// Only these corpora of the manifest
+    #[arg(long = "corpus", value_name = "NAME", value_delimiter = ',')]
+    pub corpora: Option<Vec<String>>,
+    /// Lay the corpora out in DIR
+    #[arg(long, value_name = "DIR")]
+    pub out: Option<PathBuf>,
+    /// The suite's own test: RUNNER (not the first) diverges on purpose
+    /// (OPENTIDE_CONFORMANCE_DIVERGE), and the run passes only when the
+    /// comparator catches it, in that runner alone
+    #[arg(long, value_name = "RUNNER")]
+    pub diverge: Option<String>,
+    /// Keep the corpora and documents of a run that passed (a failed run keeps
+    /// them)
+    #[arg(long)]
+    pub keep: bool,
 }
 
-fn parse(args: &[String]) -> Result<Args> {
-    let mut parsed = Args {
-        runners: RUNNERS.iter().map(|r| (*r).to_owned()).collect(),
-        corpora: None,
-        out: None,
-        diverge: None,
-        keep: false,
-    };
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        let mut value = || {
-            args.next()
-                .cloned()
-                .with_context(|| format!("{arg} needs a value"))
-        };
-        match arg.as_str() {
-            "--runners" => {
-                parsed.runners = value()?.split(',').map(str::to_owned).collect();
-            }
-            "--corpus" => {
-                parsed.corpora = Some(value()?.split(',').map(str::to_owned).collect());
-            }
-            "--out" => parsed.out = Some(PathBuf::from(value()?)),
-            "--diverge" => parsed.diverge = Some(value()?),
-            "--keep" => parsed.keep = true,
-            "-h" | "--help" | "help" => bail!("{USAGE}"),
-            other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        }
-    }
+/// The combinations of options clap cannot see: the runners are distinct and
+/// at least two, and `--diverge` names one of them that is not the reference.
+fn check_runners(parsed: &ConformanceArgs) -> Result<()> {
     let mut seen = BTreeSet::new();
     for runner in &parsed.runners {
-        if !RUNNERS.contains(&runner.as_str()) {
-            bail!("--runners: unknown runner `{runner}` (rust, python, node)");
-        }
         if !seen.insert(runner) {
             bail!("--runners: `{runner}` is named twice");
         }
@@ -121,7 +98,7 @@ fn parse(args: &[String]) -> Result<Args> {
             bail!("--diverge: `{runner}` is the reference; diverge another runner");
         }
     }
-    Ok(parsed)
+    Ok(())
 }
 
 /// Runs the command; the exit status.
@@ -130,14 +107,11 @@ fn parse(args: &[String]) -> Result<Args> {
 ///
 /// A usage error, or a corpus or runner that could not be set up (status 2).
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-pub fn run(args: &[String]) -> Result<u8> {
-    let args = match parse(args) {
-        Ok(args) => args,
-        Err(error) => {
-            eprintln!("xtask conformance: {error:#}");
-            return Ok(2);
-        }
-    };
+pub fn run(args: &ConformanceArgs) -> Result<u8> {
+    if let Err(error) = check_runners(args) {
+        eprintln!("xtask conformance: {error:#}");
+        return Ok(2);
+    }
     let repo = repo_root();
     let manifest_path = repo.join("tests/conformance/manifest.json");
     let manifest = Manifest::parse(
@@ -325,7 +299,7 @@ pub fn run(args: &[String]) -> Result<u8> {
         .collect();
     let ok = passed(&mismatches, args.diverge.as_deref()) && stale.is_empty();
     print_report(
-        &args,
+        args,
         &laid_out,
         &manifest,
         &expected,
@@ -334,7 +308,7 @@ pub fn run(args: &[String]) -> Result<u8> {
         started,
     );
     print_known(&known, &approved, &stale);
-    write_report(&out.join("report.json"), &args, &expected, &mismatches, ok)?;
+    write_report(&out.join("report.json"), args, &expected, &mismatches, ok)?;
     drop(stand_ins);
     if ok && !args.keep {
         remove(&out.join("corpora"))?;
@@ -625,7 +599,7 @@ fn lay_out(repo: &Path, corpus: &super::Corpus, root: &Path) -> Result<Vec<(Stri
 }
 
 fn print_report(
-    args: &Args,
+    args: &ConformanceArgs,
     laid_out: &[(String, PathBuf)],
     manifest: &Manifest,
     expected: &[String],
@@ -746,7 +720,7 @@ fn print_known(known: &[Known], approved: &[(String, String)], stale: &[&Known])
 
 fn write_report(
     path: &Path,
-    args: &Args,
+    args: &ConformanceArgs,
     expected: &[String],
     mismatches: &[Mismatch],
     ok: bool,
@@ -778,8 +752,15 @@ fn write_report(
 mod tests {
     use super::*;
 
-    fn args(text: &[&str]) -> Result<Args> {
-        parse(&text.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>())
+    fn args(text: &[&str]) -> Result<ConformanceArgs, clap::Error> {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Cli {
+            #[command(flatten)]
+            args: ConformanceArgs,
+        }
+        Cli::try_parse_from(std::iter::once("conformance").chain(text.iter().copied()))
+            .map(|cli| cli.args)
     }
 
     #[test]
@@ -793,23 +774,29 @@ mod tests {
 
     #[test]
     fn bad_options_are_usage_errors() {
+        // What clap cannot see: the runners' combination.
         for (text, message) in [
             (&["--runners", "rust"][..], "at least two"),
-            (&["--runners", "rust,ruby"][..], "unknown runner"),
             (&["--runners", "rust,rust"][..], "named twice"),
             (&["--diverge", "rust"][..], "is the reference"),
             (
                 &["--runners", "rust,python", "--diverge", "node"][..],
                 "not one of",
             ),
-            (&["--frobnicate"][..], "unknown option"),
-            (&["--out"][..], "needs a value"),
         ] {
-            let error = args(text).unwrap_err();
+            let error = check_runners(&args(text).unwrap()).unwrap_err();
             assert!(
                 format!("{error:#}").contains(message),
                 "{text:?}: {error:#}"
             );
+        }
+        // What it does: an unknown runner or option, a missing value.
+        for text in [
+            &["--runners", "rust,ruby"][..],
+            &["--frobnicate"][..],
+            &["--out"][..],
+        ] {
+            assert_eq!(args(text).err().unwrap().exit_code(), 2, "{text:?}");
         }
     }
 

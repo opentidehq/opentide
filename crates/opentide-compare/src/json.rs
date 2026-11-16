@@ -451,9 +451,11 @@ pub fn write(value: &Json, layout: Layout, newline: bool) -> Vec<u8> {
     out
 }
 
-/// `value` on one line, for a report.
+/// `value` on one line, for a report. Every `Json` serialises; were that
+/// ever false, the text names the failure rather than reading as an empty
+/// value that two different failures would share.
 pub fn compact(value: &Json) -> String {
-    serde_json::to_string(value).unwrap_or_default()
+    serde_json::to_string(value).unwrap_or_else(|error| format!("<unserialisable: {error}>"))
 }
 
 #[cfg(test)]
