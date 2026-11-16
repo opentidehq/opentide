@@ -10,6 +10,8 @@
 //! `OPENTIDE_DIFF_SEEDS` (comma separated, default `1,2`) picks the seeds,
 //! `OPENTIDE_DIFF_SCALE` (default 1) multiplies the sampling, and
 //! `OPENTIDE_DIFF_REPORT` names a file the JSON reports are written to.
+//! The generated-query pass (`generated_queries_match_tree_sitter`) has its own
+//! `OPENTIDE_GEN_SEEDS` (default `11,12`), `OPENTIDE_GEN_SCALE` and `OPENTIDE_GEN_REPORT`.
 //! `word_level_mutants_match_tree_sitter` is the reviewer's scheme (40 word-level
 //! mutants per file: `OPENTIDE_MUT_SEEDS` default `21`, `OPENTIDE_MUT_PER_FILE`, `OPENTIDE_MUT_REPORT`).
 //!
@@ -379,6 +381,8 @@ fn pinned_regressions() {
         "FROM a | WHERE x IS NOT NULL AND y IS NULL\n",
         "FROM a | WHERE a / NOT IN (\"a*\")\n",
         "FROM a | EVAL x = -not\n",
+        // A tuple is the left of an `in`.
+        "FROM a | WHERE (a, b) NOT IN (FROM c | KEEP a, b)\n",
         // A parameter names an assignment.
         "ROW ?p = 1\n",
         "FROM a | EVAL ??p = 1 | STATS ?q = COUNT(*)\n",
@@ -391,6 +395,19 @@ fn pinned_regressions() {
                 "{query} @ {offset}"
             );
         }
+    }
+    // The verdict of a broken query is the old engine's: a tuple is the left of an `in`, and nothing else.
+    for query in [
+        "FROM a | WHERE x* (host.name, user.name) IN (\"a\", \"b\")\n",
+        "FROM a | WHERE (a, b) + 1 IN (FROM c)\n",
+    ] {
+        let errors = |side: &Side| {
+            (side.analyze)(query, None)
+                .0
+                .iter()
+                .any(|d| d.message.contains("ES|QL syntax error"))
+        };
+        assert!(errors(&old) && errors(&new), "{query}");
     }
     // Class (b): tree-sitter reads a reserved word as the unit of a number;
     // Elasticsearch (`@elastic/esql` 4.33.0) and the new parser reject it.
@@ -508,6 +525,438 @@ fn word_level_mutants_match_tree_sitter() {
         if let Ok(path) = std::env::var("OPENTIDE_MUT_REPORT") {
             std::fs::write(path, report.to_json_string()).unwrap_or_default();
         }
+        assert_gates(&report);
+    }
+}
+
+/// A seeded generator of queries the grammar accepts: a source command, then
+/// processing commands, over expressions of every operator, call, constant
+/// and name form. It stands beside the corpus (which the differential feeds
+/// first) so that the valid side of the gate is not the corpus alone.
+mod generated {
+    use super::rng::Rng;
+
+    const FIELDS: &[&str] = &[
+        "host.name",
+        "user.name",
+        "source.ip",
+        "destination.port",
+        "event.code",
+        "process.name",
+        "@timestamp",
+        "message",
+        "a",
+        "b.c",
+        "`odd name`",
+        "_id",
+        "x",
+        "event.outcome",
+        "process.command_line",
+        "file.path",
+        "url.full",
+    ];
+    const INDICES: &[&str] = &[
+        "logs-*",
+        "logs-endpoint.events.*",
+        "winlogbeat-*",
+        "a",
+        "b,c",
+        "remote:logs-*",
+        "logs-*::data",
+        "my-index-000001",
+        "traces-apm*",
+        "\"quoted-index\"",
+    ];
+    const CALLS: &[&str] = &[
+        "TO_LOWER",
+        "TO_STRING",
+        "LENGTH",
+        "ABS",
+        "ROUND",
+        "COALESCE",
+        "CONCAT",
+        "MV_COUNT",
+        "TO_IP",
+        "DATE_TRUNC",
+        "NOW",
+        "CASE",
+        "SUBSTRING",
+        "STARTS_WITH",
+        "MV_CONTAINS",
+    ];
+    const AGGS: &[&str] = &[
+        "COUNT",
+        "SUM",
+        "MAX",
+        "MIN",
+        "AVG",
+        "COUNT_DISTINCT",
+        "VALUES",
+        "TOP",
+    ];
+    const TYPES: &[&str] = &[
+        "long", "keyword", "ip", "datetime", "double", "boolean", "string",
+    ];
+    const UNITS: &[&str] = &[
+        "minute", "minutes", "hour", "hours", "day", "days", "seconds", "m", "ms",
+    ];
+    const CMP: &[&str] = &["==", "!=", "<", "<=", ">", ">="];
+    const ARITH: &[&str] = &["+", "-", "*", "/", "%"];
+    const STRINGS: &[&str] = &[
+        "\"abc\"",
+        "\"a*\"",
+        "\"C:\\\\Windows\"",
+        "\"tab\\t\"",
+        "\"\"\"raw \\ text\"\"\"",
+        "\"\"",
+        "\"it\\\"s\"",
+        "\"*.exe\"",
+    ];
+
+    pub struct Gen<'r>(pub &'r mut Rng);
+
+    impl Gen<'_> {
+        fn field(&mut self) -> String {
+            self.0.pick(FIELDS).to_string()
+        }
+
+        fn constant(&mut self) -> String {
+            match self.0.below(9) {
+                0 => self.0.below(1000).to_string(),
+                1 => format!("{}.{}", self.0.below(50), self.0.below(99)),
+                2 => self.0.pick(STRINGS).to_string(),
+                3 => self
+                    .0
+                    .pick(&["true", "false", "NULL", "TRUE", "False"])
+                    .to_string(),
+                4 => format!("{} {}", self.0.below(30) + 1, self.0.pick(UNITS)),
+                5 => self.0.pick(&["?p", "?1", "??id", "?"]).to_string(),
+                6 => format!("{}e{}", self.0.below(9), self.0.below(5)),
+                7 => format!("[{}, {}]", self.0.below(9), self.0.below(9)),
+                _ => format!(".{}", self.0.below(99)),
+            }
+        }
+
+        fn atom(&mut self, depth: usize) -> String {
+            match self.0.below(if depth == 0 { 4 } else { 9 }) {
+                0 | 1 => self.field(),
+                2 | 3 => self.constant(),
+                4 | 5 => {
+                    let call = self.0.pick(CALLS);
+                    let n = self.0.below(3);
+                    let args: Vec<String> = (0..n).map(|_| self.expr(depth - 1)).collect();
+                    format!("{call}({})", args.join(", "))
+                }
+                6 => format!("({})", self.expr(depth - 1)),
+                7 => format!("{}::{}", self.atom(depth - 1), self.0.pick(TYPES)),
+                _ => format!(
+                    "{}({}, {{\"k\": {}}})",
+                    self.0.pick(CALLS),
+                    self.expr(depth - 1),
+                    self.constant()
+                ),
+            }
+        }
+
+        fn value(&mut self, depth: usize) -> String {
+            match self.0.below(6) {
+                0 if depth > 0 => format!("-{}", self.value(depth - 1)),
+                1 | 2 if depth > 0 => {
+                    let n = self.0.below(3) + 1;
+                    let mut s = self.atom(depth - 1);
+                    for _ in 0..n {
+                        s = format!("{s} {} {}", self.0.pick(ARITH), self.atom(depth - 1));
+                    }
+                    s
+                }
+                _ => self.atom(depth),
+            }
+        }
+
+        fn predicate(&mut self, depth: usize) -> String {
+            let v = self.value(depth);
+            match self.0.below(10) {
+                0..=2 => format!("{v} {} {}", self.0.pick(CMP), self.value(depth)),
+                3 => format!("{v} IN ({}, {})", self.constant(), self.constant()),
+                4 => format!("{v} NOT IN ({})", self.constant()),
+                5 => format!("{v} IS NULL"),
+                6 => format!("{v} IS NOT NULL"),
+                7 => format!(
+                    "{v} {}LIKE {}",
+                    self.0.pick(&["", "NOT ", "R"]),
+                    self.0.pick(STRINGS)
+                ),
+                8 => format!("{} : {}", self.field(), self.0.pick(STRINGS)),
+                _ => v,
+            }
+        }
+
+        pub fn expr(&mut self, depth: usize) -> String {
+            let mut s = self.predicate(depth);
+            for _ in 0..self.0.below(4) {
+                let op = self.0.pick(&["AND", "OR", "and", "or"]);
+                let p = self.predicate(depth.saturating_sub(1));
+                let p = if self.0.chance(15) {
+                    format!("NOT {p}")
+                } else {
+                    p
+                };
+                s = format!("{s} {op} {p}");
+            }
+            if self.0.chance(10) {
+                format!("NOT ({s})")
+            } else {
+                s
+            }
+        }
+
+        fn names(&mut self) -> String {
+            let n = self.0.below(3) + 1;
+            (0..n)
+                .map(|_| {
+                    self.0.pick(&[
+                        "host.*",
+                        "user.name",
+                        "a*b",
+                        "`q`",
+                        "*",
+                        "x",
+                        "@timestamp",
+                        "?p",
+                        "process.*",
+                    ])
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+
+        fn agg(&mut self) -> String {
+            let call = if self.0.chance(40) {
+                "COUNT(*)".to_string()
+            } else {
+                format!("{}({})", self.0.pick(AGGS), self.field())
+            };
+            let named = if self.0.chance(60) {
+                format!(
+                    "{} = {call}",
+                    self.0.pick(&["n", "total", "c1", "`my agg`"])
+                )
+            } else {
+                call
+            };
+            if self.0.chance(25) {
+                format!("{named} WHERE {}", self.expr(1))
+            } else {
+                named
+            }
+        }
+
+        fn command(&mut self, allow_fork: bool) -> String {
+            let e = self.0.below(26);
+            match e {
+                0..=2 => format!("WHERE {}", self.expr(2)),
+                3 | 4 => format!(
+                    "EVAL {} = {}",
+                    self.0.pick(&["n", "x2", "`y z`", "a.b"]),
+                    self.expr(2)
+                ),
+                5 => format!(
+                    "EVAL {}, {} = {}",
+                    self.expr(1),
+                    self.0.pick(&["p", "q"]),
+                    self.expr(1)
+                ),
+                6 => format!("KEEP {}", self.names()),
+                7 => format!("DROP {}", self.names()),
+                8 => format!(
+                    "RENAME {} AS {}",
+                    self.0.pick(&["a", "host.name", "`q`"]),
+                    self.0.pick(&["b", "h"])
+                ),
+                9 => format!(
+                    "RENAME {} = {}",
+                    self.0.pick(&["b", "h"]),
+                    self.0.pick(&["a", "host.name"])
+                ),
+                10 => format!(
+                    "SORT {} {}",
+                    self.field(),
+                    self.0
+                        .pick(&["", "ASC", "DESC", "DESC NULLS FIRST", "ASC NULLS LAST"])
+                ),
+                11 => format!("LIMIT {}", self.0.below(500)),
+                12 => format!("LIMIT {} BY {}", self.0.below(9) + 1, self.field()),
+                13 | 14 => {
+                    let n = self.0.below(2) + 1;
+                    let aggs: Vec<String> = (0..n).map(|_| self.agg()).collect();
+                    let by = if self.0.chance(70) {
+                        format!(
+                            " BY {}",
+                            self.0.pick(&[
+                                "host.name",
+                                "b = BUCKET(@timestamp, 1 hour)",
+                                "user.name, host.name"
+                            ])
+                        )
+                    } else {
+                        String::new()
+                    };
+                    format!(
+                        "{} {}{by}",
+                        self.0.pick(&["STATS", "INLINE STATS", "INLINESTATS"]),
+                        aggs.join(", ")
+                    )
+                }
+                15 => format!("DISSECT {} \"%{{a}} %{{b}}\"", self.field()),
+                16 => format!("GROK {} \"%{{IP:ip}}\"", self.field()),
+                17 => format!(
+                    "ENRICH {} ON {} WITH {}",
+                    self.0.pick(&["policy", "ctx:policy", "\"p\""]),
+                    self.field(),
+                    self.0.pick(&["x", "n = x", "x, y"])
+                ),
+                18 => format!("MV_EXPAND {}", self.field()),
+                19 => format!(
+                    "{} JOIN {} ON {}",
+                    self.0.pick(&["LOOKUP", "LEFT", "RIGHT"]),
+                    self.0.pick(&["idx", "lookup-*", "remote:idx"]),
+                    self.expr(1)
+                ),
+                20 => format!("CHANGE_POINT {} ON {} AS t, p", self.field(), self.field()),
+                21 => format!("SAMPLE 0.{}", self.0.below(99) + 1),
+                22 if allow_fork => format!(
+                    "FORK (WHERE {}) (LIMIT {} | KEEP {})",
+                    self.expr(1),
+                    self.0.below(9) + 1,
+                    self.names()
+                ),
+                23 => format!("FILLNULL {} ON {}", self.constant(), self.names()),
+                24 => format!(
+                    "COMPLETION {} WITH {{\"inference_id\": \"m\"}}",
+                    self.field()
+                ),
+                _ => self
+                    .0
+                    .pick(&[
+                        "DEDUP",
+                        "METRICS_INFO",
+                        "TS_INFO",
+                        "FUSE",
+                        "FUSE RRF",
+                        "MV_EXPAND a",
+                    ])
+                    .to_string(),
+            }
+        }
+
+        fn source(&mut self) -> String {
+            match self.0.below(10) {
+                0 => format!(
+                    "ROW {} = {}, b = {}",
+                    self.0.pick(&["a", "x"]),
+                    self.constant(),
+                    self.expr(1)
+                ),
+                1 => "SHOW INFO".to_string(),
+                2 => format!("TS {}", self.0.pick(INDICES)),
+                3 => format!(
+                    "FROM {}, (FROM {} | WHERE {})",
+                    self.0.pick(INDICES),
+                    self.0.pick(INDICES),
+                    self.expr(1)
+                ),
+                _ => {
+                    let n = self.0.below(2) + 1;
+                    let idx: Vec<&str> = (0..n).map(|_| self.0.pick(INDICES)).collect();
+                    let meta = match self.0.below(4) {
+                        0 => " METADATA _id",
+                        1 => " METADATA _id, _index, _version",
+                        _ => "",
+                    };
+                    format!("FROM {}{meta}", idx.join(", "))
+                }
+            }
+        }
+
+        pub fn query(&mut self) -> String {
+            let mut q = String::new();
+            if self.0.chance(8) {
+                q.push_str("SET a = 1;\n");
+            }
+            if self.0.chance(10) {
+                q.push_str("// a comment\n");
+            }
+            q.push_str(&self.source());
+            for _ in 0..self.0.below(6) {
+                q.push_str(if self.0.chance(70) { "\n| " } else { " | " });
+                q.push_str(&self.command(true));
+                if self.0.chance(5) {
+                    q.push_str(" /* c /* n */ */");
+                }
+            }
+            if self.0.chance(50) {
+                q.push('\n');
+            }
+            q
+        }
+    }
+}
+
+/// Queries composed by the generator: the valid side of the gate beyond the
+/// corpus. The queries the old engine rejects count on the broken side.
+#[test]
+fn generated_queries_match_tree_sitter() {
+    let scale: usize = std::env::var("OPENTIDE_GEN_SCALE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1);
+    let (old, new) = (old(), new());
+    for seed in env_list("OPENTIDE_GEN_SEEDS", "11,12") {
+        let mut rng = rng::Rng::new(seed);
+        let mut generator = generated::Gen(&mut rng);
+        let files: Vec<Source> = (0..400 * scale)
+            .map(|i| Source {
+                name: format!("generated/{seed}/{i}"),
+                text: generator.query(),
+            })
+            .collect();
+        let originals = files
+            .iter()
+            .filter(|f| valid(&old.observe(&f.text)))
+            .count();
+        eprintln!(
+            "generated seed {seed}: {originals} of {} queries are valid",
+            files.len()
+        );
+        assert!(
+            originals * 10 > files.len() * 7,
+            "the generator makes too few valid queries: {originals} of {}",
+            files.len()
+        );
+        let mut config = Config::new(&valid, &tokens, SAMPLES);
+        config.seed = seed;
+        config.mutations_per_input = 1;
+        config.sentences = 0;
+        config.max_prefixes = 2;
+        config.max_offsets = 16;
+        let report = run(&old, &new, &files, &config);
+        eprintln!(
+            "generated seed {seed}: {} inputs, {} valid; valid {}, broken {}, verdict {}",
+            report.inputs,
+            report.valid,
+            report.total(opentide_parse::differential::Class::Valid),
+            report.total(opentide_parse::differential::Class::Broken),
+            report.total(opentide_parse::differential::Class::Verdict),
+        );
+        if let Ok(path) = std::env::var("OPENTIDE_GEN_REPORT") {
+            std::fs::write(path, report.to_json_string()).unwrap_or_default();
+        }
+        assert!(
+            report.valid * 10 > files.len() * 6,
+            "the generator makes too few valid queries: {} of {}",
+            report.valid,
+            files.len()
+        );
         assert_gates(&report);
     }
 }

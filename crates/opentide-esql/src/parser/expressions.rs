@@ -139,6 +139,8 @@ fn operators(p: &mut Parser<'_>, min: u8) -> Option<CompletedMarker> {
         let lhs_kind = lhs.kind();
         let boolean = BOOLEAN.map(K::raw).contains(&lhs_kind);
         let ok = match op {
+            // A tuple is the left of an `in`, and nothing else.
+            _ if lhs_kind == K::IN_TUPLE.raw() => matches!(op, Infix::In { .. }),
             Infix::Or | Infix::And => true,
             Infix::Cast | Infix::Match => PRIMARY.map(K::raw).contains(&lhs_kind),
             Infix::Comparison => !boolean && lhs_kind != K::COMPARISON.raw(),
@@ -248,14 +250,14 @@ fn prefix(p: &mut Parser<'_>, min: u8) -> Option<CompletedMarker> {
         expr_bp(p, 8);
         return Some(m.complete(p, K::UNARY_EXPRESSION.raw()));
     }
-    atom(p)
+    atom(p, min <= 3)
 }
 
 /// `_primary_expression`.
-fn atom(p: &mut Parser<'_>) -> Option<CompletedMarker> {
+fn atom(p: &mut Parser<'_>, tuple_ok: bool) -> Option<CompletedMarker> {
     let kind = p.current();
     if kind == K::L_PAREN.raw() {
-        Some(parenthesized(p))
+        Some(parenthesized(p, tuple_ok))
     } else if kind == K::WORD.raw() {
         word_atom(p)
     } else if kind == K::QUOTED_IDENT.raw() {
@@ -306,7 +308,7 @@ fn param_atom(p: &mut Parser<'_>) -> Option<CompletedMarker> {
 }
 
 /// `( expr )`, or the `( a, b )` of a tuple before `IN`.
-fn parenthesized(p: &mut Parser<'_>) -> CompletedMarker {
+fn parenthesized(p: &mut Parser<'_>, tuple_ok: bool) -> CompletedMarker {
     let m = p.start();
     p.bump();
     expr(p);
@@ -315,7 +317,7 @@ fn parenthesized(p: &mut Parser<'_>) -> CompletedMarker {
         expr_bp(p, 5);
     }
     p.expect(K::R_PAREN.raw(), "expected `)`");
-    if tuple && !(at_kw(p, K::IN_KW) || at_kw(p, K::NOT_KW)) {
+    if tuple && !(tuple_ok && (at_kw(p, K::IN_KW) || at_kw(p, K::NOT_KW))) {
         p.error("a tuple of values is only valid before `in`");
     }
     let kind = if tuple {
@@ -371,7 +373,7 @@ fn patterns(p: &mut Parser<'_>) {
 
 /// A primary expression and its casts.
 pub(super) fn primary(p: &mut Parser<'_>) {
-    if let Some(atom) = atom(p) {
+    if let Some(atom) = atom(p, false) {
         cast_chain(p, atom);
     }
 }

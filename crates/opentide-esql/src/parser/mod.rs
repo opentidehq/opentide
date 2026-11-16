@@ -195,6 +195,10 @@ mod tests {
             "FROM a | WHERE b == not 2",
             "FROM a | WHERE x > not NOW()",
             "FROM a | WHERE x IN (not a)",
+            // A tuple is the left of an `in`, and nothing else.
+            "FROM a | WHERE x * (b, c) IN (\"a\", \"b\")",
+            "FROM a | WHERE (b, c) + 1 IN (FROM d)",
+            "FROM a | WHERE (b, c) AND x",
             // A reserved word is never a unit.
             "FROM a | LIMIT 1 LIKE",
             "FROM a | LIMIT 5WITH",
