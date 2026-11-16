@@ -1,0 +1,76 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(r#\"vendor:\"Microsoft\" AND event_code:(\"4625\", 4771) NOT user IN \"T\".\"C\" OR web* time:[1 TO 5}\"#)"
+---
+source_file@0..90
+  statement@0..90
+    filter@0..90
+      or_expression@0..90
+        and_expression@0..68
+          field_term@0..18
+            field_name@0..6
+              identifier@0..6
+                letters@0..6 "vendor"
+            :@6..7 ":"
+            string@7..18 "\"Microsoft\""
+          whitespace@18..19 " "
+          keyword@19..22
+            letters@19..22 "AND"
+          whitespace@22..23 " "
+          field_term@23..48
+            field_name@23..33
+              identifier@23..33
+                letters@23..33 "event_code"
+            :@33..34 ":"
+            list@34..48
+              (@34..35 "("
+              string@35..41 "\"4625\""
+              ,@41..42 ","
+              whitespace@42..43 " "
+              number@43..47
+                digits@43..47 "4771"
+              )@47..48 ")"
+          whitespace@48..49 " "
+          not_expression@49..68
+            keyword@49..52
+              letters@49..52 "NOT"
+            whitespace@52..53 " "
+            context_term@53..68
+              field_name@53..57
+                identifier@53..57
+                  letters@53..57 "user"
+              whitespace@57..58 " "
+              keyword@58..60
+                letters@58..60 "IN"
+              whitespace@60..61 " "
+              context_table@61..64
+                string@61..64 "\"T\""
+              .@64..65 "."
+              context_table@65..68
+                string@65..68 "\"C\""
+        whitespace@68..69 " "
+        keyword@69..71
+          letters@69..71 "OR"
+        whitespace@71..72 " "
+        and_expression@72..90
+          free_text@72..76
+            text_word@72..76
+              letters@72..75 "web"
+              *@75..76 "*"
+          whitespace@76..77 " "
+          field_term@77..90
+            field_name@77..81
+              identifier@77..81
+                letters@77..81 "time"
+            :@81..82 ":"
+            range@82..90
+              [@82..83 "["
+              bound@83..84
+                digits@83..84 "1"
+              whitespace@84..85 " "
+              keyword@85..87
+                letters@85..87 "TO"
+              whitespace@87..88 " "
+              bound@88..89
+                digits@88..89 "5"
+              }@89..90 "}"

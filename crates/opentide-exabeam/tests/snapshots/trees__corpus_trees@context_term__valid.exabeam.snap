@@ -1,0 +1,40 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/context_term__valid.exabeam
+---
+source_file@0..73
+  statement@0..73
+    filter@0..73
+      and_expression@0..73
+        context_term@0..29
+          field_name@0..4
+            identifier@0..4
+              letters@0..4 "user"
+          whitespace@4..5 " "
+          keyword@5..7
+            letters@5..7 "IN"
+          whitespace@7..8 " "
+          context_table@8..29
+            string@8..29 "\"Privileged Accounts\""
+        whitespace@29..30 " "
+        keyword@30..33
+          letters@30..33 "AND"
+        whitespace@33..34 " "
+        not_expression@34..73
+          keyword@34..37
+            letters@34..37 "NOT"
+          whitespace@37..38 " "
+          context_term@38..73
+            field_name@38..46
+              identifier@38..46
+                letters@38..46 "src_host"
+            whitespace@46..47 " "
+            keyword@47..49
+              letters@47..49 "IN"
+            whitespace@49..50 " "
+            context_table@50..62
+              string@50..62 "\"Jump Hosts\""
+            .@62..63 "."
+            context_table@63..73
+              string@63..73 "\"Hostname\""

@@ -1,0 +1,36 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/foreach_statement__invalid.exabeam
+---
+source_file@0..48
+  statement@0..18
+    filter@0..18
+      field_term@0..18
+        field_name@0..6
+          identifier@0..6
+            letters@0..6 "vendor"
+        :@6..7 ":"
+        string@7..18 "\"Microsoft\""
+  whitespace@18..19 " "
+  |@19..20 "|"
+  whitespace@20..21 " "
+  foreach_statement@21..48
+    keyword@21..28
+      letters@21..28 "FOREACH"
+    whitespace@28..29 " "
+    [@29..30 "["
+    whitespace@30..31 " "
+    statement@31..46
+      select_clause@31..46
+        keyword@31..37
+          letters@31..37 "SELECT"
+        whitespace@37..38 " "
+        column@38..46
+          field_name@38..46
+            identifier@38..46
+              letters@38..46 "src_host"
+    whitespace@46..47 " "
+    ]@47..48 "]"
+errors:
+28..29: expected a field
