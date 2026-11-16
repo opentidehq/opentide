@@ -176,6 +176,7 @@ fn a_long_run_of_field_comparisons_is_linear() {
         "{:?}",
         started.elapsed()
     );
+}
 
 /// A run with a trailing or doubled operator reports each finding once: the tree-sitter-shaped
 /// view nested such a run so that its last operand stood under two levels, and checked it
