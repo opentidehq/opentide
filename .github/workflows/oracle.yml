@@ -13,7 +13,7 @@ name: Oracle
 # Imported from opentidehq/language-server (#800). Weekly and on Run workflow
 # (the nightly set): every reference runs on each run; none on a pull request.
 on:
-  # Part of the nightly: ci.yml calls this workflow (its `nightly` scope,
+  # Part of the nightly: nightly.yml calls this workflow (ci.yml's `nightly` scope,
   # .github/AGENTS.md); Run workflow runs it alone. Never on a pull request
   # or a push, so it never blocks a merge.
   workflow_call:

@@ -239,26 +239,54 @@ def test_runs_are_grouped_and_a_pull_request_cancels_its_stale_run() -> None:
     assert publish == {"group": "publish", "cancel-in-progress": False}
 
 
+def called_workflows(name: str) -> set[str]:
+    """Every workflow `name` calls, and those they call in turn."""
+    called: set[str] = set()
+    for job in load(WORKFLOWS / name)["jobs"].values():
+        uses = str(job.get("uses", ""))
+        if uses.startswith("./.github/workflows/"):
+            callee = uses.removeprefix("./.github/workflows/")
+            called |= {callee, *called_workflows(callee)}
+    return called
+
+
 def test_the_nightly_is_one_workflow() -> None:
-    """The workflows ci.yml's nightly calls have no schedule of their own."""
-    called = {
-        job["uses"].removeprefix("./.github/workflows/")
-        for job in ci_jobs().values()
-        if str(job.get("uses", "")).startswith("./")
-    }
-    assert {"coverage.yml", "bench.yml", "oracle.yml"} <= called
+    """What ci.yml's nightly calls, nightly.yml and below, has no schedule of its own:
+    a failure there is the nightly's, which `nightly-report` files."""
+    called = called_workflows("ci.yml")
+    assert {"nightly.yml", "coverage.yml", "bench.yml", "oracle.yml", "engine-fuzz.yml"} <= called
     for name in called:
         assert set(triggers(load(WORKFLOWS / name))) <= {"workflow_call", "workflow_dispatch"}
+    nightly = ci_jobs()["nightly"]
+    assert nightly["uses"] == "./.github/workflows/nightly.yml"
+    assert nightly_only(nightly)
 
 
-def test_only_the_rust_benchmark_is_held_to_a_last_result() -> None:
-    """The python engine is a fixed PyPI wheel: its last result measures the runner."""
-    steps = load(WORKFLOWS / "bench.yml")["jobs"]["bench"]["steps"]
+def test_the_nightly_report_waits_for_every_nightly_job() -> None:
+    """It reads the run's failed jobs: one still running when it starts is missed."""
+    jobs = ci_jobs()
+    nightly = {job_id for job_id, job in jobs.items() if nightly_only(job)} - {"nightly-report"}
+    assert nightly <= set(jobs["nightly-report"]["needs"])
+    assert "gate" in jobs["nightly-report"]["needs"]
+
+
+def test_the_fuzz_matrix_holds_every_target() -> None:
+    targets = {path.stem for path in (ROOT / "fuzz" / "fuzz_targets").glob("*.rs")}
+    matrix = load(WORKFLOWS / "engine-fuzz.yml")["jobs"]["fuzz"]["strategy"]["matrix"]["target"]
+    assert sorted(matrix) == sorted(targets)
+
+
+def test_the_rust_benchmark_is_held_to_its_last_result() -> None:
+    """The python engine (the oracle) is frozen: bench.yml measures the rust one alone."""
+    job = load(WORKFLOWS / "bench.yml")["jobs"]["bench"]
+    assert "strategy" not in job
+    assert job["env"]["ENGINE"] == "rust"
+    steps = job["steps"]
     (find,) = (s for s in steps if s.get("name") == "Find the base branch's last result")
-    assert find["if"] == "matrix.engine == 'rust'"
+    assert "if" not in find
     check = next(s for s in steps if s.get("name") == "Check against the budgets")
-    assert "--previous" in check["run"]  # still given to rust, only when a reference exists
-    assert "--require-reference" in check["run"]  # python stays held to its oracle baseline
+    assert "--previous" in check["run"]  # only when a reference exists
+    assert "--require-reference" in check["run"]  # a command held to nothing fails
 
 
 def test_every_local_action_a_workflow_uses_exists() -> None:

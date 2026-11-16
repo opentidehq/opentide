@@ -165,16 +165,24 @@ def test_the_job_names_of_both_workflows(name: str, matches: bool) -> None:
 
 
 def test_the_workflows_agree_with_the_names_it_looks_for() -> None:
-    """ci.yml's `benchmarks` job is named `Benchmarks`; bench.yml's jobs `Benchmarks (<engine>)`."""
+    """ci.yml's `nightly` job calls nightly.yml's `benchmarks` (`Benchmarks`), which
+    calls bench.yml, whose job is `Benchmarks (rust)`: `Nightly / Benchmarks /
+    Benchmarks (rust)` in ci.yml's run."""
     import yaml
 
     workflows = Path(__file__).resolve().parents[2] / ".github" / "workflows"
-    ci = yaml.safe_load((workflows / "ci.yml").read_text(encoding="utf-8"))["jobs"]
-    caller = next(job for job in ci.values() if job.get("uses") == "./.github/workflows/bench.yml")
+
+    def caller(path: str, uses: str) -> dict[str, Any]:
+        jobs = yaml.safe_load((workflows / path).read_text(encoding="utf-8"))["jobs"]
+        return next(job for job in jobs.values() if job.get("uses") == uses)
+
+    nightly = caller("ci.yml", "./.github/workflows/nightly.yml")
+    benchmarks = caller("nightly.yml", "./.github/workflows/bench.yml")
     bench = yaml.safe_load((workflows / "bench.yml").read_text(encoding="utf-8"))
     job = bench["jobs"]["bench"]
-    assert job["name"] == "Benchmarks (${{ matrix.engine }})"
-    assert bench_reference.is_bench_job(f"{caller['name']} / Benchmarks (python)", "python")
+    assert job["name"] == "Benchmarks (rust)"
+    name = f"{nightly['name']} / {benchmarks['name']} / {job['name']}"
+    assert bench_reference.is_bench_job(name, "rust")
     assert "scripts/ci/bench_reference.py" in "\n".join(
         str(step.get("run", "")) for step in job["steps"]
     )

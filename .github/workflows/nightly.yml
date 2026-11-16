@@ -1,0 +1,337 @@
+# The nightly set (.github/AGENTS.md, "What runs where"): everything the
+# nightly checks beyond the PR gate and the release tier, in one reusable
+# workflow. ci.yml's `nightly` job calls it on the nightly (schedule, and Run
+# workflow with scope `nightly`), so its jobs are ci.yml's run's (`Nightly /
+# ...`) and ci.yml's `nightly-report` files one issue for any failure here.
+# Never on a pull request or a push, so nothing here gates a merge.
+#
+# The nightly's jobs that need this run's release build (the Windows CLI smoke
+# on its wheel, the engine assets in vscode-extension) stay in ci.yml: a job
+# here can wait for a job of the caller only if all of them do.
+#
+# Called from ci.yml, it calls coverage.yml, bench.yml, oracle.yml and
+# engine-fuzz.yml: three levels, within GitHub's limit. The caller's job
+# permissions cap every job here.
+name: Nightly
+
+on:
+  workflow_call:
+    inputs:
+      features:
+        description: "The workspace's test features (changes.py's `features` output)"
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      features:
+        description: "The engine tests' features; Run workflow on ci.yml with scope nightly passes changes.py's"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  # The Python of the gate's Python jobs (ci.yml's COVERAGE_PYTHON).
+  COVERAGE_PYTHON: "3.14"
+
+jobs:
+
+  # The workspace's tests on macOS and Windows, built there (no archive
+  # crosses an OS), without a compiler cache. The 101 generated-workspace
+  # cases of `cli_snapshots` print "skipped" here by design: they are a
+  # Linux-gate check (see "Generated workspaces for the CLI snapshots").
+  engine-test-os:
+    name: Engine tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      INSTA_UPDATE: "no"
+      OPENTIDE_PYTHON: python
+      FEATURES: ${{ inputs.features }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Set up Rust
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: cargo-nextest@0.9.148
+      # The cli_snapshots cases hold `Objects/` and `objects/` side by side,
+      # which are one folder on macOS's default (case-insensitive) volume, and
+      # the harness stops there. A small case-sensitive volume, at a short
+      # mount point (tests/golden/README.md, "Snapshots"), holds their roots.
+      - name: Case-sensitive volume for the snapshot cases
+        if: runner.os == 'macOS'
+        run: |
+          hdiutil create -size 2g -fs 'Case-sensitive APFS' -volname cs -type SPARSE "${RUNNER_TEMP}/cs.sparseimage"
+          hdiutil attach "${RUNNER_TEMP}/cs.sparseimage" -mountpoint /Volumes/cs
+          sudo chown "$(id -u)" /Volumes/cs
+          echo "OPENTIDE_CASE_ROOT=/Volumes/cs" >> "${GITHUB_ENV}"
+      - name: cargo nextest (profile ci)
+        shell: bash
+        run: |
+          read -ra feature_args <<< "${FEATURES}"
+          cargo nextest run --locked --profile ci --workspace "${feature_args[@]}"
+      - name: Upload the JUnit report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        continue-on-error: true
+        with:
+          name: nextest-junit-${{ matrix.os }}
+          path: target/nextest/ci/junit.xml
+          retention-days: 14
+
+  # The cross-SDK conformance suite (UC-5.4, #839): every operation of
+  # tests/conformance/manifest.json on the tide corpus, the heavy workspace,
+  # the fault workspace and each configuration fault, through the Rust, Python
+  # and Node SDKs, byte for byte (`cargo xtask conformance`); then the suite's
+  # own test, a deliberate divergence of one runner that it must catch. On the
+  # three operating systems. It builds the facade three times (the Python and
+  # Node bindings, the Rust runner), so it is in the nightly.
+  conformance:
+    name: SDK conformance (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.COVERAGE_PYTHON }}
+
+      # The full set's compiler cache for this OS; `conformance` saves it.
+      # By content: a stale one still serves every crate that did not change.
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: ${{ runner.os == 'Linux' && 'full-set-Linux' || '' }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: bindings/node/package-lock.json
+
+      # The Python SDK: opentide._native, the develop profile.
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: npm ci
+        working-directory: bindings/node
+        run: npm ci
+
+      # The Node SDK, the develop profile as the Python binding's, reporting
+      # the workspace's version as the Rust and Python builds do (the npm
+      # package's own is 0.0.0 until the release sets it).
+      - name: Build the addon
+        working-directory: bindings/node
+        shell: bash
+        run: |
+          OPENTIDE_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' ../../Cargo.toml | head -n 1)"
+          export OPENTIDE_VERSION
+          node build.mjs --profile develop
+
+      # rust-cache saves target/ and restores it on the next run without the
+      # marker of the runs' folder, target/conformance, which `conformance`
+      # then refuses to empty: a restored copy is no run of this job's.
+      - name: Drop a restored runs' folder
+        shell: bash
+        run: rm -rf target/conformance
+
+      - name: Every operation on every corpus, byte for byte
+        run: cargo xtask conformance --runners rust,python,node
+
+      - name: A divergence in one runner is caught
+        run: cargo xtask conformance --runners rust,python,node --corpus tide_corpus --diverge node
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate.
+        continue-on-error: true
+        with:
+          name: conformance-${{ matrix.os }}
+          path: target/conformance/report.json
+          if-no-files-found: ignore
+
+      # The full set's Linux compiler cache, which the other full-set jobs
+      # restore: saved by the nightly and pushes to development (the default
+      # branch, whose caches every branch reads), and by pushes to
+      # integration/unified-core, whose full set is the one that runs while
+      # development's ci.yml predates this family (it saves none, so every
+      # full-set job built cold there, #841). Once a week. Not on a release
+      # train: a copy per base branch did not fit beside the core families
+      # in the 10 GB GitHub keeps.
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && ((github.event_name == 'schedule' || github.ref == 'refs/heads/development' || github.ref == 'refs/heads/integration/unified-core') && steps.sccache.outputs.cache-hit != 'true' && runner.os == 'Linux') }}
+
+  # Every public Elastic rule passes Elasticsearch's parser, so any engine
+  # error on them is an engine bug (language-server#82). The rules are ELv2:
+  # checked out here at a pinned commit (the one oracle.yml reads), never
+  # vendored.
+  elastic-sweep:
+    name: Elastic detection-rules sweep
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      # engine-test's environment: the same rust-cache key, so this job reads
+      # the Linux cell's cache.
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: elastic/detection-rules
+          persist-credentials: false
+          ref: 2b30453d7dede69f980472cff51a2ae9a6917bae
+          path: detection-rules
+          sparse-checkout: |
+            rules
+            rules_building_block
+            hunting
+      # engine-test's compiler cache, as its rust-cache (RUSTC_WRAPPER is in that key).
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
+      - name: detection-rules sweep
+        env:
+          OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules
+        run: cargo test --locked -p opentide-analysis --test elastic_detection_rules -- --nocapture
+
+  # Real clients against the server (language-server#185 P2.8): pytest-lsp
+  # replays the capabilities VS Code, Neovim and Emacs send and checks each
+  # response against them, and Neovim's own client must show each diagnostic
+  # once. Informational while the recorded capabilities and Ubuntu's Neovim move.
+  clients:
+    name: LSP clients (informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    env:
+      # engine-test's environment: the same rust-cache key, so this job reads
+      # the Linux cell's cache.
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # engine-test's compiler cache, as its rust-cache (RUSTC_WRAPPER is in that key).
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: cargo build --locked -p opentide-lsp
+      - name: pytest-lsp (VS Code, Neovim, Emacs capabilities)
+        env:
+          OPENTIDE_LSP_BIN: ${{ github.workspace }}/target/debug/opentide-lsp
+        run: |
+          pip install -r scripts/engine/clients/requirements.txt
+          cd scripts/engine/clients && python -m pytest -q
+      - name: Neovim headless
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q neovim
+          nvim --headless --clean -l scripts/engine/nvim-smoke.lua target/debug/opentide-lsp
+
+  # Coverage, the benchmarks, the vendor-parser oracles (Kusto.Language,
+  # Splunk, Elasticsearch, Lucene, Falco) and the fuzz targets: workflows of
+  # their own, each also on Run workflow.
+  coverage:
+    name: Coverage
+    permissions:
+      contents: read
+    uses: ./.github/workflows/coverage.yml
+
+  benchmarks:
+    name: Benchmarks
+    permissions:
+      contents: read
+      # bench.yml reads the base branch's last result (gh run list, download).
+      actions: read
+    uses: ./.github/workflows/bench.yml
+
+  oracle:
+    name: Vendor-parser oracles
+    permissions:
+      contents: read
+    uses: ./.github/workflows/oracle.yml
+    # The Carbon Black Cloud tenant's (oracle.yml).
+    secrets: inherit
+
+  # Every fuzz target for ten minutes from the corpus engine-fuzz.yml keeps:
+  # the nightly's one fuzz pass.
+  fuzz:
+    name: Fuzz
+    permissions:
+      contents: read
+    uses: ./.github/workflows/engine-fuzz.yml

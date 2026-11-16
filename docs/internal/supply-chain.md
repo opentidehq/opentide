@@ -12,8 +12,7 @@ Each gate below runs in CI; the required ones are in `.github/AGENTS.md` ("Requi
 |------|-------|------|----------|
 | `cargo deny check` | ci.yml `deny` (Supply chain (cargo deny)) | every pull request and push | a licence not on the list, a RustSec advisory, a second version of a shipped crate, OpenSSL, a source other than crates.io |
 | `cargo audit` (every `Cargo.lock`) | `rust-audit.yml` | daily | an advisory published since the last change; opens or comments on one issue |
-| Fuzz smoke | ci.yml `fuzz-smoke` | the nightly set (nightly and Run workflow) | a panic or a timeout in 60 s of any target |
-| Nightly fuzz | `engine-fuzz.yml` | nightly | a panic or a timeout in 10 minutes of any target; the input is uploaded |
+| Nightly fuzz | `engine-fuzz.yml` (ci.yml's nightly calls it through `nightly.yml`) | the nightly set (nightly and Run workflow) | a panic or a timeout in 10 minutes of any target; the input is uploaded |
 | Unsafe policy | clippy, `xtask/tests/lint_policy.rs`, `xtask/tests/unsafe_listing.rs` | every pull request | `unsafe` outside two crates, a block without `// SAFETY:` or with two operations, a site missing from [Unsafe code](./unsafe.md) |
 | SBOMs | `engine-release-build.yml` `sbom` (Engine release (dry run) / SBOMs) | the dry run in the nightly set (nightly and Run workflow); every release | an SBOM that does not validate against CycloneDX 1.5 |
 

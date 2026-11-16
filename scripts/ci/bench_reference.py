@@ -1,8 +1,9 @@
 """Find the benchmarks' reference: the base branch's last result (bench.yml).
 
-The benchmarks run in two workflows: ci.yml's nightly calls bench.yml (its
-`benchmarks` job, so the jobs are named ``Benchmarks / Benchmarks (<engine>)``
-and the run and its artifacts belong to ci.yml), and Run workflow on bench.yml
+The benchmarks run in two workflows: ci.yml's nightly calls nightly.yml (its
+`nightly` job), which calls bench.yml (its `benchmarks` job), so the job is
+named ``Nightly / Benchmarks / Benchmarks (<engine>)`` and the run and its
+artifacts belong to ci.yml; and Run workflow on bench.yml
 runs it alone (``Benchmarks (<engine>)``). The reference is the newest run of
 either on the base branch whose job for this engine succeeded on this run's
 CPU model: GitHub's runners of one class come on several CPU generations, and

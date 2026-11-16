@@ -27,10 +27,12 @@ run-name: >-
 #   the gate plus every package on every target, an install smoke test of
 #   each on its OS, the publish dry run and the docs.
 # - The nightly (schedule, and Run workflow with scope `nightly`): everything
-#   above, plus macOS and Windows, Python 3.10-3.13, the full E2E set, the
-#   packages, fuzz smoke, coverage, benchmarks, the vendor-parser oracles,
-#   the schema checks, the Elastic sweep and the rest. It never gates; a
-#   failure opens or updates one issue labelled `nightly-failure`.
+#   above, plus `nightly` (nightly.yml: macOS and Windows, SDK conformance,
+#   coverage, the benchmarks, the vendor-parser oracles, the fuzz targets,
+#   the Elastic sweep, the LSP clients) and the Windows CLI smoke on the
+#   release build's wheel. It never gates; a failure opens or updates one
+#   issue labelled `nightly-failure`. Python 3.10-3.13 and the full E2E set
+#   (`python-matrix`) run on release pull requests and the nightly.
 #
 # Byte-for-byte comparison with the frozen Python CLI is no requirement
 # anywhere: the oracle's comparisons (golden, corpus, MCP replay, the payload,
@@ -95,8 +97,9 @@ env:
 #                   `conformance` saves it, by the nightly and on pushes to
 #                   development and integration/unified-core
 #
-# The one rust-cache left: `fuzz` (fuzz-smoke). macOS and Windows build
-# without one: theirs crowded the Linux families out of the 10 GB (#841).
+# The nightly's jobs live in nightly.yml, which restores full-set-Linux too.
+# macOS and Windows build without a compiler cache: theirs crowded the Linux
+# families out of the 10 GB (#841).
 
 jobs:
 
@@ -1263,86 +1266,21 @@ jobs:
       contents: read
     uses: ./.github/workflows/publish-dry-run.yml
 
-  # ---------------------------------------------------------------------------
-  # The nightly set: never on a pull request or a push, so it never gates.
-  # ---------------------------------------------------------------------------
-
-  # The workspace's tests on macOS and Windows, built there (no archive
-  # crosses an OS), without a compiler cache. The 101 generated-workspace
-  # cases of `cli_snapshots` print "skipped" here by design: they are a
-  # Linux-gate check (see "Generated workspaces for the CLI snapshots").
-  engine-test-os:
-    name: Engine tests (${{ matrix.os }})
-    needs: changes
-    if: needs.changes.outputs.mode == 'nightly'
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-    env:
-      RUSTFLAGS: "-Dwarnings"
-      CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      CARGO_INCREMENTAL: "0"
-      CARGO_TERM_COLOR: always
-      INSTA_UPDATE: "no"
-      OPENTIDE_PYTHON: python
-      FEATURES: ${{ needs.changes.outputs.features }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - name: Set up Rust
-        uses: ./.github/actions/rust-setup
-        with:
-          tools: cargo-nextest@0.9.148
-      # The cli_snapshots cases hold `Objects/` and `objects/` side by side,
-      # which are one folder on macOS's default (case-insensitive) volume, and
-      # the harness stops there. A small case-sensitive volume, at a short
-      # mount point (tests/golden/README.md, "Snapshots"), holds their roots.
-      - name: Case-sensitive volume for the snapshot cases
-        if: runner.os == 'macOS'
-        run: |
-          hdiutil create -size 2g -fs 'Case-sensitive APFS' -volname cs -type SPARSE "${RUNNER_TEMP}/cs.sparseimage"
-          hdiutil attach "${RUNNER_TEMP}/cs.sparseimage" -mountpoint /Volumes/cs
-          sudo chown "$(id -u)" /Volumes/cs
-          echo "OPENTIDE_CASE_ROOT=/Volumes/cs" >> "${GITHUB_ENV}"
-      - name: cargo nextest (profile ci)
-        shell: bash
-        run: |
-          read -ra feature_args <<< "${FEATURES}"
-          cargo nextest run --locked --profile ci --workspace "${feature_args[@]}"
-      - name: Upload the JUnit report
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        continue-on-error: true
-        with:
-          name: nextest-junit-${{ matrix.os }}
-          path: target/nextest/ci/junit.xml
-          retention-days: 14
-
-  # The other supported Pythons, the oldest (3.10) included, on the build's
-  # abi3 wheel: `python`'s run without coverage.
-  test-full:
-    name: Python (${{ matrix.python-version }})
+  # The other supported Pythons, the oldest (3.10) included, on `native`'s
+  # abi3 wheel (`python`'s run without coverage), one after another in one
+  # job, then the E2E tests too slow for every pull request, marked
+  # `full_set` (the platform plugin on opentide installed from its wheel,
+  # UC-4.5c, #835), on 3.14. Release pull requests and the nightly. Each
+  # Python's run is a log group of its own and a failed one an error
+  # annotation naming it; the job fails when any did.
+  python-matrix:
+    name: Python 3.10-3.13 and the full E2E set
     needs: [changes, native]
     if: needs.changes.outputs.mode == 'nightly' || needs.changes.outputs.release == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
     env:
       # opentide is the build's wheel: `uv run` builds nothing, and the
       # tests that install opentide's wheel take it.
@@ -1359,126 +1297,98 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: ${{ matrix.python-version }}
-      # cargo for the test that reads the workspace's metadata.
+          python-version: |
+            3.10
+            3.11
+            3.12
+            3.13
+            ${{ env.COVERAGE_PYTHON }}
+      # cargo for the tests that read the workspace's metadata; the full set's
+      # tests build wheels of their own.
       - name: Set up Rust
         uses: ./.github/actions/rust-setup
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: native
           path: .native
-      - name: Install dependencies and the build's wheel
+      # The tests import opentide from src/ (tests/conftest.py), as from an
+      # editable install: the wheel's module goes beside the sources. abi3:
+      # one module for every Python.
+      - name: The build's extension beside the sources
+        run: unzip -j -o .native/opentide-*.whl 'opentide/_native.abi3.so' -d src/opentide
+      # One environment per Python (UV_PROJECT_ENVIRONMENT), each with the
+      # dependencies and the build's wheel.
+      - name: Pytest on Python 3.10 to 3.13
         run: |
-          uv sync --group dev --no-install-project
-          uv pip install --no-deps .native/opentide-*.whl
-          # The tests import opentide from src/ (tests/conftest.py), as from an
-          # editable install: the wheel's module goes beside the sources.
-          unzip -j -o .native/opentide-*.whl 'opentide/_native.abi3.so' -d src/opentide
-      - name: Pytest
-        run: uv run pytest tests/ --ignore=tests/test_ci --no-cov -q -n 4 -m "not full_set and not gitlab_ci_lint"
-
-  # The E2E tests too slow for every pull request, marked `full_set`: the
-  # platform plugin on opentide installed from its wheel (UC-4.5c, #835),
-  # whose `uv build` alone takes minutes.
-  e2e-full:
-    name: E2E (3.14, full set)
-    needs: [changes, native]
-    if: needs.changes.outputs.mode == 'nightly' || needs.changes.outputs.release == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    env:
-      # opentide is the build's wheel: `uv run` builds nothing, and the
-      # tests that install opentide's wheel take it.
-      UV_NO_SYNC: "1"
-      OPENTIDE_TEST_WHEELHOUSE: ${{ github.workspace }}/.native
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          enable-cache: true
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: ${{ env.COVERAGE_PYTHON }}
-      # The tests build wheels of their own.
-      - name: Set up Rust
-        uses: ./.github/actions/rust-setup
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: native
-          path: .native
-      - name: Install dependencies and the build's wheel
+          set -uo pipefail
+          failed=()
+          for version in 3.10 3.11 3.12 3.13; do
+            echo "::group::Python ${version}"
+            export UV_PROJECT_ENVIRONMENT="${RUNNER_TEMP}/venv-${version}"
+            if uv sync --python "${version}" --group dev --no-install-project \
+              && uv pip install --python "${UV_PROJECT_ENVIRONMENT}/bin/python" --no-deps .native/opentide-*.whl \
+              && uv run --python "${version}" pytest tests/ --ignore=tests/test_ci --no-cov -q -n 4 \
+                -m "not full_set and not gitlab_ci_lint"; then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error title=Python ${version}::the suite failed on Python ${version} (its log group above)"
+              failed+=("${version}")
+            fi
+          done
+          if (( ${#failed[@]} )); then
+            echo "Failed on Python ${failed[*]}" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      - name: E2E pytest (full set, ${{ env.COVERAGE_PYTHON }})
+        if: ${{ !cancelled() }}
+        env:
+          UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/venv-${{ env.COVERAGE_PYTHON }}
         run: |
-          uv sync --group dev --no-install-project
-          uv pip install --no-deps .native/opentide-*.whl
-          # The tests import opentide from src/ (tests/conftest.py), as from an
-          # editable install: the wheel's module goes beside the sources.
-          unzip -j -o .native/opentide-*.whl 'opentide/_native.abi3.so' -d src/opentide
-      - name: E2E pytest (full set)
-        run: uv run pytest tests/ -m full_set -q --no-cov
+          uv sync --python "${COVERAGE_PYTHON}" --group dev --no-install-project
+          uv pip install --python "${UV_PROJECT_ENVIRONMENT}/bin/python" --no-deps .native/opentide-*.whl
+          uv run --python "${COVERAGE_PYTHON}" pytest tests/ -m full_set -q --no-cov
 
-  # Coverage, the benchmarks, the vendor-parser oracles (Kusto.Language,
-  # Splunk, Elasticsearch, Lucene, Falco) and the schema checks: workflows of
-  # their own, run as part of the nightly.
-  coverage:
-    name: Coverage
-    needs: changes
-    if: needs.changes.outputs.mode == 'nightly'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/coverage.yml
+  # ---------------------------------------------------------------------------
+  # The nightly set: never on a pull request or a push, so it never gates.
+  # ---------------------------------------------------------------------------
 
-  benchmarks:
-    name: Benchmarks
+  # Every nightly job that needs nothing from this run (nightly.yml): the
+  # engine tests on macOS and Windows, SDK conformance on three OSes, the
+  # Elastic sweep, the LSP clients, coverage, the budgeted benchmarks, the
+  # vendor-parser oracles and the fuzz targets.
+  nightly:
+    name: Nightly
     needs: changes
     if: needs.changes.outputs.mode == 'nightly'
     permissions:
       contents: read
       # bench.yml reads the base branch's last result (gh run list, download).
       actions: read
-    uses: ./.github/workflows/bench.yml
-
-  oracle:
-    name: Vendor-parser oracles
-    needs: changes
-    if: needs.changes.outputs.mode == 'nightly'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/oracle.yml
+    uses: ./.github/workflows/nightly.yml
+    with:
+      features: ${{ needs.changes.outputs.features }}
+    # oracle.yml's Carbon Black Cloud tenant.
     secrets: inherit
 
-  # The cross-SDK conformance suite (UC-5.4, #839): every operation of
-  # tests/conformance/manifest.json on the tide corpus, the heavy workspace,
-  # the fault workspace and each configuration fault, through the Rust, Python
-  # and Node SDKs, byte for byte (`cargo xtask conformance`); then the suite's
-  # own test, a deliberate divergence of one runner that it must catch. On the
-  # three operating systems. It builds the facade three times (the Python and
-  # Node bindings, the Rust runner), so it is in the full set.
-  conformance:
-    name: SDK conformance (${{ matrix.os }})
-    needs: changes
-    if: needs.changes.outputs.mode == 'nightly'
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
+  # The console script on Windows (the only `spawn` platform): the launcher
+  # and redirect smoke and Ctrl-C (opentide._cli:main, UC-3.8b, #960: a
+  # CTRL_BREAK_EVENT to `serve` in a process group of its own; SIGTERM is
+  # POSIX's), on the windows-x64 wheel `release` built (build-packages.yml's
+  # `wheels-windows-x64`): nothing compiles here (`uv sync` built the engine
+  # cold, about 13 minutes). Whatever else in `release` failed: the download
+  # fails when the wheel was not built. Serial: two small test files.
+  cli-windows-smoke:
+    name: CLI Windows smoke
+    needs: [changes, release]
+    if: always() && needs.changes.outputs.mode == 'nightly'
+    runs-on: windows-latest
+    timeout-minutes: 20
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
     env:
-      RUSTFLAGS: "-Dwarnings"
-      CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      CARGO_TERM_COLOR: always
-      RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 2G
-      # The server stays up for the whole job: its statistics are the run's.
-      SCCACHE_IDLE_TIMEOUT: "0"
+      # opentide is the release build's wheel: `uv run` builds nothing.
+      UV_NO_SYNC: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1487,400 +1397,43 @@ jobs:
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
-          cache-dependency-glob: uv.lock
 
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
-      # The full set's compiler cache for this OS; `conformance` saves it.
-      # By content: a stale one still serves every crate that did not change.
-      - name: Set up Rust
-        id: sccache
-        uses: ./.github/actions/rust-setup
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          tools: sccache@0.19.0
-          cache: ${{ runner.os == 'Linux' && 'full-set-Linux' || '' }}
+          name: wheels-windows-x64
+          path: .wheel
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: bindings/node/package-lock.json
-
-      # The Python SDK: opentide._native, the develop profile.
-      - name: Install dependencies
-        run: uv sync --group dev
-
-      - name: npm ci
-        working-directory: bindings/node
-        run: npm ci
-
-      # The Node SDK, the develop profile as the Python binding's, reporting
-      # the workspace's version as the Rust and Python builds do (the npm
-      # package's own is 0.0.0 until the release sets it).
-      - name: Build the addon
-        working-directory: bindings/node
+      # The dependencies, then opentide from the release build's wheel; its
+      # extension also goes beside the sources, which the tests import
+      # (tests/conftest.py).
+      - name: Install dependencies and the release build's wheel
         shell: bash
         run: |
-          OPENTIDE_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' ../../Cargo.toml | head -n 1)"
-          export OPENTIDE_VERSION
-          node build.mjs --profile develop
-
-      # rust-cache saves target/ and restores it on the next run without the
-      # marker of the runs' folder, target/conformance, which `conformance`
-      # then refuses to empty: a restored copy is no run of this job's.
-      - name: Drop a restored runs' folder
-        shell: bash
-        run: rm -rf target/conformance
-
-      - name: Every operation on every corpus, byte for byte
-        run: cargo xtask conformance --runners rust,python,node
-
-      - name: A divergence in one runner is caught
-        run: cargo xtask conformance --runners rust,python,node --corpus tide_corpus --diverge node
-
-      - name: Upload the report
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        # A report for reading, not a gate.
-        continue-on-error: true
-        with:
-          name: conformance-${{ matrix.os }}
-          path: target/conformance/report.json
-          if-no-files-found: ignore
-
-      # The full set's Linux compiler cache, which the other full-set jobs
-      # restore: saved by the nightly and pushes to development (the default
-      # branch, whose caches every branch reads), and by pushes to
-      # integration/unified-core, whose full set is the one that runs while
-      # development's ci.yml predates this family (it saves none, so every
-      # full-set job built cold there, #841). Once a week. Not on a release
-      # train: a copy per base branch did not fit beside the core families
-      # in the 10 GB GitHub keeps.
-      - name: Save the compiler cache
-        if: ${{ !cancelled() }}
-        uses: ./.github/actions/sccache-save
-        with:
-          key: ${{ steps.sccache.outputs.key }}
-          save: ${{ job.status == 'success' && ((github.event_name == 'schedule' || github.ref == 'refs/heads/development' || github.ref == 'refs/heads/integration/unified-core') && steps.sccache.outputs.cache-hit != 'true' && runner.os == 'Linux') }}
-
-  # The npm packages as a user installs them, as publish.yml's smoke-npm
-  # does before a release: the tree's packages at the workspace version
-  # (`release.py npm-version`), the addon built for linux-x64-gnu only (the
-  # other five native packages packed as stand-ins without an addon, so that
-  # npm still has to choose by os/cpu/libc), published to a throwaway local
-  # registry (Verdaccio, no uplink), then `npm install @opentide/opentide` in
-  # a clean project: exactly the host's native package, `npx opentide
-  # --version`, the SDK, `runJson` and `tsc` against index.d.ts, and the same
-  # through the `opentide` alias (scripts/engine/npm-local-registry/test.mjs).
-  # It reads the node job's Rust cache.
-  npm-install:
-    name: npm install from a local registry (linux-x64-gnu)
-    needs: changes
-    if: needs.changes.outputs.mode == 'nightly'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    env:
-      RUSTFLAGS: "-Dwarnings"
-      CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      CARGO_TERM_COLOR: always
-      RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 2G
-      # The server stays up for the whole job: its statistics are the run's.
-      SCCACHE_IDLE_TIMEOUT: "0"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-
-      # The full set's compiler cache for this OS; `conformance` saves it.
-      # By content: a stale one still serves every crate that did not change.
-      - name: Set up Rust
-        id: sccache
-        uses: ./.github/actions/rust-setup
-        with:
-          tools: sccache@0.19.0
-          cache: full-set-${{ runner.os }}
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: |
-            bindings/node/package-lock.json
-            scripts/engine/npm-local-registry/package-lock.json
-
-      - name: npm ci
-        working-directory: bindings/node
-        run: npm ci
-
-      # Before the build: napi-rs writes the version into the loader.
-      - name: The npm packages at the workspace version
-        run: |
           set -euo pipefail
-          version="$(python3 scripts/engine/release.py version)"
-          python3 scripts/engine/release.py npm-version "${version}"
-          python3 scripts/engine/release.py lockstep "${version}" --npm "${version}"
-          echo "NPM_VERSION=${version}" >> "$GITHUB_ENV"
+          uv sync --python "${COVERAGE_PYTHON}" --group dev --no-install-project
+          uv pip install --no-deps .wheel/opentide-*.whl
+          uv run python - <<'PY'
+          import glob
+          import zipfile
 
-      - name: Build the addon (linux-x64-gnu)
-        working-directory: bindings/node
-        run: OPENTIDE_VERSION="${NPM_VERSION}" node build.mjs --profile develop
-
-      - name: Pack, publish to a local registry, npm install, npx, SDK and types
-        run: node scripts/engine/npm-local-registry/test.mjs --version "${NPM_VERSION}" --pack "${RUNNER_TEMP}/npm"
-
-  # Every public Elastic rule passes Elasticsearch's parser, so any engine
-  # error on them is an engine bug (language-server#82). The rules are ELv2:
-  # checked out here at a pinned commit (the one oracle.yml reads), never
-  # vendored.
-  elastic-sweep:
-    name: Elastic detection-rules sweep
-    needs: changes
-    if: needs.changes.outputs.mode == 'nightly'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      # engine-test's environment: the same rust-cache key, so this job reads
-      # the Linux cell's cache.
-      RUSTFLAGS: "-Dwarnings"
-      CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      CARGO_TERM_COLOR: always
-      RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 2G
-      # The server stays up for the whole job: its statistics are the run's.
-      SCCACHE_IDLE_TIMEOUT: "0"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: elastic/detection-rules
-          persist-credentials: false
-          ref: 2b30453d7dede69f980472cff51a2ae9a6917bae
-          path: detection-rules
-          sparse-checkout: |
-            rules
-            rules_building_block
-            hunting
-      # engine-test's compiler cache, as its rust-cache (RUSTC_WRAPPER is in that key).
-      - name: Set up Rust
-        id: sccache
-        uses: ./.github/actions/rust-setup
-        with:
-          tools: sccache@0.19.0
-          cache: full-set-${{ runner.os }}
-      - name: detection-rules sweep
-        env:
-          OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules
-        run: cargo test --locked -p opentide-analysis --test elastic_detection_rules -- --nocapture
-
-  # Each fuzz target (fuzz/, cargo-fuzz on nightly) for 60 seconds from its
-  # seeds and saved regressions: a panic or a timeout fails here, in the full
-  # set. engine-fuzz.yml runs each for ten minutes a night with the corpus
-  # it keeps.
-  fuzz-smoke:
-    name: Fuzz smoke (${{ matrix.targets }})
-    needs: changes
-    if: needs.changes.outputs.mode == 'nightly'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        # Every target of fuzz/fuzz_targets/ (tests/test_ci/test_workflows.py),
-        # up to three to a runner: one build serves them all.
-        targets: ["kql spl esql", "eql kuery lucene", "falco tide protocol", "config framing serve", "cql", "yara exabeam yaral", "cli", "from_node"]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # The dated nightly fuzz/NIGHTLY pins, which scripts/engine/fuzz.sh also
-      # reads: a new nightly reaches this check in a change of its own.
-      - name: Set up Rust (nightly)
-        id: nightly
-        run: |
-          echo "FUZZ_TOOLCHAIN=$(cat fuzz/NIGHTLY)" >> "$GITHUB_ENV"
-          FUZZ_TOOLCHAIN="$(cat fuzz/NIGHTLY)"
-          rustup toolchain install "${FUZZ_TOOLCHAIN}" --profile minimal --no-self-update
-          echo "version=$(rustc +"${FUZZ_TOOLCHAIN}" -V | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
-      # fuzz/ is a workspace of its own; cargo-fuzz builds into fuzz/target.
-      # rust-cache also keeps ~/.cargo/bin, so cargo-fuzz installs once. Its key
-      # hashes the pinned stable (rust-toolchain.toml), not the nightly that
-      # builds here: `key` names the nightly, so a new one saves a new tree.
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          # Saved by the nightly and pushes to development only (the default
-          # branch, whose caches every pull request reads): a target tree per
-          # integration merge, whose Cargo.lock nearly always changed, evicted
-          # the compiler caches pull requests restore (#841).
-          save-if: ${{ github.event_name == 'schedule' || github.ref == 'refs/heads/development' }}
-          shared-key: fuzz
-          key: ${{ steps.nightly.outputs.version }}
-          workspaces: fuzz -> target
-      - run: cargo +"${FUZZ_TOOLCHAIN}" install cargo-fuzz --locked --version 0.13.2
-      - name: fuzz ${{ matrix.targets }} (60 s each)
-        env:
-          TARGETS: ${{ matrix.targets }}
-        run: |
-          set -euo pipefail
-          for target in ${TARGETS}; do
-            echo "::group::fuzz ${target}"
-            bash scripts/engine/fuzz.sh "${target}" 60
-            echo "::endgroup::"
-          done
-      - if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        # A report for reading, not a gate: an outage of GitHub's artifact
-        # service must not fail a job whose checks passed.
-        continue-on-error: true
-        with:
-          name: fuzz-smoke-artifacts-${{ strategy.job-index }}
-          path: fuzz/artifacts
-          if-no-files-found: ignore
-
-  # Real clients against the server (language-server#185 P2.8): pytest-lsp
-  # replays the capabilities VS Code, Neovim and Emacs send and checks each
-  # response against them, and Neovim's own client must show each diagnostic
-  # once. Informational while the recorded capabilities and Ubuntu's Neovim move.
-  clients:
-    name: LSP clients (informational)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    # The full set (the workflow's header).
-    needs: changes
-    if: needs.changes.outputs.mode == 'nightly'
-    permissions:
-      contents: read
-    env:
-      # engine-test's environment: the same rust-cache key, so this job reads
-      # the Linux cell's cache.
-      RUSTFLAGS: "-Dwarnings"
-      CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      CARGO_TERM_COLOR: always
-      RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 2G
-      # The server stays up for the whole job: its statistics are the run's.
-      SCCACHE_IDLE_TIMEOUT: "0"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # engine-test's compiler cache, as its rust-cache (RUSTC_WRAPPER is in that key).
-      - name: Set up Rust
-        id: sccache
-        uses: ./.github/actions/rust-setup
-        with:
-          tools: sccache@0.19.0
-          cache: full-set-${{ runner.os }}
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - run: cargo build --locked -p opentide-lsp
-      - name: pytest-lsp (VS Code, Neovim, Emacs capabilities)
-        env:
-          OPENTIDE_LSP_BIN: ${{ github.workspace }}/target/debug/opentide-lsp
-        run: |
-          pip install -r scripts/engine/clients/requirements.txt
-          cd scripts/engine/clients && python -m pytest -q
-      - name: Neovim headless
-        run: |
-          sudo apt-get update -q && sudo apt-get install -y -q neovim
-          nvim --headless --clean -l scripts/engine/nvim-smoke.lua target/debug/opentide-lsp
-
-  # analyze() per language and hover in a 1,000-object workspace
-  # (language-server#181). The numbers go in the job summary for comparing
-  # runs; they gate nothing.
-  bench:
-    name: Benchmarks (informational)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    needs: changes
-    if: needs.changes.outputs.mode == 'nightly'
-    permissions:
-      contents: read
-    env:
-      RUSTFLAGS: "-Dwarnings"
-      RUSTC_WRAPPER: sccache
-      SCCACHE_DIR: ${{ github.workspace }}/.sccache
-      SCCACHE_CACHE_SIZE: 2G
-      # The server stays up for the whole job: its statistics are the run's.
-      SCCACHE_IDLE_TIMEOUT: "0"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # The full set's compiler cache for this OS; `conformance` saves it.
-      # By content: a stale one still serves every crate that did not change.
-      - name: Set up Rust
-        id: sccache
-        uses: ./.github/actions/rust-setup
-        with:
-          tools: sccache@0.19.0
-          cache: full-set-${{ runner.os }}
-      - name: cargo bench (opentide-analysis)
-        run: |
-          cargo bench --locked -p opentide-analysis --bench analyze | tee bench.txt
-          { echo '### analyze() per language'; echo; echo '```'; cat bench.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-
-
-
-
-  cli-windows-smoke:
-    name: CLI Windows smoke
-    # The full set (the workflow's header): `Engine tests (windows-latest)`
-    # covers Windows on every pull request.
-    needs: changes
-    if: needs.changes.outputs.mode == 'nightly'
-    runs-on: windows-latest
-    # Also not gated on `test`: a 36 s job that waited ~5 min for a matrix it
-    # shares nothing with. Left serial — two small test files, so workers would
-    # only add startup cost.
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.14"
-
-      # `uv sync` compiles the analysis engine (bindings/python/, Rust) into opentide (maturin).
-      # rustup installs the toolchain rust-toolchain.toml pins. No compiler cache:
-      # macOS's and Windows's (a gigabyte each) crowded the Linux families every
-      # pull request restores out of the 10 GB GitHub keeps (#841).
-      - name: Set up Rust
-        uses: ./.github/actions/rust-setup
-
-      - name: Install dependencies
-        run: uv sync --group dev
+          (wheel,) = glob.glob(".wheel/opentide-*.whl")
+          with zipfile.ZipFile(wheel) as archive:
+              (module,) = (n for n in archive.namelist() if n.startswith("opentide/_native.") and n.endswith(".pyd"))
+              with open(f"src/{module}", "wb") as out:
+                  out.write(archive.read(module))
+              print(f"{wheel}: {module}")
+          PY
 
       - name: Console launcher and redirect smoke
         run: >-
           uv run pytest tests/test_cli/e2e/test_console_script_smoke.py
           -m cli_smoke -q --no-cov
 
-      # Ctrl-C through the console script (opentide._cli:main, UC-3.8b, #960): a
-      # CTRL_BREAK_EVENT to `serve` in a process group of its own; SIGTERM is POSIX's.
       - name: Ctrl-C through the console script
         run: >-
           uv run pytest tests/test_cli/e2e/test_launcher_signals_e2e.py
@@ -1921,6 +1474,7 @@ jobs:
         run: >-
           node scripts/engine/check-vscode-extension.mjs
           vscode-extension release-assets "$(python3 scripts/engine/release.py tag)"
+
   # ---------------------------------------------------------------------------
   # The one required check.
   # ---------------------------------------------------------------------------
@@ -1951,8 +1505,7 @@ jobs:
       - deny
       - release
       - publish-dry-run
-      - test-full
-      - e2e-full
+      - python-matrix
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -1983,17 +1536,7 @@ jobs:
     needs:
       - changes
       - gate
-      - engine-test-os
-      - coverage
-      - benchmarks
-      - oracle
-      - conformance
-      - wasm
-      - npm-install
-      - elastic-sweep
-      - fuzz-smoke
-      - clients
-      - bench
+      - nightly
       - cli-windows-smoke
       - engine-release-consumers
     if: always() && needs.changes.outputs.mode == 'nightly'

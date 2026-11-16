@@ -206,7 +206,7 @@ npm resolves the native package from the local tarball; it may print a warning f
 
 Verdaccio and TypeScript come from the test's own [`package-lock.json`](../../scripts/engine/npm-local-registry/package-lock.json) (`npm ci --ignore-scripts`, from the default registry, into the work folder). Nothing is published anywhere else, and the work folder is deleted afterwards (`--keep` leaves it).
 
-It runs in `release-build.yml`'s `smoke` (which `publish.yml` and ci.yml's `release` call), on each of the six platforms, against the tarballs `build-packages.yml`'s `npm-pack` built, before `attest` and so before anything is published; and in ci.yml's full set (`npm-install`), on linux-x64-gnu only: the tree's packages at the workspace version, the other five native packages packed as stand-ins without an addon, so that npm still has to choose. To run it locally (Node.js 22 or later), from the repository root:
+It runs in `release-build.yml`'s `smoke` (which `publish.yml` and ci.yml's `release` call), on each of the six platforms, against the tarballs `build-packages.yml`'s `npm-pack` built, before `attest` and so before anything is published; ci.yml's `release` runs it on every release pull request and in the nightly. To run it locally (Node.js 22 or later), from the repository root:
 
 ```bash
 cd bindings/node && npm ci && cd ../..

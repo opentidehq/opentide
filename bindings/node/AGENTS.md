@@ -57,5 +57,5 @@ cargo xtask conformance                    # the same documents as the Rust and 
 ```
 
 The packages as a user installs them, from a throwaway local registry (Verdaccio, no uplink):
-`scripts/engine/npm-local-registry/test.mjs` (ci.yml `npm-install`, publish.yml `smoke-npm`); how
+`scripts/engine/npm-local-registry/test.mjs` (release-build.yml's `smoke`, which publish.yml and ci.yml's release tier and nightly call); how
 to run it locally: [`docs/internal/publishing.md`](../../docs/internal/publishing.md#the-npm-install-test).
