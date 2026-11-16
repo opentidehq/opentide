@@ -40,13 +40,18 @@ fn the_floors_parse_without_a_diagnostic() {
     let nest = query(&format!("{}a == 1{}", "(".repeat(n), ")".repeat(n)));
     assert_eq!(parse_small(nest).0, []);
     let limit = usize::try_from(parser::MAX_DEPTH).unwrap_or(usize::MAX);
-    let at_limit = query(&format!("{}a == 1{}", "(".repeat(limit), ")".repeat(limit)));
+    // At the limit, the innermost operand is one with no operator (`a == 1` is one level more).
+    let at_limit = query(&format!("{}a{}", "(".repeat(limit), ")".repeat(limit)));
     assert_eq!(parse_small(at_limit).0, []);
-    for op in [" or ", " and ", " + ", " * "] {
-        let (errors, depth) = parse_small(query(&vec!["a == 1"; 20_000].join(op)));
-        if op.trim() == "or" || op.trim() == "and" {
-            assert_eq!(errors, [], "{op}");
-        }
+    for (op, term) in [
+        (" or ", "a == 1"),
+        (" and ", "a == 1"),
+        (" + ", "a"),
+        (" * ", "a"),
+        (" % ", "a"),
+    ] {
+        let (errors, depth) = parse_small(query(&vec![term; 20_000].join(op)));
+        assert_eq!(errors, [], "{op}");
         assert!(depth < 10, "{op}: depth {depth}");
     }
     let (errors, depth) = parse_small(query(&vec!["a"; 20_000].join(" - ")));
@@ -123,4 +128,42 @@ fn every_recursive_construct_is_one_diagnostic_past_the_limit() {
             assert!(depth < MAX_TREE_DEPTH, "{n} {head}: depth {depth}");
         }
     }
+}
+
+/// Every operator level inside each parenthesis (`(a or b and c == d + e * (...`) recurses
+/// through each level: each is a level of its own, so deep nesting of this shape is one
+/// diagnostic, never an overflow, and shallow nesting parses (#1408 review).
+#[test]
+fn mixed_levels_inside_nesting_are_bounded() {
+    let ladder = |n: usize| {
+        query(&format!(
+            "{}1{}",
+            "(a or b and c == d + e * ".repeat(n),
+            ")".repeat(n)
+        ))
+    };
+    assert_eq!(parse_small(ladder(100)).0, []);
+    for n in [170, 300, 900, 5_000] {
+        let (errors, depth) = parse_small(ladder(n));
+        let deep = errors
+            .iter()
+            .filter(|e| matches!(e, ErrorKind::TooDeep { .. }))
+            .count();
+        assert!(deep <= 1, "{n}: {errors:?}");
+        assert!(depth < MAX_TREE_DEPTH, "{n}: depth {depth}");
+    }
+    let calls = query(&format!(
+        "{}1{}",
+        "a in (b or b and c == d + e * f(g or h and i == j + k * -".repeat(340),
+        "))".repeat(340)
+    ));
+    let (errors, _) = parse_small(calls);
+    assert!(
+        errors
+            .iter()
+            .filter(|e| matches!(e, ErrorKind::TooDeep { .. }))
+            .count()
+            == 1,
+        "{errors:?}"
+    );
 }

@@ -25,4 +25,4 @@ SOURCE_FILE@0..57
     WHITESPACE@54..55 " "
     NUMBER_TOKEN@55..56 "4"
   WHITESPACE@56..57 "\n"
-52..53: unexpected token (expected an index, `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `|`, `.`, `:`)
+52..53: unexpected token (expected an index, `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `|`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `+`, `-`, `*`, `/`, `%`, `.`, `:`)

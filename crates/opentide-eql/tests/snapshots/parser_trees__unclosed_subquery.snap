@@ -30,4 +30,4 @@ SOURCE_FILE@0..37
         WHITESPACE@32..33 " "
         BOOLEAN@33..37
           TRUE_KW@33..37 "true"
-37..37: missing `]` (expected `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `]`, `:`)
+37..37: missing `]` (expected `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `+`, `-`, `*`, `/`, `%`, `]`, `:`)

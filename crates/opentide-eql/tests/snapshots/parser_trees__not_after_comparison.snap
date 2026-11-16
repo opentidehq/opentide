@@ -22,5 +22,5 @@ SOURCE_FILE@0..24
   WHITESPACE@22..23 " "
   ERROR@23..24
     WORD@23..24 "b"
-18..19: an expression is missing (expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `true`, `+`, `-`, `(`, `?`)
-22..23: unexpected token (expected `|`)
+18..19: an expression is missing (expected a name, a function, a number, a string, a quoted name, `false`, `null`, `true`, `+`, `-`, `(`, `?`)
+22..23: unexpected token (expected `and`, `or`, `|`)

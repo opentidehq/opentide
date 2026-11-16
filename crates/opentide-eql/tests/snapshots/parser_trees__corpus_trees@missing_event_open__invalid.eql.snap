@@ -29,4 +29,4 @@ SOURCE_FILE@0..77
     R_BRACK@75..76 "]"
   WHITESPACE@76..77 "\n"
 57..58: an expression is missing (expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `true`, `+`, `-`, `(`, `?`)
-57..58: unexpected token (expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `true`, `|`, `+`, `-`, `(`, `?`)
+57..58: unexpected token (expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `or`, `true`, `|`, `+`, `-`, `(`, `?`)

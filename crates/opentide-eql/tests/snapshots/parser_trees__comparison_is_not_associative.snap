@@ -25,4 +25,4 @@ SOURCE_FILE@0..25
     EQ_EQ@21..23 "=="
     WHITESPACE@23..24 " "
     WORD@24..25 "c"
-20..21: unexpected token (expected an index, `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `|`, `.`, `:`)
+20..21: unexpected token (expected an index, `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `|`, `+`, `-`, `*`, `/`, `%`, `.`, `:`)
