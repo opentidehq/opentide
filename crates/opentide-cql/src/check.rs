@@ -23,7 +23,7 @@ pub(crate) fn diagnostics(
     root: &SyntaxNode,
     errors: &[SyntaxError],
     source: &str,
-    ctx: &Context,
+    ctx: Context,
 ) -> Vec<Diagnostic> {
     let catalog = Catalog::cached();
     let broken = Broken::new(errors);

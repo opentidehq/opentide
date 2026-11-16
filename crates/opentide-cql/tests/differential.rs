@@ -21,7 +21,9 @@
 #[allow(
     dead_code,
     unused_imports,
-    reason = "a verbatim copy of the old crate; not every item is compared"
+    clippy::trivially_copy_pass_by_ref,
+    clippy::too_many_lines,
+    reason = "a verbatim copy of the old crate (its public items were not linted so); not every item is compared"
 )]
 mod legacy;
 
