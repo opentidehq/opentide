@@ -558,12 +558,12 @@ error[external_id_in_rule]: Vendor rule id key "rule_id" is not allowed on the s
    │
    ╰─ help: Run 'opentide deploy migrate-state' and commit the rule together with .opentide/states/deployment/
 
-error[spl_parse_error]: SPL syntax error: unexpected 'index'
-   ╭─▶ objects/rules/rogue-harvest-rule-0056.yaml:70:7
+error[spl_parse_error]: unbalanced parentheses: this '(' is never closed
+   ╭─▶ objects/rules/rogue-harvest-rule-0056.yaml:70:27
    │
 69 │     query: |
 70 │       index=main | eval x=(
-   │       ━━━━━
+   │                           ━
    │
    ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
 
@@ -931,7 +931,7 @@ tip: add --json for machine-readable output
 | error | [`kql_unknown_operator`](https://opentide.org/docs/cli/diagnostics#kql_unknown_operator) | `objects/rules/rogue-exfiltration-rule-0092.yaml:65:9` | unknown tabular operator 'frobnicate' — help: the KQL reference: https://learn.microsoft.com/kusto/query/ |
 | error | [`duplicate_id`](https://opentide.org/docs/cli/diagnostics#duplicate_id) | `objects/rules/rogue-harvest-rule-0003.yaml:4:9` | UUID 53651415-1c05-4cfb-b1b2-39c888ab0f06 is also used by "Lateral Pivot Rule 0002" — help: give one of them a fresh UUID v4; keep the UUID on the object that is deployed or referenced |
 | error | [`external_id_in_rule`](https://opentide.org/docs/cli/diagnostics#external_id_in_rule) | `objects/rules/rogue-harvest-rule-0027.yaml:55:14` | Vendor rule id key "rule\_id" is not allowed on the sentinel block; external ids live in .opentide/states/deployment/&lt;uuid&gt;.json — help: Run 'opentide deploy migrate-state' and commit the rule together with .opentide/states/deployment/ |
-| error | [`spl_parse_error`](https://opentide.org/docs/cli/diagnostics#spl_parse_error) | `objects/rules/rogue-harvest-rule-0056.yaml:70:7` | SPL syntax error: unexpected 'index' — help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference |
+| error | [`spl_parse_error`](https://opentide.org/docs/cli/diagnostics#spl_parse_error) | `objects/rules/rogue-harvest-rule-0056.yaml:70:27` | unbalanced parentheses: this '\(' is never closed — help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference |
 | error | [`kql_type_mismatch`](https://opentide.org/docs/cli/diagnostics#kql_type_mismatch) | `objects/rules/rogue-harvest-rule-0066.yaml:61:26` | \`&gt;\` is not defined for \`ResultType\`, a string column; Kusto rejects the query — help: the KQL reference: https://learn.microsoft.com/kusto/query/ |
 | error | [`vocab_unknown`](https://opentide.org/docs/cli/diagnostics#vocab_unknown) | `objects/rules/rogue-relay-rule-0011.yaml:9:8` | "clearr" is not a TLP value — help: did you mean "clear"? |
 | error | [`falco_parse_error`](https://opentide.org/docs/cli/diagnostics#falco_parse_error) | `objects/rules/rogue-spray-rule-0113.yaml:46:37` | expected a string value or a field with a valid transformer: 'val', 'tolower', 'toupper', 'b64', 'basename', 'len', 'join', 'concat', 'getopt' \(libsinsp\) — help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/ |

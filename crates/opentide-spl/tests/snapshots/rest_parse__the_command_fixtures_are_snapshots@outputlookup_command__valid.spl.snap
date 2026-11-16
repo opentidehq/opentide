@@ -1,0 +1,32 @@
+---
+source: crates/opentide-spl/tests/rest_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/outputlookup_command__valid.spl
+---
+SOURCE_FILE@0..45
+  PIPELINE@0..45
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    OUTPUTLOOKUP_COMMAND@13..45
+      OUTPUTLOOKUP_KW@13..25 "outputlookup"
+      WHITESPACE@25..26 " "
+      COMMAND_OPTION@26..37
+        IDENTIFIER@26..32
+          IDENT@26..32 "append"
+        EQ@32..33 "="
+        BOOLEAN@33..37
+          BOOL_KW@33..37 "true"
+      WHITESPACE@37..38 " "
+      IDENTIFIER@38..45
+        FIELD_WORD@38..45 "t-x.csv"
+--
