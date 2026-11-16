@@ -144,12 +144,15 @@ struct Context {
     depth: u32,
     /// Whether the last significant token ends an operand.
     operand: bool,
+    /// In a `dedup`, `order`, `select` or `unselect` section: a list of
+    /// expressions, not of statements.
+    listing: bool,
 }
 
 impl Context {
     /// Whether the next token can only continue the expression.
     fn continues(self) -> bool {
-        self.depth > 0 && self.operand
+        (self.depth > 0 || self.listing) && self.operand
     }
 
     /// The context after a token of `kind`.
@@ -165,6 +168,22 @@ impl Context {
                 self.operand = true;
             }
             K::L_BRACE | K::R_BRACE => self = Self::default(),
+            K::DEDUP_KW | K::ORDER_KW | K::SELECT_KW | K::UNSELECT_KW => {
+                self.listing = true;
+                self.operand = false;
+            }
+            K::META_KW
+            | K::SETUP_KW
+            | K::EVENTS_KW
+            | K::MATCH_KW
+            | K::OUTCOME_KW
+            | K::CONDITION_KW
+            | K::OPTIONS_KW
+            | K::EXPORT_KW
+            | K::LIMIT_KW => {
+                self.listing = false;
+                self.operand = false;
+            }
             K::IDENT
             | K::VAR_TOKEN
             | K::COUNT_TOKEN
@@ -384,14 +403,17 @@ fn mark_paths(lexemes: &mut [Lexeme]) {
     let mut touching = false;
     for lexeme in lexemes {
         let kind = K::from_raw(lexeme.kind);
-        if matches!(kind, K::WHITESPACE | K::COMMENT) {
+        if kind == K::WHITESPACE {
             touching = false;
             continue;
         }
+        if kind == K::COMMENT {
+            // A comment is no blank: tree-sitter took `$e/*c*/.x` as a path.
+            continue;
+        }
         let after_path = touching
-            && prev.is_some_and(|(k, end)| {
-                end == lexeme.range.start()
-                    && matches!(k, K::VAR_TOKEN | K::IDENT | K::FIELD_NAME | K::R_BRACK)
+            && prev.is_some_and(|(k, _)| {
+                matches!(k, K::VAR_TOKEN | K::IDENT | K::FIELD_NAME | K::R_BRACK)
                     && !(k == K::IDENT && before == Some(K::DOT))
             });
         let kind = match kind {
@@ -485,8 +507,9 @@ mod tests {
         // The segment after a dot may follow a blank (tree-sitter accepted it).
         assert_eq!(kinds("$e. and")[2].0, K::FIELD_NAME);
         assert_eq!(kinds("a.\n b")[2].0, K::FIELD_NAME);
-        // A comment is a blank too.
-        assert_eq!(kinds("$e/**/.x")[2].0, K::DOT);
+        // A comment is no blank.
+        assert_eq!(kinds("$e/**/.x")[2].0, K::ACCESS_DOT);
+        assert_eq!(kinds("$e/**/.x")[3].0, K::FIELD_NAME);
     }
 
     #[test]
