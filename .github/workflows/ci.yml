@@ -279,9 +279,9 @@ jobs:
         if: needs.changes.outputs.rust == 'true'
         run: cargo clippy --package opentide-cli --no-default-features --locked -- -D warnings
 
-      # The code only wasm32 compiles (libc_syscalls.rs, the wasip1 paths of
+      # The code only wasm32 compiles (opentide-wasm's, the wasip1 paths of
       # opentide-lsp and opentide-cli), which the native clippy never sees:
-      # when the `wasm` job runs, with build-wasm.sh's wasi-sdk.
+      # when the `wasm` job runs (wasi-sdk only for the command line's ring).
       - name: clippy on the WebAssembly targets
         if: needs.changes.outputs.wasm == 'true'
         run: bash scripts/engine/build-wasm.sh clippy
