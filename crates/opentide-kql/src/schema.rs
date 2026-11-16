@@ -804,6 +804,7 @@ pub(crate) fn unknown_column(
         name,
         schema.columns.iter().map(|c| c.name.as_str()).filter(|c| {
             c.chars().count().abs_diff(chars) <= 2 && {
+                crate::inspect::count_column_measured();
                 let d = strsim::levenshtein(&c.to_ascii_lowercase(), &lower);
                 d <= 2 && d * 2 < name.len()
             }

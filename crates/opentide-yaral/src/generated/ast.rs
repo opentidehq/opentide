@@ -1747,7 +1747,7 @@ impl OrderItem {
     }
     /// The token child.
     pub fn direction(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![asc])
+        support::token_in(&self.syntax, &[T![asc], T![desc]])
     }
 }
 
@@ -2045,7 +2045,7 @@ impl InExpr {
     }
     /// The token child.
     pub fn kind(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, T![regex])
+        support::token_in(&self.syntax, &[T![regex], T![cidr]])
     }
     /// The `Expr` child, number 1 from 0 among the `Expr` children.
     pub fn right(&self) -> Option<Expr> {
@@ -2081,9 +2081,9 @@ impl BinaryExpr {
     pub fn exprs(&self) -> AstChildren<Expr> {
         support::children(&self.syntax)
     }
-    /// The token child.
-    pub fn op(&self) -> Option<SyntaxToken> {
-        support::token_in(&self.syntax, &[T![+], T![-], T![*], T![/], T![%]])
+    /// The token children, in order.
+    pub fn op(&self) -> Vec<SyntaxToken> {
+        support::tokens_in(&self.syntax, &[T![+], T![-], T![*], T![/], T![%]])
     }
 }
 

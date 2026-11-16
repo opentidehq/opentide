@@ -23,6 +23,29 @@ fn lex_on_small_stack(source: String) -> Vec<(usize, usize, bool)> {
 
 const N: usize = 1_000_000;
 
+/// Fails unless `run(4 * n)` takes less than 8 times `run(n)`: linear work
+/// takes 4 times as long, quadratic 16 times. Each is the best of three runs,
+/// the sizes alternated, so a busy machine slows both alike; a run under 50 ms passes whatever the
+/// ratio, its noise being larger than it.
+fn assert_linear(name: &str, n: usize, run: impl Fn(usize)) {
+    let time = |k: usize| {
+        let started = std::time::Instant::now();
+        run(k);
+        started.elapsed()
+    };
+    // Alternated, so that a busy spell slows both sizes alike.
+    let (mut small, mut large) = (std::time::Duration::MAX, std::time::Duration::MAX);
+    for _ in 0..3 {
+        small = small.min(time(n));
+        large = large.min(time(4 * n));
+    }
+    assert!(
+        large < std::time::Duration::from_millis(50) || large < small * 8,
+        "{name}: {small:?} for {n}, {large:?} for {}: not linear",
+        4 * n
+    );
+}
+
 #[test]
 fn long_tokens_do_not_recurse_per_repetition() {
     let cases: Vec<(&str, String)> = vec![
@@ -86,15 +109,11 @@ fn long_tokens_do_not_recurse_per_repetition() {
 #[test]
 fn unclosed_typed_literals_are_linear() {
     let source = "datetime(a ".repeat(20_000);
-    let started = std::time::Instant::now();
     let spans = lex_on_small_stack(source.clone());
-    assert!(
-        started.elapsed().as_secs() < 2,
-        "{:?} for {} bytes",
-        started.elapsed(),
-        source.len()
-    );
     assert_eq!(spans.last().map(|s| s.1), Some(source.len()));
+    assert_linear("unclosed typed literals", 5_000, |n| {
+        let _ = lex_on_small_stack("datetime(a ".repeat(n));
+    });
     // A closed one on a later line is still a literal.
     let spans = lex_on_small_stack(format!("{source}\ndatetime(2024-01-01)"));
     assert_eq!(

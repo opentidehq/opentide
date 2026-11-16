@@ -266,6 +266,40 @@ jobs:
           OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules
         run: cargo test --locked -p opentide-analysis --test elastic_detection_rules -- --nocapture
 
+  # The editor's diagnostics are validate's (#678): every fault kind of the
+  # generated corpus through `opentide validate` and through the language
+  # server, compared (xtask/src/lsp.rs). Nightly, not in `build`: the run
+  # alone takes about 4 minutes of debug binary (233 kinds, 2026-11-16), which
+  # would lengthen every push's long pole; the four-file twin,
+  # crates/opentide-cli/tests/validate_lsp_parity.rs, runs on pull requests.
+  lsp-parity:
+    name: Validate and language-server parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The full set's Linux compiler cache (`conformance` saves it).
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
+      - name: lsp parity on the faults corpus
+        run: cargo xtask lsp parity --corpus faults
+
   # Real clients against the server (language-server#185 P2.8): pytest-lsp
   # replays the capabilities VS Code, Neovim and Emacs send and checks each
   # response against them, and Neovim's own client must show each diagnostic

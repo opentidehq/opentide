@@ -1335,8 +1335,8 @@ jobs:
 
   # Every nightly job that needs nothing from this run (nightly.yml): the
   # engine tests on macOS and Windows, SDK conformance on three OSes, the
-  # Elastic sweep, the LSP clients, coverage, the budgeted benchmarks, the
-  # vendor-parser oracles and the fuzz targets.
+  # Elastic sweep, lsp parity, the LSP clients, coverage, the budgeted
+  # benchmarks, the vendor-parser oracles and the fuzz targets.
   nightly:
     name: Nightly
     needs: changes
