@@ -217,7 +217,7 @@ Language id `kuery` (`.kuery`, alias `kibana-kql`). This is the Kibana Query Lan
 
 `or`, `and`, and `not` are keywords only with whitespace after them: at the very end of the query or before `)` or `}` they are value text, as in Kibana (`f:a or`, `f:(not)`), while `f:a or ` (trailing space) fails. Engine checks below the grammar:
 
-- `kuery_parse_error` messages name the problem (no implicit `and` in `a:1 b:2`, an unclosed `(` or quote, a missing value or operand). They are not Kibana's PEG messages word for word: tree-sitter recovers at a different point than Kibana's parser.
+- `kuery_parse_error` messages name the problem (no implicit `and` in `a:1 b:2`, an unclosed `(` or quote, a missing value or operand). They are not Kibana's PEG messages word for word: the parser (`crates/opentide-kuery/src/parser.rs`) recovers at a different point than Kibana's.
 - `kuery_question_mark` (hint): `?` is a literal in KQL, not a single-character wildcard. URL query strings (`/path?x=1`) are skipped.
 - `kuery_free_text` (hint): a value with no field searches every field; after `f:a and b` the hint suggests `f:(a and b)`.
 - `kuery_looks_like_lucene` (warning): two different kinds of Lucene syntax (ranges, `_exists_`, prefixes, `&&`, regexps, fuzzy or boost, text only Lucene parses) suggest `language: lucene`.
@@ -297,7 +297,7 @@ Errors are what Falco refuses to load: `falco_parse_error`, `falco_unknown_field
 
 Every condition of the Falco default rules (`crates/testdata/conformance/external/falco/`, 241 rules across the six sources) comes out with no finding. Hover explains fields (type, sources, description), macros and lists (the block's, or the default rules' with the defining file), operators, modifiers, transformers, and event types; completion offers the source's fields, macros and transformers in condition position, operators after a field, and lists (and event types after `evt.type`) inside a value list.
 
-The tree-sitter grammar drives highlighting and editor structure; it accepts libsinsp's syntax, but its verdict is not the engine's.
+The tree (`crates/opentide-falco/src/cst.rs`, on `opentide-parse`) drives highlighting and editor structure; it accepts libsinsp's syntax, but its verdict is not the engine's.
 
 | id | grammar rule | fixture ids | capture |
 | --- | --- | --- | --- |
@@ -335,7 +335,7 @@ Corpus lives in `crates/testdata/corpus/{kql,spl,esql,eql,kuery,lucene}/` tagged
 
 Language id `cql` (`.cql`). The CrowdStrike Query Language of Falcon LogScale and Falcon Next-Gen SIEM: `configurations.crowdstrike.query` (platform::crowdstrike::1.0, a correlation rule) and hunts with `system: crowdstrike` in Tide. CQL is closed source, so the grammar follows CrowdStrike's published "CQL Grammar Subset" and reference pages; `docs/engine/CQL.md` has the language, the diagnostics and the conformance results.
 
-- **Syntax** is the tree-sitter grammar, with an external scanner for what CQL lexes by position: a word is a function name only when `(` follows at once, a field name before a filter operator and a pattern elsewhere; `/` is a comment, a regex, a pattern character or division. `or` binds tighter than `and`, juxtaposition is `and`, `|` is loosest. Filter and expression constructs are separate nodes. 2,786 of the 2,812 blocks labelled CQL in CrowdStrike's public content parse, and 475 of the 490 queries on CrowdStrike's function pages are clean; the rest are not valid CQL (non-breaking spaces pasted from the web, prose, SPL, templates, author errors). Steps may follow each other without a pipe, as CrowdStrike's examples write them (`docs/engine/CQL.md`).
+- **Syntax** is the parser (`crates/opentide-cql/src/parser.rs` and `cql.ungram`, on `opentide-parse`), whose lexer modes (`src/lexer.rs`) read what CQL lexes by position: a word is a function name only when `(` follows at once, a field name before a filter operator and a pattern elsewhere; `/` is a comment, a regex, a pattern character or division. `or` binds tighter than `and`, juxtaposition is `and`, `|` is loosest. Filter and expression constructs are separate nodes. 2,786 of the 2,812 blocks labelled CQL in CrowdStrike's public content parse, and 475 of the 490 queries on CrowdStrike's function pages are clean; the rest are not valid CQL (non-breaking spaces pasted from the web, prose, SPL, templates, author errors). Steps may follow each other without a pipe, as CrowdStrike's examples write them (`docs/engine/CQL.md`).
 - **Checks** run on the tree against `data/catalogs/cql/` (`scripts/engine/sync_cql_catalog.py`): functions (matched without regard to case), parameters, the one omittable argument, enumerated values and bounds, regex flags, string escapes, where free text and `<=>` may appear, and Falcon event names. A correlation rule also refuses `correlate()` with another aggregate.
 
 Errors are what LogScale refuses to compile: `cql_parse_error`, `cql_unknown_function`, `cql_removed_function`, `cql_unknown_parameter`, `cql_duplicate_parameter`, `cql_unnamed_argument`, `cql_missing_parameter`, `cql_parameter_value`, `cql_regex_flag`, `cql_free_text_after_aggregate`, `cql_assignment_as`, `cql_link_outside_correlate`, `cql_event_function_after_aggregate`, `cql_correlate_placement`, `cql_match_guard`, and in a correlation rule `cql_correlate_aggregate`. Warnings: `cql_deprecated_function`, `cql_string_escape`, `cql_unknown_event`, `cql_regex_group_under_or`. No field, saved search, lookup file or repository is ever reported unknown: they live in the tenant.
@@ -386,7 +386,7 @@ Hover explains functions (signature, summary, aggregate, lifecycle, CrowdStrike'
 Language id `exabeam` (`.exabeam`). The Exabeam Query Language of Exabeam's New-Scale SIEM ([exabeam-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/exabeam-1.0.md)): `configurations.exabeam.sequences[].query` (profile `rule`), hunts with `system: exabeam` and `.exabeam` files (profile `search`). Exabeam's guides call it "EQL"; the id is never `eql`, which is Elastic's. `docs/engine/EXABEAM.md` has the profiles, the codes and the conformance results.
 
 - **Verdicts** come from `crates/opentide-exabeam/src/check.rs`, a port of the specification's reference checker, which agrees with it on every conformance query and on Exabeam's 2,371 published rules but for three RE2 differences (`docs/engine/EXABEAM.md`).
-- **The tree** (`crates/opentide-exabeam/src/cst.rs`, a parser on `opentide-parse` that accepts what `grammars/tree-sitter-opentide-exabeam` accepts) colours the text: the filter (`NOT` > `AND` > `OR`, juxtaposition is `AND`) and the advanced operators, keywords in any case, clauses in any order. Its tokens equal the verdict parser's on every error-free conformance query (`tests/reference.rs`), and the grammar's highlights on every query the grammar parses without an error (`tests/differential.rs`).
+- **The tree** (`crates/opentide-exabeam/src/cst.rs`, a parser on `opentide-parse` that accepts what the tree-sitter grammar it replaced accepted) colours the text: the filter (`NOT` > `AND` > `OR`, juxtaposition is `AND`) and the advanced operators, keywords in any case, clauses in any order. Its tokens equal the verdict parser's on every error-free conformance query (`tests/reference.rs`).
 
 | id | grammar rule | fixture ids | capture |
 | --- | --- | --- | --- |
@@ -418,8 +418,8 @@ Language id `exabeam` (`.exabeam`). The Exabeam Query Language of Exabeam's New-
 Language id `yara` (`.yar`, `.yara`). YARA signatures as libyara 4.5 compiles them ([yara-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-1.0.md)): HarfangLab and Bitdefender `yara` blocks. `docs/engine/YARA.md` has the codes.
 
 - **Verdicts** come from VirusTotal's `yara-x-parser` (`crates/opentide-yara`), not from this grammar.
-- **The tree-sitter grammar** (`grammars/tree-sitter-opentide-yara`) colours and structures the text. It is written from libyara's `grammar.y`, `lexer.l` and `hex_grammar.y`, with their precedence: `expression` (booleans, comparisons, `of`, `for`) over `primary_expression` (arithmetic, string counts and offsets, module references). `\` is division, so `/` always opens a regexp.
-- **Agreement**: `crates/opentide-yara/tests/tree_sitter_agreement.rs` runs both parsers over yara-x-parser's own 71 inputs and this corpus. They agree on every input but eight, each listed with its reason. Five are YARA-X-only syntax (`with`, digit separators, float meta and `"""` strings, booleans in `of` tuples), which the grammar refuses as libyara does. Three are libyara syntax that YARA-X refuses (an escape in a `base64` alphabet, rule wildcards in `of`).
+- **`yara-x-parser`'s CST** (`crates/opentide-yara/src/cst.rs`) colours and structures the text, folding and bracket pairs included; its AST gives the verdict.
+- **Corpus**: `crates/opentide-yara/tests/corpus_names.rs` holds every corpus fixture to its name (`__valid` parses with YARA-X, `__invalid` does not), but one listed with its reason: libyara's rule wildcards in `of` (`any of (base*)`), which YARA-X refuses.
 
 | id | grammar rule | fixture ids | capture |
 | --- | --- | --- | --- |
@@ -477,7 +477,7 @@ Language id `yara` (`.yar`, `.yara`). YARA signatures as libyara 4.5 compiles th
 
 Language id `yaral` (`.yaral`, `.yl2`). YARA-L 2.0, Google Security Operations ([yara-l-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-l-1.0.md)): `configurations.google_secops` sections, Google SecOps hunts, and rule files. `docs/engine/YARAL.md` has the codes.
 
-- **The grammar is the verdict parser** (`grammars/tree-sitter-opentide-yaral`, written for the spec: Google publishes none). It parses a rule or a search: sections in any order (the engine reports order and profile), newline-separated predicates as juxtaposed statements, field paths whose `.segment` and `[index]` accessors follow without blanks, so a UDM segment named like a keyword (`network.dhcp.options`) stays a name.
+- **The parser is the verdict parser** (`crates/opentide-yaral/src/parser/` and `yaral.ungram`, on `opentide-parse`, written for the spec: Google publishes none). It parses a rule or a search: sections in any order (the engine reports order and profile), newline-separated predicates as juxtaposed statements, field paths whose `.segment` and `[index]` accessors follow without blanks, so a UDM segment named like a keyword (`network.dhcp.options`) stays a name.
 - **Keywords** are case-insensitive in any mix (`and`, `AND`, `aNd`): each is a token rule matching every spelling (`_kw_and`), aliased to the lower-case node, and the language's keywords are a `reserved` set, so `word` extraction keeps `metadata` an identifier and a keyword is never a name.
 - **Coverage**: every rule of chronicle/detection-rules' `rules/community` (410) parses; `crates/testdata/conformance/external/yaral/` holds 79 of them with fault twins.
 

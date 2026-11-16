@@ -16,14 +16,14 @@ editors / @opentide/lsp-client / WASM worker
           /        |         \
     opentide-{kql,spl}  opentide-{esql,eql,kuery,lucene}  opentide-tide
           \        |         /
-            opentide-syntax + opentide-highlight
+            opentide-parse + opentide-highlight
                       |
                opentide-core
 ```
 
 ## Layers
 
-- **Grammars** (`grammars/tree-sitter-opentide-{kql,spl,esql,eql,kuery,lucene}`) vendored `parser.c`. CI regenerates and fails on drift.
+- **Parsers** are pure Rust (ADR 0012): each language crate has a logos lexer and a hand-written grammar on `opentide-parse` into a lossless rowan tree, and a `.ungram` its typed AST is generated from (`cargo xtask codegen`, checked in CI). YARA reads `yara-x-parser`. No C and no `unsafe` in the engine; the browser module links no libc (`.agents/skills/parser/SKILL.md`).
 - **Catalogs** (`data/catalogs/`) compiled into the engine with `include_str!`. The language server generates each root's Tide field catalogs from `opentide-schema` and hands them to the engine (#926); it does not read `.opentide/lsp/catalogs/`.
 - **HighlightSpec** (`highlights/spec.toml`) is frozen. Capture rename = major. Generated tmLanguage / Monaco / Helix maps are CI-checked.
 - **Injection**: block-scalar indent is stripped for analysis; tokens are remapped onto YAML coordinates.

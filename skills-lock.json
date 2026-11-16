@@ -61,6 +61,12 @@
       "skillPath": ".agents/skills/mcp-server/SKILL.md",
       "computedHash": "project-local"
     },
+    "parser": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/parser/SKILL.md",
+      "computedHash": "project-local"
+    },
     "pytest-coverage": {
       "source": "github/awesome-copilot",
       "sourceType": "github",
@@ -119,12 +125,6 @@
       "source": "opentidehq/opentide",
       "sourceType": "project",
       "skillPath": ".agents/skills/steward/SKILL.md",
-      "computedHash": "project-local"
-    },
-    "tree-sitter": {
-      "source": "opentidehq/opentide",
-      "sourceType": "project",
-      "skillPath": ".agents/skills/tree-sitter/SKILL.md",
       "computedHash": "project-local"
     },
     "uv": {

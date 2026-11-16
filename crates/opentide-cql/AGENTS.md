@@ -1,8 +1,9 @@
 # opentide-cql — agent guide
 
 The CrowdStrike Query Language (CQL) engine of Falcon LogScale and Falcon Next-Gen SIEM
-(`configurations.crowdstrike.query`, hunts with `system: crowdstrike`, `.cql` files): the
-tree-sitter grammar (`grammars/tree-sitter-opentide-cql`, with an external scanner) is the parser,
+(`configurations.crowdstrike.query`, hunts with `system: crowdstrike`, `.cql` files): its
+parser (`src/lexer.rs`, whose modes read what CQL lexes by position, and `src/parser.rs`, on
+`opentide-parse`, with `cql.ungram`) builds the tree,
 `check` runs CrowdStrike's compile-time rules on the tree, and `assist` gives hover, completion and
 signature help. Catalogs: `data/catalogs/cql/` (`scripts/engine/sync_cql_catalog.py`). Design:
 `docs/engine/CQL.md`.
@@ -26,7 +27,7 @@ cargo nextest run --profile fast -p opentide-cql
 cargo nextest run -p opentide-analysis --test external_cql
 ```
 
-`src/tests.rs` (the checks), `crates/opentide-syntax/tests/corpus_gate.rs` (one valid and one invalid
+`src/tests.rs` (the checks), `crates/opentide-analysis/tests/corpus_gate.rs` (one valid and one invalid
 fixture per production in `crates/testdata/corpus/cql/`) and `crates/opentide-analysis/tests/external_cql.rs`
 (CrowdStrike's public queries, each clean, and a twin with one injected fault). No oracle runs in CI:
 CQL is closed source (`scripts/engine/oracles/README.md`).

@@ -1,13 +1,13 @@
 # AGENTS.md — the Rust workspace and the engine
 
-Instructions for coding agents working on the Cargo workspace of this repository (`opentidehq/opentide`): the engine crates in `crates/`, imported from opentidehq/language-server with their history (`docs/engine/IMPORT.md`), the binding in `bindings/python/`, the tooling in `xtask/`, and the grammars, highlights, catalogs, editors, npm packages and fuzz targets they build on. The root `AGENTS.md` is the map of the rest. Each crate has its own `AGENTS.md`; read it before changing the crate. Detection-authoring skills live in `opentidehq/skills` and are not an engine.
+Instructions for coding agents working on the Cargo workspace of this repository (`opentidehq/opentide`): the engine crates in `crates/`, imported from opentidehq/language-server with their history (`docs/engine/IMPORT.md`), the binding in `bindings/python/`, the tooling in `xtask/`, and the highlights, catalogs, editors, npm packages and fuzz targets they build on. The root `AGENTS.md` is the map of the rest. Each crate has its own `AGENTS.md`; read it before changing the crate. Detection-authoring skills live in `opentidehq/skills` and are not an engine.
 
 Before editing, read the one skill that matches the change. Skills follow the [Agent Skills specification](https://agentskills.io/specification).
 
 | Change | Read |
 | --- | --- |
 | Any `crates/**/*.rs`, `Cargo.toml`, `Cargo.lock` | `.agents/skills/rust-engine/SKILL.md` |
-| `grammars/`, `crates/opentide-syntax`, `highlights/queries/` | `.agents/skills/tree-sitter/SKILL.md` |
+| A language crate's lexer, parser, `.ungram` or keyword table; `crates/opentide-parse` | `.agents/skills/parser/SKILL.md` |
 | `crates/opentide-lsp`, `editors/`, stdio tests | `.agents/skills/lsp-host/SKILL.md` |
 | `crates/opentide-wasm`, `packages/`, packaging | `.agents/skills/wasm-hosts/SKILL.md` |
 | A `crates/CHANGELOG.md` entry, or an engine release's notes | `.agents/skills/engine-release-notes/SKILL.md` |
@@ -50,7 +50,7 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 - Highlight tokenizes **authored** SPL. An implicit leading `| search` is not a source rewrite.
 - opentide LSP owns Tide diagnostics. Editor samples keep yamlls off `objects/**`.
 - There is no `opentide-sql` crate, no `.sql` language id, and no stub SQL highlighter.
-- Do not hand-edit `grammars/**/src/parser.c`, `grammar.json`, or `node-types.json`. Regenerate with `tree-sitter-cli` **0.25.10**.
+- Every query parser is pure Rust on `opentide-parse` (ADR 0012; YARA reads `yara-x-parser`). No C, no tree-sitter, no generated parser: do not add a `cc` build or a `*-sys` crate to the engine (the WASI command line's `ring` is the one C dependency). Do not hand-edit `src/generated/ast.rs`: `cargo xtask codegen` writes it from the `.ungram`.
 - Do not commit a rewritten `Cargo.lock` with a change that is not about dependencies. The lock is what Cargo resolves and CI builds with `--locked`; restore the committed lock if Cargo rewrites it.
 - Configuration TOML (`opentide-config`, #158): the models, layering and checks are `opentide-schema`'s `configuration` module (UC-1.5, #811), the oracle's `configuration_text_issues` ported and compared case for case. The language server checks a buffer natively with `buffer_issues` (UC-2.6, #821) and `opentide-analysis` places the `{code, field_path, severity}` findings (`place_configuration_issues`); hover and completion read the host's schemas. No configuration check logic in `opentide-analysis`, no vendored or hand-written configuration schema, no TOML grammar, no HighlightSpec captures.
 - YARA's verdict parser is `yara-x-parser`, never the `yara-x` compiler crate (wasmtime, breaks WASI). `yara-x` and `yara-python` are oracles only: not in `Cargo.lock`, never shipped.
@@ -64,9 +64,9 @@ The workspace's lints are in the root `Cargo.toml` (`[workspace.lints]`), each a
 
 - **One Rust, pinned.** `rust-toolchain.toml` names an exact release; CI installs that file's toolchain, so a new stable's lints cannot turn every PR red. Move to a newer release in a change of its own, as the file says: bump `channel`, then fix or allow (with a reason) what the new lints report.
 
-- **`unsafe_code` is forbidden** except in `opentide-syntax` (tree-sitter FFI) and `opentide-wasm` (wasm32 libc shims). `opentide-node` (`bindings/node`) copies the table with `deny` too, and writes no `unsafe`: napi-derive's registration carries `#[allow(unsafe_code)]`, which `forbid` refuses. Those two copy the workspace table with `unsafe_code = "deny"`, allow it per item with a reason, and comment every `unsafe` block with `// SAFETY:` (`clippy::undocumented_unsafe_blocks`), one unsafe operation per block (`clippy::multiple_unsafe_ops_per_block`). `xtask/tests/lint_policy.rs` fails when a copy drifts or another crate leaves the workspace table; [`docs/internal/unsafe.md`](../docs/internal/unsafe.md) lists every site with its justification, and `xtask/tests/unsafe_listing.rs` fails when it misses one.
+- **`unsafe_code` is forbidden** in every crate, and none holds any (#1231 removed the last: the tree-sitter FFI and the browser build's libc shims). `opentide-node` (`bindings/node`) copies the table with `deny`, and writes no `unsafe`: napi-derive's registration carries `#[allow(unsafe_code)]`, which `forbid` refuses. A crate that came to need `unsafe` would copy the workspace table with `unsafe_code = "deny"`, allow it per item with a reason, and comment every `unsafe` block with `// SAFETY:` (`clippy::undocumented_unsafe_blocks`), one unsafe operation per block (`clippy::multiple_unsafe_ops_per_block`). `xtask/tests/lint_policy.rs` fails when a copy drifts or another crate leaves the workspace table; [`docs/internal/unsafe.md`](../docs/internal/unsafe.md) lists every site with its justification, and `xtask/tests/unsafe_listing.rs` fails when it misses one.
 - **No `unwrap`, `expect`, `dbg!`, `todo!` or `unimplemented!` outside tests.** A panic on user input is a bug: return a diagnostic or an error. Where a value cannot fail (a catalog compiled in with `include_str!`, a regex literal, a structural invariant), the item says why: `#[expect(clippy::expect_used, reason = "...")]`. An integration test file's helpers outside `#[test]` take the same `#![expect]` at the file's top.
-- **`missing_docs`** holds for `opentide` (the facade), `opentide-syntax`, `opentide-parse`, `opentide-kuery`, `opentide-lsp`, `opentide-wasm`, `opentide-native`, `opentide-compare` and `xtask`, and for every new crate. The twelve other crates, imported undocumented (`opentide-cql` with language-server 0.12.0), opt out at their crate root (`#![expect(missing_docs, ...)]`); remove the opt-out once a crate is documented. Inaccurate docs are worse than none.
+- **`missing_docs`** holds for `opentide` (the facade), `opentide-parse`, `opentide-kuery`, `opentide-lsp`, `opentide-wasm`, `opentide-native`, `opentide-compare` and `xtask`, and for every new crate. The twelve other crates, imported undocumented (`opentide-cql` with language-server 0.12.0), opt out at their crate root (`#![expect(missing_docs, ...)]`); remove the opt-out once a crate is documented. Inaccurate docs are worse than none.
 - Prefer `#[expect(..., reason)]` to `#[allow]`: a stale expectation fails. Use `allow` only where an expectation cannot be fulfilled (clippy's glob-import lints; `dead_code` in a test module only some test binaries use up), and say so beside it.
 - **Casts.** `clippy::cast_possible_truncation` is on: a narrowing `as` carries `#[expect(..., reason)]` on its function naming the bound (LSP positions are `u32`; a char is one or two UTF-16 units), or becomes `try_from`, or widens the other side.
 
@@ -98,15 +98,15 @@ cargo test --workspace
 cargo run -p opentide-lsp -- generate-highlights --check
 ```
 
-Grammar, catalog, and corpus edits can flip an oracle verdict. `bash scripts/engine/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/engine/oracles/README.md`). Grammar edits also need `bash scripts/engine/check-grammars.sh` from the repository root (CLI 0.25.10). The engine's CI jobs (`ci.yml`) set `RUSTFLAGS=-Dwarnings`. Code under `cfg(target_arch = "wasm32")` or `cfg(target_os = "wasi")` is linted only for that target: `bash scripts/engine/build-wasm.sh clippy` (CI's `engine-lint` job, when `wasm` runs) runs clippy for `opentide-wasm` on wasm32-unknown-unknown and `opentide-lsp` on wasm32-wasip1 with the wasm C toolchain the grammars need. Code under `cfg(windows)` is built and tested by `ci.yml`'s `engine-test` on Windows (nextest, as on Linux and macOS) but not linted with clippy.
+Parser, catalog, and corpus edits can flip an oracle verdict. `bash scripts/engine/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/engine/oracles/README.md`). The engine's CI jobs (`ci.yml`) set `RUSTFLAGS=-Dwarnings`. Code under `cfg(target_arch = "wasm32")` or `cfg(target_os = "wasi")` is linted only for that target: `bash scripts/engine/build-wasm.sh clippy` (CI's `engine-lint` job, when `wasm` runs) runs clippy for `opentide-wasm` on wasm32-unknown-unknown and `opentide-lsp` and the command line on wasm32-wasip1 (wasi-sdk only for the command line's `ring`). Code under `cfg(windows)` is built and tested by `ci.yml`'s `engine-test` on Windows (nextest, as on Linux and macOS) but not linted with clippy.
 
 ## Upstream docs, not downloaded skills
 
-The Rust project, tree-sitter, wasm-bindgen, and the LSP spec publish documentation, not Agent Skills. Use those docs when a skill points at them:
+The Rust project, logos, rowan, wasm-bindgen, and the LSP spec publish documentation, not Agent Skills. Use those docs when a skill points at them:
 
 - Edition 2024: <https://doc.rust-lang.org/stable/edition-guide/rust-2024/>
-- tree-sitter 0.25.10: <https://docs.rs/tree-sitter/0.25.10/tree_sitter/>
+- logos: <https://docs.rs/logos/>; rowan 0.17: <https://docs.rs/rowan/0.17/rowan/>; ungrammar: <https://docs.rs/ungrammar/>
 - wasm-bindgen targets: <https://wasm-bindgen.github.io/wasm-bindgen/reference/rust-targets.html>
 - LSP framing: <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#headerPart>
 
-Do not `npx skills add` a generic Rust, tree-sitter, or WASM skill into this repo. The packs on skills.sh describe async services, snapshot tests, `wasm-pack`, or a multi-hundred-language parser cache. None of them match this engine. Apollo's `rust-best-practices` handbook is the closest maintained Rust skill and still disagrees with this repo on snapshots and async.
+Do not `npx skills add` a generic Rust, parser, or WASM skill into this repo. The packs on skills.sh describe async services, snapshot tests, `wasm-pack`, or a multi-hundred-language parser cache. None of them match this engine. Apollo's `rust-best-practices` handbook is the closest maintained Rust skill and still disagrees with this repo on snapshots and async.

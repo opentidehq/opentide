@@ -22,7 +22,7 @@ Every legend string has a `[captures."<name>"]` table with `tm`, `monaco`, and `
 - `highlights/generated/helix.toml`
 - `highlights/generated/legend.json`
 
-CI runs `generate-highlights --check`. After a spec or `.scm` change:
+CI runs `generate-highlights --check`. After a spec or `KEYWORDS` table change:
 
 ```bash
 cargo run -p opentide-lsp -- generate-highlights
@@ -31,20 +31,20 @@ cargo run -p opentide-lsp -- generate-highlights --check
 
 Commit the generated files. Do not hand-edit them. Editor repos copy the zip produced from these files; they do not author a second grammar.
 
-## Queries
+## Captures
 
-`.scm` captures must be legend members. `opentide-highlight` extracts `@name` from the query files and errors on an unknown name. The syntax crate resolves overlaps: first pattern wins, then a later span that starts inside a previous token is dropped.
+A capture a language uses must be a legend member: each language crate colours its tree with HighlightSpec captures (its `highlight`), and its `KEYWORDS` table (`crates/opentide-highlight/src/keywords/<lang>.rs`, which the TextMate grammar is generated from) names spec captures only (`keyword_tables_name_spec_captures`). The query languages have no `.scm`; Tide's `highlights/queries/tide/highlights.scm` (for tree-sitter-yaml in editors) is held to the spec by a test.
 
 A new capture needs all of:
 
 1. A legend entry appended in `spec.toml`.
 2. A `[captures."..."]` table with three scopes.
-3. A pattern in the right `highlights/queries/<lang>/highlights.scm`, above the broad `(identifier) @variable` pattern.
+3. The language crate's highlighter giving it to the tokens it colours, and, for a keyword or punctuation the TextMate grammar lists, a `KEYWORDS` row.
 4. Regenerated files under `highlights/generated/`.
-5. A corpus or highlight test that the token is present (`capture == "keyword"` style assertions in `opentide-syntax` and `opentide-analysis`).
+5. A corpus or highlight test that the token is present (`capture == "keyword"` style assertions in the language crate and `opentide-analysis`).
 
 ## Markdown and Tide
 
-`markdown.heading`, `markdown.emphasis`, `markdown.strong`, `markdown.code`, `markdown.link`, `markdown.list`, `markdown.quote` highlight Tide markdown bodies. They are not tree-sitter Markdown. `tide.keyword`, `tide.property`, `tide.uuid`, and `tide.schema` are the YAML object layer. `macro` is the SPL macro capture.
+`markdown.heading`, `markdown.emphasis`, `markdown.strong`, `markdown.code`, `markdown.link`, `markdown.list`, `markdown.quote` highlight Tide markdown bodies. They are not a Markdown grammar. `tide.keyword`, `tide.property`, `tide.uuid`, and `tide.schema` are the YAML object layer. `macro` is the SPL macro capture.
 
 Do not reuse `keyword` for a Tide YAML key. The Tide scopes exist so editors can theme object structure separately from query keywords.

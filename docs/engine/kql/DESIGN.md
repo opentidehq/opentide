@@ -27,7 +27,7 @@ Citations:
 | Names (operators, functions, types, plugins, tables) | `data/catalogs/kql/core/*.toml`, `data/catalogs/kql/{sentinel,defender}/tables.toml` | hover / completions / highlight overlay |
 | **Columns** | `data/catalogs/kql/{sentinel,defender}/columns.toml` | hover on `EventID`; completions after `\| where` / `project` / `by` |
 | **Operator options** | `data/catalogs/kql/core/operator-options.toml` | `join kind=`, `union kind=`, `parse kind=`; signature help |
-| Grammar | `grammars/tree-sitter-opentide-kql` | parse / injection |
+| Parser | `crates/opentide-kql/src/parser/` and `kql.ungram` (on `opentide-parse`) | parse / injection |
 | HighlightSpec | `highlights/spec.toml` | capture names only (no column names) |
 
 Control commands (`.show`, `.create`, …) remain **unsupported** in detections
@@ -139,7 +139,7 @@ columns ([defender-tables.md](defender-tables.md)) or the Defender NRT bans
 
 ## Highlight overlay
 
-Tree-sitter paints operators / tables / functions. The engine then remaps:
+The parser's tree paints operators / tables / functions. The engine then remaps:
 
 - catalog functions / plugins → `function.builtin`
 - known columns (when not already keyword/function/type) → `property`
