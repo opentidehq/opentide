@@ -119,20 +119,20 @@ fn command_words_glue_like_tree_sitter() {
 
 /// Fails unless `run(4 * n)` takes less than 8 times `run(n)`: linear work
 /// takes 4 times as long, quadratic 16 times. Each is the best of three runs,
-/// so a busy machine slows both alike; a run under 50 ms passes whatever the
+/// the sizes alternated, so a busy machine slows both alike; a run under 50 ms passes whatever the
 /// ratio, its noise being larger than it.
 fn assert_linear(name: &str, n: usize, run: impl Fn(usize)) {
-    let best = |k: usize| {
-        (0..3)
-            .map(|_| {
-                let started = std::time::Instant::now();
-                run(k);
-                started.elapsed()
-            })
-            .min()
-            .unwrap_or_default()
+    let time = |k: usize| {
+        let started = std::time::Instant::now();
+        run(k);
+        started.elapsed()
     };
-    let (small, large) = (best(n), best(4 * n));
+    // Alternated, so that a busy spell slows both sizes alike.
+    let (mut small, mut large) = (std::time::Duration::MAX, std::time::Duration::MAX);
+    for _ in 0..3 {
+        small = small.min(time(n));
+        large = large.min(time(4 * n));
+    }
     assert!(
         large < std::time::Duration::from_millis(50) || large < small * 8,
         "{name}: {small:?} for {n}, {large:?} for {}: not linear",

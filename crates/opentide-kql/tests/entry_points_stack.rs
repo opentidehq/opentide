@@ -135,8 +135,12 @@ fn a_long_unknown_column_is_not_measured_against_every_column() {
     );
     let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
     let before = opentide_kql::inspect::columns_measured();
+    let started = Instant::now();
     let _ = analyze_with_catalog(&source, &catalog);
     let _ = hover(&source, 0, Profile::Sentinel);
+    // A hang guard, as for the other entry points here; the count below is
+    // the regression test.
+    assert_fast("a long unknown column", started.elapsed());
     assert_eq!(
         opentide_kql::inspect::columns_measured(),
         before,
