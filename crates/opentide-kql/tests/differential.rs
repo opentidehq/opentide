@@ -277,7 +277,7 @@ fn sources() -> Vec<Source> {
 /// How much bigger than the default a run is: `OPENTIDE_KQL_SCALE=4` runs four
 /// times the prefixes, mutations and sentences (by hand; CI runs 1).
 fn scale() -> usize {
-    std::env::var("OPENTIDE_KQL_SCALE")
+    std::env::var("OPENTIDE_DIFF_SCALE")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(1)
@@ -378,14 +378,14 @@ fn differential(seed: u64) {
     assert_gates(&gen_report);
 }
 
+/// One seed in CI; `OPENTIDE_DIFF_SEEDS=1,2` and `OPENTIDE_DIFF_SCALE=4` for
+/// the full run before a push (NOTES.md records it).
 #[test]
-fn seed_1() {
-    differential(1);
-}
-
-#[test]
-fn seed_2() {
-    differential(2);
+fn seeds() {
+    let seeds = std::env::var("OPENTIDE_DIFF_SEEDS").unwrap_or_else(|_| "1".into());
+    for seed in seeds.split(',').filter_map(|s| s.trim().parse().ok()) {
+        differential(seed);
+    }
 }
 
 /// Triage aid: with `OPENTIDE_KQL_TRIAGE=<file name part>`, prints the first

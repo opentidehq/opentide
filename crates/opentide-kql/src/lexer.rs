@@ -248,8 +248,16 @@ fn kind_of(token: Result<Token, ()>, text: &str) -> K {
 /// Lexes `source`: every byte is in one lexeme (whitespace and comments
 /// are trivia, a character no token takes is an `ERROR_TOKEN`).
 pub(crate) fn lex_kql(source: &str) -> Vec<Lexeme> {
+    lex_kql_indexing(source, &[])
+}
+
+/// [`lex_kql`], reading the brackets that open at `index_at` as an index
+/// (`[`, a string, `]`), never as a quoted name: where the parser found a
+/// quoted name right after an expression, which the old grammar read as
+/// `step['x']`.
+pub(crate) fn lex_kql_indexing(source: &str, index_at: &[TextSize]) -> Vec<Lexeme> {
     let lexemes = lex::<Token>(source, |token, text| kind_of(token, text).raw());
-    fix_up(source, lexemes)
+    fix_up(source, lexemes, index_at)
 }
 
 /// The kinds that end a primary expression: a `[` after one indexes it.
@@ -274,7 +282,7 @@ const BEFORE_AN_OPERATOR: [K; 4] = [K::PIPE, K::L_PAREN, K::COMMA, K::WITH_KW];
 ///   subtraction of names (`a - b`), so it is split;
 /// - `['k']` after a value (`d['k']`, `d.['k']`) is an index, not a quoted
 ///   name: split into `[`, the string and `]`.
-fn fix_up(source: &str, lexemes: Vec<Lexeme>) -> Vec<Lexeme> {
+fn fix_up(source: &str, lexemes: Vec<Lexeme>, index_at: &[TextSize]) -> Vec<Lexeme> {
     let mut out: Vec<Lexeme> = Vec::with_capacity(lexemes.len());
     let mut previous = None;
     let mut i = 0;
@@ -287,6 +295,7 @@ fn fix_up(source: &str, lexemes: Vec<Lexeme>) -> Vec<Lexeme> {
         }
         if kind == K::L_BRACKET
             && !previous.is_some_and(|p| ENDS_A_VALUE.contains(&p))
+            && !index_at.contains(&lexeme.range.start())
             && let Some(range) = quoted_name(source, &lexemes[i - 1..])
         {
             // `['Display Name']`: three tokens that touch, a name.

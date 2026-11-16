@@ -12,7 +12,7 @@ mod tabular;
 #[cfg(test)]
 mod tests;
 
-use crate::lexer::lex_kql;
+use crate::lexer::lex_kql_indexing;
 use crate::syntax::SyntaxKind as K;
 use opentide_parse::{CompletedMarker, Grammar, Input, Marker, Parse, Parser, TokenSet, build};
 
@@ -29,9 +29,28 @@ pub(crate) const GRAMMAR: Grammar = Grammar {
 };
 
 /// Parses `source` into a lossless tree and its syntax errors.
+///
+/// A keyword is a name where the grammar wants one, and the lexer cannot tell
+/// whether `['x']` after it is a quoted name (`project ['x']`) or an index
+/// (`where step ['x']`, `step` a column). It reads a quoted name; where the
+/// parser then finds one right after an expression, the text is lexed again
+/// with an index there and parsed again (rare: a keyword used as a column and
+/// indexed), as the old grammar read it.
 pub(crate) fn parse(source: &str) -> Parse {
     PARSES.with(|n| n.set(n.get() + 1));
-    let input = Input::new(source, lex_kql(source), GRAMMAR);
+    let mut index_at = Vec::new();
+    for _ in 0..4 {
+        let input = Input::new(source, lex_kql_indexing(source, &index_at), GRAMMAR);
+        let mut p = P::new(Parser::new(&input));
+        statement::source_file(&mut p);
+        let found = std::mem::take(&mut p.1.index_at);
+        let parse = build(&input, p.0.finish());
+        if found.is_empty() || parse.errors.is_empty() {
+            return parse;
+        }
+        index_at.extend(found);
+    }
+    let input = Input::new(source, lex_kql_indexing(source, &index_at), GRAMMAR);
     let mut p = P::new(Parser::new(&input));
     statement::source_file(&mut p);
     build(&input, p.0.finish())
@@ -76,6 +95,8 @@ pub(crate) struct P<'i>(Parser<'i>, Flood);
 pub(crate) struct Flood {
     consumed: u64,
     last_error: Option<u64>,
+    /// Where a quoted name stands right after an expression ([`parse`]).
+    pub(crate) index_at: Vec<rowan::TextSize>,
 }
 
 impl<'i> P<'i> {
@@ -117,6 +138,16 @@ impl<'i> P<'i> {
 
     pub(crate) fn current_range(&self) -> Option<rowan::TextRange> {
         self.0.current_range()
+    }
+
+    /// Notes a quoted name right after an expression: the old grammar read
+    /// it as an index ([`parse`]).
+    pub(crate) fn quoted_name_after_value(&mut self) {
+        if self.current() == K::QUOTED_IDENT
+            && let Some(range) = self.current_range()
+        {
+            self.1.index_at.push(range.start());
+        }
     }
 
     pub(crate) fn at_eof(&self) -> bool {

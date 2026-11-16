@@ -438,15 +438,16 @@ fn options(p: &mut P<'_>) {
 }
 
 /// The options of `mv-expand`: a fixed set of names.
+/// The option names are keywords here, as in the old grammar: `bagexpansion`
+/// without `=` is an error, not a column.
 fn mv_options(p: &mut P<'_>) {
     while matches!(
         p.current(),
         K::KIND_KW | K::BAGEXPANSION_KW | K::WITH_ITEMINDEX_KW | K::HINT_NAME
-    ) && p.nth(1) == K::EQ
-    {
+    ) {
         let m = p.start();
         p.bump();
-        p.bump();
+        p.expect(K::EQ);
         option_value(p);
         p.done(m, K::MV_OPTION);
     }
@@ -855,11 +856,13 @@ fn search_source(p: &mut P<'_>) {
     let m = p.start();
     p.bump();
     options(p);
-    if p.at(K::IN_KW) && p.nth(1) == K::L_PAREN {
+    // `in` after `search` starts the table list, as in the old grammar.
+    if p.at(K::IN_KW) {
         p.bump();
-        p.bump();
-        list(p, ident);
-        p.expect(K::R_PAREN);
+        if p.expect(K::L_PAREN) {
+            list(p, ident);
+            p.expect(K::R_PAREN);
+        }
     }
     p.eat(K::WHERE_KW);
     expr::expr(p);

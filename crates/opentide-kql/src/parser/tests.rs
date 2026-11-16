@@ -240,3 +240,24 @@ fn a_run_of_unexpected_tokens_is_one_error() {
         assert!(errors <= 3, "{errors} errors");
     }
 }
+
+/// Found by the differential at four times its scale: `search in` and an
+/// mv-expand option name without `=` are errors, as tree-sitter read them.
+#[test]
+fn keywords_that_start_a_clause_need_the_clause() {
+    for source in [
+        "search in ",
+        "search in x",
+        "T | mv-expand bagexpansion ",
+        "T | mv-expand kind",
+    ] {
+        assert!(!errors(source).is_empty(), "{source}");
+    }
+    for source in [
+        "search in (T) x",
+        "T | mv-expand kind = array x",
+        "T | mv-expand x",
+    ] {
+        assert!(errors(source).is_empty(), "{source}");
+    }
+}

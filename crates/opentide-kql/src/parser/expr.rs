@@ -178,6 +178,7 @@ fn primary(p: &mut P<'_>) -> Option<CompletedMarker> {
         _ => return None,
     };
     loop {
+        p.quoted_name_after_value();
         match (p.current(), p.nth(1)) {
             (K::DOT, K::L_BRACKET) | (K::L_BRACKET, _) => {
                 let m = p.precede(lhs);
