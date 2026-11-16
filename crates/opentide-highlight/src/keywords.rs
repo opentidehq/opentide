@@ -46,11 +46,11 @@ pub type Keywords = &'static [(&'static str, Capture)];
 #[must_use]
 pub const fn keywords(language: LanguageId) -> Option<Keywords> {
     match language {
+        LanguageId::Eql => Some(eql::KEYWORDS),
         LanguageId::Kql
         | LanguageId::Spl
         | LanguageId::TideYaml
         | LanguageId::Esql
-        | LanguageId::Eql
         | LanguageId::Kuery
         | LanguageId::Lucene
         | LanguageId::Config
@@ -60,6 +60,60 @@ pub const fn keywords(language: LanguageId) -> Option<Keywords> {
         | LanguageId::Exabeam
         | LanguageId::Yaral => None,
     }
+}
+
+/// EQL: its keywords, the operators, the brackets and the delimiters. The names of fields,
+/// functions and pipes, the numbers, the strings and `?`, `![` are nodes of the tree, which the
+/// analysis colours; they are not in the TextMate grammar.
+mod eql {
+    use super::{Capture, Keywords};
+
+    const KEYWORD: Capture = Capture::new("keyword");
+    const OPERATOR: Capture = Capture::new("operator");
+    const PIPE: Capture = Capture::new("operator.pipe");
+    const BRACKET: Capture = Capture::new("punctuation.bracket");
+    const DELIMITER: Capture = Capture::new("punctuation.delimiter");
+
+    pub(super) const KEYWORDS: Keywords = &[
+        ("|", PIPE),
+        ("sequence", KEYWORD),
+        ("sample", KEYWORD),
+        ("join", KEYWORD),
+        ("by", KEYWORD),
+        ("with", KEYWORD),
+        ("maxspan", KEYWORD),
+        ("until", KEYWORD),
+        ("where", KEYWORD),
+        ("of", KEYWORD),
+        ("and", KEYWORD),
+        ("or", KEYWORD),
+        ("not", KEYWORD),
+        ("in", OPERATOR),
+        ("in~", OPERATOR),
+        ("like", OPERATOR),
+        ("like~", OPERATOR),
+        ("regex", OPERATOR),
+        ("regex~", OPERATOR),
+        (":", OPERATOR),
+        ("==", OPERATOR),
+        ("!=", OPERATOR),
+        ("<", OPERATOR),
+        ("<=", OPERATOR),
+        (">", OPERATOR),
+        (">=", OPERATOR),
+        ("+", OPERATOR),
+        ("-", OPERATOR),
+        ("*", OPERATOR),
+        ("/", OPERATOR),
+        ("%", OPERATOR),
+        ("=", OPERATOR),
+        ("(", BRACKET),
+        (")", BRACKET),
+        ("[", BRACKET),
+        ("]", BRACKET),
+        (",", DELIMITER),
+        (".", DELIMITER),
+    ];
 }
 
 /// `(token, capture name)` pairs of a table.
