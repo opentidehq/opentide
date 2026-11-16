@@ -10,6 +10,13 @@
 /// libyara's `RE_MAX_RANGE` (`INT16_MAX`).
 const RE_MAX_RANGE: u32 = 32767;
 
+/// The deepest group nesting YARA-X could take. Its regexp parser
+/// (`regex-syntax`, nest limit 250) also counts repetitions, alternations
+/// and concatenations as levels, so 250 bare groups around one byte are the
+/// most it takes; any deeper group is refused. The bound also keeps the
+/// recursive descent here off the end of a small stack (#1405 review).
+const MAX_GROUP_DEPTH: usize = 250;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding {
     /// Byte offsets into the pattern text (between the slashes).
@@ -373,6 +380,14 @@ impl Parser<'_> {
                         }
                     }
                     self.yara_x_only(start, start + 2, "A `(?` group in a regular expression");
+                }
+                if depth >= MAX_GROUP_DEPTH {
+                    self.error(
+                        start,
+                        start + 1,
+                        "regular expression nested too deeply: YARA-X takes at most 250 levels of groups, repetitions and alternatives",
+                    );
+                    return Item::Other;
                 }
                 let inner = self.alternation(depth + 1);
                 if self.check.errors.is_empty() {
@@ -775,6 +790,23 @@ mod tests {
         ] {
             assert!(yara_x(re).is_empty(), "{re}: {:?}", yara_x(re));
         }
+    }
+
+    /// YARA-X refuses a regexp nested past its limit (E014); 250 bare
+    /// groups around one byte compile, 251 do not (checked against the
+    /// 1.23.0 wheel). Far deeper text stops at the limit instead of
+    /// overflowing the stack, plain or `(?:` groups.
+    #[test]
+    fn nesting_stops_at_yara_xs_limit() {
+        let nest = |open: &str, n: usize| format!("{}a{}", open.repeat(n), ")".repeat(n));
+        assert!(errors(&nest("(", 250)).is_empty());
+        assert_eq!(errors(&nest("(", 251)).len(), 1);
+        let deep = nest("(?:a|", 100_000);
+        let run = std::thread::Builder::new()
+            .stack_size(1 << 20)
+            .spawn(move || errors(&deep).len())
+            .expect("a thread");
+        assert_eq!(run.join().expect("no overflow"), 1);
     }
 
     /// YARA-X 1.23's verdicts (E014, E045), checked against the wheel.
