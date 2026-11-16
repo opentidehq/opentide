@@ -49,6 +49,19 @@ fn long_tokens_do_not_recurse_per_repetition() {
         ("white space", " ".repeat(N)),
         ("bang word", format!("!{}", "a".repeat(N))),
         ("unclosed string", format!("\"{}", "a".repeat(N))),
+        // The review's probes (#1314): an escape, a doubled quote and a
+        // near-fence repeated inside each form of string and quoted name.
+        ("double-quoted \\a", format!("\"{}\"", "\\a".repeat(N))),
+        ("single-quoted \\a", format!("'{}'", "\\a".repeat(N))),
+        ("verbatim \"\"", format!("@\"{}\"", "\"\"".repeat(N))),
+        ("verbatim ''", format!("@'{}'", "''".repeat(N))),
+        ("backtick `a", format!("```{}```", "`a".repeat(N))),
+        ("tilde ~~a", format!("~~~{}~~~", "~~a".repeat(N))),
+        ("quoted name ['\\a']", format!("['{}']", "\\a".repeat(N))),
+        (
+            "quoted name [\"\\a\"]",
+            format!("[\"{}\"]", "\\a".repeat(N)),
+        ),
         ("unclosed escapes", format!("\"{}", "\\\"".repeat(N))),
         ("unclosed fences", "`` ".repeat(N)),
     ];
@@ -65,4 +78,27 @@ fn long_tokens_do_not_recurse_per_repetition() {
         let end = spans.last().map_or(0, |s| s.1);
         assert_eq!(end, len, "{name}: lexemes tile the source");
     }
+}
+
+/// Found by review (#1314): an unclosed typed literal scanned to the end of
+/// its line at every `datetime(`, so 20,000 of them on one line (220 KB)
+/// took 22.8 s. Each line is scanned once now.
+#[test]
+fn unclosed_typed_literals_are_linear() {
+    let source = "datetime(a ".repeat(20_000);
+    let started = std::time::Instant::now();
+    let spans = lex_on_small_stack(source.clone());
+    assert!(
+        started.elapsed().as_secs() < 2,
+        "{:?} for {} bytes",
+        started.elapsed(),
+        source.len()
+    );
+    assert_eq!(spans.last().map(|s| s.1), Some(source.len()));
+    // A closed one on a later line is still a literal.
+    let spans = lex_on_small_stack(format!("{source}\ndatetime(2024-01-01)"));
+    assert_eq!(
+        spans.last().map(|s| s.1 - s.0),
+        Some("datetime(2024-01-01)".len())
+    );
 }
