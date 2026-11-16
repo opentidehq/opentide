@@ -10,7 +10,9 @@
 //!   baseline recorded in the budgets (`baseline_s`, `baseline_rss_mib`), when
 //!   the report is of the baseline's scale and seed;
 //! - for the `rust` engine, above the plan section 11 target (`target_s`,
-//!   `target_rss_mib`), an absolute budget, at scale 1; or, where the budgets
+//!   `target_rss_mib`), an absolute budget, at scale 1 (a time target with
+//!   `policy.regression` on top: runners of one CPU model differ by that
+//!   much); or, where the budgets
 //!   waive a time target with the work item that will meet it
 //!   (`target_waiver`), more than `policy.regression` above the Rust
 //!   implementation's own CI baseline (`rust_baseline_s`), the summary still
@@ -768,7 +770,11 @@ fn check_against(budgets: &Budgets, report: &Report, previous: Option<&Report>) 
     }
     let heavy = report.seed == Some(SEED_OF_TARGETS);
     let reference = match report.engine.as_str() {
-        "rust" if report.scale == 1 && heavy => "plan section 11 target".to_owned(),
+        "rust" if report.scale == 1 && heavy => format!(
+            "plan section 11 target (time budget = target + {:.0}%, runners of one CPU \
+             model differ by that much)",
+            policy.regression * 100.0
+        ),
         "rust" if !heavy => {
             notes.push(
                 "the plan section 11 targets are for the heavy workspace; this report \
@@ -1081,16 +1087,41 @@ fn check_one(
                                 rust_time_tolerance * 100.0
                             ));
                         }
-                        row.reasons.push(if median > target {
-                            format!("over the plan target {target:.3} s, waived until {waiver}")
-                        } else {
-                            format!("meets the plan target {target:.3} s: remove its target_waiver")
-                        });
+                        // Met as the unwaived check below would meet it: within the
+                        // target + policy.regression.
+                        row.reasons
+                            .push(if median > target * (1.0 + policy.regression) {
+                                format!("over the plan target {target:.3} s, waived until {waiver}")
+                            } else {
+                                format!(
+                                    "meets the plan target {target:.3} s: remove its target_waiver"
+                                )
+                            });
                     }
                     _ => {
-                        if median > target {
+                        // The target is a fixed line, but the median it is held to is
+                        // not: two runners with one CPU model differ by up to about
+                        // 10% (see the budgets' [[cpu_baseline]] notes), so a command
+                        // a few percent under its target failed on the slower one with
+                        // no change at all (validate_file, 0.088 s and 0.100 s against
+                        // 0.100 s on two EPYC 7763 runners one hour apart). A miss is a
+                        // median more than policy.regression above the target, the
+                        // relative tolerance of the other time budgets; one within it
+                        // passes and says so. Without their noise floor: a 20 ms floor
+                        // would more than double the 20 and 30 ms start targets.
+                        let ceiling = target * (1.0 + policy.regression);
+                        row.budget_s = Some(ceiling);
+                        if median > ceiling {
                             time_misses.push(format!(
-                                "median {median:.3} s is over the target {target:.3} s"
+                                "median {median:.3} s is over the target {target:.3} s + {:.0}%",
+                                policy.regression * 100.0
+                            ));
+                        } else if median > target {
+                            row.reasons.push(format!(
+                                "{:+.1}% over the target {target:.3} s, within the {:.0}% \
+                                 between runners",
+                                (median / target - 1.0) * 100.0,
+                                policy.regression * 100.0
                             ));
                         }
                     }
@@ -1715,13 +1746,14 @@ target_s = 0.03
             "{:?}",
             bigger.failures
         );
-        // Accepted at 0.8 s, the run is still held to the 0.7 s target.
+        // Accepted at 0.8 s, the run is still held to the 0.7 s target (+ 10%: 0.77 s).
         let generous = Budgets::parse(&BUDGETS.replace(
             "[commands.validate_clean]\n",
             &ACCEPTED.replace("accepted_s = 0.6", "accepted_s = 0.8"),
         ))
         .unwrap();
-        let over = check(&generous, &rust_at(0.75, 90.0, AFTER), Some(&previous));
+        // (0.78 s: past the target + 10%, under the accepted 0.8 s + 10%.)
+        let over = check(&generous, &rust_at(0.78, 90.0, AFTER), Some(&previous));
         assert!(!over.passed());
         assert!(
             over.failures.iter().all(|f| !f.contains("accepted at")),
@@ -2144,7 +2176,7 @@ target_s = 0.03
         let r = report(
             "rust",
             vec![
-                measured("validate_clean", 0.71, 90.0),
+                measured("validate_clean", 0.78, 90.0),
                 CommandResult::not_implemented("explain", "explain", "no Rust yet"),
             ],
         );
@@ -2155,6 +2187,44 @@ target_s = 0.03
             "{:?}",
             outcome.failures
         );
+    }
+
+    #[test]
+    fn a_median_within_the_runner_tolerance_of_its_target_passes_and_says_so() {
+        // validate_file on two EPYC 7763 runners: 0.088 s, then 0.100 s with no
+        // change. Exactly on the target + 10% passes; past it fails.
+        for (seconds, passes) in [(0.70, true), (0.75, true), (0.77, true), (0.771, false)] {
+            let r = report(
+                "rust",
+                vec![
+                    measured("validate_clean", seconds, 90.0),
+                    CommandResult::not_implemented("explain", "e", "no Rust yet"),
+                ],
+            );
+            let outcome = check(&budgets(), &r, None);
+            assert_eq!(
+                outcome.passed(),
+                passes,
+                "{seconds}: {:?}",
+                outcome.failures
+            );
+            let row = &outcome.rows[0];
+            assert!(
+                (row.budget_s.unwrap() - 0.77).abs() < 1e-9,
+                "{:?}",
+                row.budget_s
+            );
+            let noted = row
+                .reasons
+                .iter()
+                .any(|r| r.contains("within the 10% between runners"));
+            assert_eq!(
+                noted,
+                seconds > 0.70 && passes,
+                "{seconds}: {:?}",
+                row.reasons
+            );
+        }
     }
 
     #[test]
@@ -2221,6 +2291,19 @@ target_s = 0.03
             text.contains("✅ pass (over the plan target 0.030 s, waived until UC-3.6 (#999))"),
             "{text}"
         );
+        // Over the target but within its 10%, as the check without the waiver
+        // would pass it: the waiver can go (0.032 s against 0.030 s).
+        let near = Budgets::parse(&BUDGETS.replace(
+            "target_s = 0.03\n",
+            "target_s = 0.03\ntarget_waiver = \"UC-3.6 (#999)\"\nrust_baseline_s = 0.031\n",
+        ))
+        .unwrap();
+        let outcome = check(&near, &rust(0.032), None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert_eq!(
+            outcome.rows[1].reasons,
+            ["meets the plan target 0.030 s: remove its target_waiver"]
+        );
         // A regression against the Rust baseline still fails.
         let outcome = check(&budgets, &rust(0.2), None);
         assert!(!outcome.passed());
@@ -2265,7 +2348,7 @@ target_s = 0.03
             outcome.rows[0]
                 .reasons
                 .iter()
-                .any(|r| r.contains("over the target 0.700 s; waived until #1072")),
+                .any(|r| r.contains("over the target 0.700 s + 10%; waived until #1072")),
             "{:?}",
             outcome.rows[0].reasons
         );
