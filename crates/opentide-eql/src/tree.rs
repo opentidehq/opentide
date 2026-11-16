@@ -39,6 +39,9 @@ struct Data {
     parent: Option<u32>,
     children: Vec<u32>,
     field: Option<&'static str>,
+    /// The parser's node this one stands for (none for a token, a comment, or a level of a
+    /// re-nested run).
+    syntax: Option<SyntaxNode>,
 }
 
 /// A parsed query.
@@ -176,6 +179,7 @@ pub(crate) fn parse(source: &str) -> Tree {
                     usize::from(r.start()),
                     usize::from(r.end()),
                 );
+                tree.data[id as usize].syntax = Some(node.clone());
                 if is_leaf(kind) {
                     skip = 1;
                 }
@@ -243,6 +247,7 @@ impl Tree {
             parent,
             children: Vec::new(),
             field: None,
+            syntax: None,
         });
         if let Some(p) = parent {
             self.data[p as usize].children.push(id);
@@ -535,6 +540,11 @@ impl<'t> Node<'t> {
         self.tree.memo.borrow_mut().insert(self.id, value);
     }
 
+    /// The parser's node this one stands for.
+    pub(crate) fn syntax(&self) -> Option<SyntaxNode> {
+        self.d().syntax.clone()
+    }
+
     pub(crate) fn kind(&self) -> &'static str {
         self.d().kind
     }
@@ -575,10 +585,6 @@ impl<'t> Node<'t> {
 
     pub(crate) fn named_child(&self, i: usize) -> Option<Node<'t>> {
         self.named_children(&mut Cursor).nth(i)
-    }
-
-    pub(crate) fn named_child_count(&self) -> usize {
-        self.named_children(&mut Cursor).count()
     }
 
     pub(crate) fn walk(&self) -> Cursor {
