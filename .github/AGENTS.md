@@ -123,7 +123,7 @@ error annotation naming it), then the `full_set` E2E tests on 3.14.
 **The nightly set** (`mode == 'nightly'`): one job, `nightly`, calls
 [`nightly.yml`](workflows/nightly.yml), which holds every nightly job that needs nothing from the
 run: `engine-test-os` (the workspace's tests on macOS and Windows, built there), `conformance`
-(the cross-SDK suite on three OSes), `elastic-sweep`, `clients` (informational), `coverage`
+(the cross-SDK suite on three OSes), `elastic-sweep`, `lsp-parity` (`cargo xtask lsp parity --corpus faults`: every fault kind through `validate` and the language server, ~4 min of debug binary, so not in `build`), `clients` (informational), `coverage`
 ([`coverage.yml`](workflows/coverage.yml)), `benchmarks` ([`bench.yml`](workflows/bench.yml), the
 budgeted Rust benchmarks), `oracle` ([`oracle.yml`](workflows/oracle.yml): the vendor-parser
 oracles, with the Carbon Black Cloud tenant: `secrets: inherit` on both calls) and `fuzz`

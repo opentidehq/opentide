@@ -96,7 +96,7 @@ rust_jobs() {
   echo "==> Cargo workspace: doctests"
   cargo test --workspace --locked --doc --quiet
   tree_unchanged "$before"
-  echo "==> The editor's diagnostics are validate's (corpus job: lsp parity)"
+  echo "==> The editor's diagnostics are validate's (the nightly's lsp-parity job)"
   cargo xtask lsp parity --corpus faults
   echo "==> rustdoc (RUSTDOCFLAGS=-D warnings)"
   RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace --locked --quiet
