@@ -97,3 +97,15 @@ fn an_exabeam_filter_that_stops_early_is_reported_where_it_stops() {
         after_the_query(EXABEAM)
     );
 }
+
+/// A double-quoted query: the end is its closing quote, where the text stops.
+#[test]
+fn a_quoted_query_that_stops_early_is_reported_at_its_closing_quote() {
+    let source = "configurations:\n  crowdstrike:\n    query: \"a=1 | groupBy(\"\n";
+    let quote = source.rfind('"').unwrap();
+    let line_start = source[..quote].rfind('\n').unwrap() + 1;
+    assert_eq!(
+        parse_error_start(source, LanguageId::Cql),
+        Position::new(2, u32::try_from(quote - line_start).unwrap())
+    );
+}

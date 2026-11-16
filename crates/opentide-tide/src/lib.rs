@@ -276,7 +276,9 @@ pub fn extract_injections(source: &str) -> Vec<InjectedQuery> {
 /// The host span of `inner`, a span of `query`'s text. An offset at or past
 /// the text's end is the host offset right after its last byte, where an
 /// engine's "missing `)`" points (#1431: a span starting there landed at
-/// the query's start, and its frame took the whole query).
+/// the query's start, and its frame took the whole query). A decoded escape
+/// maps its character onto the escape's first bytes, so after a query that
+/// ends in `\u00e9` that offset is inside the escape.
 pub fn remap_span(query: &InjectedQuery, inner: ByteSpan) -> ByteSpan {
     let Some(&last) = query.host_map.last() else {
         return query.host_span;
