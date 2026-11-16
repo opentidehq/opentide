@@ -22,7 +22,10 @@ use std::rc::Rc;
 /// stays an analysis check ([`crate::parser`]); the floor every language keeps
 /// is `deep_queries`' `NESTING_CEILING`. A level of parentheses is six frames of
 /// this descent (`group`, `expression`, the `or` and `and` `chain`s, `unary`,
-/// `check`) and a transformer one (`call`, `transformer_argument`).
+/// `check`) and a transformer one (`call`, `transformer_argument`); a level
+/// is at most four nodes of the tree (`m or m and not (`: or, and, not, the
+/// parentheses), so the tree stays near 2,050 levels, under
+/// [`opentide_parse::MAX_TREE_DEPTH`].
 pub(crate) const MAX_DEPTH: u32 = 512;
 
 const UNEXPECTED: &str = "unexpected";
@@ -643,6 +646,25 @@ fn field_names_of(root: &SyntaxNode) -> Vec<String> {
     out
 }
 
+/// The token that holds the byte at `offset`, as rowan's
+/// `token_at_offset(offset).right_biased()` finds it (a child whose range ends
+/// at `offset` is skipped, as tree-sitter's `descendant_for_byte_range` does),
+/// but in a loop: rowan descends by recursion, two frames per tree level, and
+/// a tree may be [`opentide_parse::MAX_TREE_DEPTH`] levels deep.
+fn token_at(root: &SyntaxNode, offset: TextSize) -> Option<SyntaxToken> {
+    let mut node = root.clone();
+    loop {
+        let child = node.children_with_tokens().find(|c| {
+            let r = c.text_range();
+            r.start() <= offset && offset < r.end()
+        })?;
+        match child {
+            NodeOrToken::Token(token) => return Some(token),
+            NodeOrToken::Node(inner) => node = inner,
+        }
+    }
+}
+
 /// What hover reads at byte `offset` of `source`: the kind of the smallest
 /// piece of the tree that holds the byte there (`field_name`, `identifier`,
 /// `bare_string`, or `other`) and its text. A bare string, an operator, an
@@ -665,7 +687,7 @@ pub fn hover_target(source: &str, offset: usize) -> Option<(&'static str, String
     if offset >= source.len() {
         return whole();
     }
-    let token = root.token_at_offset(TextSize::from(at)).right_biased()?;
+    let token = token_at(root, TextSize::from(at))?;
     let parent = token.parent()?;
     if token.kind() == K::Whitespace {
         if parent.parent().is_none() {
@@ -693,7 +715,53 @@ pub fn hover_target(source: &str, offset: usize) -> Option<(&'static str, String
 
 #[cfg(test)]
 mod tests {
-    use super::is_number;
+    use super::{K, NodeOrToken, SyntaxNode, TextSize, is_number, token_at};
+
+    /// Found by review (#1404): the hovered token was found with rowan's
+    /// `token_at_offset`, which recurses once per tree level. On a tree
+    /// 50,000 levels deep (built by hand: the parser stops near 2,050) that
+    /// overflows a 1 MB stack; the loop does not.
+    #[test]
+    fn the_hovered_token_is_found_in_a_loop() {
+        let found = std::thread::Builder::new()
+            .stack_size(1 << 20)
+            .spawn(|| {
+                // `GreenNode::new`, not the builder: its cache hashes a node
+                // by recursion.
+                let mut green = rowan::GreenNode::new(
+                    K::ParenthesizedExpression.raw(),
+                    [NodeOrToken::Token(rowan::GreenToken::new(
+                        K::Identifier.raw(),
+                        "m",
+                    ))],
+                );
+                for _ in 1..50_000 {
+                    green = rowan::GreenNode::new(
+                        K::ParenthesizedExpression.raw(),
+                        [NodeOrToken::Node(green)],
+                    );
+                }
+                let root = SyntaxNode::new_root(green);
+                let found = token_at(&root, TextSize::from(0)).map(|t| t.text().to_owned());
+                let missing = token_at(&root, TextSize::from(1));
+                // Dropping a tree this deep recurses too (rowan's `Arc`s): leak it.
+                std::mem::forget(root);
+                (found, missing.is_none())
+            })
+            .map(|t| t.join());
+        assert!(matches!(found, Ok(Ok((Some(ref m), true))) if m == "m"));
+    }
+
+    #[test]
+    fn the_token_after_a_boundary_is_the_hovered_one() {
+        // As `token_at_offset(..).right_biased()`: where `a.b` ends and `=`
+        // starts, the `=`.
+        let root = super::parse_memo("a.b=c").0.clone();
+        let at = |o: u32| token_at(&root, TextSize::from(o)).map(|t| t.text().to_owned());
+        assert_eq!(at(3).as_deref(), Some("="));
+        assert_eq!(at(0).as_deref(), Some("a.b"));
+        assert_eq!(at(5), None);
+    }
 
     /// The grammar's `number`, byte for byte: what its regex accepts and what
     /// it does not.
