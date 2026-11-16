@@ -1,0 +1,52 @@
+---
+source: crates/opentide-spl/tests/expr_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/assignment__valid.spl
+---
+SOURCE_FILE@0..63
+  PIPELINE@0..63
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    EVAL_COMMAND@13..63
+      EVAL_KW@13..17 "eval"
+      WHITESPACE@17..18 " "
+      ASSIGNMENT@18..35
+        IDENTIFIER@18..19
+          IDENT@18..19 "k"
+        EQ@19..20 "="
+        BIN_EXPR@20..35
+          IDENTIFIER@20..24
+            IDENT@20..24 "host"
+          DOT@24..25 "."
+          STR@25..28
+            STRING_TOKEN@25..28 "\"-\""
+          DOT@28..29 "."
+          IDENTIFIER@29..35
+            IDENT@29..35 "source"
+      COMMA@35..36 ","
+      WHITESPACE@36..37 " "
+      ASSIGNMENT@37..48
+        STR@37..42
+          STRING_TOKEN@37..42 "\"a.b\""
+        EQ@42..43 "="
+        STR@43..48
+          STRING_TOKEN@43..48 "'c.d'"
+      COMMA@48..49 ","
+      WHITESPACE@49..50 " "
+      ASSIGNMENT@50..63
+        IDENTIFIER@50..56
+          DYNAMIC_NAME@50..56 "{host}"
+        EQ@56..57 "="
+        IDENTIFIER@57..63
+          IDENT@57..63 "source"
+--

@@ -1,0 +1,12 @@
+---
+source: crates/opentide-spl/tests/search_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/search_command__valid.trailing_pipe.spl
+---
+SOURCE_FILE@0..8
+  PIPELINE@0..8
+    SEARCH_COMMAND@0..6
+      SEARCH_KW@0..6 "search"
+    WHITESPACE@6..7 " "
+    PIPE@7..8 "|"
+--

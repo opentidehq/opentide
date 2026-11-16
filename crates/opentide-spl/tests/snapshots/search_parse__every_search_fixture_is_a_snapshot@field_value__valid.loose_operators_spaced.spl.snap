@@ -1,0 +1,75 @@
+---
+source: crates/opentide-spl/tests/search_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/field_value__valid.loose_operators_spaced.spl
+---
+SOURCE_FILE@0..78
+  PIPELINE@0..78
+    BARE_SEARCH@0..78
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+      WHITESPACE@10..11 " "
+      FIELD_VALUE@11..24
+        FIELD_REF@11..17
+          IDENTIFIER@11..17
+            IDENT@11..17 "status"
+        WHITESPACE@17..18 " "
+        EQ2@18..20 "=="
+        WHITESPACE@20..21 " "
+        FIELD_VALUE_RHS@21..24
+          NUMBER@21..24
+            NUMBER_TOKEN@21..24 "200"
+      WHITESPACE@24..25 " "
+      SEARCH_BOOLEAN@25..28
+        NOT_KW@25..28 "NOT"
+      WHITESPACE@28..29 " "
+      FIELD_VALUE@29..40
+        FIELD_REF@29..33
+          IDENTIFIER@29..33
+            IDENT@29..33 "code"
+        WHITESPACE@33..34 " "
+        LT_GT@34..36 "<>"
+        WHITESPACE@36..37 " "
+        FIELD_VALUE_RHS@37..40
+          NUMBER@37..40
+            NUMBER_TOKEN@37..40 "404"
+      WHITESPACE@40..41 " "
+      FIELD_VALUE@41..52
+        FIELD_REF@41..46
+          IDENTIFIER@41..46
+            IDENT@41..46 "bytes"
+        WHITESPACE@46..47 " "
+        EQ_GT@47..49 "=>"
+        WHITESPACE@49..50 " "
+        FIELD_VALUE_RHS@50..52
+          NUMBER@50..52
+            NUMBER_TOKEN@50..52 "10"
+      WHITESPACE@52..53 " "
+      FIELD_VALUE@53..64
+        FIELD_REF@53..58
+          IDENTIFIER@53..58
+            IDENT@53..58 "bytes"
+        WHITESPACE@58..59 " "
+        EQ_LT@59..61 "=<"
+        WHITESPACE@61..62 " "
+        FIELD_VALUE_RHS@62..64
+          NUMBER@62..64
+            NUMBER_TOKEN@62..64 "99"
+      WHITESPACE@64..65 " "
+      FIELD_VALUE@65..78
+        FIELD_REF@65..69
+          IDENTIFIER@65..69
+            IDENT@65..69 "user"
+        WHITESPACE@69..70 " "
+        BANG_TILDE@70..72 "!~"
+        WHITESPACE@72..73 " "
+        FIELD_VALUE_RHS@73..78
+          IDENTIFIER@73..78
+            IDENT@73..78 "admin"
+--

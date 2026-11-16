@@ -1,0 +1,25 @@
+---
+source: crates/opentide-spl/tests/table_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/head_command__valid.spl
+---
+SOURCE_FILE@0..19
+  PIPELINE@0..19
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    HEAD_COMMAND@13..19
+      HEAD_KW@13..17 "head"
+      WHITESPACE@17..18 " "
+      NUMBER@18..19
+        NUMBER_TOKEN@18..19 "1"
+--

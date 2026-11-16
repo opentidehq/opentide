@@ -1,0 +1,48 @@
+---
+source: crates/opentide-spl/tests/rest_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/command_option__valid.spl
+---
+SOURCE_FILE@0..48
+  PIPELINE@0..48
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    CATALOG_COMMAND@13..30
+      CATALOG_COMMAND_NAME@13..16
+        CATALOG_COMMAND_WORD@13..16 "bin"
+      WHITESPACE@16..17 " "
+      ARGUMENT_LIST@17..30
+        IDENTIFIER@17..22
+          IDENT@17..22 "_time"
+        WHITESPACE@22..23 " "
+        COMMAND_OPTION@23..30
+          IDENTIFIER@23..27
+            IDENT@23..27 "span"
+          EQ@27..28 "="
+          IDENTIFIER@28..30
+            FIELD_WORD@28..30 "1h"
+    WHITESPACE@30..31 " "
+    PIPE@31..32 "|"
+    WHITESPACE@32..33 " "
+    CATALOG_COMMAND@33..48
+      CATALOG_COMMAND_NAME@33..38
+        CATALOG_COMMAND_WORD@33..38 "regex"
+      WHITESPACE@38..39 " "
+      ARGUMENT_LIST@39..48
+        COMPARISON@39..48
+          IDENTIFIER@39..43
+            IDENT@39..43 "_raw"
+          NE@43..45 "!="
+          STR@45..48
+            STRING_TOKEN@45..48 "\"a\""
+--

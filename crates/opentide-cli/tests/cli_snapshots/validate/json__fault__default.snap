@@ -2168,19 +2168,19 @@ exit: 1
       },
       {
         "code": "spl_parse_error",
-        "column": 7,
+        "column": 27,
         "context": {
           "language": "spl",
           "platform": "splunk",
           "position": {
-            "column": 7,
-            "end_column": 12,
+            "column": 27,
+            "end_column": 28,
             "end_line": 70,
             "line": 70
           },
           "source": "engine"
         },
-        "end_column": 12,
+        "end_column": 28,
         "end_line": 70,
         "explain": "opentide explain spl_parse_error",
         "field_path": [
@@ -2192,7 +2192,7 @@ exit: 1
         "fix": null,
         "help": "the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference",
         "line": 70,
-        "message": "SPL syntax error: unexpected 'index'",
+        "message": "unbalanced parentheses: this '(' is never closed",
         "object_type": "rule",
         "object_uuid": "6f15b876-fe41-46c7-bbd8-dab61b817b6f",
         "path": "objects/rules/rogue-harvest-rule-0056.yaml",
