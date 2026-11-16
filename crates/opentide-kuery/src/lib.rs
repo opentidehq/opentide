@@ -14,9 +14,7 @@
 //! Internal to opentide, with no stability promise: depend on the
 //! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
-use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, LineIndex, Range, Severity, codes,
-};
+use opentide_core::{ByteSpan, CompletionItem, Diagnostic, LineIndex, Range, Severity, codes};
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_parse::TokenSet;
 use regex::Regex;
@@ -37,6 +35,15 @@ pub fn debug_parse(source: &str) -> String {
 
 pub use ecs::ecs_diagnostics;
 
+/// Whether Kibana's KQL grammar accepts `source` as written: no syntax error,
+/// without the masking of a trailing `or`, `and` or `not` that [`analyze`]
+/// applies. The Lucene engine asks it of a query it rejects (a sign the query
+/// was written for `language: kuery`).
+#[must_use]
+pub fn parses(source: &str) -> bool {
+    parser::parse(source, false).1.errors.is_empty()
+}
+
 const KQL_DOCS: &str = "https://www.elastic.co/docs/reference/query-languages/kql";
 
 /// What [`analyze`] finds in one query.
@@ -52,7 +59,12 @@ pub struct AnalyzeResult {
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
 /// Parses a Kibana KQL query as Kibana reads it, checks it, and highlights it.
-pub fn analyze(source: &str) -> AnalyzeResult {
+///
+/// `lucene_parses` is the Lucene grammar's verdict on a text (pass
+/// `opentide_lucene::parses`): a query Kibana rejects and Lucene accepts is one
+/// sign that it was written for `language: lucene`. The Lucene engine depends
+/// on this one ([`parses`]), so it cannot be called from here.
+pub fn analyze(source: &str, lucene_parses: fn(&str) -> bool) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     // Kibana reads `or`, `and`, and `not` as keywords only with whitespace
     // after them; at the end of the query or before `)` they are value text.
@@ -128,7 +140,8 @@ pub fn analyze(source: &str) -> AnalyzeResult {
             },
         }
     }
-    if let Some(d) = looks_like_lucene(!parse.errors.is_empty(), source, &lines, &lucene_signals) {
+    let lucene_only = !parse.errors.is_empty() && lucene_parses(source);
+    if let Some(d) = looks_like_lucene(lucene_only, source, &lines, &lucene_signals) {
         diagnostics.push(d);
     }
     let tokens = highlight(&spec, root, source);
@@ -515,7 +528,7 @@ fn free_text(node: &SyntaxNode, source: &str, lines: &LineIndex<'_>) -> Option<D
 /// KQL text that reads like Lucene. One sign can be a coincidence; two
 /// different kinds of Lucene syntax are a rule written for `language: lucene`.
 fn looks_like_lucene(
-    has_error: bool,
+    lucene_only: bool,
     source: &str,
     lines: &LineIndex<'_>,
     found: &[Diagnostic],
@@ -543,10 +556,7 @@ fn looks_like_lucene(
         }
     }
     // Kibana rejects the text, and the Lucene grammar accepts it.
-    if has_error
-        && opentide_syntax::parse(LanguageId::Lucene, source)
-            .is_some_and(|t| !opentide_syntax::has_error(&t))
-    {
+    if lucene_only {
         signals.push("text only Lucene parses");
     }
     (signals.len() >= 2).then(|| {
@@ -858,9 +868,35 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
     items
 }
 
+/// Whether the grammar reports an error in `source`, and the `Debug` names of
+/// the kinds of its tree, nodes and tokens in preorder: what the corpus gate of
+/// `opentide-analysis` reads. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
+    opentide_parse::debug_kinds::<syntax::Kuery>(&parser::parse(source, false).1)
+}
+
+/// The `Debug` names of the node kinds the grammar declares, the error node
+/// left out: the productions the corpus gate of `opentide-analysis` asks a
+/// fixture of. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_node_kinds() -> Vec<String> {
+    syntax::node_kinds()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// [`super::analyze`] with a Lucene grammar that accepts nothing: the
+    /// Lucene engine depends on this crate, so its verdict is out of reach
+    /// here. opentide-lucene's `tests/language_hints.rs` runs the two
+    /// engines together.
+    fn analyze(source: &str) -> AnalyzeResult {
+        super::analyze(source, |_| false)
+    }
 
     #[test]
     fn range_on_an_ecs_text_field_is_a_hint() {
@@ -1131,8 +1167,6 @@ mod tests {
         assert!(d.message.contains("language: lucene"));
         // One signal alone is not enough.
         assert!(find("bytes:[100 TO 200]", codes::KUERY_LOOKS_LIKE_LUCENE).is_none());
-        // Implicit AND is a KQL error that Lucene accepts.
-        assert!(find("a:1 b:2 AND _exists_:c", codes::KUERY_LOOKS_LIKE_LUCENE).is_some());
     }
 
     #[test]

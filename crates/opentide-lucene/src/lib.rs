@@ -40,8 +40,7 @@ pub fn debug_parse(source: &str) -> String {
 }
 
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, LineIndex, Range, Severity, codes,
-    position_to_offset,
+    ByteSpan, CompletionItem, Diagnostic, LineIndex, Range, Severity, codes, position_to_offset,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use syntax::SyntaxKind as K;
@@ -82,6 +81,14 @@ impl Dialect {
 pub struct AnalyzeResult {
     pub diagnostics: Vec<Diagnostic>,
     pub tokens: Vec<HighlightToken>,
+}
+
+/// Whether the Lucene query string grammar accepts `source`: no syntax error.
+/// The Kibana KQL engine asks it of a query Kibana rejects (a sign the query
+/// was written for `language: lucene`); pass it to `opentide_kuery::analyze`.
+#[must_use]
+pub fn parses(source: &str) -> bool {
+    !Tree::parse(source).has_error()
 }
 
 pub fn analyze(source: &str) -> AnalyzeResult {
@@ -927,10 +934,7 @@ fn looks_like_kuery(tree: &Tree, cx: Cx<'_>, found: &[Diagnostic]) -> Option<Dia
         signals.push("a leading `not`");
     }
     // Lucene rejects the text, and Kibana's KQL grammar accepts it.
-    if tree.has_error()
-        && opentide_syntax::parse(LanguageId::Kuery, source)
-            .is_some_and(|t| !opentide_syntax::has_error(&t))
-    {
+    if tree.has_error() && opentide_kuery::parses(source) {
         signals.push("text only KQL parses");
     }
     signals.dedup();
@@ -1153,6 +1157,24 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
             .map(|f| CompletionItem::new(f, "property")),
     );
     items
+}
+
+/// Whether the grammar reports an error in `source`, and the `Debug` names of
+/// the kinds of its tree, nodes and tokens in preorder: what the corpus gate of
+/// `opentide-analysis` reads. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
+    opentide_parse::debug_kinds::<syntax::Lucene>(&parser::parse(source).1)
+}
+
+/// The `Debug` names of the node kinds the grammar declares, the error node
+/// left out: the productions the corpus gate of `opentide-analysis` asks a
+/// fixture of. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_node_kinds() -> Vec<String> {
+    syntax::node_kinds()
 }
 
 #[cfg(test)]

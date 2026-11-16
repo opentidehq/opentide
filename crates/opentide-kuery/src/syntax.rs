@@ -307,6 +307,14 @@ pub(crate) fn lex(source: &str, mask: bool) -> Vec<Lexeme> {
     lexemes
 }
 
+/// The `Debug` names of the node kinds, the error node left out (`debug_node_kinds`).
+pub(crate) fn node_kinds() -> Vec<String> {
+    ALL.iter()
+        .filter(|k| **k >= SyntaxKind::SourceFile && **k != SyntaxKind::Error)
+        .map(|k| format!("{k:?}"))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
