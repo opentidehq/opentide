@@ -3129,12 +3129,10 @@ dependencies = [
  "opentide-core",
  "opentide-highlight",
  "opentide-parse",
- "opentide-syntax",
  "regex-syntax",
  "rowan",
  "serde",
  "toml",
- "tree-sitter",
 ]
 
 [[package]]
