@@ -12,7 +12,8 @@
 # The mapping of today's crates is a decision for the maintainer (UC-0.4, #802):
 #
 # - The plan names no tiers. Foundation crates depend on one another today (the
-#   query engines on core, syntax and highlight; ES|QL and EQL on Lucene), so
+#   query engines on core, syntax and highlight; Lucene on kuery; ES|QL and
+#   EQL on Lucene), so
 #   foundation has five tiers read off `cargo metadata`, and a sixth, from the
 #   plan's row order, for opentide-schema (below); domain has two.
 # - opentide-tide and opentide-analysis are Domain: the plan folds both into
