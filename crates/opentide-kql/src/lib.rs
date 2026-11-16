@@ -47,6 +47,7 @@ mod parser;
     )
 )]
 mod syntax;
+mod syntax_util;
 // The typed AST names the kinds from the crate root.
 use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 #[doc(hidden)]
@@ -1944,6 +1945,22 @@ fn prefix_option_items(op: &str, options: &[&OperatorOption]) -> Vec<CompletionI
 /// Hover at byte `offset` of `source` (an LSP host converts the editor's
 /// UTF-16 position once, with `opentide_core::position_to_offset`).
 pub fn hover(source: &str, offset: usize, profile: Profile) -> Option<String> {
+    hover_with(source, offset, profile, tree_sitter_columns)
+}
+
+/// The column pass on the tree-sitter tree: what hover reads a column from.
+fn tree_sitter_columns(source: &str, catalog: &Catalog) -> Option<schema::Analysis> {
+    let tree = ts_parse(LanguageId::Kql, source)?;
+    Some(schema::analyze(tree.root_node(), source, catalog))
+}
+
+/// [`hover`], with the column pass `columns` (the old tree's or the new's).
+pub(crate) fn hover_with(
+    source: &str,
+    offset: usize,
+    profile: Profile,
+    columns: fn(&str, &Catalog) -> Option<schema::Analysis>,
+) -> Option<String> {
     let offset = offset.min(source.len());
     // An offset inside a character (a decoded escape) has nothing to show.
     if !source.is_char_boundary(offset) {
@@ -1952,7 +1969,7 @@ pub fn hover(source: &str, offset: usize, profile: Profile) -> Option<String> {
     let workspace = Catalog::for_workspace(profile, source);
     let catalog = &*workspace;
     let word = word_at(source, offset)?;
-    if let Some(md) = column_hover(source, offset, catalog) {
+    if let Some(md) = column_hover(source, offset, catalog, columns) {
         return Some(md);
     }
     if let Some(parser) = catalog.asim_parser(&word) {
@@ -2117,9 +2134,13 @@ pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<S
 
 /// Hover for a column the query reads or defines: its name and type as the
 /// pipeline has them at that point, and where it comes from.
-fn column_hover(source: &str, offset: usize, catalog: &Catalog) -> Option<String> {
-    let tree = ts_parse(LanguageId::Kql, source)?;
-    let analysis = schema::analyze(tree.root_node(), source, catalog);
+fn column_hover(
+    source: &str,
+    offset: usize,
+    catalog: &Catalog,
+    columns: fn(&str, &Catalog) -> Option<schema::Analysis>,
+) -> Option<String> {
+    let analysis = columns(source, catalog)?;
     let column = analysis.column_at(offset)?;
     let type_name = column.type_name.as_deref().unwrap_or("unknown type");
     let mut md = format!("**{}** column (`{type_name}`)", column.name);

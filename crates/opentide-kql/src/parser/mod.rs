@@ -30,10 +30,41 @@ pub(crate) const GRAMMAR: Grammar = Grammar {
 
 /// Parses `source` into a lossless tree and its syntax errors.
 pub(crate) fn parse(source: &str) -> Parse {
+    PARSES.with(|n| n.set(n.get() + 1));
     let input = Input::new(source, lex_kql(source), GRAMMAR);
     let mut p = P(Parser::new(&input));
     statement::source_file(&mut p);
     build(&input, p.0.finish())
+}
+
+thread_local! {
+    /// The parses this thread ran: what the parse-once memo's test counts.
+    static PARSES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// The last text parsed through [`parse_once`], and its parse.
+    static LAST: std::cell::RefCell<Option<(String, Parse)>> = const { std::cell::RefCell::new(None) };
+}
+
+/// [`parse`], memoised for the last text: an analysis, its hover, its
+/// completions and its column pass on one text parse it once (an editor asks
+/// for them in a row on the same document). The green tree is shared, not
+/// copied.
+pub(crate) fn parse_once(source: &str) -> Parse {
+    if let Some(hit) = LAST.with(|last| {
+        last.borrow()
+            .as_ref()
+            .filter(|(text, _)| text == source)
+            .map(|(_, parse)| parse.clone())
+    }) {
+        return hit;
+    }
+    let parse = parse(source);
+    LAST.with(|last| *last.borrow_mut() = Some((source.to_owned(), parse.clone())));
+    parse
+}
+
+/// How many times this thread has parsed a text (not counting memo hits).
+pub(crate) fn parse_count() -> u64 {
+    PARSES.with(std::cell::Cell::get)
 }
 
 /// The toolkit's parser, spoken in this language's kinds.

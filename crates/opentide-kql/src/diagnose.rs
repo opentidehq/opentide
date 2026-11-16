@@ -1,44 +1,63 @@
-//! The diagnostics that read the tree, on the new parser (#1230): the syntax
-//! error, control commands, unknown and `render` operators, functions,
-//! legacy scalar operators and tables, and the highlight tokens. The column
-//! pass (`schema`) and the performance checks (`perf`) are still on
-//! tree-sitter; the analysis port moves them next.
+//! The analysis on the new parser (#1230): every diagnostic of
+//! `analyze_with_catalog` in its order (the syntax error, control commands,
+//! unknown and `render` operators, functions, legacy scalar operators,
+//! tables, the column pass, the performance checks), the HIR and the
+//! highlight tokens, from one parse and one line index.
 
 use crate::highlight::highlight_spans;
-use crate::parser::parse;
+use crate::parser::parse_once;
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
-use crate::{Catalog, TYPED_LITERAL_TYPES, check_table_named, overlay_catalog_captures};
-use opentide_core::{ByteSpan, Diagnostic, Range, codes, span_to_range, suggest};
+use crate::syntax_util::{is_operator, legacy_kind, span, text};
+use crate::{
+    Catalog, Hir, HirOp, TYPED_LITERAL_TYPES, check_table_named, overlay_catalog_captures, perf,
+    schema,
+};
+use opentide_core::{ByteSpan, Diagnostic, LineIndex, Range, codes, suggest};
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_parse::SyntaxError;
 use rowan::NodeOrToken;
 use std::collections::BTreeSet;
 
-/// What the new parser gives so far.
+/// An analysis on the new parser.
 pub(crate) struct Analysis {
-    /// The diagnostics that read the tree, in the old order.
+    /// The diagnostics, in the old order.
     pub(crate) diagnostics: Vec<Diagnostic>,
+    pub(crate) hir: Hir,
     pub(crate) tokens: Vec<HighlightToken>,
 }
 
-/// The tree-reading part of `analyze_with_catalog`.
+/// `analyze_with_catalog` on the new parser.
 #[expect(
     clippy::expect_used,
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
 pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
-    let parsed = parse(source);
+    let parsed = parse_once(source);
     let root = SyntaxNode::new_root(parsed.green);
+    let lines = LineIndex::new(source);
     let mut diagnostics = Vec::new();
     if let Some(error) = parsed.errors.first() {
-        diagnostics.push(syntax_error(source, &root, error));
+        diagnostics.push(syntax_error(&lines, &root, error));
     }
-    control_commands(&root, source, &mut diagnostics);
-    operators(&root, source, catalog, &mut diagnostics);
+    let hir = lower(&root, source);
+    control_commands(&root, &lines, &mut diagnostics);
+    operators(&root, &lines, catalog, &mut diagnostics);
     let lets = let_names(&root);
-    functions(&root, source, catalog, &lets, &mut diagnostics);
-    scalar_operators(&root, source, catalog, &mut diagnostics);
-    tables(&root, source, catalog, &lets, &mut diagnostics);
+    functions(&root, &lines, catalog, &lets, &mut diagnostics);
+    scalar_operators(&root, &lines, catalog, &mut diagnostics);
+    tables(&root, &lines, catalog, &lets, &mut diagnostics);
+    let columns = schema::new_tree::analyze(&root, source, catalog, parsed.errors.is_empty());
+    diagnostics.extend(columns.diagnostics.iter().cloned());
+    perf::check(
+        &pipelines(&root, parsed.errors.is_empty()),
+        source,
+        &columns,
+        &mut diagnostics,
+    );
+    if let Some(error) = parsed.errors.first() {
+        let boundary = lines.position(usize::from(quiet_from(&root, error)));
+        quiet_after_the_error(&mut diagnostics, boundary);
+    }
     let spec = HighlightSpec::load().expect("highlight spec");
     let mut spans = highlight_spans(&root);
     overlay_catalog_captures(source, &mut spans, catalog);
@@ -46,17 +65,149 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     let tokens = tokens_from_spans(&spec, source, &refs).unwrap_or_default();
     Analysis {
         diagnostics,
+        hir,
         tokens,
     }
 }
 
+/// Where findings stop on broken input: the start of the outermost operator,
+/// `let` or source that holds the syntax error, or the error itself.
+fn quiet_from(root: &SyntaxNode, error: &SyntaxError) -> rowan::TextSize {
+    let at = error.gap.end();
+    // The tokens on both sides of the error: the operator the error ends is
+    // as much a fragment as the one it starts.
+    let before = root.token_at_offset(error.gap.start()).left_biased();
+    let after = root.token_at_offset(at).right_biased();
+    [before, after]
+        .into_iter()
+        .flatten()
+        .filter_map(|t| {
+            t.parent()?
+                .ancestors()
+                .filter(|n| {
+                    is_operator(n.kind())
+                        || matches!(n.kind(), K::LET_STATEMENT | K::TABULAR_SOURCE)
+                })
+                .last()
+        })
+        .map(|n| crate::syntax_util::range(&n).start())
+        .fold(at, rowan::TextSize::min)
+}
+
+/// Broken input must not get noisier: past the syntax error, and in the
+/// operator that holds it, the parser's recovery has made nodes of fragments
+/// (`| summ` is an unknown operator, a half-typed word a table), so only the
+/// findings that end before `boundary` (and before the error) are kept with
+/// the error (the first diagnostic).
+fn quiet_after_the_error(diagnostics: &mut Vec<Diagnostic>, boundary: opentide_core::Position) {
+    let key = |p: opentide_core::Position| (p.line, p.character);
+    let Some(error) = diagnostics.first().map(|d| d.range.start) else {
+        return;
+    };
+    let boundary = if key(error) < key(boundary) {
+        error
+    } else {
+        boundary
+    };
+    let mut first = true;
+    diagnostics.retain(|d| {
+        let keep = first || key(d.range.end) <= key(boundary);
+        first = false;
+        keep
+    });
+}
+
+/// The column pass alone (`opentide_kql::columns`), on the memoised parse.
+pub(crate) fn columns(source: &str, catalog: &Catalog) -> schema::Analysis {
+    let parsed = parse_once(source);
+    let root = SyntaxNode::new_root(parsed.green);
+    schema::new_tree::analyze(&root, source, catalog, parsed.errors.is_empty())
+}
+
+/// The tabular expressions of the query, in source order, as the
+/// performance checks read them; none in a query that does not parse
+/// (`clean`), whose operators recovery may have made of fragments: broken
+/// input gets no performance hint (the text-based scope checks still run).
+fn pipelines(root: &SyntaxNode, clean: bool) -> Vec<perf::Pipeline> {
+    root.descendants()
+        .filter(|n| clean && n.kind() == K::TABULAR_EXPRESSION)
+        .map(|expr| perf::Pipeline {
+            span: span(&expr),
+            ops: expr
+                .children()
+                .filter(|op| is_operator(op.kind()))
+                .map(|op| perf::Op {
+                    kind: legacy_kind(op.kind()),
+                    span: span(&op),
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+/// The HIR (`opentide_kql::lower`): the `let`s, the first source, and every
+/// operator with its text, in source order; a control command alone.
+pub(crate) fn lower(root: &SyntaxNode, source: &str) -> Hir {
+    let mut lets = Vec::new();
+    let mut source_name = String::new();
+    let mut operators = Vec::new();
+    for node in root.descendants() {
+        match node.kind() {
+            K::LET_STATEMENT => {
+                let name = name_of(&node)
+                    .map(|t| t.text().to_owned())
+                    .unwrap_or_default();
+                let value = node
+                    .first_child()
+                    .map(|v| text(source, &v).to_owned())
+                    .unwrap_or_default();
+                lets.push((name, value));
+            }
+            K::CONTROL_COMMAND => {
+                let name = name_of(&node)
+                    .map(|t| t.text().to_owned())
+                    .unwrap_or_default();
+                return Hir::ControlCommand { name };
+            }
+            K::TABULAR_SOURCE if source_name.is_empty() => {
+                text(source, &node).trim().clone_into(&mut source_name);
+            }
+            kind if is_operator(kind) => {
+                let name = if kind == K::KEYWORD_OPERATOR {
+                    crate::syntax_util::tokens(&node)
+                        .next()
+                        .map_or_else(|| "unknown".to_owned(), |t| t.text().to_owned())
+                } else {
+                    legacy_kind(kind)
+                        .trim_end_matches("_operator")
+                        .replace('_', "-")
+                };
+                operators.push(HirOp {
+                    name,
+                    args: text(source, &node).to_owned(),
+                });
+            }
+            _ => {}
+        }
+    }
+    if source_name.is_empty() && operators.is_empty() && lets.is_empty() {
+        Hir::Empty
+    } else {
+        Hir::Query {
+            lets,
+            source: source_name,
+            operators,
+        }
+    }
+}
+
 /// The range of a node or token, at least one byte wide.
-fn range_of(source: &str, range: rowan::TextRange) -> Range {
+fn range_of(lines: &LineIndex, range: rowan::TextRange) -> Range {
     let start = usize::from(range.start());
-    span_to_range(
-        source,
-        ByteSpan::new(start, usize::from(range.end()).max(start + 1)),
-    )
+    lines.range(ByteSpan::new(
+        start,
+        usize::from(range.end()).max(start + 1),
+    ))
 }
 
 /// The first identifier token directly under `node`: the name of a call, a
@@ -86,7 +237,7 @@ fn expected_phrase(error: &SyntaxError) -> Option<String> {
 
 /// The one syntax error the old engine reported, with what the parser
 /// expected: at the token the error stands before.
-fn syntax_error(source: &str, root: &SyntaxNode, error: &SyntaxError) -> Diagnostic {
+fn syntax_error(lines: &LineIndex, root: &SyntaxNode, error: &SyntaxError) -> Diagnostic {
     let mut message = format!("KQL syntax error: {}", error.message);
     if !error.message.starts_with("expected")
         && let Some(expected) = expected_phrase(error)
@@ -112,23 +263,23 @@ fn syntax_error(source: &str, root: &SyntaxNode, error: &SyntaxError) -> Diagnos
                 .last()
         })
         .map_or_else(|| rowan::TextRange::empty(at), |t| t.text_range());
-    Diagnostic::error(codes::KQL_PARSE_ERROR, message, range_of(source, range))
+    Diagnostic::error(codes::KQL_PARSE_ERROR, message, range_of(lines, range))
 }
 
 /// `.show tables`: reported once.
-fn control_commands(root: &SyntaxNode, source: &str, out: &mut Vec<Diagnostic>) {
+fn control_commands(root: &SyntaxNode, lines: &LineIndex, out: &mut Vec<Diagnostic>) {
     if let Some(node) = root.descendants().find(|n| n.kind() == K::CONTROL_COMMAND) {
         let name = name_of(&node).map_or_else(|| ".".into(), |t| t.text().to_owned());
         out.push(Diagnostic::error(
             codes::KQL_CONTROL_COMMAND_UNSUPPORTED,
             format!("KQL control command '.{name}' is not valid in detections"),
-            range_of(source, node.text_range()),
+            range_of(lines, node.text_range()),
         ));
     }
 }
 
 /// Unknown operators, and `render`.
-fn operators(root: &SyntaxNode, source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+fn operators(root: &SyntaxNode, lines: &LineIndex, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     for node in root.descendants() {
         match node.kind() {
             K::UNKNOWN_OPERATOR => {
@@ -139,7 +290,7 @@ fn operators(root: &SyntaxNode, source: &str, catalog: &Catalog, out: &mut Vec<D
                     let mut d = Diagnostic::error(
                         codes::KQL_UNKNOWN_OPERATOR,
                         format!("unknown tabular operator '{name}'"),
-                        range_of(source, node.text_range()),
+                        range_of(lines, node.text_range()),
                     );
                     if let Some(s) =
                         suggest::closest(&name, catalog.operators.iter().map(|o| o.name.as_str()))
@@ -152,7 +303,7 @@ fn operators(root: &SyntaxNode, source: &str, catalog: &Catalog, out: &mut Vec<D
             K::RENDER_OPERATOR => out.push(Diagnostic::warning(
                 codes::KQL_RENDER_NOT_VALID,
                 "`render` is not valid in detection queries",
-                range_of(source, node.text_range()),
+                range_of(lines, node.text_range()),
             )),
             _ => {}
         }
@@ -171,7 +322,7 @@ fn let_names(root: &SyntaxNode) -> BTreeSet<String> {
 /// misspelled functions.
 fn functions(
     root: &SyntaxNode,
-    source: &str,
+    lines: &LineIndex,
     catalog: &Catalog,
     lets: &BTreeSet<String>,
     out: &mut Vec<Diagnostic>,
@@ -181,7 +332,7 @@ fn functions(
             continue;
         };
         let name = name_token.text().to_owned();
-        let name_range = range_of(source, name_token.text_range());
+        let name_range = range_of(lines, name_token.text_range());
         let is_plugin = node
             .parent()
             .is_some_and(|p| p.kind() == K::EVALUATE_OPERATOR);
@@ -194,7 +345,7 @@ fn functions(
                 format!(
                     "'{name}(' starts a typed literal: write the value and ')' on the same line, directly after '{name}'"
                 ),
-                range_of(source, node.text_range()),
+                range_of(lines, node.text_range()),
             ));
         } else if is_plugin {
             if catalog.plugin(&name).is_none() {
@@ -244,7 +395,12 @@ fn functions(
 }
 
 /// The legacy spellings of scalar operators (`containscs`, `notcontains`).
-fn scalar_operators(root: &SyntaxNode, source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+fn scalar_operators(
+    root: &SyntaxNode,
+    lines: &LineIndex,
+    catalog: &Catalog,
+    out: &mut Vec<Diagnostic>,
+) {
     for node in root
         .descendants()
         .filter(|n| matches!(n.kind(), K::COMPARISON_EXPR | K::IN_EXPR | K::BETWEEN_EXPR))
@@ -265,7 +421,7 @@ fn scalar_operators(root: &SyntaxNode, source: &str, catalog: &Catalog, out: &mu
                     Diagnostic::warning(
                         codes::KQL_DEPRECATED_OPERATOR,
                         format!("'{text}' is a legacy spelling; use {replacement}"),
-                        range_of(source, token.text_range()),
+                        range_of(lines, token.text_range()),
                     )
                     .with_suggestion(replacement.clone()),
                 );
@@ -313,7 +469,7 @@ fn is_fuzzy_union(node: &SyntaxNode) -> bool {
 /// parameters adds their names to its body's `let` names.
 fn tables(
     root: &SyntaxNode,
-    source: &str,
+    lines: &LineIndex,
     catalog: &Catalog,
     lets: &BTreeSet<String>,
     out: &mut Vec<Diagnostic>,
@@ -342,7 +498,7 @@ fn tables(
                 if !fuzzy && let Some(name) = name_of(&node) {
                     check_table_named(
                         name.text(),
-                        range_of(source, node.text_range()),
+                        range_of(lines, node.text_range()),
                         catalog,
                         &scopes[scope],
                         out,
