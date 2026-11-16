@@ -102,7 +102,9 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   no entry, times get the slowest recorded + `cross_cpu_regression` (20%). RSS keeps 10%. The
   workspace digest in the report must equal `[baseline] digest`. A previous result counts only with the same engine,
   oracle, workspace, run count and CPU model; GitHub's `ubuntu-24.04` runners come on several
-  CPUs, so CI looks for the newest successful development run on the same CPU.
+  CPUs, so CI looks for the newest successful development run on the same CPU. One measured
+  before the recorded reference (`[policy] reference_unix`) does not count: a CPU model last
+  seen many merges back would hold a run to that whole interval, and stay red.
 - Peak RSS has a floor: on Linux `exec` records the high-water mark of the memory a child shared
   with xtask until then, so a child's `ru_maxrss` is at least xtask's mark at the spawn. xtask
   resets its own mark to its current RSS before each spawn (`/proc/self/clear_refs`), generates

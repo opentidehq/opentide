@@ -31,6 +31,7 @@ use jiff::Timestamp;
 use opentide_compile::Json;
 
 use crate::Environment;
+use crate::answer::Answer;
 use crate::connector::TenantContext;
 use crate::credentials::{Credential, Secret};
 use crate::error::ConnectorError;
@@ -532,15 +533,7 @@ impl Authorizer {
                     format!("tenant {tenant}: the credentials gave no access token"),
                 ));
             }
-            let reason = match (body.get("error"), body.get("error_description")) {
-                (Some(Json::Str(error)), Some(Json::Str(description))) => {
-                    format!("{error}: {description}")
-                }
-                (Some(Json::Str(error)), _) => error.clone(),
-                _ => answer
-                    .not_json_detail()
-                    .unwrap_or_else(|| format!("HTTP {}", answer.status)),
-            };
+            let reason = refusal_reason(&answer);
             return Err(unauthorized(
                 cx,
                 format!("tenant {tenant}: Google refused the credentials ({reason})"),
@@ -559,6 +552,21 @@ impl Authorizer {
                 .checked_add(jiff::SignedDuration::from_secs(lifetime.max(0)))
                 .unwrap_or(now),
         })
+    }
+}
+
+/// What Google's token endpoint said when it refused: `error: description`,
+/// else the body's text. The request's credentials are masked.
+fn refusal_reason(answer: &Answer) -> String {
+    let quoted = answer.quotable_json().unwrap_or(Json::Null);
+    match (quoted.get("error"), quoted.get("error_description")) {
+        (Some(Json::Str(error)), Some(Json::Str(description))) => {
+            format!("{error}: {description}")
+        }
+        (Some(Json::Str(error)), _) => error.clone(),
+        _ => answer
+            .not_json_detail()
+            .unwrap_or_else(|| format!("HTTP {}", answer.status)),
     }
 }
 

@@ -404,3 +404,64 @@ fn a_long_left_associative_chain_is_flattened_not_overflowed() {
         assert_eq!(node.to_string(), source, "lossless");
     });
 }
+
+/// `nth_range` and `source` let a grammar see layout the kinds do not
+/// carry: whether two tokens touch, and the bytes between them.
+#[test]
+fn a_grammar_reads_token_ranges_ahead_and_the_source() {
+    let source = "a (b) c";
+    let input = Input::new(source, toy_lex(source), grammar(8));
+    let mut p = Parser::new(&input);
+    assert_eq!(p.nth_range(0), Some(at(0, 1)));
+    assert_eq!(p.nth_range(1), Some(at(2, 3)), "trivia is skipped");
+    assert_eq!(p.nth_range(2), Some(at(3, 4)));
+    assert_eq!(p.nth_range(5), None, "past the last token");
+    assert_eq!(p.current_range(), p.nth_range(0));
+    // `(` and `b` touch; `a` and `(` do not.
+    let touch = |p: &Parser<'_>, n: usize| {
+        p.nth_range(n)
+            .zip(p.nth_range(n + 1))
+            .is_some_and(|(x, y)| x.end() == y.start())
+    };
+    assert!(!touch(&p, 0));
+    assert!(touch(&p, 1));
+    let between = p
+        .nth_range(0)
+        .zip(p.nth_range(1))
+        .map(|(x, y)| &p.source()[usize::from(x.end())..usize::from(y.start())]);
+    assert_eq!(between, Some(" "));
+    let root = p.start();
+    while !p.at_eof() {
+        p.bump();
+    }
+    root.complete(&mut p, ROOT);
+    assert_eq!(p.nth_range(0), None, "at end of input");
+    let _ = build(&input, p.finish());
+}
+
+#[test]
+fn nth_range_is_none_once_the_parser_has_stalled() {
+    let source = "a b";
+    let input = Input::new(source, toy_lex(source), grammar(8));
+    let mut p = Parser::with_fuel(&input, 3);
+    for _ in 0..10 {
+        let _ = p.at(WORD);
+    }
+    assert!(p.stalled());
+    assert_eq!(p.nth_range(0), None);
+    assert_eq!(p.nth_range(1), None);
+}
+
+/// `nth_range` burns fuel like `nth`: a loop that only reads ranges stalls.
+#[test]
+fn a_loop_that_only_reads_ranges_stalls() {
+    let source = "a b";
+    let input = Input::new(source, toy_lex(source), grammar(8));
+    let p = Parser::with_fuel(&input, 50);
+    let mut reads = 0;
+    while p.nth_range(0).is_some() {
+        reads += 1;
+        assert!(reads < 1_000, "nth_range never ran out of fuel");
+    }
+    assert!(p.stalled());
+}

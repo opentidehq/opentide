@@ -99,12 +99,24 @@ const KUERY_NEST_FLOOR: usize = NESTING_CEILING;
 /// lucene passed the 10,000 cap in 0.04 s; held at the ceiling.
 const LUCENE_NEST_FLOOR: usize = NESTING_CEILING;
 
-/// Run `run` on a 1 MB stack and fail on an overflow, a panic or a blown time budget.
+/// The stack the floors are measured against: the browser WASM module's 1 MB.
+#[cfg(not(any(coverage, windows)))]
+const SMALL_STACK: usize = 1 << 20;
+/// Under `cargo llvm-cov` (`--cfg coverage`) the instrumentation enlarges every frame,
+/// so the depths measured on an ordinary debug build overflow 1 MB (`kql nest` aborted
+/// the nightly Coverage job). A Windows debug build's frames are larger too (`kql nest`
+/// aborted the nightly's Windows engine tests: the floors sit at the edge measured on
+/// Linux and macOS). Neither binary is the WASM budget; the 1 MB model stays enforced
+/// by the Linux and macOS test jobs. 8 MB is a generous bound, not a measurement.
+#[cfg(any(coverage, windows))]
+const SMALL_STACK: usize = 8 << 20;
+
+/// Run `run` on a [`SMALL_STACK`] and fail on an overflow, a panic or a blown time budget.
 fn on_small_stack<T: Send + 'static>(name: &str, run: impl FnOnce() -> T + Send + 'static) -> T {
     let started = Instant::now();
     let out = thread::Builder::new()
         .name(name.into())
-        .stack_size(1 << 20)
+        .stack_size(SMALL_STACK)
         .spawn(run)
         .unwrap()
         .join()
@@ -336,6 +348,43 @@ fn eql_nest_floor() {
 fn kuery_nest_floor() {
     let q = nest("a:1", KUERY_NEST_FLOOR);
     analyzes_cleanly("kuery nest", q, |q| opentide_kuery::analyze(q).diagnostics);
+}
+
+/// kuery's `max_depth` (`opentide-kuery` `MAX_DEPTH`): the margin above
+/// `KUERY_NEST_FLOOR` that keeps the floor from sitting on the limit.
+const KUERY_MAX_DEPTH: usize = 1_024;
+
+/// The limit itself, on the 1 MB stack, through `analyze` (the highlighter,
+/// the checks and the rowan tree's drop walk it too): it must parse clean.
+#[test]
+fn kuery_nest_at_its_limit() {
+    for q in [
+        nest("a:1", KUERY_MAX_DEPTH),
+        format!("a:{}", nest("b", KUERY_MAX_DEPTH)),
+    ] {
+        analyzes_cleanly("kuery nest at the limit", q, |q| {
+            opentide_kuery::analyze(q).diagnostics
+        });
+    }
+}
+
+/// Far past the limit: one parse error, no overflow, no quadratic time.
+#[test]
+fn kuery_nest_past_its_limit_is_one_error() {
+    for q in [
+        nest("a:1", 100_000),
+        "(".repeat(200_000),
+        "a:{".repeat(50_000),
+    ] {
+        let diagnostics = on_small_stack("kuery nest past the limit", move || {
+            opentide_kuery::analyze(&q).diagnostics
+        });
+        let errors: Vec<_> = diagnostics
+            .iter()
+            .filter(|d| d.code.ends_with("_parse_error"))
+            .collect();
+        assert_eq!(errors.len(), 1, "{errors:?}");
+    }
 }
 
 #[test]
