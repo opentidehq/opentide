@@ -1725,12 +1725,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 
 [[package]]
-name = "humantime"
-version = "2.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15cdd26707701c53297e2fa6afb323d55fbc1d0810c3aec078ae3ef0424c3c15"
-
-[[package]]
 name = "hybrid-array"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2683,7 +2677,6 @@ dependencies = [
  "ctrlc",
  "dunce",
  "form_urlencoded",
- "humantime",
  "indexmap",
  "inquire",
  "jiff",
@@ -2790,6 +2783,7 @@ dependencies = [
  "percent-encoding",
  "regex",
  "reqwest",
+ "roxmltree",
  "rustls",
  "rustls-native-certs",
  "serde",
@@ -2823,9 +2817,12 @@ dependencies = [
 name = "opentide-cql"
 version = "0.12.0"
 dependencies = [
+ "logos",
  "opentide-core",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
+ "rowan",
  "serde",
  "toml",
  "tree-sitter",
@@ -3713,6 +3710,15 @@ dependencies = [
  "memoffset",
  "rustc-hash 1.1.0",
  "text-size",
+]
+
+[[package]]
+name = "roxmltree"
+version = "0.21.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9da7f59328b09405b181fee1018925fad50f157afb43c0c0f5c522c256dd5907"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]

@@ -531,49 +531,12 @@ impl Run<'_> {
                 return self.emit_usage(problem, out, err);
             }
         };
-        let mut words = command_path(&matches);
+        let words = command_path(&matches);
         let typed = match crate::tree::Cli::from_arg_matches(&matches) {
             Ok(cli) => cli,
             // The tree and its derive disagree: a bug, reported as one.
             Err(error) => return Err(std::io::Error::other(error.to_string())),
         };
-        // `generate schemas templates`: the words after `generate` that are
-        // no subcommand of it are its phases.
-        let mut generate_phases = Vec::new();
-        if let Some(RootCommand::Generate(crate::tree::GenerateArgs {
-            command: Some(crate::tree::GenerateCommand::Phases(named)),
-        })) = &typed.command
-        {
-            generate_phases.clone_from(named);
-            words.truncate(1);
-            // The phases end at the first word that starts with `-`
-            // (`GeneratePhaseGroup`): what follows is `generate`'s own
-            // options, parsed as such, so `generate schemas --bogus` is an
-            // unknown option and `generate schemas --help` the group's help.
-            if let Some(end) = generate_phases
-                .iter()
-                .position(|word| word.starts_with('-'))
-            {
-                let options = generate_phases.split_off(end);
-                // The command line up to `generate`, the phases left out.
-                let start = self
-                    .args
-                    .windows(2)
-                    .position(|pair| pair[0] == "generate" && pair[1] == generate_phases[0])
-                    .unwrap_or_default();
-                let mut reparsed = self.args[..=start].to_vec();
-                reparsed.extend(options);
-                let argv =
-                    std::iter::once(catalog::PROGRAM.to_owned()).chain(reparsed.iter().cloned());
-                if let Err(error) = self.root.clone().try_get_matches_from(argv) {
-                    if error.kind() == clap::error::ErrorKind::DisplayHelp {
-                        return self.help(&words, 0, out);
-                    }
-                    let problem = usage::describe(&self.root, &reparsed, error);
-                    return self.emit_usage(problem, out, err);
-                }
-            }
-        }
         if matches.value_source("repo") == Some(ValueSource::CommandLine)
             && let Some(repo) = &self.globals.repo
             && words.first().map(String::as_str) != Some("setup")
@@ -654,9 +617,31 @@ impl Run<'_> {
                 return self.emit(&outcome, &lines, out, err);
             }
             Some(RootCommand::Generate(args)) => {
-                let report = self.generate(args, &generate_phases, &matches);
+                let report = self.generate(args, &matches);
                 return self.emit_report(&report, out, err);
             }
+            Some(RootCommand::Validate(
+                validate @ crate::tree::ValidateArgs {
+                    command: Some(crate::tree::ValidateCommand::Query(query)),
+                    ..
+                },
+            )) => {
+                let report = self.validate_query(validate, query);
+                return self.emit_report(&report, out, err);
+            }
+            Some(RootCommand::Migrate(crate::tree::MigrateArgs {
+                command: Some(crate::tree::MigrateCommand::VocabScope(args)),
+            })) => {
+                let cwd = self.host.cwd.clone().unwrap_or_default();
+                let report = crate::commands::migrate::run(
+                    &crate::commands::migrate::Args::from(args),
+                    self.globals.repo.as_deref(),
+                    self.env,
+                    &cwd,
+                );
+                return self.emit_report(&report, out, err);
+            }
+            Some(RootCommand::Deploy(deploy)) => return self.run_deploy(deploy, out, err),
             Some(RootCommand::Setup(args)) => {
                 let report = self.setup(args, &matches);
                 return self.emit_report(&report, out, err);
@@ -743,88 +728,9 @@ impl Run<'_> {
             }
             _ => {}
         }
-        let path = words.join(" ");
-        match path.as_str() {
-            "validate query" => {
-                let report = self.validate_query(&matches);
-                self.emit_report(&report, out, err)
-            }
-            "deploy replay-state" => {
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let commit = leaf(&matches)
-                    .get_one::<String>("state_commit")
-                    .cloned()
-                    .unwrap_or_default();
-                if self.interrupted() {
-                    return Ok(INTERRUPTED_EXIT_CODE);
-                }
-                crate::commands::deploy_replay::run(&cwd, self.env, &commit, out, err)
-            }
-            "deploy metadata" => {
-                let platform = leaf(&matches)
-                    .get_one::<crate::tree::Platform>("platform")
-                    .and_then(clap::ValueEnum::to_possible_value)
-                    .map(|value| value.get_name().to_owned())
-                    .unwrap_or_default();
-                let failure = Failure::new(
-                    "not_implemented",
-                    format!("Metadata deployment is not implemented for {platform}"),
-                );
-                self.emit(
-                    &Outcome::failed(&path, USAGE_EXIT_CODE, failure),
-                    &[],
-                    out,
-                    err,
-                )
-            }
-            "deploy migrate-state" => {
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let report = crate::commands::migrate_state::run(
-                    self.globals.repo.as_deref(),
-                    self.env,
-                    &cwd,
-                );
-                self.emit_report(&report, out, err)
-            }
-            "migrate vocab-scope" => {
-                let options = leaf(&matches);
-                let parsed = crate::commands::migrate::Args {
-                    apply: options.get_flag("apply"),
-                    fields: options
-                        .get_many::<String>("field")
-                        .map(|values| values.cloned().collect())
-                        .unwrap_or_default(),
-                    force: options.get_flag("force"),
-                };
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let report = crate::commands::migrate::run(
-                    &parsed,
-                    self.globals.repo.as_deref(),
-                    self.env,
-                    &cwd,
-                );
-                self.emit_report(&report, out, err)
-            }
-            "deploy" if leaf(&matches).get_flag("dry_run") => {
-                let run = self.deploy(&matches);
-                self.emit_deploy(&run, out, err)
-            }
-            "deploy" => {
-                let parsed = self.deploy_args(&matches);
-                if let Some(refused) = crate::commands::deploy::refusal(&parsed) {
-                    return self.emit_deploy(&refused, out, err);
-                }
-                let every_platform = parsed.platform.is_none();
-                let mut report = self.deploy_send(&matches, parsed);
-                if every_platform {
-                    // A run over the workspace's platforms that matched no
-                    // rule says so to the CI run as a whole (`emit_warning`).
-                    self.no_rules_warning(&mut report);
-                }
-                self.emit_report(&report, out, err)
-            }
-            _ => self.emit(&unhandled(&path), &[], out, err),
-        }
+        // Every command has a typed arm above: a tree and a dispatch that
+        // disagree are a bug, reported as one.
+        self.emit(&unhandled(&words.join(" ")), &[], out, err)
     }
 
     /// Where the stdio servers (`mcp start`, `serve`) run: the working
@@ -881,7 +787,6 @@ impl Run<'_> {
     fn generate(
         &self,
         args: &crate::tree::GenerateArgs,
-        phases: &[String],
         matches: &clap::ArgMatches,
     ) -> crate::commands::Report {
         use crate::commands::{extract, generate};
@@ -903,12 +808,23 @@ impl Run<'_> {
             cwd: &cwd,
             proxy: self.globals.proxy.as_deref(),
         };
+        if !args.phases.is_empty() && args.command.is_some() {
+            // A phase word before a subcommand name (`generate schemas
+            // extract`): clap parsed the subcommand, but the words were
+            // always phases, so the unknown one is refused as it was.
+            let words = phases_and_subcommands(&args.phases, matches);
+            return generate::phases(&words, &cx, &self.host.version);
+        }
         match &args.command {
-            None | Some(Command::Phases(_)) => generate::phases(phases, &cx, &self.host.version),
+            None => generate::phases(&args.phases, &cx, &self.host.version),
             Some(Command::Exports(exports)) => generate::exports(exports.into(), &cx),
             Some(Command::Explorer(explorer)) => {
-                let typed =
-                    leaf(matches).value_source("visibility_tlp") == Some(ValueSource::CommandLine);
+                let typed = matches
+                    .subcommand_matches("generate")
+                    .and_then(|generate| generate.subcommand_matches("explorer"))
+                    .is_some_and(|explorer| {
+                        explorer.value_source("visibility_tlp") == Some(ValueSource::CommandLine)
+                    });
                 generate::explorer(&generate::ExplorerOptions::new(explorer, typed), &cx)
             }
             Some(Command::Docs(docs)) => generate::docs(&docs.into(), &cx),
@@ -1260,104 +1176,17 @@ impl Run<'_> {
     /// `opentide validate query`, from its parsed arguments. The options of
     /// `validate` it also takes, typed before `query`, are its own
     /// (`hand_down`); the others are refused, as is one typed on both.
-    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-    fn validate_query(&self, matches: &clap::ArgMatches) -> crate::commands::Report {
-        use crate::commands::validate_query::{Args, COMMAND, Context, plugin_live, run};
-        let args = leaf(matches);
-        let group = matches.subcommand_matches("validate");
-        let typed =
-            |on: &clap::ArgMatches, id: &str| on.value_source(id) == Some(ValueSource::CommandLine);
-        if let Some(group) = group {
-            // `validate`'s options in its order, with their flags.
-            const GROUP: [(&str, &str, bool); 11] = [
-                ("check", "--check", false),
-                ("file", "--file", true),
-                ("uuid", "--uuid", true),
-                ("object_type", "--type", false),
-                ("strict", "--strict", true),
-                ("queries", "--queries", true),
-                ("fix", "--fix", false),
-                ("dry_run", "--dry-run", false),
-                ("watch", "--watch", false),
-                ("report_format", "--format", false),
-                ("output", "--output", false),
-            ];
-            let refused: Vec<&str> = GROUP
-                .iter()
-                .filter(|(id, _, shared)| !shared && typed(group, id))
-                .map(|(_, flag, _)| *flag)
-                .collect();
-            let problem = if refused.is_empty() {
-                // `validate query`'s own options, in its order.
-                let twice: Vec<&str> = [
-                    ("file", "--file"),
-                    ("uuid", "--uuid"),
-                    ("strict", "--strict"),
-                    ("queries", "--queries"),
-                ]
-                .iter()
-                .filter(|(id, _)| typed(group, id) && typed(args, id))
-                .map(|(_, flag)| *flag)
-                .collect();
-                (!twice.is_empty()).then(|| {
-                    format!(
-                        "Pass {} once, before or after `query`, not both: `opentide validate \
-                         query` would use only the second.",
-                        twice.join(", ")
-                    )
-                })
-            } else {
-                let verb = if refused.len() == 1 {
-                    "configures"
-                } else {
-                    "configure"
-                };
-                Some(format!(
-                    "{} {verb} `opentide validate` itself and would be ignored by `opentide \
-                     validate query`.",
-                    refused.join(", ")
-                ))
-            };
-            if let Some(problem) = problem {
-                let failure = Failure::new(code::USAGE_INVALID_VALUE, problem);
-                return crate::commands::Report::failed(COMMAND, USAGE_EXIT_CODE, failure);
-            }
+    fn validate_query(
+        &self,
+        validate: &crate::tree::ValidateArgs,
+        query: &crate::tree::ValidateQueryArgs,
+    ) -> crate::commands::Report {
+        use crate::commands::validate_query::{Args, COMMAND, Context, plugin_live, refusal, run};
+        if let Some(problem) = refusal(validate, query) {
+            let failure = Failure::new(code::USAGE_INVALID_VALUE, problem);
+            return crate::commands::Report::failed(COMMAND, USAGE_EXIT_CODE, failure);
         }
-        // An option typed on `validate` alone is the subcommand's.
-        let pick = |id: &str| -> &clap::ArgMatches {
-            let shared = ["file", "uuid", "strict", "queries"].contains(&id);
-            match group {
-                Some(group) if shared && typed(group, id) && !typed(args, id) => group,
-                _ => args,
-            }
-        };
-        let strings = |id: &str| -> Vec<String> {
-            pick(id)
-                .get_many::<String>(id)
-                .map(|values| values.cloned().collect())
-                .unwrap_or_default()
-        };
-        let parsed = Args {
-            platform: args
-                .get_one::<crate::tree::PlatformValue>("platform")
-                .map(|platform| platform.0.clone()),
-            strategies: strings("strategy"),
-            plan: args.get_one::<String>("plan").cloned(),
-            wide: args.get_flag("wide"),
-            live: args.get_flag("live"),
-            changed: args.get_flag("changed"),
-            files: strings("file"),
-            uuids: strings("uuid"),
-            strict: pick("strict").get_flag("strict"),
-            queries: pick("queries")
-                .get_one::<crate::tree::Queries>("queries")
-                .map(|queries| match queries {
-                    crate::tree::Queries::Error => opentide_workspace::validate::QueriesMode::Error,
-                    crate::tree::Queries::Warn => opentide_workspace::validate::QueriesMode::Warn,
-                    crate::tree::Queries::Off => opentide_workspace::validate::QueriesMode::Off,
-                }),
-            check_timeout: args.get_one::<String>("check_timeout").cloned(),
-        };
+        let parsed = Args::from_cli(validate, query);
         let cwd = self.host.cwd.clone().unwrap_or_default();
         let plugin = parsed
             .platform
@@ -1492,8 +1321,8 @@ impl Run<'_> {
     }
 
     /// `opentide deploy --dry-run`, from its parsed arguments.
-    fn deploy(&self, matches: &clap::ArgMatches) -> crate::commands::deploy::DryRun {
-        let parsed = self.deploy_args(matches);
+    fn deploy(&self, args: &crate::tree::DeployArgs) -> crate::commands::deploy::DryRun {
+        let parsed = crate::commands::deploy::Args::from(args);
         let cwd = self.host.cwd.clone().unwrap_or_default();
         crate::commands::deploy::run(
             &parsed,
@@ -1510,11 +1339,10 @@ impl Run<'_> {
     /// it ends; the CI job summary's section.
     fn deploy_send(
         &self,
-        matches: &clap::ArgMatches,
+        args: &crate::tree::DeployArgs,
         parsed: crate::commands::deploy::Args,
     ) -> crate::commands::Report {
         use crate::commands::deploy_send::{Args, Context, Lines, run};
-        let args = leaf(matches);
         let send_args = Args {
             strategies: parsed.strategies,
             all: parsed.all,
@@ -1523,9 +1351,9 @@ impl Run<'_> {
             platform: parsed.platform,
             wide: parsed.wide,
             keep_deprecated: parsed.keep_deprecated,
-            skip_promotion: args.get_flag("skip_promotion"),
-            skip_unconfigured: args.get_flag("skip_unconfigured"),
-            persist_state_externally: args.get_flag("persist_state_externally"),
+            skip_promotion: args.skip_promotion,
+            skip_unconfigured: args.skip_unconfigured,
+            persist_state_externally: args.persist_state_externally,
         };
         let cwd = self.host.cwd.clone().unwrap_or_default();
         let interrupt = &self.host.interrupt;
@@ -1582,32 +1410,63 @@ impl Run<'_> {
         }
     }
 
-    /// `opentide deploy`'s parsed arguments.
-    fn deploy_args(&self, matches: &clap::ArgMatches) -> crate::commands::deploy::Args {
-        let args = leaf(matches);
-        let strings = |id: &str| -> Vec<String> {
-            args.get_many::<String>(id)
-                .map(|values| values.cloned().collect())
-                .unwrap_or_default()
-        };
-        let keep_deprecated = if args.get_flag("keep_deprecated") {
-            Some(true)
-        } else if args.get_flag("drop_deprecated") {
-            Some(false)
-        } else {
-            None
-        };
-        crate::commands::deploy::Args {
-            strategies: strings("strategy"),
-            all: args.get_flag("all_files"),
-            uuids: strings("uuids"),
-            files: strings("files"),
-            platform: args
-                .get_one::<crate::tree::PlatformValue>("platform")
-                .map(|platform| platform.0.clone()),
-            plan: args.get_one::<String>("plan").cloned(),
-            wide: args.get_flag("wide"),
-            keep_deprecated,
+    /// `opentide deploy`: a send, a dry run, or one of its subcommands.
+    fn run_deploy(
+        &self,
+        deploy: &crate::tree::DeployArgs,
+        out: &mut dyn Write,
+        err: &mut dyn Write,
+    ) -> std::io::Result<i32> {
+        use crate::tree::DeployCommand as Command;
+        let cwd = self.host.cwd.clone().unwrap_or_default();
+        match &deploy.command {
+            Some(Command::ReplayState(replay)) => {
+                if self.interrupted() {
+                    return Ok(INTERRUPTED_EXIT_CODE);
+                }
+                crate::commands::deploy_replay::run(&cwd, self.env, &replay.state_commit, out, err)
+            }
+            Some(Command::Metadata(metadata)) => {
+                let platform = clap::ValueEnum::to_possible_value(&metadata.platform)
+                    .map(|value| value.get_name().to_owned())
+                    .unwrap_or_default();
+                let failure = Failure::new(
+                    "not_implemented",
+                    format!("Metadata deployment is not implemented for {platform}"),
+                );
+                self.emit(
+                    &Outcome::failed("deploy metadata", USAGE_EXIT_CODE, failure),
+                    &[],
+                    out,
+                    err,
+                )
+            }
+            Some(Command::MigrateState(_)) => {
+                let report = crate::commands::migrate_state::run(
+                    self.globals.repo.as_deref(),
+                    self.env,
+                    &cwd,
+                );
+                self.emit_report(&report, out, err)
+            }
+            None if deploy.dry_run => {
+                let run = self.deploy(deploy);
+                self.emit_deploy(&run, out, err)
+            }
+            None => {
+                let parsed = crate::commands::deploy::Args::from(deploy);
+                if let Some(refused) = crate::commands::deploy::refusal(&parsed) {
+                    return self.emit_deploy(&refused, out, err);
+                }
+                let every_platform = parsed.platform.is_none();
+                let mut report = self.deploy_send(deploy, parsed);
+                if every_platform {
+                    // A run over the workspace's platforms that matched no
+                    // rule says so to the CI run as a whole (`emit_warning`).
+                    self.no_rules_warning(&mut report);
+                }
+                self.emit_report(&report, out, err)
+            }
         }
     }
 
@@ -1800,19 +1659,8 @@ impl Run<'_> {
                 line.log();
             }
             let mut document = outcome.document(self.duration_ms());
-            if !report.warnings.is_empty()
-                && let crate::json::Json::Object(members) = &mut document
-            {
-                let at = members
-                    .get_index_of("message")
-                    .map_or(members.len(), |at| at + 1);
-                members.shift_insert(
-                    at,
-                    "warnings".into(),
-                    crate::json::Json::Array(
-                        report.warnings.iter().map(crate::json::Json::str).collect(),
-                    ),
-                );
+            if let crate::json::Json::Object(members) = &mut document {
+                crate::envelope::put_warnings(members, &report.warnings);
             }
             out.write_all(document_text(&document, self.indent).as_bytes())?;
             out.flush()?;
@@ -2266,15 +2114,6 @@ struct ServerPlaces {
     debug: bool,
 }
 
-/// The matches of the subcommand `matches` ran.
-fn leaf(matches: &clap::ArgMatches) -> &clap::ArgMatches {
-    let mut current = matches;
-    while let Some((_, sub)) = current.subcommand() {
-        current = sub;
-    }
-    current
-}
-
 /// The subcommand path `matches` ran.
 /// The string a result holds at `key`, if any.
 fn data_text(data: &[(String, crate::json::Json)], key: &str) -> Option<String> {
@@ -2333,16 +2172,19 @@ pub fn utc_now() -> (String, String, String) {
     utc_at(SystemTime::now())
 }
 
-/// [`utc_now`] at `time`, formatted by humantime's RFC 3339.
+/// [`utc_now`] at `time`, formatted by jiff (RFC 3339, in UTC).
 pub fn utc_at(time: SystemTime) -> (String, String, String) {
-    let iso = humantime::format_rfc3339_seconds(time).to_string();
-    // `2026-11-09T10:11:12.123456Z` -> `20261109T101112123456Z`.
-    let stamp: String = humantime::format_rfc3339_micros(time)
-        .to_string()
-        .chars()
-        .filter(|c| !matches!(c, '-' | ':' | '.'))
-        .collect();
-    let clock = iso.get(11..19).unwrap_or_default().to_owned();
+    // A moment outside jiff's range (before year -9999 or after the end of
+    // 9999) stops at the nearest end of it, not at 1970: the stamp stays
+    // ordered with the time that made it.
+    let at = jiff::Timestamp::try_from(time).unwrap_or(if time >= SystemTime::UNIX_EPOCH {
+        jiff::Timestamp::MAX
+    } else {
+        jiff::Timestamp::MIN
+    });
+    let iso = at.strftime("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let stamp = at.strftime("%Y%m%dT%H%M%S%6fZ").to_string();
+    let clock = at.strftime("%H:%M:%S").to_string();
     (iso, stamp, clock)
 }
 
@@ -2665,6 +2507,19 @@ fn unhandled(path: &str) -> Outcome {
     Outcome::failed(path, 1, Failure::new(code::INTERNAL, message))
 }
 
+/// The phase words followed by the subcommand names clap took after them
+/// (`generate schemas extract elastic` gives `schemas extract elastic`),
+/// the words the phase check always saw.
+fn phases_and_subcommands(phases: &[String], matches: &clap::ArgMatches) -> Vec<String> {
+    let mut words = phases.to_vec();
+    let mut level = matches.subcommand_matches("generate");
+    while let Some((name, next)) = level.and_then(clap::ArgMatches::subcommand) {
+        words.push(name.to_owned());
+        level = Some(next);
+    }
+    words
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2745,6 +2600,90 @@ mod tests {
         assert_eq!(iso.len(), 20);
         assert_eq!(stamp.len(), 22);
         assert_eq!(clock.len(), 8);
+    }
+
+    /// The strings humantime gave (checked against Python's `datetime`) for
+    /// the instants where a hand-written calendar goes wrong.
+    #[test]
+    fn framework_utc_stamps_at_calendar_edges() {
+        let after = |secs: u64, micros: u64| {
+            utc_at(
+                std::time::UNIX_EPOCH + Duration::from_secs(secs) + Duration::from_micros(micros),
+            )
+        };
+        let before = |secs: u64| utc_at(std::time::UNIX_EPOCH - Duration::from_secs(secs));
+        let table = [
+            // 1900 is not a leap year: the day after the 28th is 1 March.
+            (
+                before(2_203_891_201),
+                "1900-02-28T23:59:59Z",
+                "19000228T235959000000Z",
+            ),
+            (
+                before(2_203_891_200),
+                "1900-03-01T00:00:00Z",
+                "19000301T000000000000Z",
+            ),
+            // The second before 1970.
+            (before(1), "1969-12-31T23:59:59Z", "19691231T235959000000Z"),
+            (
+                after(1_709_210_096, 789_012),
+                "2024-02-29T12:34:56Z",
+                "20240229T123456789012Z",
+            ),
+            // 2100 is not a leap year either.
+            (
+                after(4_107_542_399, 0),
+                "2100-02-28T23:59:59Z",
+                "21000228T235959000000Z",
+            ),
+            (
+                after(4_107_542_400, 0),
+                "2100-03-01T00:00:00Z",
+                "21000301T000000000000Z",
+            ),
+            // A year-end rollover.
+            (
+                after(1_798_761_599, 999_999),
+                "2026-12-31T23:59:59Z",
+                "20261231T235959999999Z",
+            ),
+            (
+                after(1_798_761_600, 0),
+                "2027-01-01T00:00:00Z",
+                "20270101T000000000000Z",
+            ),
+        ];
+        for ((iso, stamp, clock), want_iso, want_stamp) in table {
+            assert_eq!((iso.as_str(), stamp.as_str()), (want_iso, want_stamp));
+            assert_eq!(clock, &want_iso[11..19]);
+        }
+    }
+
+    /// jiff ends at `9999-12-30T22:00:00.999999999Z`: a moment past it (or
+    /// before its start) stops there instead of becoming 1970.
+    #[test]
+    fn framework_utc_stamps_stop_at_the_end_of_jiffs_range() {
+        let last = 253_402_207_200;
+        let (iso, stamp, _) = utc_at(std::time::UNIX_EPOCH + Duration::from_secs(last));
+        assert_eq!(iso, "9999-12-30T22:00:00Z");
+        assert_eq!(stamp, "99991230T220000000000Z");
+        let past = utc_at(std::time::UNIX_EPOCH + Duration::from_secs(last + 1));
+        assert_eq!(past.0, "9999-12-30T22:00:00Z");
+        assert_eq!(past.1, "99991230T220000999999Z");
+        // Before jiff's start (year -9999). Windows' SystemTime begins in
+        // 1601, so there no such moment exists to stop.
+        let before = std::time::UNIX_EPOCH.checked_sub(Duration::from_secs(377_705_023_202));
+        assert!(
+            before.is_some() || cfg!(windows),
+            "only Windows starts after -9999"
+        );
+        if let Some(before) = before {
+            assert_eq!(
+                utc_at(before),
+                utc_at(std::time::UNIX_EPOCH - Duration::from_secs(377_705_023_201))
+            );
+        }
     }
 
     #[test]
@@ -4065,7 +4004,7 @@ mod tests {
             pipeline.stdout
         );
         // The phases end at the first `-` word: what follows is
-        // `generate`'s own options (`GeneratePhaseGroup`).
+        // `generate`'s own options.
         for (argv, option) in [
             ("--json generate schemas --bogus", "--bogus"),
             ("--json generate schemas templates --repo .", "--repo"),
@@ -4087,6 +4026,31 @@ mod tests {
             "{}",
             help.stdout
         );
+        // A phase word before a subcommand name is still an unknown phase.
+        for argv in [
+            "generate schemas extract elastic",
+            "generate schemas inflight",
+            "generate schemas help",
+        ] {
+            for json in ["", "--json "] {
+                let line = format!("{json}{argv}");
+                let refused = dispatched(&line, &[], false);
+                let shown = format!("{}{}", refused.stdout, refused.stderr);
+                assert_eq!(refused.code, 2, "{line}: {shown}");
+                assert!(
+                    shown.contains("Unknown generation phase"),
+                    "{line}: {shown}"
+                );
+                if !json.is_empty() {
+                    assert!(
+                        refused.stdout.contains("\"code\":\"usage_invalid_choice\"")
+                            && refused.stdout.contains("\"argument\":\"phase\""),
+                        "{line}: {}",
+                        refused.stdout
+                    );
+                }
+            }
+        }
         let subcommand = dispatched("--json generate inflight prune --bogus", &[], false);
         assert!(
             subcommand.stdout.contains("usage_unknown_option"),
