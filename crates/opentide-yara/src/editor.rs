@@ -5,7 +5,6 @@
 //! cursor, so they work in a rule that does not parse yet.
 
 use crate::catalog::{Catalog, Kind, Member, leaf_name};
-use crate::syntax;
 use opentide_core::{CompletionItem, ParameterInformation, SignatureHelp, SignatureInformation};
 use std::collections::BTreeSet;
 use yara_x_parser::Parser;
@@ -63,8 +62,7 @@ fn span_of(s: &yara_x_parser::Span) -> Span {
 }
 
 fn rules(source: &str) -> Vec<RuleInfo> {
-    let prepared = syntax::prepare(source);
-    let ast = AST::from(Parser::new(prepared.text.as_bytes()));
+    let ast = AST::from(Parser::new(source.as_bytes()));
     ast.rules().map(|r| rule_info(r)).collect()
 }
 
@@ -475,15 +473,6 @@ fn arg_names(args: &str) -> Vec<&'static str> {
         .collect()
 }
 
-fn engines(m: &Member) -> &'static str {
-    match (m.libyara, m.yara_x) {
-        (true, true) => "libyara 4.5 and YARA-X",
-        (true, false) => "libyara 4.5 only: YARA-X refuses it",
-        (false, true) => "YARA-X only: libyara 4.5 refuses it",
-        (false, false) => "neither engine",
-    }
-}
-
 fn member_hover(module: &str, m: &Member) -> String {
     let shown = format!(
         "{module}.{}",
@@ -493,12 +482,13 @@ fn member_hover(module: &str, m: &Member) -> String {
         let sigs: Vec<String> = m
             .overloads
             .iter()
+            .filter(|o| o.yara_x || !m.yara_x)
             .map(|o| {
                 format!(
                     "{}({}) -> {}",
                     leaf_name(&m.path),
                     arg_names(&o.args).join(", "),
-                    o.ret
+                    o.yara_x_ret.as_deref().unwrap_or(&o.ret)
                 )
             })
             .collect();
@@ -506,7 +496,9 @@ fn member_hover(module: &str, m: &Member) -> String {
     } else {
         format!("`{shown}`: {}", kind_name(m))
     };
-    out.push_str(&format!(" ({})", engines(m)));
+    if !m.yara_x {
+        out.push_str(" (YARA-X does not have it: `yara_unknown_module_member`)");
+    }
     let doc = m
         .doc
         .as_deref()
@@ -728,15 +720,13 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
 
 fn module_hover(module: &str) -> String {
     let catalog = Catalog::cached();
-    let count = catalog.children(module, "").count();
-    let engines = if catalog.has_libyara_declarations(module) {
-        "libyara 4.5"
-    } else {
-        "YARA-X only (libyara 4.5.4 has no such module)"
-    };
-    format!(
-        "YARA module `{module}`: {count} top-level members ({engines}). Needs `import \"{module}\"`."
-    )
+    let count = catalog.children(module, "").filter(|m| m.yara_x).count();
+    if count == 0 {
+        return format!(
+            "YARA module `{module}`: YARA-X has none of its members, so using one is `yara_unknown_module_member`."
+        );
+    }
+    format!("YARA module `{module}`: {count} top-level members. Needs `import \"{module}\"`.")
 }
 
 // --- Completion ---
@@ -848,7 +838,7 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
             };
             return catalog
                 .children(&module, &parent_path)
-                .filter(|m| m.libyara || !catalog.has_libyara_declarations(&module))
+                .filter(|m| m.yara_x)
                 .map(|m| {
                     let label = leaf_name(&m.path).to_string();
                     let kind = if m.kind == Kind::Function {
@@ -953,11 +943,16 @@ pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
         }
         m.overloads
             .iter()
-            .filter(|o| o.libyara || !catalog.has_libyara_declarations(&module))
+            .filter(|o| o.yara_x)
             .map(|o| {
                 let args = arg_names(&o.args);
                 SignatureInformation {
-                    label: format!("{}({}) -> {}", leaf_name(&m.path), args.join(", "), o.ret),
+                    label: format!(
+                        "{}({}) -> {}",
+                        leaf_name(&m.path),
+                        args.join(", "),
+                        o.yara_x_ret.as_deref().unwrap_or(&o.ret)
+                    ),
                     documentation: o.doc.clone().or_else(|| m.doc.clone()),
                     parameters: args
                         .iter()
@@ -1041,7 +1036,9 @@ mod tests {
             "{h}"
         );
         let h = hover(SIG, at("exports") + 2).unwrap();
-        assert!(h.contains("exports(string) -> integer"), "{h}");
+        // YARA-X's overloads and return types (a predicate is boolean).
+        assert!(h.contains("exports(string) -> boolean"), "{h}");
+        assert!(!h.contains("-> integer"), "{h}");
         let h = hover(SIG, at("#cfg") + 2).unwrap();
         assert!(
             h.contains("number of matches") && h.contains("$cfg = \"CFG!\""),
@@ -1068,6 +1065,12 @@ mod tests {
         assert!(
             l.contains(&"number_of_sections".to_string()) && l.contains(&"imphash".to_string())
         );
+        // YARA-X's members: none it refuses, and the ones only it has.
+        assert!(l.contains(&"MACHINE_ARM64EC".to_string()), "{l:?}");
+        assert!(
+            !l.contains(&"IMAGE_DEBUG_TYPE_BORLAND".to_string()),
+            "{l:?}"
+        );
         let l = labels("import \"pe\"\nrule a { condition: pe.sections[0].");
         assert!(l.contains(&"name".to_string()), "{l:?}");
         let l = labels("rule a {\n  strings:\n    $ab = \"x\"\n  condition:\n    #a");
@@ -1083,7 +1086,7 @@ mod tests {
         assert!(
             h.signatures
                 .iter()
-                .any(|s| s.label == "exports(string) -> integer")
+                .any(|s| s.label == "exports(string) -> boolean")
         );
         let text = "import \"math\"\nrule a { condition: math.entropy(0, ";
         let h = signature_help(text, text.len()).unwrap();

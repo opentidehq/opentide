@@ -13,8 +13,8 @@ Reads two sources:
   It decides ``yara_x = true``, and gives the types and documentation.
 
 and writes one row per module member, path first. A member in one engine
-only is kept with the other flag false: ``yara_unknown_module_member`` under
-libyara, ``yara_x_incompatible`` for what only libyara has.
+only is kept with the other flag false; the engine checks YARA-X's flag, so
+a member only libyara has is ``yara_unknown_module_member`` (#1225).
 
 Usage:
     cargo run --release --manifest-path scripts/engine/yara-modules/Cargo.toml \

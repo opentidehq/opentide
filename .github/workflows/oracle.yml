@@ -2,7 +2,7 @@ name: Oracle
 
 # CI-only differential oracles (scripts/engine/oracles/README.md). The engine is
 # compared with Microsoft Kusto.Language, Splunk's search parser, Falco's own
-# `falco --validate`, libyara and YARA-X (yara-python, the yara-x wheel), and the Elastic and Lucene parsers (@elastic/esql,
+# `falco --validate`, YARA-X (the yara-x wheel), and the Elastic and Lucene parsers (@elastic/esql,
 # EqlBase.g4, Kibana's kuery grammar, Lucene's QueryParser). A disagreement not
 # listed in crates/testdata/oracles/exceptions.toml is a red build, and so is a
 # listed one that is gone. The references never ship: ci.yml's
@@ -126,10 +126,10 @@ jobs:
 
   yara:
     # Every recorded verdict of crates/testdata/conformance/yara/cases.json, and
-    # every YARA file of the repository through the engine, libyara 4.5.4
-    # (yara-python) and YARA-X 1.23.0 (the yara-x wheel). The pins are in
+    # every YARA file of the repository through the engine and YARA-X 1.23.0
+    # (the yara-x wheel), the language (#1225). The pin is in
     # scripts/engine/oracles/yara/oracle.py and scripts/engine/oracles/README.md.
-    name: libyara and YARA-X
+    name: YARA-X
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -144,7 +144,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - run: pip install yara-python==4.5.4 yara-x==1.23.0
+      - run: pip install yara-x==1.23.0
       - run: bash scripts/engine/ci-oracle.sh --manifests-only
       - run: cargo build -p opentide-lsp
       - name: YARA oracle

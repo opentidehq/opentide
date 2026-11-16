@@ -20,6 +20,6 @@ opentide lint --check queries
 
 ## How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ━━━ stderr · empty
