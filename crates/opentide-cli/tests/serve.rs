@@ -601,8 +601,9 @@ fn a_run_in_a_missing_directory_fails() {
     assert_eq!(
         result.get("document").unwrap().get("message"),
         Some(&Json::str(format!(
-            "[Errno 2] No such file or directory: {:?}",
-            missing.display().to_string()
+            "cannot run in the working directory {}: {}",
+            missing.display(),
+            std::fs::metadata(&missing).unwrap_err()
         )))
     );
     assert!(client.stop());
@@ -631,19 +632,34 @@ fn a_rust_run_cancelled_before_it_started_answers_130_unrun() {
     assert!(!job.cancel(), "a cancel after the run changes nothing");
 }
 
-/// The oracle's recorded sessions, replayed: the same lines in, the same
-/// bytes out.
+/// `tests/golden/cases.toml`'s `serve` session (`initialize`, two runs, a
+/// refused run, protocol errors, `shutdown`, `exit`) on each of its
+/// fixtures, held to `tests/cli_snapshots/serve/plain__<fixture>__session.snap`
+/// (`cargo insta review` to change one): every line the server wrote, in
+/// order, with the run's folder as `<WS>` and the commands digest masked (and
+/// checked against the digest of today's `commands` document).
 #[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn recorded_sessions_are_answered_as_the_oracle_answered_them() {
+fn the_serve_session_is_held_to_its_snapshots() {
     let _session = session();
-    let cases = replay::repo().join("tests/golden/cases/serve/plain");
-    for fixture in ["tide-corpus", "vscode"] {
-        let dir = cases.join(fixture).join("session");
-        let case: toml::Table =
-            toml::from_str(&std::fs::read_to_string(dir.join("case.toml")).unwrap()).unwrap();
-        let input = case["stdin"]["input"].as_str().unwrap().to_owned();
-        let expected = std::fs::read_to_string(dir.join("stdout")).unwrap();
+    let manifest: toml::Table = toml::from_str(
+        &std::fs::read_to_string(replay::repo().join("tests/golden/cases.toml")).unwrap(),
+    )
+    .unwrap();
+    let case = manifest["case"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["command"].as_str() == Some("serve") && case.get("input").is_some())
+        .unwrap();
+    let input = case["input"].as_str().unwrap();
+    let fixtures: Vec<&str> = case["fixtures"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|fixture| fixture.as_str().unwrap())
+        .collect();
+    assert_eq!(fixtures, ["tide-corpus", "vscode"]);
+    for fixture in fixtures {
         let (_root, ws) = workspace(fixture);
         let (sender, lines) = channel();
         let sender = Mutex::new(sender);
@@ -652,30 +668,38 @@ fn recorded_sessions_are_answered_as_the_oracle_answered_them() {
             Ok(())
         });
         let base = vec![("HOME".to_owned(), ws.display().to_string())];
-        let runner = HostRunner::new(base, ws.clone(), "0.28.1");
-        let server = Server::new(write, Arc::new(runner), "0.28.1");
+        let server = Server::new(
+            write,
+            Arc::new(HostRunner::new(base, ws.clone(), "0.28.1")),
+            "0.28.1",
+        );
         // The reading thread takes every line before the first run starts.
         opentide_cli::serve::read_lines(input.as_bytes(), &server);
         assert!(server.serve(&|| false));
         drop(server);
         let output: String = lines.try_iter().collect();
-        // The digest names today's command tree, which has changed since
-        // the oracle under approved entries (`commands`'s own cases); it is
-        // computed as the oracle computed it from the oracle's tree.
-        let recorded =
-            std::fs::read_to_string(cases.join("../../commands/json/none/default/stdout")).unwrap();
-        let oracle_digest = commands_digest(&Json::parse(&recorded).unwrap());
-        assert!(
-            expected.contains(&oracle_digest),
-            "the oracle's digest is its tree's"
+        let output = output.replace(&ws.display().to_string(), "<WS>");
+        // The digest changes with every help edit: the snapshot masks it, and
+        // the test holds it to the digest of the `commands` document today.
+        let today = commands_digest(
+            host(&ws)
+                .run("{\"argv\":[\"commands\"]}")
+                .get("document")
+                .unwrap(),
         );
-        let today = host(&ws).run("{\"argv\":[\"commands\"]}");
-        let today = commands_digest(today.get("document").unwrap());
-        assert_eq!(
-            output,
-            expected.replace(&oracle_digest, &today),
-            "{fixture}"
+        let digest = format!("\"commands_digest\":\"{today}\"");
+        assert_eq!(output.matches(&digest).count(), 1, "{fixture}: {output}");
+        let output = output.replace(&digest, "\"commands_digest\":\"<COMMANDS_DIGEST>\"");
+        let mut settings = insta::Settings::clone_current();
+        settings.set_snapshot_path(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/cli_snapshots/serve"),
         );
+        settings.set_prepend_module_to_snapshot(false);
+        settings.set_omit_expression(true);
+        settings.set_description(format!("serve/plain/{fixture}/session"));
+        settings.bind(|| {
+            insta::assert_snapshot!(format!("plain__{fixture}__session"), output);
+        });
     }
 }
 

@@ -12,6 +12,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use super::interrupt::watched;
 use opentide_connectors::{Environment, HttpClient, HttpSettings, TenantLabel};
 use tokio_util::sync::CancellationToken;
 
@@ -296,18 +297,10 @@ fn get(url: &str, accept: Option<&str>, network: Network<'_>) -> Option<Vec<u8>>
                 client.bytes(answer, &cancel).await.ok()
             };
             // Ctrl-C stops the fetch.
-            let watch = async {
-                while !interrupted() {
-                    tokio::time::sleep(Duration::from_millis(50)).await;
-                }
-                cancel.cancel();
-            };
-            tokio::select! {
-                body = work => body,
-                () = watch => None,
-            }
+            watched(async { Ok(work.await) }, &cancel, interrupted).await
         })
         .ok()
+        .and_then(Result::ok)
         .flatten()
     })
     .ok()

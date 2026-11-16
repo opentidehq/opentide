@@ -1,0 +1,48 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: "debug_parse(\"event.category:process and not process.name:(\\\"cmd.exe\\\" or power shell) and source.port >= 1024\")"
+---
+SourceFile@0..94
+  AndQuery@0..94
+    FieldValueExpression@0..22
+      Field@0..14
+        UnquotedLiteral@0..14
+          Word@0..14 "event.category"
+      Colon@14..15 ":"
+      UnquotedLiteral@15..22
+        Word@15..22 "process"
+    Whitespace@22..23 " "
+    AndKw@23..26 "and"
+    Whitespace@26..27 " "
+    NotQuery@27..70
+      NotKw@27..30 "not"
+      Whitespace@30..31 " "
+      FieldValueExpression@31..70
+        Field@31..43
+          UnquotedLiteral@31..43
+            Word@31..43 "process.name"
+        Colon@43..44 ":"
+        ValueList@44..70
+          LParen@44..45 "("
+          OrList@45..69
+            QuotedString@45..54 "\"cmd.exe\""
+            Whitespace@54..55 " "
+            OrKw@55..57 "or"
+            Whitespace@57..58 " "
+            UnquotedLiteral@58..69
+              Word@58..63 "power"
+              Whitespace@63..64 " "
+              Word@64..69 "shell"
+          RParen@69..70 ")"
+    Whitespace@70..71 " "
+    AndKw@71..74 "and"
+    Whitespace@74..75 " "
+    RangeExpression@75..94
+      Field@75..86
+        UnquotedLiteral@75..86
+          Word@75..86 "source.port"
+      Whitespace@86..87 " "
+      Gte@87..89 ">="
+      Whitespace@89..90 " "
+      UnquotedLiteral@90..94
+        Word@90..94 "1024"

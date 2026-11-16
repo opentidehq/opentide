@@ -1,10 +1,8 @@
-//! `generate` and `setup ci` against the oracle's recordings (UC-3.2, #824;
-//! UC-3.2c, #916): every recorded case of the ported commands, run in-process through
-//! [`opentide_cli::run`] on a fresh copy of its fixture, with the goldens'
-//! normalisation (`opentide-compare`), compared with the recording by the
-//! goldens' comparator (`opentide_compare::compare`, as `cargo xtask golden
-//! check --engine compare` compares them) under `APPROVED_DIFFS.toml`: exit
-//! code, stdout, stderr, and every file written.
+//! Behaviour of `generate` and `setup ci` (UC-3.2, #824; UC-3.2c, #916)
+//! beyond what the snapshot suite (`cli_snapshots.rs`) records: runs in
+//! process through [`opentide_cli::run`] on a copy of a fixture, for the
+//! cases that need their own setup (a failure part-way, a branch, a renamed
+//! rule, a refused configuration).
 
 #![cfg(unix)]
 #![expect(
@@ -22,31 +20,6 @@ use opentide_cli::{Host, run};
 #[path = "common/replay.rs"]
 mod replay;
 use replay::{Buffer, fixture};
-
-/// The commands whose recordings this test replays.
-const COMMANDS: &[&str] = &[
-    "generate.exports",
-    "generate.exports.navigator",
-    "generate.exports.objects",
-    "generate.exports.revisions",
-    "generate.docs",
-    "generate.docs.rules",
-    "generate.docs.objectives",
-    "generate.docs.threats",
-    "generate.docs.index",
-    "generate.explorer",
-    "generate.inflight",
-    "generate.inflight.prune",
-    "setup.ci",
-];
-
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn generate_cases_are_the_oracles() {
-    let (problems, ran) = replay::replay_commands(COMMANDS, true);
-    assert!(ran >= 32, "only {ran} cases found");
-    assert!(problems.is_empty(), "{}", problems.join("\n\n"));
-}
 
 /// The exports that rendered before one failed are on disk, as the oracle,
 /// which writes them one after another, leaves them: a threat without
@@ -391,6 +364,39 @@ fn setup_ci_reads_the_statuses_of_a_refused_paths_toml() {
             .as_str()
             .unwrap()
             .starts_with("--promotion-target: \"NOPE\" is not a status in this repository's deployment.toml; use one of: DESIGN, "),
+        "{stdout}"
+    );
+}
+
+/// A status without a `name` shows as a placeholder in the list of statuses
+/// `--promotion-target` offers, not as Python's `None`.
+#[test]
+fn setup_ci_lists_a_nameless_status_as_a_placeholder() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("vscode-docs-folder", &ws);
+    std::fs::write(
+        ws.join(".opentide/configurations/deployment.toml"),
+        "[[statuses]]\nname = \"STAGING\"\n\n[[statuses]]\ndescription = \"no name\"\n",
+    )
+    .unwrap();
+    let (code, stdout) = run_json(
+        &ws,
+        &[
+            "setup",
+            "ci",
+            "github",
+            "--promotion-target",
+            "NOPE",
+            "--yes",
+        ],
+    );
+    assert_eq!(code, 2, "{stdout}");
+    assert!(
+        document(&stdout)["failure"]["message"]
+            .as_str()
+            .unwrap()
+            .ends_with("use one of: STAGING, (no name)"),
         "{stdout}"
     );
 }

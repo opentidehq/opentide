@@ -51,9 +51,26 @@ Byte-for-byte parity with Python is not what they check; what the Rust CLI does 
   `VERSION`), so a release changes nothing. Every case runs under umask 022 with `/dev/null` as
   standard input, and the fixtures get fixed modes.
 - **Fails, never snapshotted**: a request a case's cassette does not hold, and a panic.
-- **Left out**: cases on the generated fixtures (`fault`, `fault-lint`, `heavy-small`: `cargo
-  xtask corpus` builds them, which a crate test cannot), and `serve`'s session, which feeds
-  standard input (`tests/serve.rs` drives it).
+- **Left out**: `serve`'s session, which feeds standard input: `tests/serve.rs` holds it in its own
+  snapshots (#1285), while `cli_snapshots` still lists `serve` among its skipped commands.
+- **Needs the generated workspaces**: the cases on `fault`, `fault-lint` and `heavy-small` run in
+  three tests (`generated_fault`, `generated_fault_lint`, `generated_heavy_small`) when
+  `OPENTIDE_REPLAY_FIXTURES` names the workspaces `cargo xtask corpus` writes, which a crate test
+  cannot build; without it they print "skipped". CI writes two workspaces, `fault` and `heavy-small`;
+  `fault-lint` is `fault` with lint's recommended check off, which the harness derives itself. The Linux PR gate and the Coverage workflow
+  write them and set `OPENTIDE_SNAPSHOT_REQUIRE_GENERATED`, so a gate cannot pass by skipping
+  them. The nightly `engine-test-os` (macOS, Windows) does not write them, by
+  design (minutes of debug-build CPU per OS for output the Linux snapshots already hold): the 101
+  cases are a Linux-gate check. To run or record
+  them (about 4 minutes of CPU in a debug build):
+
+  ```sh
+  out=$(mktemp -d)
+  cargo xtask corpus faults --out "$out/fault"
+  cargo xtask corpus generate --seed 1 --threats 30 --objectives 30 --rules 50 --out "$out/heavy-small"
+  OPENTIDE_REPLAY_FIXTURES="fault=$out/fault,heavy-small=$out/heavy-small" \
+    cargo nextest run -p opentide-cli --test cli_snapshots -E 'test(/^generated_/)'
+  ```
 
 They are ordinary nextest tests, one per command group, in the PR gate whenever `opentide-cli` or
 a crate below it changes. A change to what a command prints or writes fails them, by design:
@@ -94,16 +111,11 @@ policing out of CI: no workflow records, checks or compares the goldens (golden 
 golden determinism, the golden preview, the corpora, the MCP replay, the payload, config,
 validate and lint diffs, `codegen --check --oracle`), and `APPROVED_DIFFS.toml` gates nothing.
 Every command here stays, run by hand when a change calls for it: a re-record, a new oracle, or a
-behaviour change you want measured against the oracle. The Rust crates' own tests that replay the
-recordings in-process (`crates/opentide-cli/tests/command_goldens.rs`, `framework_goldens.rs`,
-`generate_goldens.rs` and every other test that diffs against recorded Python output) are
-`#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]`:
-no CI tier runs them. Run them by hand:
-
-```bash
-cargo nextest run -p opentide-cli --run-ignored only   # the oracle replays only
-cargo nextest run --workspace --run-ignored all        # everything, the replays included
-```
+behaviour change you want measured against the oracle. No Rust test replays `cases/` any
+more (#1139): the in-process replays were retired in favour of the snapshot suite
+("Snapshots"), which runs the same `cases.toml` and is a reviewed record of the Rust
+implementation's own output. The recordings under `cases/` and `blobs/`, and `APPROVED_DIFFS.toml`,
+stay for the hand-run `cargo xtask golden` and `compare` commands above.
 
 ### A preview of the next oracle
 

@@ -1,66 +1,12 @@
 //! The command line the facade carries (`cli` feature): the `opentide`
-//! binary and `cli::run_json`, against the PyPI CLI's recordings.
+//! binary and `cli::run_json`. What `opentide commands` prints is held by the
+//! CLI's snapshots (`crates/opentide-cli/tests/cli_snapshots.rs`).
 
 #![cfg(feature = "cli")]
 
 mod common;
 
 use std::process::Command;
-
-/// `opentide --json commands`'s recording from the PyPI CLI (opentide
-/// 0.28.1), the goldens' case `commands/json/none/default`.
-const CASE: &str = "commands/json/none/default";
-
-#[test]
-#[ignore = "byte-level replay against the Python oracle: run by hand with --run-ignored only"]
-fn the_binary_prints_the_pypi_command_tree() {
-    use opentide_compare::normalise::{Volatile, opentide_version};
-    use opentide_compare::{Case, Normalisation, Run, compare_normalised};
-
-    let output = Command::new(env!("CARGO_BIN_EXE_opentide"))
-        .args(["--json", "commands"])
-        .env_clear()
-        .output()
-        .unwrap();
-    let printed = String::from_utf8(output.stdout).unwrap();
-    assert!(printed.contains(&format!("\"version\":\"{}\"", opentide::cli::VERSION)));
-    let recorded = common::repo().join("tests/golden/cases").join(CASE);
-    let read = |name: &str| std::fs::read_to_string(recorded.join(name)).unwrap();
-    // The versions differ (the crate's, the package's), as they do between
-    // the goldens' two engines; the goldens' comparator and their ledger
-    // (APPROVED_DIFFS.toml: the approved additions) judge the rest.
-    let oracle = Run {
-        exit_code: 0,
-        stdout: opentide_version(&read("stdout"), "0.28.1").into_bytes(),
-        stderr: read("stderr").into_bytes(),
-        files: std::collections::BTreeMap::new(),
-    };
-    let candidate = Run {
-        exit_code: output.status.code().unwrap(),
-        stdout: opentide_version(&printed, opentide::cli::VERSION).into_bytes(),
-        stderr: output.stderr,
-        files: std::collections::BTreeMap::new(),
-    };
-    let ledger = opentide_compare::ledger::Ledger::parse(
-        &std::fs::read_to_string(common::repo().join("tests/golden/APPROVED_DIFFS.toml")).unwrap(),
-    )
-    .unwrap();
-    let report = compare_normalised(
-        Case {
-            command: "commands",
-            id: CASE,
-        },
-        (oracle, &Volatile::default()),
-        (candidate, &Volatile::default()),
-        Normalisation::default(),
-        &ledger,
-    );
-    assert!(
-        report.equal,
-        "opentide --json commands differs from the PyPI CLI's: {}",
-        report.to_json().unwrap()
-    );
-}
 
 #[test]
 fn the_binary_reports_a_usage_error_as_the_cli_does() {

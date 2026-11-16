@@ -1,6 +1,6 @@
 ---
 source: crates/opentide-cli/tests/render.rs
-expression: lint_fault_frames_plain
+expression: candidate
 ---
 note[metadata_recommended]: Recommended metadata missing: organisation
   ╭─▶ objects/objectives/hidden-spray-objective-0004.yaml:3:1
@@ -309,7 +309,7 @@ error[yaml_parse]: Could not parse object YAML: found character that cannot star
    │
 67 │       lookback: "2h"
 68 │    indent: tab
-   │ ━
+   │ ━━━
    │
    ╰─ note: while scanning for the next token
 
@@ -734,5 +734,3 @@ error[yaml_parse]: Could not parse object YAML: expected a mapping at the top of
 warning[filename_mismatch]: Filename 'hidden-downgrade-threat-0005-v2.yaml' does not match slugify(name)='hidden-downgrade-threat-0005'
   ╭─▶ objects/threats/hidden-downgrade-threat-0005-v2.yaml
   ╰─ help: rename it to objects/threats/hidden-downgrade-threat-0005.yaml
-
-

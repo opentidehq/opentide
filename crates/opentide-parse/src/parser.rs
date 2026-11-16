@@ -157,10 +157,33 @@ impl<'i> Parser<'i> {
     /// Where the current token is; `None` at end of input, and once the
     /// parser has stalled (as [`Parser::nth`]).
     pub fn current_range(&self) -> Option<TextRange> {
+        self.nth_range(0)
+    }
+
+    /// Where the `n`th significant token ahead is; `None` past the last one,
+    /// and once the parser has stalled. With [`Parser::nth`] it lets a
+    /// grammar read layout the kinds do not carry: whether two tokens touch
+    /// (`nth_range(0)` ends where `nth_range(1)` starts) or what follows a
+    /// keyword in the source (a context keyword, Kibana's trailing `or`).
+    pub fn nth_range(&self, n: usize) -> Option<TextRange> {
+        // Look-ahead like `nth`: it burns fuel, so a loop that only reads
+        // ranges stalls instead of hanging.
+        let fuel = self.fuel.get();
+        if fuel == 0 {
+            self.stalled.set(true);
+        } else {
+            self.fuel.set(fuel - 1);
+        }
         if self.stalled.get() {
             return None;
         }
-        self.input.significant(self.pos).map(|l| l.range)
+        self.input.significant(self.pos + n).map(|l| l.range)
+    }
+
+    /// The source text, for a grammar that must look past the tokens (the
+    /// byte after a keyword) with [`Parser::nth_range`].
+    pub fn source(&self) -> &'i str {
+        self.input.source()
     }
 
     /// Whether the current token is `kind`; a miss adds `kind` to the

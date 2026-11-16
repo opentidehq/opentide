@@ -24,10 +24,10 @@ Commands:
   codegen       Write the artifacts generated from the Rust model (the platform templates); `--check` compares them (UC-1.8, #814)
   mcp           Record the MCP sessions from the Python server and replay them against the Rust server (UC-3.7, #829)
   cassettes     The recorded-HTTP cassettes of tests/cassettes (UC-4.1, #831)
-  golden        Record what the frozen Python CLI does, and check an engine against the recordings (tests/golden/README.md); `golden help` lists the options
+  golden        Record what the frozen Python CLI does, and check an engine against the recordings (tests/golden/README.md); `golden --help` lists the commands
   bench         Run the benchmarks against their budgets (UC-0.8, #806)
   payloads      The deploy compile's request bodies against the oracle's (UC-3.1, #823)
-  vocab         The vocabularies: sync, generate, compare and ingest (UC-1.6, #812); `vocab help` lists the options
+  vocab         The vocabularies: sync, generate, compare and ingest (UC-1.6, #812); `vocab --help` lists the commands
   schema        The object models against the oracle: their JSON Schemas, and their verdict on every object file of every corpus (UC-1.3, #809)
   spec-fields   Check every model field's description against its row in the field tables of the specifications checkout
   stubs         Generate src/opentide/_native/models.pyi and sdk.pyi from the extension's introspection data (UC-1.9, #815; UC-5.2b, #837)
@@ -39,9 +39,9 @@ Options:
 
 $ xtask codegen --frobnicate
 ? 2
-xtask codegen: unknown option `--frobnicate`
+error: unexpected argument '--frobnicate' found
 
-usage: cargo xtask codegen [--check [--oracle]]
+Usage: cargo xtask codegen [OPTIONS]
 ...
 
 $ xtask frobnicate

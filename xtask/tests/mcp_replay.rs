@@ -10,8 +10,9 @@
 
 use std::path::{Path, PathBuf};
 
+use clap::{Command, FromArgMatches, Subcommand};
 use serde_json::json;
-use xtask::mcp::{Exchange, Launch, Recording, run};
+use xtask::mcp::{Cmd, Exchange, Launch, Recording, run};
 
 /// A stand-in interpreter in `dir`: `-c` prints the package directory,
 /// `-m opentide ... mcp start` answers each request on stdout, after
@@ -74,13 +75,28 @@ fn recording(dir: &Path, name: &str, launch: Launch, data: &str) -> PathBuf {
     path
 }
 
-fn args(python: &Path, rest: &[&Path]) -> Vec<String> {
-    ["replay", "--engine", "rust", "--show-approved", "--python"]
-        .iter()
-        .map(|arg| (*arg).to_owned())
-        .chain(std::iter::once(python.display().to_string()))
-        .chain(rest.iter().map(|path| path.display().to_string()))
-        .collect()
+/// `cargo xtask mcp <argv>`, parsed as the command line does.
+fn parse(argv: &[&str]) -> Result<Cmd, clap::Error> {
+    let command = Cmd::augment_subcommands(Command::new("mcp").subcommand_required(true));
+    let matches =
+        command.try_get_matches_from(std::iter::once("mcp").chain(argv.iter().copied()))?;
+    Cmd::from_arg_matches(&matches)
+}
+
+/// `mcp replay --engine rust --show-approved --python PYTHON FILES...`.
+fn args(python: &Path, rest: &[&Path]) -> Cmd {
+    let python = python.display().to_string();
+    let rest: Vec<String> = rest.iter().map(|path| path.display().to_string()).collect();
+    let mut argv = vec![
+        "replay",
+        "--engine",
+        "rust",
+        "--show-approved",
+        "--python",
+        &python,
+    ];
+    argv.extend(rest.iter().map(String::as_str));
+    parse(&argv).unwrap()
 }
 
 #[test]
@@ -163,27 +179,24 @@ fn a_recording_must_name_a_fixture_of_the_sessions() {
 
 #[test]
 fn the_command_line_replays_against_rust_and_records_from_a_release() {
-    let strings = |args: &[&str]| -> Vec<String> { args.iter().map(|a| (*a).to_owned()).collect() };
-    let error = |args: &[&str]| format!("{:#}", run(&strings(args)).unwrap_err());
-    assert_eq!(run(&[]).unwrap(), 2);
-    assert_eq!(run(&strings(&["help"])).unwrap(), 0);
-    assert_eq!(run(&strings(&["replay", "--help"])).unwrap(), 0);
-    assert!(error(&["play"]).starts_with("unknown command `play`"));
-    assert!(error(&["replay", "--fast"]).starts_with("unknown option --fast"));
-    assert!(error(&["replay", "--engine"]).starts_with("--engine NAME"));
-    assert!(error(&["replay", "a.jsonl"]).starts_with("replay needs --engine rust"));
-    assert!(
-        error(&["replay", "--engine", "python", "a.jsonl"])
-            .starts_with("--engine python: the Rust server is opentide's only one")
-    );
-    assert!(error(&["replay", "--engine", "rust"]).starts_with("replay needs recordings"));
-    assert!(error(&["record"]).starts_with("record needs --python PATH"));
+    let usage = |argv: &[&str]| parse(argv).err().unwrap().exit_code();
+    assert_eq!(usage(&[]), 2);
+    assert_eq!(usage(&["help"]), 0);
+    assert_eq!(usage(&["replay", "--help"]), 0);
+    assert_eq!(usage(&["play"]), 2);
+    assert_eq!(usage(&["replay", "--fast"]), 2);
+    assert_eq!(usage(&["replay", "--engine"]), 2);
+    assert_eq!(usage(&["replay", "a.jsonl"]), 2, "no --engine");
+    assert_eq!(usage(&["replay", "--engine", "python", "a.jsonl"]), 2);
+    assert_eq!(usage(&["replay", "--engine", "rust"]), 2, "no recordings");
+    assert_eq!(usage(&["record"]), 2, "no --python or --oracle");
     // A session that does not exist records nothing.
     let dir = tempfile::tempdir().unwrap();
     let python = stand_in(dir.path(), "python", "", "");
     let python = python.display().to_string();
+    let command = parse(&["record", "--python", &python, "--only", "nope"]).unwrap();
     assert_eq!(
-        error(&["record", "--python", &python, "--only", "nope"]),
+        format!("{:#}", run(&command).unwrap_err()),
         "no session `nope`"
     );
 }

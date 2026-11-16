@@ -10,10 +10,8 @@
     missing_docs,
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
-#![expect(
-    clippy::too_many_lines,
-    reason = "engine dispatchers match every node kind in one function"
-)]
+
+mod keywords;
 mod markdown;
 
 use opentide_core::{ByteSpan, LanguageId, LineIndex, Range};
@@ -23,6 +21,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, OnceLock, RwLock};
 use thiserror::Error;
 
+pub use keywords::{Capture, Keywords, keywords};
 pub use markdown::highlight_markdown_line;
 
 pub const SPEC_TOML: &str = include_str!(concat!(env!("OPENTIDE_ASSETS"), "/highlights/spec.toml"));
@@ -833,12 +832,20 @@ pub fn tm_scope_name(language: LanguageId) -> String {
 }
 
 /// Generate TextMate / Monaco / Helix maps from the frozen spec.
-#[expect(
-    clippy::expect_used,
-    reason = "a regex literal: an invalid pattern fails every test that reaches it"
-)]
+///
+/// The keywords and punctuation come from the language's `KEYWORDS` table
+/// when it has one ([`keywords`]), else from its `highlights.scm`.
 pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde_json::Value {
-    let scm = highlights_scm(language);
+    generate_tm_language_from(language, spec, keywords::language_pairs(language))
+}
+
+/// [`generate_tm_language`] over explicit `(token, capture name)` pairs.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+fn generate_tm_language_from(
+    language: LanguageId,
+    spec: &HighlightSpec,
+    pairs: Vec<(String, String)>,
+) -> serde_json::Value {
     let mut patterns: Vec<serde_json::Value> = Vec::new();
     let comment_tm = spec
         .captures
@@ -958,15 +965,7 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
             }));
         }
     }
-    let mut by_capture: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    let re = Regex::new(r#""([^"\\]+)"\s+@([A-Za-z0-9_.]+)"#).expect("regex");
-    for cap in re.captures_iter(scm) {
-        by_capture
-            .entry(cap[2].to_string())
-            .or_default()
-            .insert(cap[1].to_string());
-    }
-    for (capture, tokens) in &by_capture {
+    for (capture, tokens) in &keywords::by_capture(pairs) {
         let Some(maps) = spec.captures.get(capture) else {
             continue;
         };
