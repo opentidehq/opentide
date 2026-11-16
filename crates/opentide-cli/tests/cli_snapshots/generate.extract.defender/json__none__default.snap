@@ -32,6 +32,5 @@ exit: 1
   "detail": "You must first have Defender for Endpoint tenants configured to initiate the import",
   "event": "defender_tenants_not_configured",
   "level": "critical",
-  "logger": "opentide.extraction.mde_importer",
   "timestamp": "0000-00-00 00:00:00"
 }

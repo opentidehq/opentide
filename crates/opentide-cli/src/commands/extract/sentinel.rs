@@ -27,7 +27,6 @@ use super::{
 };
 
 const SENTINEL: &str = "sentinel";
-const LOGGER: &str = "opentide.extraction.sentinel_importer";
 /// Every line holding it is left out of a file (`OPENTIDE::REMOVE`).
 const REMOVE: &str = "OPENTIDE::REMOVE";
 
@@ -621,7 +620,6 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
         tracing::error!(
             detail = "You must first have Sentinel tenants configured to initiate the import",
             advice = "run 'opentide setup platforms --sentinel'",
-            logger = LOGGER,
             critical = true,
             "sentinel_tenants_not_configured"
         );
@@ -630,7 +628,7 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
     let environment = Environment::from_pairs(cx.env.iter());
     // Display names are not unique in Sentinel; never overwrite a file from this run.
     let mut written: Vec<String> = Vec::new();
-    let mut skipped = Skipped::new(LOGGER, "sentinel_import_rule_skipped");
+    let mut skipped = Skipped::new("sentinel_import_rule_skipped");
     for configured in &tenants {
         let (tenant, http) = tenant(
             SENTINEL,

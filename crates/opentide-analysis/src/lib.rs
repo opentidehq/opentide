@@ -12,10 +12,6 @@
     missing_docs,
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
-#![expect(
-    clippy::too_many_lines,
-    reason = "engine dispatchers match every node kind in one function"
-)]
 pub use opentide_core::datasets::{
     DatasetKind, Declaration, DeclaredColumn, DeclaredDatasets, DeclaredSource,
 };
@@ -139,6 +135,10 @@ pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<ElasticTenant> {
 /// workspace, so a host checking many files of one workspace calls it file
 /// by file: the object's own checks are `validate`'s (UC-2.6, #821) and its
 /// platform blocks' are [`analyze_blocks`], which `lint` reads.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one arm per language: kept whole; split when next touched"
+)]
 pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResponse {
     match request.language {
         LanguageId::Kql => {
