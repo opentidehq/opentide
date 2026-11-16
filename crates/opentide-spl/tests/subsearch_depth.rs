@@ -68,3 +68,18 @@ fn a_hundred_thousand_nested_subsearches_do_not_overflow() {
         );
     }
 }
+
+/// While a walk runs, no check reads a closed subsearch's text byte by byte:
+/// each jumps over it by its pair, so a level never rescans the levels below
+/// it (perf's search terms did, 256 levels times the text). Counted, debug
+/// builds only.
+#[cfg(debug_assertions)]
+#[test]
+fn no_check_rescans_a_closed_subsearch() {
+    for source in shapes(300).into_iter().take(4) {
+        let head: String = source.chars().take(60).collect();
+        let before = opentide_spl::nested_scans();
+        opentide_spl::analyze(&source);
+        assert_eq!(opentide_spl::nested_scans() - before, 0, "`{head}…`");
+    }
+}

@@ -143,6 +143,7 @@ pub(crate) fn end_of_brackets(source: &str, start: usize, end: usize) -> usize {
     if let Some(close) = closing_bracket(source, start) {
         return if close < end { close + 1 } else { end };
     }
+    count_nested_scan();
     let bytes = source.as_bytes();
     let mut depth = 0i32;
     let mut i = start;
@@ -291,6 +292,28 @@ fn top_level(
         out.push((stage_start, end));
     }
     out
+}
+
+#[cfg(debug_assertions)]
+thread_local! {
+    static NESTED_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Notes a scan into a subsearch's text by a check that could not jump over
+/// it (outside a walk, or a `[` never closed). Debug builds only.
+#[inline]
+pub(crate) fn count_nested_scan() {
+    #[cfg(debug_assertions)]
+    NESTED_SCANS.set(NESTED_SCANS.get() + 1);
+}
+
+/// How many scans into a subsearch's text this thread made byte by byte
+/// ([`count_nested_scan`]); within an analysis of closed subsearches, none.
+/// Debug builds only, for `tests/subsearch_depth.rs`. Not API.
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub fn nested_scans() -> usize {
+    NESTED_SCANS.get()
 }
 
 /// The source and bracket pairs of the walk running on this thread.
