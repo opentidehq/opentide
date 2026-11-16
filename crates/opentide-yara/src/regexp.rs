@@ -118,6 +118,8 @@ struct Parser<'a> {
     check: Check,
     /// After a `(?u` flag: YARA-X refuses a word boundary in Unicode mode.
     unicode: bool,
+    /// The capture group names so far: YARA-X refuses one twice.
+    names: std::collections::BTreeSet<Vec<u8>>,
 }
 
 /// Check the source of a regexp (the text between the slashes).
@@ -127,6 +129,7 @@ pub fn check(src: &str) -> Check {
         pos: 0,
         check: Check::default(),
         unicode: false,
+        names: std::collections::BTreeSet::new(),
     };
     if src.is_empty() {
         p.error(0, 0, "empty regular expression");
@@ -318,26 +321,50 @@ impl Parser<'_> {
             false
         };
         if name {
-            let len = self.src[self.pos..]
+            // YARA-X's names (regex-syntax): a letter or `_`, then letters,
+            // digits, `_`, `.`, `[`, `]`; each name once.
+            let rest = &self.src[self.pos..];
+            if !rest
+                .first()
+                .is_some_and(|&b| b.is_ascii_alphabetic() || b == b'_')
+            {
+                return None;
+            }
+            let len = rest
                 .iter()
-                .take_while(|&&b| b.is_ascii_alphanumeric() || b == b'_')
+                .take_while(|&&b| {
+                    b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'[' | b']')
+                })
                 .count();
+            let group = rest[..len].to_vec();
             self.pos += len;
-            if len == 0 || self.peek() != Some(b'>') {
+            if self.peek() != Some(b'>') || !self.names.insert(group) {
                 return None;
             }
             self.pos += 1;
             return Some(true);
         }
+        // Flags: each at most once, one `-` followed by a flag, and at
+        // least one flag before `)`.
         let mut negated = false;
+        let mut seen: Vec<u8> = Vec::new();
+        let mut after_dash = false;
         while let Some(c) = self.peek() {
             self.pos += 1;
             match c {
-                b'u' => self.unicode = !negated,
-                b'-' => negated = true,
-                b'i' | b'm' | b's' | b'x' | b'U' | b'R' => {}
-                b':' => return Some(true),
-                b')' => return Some(false),
+                b'-' if !negated => {
+                    negated = true;
+                    after_dash = true;
+                }
+                b'i' | b'm' | b's' | b'x' | b'U' | b'R' | b'u' if !seen.contains(&c) => {
+                    if c == b'u' {
+                        self.unicode = !negated;
+                    }
+                    seen.push(c);
+                    after_dash = false;
+                }
+                b':' if !after_dash => return Some(true),
+                b')' if !after_dash && !seen.is_empty() => return Some(false),
                 _ => return None,
             }
         }
@@ -789,6 +816,37 @@ mod tests {
             "abc\\b{end-half}",
         ] {
             assert!(yara_x(re).is_empty(), "{re}: {:?}", yara_x(re));
+        }
+    }
+
+    /// Group heads as YARA-X 1.23.0 reads them, checked against the wheel.
+    #[test]
+    fn group_heads_follow_yara_x() {
+        for re in [
+            "(?P<n>a)(?P<n>b)",
+            "(?P<n>a)(?<n>b)",
+            "(?<1a>a)",
+            "(?i-)a",
+            "(?-)a",
+            "(?)a",
+            "(?ii)a",
+            "(?i-i)a",
+            "(?i--s)a",
+            "(?i-:a)",
+        ] {
+            assert_eq!(errors(re).len(), 1, "{re}");
+        }
+        for re in [
+            "(?<_a>a)",
+            "(?<a.b>a)",
+            "(?<a[1]>a)",
+            "(?:)a",
+            "(?-i:a)",
+            "(?P<a>x)(?P<b>y)",
+            "(?i)a",
+            "(?is-mx:a)",
+        ] {
+            assert!(errors(re).is_empty(), "{re}: {:?}", errors(re));
         }
     }
 
