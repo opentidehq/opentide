@@ -34,6 +34,12 @@ fn one_huge_token_of_every_kind() {
             format!("a.b[{}] = 1", "z".repeat(MILLION)),
             format!("a.b = {}", "<".repeat(MILLION)),
             format!("a.b = {}", "é".repeat(MILLION / 2)),
+            // Every class of the `Number` and `Whitespace` regexes.
+            format!("a.b = 0x{}", "f".repeat(MILLION)),
+            format!("a.b = 1.{}", "2".repeat(MILLION)),
+            format!("a.b = 1e+{}", "3".repeat(MILLION)),
+            format!("a.b ={}1", " \t\r\n\x0c\x08".repeat(MILLION / 6)),
+            format!("len(a.b, 1.{}) = 1", "2".repeat(MILLION)),
         ] {
             let spans = highlight_captures(&source);
             assert!(!spans.is_empty());
