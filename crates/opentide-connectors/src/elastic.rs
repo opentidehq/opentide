@@ -471,7 +471,7 @@ fn error_payload(answer: &Answer) -> (String, String, String) {
     if !json_type {
         return (String::new(), text.clone(), text);
     }
-    let Some(data) = answer.json() else {
+    let Some(data) = answer.quotable_json() else {
         return (String::new(), text.clone(), text);
     };
     let empty = Json::Object(Object::new());
@@ -1314,7 +1314,7 @@ fn write_failed(
 
 /// `_kibana_error`: Kibana's `message`, else the body's text.
 fn kibana_error(answer: &Answer) -> String {
-    match answer.json() {
+    match answer.quotable_json() {
         Some(body) => match body.get("message").filter(|m| m.is_filled()) {
             Some(message) if body.as_object().is_some() => json_text(message),
             _ => answer.text(),
@@ -1419,6 +1419,7 @@ fn body(answer: &Answer, tenant: &str, what: &str) -> Result<Json, ConnectorErro
         ));
     };
     if answer.status != 200 {
+        let body = answer.quotable_json().unwrap_or(body);
         let mut reason: Option<String> = None;
         if body.as_object().is_some() {
             match body.get("error") {
@@ -2222,6 +2223,47 @@ pub fn advisories(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_error_payload_does_not_quote_the_bearer() {
+        use crate::answer::{TEST_BEARER, answer_to_bearer};
+        let answer = answer_to_bearer(&format!(
+            r#"{{"error":{{"type":"t","reason":"bad {TEST_BEARER}"}}}}"#
+        ));
+        let (kind, reason, blob) = error_payload(&answer);
+        assert_eq!((kind.as_str(), reason.as_str()), ("t", "bad ***"));
+        assert!(!blob.contains(TEST_BEARER), "{blob}");
+    }
+
+    #[test]
+    fn a_refused_query_does_not_quote_the_bearer() {
+        use crate::answer::{TEST_BEARER, answer_to_bearer};
+        let refused = |body: &str| match body_of(body).unwrap_err() {
+            ConnectorError::Refused { detail, .. } => detail.unwrap(),
+            other => panic!("{other:?}"),
+        };
+        fn body_of(text: &str) -> Result<Json, ConnectorError> {
+            body(&answer_to_bearer(text), "t", "ES|QL")
+        }
+        for (body, reason) in [
+            (
+                r#"{"error":{"root_cause":[{"reason":"r TOKEN"}]}}"#,
+                "r ***",
+            ),
+            (r#"{"error":{"reason":"e TOKEN"}}"#, "e ***"),
+            (r#"{"error":"plain TOKEN"}"#, "plain ***"),
+            (r#"{"message":"m TOKEN"}"#, "m ***"),
+        ] {
+            assert_eq!(refused(&body.replace("TOKEN", TEST_BEARER)), reason);
+        }
+    }
+
+    #[test]
+    fn kibana_errors_do_not_quote_the_bearer() {
+        use crate::answer::{TEST_BEARER, answer_to_bearer};
+        let answer = answer_to_bearer(&format!(r#"{{"message":"no access for {TEST_BEARER}"}}"#));
+        assert_eq!(kibana_error(&answer), "no access for ***");
+    }
 
     #[test]
     fn query_text_is_read_past_comments_and_strings() {

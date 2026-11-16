@@ -834,7 +834,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     };
     // The scope: every rule file directly in the rules folder, or those the
     // flags select. Reading the rules folder reads the workspace, whose
-    // files that do not load are logged, as the oracle's registry did.
+    // files that do not load are logged.
     let mut warnings = Vec::new();
     let mut rule_files: Vec<PathBuf> = Vec::new();
     let mut scope_label: Option<&str> = Some("selected");

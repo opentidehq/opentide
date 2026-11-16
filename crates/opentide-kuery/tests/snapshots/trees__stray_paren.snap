@@ -1,0 +1,21 @@
+---
+source: crates/opentide-kuery/tests/trees.rs
+expression: "debug_parse(\"a:1) and b\")"
+---
+SourceFile@0..10
+  FieldValueExpression@0..3
+    Field@0..1
+      UnquotedLiteral@0..1
+        Word@0..1 "a"
+    Colon@1..2 ":"
+    UnquotedLiteral@2..3
+      Word@2..3 "1"
+  Error@3..4
+    RParen@3..4 ")"
+  Whitespace@4..5 " "
+  ValueExpression@5..10
+    UnquotedLiteral@5..10
+      Word@5..8 "and"
+      Whitespace@8..9 " "
+      Word@9..10 "b"
+3..3: unexpected (expected `or`, `and`, end of input)
