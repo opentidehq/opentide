@@ -204,35 +204,75 @@ impl<'i> P<'i> {
         }
     }
 
-    /// Whether a `|` stands at the top level of the group that opens at `n`.
-    pub(crate) fn pipe_in_group(&self, n: usize) -> bool {
-        let end = self.after_group(n);
-        let mut depth = 0usize;
-        for at in n..end {
-            match self.nth(at) {
-                K::L_PAREN | K::L_BRACKET | K::L_BRACE => depth += 1,
-                K::R_PAREN | K::R_BRACKET | K::R_BRACE => depth = depth.saturating_sub(1),
-                K::PIPE if depth == 1 => return true,
-                _ => {}
-            }
-        }
-        false
-    }
-
     /// Whether the group that opens at `n` (a `(`) is `( tabular_expression )`
     /// rather than `( expression )`. Both read `(b)`, `(f(1))` and `((b))`,
     /// and the grammar this one replaces took them as tabular: a pipe in the
     /// group, a source operator, or exactly one lone name, call or such group.
+    ///
+    /// A group that holds only another group (`((b))`) is read through, level
+    /// by level, from one scan of the outer group: a deep nest of `(` costs
+    /// one pass and no recursion (one pass per level burnt the parser's fuel
+    /// on 3,000 levels, and recursed once per level).
     pub(crate) fn paren_is_tabular(&self, n: usize) -> bool {
         if self.nth(n) != K::L_PAREN {
             return false;
         }
-        let close = self.after_group(n).saturating_sub(1);
-        self.pipe_in_group(n) || self.tabular_item(n + 1, close)
+        let mut run = 1;
+        while self.nth(n + run) == K::L_PAREN {
+            run += 1;
+        }
+        // For the `(` at `n + k` (k < run): the index after its group, and
+        // whether a `|` stands at its top level.
+        let mut ends: Vec<Option<usize>> = vec![None; run];
+        let mut pipes = vec![false; run];
+        let mut open: Vec<usize> = Vec::new();
+        let mut at = n;
+        let end = loop {
+            match self.nth(at) {
+                K::EOF => break at,
+                K::L_PAREN | K::L_BRACKET | K::L_BRACE => open.push(at),
+                K::R_PAREN | K::R_BRACKET | K::R_BRACE => {
+                    if let Some(opened) = open.pop()
+                        && let Some(slot) = ends.get_mut(opened - n)
+                    {
+                        *slot = Some(at + 1);
+                    }
+                    if open.is_empty() {
+                        break at + 1;
+                    }
+                }
+                K::PIPE => {
+                    if let Some(slot) = open.last().and_then(|&o| pipes.get_mut(o - n)) {
+                        *slot = true;
+                    }
+                }
+                _ => {}
+            }
+            at += 1;
+        };
+        // A group that never closes ends at the end of the input.
+        let end_of = |k: usize| ends[k].unwrap_or(end);
+        let mut k = 0;
+        loop {
+            if pipes[k] {
+                return true;
+            }
+            let close = end_of(k).saturating_sub(1);
+            if k + 1 < run {
+                // `((`: tabular when the inner group is all of the outer one
+                // and is tabular itself.
+                if end_of(k + 1) != close {
+                    return false;
+                }
+                k += 1;
+                continue;
+            }
+            return self.tabular_item(n + k + 1, close);
+        }
     }
 
     /// Whether the tokens `from..close` are one tabular source: a name, a
-    /// call, a group that is tabular, or a source operator.
+    /// call or a source operator (a group is [`P::paren_is_tabular`]'s).
     fn tabular_item(&self, from: usize, close: usize) -> bool {
         match self.nth(from) {
             K::PRINT_KW
@@ -244,7 +284,6 @@ impl<'i> P<'i> {
             | K::FIND_KW => true,
             K::MATERIALIZE_KW => self.nth(from + 1) == K::L_PAREN,
             K::RANGE_KW if self.name_at(from + 1) && self.nth(from + 2) == K::FROM_KW => true,
-            K::L_PAREN => self.after_group(from) == close && self.paren_is_tabular(from),
             K::DYNAMIC_KW | K::TOSCALAR_KW if self.nth(from + 1) == K::L_PAREN => false,
             K::BOOLEAN | K::NULL_KW => false,
             _ if self.name_at(from) => {
