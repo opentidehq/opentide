@@ -133,13 +133,27 @@ fn a_long_unknown_column_is_not_measured_against_every_column() {
         "SecurityEvent | where Account == ['{}'] | take 1",
         "a".repeat(N)
     );
-    let started = Instant::now();
     let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
+    let before = opentide_kql::inspect::columns_measured();
     let _ = analyze_with_catalog(&source, &catalog);
     let _ = hover(&source, 0, Profile::Sentinel);
+    assert_eq!(
+        opentide_kql::inspect::columns_measured(),
+        before,
+        "a name of a million characters was measured against a column"
+    );
+    // A near miss still is.
+    let before = opentide_kql::inspect::columns_measured();
+    let near = analyze_with_catalog(
+        "SecurityEvent | where Acount == 'x' | take 1",
+        &Catalog::for_workspace(Profile::Sentinel, ""),
+    );
+    assert!(opentide_kql::inspect::columns_measured() > before);
     assert!(
-        started.elapsed() < Duration::from_secs(5),
+        near.diagnostics
+            .iter()
+            .any(|d| d.suggestion.as_deref() == Some("Account")),
         "{:?}",
-        started.elapsed()
+        near.diagnostics
     );
 }

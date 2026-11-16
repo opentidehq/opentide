@@ -117,16 +117,34 @@ fn command_words_glue_like_tree_sitter() {
     ]);
 }
 
+/// Fails unless `run(4 * n)` takes less than 8 times `run(n)`: linear work
+/// takes 4 times as long, quadratic 16 times. Each is the best of three runs,
+/// so a busy machine slows both alike; a run under 50 ms passes whatever the
+/// ratio, its noise being larger than it.
+fn assert_linear(name: &str, n: usize, run: impl Fn(usize)) {
+    let best = |k: usize| {
+        (0..3)
+            .map(|_| {
+                let started = std::time::Instant::now();
+                run(k);
+                started.elapsed()
+            })
+            .min()
+            .unwrap_or_default()
+    };
+    let (small, large) = (best(n), best(4 * n));
+    assert!(
+        large < std::time::Duration::from_millis(50) || large < small * 8,
+        "{name}: {small:?} for {n}, {large:?} for {}: not linear",
+        4 * n
+    );
+}
+
 #[test]
 fn a_run_of_equals_after_a_command_is_linear() {
-    let source = format!("| stats {}", "a=".repeat(20_000));
-    let started = std::time::Instant::now();
-    let _ = parse(&source);
-    assert!(
-        started.elapsed() < std::time::Duration::from_secs(3),
-        "{:?}",
-        started.elapsed()
-    );
+    assert_linear("a run of equals", 5_000, |n| {
+        let _ = parse(&format!("| stats {}", "a=".repeat(n)));
+    });
 }
 
 #[test]

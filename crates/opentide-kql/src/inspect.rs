@@ -9,6 +9,23 @@ use crate::syntax::{ALL, SyntaxKind as K, SyntaxNode};
 use rowan::NodeOrToken;
 use std::collections::BTreeSet;
 
+thread_local! {
+    static COLUMNS_MEASURED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many columns an unknown column's name was measured against
+/// (Levenshtein) on this thread: a test bounds it, so measuring a long name
+/// against every column cannot come back unnoticed (a work count, not a wall
+/// clock).
+#[must_use]
+pub fn columns_measured() -> usize {
+    COLUMNS_MEASURED.with(std::cell::Cell::get)
+}
+
+pub(crate) fn count_column_measured() {
+    COLUMNS_MEASURED.with(|n| n.set(n.get() + 1));
+}
+
 /// The lexemes of `source` as `(start, end, is_trivia)`: whitespace and
 /// comments are trivia.
 #[must_use]
