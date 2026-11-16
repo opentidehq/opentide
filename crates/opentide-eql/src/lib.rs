@@ -334,6 +334,19 @@ fn parse_error_message(problem: &tree::Problem, source: &str) -> String {
     if near.starts_with('=') && !near.starts_with("==") {
         return "EQL syntax error: use `==` for equality; `=` is not a comparison".into();
     }
+    // The lexer cuts an unclosed `/*` as `/` and `*`: name the comment, not the operator.
+    if source
+        .get(problem.token.start..)
+        .is_some_and(|rest| rest.starts_with("/*"))
+    {
+        return "EQL syntax error: this `/*` comment is never closed".into();
+    }
+    // A quote the lexer could not close is a token of its own.
+    match near {
+        "\"" | "'" => return format!("EQL syntax error: this {near} string is never closed"),
+        "`" => return "EQL syntax error: this ` quoted name is never closed".into(),
+        _ => {}
+    }
     let expected = problem
         .expected
         .as_deref()
@@ -1432,6 +1445,22 @@ mod tests {
             early.starts_with("EQL syntax error: the query ends too early; expected "),
             "{early}"
         );
+        assert_eq!(
+            parse_error("process where /* unterminated true"),
+            "EQL syntax error: this `/*` comment is never closed"
+        );
+        for (unclosed, message) in [
+            ("process where a == \"x", "this \" string is never closed"),
+            ("process where a == 'x", "this ' string is never closed"),
+            ("process where a == \"\"\"x", "this \" string is never closed"),
+            ("process where `a == 1", "this ` quoted name is never closed"),
+        ] {
+            assert_eq!(
+                parse_error(unclosed),
+                format!("EQL syntax error: {message}"),
+                "{unclosed}"
+            );
+        }
         let near = parse_error("process where a == 1)");
         assert!(
             near.starts_with("EQL syntax error near `)`; expected ") && near.contains("`and`"),

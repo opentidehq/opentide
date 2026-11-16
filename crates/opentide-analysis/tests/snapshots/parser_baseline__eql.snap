@@ -3,81 +3,37 @@ source: crates/opentide-analysis/tests/parser_baseline.rs
 expression: baseline(language)
 ---
 == conformance/external/eql/aws_cloudtrail_bucket_block_public_access_weakened.broken.eql
-eql_parse_error error 0:0-0:451 EQL syntax error near `any`
-eql_case_sensitive warning 0:11-0:22 event category `eventSource` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:46-0:55 event category `eventName` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:56-0:84 event category `PutBucketPublicAccessBlock` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:91-0:108 event category `requestParameters` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:109-0:139 event category `PublicAccessBlockConfiguration` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:140-0:161 event category `RestrictPublicBuckets` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:173-0:190 event category `requestParameters` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:191-0:221 event category `PublicAccessBlockConfiguration` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:222-0:237 event category `BlockPublicAcls` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:249-0:266 event category `requestParameters` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:267-0:297 event category `PublicAccessBlockConfiguration` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:298-0:315 event category `BlockPublicPolicy` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:327-0:344 event category `requestParameters` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:345-0:375 event category `PublicAccessBlockConfiguration` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:376-0:392 event category `IgnorePublicAcls` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:407-0:416 event category `errorCode` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:417-0:426 event category `Success` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:432-0:441 event category `errorCode` is compared case-sensitively; ECS categories are lower case
+eql_parse_error error 0:4-0:9 EQL syntax error near `wehre`; expected `where`
 0..3 type
-4..9 variable
 10..11 punctuation.bracket
-11..22 type
 22..23 operator
-23..41 type
-42..45 variable
-46..55 type
+42..45 keyword
 55..56 operator
-56..84 type
 84..85 punctuation.bracket
 86..89 keyword
 90..91 punctuation.bracket
-91..108 type
 108..109 punctuation.delimiter
-109..139 type
 139..140 punctuation.delimiter
-140..161 type
 161..162 operator
-162..169 type
-170..172 variable
-173..190 type
+170..172 keyword
 190..191 punctuation.delimiter
-191..221 type
 221..222 punctuation.delimiter
-222..237 type
 237..238 operator
-238..245 type
-246..248 variable
-249..266 type
+246..248 keyword
 266..267 punctuation.delimiter
-267..297 type
 297..298 punctuation.delimiter
-298..315 type
 315..316 operator
-316..323 type
-324..326 variable
-327..344 type
+324..326 keyword
 344..345 punctuation.delimiter
-345..375 type
 375..376 punctuation.delimiter
-376..392 type
 392..393 operator
-393..400 type
 400..401 punctuation.bracket
 402..405 keyword
 406..407 punctuation.bracket
-407..416 type
 416..417 operator
-417..426 type
-427..429 variable
+427..429 keyword
 430..431 punctuation.bracket
-431..432 operator
-432..441 type
 442..444 operator
-445..449 constant
 449..450 punctuation.bracket
 450..451 punctuation.bracket
 == conformance/external/eql/aws_cloudtrail_bucket_block_public_access_weakened.eql
@@ -140,25 +96,13 @@ eql_case_sensitive warning 0:432-0:441 event category `errorCode` is compared ca
 449..450 punctuation.bracket
 450..451 punctuation.bracket
 == conformance/external/eql/azure_aadhybridhealth_adfs_new_server.broken.eql
-eql_parse_error error 0:0-0:157 EQL syntax error near `any`
-eql_case_sensitive warning 0:19-0:35 event category `Administrative` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:40-0:50 event category `resourceId` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:51-0:74 event category `*AdFederationService*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:79-0:92 event category `operationName` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:93-0:157 event category `MICROSOFT.ADHYBRIDHEALTHSERVICE/SERVICES/SERVICEMEMBERS/ACTION` is compared case-sensitively; ECS categories are lower case
+eql_parse_error error 0:4-0:9 EQL syntax error near `wehre`; expected `where`
 0..3 type
-4..9 variable
-10..18 type
 18..19 operator
-19..35 type
-36..39 variable
-40..50 type
+36..39 keyword
 50..51 operator
-51..74 type
-75..78 variable
-79..92 type
+75..78 keyword
 92..93 operator
-93..157 type
 == conformance/external/eql/azure_aadhybridhealth_adfs_new_server.eql
 0..3 type
 4..9 keyword
@@ -174,20 +118,12 @@ eql_case_sensitive warning 0:93-0:157 event category `MICROSOFT.ADHYBRIDHEALTHSE
 92..93 operator
 93..157 string
 == conformance/external/eql/dns_query_win_cloudflared_communication.broken.eql
-eql_parse_error error 0:0-0:128 EQL syntax error near `any`
-eql_case_sensitive warning 0:10-0:19 event category `QueryName` is compared case-sensitively; ECS categories are lower case
+eql_parse_error error 0:4-0:9 EQL syntax error near `wehre`; expected `where`
 0..3 type
-4..9 variable
-10..19 type
-20..24 operator
 26..27 punctuation.bracket
-27..48 type
 48..49 punctuation.delimiter
-50..79 type
 79..80 punctuation.delimiter
-81..101 type
 101..102 punctuation.delimiter
-103..127 type
 127..128 punctuation.bracket
 == conformance/external/eql/dns_query_win_cloudflared_communication.eql
 0..3 type
@@ -204,33 +140,20 @@ eql_case_sensitive warning 0:10-0:19 event category `QueryName` is compared case
 103..127 string
 127..128 punctuation.bracket
 == conformance/external/eql/file_event_lnx_persistence_sudoers_files.broken.eql
-eql_parse_error error 0:0-0:156 EQL syntax error near `any`
-eql_case_sensitive warning 0:11-0:25 event category `TargetFilename` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:80-0:85 event category `Image` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:107-0:121 event category `TargetFilename` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:122-0:154 event category `/etc/sudoers.d/README.dpkg-new` is compared case-sensitively; ECS categories are lower case
+eql_parse_error error 0:4-0:9 EQL syntax error near `wehre`; expected `where`
 0..3 type
-4..9 variable
 10..11 punctuation.bracket
-11..25 type
-26..30 operator
 32..33 punctuation.bracket
-33..47 type
 47..48 punctuation.delimiter
-49..67 type
 67..68 punctuation.bracket
 68..69 punctuation.bracket
 70..73 keyword
 74..75 punctuation.bracket
 75..78 keyword
 79..80 punctuation.bracket
-80..85 type
 85..86 operator
-86..102 type
-103..106 variable
-107..121 type
+103..106 keyword
 121..122 operator
-122..154 type
 154..155 punctuation.bracket
 155..156 punctuation.bracket
 == conformance/external/eql/file_event_lnx_persistence_sudoers_files.eql
@@ -259,42 +182,24 @@ eql_case_sensitive warning 0:122-0:154 event category `/etc/sudoers.d/README.dpk
 154..155 punctuation.bracket
 155..156 punctuation.bracket
 == conformance/external/eql/lnx_auditd_audio_capture.broken.eql
-eql_parse_error error 0:0-0:138 EQL syntax error near `any`
-eql_case_sensitive warning 0:16-0:24 event category `EXECVE` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:80-0:89 event category `SYSCALL` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:115-0:122 event category `SYSCALL` is compared case-sensitively; ECS categories are lower case
+eql_parse_error error 0:4-0:9 EQL syntax error near `wehre`; expected `where`
 0..3 type
-4..9 variable
 10..11 punctuation.bracket
-11..15 variable
 15..16 operator
-16..24 type
-25..28 variable
-29..31 type
+25..28 keyword
 31..32 operator
-32..41 type
-42..45 variable
-46..48 type
+42..45 keyword
 48..49 operator
-49..54 type
-55..58 variable
-59..61 type
+55..58 keyword
 61..62 operator
-62..69 type
 69..70 punctuation.bracket
 71..73 keyword
 74..75 punctuation.bracket
-75..79 type
 79..80 operator
-80..89 type
-90..93 variable
-94..97 type
+90..93 keyword
 97..98 operator
-98..110 type
-111..114 variable
-115..122 type
+111..114 keyword
 122..123 operator
-123..137 type
 137..138 punctuation.bracket
 == conformance/external/eql/lnx_auditd_audio_capture.eql
 0..3 type
@@ -331,56 +236,30 @@ eql_case_sensitive warning 0:115-0:122 event category `SYSCALL` is compared case
 123..137 string
 137..138 punctuation.bracket
 == conformance/external/eql/net_connection_lnx_crypto_mining_indicators.broken.eql
-eql_parse_error error 0:0-0:509 EQL syntax error near `any`
-eql_case_sensitive warning 0:10-0:29 event category `DestinationHostname` is compared case-sensitively; ECS categories are lower case
+eql_parse_error error 0:4-0:9 EQL syntax error near `wehre`; expected `where`
 0..3 type
-4..9 variable
-10..29 type
-30..34 operator
 36..37 punctuation.bracket
-37..55 type
 55..56 punctuation.delimiter
-57..73 type
 73..74 punctuation.delimiter
-75..91 type
 91..92 punctuation.delimiter
-93..109 type
 109..110 punctuation.delimiter
-111..127 type
 127..128 punctuation.delimiter
-129..150 type
 150..151 punctuation.delimiter
-152..173 type
 173..174 punctuation.delimiter
-175..192 type
 192..193 punctuation.delimiter
-194..216 type
 216..217 punctuation.delimiter
-218..240 type
 240..241 punctuation.delimiter
-242..269 type
 269..270 punctuation.delimiter
-271..298 type
 298..299 punctuation.delimiter
-300..324 type
 324..325 punctuation.delimiter
-326..348 type
 348..349 punctuation.delimiter
-350..372 type
 372..373 punctuation.delimiter
-374..391 type
 391..392 punctuation.delimiter
-393..411 type
 411..412 punctuation.delimiter
-413..429 type
 429..430 punctuation.delimiter
-431..443 type
 443..444 punctuation.delimiter
-445..465 type
 465..466 punctuation.delimiter
-467..487 type
 487..488 punctuation.delimiter
-489..508 type
 508..509 punctuation.bracket
 == conformance/external/eql/net_connection_lnx_crypto_mining_indicators.eql
 0..3 type
@@ -433,27 +312,15 @@ eql_case_sensitive warning 0:10-0:29 event category `DestinationHostname` is com
 489..508 string
 508..509 punctuation.bracket
 == conformance/external/eql/okta_fastpass_phishing_detection.broken.eql
-eql_parse_error error 0:0-0:139 EQL syntax error near `any`
-eql_case_sensitive warning 0:25-0:61 event category `FastPass declined phishing attempt` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:81-0:90 event category `FAILURE` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:95-0:104 event category `eventType` is compared case-sensitively; ECS categories are lower case
+eql_parse_error error 0:4-0:9 EQL syntax error near `wehre`; expected `where`
 0..3 type
-4..9 variable
-10..17 type
 17..18 punctuation.delimiter
-18..24 type
 24..25 operator
-25..61 type
-62..65 variable
-66..73 type
+62..65 keyword
 73..74 punctuation.delimiter
-74..80 type
 80..81 operator
-81..90 type
-91..94 variable
-95..104 type
+91..94 keyword
 104..105 operator
-105..139 type
 == conformance/external/eql/okta_fastpass_phishing_detection.eql
 0..3 type
 4..9 keyword
@@ -473,93 +340,35 @@ eql_case_sensitive warning 0:95-0:104 event category `eventType` is compared cas
 104..105 operator
 105..139 string
 == conformance/external/eql/posh_ps_aadinternals_cmdlets_execution.broken.eql
-eql_parse_error error 0:0-0:534 EQL syntax error near `any`
-eql_case_sensitive warning 0:10-0:25 event category `ScriptBlockText` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:33-0:47 event category `*Add-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:49-0:69 event category `*ConvertTo-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:71-0:89 event category `*Disable-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:91-0:108 event category `*Enable-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:110-0:127 event category `*Export-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:129-0:144 event category `*Find-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:146-0:160 event category `*Get-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:162-0:178 event category `*Grant-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:180-0:201 event category `*Initialize-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:203-0:221 event category `*Install-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:223-0:240 event category `*Invoke-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:242-0:257 event category `*Join-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:259-0:273 event category `*New-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:275-0:290 event category `*Open-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:292-0:307 event category `*Read-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:309-0:328 event category `*Register-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:330-0:347 event category `*Remove-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:349-0:365 event category `*Reset-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:367-0:385 event category `*Resolve-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:387-0:405 event category `*Restore-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:407-0:422 event category `*Save-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:424-0:441 event category `*Search-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:443-0:458 event category `*Send-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:460-0:474 event category `*Set-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:476-0:492 event category `*Start-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:494-0:514 event category `*Unprotect-AADInt*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:516-0:533 event category `*Update-AADInt*` is compared case-sensitively; ECS categories are lower case
+eql_parse_error error 0:4-0:9 EQL syntax error near `wehre`; expected `where`
 0..3 type
-4..9 variable
-10..25 type
-26..30 operator
 32..33 punctuation.bracket
-33..47 type
 47..48 punctuation.delimiter
-49..69 type
 69..70 punctuation.delimiter
-71..89 type
 89..90 punctuation.delimiter
-91..108 type
 108..109 punctuation.delimiter
-110..127 type
 127..128 punctuation.delimiter
-129..144 type
 144..145 punctuation.delimiter
-146..160 type
 160..161 punctuation.delimiter
-162..178 type
 178..179 punctuation.delimiter
-180..201 type
 201..202 punctuation.delimiter
-203..221 type
 221..222 punctuation.delimiter
-223..240 type
 240..241 punctuation.delimiter
-242..257 type
 257..258 punctuation.delimiter
-259..273 type
 273..274 punctuation.delimiter
-275..290 type
 290..291 punctuation.delimiter
-292..307 type
 307..308 punctuation.delimiter
-309..328 type
 328..329 punctuation.delimiter
-330..347 type
 347..348 punctuation.delimiter
-349..365 type
 365..366 punctuation.delimiter
-367..385 type
 385..386 punctuation.delimiter
-387..405 type
 405..406 punctuation.delimiter
-407..422 type
 422..423 punctuation.delimiter
-424..441 type
 441..442 punctuation.delimiter
-443..458 type
 458..459 punctuation.delimiter
-460..474 type
 474..475 punctuation.delimiter
-476..492 type
 492..493 punctuation.delimiter
-494..514 type
 514..515 punctuation.delimiter
-516..533 type
 533..534 punctuation.bracket
 == conformance/external/eql/posh_ps_aadinternals_cmdlets_execution.eql
 0..3 type
@@ -622,46 +431,26 @@ eql_case_sensitive warning 0:516-0:533 event category `*Update-AADInt*` is compa
 516..533 string
 533..534 punctuation.bracket
 == conformance/external/eql/proc_creation_lnx_awk_shell_spawn.broken.eql
-eql_parse_error error 0:0-0:196 EQL syntax error near `any`
-eql_case_sensitive warning 0:12-0:17 event category `Image` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:69-0:80 event category `CommandLine` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:81-0:98 event category `*BEGIN {system*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:105-0:116 event category `CommandLine` is compared case-sensitively; ECS categories are lower case
+eql_parse_error error 0:4-0:9 EQL syntax error near `wehre`; expected `where`
 0..3 type
-4..9 variable
 10..11 punctuation.bracket
 11..12 punctuation.bracket
-12..17 type
-18..22 operator
 24..25 punctuation.bracket
-25..32 type
 32..33 punctuation.delimiter
-34..42 type
 42..43 punctuation.delimiter
-44..52 type
 52..53 punctuation.delimiter
-54..62 type
 62..63 punctuation.bracket
 63..64 punctuation.bracket
 65..68 keyword
-69..80 type
 80..81 operator
-81..98 type
 98..99 punctuation.bracket
 100..103 keyword
 104..105 punctuation.bracket
-105..116 type
-117..121 operator
 123..124 punctuation.bracket
-124..137 type
 137..138 punctuation.delimiter
-139..152 type
 152..153 punctuation.delimiter
-154..167 type
 167..168 punctuation.delimiter
-169..180 type
 180..181 punctuation.delimiter
-182..194 type
 194..195 punctuation.bracket
 195..196 punctuation.bracket
 == conformance/external/eql/proc_creation_lnx_awk_shell_spawn.eql
@@ -703,32 +492,15 @@ eql_case_sensitive warning 0:105-0:116 event category `CommandLine` is compared 
 194..195 punctuation.bracket
 195..196 punctuation.bracket
 == conformance/external/eql/proc_creation_macos_applescript.broken.eql
-eql_parse_error error 0:0-0:262 EQL syntax error near `any`
-eql_case_sensitive warning 0:11-0:16 event category `Image` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:36-0:47 event category `CommandLine` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:97-0:108 event category `ParentImage` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:126-0:137 event category `CommandLine` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:156-0:167 event category `CommandLine` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:181-0:192 event category `CommandLine` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:193-0:227 event category `*set imageData to the clipboard*` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:232-0:243 event category `CommandLine` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:244-0:259 event category `*set fileRef*` is compared case-sensitively; ECS categories are lower case
+eql_parse_error error 0:4-0:9 EQL syntax error near `wehre`; expected `where`
 0..3 type
-4..9 variable
 10..11 punctuation.bracket
-11..16 type
 16..17 operator
-17..30 type
-31..34 variable
+31..34 keyword
 35..36 punctuation.bracket
-36..47 type
-48..52 operator
 54..55 punctuation.bracket
-55..63 type
 63..64 punctuation.delimiter
-65..74 type
 74..75 punctuation.delimiter
-76..83 type
 83..84 punctuation.bracket
 84..85 punctuation.bracket
 85..86 punctuation.bracket
@@ -736,26 +508,16 @@ eql_case_sensitive warning 0:244-0:259 event category `*set fileRef*` is compare
 91..92 punctuation.bracket
 92..95 keyword
 96..97 punctuation.bracket
-97..108 type
 108..109 operator
-109..120 type
-121..124 variable
+121..124 keyword
 125..126 punctuation.bracket
-126..137 type
 137..138 operator
-138..151 type
-152..155 variable
-156..167 type
+152..155 keyword
 167..168 operator
-168..176 type
-177..180 variable
-181..192 type
+177..180 keyword
 192..193 operator
-193..227 type
-228..231 variable
-232..243 type
+228..231 keyword
 243..244 operator
-244..259 type
 259..260 punctuation.bracket
 260..261 punctuation.bracket
 261..262 punctuation.bracket
@@ -807,26 +569,15 @@ eql_case_sensitive warning 0:244-0:259 event category `*set fileRef*` is compare
 260..261 punctuation.bracket
 261..262 punctuation.bracket
 == conformance/external/eql/proc_creation_win_auditpol_nt_resource_kit_usage.broken.eql
-eql_parse_error error 0:0-0:154 EQL syntax error near `any`
-eql_case_sensitive warning 0:10-0:21 event category `CommandLine` is compared case-sensitively; ECS categories are lower case
+eql_parse_error error 0:4-0:9 EQL syntax error near `wehre`; expected `where`
 0..3 type
-4..9 variable
-10..21 type
-22..26 operator
 28..29 punctuation.bracket
-29..44 type
 44..45 punctuation.delimiter
-46..62 type
 62..63 punctuation.delimiter
-64..77 type
 77..78 punctuation.delimiter
-79..98 type
 98..99 punctuation.delimiter
-100..116 type
 116..117 punctuation.delimiter
-118..135 type
 135..136 punctuation.delimiter
-137..153 type
 153..154 punctuation.bracket
 == conformance/external/eql/proc_creation_win_auditpol_nt_resource_kit_usage.eql
 0..3 type
@@ -849,35 +600,17 @@ eql_case_sensitive warning 0:10-0:21 event category `CommandLine` is compared ca
 137..153 string
 153..154 punctuation.bracket
 == conformance/external/eql/win_security_access_token_abuse.broken.eql
-eql_parse_error error 0:0-0:142 EQL syntax error near `any`
-eql_case_sensitive warning 0:10-0:17 event category `EventID` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:27-0:36 event category `LogonType` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:43-0:59 event category `LogonProcessName` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:60-0:68 event category `Advapi` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:73-0:98 event category `AuthenticationPackageName` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:99-0:110 event category `Negotiate` is compared case-sensitively; ECS categories are lower case
-eql_case_sensitive warning 0:115-0:133 event category `ImpersonationLevel` is compared case-sensitively; ECS categories are lower case
+eql_parse_error error 0:4-0:9 EQL syntax error near `wehre`; expected `where`
 0..3 type
-4..9 variable
-10..17 type
 17..18 operator
-18..22 number
 23..26 keyword
-27..36 type
 36..37 operator
-37..38 number
 39..42 keyword
-43..59 type
 59..60 operator
-60..68 type
-69..72 variable
-73..98 type
+69..72 keyword
 98..99 operator
-99..110 type
-111..114 variable
-115..133 type
+111..114 keyword
 133..134 operator
-134..142 type
 == conformance/external/eql/win_security_access_token_abuse.eql
 eql_argument_type error 0:18-0:22 a pattern of `:` must be a string, found integer `4624`; use `==` to compare numbers
 eql_argument_type error 0:37-0:38 a pattern of `:` must be a string, found integer `9`; use `==` to compare numbers
@@ -903,7 +636,7 @@ eql_argument_type error 0:37-0:38 a pattern of `:` must be a string, found integ
 133..134 operator
 134..142 string
 == corpus/eql/any__invalid.eql
-eql_parse_error error 0:0-0:3 EQL syntax error near `any`
+eql_parse_error error 0:3-0:3 EQL syntax error: the query ends too early; expected `where`
 0..3 type
 == corpus/eql/any__valid.eql
 0..3 type
@@ -914,13 +647,11 @@ eql_parse_error error 0:0-0:3 EQL syntax error near `any`
 25..27 operator
 28..37 string
 == corpus/eql/comment__invalid.eql
-eql_parse_error error 0:14-0:29 EQL syntax error near `/*`
+eql_parse_error error 0:14-0:15 EQL syntax error: this `/*` comment is never closed
 0..7 type
 8..13 keyword
 14..15 operator
 15..16 operator
-17..29 variable
-30..34 boolean
 == corpus/eql/comment__valid.eql
 0..10 comment
 11..18 type
@@ -928,15 +659,13 @@ eql_parse_error error 0:14-0:29 EQL syntax error near `/*`
 25..37 comment
 38..42 boolean
 == corpus/eql/comparison__invalid.eql
-eql_parse_error error 0:14-0:27 EQL syntax error near `process.pid`
-eql_not_boolean error 0:28-0:29 integer `4` is not a condition: EQL needs a boolean here (a comparison, a predicate, `true` or `false`)
+eql_parse_error error 0:26-0:27 EQL syntax error: use `==` for equality; `=` is not a comparison
 0..7 type
 8..13 keyword
 14..21 property
 21..22 punctuation.delimiter
 22..25 property
 26..27 operator
-28..29 number
 == corpus/eql/comparison__valid.eql
 0..7 type
 8..13 keyword
@@ -952,7 +681,7 @@ eql_not_boolean error 0:28-0:29 integer `4` is not a condition: EQL needs a bool
 47..49 operator
 50..51 number
 == corpus/eql/event_query__invalid.eql
-eql_parse_error error 0:13-0:13 EQL syntax error: missing `identifier`
+eql_parse_error error 0:13-0:13 EQL syntax error: the query ends too early; expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `true`, `+`, `-`, `(`, or `?`
 0..7 type
 8..13 keyword
 == corpus/eql/event_query__valid.eql
@@ -970,15 +699,12 @@ eql_parse_error error 0:13-0:13 EQL syntax error: missing `identifier`
 53..54 operator
 55..64 string
 == corpus/eql/field__invalid.eql
-eql_parse_error error 0:22-0:23 EQL syntax error near `?`
+eql_parse_error error 0:22-0:23 EQL syntax error near `?`; expected a name or a quoted name
 0..7 type
 8..13 keyword
 14..21 property
 21..22 punctuation.delimiter
-22..23 operator
-23..27 property
 28..30 operator
-31..35 constant
 == corpus/eql/field__valid.eql
 0..7 type
 8..13 keyword
@@ -1027,7 +753,8 @@ eql_unknown_function error 0:14-0:18 function `add` has no case-insensitive `add
 68..69 operator
 70..71 number
 == corpus/eql/join__invalid.eql
-eql_parse_error error 0:0-0:25 EQL syntax error near `join`
+eql_parse_error error 0:25-0:25 EQL syntax error: the query ends too early; expected `by`, `[`, or `![`
+eql_unsupported error 0:0-0:4 Elasticsearch EQL does not support `join`; use `sequence` or `sample`
 0..4 keyword
 5..6 punctuation.bracket
 6..13 type
@@ -1048,15 +775,12 @@ eql_unsupported error 0:0-0:4 Elasticsearch EQL does not support `join`; use `se
 38..42 boolean
 42..43 punctuation.bracket
 == corpus/eql/missing_event_open__invalid.eql
-eql_parse_error error 0:23-0:35 EQL syntax error near `![file`
+eql_parse_error error 0:23-0:25 EQL syntax error near `![`; expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `true`, `+`, `-`, `(`, or `?`
 0..7 type
 8..13 keyword
 14..18 boolean
 19..22 keyword
-23..25 operator
-25..29 variable
-30..35 variable
-36..40 boolean
+30..35 keyword
 40..41 punctuation.bracket
 == corpus/eql/missing_event_open__valid.eql
 0..8 keyword
@@ -1076,14 +800,12 @@ eql_parse_error error 0:23-0:35 EQL syntax error near `![file`
 63..67 boolean
 67..68 punctuation.bracket
 == corpus/eql/number__invalid.eql
-eql_parse_error error 0:19-0:20 EQL syntax error near `0`
-eql_field_comparison error 0:14-0:23 Elasticsearch EQL cannot compare a field with another field (`==`); one side must be a constant
+eql_parse_error error 0:20-0:23 EQL syntax error near `x10`; expected `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `|`, `+`, `-`, `*`, `/`, `%`, or `:`
 0..7 type
 8..13 keyword
 14..15 property
 16..18 operator
 19..20 number
-20..23 property
 == corpus/eql/number__valid.eql
 0..7 type
 8..13 keyword
@@ -1116,8 +838,7 @@ eql_unsupported error 0:21-0:27 Elasticsearch EQL does not support the `unique` 
 21..25 keyword
 26..27 number
 == corpus/eql/predicate_expression__invalid.eql
-eql_parse_error error 0:31-0:32 EQL syntax error: missing `identifier`
-eql_field_comparison error 0:31-0:31 `in` lists must hold constants; Elasticsearch EQL cannot compare against a field
+eql_parse_error error 0:31-0:32 EQL syntax error near `)`; expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `true`, `+`, `-`, `(`, or `?`
 0..7 type
 8..13 keyword
 14..21 property
@@ -1149,12 +870,12 @@ eql_field_comparison error 0:31-0:31 `in` lists must hold constants; Elasticsear
 76..81 operator
 82..86 string
 == corpus/eql/relationship__invalid.eql
-eql_parse_error error 0:25-0:35 EQL syntax error near `of`
+eql_parse_error error 0:28-0:35 EQL syntax error near `process`; expected `[` or `![`
+eql_unsupported error 0:14-0:27 Elasticsearch EQL does not support the lineage keyword `descendant of`
 0..7 type
 8..13 keyword
-14..24 property
+14..24 error
 25..27 keyword
-28..35 variable
 == corpus/eql/relationship__valid.eql
 eql_unsupported error 0:14-0:48 Elasticsearch EQL does not support the lineage keyword `descendant of`
 0..7 type
@@ -2009,18 +1730,15 @@ eql_field_comparison error 0:14-0:51 Elasticsearch EQL cannot compare a field wi
 47..48 punctuation.delimiter
 48..51 property
 == oracles/elasticsearch/eql-field-comparison/colon_fields.eql
-eql_parse_error error 0:14-0:28 EQL syntax error near `process.name`
+eql_parse_error error 0:29-0:36 EQL syntax error near `process`; expected a number, a string, `false`, `null`, `true`, or `(`
 0..7 type
 8..13 keyword
 14..21 property
 21..22 punctuation.delimiter
 22..26 property
 27..28 operator
-29..36 property
 36..37 punctuation.delimiter
-37..43 property
 43..44 punctuation.delimiter
-44..48 property
 == oracles/elasticsearch/eql-field-comparison/eq_fields.eql
 eql_field_comparison error 0:14-0:47 Elasticsearch EQL cannot compare a field with another field (`==`); one side must be a constant
 0..7 type
