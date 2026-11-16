@@ -11,6 +11,9 @@
 //! Gates: a query whose tree-sitter parse has no error gives identical
 //! highlight spans, and a clean tree from the new parser; a broken one keeps
 //! its verdict: the new parser reports an error exactly when tree-sitter does.
+//! One exception is outside the inputs: nesting past the parser's 512 levels
+//! (ADR 0012's depth contract, `tests/long_runs.rs`) is an error where
+//! tree-sitter has none.
 //! `OPENTIDE_EXABEAM_DIFF=<file>` writes the JSON report;
 //! `OPENTIDE_EXABEAM_SEED=<n>` picks the first seed (default 1) and
 //! `OPENTIDE_DIFF_SEEDS=<k>` how many run from it.
@@ -52,13 +55,94 @@ fn unquote(s: &str) -> String {
     serde_json::from_str::<String>(&format!("\"{inner}\"")).unwrap_or_else(|_| inner.to_owned())
 }
 
-/// Rust string literals in a source file, roughly unescaped.
+/// Rust string literals in a source file, roughly unescaped: raw strings
+/// (`r"…"`, `r#"…"#`) whole, then the others.
 fn rust_strings(text: &str) -> Vec<String> {
+    let raw = regex::Regex::new(r##"(?s)r#"(.*?)"#|r"([^"]*)""##).expect("regex");
+    let mut out: Vec<String> = raw
+        .captures_iter(text)
+        .filter_map(|c| c.get(1).or_else(|| c.get(2)))
+        .map(|m| m.as_str().to_owned())
+        .collect();
+    let rest = raw.replace_all(text, "");
     let re = regex::Regex::new(r#""((?:[^"\\\n]|\\.)*)""#).expect("regex");
-    re.captures_iter(text)
-        .map(|c| unquote(&format!("\"{}\"", &c[1])))
-        .filter(|s| !s.is_empty() && s.len() < 400)
-        .collect()
+    out.extend(re.captures_iter(&rest).map(|c| unescape_rust(&c[1])));
+    out.retain(|s| !s.is_empty() && s.len() < 400);
+    out
+}
+
+/// A Rust string literal's body unescaped: `\n`, `\t`, `\r`, `\0`, `\\`,
+/// `\"`, `\'`, `\xNN` and `\u{…}`; anything else is kept as written.
+fn unescape_rust(body: &str) -> String {
+    let mut out = String::new();
+    let mut chars = body.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some('r') => out.push('\r'),
+            Some('0') => out.push('\0'),
+            Some(e @ ('\\' | '"' | '\'')) => out.push(e),
+            Some('x') => {
+                let hex: String = chars.by_ref().take(2).collect();
+                out.extend(u8::from_str_radix(&hex, 16).ok().map(char::from));
+            }
+            Some('u') => {
+                let hex: String = chars
+                    .by_ref()
+                    .skip_while(|c| *c == '{')
+                    .take_while(|c| *c != '}')
+                    .collect();
+                out.extend(u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32));
+            }
+            // A line continuation, or an escape this reader does not know.
+            Some('\n') => while chars.next_if(|c| c.is_whitespace()).is_some() {},
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+/// The `query:` values of a YAML file: plain and quoted scalars on the
+/// line, and block scalars (`|`, `>`) from the lines indented under them.
+fn yaml_queries(text: &str) -> Vec<String> {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut out = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start().trim_start_matches("- ");
+        let Some(value) = trimmed.strip_prefix("query:") else {
+            continue;
+        };
+        let value = value.trim();
+        if !value.starts_with(['|', '>']) {
+            out.push(unquote(value));
+            continue;
+        }
+        let indent = line.len() - line.trim_start().len();
+        let block: Vec<&str> = lines[i + 1..]
+            .iter()
+            .take_while(|l| l.trim().is_empty() || l.len() - l.trim_start().len() > indent)
+            .copied()
+            .collect();
+        let inner = block
+            .iter()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| l.len() - l.trim_start().len())
+            .min()
+            .unwrap_or(0);
+        let body: Vec<&str> = block.iter().map(|l| l.get(inner..).unwrap_or("")).collect();
+        let joiner = if value.starts_with('>') { " " } else { "\n" };
+        out.push(body.join(joiner).trim_end().to_owned());
+    }
+    out
 }
 
 fn files(dir: &Path, extensions: &[&str]) -> Vec<PathBuf> {
@@ -113,13 +197,22 @@ fn sources() -> Vec<Source> {
             .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
         let body: Vec<&str> = text.lines().skip(1).collect();
         add(&format!("corpus/{name}"), body.join("\n"));
+        // Tree-sitter skips a byte-order mark at the start of the text.
+        add(
+            &format!("corpus/{name}#bom"),
+            format!("\u{feff}{}", body.join("\n")),
+        );
         for line in body {
             add(&format!("corpus/{name}#line"), line.to_owned());
         }
     }
     // The specification's conformance queries and probes.
     let conformance = repo().join("crates/testdata/conformance/exabeam");
-    for path in files(&conformance, &["exabeam"]) {
+    let external = repo().join("crates/testdata/conformance/external/exabeam");
+    for path in files(&conformance, &["exabeam"])
+        .into_iter()
+        .chain(files(&external, &["exabeam"]))
+    {
         let text = std::fs::read_to_string(&path).expect("a query");
         add("conformance", text.clone());
         for line in text.lines() {
@@ -139,13 +232,17 @@ fn sources() -> Vec<Source> {
             add("probes", query.replace('⏎', "\n").replace('⇥', "\t"));
         }
     }
-    // The Exabeam fixtures of the CLI: `query:` lines.
-    for path in files(&repo().join("tests/fixtures/exabeam"), &["yaml", "yml"]) {
-        let text = std::fs::read_to_string(&path).unwrap_or_default();
-        for line in text.lines() {
-            let line = line.trim().trim_start_matches("- ");
-            if let Some(q) = line.strip_prefix("query:") {
-                add("yaml", unquote(q));
+    // The Exabeam fixtures of the CLI and the conformance blocks and
+    // objects: `query:` values.
+    for dir in [
+        "tests/fixtures/exabeam",
+        "crates/testdata/conformance/exabeam/blocks",
+        "crates/testdata/conformance/exabeam/objects",
+    ] {
+        for path in files(&repo().join(dir), &["yaml", "yml"]) {
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            for q in yaml_queries(&text) {
+                add("yaml", q);
             }
         }
     }
@@ -156,6 +253,11 @@ fn sources() -> Vec<Source> {
         "crates/opentide-exabeam/src/assist.rs",
         "crates/opentide-exabeam/tests/captures.rs",
         "crates/opentide-exabeam/tests/trees.rs",
+        "crates/opentide-exabeam/tests/long_runs.rs",
+        "crates/opentide-exabeam/tests/conformance.rs",
+        "crates/opentide-exabeam/tests/reference.rs",
+        "crates/opentide-tide/tests/exabeam.rs",
+        "crates/opentide-lsp/tests/e2e_stdio.rs",
         "crates/opentide-analysis/tests/goldens.rs",
         "crates/opentide-analysis/tests/deep_queries.rs",
     ] {
@@ -340,7 +442,7 @@ const SAMPLES: &[&str] = &[
     "<", "<=", ">", ">=", "\"", "'", "\\", "|", ".", "*", "@", "-", "/", " AND ", " OR ", "NOT ",
     "AND", "or", "not", "IN", "TO", "AS", "ASC", "SELECT", "FROM", "WHERE", "GROUP-BY", "ORDER-BY",
     "LIMIT", "FOREACH", "DISTINCT", "rgx(", "WLDi(", "count(", "1", "-2.5", "10.0.0.1", "true",
-    "null", "\t", "\u{a0}", "é", "\n",
+    "null", "\t", "\u{a0}", "\u{feff}", "é", "\n",
 ];
 
 /// One seed and a sample by default (well under CI's limit); the full run
@@ -365,10 +467,12 @@ fn config_for<'a>(seed: u64, full: bool) -> Config<'a> {
 #[test]
 fn pure_rust_tree_matches_tree_sitter() {
     let full = std::env::var("OPENTIDE_DIFF_SCALE").is_ok_and(|s| s == "full");
-    let seeds: u64 = std::env::var("OPENTIDE_DIFF_SEEDS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(1);
+    // A count here (Falco's form), not the list other languages take: a
+    // value that is not a count fails rather than run one seed unseen.
+    let seeds: u64 = std::env::var("OPENTIDE_DIFF_SEEDS").map_or(1, |s| {
+        s.parse()
+            .unwrap_or_else(|_| panic!("OPENTIDE_DIFF_SEEDS={s}: a number of seeds"))
+    });
     let first: u64 = std::env::var("OPENTIDE_EXABEAM_SEED")
         .ok()
         .and_then(|s| s.parse().ok())

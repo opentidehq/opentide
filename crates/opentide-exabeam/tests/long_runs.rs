@@ -40,11 +40,39 @@ fn one_huge_token_of_every_kind() {
             format!("a:{}", "-".repeat(MILLION)),
             format!("a:1.{}", "2".repeat(MILLION)),
             format!("a:{}1", " \t\r\n\x0b\x0c".repeat(MILLION / 6)),
+            format!("a:{}", "+".repeat(MILLION)),
+            format!("a:{}", ".".repeat(MILLION)),
         ] {
             eprintln!("{}", source.chars().take(12).collect::<String>());
-            assert!(!highlight_captures(&source).is_empty());
+            assert!(assert_tiled(&source) > 0);
+        }
+        // Every other piece class: each is one character, and a run of them
+        // is a run of errors after the term.
+        for piece in [
+            "(", ")", "[", "]", "{", "}", ",", ":", "=", "<", ">", "!", "|",
+        ] {
+            let source = format!("a:1 {}", piece.repeat(MILLION / 10));
+            eprintln!("{piece}");
+            assert_tiled(&source);
+        }
+        // Quotes that never close, each an error at which lexing restarts.
+        for quote in ["\"", "'"] {
+            let source = format!("a:{}", format!("\\{quote}").repeat(MILLION / 2));
+            assert_tiled(&source);
         }
     });
+}
+
+/// The captures lie inside `source`, in order and apart; how many there are.
+fn assert_tiled(source: &str) -> usize {
+    let captures = highlight_captures(source);
+    let mut end = 0;
+    for (span, _) in &captures {
+        assert!(span.start >= end && span.end > span.start, "{span:?}");
+        end = span.end;
+    }
+    assert!(end <= source.len());
+    captures.len()
 }
 
 #[test]
@@ -80,6 +108,11 @@ fn nesting_past_the_limit_is_one_error_and_never_a_stack_overflow() {
         // the parser's.
         let ok = format!("{}a:1{}", "(".repeat(500), ")".repeat(500));
         assert!(!tree_has_error(&ok));
+        // Under 64 KiB, so the thread keeps the deep tree (`parse_memo`) and
+        // drops it at its exit, on the same small stack.
+        let kept = format!("a OR b c AND NOT {}x{}", "(".repeat(510), ")".repeat(510));
+        assert!(!tree_has_error(&kept));
+        assert_tiled(&kept);
         let deep = format!("{}a:1{}", "(".repeat(2_000), ")".repeat(2_000));
         let dump = debug_parse(&deep);
         assert_eq!(dump.matches("nesting deeper than 512 levels").count(), 1);
