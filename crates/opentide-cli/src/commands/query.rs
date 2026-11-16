@@ -602,7 +602,6 @@ pub(crate) fn log_unset(tenants: &[Configured], env: &Env) {
             tracing::error!(
                 detail = format!("Unset configuration variables: {}", joined.join(", ")).as_str(),
                 advice = "Set those environment variables before a live check.",
-                logger = "opentide.core.environment",
                 critical = true,
                 "environment_variable_missing"
             );

@@ -20,6 +20,15 @@ use std::sync::OnceLock;
 use tree_sitter::Node;
 
 mod ecs;
+mod parser;
+mod syntax;
+
+/// The tree of `source` and its errors as indented text, for the snapshot
+/// tests of the parser (`tests/trees.rs`). Not part of the API.
+#[doc(hidden)]
+pub fn debug_parse(source: &str) -> String {
+    parser::debug(source)
+}
 
 pub use ecs::ecs_diagnostics;
 

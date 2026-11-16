@@ -82,7 +82,7 @@ pub enum DefenderError {
     /// `DetectionRuleUpdateFailed`, `DetectionRuleDeletionFailed`).
     #[error("{message}")]
     Refused {
-        /// The call and the tenant, as the Python client logs it.
+        /// The call and the tenant.
         message: String,
         /// Graph's answer (`str(_error_body(response))`).
         context: Option<String>,
@@ -526,7 +526,7 @@ pub fn safer_configuration(body: &Json) -> Json {
 
 /// `_error_body`: the JSON of an error answer, else its text, else a note.
 fn error_body_value(answer: &Answer) -> Json {
-    answer.json().unwrap_or_else(|| {
+    answer.quotable_json().unwrap_or_else(|| {
         let text = answer.text();
         if text.is_empty() {
             Json::Str(format!("(empty body, HTTP {})", answer.status))
@@ -824,6 +824,20 @@ impl Platform for Defender {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn graph_errors_do_not_quote_the_bearer() {
+        use crate::answer::{TEST_BEARER, answer_to_bearer};
+        let answer = answer_to_bearer(&format!(
+            r#"{{"error":{{"code":"X","message":"bad {TEST_BEARER}"}}}}"#
+        ));
+        assert_eq!(error_message(&answer), "bad ***");
+        let shown = error_body(&answer);
+        assert!(
+            shown.contains("bad ***") && !shown.contains(TEST_BEARER),
+            "{shown}"
+        );
+    }
 
     #[test]
     fn a_double_slash_in_a_string_does_not_hide_the_table() {
