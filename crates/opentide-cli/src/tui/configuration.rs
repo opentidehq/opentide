@@ -29,6 +29,7 @@ use regex::Regex;
 use serde_json::Value as JsonValue;
 
 use crate::env::Env;
+use crate::redact::{NOT_UTF8, toml_position};
 
 /// What a hidden value reads as. Never the value, its length or a part of it.
 pub const HIDDEN: &str = "•••• hidden";
@@ -982,20 +983,6 @@ fn proven(document: &Node, redacted: &str) -> bool {
     !secrets(document)
         .iter()
         .any(|secret| redacted.contains(secret.as_str()))
-}
-
-/// Why a configuration file is not read as text: its bytes are not UTF-8.
-pub(crate) const NOT_UTF8: &str = "the file is not valid UTF-8";
-
-/// Where a parse error is, never its message: that may quote the file.
-pub(crate) fn toml_position(error: &config_toml::ParseError) -> String {
-    if error.too_deep {
-        return "nested too deep".to_owned();
-    }
-    match (error.line, error.column) {
-        (Some(line), Some(column)) => format!("line {line}, column {column}"),
-        _ => "position unknown".to_owned(),
-    }
 }
 
 /// `text` with every secret value replaced, as the raw view shows it

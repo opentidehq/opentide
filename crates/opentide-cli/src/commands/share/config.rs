@@ -14,7 +14,7 @@ use regex::Regex;
 use std::sync::OnceLock;
 
 use crate::env::Env;
-use crate::tui::configuration::{NOT_UTF8, toml_position};
+use crate::redact::{NOT_UTF8, toml_position};
 
 /// The one sharing integration.
 pub const INTEGRATION_MISP: &str = "misp";
