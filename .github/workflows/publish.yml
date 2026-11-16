@@ -47,10 +47,10 @@
 #     repository_dispatch (event `publish`, client_payload.checkout_ref) is
 #     the same, for GitHub App tokens without actions: write.
 #
-# Jobs: the guard; `checks` (every crate built from its package, the licence
-# scan); the builds (`release-assets`, `packages`: the wheels and npm packages of
-# build-packages.yml, and `sdist`);
-# a smoke test per artifact (`smoke-*`); then for an internal candidate
+# Jobs: the guard; `build` (release-build.yml: every crate built from its
+# package with the licence scan, the Release's assets, the wheels and npm
+# packages of build-packages.yml, the sdist, and a smoke test of each artifact
+# on its platform); then for an internal candidate
 # `internal-release` (the tag and the draft, nothing else), and for a release
 # (or a public candidate) `attest`
 # (GitHub artifact attestations of every artifact), `release` (the tag and the
@@ -263,296 +263,30 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "### ${tag} (${channel})" >> "$GITHUB_STEP_SUMMARY"
 
-  # Every publishable crate built from its package (`cargo package`, as
-  # crates.io and `cargo install` build it), and the licence scan over the
-  # packages: no oracle reference ships. No token here.
-  checks:
-    name: Crate packages and licence scan
+  # Everything this run ships, built and smoke-tested from the guard's commit
+  # (release-build.yml, which ci.yml also runs on a release pull request and
+  # the nightly): the crate packages and the licence scan; the GitHub
+  # Release's assets (engine-release-build.yml: the binaries, installers,
+  # WebAssembly builds, SBOMs, SHA256SUMS); the wheels (one cp310-abi3 per
+  # platform, manylinux_2_28, no musllinux: the maintainer's decision), each
+  # run on its own OS; the npm packages; the sdist; then one smoke matrix
+  # (scripts/build/smoke_release.sh): the installer and `npm install` from a
+  # local registry on each of the six platforms, a build from the sdist with
+  # the PyPI dist's shape, and `cargo install` from the crate packages. No
+  # token, no cache: a release builds from nothing.
+  build:
+    name: Build and smoke-test
     needs: guard
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ needs.guard.outputs.revision }}
-      # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      # A candidate's crates are crates.io pre-releases, X.Y.Z-rc.N: this
-      # checkout only (the branch keeps X.Y.Z) carries that version and pins.
-      - name: A candidate's crates at its pre-release version
-        if: needs.guard.outputs.version != needs.guard.outputs.base
-        env:
-          VERSION: ${{ needs.guard.outputs.version }}
-        run: python3 scripts/engine/release.py bump "${VERSION}"
-      - run: python3 scripts/engine/release.py vendor
-      # `cargo publish --workspace` skips the members with `publish = false`;
-      # `cargo package` names them.
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-cassette --exclude opentide-wasm --exclude opentide-node --allow-dirty
-      # opentide-cli carries opentide's package data (its explain pages), as
-      # the wheel does: scanned as a product (license-scan.sh --product).
-      - name: license scan (no oracle references)
-        run: |
-          set -euo pipefail
-          find target/package -maxdepth 1 -name '*.crate' ! -name 'opentide-cli-*' -print0 \
-            | xargs -0 bash scripts/engine/license-scan.sh
-          bash scripts/engine/license-scan.sh --product target/package/opentide-cli-*.crate
-          bash scripts/engine/license-scan.sh crates/opentide-wasm
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: crates
-          path: target/package/*.crate
-          if-no-files-found: error
-
-  # The GitHub Release's assets (engine-release-build.yml, which ci.yml also
-  # runs as a dry run): `release-assets`.
-  release-assets:
-    needs: [guard, checks]
     permissions:
       contents: read
-    uses: ./.github/workflows/engine-release-build.yml
-    with:
-      tag: ${{ needs.guard.outputs.tag }}
-      wheel-version: ${{ needs.guard.outputs.pypi_version }}
-
-  # The wheels and the npm packages (build-packages.yml, which ci.yml's full
-  # set also runs, as installable artifacts to test): one cp310-abi3 wheel per
-  # platform (manylinux_2_28, no musllinux: the maintainer's decision), the
-  # native addons (napi-rs) and every npm tarball, at the release's version.
-  packages:
-    needs: [guard, checks]
-    permissions:
-      contents: read
-    uses: ./.github/workflows/build-packages.yml
+    uses: ./.github/workflows/release-build.yml
     with:
       revision: ${{ needs.guard.outputs.revision }}
+      tag: ${{ needs.guard.outputs.tag }}
       pypi-version: ${{ needs.guard.outputs.pypi_version }}
       npm-version: ${{ needs.guard.outputs.version }}
-
-  # The sdist carries the workspace's manifests, sources and embedded data: a
-  # platform without a wheel (musl, free-threaded CPython) builds from it
-  # wherever a Rust toolchain is installed.
-  sdist:
-    name: Sdist
-    needs: [guard, checks]
-    runs-on: ubuntu-latest
-    env:
-      PYPI_VERSION: ${{ needs.guard.outputs.pypi_version }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ needs.guard.outputs.revision }}
-
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-
-      # As build-packages.yml's wheels: maturin takes the version from
-      # bindings/python/'s crate, where a candidate's is written.
-      - name: The sdist at the release's version
-        run: python scripts/engine/release.py pypi-version "${PYPI_VERSION}"
-
-      - name: Build sdist
-        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
-        with:
-          maturin-version: v1.16.0
-          command: sdist
-          args: --out dist
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: sdist
-          path: dist/*.tar.gz
-          if-no-files-found: error
-
-  # --- Smoke tests: each artifact installed the way a user installs it ------
-
-  # `pip install` the wheel (it has no dependency; the `plugins` extra is
-  # pydantic), then
-  # scripts/build/smoke_package.py: `opentide --version`, the package's
-  # requirements against pyproject.toml, `opentide --json validate` on the
-  # tide corpus, and the SDK (Workspace.open, validate, run_json, the models).
-  smoke-wheel:
-    name: Smoke pip install (${{ matrix.os }})
-    needs: [guard, packages]
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    env:
-      PYPI_VERSION: ${{ needs.guard.outputs.pypi_version }}
-    steps:
-      # scripts/build/smoke_package.py and the tide corpus, at the commit built.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ needs.guard.outputs.revision }}
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          path: ${{ runner.temp }}/wheels
-          pattern: wheels-*
-          merge-multiple: true
-      - name: pip install, then the version, validate on the tide corpus and the SDK
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m venv "${RUNNER_TEMP}/venv"
-          if [[ -x "${RUNNER_TEMP}/venv/Scripts/python.exe" ]]; then bin="${RUNNER_TEMP}/venv/Scripts"; else bin="${RUNNER_TEMP}/venv/bin"; fi
-          "${bin}/python" -m pip install --quiet --find-links "${RUNNER_TEMP}/wheels" --only-binary opentide "opentide==${PYPI_VERSION}"
-          "${bin}/python" -I scripts/build/smoke_package.py "${PYPI_VERSION}"
-
-  # A build from the sdist, with whatever Rust the machine has (the runner
-  # image's stable; the sdist leaves rust-toolchain.toml out), as on a
-  # platform without a wheel.
-  smoke-sdist:
-    name: Smoke build from the sdist
-    needs: [guard, sdist]
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      PYPI_VERSION: ${{ needs.guard.outputs.pypi_version }}
-    steps:
-      # scripts/build/smoke_package.py and the tide corpus, at the commit built.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ needs.guard.outputs.revision }}
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: sdist
-          path: ${{ runner.temp }}/sdist
-      - name: pip install the sdist, then the version, validate on the tide corpus and the SDK
-        run: |
-          set -euo pipefail
-          cargo --version
-          python -m venv "${RUNNER_TEMP}/venv"
-          "${RUNNER_TEMP}/venv/bin/python" -m pip install --quiet --no-binary opentide "${RUNNER_TEMP}"/sdist/opentide-*.tar.gz
-          "${RUNNER_TEMP}/venv/bin/python" -I scripts/build/smoke_package.py "${PYPI_VERSION}"
-
-  # The npm packages installed as a user installs them, before npm has any:
-  # every tarball published to a throwaway local registry (Verdaccio, no
-  # uplink), then `npm install @opentide/opentide` in a clean project, which
-  # must choose exactly the runner's native package by os/cpu/libc; `npx
-  # opentide --version`, the SDK from require() and import, `runJson`, and
-  # `tsc` against index.d.ts; and the same through the `opentide` alias
-  # (scripts/engine/npm-local-registry/test.mjs). Nothing reaches npmjs.com
-  # but the test's own tools (its package-lock.json).
-  smoke-npm:
-    name: Smoke npm install (${{ matrix.os }})
-    needs: [guard, packages]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    env:
-      NPM_VERSION: ${{ needs.guard.outputs.version }}
-    steps:
-      # The test and its lock, at the commit the packages were built from.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ needs.guard.outputs.revision }}
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          package-manager-cache: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: npm-packages
-          path: ${{ runner.temp }}/npm
-      - name: Publish to a local registry, npm install, npx, SDK and types
-        shell: bash
-        run: node scripts/engine/npm-local-registry/test.mjs --version "${NPM_VERSION}" --tarballs "${RUNNER_TEMP}/npm"
-
-  # `cargo install opentide --features cli` from the crates' packages, before
-  # crates.io has any of this version: a patch resolves each to its package
-  # (release.py crate-patch).
-  smoke-cargo:
-    name: Smoke cargo install opentide --features cli
-    needs: [guard, checks]
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      # The crates' version: the release's, or a candidate's X.Y.Z-rc.N.
-      CRATES_VERSION: ${{ needs.guard.outputs.version }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ needs.guard.outputs.revision }}
-      # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: crates
-          path: crates-packages
-      - name: cargo install from the packages, then opentide --version
-        run: |
-          set -euo pipefail
-          config="$(python3 scripts/engine/release.py crate-patch crates-packages "${RUNNER_TEMP}/packages")"
-          cargo install --config "${config}" --path "${RUNNER_TEMP}/packages/opentide-${CRATES_VERSION}" \
-            --features cli --debug --root "${RUNNER_TEMP}/cargo"
-          out="$("${RUNNER_TEMP}/cargo/bin/opentide" --version)"
-          echo "${out}"
-          grep -qF "${CRATES_VERSION}" <<< "${out}"
-
-  # The binary installers, against the assets this run built.
-  smoke-installer:
-    name: Smoke binary installer (${{ matrix.os }})
-    needs: [guard, release-assets]
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
-    env:
-      VERSION: ${{ needs.guard.outputs.version }}
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-assets
-          path: release-assets
-      - name: opentide-installer.sh, then opentide --version
-        if: runner.os != 'Windows'
-        run: |
-          set -euo pipefail
-          OPENTIDE_DOWNLOAD_URL="file://$(pwd)/release-assets" OPENTIDE_INSTALL_DIR="${RUNNER_TEMP}/bin" \
-            sh release-assets/opentide-installer.sh
-          out="$("${RUNNER_TEMP}/bin/opentide" --version)"
-          echo "${out}"
-          grep -qF "${VERSION}" <<< "${out}"
-          "${RUNNER_TEMP}/bin/opentide-lsp" --version
-      - name: opentide-installer.ps1, then opentide --version
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $true
-          $env:OPENTIDE_DOWNLOAD_URL = (Resolve-Path release-assets).Path
-          $env:OPENTIDE_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'bin'
-          & ./release-assets/opentide-installer.ps1
-          $out = & (Join-Path $env:OPENTIDE_INSTALL_DIR 'opentide.exe') --version
-          Write-Output $out
-          if (-not ($out -like "*$env:VERSION*")) { throw "opentide --version printed $out, not $env:VERSION" }
-          & (Join-Path $env:OPENTIDE_INSTALL_DIR 'opentide-lsp.exe') --version
+      crates-version: ${{ needs.guard.outputs.version }}
+      dry-run: false
 
   # --- An internal candidate: a tag and a draft, no registry ---------------
 
@@ -565,7 +299,7 @@ jobs:
   # npm. A draft does not create its tag, so the job pushes it first.
   internal-release:
     name: Internal candidate (draft GitHub pre-release)
-    needs: [guard, checks, release-assets, packages, sdist, smoke-wheel, smoke-sdist, smoke-npm, smoke-cargo, smoke-installer]
+    needs: [guard, build]
     if: needs.guard.outputs.channel == 'internal'
     runs-on: ubuntu-latest
     permissions:
@@ -661,7 +395,7 @@ jobs:
   # attest action, nothing else.
   attest:
     name: Attestations
-    needs: [guard, checks, release-assets, packages, sdist, smoke-wheel, smoke-sdist, smoke-npm, smoke-cargo, smoke-installer]
+    needs: [guard, build]
     # A release or a public candidate only: never a dry run or an internal
     # candidate, which mint no OIDC token.
     if: needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc'
@@ -1004,7 +738,7 @@ jobs:
   # version; a crate already published is skipped, so a resumed run picks up
   # where it stopped. `cargo publish --no-verify` builds nothing here, where
   # the OIDC token and the registry tokens are: a build runs every
-  # dependency's build script. `checks` built each package, without them.
+  # dependency's build script. `build` (release-build.yml's `crate-packages`) built each package, without them.
   #
   # Trusted publishing: `release.py trust publish.yml` registers this workflow
   # as each crate's trusted publisher (with CARGO_REGISTRY_TOKEN, which needs
@@ -1070,7 +804,7 @@ jobs:
         run: python3 scripts/engine/release.py trust publish.yml
 
   # npm, with trusted publishing (the workflow's OIDC identity, no token) and
-  # provenance: the tarballs build-packages.yml packed and smoke-npm installed, in
+  # provenance: the tarballs build-packages.yml packed and release-build.yml's smoke installed, in
   # order. A release only: a candidate publishes nothing to npm (ci.yml's
   # `packages` artifacts carry the tarballs to test). A version npm has is
   # skipped, so a resumed run picks up where it stopped. Trusted publishing
