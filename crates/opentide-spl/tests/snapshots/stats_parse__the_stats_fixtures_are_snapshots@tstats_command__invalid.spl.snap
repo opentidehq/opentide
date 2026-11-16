@@ -1,0 +1,13 @@
+---
+source: crates/opentide-spl/tests/stats_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/tstats_command__invalid.spl
+---
+SOURCE_FILE@0..8
+  PIPELINE@0..8
+    PIPE@0..1 "|"
+    WHITESPACE@1..2 " "
+    TSTATS_COMMAND@2..8
+      TSTATS_KW@2..8 "tstats"
+--
+8..8: expected an aggregate
