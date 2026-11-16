@@ -168,6 +168,18 @@ pub struct Policy {
     /// than the report's: generous (0.50), so that a runner on an unrecorded
     /// CPU still has a ceiling. RSS keeps `regression` on every CPU.
     pub cross_cpu_regression: f64,
+    /// When the recorded reference ran (seconds since the Unix epoch): a
+    /// last result of the base branch measured before it is not compared
+    /// with. Each CPU model's newest green result is the reference, and one
+    /// model's can be many merges old (the runners come on several), so it
+    /// would hold a run to that whole interval, and a red run never becomes
+    /// the reference: the model would stay red. The run is held to its
+    /// budgets alone, and the first green run since records the reference.
+    #[serde(default)]
+    pub reference_unix: Option<u64>,
+    /// The recorded reference run, as the notes name it; with `reference_unix`.
+    #[serde(default)]
+    pub reference_run: Option<String>,
 }
 
 /// The oracle measurement the `baseline_*` numbers come from.
@@ -369,6 +381,17 @@ impl Budgets {
             if !(value.is_finite() && value >= 0.0) {
                 bail!("{name} must be a number >= 0, not {value}");
             }
+        }
+        if policy.reference_unix.is_some() != policy.reference_run.is_some() {
+            bail!("policy.reference_unix and policy.reference_run go together");
+        }
+        if let Some(unix) = policy.reference_unix
+            && unix < ACCEPTED_FLOOR_UNIX
+        {
+            bail!(
+                "policy.reference_unix {unix} is before 2020: seconds since the Unix epoch, \
+                 the reference report's created_unix"
+            );
         }
         for (id, budget) in &budgets.commands {
             for (name, value) in [
@@ -803,6 +826,28 @@ fn check_against(budgets: &Budgets, report: &Report, previous: Option<&Report>) 
             None
         }
         None => Some(previous),
+    });
+    if let Some(unix) = policy.reference_unix
+        && unix > report.created_unix
+    {
+        // A typo'd or future time would turn the relative gate off for as
+        // long as it stays.
+        failures.push(format!(
+            "policy.reference_unix {unix} is after this run ({}): refused",
+            report.created_unix
+        ));
+    }
+    let previous = previous.and_then(|previous| match policy.reference_unix {
+        Some(unix) if previous.created_unix < unix => {
+            notes.push(format!(
+                "{} predates the recorded reference ({}): no regression check against it; \
+                 held to the budgets",
+                last_result(),
+                policy.reference_run.as_deref().unwrap_or_default()
+            ));
+            None
+        }
+        _ => Some(previous),
     });
     let previous_label = previous.map(|previous| {
         let sha = previous.git_sha.as_deref().unwrap_or("unknown commit");
@@ -1548,6 +1593,74 @@ target_s = 0.03
 
     const AFTER: u64 = 1_794_700_000;
     const BEFORE: u64 = 1_794_600_000;
+
+    fn referenced_budgets(unix: u64) -> Budgets {
+        Budgets::parse(&BUDGETS.replace(
+            "cross_cpu_regression = 0.50\n",
+            &format!(
+                "cross_cpu_regression = 0.50\nreference_unix = {unix}\nreference_run = \"run 7\"\n"
+            ),
+        ))
+        .unwrap()
+    }
+
+    /// A last result measured before the recorded reference is not compared
+    /// with (the run is held to its budgets); one measured at or after it is.
+    #[test]
+    fn a_last_result_older_than_the_recorded_reference_is_not_compared() {
+        let budgets = referenced_budgets(AFTER - 10);
+        let stale = rust_at(0.4, 80.0, BEFORE);
+        let outcome = check(&budgets, &rust_at(0.6, 90.0, AFTER), Some(&stale));
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(outcome.rows[0].delta_previous.is_none());
+        assert!(
+            outcome
+                .notes
+                .iter()
+                .any(|n| n.contains("predates the recorded reference (run 7)")),
+            "{:?}",
+            outcome.notes
+        );
+        // Still held to its absolute budget (the 0.7 s target).
+        assert!(!check(&budgets, &rust_at(0.8, 90.0, AFTER), Some(&stale)).passed());
+        for since in [AFTER - 10, AFTER - 5] {
+            let recorded = rust_at(0.4, 80.0, since);
+            let outcome = check(&budgets, &rust_at(0.6, 90.0, AFTER), Some(&recorded));
+            assert!(!outcome.passed(), "{since}");
+            assert!(outcome.rows[0].delta_previous.is_some());
+        }
+    }
+
+    /// A reference time after the run, or before 2020, is refused; the two
+    /// keys go together.
+    #[test]
+    fn the_reference_time_is_checked() {
+        let budgets = referenced_budgets(AFTER + 1);
+        let outcome = check(&budgets, &rust_at(0.6, 90.0, AFTER), None);
+        assert!(
+            outcome
+                .failures
+                .iter()
+                .any(|f| f.contains("policy.reference_unix") && f.contains("refused")),
+            "{:?}",
+            outcome.failures
+        );
+        let early = BUDGETS.replace(
+            "cross_cpu_regression = 0.50\n",
+            "cross_cpu_regression = 0.50\nreference_unix = 1000\nreference_run = \"x\"\n",
+        );
+        let error = Budgets::parse(&early).unwrap_err().to_string();
+        assert!(
+            error.contains("reference_unix 1000 is before 2020"),
+            "{error}"
+        );
+        let alone = BUDGETS.replace(
+            "cross_cpu_regression = 0.50\n",
+            "cross_cpu_regression = 0.50\nreference_unix = 1794700000\n",
+        );
+        let error = Budgets::parse(&alone).unwrap_err().to_string();
+        assert!(error.contains("go together"), "{error}");
+    }
 
     /// An accepted change is not held to a last result measured before it,
     /// but to the numbers it was accepted at; one measured after it is.
