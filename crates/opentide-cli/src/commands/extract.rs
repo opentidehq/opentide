@@ -180,8 +180,6 @@ fn under(path: &Path, root: &Path) -> bool {
 // ---------------------------------------------------------------- Defender
 
 const DEFENDER: &str = "defender_for_endpoint";
-/// The importer's logger, as its log lines name it.
-const DEFENDER_LOGGER: &str = "opentide.extraction.mde_importer";
 
 const TEMPLATE: &str = "\nname: {name}\n#references:\n  #public:\n    #1: \n  #internal:\n    #a: \n\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.0\n  version: 1\n  created: {created}\n  modified: {modified}\n  tlp: amber+strict\n  author: {author}\n  #contributors:\n    #-\n\ndescription: |\n{description}\n#detection_model: \n\nresponse:\n  alert_severity: {alert_severity}\n  #playbook: https://\n  #responders: \n  #procedure:\n\nconfigurations:\n  defender_for_endpoint: \n    schema: platform::defender_for_endpoint::1.0\n    status: {status}\n    {contributors}\n    tenants:\n      - {tenants}\n    #flags:\n      #-\n    \n    scheduling: {schedule}\n    \n    alert:\n      #title: \n      category: {category}{techniques}\n      #severity: \n      {alert_recommendation}\n    \n    {impacted_entities_flag}impacted_entities:\n      {impacted_device}\n      #mailbox: \n      {impacted_user} \n    \n    #actions:\n    \n      #devices:\n        #isolate_device: \n        #collect_investigation_package: true\n        #run_antivirus_scan: true\n        #initiate_investigation: true\n        #restrict_app_execution: true\n    \n      #files:\n        #allow_block:\n          #action: \n          #column: \n          #groups:\n            #selection: \n            #device_groups:\n              #-\n        #quarantine_file: \n    \n    scope:\n      selection: All\n      #device_groups:\n        #-\n    \n    query: |\n{query}\n";
 const NO_CONTRIBUTORS_TEMPLATE: &str = "\n    #contributors:\n      #-\n";
@@ -514,7 +512,6 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
         tracing::error!(
             detail = "You must first have Defender for Endpoint tenants configured to initiate the import",
             advice = "run 'opentide setup platforms --defender-for-endpoint'",
-            logger = DEFENDER_LOGGER,
             critical = true,
             "defender_tenants_not_configured"
         );
@@ -526,7 +523,7 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
         .map_err(|error| format!("{}: {error}", destination.display()))?;
     let connector = opentide_connectors::defender::Defender::new();
     let mut listed: Vec<(String, Vec<(String, CJson)>)> = Vec::new();
-    let mut skipped = Skipped::new(DEFENDER_LOGGER, "defender_import_rule_skipped");
+    let mut skipped = Skipped::new("defender_import_rule_skipped");
     for configured in &tenants {
         let (tenant, http) = tenant(
             DEFENDER,
@@ -548,7 +545,6 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
             opentide_connectors::defender::DefenderError::Authentication { .. } => {
                 tracing::error!(
                     detail = format!("Cannot authenticate against {}", configured.name).as_str(),
-                    logger = "opentide.platforms.defender_for_endpoint.client",
                     critical = true,
                     "fatal_error"
                 );
@@ -607,7 +603,6 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
             tracing::warn!(
                 rule = shown,
                 uuid = detector.as_str(),
-                logger = DEFENDER_LOGGER,
                 detail = format!(
                     "Imported from {}; the copies in {} differ",
                     names[0],
@@ -641,15 +636,13 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
 /// The rules an import left out, each logged as it is skipped and listed
 /// under `skipped` in the result, with the reason.
 pub(crate) struct Skipped {
-    logger: &'static str,
     event: &'static str,
     rules: Vec<Json>,
 }
 
 impl Skipped {
-    pub(crate) fn new(logger: &'static str, event: &'static str) -> Self {
+    pub(crate) fn new(event: &'static str) -> Self {
         Self {
-            logger,
             event,
             rules: Vec::new(),
         }
@@ -657,13 +650,7 @@ impl Skipped {
 
     /// Logs and lists the rule `name`, left out for `reason`.
     pub(crate) fn push(&mut self, name: &str, reason: &str) {
-        tracing::warn!(
-            rule = name,
-            reason = reason,
-            logger = self.logger,
-            "{}",
-            self.event
-        );
+        tracing::warn!(rule = name, reason = reason, "{}", self.event);
         self.rules.push(Json::object([
             ("name", Json::str(name)),
             ("reason", Json::str(reason)),
@@ -869,8 +856,6 @@ mod tests {
 // ----------------------------------------------------------------- Elastic
 
 const ELASTIC: &str = "elastic";
-/// The importer's logger, as its log lines name it.
-const ELASTIC_LOGGER: &str = "opentide.extraction.elastic_importer";
 
 /// The field types RFC 0007's `FieldType` takes (`_VALID_FIELD_TYPES`).
 const VALID_FIELD_TYPES: [&str; 25] = [
@@ -926,6 +911,19 @@ fn is_set(value: &CJson) -> bool {
     }
 }
 
+/// A suppression window from Kibana's `{value, unit}` object (`5m`), or the
+/// keys it lacks: a half-built duration is left out of the rule.
+fn suppression_duration(duration: &Object) -> Result<String, Vec<&'static str>> {
+    let part = |key: &str| duration.get(key).filter(|value| is_set(value)).map(text_of);
+    match (part("value"), part("unit")) {
+        (Some(value), Some(unit)) => Ok(format!("{value}{unit}")),
+        (value, unit) => Err([("value", value), ("unit", unit)]
+            .into_iter()
+            .filter_map(|(key, found)| found.is_none().then_some(key))
+            .collect()),
+    }
+}
+
 /// The value of `key` when Kibana set it ([`is_set`]).
 fn given<'j>(rule: &'j CJson, key: &str) -> Option<&'j CJson> {
     rule.get(key).filter(|value| is_set(value))
@@ -936,7 +934,8 @@ fn flag(rule: &CJson, key: &str) -> bool {
     rule.get(key) == Some(&CJson::Bool(true))
 }
 
-fn py(value: &CJson) -> String {
+/// `value` as text: a string as it is, anything else as its compact JSON.
+fn text_of(value: &CJson) -> String {
     opentide_connectors::text::json_text(value)
 }
 
@@ -1028,7 +1027,7 @@ fn is_prebuilt(rule: &CJson) -> bool {
 
 /// Kibana's `now-<n><unit>` as an RFC 0007 duration (`_date_math_duration`).
 fn date_math_duration(value: &CJson) -> String {
-    let text = py(value);
+    let text = text_of(value);
     let text = text.trim();
     let text = text.strip_prefix("now-").unwrap_or(text);
     if let Some(weeks) = text.strip_suffix('w')
@@ -1070,7 +1069,7 @@ fn extract_filter(entry: &CJson) -> CJson {
     {
         return object(vec![
             ("field", key.clone()),
-            ("value", CJson::Str(py(query))),
+            ("value", CJson::Str(text_of(query))),
             ("negate", CJson::Bool(flag(meta, "negate"))),
         ]);
     }
@@ -1093,7 +1092,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     let prebuilt = is_prebuilt(rule);
     let raw_rule_id = given(rule, "rule_id")
         .or_else(|| given(rule, "id"))
-        .map(py)
+        .map(text_of)
         .unwrap_or_default();
     let rule_id = if make_custom && prebuilt {
         uuid::Uuid::new_v5(&migration_namespace(), raw_rule_id.as_bytes()).to_string()
@@ -1102,26 +1101,29 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     };
     let mut rule_name = rule
         .get("name")
-        .map_or_else(|| "Unnamed Rule".to_owned(), py);
+        .map_or_else(|| "Unnamed Rule".to_owned(), text_of);
     if make_custom && prebuilt {
         rule_name.push_str(" (Custom)");
     }
     let description = rule
         .get("description")
-        .map(py)
+        .map(text_of)
         .unwrap_or_default()
         .trim()
         .to_owned();
     let (author, contributors): (String, Vec<CJson>) = match rule.get("author") {
         Some(CJson::Array(authors)) if !authors.is_empty() => (
-            py(&authors[0]),
-            authors[1..].iter().map(|a| CJson::Str(py(a))).collect(),
+            text_of(&authors[0]),
+            authors[1..]
+                .iter()
+                .map(|a| CJson::Str(text_of(a)))
+                .collect(),
         ),
         Some(CJson::Str(author)) => (author.clone(), Vec::new()),
         None => ("Elastic Security".to_owned(), Vec::new()),
         Some(_) => ("Elastic Security".to_owned(), Vec::new()),
     };
-    let created_text = rule.get("created_at").map(py).unwrap_or_default();
+    let created_text = rule.get("created_at").map(text_of).unwrap_or_default();
     let created = Some(
         created_text
             .split('T')
@@ -1131,7 +1133,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     )
     .filter(|text| !text.is_empty())
     .unwrap_or_else(|| "2026-01-01".to_owned());
-    let modified_text = rule.get("updated_at").map(py).unwrap_or_default();
+    let modified_text = rule.get("updated_at").map(text_of).unwrap_or_default();
     let modified = Some(
         modified_text
             .split('T')
@@ -1144,7 +1146,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     let techniques = extract_techniques(rule.get("threat"));
     let severity = rule
         .get("severity")
-        .map_or_else(|| "medium".to_owned(), py)
+        .map_or_else(|| "medium".to_owned(), text_of)
         .to_lowercase();
     let alert_severity = match severity.as_str() {
         "low" => "Low",
@@ -1167,7 +1169,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         "query" | "eql" | "esql" | "threshold" | "new_terms" | "threat_match"
     ) {
         if let Some(query) = given(rule, "query") {
-            block.insert("query".into(), CJson::Str(py(query).trim().to_owned()));
+            block.insert("query".into(), CJson::Str(text_of(query).trim().to_owned()));
         }
         if matches!(kind, "query" | "threshold" | "new_terms" | "threat_match")
             && let Some(language @ CJson::Str(text)) = rule.get("language")
@@ -1200,10 +1202,9 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         (Ok(total), Some(Ok(every))) => {
             if total < every {
                 tracing::warn!(
-                    rule = rule.get("name").map(py).as_deref().unwrap_or("None"),
-                    interval = py(&interval).as_str(),
-                    from = py(&from).as_str(),
-                    logger = ELASTIC_LOGGER,
+                    rule = rule.get("name").map(text_of).as_deref(),
+                    interval = text_of(&interval).as_str(),
+                    from = text_of(&from).as_str(),
                     "elastic_import_window_widened"
                 );
             }
@@ -1211,10 +1212,9 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
         }
         _ => {
             tracing::warn!(
-                rule = rule.get("name").map(py).as_deref().unwrap_or("None"),
-                interval = py(&interval).as_str(),
-                from = py(&from).as_str(),
-                logger = ELASTIC_LOGGER,
+                rule = rule.get("name").map(text_of).as_deref(),
+                interval = text_of(&interval).as_str(),
+                from = text_of(&from).as_str(),
                 "elastic_import_schedule_defaulted"
             );
             "1m".to_owned()
@@ -1276,13 +1276,18 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
             out.insert("group_by".into(), string_list(group_by));
         }
         match given(suppression, "duration") {
-            Some(CJson::Object(duration)) => {
-                let part = |key: &str| duration.get(key).map_or_else(|| "None".to_owned(), py);
-                out.insert(
-                    "duration".into(),
-                    CJson::Str(format!("{}{}", part("value"), part("unit"))),
-                );
-            }
+            Some(CJson::Object(duration)) => match suppression_duration(duration) {
+                Ok(text) => {
+                    out.insert("duration".into(), CJson::Str(text));
+                }
+                Err(missing) => {
+                    tracing::warn!(
+                        rule = rule.get("name").map(text_of).as_deref(),
+                        missing = missing.join(", ").as_str(),
+                        "elastic_import_suppression_duration_skipped"
+                    );
+                }
+            },
             Some(text @ CJson::Str(_)) => {
                 out.insert("duration".into(), text.clone());
             }
@@ -1323,10 +1328,9 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                 .is_some_and(|kind| VALID_FIELD_TYPES.contains(&kind))
             {
                 tracing::warn!(
-                    rule = rule.get("name").map(py).as_deref().unwrap_or("None"),
-                    field = py(name).as_str(),
-                    r#type = kind.map_or_else(|| "None".to_owned(), py).as_str(),
-                    logger = ELASTIC_LOGGER,
+                    rule = rule.get("name").map(text_of).as_deref(),
+                    field = text_of(name).as_str(),
+                    r#type = kind.map(text_of).as_deref(),
                     "elastic_import_required_field_dropped"
                 );
                 continue;
@@ -1370,11 +1374,11 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     if let Some(note) = given(rule, "note") {
         guide.insert(
             "investigation".into(),
-            CJson::Str(py(note).trim().to_owned()),
+            CJson::Str(text_of(note).trim().to_owned()),
         );
     }
     if let Some(setup) = given(rule, "setup") {
-        guide.insert("setup".into(), CJson::Str(py(setup).trim().to_owned()));
+        guide.insert("setup".into(), CJson::Str(text_of(setup).trim().to_owned()));
     }
     if !guide.is_empty() {
         block.insert("guide".into(), CJson::Object(guide));
@@ -1431,8 +1435,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                     if !known {
                         tracing::warn!(
                             rule = rule_name.as_str(),
-                            command = command.map_or_else(|| "None".to_owned(), py).as_str(),
-                            logger = ELASTIC_LOGGER,
+                            command = command.map(text_of).as_deref(),
                             "skipping_unsupported_endpoint_response_action"
                         );
                         continue;
@@ -1457,7 +1460,6 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                             rule = rule_name.as_str(),
                             reason =
                                 "osquery response action has no inline query (pack/saved query)",
-                            logger = ELASTIC_LOGGER,
                             "skipping_unsupported_osquery_response_action"
                         );
                     }
@@ -1581,7 +1583,7 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
                 ),
                 (
                     "history_window_start",
-                    CJson::Str(date_math_duration(&CJson::Str(py(&start)))),
+                    CJson::Str(date_math_duration(&CJson::Str(text_of(&start)))),
                 ),
             ]),
         );
@@ -1762,7 +1764,7 @@ fn unwritable_reason(document: &Object, text: &str) -> Option<String> {
     let id = document
         .get("metadata")
         .and_then(|metadata| metadata.get("uuid"))
-        .map(py)
+        .map(text_of)
         .unwrap_or_default();
     if !is_uuid(&id) {
         return Some(format!("Kibana rule_id {id:?} is not a UUID"));
@@ -1855,7 +1857,7 @@ fn elastic_run(
             tenant
                 .setup
                 .get("space")
-                .map_or_else(|| "default".to_owned(), py)
+                .map_or_else(|| "default".to_owned(), text_of)
                 == space
         })
         .ok_or_else(|| format!("No Elastic tenant is configured for Kibana space '{space}'"))?;
@@ -1901,12 +1903,11 @@ fn elastic_run(
             }
             let document = kibana_to_opentide(rule, true);
             let text = rule_yaml(&document)?;
-            let name = document.get("name").map(py).unwrap_or_default();
+            let name = document.get("name").map(text_of).unwrap_or_default();
             if let Some(reason) = unwritable_reason(&document, &text) {
                 tracing::warn!(
                     rule = name.as_str(),
                     reason = reason.as_str(),
-                    logger = ELASTIC_LOGGER,
                     "elastic_import_rule_skipped"
                 );
                 skipped.push(Json::object([
@@ -1920,7 +1921,7 @@ fn elastic_run(
                 let uuid = document
                     .get("metadata")
                     .and_then(|metadata| metadata.get("uuid"))
-                    .map(py)
+                    .map(text_of)
                     .unwrap_or_default();
                 let short: String = uuid.chars().take(8).collect();
                 stem = format!("{stem} {short}");
@@ -1957,6 +1958,57 @@ mod elastic_tests {
 
     fn rule(text: &str) -> CJson {
         serde_json::from_str(text).unwrap()
+    }
+
+    #[test]
+    fn a_suppression_duration_lacking_a_part_is_left_out() {
+        let duration = |text: &str| match rule(text) {
+            CJson::Object(object) => object,
+            other => panic!("an object, not {other:?}"),
+        };
+        assert_eq!(
+            suppression_duration(&duration(r#"{"value": 5, "unit": "m"}"#)),
+            Ok("5m".to_owned())
+        );
+        assert_eq!(
+            suppression_duration(&duration(r#"{"unit": "m"}"#)),
+            Err(vec!["value"])
+        );
+        assert_eq!(
+            suppression_duration(&duration(r#"{"value": 5, "unit": null}"#)),
+            Err(vec!["unit"])
+        );
+        assert_eq!(
+            suppression_duration(&duration("{}")),
+            Err(vec!["value", "unit"])
+        );
+        for (answer, kept) in [
+            (r#"{"value": 5}"#, false),
+            (r#"{"unit": "m"}"#, false),
+            (r#"{"value": 5, "unit": "m"}"#, true),
+        ] {
+            let converted = kibana_to_opentide(
+                &rule(&format!(
+                    r#"{{"name": "N", "type": "query", "language": "kuery", "query": "a", "index": ["x"],
+                        "alert_suppression": {{"group_by": ["h"], "duration": {answer}}}}}"#
+                )),
+                true,
+            );
+            let suppression = converted
+                .get("configurations")
+                .and_then(|configurations| configurations.get("elastic"))
+                .and_then(|elastic| elastic.get("suppression"))
+                .unwrap();
+            assert_eq!(
+                suppression.get("duration").is_some(),
+                kept,
+                "{answer}: {converted:?}"
+            );
+            assert!(
+                !format!("{converted:?}").contains("None"),
+                "{answer}: {converted:?}"
+            );
+        }
     }
 
     #[test]
