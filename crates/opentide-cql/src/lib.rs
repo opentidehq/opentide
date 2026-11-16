@@ -93,9 +93,21 @@ fn parse_error(root: &SyntaxNode, err: &SyntaxError, source: &str) -> (String, B
         .token_at_offset(err.gap.end())
         .right_biased()
         .filter(|t| t.text_range().start() == err.gap.end() && !t.text_range().is_empty());
-    let span = next
-        .as_ref()
-        .map_or(ByteSpan::new(at, at), |t| bounds(t.text_range()));
+    // Characters no token takes are one token each (`a >= error` after an operator that wants
+    // a number): the range covers the run of them, so the message quotes the whole word.
+    let span = next.as_ref().map_or(ByteSpan::new(at, at), |t| {
+        let mut end = t.text_range().end();
+        if t.kind() == K::ERROR_TOKEN {
+            let mut cur = t.next_token();
+            while let Some(n) =
+                cur.filter(|n| n.kind() == K::ERROR_TOKEN && n.text_range().start() == end)
+            {
+                end = n.text_range().end();
+                cur = n.next_token();
+            }
+        }
+        bounds(TextRange::new(t.text_range().start(), end))
+    });
     // Text pasted from a web page often carries U+00A0, which CQL does not
     // read as a space: blame it when it is where the parser stopped.
     let before = source[..at].chars().next_back();
@@ -103,6 +115,13 @@ fn parse_error(root: &SyntaxNode, err: &SyntaxError, source: &str) -> (String, B
     if before == Some('\u{a0}') || here.contains('\u{a0}') {
         return (
             "CQL syntax error: a non-breaking space (U+00A0) is not whitespace in CQL; replace it with a space".to_string(),
+            span,
+        );
+    }
+    // A `"` with no closing quote lexes as a stray character: the string is never closed.
+    if here == "\"" {
+        return (
+            "CQL syntax error: the string is never closed".to_string(),
             span,
         );
     }

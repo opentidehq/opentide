@@ -563,7 +563,40 @@ fn a_subquery_missing_its_brace_says_so() {
 fn parse_errors_name_the_fault() {
     for (q, message) in [
         ("parseJson( | a=1", "CQL syntax error: missing `)`"),
+        (
+            "x := lower(\"a\"\n| y := 1",
+            "CQL syntax error: missing `)`",
+        ),
+        ("count(", "CQL syntax error: missing `)`"),
+        (
+            "case { a=1 | x := (b ; * }",
+            "CQL syntax error: missing `)`",
+        ),
         ("rdns (field=ip,as=host)", "CQL syntax error near `,`"),
+        ("test(a > 1 and b > 2)", "CQL syntax error near `and`"),
+        ("test((a, b))", "CQL syntax error near `,`"),
+        ("(a=1 | b=2)", "CQL syntax error near `|`"),
+        (
+            "/* unterminated comment",
+            "CQL syntax error: the block comment is never closed",
+        ),
+        (
+            "a=1 /* x",
+            "CQL syntax error: the block comment is never closed",
+        ),
+        (
+            "a=/x",
+            "CQL syntax error: the regular expression is never closed",
+        ),
+        (
+            "user = \"Alan Turing",
+            "CQL syntax error: the string is never closed",
+        ),
+        ("x := \"abc", "CQL syntax error: the string is never closed"),
+        (
+            "statuscode >= error",
+            "CQL syntax error near `error`: expected a value",
+        ),
     ] {
         let d = analyze(q).diagnostics;
         assert_eq!(d[0].message, message, "{q}: {d:#?}");
