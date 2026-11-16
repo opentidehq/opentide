@@ -73,6 +73,12 @@ added = ["tenants/0/setup/enterprise_security"]
 changelog = "**Splunk `enterprise_security` and Bitdefender `automatic_actions` take a boolean and nothing else**"
 
 [[difference]]
+id = "splunk-offset-placeholder"
+reason = "Splunk's `schedule_offset` is an integer and nothing else: a `$NAME` placeholder is refused at its key, as `deploy` refuses it (placeholders are resolved in credentials and `ssl` only), where the oracle accepted it."
+added = ["tenants/0/setup/schedule_offset"]
+changelog = "**Splunk `schedule_offset` takes an integer, not a placeholder**"
+
+[[difference]]
 id = "toml-datetime-text"
 reason = "A TOML date-time is kept as toml_datetime writes it, losslessly: fractional seconds as written (`.5`, nanoseconds), a `-00:00` offset as `+00:00`. The oracle rounded to microseconds, padded the fraction to six digits and wrote UTC as `Z`; a message quotes the value as a string (`'1979-05-27T07:32:00Z'`) where the oracle wrote `datetime.datetime(...)`."
 fields = ["dt_fraction", "dt_offset", "time_nanos", "error", "message"]
@@ -340,6 +346,7 @@ text = "[[tenants]]\nname = \"a\"\nstrategies = []\n[tenants.setup]\nurl = \"u\"
 
 [[case]]
 id = "splunk-valid"
+difference = "splunk-offset-placeholder"
 kind = "text"
 path = "/w/.opentide/configurations/platforms/splunk.toml"
 text = "[platform]\nenabled = true\n[[tenants]]\nname = \"a\"\nstrategies = [\" preview \"]\n[tenants.setup]\nurl = \"$URL\"\nport = 8089\napp = \"search\"\nallow_skew = 1.5\nschedule_offset = \"$OFF\"\nssl = \"$SSL\"\n"

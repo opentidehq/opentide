@@ -143,7 +143,8 @@ pub(crate) fn needs_input_for(command: &str, message: String) -> Box<Report> {
     ))
 }
 
-/// Python's `repr()` of a string, for the messages that quote one.
+/// `text` in double quotes with Rust's escapes (its `Debug` form), for the
+/// messages that quote a value.
 pub(crate) fn repr(text: &str) -> String {
     opentide_schema::configuration::repr::quote(text)
 }
@@ -599,7 +600,7 @@ fn deployment_statuses(resolved: &Resolved) -> Vec<String> {
         .iter()
         .map(|entry| {
             entry.get("name").map_or_else(
-                || "None".to_owned(),
+                || "(no name)".to_owned(),
                 |name| match &name.value {
                     Value::Str(text) => text.clone(),
                     _ => opentide_schema::configuration::repr::node(name),
