@@ -8,7 +8,7 @@
 
 #[path = "../src/lexer.rs"]
 mod lexer;
-#[path = "../src/lexical.rs"]
+#[path = "legacy/lexical.rs"]
 mod lexical;
 #[path = "../src/parser.rs"]
 mod parser;

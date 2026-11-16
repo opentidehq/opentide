@@ -6,9 +6,9 @@
 //! function results, and arithmetic are typed here. Every type rule accepts
 //! `null`, as Elasticsearch's `TypeResolutions.isType` does.
 
+use crate::tree::Node;
 use opentide_core::{ByteSpan, Diagnostic, Range, Severity, codes, span_to_range};
 use std::collections::HashMap;
-use tree_sitter::Node;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Ty {

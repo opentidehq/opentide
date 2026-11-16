@@ -99,7 +99,8 @@ fn node_name(kind: K) -> &'static str {
     }
 }
 
-/// Nodes that are one token in tree-sitter: no children.
+/// Nodes that are one token in tree-sitter: no children. (`boolean` is not one: tree-sitter
+/// keeps its `true` or `false` as an anonymous child.)
 fn is_leaf(kind: K) -> bool {
     matches!(
         kind,
@@ -111,7 +112,6 @@ fn is_leaf(kind: K) -> bool {
             | K::IDENTIFIER
             | K::QUOTED_IDENTIFIER
             | K::NULL
-            | K::BOOLEAN
             | K::NUMBER
             | K::STRING
     )
@@ -125,12 +125,9 @@ fn is_run(kind: K) -> bool {
     )
 }
 
-/// Parses `source` into the analysis's tree.
-pub(crate) fn parse(source: &str) -> Tree {
-    let parse = parser::parse(source);
-    let root = SyntaxNode::new_root(parse.green);
-    let problems = parse
-        .errors
+/// The parser's errors, each with the token it stops at.
+fn problems(root: &SyntaxNode, errors: &[opentide_parse::SyntaxError]) -> Vec<Problem> {
+    errors
         .iter()
         .map(|e| {
             let at = usize::from(e.gap.end());
@@ -153,7 +150,14 @@ pub(crate) fn parse(source: &str) -> Tree {
                 ),
             }
         })
-        .collect();
+        .collect()
+}
+
+/// Parses `source` into the analysis's tree.
+pub(crate) fn parse(source: &str) -> Tree {
+    let parse = parser::parse(source);
+    let root = SyntaxNode::new_root(parse.green);
+    let problems = problems(&root, &parse.errors);
     let mut tree = Tree {
         data: Vec::new(),
         problems,
@@ -271,7 +275,14 @@ fn token_name(kind: K, text: &str) -> &'static str {
 }
 
 impl Tree {
-    fn push(&mut self, parent: Option<u32>, kind: &'static str, named: bool, start: usize, end: usize) -> u32 {
+    fn push(
+        &mut self,
+        parent: Option<u32>,
+        kind: &'static str,
+        named: bool,
+        start: usize,
+        end: usize,
+    ) -> u32 {
         let id = u32::try_from(self.data.len()).unwrap_or(u32::MAX);
         self.data.push(Data {
             kind,
@@ -292,7 +303,10 @@ impl Tree {
     fn trim(&mut self, id: u32) {
         let d = &self.data[id as usize];
         if let (Some(&first), Some(&last)) = (d.children.first(), d.children.last()) {
-            let (start, end) = (self.data[first as usize].start, self.data[last as usize].end);
+            let (start, end) = (
+                self.data[first as usize].start,
+                self.data[last as usize].end,
+            );
             let d = &mut self.data[id as usize];
             d.start = start;
             d.end = end;
@@ -337,9 +351,19 @@ impl Tree {
         'down: loop {
             for &c in &self.data[node as usize].children {
                 let child = &self.data[c as usize];
-                if child.named && child.start < start && end < child.end && !child.children.is_empty() {
-                    let inside = child.children.iter().any(|&g| self.data[g as usize].end <= start)
-                        && child.children.iter().any(|&g| self.data[g as usize].start >= end);
+                if child.named
+                    && child.start < start
+                    && end < child.end
+                    && !child.children.is_empty()
+                {
+                    let inside = child
+                        .children
+                        .iter()
+                        .any(|&g| self.data[g as usize].end <= start)
+                        && child
+                            .children
+                            .iter()
+                            .any(|&g| self.data[g as usize].start >= end);
                     if inside {
                         node = c;
                         continue 'down;
@@ -361,14 +385,10 @@ impl Tree {
     pub(crate) fn root_node(&self) -> Node<'_> {
         Node { tree: self, id: 0 }
     }
-
-    /// Whether the parser reported anything.
-    pub(crate) fn has_error(&self) -> bool {
-        !self.problems.is_empty()
-    }
 }
 
 /// The fields of `id`'s children, by the grammar's positions.
+#[expect(clippy::too_many_lines, reason = "one arm per node kind with fields")]
 fn assign_fields(data: &mut [Data], id: u32) {
     let kids = data[id as usize].children.clone();
     let kind = data[id as usize].kind;
@@ -433,7 +453,9 @@ fn assign_fields(data: &mut [Data], id: u32) {
             }
             // The field spans the comma list, commas included.
             if let Some(&first) = named_ix.get(1) {
-                (first..n).filter(|&i| k(i) == ",").for_each(|i| set.push((i, "arguments")));
+                (first..n)
+                    .filter(|&i| k(i) == ",")
+                    .for_each(|i| set.push((i, "arguments")));
             }
         }
         "function_call" => {
@@ -444,7 +466,9 @@ fn assign_fields(data: &mut [Data], id: u32) {
                 set.push((i, "arguments"));
             }
             if let Some(open) = pos("(") {
-                (open + 1..n).filter(|&i| k(i) == ",").for_each(|i| set.push((i, "arguments")));
+                (open + 1..n)
+                    .filter(|&i| k(i) == ",")
+                    .for_each(|i| set.push((i, "arguments")));
             }
         }
         "or_expression" | "and_expression" | "comparison" | "binary_expression" => {
@@ -454,10 +478,11 @@ fn assign_fields(data: &mut [Data], id: u32) {
             if let Some(&i) = named_ix.get(1) {
                 set.push((i, "right"));
             }
-            if let Some(i) = (0..n).find(|&i| !named(i) && k(i) != "comment") {
-                if kind != "or_expression" && kind != "and_expression" {
-                    set.push((i, "operator"));
-                }
+            if kind != "or_expression"
+                && kind != "and_expression"
+                && let Some(i) = (0..n).find(|&i| !named(i) && k(i) != "comment")
+            {
+                set.push((i, "operator"));
             }
         }
         "not_expression" | "unary_expression" => {
@@ -470,7 +495,14 @@ fn assign_fields(data: &mut [Data], id: u32) {
         }
         "relationship" => {
             for &i in &named_ix {
-                set.push((i, if k(i) == "subquery" { "subquery" } else { "relation" }));
+                set.push((
+                    i,
+                    if k(i) == "subquery" {
+                        "subquery"
+                    } else {
+                        "relation"
+                    },
+                ));
             }
         }
         "predicate_expression" => {
@@ -526,10 +558,6 @@ impl<'t> Node<'t> {
         self.d().named
     }
 
-    pub(crate) fn is_missing(&self) -> bool {
-        false
-    }
-
     pub(crate) fn field_name(&self) -> Option<&'static str> {
         self.d().field
     }
@@ -550,11 +578,7 @@ impl<'t> Node<'t> {
     pub(crate) fn has_error(&self) -> bool {
         let d = self.d();
         self.kind() == "ERROR"
-            || self
-                .tree
-                .problems
-                .iter()
-                .any(|p| {
+            || self.tree.problems.iter().any(|p| {
                 (p.token.start >= d.start && p.token.start < d.end)
                     || (p.span.start > d.start && p.span.start <= d.end)
             })
@@ -661,6 +685,10 @@ pub(crate) fn walk_with_ancestors<'t>(root: Node<'t>, mut f: impl FnMut(Node<'t>
 /// first that matches wins): what `capture(token, parent)` becomes on this tree.
 pub(crate) fn capture(node: Node<'_>) -> Option<&'static str> {
     let kind = node.kind();
+    // `(boolean) @boolean`: the node is not a leaf here, its `true` or `false` is.
+    if !node.is_named() && node.parent().is_some_and(|p| p.kind() == "boolean") {
+        return Some("boolean");
+    }
     if !node.is_named() {
         return opentide_highlight::keywords(opentide_core::LanguageId::Eql)?
             .iter()

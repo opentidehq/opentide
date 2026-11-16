@@ -21,21 +21,24 @@
     reason = "engine dispatchers match every node kind in one function"
 )]
 mod ecs;
+mod lexer;
 mod lexical;
+mod parser;
 mod regex;
 mod semantics;
+mod syntax;
+mod tree;
 
 pub use ecs::ecs_diagnostics;
 
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, Severity,
-    SignatureHelp, SignatureInformation, codes, span_to_range, suggest,
+    ByteSpan, CompletionItem, Diagnostic, ParameterInformation, Range, Severity, SignatureHelp,
+    SignatureInformation, codes, span_to_range, suggest,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
-use opentide_syntax::{first_error, node_span, parse as ts_parse, walk};
 use serde::Deserialize;
 use std::sync::OnceLock;
-use tree_sitter::Node;
+use tree::{Node, node_span, walk};
 
 const FUNCTIONS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
@@ -245,13 +248,11 @@ pub struct AnalyzeResult {
     pub tokens: Vec<HighlightToken>,
 }
 
-/// Parses `source` as Elasticsearch reads it: block comments that its lexer
-/// nests are blanked inside (same byte offsets) so the grammar ends them at
-/// the same place.
-fn parse_prepared(source: &str) -> Option<(tree_sitter::Tree, lexical::Prepared<'_>)> {
+/// Parses `source` as Elasticsearch reads it (the lexer ends a block comment where its lexer
+/// does, nested ones too), with what `lexical` finds about its comments.
+fn parse_prepared(source: &str) -> Option<(tree::Tree, lexical::Prepared)> {
     let prepared = lexical::prepare(source);
-    let tree = ts_parse(LanguageId::Eql, &prepared.text)?;
-    Some((tree, prepared))
+    Some((tree::parse(source), prepared))
 }
 
 #[expect(
@@ -273,15 +274,15 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     };
     let root = tree.root_node();
     let mut out = Vec::new();
-    if let Some(err) = first_error(root) {
+    if let Some(problem) = tree.problems.first() {
         out.push(Diagnostic::error(
             codes::EQL_PARSE_ERROR,
-            parse_error_message(err, source),
-            range(source, node_span(err)),
+            parse_error_message(problem, source),
+            range(source, problem.token),
         ));
     }
     check_comments(&prepared.comments, source, &mut out);
-    if let Some(span) = lexical::expression_depth_exceeded(root) {
+    if let Some(span) = expression_depth_exceeded(root) {
         out.push(Diagnostic::warning(
             codes::EQL_EXPRESSION_DEPTH,
             format!(
@@ -292,11 +293,11 @@ pub fn analyze(source: &str) -> AnalyzeResult {
         ));
     }
     let mut translated = std::collections::HashMap::new();
-    opentide_syntax::walk_with_ancestors(root, |node, ancestors| {
+    tree::walk_with_ancestors(root, |node, ancestors| {
         check_node(node, ancestors, &mut translated, source, catalog, &mut out);
     });
     check_pipes(root, source, catalog, &mut out);
-    let tokens = highlight(&spec, source, &prepared.text);
+    let tokens = highlight(&spec, source, root);
     AnalyzeResult {
         diagnostics: out,
         tokens,
@@ -320,25 +321,59 @@ fn check_comments(found: &[lexical::CommentFinding], source: &str, out: &mut Vec
     }
 }
 
-fn parse_error_message(err: Node, source: &str) -> String {
-    if err.is_missing() {
-        return format!("EQL syntax error: missing `{}`", err.kind());
+/// The parser's first error, worded for a reader: the token it stopped at and what it
+/// expected there.
+fn parse_error_message(problem: &tree::Problem, source: &str) -> String {
+    if problem.too_deep {
+        return format!("EQL syntax error: {}", problem.message);
     }
-    let snippet = text(err, source).trim();
-    if snippet.starts_with('=') && !snippet.starts_with("==") {
+    let near = source
+        .get(problem.token.start..problem.token.end)
+        .unwrap_or("")
+        .trim();
+    if near.starts_with('=') && !near.starts_with("==") {
         return "EQL syntax error: use `==` for equality; `=` is not a comparison".into();
     }
-    match snippet.split_whitespace().next() {
-        Some(first) => {
-            let lower = first.to_ascii_lowercase();
-            if KEYWORD_WORDS.contains(&lower.as_str()) && first != lower {
-                format!("EQL syntax error near `{first}`: keywords are lower case (`{lower}`)")
-            } else {
-                format!("EQL syntax error near `{first}`")
-            }
-        }
-        None => "EQL syntax error".into(),
+    let expected = problem
+        .expected
+        .as_deref()
+        .map(|e| format!("; expected {e}"))
+        .unwrap_or_default();
+    if near.is_empty() {
+        return format!("EQL syntax error: the query ends too early{expected}");
     }
+    let lower = near.to_ascii_lowercase();
+    if KEYWORD_WORDS.contains(&lower.as_str()) && near != lower {
+        format!("EQL syntax error near `{near}`: keywords are lower case (`{lower}`)")
+    } else {
+        format!("EQL syntax error near `{near}`{expected}")
+    }
+}
+
+/// `EqlParser` scans the tokens before parsing: `(` and `)` move a depth counter, and a run of
+/// prefix-capable `not`, `-`, `+` tokens adds to it; any other visible token ends the run.
+/// Whitespace and comments do not. Returns the token where `depth + run` first exceeds the
+/// limit.
+fn expression_depth_exceeded(root: Node) -> Option<ByteSpan> {
+    let mut depth: i64 = 0;
+    let mut chain: i64 = 0;
+    let mut found = None;
+    walk(root, |node| {
+        if found.is_some() || node.child_count() > 0 || node.end_byte() <= node.start_byte() {
+            return;
+        }
+        match node.kind() {
+            "(" => depth += 1,
+            ")" => depth -= 1,
+            "not" | "-" | "+" if !node.is_named() => chain += 1,
+            "comment" => {}
+            _ => chain = 0,
+        }
+        if depth + chain > lexical::MAX_EXPRESSION_DEPTH {
+            found = Some(node_span(node));
+        }
+    });
+    found
 }
 
 fn check_node(
@@ -996,26 +1031,27 @@ fn text<'a>(node: Node, source: &'a str) -> &'a str {
     source.get(node.start_byte()..node.end_byte()).unwrap_or("")
 }
 
-/// `parsed` is `source` with nested comments blanked; offsets are the same.
-fn highlight(spec: &HighlightSpec, source: &str, parsed: &str) -> Vec<HighlightToken> {
-    let Ok(mut spans) = opentide_syntax::query_captures(
-        LanguageId::Eql,
-        parsed,
-        opentide_highlight::EQL_HIGHLIGHTS_SCM,
-    ) else {
-        return Vec::new();
-    };
+/// Each leaf's capture (`tree::capture`), a known function's as `function.builtin`.
+fn highlight(spec: &HighlightSpec, source: &str, root: Node) -> Vec<HighlightToken> {
     let catalog = Catalog::cached();
-    for (span, capture) in &mut spans {
-        if capture == "function" {
-            let name = source.get(span.start..span.end).unwrap_or("");
-            if catalog.function(name.trim_end_matches('~')).is_some() {
-                *capture = "function.builtin".into();
-            }
+    let mut spans: Vec<(ByteSpan, &str)> = Vec::new();
+    walk(root, |node| {
+        if node.child_count() > 0 || node.end_byte() <= node.start_byte() {
+            return;
         }
-    }
-    let refs: Vec<(ByteSpan, &str)> = spans.iter().map(|(s, c)| (*s, c.as_str())).collect();
-    tokens_from_spans(spec, source, &refs).unwrap_or_default()
+        let Some(mut capture) = tree::capture(node) else {
+            return;
+        };
+        if capture == "function"
+            && catalog
+                .function(text(node, source).trim_end_matches('~'))
+                .is_some()
+        {
+            capture = "function.builtin";
+        }
+        spans.push((node_span(node), capture));
+    });
+    tokens_from_spans(spec, source, &spans).unwrap_or_default()
 }
 
 /// One `sequence` in a query, for rule-level checks such as Tide's

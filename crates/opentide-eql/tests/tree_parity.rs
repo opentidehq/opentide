@@ -7,7 +7,7 @@
 
 #[path = "../src/lexer.rs"]
 mod lexer;
-#[path = "../src/lexical.rs"]
+#[path = "legacy/lexical.rs"]
 mod lexical;
 #[path = "../src/parser.rs"]
 mod parser;
@@ -133,6 +133,12 @@ fn the_tree_is_tree_sitters_on_every_valid_file_and_line() {
             }
         }
     }
-    assert!(bad.is_empty(), "{} differ:\n{}", bad.len(), bad.iter().take(30).cloned().collect::<Vec<_>>().join("\n"));
+    assert!(
+        bad.is_empty(),
+        "{} differ:\n{}",
+        bad.len(),
+        bad.iter().take(30).cloned().collect::<Vec<_>>().join("\n")
+    );
     assert!(compared > 300, "{compared} compared");
 }
+
