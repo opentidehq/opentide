@@ -48,6 +48,7 @@ const PARENT_RULES: &[(K, K, &str)] = &[
     (K::KEYWORD_OPERATOR, K::SERIALIZE_KW, "keyword"),
     (K::SCAN_OPERATOR, K::SCAN_KW, "keyword"),
     (K::KEYWORD_OPERATOR, K::AS_KW, "keyword"),
+    (K::PARSE_KV_OPERATOR, K::AS_KW, "keyword"),
     (K::KEYWORD_OPERATOR, K::GETSCHEMA_KW, "keyword"),
     (K::MAKE_SERIES_OPERATOR, K::MAKE_SERIES_KW, "keyword"),
     (K::KEYWORD_OPERATOR, K::SAMPLE_KW, "keyword"),

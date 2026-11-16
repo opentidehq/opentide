@@ -559,7 +559,6 @@ fn kql_named_rules_are_known() {
         "unknown_operator",
         "count_operator",
         "keyword_operator",
-        "parse_kv_operator",
         "project_keep_operator",
         "project_reorder_operator",
         // pieces of the productions above, covered by their fixtures

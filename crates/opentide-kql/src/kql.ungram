@@ -182,7 +182,11 @@ ParseWhereOperator =
 ParsePart = ParsePiece | ParseColumn
 ParsePiece = piece:('string' | '*')
 ParseColumn = name:'ident' (':' Type)?
-ParseKvOperator = keyword:'parse-kv' args:Expr?
+// `parse-kv Message as (Level: string) with (pair_delimiter = ",")`.
+ParseKvOperator =
+  keyword:'parse-kv' args:Expr?
+  ('as' '(' DatatableColumn (',' DatatableColumn)* ','? ')')?
+  ('with' '(' OperatorOption (',' OperatorOption)* ')')?
 
 TakeOperator = 'take' count:'number'
 LimitOperator = 'limit' count:'number'

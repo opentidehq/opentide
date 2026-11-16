@@ -295,6 +295,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 - **`opentide serve` names a run's missing working directory in the system's words** ([#1140](https://github.com/opentidehq/opentide/issues/1140)). A `run` whose `cwd` is not a directory fails with `cannot run in the working directory <path>: No such file or directory (os error 2)`, or `… <path>: not a directory`, not `[Errno 2] No such file or directory: '<path>'`.
 
 ### Fixed
+- **`parse-kv` takes its keys and options** ([#1230](https://github.com/opentidehq/opentide/issues/1230)). A KQL query with `parse-kv Message as (Level: string) with (pair_delimiter = " ")`, Kusto's documented form, was a `kql_parse_error`: only `parse-kv Message` parsed.
 
 - **`--json` log lines no longer carry a `logger` field** ([#1140](https://github.com/opentidehq/opentide/issues/1140)). The notes above already said so; the lines still ended with the name of a Python module (`"logger":"opentide.cli.services.deploy"`) after the event. They hold the event's fields, `event`, `level` and `timestamp`, as documented.
 - **Splunk `schedule_offset` takes an integer, not a placeholder** ([#1140](https://github.com/opentidehq/opentide/issues/1140)). `opentide validate` and the editor accepted `schedule_offset = "$NAME"`, which `deploy` then refused with `schedule_offset must be an integer`: `deploy` resolves placeholders in credentials and `ssl` only. They now refuse it at its key; write the number of minutes.
