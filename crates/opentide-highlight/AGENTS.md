@@ -14,7 +14,7 @@ opentide-analysis, opentide-lsp and opentide-wasm depend on it.
 
 - Renaming a capture is a major (breaking) change; adding one is a minor (`[meta].version`).
 - `highlights/generated/` is written by `opentide-lsp generate-highlights`, never by hand.
-- The TextMate keywords of a language come from its `KEYWORDS: &[(&str, Capture)]` table (`src/keywords.rs`, `keywords(language)`) when it has one, else from its `highlights.scm`. The output is the same bytes either way. A table names captures of `highlights/spec.toml` only: they are a frozen contract. A language adds its table when its engine moves to `opentide-parse` (#1219).
+- The TextMate keywords of a query language come from its `KEYWORDS: &[(&str, Capture)]` table (`src/keywords/<lang>.rs`, `keywords(language)`); Tide YAML and the configuration have none. The query languages have no `highlights.scm` (#1231); `TIDE_HIGHLIGHTS_SCM` is Tide's query for tree-sitter-yaml in editors, which no generator reads. A table names captures of `highlights/spec.toml` only: they are a frozen contract.
 - The bundled Tide catalog is generated from the Rust models (`cargo xtask codegen`) and checked by `cargo xtask codegen --check`.
 - A workspace catalog replaces the bundled one process-wide, so `tests/workspace_catalog.rs` is a binary of its own.
 - No `std::fs` in `src/`.

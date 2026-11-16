@@ -165,7 +165,7 @@ The test profiles are in [`.config/nextest.toml`](.config/nextest.toml); CI's jo
   neither has an exclude list. Never add one: fix the code or, where a tool is wrong, suppress
   the single site with a reason (`# noqa: RULE -- why`, `# ty: ignore[rule]  # why`).
 - **The Rust workspace** passes rustfmt and `clippy -D warnings` under the lints in the root
-  [`Cargo.toml`](Cargo.toml) (`[workspace.lints]`: `unsafe_code` forbidden outside two crates,
+  [`Cargo.toml`](Cargo.toml) (`[workspace.lints]`: `unsafe_code` forbidden in every crate,
   `clippy::pedantic`, no `unwrap`/`expect`/`dbg!`/`todo!`/`unimplemented!` outside tests,
   `missing_docs`). Fix what a lint reports, or put `#[expect(lint, reason = "...")]` on the
   narrowest item where it fires; growing the workspace's allow-list is a decision of its own.

@@ -32,7 +32,7 @@ The catalog is `searchbnf`-informed; opentide still owns the grammar. Unknown co
 
 **Hover:** commands + functions (from catalog docs).
 
-**Highlights:** `highlights.scm` colors dedicated commands + `(catalog_command (catalog_command_name) @keyword)`. AST fallback also treats `catalog_command_name` as `keyword`.
+**Highlights:** (measured against the tree-sitter `highlights.scm`, deleted in #1231; the parser's highlighter and the `KEYWORDS` table replaced it with the same tokens) `highlights.scm` colored dedicated commands + `(catalog_command (catalog_command_name) @keyword)`. AST fallback also treats `catalog_command_name` as `keyword`.
 
 ---
 
