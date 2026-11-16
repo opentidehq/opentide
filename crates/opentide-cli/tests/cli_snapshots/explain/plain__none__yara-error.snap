@@ -8,7 +8,7 @@ exit: 0
 ━━━ stdout
 # yara_unknown_module
 
-A YARA import names a module outside yara-1.0's 13.
+A YARA import names a module opentide does not know: it knows YARA-X's default modules except vt, and refuses magic, which YARA-X does not build by default.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 

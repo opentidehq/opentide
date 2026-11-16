@@ -180,3 +180,11 @@ paths = [
   "crates/testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/159.in",
   "crates/testdata/conformance/yara/cases.json#yara-x:lib/src/compiler/tests/testdata/errors/160.in",
 ]
+
+[[yara]]
+id = "vt-module-not-supported"
+check = "yara_x"
+reason = "YARA-X builds `vt` by default and compiles `import \"vt\"`; opentide refuses it on purpose (yara_unknown_module): `vt` describes VirusTotal's own scan metadata, which only VirusTotal's scanning fills in (maintainer decision, #1225). xtask/src/yara_modules.rs EXCLUDED leaves it out of the generated catalogue."
+paths = [
+  "crates/testdata/conformance/yara/cases.json#opentide:modules/vt",
+]

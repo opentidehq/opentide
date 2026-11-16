@@ -1793,7 +1793,9 @@ pub mod codes {
             YARA_RULE_IDENTIFIER_CONFLICT => {
                 "A YARA rule is named like a keyword, a built-in or an imported module."
             }
-            YARA_UNKNOWN_MODULE => "A YARA import names a module outside yara-1.0's 13.",
+            YARA_UNKNOWN_MODULE => {
+                "A YARA import names a module opentide does not know: it knows YARA-X's default modules except vt, and refuses magic, which YARA-X does not build by default."
+            }
             YARA_MODULE_NOT_IMPORTED => {
                 "A YARA module field or function is used without importing its module."
             }

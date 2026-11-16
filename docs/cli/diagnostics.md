@@ -441,7 +441,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`yara_type`](#yara_type) | A YARA operator or function is applied to a value of the wrong type. |
 | [`yara_undefined_identifier`](#yara_undefined_identifier) | A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as YARA-X refuses: a module field called as a function, a module function named without a call, or `entrypoint`. |
 | [`yara_undefined_string`](#yara_undefined_string) | A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define. |
-| [`yara_unknown_module`](#yara_unknown_module) | A YARA import names a module outside yara-1.0's 13. |
+| [`yara_unknown_module`](#yara_unknown_module) | A YARA import names a module opentide does not know: it knows YARA-X's default modules except vt, and refuses magic, which YARA-X does not build by default. |
 | [`yara_unknown_module_member`](#yara_unknown_module_member) | The YARA module has no such field or function, or the function takes other arguments. |
 | [`yara_unreferenced_string`](#yara_unreferenced_string) | A YARA string is never used in the condition, which YARA-X refuses unless the condition uses them. |
 | [`yara_x_incompatible`](#yara_x_incompatible) | Retired in opentide 0.29.0; YARA-X is the YARA language: what it refuses is an error with its own code (`yara_regexp`, `yara_type`, `yara_parse_error`, ...), and syntax only YARA-X has is `yara_x_only_syntax` under a profile that refuses it. |
@@ -7842,7 +7842,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## yara_unknown_module
 
-A YARA import names a module outside yara-1.0's 13.
+A YARA import names a module opentide does not know: it knows YARA-X's default modules except vt, and refuses magic, which YARA-X does not build by default.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
