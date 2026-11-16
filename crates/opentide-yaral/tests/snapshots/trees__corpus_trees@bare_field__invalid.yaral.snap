@@ -1,0 +1,23 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/bare_field__invalid.yaral
+---
+SOURCE_FILE@0..48
+  COMMENT@0..26 "// prod:bare_field invalid"
+  WHITESPACE@26..27 "\n"
+  SEARCH_QUERY@27..47
+    SEARCH_EVENTS@27..47
+      COMPARISON@27..47
+        BARE_FIELD@27..37
+          IDENT@27..36 "principal"
+          MEMBER@36..37
+            ACCESS_DOT@36..37 "."
+        WHITESPACE@37..38 " "
+        EQ@38..39 "="
+        WHITESPACE@39..40 " "
+        LITERAL@40..47
+          STRING@40..47 "\"web01\""
+  WHITESPACE@47..48 "\n"
+errors:
+37..38: expected a field name (expected a field name)

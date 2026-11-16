@@ -1,0 +1,68 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/in_expression__valid.esql
+---
+SOURCE_FILE@0..116
+  COMMENT@0..27 "// prod:in_expression valid"
+  WHITESPACE@27..28 "\n"
+  QUERY@28..115
+    FROM_COMMAND@28..52
+      FROM_KW@28..32 "FROM"
+      WHITESPACE@32..33 " "
+      INDEX_PATTERN@33..39
+        INDEX_NAME@33..39
+          SOURCE_TEXT@33..39 "logs-*"
+      WHITESPACE@39..40 " "
+      METADATA@40..52
+        METADATA_KW@40..48 "METADATA"
+        WHITESPACE@48..49 " "
+        METADATA_FIELD@49..52
+          SOURCE_TEXT@49..52 "_id"
+    WHITESPACE@52..53 "\n"
+    PIPE@53..54 "|"
+    WHITESPACE@54..55 " "
+    WHERE_COMMAND@55..115
+      WHERE_KW@55..60 "WHERE"
+      WHITESPACE@60..61 " "
+      AND_EXPRESSION@61..115
+        IN_EXPRESSION@61..95
+          QUALIFIED_NAME@61..73
+            IDENTIFIER@61..68
+              IDENT@61..68 "process"
+            DOT@68..69 "."
+            IDENTIFIER@69..73
+              IDENT@69..73 "name"
+          WHITESPACE@73..74 " "
+          IN_KW@74..76 "IN"
+          WHITESPACE@76..77 " "
+          L_PAREN@77..78 "("
+          STRING@78..85
+            STRING_LIT@78..85 "\"a.exe\""
+          COMMA@85..86 ","
+          WHITESPACE@86..87 " "
+          STRING@87..94
+            STRING_LIT@87..94 "\"b.exe\""
+          R_PAREN@94..95 ")"
+        WHITESPACE@95..96 " "
+        AND_KW@96..99 "AND"
+        WHITESPACE@99..100 " "
+        IN_EXPRESSION@100..115
+          QUALIFIED_NAME@100..101
+            IDENTIFIER@100..101
+              IDENT@100..101 "x"
+          WHITESPACE@101..102 " "
+          NOT_KW@102..105 "NOT"
+          WHITESPACE@105..106 " "
+          IN_KW@106..108 "IN"
+          WHITESPACE@108..109 " "
+          L_PAREN@109..110 "("
+          NUMBER@110..111
+            NUMBER_LIT@110..111 "1"
+          COMMA@111..112 ","
+          WHITESPACE@112..113 " "
+          NUMBER@113..114
+            NUMBER_LIT@113..114 "2"
+          R_PAREN@114..115 ")"
+  WHITESPACE@115..116 "\n"
+--- errors

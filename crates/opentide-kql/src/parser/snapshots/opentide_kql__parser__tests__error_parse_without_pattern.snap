@@ -1,0 +1,22 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | parse Msg with\")"
+---
+SOURCE_FILE@0..18
+  QUERY@0..18
+    TABULAR_EXPRESSION@0..18
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      PARSE_OPERATOR@4..18
+        PARSE_KW@4..9 "parse"
+        WHITESPACE@9..10 " "
+        NAME_REF@10..13
+          IDENT@10..13 "Msg"
+        WHITESPACE@13..14 " "
+        WITH_KW@14..18 "with"
+errors:
+18..18: expected a pattern

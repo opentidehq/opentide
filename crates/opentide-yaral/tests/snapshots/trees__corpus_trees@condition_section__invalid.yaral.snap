@@ -1,0 +1,30 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/condition_section__invalid.yaral
+---
+SOURCE_FILE@0..69
+  COMMENT@0..33 "// prod:condition_section invalid"
+  WHITESPACE@33..34 "\n"
+  RULE_DECLARATION@34..68
+    RULE_KW@34..38 "rule"
+    WHITESPACE@38..39 " "
+    RULE_NAME@39..40
+      IDENT@39..40 "r"
+    WHITESPACE@40..41 " "
+    L_BRACE@41..42 "{"
+    WHITESPACE@42..45 "\n  "
+    CONDITION_SECTION@45..66
+      CONDITION_KW@45..54 "condition"
+      COLON@54..55 ":"
+      WHITESPACE@55..60 "\n    "
+      AND_EXPR@60..66
+        VARIABLE@60..62
+          VAR_TOKEN@60..62 "$e"
+        WHITESPACE@62..63 " "
+        AND_KW@63..66 "and"
+    WHITESPACE@66..67 "\n"
+    R_BRACE@67..68 "}"
+  WHITESPACE@68..69 "\n"
+errors:
+66..67: expected an expression

@@ -1,0 +1,37 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/rule_declaration__invalid.yaral
+---
+SOURCE_FILE@0..85
+  COMMENT@0..32 "// prod:rule_declaration invalid"
+  WHITESPACE@32..33 "\n"
+  RULE_DECLARATION@33..84
+    RULE_KW@33..37 "rule"
+    WHITESPACE@37..38 " "
+    L_BRACE@38..39 "{"
+    WHITESPACE@39..42 "\n  "
+    EVENTS_SECTION@42..82
+      EVENTS_KW@42..48 "events"
+      COLON@48..49 ":"
+      WHITESPACE@49..54 "\n    "
+      COMPARISON@54..82
+        UDM_FIELD@54..76
+          VARIABLE@54..56
+            VAR_TOKEN@54..56 "$e"
+          MEMBER@56..65
+            ACCESS_DOT@56..57 "."
+            FIELD_NAME@57..65 "metadata"
+          MEMBER@65..76
+            ACCESS_DOT@65..66 "."
+            FIELD_NAME@66..76 "event_type"
+        WHITESPACE@76..77 " "
+        EQ@77..78 "="
+        WHITESPACE@78..79 " "
+        LITERAL@79..82
+          STRING@79..82 "\"A\""
+    WHITESPACE@82..83 "\n"
+    R_BRACE@83..84 "}"
+  WHITESPACE@84..85 "\n"
+errors:
+37..38: expected a rule name

@@ -1,0 +1,54 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/parameter__valid.esql
+---
+SOURCE_FILE@0..87
+  COMMENT@0..23 "// prod:parameter valid"
+  WHITESPACE@23..24 "\n"
+  QUERY@24..86
+    FROM_COMMAND@24..48
+      FROM_KW@24..28 "FROM"
+      WHITESPACE@28..29 " "
+      INDEX_PATTERN@29..35
+        INDEX_NAME@29..35
+          SOURCE_TEXT@29..35 "logs-*"
+      WHITESPACE@35..36 " "
+      METADATA@36..48
+        METADATA_KW@36..44 "METADATA"
+        WHITESPACE@44..45 " "
+        METADATA_FIELD@45..48
+          SOURCE_TEXT@45..48 "_id"
+    WHITESPACE@48..49 "\n"
+    PIPE@49..50 "|"
+    WHITESPACE@50..51 " "
+    WHERE_COMMAND@51..86
+      WHERE_KW@51..56 "WHERE"
+      WHITESPACE@56..57 " "
+      AND_EXPRESSION@57..86
+        COMPARISON@57..75
+          QUALIFIED_NAME@57..66
+            IDENTIFIER@57..61
+              IDENT@57..61 "host"
+            DOT@61..62 "."
+            IDENTIFIER@62..66
+              IDENT@62..66 "name"
+          WHITESPACE@66..67 " "
+          EQ_EQ@67..69 "=="
+          WHITESPACE@69..70 " "
+          PARAMETER@70..75
+            PARAM@70..75 "?host"
+        WHITESPACE@75..76 " "
+        AND_KW@76..79 "AND"
+        WHITESPACE@79..80 " "
+        COMPARISON@80..86
+          QUALIFIED_NAME@80..81
+            IDENTIFIER@80..81
+              IDENT@80..81 "x"
+          WHITESPACE@81..82 " "
+          GT@82..83 ">"
+          WHITESPACE@83..84 " "
+          PARAMETER@84..86
+            PARAM@84..86 "?1"
+  WHITESPACE@86..87 "\n"
+--- errors

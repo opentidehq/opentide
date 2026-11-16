@@ -1,0 +1,102 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/stage__valid.yaral
+---
+SOURCE_FILE@0..219
+  COMMENT@0..19 "// prod:stage valid"
+  WHITESPACE@19..20 "\n"
+  SEARCH_QUERY@20..218
+    STAGE@20..183
+      STAGE_KW@20..25 "stage"
+      WHITESPACE@25..26 " "
+      STAGE_NAME@26..31
+        IDENT@26..31 "daily"
+      WHITESPACE@31..32 " "
+      L_BRACE@32..33 "{"
+      WHITESPACE@33..36 "\n  "
+      SEARCH_EVENTS@36..107
+        COMPARISON@36..78
+          BARE_FIELD@36..55
+            IDENT@36..44 "metadata"
+            MEMBER@44..55
+              ACCESS_DOT@44..45 "."
+              FIELD_NAME@45..55 "event_type"
+          WHITESPACE@55..56 " "
+          EQ@56..57 "="
+          WHITESPACE@57..58 " "
+          LITERAL@58..78
+            STRING@58..78 "\"NETWORK_CONNECTION\""
+        WHITESPACE@78..81 "\n  "
+        COMPARISON@81..107
+          VARIABLE@81..86
+            VAR_TOKEN@81..86 "$host"
+          WHITESPACE@86..87 " "
+          EQ@87..88 "="
+          WHITESPACE@88..89 " "
+          BARE_FIELD@89..107
+            IDENT@89..98 "principal"
+            MEMBER@98..107
+              ACCESS_DOT@98..99 "."
+              FIELD_NAME@99..107 "hostname"
+      WHITESPACE@107..110 "\n  "
+      MATCH_SECTION@110..133
+        MATCH_KW@110..115 "match"
+        COLON@115..116 ":"
+        WHITESPACE@116..121 "\n    "
+        MATCH_CLAUSE@121..133
+          VARIABLE@121..126
+            VAR_TOKEN@121..126 "$host"
+          WHITESPACE@126..127 " "
+          MATCH_WINDOW@127..133
+            BY_KW@127..129 "by"
+            WHITESPACE@129..130 " "
+            TIME_UNIT@130..133
+              IDENT@130..133 "day"
+      WHITESPACE@133..136 "\n  "
+      OUTCOME_SECTION@136..181
+        OUTCOME_KW@136..143 "outcome"
+        COLON@143..144 ":"
+        WHITESPACE@144..149 "\n    "
+        COMPARISON@149..181
+          VARIABLE@149..155
+            VAR_TOKEN@149..155 "$bytes"
+          WHITESPACE@155..156 " "
+          EQ@156..157 "="
+          WHITESPACE@157..158 " "
+          FUNCTION_CALL@158..181
+            FUNCTION_NAME@158..161
+              IDENT@158..161 "sum"
+            L_PAREN@161..162 "("
+            ARGUMENTS@162..180
+              BARE_FIELD@162..180
+                IDENT@162..169 "network"
+                MEMBER@169..180
+                  ACCESS_DOT@169..170 "."
+                  FIELD_NAME@170..180 "sent_bytes"
+            R_PAREN@180..181 ")"
+      WHITESPACE@181..182 "\n"
+      R_BRACE@182..183 "}"
+    WHITESPACE@183..184 "\n"
+    SEARCH_EVENTS@184..203
+      COMPARISON@184..203
+        VARIABLE@184..189
+          VAR_TOKEN@184..189 "$host"
+        WHITESPACE@189..190 " "
+        EQ@190..191 "="
+        WHITESPACE@191..192 " "
+        UDM_FIELD@192..203
+          VARIABLE@192..198
+            VAR_TOKEN@192..198 "$daily"
+          MEMBER@198..203
+            ACCESS_DOT@198..199 "."
+            FIELD_NAME@199..203 "host"
+    WHITESPACE@203..204 "\n"
+    MATCH_SECTION@204..218
+      MATCH_KW@204..209 "match"
+      COLON@209..210 ":"
+      WHITESPACE@210..213 "\n  "
+      MATCH_CLAUSE@213..218
+        VARIABLE@213..218
+          VAR_TOKEN@213..218 "$host"
+  WHITESPACE@218..219 "\n"

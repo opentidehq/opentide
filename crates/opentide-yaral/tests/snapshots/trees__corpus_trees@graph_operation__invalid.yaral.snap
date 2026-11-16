@@ -1,0 +1,34 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/graph_operation__invalid.yaral
+---
+SOURCE_FILE@0..74
+  COMMENT@0..31 "// prod:graph_operation invalid"
+  WHITESPACE@31..32 "\n"
+  RULE_DECLARATION@32..73
+    RULE_KW@32..36 "rule"
+    WHITESPACE@36..37 " "
+    RULE_NAME@37..38
+      IDENT@37..38 "r"
+    WHITESPACE@38..39 " "
+    L_BRACE@39..40 "{"
+    WHITESPACE@40..43 "\n  "
+    SETUP_SECTION@43..71
+      SETUP_KW@43..48 "setup"
+      COLON@48..49 ":"
+      WHITESPACE@49..54 "\n    "
+      GRAPH_APPEND@54..71
+        GRAPH_APPEND_KW@54..66 "graph_append"
+        WHITESPACE@66..67 " "
+        ARRAY_EXPR@67..71
+          L_BRACK@67..68 "["
+          VARIABLE@68..70
+            VAR_TOKEN@68..70 "$g"
+          COMMA@70..71 ","
+    WHITESPACE@71..72 "\n"
+    R_BRACE@72..73 "}"
+  WHITESPACE@73..74 "\n"
+errors:
+71..72: expected an expression (expected `]`)
+71..72: expected `]` (expected `]`)

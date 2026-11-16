@@ -1,0 +1,137 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/of_expression__valid.yaral
+---
+SOURCE_FILE@0..287
+  COMMENT@0..27 "// prod:of_expression valid"
+  WHITESPACE@27..28 "\n"
+  RULE_DECLARATION@28..286
+    RULE_KW@28..32 "rule"
+    WHITESPACE@32..33 " "
+    RULE_NAME@33..34
+      IDENT@33..34 "r"
+    WHITESPACE@34..35 " "
+    L_BRACE@35..36 "{"
+    WHITESPACE@36..39 "\n  "
+    META_SECTION@39..61
+      META_KW@39..43 "meta"
+      COLON@43..44 ":"
+      WHITESPACE@44..49 "\n    "
+      META_ENTRY@49..61
+        META_KEY@49..55
+          IDENT@49..55 "author"
+        WHITESPACE@55..56 " "
+        EQ@56..57 "="
+        WHITESPACE@57..58 " "
+        LITERAL@58..61
+          STRING@58..61 "\"a\""
+    WHITESPACE@61..64 "\n  "
+    EVENTS_SECTION@64..224
+      EVENTS_KW@64..70 "events"
+      COLON@70..71 ":"
+      WHITESPACE@71..76 "\n    "
+      COMPARISON@76..113
+        UDM_FIELD@76..98
+          VARIABLE@76..78
+            VAR_TOKEN@76..78 "$a"
+          MEMBER@78..87
+            ACCESS_DOT@78..79 "."
+            FIELD_NAME@79..87 "metadata"
+          MEMBER@87..98
+            ACCESS_DOT@87..88 "."
+            FIELD_NAME@88..98 "event_type"
+        WHITESPACE@98..99 " "
+        EQ@99..100 "="
+        WHITESPACE@100..101 " "
+        LITERAL@101..113
+          STRING@101..113 "\"USER_LOGIN\""
+      WHITESPACE@113..118 "\n    "
+      COMPARISON@118..156
+        UDM_FIELD@118..140
+          VARIABLE@118..120
+            VAR_TOKEN@118..120 "$b"
+          MEMBER@120..129
+            ACCESS_DOT@120..121 "."
+            FIELD_NAME@121..129 "metadata"
+          MEMBER@129..140
+            ACCESS_DOT@129..130 "."
+            FIELD_NAME@130..140 "event_type"
+        WHITESPACE@140..141 " "
+        EQ@141..142 "="
+        WHITESPACE@142..143 " "
+        LITERAL@143..156
+          STRING@143..156 "\"USER_LOGOUT\""
+      WHITESPACE@156..161 "\n    "
+      COMPARISON@161..190
+        UDM_FIELD@161..182
+          VARIABLE@161..163
+            VAR_TOKEN@161..163 "$a"
+          MEMBER@163..170
+            ACCESS_DOT@163..164 "."
+            FIELD_NAME@164..170 "target"
+          MEMBER@170..175
+            ACCESS_DOT@170..171 "."
+            FIELD_NAME@171..175 "user"
+          MEMBER@175..182
+            ACCESS_DOT@175..176 "."
+            FIELD_NAME@176..182 "userid"
+        WHITESPACE@182..183 " "
+        EQ@183..184 "="
+        WHITESPACE@184..185 " "
+        VARIABLE@185..190
+          VAR_TOKEN@185..190 "$user"
+      WHITESPACE@190..195 "\n    "
+      COMPARISON@195..224
+        UDM_FIELD@195..216
+          VARIABLE@195..197
+            VAR_TOKEN@195..197 "$b"
+          MEMBER@197..204
+            ACCESS_DOT@197..198 "."
+            FIELD_NAME@198..204 "target"
+          MEMBER@204..209
+            ACCESS_DOT@204..205 "."
+            FIELD_NAME@205..209 "user"
+          MEMBER@209..216
+            ACCESS_DOT@209..210 "."
+            FIELD_NAME@210..216 "userid"
+        WHITESPACE@216..217 " "
+        EQ@217..218 "="
+        WHITESPACE@218..219 " "
+        VARIABLE@219..224
+          VAR_TOKEN@219..224 "$user"
+    WHITESPACE@224..227 "\n  "
+    MATCH_SECTION@227..251
+      MATCH_KW@227..232 "match"
+      COLON@232..233 ":"
+      WHITESPACE@233..238 "\n    "
+      MATCH_CLAUSE@238..251
+        VARIABLE@238..243
+          VAR_TOKEN@238..243 "$user"
+        WHITESPACE@243..244 " "
+        MATCH_WINDOW@244..251
+          OVER_KW@244..248 "over"
+          WHITESPACE@248..249 " "
+          DURATION@249..251 "1h"
+    WHITESPACE@251..254 "\n  "
+    CONDITION_SECTION@254..284
+      CONDITION_KW@254..263 "condition"
+      COLON@263..264 ":"
+      WHITESPACE@264..269 "\n    "
+      OF_EXPR@269..284
+        ANY_KW@269..272 "any"
+        WHITESPACE@272..273 " "
+        OF_KW@273..275 "of"
+        WHITESPACE@275..276 " "
+        ARRAY_EXPR@276..284
+          L_BRACK@276..277 "["
+          VARIABLE@277..279
+            VAR_TOKEN@277..279 "$a"
+          COMMA@279..280 ","
+          WHITESPACE@280..281 " "
+          VARIABLE@281..283
+            VAR_TOKEN@281..283 "$b"
+          R_BRACK@283..284 "]"
+    WHITESPACE@284..285 "\n"
+    R_BRACE@285..286 "}"
+  WHITESPACE@286..287 "\n"

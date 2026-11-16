@@ -1,0 +1,22 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(\"a:[1\\tTO 2]\")"
+---
+SourceFile@0..10
+  BooleanQuery@0..10
+    FieldQuery@0..7
+      FieldName@0..1
+        Term@0..1 "a"
+      Colon@1..2 ":"
+      RangeQuery@2..7
+        LBracket@2..3 "["
+        RangeTerm@3..7 "1\tTO"
+    Whitespace@7..8 " "
+    TermQuery@8..9
+      Term@8..9 "2"
+    Error@9..10
+      RBracket@9..10 "]"
+7..8: missing `TO` (expected ToKw)
+7..8: missing a range bound (expected Phrase, RangeTerm, ToKw)
+7..8: missing a range closer (expected Phrase, RangeTerm, RBracket, RBrace, ToKw)
+9..9: unexpected (expected Term, WildcardTerm, Star, Phrase, Regexp, Boost, Fuzzy, BareOperator, AndKw, OrKw, NotKw, AmpAmp, PipePipe, Bang, Plus, Minus, LParen, LBracket, LBrace)

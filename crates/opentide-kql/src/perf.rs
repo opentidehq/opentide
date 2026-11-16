@@ -6,27 +6,60 @@
 //! cannot know which side is larger.
 
 use crate::schema::{Analysis, Known};
-use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
+use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
 use tree_sitter::Node;
 
 const CITE: &str = "https://learn.microsoft.com/en-us/kusto/query/best-practices";
 
-pub(crate) fn collect(root: Node, source: &str, columns: &Analysis, out: &mut Vec<Diagnostic>) {
-    walk(root, source, columns, out);
-    warn_scope(source, out);
+/// One tabular expression as the checks read it: its span, and its
+/// operators (the tree-sitter node name of each, and its span).
+pub(crate) struct Pipeline {
+    pub(crate) span: ByteSpan,
+    pub(crate) ops: Vec<Op>,
 }
 
-fn walk(node: Node, source: &str, columns: &Analysis, out: &mut Vec<Diagnostic>) {
+/// An operator of a [`Pipeline`].
+#[derive(Clone, Copy)]
+pub(crate) struct Op {
+    pub(crate) kind: &'static str,
+    pub(crate) span: ByteSpan,
+}
+
+pub(crate) fn collect(root: Node, source: &str, columns: &Analysis, out: &mut Vec<Diagnostic>) {
+    let mut pipelines = Vec::new();
+    walk(root, &mut pipelines);
+    check(&pipelines, source, columns, out);
+}
+
+/// The checks over the pipelines of a query, in source order, and over its
+/// text.
+pub(crate) fn check(
+    pipelines: &[Pipeline],
+    source: &str,
+    columns: &Analysis,
+    out: &mut Vec<Diagnostic>,
+) {
+    let lines = LineIndex::new(source);
+    for pipeline in pipelines {
+        warn_pipeline(pipeline, &lines, columns, out);
+    }
+    warn_scope(source, &lines, out);
+}
+
+fn walk(node: Node, out: &mut Vec<Pipeline>) {
     if node.kind() == "tabular_expression" {
-        warn_pipeline(node, source, columns, out);
+        out.push(Pipeline {
+            span: span(node),
+            ops: operators(node),
+        });
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        walk(child, source, columns, out);
+        walk(child, out);
     }
 }
 
-fn operators(expr: Node<'_>) -> Vec<Node<'_>> {
+fn operators(expr: Node<'_>) -> Vec<Op> {
     let mut ops = Vec::new();
     let mut cursor = expr.walk();
     for child in expr.children(&mut cursor) {
@@ -36,7 +69,10 @@ fn operators(expr: Node<'_>) -> Vec<Node<'_>> {
         let mut inner = child.walk();
         for grand in child.children(&mut inner) {
             if grand.kind().ends_with("_operator") {
-                ops.push(grand);
+                ops.push(Op {
+                    kind: grand.kind(),
+                    span: span(grand),
+                });
                 break;
             }
         }
@@ -45,10 +81,8 @@ fn operators(expr: Node<'_>) -> Vec<Node<'_>> {
 }
 
 /// The pipeline starts from a table (or ASIM parser), not a `let`.
-fn source_is_table(expr: Node, columns: &Analysis) -> bool {
-    columns
-        .pipeline(span(expr))
-        .is_some_and(|p| p.reads_dataset())
+fn source_is_table(expr: ByteSpan, columns: &Analysis) -> bool {
+    columns.pipeline(expr).is_some_and(|p| p.reads_dataset())
 }
 
 fn span(node: Node) -> ByteSpan {
@@ -59,17 +93,17 @@ fn span(node: Node) -> ByteSpan {
 /// ahead of that operator (#109): one an `extend` (or `summarize`, `parse`,
 /// ...) made, or one the source does not have, which a `join`, `lookup` or
 /// `union` brought in.
-fn reads_made_column(filter: Node, expr: Node, columns: &Analysis) -> bool {
+fn reads_made_column(filter: ByteSpan, expr: ByteSpan, columns: &Analysis) -> bool {
     let source = columns
-        .pipeline(span(expr))
+        .pipeline(expr)
         .map(|p| &p.source)
         .filter(|s| s.known != Known::Open);
-    columns.reads(span(filter)).any(|r| {
+    columns.reads(filter).any(|r| {
         let made = r
             .column
             .as_ref()
             .and_then(|c| c.made_by)
-            .is_some_and(|made| made.span.end <= filter.start_byte());
+            .is_some_and(|made| made.span.end <= filter.start);
         made || source.is_some_and(|s| s.column(&r.name).is_none())
     })
 }
@@ -95,30 +129,36 @@ fn narrows(kind: &str) -> bool {
         )
 }
 
-fn warn_pipeline(expr: Node, source: &str, columns: &Analysis, out: &mut Vec<Diagnostic>) {
-    let ops = operators(expr);
+fn warn_pipeline(
+    pipeline: &Pipeline,
+    lines: &LineIndex,
+    columns: &Analysis,
+    out: &mut Vec<Diagnostic>,
+) {
+    let ops = &pipeline.ops;
+    let expr = pipeline.span;
     if source_is_table(expr, columns)
         && let Some(first) = ops.first()
-        && !is_filter(first.kind())
+        && !is_filter(first.kind)
         && let Some(late) = ops
             .iter()
-            .find(|op| is_filter(op.kind()))
-            .filter(|late| !reads_made_column(**late, expr, columns))
+            .find(|op| is_filter(op.kind))
+            .filter(|late| !reads_made_column(late.span, expr, columns))
     {
-        let keyword = if late.kind() == "filter_operator" {
+        let keyword = if late.kind == "filter_operator" {
             "filter"
         } else {
             "where"
         };
         push(
             out,
-            source,
+            lines,
             codes::KQL_WHERE_NOT_FIRST,
             format!(
                 "`{keyword}` is not the first operator after the table reference; filter before later operators ({CITE})"
             ),
-            late.start_byte(),
-            late.end_byte(),
+            late.span.start,
+            late.span.end,
         );
     }
 
@@ -129,33 +169,31 @@ fn warn_pipeline(expr: Node, source: &str, columns: &Analysis, out: &mut Vec<Dia
     // `summarize` itself is never warned: it already returns only the
     // columns it names, and projecting before `arg_max(T, *)` would change
     // its result (#109).
-    let mut narrowed = columns
-        .pipeline(span(expr))
-        .is_some_and(|p| p.source.narrowed);
+    let mut narrowed = columns.pipeline(expr).is_some_and(|p| p.source.narrowed);
     for (index, op) in ops.iter().enumerate() {
-        if narrows(op.kind()) {
+        if narrows(op.kind) {
             narrowed = true;
             continue;
         }
-        if narrowed || op.kind() != "join_operator" {
+        if narrowed || op.kind != "join_operator" {
             continue;
         }
         let project_later = ops
             .iter()
             .skip(index + 1)
-            .any(|later| is_narrowing_project(later.kind()));
+            .any(|later| is_narrowing_project(later.kind));
         if !project_later {
             continue;
         }
         push(
             out,
-            source,
+            lines,
             codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT,
             format!(
                 "`join` runs before `project` narrows columns; project the needed columns first ({CITE})"
             ),
-            op.start_byte(),
-            op.end_byte(),
+            op.span.start,
+            op.span.end,
         );
     }
 }
@@ -314,7 +352,7 @@ enum SearchShape {
     Wildcard(Vec<(usize, usize)>),
 }
 
-fn warn_scope(source: &str, out: &mut Vec<Diagnostic>) {
+fn warn_scope(source: &str, lines: &LineIndex, out: &mut Vec<Diagnostic>) {
     let tokens = tokenize(source);
     let mut depth = 0i32;
     let mut at_source = true;
@@ -339,7 +377,7 @@ fn warn_scope(source: &str, out: &mut Vec<Diagnostic>) {
             Kind::Star if at_source => {
                 push(
                     out,
-                    source,
+                    lines,
                     codes::KQL_WILDCARD_TABLE,
                     format!(
                         "wildcard table `*` scans every table; name the table instead ({CITE})"
@@ -354,7 +392,7 @@ fn warn_scope(source: &str, out: &mut Vec<Diagnostic>) {
                 match classify_search(&tokens, i) {
                     SearchShape::Unscoped => push(
                         out,
-                        source,
+                        lines,
                         codes::KQL_UNSCOPED_SEARCH,
                         format!(
                             "unscoped `search` reads every table; scope it with `in (Table, ...)` or start from a table ({CITE})"
@@ -366,7 +404,7 @@ fn warn_scope(source: &str, out: &mut Vec<Diagnostic>) {
                         for (start, end) in stars {
                             push(
                                 out,
-                                source,
+                                lines,
                                 codes::KQL_WILDCARD_TABLE,
                                 format!(
                                     "wildcard table `*` scans every table; name the table instead ({CITE})"
@@ -385,7 +423,7 @@ fn warn_scope(source: &str, out: &mut Vec<Diagnostic>) {
                 if let Some((start, end)) = union_star(&tokens, i) {
                     push(
                         out,
-                        source,
+                        lines,
                         codes::KQL_UNSCOPED_UNION,
                         format!(
                             "unscoped `union` uses wildcard table `*` and reads every table; name the tables instead ({CITE})"
@@ -490,18 +528,17 @@ fn union_star(tokens: &[Tok], union_idx: usize) -> Option<(usize, usize)> {
 
 fn push(
     out: &mut Vec<Diagnostic>,
-    source: &str,
+    lines: &LineIndex,
     code: &str,
     message: String,
     start: usize,
     end: usize,
 ) {
-    let start = start.min(source.len());
-    let end = end.min(source.len());
+    // The spans come from the query itself: never past its end.
     if start >= end {
         return;
     }
-    let range = span_to_range(source, ByteSpan::new(start, end));
+    let range = lines.range(ByteSpan::new(start, end));
     if out.iter().any(|d| d.code == code && d.range == range) {
         return;
     }

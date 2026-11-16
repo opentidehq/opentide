@@ -1,0 +1,52 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/okta_admin_activity_from_proxy_query.broken.esql
+---
+SOURCE_FILE@0..136
+  QUERY@0..135
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    UNKNOWN_COMMAND@40..135
+      COMMAND_NAME@40..50
+        COMMAND_WORD@40..50 "frobnicate"
+      WHITESPACE@50..51 " "
+      UNKNOWN_TEXT@51..84
+        UNKNOWN_WORD@51..84 "debugContext.debugData.requestUri"
+      WHITESPACE@84..85 " "
+      UNKNOWN_TEXT@85..89
+        UNKNOWN_WORD@85..89 "like"
+      WHITESPACE@89..90 " "
+      STRING@90..99
+        STRING_LIT@90..99 "\"*admin*\""
+      WHITESPACE@99..100 " "
+      UNKNOWN_TEXT@100..103
+        UNKNOWN_WORD@100..103 "and"
+      WHITESPACE@103..104 " "
+      UNKNOWN_TEXT@104..129
+        UNKNOWN_WORD@104..129 "securityContext.isProxy=="
+      STRING@129..135
+        STRING_LIT@129..135 "\"true\""
+  WHITESPACE@135..136 "\n"
+--- errors

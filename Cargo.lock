@@ -3451,11 +3451,15 @@ dependencies = [
 name = "opentide-esql"
 version = "0.12.0"
 dependencies = [
+ "insta",
+ "logos",
  "opentide-core",
  "opentide-ecs",
  "opentide-highlight",
  "opentide-lucene",
+ "opentide-parse",
  "opentide-syntax",
+ "rowan",
  "serde",
  "toml 0.8.23",
  "tree-sitter",
@@ -3508,10 +3512,14 @@ dependencies = [
 name = "opentide-kql"
 version = "0.12.0"
 dependencies = [
+ "insta",
+ "logos",
  "opentide-core",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
  "regex",
+ "rowan",
  "serde",
  "strsim",
  "toml 0.8.23",
@@ -3561,10 +3569,14 @@ dependencies = [
 name = "opentide-lucene"
 version = "0.12.0"
 dependencies = [
+ "insta",
  "opentide-core",
  "opentide-ecs",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
+ "regex",
+ "rowan",
  "serde",
  "strsim",
  "toml 0.8.23",
@@ -3750,10 +3762,14 @@ dependencies = [
 name = "opentide-yaral"
 version = "0.12.0"
 dependencies = [
+ "insta",
+ "logos",
  "opentide-core",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
  "regex-syntax",
+ "rowan",
  "serde",
  "toml 0.8.23",
  "tree-sitter",

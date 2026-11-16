@@ -1,0 +1,26 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/comment__valid.yaral
+---
+SOURCE_FILE@0..111
+  COMMENT@0..21 "// prod:comment valid"
+  WHITESPACE@21..22 "\n"
+  COMMENT@22..46 "// a single-line comment"
+  WHITESPACE@46..47 "\n"
+  COMMENT@47..75 "/* and a\n   block comment */"
+  WHITESPACE@75..76 "\n"
+  SEARCH_QUERY@76..110
+    SEARCH_EVENTS@76..110
+      COMPARISON@76..110
+        BARE_FIELD@76..95
+          IDENT@76..84 "metadata"
+          MEMBER@84..95
+            ACCESS_DOT@84..85 "."
+            FIELD_NAME@85..95 "event_type"
+        WHITESPACE@95..96 " "
+        EQ@96..97 "="
+        WHITESPACE@97..98 " "
+        LITERAL@98..110
+          STRING@98..110 "\"USER_LOGIN\""
+  WHITESPACE@110..111 "\n"

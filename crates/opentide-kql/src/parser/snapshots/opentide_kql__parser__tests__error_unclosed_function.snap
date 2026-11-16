@@ -1,0 +1,34 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"let f = () { T ;\\nf()\")"
+---
+SOURCE_FILE@0..20
+  LET_STATEMENT@0..16
+    LET_KW@0..3 "let"
+    WHITESPACE@3..4 " "
+    IDENT@4..5 "f"
+    WHITESPACE@5..6 " "
+    EQ@6..7 "="
+    WHITESPACE@7..8 " "
+    FUNCTION_DEFINITION@8..16
+      L_PAREN@8..9 "("
+      R_PAREN@9..10 ")"
+      WHITESPACE@10..11 " "
+      L_BRACE@11..12 "{"
+      WHITESPACE@12..13 " "
+      TABULAR_EXPRESSION@13..14
+        TABULAR_SOURCE@13..14
+          TABLE_REF@13..14
+            IDENT@13..14 "T"
+      WHITESPACE@14..15 " "
+      SEMICOLON@15..16 ";"
+  WHITESPACE@16..17 "\n"
+  QUERY@17..20
+    TABULAR_EXPRESSION@17..20
+      TABULAR_SOURCE@17..20
+        FUNCTION_CALL@17..20
+          IDENT@17..18 "f"
+          L_PAREN@18..19 "("
+          R_PAREN@19..20 ")"
+errors:
+16..17: expected `}` (expected `}`)
