@@ -50,6 +50,8 @@ pub(crate) struct Tree {
     pub(crate) problems: Vec<Problem>,
     /// The parser's tree, which this one stands over.
     pub(crate) syntax: SyntaxNode,
+    /// The node of this tree each node of the parser's stands for.
+    by_syntax: std::collections::HashMap<SyntaxNode, u32>,
     /// A small value an analysis pass computed for a node, kept so that a pass over a long
     /// left-nested run reads each node once (`semantics`' operand types).
     memo: std::cell::RefCell<std::collections::HashMap<u32, u8>>,
@@ -153,6 +155,7 @@ pub(crate) fn parse(source: &str) -> Tree {
         data: Vec::new(),
         problems,
         syntax: root.clone(),
+        by_syntax: std::collections::HashMap::new(),
         memo: std::cell::RefCell::default(),
     };
     let mut open: Vec<u32> = Vec::new();
@@ -180,6 +183,7 @@ pub(crate) fn parse(source: &str) -> Tree {
                     usize::from(r.end()),
                 );
                 tree.data[id as usize].syntax = Some(node.clone());
+                tree.by_syntax.insert(node.clone(), id);
                 if is_leaf(kind) {
                     skip = 1;
                 }
@@ -360,6 +364,11 @@ impl Tree {
             }
             node = c;
         }
+    }
+
+    /// The node of this tree that stands for `node` of the parser's.
+    pub(crate) fn view(&self, node: &SyntaxNode) -> Option<Node<'_>> {
+        self.by_syntax.get(node).map(|&id| Node { tree: self, id })
     }
 
     pub(crate) fn root_node(&self) -> Node<'_> {
