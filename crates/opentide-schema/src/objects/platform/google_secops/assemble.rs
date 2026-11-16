@@ -91,7 +91,7 @@ pub fn meta_value(text: &str) -> String {
 pub struct RuleFacts {
     /// `name` (the rule's title).
     pub title: String,
-    /// `metadata.uuid`, as Python's `UUID` writes it.
+    /// `metadata.uuid`, lowercase and hyphenated.
     pub uuid: String,
     /// `metadata.version`; the meta leaves `opentide_version` out when the
     /// rule has none.

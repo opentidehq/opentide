@@ -55,8 +55,8 @@ pub fn text(value: &Value) -> Result<String> {
     })
 }
 
-/// Python's `str.title()`, which names a tactic without a display name: each
-/// letter after a letter lowercased, every other letter uppercased.
+/// Title case, which names a tactic without a display name: each character
+/// after a cased one lowercased, every other one uppercased.
 pub fn title(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut previous_cased = false;

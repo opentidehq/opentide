@@ -752,8 +752,8 @@ impl<T: FromNode> FromNode for Vec<T> {
     }
 }
 
-/// A mapping with string keys: Pydantic's `dict[str, V]`. The ordered
-/// map keeps the document's order, as a Python `dict` does.
+/// A mapping with string keys and `V` values. The ordered map keeps the
+/// document's order.
 fn string_map<V: FromNode, M: Default>(
     node: &Node,
     cx: &mut Context,
