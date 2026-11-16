@@ -3144,14 +3144,13 @@ spl_parse_error error 0:18-0:18 SPL syntax error: expected a field
 23..24 punctuation.delimiter
 25..31 property
 == corpus/spl/tail_command__invalid.spl
-spl_parse_error error 0:21-0:22 unbalanced parentheses: this '(' is never closed
+spl_parse_error error 0:18-0:21 SPL syntax error: unexpected 'abc'
 0..5 property
 5..6 operator
 6..10 variable
 11..12 operator.pipe
 13..17 keyword
-18..20 number
-21..22 punctuation.bracket
+18..21 variable
 == corpus/spl/tail_command__valid.spl
 0..5 property
 5..6 operator

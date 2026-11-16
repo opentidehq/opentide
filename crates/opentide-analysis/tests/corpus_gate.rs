@@ -638,6 +638,7 @@ fn kql_invalid_fixtures_exist_per_required_rule() {
         dir,
         LanguageId::Kql,
         &*kind_names(LanguageId::Kql),
+        engine_rejects,
         &fixtures,
     );
 }
@@ -669,15 +670,17 @@ fn spl_invalid_fixtures_are_rejected() {
         dir,
         LanguageId::Spl,
         &*kind_names(LanguageId::Spl),
+        engine_rejects,
         &fixtures,
     );
 }
 
 /// The gate fails on an invalid fixture the language accepts, and passes one it rejects
-/// by its parser or by its analysis (#1426).
+/// by its parser alone or by its analysis alone (#1426).
 #[test]
 fn an_invalid_fixture_the_language_accepts_fails_the_gate() {
     let fixture = |name: &str, body: &str| (name.to_string(), body.to_string());
+    let never: Rejects = |_, _| false;
     for (language, accepted, syntax, semantic) in [
         (LanguageId::Kuery, "a:1", "a:(", "not(user.name:SYSTEM)"),
         (
@@ -688,24 +691,58 @@ fn an_invalid_fixture_the_language_accepts_fails_the_gate() {
         ),
     ] {
         let names = kind_names(language);
+        // Each sample is rejected the way it is meant to be.
+        assert!(names.parse(syntax).has_error, "{syntax}");
+        assert!(!names.parse(semantic).has_error, "{semantic}");
+        assert!(engine_rejects(language, semantic), "{semantic}");
         let fixtures = [
             fixture("accepted__invalid", accepted),
             fixture("syntax__invalid", syntax),
             fixture("semantic__invalid", semantic),
         ];
         assert_eq!(
-            accepted_invalid_fixtures(language, &*names, &fixtures),
+            accepted_invalid_fixtures(language, &*names, engine_rejects, &fixtures),
             ["accepted__invalid"],
             "{language:?}"
         );
+        // Without the analysis, only the parser's rejection is left.
+        assert_eq!(
+            accepted_invalid_fixtures(language, &*names, never, &fixtures),
+            ["accepted__invalid", "semantic__invalid"],
+            "{language:?}"
+        );
         let gate = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            assert_invalid_fixtures_rejected("test", language, &*names, &fixtures[..1]);
+            assert_invalid_fixtures_rejected(
+                "test",
+                language,
+                &*names,
+                engine_rejects,
+                &fixtures[..1],
+            );
         }));
         assert!(
             gate.is_err(),
             "{language:?}: an accepted invalid fixture must fail"
         );
     }
+}
+
+/// `check_gate_with` runs the check: kuery's gate, whose invalid fixtures include ones
+/// only the analysis rejects (`not(…)`), fails when the analysis rejects nothing.
+#[test]
+fn the_gate_checks_its_invalid_fixtures() {
+    let gate = ElasticGate {
+        language: LanguageId::Kuery,
+        id: "kuery",
+        structural: &["source_file"],
+        unparsed: &[],
+    };
+    let names = kind_names(LanguageId::Kuery);
+    let blind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        check_gate_with(&gate, &*names, |_, _| false);
+    }));
+    assert!(blind.is_err(), "the gate must check its invalid fixtures");
+    check_gate_with(&gate, &*names, engine_rejects);
 }
 
 #[test]
@@ -752,17 +789,23 @@ struct ElasticGate {
     unparsed: &'static [&'static str],
 }
 
+/// Whether a language's analysis reports an error for a query ([`engine_rejects`] in the
+/// gates; a test passes one that never does).
+type Rejects = fn(LanguageId, &str) -> bool;
+
 /// The `__invalid` fixtures (file name, query) that the language accepts: no syntax
-/// error, and no error from its analysis. An invalid fixture is the gate's proof that
-/// the production is checked, so one that passes proves nothing (#1426).
+/// error from its parser, and no error from its analysis (`rejects`). An invalid
+/// fixture is the gate's proof that the production is checked, so one that passes
+/// proves nothing (#1426).
 fn accepted_invalid_fixtures(
     language: LanguageId,
     names: &dyn KindNames,
+    rejects: Rejects,
     fixtures: &[(String, String)],
 ) -> Vec<String> {
     fixtures
         .iter()
-        .filter(|(_, body)| !names.parse(body).has_error && !engine_rejects(language, body))
+        .filter(|(_, body)| !names.parse(body).has_error && !rejects(language, body))
         .map(|(name, _)| name.clone())
         .collect()
 }
@@ -771,9 +814,10 @@ fn assert_invalid_fixtures_rejected(
     dir: &str,
     language: LanguageId,
     names: &dyn KindNames,
+    rejects: Rejects,
     fixtures: &[(String, String)],
 ) {
-    let accepted = accepted_invalid_fixtures(language, names, fixtures);
+    let accepted = accepted_invalid_fixtures(language, names, rejects, fixtures);
     assert!(
         accepted.is_empty(),
         "invalid fixtures in {dir} that parse and analyse without an error: {accepted:?}"
@@ -821,10 +865,10 @@ fn fixture_body(text: &str) -> String {
 }
 
 fn check_gate(gate: &ElasticGate) {
-    check_gate_with(gate, &*kind_names(gate.language));
+    check_gate_with(gate, &*kind_names(gate.language), engine_rejects);
 }
 
-fn check_gate_with(gate: &ElasticGate, names: &dyn KindNames) {
+fn check_gate_with(gate: &ElasticGate, names: &dyn KindNames, rejects: Rejects) {
     let dir = format!("crates/testdata/corpus/{}", gate.id);
     let tags = tags_in(&dir);
     let structural: BTreeSet<&str> = gate.structural.iter().copied().collect();
@@ -872,7 +916,7 @@ fn check_gate_with(gate: &ElasticGate, names: &dyn KindNames) {
             invalid.push((name, fixture_body(&fs::read_to_string(&path).unwrap())));
         }
     }
-    assert_invalid_fixtures_rejected(&dir, gate.language, names, &invalid);
+    assert_invalid_fixtures_rejected(&dir, gate.language, names, rejects, &invalid);
     for rule in &required {
         for kind in ["valid", "invalid"] {
             assert!(
@@ -1233,6 +1277,7 @@ fn the_gate_reads_productions_and_trees_only_through_its_table() {
             unparsed: &[],
         },
         &names,
+        engine_rejects,
     );
     assert_eq!(names.productions.get(), 1);
     assert!(names.parses.get() > 0);
@@ -1271,10 +1316,14 @@ fn the_esql_table_flags_what_the_gate_must() {
         }
     }
     let gate = std::panic::catch_unwind(|| {
-        check_gate_with(&ESQL_GATE, &Extra(kind_names(LanguageId::Esql)));
+        check_gate_with(
+            &ESQL_GATE,
+            &Extra(kind_names(LanguageId::Esql)),
+            engine_rejects,
+        );
     });
     // The real table passes; the one extra production alone fails it.
-    check_gate_with(&ESQL_GATE, &*kind_names(LanguageId::Esql));
+    check_gate_with(&ESQL_GATE, &*kind_names(LanguageId::Esql), engine_rejects);
     assert!(gate.is_err(), "an untagged production must fail the gate");
 }
 
