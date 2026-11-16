@@ -45,7 +45,6 @@ exit: 1
   "detail": "Carbon Black refused rule (00000000-0000-4000-8046-000000000005) on carbon_black_cloud tenant ***",
   "event": "query_rejected",
   "level": "critical",
-  "logger": "opentide.platforms.live_validation",
   "reason": "Carbon Black Cloud refused the query on ***: ensure each term has a value, and escape slashes, colons and spaces",
   "timestamp": "0000-00-00 00:00:00"
 }
