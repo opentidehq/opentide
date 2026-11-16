@@ -392,3 +392,26 @@ fn dynamic_and_toscalar_are_not_columns() {
         assert!(errors(source).is_empty(), "{source}: {:?}", errors(source));
     }
 }
+
+/// Class (b), an old-engine false error kept fixed (#1230): Kusto's
+/// multi-line string literals, ```` ```…``` ```` and `~~~…~~~`, are string
+/// literals wherever a string is
+/// (<https://learn.microsoft.com/kusto/query/scalar-data-types/string#multi-line-string-literals>);
+/// tree-sitter rejected them everywhere (the full differential's seed-3
+/// verdict difference).
+#[test]
+fn fenced_multi_line_strings_are_string_literals() {
+    for source in [
+        "print s = ```a\nmulti-line\nstring```",
+        "T | where a == ~~~x~~~",
+        "T | extend b = strlen(```y```) | where c has ```z```",
+    ] {
+        assert!(errors(source).is_empty(), "{source}: {:?}", errors(source));
+        let tree = SyntaxNode::new_root(parse(source).green);
+        assert!(
+            tree.descendants_with_tokens()
+                .any(|t| t.kind() == K::STRING && t.to_string().starts_with(['`', '~'])),
+            "{source}"
+        );
+    }
+}
