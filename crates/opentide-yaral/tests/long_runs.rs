@@ -14,10 +14,23 @@ use opentide_yaral::{Context, analyze_with, infer_profile};
 use std::thread;
 use std::time::{Duration, Instant};
 
-/// Every entry point on `source`, on a 1 MB stack; the diagnostics of a file.
+/// The stack the depth checks run on: the browser WASM module's 1 MB.
+#[cfg(not(any(coverage, windows)))]
+const SMALL_STACK: usize = 1 << 20;
+/// A Windows debug build's frames are larger, and `cargo llvm-cov`'s
+/// instrumentation enlarges every frame: the depths that fit 1 MB on Linux
+/// overflowed the nightly's Windows engine tests. Neither binary is the WASM
+/// budget, which the Linux and macOS test jobs keep enforcing at 1 MB; 8 MB is
+/// a generous bound, not a measurement. The same rule as `SMALL_STACK` in
+/// `crates/opentide-analysis/tests/deep_queries.rs`.
+#[cfg(any(coverage, windows))]
+const SMALL_STACK: usize = 8 << 20;
+
+/// Every entry point on `source`, on a [`SMALL_STACK`]; the diagnostics of a
+/// file.
 fn every_entry_point(source: String) -> Vec<opentide_core::Diagnostic> {
     thread::Builder::new()
-        .stack_size(1 << 20)
+        .stack_size(SMALL_STACK)
         .spawn(move || {
             let mut file = Vec::new();
             for ctx in [Context::FILE, Context::SECTIONS, Context::SEARCH] {
