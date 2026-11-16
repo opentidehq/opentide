@@ -27,4 +27,4 @@ SOURCE_FILE@0..58
     NULL_KW@53..57 "null"
   WHITESPACE@57..58 "\n"
 44..44: a field name is missing (expected a name, a quoted name)
-45..45: unexpected token (expected an index, `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `|`, `.`, `:`)
+45..45: unexpected token (expected an index, `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `|`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `+`, `-`, `*`, `/`, `%`, `.`, `:`)

@@ -21,4 +21,4 @@ SOURCE_FILE@0..21
         WHITESPACE@19..20 " "
         NUMBER@20..21
           NUMBER_TOKEN@20..21 "1"
-21..21: missing `)` (expected `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `)`, `:`)
+21..21: missing `)` (expected `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `+`, `-`, `*`, `/`, `%`, `)`, `:`)

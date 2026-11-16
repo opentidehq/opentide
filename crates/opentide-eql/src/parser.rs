@@ -18,8 +18,9 @@ use opentide_parse::{
     debug_tree,
 };
 
-/// Nesting (parentheses, calls, signs, `not`, lists, subqueries) deeper than this is one
-/// error. The tree-sitter engine took 10,000 levels; the floor every language keeps is
+/// Nesting deeper than this is one error. A level is a parenthesis, a call, a sign, a `not`, a
+/// list, a subquery, or an operand under an operator of a looser level (so `(a or b == c` is
+/// two levels in the parenthesis). The tree-sitter engine took 10,000 levels; the floor every language keeps is
 /// `deep_queries`' `NESTING_CEILING` (1,000). Elasticsearch itself stops at 250 (the
 /// `eql_expression_depth` check).
 pub(crate) const MAX_DEPTH: u32 = 1_024;
@@ -108,7 +109,6 @@ const CONSTANTS: TokenSet = K::set(&[
 const OPENS: TokenSet = K::set(&[K::L_BRACK, K::BANG_L_BRACK]);
 const CATEGORY_NAMES: TokenSet = K::set(&[K::WORD, K::STRING_TOKEN]);
 const SUBQUERY_STOP: TokenSet = K::set(&[K::R_BRACK, K::PIPE]);
-const OR_AND: TokenSet = K::set(&[K::OR_KW, K::AND_KW]);
 
 /// The operator levels, from the loosest. `not` and lineage are prefixes at [`NOT`]; their
 /// operand is a comparison or tighter.
@@ -439,13 +439,20 @@ fn level_kind(level: u8) -> K {
 }
 
 /// An expression whose operators are all at `min` or tighter.
+///
+/// An operand under an operator is one nesting level (`enter`): a parenthesis holding every
+/// level, `(a or b and c == d + e * (...`, recurses through each, and its stack is bounded by
+/// the levels it enters, not by its parentheses alone.
 fn expr_bp(p: &mut Parser<'_>, min: u8) {
     let Some((mut lhs, mut ceiling)) = prefix(p, min) else {
         return;
     };
-    // Records what may follow, for an error's expected set.
-    at_any(p, &OR_AND);
-    while let Some(level) = infix(p) {
+    loop {
+        // Records what may follow, for an error's expected set.
+        expect_infix(p, min, ceiling);
+        let Some(level) = infix(p) else {
+            break;
+        };
         if level < min || level > ceiling {
             break;
         }
@@ -454,15 +461,39 @@ fn expr_bp(p: &mut Parser<'_>, min: u8) {
         if level == COMPARISON {
             // Not associative: a comparison is no operand of another.
             p.bump();
-            expr_bp(p, ADDITIVE);
-            ceiling = AND;
+            if p.enter() {
+                expr_bp(p, ADDITIVE);
+                p.exit();
+            }
         } else {
             while infix(p) == Some(level) {
                 p.bump();
-                expr_bp(p, level + 1);
+                if p.enter() {
+                    expr_bp(p, level + 1);
+                    p.exit();
+                }
             }
         }
+        // Only a looser level may follow a run: `a and b == c` is no comparison's operand.
+        ceiling = level - 1;
         lhs = m.complete(p, kind.raw());
+    }
+}
+
+/// Records the infix operators from level `min` to `ceiling` as expected here.
+#[inline(never)]
+fn expect_infix(p: &mut Parser<'_>, min: u8, ceiling: u8) {
+    let levels = [
+        (OR, K::set(&[K::OR_KW])),
+        (AND, K::set(&[K::AND_KW])),
+        (COMPARISON, COMPARISON_OPS),
+        (ADDITIVE, ADDITIVE_OPS),
+        (MULTIPLICATIVE, MULTIPLICATIVE_OPS),
+    ];
+    for (level, set) in levels {
+        if (min..=ceiling).contains(&level) {
+            p.at_set(set);
+        }
     }
 }
 
@@ -498,7 +529,7 @@ fn prefix(p: &mut Parser<'_>, min: u8) -> Option<(CompletedMarker, u8)> {
         }
         return Some((m.complete(p, K::UNARY_EXPRESSION.raw()), MULTIPLICATIVE));
     }
-    let operand = primary(p)?;
+    let operand = primary(p, min)?;
     Some((predicate(p, operand), MULTIPLICATIVE))
 }
 
@@ -602,8 +633,9 @@ fn fail(p: &mut Parser<'_>, message: &str) {
     p.err_recover(message, RECOVERY);
 }
 
-/// A constant, a call, a field or a parenthesized expression.
-fn primary(p: &mut Parser<'_>) -> Option<CompletedMarker> {
+/// A constant, a call, a field or a parenthesized expression; `min` is the loosest level the
+/// expression it stands in may take (`not` and lineage only down to a comparison).
+fn primary(p: &mut Parser<'_>, min: u8) -> Option<CompletedMarker> {
     let kind = K::from_raw(p.current());
     if in_set(&CONSTANTS, kind) {
         return constant(p);
@@ -623,15 +655,23 @@ fn primary(p: &mut Parser<'_>) -> Option<CompletedMarker> {
         K::WORD | K::TILDE_WORD if p.nth(1) == K::L_PAREN.raw() => function_call(p),
         K::WORD | K::QUOTED_IDENT_TOKEN | K::QUESTION => Some(field(p)),
         _ => {
-            missing_expression(p);
+            missing_expression(p, min);
             None
         }
     }
 }
 
+/// "an expression is missing", expecting what may start one at level `min`.
 #[inline(never)]
-fn missing_expression(p: &mut Parser<'_>) {
-    p.at_set(EXPR_START);
+fn missing_expression(p: &mut Parser<'_>, min: u8) {
+    let mut start = EXPR_START;
+    if min > COMPARISON {
+        start = TokenSet::EMPTY;
+        for kind in EXPR_START.iter().filter(|&k| k != K::NOT_KW.raw()) {
+            start = start.with(kind);
+        }
+    }
+    p.at_set(start);
     fail(p, EXPECTED_EXPRESSION);
 }
 

@@ -25,4 +25,4 @@ SOURCE_FILE@0..47
   ERROR@43..46
     WORD@43..46 "x10"
   WHITESPACE@46..47 "\n"
-43..43: unexpected token (expected `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `|`, `:`)
+43..43: unexpected token (expected `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `|`, `+`, `-`, `*`, `/`, `%`, `:`)
