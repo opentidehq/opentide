@@ -55,6 +55,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
+- **`opentide_compile::bitdefender::YARA_RULE_LIMIT`, `YARA_RULE_LIMIT_CODE`, `is_yara` and `yara_rule_limit`** ([opentide#1252](https://github.com/opentidehq/opentide/issues/1252)). GravityZone's maximum of 50 YARA rules per company, the code `bitdefender_yara_rule_limit`, whether a rule's block deploys a YARA rule, and the message for a deploy that would pass the limit (recorded and created YARA rules). `deploy` refuses a tenant's YARA creates with it before anything is sent.
+
 - **`opentide_core::with_line_index`** ([opentide#1231](https://github.com/opentidehq/opentide/issues/1231)). `with_line_index(source, run)` installs the line table of `source` while `run` runs: `span_to_range` and `offset_to_position` on that very text (the same address and length) then search it instead of scanning from the start, and the table that was installed before is put back afterwards, even on a panic. An engine wraps the analysis of a query in it so that converting many findings stays linear. `LineIndex` is unchanged.
 
 - **`opentide_analysis::save_visibility` and `standalone_datasets`.** `save_visibility` returns a `RestoreVisibility` guard that installs the workspace's declared datasets in use before when it drops, so a run leaves the process as it found it. `standalone_datasets` scopes the calling thread to the host's datasets, ignoring a workspace's, with no lock; it is built on `opentide_core::datasets::scope_thread` (`ThreadScope`), which `datasets::current` honours.
