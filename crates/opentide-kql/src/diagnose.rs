@@ -103,7 +103,7 @@ fn quiet_from(root: &SyntaxNode, error: &SyntaxError) -> rowan::TextSize {
 /// operator that holds it, the parser's recovery has made nodes of fragments
 /// (`| summ` is an unknown operator, a half-typed word a table), so only the
 /// findings that end before `boundary` (and before the error) are kept with
-/// the error (the first diagnostic).
+/// the error (the first diagnostic), and an unknown operator the error is in.
 fn quiet_after_the_error(diagnostics: &mut Vec<Diagnostic>, boundary: opentide_core::Position) {
     let key = |p: opentide_core::Position| (p.line, p.character);
     let Some(error) = diagnostics.first().map(|d| d.range.start) else {
@@ -116,7 +116,11 @@ fn quiet_after_the_error(diagnostics: &mut Vec<Diagnostic>, boundary: opentide_c
     };
     let mut first = true;
     diagnostics.retain(|d| {
-        let keep = first || key(d.range.end) <= key(boundary);
+        // A mistyped operator name (`| summarzie count() by a`) is why the
+        // operator does not parse: its "did you mean" stays, as on the old
+        // engine.
+        let explains = d.code == codes::KQL_UNKNOWN_OPERATOR && key(d.range.start) <= key(error);
+        let keep = first || explains || key(d.range.end) <= key(boundary);
         first = false;
         keep
     });
