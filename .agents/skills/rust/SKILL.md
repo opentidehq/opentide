@@ -84,7 +84,7 @@ cargo clippy --workspace --all-targets -- -D warnings
   workspace table, or when one of those two crates' copies of it drifts.
 - `missing_docs` holds for every new crate. Inaccurate docs are worse than none.
 - Code under `cfg(target_arch = "wasm32")` is linted only for that target:
-  `bash scripts/engine/build-wasm.sh clippy` (CI's `engine-wasm` job).
+  `bash scripts/engine/build-wasm.sh clippy` (CI's `engine-lint` job, when `wasm` runs).
 
 ## nextest
 

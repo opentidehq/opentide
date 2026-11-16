@@ -39,7 +39,7 @@ Unknown language ids become `Err(JsValue)`. Invalid UTF-8 becomes `Err`. Do not 
 
 Native tests in this crate call `opentide_analysis::highlight` and `LanguageServer::handle` directly. They do not need a browser. `cargo test -p opentide-wasm` runs on the host. Do not add `wasm-bindgen-test` unless a browser harness exists.
 
-Build both artifacts with `scripts/engine/build-wasm.sh` (`ci.yml` job `engine-wasm`, and the release). tree-sitter, the grammars, and the ES|QL comment scanner are C, so a plain `cargo build --target wasm32-unknown-unknown` fails on missing libc headers. The script pins wasi-sdk, compiles the C with its clang and wasi-libc headers, links wasi-libc's `libc.a`, and smoke-tests each artifact (`scripts/engine/wasm-smoke.mjs`):
+Build both artifacts with `scripts/engine/build-wasm.sh` (`ci.yml` job `wasm`, and the release). tree-sitter, the grammars, and the ES|QL comment scanner are C, so a plain `cargo build --target wasm32-unknown-unknown` fails on missing libc headers. The script pins wasi-sdk, compiles the C with its clang and wasi-libc headers, links wasi-libc's `libc.a`, and smoke-tests each artifact (`scripts/engine/wasm-smoke.mjs`):
 
 - browser: the module imports nothing but wasm-bindgen glue, `highlight()` works for every language through `wasm-bindgen --target nodejs`, and its `LanguageServer` answers `initialize`, diagnostics, hover and completion;
 - wasi: the CLI runs `analyze` under `node:wasi`.
