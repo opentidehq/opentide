@@ -29,5 +29,5 @@ SOURCE_FILE@0..24
     ERROR@21..24
       WORD@21..24 "abc"
 --- errors
-19..20: expected an expression (expected NOT_KW, PLUS, MINUS)
+19..20: expected an expression (expected PLUS, MINUS)
 21..21: expected `|` or the end of the query (expected AND_KW, OR_KW, PIPE, R_PAREN)

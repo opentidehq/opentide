@@ -91,11 +91,18 @@ pub(super) fn fields_command(p: &mut Parser<'_>, node: K, kw: K) {
 /// `(name '=')? value ('where' filter)?`
 fn field(p: &mut Parser<'_>, node: K, filter: bool) {
     let m = p.start();
-    if let Some(lhs) = expr(p)
-        && lhs.kind() == K::QUALIFIED_NAME.raw()
-        && p.eat(K::EQ.raw())
-    {
-        expr(p);
+    if let Some(lhs) = expr(p) {
+        // The name of an assignment: a qualified name, or a bare parameter
+        // (`EVAL ?p = 1`: Elasticsearch's identifierOrParameter).
+        let name = lhs.kind() == K::QUALIFIED_NAME.raw()
+            || (lhs.kind() == K::PARAMETER.raw() && p.at(K::EQ.raw()));
+        if name && p.at(K::EQ.raw()) {
+            if lhs.kind() == K::PARAMETER.raw() {
+                lhs.precede(p).complete(p, K::QUALIFIED_NAME.raw());
+            }
+            p.bump();
+            expr(p);
+        }
     }
     if filter && eat_kw(p, K::WHERE_KW) {
         expr(p);
