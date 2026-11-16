@@ -295,6 +295,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 - **`opentide serve` names a run's missing working directory in the system's words** ([#1140](https://github.com/opentidehq/opentide/issues/1140)). A `run` whose `cwd` is not a directory fails with `cannot run in the working directory <path>: No such file or directory (os error 2)`, or `… <path>: not a directory`, not `[Errno 2] No such file or directory: '<path>'`.
 
 ### Fixed
+- **A CQL word, tag value or field may hold an emoji or another character above U+FFFF** ([#1231](https://github.com/opentidehq/opentide/issues/1231)). `#tag=😀` and `a😀b` were a `cql_parse_error`, while `a=😀*` was accepted; such a character is a field character now, as LogScale reads it. A run of them no longer slows the check down: 10,000 emoji took seconds.
 - **`parse-kv` takes its keys and options** ([#1230](https://github.com/opentidehq/opentide/issues/1230)). A KQL query with `parse-kv Message as (Level: string) with (pair_delimiter = " ")`, Kusto's documented form, was a `kql_parse_error`: only `parse-kv Message` parsed.
 
 - **`--json` log lines no longer carry a `logger` field** ([#1140](https://github.com/opentidehq/opentide/issues/1140)). The notes above already said so; the lines still ended with the name of a Python module (`"logger":"opentide.cli.services.deploy"`) after the event. They hold the event's fields, `event`, `level` and `timestamp`, as documented.
