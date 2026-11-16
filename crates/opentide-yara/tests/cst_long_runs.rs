@@ -58,12 +58,26 @@ fn one_huge_token_of_every_kind() {
                 "1".repeat(MILLION)
             ),
             format!("/*{}*/", "x\n".repeat(MILLION / 2)),
+            // The block comment's repeated group in yara-x-parser's lexer.
+            format!("/*{}*/", "*x".repeat(MILLION / 2)),
             format!("//{}", "x".repeat(MILLION)),
             format!(
                 "rule r {{ condition: true }}{}",
                 " \t\r\n".repeat(MILLION / 4)
             ),
             rule(&format!("${}", "a".repeat(MILLION))),
+            // yara-x-parser's repeated groups: digit separators, `"""` strings.
+            rule(&format!("{}1 == 1", "1_".repeat(MILLION / 2))),
+            rule(&format!("0x{}1 == 1", "f_".repeat(MILLION / 2))),
+            rule(&format!("1.{}2 == 1.0", "2_".repeat(MILLION / 2))),
+            format!(
+                "rule r {{ meta: a = \"\"\"{}\"\"\" condition: true }}",
+                "\\\"".repeat(MILLION / 2)
+            ),
+            format!(
+                "rule r {{ meta: a = \"\"\"{}\"\"\" condition: true }}",
+                "x".repeat(MILLION)
+            ),
         ] {
             every_feature(&source);
         }
