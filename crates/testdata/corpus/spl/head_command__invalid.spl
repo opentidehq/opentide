@@ -1,2 +1,2 @@
 ``` prod:head_command invalid
-index=main | head
+index=main | head limit=

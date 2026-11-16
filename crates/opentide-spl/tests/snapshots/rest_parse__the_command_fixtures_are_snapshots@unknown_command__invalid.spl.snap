@@ -3,8 +3,8 @@ source: crates/opentide-spl/tests/rest_parse.rs
 expression: render(&body(path))
 input_file: crates/testdata/corpus/spl/unknown_command__invalid.spl
 ---
-SOURCE_FILE@0..26
-  PIPELINE@0..26
+SOURCE_FILE@0..28
+  PIPELINE@0..28
     BARE_SEARCH@0..10
       FIELD_VALUE@0..10
         FIELD_REF@0..5
@@ -17,11 +17,17 @@ SOURCE_FILE@0..26
     WHITESPACE@10..11 " "
     PIPE@11..12 "|"
     WHITESPACE@12..13 " "
-    UNKNOWN_COMMAND@13..26
+    UNKNOWN_COMMAND@13..28
       IDENTIFIER@13..24
         IDENT@13..24 "notacommand"
       WHITESPACE@24..25 " "
-      ARGUMENT_LIST@25..26
-        IDENTIFIER@25..26
-          IDENT@25..26 "x"
+      ARGUMENT_LIST@25..28
+        COMMAND_OPTION@25..28
+          IDENTIFIER@25..26
+            IDENT@25..26 "x"
+          EQ@26..27 "="
+          VALUE_LIST@27..28
+            L_PAREN@27..28 "("
 --
+28..28: expected a value
+28..28: missing `)` (expected R_PAREN)

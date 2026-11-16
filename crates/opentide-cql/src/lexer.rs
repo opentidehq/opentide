@@ -215,11 +215,14 @@ fn is_ident(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
 
-/// Appendix C `FieldChar` as grammar.js spells it: other Unicode up to U+FFFF.
+/// Appendix C `FieldChar`: "other Unicode up to U+FFFF", read in UTF-16 code
+/// units as LogScale's JVM lexer reads it, so a character above U+FFFF (two
+/// surrogates, each below it) is a field character too. It is the scanner's
+/// [`is_scan_char`]: a word and the scanner must agree on where a run of
+/// field characters ends, or the scanner re-reads the whole run at each
+/// character the word refuses (quadratic, #1231).
 fn is_field_char(c: char) -> bool {
-    matches!(c, '#' | '%' | '&' | '.' | '@' | '^' | '~' | '\\')
-        || is_ident(c)
-        || matches!(u32::from(c), 0xA1..=0xAA | 0xAC | 0xAE..=0xBA | 0xBC..=0xFFFF)
+    is_scan_char(c)
 }
 
 /// A field character as `scanner.c` reads it: any Unicode beyond Latin-1.
@@ -424,6 +427,13 @@ fn regex_body_end(s: &str, i: usize, memo: &mut Memo) -> Option<usize> {
 
 // ---- The scanner ---------------------------------------------------------------------------
 
+// The characters [`scan`] has read on this thread: a test bounds the reads per
+// character of a source, so a rescan of a run cannot come back unnoticed.
+#[cfg(test)]
+thread_local! {
+    static SCANNED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// `scanner.c`: the tokens a regular expression cannot read because they depend on what
 /// follows. Returns the token (`WORD` is the field of an assignment) and its end.
 #[expect(
@@ -464,6 +474,8 @@ fn scan(s: &str, start: usize, flags: Flags) -> Option<(K, usize)> {
     let (mut last, mut before_last) = ('\0', '\0');
     let (mut i, mut end) = (start, start);
     while let Some(c) = char_at(s, i) {
+        #[cfg(test)]
+        SCANNED.with(|n| n.set(n.get() + 1));
         if c == ':' {
             i += 1;
             if char_at(s, i) == Some('=') {
@@ -475,10 +487,15 @@ fn scan(s: &str, start: usize, flags: Flags) -> Option<(K, usize)> {
             } else {
                 Shape::Other
             };
-            if !want_pattern && !want_assign && shape == Shape::Other {
+            has_pattern_char = true;
+            // Without a pattern to read, only an assignment's field (no
+            // pattern character) or a call's name (`a` or `a:b`) is a token:
+            // past a second colon neither can be, so reading on to the end of
+            // the run would find nothing, and the word stops at this colon:
+            // the run's next segment would re-read the rest (quadratic).
+            if !want_pattern && shape == Shape::Other {
                 break;
             }
-            has_pattern_char = true;
         } else if is_scan_char(c) || (want_pattern && is_pattern_only(c)) {
             if !is_ident(c) {
                 shape = Shape::Other;
@@ -1079,6 +1096,59 @@ mod tests {
             })
             .filter(|(k, _)| *k != K::WHITESPACE)
             .collect()
+    }
+
+    /// The scanner reads each character of a source a bounded number of
+    /// times. A word that stopped at U+FFFF while the scanner read on made it
+    /// re-read a whole run of characters above U+FFFF at each of them
+    /// (`"\u{1F600}"` x 10,000 took seconds). Counted, not timed.
+    #[test]
+    fn the_scanner_reads_each_character_a_bounded_number_of_times() {
+        let n = 5_000;
+        for unit in [
+            "\u{1F600}",
+            "\u{e9}\u{1F600}",
+            "a\u{1F600}",
+            "\u{1F600} ",
+            "x=\u{1F600} | ",
+            "a ",
+            "a=b | ",
+            "#t=a* ",
+            "f(x) ",
+        ] {
+            let source = unit.repeat(n);
+            assert_bounded_reads(&source);
+        }
+        // After `:=` the scanner reads for an assignment or a call, not a
+        // pattern: a run of colon segments was re-read at each colon.
+        for unit in ["a:", "\u{1F600}:", "\u{e9}:", "a:b:"] {
+            assert_bounded_reads(&format!("x := {}", unit.repeat(n)));
+            assert_bounded_reads(&format!("x := f({})", unit.repeat(n)));
+        }
+    }
+
+    /// Lexing `source` reads at most three characters per character.
+    fn assert_bounded_reads(source: &str) {
+        SCANNED.with(|count| count.set(0));
+        let lexemes = lex(source);
+        let read = SCANNED.with(std::cell::Cell::get);
+        let chars = source.chars().count();
+        let head: String = source.chars().take(12).collect();
+        assert!(
+            read <= 3 * chars,
+            "`{head}…`: the scanner read {read} characters of {chars}"
+        );
+        assert!(!lexemes.is_empty());
+    }
+
+    /// A character above U+FFFF is a field character, as the scanner and
+    /// LogScale's UTF-16 lexer read it: a word runs through it.
+    #[test]
+    fn a_character_above_u_ffff_is_part_of_a_word() {
+        assert_eq!(kinds("a\u{1F600}b"), [(K::WORD, "a\u{1F600}b")]);
+        assert_eq!(kinds("\u{e9}\u{1F600}"), [(K::WORD, "\u{e9}\u{1F600}")]);
+        let tag = kinds("#tag=\u{1F600}");
+        assert_eq!(tag.last(), Some(&(K::WORD, "\u{1F600}")), "{tag:?}");
     }
 
     #[test]

@@ -55,6 +55,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
+- **`opentide_compile::bitdefender::YARA_RULE_LIMIT`, `YARA_RULE_LIMIT_CODE`, `is_yara` and `yara_rule_limit`** ([opentide#1252](https://github.com/opentidehq/opentide/issues/1252)). GravityZone's maximum of 50 YARA rules per company, the code `bitdefender_yara_rule_limit`, whether a rule's block deploys a YARA rule, and the message for a deploy that would pass the limit (recorded and created YARA rules). `deploy` refuses a tenant's YARA creates with it before anything is sent.
+
 - **`opentide_core::with_line_index`** ([opentide#1231](https://github.com/opentidehq/opentide/issues/1231)). `with_line_index(source, run)` installs the line table of `source` while `run` runs: `span_to_range` and `offset_to_position` on that very text (the same address and length) then search it instead of scanning from the start, and the table that was installed before is put back afterwards, even on a panic. An engine wraps the analysis of a query in it so that converting many findings stays linear. `LineIndex` is unchanged.
 
 - **`opentide_analysis::save_visibility` and `standalone_datasets`.** `save_visibility` returns a `RestoreVisibility` guard that installs the workspace's declared datasets in use before when it drops, so a run leaves the process as it found it. `standalone_datasets` scopes the calling thread to the host's datasets, ignoring a workspace's, with no lock; it is built on `opentide_core::datasets::scope_thread` (`ThreadScope`), which `datasets::current` honours.
@@ -132,6 +134,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **`opentide_connectors::transport::BuildError` shows its whole text** ([opentide#1180](https://github.com/opentidehq/opentide/issues/1180)). Its `Display` was reqwest's bare `builder error`; it is now `builder error: <reason>` (for example `builder error: relative URL without a base`), as `describe()` already gave. `RequestBuilder` parses with `url` and `http` on every target and refuses a URL with no host (`mailto:`, `file:`, `data:`) as before.
 
 ### Fixed
+
+- **The CQL lexer reads a character above U+FFFF as a field character, in linear time** ([opentide#1231](https://github.com/opentidehq/opentide/issues/1231)). Appendix C's `FieldChar` ("other Unicode up to U+FFFF", UTF-16 units) stopped a word at U+FFFF, while the scanner read on: at each such character the scanner re-read the whole run (quadratic), and `#tag=😀` was a `cql_parse_error`. A word and the scanner agree now; `opentide_cql::analyze` reports nothing on such a word. The scanner also stops at a second colon when it reads for an assignment or a call (after `:=`), where it read on to the end of the run and re-read it at each colon.
 
 - **`opentide-eql`'s analysis reads the typed AST, in linear time on broken input** ([opentide#1435](https://github.com/opentidehq/opentide/issues/1435)). `analyze`, `ecs_diagnostics`, `sequences`, `hover` and `completions` no longer build the tree-sitter-shaped view of the parse tree. On broken input with a problem at every step (a call with 20,000 empty arguments, a run of doubled `or`s), each took a minute or more and now takes well under a second. A broken `or`/`and` run no longer reports a finding or highlights a token twice, and an error region is no longer read as a pipe's name or argument or as a join key.
 
