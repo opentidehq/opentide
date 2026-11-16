@@ -20,8 +20,8 @@
 //! checked.
 
 use super::scan::{
-    command_word, end_of_brackets, end_of_macro, end_quoted, skip_comment, skip_hidden, skip_ws,
-    split_segments, subsearches,
+    Order, command_word, end_of_brackets, end_of_macro, end_quoted, skip_comment, skip_hidden,
+    skip_ws, split_segments, walk_pipelines,
 };
 use super::{Catalog, DatamodelRow};
 use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
@@ -165,43 +165,53 @@ pub(crate) fn collect(source: &str, out: &mut Vec<Diagnostic>) {
         return;
     }
     let cim = Cim::cached();
-    walk(source, 0, source.len(), cim, out);
+    walk_pipelines(
+        source,
+        (0, source.len()),
+        skip_hidden,
+        Order::SubsearchesFirst,
+        |_| Vec::new(),
+        |prefixes, _, (seg_start, seg_end)| stage(source, seg_start, seg_end, cim, prefixes, out),
+    );
 }
 
-fn walk(source: &str, start: usize, end: usize, cim: &Cim, out: &mut Vec<Diagnostic>) {
-    let mut prefixes: Vec<Prefix> = Vec::new();
-    for (seg_start, seg_end) in split_segments(source, start, end) {
-        for (inner_start, inner_end) in subsearches(source, seg_start, seg_end) {
-            walk(source, inner_start, inner_end, cim, out);
-        }
-        let word = command(source, seg_start, seg_end);
-        let refs = refs_in_segment(source, seg_start, seg_end, &word);
-        for r in &refs {
-            if let Some(diag) = check_ref(source, r, cim) {
-                out.push(diag);
-                continue;
-            }
-            activate(r, cim, &mut prefixes);
-        }
-        if let Some(dropped) = dropped_prefix(source, seg_start, seg_end) {
-            prefixes.retain(|p| p.alias != dropped);
+/// One stage of a pipeline, after its subsearches, with the prefixes the
+/// stages before it activated.
+fn stage<'c>(
+    source: &str,
+    seg_start: usize,
+    seg_end: usize,
+    cim: &'c Cim,
+    prefixes: &mut Vec<Prefix<'c>>,
+    out: &mut Vec<Diagnostic>,
+) {
+    let word = command(source, seg_start, seg_end);
+    let refs = refs_in_segment(source, seg_start, seg_end, &word);
+    for r in &refs {
+        if let Some(diag) = check_ref(source, r, cim) {
+            out.push(diag);
             continue;
         }
-        if prefixes.is_empty() {
+        activate(r, cim, prefixes);
+    }
+    if let Some(dropped) = dropped_prefix(source, seg_start, seg_end) {
+        prefixes.retain(|p| p.alias != dropped);
+        return;
+    }
+    if prefixes.is_empty() {
+        return;
+    }
+    for (tok_start, tok_end) in field_tokens(source, seg_start, seg_end, &word) {
+        if refs.iter().any(|r| tok_start < r.end && r.start < tok_end) {
             continue;
         }
-        for (tok_start, tok_end) in field_tokens(source, seg_start, seg_end, &word) {
-            if refs.iter().any(|r| tok_start < r.end && r.start < tok_end) {
-                continue;
-            }
-            if let Some(diag) = check_field(source, tok_start, tok_end, &prefixes) {
-                out.push(diag);
-            }
+        if let Some(diag) = check_field(source, tok_start, tok_end, prefixes) {
+            out.push(diag);
         }
-        if word == "rename" {
-            let text = &source[seg_start..seg_end];
-            prefixes.retain(|p| !text.contains(&format!("{}.*", p.alias)));
-        }
+    }
+    if word == "rename" {
+        let text = &source[seg_start..seg_end];
+        prefixes.retain(|p| !text.contains(&format!("{}.*", p.alias)));
     }
 }
 

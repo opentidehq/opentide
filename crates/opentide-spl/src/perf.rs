@@ -17,8 +17,8 @@
 
 use super::Catalog;
 use super::scan::{
-    base_search, command_word, end_of_macro, end_quoted, read_word, skip_comment,
-    skip_ws_and_comments, split_segments, subsearches,
+    Order, base_search, command_word, end_of_macro, end_quoted, read_word, skip_comment,
+    skip_hidden, skip_ws_and_comments, walk_pipelines,
 };
 use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
 
@@ -45,31 +45,37 @@ fn walk_pipeline(
     catalog: &Catalog,
     out: &mut Vec<Diagnostic>,
 ) {
-    let segments = split_segments(source, start, end);
-    if let Some((base_start, base_end)) = base_search(source, &segments, catalog) {
-        scan_search(source, base_start, base_end, out);
-    }
-    for &(seg_start, seg_end) in &segments {
-        if seg_start >= seg_end {
-            continue;
-        }
-        let (word, word_span) = command_word(source, seg_start, seg_end);
-        if let Some((cmd_start, cmd_end)) = word_span
-            && let Some(message) = truncation_message(&word)
-        {
-            push(
-                out,
-                source,
-                codes::SPL_SUBSEARCH_TRUNCATION,
-                message,
-                cmd_start,
-                cmd_end,
-            );
-        }
-        for (inner_start, inner_end) in subsearches(source, seg_start, seg_end) {
-            walk_pipeline(source, inner_start, inner_end, catalog, out);
-        }
-    }
+    walk_pipelines(
+        source,
+        (start, end),
+        skip_hidden,
+        Order::StageFirst,
+        |segments| base_search(source, segments, catalog),
+        |base, index, (seg_start, seg_end)| {
+            // The base search first, before the first stage's own checks.
+            if index == 0
+                && let Some((base_start, base_end)) = *base
+            {
+                scan_search(source, base_start, base_end, out);
+            }
+            if seg_start >= seg_end {
+                return;
+            }
+            let (word, word_span) = command_word(source, seg_start, seg_end);
+            if let Some((cmd_start, cmd_end)) = word_span
+                && let Some(message) = truncation_message(&word)
+            {
+                push(
+                    out,
+                    source,
+                    codes::SPL_SUBSEARCH_TRUNCATION,
+                    message,
+                    cmd_start,
+                    cmd_end,
+                );
+            }
+        },
+    );
 }
 
 fn truncation_message(word: &str) -> Option<String> {

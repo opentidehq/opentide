@@ -20,6 +20,7 @@
 //! `|`, not from grammar rule names.
 
 use super::Catalog;
+use super::scan::{Order, closing_bracket, walk_pipelines};
 use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
 
 /// Where a search clause sits, which decides what Splunk does with the
@@ -66,16 +67,20 @@ pub(crate) fn collect(source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>
 }
 
 fn walk(source: &str, start: usize, end: usize, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    for (index, (seg_start, seg_end)) in split_segments(source, start, end).into_iter().enumerate()
-    {
-        if let Some((clause, from, to)) = clause_of(source, seg_start, seg_end, index == 0, catalog)
-        {
-            scan(source, from, to, clause, out);
-        }
-        for (inner_start, inner_end) in subsearches(source, seg_start, seg_end) {
-            walk(source, inner_start, inner_end, catalog, out);
-        }
-    }
+    walk_pipelines(
+        source,
+        (start, end),
+        skip_hidden,
+        Order::StageFirst,
+        |_| (),
+        |(), index, (seg_start, seg_end)| {
+            if let Some((clause, from, to)) =
+                clause_of(source, seg_start, seg_end, index == 0, catalog)
+            {
+                scan(source, from, to, clause, out);
+            }
+        },
+    );
 }
 
 /// The search clause of one stage, if it has one. `first` is the stage
@@ -148,6 +153,10 @@ fn top_level_words(source: &str, start: usize, end: usize) -> Vec<(usize, usize)
             continue;
         }
         match bytes[i] {
+            // A subsearch is opaque: jump over it when the walk knows its end.
+            b'[' if let Some(close) = closing_bracket(source, i).filter(|&c| c < end) => {
+                i = close + 1;
+            }
             b'[' | b'(' => {
                 depth += 1;
                 i += 1;
@@ -197,6 +206,14 @@ fn scan(source: &str, start: usize, end: usize, clause: Clause, out: &mut Vec<Di
             continue;
         }
         match c {
+            b'[' if brackets == 0
+                && let Some(close) = closing_bracket(source, i).filter(|&c| c < end) =>
+            {
+                // A subsearch is its own query; `walk` reads it.
+                i = close + 1;
+                field_before = false;
+                continue;
+            }
             b'[' => {
                 brackets += 1;
                 i += 1;
@@ -361,65 +378,6 @@ fn command_word(source: &str, start: usize, end: usize) -> Option<(usize, usize)
 fn is_field(source: &str, at: usize, end: usize) -> bool {
     let i = skip_ws_and_comments(source, at, end);
     i < end && is_op_byte(source.as_bytes()[i])
-}
-
-/// Splits `start..end` on `|` outside quotes, comments, macros and brackets.
-/// Parentheses do not hide a pipe: Splunk splits
-/// `index=a TERM("x" | eval y=1` into two stages and runs it.
-fn split_segments(source: &str, start: usize, end: usize) -> Vec<(usize, usize)> {
-    let bytes = source.as_bytes();
-    let mut i = start;
-    let mut seg_start = start;
-    let mut depth = 0i32;
-    let mut segs = Vec::new();
-    while i < end {
-        if let Some(next) = skip_hidden(source, i, end) {
-            i = next;
-            continue;
-        }
-        match bytes[i] {
-            b'|' if depth == 0 => {
-                segs.push((seg_start, i));
-                seg_start = i + 1;
-            }
-            b'[' => depth += 1,
-            b']' => depth = (depth - 1).max(0),
-            _ => {}
-        }
-        i += 1;
-    }
-    if seg_start < end {
-        segs.push((seg_start, end));
-    }
-    segs
-}
-
-/// The insides of top-level `[ … ]` subsearches in `start..end`.
-fn subsearches(source: &str, start: usize, end: usize) -> Vec<(usize, usize)> {
-    let bytes = source.as_bytes();
-    let mut i = start;
-    let mut depth = 0i32;
-    let mut inner_start = 0;
-    let mut out = Vec::new();
-    while i < end {
-        if let Some(next) = skip_hidden(source, i, end) {
-            i = next;
-            continue;
-        }
-        if bytes[i] == b'[' {
-            if depth == 0 {
-                inner_start = i + 1;
-            }
-            depth += 1;
-        } else if bytes[i] == b']' && depth > 0 {
-            depth -= 1;
-            if depth == 0 {
-                out.push((inner_start, i));
-            }
-        }
-        i += 1;
-    }
-    out
 }
 
 /// The end of a comment, quoted string or macro starting at `i`.

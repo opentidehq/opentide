@@ -17,8 +17,8 @@
 
 use super::Catalog;
 use super::scan::{
-    base_search, command_word, end_of_brackets, end_of_macro, end_quoted, skip_comment, skip_ws,
-    split_segments, subsearches,
+    Order, base_search, command_word, end_of_brackets, end_of_macro, end_quoted, skip_comment,
+    skip_hidden, skip_ws, walk_pipelines,
 };
 use opentide_core::datasets::{DatasetKind, DeclaredColumn, DeclaredDatasets, current};
 use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
@@ -102,22 +102,24 @@ pub(crate) fn declared_fields(source: &str, catalog: &Catalog) -> Vec<(String, D
 }
 
 fn walk(source: &str, start: usize, end: usize, catalog: &Catalog, out: &mut Vec<Read>) {
-    let segments = split_segments(source, start, end);
-    // The stage that reads the index, as the wildcard lints see it (perf.rs).
-    let base = base_search(source, &segments, catalog);
-    for &(seg_start, seg_end) in &segments {
-        for (inner_start, inner_end) in subsearches(source, seg_start, seg_end) {
-            walk(source, inner_start, inner_end, catalog, out);
-        }
-        // The base search, and a `tstats` `where` clause.
-        if base == Some((seg_start, seg_end))
-            || command_word(source, seg_start, seg_end)
-                .0
-                .eq_ignore_ascii_case("tstats")
-        {
-            scan_terms(source, seg_start, seg_end, out);
-        }
-    }
+    walk_pipelines(
+        source,
+        (start, end),
+        skip_hidden,
+        Order::SubsearchesFirst,
+        // The stage that reads the index, as the wildcard lints see it (perf.rs).
+        |segments| base_search(source, segments, catalog),
+        |base, _, (seg_start, seg_end)| {
+            // The base search, and a `tstats` `where` clause.
+            if *base == Some((seg_start, seg_end))
+                || command_word(source, seg_start, seg_end)
+                    .0
+                    .eq_ignore_ascii_case("tstats")
+            {
+                scan_terms(source, seg_start, seg_end, out);
+            }
+        },
+    );
 }
 
 /// Walks search terms, tracking `NOT`, and collects sourcetype values.
