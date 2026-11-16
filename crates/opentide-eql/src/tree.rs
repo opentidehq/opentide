@@ -44,6 +44,9 @@ struct Data {
 pub(crate) struct Tree {
     data: Vec<Data>,
     pub(crate) problems: Vec<Problem>,
+    /// A small value an analysis pass computed for a node, kept so that a pass over a long
+    /// left-nested run reads each node once (`semantics`' operand types).
+    memo: std::cell::RefCell<std::collections::HashMap<u32, u8>>,
 }
 
 /// Stands where tree-sitter's cursor stood: iteration needs none.
@@ -161,6 +164,7 @@ pub(crate) fn parse(source: &str) -> Tree {
     let mut tree = Tree {
         data: Vec::new(),
         problems,
+        memo: std::cell::RefCell::default(),
     };
     let mut open: Vec<u32> = Vec::new();
     let mut skip = 0usize;
@@ -228,9 +232,7 @@ pub(crate) fn parse(source: &str) -> Tree {
         root.start = 0;
         root.end = source.len();
     }
-    for (start, end) in comments {
-        tree.place_comment(start, end);
-    }
+    tree.place_comments(&comments);
     for id in 0..tree.data.len() {
         assign_fields(&mut tree.data, u32::try_from(id).unwrap_or(u32::MAX));
     }
@@ -265,14 +267,25 @@ fn token_name(kind: K, text: &str) -> &'static str {
         K::COLON => ":",
         K::QUESTION => "?",
         K::BANG_L_BRACK => "![",
-        // A keyword is lower case: its text is its name. Anything else stands in an error.
-        _ => crate::KEYWORD_WORDS
-            .iter()
-            .find(|k| **k == text)
-            .copied()
-            .unwrap_or("ERROR"),
+        // A keyword is lower case: its text is its name.
+        _ if let Some(keyword) = crate::KEYWORD_WORDS.iter().find(|k| **k == text) => keyword,
+        // A name or a literal with no node of its own stands in an error region; it is named by
+        // what it is, so that highlighting still reads it.
+        K::WORD => ERROR_WORD,
+        K::TILDE_WORD => ERROR_TILDE_WORD,
+        K::QUOTED_IDENT_TOKEN => ERROR_QUOTED,
+        K::STRING_TOKEN => ERROR_STRING,
+        K::NUMBER_TOKEN => ERROR_NUMBER,
+        _ => "ERROR",
     }
 }
+
+/// Anonymous tokens in an error region, by what the lexer cut.
+const ERROR_WORD: &str = "ERROR word";
+const ERROR_TILDE_WORD: &str = "ERROR tilde_word";
+const ERROR_QUOTED: &str = "ERROR quoted_identifier";
+const ERROR_STRING: &str = "ERROR string";
+const ERROR_NUMBER: &str = "ERROR number";
 
 impl Tree {
     fn push(
@@ -341,45 +354,69 @@ impl Tree {
         self.data[id as usize].children = children;
     }
 
-    /// Puts a comment in the deepest node it stands strictly inside (a child before it and one
-    /// after it), else in the root.
-    fn place_comment(&mut self, start: usize, end: usize) {
+    /// Puts each comment (in document order) in the deepest node it stands strictly inside (a
+    /// child before it and one after it), else in the root. A node's children are in order and
+    /// do not overlap, so each level is a binary search, and each node's comments are merged
+    /// into its children once: linear in the comments, where an insert per comment was not.
+    fn place_comments(&mut self, comments: &[(usize, usize)]) {
         if self.data.is_empty() {
             return;
         }
-        let mut node = 0u32;
-        'down: loop {
-            for &c in &self.data[node as usize].children {
-                let child = &self.data[c as usize];
-                if child.named
-                    && child.start < start
-                    && end < child.end
-                    && !child.children.is_empty()
-                {
-                    let inside = child
-                        .children
-                        .iter()
-                        .any(|&g| self.data[g as usize].end <= start)
-                        && child
-                            .children
-                            .iter()
-                            .any(|&g| self.data[g as usize].start >= end);
-                    if inside {
-                        node = c;
-                        continue 'down;
-                    }
-                }
-            }
-            break;
+        let mut placed: Vec<(u32, u32)> = Vec::with_capacity(comments.len());
+        for &(start, end) in comments {
+            let node = self.comment_parent(start, end);
+            let id = self.push(None, "comment", true, start, end);
+            self.data[id as usize].parent = Some(node);
+            placed.push((node, id));
         }
-        let id = self.push(None, "comment", true, start, end);
-        self.data[id as usize].parent = Some(node);
-        let kids = &self.data[node as usize].children;
-        let at = kids
-            .iter()
-            .position(|&k| self.data[k as usize].start >= end)
-            .unwrap_or(kids.len());
-        self.data[node as usize].children.insert(at, id);
+        // Stable: a node's comments stay in document order.
+        placed.sort_by_key(|&(node, _)| node);
+        for group in placed.chunk_by(|a, b| a.0 == b.0) {
+            let node = group[0].0 as usize;
+            let kids = std::mem::take(&mut self.data[node].children);
+            let mut merged = Vec::with_capacity(kids.len() + group.len());
+            let mut pending = group.iter().map(|&(_, id)| id).peekable();
+            for kid in kids {
+                let kid_start = self.data[kid as usize].start;
+                while let Some(&c) = pending.peek() {
+                    if self.data[c as usize].end > kid_start {
+                        break;
+                    }
+                    merged.push(c);
+                    pending.next();
+                }
+                merged.push(kid);
+            }
+            merged.extend(pending);
+            self.data[node].children = merged;
+        }
+    }
+
+    /// The deepest node a comment at `start..end` stands strictly inside.
+    fn comment_parent(&self, start: usize, end: usize) -> u32 {
+        let mut node = 0u32;
+        loop {
+            let kids = &self.data[node as usize].children;
+            // The only child that can hold the comment: the last one starting before it.
+            let i = kids.partition_point(|&k| self.data[k as usize].start < start);
+            let Some(&c) = i.checked_sub(1).and_then(|i| kids.get(i)) else {
+                return node;
+            };
+            let child = &self.data[c as usize];
+            let (Some(&first), Some(&last)) = (child.children.first(), child.children.last())
+            else {
+                return node;
+            };
+            let inside = child.named
+                && child.start < start
+                && end < child.end
+                && self.data[first as usize].end <= start
+                && self.data[last as usize].start >= end;
+            if !inside {
+                return node;
+            }
+            node = c;
+        }
     }
 
     pub(crate) fn root_node(&self) -> Node<'_> {
@@ -550,6 +587,16 @@ impl<'t> Node<'t> {
         }
     }
 
+    /// The value [`Node::remember`] kept for this node.
+    pub(crate) fn remembered(&self) -> Option<u8> {
+        self.tree.memo.borrow().get(&self.id).copied()
+    }
+
+    /// Keeps `value` for this node.
+    pub(crate) fn remember(&self, value: u8) {
+        self.tree.memo.borrow_mut().insert(self.id, value);
+    }
+
     pub(crate) fn kind(&self) -> &'static str {
         self.d().kind
     }
@@ -685,6 +732,14 @@ pub(crate) fn walk_with_ancestors<'t>(root: Node<'t>, mut f: impl FnMut(Node<'t>
 /// first that matches wins): what `capture(token, parent)` becomes on this tree.
 pub(crate) fn capture(node: Node<'_>) -> Option<&'static str> {
     let kind = node.kind();
+    // A name or a literal in an error region reads as it would in a query that parses.
+    match kind {
+        ERROR_WORD | ERROR_QUOTED => return Some("variable"),
+        ERROR_TILDE_WORD => return Some("function"),
+        ERROR_STRING => return Some("string"),
+        ERROR_NUMBER => return Some("number"),
+        _ => {}
+    }
     // `(boolean) @boolean`: the node is not a leaf here, its `true` or `false` is.
     if !node.is_named() && node.parent().is_some_and(|p| p.kind() == "boolean") {
         return Some("boolean");

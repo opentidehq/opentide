@@ -401,6 +401,22 @@ fn check_node(
     if !node.is_named() {
         return;
     }
+    // An expression the parser could not finish (`startsWith(a, `) is not checked further: its
+    // arity and types are those of a fragment, and the syntax error already says what is wrong.
+    let expression = matches!(
+        node.kind(),
+        "comparison"
+            | "predicate_expression"
+            | "binary_expression"
+            | "unary_expression"
+            | "and_expression"
+            | "or_expression"
+            | "not_expression"
+            | "function_call"
+    );
+    if expression && node.has_error() {
+        return;
+    }
     match node.kind() {
         "string" => check_string(node, source, out),
         "index" => out.push(Diagnostic::error(
