@@ -1,0 +1,36 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..22
+  PIPELINE@0..22
+    ASSIGNMENT@0..22
+      FIELD_NAME@0..1
+        WORD@0..1 "x"
+      WHITESPACE@1..2 " "
+      COLON_EQ@2..4 ":="
+      WHITESPACE@4..5 " "
+      BINARY_EXPRESSION@5..22
+        FIELD_NAME@5..6
+          WORD@5..6 "a"
+        WHITESPACE@6..7 " "
+        PLUS@7..8 "+"
+        WHITESPACE@8..9 " "
+        FIELD_NAME@9..10
+          WORD@9..10 "b"
+        WHITESPACE@10..11 " "
+        MINUS@11..12 "-"
+        WHITESPACE@12..13 " "
+        BINARY_EXPRESSION@13..22
+          FIELD_NAME@13..14
+            WORD@13..14 "c"
+          WHITESPACE@14..15 " "
+          STAR@15..16 "*"
+          WHITESPACE@16..17 " "
+          FIELD_NAME@17..18
+            WORD@17..18 "d"
+          WHITESPACE@18..19 " "
+          SLASH@19..20 "/"
+          WHITESPACE@20..21 " "
+          FIELD_NAME@21..22
+            WORD@21..22 "e"

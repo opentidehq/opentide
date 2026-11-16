@@ -1,0 +1,101 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/attributed_expression__valid.cql
+---
+SOURCE_FILE@0..175
+  PIPELINE@0..174
+    FUNCTION_CALL@0..174
+      FUNCTION_NAME@0..9
+        FUNCTION_NAME_TOKEN@0..9 "correlate"
+      L_PAREN@9..10 "("
+      ARGUMENT_LIST@10..173
+        ARGUMENT@10..42
+          NAMED_SUBQUERY@10..42
+            IDENTIFIER@10..20
+              WORD@10..20 "LoginFail1"
+            WHITESPACE@20..21 " "
+            COLON@21..22 ":"
+            WHITESPACE@22..23 " "
+            SUBQUERY@23..42
+              L_BRACE@23..24 "{"
+              WHITESPACE@24..25 " "
+              PIPELINE@25..40
+                FIELD_FILTER@25..40
+                  FIELD_NAME@25..30
+                    WORD@25..30 "logon"
+                  WHITESPACE@30..31 " "
+                  EQ@31..32 "="
+                  WHITESPACE@32..33 " "
+                  UNQUOTED_PATTERN@33..40
+                    WORD@33..40 "FAILURE"
+              WHITESPACE@40..41 " "
+              R_BRACE@41..42 "}"
+        COMMA@42..43 ","
+        WHITESPACE@43..44 " "
+        ARGUMENT@44..146
+          ATTRIBUTED_EXPRESSION@44..146
+            NAMED_SUBQUERY@44..114
+              IDENTIFIER@44..56
+                WORD@44..56 "LoginSuccess"
+              WHITESPACE@56..57 " "
+              COLON@57..58 ":"
+              WHITESPACE@58..59 " "
+              SUBQUERY@59..114
+                L_BRACE@59..60 "{"
+                WHITESPACE@60..61 " "
+                PIPELINE@61..112
+                  FIELD_FILTER@61..76
+                    FIELD_NAME@61..66
+                      WORD@61..66 "logon"
+                    WHITESPACE@66..67 " "
+                    EQ@67..68 "="
+                    WHITESPACE@68..69 " "
+                    UNQUOTED_PATTERN@69..76
+                      WORD@69..76 "SUCCESS"
+                  WHITESPACE@76..77 " "
+                  PIPE@77..78 "|"
+                  WHITESPACE@78..79 " "
+                  LINK_CONSTRAINT@79..112
+                    FIELD_NAME@79..89
+                      WORD@79..89 "user.email"
+                    WHITESPACE@89..90 " "
+                    LT_EQ_GT@90..93 "<=>"
+                    WHITESPACE@93..94 " "
+                    FIELD_NAME@94..112
+                      WORD@94..112 "LoginFail1.user.id"
+                WHITESPACE@112..113 " "
+                R_BRACE@113..114 "}"
+            WHITESPACE@114..115 " "
+            EXPRESSION_ATTRIBUTE@115..146
+              IDENTIFIER@115..122
+                WORD@115..122 "include"
+              COLON@122..123 ":"
+              WHITESPACE@123..124 " "
+              ARRAY@124..146
+                L_BRACK@124..125 "["
+                FIELD_NAME@125..135
+                  WORD@125..135 "user.email"
+                COMMA@135..136 ","
+                WHITESPACE@136..137 " "
+                FIELD_NAME@137..145
+                  WORD@137..145 "platform"
+                R_BRACK@145..146 "]"
+        COMMA@146..147 ","
+        WHITESPACE@147..148 " "
+        NAMED_ARGUMENT@148..161
+          ARGUMENT_NAME@148..156
+            WORD@148..156 "sequence"
+          EQ@156..157 "="
+          BOOLEAN@157..161
+            TRUE_KW@157..161 "true"
+        COMMA@161..162 ","
+        WHITESPACE@162..163 " "
+        NAMED_ARGUMENT@163..173
+          ARGUMENT_NAME@163..169
+            WORD@163..169 "within"
+          EQ@169..170 "="
+          FIELD_NAME@170..173
+            WORD@170..173 "15m"
+      R_PAREN@173..174 ")"
+  WHITESPACE@174..175 "\n"

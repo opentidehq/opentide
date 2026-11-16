@@ -3408,6 +3408,7 @@ dependencies = [
 name = "opentide-cql"
 version = "0.12.0"
 dependencies = [
+ "insta",
  "logos",
  "opentide-core",
  "opentide-highlight",
@@ -3433,11 +3434,14 @@ dependencies = [
 name = "opentide-eql"
 version = "0.12.0"
 dependencies = [
+ "logos",
  "opentide-core",
  "opentide-ecs",
  "opentide-highlight",
  "opentide-lucene",
+ "opentide-parse",
  "opentide-syntax",
+ "rowan",
  "serde",
  "toml 0.8.23",
  "tree-sitter",
@@ -3474,10 +3478,14 @@ dependencies = [
 name = "opentide-falco"
 version = "0.12.0"
 dependencies = [
+ "insta",
+ "logos",
  "opentide-core",
  "opentide-highlight",
+ "opentide-parse",
  "opentide-syntax",
  "regex",
+ "rowan",
  "serde",
  "serde_json",
  "toml 0.8.23",

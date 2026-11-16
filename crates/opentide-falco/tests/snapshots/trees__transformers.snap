@@ -1,0 +1,70 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(r#\"getopt(proc.args, \"nt:\")[t] = value and join(\",\", (proc.name, 1)) = a and fd.name = val(proc.cwd)[x]\"#)"
+---
+source_file@0..100
+  and_expression@0..100
+    comparison@0..35
+      field_transformer@0..27
+        transformer_name@0..7 "getopt("
+        field@7..16
+          field_name@7..16 "proc.args"
+        ,@16..17 ","
+        whitespace@17..18 " "
+        quoted_string@18..23 "\"nt:\""
+        )@23..24 ")"
+        field_argument@24..27
+          [@24..25 "["
+          argument_value@25..26
+            identifier@25..26 "t"
+          ]@26..27 "]"
+      whitespace@27..28 " "
+      comparison_operator@28..29
+        =@28..29 "="
+      whitespace@29..30 " "
+      bare_string@30..35
+        identifier@30..35 "value"
+    whitespace@35..36 " "
+    and@36..39 "and"
+    whitespace@39..40 " "
+    comparison@40..69
+      field_transformer@40..65
+        transformer_name@40..45 "join("
+        quoted_string@45..48 "\",\""
+        ,@48..49 ","
+        whitespace@49..50 " "
+        transformer_list@50..64
+          (@50..51 "("
+          field@51..60
+            field_name@51..60 "proc.name"
+          ,@60..61 ","
+          whitespace@61..62 " "
+          number@62..63 "1"
+          )@63..64 ")"
+        )@64..65 ")"
+      whitespace@65..66 " "
+      comparison_operator@66..67
+        =@66..67 "="
+      whitespace@67..68 " "
+      bare_string@68..69
+        identifier@68..69 "a"
+    whitespace@69..70 " "
+    and@70..73 "and"
+    whitespace@73..74 " "
+    comparison@74..100
+      field@74..81
+        field_name@74..81 "fd.name"
+      whitespace@81..82 " "
+      comparison_operator@82..83
+        =@82..83 "="
+      whitespace@83..84 " "
+      value_transformer@84..100
+        transformer_name@84..88 "val("
+        field@88..96
+          field_name@88..96 "proc.cwd"
+        )@96..97 ")"
+        field_argument@97..100
+          [@97..98 "["
+          argument_value@98..99
+            identifier@98..99 "x"
+          ]@99..100 "]"

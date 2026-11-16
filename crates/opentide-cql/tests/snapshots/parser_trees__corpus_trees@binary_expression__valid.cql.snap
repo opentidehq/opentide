@@ -1,0 +1,112 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/binary_expression__valid.cql
+---
+SOURCE_FILE@0..167
+  PIPELINE@0..166
+    ASSIGNMENT@0..95
+      FIELD_NAME@0..9
+        WORD@0..9 "errortime"
+      WHITESPACE@9..10 " "
+      COLON_EQ@10..12 ":="
+      WHITESPACE@12..13 " "
+      BINARY_EXPRESSION@13..95
+        FUNCTION_CALL@13..88
+          FUNCTION_NAME@13..15
+            FUNCTION_NAME_TOKEN@13..15 "if"
+          L_PAREN@15..16 "("
+          ARGUMENT_LIST@16..87
+            ARGUMENT@16..47
+              PARENTHESIZED_EXPRESSION@16..47
+                L_PAREN@16..17 "("
+                BINARY_EXPRESSION@17..46
+                  FIELD_NAME@17..33
+                    WORD@17..33 "@ingesttimestamp"
+                  WHITESPACE@33..34 " "
+                  GT@34..35 ">"
+                  WHITESPACE@35..36 " "
+                  FIELD_NAME@36..46
+                    WORD@36..46 "@timestamp"
+                R_PAREN@46..47 ")"
+            COMMA@47..48 ","
+            WHITESPACE@48..49 " "
+            NAMED_ARGUMENT@49..64
+              ARGUMENT_NAME@49..53
+                WORD@49..53 "then"
+              EQ@53..54 "="
+              FIELD_NAME@54..64
+                WORD@54..64 "@timestamp"
+            COMMA@64..65 ","
+            WHITESPACE@65..66 " "
+            NAMED_ARGUMENT@66..87
+              ARGUMENT_NAME@66..70
+                WORD@66..70 "else"
+              EQ@70..71 "="
+              FIELD_NAME@71..87
+                WORD@71..87 "@ingesttimestamp"
+          R_PAREN@87..88 ")"
+        WHITESPACE@88..89 " "
+        SLASH@89..90 "/"
+        WHITESPACE@90..91 " "
+        NUMBER@91..95
+          NUMBER_TOKEN@91..95 "1000"
+    WHITESPACE@95..96 "\n"
+    PIPE@96..97 "|"
+    WHITESPACE@97..98 " "
+    FUNCTION_CALL@98..136
+      FUNCTION_NAME@98..102
+        FUNCTION_NAME_TOKEN@98..102 "test"
+      L_PAREN@102..103 "("
+      ARGUMENT_LIST@103..135
+        ARGUMENT@103..135
+          BINARY_EXPRESSION@103..135
+            FUNCTION_CALL@103..117
+              FUNCTION_NAME@103..109
+                FUNCTION_NAME_TOKEN@103..109 "length"
+              L_PAREN@109..110 "("
+              ARGUMENT_LIST@110..116
+                ARGUMENT@110..116
+                  FIELD_NAME@110..116
+                    WORD@110..116 "userid"
+              R_PAREN@116..117 ")"
+            WHITESPACE@117..118 " "
+            EQ_EQ@118..120 "=="
+            WHITESPACE@120..121 " "
+            FUNCTION_CALL@121..135
+              FUNCTION_NAME@121..127
+                FUNCTION_NAME_TOKEN@121..127 "length"
+              L_PAREN@127..128 "("
+              ARGUMENT_LIST@128..134
+                ARGUMENT@128..134
+                  FIELD_NAME@128..134
+                    WORD@128..134 "method"
+              R_PAREN@134..135 ")"
+      R_PAREN@135..136 ")"
+    WHITESPACE@136..137 "\n"
+    PIPE@137..138 "|"
+    WHITESPACE@138..139 " "
+    ASSIGNMENT@139..166
+      FIELD_NAME@139..142
+        WORD@139..142 "pct"
+      WHITESPACE@142..143 " "
+      COLON_EQ@143..145 ":="
+      WHITESPACE@145..146 " "
+      BINARY_EXPRESSION@146..166
+        PARENTHESIZED_EXPRESSION@146..158
+          L_PAREN@146..147 "("
+          BINARY_EXPRESSION@147..157
+            FIELD_NAME@147..151
+              WORD@147..151 "part"
+            WHITESPACE@151..152 " "
+            STAR@152..153 "*"
+            WHITESPACE@153..154 " "
+            NUMBER@154..157
+              NUMBER_TOKEN@154..157 "100"
+          R_PAREN@157..158 ")"
+        WHITESPACE@158..159 " "
+        PERCENT@159..160 "%"
+        WHITESPACE@160..161 " "
+        FIELD_NAME@161..166
+          WORD@161..166 "total"
+  WHITESPACE@166..167 "\n"

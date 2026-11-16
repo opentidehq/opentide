@@ -1,0 +1,49 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..39
+  PIPELINE@0..39
+    MATCH_STATEMENT@0..39
+      FIELD_NAME@0..1
+        WORD@0..1 "x"
+      WHITESPACE@1..2 " "
+      MATCH_KW@2..7 "match"
+      WHITESPACE@7..8 " "
+      L_BRACE@8..9 "{"
+      WHITESPACE@9..10 " "
+      MATCH_BRANCH@10..23
+        STRING@10..13
+          STRING_TOKEN@10..13 "\"a\""
+        WHITESPACE@13..14 " "
+        FAT_ARROW@14..16 "=>"
+        WHITESPACE@16..17 " "
+        PIPELINE@17..23
+          ASSIGNMENT@17..23
+            FIELD_NAME@17..18
+              WORD@17..18 "y"
+            WHITESPACE@18..19 " "
+            COLON_EQ@19..21 ":="
+            WHITESPACE@21..22 " "
+            NUMBER@22..23
+              NUMBER_TOKEN@22..23 "1"
+      WHITESPACE@23..24 " "
+      SEMI@24..25 ";"
+      WHITESPACE@25..26 " "
+      MATCH_BRANCH@26..37
+        UNQUOTED_PATTERN@26..27
+          PATTERN@26..27 "*"
+        WHITESPACE@27..28 " "
+        FAT_ARROW@28..30 "=>"
+        WHITESPACE@30..31 " "
+        PIPELINE@31..37
+          ASSIGNMENT@31..37
+            FIELD_NAME@31..32
+              WORD@31..32 "y"
+            WHITESPACE@32..33 " "
+            COLON_EQ@33..35 ":="
+            WHITESPACE@35..36 " "
+            NUMBER@36..37
+              NUMBER_TOKEN@36..37 "2"
+      WHITESPACE@37..38 " "
+      R_BRACE@38..39 "}"

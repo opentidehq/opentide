@@ -1,0 +1,19 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/value_transformer__invalid.falco
+---
+source_file@0..26
+  comparison@0..26
+    field@0..10
+      field_name@0..10 "proc.pname"
+    whitespace@10..11 " "
+    comparison_operator@11..12
+      =@11..12 "="
+    whitespace@12..13 " "
+    value_transformer@13..26
+      transformer_name@13..17 "val("
+      field@17..26
+        field_name@17..26 "proc.name"
+errors:
+26..26: missing `)` (expected ))
