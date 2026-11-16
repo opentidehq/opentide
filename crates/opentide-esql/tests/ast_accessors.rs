@@ -11,10 +11,13 @@
 use opentide_esql::ast;
 use opentide_esql::{SyntaxNode, SyntaxToken, syntax_tree};
 use opentide_parse::ast::{AstChildren, AstNode};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 /// What an accessor returned: the elements it reached, with their parents.
 trait Reached {
+    /// Whether the accessor returns several elements (`AstChildren`).
+    const PLURAL: bool = false;
     fn reached(self) -> Vec<(rowan::TextRange, Option<SyntaxNode>)>;
 }
 
@@ -27,6 +30,7 @@ impl<N: AstNode<Language = opentide_esql::Lang>> Reached for Option<N> {
 }
 
 impl<N: AstNode<Language = opentide_esql::Lang>> Reached for AstChildren<N> {
+    const PLURAL: bool = true;
     fn reached(self) -> Vec<(rowan::TextRange, Option<SyntaxNode>)> {
         self.map(|n| (n.syntax().text_range(), n.syntax().parent()))
             .collect()
@@ -78,6 +82,14 @@ macro_rules! lift_node {
     };
 }
 
+/// What one accessor returned on one node: (type, accessor, plural, ranges).
+type Found = (&'static str, &'static str, bool, Vec<rowan::TextRange>);
+
+/// Whether a result is a list of children.
+fn plural_of<R: Reached>(_: &R) -> bool {
+    R::PLURAL
+}
+
 macro_rules! accessors {
     ($($t:ident => [$($a:ident),* $(,)?]),* $(,)?) => {
         lift_node!($($t),*);
@@ -86,22 +98,38 @@ macro_rules! accessors {
         const ACCESSORS: &[(&str, &[&str])] = &[$((stringify!($t), &[$(stringify!($a)),*])),*];
 
         /// Casts `node` to every typed node that takes it and calls each
-        /// accessor; returns `(type, accessor, problem)` for any element that
-        /// is not a direct child of `node`, and the types it cast to.
-        fn visit(node: &SyntaxNode, casts: &mut Vec<&'static str>, bad: &mut Vec<String>) {
+        /// accessor. Records the accessors that returned something in `hits`,
+        /// what each returned in `found` (type, accessor, ranges), and a
+        /// problem in `bad` for any element that is not a direct child of
+        /// `node`; returns the types `node` cast to.
+        fn visit(
+            node: &SyntaxNode,
+            hits: &mut HashSet<(&'static str, &'static str)>,
+            found: &mut Vec<Found>,
+            bad: &mut Vec<String>,
+        ) -> Vec<&'static str> {
+            let mut casts = Vec::new();
             $(
                 if let Some(typed) = <ast::$t as AstNode>::cast(node.clone()) {
                     casts.push(stringify!($t));
-                    assert_eq!(typed.syntax(), node);
+                    let _ = &typed;
                     $(
-                        for (range, parent) in typed.$a().lift().reached() {
-                            if parent.as_ref() != Some(node) || !node.text_range().contains_range(range) {
+                        let result = typed.$a().lift();
+                        let plural = plural_of(&result);
+                        let reached = result.reached();
+                        if !reached.is_empty() {
+                            hits.insert((stringify!($t), stringify!($a)));
+                        }
+                        for (range, parent) in &reached {
+                            if parent.as_ref() != Some(node) || !node.text_range().contains_range(*range) {
                                 bad.push(format!("{}::{} at {range:?}", stringify!($t), stringify!($a)));
                             }
                         }
+                        found.push((stringify!($t), stringify!($a), plural, reached.into_iter().map(|(r, _)| r).collect()));
                     )*
                 }
             )*
+            casts
         }
     };
 }
@@ -254,17 +282,122 @@ fn corpus() -> Vec<String> {
         .collect()
 }
 
+/// Forms the corpus does not hold, so that every node type occurs and every
+/// accessor returns something.
+const EXTRA: &[&str] = &[
+    "ROW a = null, b = true, c = -x, d = false | ENRICH _any:p",
+    "ROW a = [+1, -2], b = [true, false], c = [\"x\", \"y\"]",
+    "TS a, b METADATA _id",
+    "PROMQL \"x\"",
+    "FROM a | LIMIT 1 BY x, y | INLINESTATS c = count(*), d = max(x)",
+    "FROM a | DISSECT x \"%{a}\" append_separator = \",\", b = 1",
+    "FROM a | LOOKUP JOIN t AS q ON a, b",
+    "FROM a | COMPLETION p WITH `endpoint`",
+    "FROM a | RERANK r = \"q\" ON a, b",
+    "FROM a | FUSE linear KEY BY a, b GROUP BY c WITH {\"a\": 1, \"b\": 2} WITH {}",
+    "FROM a | USER_AGENT u = x WITH {} | IP_LOCATION l = x WITH {}",
+    "FROM a | MMR x ON y LIMIT 3 WITH {} | HIGHLIGHT q ON a WITH {}",
+    "FROM a | DENSE_VECTOR v = x, y | FILLNULL 0 ON a, b",
+    // `ASC`: `OrderExpression::direction` reads only `asc` of `('asc' | 'desc')?`,
+    // the codegen bug #1454 (an optional token choice exposes its first token).
+    "FROM a | SORT x ASC | ENRICH \"policy\" | WHERE x NOT LIKE \"a\"",
+];
+
+/// Accessors no tree reaches, each with its reason.
+const UNREACHED: &[(&str, &str, &str)] = &[];
+
+/// The accessors that take the n-th node of one kind (`left`, `right`), from
+/// the generated file: (type, accessor, n). The first of them reads
+/// `support::child` (n = 0), the others `support::nth_child`.
+fn nth_accessors() -> Vec<(String, String, usize)> {
+    let generated = include_str!("../src/generated/ast.rs");
+    // (type, accessor, returned type, n) of every accessor of one node.
+    let mut all: Vec<(String, String, String, usize)> = Vec::new();
+    let (mut current, mut accessor) = (None, None);
+    for line in generated.lines() {
+        let line = line.trim_start();
+        if let Some(rest) = line.strip_prefix("impl ") {
+            current = rest.strip_suffix(" {").filter(|t| !t.contains(' '));
+        } else if let Some(rest) = line.strip_prefix("pub fn ") {
+            let name = rest.split('(').next().unwrap_or_default();
+            let returned = rest
+                .split("-> Option<")
+                .nth(1)
+                .and_then(|r| r.split('>').next())
+                .map(ToString::to_string);
+            accessor = returned.map(|r| (name.to_string(), r));
+        } else if let (Some(t), Some((a, r))) = (current, &accessor) {
+            let n = if line == "support::child(&self.syntax)" {
+                Some(0)
+            } else {
+                line.strip_prefix("support::nth_child(&self.syntax, ")
+                    .and_then(|rest| rest.split(')').next())
+                    .and_then(|n| n.parse().ok())
+            };
+            if let Some(n) = n {
+                all.push((t.to_string(), a.clone(), r.clone(), n));
+            }
+        }
+    }
+    // Keep the groups with an n-th child: a type's accessors of one returned
+    // type, one of them past the first.
+    all.iter()
+        .filter(|(t, _, r, _)| {
+            all.iter()
+                .any(|(t2, _, r2, n2)| t2 == t && r2 == r && *n2 > 0)
+        })
+        .map(|(t, a, _, n)| (t.clone(), a.clone(), *n))
+        .collect()
+}
+
 #[test]
 fn every_accessor_reaches_a_child_of_its_node() {
-    let (mut casts, mut bad, mut nodes) = (Vec::new(), Vec::new(), 0);
-    // The forms the corpus does not hold: `null`, a boolean, a unary minus,
-    // an enrich mode.
-    let extra = "ROW a = null, b = true, c = -x | ENRICH _any:p".to_string();
-    for source in corpus().into_iter().chain([extra]) {
+    let (mut casts, mut hits, mut bad, mut nodes) = (HashSet::new(), HashSet::new(), Vec::new(), 0);
+    let nth = nth_accessors();
+    assert!(!nth.is_empty(), "the ungram labels positional children");
+    let mut disordered = Vec::new();
+    for source in corpus()
+        .into_iter()
+        .chain(EXTRA.iter().map(ToString::to_string))
+    {
         let root = syntax_tree(&source);
         for node in root.descendants() {
             nodes += 1;
-            visit(&node, &mut casts, &mut bad);
+            let mut found = Vec::new();
+            casts.extend(visit(&node, &mut hits, &mut found, &mut bad));
+            // The n-th of a kind stands after the (n-1)-th: `left` before
+            // `right`, a map entry's key before its value.
+            let at: HashMap<(&str, &str), rowan::TextRange> = found
+                .iter()
+                .filter_map(|(t, a, _, r)| Some(((*t, *a), *r.first()?)))
+                .collect();
+            // Two accessors of one node return two children: a labelled
+            // child (`right`) is never the one another label reads (`left`).
+            for (i, (t, a, plural, r)) in found.iter().enumerate() {
+                for (t2, a2, plural2, r2) in &found[i + 1..] {
+                    if t == t2 && !plural && !plural2 && !r.is_empty() && r == r2 {
+                        disordered.push(format!(
+                            "{t}::{a} and {t}::{a2} both read {r:?} in {source:?}"
+                        ));
+                    }
+                }
+            }
+            for (t, a, n) in &nth {
+                for (t2, a2, n2) in &nth {
+                    if t == t2
+                        && n < n2
+                        && let (Some(r), Some(r2)) = (
+                            at.get(&(t.as_str(), a.as_str())),
+                            at.get(&(t2.as_str(), a2.as_str())),
+                        )
+                        && r.end() > r2.start()
+                    {
+                        disordered.push(format!(
+                            "{t}::{a} {r:?} is not before {t2}::{a2} {r2:?} in {source:?}"
+                        ));
+                    }
+                }
+            }
         }
     }
     assert!(
@@ -273,16 +406,37 @@ fn every_accessor_reaches_a_child_of_its_node() {
         bad.len(),
         bad[..bad.len().min(20)].join("\n")
     );
+    assert!(
+        disordered.is_empty(),
+        "{}",
+        disordered[..disordered.len().min(20)].join("\n")
+    );
     assert!(nodes > 5_000, "visited {nodes} nodes");
-    // Every node kind of the ungram occurs in the corpus, and casts.
-    casts.sort_unstable();
-    casts.dedup();
+    // Every node kind of the ungram occurs, and casts.
     let missing: Vec<_> = ACCESSORS
         .iter()
         .map(|(t, _)| *t)
         .filter(|t| !casts.contains(t))
         .collect();
-    assert!(missing.is_empty(), "no corpus tree has a {missing:?}");
+    assert!(missing.is_empty(), "no tree has a {missing:?}");
+    // Every accessor returns something on some tree, but the listed ones.
+    let unreached: Vec<_> = ACCESSORS
+        .iter()
+        .flat_map(|(t, accessors)| accessors.iter().map(move |a| (*t, *a)))
+        .filter(|pair| !hits.contains(pair))
+        .filter(|(t, a)| !UNREACHED.iter().any(|(ut, ua, _)| ut == t && ua == a))
+        .collect();
+    assert!(
+        unreached.is_empty(),
+        "{} accessors never return anything: {unreached:?}",
+        unreached.len()
+    );
+    // An exception that is reached is stale.
+    let stale: Vec<_> = UNREACHED
+        .iter()
+        .filter(|(t, a, _)| hits.contains(&(*t, *a)))
+        .collect();
+    assert!(stale.is_empty(), "reached now: {stale:?}");
 }
 
 #[test]

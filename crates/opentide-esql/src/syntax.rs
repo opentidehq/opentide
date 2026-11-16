@@ -148,6 +148,7 @@ pub type SyntaxToken = rowan::SyntaxToken<Lang>;
 
 /// The kind of each token of `esql.ungram`, for the typed AST.
 #[macro_export]
+#[doc(hidden)]
 macro_rules! T {
     [from] => { $crate::SyntaxKind::FROM_KW };
     [ts] => { $crate::SyntaxKind::TS_KW };
