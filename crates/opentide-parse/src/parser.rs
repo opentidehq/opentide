@@ -107,8 +107,14 @@ pub struct Parser<'i> {
     poisoned: bool,
     /// One entry per open node, root first: the height of its tallest
     /// completed child (0 for none). Its length is the depth of the next
-    /// node opened; with the heights it is how deep a `precede` pushes a node.
+    /// node opened. Markers close in the order they opened, so the last
+    /// entry is the marker that closes next.
     open: Vec<u32>,
+    /// The height of each completed node, by the position of its start
+    /// event: how deep a `precede` pushes it. Kept here, not in the markers,
+    /// so a grammar's frames do not grow (ES|QL's limit sits at the edge of
+    /// a 1 MB stack).
+    heights: Vec<u32>,
 }
 
 impl<'i> Parser<'i> {
@@ -133,6 +139,7 @@ impl<'i> Parser<'i> {
             depth: 0,
             poisoned: false,
             open: Vec::new(),
+            heights: Vec::new(),
         }
     }
 
@@ -300,27 +307,30 @@ impl<'i> Parser<'i> {
         self.check_stall();
         let pos = u32::try_from(self.events.len()).unwrap_or(u32::MAX);
         self.events.push(Event::Tombstone);
-        let frame = u32::try_from(self.open.len()).unwrap_or(u32::MAX);
         self.open.push(0);
         Marker {
             pos,
-            frame,
             child: None,
             armed: true,
         }
     }
 
-    /// Closes the open nodes from `frame` up; the height of the node at
-    /// `frame` (its tallest child plus one), which its parent records. A
-    /// marker closed out of order closes the ones opened after it too.
-    fn close_frame(&mut self, frame: u32, own: bool) -> u32 {
-        let at = (frame as usize).min(self.open.len());
-        let tallest = self.open.drain(at..).max().unwrap_or(0);
+    /// Closes the innermost open node: completed (`own`), its height is its
+    /// tallest child's plus one, recorded at `pos`; abandoned, its children
+    /// go to the enclosing node. The enclosing node records the height.
+    fn close_frame(&mut self, pos: u32, own: bool) {
+        let tallest = self.open.pop().unwrap_or(0);
         let height = if own { tallest + 1 } else { tallest };
         if let Some(parent) = self.open.last_mut() {
             *parent = (*parent).max(height);
         }
-        height
+        if own {
+            let at = pos as usize;
+            if self.heights.len() <= at {
+                self.heights.resize(at + 1, 0);
+            }
+            self.heights[at] = height;
+        }
     }
 
     /// One level deeper. Past `max_depth` it records one error, wraps the
@@ -428,8 +438,6 @@ impl<'i> Parser<'i> {
 #[must_use = "a node is complete()d or abandon()ed"]
 pub struct Marker {
     pos: u32,
-    /// Its entry in [`Parser`]'s open nodes.
-    frame: u32,
     /// The node [`CompletedMarker::precede`] opened this one around: its
     /// `forward_parent` points here until [`Marker::abandon`] clears it.
     child: Option<u32>,
@@ -447,11 +455,10 @@ impl Marker {
             };
         }
         p.events.push(Event::Finish);
-        let height = p.close_frame(self.frame, true);
+        p.close_frame(self.pos, true);
         CompletedMarker {
             pos: self.pos,
             kind,
-            height,
         }
     }
 
@@ -461,7 +468,7 @@ impl Marker {
     pub fn abandon(mut self, p: &mut Parser<'_>) {
         self.armed = false;
         // Its children belong to the enclosing node, one level up.
-        p.close_frame(self.frame, false);
+        p.close_frame(self.pos, false);
         if let Some(child) = self.child
             && let Some(Event::Start { forward_parent, .. }) = p.events.get_mut(child as usize)
         {
@@ -487,8 +494,6 @@ impl Drop for Marker {
 pub struct CompletedMarker {
     pos: u32,
     kind: SyntaxKind,
-    /// How many nodes deep its subtree is (1 for a leaf node).
-    height: u32,
 }
 
 impl CompletedMarker {
@@ -506,13 +511,13 @@ impl CompletedMarker {
     pub fn precede(self, p: &mut Parser<'_>) -> Marker {
         // The wrapper opens where this node was; this node and its subtree
         // go one deeper.
-        let bottom = p.open.len() + 1 + self.height as usize;
-        if bottom > TREE_BUDGET {
+        let height = p.heights.get(self.pos as usize).copied().unwrap_or(1);
+        if p.open.len() + 1 + height as usize > TREE_BUDGET {
             p.too_many_nodes();
         }
         let mut m = p.start();
         if let Some(frame) = p.open.last_mut() {
-            *frame = self.height;
+            *frame = height;
         }
         if let Some(Event::Start { forward_parent, .. }) = p.events.get_mut(self.pos as usize) {
             debug_assert!(
