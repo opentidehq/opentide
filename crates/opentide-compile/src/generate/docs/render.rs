@@ -29,7 +29,9 @@ use super::mermaid::NodeKind;
 use super::page::{Callout, Page, Section, callout, code_block, key_value_table, paragraph, table};
 use super::platforms::{self, TEXT, platform_label};
 use super::settings::{Settings as BlockSettings, flatten};
-use super::text::{first_sentence, inline_code, join, join_lines, plural, table_cell, title_case};
+use super::text::{
+    first_sentence, inline_code, join, join_lines, markdown_text, plural, table_cell, title_case,
+};
 use super::vocab::{Enriched, Vocab};
 use crate::json::Json;
 use crate::strategy::StatusStrategy;
@@ -209,22 +211,26 @@ impl Pages<'_, '_> {
         };
         if let Some(signal) = self.catalog.signal(uuid) {
             let Some(parent) = self.catalog.record(&signal.owner) else {
-                return format!("{}{suffix}", signal.name);
+                return format!("{}{suffix}", markdown_text(&signal.name));
             };
             let anchor = self.flavor().heading_anchor(&signal.name);
             let href = Self::href(from, "objectives", &self.filename(parent), Some(&anchor));
-            let link = self.flavor().render_link(&signal.name, &href, self.wiki());
+            let link = self
+                .flavor()
+                .render_link(&markdown_text(&signal.name), &href, self.wiki());
             return format!("{link}{suffix}");
         }
         let Some(record) = self.catalog.record(uuid) else {
             let name = self.catalog.name(uuid);
             if name != uuid {
-                return format!("{name}{suffix}");
+                return format!("{}{suffix}", markdown_text(&name));
             }
             return format!("`{uuid}`");
         };
         let href = Self::href(from, record.scope.folder(), &self.filename(record), None);
-        let link = self.flavor().render_link(&record.name, &href, self.wiki());
+        let link = self
+            .flavor()
+            .render_link(&markdown_text(&record.name), &href, self.wiki());
         format!("{link}{suffix}")
     }
 
@@ -855,7 +861,7 @@ impl Pages<'_, '_> {
         let missing: Vec<String> = signals
             .iter()
             .filter(|signal| self.catalog.rules_for_signal(&signal.uuid).is_empty())
-            .map(|signal| format!("*{}*", table_cell(&signal.name)))
+            .map(|signal| format!("*{}*", table_cell(&markdown_text(&signal.name))))
             .collect();
         if missing.is_empty() {
             return String::new();
@@ -998,7 +1004,10 @@ impl Pages<'_, '_> {
                 .cloned()
                 .unwrap_or_else(|| self.flavor().heading_anchor(&signal.name));
             rows.push([
-                Flavor::link(&table_cell(&signal.name), &format!("#{anchor}")),
+                Flavor::link(
+                    &table_cell(&markdown_text(&signal.name)),
+                    &format!("#{anchor}"),
+                ),
                 self.vocab.enrich("alert_severity", &signal.severity).label,
                 self.vocab
                     .enrich("detection.methodology", &signal.methodology)
@@ -1767,9 +1776,9 @@ impl Pages<'_, '_> {
             &filename,
             None,
         );
-        let mut name = record.name.clone();
+        let mut name = markdown_text(&record.name);
         if self.settings.icons {
-            format!("{} {}", icon(record.scope), record.name)
+            format!("{} {name}", icon(record.scope))
                 .trim()
                 .clone_into(&mut name);
         }

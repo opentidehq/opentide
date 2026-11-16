@@ -10,16 +10,32 @@ pub fn collapse(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Every `|` not already escaped, escaped.
+/// Every `|` not already escaped, escaped: a `|` after an odd run of
+/// backslashes is escaped already; after an even run (`\\|`) the
+/// backslashes escape each other, and the `|` would end the cell.
 fn escape_pipes(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
-    let mut previous = '\0';
+    let mut backslashes = 0usize;
     for c in text.chars() {
-        if c == '|' && previous != '\\' {
+        if c == '|' && backslashes.is_multiple_of(2) {
             out.push('\\');
         }
         out.push(c);
-        previous = c;
+        backslashes = if c == '\\' { backslashes + 1 } else { 0 };
+    }
+    out
+}
+
+/// A name (an object's, a signal's) as Markdown text that renders as
+/// itself: `\\`, `[`, `]`, `<` and `>` backslash-escaped, so a name cannot
+/// open a link (`[x](javascript:…)`), an image or raw HTML (`<b>`).
+pub fn markdown_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if matches!(c, '\\' | '[' | ']' | '<' | '>') {
+            out.push('\\');
+        }
+        out.push(c);
     }
     out
 }
@@ -184,6 +200,24 @@ pub fn title_case(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_cannot_open_links_or_html() {
+        assert_eq!(
+            markdown_text("[x](javascript:alert(1)) <b>"),
+            "\\[x\\](javascript:alert(1)) \\<b\\>"
+        );
+        assert_eq!(markdown_text("a\\b"), "a\\\\b");
+        assert_eq!(markdown_text("Plain name"), "Plain name");
+    }
+
+    #[test]
+    fn a_pipe_after_escaped_backslashes_is_escaped() {
+        assert_eq!(table_cell("a|b"), "a\\|b");
+        assert_eq!(table_cell("a\\|b"), "a\\|b");
+        assert_eq!(table_cell("a\\\\|b"), "a\\\\\\|b");
+        assert_eq!(table_cell(&markdown_text("a\\|b")), "a\\\\\\|b");
+    }
 
     #[test]
     fn cells_are_one_line_with_pipes_escaped() {

@@ -410,6 +410,88 @@ fn gitlab_pages_are_ordered_and_named_by_uuid() {
     );
 }
 
+/// `page`'s Markdown: without its Mermaid blocks (fenced, or Azure DevOps'
+/// `::: mermaid`) and its wiki front matter, which are not Markdown.
+fn without_mermaid(page: &str) -> String {
+    let page = page
+        .strip_prefix("---\n")
+        .and_then(|rest| rest.split_once("\n---\n"))
+        .map_or(page, |(_, rest)| rest);
+    let mut out = String::new();
+    let mut inside = false;
+    for line in page.lines() {
+        if !inside && (line == "```mermaid" || line == "::: mermaid") {
+            inside = true;
+        } else if inside && (line == "```" || line == ":::") {
+            inside = false;
+        } else if !inside {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// A rule's or a signal's name is text on every page: it cannot open a
+/// link (`[x](javascript:…)`) or raw HTML (`<b>`), in a heading, a link's
+/// text, a table or an index.
+#[test]
+fn names_are_escaped_where_they_become_markdown() {
+    const RULE: &str = "Evil [x](javascript:alert(1)) <b>bold</b>";
+    const SIGNAL: &str = "Signal [y](javascript:alert(2)) <i>it</i>";
+    let rename = |file: &Path, from: &str, to: &str| {
+        let text = std::fs::read_to_string(file).unwrap();
+        assert!(text.contains(from), "{}", file.display());
+        let quoted = opentide_schema::node::double_quoted(to);
+        std::fs::write(file, text.replacen(from, &quoted, 1)).unwrap();
+    };
+    let (_dir, workspace) = open_edited("tide-corpus", |ws| {
+        let objects = ws.join("Objects");
+        rename(
+            &objects.join("Detection Rules/rule-0001-sentinel-kql.yaml"),
+            "Sentinel KQL Rule",
+            RULE,
+        );
+        rename(
+            &objects.join("Detection Objectives/objective-0001-credential-access.yaml"),
+            "Suspicious logon signal",
+            SIGNAL,
+        );
+    });
+    for flavor in ["generic", "github", "gitlab", "azure-devops"] {
+        let written = render(&workspace, Some(flavor)).unwrap();
+        let mut seen_rule = 0;
+        let mut seen_signal = 0;
+        for (path, text) in &written {
+            // Mermaid labels are not Markdown: their own escaping is tested
+            // with the diagrams.
+            let text = &without_mermaid(text);
+            for raw in ["[x](javascript", "[y](javascript", "<b>", "<i>"] {
+                for (at, _) in text.match_indices(raw) {
+                    assert!(
+                        text[..at].ends_with('\\'),
+                        "{flavor}: {path} holds an unescaped {raw:?}:\n{text}"
+                    );
+                }
+            }
+            seen_rule += text
+                .matches("Evil \\[x\\](javascript:alert(1)) \\<b\\>bold\\</b\\>")
+                .count();
+            seen_signal += text
+                .matches("Signal \\[y\\](javascript:alert(2)) \\<i\\>it\\</i\\>")
+                .count();
+        }
+        assert!(
+            seen_rule > 3,
+            "{flavor}: the rule's name, escaped, {seen_rule} times"
+        );
+        assert!(
+            seen_signal > 1,
+            "{flavor}: the signal's name, escaped, {seen_signal} times"
+        );
+    }
+}
+
 /// Azure DevOps: wiki links from the wiki's root, a table of contents on
 /// the index pages, and Mermaid in `::: mermaid` blocks with `graph`.
 #[test]

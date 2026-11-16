@@ -20,7 +20,7 @@
 use std::collections::HashMap;
 
 use super::flavor::Flavor;
-use super::text::{join, table_cell};
+use super::text::{join, markdown_text, table_cell};
 
 /// A page with fewer listed sections than this gets no contents line.
 pub const CONTENTS_THRESHOLD: usize = 4;
@@ -190,7 +190,7 @@ impl Page {
             blocks.push(self.breadcrumb.clone());
         } else {
             blocks.push(self.breadcrumb.clone());
-            blocks.push(heading(1, &self.title));
+            blocks.push(heading(1, &markdown_text(&self.title)));
         }
         blocks.extend(self.lead.iter().cloned());
         blocks.push(self.contents());
@@ -217,7 +217,12 @@ impl Page {
             .iter()
             .zip(self.top_anchors())
             .filter(|(item, _)| item.in_contents)
-            .map(|(item, anchor)| Flavor::link(&table_cell(&item.title), &format!("#{anchor}")))
+            .map(|(item, anchor)| {
+                Flavor::link(
+                    &table_cell(&markdown_text(&item.title)),
+                    &format!("#{anchor}"),
+                )
+            })
             .collect();
         paragraph(&format!("**On this page:** {}", links.join(" · ")))
     }
@@ -234,7 +239,10 @@ fn descendants(section: &Section) -> usize {
 
 /// A section and its children as Markdown.
 fn section_text(section: &Section, level: usize) -> String {
-    let mut parts = vec![heading(level, &section.title), section.body.clone()];
+    let mut parts = vec![
+        heading(level, &markdown_text(&section.title)),
+        section.body.clone(),
+    ];
     parts.extend(
         section
             .children
