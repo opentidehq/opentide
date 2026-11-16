@@ -20,6 +20,12 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+/// The typed AST `cargo xtask codegen` writes from `eql.ungram`. Public but hidden, as SPL's
+/// and KQL's: `tests/ast_conformance.rs` reads it on the corpus's trees.
+#[doc(hidden)]
+#[path = "generated/ast.rs"]
+pub mod ast;
+mod ast_ext;
 mod builder;
 mod ecs;
 mod highlight;
@@ -39,8 +45,11 @@ use opentide_core::{
     SignatureInformation, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+use opentide_parse::ast::AstNode;
 use serde::Deserialize;
 use std::sync::OnceLock;
+#[doc(hidden)]
+pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 use tree::{Node, node_span, walk};
 
 const FUNCTIONS_TOML: &str = include_str!(concat!(
@@ -305,7 +314,9 @@ fn analyze_lines(source: &str) -> AnalyzeResult {
     tree::walk_with_ancestors(root, |node, ancestors| {
         check_node(node, ancestors, &mut translated, source, catalog, &mut out);
     });
-    builder::check_pipes(&tree.syntax, source, catalog, &mut out);
+    if let Some(root) = ast::SourceFile::cast(tree.syntax.clone()) {
+        builder::check_pipes(&root, source, catalog, &mut out);
+    }
     let tokens = highlight(&spec, source, &tree.syntax);
     AnalyzeResult {
         diagnostics: out,
@@ -372,6 +383,13 @@ fn parse_error_message(problem: &tree::Problem, source: &str) -> String {
     }
 }
 
+/// Runs `check` on the typed node of a view node, when it stands for one of that type.
+fn with_ast<N: AstNode<Language = Lang>>(syntax: Option<&SyntaxNode>, check: impl FnOnce(N)) {
+    if let Some(n) = syntax.cloned().and_then(N::cast) {
+        check(n);
+    }
+}
+
 fn check_node(
     node: Node,
     ancestors: &[Node],
@@ -400,27 +418,32 @@ fn check_node(
     if expression && node.has_error() {
         return;
     }
-    // The checks ported to the parser's tree take its node; a level of a re-nested run has
-    // none, and needs none of them.
+    // The checks ported to the typed AST take the parser's node; a level of a re-nested run
+    // has none, and needs none of them.
     let syntax = node.syntax();
-    let on_syntax = |check: &mut dyn FnMut(&syntax::SyntaxNode)| {
-        if let Some(syntax) = &syntax {
-            check(syntax);
-        }
-    };
     match node.kind() {
-        "string" => on_syntax(&mut |n| builder::check_string(n, source, out)),
+        "string" => with_ast(syntax.as_ref(), |n| builder::check_string(&n, source, out)),
         "index" | "join" | "relationship" => {
-            on_syntax(&mut |n| builder::check_shape(n, source, out));
+            if let Some(n) = &syntax {
+                builder::check_shape(n, source, out);
+            }
         }
-        "field" => on_syntax(&mut |n| builder::check_field_case(n, source, out)),
-        "event_category" => on_syntax(&mut |n| builder::check_category_case(n, source, out)),
+        "field" => with_ast(syntax.as_ref(), |n| {
+            builder::check_field_case(&n, source, out);
+        }),
+        "event_category" => with_ast(syntax.as_ref(), |n| {
+            builder::check_category_case(&n, source, out);
+        }),
         "comparison" => {
-            on_syntax(&mut |n| builder::check_literal_wildcard(n, source, out));
+            with_ast(syntax.as_ref(), |n| {
+                builder::check_comparison_wildcard(&n, source, out);
+            });
             semantics::check_field_comparisons(node, ancestors, translated, source, out);
         }
         "predicate_expression" => {
-            on_syntax(&mut |n| builder::check_literal_wildcard(n, source, out));
+            with_ast(syntax.as_ref(), |n| {
+                builder::check_predicate_wildcard(&n, source, out);
+            });
             regex::check_regex(node, source, out);
             semantics::check_types(node, source, out);
             semantics::check_field_comparisons(node, ancestors, translated, source, out);
@@ -430,17 +453,23 @@ fn check_node(
             semantics::check_conditions(node, source, out);
         }
         "function_call" => {
-            let mut resolves = false;
-            on_syntax(&mut |n| resolves = builder::check_function(n, source, catalog, out));
+            let resolves = syntax
+                .clone()
+                .and_then(ast::FunctionCall::cast)
+                .is_some_and(|n| builder::check_function(&n, source, catalog, out));
             if resolves {
                 semantics::check_types(node, source, out);
             }
         }
-        "sequence" => on_syntax(&mut |n| builder::check_sequence(n, source, out)),
-        "sample" => on_syntax(&mut |n| builder::check_sample(n, source, out)),
+        "sequence" => with_ast(syntax.as_ref(), |n| {
+            builder::check_sequence(&n, source, out);
+        }),
+        "sample" => with_ast(syntax.as_ref(), |n| builder::check_sample(&n, source, out)),
         "subquery" => {
             semantics::check_conditions(node, source, out);
-            on_syntax(&mut |n| builder::check_shape(n, source, out));
+            if let Some(n) = &syntax {
+                builder::check_shape(n, source, out);
+            }
         }
         _ => {}
     }

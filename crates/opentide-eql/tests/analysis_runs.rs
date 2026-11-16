@@ -137,3 +137,21 @@ fn a_broken_run_highlights_each_token_once() {
         assert_eq!(spans.len(), all, "{source}: {tokens:?}");
     }
 }
+
+/// A pipe whose name or arguments the parser could not read is its syntax error alone: no
+/// `unrecognized pipe` naming the error region, no argument count over it.
+#[test]
+fn a_broken_pipe_is_only_its_syntax_error() {
+    for source in [
+        "process where true | in head 5",
+        "process where process.pid =| = \"4624\"",
+        "\"dns\" where (false) | tail 10\n\"dns\" where (false) | tail 10",
+    ] {
+        let codes: Vec<String> = analyze(source)
+            .diagnostics
+            .into_iter()
+            .map(|d| d.code)
+            .collect();
+        assert_eq!(codes, ["eql_parse_error"], "{source}");
+    }
+}

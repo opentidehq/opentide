@@ -77,18 +77,3 @@ pub(crate) fn first_child_span(node: &SyntaxNode) -> ByteSpan {
         None => span(node),
     }
 }
-
-/// The first visible token directly under `node` that is one of `kinds`.
-pub(crate) fn token_in(node: &SyntaxNode, kinds: &[K]) -> Option<crate::syntax::SyntaxToken> {
-    node.children_with_tokens()
-        .filter_map(NodeOrToken::into_token)
-        .find(|t| kinds.contains(&t.kind()))
-}
-
-/// Whether a subquery opens with `![` (a missing event) rather than `[`.
-pub(crate) fn opens_missing(subquery: &SyntaxNode) -> bool {
-    token_in(subquery, &[K::L_BRACK]).is_none()
-        && subquery
-            .children()
-            .any(|c| c.kind() == K::MISSING_EVENT_OPEN)
-}
