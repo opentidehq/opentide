@@ -408,6 +408,35 @@ fn lint_check(text: &str) -> Vec<(String, String, usize)> {
 
 const ELASTIC_KUERY: &str = "  elastic:\n    type: query\n    language: kuery\n";
 
+/// #1233: a file whose line endings the check rewrites is parsed again
+/// from the rewritten text, not read from lint's parse of the original:
+/// the findings and their lines are those of the `\n` text.
+#[test]
+fn lint_reads_crlf_and_cr_files_as_their_lf_text() {
+    let lf = rule(&format!(
+        "  sentinel:\n    query: |\n      search \"error\"\n{ELASTIC_KUERY}    query: \
+         'process.name: \"a\"'\n    scheduling:\n      interval: 5m\n      lookback: 0m\n"
+    ));
+    let expected = lint_check(&lf);
+    assert!(
+        expected.iter().any(|(code, ..)| code == "lookback_zero"),
+        "{expected:#?}"
+    );
+    assert!(
+        expected
+            .iter()
+            .any(|(code, ..)| code == "kql_unscoped_search"),
+        "{expected:#?}"
+    );
+    for ending in ["\r\n", "\r"] {
+        assert_eq!(
+            lint_check(&lf.replace('\n', ending)),
+            expected,
+            "{ending:?}"
+        );
+    }
+}
+
 #[test]
 fn lint_reports_query_warnings_and_advisories_but_not_engine_errors() {
     let text = rule(&format!(

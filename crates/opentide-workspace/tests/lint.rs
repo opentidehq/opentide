@@ -1014,8 +1014,9 @@ mod lint {
     }
 
     /// #1233: lint parses each object file once. The queries check gets the
-    /// tree lint read the file into, whether lint parsed it or the
-    /// workspace's index did; a file that does not parse is not checked.
+    /// tree lint read the file into, through [`lint`] and through
+    /// [`Workspace::lint`] (which reads the files as `lint` does); a file
+    /// that does not parse is not checked.
     #[test]
     fn the_queries_check_reads_the_parse_lint_made() {
         let fs = Arc::new(workspace());
