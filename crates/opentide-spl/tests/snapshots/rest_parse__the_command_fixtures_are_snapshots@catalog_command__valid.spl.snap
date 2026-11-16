@@ -1,0 +1,34 @@
+---
+source: crates/opentide-spl/tests/rest_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/catalog_command__valid.spl
+---
+SOURCE_FILE@0..30
+  PIPELINE@0..30
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    CATALOG_COMMAND@13..30
+      CATALOG_COMMAND_NAME@13..16
+        CATALOG_COMMAND_WORD@13..16 "top"
+      WHITESPACE@16..17 " "
+      ARGUMENT_LIST@17..30
+        COMMAND_OPTION@17..25
+          IDENTIFIER@17..22
+            IDENT@17..22 "limit"
+          EQ@22..23 "="
+          NUMBER@23..25
+            NUMBER_TOKEN@23..25 "10"
+        WHITESPACE@25..26 " "
+        IDENTIFIER@26..30
+          IDENT@26..30 "host"
+--
