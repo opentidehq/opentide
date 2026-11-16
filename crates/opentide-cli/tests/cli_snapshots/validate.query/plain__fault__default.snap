@@ -285,12 +285,12 @@ error[kql_unknown_operator]: unknown tabular operator 'frobnicate'
    │
    ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
 
-error[spl_parse_error]: SPL syntax error: unexpected 'index'
-   ╭─▶ objects/rules/rogue-harvest-rule-0056.yaml:70:7
+error[spl_parse_error]: unbalanced parentheses: this '(' is never closed
+   ╭─▶ objects/rules/rogue-harvest-rule-0056.yaml:70:27
    │
 69 │     query: |
 70 │       index=main | eval x=(
-   │       ━━━━━
+   │                           ━
    │
    ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
 

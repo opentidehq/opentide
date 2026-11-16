@@ -1,0 +1,54 @@
+---
+source: crates/opentide-spl/tests/search_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/search_group__valid.spl
+---
+SOURCE_FILE@0..61
+  PIPELINE@0..61
+    BARE_SEARCH@0..61
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+      WHITESPACE@10..11 " "
+      SEARCH_GROUP@11..45
+        L_PAREN@11..12 "("
+        SEARCH_EXPRESSION@12..44
+          FIELD_VALUE@12..26
+            FIELD_REF@12..21
+              IDENTIFIER@12..21
+                IDENT@12..21 "EventCode"
+            EQ@21..22 "="
+            FIELD_VALUE_RHS@22..26
+              NUMBER@22..26
+                NUMBER_TOKEN@22..26 "4624"
+          WHITESPACE@26..27 " "
+          SEARCH_BOOLEAN@27..29
+            OR_KW@27..29 "OR"
+          WHITESPACE@29..30 " "
+          FIELD_VALUE@30..44
+            FIELD_REF@30..39
+              IDENTIFIER@30..39
+                IDENT@30..39 "EventCode"
+            EQ@39..40 "="
+            FIELD_VALUE_RHS@40..44
+              NUMBER@40..44
+                NUMBER_TOKEN@40..44 "4625"
+        R_PAREN@44..45 ")"
+      WHITESPACE@45..46 " "
+      SEARCH_BOOLEAN@46..49
+        NOT_KW@46..49 "NOT"
+      WHITESPACE@49..50 " "
+      FIELD_VALUE@50..61
+        FIELD_REF@50..54
+          IDENTIFIER@50..54
+            IDENT@50..54 "user"
+        EQ@54..55 "="
+        FIELD_VALUE_RHS@55..61
+          IDENTIFIER@55..61
+            IDENT@55..61 "SYSTEM"
+--

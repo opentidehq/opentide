@@ -1,0 +1,43 @@
+---
+source: crates/opentide-spl/tests/rest_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/spath_command__valid.spl
+---
+SOURCE_FILE@0..46
+  PIPELINE@0..46
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    SPATH_COMMAND@13..46
+      SPATH_KW@13..18 "spath"
+      WHITESPACE@18..19 " "
+      COMMAND_OPTION@19..26
+        IDENTIFIER@19..24
+          IDENT@19..24 "input"
+        EQ@24..25 "="
+        IDENTIFIER@25..26
+          IDENT@25..26 "x"
+      WHITESPACE@26..27 " "
+      COMMAND_OPTION@27..37
+        IDENTIFIER@27..31
+          IDENT@27..31 "path"
+        EQ@31..32 "="
+        IDENTIFIER@32..37
+          FIELD_WORD@32..37 "a{}.b"
+      WHITESPACE@37..38 " "
+      COMMAND_OPTION@38..46
+        IDENTIFIER@38..44
+          IDENT@38..44 "output"
+        EQ@44..45 "="
+        IDENTIFIER@45..46
+          IDENT@45..46 "y"
+--
