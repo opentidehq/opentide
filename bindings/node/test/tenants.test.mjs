@@ -204,10 +204,10 @@ test('a failed deploy rejects with its scope, status and fields (#1142)', async 
   const connection = connect()
   const body = JSON.stringify({ data: { name: 'Example', queryType: 'events' } })
   // A rule the tenant lacks: the rule fails, its tenant's other rules can deploy.
-  const missing = await rejects(connection.deploy('1999999999999999999', 'update', body), 'tenant_answer_invalid')
+  const missing = await rejects(connection.deploy('1999999999999999999', 'update', body), 'sentinel_one_rule_not_found')
   assert.equal(missing.scope, 'rule')
-  assert.equal(missing.status, null)
-  assert.deepEqual(Object.keys(missing.fields), ['platform', 'tenant', 'address'])
+  assert.equal(missing.status, 404)
+  assert.deepEqual(Object.keys(missing.fields), ['platform', 'tenant', 'detail'])
   assert.equal(missing.fields.tenant, 'soc')
   // Nothing listens there: the whole tenant fails.
   const nowhere = Connection.open(soc('https://127.0.0.1:9'), ENVIRONMENT)

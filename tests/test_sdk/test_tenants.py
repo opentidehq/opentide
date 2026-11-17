@@ -219,8 +219,9 @@ def test_a_failed_deploy_raises_with_its_scope_and_fields(connection: Connection
     body = json.dumps({"data": {"name": "Example", "queryType": "events"}}).encode()
     with pytest.raises(OpentideError) as raised:
         run(connection.deploy("1999999999999999999", "update", body))  # a rule the tenant lacks
-    assert raised.value.code == "tenant_answer_invalid"
+    assert raised.value.code == "sentinel_one_rule_not_found"
     assert raised.value.scope == "rule"
+    assert raised.value.status == 404
     assert raised.value.fields["platform"] == "sentinel_one"
     assert raised.value.fields["tenant"] == "soc"
     assert "SentinelOne has no such rule (HTTP 404)" in raised.value.message
