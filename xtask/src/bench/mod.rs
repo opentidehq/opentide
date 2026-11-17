@@ -108,7 +108,9 @@ pub struct BenchArgs {
     /// Benchmark this workspace instead of generating one
     #[arg(long, value_name = "DIR", value_parser = absolute, conflicts_with = "check")]
     workspace: Option<PathBuf>,
-    /// Run this opentide instead of installing the oracle
+    /// Run this opentide: under --engine python instead of installing the
+    /// oracle, under --engine rust instead of building this checkout's
+    /// release binary
     #[arg(long, value_name = "PATH", value_parser = absolute, conflicts_with = "check")]
     opentide: Option<PathBuf>,
     /// Run this language server for --engine rust
@@ -639,6 +641,20 @@ const LAUNCHER: &[&str] = &["startup", "explain"];
 /// Whether `--engine rust` measures a scenario on the Rust CLI's `opentide`
 /// binary (opentide-cli, built `--release`): every command-line scenario but
 /// the [`LAUNCHER`] ones. Since UC-6.2 (#841) the Rust CLI runs every command.
+/// The Rust CLI `--engine rust` runs: `--opentide` when given, else the
+/// release binary built from this checkout (`build`). `--opentide` was
+/// ignored under `--engine rust`, so two binaries compared from one
+/// checkout measured that checkout's code twice.
+fn rust_cli_binary(
+    given: Option<&Path>,
+    build: impl FnOnce() -> anyhow::Result<PathBuf>,
+) -> anyhow::Result<PathBuf> {
+    match given {
+        Some(path) => Ok(path.to_path_buf()),
+        None => build(),
+    }
+}
+
 fn rust_cli(scenario: &Scenario) -> bool {
     scenario.kind == Kind::Cli && !LAUNCHER.contains(&scenario.id)
 }
@@ -813,9 +829,12 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
             let (path, version) = oracle::ensure_oracle(root, &base.join("oracle"))?;
             (Some(path), Some(version))
         }
-        (Engine::Rust, _) if selected.iter().any(|s| rust_cli(s)) => {
-            (Some(oracle::build_cli(root)?), None)
-        }
+        (Engine::Rust, given) if selected.iter().any(|s| rust_cli(s)) => (
+            Some(rust_cli_binary(given.as_deref(), || {
+                oracle::build_cli(root)
+            })?),
+            None,
+        ),
         (Engine::Rust, _) => (None, None),
     };
     let load_bin = match options.engine {
@@ -1409,6 +1428,18 @@ mod tests {
         assert_eq!(ids.len(), SCENARIOS.len());
         let budgeted: Vec<&str> = budgets.commands.keys().map(String::as_str).collect();
         assert_eq!(ids, budgeted);
+    }
+
+    #[test]
+    fn rust_runs_the_given_opentide_and_builds_only_without_one() {
+        let given = rust_cli_binary(Some(Path::new("/x/opentide")), || {
+            panic!("built though --opentide was given")
+        })
+        .unwrap();
+        assert_eq!(given, Path::new("/x/opentide"));
+        let built =
+            rust_cli_binary(None, || Ok(PathBuf::from("/target/release/opentide"))).unwrap();
+        assert_eq!(built, Path::new("/target/release/opentide"));
     }
 
     #[test]
