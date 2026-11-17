@@ -72,7 +72,7 @@ pub fn identity(entry: &Table, key_field: &str) -> Result<Option<String>> {
     Ok((!text.is_empty()).then(|| text.to_owned()))
 }
 
-/// Python's `int()` of a version part: surrounding white space, a sign and
+/// A version part as an integer: surrounding white space, a sign and
 /// digit-separating underscores allowed.
 fn py_int(text: &str) -> Result<i64> {
     let trimmed = text.trim();

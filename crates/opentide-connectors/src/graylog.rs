@@ -31,8 +31,8 @@ use regex::Regex;
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, LiveCheck, LiveValidator, Operation,
-    Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
+    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
+    Operation, Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -1055,9 +1055,10 @@ impl Deployer for Graylog {
     /// compiles for 7.2) is refused before any write
     /// (`graylog_field_unsupported_version`), since Graylog would drop them;
     /// one that fits is sent in the shape the version takes (6.3 flat, 7.x
-    /// wrapped in `entity`). `opentide deploy`'s warning about a version
-    /// that does not revoke tokens has no channel here. [`deploy_rule`]
-    /// takes the compiled definition itself.
+    /// wrapped in `entity`). A version that does not revoke access tokens
+    /// reliably is the outcome's `graylog_version_vulnerable` warning, as
+    /// `opentide deploy` warns of it. [`deploy_rule`] takes the compiled
+    /// definition itself.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
@@ -1155,9 +1156,34 @@ impl Deployer for Graylog {
                     StateChange::Forget => None,
                 },
                 operation: request.operation,
+                warnings: deploy_warnings(version, outcome.warnings),
             })
         })
     }
+}
+
+/// What a deploy on a tenant running `version` raised: the warning of a
+/// version that does not revoke access tokens reliably (as `opentide deploy`
+/// warns `graylog_version_vulnerable`), then the rule's.
+fn deploy_warnings(version: Version, raised: Vec<Warning>) -> Vec<DeployWarning> {
+    let vulnerable = opentide_compile::graylog::is_vulnerable(version).then(|| {
+        DeployWarning::new(
+            "graylog_version_vulnerable",
+            format!(
+                "Graylog {version} does not revoke access tokens reliably ({}); upgrade to \
+                 6.3.12, 7.0.16, 7.1.12 or later",
+                opentide_compile::graylog::ADVISORY
+            ),
+        )
+    });
+    vulnerable
+        .into_iter()
+        .chain(
+            raised
+                .into_iter()
+                .map(|warning| DeployWarning::new(warning.event, warning.detail)),
+        )
+        .collect()
 }
 
 impl LiveValidator for Graylog {

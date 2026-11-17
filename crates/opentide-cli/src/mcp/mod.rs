@@ -98,7 +98,7 @@ pub struct Launch {
 }
 
 impl Launch {
-    /// The variables the Python CLI's root callback exports for these
+    /// The variables the command line's root exports for these
     /// options (`CliContext.apply_environment`), which the tools and the
     /// commands they run read the workspace, the data and the proxy from:
     /// only what an option names, the rest is the process's own.

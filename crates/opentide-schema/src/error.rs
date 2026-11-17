@@ -14,7 +14,7 @@ use crate::node::Span;
 
 /// The CLI's codes for schema errors. `schema_validation` is the engine's
 /// already ([`opentide_core::codes::SCHEMA_VALIDATION`]). The others are
-/// created by the Python CLI; the language server only relays three of them
+/// created by the CLI; the language server only relays three of them
 /// from the host's configuration checker. `opentide_core::codes::ALL` lists
 /// the codes the engine itself emits, each with a description
 /// (`codes::describe`), so each of the others moves there with the Rust port

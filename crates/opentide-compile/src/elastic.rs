@@ -740,7 +740,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
                 )
             })
             .collect();
-        // Python's sort is stable, as `sort_by` is.
+        // `sort_by` is stable: fields of one name keep their order.
         fields.sort_by(|a, b| a.0.cmp(&b.0));
         body.insert(
             "required_fields".into(),

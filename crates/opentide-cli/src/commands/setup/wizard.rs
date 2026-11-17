@@ -1,10 +1,7 @@
-//! The setup wizards at a terminal (`services/setup/interactive.py`,
-//! `orchestrator.run_interactive_setup`, `repo.run_interactive_repo_setup`,
-//! `mcp.run_interactive_mcp_setup`, `ui/setup.py`): the same questions, in
-//! the same order and with the same defaults as the Python wizards, asked
-//! through a [`Prompter`]. At a terminal that is [`Inquire`], on the
-//! inquire crate (crossterm, so Linux, macOS and Windows consoles); the
-//! tests answer through a script.
+//! The setup wizards at a terminal: each wizard's questions, in a fixed
+//! order and with their defaults, asked through a [`Prompter`]. At a
+//! terminal that is [`Inquire`], on the inquire crate (crossterm, so Linux,
+//! macOS and Windows consoles); the tests answer through a script.
 //!
 //! A wizard only gathers answers: what they ask for runs through the same
 //! non-interactive steps a scripted `setup` runs (`run.rs`).

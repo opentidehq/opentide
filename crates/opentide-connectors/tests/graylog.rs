@@ -937,6 +937,7 @@ fn the_platform_deploys_from_a_compiled_body() {
     let outcome = outcome.unwrap();
     assert_eq!(outcome.remote_id.as_deref(), Some(DEFINITION_ID));
     assert_eq!(outcome.operation, Operation::Create);
+    assert_eq!(outcome.warnings, Vec::new(), "7.2.1 revokes tokens");
     // The version is read before any write, as `opentide deploy` reads it.
     assert_eq!(requests[0].url.path(), "/api/system");
     let sent: serde_json::Value = requests[2].body_json().unwrap();
@@ -956,7 +957,19 @@ fn the_platform_creates_in_the_shape_of_the_tenants_version() {
     assert_eq!(sent["title"], serde_json::json!(compiled.title));
     assert_eq!(sent["share_request"], serde_json::Value::Null);
     let (outcome, requests) = create_on(&compiled, "7.1.0");
-    assert_eq!(outcome.unwrap().remote_id.as_deref(), Some(DEFINITION_ID));
+    let outcome = outcome.unwrap();
+    assert_eq!(outcome.remote_id.as_deref(), Some(DEFINITION_ID));
+    // #1142: the version that does not revoke tokens is the outcome's
+    // warning, as `opentide deploy` warns `graylog_version_vulnerable`.
+    let codes: Vec<&str> = outcome.warnings.iter().map(|w| w.code.as_str()).collect();
+    assert_eq!(codes, ["graylog_version_vulnerable"]);
+    assert!(
+        outcome.warnings[0]
+            .message
+            .starts_with("Graylog 7.1.0 does not revoke access tokens reliably ("),
+        "{:?}",
+        outcome.warnings[0]
+    );
     let sent: serde_json::Value = requests[2].body_json().unwrap();
     assert_eq!(sent["entity"]["title"], serde_json::json!(compiled.title));
     assert!(sent["entity"].get("share_request").is_none(), "{sent}");
