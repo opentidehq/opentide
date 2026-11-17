@@ -377,9 +377,10 @@ fn parse_error_message(problem: &parsed::Problem, source: &str) -> String {
         return "EQL syntax error: use `==` for equality; `=` is not a comparison".into();
     }
     // The lexer cuts an unclosed `/*` as `/` and `*`: name the comment, not the operator.
-    if source
-        .get(problem.token.start..)
-        .is_some_and(|rest| rest.starts_with("/*"))
+    if problem.token.end > problem.token.start
+        && source
+            .get(problem.token.start..)
+            .is_some_and(|rest| rest.starts_with("/*"))
     {
         return "EQL syntax error: this `/*` comment is never closed".into();
     }

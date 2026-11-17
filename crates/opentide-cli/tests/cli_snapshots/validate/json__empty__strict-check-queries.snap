@@ -1,0 +1,52 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/empty/strict-check-queries
+---
+args: opentide --json validate --strict --check queries
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "check": "queries",
+  "checks": {
+    "queries": {
+      "check": "queries",
+      "status": "passed"
+    }
+  },
+  "command": "validate",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Validation passed",
+  "next_actions": [],
+  "ok": true,
+  "report": {
+    "issues": [],
+    "ok": true,
+    "stats": {
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
+      "objects_checked": 0,
+      "parallel": "<CORES>",
+      "queries_checked": 0,
+      "wall_ms": 0.0,
+      "workers": "<CORES>"
+    },
+    "warnings": []
+  },
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "errors": 0,
+    "files": 0,
+    "fixable": 0,
+    "objects": 0,
+    "queries": 0,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "workspace": "<WS>"
+}
+
+━━━ stderr · empty

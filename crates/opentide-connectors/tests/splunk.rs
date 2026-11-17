@@ -90,20 +90,19 @@ fn splunk_the_deployer_sends_what_the_python_deployer_sent() {
         let mut outcomes = Vec::new();
         for step in items(inputs.get("deploy").unwrap()) {
             let deletion = text(step.get("status").unwrap()) == "REMOVED";
-            let request = DeployRequest {
-                rule_id: text(step.get("name").unwrap()).to_owned(),
-                operation: if deletion {
+            let request = DeployRequest::new(
+                text(step.get("name").unwrap()).to_owned(),
+                if deletion {
                     Operation::Delete
                 } else {
                     Operation::Update
                 },
-                body: if deletion {
+                if deletion {
                     Vec::new()
                 } else {
                     Json::Object(settings(step)).to_compact().into_bytes()
                 },
-                policies: None,
-            };
+            );
             outcomes.push(connector.deploy(tenant.cx(), &request).await.unwrap());
         }
         outcomes

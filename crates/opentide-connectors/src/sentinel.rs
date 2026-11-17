@@ -188,7 +188,9 @@ impl Sentinel {
                 }
             })
             .await?;
-        if answer.status < 400 {
+        // A 3xx is a failure: a redirect the client could not follow (no
+        // `Location`) is not a rule written (#1142).
+        if (200..300).contains(&answer.status) {
             return Ok(Ok(answer));
         }
         let (code, message) = arm_error(&answer);
@@ -266,7 +268,20 @@ impl Sentinel {
                 .arm(cx, crate::transport::Method::GET, &current, None)
                 .await?
             {
-                Ok(answer) => answer.json().unwrap_or(Json::Null),
+                Ok(answer) => match answer.json() {
+                    Some(page) => page,
+                    None => {
+                        return Err(ConnectorError::Answer {
+                            platform: PLATFORM.into(),
+                            tenant: cx.tenant.label.tenant.clone(),
+                            address: ARM_ENDPOINT.into(),
+                            reason: format!(
+                                "listing the analytics rules: {}",
+                                answer.not_json_page().unwrap_or_default()
+                            ),
+                        });
+                    }
+                },
                 Err(error) => return Ok(Err(error)),
             };
             if let Some(Json::Array(items)) = page.get("value") {

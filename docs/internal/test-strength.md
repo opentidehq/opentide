@@ -112,4 +112,6 @@ tabled, per command, which engine ran it and how its compare run stood against t
 UC-6.2 ([#841](https://github.com/opentidehq/opentide/issues/841)) made the Rust core the only
 engine, so every row would have read the same: it was retired with the Python implementation.
 What it summarised is CI's `Golden compare` job (`cargo xtask golden check --engine rust`): every
-golden case against the oracle's recording, through the approved-diffs ledger.
+golden case against the oracle's recording, through the approved-diffs ledger. That job, the recordings and the
+ledger were retired in turn ([#1142](https://github.com/opentidehq/opentide/issues/1142)): the CLI's
+Rust-owned snapshots hold its behaviour.

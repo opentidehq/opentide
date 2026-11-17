@@ -1,13 +1,14 @@
 # The recorded-HTTP scenarios (UC-4.1, #831): each one is a client run whose
-# requests `cargo xtask cassettes record <name>` records through the
-# recording proxy into `<name>.json` beside this file. Never write or edit a
+# requests were recorded through the recording proxy into `<name>.json`
+# beside this file (`cargo xtask cassettes record`, retired with the oracle
+# in #1142). Never write or edit a
 # cassette by hand; `cargo xtask cassettes check` fails on one whose digest
 # does not match, on one that still holds anything redaction removes, and on a
 # scenario without its cassette or a cassette without its scenario.
 #
-# client: the command line; `{python}` is the oracle's interpreter and
-#   `{oracle}` its bin directory (tests/golden/ORACLE), so the client is the
-#   frozen Python implementation.
+# client: the command line; `{python}` was the oracle's interpreter and
+#   `{oracle}` its bin directory, so the client is the frozen Python
+#   implementation.
 # tenant: a stand-in tenant to start first; it prints its port on its first
 #   line, and every host in `routes` is sent to it.
 # secrets: environment variables given a fresh random value for the run; the
@@ -453,9 +454,9 @@ exit = 1
 # through the CLI flow.
 
 [[scenario]]
-name = "golden/deploy-defender"
-description = "deploy on Defender for Endpoint's stand-in, the golden cases' cassette: sign in, create a rule (its id recorded), then update a recorded id Graph does not know (404): the run stops, the retired rule not attempted."
-client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform defender_for_endpoint --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
+name = "golden/deploy-defender-continues"
+description = "deploy on Defender for Endpoint's stand-in, recorded with the Rust CLI (the reference since #1512 retired the Python oracle, which stopped at the 404): sign in, create a rule (its id recorded), update a recorded id Graph does not know (404), then still delete the retired rule (404 too): each failure is the rule's own and the run goes on."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec opentide --repo \"$HOME/ws\" --json deploy --platform defender_for_endpoint --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
 tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
 routes = ["login.microsoftonline.com", "graph.microsoft.com"]
 secrets = ["DEFENDER_CLIENT_SECRET"]

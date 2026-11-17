@@ -664,14 +664,15 @@ class Connection:
         self,
         rule_id: str,
         operation: OperationName,
-        body: bytes,
+        body: bytes | None = None,
         *,
         policies: Sequence[str] | None = None,
     ) -> DeployOutcome:
         """Applies *operation* to the rule *rule_id* on the tenant, sending
         *body* (a deploy plan's payload for this tenant) as its bytes. Returns
         the platform's identifier of the rule, and the warnings the deploy
-        raised without failing.
+        raised without failing. A ``delete`` takes no *body*; the other
+        operations raise ``usage_invalid_value`` without one.
 
         *policies* are a Sysdig rule's runtime policies (the plan entry's
         ``policies``, which a block that names its own carries); ``None``
@@ -688,7 +689,7 @@ class Connection:
             self._inner.deploy,
             rule_id,
             operation,
-            bytes(body),
+            None if body is None else bytes(body),
             policies=None if policies is None else list(policies),
         )
         return DeployOutcome(

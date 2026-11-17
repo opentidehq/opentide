@@ -1,7 +1,6 @@
 //! `opentide mcp start` over stdio (#264, #460, #1139): the binary spawned as
 //! an MCP client spawns it, speaking newline-delimited JSON-RPC. The tools
-//! and resources are tested in process (`src/mcp/tests.rs`) and against the
-//! recorded sessions (`cargo xtask mcp replay`); these hold the transport
+//! and resources are tested in process (`src/mcp/tests.rs`); these hold the transport
 //! and the launch: every line on stdout is a JSON-RPC frame until the server
 //! exits, the handshake, and the workspace each way of starting finds.
 

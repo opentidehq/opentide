@@ -1,2 +1,0 @@
-Skipped: No sharing target is configured
-  help: add a [[misp]] block to .opentide/configurations/sharing.toml (see docs/cli/share.md)

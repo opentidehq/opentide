@@ -194,8 +194,8 @@ def workspace_version() -> str:
 
 def internal_pins() -> dict[str, str]:
     """The workspace's dependencies on its own crates, with their version
-    requirement. A path dependency without a version (the test harnesses,
-    `opentide-compare` and `opentide-cassette`, which are never published) is
+    requirement. A path dependency without a version (the test harness
+    `opentide-cassette`, which is never published) is
     left out: cargo strips it from a published manifest, and a published
     crate that needed it would fail `cargo package`."""
     deps = tomllib.loads(WORKSPACE.read_text())["workspace"]["dependencies"]

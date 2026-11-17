@@ -51,7 +51,7 @@ Phase 0 merges into `integration/unified-core`, not `development`. The integrati
 ### Decisions taken during Phase 0
 
 - `engine_not_ported` (exit 2) added for `OPENTIDE_ENGINE=rust` on a command with no Rust implementation; `engine_unavailable` unchanged ([#854](https://github.com/opentidehq/opentide/pull/854)).
-- `opentide-compare` is in the layer table (foundation, tier 0) though the [Crates](#crates) table does not name it; it goes with compare mode (UC-6.2). `OPENTIDE_ENGINE` is appended last to the environment variables of `opentide --json commands`, so the oracle's list is a prefix: an approved addition ([#854](https://github.com/opentidehq/opentide/pull/854)).
+- `opentide-compare` was in the layer table (foundation, tier 0) though the [Crates](#crates) table did not name it; it was deleted with the oracle's recordings (#1142). `OPENTIDE_ENGINE` is appended last to the environment variables of `opentide --json commands`, so the oracle's list is a prefix: an approved addition ([#854](https://github.com/opentidehq/opentide/pull/854)).
 - `crowdstrike_unsupported` is kept as a retired code that `opentide explain` still explains, so the CQL import only adds codes ([#859](https://github.com/opentidehq/opentide/pull/859)).
 - The golden budget is 128 MiB of apparent bytes (`cases/` and `blobs/`); `lsp start` is recorded as `--help` only, as `mcp start` is ([#857](https://github.com/opentidehq/opentide/pull/857)).
 - The language server's 0.1 s first-diagnostics target ([Metrics](#11-metrics)) is waived until UC-2.6 ([#856](https://github.com/opentidehq/opentide/pull/856)).
@@ -139,7 +139,7 @@ These do not change at any step. A change to one is a separate, explicit decisio
 
 ### Crates
 
-Each crate depends only on crates in rows below it. `xtask check-layers` enforces this in CI, from [`xtask/layers.toml`](https://github.com/opentidehq/opentide/blob/integration/unified-core/xtask/layers.toml), the one place the enforced table is written down. It differs from this table in two ways: the bindings sit above the facade, since they wrap it (ADR 0005), and `opentide-compare` (UC-0.7) is a foundation crate that goes with compare mode (UC-6.2). The query crates include `-cql` since language-server 0.12.0 (#859).
+Each crate depends only on crates in rows below it. `xtask check-layers` enforces this in CI, from [`xtask/layers.toml`](https://github.com/opentidehq/opentide/blob/integration/unified-core/xtask/layers.toml), the one place the enforced table is written down. It differs from this table in one way: the bindings sit above the facade, since they wrap it (ADR 0005). The query crates include `-cql` since language-server 0.12.0 (#859).
 
 | Layer | Crate | Responsibility | From |
 |-------|-------|----------------|------|
@@ -182,6 +182,8 @@ Every binding function is a one-line wrapper over a facade function. Logic in a 
 The Python implementation at a frozen tag is the **oracle**. Nothing is ported without a test that compares the Rust result with the oracle's.
 
 ### 5.1 Golden capture (`xtask golden`)
+
+> **Status:** retired. Once the Rust-owned snapshots held the command line's behaviour ([#1139](https://github.com/opentidehq/opentide/issues/1139)), the recordings, the ledger and `xtask golden`, `compare` and `mcp` were deleted ([#1142](https://github.com/opentidehq/opentide/issues/1142)).
 
 For every command path in `opentide --json commands`, every output mode (`human` through a pseudo-terminal at fixed width, `plain`, `json`, `agent`), and every fixture workspace: record stdout, stderr, exit code, the JSON document, and every file written (path, bytes, mode). Normalise only what is non-deterministic: `duration_ms`, timestamps, absolute paths, temporary directory names, crash-log paths. Normalisation rules are code, reviewed and tested. Recordings live under `tests/golden/cases/<command>/<mode>/<fixture>/<variant>/` (a command path's words joined by `.`, `_root` for the bare program), a file of 16 KiB or more stored once in `tests/golden/blobs/<sha256>`, with their size and coverage in `tests/golden/COVERAGE.md`; they are reviewed like code ([`tests/golden/README.md`](https://github.com/opentidehq/opentide/blob/integration/unified-core/tests/golden/README.md)).
 
@@ -322,7 +324,7 @@ Work items are numbered `UC-<phase>.<n>` and filed as sub-issues of the epic, on
 2. The default flips per command with a changelog entry; `OPENTIDE_ENGINE=python` remains for one more release as an escape hatch.
 3. The Python implementation of a command is deleted one release after its flip.
 4. SDK names that change keep a deprecated alias for one minor release.
-5. The extension moves when the WASI build passes every golden case that needs no network (`cargo xtask golden check --runner wasi`).
+5. The extension moves when the WASI build passes the command line's snapshot cases that need no network (the oracle's `golden check --runner wasi` was retired with the recordings, #1142).
 
 ## 8. Distribution
 

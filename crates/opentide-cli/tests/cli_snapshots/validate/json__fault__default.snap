@@ -1442,19 +1442,19 @@ exit: 1
       },
       {
         "code": "esql_parse_error",
-        "column": 40,
+        "column": 41,
         "context": {
           "language": "esql",
           "platform": "elastic",
           "position": {
-            "column": 40,
-            "end_column": 41,
+            "column": 41,
+            "end_column": 42,
             "end_line": 76,
             "line": 76
           },
           "source": "engine"
         },
-        "end_column": 41,
+        "end_column": 42,
         "end_line": 76,
         "explain": "opentide explain esql_parse_error",
         "field_path": [

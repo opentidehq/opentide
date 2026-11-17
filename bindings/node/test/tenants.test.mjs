@@ -162,6 +162,13 @@ test('an option that does not read rejects the promise', async () => {
   await rejects(connection.query('x', { end: 'soon' }), 'usage_invalid_value')
   await rejects(connection.query('x', { timeout: -1 }), 'usage_invalid_value')
   await rejects(connection.deploy('x', 'upsert', '{}'), 'usage_invalid_choice')
+  // #1142: a delete takes no body; the other operations need one.
+  const deleted = await connection.deploy('1900000000000000001', 'delete')
+  assert.equal(deleted.operation, 'delete')
+  assert.equal(deleted.remoteId, null)
+  for (const operation of ['create', 'update', 'disable']) {
+    await rejects(connection.deploy('x', operation), 'usage_invalid_value')
+  }
 })
 
 test('a live check accepts and refuses', async () => {

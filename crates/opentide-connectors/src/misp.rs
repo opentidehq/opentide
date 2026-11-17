@@ -69,6 +69,10 @@ pub struct MispCallError {
     pub reason: String,
     /// The HTTP status, when there was one.
     pub status: Option<u16>,
+    /// Why a call that got no answer failed (the timeout, the TLS or proxy
+    /// error, the cancellation), as the transport says it: never a body or
+    /// a key. Not part of the reason the command reports.
+    pub detail: Option<String>,
 }
 
 impl MispCallError {
@@ -78,7 +82,15 @@ impl MispCallError {
             kind,
             reason: reason.to_owned(),
             status,
+            detail: None,
         }
+    }
+
+    /// The same failure, with the transport's `detail`.
+    #[must_use]
+    pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
+        self.detail = Some(detail.into());
+        self
     }
 }
 
@@ -298,17 +310,26 @@ impl MispClient {
                 .collect();
             builder = builder.body(Json::Object(kept).to_compact());
         }
-        let request = builder.build().map_err(|_| connectivity())?;
+        // A request that does not build (a key with a newline is no header
+        // value) says why; the reason never holds the value.
+        let request = builder
+            .build()
+            .map_err(|error| connectivity().with_detail(error.describe()))?;
         let (status, body) = self
             .runtime
             .block_on(async {
                 let cancel = CancellationToken::new();
-                let response = self.http.send(request, &cancel).await.ok()?;
+                let response = self.http.send(request, &cancel).await?;
                 let status = response.status().as_u16();
-                let body = self.http.bytes(response, &cancel).await.ok()?;
-                Some((status, body))
+                let body = self.http.bytes(response, &cancel).await?;
+                Ok::<_, crate::ConnectorError>((status, body))
             })
-            .ok_or_else(connectivity)?;
+            .map_err(|error| {
+                // The transport's reason is kept, not swallowed (#1142).
+                let detail = error.to_string();
+                tracing::debug!(detail = detail.as_str(), "misp_request_failed");
+                connectivity().with_detail(detail)
+            })?;
         decode(status, &body)
     }
 
@@ -529,7 +550,8 @@ pub fn decode(status: u16, body: &[u8]) -> Result<Json, MispCallError> {
         ));
     }
     let text = String::from_utf8_lossy(body);
-    if status >= 400 {
+    // A 3xx is a refusal too: a redirect the client could not follow.
+    if !(200..300).contains(&status) {
         if too_large(&text) {
             return Err(MispCallError::new(
                 Kind::AttributeTooLarge,
@@ -865,6 +887,9 @@ mod tests {
         assert_eq!(kind(502, "<html>").kind, Kind::Connectivity);
         assert_eq!(kind(400, "Value Too Long").kind, Kind::AttributeTooLarge);
         assert_eq!(kind(422, "nope").reason, "remote_rejected");
+        // #1142: a redirect the client could not follow is no success.
+        assert_eq!(kind(307, "{}").reason, "remote_rejected");
+        assert_eq!(kind(307, "{}").status, Some(307));
         assert_eq!(kind(200, "<html>").reason, "connectivity_failed");
         assert_eq!(
             kind(200, r#"{"errors": [403, {"message": "x"}]}"#).kind,

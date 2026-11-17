@@ -1,10 +1,8 @@
-//! The golden recordings (`tests/golden/cases`) as the generation tests read
-//! them: a fixture laid out as `cargo xtask golden record` lays it out
-//! (`xtask/src/golden/fixture.rs`), and the files a recorded case wrote.
+//! The fixtures the generation tests open, laid out as the command line's
+//! snapshot harness lays them out (`crates/opentide-cli/tests/common/replay.rs`).
 
 #![allow(dead_code, reason = "each test binary uses part of the helpers")]
 
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 pub fn repo() -> PathBuf {
@@ -49,40 +47,4 @@ pub fn fixture(name: &str, ws: &Path) {
         "vscode" => copy_tree(&repo().join("tests/golden/fixtures/vscode-workspace"), ws),
         other => panic!("{other}: a fixture these tests do not lay out"),
     }
-}
-
-/// The case directory of `id` (`<command>/<mode>/<fixture>/<variant>`).
-pub fn case(id: &str) -> PathBuf {
-    repo().join("tests/golden/cases").join(id)
-}
-
-/// The recorded exit code and every file the case created or modified under
-/// `ws/`, by path relative to the workspace, with its bytes.
-pub fn recorded(id: &str) -> (i64, BTreeMap<String, Vec<u8>>) {
-    let dir = case(id);
-    let outcome: toml::Table = std::fs::read_to_string(dir.join("outcome.toml"))
-        .unwrap()
-        .parse()
-        .unwrap();
-    let mut files = BTreeMap::new();
-    for entry in outcome
-        .get("files")
-        .and_then(|files| files.as_array())
-        .into_iter()
-        .flatten()
-    {
-        let path = entry["path"].as_str().unwrap();
-        if entry["kind"].as_str() != Some("file") || entry["change"].as_str() == Some("deleted") {
-            continue;
-        }
-        let Some(relative) = path.strip_prefix("ws/") else {
-            continue;
-        };
-        let bytes = match entry.get("blob").and_then(|blob| blob.as_str()) {
-            Some(blob) => std::fs::read(repo().join("tests/golden/blobs").join(blob)).unwrap(),
-            None => std::fs::read(dir.join("files").join(path)).unwrap(),
-        };
-        files.insert(relative.to_owned(), bytes);
-    }
-    (outcome["exit_code"].as_integer().unwrap(), files)
 }

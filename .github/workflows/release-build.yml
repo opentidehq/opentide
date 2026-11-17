@@ -210,8 +210,8 @@ jobs:
   # Every publishable crate built from its package (`cargo package`, as
   # crates.io and `cargo install` build it), and the licence scan over the
   # packages: no oracle reference ships. Left out: the members with
-  # `publish = false` (the PyO3 and Node.js bindings, xtask, the test harnesses
-  # opentide-compare and opentide-cassette, and opentide-wasm, which ships as a
+  # `publish = false` (the PyO3 and Node.js bindings, xtask, the test harness
+  # opentide-cassette, and opentide-wasm, which ships as a
   # release asset), whose sources are scanned instead. opentide-cli carries opentide's package
   # data, its explain pages, as the wheel does: scanned as a product.
   crate-packages:
@@ -244,13 +244,13 @@ jobs:
       - run: python3 scripts/engine/release.py vendor
       # `cargo publish --workspace` skips the members with `publish = false`;
       # `cargo package` names them.
-      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-compare --exclude opentide-cassette --exclude opentide-wasm --exclude opentide-node --allow-dirty
+      - run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-cassette --exclude opentide-wasm --exclude opentide-node --allow-dirty
       - name: license scan (no oracle references)
         run: |
           set -euo pipefail
           find target/package -maxdepth 1 -name '*.crate' ! -name 'opentide-cli-*' -print0 | xargs -0 bash scripts/engine/license-scan.sh
           bash scripts/engine/license-scan.sh --product target/package/opentide-cli-*.crate
-          bash scripts/engine/license-scan.sh crates/opentide-compare crates/opentide-cassette crates/opentide-wasm bindings/node bindings/python
+          bash scripts/engine/license-scan.sh crates/opentide-cassette crates/opentide-wasm bindings/node bindings/python
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: crates

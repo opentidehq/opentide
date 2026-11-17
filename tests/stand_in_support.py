@@ -1,7 +1,7 @@
 """Stand-in tenants on loopback for the SDK's tenant operations (UC-5.2b, #837).
 
 :func:`stand_in` starts one of ``tests/cassettes/<name>/tenant.py`` (the stand-ins
-``cargo xtask cassettes record`` records the connectors against) in a child process
+the connectors' cassettes were recorded against) in a child process
 on a free loopback port, and stops it on exit. Nothing reaches a real host.
 """
 
