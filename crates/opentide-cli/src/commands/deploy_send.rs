@@ -4116,7 +4116,7 @@ impl Sender<'_, '_> {
     /// without the licence or with no answer stops its batch.
     #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
     fn exabeam(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
-        use opentide_connectors::exabeam::{Action, Exabeam, RuleDeploy, StateChange, deploy_rule};
+        use opentide_connectors::exabeam::Exabeam;
         let platform = opentide_compile::exabeam::PLATFORM;
         let exabeam = Exabeam::new();
         for batch in batches {
@@ -4134,27 +4134,24 @@ impl Sender<'_, '_> {
                 http: &connection.http,
                 cancel: &cancel,
             };
-            let session = match exabeam.session(context) {
-                Ok(session) => session,
-                Err(error) => {
-                    // An unset credential variable: no rule on the tenant can deploy.
-                    let text = error.text();
-                    tracing::error!(
-                        tenant = tenant.as_str(),
-                        error = text.as_str(),
-                        critical = true,
-                        "exabeam_tenant_deployment_failed"
-                    );
-                    self.unusable(platform, Some(&tenant), &text);
-                    log.unreached_on(
-                        platform,
-                        &tenant,
-                        "not_attempted",
-                        &format!("not attempted: tenant {tenant} failed"),
-                    );
-                    continue;
-                }
-            };
+            if let Err(error) = exabeam.session(context) {
+                // An unset credential variable: no rule on the tenant can deploy.
+                let text = error.text();
+                tracing::error!(
+                    tenant = tenant.as_str(),
+                    error = text.as_str(),
+                    critical = true,
+                    "exabeam_tenant_deployment_failed"
+                );
+                self.unusable(platform, Some(&tenant), &text);
+                log.unreached_on(
+                    platform,
+                    &tenant,
+                    "not_attempted",
+                    &format!("not attempted: tenant {tenant} failed"),
+                );
+                continue;
+            }
             for (rule, action) in planned {
                 let mut result = RuleResult::new(platform, Some(&tenant), &rule.uuid, &rule.name);
                 let strategy = match self.strategy_of(rule, platform) {
@@ -4194,116 +4191,94 @@ impl Sender<'_, '_> {
                     }),
                     None => self.unpersisted(&rule.uuid, platform, &tenant),
                 };
-                let (name, body) = compiled.map_or_else(
-                    || (String::new(), CJson::Null),
-                    |compiled| (compiled.name, compiled.body),
-                );
-                let request = RuleDeploy {
-                    action: match &action {
-                        Planned::Create => Action::Create,
-                        Planned::Update(id) => Action::Update(id.clone()),
-                        Planned::Delete(id) => Action::Delete(id.clone()),
-                    },
-                    body,
-                    name,
-                    disable: strategy == StatusStrategy::Disablement,
-                    recreate_refusal: recreate_refusal
-                        .as_ref()
-                        .map(|refusal| (refusal.code.to_owned(), refusal.message.clone())),
+                let (operation, stored) = match &action {
+                    Planned::Create => (Operation::Create, None),
+                    Planned::Update(id) if strategy == StatusStrategy::Disablement => {
+                        (Operation::Disable, Some(id.as_str()))
+                    }
+                    Planned::Update(id) => (Operation::Update, Some(id.as_str())),
+                    Planned::Delete(id) => (Operation::Delete, Some(id.as_str())),
                 };
+                let body = compiled.map_or(CJson::Null, |compiled| compiled.body);
+                let mut request = DeployRequest::new(
+                    stored.unwrap_or_default(),
+                    operation,
+                    serde_json::to_vec(&body).unwrap_or_default(),
+                );
+                if let Some(refusal) = &recreate_refusal {
+                    request = request.refusing_recreate(DeployFailure::new(
+                        refusal.code,
+                        refusal.message.clone(),
+                    ));
+                }
                 // The update path's lines name the object; the create path's
                 // name the Exabeam rule (the event carries it); a delete's none.
                 let object_name =
                     (!matches!(action, Planned::Delete(_))).then_some(rule.name.as_str());
+                let context = self.context(&connection);
                 match self
-                    .block(async { Ok(deploy_rule(&session, &request).await) })
+                    .block(async { Ok(exabeam.deploy(context, &request).await) })
                     .map_err(|error| raised(&error))?
                 {
-                    Ok(outcome) => {
-                        for warning in &outcome.warnings {
-                            self.warned = true;
-                            let named = matches!(
-                                warning.code.as_str(),
-                                "exabeam_schedule_retained" | "exabeam_rule_auto_disabled"
-                            );
-                            tracing::warn!(
-                                code = warning.code.as_str(),
-                                uuid = rule.uuid.as_str(),
-                                tenant = tenant.as_str(),
-                                name = named.then_some(rule.name.as_str()),
-                                detail = warning.message.as_str(),
-                                "{}",
-                                warning.code
-                            );
-                        }
-                        if let Some((event, rule_id)) = &outcome.done {
-                            tracing::info!(
-                                uuid = rule.uuid.as_str(),
-                                rule_id = rule_id.as_str(),
-                                "{}",
-                                event
-                            );
-                        }
-                        match &outcome.state {
-                            StateChange::Record(id) => self.record_created(
+                    Ok(done) => {
+                        self.exabeam_done(&rule.uuid, &rule.name, &tenant, &done);
+                        match done.remote_id.as_deref() {
+                            None => self.record_deleted(&mut result, platform, &tenant),
+                            Some(id) if Some(id) != stored => self.record_created(
                                 &mut result,
                                 platform,
                                 &tenant,
-                                &ExternalId::Text(id.clone()),
+                                &ExternalId::Text(id.to_owned()),
                             ),
-                            StateChange::Forget => {
-                                self.record_deleted(&mut result, platform, &tenant);
-                            }
-                            StateChange::Keep => {}
+                            Some(_) => {}
                         }
-                        if let Some(failure) = &outcome.failure {
-                            match recreate_refusal.as_ref().filter(|refusal| {
-                                refusal.code == failure.code && refusal.message == failure.message
-                            }) {
-                                Some(refusal) => {
-                                    self.report_failure(refusal, &rule.uuid, platform, &tenant);
-                                    result.fail(&refusal.message);
-                                }
-                                None => {
-                                    let field = |key: &str| {
-                                        failure
-                                            .fields
-                                            .iter()
-                                            .find(|(name, _)| *name == key)
-                                            .map(|(_, value)| value.as_str())
-                                    };
-                                    tracing::error!(
-                                        code = failure.code.as_str(),
-                                        error = failure.message.as_str(),
-                                        detail = field("detail"),
-                                        existing_id = field("existing_id"),
-                                        errors = field("errors"),
-                                        trace_id = field("trace_id"),
-                                        uuid = rule.uuid.as_str(),
-                                        tenant = tenant.as_str(),
-                                        name = field("name").or(object_name),
-                                        "{}",
-                                        failure.code
-                                    );
-                                    self.rule_error(
-                                        &mut result,
-                                        &format!("{}: {}", failure.code, failure.message),
-                                    );
-                                }
+                        log.finished(result);
+                    }
+                    Err(error) if error.scope == DeployScope::Rule => {
+                        if let Some(done) = &error.partial {
+                            self.exabeam_done(&rule.uuid, &rule.name, &tenant, done);
+                        }
+                        let failure = &error.failure;
+                        match recreate_refusal
+                            .as_ref()
+                            .filter(|refusal| refusal.code == failure.code)
+                        {
+                            Some(refusal) => {
+                                self.report_failure(refusal, &rule.uuid, platform, &tenant);
+                                result.fail(&refusal.message);
+                            }
+                            None => {
+                                tracing::error!(
+                                    code = failure.code,
+                                    error = failure.message.as_str(),
+                                    detail = failure.field("detail"),
+                                    existing_id = failure.field("existing_id"),
+                                    errors = failure.field("errors"),
+                                    trace_id = failure.field("trace_id"),
+                                    uuid = rule.uuid.as_str(),
+                                    tenant = tenant.as_str(),
+                                    name = failure.field("name").or(object_name),
+                                    "{}",
+                                    failure.code
+                                );
+                                self.rule_error(
+                                    &mut result,
+                                    &format!("{}: {}", failure.code, failure.message),
+                                );
                             }
                         }
                         log.finished(result);
                     }
-                    Err(failure) => {
+                    Err(error) => {
                         tracing::error!(
-                            code = failure.code,
+                            code = error.failure.code,
                             tenant = tenant.as_str(),
-                            error = failure.message.as_str(),
+                            error = error.failure.message.as_str(),
                             critical = true,
                             "exabeam_tenant_deployment_failed"
                         );
                         self.failed = true;
-                        result.fail(&failure.message);
+                        result.fail(&error.failure.message);
                         log.finished(result);
                         break;
                     }
@@ -4311,6 +4286,35 @@ impl Sender<'_, '_> {
             }
         }
         Ok(())
+    }
+
+    /// What an Exabeam deploy did, failed or not: its warnings (the two
+    /// about the deployed rule name it), then what was done.
+    fn exabeam_done(&mut self, uuid: &str, name: &str, tenant: &str, done: &DeployOutcome) {
+        for warning in &done.warnings {
+            self.warned = true;
+            let named = matches!(
+                warning.code.as_str(),
+                "exabeam_schedule_retained" | "exabeam_rule_auto_disabled"
+            );
+            tracing::warn!(
+                code = warning.code.as_str(),
+                uuid,
+                tenant,
+                name = named.then_some(name),
+                detail = warning.message.as_str(),
+                "{}",
+                warning.code
+            );
+        }
+        for event in &done.events {
+            let rule_id = event
+                .fields
+                .iter()
+                .find(|(key, _)| key == "rule_id")
+                .map_or("", |(_, id)| id.as_str());
+            tracing::info!(uuid, rule_id, "{}", event.name);
+        }
     }
 }
 

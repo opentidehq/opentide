@@ -13,7 +13,8 @@ use std::time::Duration;
 
 use opentide_compile::Json;
 use opentide_connectors::connector::{
-    DeployRequest, Operation, QueryRequest, TenantContext, TimeWindow,
+    DeployEvent, DeployRequest, DeployScope, Deployer as _, Operation, QueryRequest, TenantContext,
+    TimeWindow,
 };
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::exabeam::{
@@ -209,17 +210,14 @@ fn created() -> ResponseTemplate {
 }
 
 fn failure_code(outcome: &RuleOutcome) -> Option<&str> {
-    outcome
-        .failure
-        .as_ref()
-        .map(|failure| failure.code.as_str())
+    outcome.failure.as_ref().map(|failure| failure.code)
 }
 
 fn warnings(outcome: &RuleOutcome) -> Vec<&str> {
     outcome
         .warnings
         .iter()
-        .map(|warning| warning.code.as_str())
+        .map(|warning| warning.code)
         .collect()
 }
 
@@ -364,7 +362,7 @@ async fn an_update_of_a_rule_gone_creates_it_again() {
         .await;
     let mut refused = update_rule();
     refused.recreate_refusal = Some((
-        "deployment_state_ignored".to_owned(),
+        "deployment_state_ignored",
         ".opentide/states/deployment/ is ignored".to_owned(),
     ));
     let outcome = deploy_rule(&stand.session(), &refused).await.unwrap();
@@ -1157,16 +1155,50 @@ async fn the_platform_deploys_through_the_generic_interface() {
             ResponseTemplate::new(200).set_body_json(serde_json::json!([{"id": "z", "name": "x"}])),
         )
         .await;
-    let error = deployer
-        .deploy(stand2.cx(), &request)
-        .await
-        .unwrap_err()
-        .into_connector();
-    assert!(
-        error.text().starts_with("exabeam_name_conflict: "),
-        "{}",
-        error.text()
-    );
+    // A rule failure keeps its code and its fields.
+    let error = deployer.deploy(stand2.cx(), &request).await.unwrap_err();
+    assert_eq!(error.scope, DeployScope::Rule);
+    assert_eq!(error.failure.code, "exabeam_name_conflict");
+    assert_eq!(error.failure.field("existing_id"), Some("z"));
+    assert_eq!(error.failure.field("name"), Some("x"));
+    assert_eq!(error.failure.field("platform"), Some("exabeam"));
+    assert_eq!(error.partial, None);
     request.body = b"not json".to_vec();
     assert!(deployer.deploy(stand2.cx(), &request).await.is_err());
+    // A delete takes no body.
+    stand2
+        .on(
+            "DELETE",
+            &format!("{RULES}/{FIRST_ID}"),
+            ResponseTemplate::new(204),
+        )
+        .await;
+    let deleted = deployer
+        .deploy(stand2.cx(), &DeployRequest::delete(FIRST_ID))
+        .await
+        .unwrap();
+    assert_eq!(deleted.remote_id, None);
+    assert_eq!(
+        deleted.events,
+        [DeployEvent::new("exabeam_rule_deleted").with_field("rule_id", FIRST_ID)]
+    );
+    // A refused key fails the tenant, with Exabeam's own code.
+    let stand3 = Stand::start().await;
+    stand3.token().await;
+    stand3
+        .on(
+            "PUT",
+            &format!("{RULES}/{FIRST_ID}"),
+            ResponseTemplate::new(401).set_body_string("token expired"),
+        )
+        .await;
+    request.rule_id = FIRST_ID.to_owned();
+    request.operation = Operation::Update;
+    request.body = body;
+    let error = Exabeam::with_pacer(Arc::clone(&stand3.pacer))
+        .deploy(stand3.cx(), &request)
+        .await
+        .unwrap_err();
+    assert_eq!(error.scope, DeployScope::Tenant);
+    assert_eq!(error.failure.code, exabeam::UNAUTHORIZED);
 }

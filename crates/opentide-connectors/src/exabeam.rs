@@ -38,9 +38,9 @@ use tokio::sync::Mutex;
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
-    Operation, Platform, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext, columns_of,
-    flatten,
+    BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest,
+    DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, QueryOutcome,
+    QueryRequest, QueryRunner, Row, TenantContext, columns_of, flatten,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -774,7 +774,7 @@ pub struct RuleDeploy {
     /// Why deployment state cannot take a rule created again, when it cannot
     /// (`deployment_state_ignore`, `unpersisted_error`): the code and the
     /// message. A recorded rule the tenant lost is then not created again.
-    pub recreate_refusal: Option<(String, String)>,
+    pub recreate_refusal: Option<(&'static str, String)>,
 }
 
 /// What deployment state makes of a deploy.
@@ -792,7 +792,7 @@ pub enum StateChange {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Event {
     /// The code (`exabeam_name_conflict`).
-    pub code: String,
+    pub code: &'static str,
     /// What happened (the log's `error`, or `detail` for a warning).
     pub message: String,
     /// More fields of the log line (`detail`, `existing_id`, `errors`,
@@ -801,9 +801,9 @@ pub struct Event {
 }
 
 impl Event {
-    fn new(code: &str, message: impl Into<String>) -> Self {
+    fn new(code: &'static str, message: impl Into<String>) -> Self {
         Self {
-            code: code.to_owned(),
+            code,
             message: message.into(),
             fields: Vec::new(),
         }
@@ -1449,21 +1449,41 @@ impl Exabeam {
 
 impl Deployer for Exabeam {
     /// One rule from the compiled body alone: its name is the body's, a
-    /// [`Operation::Disable`] disables. A rule's failure is an error here.
+    /// [`Operation::Disable`] disables; a delete takes no body. What was
+    /// done is the outcome's event (`exabeam_rule_created`, `_updated`,
+    /// `_disabled`, `_deleted`, with its `rule_id`).
+    ///
+    /// A rule Exabeam refuses fails with the failure's own code
+    /// (`exabeam_name_conflict`, `exabeam_request_rejected`, ...) and its
+    /// fields (`detail`, `existing_id`, `errors`, `trace_id`, `name`), or
+    /// the request's recreate refusal, whose [`DeployError::partial`] keeps
+    /// the `exabeam_rule_recreated` warning raised before it. A refused key,
+    /// no licence or no answer fails the tenant ([`UNAUTHORIZED`],
+    /// [`FEATURE_UNAVAILABLE`], [`UNREACHABLE`]).
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
-        crate::connector::deploying_for(request, async move {
-            let body: Json = serde_json::from_slice(&request.body).map_err(|error| {
-                ConnectorError::refused(
-                    PLATFORM,
-                    &cx.tenant.label.tenant,
-                    format!("the compiled body is not JSON: {error}"),
-                    None,
-                )
-            })?;
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        Box::pin(async move {
+            let tenant = cx.tenant.label.tenant.as_str();
+            let located = |failure: DeployFailure| {
+                failure
+                    .with_field("platform", PLATFORM)
+                    .with_field("tenant", tenant)
+            };
+            let body: Json = if request.body.is_empty() {
+                Json::Null
+            } else {
+                serde_json::from_slice(&request.body).map_err(|error| {
+                    DeployError::from(ConnectorError::refused(
+                        PLATFORM,
+                        tenant,
+                        format!("the compiled body is not JSON: {error}"),
+                        None,
+                    ))
+                })?
+            };
             let name = body
                 .get("name")
                 .and_then(Json::as_str)
@@ -1474,18 +1494,17 @@ impl Deployer for Exabeam {
                 Operation::Update | Operation::Disable => Action::Update(request.rule_id.clone()),
                 Operation::Delete => Action::Delete(request.rule_id.clone()),
             };
+            let refusal = request.recreate_refusal.as_ref();
             let rule = RuleDeploy {
                 action,
                 body,
                 name,
                 disable: request.operation == Operation::Disable,
-                recreate_refusal: request
-                    .recreate_refusal
-                    .as_ref()
-                    .map(|refusal| (refusal.code.to_owned(), refusal.message.clone())),
+                recreate_refusal: refusal.map(|refusal| (refusal.code, refusal.message.clone())),
             };
             let token = self.tokens.lock().await.get(&cx.tenant.label).cloned();
-            let session = Session::with_token(cx, Arc::clone(&self.pacer), token)?;
+            let session = Session::with_token(cx, Arc::clone(&self.pacer), token)
+                .map_err(DeployError::from)?;
             let result = deploy_rule(&session, &rule).await;
             if let Some(token) = session.current_token().await {
                 self.tokens
@@ -1493,29 +1512,51 @@ impl Deployer for Exabeam {
                     .await
                     .insert(cx.tenant.label.clone(), token);
             }
-            let outcome = result.map_err(|failure| failure.into_error(&cx.tenant.label.tenant))?;
-            if let Some(failure) = outcome.failure {
-                return Err(ConnectorError::refused(
-                    PLATFORM,
-                    &cx.tenant.label.tenant,
-                    format!("{}: {}", failure.code, failure.message),
-                    None,
-                ));
-            }
-            Ok(DeployOutcome {
-                events: Vec::new(),
-                remote_id: match outcome.state {
-                    StateChange::Record(id) => Some(id),
+            let outcome = result.map_err(|failure| {
+                let mut failed =
+                    DeployError::tenant(located(DeployFailure::new(failure.code, failure.message)));
+                failed.connector = failure.error;
+                failed
+            })?;
+            let done = DeployOutcome::new(
+                match &outcome.state {
+                    StateChange::Record(id) => Some(id.clone()),
                     StateChange::Keep => Some(request.rule_id.clone()),
                     StateChange::Forget => None,
                 },
-                operation: request.operation,
-                warnings: outcome
+                request.operation,
+            )
+            .with_warnings(
+                outcome
                     .warnings
                     .into_iter()
                     .map(|warning| DeployWarning::new(warning.code, warning.message))
                     .collect(),
-            })
+            )
+            .with_events(
+                outcome
+                    .done
+                    .into_iter()
+                    .map(|(event, id)| DeployEvent::new(event).with_field("rule_id", id))
+                    .collect(),
+            );
+            let Some(failure) = outcome.failure else {
+                return Ok(done);
+            };
+            let refused = refusal.filter(|refusal| {
+                refusal.code == failure.code && refusal.message == failure.message
+            });
+            let mut failed = located(match refused {
+                Some(refusal) => refusal.clone(),
+                None => DeployFailure::new(failure.code, failure.message),
+            });
+            for (key, value) in failure.fields {
+                failed = failed.with_field(key, value);
+            }
+            // A failure leaves no id to record: only the warnings before it.
+            let mut partial = done;
+            partial.remote_id = None;
+            Err(DeployError::rule(failed).with_partial(partial))
         })
     }
 }
