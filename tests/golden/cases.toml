@@ -694,7 +694,7 @@ fixtures = ["tide-corpus", "vscode", "heavy-small", "fault", "empty", "none"]
 command = "validate"
 variant = "strict"
 args = ["validate", "--strict"]
-fixtures = ["tide-corpus", "vscode", "fault"]
+fixtures = ["tide-corpus", "vscode", "fault", "empty", "none"]
 
 [[case]]
 command = "validate"

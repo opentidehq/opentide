@@ -1,0 +1,12 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/agent/empty/strict
+---
+args: opentide validate --strict
+exit: 1
+
+━━━ stdout · empty
+
+━━━ stderr
+✗ Validation failed: no detection objects were found under ./, and --strict requires at least one
+tip: add --json for machine-readable output

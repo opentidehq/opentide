@@ -33,7 +33,7 @@ opentide validate --check queries
 | `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name (see [Selecting a file](#selecting-a-file)). Repeatable: each `--file` adds a file to the scope |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
-| `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled` |
+| `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled`, and fail a full run that finds no detection objects ([Which workspace was checked](#which-workspace-was-checked)) |
 | `--fix` | Apply every safe fix, then validate again (see [Fixing typos](#fixing-typos---fix)) |
 | `--dry-run` | With `--fix`: print the edits as a unified diff and change nothing |
 | `--watch` | Validate again each time an object file is saved, until Ctrl-C (see [Watching](#watching---watch)) |
@@ -226,11 +226,19 @@ opentide --json validate --check schema   | jq '.report.issues'
 
 Run from anywhere inside the detection workspace: the CLI walks up to it (see [Repository root resolution](./global-options.md#repository-root-resolution)). The JSON payload names the directory it read objects from under `workspace`.
 
-An empty catalogue is not an error. A full run that checked no objects still passes with exit `0`, `--strict` included, but says where it looked:
+An empty catalogue is not an error by default. A full run that checked no objects still passes with exit `0`, but says where it looked:
 
 ```text illustrative
 ✓ Validation passed, but no detection objects were found under ./
 ```
+
+With `--strict` it fails, with exit `1` and `failure.code` `issues_found`, so a CI job or hook pointed at the wrong folder, or run outside the workspace, does not pass every commit:
+
+```text illustrative
+✗ Validation failed: no detection objects were found under ./, and --strict requires at least one
+```
+
+A run narrowed by `--file`, `--uuid`, `--type` or `--check` that matches nothing is not an empty catalogue, and keeps exit `0`.
 
 The directory is relative to the one you run in (`./`, `./detections`, `../`), or absolute when it is elsewhere.
 

@@ -478,8 +478,17 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let failed = validation.failed;
     let scope_full = args.selection.is_empty();
     let empty = !failed && args.check.is_none() && scope_full && summary.objects == 0;
+    // `--strict` fails a run that checked nothing: a CI job pointed at the
+    // wrong folder would otherwise pass every commit.
+    let strict_empty = empty && args.strict;
     let message = if failed {
         "Validation failed".to_owned()
+    } else if strict_empty {
+        format!(
+            "Validation failed: no detection objects were found under {}, and --strict \
+             requires at least one",
+            shown_directory(&root, cx.cwd)
+        )
     } else if empty {
         format!(
             "Validation passed, but no detection objects were found under {}",
@@ -580,14 +589,23 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             ));
         }
     }
-    let exit_code = validation.exit_code();
+    let exit_code = if strict_empty {
+        1
+    } else {
+        validation.exit_code()
+    };
     let mut report = Report::completed(COMMAND, data);
-    report.outcome.status = if failed { "failed" } else { "passed" }.into();
+    report.outcome.status = if failed || strict_empty {
+        "failed"
+    } else {
+        "passed"
+    }
+    .into();
     report.outcome.message.clone_from(&message);
     report.outcome.exit_code = exit_code;
     report.outcome.summary = summary_json.into_iter().collect();
     report.outcome.next_actions = next;
-    if failed {
+    if failed || strict_empty {
         report.outcome.failure = Some(Failure::new(ISSUES_FOUND, message.clone()));
     }
     report.stderr_first = progress_lines(cx.env, &summary);

@@ -1,0 +1,11 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/human/empty/strict
+---
+args: opentide validate --strict
+exit: 1
+
+━━━ stdout · empty
+
+━━━ stderr
+␛[1m␛[31m✗␛[0m Validation failed: no detection objects were found under ./, and --strict requires at least one
