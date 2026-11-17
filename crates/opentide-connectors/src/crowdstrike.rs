@@ -528,6 +528,23 @@ impl Crowdstrike {
         Self { tokens }
     }
 
+    /// Signs in to the tenant now, unless a token is kept, so a tenant that
+    /// refuses the credentials fails before any rule is sent; its
+    /// [`Deployer`] then deploys on that token.
+    ///
+    /// # Errors
+    ///
+    /// The tenant's refusal of the credentials, or why it could not be asked.
+    pub async fn sign_in(&self, cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+        let session = self.session(cx)?;
+        let base = session.base;
+        session
+            .tokens
+            .token(&cx.tenant.label, base, || sign_in(cx, base))
+            .await
+            .map(|_| ())
+    }
+
     /// The tenant's session on the platform's tokens; it signs in on its
     /// first call when no token is kept.
     fn session<'a>(&self, cx: TenantContext<'a>) -> Result<Session<'a>, ConnectorError> {

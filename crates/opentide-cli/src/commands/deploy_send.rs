@@ -2620,9 +2620,13 @@ impl Sender<'_, '_> {
                             .map_err(|error| error.into_connector(&batch.tenant.name))
                     })
                     .map(|_| None),
-                Some(PlatformId::Crowdstrike) => self
-                    .block(opentide_connectors::crowdstrike::Session::connect(context))
-                    .map(Some),
+                // A platform of the tenant's own, signed in once before any
+                // rule: its Deployer sends every rule on that token.
+                Some(PlatformId::Crowdstrike) => {
+                    let crowdstrike = opentide_connectors::crowdstrike::Crowdstrike::new();
+                    self.block(crowdstrike.sign_in(context))
+                        .map(|()| Some(crowdstrike))
+                }
                 _ => Ok(None),
             };
             // No token or session: no rule on the tenant can deploy.
@@ -2801,7 +2805,7 @@ impl Sender<'_, '_> {
         tenant: &str,
         context: TenantContext<'_>,
         defender: &opentide_connectors::defender::Defender,
-        session: Option<&opentide_connectors::crowdstrike::Session<'_>>,
+        session: Option<&opentide_connectors::crowdstrike::Crowdstrike>,
         rule: &opentide_compile::Rule,
         action: &Planned,
         result: &mut RuleResult,
@@ -2997,12 +3001,10 @@ impl Sender<'_, '_> {
                     }
                     other => raised(other),
                 };
-                match action {
-                    Planned::Delete(id) => {
-                        self.block(session.delete_detection_rule(id))
-                            .map_err(|error| refused(error, action))?;
-                        self.record_deleted(result, platform, tenant);
-                    }
+                // The Deployer's request: the stored id addresses an update
+                // (its one-rule list, the id in it) or a delete.
+                let request = match action {
+                    Planned::Delete(id) => DeployRequest::delete(id.clone()),
                     Planned::Update(id) => {
                         let mut list = body.clone();
                         if let CJson::Object(object) = &mut list {
@@ -3010,16 +3012,34 @@ impl Sender<'_, '_> {
                         }
                         let bytes =
                             serde_json::to_vec(&CJson::Array(vec![list])).unwrap_or_default();
-                        self.block(session.update_detection_rule(id, &bytes))
-                            .map_err(|error| refused(error, action))?;
+                        DeployRequest::new(id.clone(), Operation::Update, bytes)
                     }
-                    Planned::Create => {
-                        let bytes = serde_json::to_vec(&body).unwrap_or_default();
-                        let id = self
-                            .block(session.create_detection_rule(&bytes))
-                            .map_err(|error| refused(error, action))?;
+                    Planned::Create => DeployRequest::new(
+                        rule.uuid.clone(),
+                        Operation::Create,
+                        serde_json::to_vec(&body).unwrap_or_default(),
+                    ),
+                };
+                let outcome = self
+                    .block(async {
+                        session
+                            .deploy(context, &request)
+                            .await
+                            .map_err(DeployError::into_connector)
+                    })
+                    .map_err(|error| refused(error, action))?;
+                match (action, outcome.remote_id) {
+                    (Planned::Delete(_), _) => self.record_deleted(result, platform, tenant),
+                    (Planned::Create, Some(id)) => {
                         self.record_created(result, platform, tenant, &ExternalId::Text(id));
                     }
+                    // A create must give its id: without it the rule cannot
+                    // be updated or deleted later.
+                    (Planned::Create, None) => self.rule_error(
+                        result,
+                        "CrowdStrike created the rule without an id to record",
+                    ),
+                    (Planned::Update(_), _) => {}
                 }
             }
         }
