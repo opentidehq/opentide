@@ -217,12 +217,11 @@ fn deploy(proxy: &Proxy, rule: &Rule, as_compiled: bool) -> Result<(String, u16)
         let created = deployer
             .deploy(
                 cx,
-                &DeployRequest {
-                    rule_id: rule.rule_id.to_owned(),
-                    operation: Operation::Create,
-                    body: serde_json::to_vec(rule).unwrap(),
-                    policies: None,
-                },
+                &DeployRequest::new(
+                    rule.rule_id.to_owned(),
+                    Operation::Create,
+                    serde_json::to_vec(rule).unwrap(),
+                ),
             )
             .await?;
         let remote = created.remote_id.unwrap_or_default();
@@ -233,23 +232,21 @@ fn deploy(proxy: &Proxy, rule: &Rule, as_compiled: bool) -> Result<(String, u16)
         deployer
             .deploy(
                 cx,
-                &DeployRequest {
-                    rule_id: remote.clone(),
-                    operation: Operation::Update,
-                    body: serde_json::to_vec(&tuned).unwrap(),
-                    policies: None,
-                },
+                &DeployRequest::new(
+                    remote.clone(),
+                    Operation::Update,
+                    serde_json::to_vec(&tuned).unwrap(),
+                ),
             )
             .await?;
         deployer
             .deploy(
                 cx,
-                &DeployRequest {
-                    rule_id: remote.clone(),
-                    operation: Operation::Disable,
-                    body: serde_json::to_vec(&serde_json::json!({"enabled": false})).unwrap(),
-                    policies: None,
-                },
+                &DeployRequest::new(
+                    remote.clone(),
+                    Operation::Disable,
+                    serde_json::to_vec(&serde_json::json!({"enabled": false})).unwrap(),
+                ),
             )
             .await?;
         let missing = MockPlatform { as_compiled }

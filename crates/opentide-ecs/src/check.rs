@@ -14,7 +14,7 @@ use crate::{field, fields, version, with_prefix};
 use opentide_core::datasets::{self, DatasetKind};
 use opentide_core::{Diagnostic, Range, Severity, codes};
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::OnceLock;
 
@@ -445,33 +445,215 @@ fn overlaps(a: Range, b: Range) -> bool {
     key(a.start) < key(b.end) && key(b.start) < key(a.end) || a == b
 }
 
+thread_local! {
+    /// [`merge_steps`].
+    static MERGE_STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many diagnostics [`merge`] has looked at on this thread, each index lookup counting
+/// one: for the test that holds it to linear (a work count, not a wall clock).
+#[cfg(test)]
+fn merge_steps() -> usize {
+    MERGE_STEPS.get()
+}
+
 /// Add the ECS diagnostics to an engine's own. An ECS error where the engine
 /// already reports an error says the same thing and is dropped; the
 /// engine's hints at an ECS error (a type the engine could only suspect)
 /// give way to it.
+///
+/// Each ECS diagnostic is checked against indexes, not against every finding:
+/// a query with thousands of findings (one per element of a long `in` list)
+/// took a minute when each was compared with all the others. The result is
+/// the one the pairwise comparison gives, in the same order.
 pub fn merge(found: &mut Vec<Diagnostic>, ecs: Vec<Diagnostic>) {
+    MERGE_STEPS.set(MERGE_STEPS.get() + found.len() + ecs.len());
+    type Key = (u32, u32);
+    let key = |p: opentide_core::Position| (p.line, p.character);
+    let span = |r: Range| (key(r.start), key(r.end));
+    let id = |d: &Diagnostic| (d.code.clone(), d.range, d.message.clone());
+
+    // The engine's errors, by start, each with the largest end up to it: an error overlaps
+    // `start..end` when one starting before `end` ends after `start`.
+    let mut engine: Vec<(Key, Key)> = found
+        .iter()
+        .filter(|f| f.severity == Severity::Error)
+        .map(|f| span(f.range))
+        .collect();
+    engine.sort_unstable();
+    let reach: Vec<Key> = engine
+        .iter()
+        .scan((0, 0), |max, &(_, end)| {
+            *max = (*max).max(end);
+            Some(*max)
+        })
+        .collect();
+    // Every error's range, for `overlaps`' equal-ranges case.
+    let mut errors: HashSet<(Key, Key)> = engine.iter().copied().collect();
+    // The ECS errors added: none overlaps another, so by start their ends rise too, and the
+    // last one starting before `end` is the one that can overlap.
+    let mut added: BTreeSet<(Key, Key)> = BTreeSet::new();
+    let overlaps_error =
+        |errors: &HashSet<(Key, Key)>, added: &BTreeSet<(Key, Key)>, (start, end): (Key, Key)| {
+            errors.contains(&(start, end))
+                || engine
+                    .partition_point(|&(s, _)| s < end)
+                    .checked_sub(1)
+                    .is_some_and(|last| reach[last] > start)
+                || added
+                    .range(..(end, (0, 0)))
+                    .next_back()
+                    .is_some_and(|&(_, e)| e > start)
+        };
+
+    let mut live: HashMap<(String, Range, String), usize> = HashMap::new();
+    for f in found.iter() {
+        *live.entry(id(f)).or_default() += 1;
+    }
+    let mut hints: Vec<usize> = (0..found.len())
+        .filter(|&i| found[i].severity == Severity::Hint)
+        .collect();
+    let mut removed = vec![false; found.len()];
     for d in ecs {
         if d.severity == Severity::Error {
-            if found
-                .iter()
-                .any(|f| f.severity == Severity::Error && overlaps(f.range, d.range))
-            {
+            if overlaps_error(&errors, &added, span(d.range)) {
                 continue;
             }
-            found.retain(|f| !(f.severity == Severity::Hint && overlaps(f.range, d.range)));
+            hints.retain(|&i| {
+                MERGE_STEPS.set(MERGE_STEPS.get() + 1);
+                if overlaps(found[i].range, d.range) {
+                    removed[i] = true;
+                    if let Some(n) = live.get_mut(&id(&found[i])) {
+                        *n -= 1;
+                    }
+                    false
+                } else {
+                    true
+                }
+            });
         }
-        if !found
-            .iter()
-            .any(|f| f.code == d.code && f.range == d.range && f.message == d.message)
-        {
+        let entry = live.entry(id(&d)).or_default();
+        if *entry == 0 {
+            *entry += 1;
+            if d.severity == Severity::Error {
+                errors.insert(span(d.range));
+                added.insert(span(d.range));
+            } else if d.severity == Severity::Hint {
+                hints.push(found.len());
+            }
+            removed.push(false);
             found.push(d);
         }
     }
+    let mut i = 0;
+    found.retain(|_| {
+        i += 1;
+        !removed[i - 1]
+    });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `merge` as it was: each ECS diagnostic compared with every finding.
+    fn merge_pairwise(found: &mut Vec<Diagnostic>, ecs: Vec<Diagnostic>) {
+        for d in ecs {
+            if d.severity == Severity::Error {
+                if found
+                    .iter()
+                    .any(|f| f.severity == Severity::Error && overlaps(f.range, d.range))
+                {
+                    continue;
+                }
+                found.retain(|f| !(f.severity == Severity::Hint && overlaps(f.range, d.range)));
+            }
+            if !found
+                .iter()
+                .any(|f| f.code == d.code && f.range == d.range && f.message == d.message)
+            {
+                found.push(d);
+            }
+        }
+    }
+
+    /// Diagnostics on two lines of six columns, from `seed`: overlapping, touching, empty and
+    /// equal ranges, each severity, repeated codes and messages.
+    fn diagnostics(seed: &mut u64, n: usize) -> Vec<Diagnostic> {
+        let mut next = |m: u64| {
+            *seed = seed
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            u32::try_from((*seed >> 33) % m).unwrap_or(0)
+        };
+        (0..n)
+            .map(|_| {
+                let start = opentide_core::Position::new(next(2), next(6));
+                let mut end = opentide_core::Position::new(next(2), next(6));
+                if (end.line, end.character) < (start.line, start.character) {
+                    end = start;
+                }
+                let range = Range::new(start, end);
+                let code = ["a", "b"][next(2) as usize];
+                let message = format!("m{}", next(2));
+                match next(3) {
+                    0 => Diagnostic::error(code, message, range),
+                    1 => Diagnostic::warning(code, message, range),
+                    _ => Diagnostic {
+                        severity: Severity::Hint,
+                        ..Diagnostic::warning(code, message, range)
+                    },
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn merge_is_the_pairwise_merge() {
+        let mut seed = 7;
+        for round in 0..5_000 {
+            let found = diagnostics(&mut seed, round % 7);
+            let ecs = diagnostics(&mut seed, round % 5 + 1);
+            let (mut fast, mut slow) = (found.clone(), found);
+            merge(&mut fast, ecs.clone());
+            merge_pairwise(&mut slow, ecs);
+            assert_eq!(fast, slow, "round {round}");
+        }
+    }
+
+    #[test]
+    fn merge_is_linear() {
+        // One field comparison and one unknown-field warning per element of a long list, and
+        // as many ECS type errors: each was compared with every finding.
+        let at = |i: u32| {
+            Range::new(
+                opentide_core::Position::new(0, i * 4),
+                opentide_core::Position::new(0, i * 4 + 3),
+            )
+        };
+        let steps = |n: u32| {
+            let mut found: Vec<Diagnostic> = (0..n)
+                .map(|i| Diagnostic::warning("field_comparison", "f", at(i)))
+                .collect();
+            let ecs: Vec<Diagnostic> = (0..n)
+                .flat_map(|i| {
+                    [
+                        Diagnostic::warning(codes::ECS_UNKNOWN_FIELD, "u", at(i)),
+                        Diagnostic::error(codes::ECS_TYPE_MISMATCH, "t", at(i)),
+                    ]
+                })
+                .collect();
+            let before = merge_steps();
+            merge(&mut found, ecs);
+            assert_eq!(found.len(), 3 * n as usize);
+            merge_steps() - before
+        };
+        let (small, large) = (steps(1_000), steps(4_000));
+        assert!(
+            large < small * 8,
+            "{small} steps for 1,000, {large} for 4,000"
+        );
+    }
 
     #[test]
     fn declared_fields_are_mapped_with_their_type() {

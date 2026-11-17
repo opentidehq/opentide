@@ -130,12 +130,7 @@ fn crowdstrike_deploys_as_the_python_client_does() {
         cancel: &cancel,
     };
     let deploy = |operation, rule_id: &str, body: Vec<u8>| {
-        let request = DeployRequest {
-            rule_id: rule_id.to_owned(),
-            operation,
-            body,
-            policies: None,
-        };
+        let request = DeployRequest::new(rule_id.to_owned(), operation, body);
         block_on(async { deployer.deploy(cx, &request).await }).unwrap()
     };
     // One token for the run: the rules after the first reuse it.
@@ -204,12 +199,11 @@ fn crowdstrike_a_body_one_byte_off_fails_the_replay() {
         http: &http,
         cancel: &cancel,
     };
-    let request = DeployRequest {
-        rule_id: String::new(),
-        operation: Operation::Create,
-        body: create("Encoded PowerShelL"),
-        policies: None,
-    };
+    let request = DeployRequest::new(
+        String::new(),
+        Operation::Create,
+        create("Encoded PowerShelL"),
+    );
     let platform = Crowdstrike::new();
     let _ = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await });
     let mismatches = replay.proxy.verify();
@@ -416,4 +410,51 @@ fn crowdstrike_stops_the_search_a_cancelled_run_stops_waiting_for() {
             .all(|mismatch| mismatch.detail.ends_with("was recorded and never sent")),
         "{mismatches:?}"
     );
+}
+
+/// #1142: a search the API answers with a redirect it cannot follow (a 307
+/// without `Location`) is refused, not read as a started job.
+#[test]
+fn crowdstrike_a_redirect_answer_is_a_refusal() {
+    let full = cassette_support::cassette("crowdstrike/query");
+    let mut started = full.interactions[1].clone();
+    started.response.status = 307;
+    started
+        .response
+        .headers
+        .retain(|(name, _)| name != "location");
+    let replay = cassette_support::replay_cassette(
+        opentide_cassette::Cassette::new(
+            &full.scenario,
+            full.recorded_from,
+            vec![full.interactions[0].clone(), started],
+        ),
+        &[SECRET],
+    );
+    let (tenant, http) = tenant(
+        &replay,
+        "crowdstrike",
+        "falcon",
+        SETUP,
+        &crowdstrike::http_defaults(),
+    );
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let request = query(
+        "#event_simpleName=ProcessRollup2",
+        1,
+        &[],
+        DEFAULT_QUERY_TIMEOUT,
+    );
+    let outcome = block_on(async {
+        opentide_connectors::connector::QueryRunner::run(&Crowdstrike::new(), cx, &request).await
+    })
+    .unwrap();
+    let error = outcome.unwrap_err();
+    assert!(matches!(error, ConnectorError::Refused { .. }), "{error:?}");
+    assert!(error.to_string().contains("(HTTP 307)"), "{error}");
 }

@@ -70,6 +70,8 @@ const aborted: Promise<QueryResult> = connection.query('x', dated)
 const timed: Promise<LiveCheck> = connection.validateQuery('x', { end: new Date(), signal: AbortSignal.timeout(1000) })
 const deployOptions: DeployOptions = { signal: controller.signal }
 const abortable: Promise<DeployOutcome> = connection.deploy('id', 'delete', '', deployOptions)
+// A delete takes no body (#1142).
+const deleted: Promise<DeployOutcome> = connection.deploy('id', 'delete')
 async function read(): Promise<[string | null, string | null, string | null, Record<string, any>[]]> {
   const result = await found
   const check = await checked
@@ -88,5 +90,5 @@ ws.validate({ check: 'everything' })
 // @ts-expect-error: queries is error, warn or off
 ws.validate({ queries: 'loud' })
 
-export { aborted, abortable, cancelled, keys, known, live, read, sysdig, timed }
+export { aborted, abortable, deleted, cancelled, keys, known, live, read, sysdig, timed }
 export { opened, covering, code, families, rules, exitCode, failed, failure, lintStatus, ok, root, status, tree, version }

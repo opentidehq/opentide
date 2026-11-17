@@ -328,3 +328,24 @@ fn a_ladder_past_the_depth_limit_stops_growing() {
         "{past} steps for 1,000 levels, {far} for 4,000: growing past the limit"
     );
 }
+
+/// A long `in` list, valid or broken by a trailing comma, stays linear in each function that
+/// counts its steps (`analyze`, `hover`, `completions`; `ecs_diagnostics`, `sequences` and
+/// `signature_help` take none on it). The #1425 review measured 6.5 s at 5,000 elements and
+/// 106 s at 20,000 broken. Its ranges: `linear_ranges.rs`.
+#[test]
+fn a_long_in_list_is_linear() {
+    for tail in ["", " ,"] {
+        let list = move |n: usize| {
+            let items: Vec<String> = (0..n).map(|i| format!("f{i}")).collect();
+            format!("process where a in ({}{tail})", items.join(" , "))
+        };
+        assert_steps_linear(&format!("analyze{tail}"), 1_000, list, |q| drop(analyze(q)));
+        assert_steps_linear(&format!("hover{tail}"), 1_000, list, |q| {
+            drop(hover(q, q.len() / 2));
+        });
+        assert_steps_linear(&format!("completions{tail}"), 1_000, list, |q| {
+            drop(completions(q, q.len() - 1));
+        });
+    }
+}

@@ -909,7 +909,14 @@ fn analyze_injections(
         // not a query to check: `opentide validate` skips it too.
         let mut diagnostics: Vec<Diagnostic> = Vec::new();
         if !placeholder::is_placeholder_query(source, &inj) {
-            diagnostics.extend(found.into_iter().map(|d| remap_diagnostic(&lines, &inj, d)));
+            // One line table for the query: each finding's position is found in it, not by
+            // scanning the query from its start (a long `in` list has a finding per element).
+            let inner = opentide_core::LineIndex::new(&inj.inner);
+            diagnostics.extend(
+                found
+                    .into_iter()
+                    .map(|d| remap_diagnostic(&lines, &inner, &inj, d)),
+            );
             diagnostics.extend(extra);
         }
         let tokens = query_tokens
@@ -935,14 +942,15 @@ fn is_secops_section(inj: &InjectedQuery) -> bool {
 
 fn remap_diagnostic(
     lines: &opentide_core::LineIndex<'_>,
+    inner: &opentide_core::LineIndex<'_>,
     inj: &InjectedQuery,
     mut d: Diagnostic,
 ) -> Diagnostic {
-    let start = opentide_core::position_to_offset(&inj.inner, d.range.start);
+    let start = inner.offset(d.range.start);
     // An empty finding (an error at the end of a query) stays empty: one
     // character wide, it took the blank or comment after the query.
     let width = usize::from(d.range.end != d.range.start);
-    let mut end = opentide_core::position_to_offset(&inj.inner, d.range.end).max(start + width);
+    let mut end = inner.offset(d.range.end).max(start + width);
     // A finding stays inside the part it starts in.
     if let Some(part) = inj.part_at(start) {
         end = end.min(part.end).max(start + width);

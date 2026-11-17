@@ -1127,12 +1127,7 @@ async fn the_platform_deploys_through_the_generic_interface() {
     assert_eq!(platform.id(), "exabeam");
     let deployer = platform.deployer().unwrap();
     let body = serde_json::to_vec(&golden("rule-exabeam-threshold-1.0.create.api.json")).unwrap();
-    let mut request = DeployRequest {
-        rule_id: String::new(),
-        operation: Operation::Create,
-        body: body.clone(),
-        policies: None,
-    };
+    let mut request = DeployRequest::new(String::new(), Operation::Create, body.clone());
     let outcome = deployer.deploy(stand.cx(), &request).await.unwrap();
     assert_eq!(outcome.remote_id.as_deref(), Some(FIRST_ID));
     request.rule_id = FIRST_ID.to_owned();

@@ -1432,10 +1432,6 @@ fn check_batches(
 }
 
 /// `LiveQueryValidator.validate`: each rule's queries on each tenant.
-#[expect(
-    clippy::too_many_lines,
-    reason = "the oracle's check_rule, each outcome in its place"
-)]
 async fn generic(
     platform: &str,
     batches: &[Batch],
@@ -1448,14 +1444,7 @@ async fn generic(
         .get(platform)
         .and_then(opentide_connectors::Platform::live_validator)
         .ok_or_else(|| Early::Crashed(format!("{platform} has no live validator")))?;
-    let window = TimeWindow::check(cx.now);
-    // Exabeam searches the 15 minutes before the window's end, the console's
-    // "Test Last 15 mins" (`ExabeamQueryValidator.check_rule`).
-    let window = if platform == opentide_compile::exabeam::PLATFORM {
-        opentide_connectors::exabeam::rule_check_window(window.end)
-    } else {
-        window
-    };
+    let window = check_window(platform, cx.now);
     let cancel = CancellationToken::new();
     let mut report = CheckReport::default();
     for batch in batches {
@@ -1500,126 +1489,166 @@ async fn generic(
                     http: &conn.http,
                     cancel: &cancel,
                 };
-                let found: Result<LiveCheck, ConnectorError> = watched(
+                let found = watched(
                     validator.validate(context, &request),
                     &cancel,
                     cx.interrupted,
                 )
                 .await;
-                let label = item.label.clone();
-                match found {
-                    Ok(found) => {
-                        streak.answered();
-                        if platform == "defender_for_endpoint" && !found.errors.is_empty() {
-                            let mut tables =
-                                opentide_connectors::defender::defender_xdr_tables_in_query(
-                                    &request.text,
-                                );
-                            tables.sort();
-                            tables.dedup();
-                            let tables = if tables.is_empty() {
-                                "none".to_owned()
-                            } else {
-                                tables.join(", ")
-                            };
-                            let detail = format!(
-                                "{} ({}) | Detected Defender XDR tables: {tables} | \
-                                 {DEFENDER_COLUMNS_DOCS}",
-                                rule.name, rule.uuid
-                            );
-                            tracing::error!(
-                                detail = detail.as_str(),
-                                critical = true,
-                                "defender_xdr_custom_detection_query_is_missing_required_columns"
-                            );
-                        }
-                        for error in &found.errors {
-                            log_rejected(platform, rule, &tenant.name, error);
-                        }
-                        for warning in &found.warnings {
-                            tracing::warn!(
-                                detail =
-                                    format!("{} ({}) on {}", rule.name, rule.uuid, tenant.name)
-                                        .as_str(),
-                                warning = warning.as_str(),
-                                "query_validation_warning"
-                            );
-                        }
-                        if found.errors.is_empty() {
-                            tracing::info!(
-                                mdr_name = rule.name.as_str(),
-                                tenant = tenant.name.as_str(),
-                                "valid_query"
-                            );
-                        }
-                        report.checks.push(RuleCheck {
-                            rule: rule.uuid.clone(),
-                            name: rule.name.clone(),
-                            tenant: tenant.name.clone(),
-                            label,
-                            errors: found.errors,
-                            warnings: found.warnings,
-                            code: None,
-                        });
-                    }
-                    Err(ConnectorError::QueryTimedOut { message, .. }) => {
-                        streak.answered();
-                        report.checks.push(timed_out(
-                            platform,
-                            rule,
-                            &tenant.name,
-                            label,
-                            &message,
-                            timeout,
-                            Vec::new(),
-                        ));
-                    }
-                    Err(refused @ ConnectorError::Refused { .. }) => {
-                        streak.answered();
-                        report.checks.push(rejected(
-                            platform,
-                            rule,
-                            &tenant.name,
-                            label,
-                            &refused.text(),
-                        ));
-                    }
-                    Err(ConnectorError::Gateway { message, .. }) => {
-                        streak
-                            .timed_out(&message, false)
-                            .map_err(Early::Unreachable)?;
-                        report.checks.push(timed_out(
-                            platform,
-                            rule,
-                            &tenant.name,
-                            label,
-                            &message,
-                            timeout,
-                            Vec::new(),
-                        ));
-                    }
-                    Err(ConnectorError::Timeout {
-                        address, seconds, ..
-                    }) => {
-                        let error = read_timeout_text(&address, seconds);
-                        streak.timed_out(&error, true).map_err(Early::Unreachable)?;
-                        report.checks.push(timed_out(
-                            platform,
-                            rule,
-                            &tenant.name,
-                            label,
-                            &error,
-                            timeout,
-                            Vec::new(),
-                        ));
-                    }
-                    Err(error) => return Err(early(platform, &tenant.name, error)),
-                }
+                let asked = Asked {
+                    platform,
+                    rule,
+                    tenant: &tenant.name,
+                    label: item.label.clone(),
+                    timeout,
+                };
+                report
+                    .checks
+                    .push(asked.outcome(found, &request.text, &mut streak)?);
             }
         }
         streak.finish().map_err(Early::Unreachable)?;
     }
     Ok(report)
+}
+
+/// The window a rule's query is checked over: Exabeam searches the 15
+/// minutes before its end, the console's "Test Last 15 mins"
+/// (`ExabeamQueryValidator.check_rule`).
+fn check_window(platform: &str, now: jiff::Timestamp) -> TimeWindow {
+    let window = TimeWindow::check(now);
+    if platform == opentide_compile::exabeam::PLATFORM {
+        opentide_connectors::exabeam::rule_check_window(window.end)
+    } else {
+        window
+    }
+}
+
+/// One query of a rule asked of a tenant (`check_rule`).
+struct Asked<'a> {
+    platform: &'a str,
+    rule: &'a opentide_compile::Rule,
+    tenant: &'a str,
+    label: Option<String>,
+    timeout: f64,
+}
+
+impl Asked<'_> {
+    /// The query's check from what the tenant answered: a gateway or a
+    /// read that timed out counts toward the tenant's streak of timeouts,
+    /// and any other connector error stops the check.
+    fn outcome(
+        self,
+        found: Result<LiveCheck, ConnectorError>,
+        text: &str,
+        streak: &mut Streak,
+    ) -> Result<RuleCheck, Early> {
+        let Self {
+            platform,
+            rule,
+            tenant,
+            label,
+            timeout,
+        } = self;
+        let timed_out = |reason: &str| {
+            timed_out(
+                platform,
+                rule,
+                tenant,
+                label.clone(),
+                reason,
+                timeout,
+                Vec::new(),
+            )
+        };
+        match found {
+            Ok(found) => {
+                streak.answered();
+                Ok(answered(platform, rule, tenant, label.clone(), text, found))
+            }
+            Err(ConnectorError::QueryTimedOut { message, .. }) => {
+                streak.answered();
+                Ok(timed_out(&message))
+            }
+            Err(refused @ ConnectorError::Refused { .. }) => {
+                streak.answered();
+                Ok(rejected(
+                    platform,
+                    rule,
+                    tenant,
+                    label.clone(),
+                    &refused.text(),
+                ))
+            }
+            Err(ConnectorError::Gateway { message, .. }) => {
+                streak
+                    .timed_out(&message, false)
+                    .map_err(Early::Unreachable)?;
+                Ok(timed_out(&message))
+            }
+            Err(ConnectorError::Timeout {
+                address, seconds, ..
+            }) => {
+                let error = read_timeout_text(&address, seconds);
+                streak.timed_out(&error, true).map_err(Early::Unreachable)?;
+                Ok(timed_out(&error))
+            }
+            Err(error) => Err(early(platform, tenant, error)),
+        }
+    }
+}
+
+/// A query the tenant answered: its errors and warnings logged, and on
+/// Defender a rejected query's XDR tables named.
+fn answered(
+    platform: &str,
+    rule: &opentide_compile::Rule,
+    tenant: &str,
+    label: Option<String>,
+    text: &str,
+    found: LiveCheck,
+) -> RuleCheck {
+    if platform == "defender_for_endpoint" && !found.errors.is_empty() {
+        let mut tables = opentide_connectors::defender::defender_xdr_tables_in_query(text);
+        tables.sort();
+        tables.dedup();
+        let tables = if tables.is_empty() {
+            "none".to_owned()
+        } else {
+            tables.join(", ")
+        };
+        let detail = format!(
+            "{} ({}) | Detected Defender XDR tables: {tables} | {DEFENDER_COLUMNS_DOCS}",
+            rule.name, rule.uuid
+        );
+        tracing::error!(
+            detail = detail.as_str(),
+            critical = true,
+            "defender_xdr_custom_detection_query_is_missing_required_columns"
+        );
+    }
+    for error in &found.errors {
+        log_rejected(platform, rule, tenant, error);
+    }
+    for warning in &found.warnings {
+        tracing::warn!(
+            detail = format!("{} ({}) on {tenant}", rule.name, rule.uuid).as_str(),
+            warning = warning.as_str(),
+            "query_validation_warning"
+        );
+    }
+    if found.errors.is_empty() {
+        tracing::info!(mdr_name = rule.name.as_str(), tenant, "valid_query");
+    }
+    RuleCheck {
+        rule: rule.uuid.clone(),
+        name: rule.name.clone(),
+        tenant: tenant.to_owned(),
+        label,
+        errors: found.errors,
+        warnings: found.warnings,
+        code: None,
+    }
 }
 
 /// `GoogleSecopsValidator.validate`: each rule's assembled YARA-L text,
