@@ -306,15 +306,26 @@ fn default_tide_catalog() -> &'static RwLock<Option<&'static TideCatalog>> {
 thread_local! {
     /// The catalog this thread uses instead of the installed one
     /// ([`scope_tide_fields`]).
-    static SCOPED_TIDE_CATALOG: std::cell::Cell<Option<&'static TideCatalog>> =
-        const { std::cell::Cell::new(None) };
+    static SCOPED_TIDE_CATALOG: std::cell::Cell<Scoped> =
+        const { std::cell::Cell::new(Scoped::None) };
+}
+
+/// A thread's own field catalog ([`scope_tide_fields`]).
+#[derive(Clone, Copy)]
+enum Scoped {
+    /// None: the installed one, else the host's, else the bundled one.
+    None,
+    /// The host's or the bundled one, whatever is installed.
+    Default,
+    /// A workspace's.
+    Workspace(&'static TideCatalog),
 }
 
 /// While it lives, the Tide field catalog of [`scope_tide_fields`] is the one
 /// its thread uses; dropping it gives back what the thread used before.
 #[must_use = "dropping it at once ends the scope at once"]
 pub struct TideFieldsScope {
-    previous: Option<&'static TideCatalog>,
+    previous: Scoped,
     /// Not `Send`: the scope belongs to its thread.
     _thread: std::marker::PhantomData<*const ()>,
 }
@@ -336,14 +347,11 @@ impl Drop for TideFieldsScope {
 ///
 /// `json` is not a field catalog; nothing changes.
 pub fn scope_tide_fields(json: Option<&str>) -> Result<TideFieldsScope, HighlightError> {
-    let catalog = match json {
-        Some(json) => built_tide_catalog(json)?,
-        None => default_tide_catalog()
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .unwrap_or_else(bundled_tide_catalog),
+    let catalog = match json.map(built_tide_catalog).transpose()? {
+        Some(catalog) => Scoped::Workspace(catalog),
+        None => Scoped::Default,
     };
-    let previous = SCOPED_TIDE_CATALOG.with(|scoped| scoped.replace(Some(catalog)));
+    let previous = SCOPED_TIDE_CATALOG.with(|scoped| scoped.replace(catalog));
     Ok(TideFieldsScope {
         previous,
         _thread: std::marker::PhantomData,
@@ -351,14 +359,17 @@ pub fn scope_tide_fields(json: Option<&str>) -> Result<TideFieldsScope, Highligh
 }
 
 fn tide_catalog() -> &'static TideCatalog {
-    if let Some(catalog) = SCOPED_TIDE_CATALOG.with(std::cell::Cell::get) {
-        return catalog;
-    }
-    let installed = installed_tide_catalog()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if let Some((catalog, _)) = *installed {
-        return catalog;
+    match SCOPED_TIDE_CATALOG.with(std::cell::Cell::get) {
+        Scoped::Workspace(catalog) => return catalog,
+        Scoped::Default => {}
+        Scoped::None => {
+            let installed = installed_tide_catalog()
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if let Some((catalog, _)) = *installed {
+                return catalog;
+            }
+        }
     }
     let default = default_tide_catalog()
         .read()
@@ -433,11 +444,14 @@ pub fn set_default_tide_fields(json: Option<&str>) -> Result<(), HighlightError>
 /// ([`install_tide_fields`], or this thread's [`scope_tide_fields`]) rather
 /// than the bundled snapshot.
 pub fn tide_catalog_is_workspace() -> bool {
-    SCOPED_TIDE_CATALOG.with(std::cell::Cell::get).is_some()
-        || installed_tide_catalog()
+    match SCOPED_TIDE_CATALOG.with(std::cell::Cell::get) {
+        Scoped::Workspace(_) => true,
+        Scoped::Default => false,
+        Scoped::None => installed_tide_catalog()
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .is_some()
+            .is_some(),
+    }
 }
 
 pub fn tide_catalog_version() -> &'static str {

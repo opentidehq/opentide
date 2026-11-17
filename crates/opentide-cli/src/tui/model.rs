@@ -241,6 +241,9 @@ pub struct LanguageServer {
     pub advice: Option<String>,
     /// The engine's view of the workspace, for [`LanguageServer::hover`].
     host: Option<Arc<MemoryWorkspace>>,
+    /// The workspace's catalog, which [`LanguageServer::hover`] enters on
+    /// its thread as the checks did (#1142).
+    catalog: Option<opentide_analysis::Catalog>,
 }
 
 impl std::fmt::Debug for LanguageServer {
@@ -264,6 +267,10 @@ impl LanguageServer {
     /// `text`, as Markdown; `None` where it has nothing to say.
     pub fn hover(&self, text: &str, line: usize, column: usize) -> Option<String> {
         let host = self.host.as_ref()?;
+        let _catalog = self
+            .catalog
+            .as_ref()
+            .and_then(|catalog| opentide_analysis::enter_catalog(catalog).ok());
         let offset = LineStarts::new(text).offset(text, line, column);
         opentide_analysis::hover(host.as_ref(), LanguageId::TideYaml, text, offset)
     }
@@ -892,5 +899,6 @@ fn check_files(
         unavailable: None,
         advice: None,
         host: Some(host),
+        catalog: Some(catalog.clone()),
     }
 }

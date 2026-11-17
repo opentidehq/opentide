@@ -52,6 +52,17 @@ fn a_catalog_entered_on_a_thread_is_that_thread_s_alone_until_it_drops() {
     // Nothing is left behind.
     assert_eq!(seen(), before);
 
+    // Without fields, the host's or the bundled catalog: not a workspace's.
+    {
+        let _catalog = enter_catalog(&Catalog {
+            fields: None,
+            ..workspace.clone()
+        })
+        .unwrap();
+        assert_eq!(seen(), (false, false, true));
+    }
+    assert_eq!(seen(), before);
+
     // A part that does not parse is an error and changes nothing.
     let broken = Catalog {
         fields: Some("{".into()),
