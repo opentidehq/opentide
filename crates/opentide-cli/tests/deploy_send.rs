@@ -2208,8 +2208,7 @@ fn elastic_stops_a_tenant_refusing_the_key() {
     assert_eq!(code, 1, "{err}");
     assert!(err.contains("✗ failed    First rule"), "{err}");
     assert!(
-        err.contains("elastic tenant deployment failed")
-            || err.contains("Elastic tenant deployment failed"),
+        err.contains("error: Elastic tenant deployment failed · tenant: *** · error: Tenant *** auth error: HTTP 401"),
         "{err}"
     );
 }

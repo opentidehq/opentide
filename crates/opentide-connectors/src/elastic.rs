@@ -1302,21 +1302,33 @@ pub const CHECKS_SKIPPED: &str = "elastic_checks_skipped";
 pub const CHECK_WARNING: &str = "elasticsearch_check_warning";
 
 /// A deploy request's body: the Kibana rule (`payload`) and the rule's
-/// `elastic` block (`block`), as `opentide deploy` and `deploy_plan` write
-/// it; or the Kibana rule alone, with no block.
-fn deploy_body(body: &[u8]) -> Result<(Json, Option<Json>), String> {
+/// `elastic` block (`block`), as `opentide deploy` writes it; or the Kibana
+/// rule alone, with no block. The rule's `rule_id` must be `rule_id`, the
+/// one the deploy looks the rule up by.
+fn deploy_body(body: &[u8], rule_id: &str) -> Result<(Json, Option<Json>), String> {
     let body: Json = serde_json::from_slice(body)
         .map_err(|error| format!("the compiled body is not JSON: {error}"))?;
-    match body.get("payload") {
-        Some(payload @ Json::Object(_)) => {
-            let block = body
-                .get("block")
-                .filter(|block| block.as_object().is_some());
-            Ok((payload.clone(), block.cloned()))
+    let (payload, block) = match (body.get("payload"), body.get("block")) {
+        (Some(payload @ Json::Object(_)), None) => (payload.clone(), None),
+        (Some(payload @ Json::Object(_)), Some(block @ Json::Object(_))) => {
+            (payload.clone(), Some(block.clone()))
         }
-        Some(_) => Err("the body's payload is not a Kibana rule".to_owned()),
-        None if body.as_object().is_some() => Ok((body, None)),
-        None => Err("the compiled body is not a Kibana rule".to_owned()),
+        (Some(Json::Object(_)), Some(_)) => {
+            return Err("the body's block is not an elastic block".to_owned());
+        }
+        (Some(_), _) => return Err("the body's payload is not a Kibana rule".to_owned()),
+        (None, Some(_)) => return Err("the body has a block but no payload".to_owned()),
+        (None, None) if body.as_object().is_some() => (body, None),
+        (None, None) => return Err("the compiled body is not a Kibana rule".to_owned()),
+    };
+    match payload.get("rule_id").and_then(Json::as_str) {
+        Some(id) if id == rule_id => Ok((payload, block)),
+        Some(id) => Err(format!(
+            "the Kibana rule's rule_id is {id:?}, not the request's {rule_id:?}"
+        )),
+        None => Err(format!(
+            "the Kibana rule has no rule_id; the request's is {rule_id:?}"
+        )),
     }
 }
 
@@ -1327,7 +1339,9 @@ impl Deployer for Elastic {
     /// its type changes, deleted and created again. [`Operation::Create`]
     /// and [`Operation::Update`] do the same; a [`Operation::Disable`]
     /// writes the rule disabled. The body is `{"payload": <Kibana rule>,
-    /// "block": <elastic block>}` (`deploy_plan`'s); a bare Kibana rule
+    /// "block": <elastic block>}`, as `opentide deploy` sends it, the rule's
+    /// `rule_id` the request's (else the rule fails, nothing sent); a bare
+    /// Kibana rule
     /// deploys without the checks, which read the block, and says so with
     /// the unraised warning [`CHECKS_SKIPPED`]. The checks' findings are
     /// [`CHECK_WARNING`]s; what was done is the outcome's event
@@ -1336,8 +1350,13 @@ impl Deployer for Elastic {
     ///
     /// A rule Kibana or the checks refuse fails with its event's code
     /// ([`FAILURE_EVENTS`]) and the answer's status, the checks' warnings in
-    /// [`DeployError::partial`]. A key Kibana or Elasticsearch refuses (401,
-    /// 403) and every connection failure fail the tenant.
+    /// [`DeployError::partial`] (and, when a rule whose type changed was
+    /// deleted but not created again, its `elastic_rule_deleted` event). A
+    /// key Kibana or Elasticsearch refuses (401, 403) fails the tenant
+    /// (`tenant_refused`), and so does a connection failure during the
+    /// checks, a replace or a type change; one on the lookup, a create or a
+    /// delete fails the rule with that step's code, as `opentide deploy`
+    /// reports it.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
@@ -1353,7 +1372,7 @@ impl Deployer for Elastic {
             let (payload, block) = if request.operation == Operation::Delete {
                 (Json::Null, None)
             } else {
-                deploy_body(&request.body).map_err(|message| {
+                deploy_body(&request.body, &request.rule_id).map_err(|message| {
                     DeployError::from(ConnectorError::refused(PLATFORM, tenant, message, None))
                 })?
             };
@@ -1418,8 +1437,15 @@ impl Deployer for Elastic {
                     if let Some(status) = status {
                         failure = failure.with_status(*status);
                     }
-                    let partial =
+                    let mut partial =
                         ConnectorOutcome::new(None, request.operation).with_warnings(warnings);
+                    if code == "recreate_elastic_rule_failed" {
+                        // Deleted for its type change, not created again.
+                        partial.events = vec![
+                            DeployEvent::new("elastic_rule_deleted")
+                                .with_field("rule_id", request.rule_id.as_str()),
+                        ];
+                    }
                     return Err(DeployError::rule(failure).with_partial(partial));
                 }
             };

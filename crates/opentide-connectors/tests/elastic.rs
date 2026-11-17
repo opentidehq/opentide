@@ -471,24 +471,7 @@ fn a_bare_payload_skips_the_checks_and_says_so() {
             .mount(&server)
             .await;
     });
-    let setup: toml::Table = toml::from_str(&format!(
-        "url = \"{0}\"\nelasticsearch_url = \"{0}\"\nindex = [\"logs-*\"]\n",
-        server.uri()
-    ))
-    .unwrap();
-    let env = opentide_connectors::Environment::default();
-    let settings = elastic::http_settings(std::time::Duration::from_secs(30));
-    let tenant = opentide_connectors::Tenant::from_setup(
-        elastic::PLATFORM,
-        "lab",
-        &setup,
-        &env,
-        opentide_connectors::credentials::Mode::Required,
-        &settings,
-    )
-    .unwrap();
-    let http =
-        opentide_connectors::HttpClient::new(&tenant.label, &tenant.http, &env, None).unwrap();
+    let (tenant, http) = stand_tenant(&server.uri());
     let cancel = tokio_util::sync::CancellationToken::new();
     let cx = opentide_connectors::connector::TenantContext {
         tenant: &tenant,
@@ -517,4 +500,208 @@ fn a_bare_payload_skips_the_checks_and_says_so() {
     let mut expected = rule.payload.as_object().unwrap().clone();
     expected.insert("enabled".into(), Json::Bool(false));
     assert_eq!(sent, Json::Object(expected));
+}
+
+/// A tenant on `server` (Kibana and Elasticsearch both), `index` `logs-*`.
+fn stand_tenant(server: &str) -> (opentide_connectors::Tenant, opentide_connectors::HttpClient) {
+    let setup: toml::Table = toml::from_str(&format!(
+        "url = \"{server}\"\nelasticsearch_url = \"{server}\"\nindex = [\"logs-*\"]\n"
+    ))
+    .unwrap();
+    let env = opentide_connectors::Environment::default();
+    let settings = elastic::http_settings(std::time::Duration::from_secs(30));
+    let tenant = opentide_connectors::Tenant::from_setup(
+        elastic::PLATFORM,
+        "lab",
+        &setup,
+        &env,
+        opentide_connectors::credentials::Mode::Required,
+        &settings,
+    )
+    .unwrap();
+    let http =
+        opentide_connectors::HttpClient::new(&tenant.label, &tenant.http, &env, None).unwrap();
+    (tenant, http)
+}
+
+/// `request` deployed to a stand-in that `mount` sets up, cancelled first
+/// when `cancelled`: the outcome and the paths requested.
+fn deploy_to_stand(
+    mount: impl FnOnce(&wiremock::MockServer, &tokio::runtime::Runtime),
+    request: &DeployRequest,
+    cancelled: bool,
+) -> (
+    Result<
+        opentide_connectors::connector::DeployOutcome,
+        opentide_connectors::connector::DeployError,
+    >,
+    Vec<String>,
+) {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let server = runtime.block_on(wiremock::MockServer::start());
+    mount(&server, &runtime);
+    let (tenant, http) = stand_tenant(&server.uri());
+    let cancel = tokio_util::sync::CancellationToken::new();
+    if cancelled {
+        cancel.cancel();
+    }
+    let cx = opentide_connectors::connector::TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let outcome = runtime.block_on(Elastic.deploy(cx, request));
+    let requests = runtime.block_on(server.received_requests()).unwrap();
+    (
+        outcome,
+        requests
+            .iter()
+            .map(|r| format!("{} {}", r.method, r.url.path()))
+            .collect(),
+    )
+}
+
+/// A rule on `logs-*` whose timestamp override the mappings lack, and its
+/// full body.
+fn overridden_rule(rule_type: &str) -> (String, Vec<u8>) {
+    let rule_id = "11111111-1111-4111-8111-111111111111".to_owned();
+    let body = serde_json::json!({
+        "payload": {"rule_id": rule_id, "name": "Overridden", "type": rule_type,
+                    "query": "process.name: cmd.exe", "index": ["logs-*"]},
+        "block": {"type": rule_type, "index": ["logs-*"], "overrides": {"timestamp": "event.ingested"}},
+    });
+    (rule_id, serde_json::to_vec(&body).unwrap())
+}
+
+fn mount_kibana(
+    server: &wiremock::MockServer,
+    runtime: &tokio::runtime::Runtime,
+    remote: Option<serde_json::Value>,
+    create: u16,
+) {
+    use wiremock::matchers::{method, path, path_regex};
+    runtime.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path_regex("/_field_caps$"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"indices": ["logs-1"], "fields": {}})),
+            )
+            .mount(server)
+            .await;
+        let found = match remote {
+            Some(remote) => wiremock::ResponseTemplate::new(200).set_body_json(remote),
+            None => wiremock::ResponseTemplate::new(404),
+        };
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/detection_engine/rules"))
+            .respond_with(found)
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("DELETE"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string("{}"))
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/detection_engine/rules"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(create)
+                    .set_body_json(serde_json::json!({"message": "storage down"})),
+            )
+            .mount(server)
+            .await;
+    });
+}
+
+/// A create Kibana refuses fails the rule with its code and status, the
+/// checks' warning kept in `partial`; a Create does what an Update does.
+#[test]
+fn a_refused_create_keeps_its_status_and_the_checks_warning() {
+    let (rule_id, body) = overridden_rule("query");
+    let request = DeployRequest::new(rule_id, Operation::Create, body);
+    let (outcome, _) = deploy_to_stand(
+        |server, runtime| mount_kibana(server, runtime, None, 500),
+        &request,
+        false,
+    );
+    let error = outcome.unwrap_err();
+    assert_eq!(error.scope, DeployScope::Rule);
+    assert_eq!(error.failure.code, "create_elastic_rule_failed");
+    assert_eq!(error.failure.status, Some(500));
+    assert_eq!(error.failure.message, "storage down");
+    let partial = error.partial.unwrap();
+    assert_eq!(partial.remote_id, None);
+    let codes: Vec<&str> = partial.warnings.iter().map(|w| w.code.as_str()).collect();
+    assert_eq!(codes, [elastic::CHECK_WARNING]);
+    assert!(partial.warnings[0].message.contains("event.ingested"));
+    assert!(partial.events.is_empty());
+}
+
+/// A rule whose type changed is deleted, then created again; when the create
+/// fails, `partial` says the rule was deleted.
+#[test]
+fn a_type_change_that_fails_to_create_says_the_rule_was_deleted() {
+    let (rule_id, body) = overridden_rule("query");
+    let request = DeployRequest::new(rule_id.clone(), Operation::Update, body);
+    let (outcome, paths) = deploy_to_stand(
+        |server, runtime| {
+            mount_kibana(
+                server,
+                runtime,
+                Some(serde_json::json!({"rule_id": rule_id, "type": "eql"})),
+                500,
+            );
+        },
+        &request,
+        false,
+    );
+    let error = outcome.unwrap_err();
+    assert_eq!(error.failure.code, "recreate_elastic_rule_failed");
+    let partial = error.partial.unwrap();
+    assert_eq!(partial.events.len(), 1);
+    assert_eq!(partial.events[0].name, "elastic_rule_deleted");
+    assert!(
+        paths.contains(&"DELETE /api/detection_engine/rules".to_owned()),
+        "{paths:?}"
+    );
+}
+
+/// A body whose Kibana rule names another `rule_id`, or none, or whose block
+/// is not a block, fails the rule before anything is sent.
+#[test]
+fn a_body_that_does_not_fit_the_request_is_refused_before_anything_is_sent() {
+    let (rule_id, _) = overridden_rule("query");
+    for body in [
+        serde_json::json!({"payload": {"rule_id": "another", "type": "query"}, "block": {}}),
+        serde_json::json!({"payload": {"type": "query"}}),
+        serde_json::json!({"payload": {"rule_id": rule_id, "type": "query"}, "block": "x"}),
+        serde_json::json!({"block": {"type": "query"}}),
+        serde_json::json!({}),
+    ] {
+        let request = DeployRequest::new(
+            rule_id.clone(),
+            Operation::Update,
+            serde_json::to_vec(&body).unwrap(),
+        );
+        let (outcome, paths) = deploy_to_stand(|_, _| {}, &request, false);
+        let error = outcome.unwrap_err();
+        assert_eq!(error.scope, DeployScope::Rule, "{body}");
+        assert_eq!(error.failure.code, "tenant_refused", "{body}");
+        assert!(paths.is_empty(), "{body}: {paths:?}");
+    }
+}
+
+/// An interrupted deploy fails the tenant, its connector error kept.
+#[test]
+fn an_interrupted_deploy_fails_the_tenant() {
+    let (rule_id, body) = overridden_rule("query");
+    let request = DeployRequest::new(rule_id, Operation::Update, body);
+    let (outcome, _) = deploy_to_stand(
+        |server, runtime| mount_kibana(server, runtime, None, 200),
+        &request,
+        true,
+    );
+    let error = outcome.unwrap_err();
+    assert_eq!(error.scope, DeployScope::Tenant);
+    assert!(error.is_interrupted(), "{error:?}");
 }
