@@ -19,9 +19,11 @@ error: Fatal error · detail: Failed to update detection rule with id 7001 in te
                                           update detection rule with id 7001 in tenant lab
                                           (https://graph.microsoft.com/beta/security/rules/detection
                                           Rules/7001) - Error Code 404 ((empty body, HTTP 404))␛[0m
-  ␛[2m[3/3]␛[0m ␛[2m· skipped   ␛[0mDefender retire rule  ␛[2mnot attempted after a failure␛[0m
-  ␛[1m␛[31m✗␛[0m  ␛[1mdefender_for_endpoint␛[0m  ␛[2m1 deployed, 1 failed, 1 not attempted␛[0m ␛[2m<SECONDS>␛[0m
-␛[1m␛[31m✗␛[0m Deployment failed · 1 created, 1 failed, 1 not attempted · <SECONDS>
+error: Fatal error · detail: Failed to delete detection rule with id 7002 in tenant *** · context_1: Double check scope permissions, and whether the ID actually exists
+  ␛[2m[3/3]␛[0m ␛[1m␛[31m✗ failed    ␛[0m␛[1mDefender retire rule␛[0m  ␛[31mcould not delete the rule on tenant 'lab': Failed to
+                                          delete detection rule with id 7002 in tenant lab␛[0m
+  ␛[1m␛[31m✗␛[0m  ␛[1mdefender_for_endpoint␛[0m  ␛[2m1 deployed, 2 failed, 0 not attempted␛[0m ␛[2m<SECONDS>␛[0m
+␛[1m␛[31m✗␛[0m Deployment failed · 1 created, 2 failed, 0 not attempted · <SECONDS>
 
 ━━━ ws/.opentide/states/deployment/00000000-0000-4000-8047-000000000001.json · created 0644
 {
