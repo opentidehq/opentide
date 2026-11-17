@@ -209,8 +209,14 @@ impl Run {
         (named.next(), named.next())
     }
 
+    /// A level's own operands: its left and right nodes, but the level below.
+    pub(crate) fn operands(&self, level: usize) -> [Option<&SyntaxNode>; 2] {
+        let (left, right) = self.sides(level);
+        [node_of(left), node_of(right)]
+    }
+
     /// A level's operator: its first token.
-    fn operator(&self, level: usize) -> Option<&SyntaxToken> {
+    pub(crate) fn operator(&self, level: usize) -> Option<&SyntaxToken> {
         self.levels[level].iter().find_map(|s| match s {
             Slot::Token(t) => Some(t),
             _ => None,
@@ -704,7 +710,7 @@ fn translated_as_query(node: &SyntaxNode, cache: &mut Translated) -> bool {
     result
 }
 
-fn strip_parens(mut node: SyntaxNode) -> SyntaxNode {
+pub(crate) fn strip_parens(mut node: SyntaxNode) -> SyntaxNode {
     while node.kind() == K::PARENTHESIZED_EXPRESSION {
         match node.first_child() {
             Some(inner) => node = inner,
