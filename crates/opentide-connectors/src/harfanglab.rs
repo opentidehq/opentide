@@ -425,6 +425,7 @@ impl Deployer for HarfangLab {
             Ok(DeployOutcome {
                 remote_id: None,
                 operation: request.operation,
+                warnings: Vec::new(),
             })
         })
     }

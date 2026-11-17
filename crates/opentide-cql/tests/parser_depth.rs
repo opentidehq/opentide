@@ -114,11 +114,17 @@ fn past_max_depth_it_is_one_error_and_no_overflow() {
             .filter(|k| matches!(k, ErrorKind::TooDeep { .. }))
             .collect();
         assert_eq!(too_deep.len(), 1, "{name}: {errors:?}");
+        // The levels run out first, except for `attributes`, which opens more than four
+        // tree nodes a level and meets the toolkit's budget of nodes first (#1427).
+        let budget = u32::try_from(opentide_parse::TREE_BUDGET).unwrap_or(u32::MAX);
+        let limit = if name == "attributes" {
+            budget
+        } else {
+            parser::MAX_DEPTH
+        };
         assert_eq!(
             too_deep[0],
-            &ErrorKind::TooDeep {
-                limit: parser::MAX_DEPTH
-            },
+            &ErrorKind::TooDeep { limit },
             "{name}: the error names the limit that was hit"
         );
     }
@@ -215,9 +221,10 @@ fn long_flat_runs_of_other_shapes() {
 }
 
 /// A call in an operand of each precedence in turn is up to seven tree nodes a level, and
-/// binary operators are not levels of `max_depth`: the tree reaches `MAX_TREE_DEPTH` first,
-/// under 1,000 levels. That is one `TreeTooDeep` error, with no overflow and nothing after it.
-/// (Known: below the 1,000 floor for this shape; lifting it is the toolkit's tree limit.)
+/// binary operators are not levels of `max_depth`: the toolkit charges each level the nodes
+/// it opens, so the shape stops under 1,000 levels with one `TooDeep` naming the node budget,
+/// never `TreeTooDeep`, no overflow and nothing after it. The 1,000-level floor is for
+/// parenthesised nesting (`deep_queries`, ADR 0012, #1427).
 #[test]
 fn operator_operands_reach_the_tree_limit_as_one_error() {
     for (shape, clean_at, past) in [("f(a + !", 800, 830), ("f(a == b + c * !", 570, 600)] {
@@ -225,11 +232,13 @@ fn operator_operands_reach_the_tree_limit_as_one_error() {
         let (errors, depth) = parse_on_small_stack("operands", build(clean_at));
         assert!(errors.is_empty(), "{shape} x{clean_at}: {errors:?}");
         assert!(depth < opentide_parse::MAX_TREE_DEPTH, "{shape}: {depth}");
-        let (errors, _) = parse_on_small_stack("operands", build(past));
-        assert_eq!(errors.len(), 1, "{shape} x{past}: {errors:?}");
-        assert!(
-            matches!(errors[0], ErrorKind::TreeTooDeep { .. }),
-            "{shape}: {errors:?}"
+        let (errors, depth) = parse_on_small_stack("operands", build(past));
+        let budget = u32::try_from(opentide_parse::TREE_BUDGET).unwrap_or(u32::MAX);
+        assert_eq!(
+            errors,
+            [ErrorKind::TooDeep { limit: budget }],
+            "{shape} x{past}"
         );
+        assert!(depth <= opentide_parse::MAX_TREE_DEPTH, "{shape}: {depth}");
     }
 }

@@ -629,6 +629,7 @@ impl Deployer for SentinelOne {
             Ok(DeployOutcome {
                 remote_id,
                 operation: request.operation,
+                warnings: Vec::new(),
             })
         })
     }
