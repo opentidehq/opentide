@@ -5,7 +5,8 @@
 //! multiplicative (`* / %`) < unary (`NOT not ! - +`, over one primary) <
 //! primary. A run of one level is one flat n-ary node (`a or b or c` is one
 //! `BIN_EXPR` with five children), so a 20,000-term chain is not 20,000
-//! levels deep; only parentheses, calls and subsearches nest.
+//! levels deep; parentheses, calls and subsearches nest, and so does an
+//! operator's operand that has operators of its own (see [`bin`]).
 
 use super::kind::SyntaxKind as K;
 use super::parser::{at, leaf};
@@ -75,8 +76,15 @@ pub(super) fn expression(p: &mut Parser<'_>) -> Option<CompletedMarker> {
 }
 
 /// Operators of binding power at least `min`.
+///
+/// An operator's operand (`min` above 1) that has operators of its own is a
+/// level of `max_depth`: it recurses into the tighter levels, and a chain
+/// through every precedence inside each call (`f(a OR b AND NOT c == d + e *
+/// -(`) recursed several frames a level unchecked and overflowed a 1 MB stack
+/// (#1473). A plain operand (`x=[ subsearch ]`) costs nothing more.
 fn bin(p: &mut Parser<'_>, min: u8) -> Option<CompletedMarker> {
     let mut lhs = operand(p)?;
+    let mut entered = false;
     // The power of the last run: an operator that binds tighter than it is
     // one the run's operand refused (a second comparison, `a and b = c = d`),
     // which no level of the grammar takes either.
@@ -86,6 +94,12 @@ fn bin(p: &mut Parser<'_>, min: u8) -> Option<CompletedMarker> {
             break;
         }
         last = Some(power);
+        if min > 1 && !entered {
+            if !p.enter() {
+                return Some(lhs);
+            }
+            entered = true;
+        }
         let m = lhs.precede(p);
         // One flat node per level and run: `a + b - c` is one node.
         while let Some((next, kind)) = infix(p) {
@@ -109,6 +123,9 @@ fn bin(p: &mut Parser<'_>, min: u8) -> Option<CompletedMarker> {
             }
         }
         lhs = m.complete(p, K::BIN_EXPR.raw());
+    }
+    if entered {
+        p.exit();
     }
     Some(lhs)
 }
