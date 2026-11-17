@@ -552,7 +552,11 @@ mod tests {
         let sent: Value = serde_json::from_str(&deploy_json(&request)).expect("json");
         assert_eq!(sent["operation"], "disable");
         assert_eq!(sent["body"]["b"], 1);
-        let text = DeployRequest::new(request.rule_id.clone(), request.operation, b"plain".to_vec());
+        let text = DeployRequest::new(
+            request.rule_id.clone(),
+            request.operation,
+            b"plain".to_vec(),
+        );
         let sent: Value = serde_json::from_str(&deploy_json(&text)).expect("json");
         assert_eq!(sent["body"], "plain");
         for operation in [

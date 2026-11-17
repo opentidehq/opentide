@@ -225,7 +225,11 @@ fn sysdig_the_generic_deployer_adds_a_created_rule_to_the_tenants_policies() {
         cancel: &cancel,
     };
     let (_, body, _) = compiled("STAGING", None);
-    let request = opentide_connectors::connector::DeployRequest::new(UUID.to_owned(), opentide_connectors::connector::Operation::Create, body);
+    let request = opentide_connectors::connector::DeployRequest::new(
+        UUID.to_owned(),
+        opentide_connectors::connector::Operation::Create,
+        body,
+    );
     let platform = sysdig::Sysdig;
     let outcome = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await })
         .unwrap()
@@ -271,7 +275,12 @@ fn sysdig_the_generic_deployer_reports_a_rule_created_again() {
         cancel: &cancel,
     };
     let (_, body, _) = compiled("STAGING", None);
-    let request = opentide_connectors::connector::DeployRequest::new("42".to_owned(), opentide_connectors::connector::Operation::Update, body).with_policies(Some(Vec::new()));
+    let request = opentide_connectors::connector::DeployRequest::new(
+        "42".to_owned(),
+        opentide_connectors::connector::Operation::Update,
+        body,
+    )
+    .with_policies(Some(Vec::new()));
     let platform = sysdig::Sysdig;
     let outcome = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await })
         .unwrap()
@@ -407,7 +416,11 @@ fn sysdig_a_versioned_update_is_not_sent_again_after_a_503() {
         cancel: &cancel,
     };
     let (_, body, _) = compiled("DISABLED", None);
-    let request = opentide_connectors::connector::DeployRequest::new("42".to_owned(), opentide_connectors::connector::Operation::Disable, body);
+    let request = opentide_connectors::connector::DeployRequest::new(
+        "42".to_owned(),
+        opentide_connectors::connector::Operation::Disable,
+        body,
+    );
     let platform = sysdig::Sysdig;
     let _outcome = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await });
     let received = rt.block_on(server.received_requests()).unwrap();
@@ -446,7 +459,11 @@ fn sysdig_the_generic_deployer_disables_with_the_held_version_and_no_policy() {
         cancel: &cancel,
     };
     let (_, body, _) = compiled("DISABLED", None);
-    let request = opentide_connectors::connector::DeployRequest::new("42".to_owned(), opentide_connectors::connector::Operation::Disable, body.clone());
+    let request = opentide_connectors::connector::DeployRequest::new(
+        "42".to_owned(),
+        opentide_connectors::connector::Operation::Disable,
+        body.clone(),
+    );
     let platform = sysdig::Sysdig;
     let outcome = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await })
         .unwrap()
@@ -516,7 +533,9 @@ fn deploy_with_policy(
         http: &http,
         cancel: &cancel,
     };
-    let request = opentide_connectors::connector::DeployRequest::new("42".to_owned(), operation, body).with_policies(policies);
+    let request =
+        opentide_connectors::connector::DeployRequest::new("42".to_owned(), operation, body)
+            .with_policies(policies);
     let platform = sysdig::Sysdig;
     let outcome =
         block_on(async { platform.deployer().unwrap().deploy(cx, &request).await }).unwrap();

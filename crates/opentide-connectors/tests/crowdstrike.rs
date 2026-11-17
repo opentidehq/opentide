@@ -199,7 +199,11 @@ fn crowdstrike_a_body_one_byte_off_fails_the_replay() {
         http: &http,
         cancel: &cancel,
     };
-    let request = DeployRequest::new(String::new(), Operation::Create, create("Encoded PowerShelL"));
+    let request = DeployRequest::new(
+        String::new(),
+        Operation::Create,
+        create("Encoded PowerShelL"),
+    );
     let platform = Crowdstrike::new();
     let _ = block_on(async { platform.deployer().unwrap().deploy(cx, &request).await });
     let mismatches = replay.proxy.verify();

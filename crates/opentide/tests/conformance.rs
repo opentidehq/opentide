@@ -417,13 +417,17 @@ fn tenant_call(connection: &Connection, operation: &Value) -> Result<Json, opent
             ])
         }
         "deploy" => {
-            let request = DeployRequest::new(operation["rule_id"].as_str().unwrap().to_owned(), match operation["operation"].as_str().unwrap() {
+            let request = DeployRequest::new(
+                operation["rule_id"].as_str().unwrap().to_owned(),
+                match operation["operation"].as_str().unwrap() {
                     "create" => Operation::Create,
                     "update" => Operation::Update,
                     "disable" => Operation::Disable,
                     "delete" => Operation::Delete,
                     other => panic!("operation: {other}"),
-                }, operation["body"].as_str().unwrap().as_bytes().to_vec());
+                },
+                operation["body"].as_str().unwrap().as_bytes().to_vec(),
+            );
             let outcome = connectors::block_on(connection.deploy(&request))??;
             let operation = match outcome.operation {
                 Operation::Create => "create",

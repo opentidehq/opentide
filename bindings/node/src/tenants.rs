@@ -336,12 +336,8 @@ impl Connection {
         let (signal, policies) =
             options.map_or((None, None), |options| (options.signal, options.policies));
         let abort = listen(*env, signal);
-        let work = deploy_request(rule_id, &operation, body).map(|request| {
-            run_deploy(
-                Arc::clone(&self.inner),
-                request.with_policies(policies),
-            )
-        });
+        let work = deploy_request(rule_id, &operation, body)
+            .map(|request| run_deploy(Arc::clone(&self.inner), request.with_policies(policies)));
         promise(env, work, abort)
     }
 }
