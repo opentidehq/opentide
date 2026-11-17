@@ -24,7 +24,8 @@ use opentide_cli::json::Json;
 use opentide_cli::render::outcome::Console;
 use opentide_cli::render::text::Colour;
 use opentide_connectors::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, TenantContext,
+    BoxFuture, DeployError, DeployOutcome, DeployRequest, Deployer, Operation, Platform,
+    TenantContext, deploying,
 };
 use opentide_connectors::{ConnectorError, Registry};
 
@@ -428,13 +429,13 @@ impl Deployer for Scripted {
         &'a self,
         _cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, ConnectorError>> {
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
         self.seen
             .lock()
             .unwrap()
             .push((request.rule_id.clone(), request.operation));
         let next = self.outcomes.lock().unwrap().pop_front().unwrap_or(Ok(()));
-        Box::pin(async move { next.map(|()| DeployOutcome::new(None, request.operation)) })
+        deploying(async move { next.map(|()| DeployOutcome::new(None, request.operation)) })
     }
 }
 

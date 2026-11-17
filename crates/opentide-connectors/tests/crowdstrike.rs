@@ -14,7 +14,8 @@ use opentide_compile::Json;
 use opentide_compile::json::Object;
 use opentide_connectors::ConnectorError;
 use opentide_connectors::connector::{
-    DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployRequest, Operation, QueryRequest, TenantContext,
+    DEFAULT_LIMIT, DEFAULT_QUERY_TIMEOUT, DeployError, DeployRequest, Operation, QueryRequest,
+    TenantContext,
 };
 use opentide_connectors::crowdstrike::{self, Crowdstrike};
 use opentide_connectors::runtime::block_on;
@@ -131,7 +132,13 @@ fn crowdstrike_deploys_as_the_python_client_does() {
     };
     let deploy = |operation, rule_id: &str, body: Vec<u8>| {
         let request = DeployRequest::new(rule_id.to_owned(), operation, body);
-        block_on(async { deployer.deploy(cx, &request).await }).unwrap()
+        block_on(async {
+            deployer
+                .deploy(cx, &request)
+                .await
+                .map_err(DeployError::into_connector)
+        })
+        .unwrap()
     };
     // One token for the run: the rules after the first reuse it.
     let created = deploy(Operation::Create, "", create("Encoded PowerShell")).unwrap();

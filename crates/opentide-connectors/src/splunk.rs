@@ -927,8 +927,8 @@ impl Deployer for Splunk {
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, ConnectorError>> {
-        Box::pin(async move {
+    ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
+        crate::connector::deploying(async move {
             let settings = match serde_json::from_slice::<Json>(&request.body) {
                 Ok(Json::Object(settings)) => settings,
                 Ok(_) | Err(_) if request.operation == Operation::Delete => Object::new(),

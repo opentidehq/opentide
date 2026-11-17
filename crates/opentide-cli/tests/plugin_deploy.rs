@@ -22,7 +22,8 @@ use opentide_cli::logging::Sink;
 use opentide_cli::{Host, run};
 use opentide_connectors::ConnectorError;
 use opentide_connectors::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, Deployer, Operation, Platform, TenantContext,
+    BoxFuture, DeployError, DeployOutcome, DeployRequest, Deployer, Operation, Platform,
+    TenantContext,
 };
 use opentide_connectors::plugin::{PluginError, PluginHost};
 use serde_json::{Value, json};
@@ -41,8 +42,8 @@ impl Deployer for Acme {
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, ConnectorError>> {
-        Box::pin(async move {
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        opentide_connectors::connector::deploying(async move {
             let body: Value = serde_json::from_slice(&request.body).unwrap();
             SENT.lock()
                 .unwrap()

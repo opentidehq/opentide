@@ -327,8 +327,8 @@ impl Deployer for GoogleSecops {
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, ConnectorError>> {
-        Box::pin(async move {
+    ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
+        crate::connector::deploying(async move {
             let body: Json = serde_json::from_slice(&request.body).unwrap_or(Json::Null);
             let text = body
                 .get("text")

@@ -518,12 +518,17 @@ fn parse<'env>(env: Env, text: &str) -> napi::Result<Unknown<'env>> {
 
 /// Why a call failed: a stable code (`configuration_invalid`, `io_error`,
 /// `no_json_document`, `usage_invalid_choice`, `tenant_refused`, ...), a
-/// message, and the vendor's own words when a tenant gave a reason.
+/// message, and the vendor's own words when a tenant gave a reason. A failed
+/// deploy also says what it stops (`rule` or `tenant`), the HTTP status the
+/// tenant answered with, and the fields that locate it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Failure {
     code: String,
     message: String,
     detail: Option<String>,
+    scope: Option<&'static str>,
+    status: Option<u16>,
+    fields: Vec<(String, String)>,
 }
 
 impl Failure {
@@ -532,6 +537,9 @@ impl Failure {
             code: code.to_owned(),
             message,
             detail: None,
+            scope: None,
+            status: None,
+            fields: Vec::new(),
         }
     }
 
@@ -561,20 +569,30 @@ impl Failure {
 
 impl From<opentide::Error> for Failure {
     fn from(error: opentide::Error) -> Self {
-        let detail = match &error {
-            opentide::Error::Connector { detail, .. } => detail.clone(),
-            _ => None,
-        };
-        Self {
-            code: error.code().to_owned(),
-            message: error.to_string(),
-            detail,
+        let mut failure = Self::new(error.code(), error.to_string());
+        match error {
+            opentide::Error::Connector { detail, .. } => failure.detail = detail,
+            opentide::Error::Deploy(failed) => {
+                let failed = *failed;
+                failure.detail = failed.detail;
+                failure.scope = Some(match failed.scope {
+                    opentide::FailureScope::Rule => "rule",
+                    _ => "tenant",
+                });
+                failure.status = failed.status;
+                failure.fields = failed.fields;
+            }
+            _ => {}
         }
+        failure
     }
 }
 
 /// `failure` as the JavaScript `Error` the call throws: its `message`, its
 /// `code` the failure's code, and its `detail` the vendor's words or `null`.
+/// A failed deploy's also has its `scope` (`'rule'` or `'tenant'`), the HTTP
+/// `status` (or `null`) and its `fields`, an object in order; any other
+/// failure's `scope` and `status` are `null` and its `fields` empty.
 fn throw(env: Env, failure: Failure) -> napi::Error {
     let built = env
         .create_error(napi::Error::new(
@@ -587,6 +605,19 @@ fn throw(env: Env, failure: Failure) -> napi::Error {
                 Some(detail) => object.set_named_property("detail", detail)?,
                 None => object.set_named_property("detail", Null)?,
             }
+            match failure.scope {
+                Some(scope) => object.set_named_property("scope", scope)?,
+                None => object.set_named_property("scope", Null)?,
+            }
+            match failure.status {
+                Some(status) => object.set_named_property("status", u32::from(status))?,
+                None => object.set_named_property("status", Null)?,
+            }
+            let mut fields = Object::new(&env)?;
+            for (key, value) in &failure.fields {
+                fields.set_named_property(key, value.as_str())?;
+            }
+            object.set_named_property("fields", fields)?;
             Ok(napi::Error::from(object.to_unknown()))
         });
     built.unwrap_or_else(|error| error)

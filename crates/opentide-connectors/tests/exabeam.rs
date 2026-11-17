@@ -1157,7 +1157,11 @@ async fn the_platform_deploys_through_the_generic_interface() {
             ResponseTemplate::new(200).set_body_json(serde_json::json!([{"id": "z", "name": "x"}])),
         )
         .await;
-    let error = deployer.deploy(stand2.cx(), &request).await.unwrap_err();
+    let error = deployer
+        .deploy(stand2.cx(), &request)
+        .await
+        .unwrap_err()
+        .into_connector();
     assert!(
         error.text().starts_with("exabeam_name_conflict: "),
         "{}",

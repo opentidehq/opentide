@@ -212,6 +212,36 @@ def test_a_deploy_creates_the_rule(connection: Connection) -> None:
     assert outcome.warnings == []
 
 
+def test_a_failed_deploy_raises_with_its_scope_and_fields(connection: Connection) -> None:
+    """#1142: a rule the tenant cannot take raises, never returns an outcome; the
+    error says the rule failed (its tenant's other rules can deploy) and where."""
+    body = json.dumps({"data": {"name": "Example", "queryType": "events"}}).encode()
+    with pytest.raises(OpentideError) as raised:
+        run(connection.deploy("1999999999999999999", "update", body))  # a rule the tenant lacks
+    assert raised.value.code == "tenant_answer_invalid"
+    assert raised.value.scope == "rule"
+    assert raised.value.fields["platform"] == "sentinel_one"
+    assert raised.value.fields["tenant"] == "soc"
+    assert "SentinelOne has no such rule (HTTP 404)" in raised.value.message
+
+
+def test_an_unreachable_tenant_fails_the_tenant() -> None:
+    connection = Connection.open(soc("https://127.0.0.1:9"), environment=ENVIRONMENT)
+    with pytest.raises(OpentideError) as raised:
+        run(connection.deploy("1", "delete"))  # nothing listens there
+    assert raised.value.code == "tenant_unreachable"
+    assert raised.value.scope == "tenant"
+    assert raised.value.status is None
+    assert list(raised.value.fields) == ["platform", "tenant", "address"]
+    assert raised.value.fields["address"] == "https://127.0.0.1:9"
+
+
+def test_an_error_other_than_a_deploy_has_no_scope(connection: Connection) -> None:
+    with pytest.raises(OpentideError) as raised:
+        run(connection.deploy("x", "upsert", b"{}"))  # the refusal under test
+    assert (raised.value.scope, raised.value.status, raised.value.fields) == (None, None, {})
+
+
 class _WarningDeployer:
     """A native connection whose deploy raised a warning (#1142)."""
 

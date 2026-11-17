@@ -1417,5 +1417,21 @@ mod tests {
         });
         assert_eq!(failure.code, "tenant_refused");
         assert_eq!(failure.detail.as_deref(), Some("Syntax error at 3"));
+        assert_eq!((failure.scope, failure.status), (None, None));
+    }
+
+    #[test]
+    fn a_failed_deploy_keeps_its_scope_status_and_fields() {
+        use opentide::connectors::{DeployError, DeployFailure};
+        let failure = Failure::from(opentide::Error::from(DeployError::tenant(
+            DeployFailure::new("tenant_gateway", "HTTP 502 from the gateway")
+                .with_status(502)
+                .with_field("platform", "splunk")
+                .with_field("tenant", "soc"),
+        )));
+        assert_eq!(failure.code, "tenant_gateway");
+        assert_eq!(failure.scope, Some("tenant"));
+        assert_eq!(failure.status, Some(502));
+        assert_eq!(failure.fields[1], ("tenant".to_owned(), "soc".to_owned()));
     }
 }

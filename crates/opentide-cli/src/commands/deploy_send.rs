@@ -25,7 +25,7 @@ use indexmap::IndexMap;
 use opentide_compile::Json as CJson;
 use opentide_compile::plan::{self, Change, Scope, SelectOptions};
 use opentide_compile::strategy::{self, RunStrategies, StatusStrategy};
-use opentide_connectors::connector::{DeployRequest, Operation, TenantContext};
+use opentide_connectors::connector::{DeployError, DeployRequest, Operation, TenantContext};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, Registry, Tenant};
 use opentide_schema::vocab::Vocabularies;
@@ -2235,8 +2235,13 @@ impl Sender<'_, '_> {
                     )
                 };
                 let context = self.context(connection);
-                self.block(deployer.deploy(context, &request))
-                    .map_err(|error| raised(&error))?;
+                self.block(async {
+                    deployer
+                        .deploy(context, &request)
+                        .await
+                        .map_err(DeployError::into_connector)
+                })
+                .map_err(|error| raised(&error))?;
             }
             Some(PlatformId::Splunk) => {
                 let splunk_cx = self.compile;
@@ -2288,7 +2293,12 @@ impl Sender<'_, '_> {
                 let deployer = self.deployer(platform)?;
                 let context = self.context(connection);
                 let outcome = self
-                    .block(deployer.deploy(context, &request))
+                    .block(async {
+                        deployer
+                            .deploy(context, &request)
+                            .await
+                            .map_err(DeployError::into_connector)
+                    })
                     .map_err(|error| raised(&error))?;
                 // `splunk_alert_deleted`: the saved search the tenant had.
                 for warning in &outcome.warnings {
@@ -2355,8 +2365,13 @@ impl Sender<'_, '_> {
                     },
                 );
                 let context = self.context(connection);
-                self.block(deployer.deploy(context, &request))
-                    .map_err(|error| raised(&error))?;
+                self.block(async {
+                    deployer
+                        .deploy(context, &request)
+                        .await
+                        .map_err(DeployError::into_connector)
+                })
+                .map_err(|error| raised(&error))?;
             }
         }
         let _ = result;
@@ -2733,7 +2748,12 @@ impl Sender<'_, '_> {
         );
         let context = self.context(connection);
         let done = self
-            .block(deployer.deploy(context, &request))
+            .block(async {
+                deployer
+                    .deploy(context, &request)
+                    .await
+                    .map_err(DeployError::into_connector)
+            })
             .map_err(|error| plugin_raised(&error))?;
         match (operation, done.remote_id) {
             (Operation::Delete, _) => self.record_deleted(result, platform, &tenant),
