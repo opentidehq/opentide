@@ -415,7 +415,7 @@ fn misp_actors(url: &str, raw: &[u8]) -> Result<(Vec<Table>, Table)> {
     provenance.insert("source_misp_url".to_owned(), Value::from(url));
     provenance.insert(
         "source_misp_sha256".to_owned(),
-        Value::from(crate::golden::blob::sha256_hex(raw)),
+        Value::from(crate::files::sha256_hex(raw)),
     );
     Ok((actors, provenance))
 }

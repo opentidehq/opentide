@@ -9,14 +9,15 @@ use crate::parser::parse_once;
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 use crate::syntax_util::{is_operator, legacy_kind, span, text, token_at};
 use crate::{
-    Catalog, Hir, HirOp, TYPED_LITERAL_TYPES, check_table_named, overlay_catalog_captures, perf,
-    schema,
+    Catalog, CatalogRef, Hir, HirOp, TYPED_LITERAL_TYPES, check_table_named,
+    overlay_catalog_captures, perf, schema,
 };
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, Range, codes, suggest};
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_parse::SyntaxError;
 use rowan::NodeOrToken;
 use std::collections::BTreeSet;
+use std::rc::Rc;
 
 /// An analysis on the new parser.
 pub(crate) struct Analysis {
@@ -45,7 +46,7 @@ pub(crate) fn analyze(source: &str, catalog: &Catalog) -> Analysis {
     let lets = let_names(&root);
     functions(&root, &lines, catalog, &lets, &mut diagnostics);
     scalar_operators(&root, &lines, catalog, &mut diagnostics);
-    tables(&root, &lines, catalog, &lets, &mut diagnostics);
+    let _ = tables(&root, &lines, catalog, &lets, &mut diagnostics);
     let columns = schema::new_tree::analyze(&root, source, catalog, parsed.errors.is_empty());
     diagnostics.extend(columns.diagnostics.iter().cloned());
     perf::check(
@@ -185,11 +186,60 @@ fn with_typed_literal_hint(diagnostics: &mut Vec<Diagnostic>) {
     diagnostics[0].message = format!("{}; {}", diagnostics[0].message, hint.message);
 }
 
-/// The column pass alone (`opentide_kql::columns`), on the memoised parse.
-pub(crate) fn columns(source: &str, catalog: &Catalog) -> schema::Analysis {
+thread_local! {
+    /// The column passes this thread ran: what the memo's test counts.
+    static COLUMN_PASSES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// The last text [`columns`] ran on, the catalog it ran against, and the
+    /// pass.
+    static LAST_COLUMNS: std::cell::RefCell<Option<(String, CatalogRef, Rc<schema::Analysis>)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// How many column passes this thread has run (not counting memo hits).
+#[cfg(test)]
+pub(crate) fn column_passes() -> u64 {
+    COLUMN_PASSES.with(std::cell::Cell::get)
+}
+
+/// The column pass alone (`opentide_kql::columns`, a column's hover), on the
+/// memoised parse, and itself memoised for the last text and catalog: hover
+/// asks for it at each offset of the same text, and on a query of 30 nested
+/// `join`s 25 hovers took 10 s in a debug build, one pass each (#1424). The
+/// memo holds the catalog it ran against (a profile's bundled one, or a
+/// workspace's with declared columns, which `Catalog::for_workspace` keeps
+/// while the declarations stay the same) and compares it by identity: held,
+/// its address cannot be reused by another catalog.
+pub(crate) fn columns(source: &str, catalog: &CatalogRef) -> Rc<schema::Analysis> {
+    if let Some(hit) = LAST_COLUMNS.with(|last| {
+        last.borrow()
+            .as_ref()
+            .filter(|(text, held, _)| text == source && same_catalog(held, catalog))
+            .map(|(_, _, analysis)| Rc::clone(analysis))
+    }) {
+        return hit;
+    }
     let parsed = parse_once(source);
     let root = SyntaxNode::new_root(parsed.green);
-    schema::new_tree::analyze(&root, source, catalog, parsed.errors.is_empty())
+    COLUMN_PASSES.with(|n| n.set(n.get() + 1));
+    let analysis = Rc::new(schema::new_tree::analyze(
+        &root,
+        source,
+        catalog,
+        parsed.errors.is_empty(),
+    ));
+    LAST_COLUMNS.with(|last| {
+        *last.borrow_mut() = Some((source.to_owned(), catalog.clone(), Rc::clone(&analysis)));
+    });
+    analysis
+}
+
+/// The same catalog: the same static, or the same `Arc`.
+fn same_catalog(a: &CatalogRef, b: &CatalogRef) -> bool {
+    match (a, b) {
+        (CatalogRef::Bundled(a), CatalogRef::Bundled(b)) => std::ptr::eq(*a, *b),
+        (CatalogRef::Declared(a), CatalogRef::Declared(b)) => std::sync::Arc::ptr_eq(a, b),
+        _ => false,
+    }
 }
 
 /// The tabular expressions of the query, in source order, as the
@@ -533,18 +583,33 @@ fn is_fuzzy_union(node: &SyntaxNode) -> bool {
 
 /// The tables a query reads: a source, a join or lookup side, a union leg.
 /// Walks the tree with a stack of scopes: a function definition with tabular
-/// parameters adds their names to its body's `let` names.
+/// parameters adds their names to its body's `let` names, as a layer over
+/// the scope it is in. Each layer holds its own parameters only: copying the
+/// scope's names for each function made `n` functions with tabular
+/// parameters quadratic (#1424). Returns how many names the layers hold, the
+/// work count a test bounds.
 fn tables(
     root: &SyntaxNode,
     lines: &LineIndex,
     catalog: &Catalog,
     lets: &BTreeSet<String>,
     out: &mut Vec<Diagnostic>,
-) {
+) -> usize {
     if catalog.tables.is_empty() {
-        return;
+        return 0;
     }
-    let mut scopes: Vec<BTreeSet<String>> = vec![lets.clone()];
+    // (the layer it is over, its parameters). Layer 0 holds no names: the
+    // walk ends there, at the query's `lets`.
+    let mut scopes: Vec<(usize, BTreeSet<String>)> = vec![(0, BTreeSet::new())];
+    let binds = |scopes: &[(usize, BTreeSet<String>)], mut at: usize, name: &str| loop {
+        if scopes[at].1.contains(name) {
+            return true;
+        }
+        if at == 0 {
+            return lets.contains(name);
+        }
+        at = scopes[at].0;
+    };
     // Children go on the stack reversed, so they come off in document order.
     let mut stack: Vec<(SyntaxNode, usize)> = vec![(root.clone(), 0)];
     while let Some((node, scope)) = stack.pop() {
@@ -553,9 +618,7 @@ fn tables(
             K::FUNCTION_DEFINITION => {
                 let params = tabular_parameters(&node);
                 if !params.is_empty() {
-                    let mut inner = scopes[scope].clone();
-                    inner.extend(params);
-                    scopes.push(inner);
+                    scopes.push((scope, params.into_iter().collect()));
                     scope = scopes.len() - 1;
                 }
             }
@@ -567,7 +630,7 @@ fn tables(
                         name.text(),
                         range_of(lines, node.text_range()),
                         catalog,
-                        &scopes[scope],
+                        |name| binds(&scopes, scope, name),
                         out,
                     );
                 }
@@ -577,12 +640,120 @@ fn tables(
         let children: Vec<SyntaxNode> = node.children().collect();
         stack.extend(children.into_iter().rev().map(|c| (c, scope)));
     }
+    scopes.iter().map(|(_, names)| names.len()).sum()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::Profile;
+
+    /// The scopes of `tables` hold each tabular parameter once, however many
+    /// `let` names are in scope (#1424): copying them per function was
+    /// quadratic, 4.7 s for 4,000 functions in a debug build.
+    #[test]
+    fn table_scopes_hold_each_parameter_once() {
+        let n = 300;
+        let mut source = String::new();
+        for i in 0..n {
+            source.push_str(&format!(
+                "let f{i} = (x:long, T:(*)) {{ SigninLogs | extend c = x }};\n"
+            ));
+        }
+        source.push_str("let g = (T:(*), U:(*)) { T | union U };\nNopeTable | take 1");
+        let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
+        let parsed = parse_once(&source);
+        let root = SyntaxNode::new_root(parsed.green.clone());
+        let lets = let_names(&root);
+        let mut out = Vec::new();
+        let held = tables(&root, &LineIndex::new(&source), &catalog, &lets, &mut out);
+        assert_eq!(held, n + 2);
+        // A parameter is not a table; an unknown name still is reported.
+        assert!(out.iter().all(|d| !d.message.contains("'T'")), "{out:?}");
+        assert!(
+            out.iter().any(|d| d.message.contains("NopeTable")),
+            "{out:?}"
+        );
+    }
+
+    /// The tables `analyze` reports unknown in `source` (Sentinel).
+    fn unknown_tables(source: &str) -> Vec<String> {
+        let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+        analyze(source, &catalog)
+            .diagnostics
+            .into_iter()
+            .filter(|d| d.code == codes::KQL_UNKNOWN_TABLE)
+            .filter_map(|d| d.message.split('\'').nth(1).map(str::to_string))
+            .collect()
+    }
+
+    /// A tabular parameter is bound in its function's body and in every
+    /// function nested in it, through each layer out to the query's `let`
+    /// names, and nowhere after its function ends (#1424's layers).
+    #[test]
+    fn tabular_parameters_bind_through_the_layers() {
+        assert_eq!(
+            unknown_tables(
+                "let f = (T:(*)) { let g = (U:(*)) { T | union U }; g(T) };\nf(SigninLogs)"
+            ),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            unknown_tables("let f = (T:(*)) { T };\nT | take 1"),
+            vec!["T".to_string()]
+        );
+        assert_eq!(
+            unknown_tables(
+                "let L = SigninLogs;\n\
+                 let f = (A:(*)) { let g = (B:(*)) { let h = (C:(*)) { A | union B, C, D, L }; h(B) }; g(A) };\n\
+                 f(SigninLogs)"
+            ),
+            vec!["D".to_string()]
+        );
+    }
+
+    /// Hover at many offsets of one text runs the column pass once (#1424),
+    /// and a different text or profile runs it again.
+    #[test]
+    fn hover_runs_the_column_pass_once_per_text() {
+        let mut q = String::from("SecurityEvent");
+        for _ in 0..10 {
+            q = format!("SecurityEvent | join ({q}) on Account");
+        }
+        let before = column_passes();
+        for offset in (0..q.len()).step_by(7) {
+            let _ = crate::hover(&q, offset, Profile::Sentinel);
+        }
+        assert_eq!(column_passes() - before, 1);
+        let _ = crate::columns(&q, Profile::Sentinel);
+        assert_eq!(column_passes() - before, 1);
+        let _ = crate::columns(&q, Profile::Defender);
+        let _ = crate::columns("SigninLogs | project AppId", Profile::Sentinel);
+        assert_eq!(column_passes() - before, 3);
+    }
+
+    /// With a workspace that declares columns, hover still runs the column
+    /// pass once per text: the memo holds the declared catalog `Arc` that
+    /// `Catalog::for_workspace` keeps while the declarations stay the same.
+    #[test]
+    fn hover_memoises_against_a_declared_catalog() {
+        let declared = opentide_core::datasets::DeclaredDatasets::from_visibility(
+            "[[logsources]]\nname = \"Contoso_Audit_CL\"\ndescription = \"x\"\n\
+             system = \"sentinel\"\n\n[logsources.columns]\nActor_s = { type = \"string\" }\n",
+        )
+        .expect("visibility.toml");
+        let _scope = opentide_core::datasets::scope_thread(Some(declared));
+        let q = "Contoso_Audit_CL | where Actor_s == 'a' | join (SecurityEvent) on Account";
+        assert!(matches!(
+            Catalog::for_workspace(Profile::Sentinel, q),
+            CatalogRef::Declared(_)
+        ));
+        let before = column_passes();
+        for offset in 0..q.len() {
+            let _ = crate::hover(q, offset, Profile::Sentinel);
+        }
+        assert_eq!(column_passes() - before, 1);
+    }
 
     fn parse_error(source: &str) -> Diagnostic {
         let catalog = Catalog::for_workspace(Profile::Sentinel, source);

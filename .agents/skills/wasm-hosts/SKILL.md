@@ -60,7 +60,7 @@ Do not `cargo build -p opentide-wasm --target wasm32-wasip1`. That target must n
 - **No sockets**: the connectors' default transport fails every request with "this command needs the network; run the opentide CLI" (`Setup`), until `serve`'s host fetch is installed.
 - **No working directory**: the host passes it as `PWD` (`--repo` works too). **No terminal size**: the host passes `OPENTIDE_TERMINAL_WIDTH`.
 - **No processes, permissions or mmap**: `git --version`, `set_permissions` and gix's object store (memmap2) do not work; the writers skip permissions there.
-- **Panics abort** (no unwinding): a `thread::scope` spawn, or a std call WASI leaves unimplemented (`std::env::split_paths`), traps the module. Run `cargo xtask golden check --runner wasi` after a change to the command line.
+- **Panics abort** (no unwinding): a `thread::scope` spawn, or a std call WASI leaves unimplemented (`std::env::split_paths`), traps the module. Run `packages/wasi-host`'s tests (the module under `scripts/engine/wasi-run.mjs`) after a change to the command line.
 
 `wasm32-wasip1` (the renamed `wasm32-wasi`) is also for vscode.dev running the language server's CLI-style binary. Build `opentide-lsp`, not `opentide-wasm` (`scripts/engine/build-wasm.sh wasi`). Do not cfg-gate `#[wasm_bindgen]` into the lsp crate "so one artifact does both". Two artifacts.
 

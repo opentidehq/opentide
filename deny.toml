@@ -31,9 +31,15 @@ yanked = "deny"
 unmaintained = "all"
 unsound = "all"
 # An exception is an entry here with its reason and its follow-up issue
-# (docs/internal/supply-chain.md). None today: RUSTSEC-2024-0449
-# (unsafe-libyaml, through serde_yaml) went with serde_yaml (#850).
-ignore = []
+# (docs/internal/supply-chain.md). RUSTSEC-2024-0449 (unsafe-libyaml,
+# through serde_yaml) went with serde_yaml (#850).
+ignore = [
+    # chrono is unmaintained (no vulnerability, no safe upgrade). Not a direct
+    # dependency: it comes through rmcp 3.9 and schemars 1.2. #1513 removes it.
+    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained; transitive through rmcp and schemars; #1513" },
+    # humantime wraps chrono; it comes only through trycmd, a dev-dependency.
+    { id = "RUSTSEC-2026-0542", reason = "humantime unmaintained; dev-only through trycmd; #1513" },
+]
 
 # Licences of what we distribute. opentide is EUPL-1.2; every crate compiled
 # into the wheel, the npm packages or the binaries must be under a licence
@@ -100,30 +106,24 @@ skip = [
   # xtask (never published or shipped) needs rustix for the golden runner's
   # pseudo-terminals, and tempfile: both bring bitflags 2, beside the bitflags
   # 1 of lsp-types (fluent-uri 0.1).
-  { crate = "bitflags@2.13.2", reason = "xtask (rustix, tempfile), opentide-workspace (tempfile; inotify through notify, `--watch`) and opentide-cli (inquire and crossterm, the setup wizard's prompts) use bitflags 2; lsp-types (fluent-uri 0.1) and kqueue-sys (notify on BSD and macOS) still use bitflags 1" },
+  { crate = "bitflags@2.13.2", reason = "xtask (rustix, tempfile), opentide-workspace (tempfile; inotify through notify, `--watch`) and opentide-cli (inquire and crossterm, the setup wizard's prompts) use bitflags 2; lsp-types 0.97 (directly and through fluent-uri 0.1, the latest lsp-types) and portable-pty 0.9 (a dev-dependency) still use bitflags 1" },
   # xtask's schema comparison (UC-1.8b, #900; `cargo xtask codegen --check`)
   # validates the corpora with the jsonschema crate, which brings these second
   # versions. Only xtask (tooling, never shipped) depends on jsonschema.
-  { crate = "fancy-regex@0.20.1", reason = "only xtask (tooling, never shipped) uses it, through jsonschema; opentide-schema ships fancy-regex 0.14" },
   { crate = "fluent-uri@0.4.1", reason = "only xtask (tooling, never shipped) uses it, through jsonschema's referencing; the shipped crates use fluent-uri 0.1 through lsp-types" },
   { crate = "getrandom@0.3.4", reason = "only xtask (tooling, never shipped) uses it, through jsonschema's ahash; the shipped crates use getrandom 0.4 through gix" },
   { crate = "r-efi@5.3.0", reason = "only xtask (tooling, never shipped) uses it, through getrandom 0.3 (jsonschema's ahash), on UEFI targets" },
-  # rmcp (the MCP server, UC-3.7, #829) hashes with sha2 0.11, RustCrypto's
-  # digest 0.11 generation, and so does opentide-cli's SARIF fingerprints (one
-  # sha2); gix still hashes with sha1 0.10, on digest 0.10. Drop these when gix
-  # moves to digest 0.11.
-  { crate = "cpufeatures@0.3.1", reason = "sha2 0.11 (rmcp 3.9, opentide-cli) uses cpufeatures 0.3; gix's sha1 0.10 (through sha1-checked) uses cpufeatures 0.2" },
-  { crate = "digest@0.11.3", reason = "sha2 0.11 (rmcp 3.9, opentide-cli) is on digest 0.11; gix's sha1 0.10 is on digest 0.10" },
-  { crate = "block-buffer@0.12.1", reason = "digest 0.11 (sha2 0.11: rmcp 3.9, opentide-cli) beside digest 0.10 (gix's sha1)" },
-  { crate = "crypto-common@0.2.2", reason = "digest 0.11 (sha2 0.11: rmcp 3.9, opentide-cli) beside digest 0.10 (gix's sha1)" },
   # The connectors' HTTP client (UC-4.1, #831): ring 0.17, rustls's crypto
   # provider (chosen over aws-lc-rs: no C build, no OpenSSL licence), still
   # uses getrandom 0.2 and, on Windows, windows-sys 0.52.
   { crate = "getrandom@0.2.17", reason = "ring 0.17 (rustls's provider for the connectors, UC-4.1) uses getrandom 0.2; gix uses 0.4" },
   { crate = "windows-sys@0.52.0", reason = "ring 0.17 (rustls's provider for the connectors, UC-4.1) uses windows-sys 0.52 on Windows" },
-  # wiremock (the recorded-HTTP harness, opentide-cassette: test tooling,
-  # never shipped) is on base64 0.22; hyper-util (reqwest) is on 0.23.
-  { crate = "base64@0.22.1", reason = "only opentide-cassette (test tooling, never shipped) uses it, through wiremock 0.6; reqwest's hyper-util uses base64 0.23" },
+  # jsonwebtoken 9 (the Google SecOps service-account JWT, opentide-connectors)
+  # is on base64 0.22, and so is wiremock 0.6 (the recorded-HTTP harness: test
+  # tooling); our crates and reqwest's hyper-util are on 0.23. jsonwebtoken 10
+  # and later are on 0.23 but dropped the ring backend (aws-lc-rs or
+  # RustCrypto's rsa only). Drop this when the JWT moves off jsonwebtoken 9.
+  { crate = "base64@0.22.1", reason = "jsonwebtoken 9.3 (the Google SecOps JWT, on ring; 10+ has no ring backend) and wiremock 0.6 (test tooling) use base64 0.22; opentide's crates and reqwest's hyper-util use 0.23" },
   # rcgen (opentide-cassette's test certificates: test tooling, never shipped)
   # is on pem 4; jsonwebtoken 9 (the Google SecOps service-account JWT, on ring,
   # UC-4; opentide-connectors) ships pem 3. Drop this when jsonwebtoken's ring
@@ -133,12 +133,13 @@ skip = [
   # derive_more-impl (opentide-cli's setup wizard) with convert_case 0.10, and
   # napi-derive (the Node binding, UC-5.3) with 0.12.
   { crate = "convert_case@0.10.0", reason = "only derive_more-impl 2.1 (crossterm, opentide-cli's setup wizard) uses it, a proc macro run at compile time; napi-derive (the Node binding's TypeScript names) uses convert_case 0.12. Neither links into an artifact" },
-  { crate = "syn@2.0.119", reason = "garde_derive 0.23 (opentide-schema's validation derive, plan D-2) depends on syn 2 and no garde release uses syn 3 yet; every other proc macro uses syn 3. Drop this when garde moves" },
-  # yara-x-parser 1.23 (opentide-yara's verdict parser, language-server 0.13.0)
-  # is pinned exactly (=1.23.0) and brings rowan 0.17, which is on hashbrown
-  # 0.14 and rustc-hash 1, and itertools 0.15, a release past ratatui's.
-  { crate = "hashbrown@0.14.5", reason = "rowan 0.17 (yara-x-parser 1.23, opentide-yara) uses hashbrown 0.14; indexmap and the rest of the graph use 0.17" },
-  { crate = "rustc-hash@1.1.0", reason = "rowan 0.17 (yara-x-parser 1.23, opentide-yara) uses rustc-hash 1; the rest of the graph uses 2" },
+  { crate = "syn@2.0.119", reason = "garde_derive 0.23 (opentide-schema's validation derive, plan D-2) depends on syn 2 and no garde release uses syn 3 yet, as do derive_more-impl, jiff-static, strum_macros, tracing-attributes, zerocopy-derive, logos-codegen, windows-implement and windows-interface and the jni macros; clap_derive, darling and the rest use syn 3. Drop this when those move" },
+  # rowan 0.17 (the latest; the lossless trees of our parser crates, and of
+  # yara-x-parser 1.23, opentide-yara's verdict parser, pinned =1.23.0) is on
+  # hashbrown 0.14 and rustc-hash 1; yara-x-parser brings itertools 0.15, a
+  # release past ratatui's.
+  { crate = "hashbrown@0.14.5", reason = "rowan 0.17 (our parser crates, and yara-x-parser 1.23) uses hashbrown 0.14; indexmap and the rest of the graph use 0.17" },
+  { crate = "rustc-hash@1.1.0", reason = "rowan 0.17 (our parser crates, and yara-x-parser 1.23) uses rustc-hash 1; the rest of the graph uses 2" },
   { crate = "itertools@0.14.0", reason = "ratatui-core 0.1 (opentide-cli's tui) uses itertools 0.14; yara-x-parser 1.23 (opentide-yara) uses 0.15" },
 ]
 

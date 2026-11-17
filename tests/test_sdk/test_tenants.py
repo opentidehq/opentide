@@ -247,6 +247,18 @@ def test_a_deploy_takes_the_rules_policies(connection: Connection, policies: lis
     assert outcome.remote_id is not None
 
 
+def test_a_delete_takes_no_body(connection: Connection) -> None:
+    """#1142: a delete reaches the tenant without a body; the other operations need one."""
+    outcome = run(connection.deploy("1900000000000000001", "delete"))
+    assert outcome.operation == "delete"
+    assert outcome.remote_id is None
+    for operation in ("create", "update", "disable"):
+        with pytest.raises(OpentideError) as raised:
+            run(connection.deploy("x", operation))  # the refusal under test
+        assert raised.value.code == "usage_invalid_value"
+        assert f"body: a {operation} needs the compiled rule" in str(raised.value)
+
+
 def test_a_deploy_takes_only_the_four_operations(connection: Connection) -> None:
     with pytest.raises(OpentideError) as raised:
         run(connection.deploy("x", "upsert", b"{}"))  # the refusal under test

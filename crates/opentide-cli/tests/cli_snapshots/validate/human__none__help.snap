@@ -38,6 +38,9 @@ Validate objects and queries
           
           [possible values: error, warn, off]
 
+      ␛[1m--allow-empty␛[0m
+          With --strict: pass a full run that finds no detection objects (the commit hook setup writes passes it)
+
       ␛[1m--fix␛[0m
           Apply every safe fix (vocabulary typos), then validate again
 

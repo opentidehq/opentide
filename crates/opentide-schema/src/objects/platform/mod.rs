@@ -5,7 +5,7 @@
 //! Each block is one struct, its fields the oracle's in the oracle's order: the
 //! shared ones of `PlatformConfigBase` first (`platform_block!`), then the
 //! block's own. A field's doc comment is its schema description, held to the
-//! oracle's text by `cargo xtask schema diff --against python`.
+//! oracle's text (by `cargo xtask schema diff` until #1142).
 //!
 //! | Oracle | Here |
 //! |--------|------|

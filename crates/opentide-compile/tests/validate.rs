@@ -1,7 +1,7 @@
 //! `validate`'s compile check (#660; UC-2.2, #817): what a deploy would
 //! compile must compile. The tide corpus, in today's layout, with one change
-//! each; the codes, paths and lines are the oracle's (0.23.0,
-//! `tests/golden/cases/validate/*/tide-corpus-compile-*`).
+//! each; the codes, paths and lines are the oracle's (0.23.0, its recordings
+//! of `validate/*/tide-corpus-compile-*`, retired in #1142).
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: the corpus reads and every workspace here opens"

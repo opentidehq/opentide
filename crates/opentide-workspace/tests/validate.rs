@@ -1,8 +1,7 @@
 //! `validate` over a workspace in memory: each check's findings, their
 //! places and steps, the scope options, the verdict and the counts. The
-//! oracle comparison is `cargo xtask validate diff` (every recorded
-//! `validate --json` case); `diagnostic_json` holds the finding shape to the
-//! recordings byte for byte.
+//! CLI's `validate` snapshots hold what `validate --json` prints (the oracle
+//! comparison, `cargo xtask validate diff`, was retired in #1142).
 
 #![expect(
     clippy::unwrap_used,

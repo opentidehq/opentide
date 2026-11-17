@@ -184,7 +184,8 @@ impl Elastic {
         let answer = client
             .call(cx, crate::transport::Method::GET, &url, None, false)
             .await?;
-        if answer.status >= 400 {
+        // A 3xx is an error too: a redirect the client could not follow.
+        if !(200..300).contains(&answer.status) {
             return Err(FindError::Status(http_error_text(&answer, &url)));
         }
         serde_json::from_slice(&answer.body)
@@ -973,7 +974,7 @@ impl Elastic {
                     &answer,
                     &client.rule_query(rule_id),
                 ))),
-                status if status >= 400 => Ok(failed(
+                status if !(200..300).contains(&status) => Ok(failed(
                     "delete_elastic_rule_failed",
                     None,
                     http_error_text(&answer, &client.rule_query(rule_id)),
@@ -1302,7 +1303,9 @@ fn write_failed(
             kibana_error(answer)
         )));
     }
-    if answer.status >= 400 {
+    // A 3xx is a failure: a redirect the client could not follow is no
+    // rule written (#1142).
+    if !(200..300).contains(&answer.status) {
         return Ok(Some(Deployed::Failed {
             event: event.to_owned(),
             status: Some(answer.status),
@@ -2223,6 +2226,30 @@ pub fn advisories(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #1142: a rule write Kibana answers with a redirect the client could
+    /// not follow fails the rule; a 2xx is written.
+    #[test]
+    fn a_redirect_answer_is_no_rule_written() {
+        let answer = |status: u16| crate::answer::Answer {
+            status,
+            content_type: None,
+            body: br#"{"message": "moved"}"#.to_vec(),
+            elapsed: std::time::Duration::ZERO,
+            credentials: crate::answer::Credentials::default(),
+        };
+        assert!(matches!(
+            write_failed(&answer(307), "create_elastic_rule_failed", "lab"),
+            Ok(Some(Deployed::Failed {
+                status: Some(307),
+                ..
+            }))
+        ));
+        assert!(matches!(
+            write_failed(&answer(200), "create_elastic_rule_failed", "lab"),
+            Ok(None)
+        ));
+    }
 
     #[test]
     fn an_error_payload_does_not_quote_the_bearer() {

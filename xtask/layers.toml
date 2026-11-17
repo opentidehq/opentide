@@ -26,13 +26,8 @@
 # - bindings/python is the package `opentide-native` (the plan's bindings/python, UC-5.2, #837).
 # - bindings/node is the package `opentide-node` (UC-5.3, #838), compiled into
 #   the npm package @opentide/opentide: it depends on the facade alone.
-# - opentide-compare (UC-0.7, #805) is foundation tier 0: the differential
-#   comparator depends on no workspace crate. xtask (`compare`, `golden
-#   check --engine rust`, the goldens' normaliser) uses it, and so do the
-#   golden replays of opentide-cli and of the facade `opentide`, as a
-#   dev-dependency only. It is not in the plan's table: compare mode left
-#   with the Python implementation (UC-6.2, #841), and it stays for the
-#   goldens, which remain the command line's specification.
+# - opentide-compare (UC-0.7, #805), the differential comparator, was deleted
+#   with the oracle's recordings (#1142).
 # - opentide-schema (UC-1.1, #807) is the top foundation tier: the plan's
 #   table puts it in the row above core, parse, highlight and the query
 #   crates, so it may build on any of them (spans, UC-1.2) and none of them
@@ -82,7 +77,7 @@
 [[layer]]
 name = "foundation"
 tiers = [
-    ["opentide-core", "opentide-compare", "opentide-schema-derive", "opentide-cassette"],
+    ["opentide-core", "opentide-schema-derive", "opentide-cassette"],
     ["opentide-parse", "opentide-highlight", "opentide-ecs"],
     ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-falco", "opentide-cql",
      "opentide-yara", "opentide-yaral", "opentide-exabeam"],

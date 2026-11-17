@@ -18,7 +18,9 @@ warning: External id missing · detail: rule 00000000-0000-4000-8047-00000000001
                                                              at https://s1.invalid: error sending
                                                              request: client error (Connect): tunnel
                                                              error: failed to create underlying…␛[0m
-  ␛[2m[3/4]␛[0m ␛[2m· skipped   ␛[0mSentinelOne retire rule                  ␛[2mnot attempted after a failure␛[0m
-  ␛[2m[4/4]␛[0m ␛[2m· skipped   ␛[0mSentinelOne update rule                  ␛[2mnot attempted after a failure␛[0m
+error: Tenant deployment failed · platform: sentinel_one · tenant: *** · error: Cannot reach sentinel_one tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
+  ␛[2m[3/4]␛[0m ␛[2m· skipped   ␛[0mSentinelOne retire rule                  ␛[2mnot attempted: tenant lab failed␛[0m
+  ␛[2m[4/4]␛[0m ␛[2m· skipped   ␛[0mSentinelOne update rule                  ␛[2mnot attempted: tenant lab failed␛[0m
   ␛[1m␛[31m✗␛[0m  ␛[1msentinel_one␛[0m  ␛[2m0 deployed, 1 failed, 1 skipped, 2 not attempted␛[0m ␛[2m<SECONDS>␛[0m
+␛[1m␛[33mwarning:␛[0m Some rules reported deployment warnings
 ␛[1m␛[31m✗␛[0m Deployment failed · 1 skipped, 1 failed, 2 not attempted · <SECONDS>

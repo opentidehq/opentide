@@ -22,6 +22,9 @@ pub(crate) struct Problem {
     /// The start of the token it sits before (the end of the source past the last).
     pub(crate) at: usize,
     pub(crate) message: String,
+    /// At the end of the input: `at` is right after the last token, and what
+    /// follows it is blanks or comments, never the token to quote.
+    pub(crate) at_end: bool,
 }
 
 struct Data {
@@ -32,11 +35,6 @@ struct Data {
     parent: Option<u32>,
     children: Vec<u32>,
     field: Option<&'static str>,
-    /// The rowan node of a node the version gates read
-    /// ([`crate::gates::GATED`]): the checks being moved to the typed AST read
-    /// it (#1415). The lossless tree itself stays alive through
-    /// [`Tree::syntax`].
-    syntax: Option<SyntaxNode<Lang>>,
 }
 
 /// A parsed query.
@@ -73,7 +71,7 @@ fn names() -> &'static Vec<&'static str> {
     })
 }
 
-fn node_name(kind: K) -> &'static str {
+pub(crate) fn node_name(kind: K) -> &'static str {
     match kind {
         K::JOIN_QUALIFIER => "identifier",
         K::ERROR => "ERROR",
@@ -82,7 +80,7 @@ fn node_name(kind: K) -> &'static str {
 }
 
 /// Productions that are one token in tree-sitter: no children.
-fn is_leaf(kind: K) -> bool {
+pub(crate) fn is_leaf(kind: K) -> bool {
     matches!(
         kind,
         K::IDENTIFIER
@@ -166,8 +164,9 @@ pub(crate) fn parse(source: &str) -> Tree {
         .errors
         .iter()
         .map(|e| Problem {
-            at: usize::from(e.gap.end()),
+            at: usize::from(e.anchor(source.len())),
             message: e.message.clone(),
+            at_end: usize::from(e.gap.end()) >= source.len(),
         })
         .collect();
     let root = SyntaxNode::<Lang>::new_root(parse.green);
@@ -199,9 +198,6 @@ pub(crate) fn parse(source: &str) -> Tree {
                     usize::from(r.start()),
                     usize::from(r.end()),
                 );
-                if crate::gates::GATED.contains(&kind) {
-                    data[id as usize].syntax = Some(node.clone());
-                }
                 if options && kind == K::MAP_EXPRESSION {
                     data[id as usize].field = Some("options");
                 }
@@ -276,7 +272,6 @@ fn push(
         parent,
         children: Vec::new(),
         field: None,
-        syntax: None,
     });
     if let Some(p) = parent {
         data[p as usize].children.push(id);
@@ -777,11 +772,6 @@ impl<'t> Node<'t> {
         }
     }
 
-    /// The rowan node of a node of a [`crate::gates::GATED`] kind.
-    pub(crate) fn syntax(&self) -> Option<&'t SyntaxNode<Lang>> {
-        self.d().syntax.as_ref()
-    }
-
     pub(crate) fn kind(&self) -> &'static str {
         self.d().kind
     }
@@ -851,36 +841,12 @@ impl<'t> Node<'t> {
             .into_iter()
     }
 
-    pub(crate) fn named_children(&self, _: &mut Cursor) -> std::vec::IntoIter<Node<'t>> {
-        self.d()
-            .children
-            .iter()
-            .map(|&c| self.at(c))
-            .filter(Node::is_named)
-            .collect::<Vec<_>>()
-            .into_iter()
-    }
-
     pub(crate) fn child_by_field_name(&self, field: &str) -> Option<Node<'t>> {
         self.d()
             .children
             .iter()
             .map(|&c| self.at(c))
             .find(|c| c.d().field == Some(field))
-    }
-
-    pub(crate) fn children_by_field_name(
-        &self,
-        field: &str,
-        _: &mut Cursor,
-    ) -> std::vec::IntoIter<Node<'t>> {
-        self.d()
-            .children
-            .iter()
-            .map(|&c| self.at(c))
-            .filter(|c| c.d().field == Some(field))
-            .collect::<Vec<_>>()
-            .into_iter()
     }
 
     /// The smallest node that spans `start..end`, as tree-sitter finds it.

@@ -4,7 +4,7 @@
 //! key by key, and the order is part of what a reader sees. `serde_json::Value`
 //! sorts its keys unless serde_json's `preserve_order` feature is on, and that
 //! feature is unified across a build: it would change the map of every crate,
-//! `opentide-compare` and the goldens included. So the workspace keeps it off
+//! the snapshot tests included. So the workspace keeps it off
 //! and builds ordered documents with this [`Json`], whose objects are
 //! [`IndexMap`]s. It is read and written with serde, so serde_json's parser and
 //! formatters do the text.
@@ -571,6 +571,39 @@ impl<'de> Visitor<'de> for JsonVisitor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A float written and read back is the same float, bit for bit, as a
+    /// `Deployer`'s body is (written with `to_compact`, read with
+    /// `serde_json` into `Json`): 17 significant digits and exponents far
+    /// from zero included. serde_json's default parser is not exact for
+    /// these (`123456789.12345679` came back `123456789.1234568`); the
+    /// workspace turns on its `float_roundtrip`. A `--workspace` build had it
+    /// already (`jsonschema`, through `xtask`, turns it on, and features add up),
+    /// so this test guards the builds of one package: the command line, the
+    /// wheel, the npm package and CI's `-p` runs.
+    #[test]
+    fn floats_round_trip_exactly() {
+        for value in [
+            123_456_789.123_456_79_f64,
+            1.234_567_890_123_456_8e-300,
+            2.718_281_828_459_045e-200,
+            0.300_000_000_000_000_04,
+            1.797_693_134_862_315_7e308,
+            5e-324,
+            1.234_567_890_123_456_8e22,
+        ] {
+            let text = Json::Float(value).to_compact();
+            for read in [
+                Json::parse(&text).unwrap(),
+                serde_json::from_slice::<Json>(text.as_bytes()).unwrap(),
+            ] {
+                assert!(
+                    matches!(read, Json::Float(back) if back.to_bits() == value.to_bits()),
+                    "{text} read back as {read:?}"
+                );
+            }
+        }
+    }
 
     /// A document holds a `Json` per value: an object must not make every
     /// number and string as large as an `IndexMap`.

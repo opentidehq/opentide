@@ -140,13 +140,9 @@ fn parse_error(source: &str, root: &SyntaxNode, error: &SyntaxError) -> Finding 
             },
             _ => error.message.clone(),
         };
-        return Finding::new(
-            codes::YARAL_PARSE_ERROR,
-            Severity::Error,
-            message,
-            source.len(),
-            source.len() + 1,
-        );
+        // Nothing but trivia after it: right after the last token.
+        let at = usize::from(error.anchor(source.len()));
+        return Finding::new(codes::YARAL_PARSE_ERROR, Severity::Error, message, at, at);
     };
     // The run of tokens the parser gave up on, when it wrapped them.
     let region = token

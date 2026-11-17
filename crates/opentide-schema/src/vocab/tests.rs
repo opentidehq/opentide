@@ -127,8 +127,9 @@ fn stage_filters_apply_to_name_keyed_vocabularies() {
 
 #[test]
 fn the_vocab_unknown_findings_of_the_goldens() {
-    // tests/golden/cases/validate/json/{fault,tide-corpus-typo,vscode}: the
-    // same message and help as the oracle, except where APPROVED.md says.
+    // The oracle's recordings of validate/json/{fault,tide-corpus-typo,vscode}
+    // (retired, #1142): the same message and help as the oracle, except where
+    // its suggestions were reviewed as noise.
     let set = Vocabularies::bundled();
     let cases: [(&str, &str, bool, Option<&str>); 6] = [
         ("tlp::1.0", "clearr", false, Some("clear")),
@@ -136,7 +137,7 @@ fn the_vocab_unknown_findings_of_the_goldens() {
         ("tlp::1.0", "whitish", false, None),
         ("alert_severity::1.0", "high", false, Some("High")),
         // The oracle suggests 'Substantial incident' and 'Host::File':
-        // unrelated words that share letters (tests/golden/vocab/APPROVED.md).
+        // unrelated words that share letters.
         ("severity::1.0", "Big incident", false, None),
         ("signal.entities::1.0", "Host::Gizmo", true, None),
     ];

@@ -95,13 +95,13 @@ impl std::fmt::Debug for Context<'_> {
 #[derive(Clone, Debug)]
 pub struct Live {
     /// The result, keys in the oracle's order, `_`-keys included.
-    pub result: Vec<(String, Json)>,
+    pub result: Fields,
     /// The checklist's step, when the run reached the tenants.
     pub step: Option<Step>,
 }
 
 impl Live {
-    fn of(result: Vec<(String, Json)>) -> Self {
+    fn of(result: Fields) -> Self {
         Self { result, step: None }
     }
 
@@ -184,7 +184,7 @@ pub fn report_of(command: &str, result: &[(String, Json)]) -> Report {
         failure.suggestion = text("_failure_suggestion");
         failure
     });
-    let data: Vec<(String, Json)> = result
+    let data: Fields = result
         .iter()
         .filter(|(key, _)| {
             !key.starts_with('_') && !matches!(key.as_str(), "message" | "status" | "warnings")
@@ -207,7 +207,7 @@ pub fn report_of(command: &str, result: &[(String, Json)]) -> Report {
 }
 
 /// The keys every live result starts with.
-fn head(platform: Option<&str>, status: &str) -> Vec<(String, Json)> {
+fn head(platform: Option<&str>, status: &str) -> Fields {
     vec![
         ("platform".into(), Json::opt_str(platform)),
         ("mode".into(), Json::str("live")),
@@ -217,7 +217,7 @@ fn head(platform: Option<&str>, status: &str) -> Vec<(String, Json)> {
 }
 
 /// A failed result (`{**failed, "message": ..., "_exit_code": ...}`).
-fn failed(platform: Option<&str>, message: &str, exit_code: i64) -> Vec<(String, Json)> {
+fn failed(platform: Option<&str>, message: &str, exit_code: i64) -> Fields {
     let mut result = head(platform, "failed");
     result.push(("message".into(), Json::str(message)));
     result.push(("_exit_code".into(), Json::Int(exit_code)));
@@ -225,7 +225,7 @@ fn failed(platform: Option<&str>, message: &str, exit_code: i64) -> Vec<(String,
 }
 
 /// `value` set on `result`, in place when the key is there, else last.
-fn set(result: &mut Vec<(String, Json)>, key: &str, value: Json) {
+fn set(result: &mut Fields, key: &str, value: Json) {
     match result.iter_mut().find(|(name, _)| name == key) {
         Some(entry) => entry.1 = value,
         None => result.push((key.to_owned(), value)),
@@ -336,7 +336,7 @@ fn rule_scope(
     platform: &str,
     workspace: &Workspace,
     cx: &Context<'_>,
-) -> Result<RuleScope, Vec<(String, Json)>> {
+) -> Result<RuleScope, Fields> {
     if !(args.changed || !args.files.is_empty() || !args.uuids.is_empty()) {
         return Ok((None, None));
     }
@@ -450,156 +450,39 @@ fn live_platform(args: &Args, platform: &str, cx: &Context<'_>) -> Live {
     live
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "the oracle's steps in order (_validate_query_platform), read top to bottom"
-)]
+/// A run's result as a list of fields (the oracle's result dict).
+type Fields = Vec<(String, Json)>;
+
+/// `_validate_query_platform` with a workspace: the strategies, the rules
+/// selected, their tenants, then the check and its result.
 fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Context<'_>) -> Live {
     let owned = opentide_compile::Owned::new(
         &Vocabularies::bundled(),
         &workspace.configuration().resolved,
     );
-    let runs: RunStrategies = if args.strategies.is_empty() {
-        strategy::DEPLOYABLE.to_vec()
-    } else {
-        match strategy::parse_strategies(&args.strategies, &owned.statuses, "--strategy") {
-            Ok(runs) => runs,
-            Err(message) => {
-                let mut result = failed(Some(platform), &message, 2);
-                result.push((
-                    "_failure_code".into(),
-                    Json::str(code::USAGE_INVALID_CHOICE),
-                ));
-                return Live::of(result);
-            }
-        }
+    let runs = match run_strategies(args, platform, &owned) {
+        Ok(runs) => runs,
+        Err(result) => return Live::of(result),
     };
     let (files, label) = match rule_scope(args, platform, workspace, cx) {
         Ok(scope) => scope,
         Err(result) => return Live::of(result),
     };
-    let fs = workspace.fs().as_ref();
-    let (rules_dir, folder) = opentide_compile::dry_run::rules_folder(workspace);
-    let scope = match files {
-        Some(files) => opentide_compile::plan::Scope {
-            files,
-            nested: Vec::new(),
-        },
-        None => opentide_compile::plan::local_scope(fs, &rules_dir, &folder),
-    };
     let config = &owned.config;
     let enabled = opentide_compile::plan::enabled(config);
-    let read = |path: &Path| -> Result<opentide_schema::node::Node, String> {
-        let bytes = fs.read(path).map_err(|error| error.to_string())?;
-        let document =
-            opentide_schema::node::load_bytes(&bytes).map_err(|error| error.to_string())?;
-        document
-            .root()
-            .map(|root| (**root).clone())
-            .ok_or_else(|| "the file is empty".to_owned())
-    };
-    let selection = opentide_compile::plan::select(
-        &owned.statuses,
-        &scope,
-        &read,
-        &SelectOptions {
-            runs: &runs,
-            wide: args.wide,
-            keep_deprecated: false,
-            enabled: &enabled,
-            folder: &folder,
-            log: true,
-        },
-    );
-    let selection = match selection {
+    let selection = match select_rules(args, platform, workspace, files, &owned, &runs, &enabled) {
         Ok(selection) => selection,
-        Err(opentide_compile::plan::PlanError::ObjectFile { path, problem }) => {
-            return Live::of(failed(
-                Some(platform),
-                &format!("{}: {problem}", path.display()),
-                1,
-            ));
-        }
-        Err(opentide_compile::plan::PlanError::Failed(message)) => {
-            return Live::of(failed(Some(platform), &message, 1));
-        }
+        Err(result) => return Live::of(result),
     };
     let Some(uuids) = selection.platforms.get(platform) else {
-        if !enabled.iter().any(|known| known == platform) {
-            return Live::of(vec![
-                ("platform".into(), Json::str(platform)),
-                ("mode".into(), Json::str("live")),
-                ("status".into(), Json::str("skipped")),
-                ("platform_enabled".into(), Json::Bool(false)),
-                (
-                    "message".into(),
-                    Json::str(format!(
-                        "Platform {platform} is disabled in configurations, so no rule is \
-                         checked for it"
-                    )),
-                ),
-                (
-                    "advice".into(),
-                    Json::str(format!(
-                        "enable it with 'opentide setup platforms --{}'",
-                        platform.replace('_', "-")
-                    )),
-                ),
-            ]);
-        }
-        let mut result = vec![
-            ("platform".into(), Json::str(platform)),
-            ("mode".into(), Json::str("live")),
-            ("status".into(), Json::str("skipped")),
-            ("strategies".into(), names(&runs)),
-            ("message".into(), Json::str(no_rules_message(label))),
-        ];
-        if let Some(label) = label {
-            result.push(("scope".into(), Json::str(label)));
-        }
-        return Live::of(result);
+        return Live::of(nothing_selected(platform, &enabled, &runs, label));
     };
     let tables = opentide_compile::plan::tenants(config, platform);
     if tables.is_empty() {
-        let path = config_path(platform);
-        let mut result = failed(
-            Some(platform),
-            &format!(
-                "Cannot run live query validation: {platform} has no tenants configured in {path}"
-            ),
-            1,
-        );
-        let at = result.len() - 1;
-        result.insert(
-            at,
-            (
-                "advice".into(),
-                Json::str(format!("add (or uncomment) a [[tenants]] entry in {path}")),
-            ),
-        );
-        result.insert(
-            at + 1,
-            (
-                "missing_tenants".into(),
-                Json::object([(platform, Json::str(&path))]),
-            ),
-        );
-        return Live::of(result);
+        return Live::of(no_tenants(platform));
     }
-    let configured: Vec<Configured> = tables
-        .iter()
-        .map(|table| Configured {
-            name: opentide_compile::deploy::tenant_name(table).to_owned(),
-            setup: table
-                .get("setup")
-                .and_then(CJson::as_object)
-                .cloned()
-                .unwrap_or_default(),
-        })
-        .collect();
-    log_unset(&configured, cx.env);
-    let index = workspace.index();
-    let compile_cx = owned.context(index);
+    log_unset(&configured_tenants(&tables), cx.env);
+    let compile_cx = owned.context(workspace.index());
     let batches = match batches(
         platform,
         uuids,
@@ -612,181 +495,389 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
         Ok(batches) => batches,
         Err(message) => return Live::of(failed(Some(platform), &message, 1)),
     };
-    let reach: Vec<(String, usize)> = batches
-        .iter()
-        .map(|batch| (batch.tenant.name.clone(), batch.rules.len()))
-        .collect();
-    if reach.is_empty() {
-        let strategy_names = names(&runs);
-        let deployable = strategy::DEPLOYABLE.to_vec();
-        let reaches_any = runs != deployable
+    let reach = Reach {
+        runs: &runs,
+        tenants: batches
+            .iter()
+            .map(|batch| (batch.tenant.name.clone(), batch.rules.len()))
+            .collect(),
+    };
+    if reach.tenants.is_empty() {
+        let reaches_any = runs != strategy::DEPLOYABLE.to_vec()
             && batches_reach_any(platform, uuids, &tables, args.wide, workspace, &compile_cx);
-        let mut result = vec![
-            ("platform".into(), Json::str(platform)),
-            ("mode".into(), Json::str("live")),
-            ("status".into(), Json::str("skipped")),
-            ("supported".into(), Json::Bool(true)),
-            ("strategies".into(), strategy_names),
-            ("queries_validated".into(), Json::Int(0)),
-            ("queries_per_tenant".into(), Json::Object(Object::new())),
-        ];
-        if reaches_any {
-            let joined: Vec<&str> = runs.iter().map(|run| run.name()).collect();
-            result.push((
-                "message".into(),
-                Json::str(format!(
-                    "None of the {} {platform} rule(s) goes to a tenant accepting {}; they are \
-                     checked by a run with the strategy that deploys them, or without --strategy",
-                    uuids.len(),
-                    joined.join(" and ")
-                )),
-            ));
-        } else {
-            result.push((
-                "message".into(),
-                Json::str(format!(
-                    "No query was sent: none of the {} {platform} rule(s) goes to a tenant in {}",
-                    uuids.len(),
-                    config_path(platform)
-                )),
-            ));
-            result.push(("advice".into(), Json::str(NO_TENANT_ADVICE)));
-            result.push(("_exit_code".into(), Json::Int(2)));
-            result.push(("_failure_code".into(), Json::str("no_tenant_reached")));
-        }
-        return scoped(Live::of(result), label);
+        return scoped(
+            Live::of(no_tenant_reached(platform, uuids.len(), &runs, reaches_any)),
+            label,
+        );
     }
-    let system_name = config
-        .get("platforms")
-        .and_then(|platforms| platforms.get(platform))
-        .and_then(|table| table.get("platform"))
-        .and_then(|block| block.get("name"))
-        .filter(|name| name.is_filled())
-        .map_or_else(|| platform.to_owned(), opentide_compile::deploy::text);
     let timeout = check_timeout(args, cx.env);
-    let mut step = Step::new(&format!("{system_name} queries"));
+    let mut step = Step::new(&format!("{} queries", system_name(config, platform)));
     step.unit = "rule".into();
     step.count = Some(uuids.len());
     let started = Instant::now();
     let checked = check_batches(platform, &batches, timeout, cx, &compile_cx);
     step.seconds = started.elapsed().as_secs_f64();
-    let counts = |result: &mut Vec<(String, Json)>| {
-        result.push(("strategies".into(), names(&runs)));
+    let result = match checked {
+        Err(early) => {
+            step.status = StepStatus::Failed;
+            stopped_early(platform, early, &reach)
+        }
+        Ok(report) => {
+            step.status = StepStatus::Ok;
+            checked_result(platform, &report, &reach, timeout)
+        }
+    };
+    scoped(
+        Live {
+            result,
+            step: Some(step),
+        },
+        label,
+    )
+}
+
+/// The strategies `--strategy` names (every deployable one without it), or
+/// the usage refusal.
+fn run_strategies(
+    args: &Args,
+    platform: &str,
+    owned: &opentide_compile::Owned,
+) -> Result<RunStrategies, Fields> {
+    if args.strategies.is_empty() {
+        return Ok(strategy::DEPLOYABLE.to_vec());
+    }
+    strategy::parse_strategies(&args.strategies, &owned.statuses, "--strategy").map_err(|message| {
+        let mut result = failed(Some(platform), &message, 2);
         result.push((
-            "queries_validated".into(),
-            Json::from(reach.iter().map(|(_, count)| count).sum::<usize>()),
+            "_failure_code".into(),
+            Json::str(code::USAGE_INVALID_CHOICE),
         ));
+        result
+    })
+}
+
+/// The rules of the scope the run strategies deploy, per platform, or the
+/// failure to read them.
+fn select_rules(
+    args: &Args,
+    platform: &str,
+    workspace: &Workspace,
+    files: Option<Vec<std::path::PathBuf>>,
+    owned: &opentide_compile::Owned,
+    runs: &RunStrategies,
+    enabled: &[String],
+) -> Result<opentide_compile::plan::Selection, Fields> {
+    let fs = workspace.fs().as_ref();
+    let (rules_dir, folder) = opentide_compile::dry_run::rules_folder(workspace);
+    let scope = match files {
+        Some(files) => opentide_compile::plan::Scope {
+            files,
+            nested: Vec::new(),
+        },
+        None => opentide_compile::plan::local_scope(fs, &rules_dir, &folder),
+    };
+    let read = |path: &Path| -> Result<opentide_schema::node::Node, String> {
+        let bytes = fs.read(path).map_err(|error| error.to_string())?;
+        let document =
+            opentide_schema::node::load_bytes(&bytes).map_err(|error| error.to_string())?;
+        document
+            .root()
+            .map(|root| (**root).clone())
+            .ok_or_else(|| "the file is empty".to_owned())
+    };
+    opentide_compile::plan::select(
+        &owned.statuses,
+        &scope,
+        &read,
+        &SelectOptions {
+            runs,
+            wide: args.wide,
+            keep_deprecated: false,
+            enabled,
+            folder: &folder,
+            log: true,
+        },
+    )
+    .map_err(|error| match error {
+        opentide_compile::plan::PlanError::ObjectFile { path, problem } => {
+            failed(Some(platform), &format!("{}: {problem}", path.display()), 1)
+        }
+        opentide_compile::plan::PlanError::Failed(message) => failed(Some(platform), &message, 1),
+    })
+}
+
+/// No rule selected for the platform: it is disabled, or no rule of the
+/// scope and strategies names it.
+fn nothing_selected(
+    platform: &str,
+    enabled: &[String],
+    runs: &RunStrategies,
+    label: Option<&str>,
+) -> Fields {
+    if !enabled.iter().any(|known| known == platform) {
+        return vec![
+            ("platform".into(), Json::str(platform)),
+            ("mode".into(), Json::str("live")),
+            ("status".into(), Json::str("skipped")),
+            ("platform_enabled".into(), Json::Bool(false)),
+            (
+                "message".into(),
+                Json::str(format!(
+                    "Platform {platform} is disabled in configurations, so no rule is \
+                     checked for it"
+                )),
+            ),
+            (
+                "advice".into(),
+                Json::str(format!(
+                    "enable it with 'opentide setup platforms --{}'",
+                    platform.replace('_', "-")
+                )),
+            ),
+        ];
+    }
+    let mut result = vec![
+        ("platform".into(), Json::str(platform)),
+        ("mode".into(), Json::str("live")),
+        ("status".into(), Json::str("skipped")),
+        ("strategies".into(), names(runs)),
+        ("message".into(), Json::str(no_rules_message(label))),
+    ];
+    if let Some(label) = label {
+        result.push(("scope".into(), Json::str(label)));
+    }
+    result
+}
+
+/// The platform has no `[[tenants]]` entry.
+fn no_tenants(platform: &str) -> Fields {
+    let path = config_path(platform);
+    let mut result = failed(
+        Some(platform),
+        &format!(
+            "Cannot run live query validation: {platform} has no tenants configured in {path}"
+        ),
+        1,
+    );
+    let at = result.len() - 1;
+    result.insert(
+        at,
+        (
+            "advice".into(),
+            Json::str(format!("add (or uncomment) a [[tenants]] entry in {path}")),
+        ),
+    );
+    result.insert(
+        at + 1,
+        (
+            "missing_tenants".into(),
+            Json::object([(platform, Json::str(&path))]),
+        ),
+    );
+    result
+}
+
+/// Each tenant table's name and setup.
+fn configured_tenants(tables: &[&CJson]) -> Vec<Configured> {
+    tables
+        .iter()
+        .map(|table| Configured {
+            name: opentide_compile::deploy::tenant_name(table).to_owned(),
+            setup: table
+                .get("setup")
+                .and_then(CJson::as_object)
+                .cloned()
+                .unwrap_or_default(),
+        })
+        .collect()
+}
+
+/// No selected rule goes to a tenant: one goes there under another strategy
+/// (`reaches_any`), or none goes to any tenant at all (exit 2).
+fn no_tenant_reached(
+    platform: &str,
+    rules: usize,
+    runs: &RunStrategies,
+    reaches_any: bool,
+) -> Fields {
+    let mut result = vec![
+        ("platform".into(), Json::str(platform)),
+        ("mode".into(), Json::str("live")),
+        ("status".into(), Json::str("skipped")),
+        ("supported".into(), Json::Bool(true)),
+        ("strategies".into(), names(runs)),
+        ("queries_validated".into(), Json::Int(0)),
+        ("queries_per_tenant".into(), Json::Object(Object::new())),
+    ];
+    if reaches_any {
+        let joined: Vec<&str> = runs.iter().map(|run| run.name()).collect();
+        result.push((
+            "message".into(),
+            Json::str(format!(
+                "None of the {rules} {platform} rule(s) goes to a tenant accepting {}; they are \
+                 checked by a run with the strategy that deploys them, or without --strategy",
+                joined.join(" and ")
+            )),
+        ));
+    } else {
+        result.push((
+            "message".into(),
+            Json::str(format!(
+                "No query was sent: none of the {rules} {platform} rule(s) goes to a tenant in {}",
+                config_path(platform)
+            )),
+        ));
+        result.push(("advice".into(), Json::str(NO_TENANT_ADVICE)));
+        result.push(("_exit_code".into(), Json::Int(2)));
+        result.push(("_failure_code".into(), Json::str("no_tenant_reached")));
+    }
+    result
+}
+
+/// The platform's configured display name (`[platforms.<p>.platform] name`),
+/// or its key.
+fn system_name(config: &CJson, platform: &str) -> String {
+    config
+        .get("platforms")
+        .and_then(|platforms| platforms.get(platform))
+        .and_then(|table| table.get("platform"))
+        .and_then(|block| block.get("name"))
+        .filter(|name| name.is_filled())
+        .map_or_else(|| platform.to_owned(), opentide_compile::deploy::text)
+}
+
+/// The strategies a run checked with and the queries it sends each tenant.
+struct Reach<'a> {
+    runs: &'a RunStrategies,
+    tenants: Vec<(String, usize)>,
+}
+
+impl Reach<'_> {
+    /// The queries sent, over every tenant.
+    fn queries(&self) -> usize {
+        self.tenants.iter().map(|(_, count)| count).sum()
+    }
+
+    /// `strategies`, `queries_validated` and `queries_per_tenant`.
+    fn push_counts(&self, result: &mut Fields) {
+        result.push(("strategies".into(), names(self.runs)));
+        result.push(("queries_validated".into(), Json::from(self.queries())));
         result.push((
             "queries_per_tenant".into(),
             Json::Object(
-                reach
+                self.tenants
                     .iter()
                     .map(|(tenant, count)| (tenant.clone(), Json::from(*count)))
                     .collect(),
             ),
         ));
-    };
-    let live = match checked {
-        Err(early) => {
-            step.status = StepStatus::Failed;
-            let result = match early {
-                Early::Failed(message) => failed(Some(platform), &message, 1),
-                Early::Unreachable(unreachable) => unreachable.result(platform),
-                Early::Crashed(error) => {
-                    tracing::error!(
-                        system = platform,
-                        detail = error.as_str(),
-                        "query_validation_failed"
-                    );
-                    let mut result = head(Some(platform), "failed");
-                    counts(&mut result);
-                    result.push((
-                        "message".into(),
-                        Json::str(format!("Query validation for {platform} failed: {error}")),
-                    ));
-                    result.push(("_exit_code".into(), Json::Int(1)));
-                    result
-                }
-            };
-            Live {
-                result,
-                step: Some(step),
-            }
-        }
-        Ok(report) => {
-            step.status = StepStatus::Ok;
-            let failed_any = report.checks.iter().any(|check| !check.errors.is_empty());
-            let warned = report.checks.iter().any(|check| !check.warnings.is_empty());
-            let queries: usize = reach.iter().map(|(_, count)| count).sum();
-            let tenants = plural(reach.len(), "tenant", "tenants");
-            let mut message = if failed_any {
-                format!("Queries rejected on {platform} · {queries} checked on {tenants}")
-            } else {
-                format!("{} valid on {tenants}", plural(queries, "query", "queries"))
-            };
-            let timed_out: Vec<&RuleCheck> = report
-                .checks
-                .iter()
-                .filter(|check| check.code.is_some())
-                .collect();
-            if !timed_out.is_empty() {
-                message.push_str(&format!(
-                    " · {} with no answer within {}s",
-                    timed_out.len(),
-                    timeout
-                ));
-            }
-            let mut result = head(Some(platform), if failed_any { "failed" } else { "passed" });
-            counts(&mut result);
-            result.push(("message".into(), Json::str(&message)));
+    }
+}
+
+/// The result of a check that did not finish: a setup that cannot be used,
+/// an unreachable tenant, or a crash.
+fn stopped_early(platform: &str, early: Early, reach: &Reach<'_>) -> Fields {
+    match early {
+        Early::Failed(message) => failed(Some(platform), &message, 1),
+        Early::Unreachable(unreachable) => unreachable.result(platform),
+        Early::Crashed(error) => {
+            tracing::error!(
+                system = platform,
+                detail = error.as_str(),
+                "query_validation_failed"
+            );
+            let mut result = head(Some(platform), "failed");
+            reach.push_counts(&mut result);
             result.push((
-                "_summary".into(),
-                Json::object([
-                    ("queries", Json::from(queries)),
-                    ("tenants", Json::from(reach.len())),
-                ]),
+                "message".into(),
+                Json::str(format!("Query validation for {platform} failed: {error}")),
             ));
-            result.push(("_exit_code".into(), Json::Int(i64::from(failed_any))));
-            if !timed_out.is_empty() {
-                result.push(("check_timeout".into(), Json::Float(timeout)));
-                result.push((
-                    "timed_out".into(),
-                    Json::Array(timed_out.iter().map(|check| check.to_json()).collect()),
-                ));
-                result.push((
-                    "advice".into(),
-                    Json::str(format!(
-                        "raise the check timeout with --check-timeout or {CHECK_TIMEOUT_ENV}, or \
-                         make the queries cheaper"
-                    )),
-                ));
-                let rejected = report
-                    .checks
-                    .iter()
-                    .filter(|check| !check.errors.is_empty())
-                    .count();
-                if timed_out.len() == rejected {
-                    result.push(("_failure_code".into(), Json::str(QUERY_CHECK_TIMEOUT)));
-                }
-            }
-            if failed_any {
-                result.push(("error".into(), Json::str(&message)));
-            }
-            if warned {
-                result.push((
-                    "warnings".into(),
-                    Json::Array(vec![Json::str(format!(
-                        "Query validation reported warnings for {platform}"
-                    ))]),
-                ));
-            }
-            Live {
-                result,
-                step: Some(step),
-            }
+            result.push(("_exit_code".into(), Json::Int(1)));
+            result
         }
+    }
+}
+
+/// The result of a check every tenant answered: passed, or failed with the
+/// rejected queries; the checks that timed out, and the warnings.
+fn checked_result(platform: &str, report: &CheckReport, reach: &Reach<'_>, timeout: f64) -> Fields {
+    let failed_any = report.checks.iter().any(|check| !check.errors.is_empty());
+    let warned = report.checks.iter().any(|check| !check.warnings.is_empty());
+    let queries = reach.queries();
+    let tenants = plural(reach.tenants.len(), "tenant", "tenants");
+    let mut message = if failed_any {
+        format!("Queries rejected on {platform} · {queries} checked on {tenants}")
+    } else {
+        format!("{} valid on {tenants}", plural(queries, "query", "queries"))
     };
-    scoped(live, label)
+    let timed_out: Vec<&RuleCheck> = report
+        .checks
+        .iter()
+        .filter(|check| check.code.is_some())
+        .collect();
+    if !timed_out.is_empty() {
+        message.push_str(&format!(
+            " · {} with no answer within {}s",
+            timed_out.len(),
+            timeout
+        ));
+    }
+    let mut result = head(Some(platform), if failed_any { "failed" } else { "passed" });
+    reach.push_counts(&mut result);
+    result.push(("message".into(), Json::str(&message)));
+    result.push((
+        "_summary".into(),
+        Json::object([
+            ("queries", Json::from(queries)),
+            ("tenants", Json::from(reach.tenants.len())),
+        ]),
+    ));
+    result.push(("_exit_code".into(), Json::Int(i64::from(failed_any))));
+    if !timed_out.is_empty() {
+        push_timed_out(&mut result, report, &timed_out, timeout);
+    }
+    if failed_any {
+        result.push(("error".into(), Json::str(&message)));
+    }
+    if warned {
+        result.push((
+            "warnings".into(),
+            Json::Array(vec![Json::str(format!(
+                "Query validation reported warnings for {platform}"
+            ))]),
+        ));
+    }
+    result
+}
+
+/// `check_timeout`, `timed_out` and the advice; `query_check_timeout` when
+/// every rejection is a timeout.
+fn push_timed_out(
+    result: &mut Fields,
+    report: &CheckReport,
+    timed_out: &[&RuleCheck],
+    timeout: f64,
+) {
+    result.push(("check_timeout".into(), Json::Float(timeout)));
+    result.push((
+        "timed_out".into(),
+        Json::Array(timed_out.iter().map(|check| check.to_json()).collect()),
+    ));
+    result.push((
+        "advice".into(),
+        Json::str(format!(
+            "raise the check timeout with --check-timeout or {CHECK_TIMEOUT_ENV}, or make the \
+             queries cheaper"
+        )),
+    ));
+    let rejected = report
+        .checks
+        .iter()
+        .filter(|check| !check.errors.is_empty())
+        .count();
+    if timed_out.len() == rejected {
+        result.push(("_failure_code".into(), Json::str(QUERY_CHECK_TIMEOUT)));
+    }
 }
 
 /// The rule *uuid* as the index holds it, with its file.
@@ -972,7 +1063,7 @@ struct Unreachable {
 
 impl Unreachable {
     /// `_unreachable_tenant_result`.
-    fn result(&self, platform: &str) -> Vec<(String, Json)> {
+    fn result(&self, platform: &str) -> Fields {
         let mut advice = format!(
             "check the '{}' tenant in {} and the network path to {}; behind a proxy, pass \
              opentide --proxy",
@@ -1341,10 +1432,6 @@ fn check_batches(
 }
 
 /// `LiveQueryValidator.validate`: each rule's queries on each tenant.
-#[expect(
-    clippy::too_many_lines,
-    reason = "the oracle's check_rule, each outcome in its place"
-)]
 async fn generic(
     platform: &str,
     batches: &[Batch],
@@ -1357,14 +1444,7 @@ async fn generic(
         .get(platform)
         .and_then(opentide_connectors::Platform::live_validator)
         .ok_or_else(|| Early::Crashed(format!("{platform} has no live validator")))?;
-    let window = TimeWindow::check(cx.now);
-    // Exabeam searches the 15 minutes before the window's end, the console's
-    // "Test Last 15 mins" (`ExabeamQueryValidator.check_rule`).
-    let window = if platform == opentide_compile::exabeam::PLATFORM {
-        opentide_connectors::exabeam::rule_check_window(window.end)
-    } else {
-        window
-    };
+    let window = check_window(platform, cx.now);
     let cancel = CancellationToken::new();
     let mut report = CheckReport::default();
     for batch in batches {
@@ -1409,126 +1489,166 @@ async fn generic(
                     http: &conn.http,
                     cancel: &cancel,
                 };
-                let found: Result<LiveCheck, ConnectorError> = watched(
+                let found = watched(
                     validator.validate(context, &request),
                     &cancel,
                     cx.interrupted,
                 )
                 .await;
-                let label = item.label.clone();
-                match found {
-                    Ok(found) => {
-                        streak.answered();
-                        if platform == "defender_for_endpoint" && !found.errors.is_empty() {
-                            let mut tables =
-                                opentide_connectors::defender::defender_xdr_tables_in_query(
-                                    &request.text,
-                                );
-                            tables.sort();
-                            tables.dedup();
-                            let tables = if tables.is_empty() {
-                                "none".to_owned()
-                            } else {
-                                tables.join(", ")
-                            };
-                            let detail = format!(
-                                "{} ({}) | Detected Defender XDR tables: {tables} | \
-                                 {DEFENDER_COLUMNS_DOCS}",
-                                rule.name, rule.uuid
-                            );
-                            tracing::error!(
-                                detail = detail.as_str(),
-                                critical = true,
-                                "defender_xdr_custom_detection_query_is_missing_required_columns"
-                            );
-                        }
-                        for error in &found.errors {
-                            log_rejected(platform, rule, &tenant.name, error);
-                        }
-                        for warning in &found.warnings {
-                            tracing::warn!(
-                                detail =
-                                    format!("{} ({}) on {}", rule.name, rule.uuid, tenant.name)
-                                        .as_str(),
-                                warning = warning.as_str(),
-                                "query_validation_warning"
-                            );
-                        }
-                        if found.errors.is_empty() {
-                            tracing::info!(
-                                mdr_name = rule.name.as_str(),
-                                tenant = tenant.name.as_str(),
-                                "valid_query"
-                            );
-                        }
-                        report.checks.push(RuleCheck {
-                            rule: rule.uuid.clone(),
-                            name: rule.name.clone(),
-                            tenant: tenant.name.clone(),
-                            label,
-                            errors: found.errors,
-                            warnings: found.warnings,
-                            code: None,
-                        });
-                    }
-                    Err(ConnectorError::QueryTimedOut { message, .. }) => {
-                        streak.answered();
-                        report.checks.push(timed_out(
-                            platform,
-                            rule,
-                            &tenant.name,
-                            label,
-                            &message,
-                            timeout,
-                            Vec::new(),
-                        ));
-                    }
-                    Err(refused @ ConnectorError::Refused { .. }) => {
-                        streak.answered();
-                        report.checks.push(rejected(
-                            platform,
-                            rule,
-                            &tenant.name,
-                            label,
-                            &refused.text(),
-                        ));
-                    }
-                    Err(ConnectorError::Gateway { message, .. }) => {
-                        streak
-                            .timed_out(&message, false)
-                            .map_err(Early::Unreachable)?;
-                        report.checks.push(timed_out(
-                            platform,
-                            rule,
-                            &tenant.name,
-                            label,
-                            &message,
-                            timeout,
-                            Vec::new(),
-                        ));
-                    }
-                    Err(ConnectorError::Timeout {
-                        address, seconds, ..
-                    }) => {
-                        let error = read_timeout_text(&address, seconds);
-                        streak.timed_out(&error, true).map_err(Early::Unreachable)?;
-                        report.checks.push(timed_out(
-                            platform,
-                            rule,
-                            &tenant.name,
-                            label,
-                            &error,
-                            timeout,
-                            Vec::new(),
-                        ));
-                    }
-                    Err(error) => return Err(early(platform, &tenant.name, error)),
-                }
+                let asked = Asked {
+                    platform,
+                    rule,
+                    tenant: &tenant.name,
+                    label: item.label.clone(),
+                    timeout,
+                };
+                report
+                    .checks
+                    .push(asked.outcome(found, &request.text, &mut streak)?);
             }
         }
         streak.finish().map_err(Early::Unreachable)?;
     }
     Ok(report)
+}
+
+/// The window a rule's query is checked over: Exabeam searches the 15
+/// minutes before its end, the console's "Test Last 15 mins"
+/// (`ExabeamQueryValidator.check_rule`).
+fn check_window(platform: &str, now: jiff::Timestamp) -> TimeWindow {
+    let window = TimeWindow::check(now);
+    if platform == opentide_compile::exabeam::PLATFORM {
+        opentide_connectors::exabeam::rule_check_window(window.end)
+    } else {
+        window
+    }
+}
+
+/// One query of a rule asked of a tenant (`check_rule`).
+struct Asked<'a> {
+    platform: &'a str,
+    rule: &'a opentide_compile::Rule,
+    tenant: &'a str,
+    label: Option<String>,
+    timeout: f64,
+}
+
+impl Asked<'_> {
+    /// The query's check from what the tenant answered: a gateway or a
+    /// read that timed out counts toward the tenant's streak of timeouts,
+    /// and any other connector error stops the check.
+    fn outcome(
+        self,
+        found: Result<LiveCheck, ConnectorError>,
+        text: &str,
+        streak: &mut Streak,
+    ) -> Result<RuleCheck, Early> {
+        let Self {
+            platform,
+            rule,
+            tenant,
+            label,
+            timeout,
+        } = self;
+        let timed_out = |reason: &str| {
+            timed_out(
+                platform,
+                rule,
+                tenant,
+                label.clone(),
+                reason,
+                timeout,
+                Vec::new(),
+            )
+        };
+        match found {
+            Ok(found) => {
+                streak.answered();
+                Ok(answered(platform, rule, tenant, label.clone(), text, found))
+            }
+            Err(ConnectorError::QueryTimedOut { message, .. }) => {
+                streak.answered();
+                Ok(timed_out(&message))
+            }
+            Err(refused @ ConnectorError::Refused { .. }) => {
+                streak.answered();
+                Ok(rejected(
+                    platform,
+                    rule,
+                    tenant,
+                    label.clone(),
+                    &refused.text(),
+                ))
+            }
+            Err(ConnectorError::Gateway { message, .. }) => {
+                streak
+                    .timed_out(&message, false)
+                    .map_err(Early::Unreachable)?;
+                Ok(timed_out(&message))
+            }
+            Err(ConnectorError::Timeout {
+                address, seconds, ..
+            }) => {
+                let error = read_timeout_text(&address, seconds);
+                streak.timed_out(&error, true).map_err(Early::Unreachable)?;
+                Ok(timed_out(&error))
+            }
+            Err(error) => Err(early(platform, tenant, error)),
+        }
+    }
+}
+
+/// A query the tenant answered: its errors and warnings logged, and on
+/// Defender a rejected query's XDR tables named.
+fn answered(
+    platform: &str,
+    rule: &opentide_compile::Rule,
+    tenant: &str,
+    label: Option<String>,
+    text: &str,
+    found: LiveCheck,
+) -> RuleCheck {
+    if platform == "defender_for_endpoint" && !found.errors.is_empty() {
+        let mut tables = opentide_connectors::defender::defender_xdr_tables_in_query(text);
+        tables.sort();
+        tables.dedup();
+        let tables = if tables.is_empty() {
+            "none".to_owned()
+        } else {
+            tables.join(", ")
+        };
+        let detail = format!(
+            "{} ({}) | Detected Defender XDR tables: {tables} | {DEFENDER_COLUMNS_DOCS}",
+            rule.name, rule.uuid
+        );
+        tracing::error!(
+            detail = detail.as_str(),
+            critical = true,
+            "defender_xdr_custom_detection_query_is_missing_required_columns"
+        );
+    }
+    for error in &found.errors {
+        log_rejected(platform, rule, tenant, error);
+    }
+    for warning in &found.warnings {
+        tracing::warn!(
+            detail = format!("{} ({}) on {tenant}", rule.name, rule.uuid).as_str(),
+            warning = warning.as_str(),
+            "query_validation_warning"
+        );
+    }
+    if found.errors.is_empty() {
+        tracing::info!(mdr_name = rule.name.as_str(), tenant, "valid_query");
+    }
+    RuleCheck {
+        rule: rule.uuid.clone(),
+        name: rule.name.clone(),
+        tenant: tenant.to_owned(),
+        label,
+        errors: found.errors,
+        warnings: found.warnings,
+        code: None,
+    }
 }
 
 /// `GoogleSecopsValidator.validate`: each rule's assembled YARA-L text,

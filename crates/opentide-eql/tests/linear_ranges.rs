@@ -47,3 +47,13 @@ fn many_ecs_findings_are_converted_through_one_table() {
     );
     assert!(findings >= 2_000, "{findings} findings");
 }
+
+/// A long `in` list: a field comparison per element (`f0` is a field), each converted through
+/// the table (the #1425 review measured 6.5 s at 5,000 elements).
+#[test]
+fn a_long_in_list_is_converted_through_one_table() {
+    let n = 2_000;
+    let items: Vec<String> = (0..n).map(|i| format!("f{i}")).collect();
+    let source = format!("process where a in ({})", items.join(" , "));
+    assert_eq!(findings_without_a_scan(&source), n);
+}

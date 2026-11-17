@@ -364,10 +364,9 @@ class LockstepTest(unittest.TestCase):
     def test_the_workspace_pins_every_published_crate_to_its_version(self) -> None:
         version = release.workspace_version()
         self.assertEqual(release.crate_problems(version), [])
-        # The test harnesses are path dependencies without a version: never
+        # The test harness is a path dependency without a version: never
         # published, so not pinned.
         pins = release.internal_pins()
-        self.assertNotIn("opentide-compare", pins)
         self.assertNotIn("opentide-cassette", pins)
         self.assertIn("opentide-schema-derive", pins)
 

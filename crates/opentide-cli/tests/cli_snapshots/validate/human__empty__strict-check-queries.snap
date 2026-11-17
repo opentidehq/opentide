@@ -1,0 +1,11 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/human/empty/strict-check-queries
+---
+args: opentide validate --strict --check queries
+exit: 0
+
+━━━ stdout
+␛[1m␛[32m✓␛[0m Validation passed · <SECONDS>
+
+━━━ stderr · empty

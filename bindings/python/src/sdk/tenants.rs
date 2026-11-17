@@ -258,14 +258,15 @@ impl Connection {
     /// payload) as its bytes: an awaitable of `{remote_id, operation,
     /// warnings}`, as
     /// JSON. *policies* are Sysdig's runtime policies for the rule (a plan
-    /// entry's `policies`); `None` takes the tenant's.
-    #[pyo3(signature = (rule_id, operation, body, *, policies=None))]
+    /// entry's `policies`); `None` takes the tenant's. A `delete` takes no
+    /// *body*; the other operations need one (`usage_invalid_value`).
+    #[pyo3(signature = (rule_id, operation, body=None, *, policies=None))]
     fn deploy<'py>(
         &self,
         py: Python<'py>,
         rule_id: String,
         operation: &str,
-        body: Vec<u8>,
+        body: Option<Vec<u8>>,
         policies: Option<Vec<String>>,
     ) -> PyResult<Pending<'py>> {
         let operation = match operation {
@@ -279,12 +280,21 @@ impl Connection {
                 )));
             }
         };
-        let request = DeployRequest {
-            rule_id,
-            operation,
-            body,
-            policies,
-        };
+        let request = match body {
+            Some(body) => DeployRequest::new(rule_id, operation, body),
+            None if operation == Operation::Delete => DeployRequest::delete(rule_id),
+            None => {
+                return Err(invalid(format!(
+                    "body: a {} needs the compiled rule; only a delete takes none",
+                    match operation {
+                        Operation::Create => "create",
+                        Operation::Update => "update",
+                        _ => "disable",
+                    }
+                )));
+            }
+        }
+        .with_policies(policies);
         let connection = Arc::clone(&self.inner);
         pending(py, async move {
             let outcome = connection

@@ -14,10 +14,10 @@
 //! - the root's options before its commands, as every other command lists
 //!   its options before its subcommands.
 //!
-//! `cargo xtask golden check --engine compare` holds every help screen to the
-//! oracle's by content (`opentide_compare::help`): the same usage path, about
-//! text, options, arguments, commands, descriptions, defaults, environment
-//! variables and examples.
+//! Every help screen was held to the oracle's by content through the port
+//! (the same usage path, about text, options, arguments, commands,
+//! descriptions, defaults, environment variables and examples); the `help`
+//! snapshots of `tests/cli_snapshots.rs` hold them now (#1142).
 
 use clap::builder::StyledStr;
 use clap::{Arg, Command};

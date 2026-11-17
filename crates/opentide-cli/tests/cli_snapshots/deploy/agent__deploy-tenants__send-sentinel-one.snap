@@ -20,6 +20,7 @@ warning: External id recorded · uuid: 00000000-0000-4000-8047-000000000011 · p
 error: Fatal error · detail: {"errors": [{"code": 4040010, "title": "Not Found", "detail": "Rule 1800000000000000014 not found"}]} · advice: Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/
   [4/4] ✗ failed    SentinelOne update rule                  could not update the rule on tenant 'lab': SentinelOne has no such rule (HTTP 404): {"errors": [{"code": 4040010, "title": "Not Found", "detail": "Rule 1800000000000000014 not found"}]}. Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/
 ✗ sentinel_one · 2 deployed, 1 failed, 1 skipped, 0 not attempted · <SECONDS>
+warning: Some rules reported deployment warnings
 ✗ Deployment failed · 1 created, 1 deleted, 1 skipped, 1 failed, 0 not attempted · <SECONDS>
 tip: add --json for machine-readable output
 

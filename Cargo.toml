@@ -31,7 +31,6 @@ members = [
     "crates/opentide-analysis",
     "crates/opentide-lsp",
     "crates/opentide-wasm",
-    "crates/opentide-compare",
     "crates/opentide-cli",
     "crates/opentide-connectors",
     "crates/opentide-cassette",
@@ -77,11 +76,10 @@ opentide-cli = { path = "crates/opentide-cli", version = "=0.12.0", default-feat
 opentide-compile = { path = "crates/opentide-compile", version = "=0.12.0" }
 opentide-analysis = { path = "crates/opentide-analysis", version = "=0.12.0" }
 opentide-lsp = { path = "crates/opentide-lsp", version = "=0.12.0" }
-opentide-compare = { path = "crates/opentide-compare" }
 opentide-connectors = { path = "crates/opentide-connectors", version = "=0.12.0" }
 opentide-cassette = { path = "crates/opentide-cassette" }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["float_roundtrip"] }
 # Canonical paths without Windows' `\\?\` prefix (the CLI's E2E tests).
 dunce = "1"
 toml = "0.8"
@@ -101,7 +99,7 @@ percent-encoding = "2.3"
 regex = "1"
 # Look-around and back-references, which `regex` has not: the oracle's
 # Markdown-to-text patterns of the generated schemas (opentide-schema, UC-1.8).
-fancy-regex = "0.14"
+fancy-regex = "0.20"
 # Dates and times (opentide-schema `metadata.reviewed`): the calendar, the
 # clock and UTC offsets, without the time zone database.
 jiff = { version = "0.2", default-features = false, features = ["std"] }
@@ -198,7 +196,7 @@ hyper = { version = "1", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 # The version wiremock locks.
-base64 = "0.22"
+base64 = "0.23"
 sha2 = "0.11"
 # xtask only: `cargo xtask bench` reads each benchmarked process's peak RSS
 # from wait4(2), whose safe wrapper this is (the workspace forbids `unsafe`).

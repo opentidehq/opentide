@@ -58,7 +58,7 @@ for OPENTIDE_HOOK_WORKSPACE in .; do
   if [ ! -d "$OPENTIDE_HOOK_REPO/.opentide" ]; then
     echo "No opentide workspace at $OPENTIDE_HOOK_REPO (missing .opentide/). Re-run 'opentide setup hooks' or set OPENTIDE_SKIP_HOOKS=1 to bypass." >&2
     OPENTIDE_HOOK_STATUS=1
-  elif ! opentide --repo "$OPENTIDE_HOOK_REPO" validate --strict; then
+  elif ! opentide --repo "$OPENTIDE_HOOK_REPO" validate --strict --allow-empty; then
     OPENTIDE_HOOK_STATUS=1
   fi
 done
@@ -71,7 +71,7 @@ repos:
     hooks:
       - id: opentide-validate
         name: opentide validate
-        entry: sh -c 'repo="$(git rev-parse --show-toplevel)"; if [ ! -d "$repo/.opentide" ]; then echo "No opentide workspace at $repo (missing .opentide/). Re-run opentide setup hooks, or set SKIP=opentide-validate to bypass." >&2; exit 1; fi; exec opentide --repo "$repo" validate --strict'
+        entry: sh -c 'repo="$(git rev-parse --show-toplevel)"; if [ ! -d "$repo/.opentide" ]; then echo "No opentide workspace at $repo (missing .opentide/). Re-run opentide setup hooks, or set SKIP=opentide-validate to bypass." >&2; exit 1; fi; exec opentide --repo "$repo" validate --strict --allow-empty'
         language: system
         pass_filenames: false
         always_run: true

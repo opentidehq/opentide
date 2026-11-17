@@ -453,7 +453,8 @@ impl<'a> Session<'a> {
     /// empty one.
     fn object(&self, answer: &Answer, action: &str) -> Result<Json, ConnectorError> {
         let tenant = &self.cx.tenant.label.tenant;
-        if answer.status >= 400 {
+        // A 3xx is a refusal too: a redirect the client could not follow.
+        if !(200..300).contains(&answer.status) {
             let detail = if answer.status == 403 {
                 Some("the API client needs the NGSIEM: Read scope".to_owned())
             } else {

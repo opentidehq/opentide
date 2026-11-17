@@ -10,14 +10,14 @@ exit: 1
 ━━━ stderr
 ␛[1mDeploy plan␛[0m␛[1m␛[2m · strategy ␛[0m␛[1mPREVIEW RELEASE␛[0m␛[1m␛[2m · 1 platform, 1 tenant␛[0m
 ␛[2mPlan: 1 to create, 1 to update, 0 to disable, 1 to delete␛[0m
+error: Tenant deployment failed · platform: defender_for_endpoint · tenant: *** · error: Cannot reach defender_for_endpoint tenant '***' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
 
 ␛[1mDeploying to defender_for_endpoint / lab␛[0m␛[1m␛[2m · 3 rules␛[0m
-  ␛[2m[1/3]␛[0m ␛[2m· skipped   ␛[0mDefender create rule  ␛[2mnot attempted after a failure␛[0m
-  ␛[2m[2/3]␛[0m ␛[2m· skipped   ␛[0mDefender update rule  ␛[2mnot attempted after a failure␛[0m
-  ␛[2m[3/3]␛[0m ␛[2m· skipped   ␛[0mDefender retire rule  ␛[2mnot attempted after a failure␛[0m
+  ␛[2m[1/3]␛[0m ␛[2m· skipped   ␛[0mDefender create rule  ␛[2mnot attempted: tenant lab failed␛[0m
+  ␛[2m[2/3]␛[0m ␛[2m· skipped   ␛[0mDefender update rule  ␛[2mnot attempted: tenant lab failed␛[0m
+  ␛[2m[3/3]␛[0m ␛[2m· skipped   ␛[0mDefender retire rule  ␛[2mnot attempted: tenant lab failed␛[0m
   ␛[1m␛[31m✗␛[0m  ␛[1mdefender_for_endpoint␛[0m  ␛[2m0 deployed, 0 failed, 3 not attempted␛[0m ␛[2m<SECONDS>␛[0m
-error: Platform deployment failed · system: defender_for_endpoint · detail: Cannot reach defender_for_endpoint tenant '***' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)
-␛[1m␛[31merror:␛[0m Deployment to defender_for_endpoint failed: Cannot reach defender_for_endpoint tenant 'lab'
-       at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel
-       error: failed to create underlying connection: tcp connect error: Connection refused (os
-       error <ECONNREFUSED>)
+␛[1m␛[31merror:␛[0m Deployment to defender_for_endpoint failed on tenant lab: Cannot reach defender_for_endpoint
+       tenant 'lab' at https://login.microsoftonline.com: error sending request: client error
+       (Connect): tunnel error: failed to create underlying connection: tcp connect error:
+       Connection refused (os error <ECONNREFUSED>)

@@ -1013,8 +1013,8 @@ fn a_block_larger_than_the_budget_is_left_to_the_conversion() {
 }
 
 /// An optional `Literal` is Pydantic's `anyOf [literal, null]`: its `enum`
-/// holds the literal's values only, never a `null` (the schema diff
-/// against the oracle, `cargo xtask schema diff`).
+/// holds the literal's values only, never a `null` (as the retired schema
+/// diff against the oracle held it).
 #[test]
 fn an_optional_literal_keeps_null_out_of_its_enum() {
     let schema = serde_json::to_value(schemars::schema_for!(ElasticConfig)).unwrap();
