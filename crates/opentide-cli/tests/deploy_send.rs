@@ -1421,6 +1421,204 @@ fn exabeam_does_not_create_again_a_lost_rule_git_would_not_keep() {
     assert!(!err.contains("· error: git ignores"), "{err}");
 }
 
+/// Bitdefender through the command line, against a stand-in GravityZone: a
+/// created rule's id is recorded, a rule whose name another has fails with
+/// GravityZone's code, and a recorded rule the tenant lost is created again
+/// (a warning) and its new id recorded.
+#[test]
+fn bitdefender_records_created_rules_and_fails_one_whose_name_is_taken() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let ids = Arc::new(Mutex::new(vec![
+        "bbbbbbbbbbbbbbbbbbbbbbbb".to_owned(),
+        "aaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
+    ]));
+    let respond = move |request: &wiremock::Request| {
+        let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+        let (call, params, id) = (&body["method"], &body["params"], &body["id"]);
+        let answer = match call.as_str().unwrap() {
+            "createCustomRule" if params["name"] == "Taken rule" => serde_json::json!({
+                "jsonrpc": "2.0", "id": id, "error": {"code": -32602, "message": "Invalid params",
+                "data": {"details": "A rule with this name already exists"}}
+            }),
+            "createCustomRule" => {
+                serde_json::json!({"jsonrpc": "2.0", "id": id, "result": ids.lock().unwrap().pop()})
+            }
+            _ => serde_json::json!({
+                "jsonrpc": "2.0", "id": id, "error": {"code": -32002, "message": "Resource not found"}
+            }),
+        };
+        wiremock::ResponseTemplate::new(200).set_body_json(answer)
+    };
+    rt.block_on(
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/v1.0/jsonrpc/incidents"))
+            .respond_with(respond)
+            .mount(&server),
+    );
+    let block = bitdefender_block(false);
+    let (fresh, taken, lost) = (
+        "00000000-0000-4000-8099-000000000101",
+        "00000000-0000-4000-8099-000000000102",
+        "00000000-0000-4000-8099-000000000103",
+    );
+    let setup = format!(
+        "ssl = false\nurl = \"{}/api\"\napi_key = \"$GRAVITYZONE_API_KEY\"\n",
+        server.uri()
+    );
+    let ws = stated(
+        "bitdefender",
+        &setup,
+        &[("c.yaml", lost, block.clone(), "cccccccccccccccccccccccc")],
+    );
+    for (file, uuid, name) in [
+        ("a.yaml", fresh, "Fresh rule"),
+        ("b.yaml", taken, "Taken rule"),
+    ] {
+        std::fs::write(
+            ws.path().join("objects/rules").join(file),
+            rule(name, uuid, "A rule.", &block),
+        )
+        .unwrap();
+    }
+    let env = Env::from_pairs([("GRAVITYZONE_API_KEY".to_owned(), "key".to_owned())]);
+    let (sent, _) = deploy(
+        ws.path(),
+        "bitdefender",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    let shard = |uuid: &str| {
+        std::fs::read_to_string(
+            ws.path()
+                .join(format!(".opentide/states/deployment/{uuid}.json")),
+        )
+        .unwrap_or_default()
+    };
+    let rows = rows(&sent);
+    let failed: Vec<&str> = rows
+        .iter()
+        .filter(|(status, _)| status == "failed")
+        .filter_map(|(_, error)| error.as_deref())
+        .collect();
+    assert_eq!(failed.len(), 1, "{rows:?}");
+    assert!(
+        failed[0].starts_with("bitdefender_name_conflict: "),
+        "{rows:?}"
+    );
+    assert!(shard(taken).is_empty());
+    let recorded = [shard(fresh), shard(lost)].join("\n");
+    assert!(recorded.contains("aaaaaaaaaaaaaaaaaaaaaaaa"), "{recorded}");
+    assert!(recorded.contains("bbbbbbbbbbbbbbbbbbbbbbbb"), "{recorded}");
+    assert!(!recorded.contains("cccccccccccccccccccccccc"), "{recorded}");
+    // The lost rule's `bitdefender_rule_recreated` warning.
+    assert_eq!(
+        value(&sent, "warnings"),
+        &Json::Array(vec![Json::str("Some rules reported deployment warnings")])
+    );
+}
+
+/// Bitdefender through the command line: a disabled rule the tenant lost is
+/// forgotten (a warning); a tenant that refuses the key fails at its first
+/// rule and no other request is sent to it.
+#[test]
+fn bitdefender_forgets_a_lost_rule_to_disable_and_stops_a_tenant_refusing_the_key() {
+    use wiremock::matchers::{body_partial_json, method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/v1.0/jsonrpc/incidents"))
+            .and(body_partial_json(serde_json::json!({"method": "updateCustomRule"})))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(
+                r#"{"jsonrpc": "2.0", "id": "1", "error": {"code": -32002, "message": "Resource not found"}}"#,
+            ))
+            .mount(&server),
+    );
+    let disabled = bitdefender_block(false).replace("status: STAGING", "status: DISABLED");
+    let lost = "00000000-0000-4000-8099-000000000111";
+    let setup = |url: &str| {
+        format!("ssl = false\nurl = \"{url}/api\"\napi_key = \"$GRAVITYZONE_API_KEY\"\n")
+    };
+    let env = Env::from_pairs([("GRAVITYZONE_API_KEY".to_owned(), "key".to_owned())]);
+    let ws = stated(
+        "bitdefender",
+        &setup(&server.uri()),
+        &[("a.yaml", lost, disabled, "cccccccccccccccccccccccc")],
+    );
+    let (sent, _) = deploy(
+        ws.path(),
+        "bitdefender",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    assert_eq!(rows(&sent)[0].0, "deployed", "{:?}", rows(&sent));
+    assert!(
+        !ws.path()
+            .join(format!(".opentide/states/deployment/{lost}.json"))
+            .exists()
+    );
+    assert_eq!(
+        value(&sent, "warnings"),
+        &Json::Array(vec![Json::str("Some rules reported deployment warnings")])
+    );
+
+    let refusing = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(
+        wiremock::Mock::given(method("POST"))
+            .respond_with(wiremock::ResponseTemplate::new(401))
+            .expect(1)
+            .mount(&refusing),
+    );
+    let block = bitdefender_block(false);
+    let ws = workspace(
+        "bitdefender",
+        "lab",
+        &setup(&refusing.uri()),
+        &[
+            (
+                "a.yaml",
+                rule(
+                    "First rule",
+                    "00000000-0000-4000-8099-000000000112",
+                    "A.",
+                    &block,
+                ),
+            ),
+            (
+                "b.yaml",
+                rule(
+                    "Second rule",
+                    "00000000-0000-4000-8099-000000000113",
+                    "B.",
+                    &block,
+                ),
+            ),
+        ],
+    );
+    let (sent, _) = deploy(
+        ws.path(),
+        "bitdefender",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(refusing.verify());
+    let rows = rows(&sent);
+    assert!(
+        rows[0]
+            .1
+            .as_deref()
+            .unwrap_or_default()
+            .starts_with("bitdefender_tenant_unauthorized: "),
+        "{rows:?}"
+    );
+    assert_eq!(value(&sent, "status"), &Json::str("failed"));
+}
+
 /// Runs `opentide <argv>` on the command line, in `ws`, with `env`: the
 /// exit code, stdout and stderr.
 fn cli(ws: &Path, argv: &[&str], env: &[(&str, String)]) -> (i32, String, String) {
