@@ -11,8 +11,7 @@
 
 use crate::gates::{SyntaxElement, first_token, nodes_after, parts, text_of};
 use crate::syntax::SyntaxKind as K;
-use crate::tree::Node;
-use crate::{SyntaxNode, string_value, text};
+use crate::{SyntaxNode, string_value};
 use rowan::NodeOrToken;
 
 /// Column names a query outputs, in order, when they can be known without the
@@ -56,7 +55,7 @@ pub fn output_columns(source: &str) -> Option<Vec<String>> {
 type Columns = Option<Vec<String>>;
 
 /// The nodes of `parts` (comments aside), each with its position there.
-fn nodes(parts: &[SyntaxElement]) -> impl Iterator<Item = (usize, &SyntaxNode)> {
+pub(crate) fn nodes(parts: &[SyntaxElement]) -> impl Iterator<Item = (usize, &SyntaxNode)> {
     parts
         .iter()
         .enumerate()
@@ -70,34 +69,59 @@ fn nodes_before(parts: &[SyntaxElement], at: Option<usize>) -> impl Iterator<Ite
         .map(|(_, n)| n)
 }
 
-/// An assignment's (`name = value`) name and value: the first node before
-/// `=`, and the first node after it (the first node without one). Another
-/// node (an `ERROR`) has neither. The parser reads an aggregate's `WHERE`
-/// after its `=` (`processing.rs`, `field`), and only the name of an
-/// aggregate is read.
-fn assignment(node: &SyntaxNode) -> (Option<SyntaxNode>, Option<SyntaxNode>) {
+/// An assignment's (`name = value`, `agg WHERE filter`) labelled nodes.
+#[derive(Default)]
+pub(crate) struct Assignment {
+    /// The first node before `=`.
+    pub name: Option<SyntaxNode>,
+    /// The first node neither before `=` nor after `WHERE`.
+    pub value: Option<SyntaxNode>,
+    /// The first node after `WHERE`.
+    pub filter: Option<SyntaxNode>,
+}
+
+/// The [`Assignment`] of an aggregate or a field; another node (an `ERROR`)
+/// has none of its parts. The parser reads an aggregate's `WHERE` after its
+/// `=` (`processing.rs`, `field`).
+pub(crate) fn assignment(node: &SyntaxNode) -> Assignment {
+    let mut out = Assignment::default();
     if !matches!(
         node.kind(),
         K::AGGREGATE_FIELD | K::FIELD_ASSIGNMENT_OR_EXPRESSION
     ) {
-        return (None, None);
+        return out;
     }
     let parts = parts(node);
     let eq = first_token(&parts, &[K::EQ]);
-    let (mut name, mut value) = (None, None);
+    let filter = first_token(&parts, &[K::WHERE_KW]);
     for (i, n) in nodes(&parts) {
-        let slot = if eq.is_some_and(|e| i < e) {
-            &mut name
+        let slot = if filter.is_some_and(|w| i > w) {
+            &mut out.filter
+        } else if eq.is_some_and(|e| i < e) {
+            &mut out.name
         } else {
-            &mut value
+            &mut out.value
         };
         slot.get_or_insert_with(|| n.clone());
     }
-    (name, value)
+    out
+}
+
+/// A rename clause's old and new names: `old AS new`, or `new = old`.
+pub(crate) fn renamed(clause: &SyntaxNode) -> (Option<SyntaxNode>, Option<SyntaxNode>) {
+    let parts = parts(clause);
+    let as_first = first_token(&parts, &[K::AS_KW]).is_some();
+    let mut names = nodes(&parts).map(|(_, n)| n.clone());
+    let (first, second) = (names.next(), names.next());
+    if as_first {
+        (first, second)
+    } else {
+        (second, first)
+    }
 }
 
 /// The nodes of `kind` among a command's nodes.
-fn child_of(parts: &[SyntaxElement], kind: K) -> Vec<&SyntaxNode> {
+pub(crate) fn child_of(parts: &[SyntaxElement], kind: K) -> Vec<&SyntaxNode> {
     nodes(parts)
         .map(|(_, n)| n)
         .filter(|n| n.kind() == kind)
@@ -151,18 +175,9 @@ fn apply(command: &SyntaxNode, source: &str, columns: Columns) -> Option<Columns
                 return Some(None);
             };
             for clause in child_of(&own, K::RENAME_CLAUSE) {
-                // `old AS new`, or `new = old`.
-                let clause_parts = parts(clause);
-                let as_first = first_token(&clause_parts, &[K::AS_KW]).is_some();
-                let mut names = nodes(&clause_parts).map(|(_, n)| n);
-                let (first, second) = (names.next(), names.next());
-                let (old, new) = if as_first {
-                    (first?, second?)
-                } else {
-                    (second?, first?)
-                };
-                let old = Pattern::of(old, source)?.literal()?;
-                let new = Pattern::of(new, source)?.literal()?;
+                let (old, new) = renamed(clause);
+                let old = Pattern::of(&old?, source)?.literal()?;
+                let new = Pattern::of(&new?, source)?.literal()?;
                 let mut at = cols.iter().position(|c| *c == old)?;
                 if old != new {
                     // A column already called `new` is replaced; the renamed
@@ -191,7 +206,7 @@ fn apply(command: &SyntaxNode, source: &str, columns: Columns) -> Option<Columns
             let mut cols: Vec<String> = Vec::new();
             let by = first_token(&own, &[K::BY_KW]);
             for agg in nodes_before(&own, by) {
-                let name = match assignment(agg).0 {
+                let name = match assignment(agg).name {
                     Some(name) => qualified_of(&name, source)?,
                     None => verbatim(agg, source)?,
                 };
@@ -211,12 +226,12 @@ fn apply(command: &SyntaxNode, source: &str, columns: Columns) -> Option<Columns
                 .map(|by| nodes_after(&own, by))
                 .into_iter()
                 .flatten()
-                .any(|g| assignment(g).0.is_some())
+                .any(|g| assignment(g).name.is_some())
             {
                 return None;
             }
             for agg in nodes_before(&own, by) {
-                define(&mut cols, qualified_of(&assignment(agg).0?, source)?);
+                define(&mut cols, qualified_of(&assignment(agg).name?, source)?);
             }
             Some(Some(cols))
         }
@@ -345,7 +360,7 @@ fn push_unique(cols: &mut Vec<String>, name: String) -> Option<()> {
 /// field reference. Other unnamed expressions are named by their text, which
 /// is only trusted for `STATS … BY` (`by_text`).
 fn field_name(field: &SyntaxNode, source: &str, by_text: bool) -> Option<String> {
-    let (name, value) = assignment(field);
+    let Assignment { name, value, .. } = assignment(field);
     if let Some(name) = name {
         return qualified_of(&name, source);
     }
@@ -379,8 +394,7 @@ fn name_parts(node: &SyntaxNode) -> Vec<SyntaxElement> {
         .collect()
 }
 
-/// [`qualified`] of a rowan node: a dotted name with backquoted parts
-/// unquoted. `None` for parameters.
+/// A dotted name with backquoted parts unquoted. `None` for parameters.
 pub(crate) fn qualified_of(node: &SyntaxNode, source: &str) -> Option<String> {
     let mut out = Vec::new();
     for part in name_parts(node) {
@@ -396,20 +410,6 @@ pub(crate) fn qualified_of(node: &SyntaxNode, source: &str) -> Option<String> {
         }
     }
     (!out.is_empty()).then(|| out.join("."))
-}
-
-/// A dotted name with backquoted parts unquoted. `None` for parameters.
-pub(crate) fn qualified(node: Node, source: &str) -> Option<String> {
-    let mut parts = Vec::new();
-    let mut cursor = node.walk();
-    for part in node.named_children(&mut cursor) {
-        match part.kind() {
-            "identifier" | "id_pattern" => parts.push(text(part, source).to_string()),
-            "quoted_identifier" => parts.push(unquote(text(part, source))),
-            _ => return None,
-        }
-    }
-    (!parts.is_empty()).then(|| parts.join("."))
 }
 
 fn unquote(t: &str) -> String {
