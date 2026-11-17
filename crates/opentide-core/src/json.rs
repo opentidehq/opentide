@@ -577,7 +577,10 @@ mod tests {
     /// `serde_json` into `Json`): 17 significant digits and exponents far
     /// from zero included. serde_json's default parser is not exact for
     /// these (`123456789.12345679` came back `123456789.1234568`); the
-    /// workspace turns on its `float_roundtrip`.
+    /// workspace turns on its `float_roundtrip`. A `--workspace` build had it
+    /// already (`jsonschema`, through `xtask`, turns it on, and features add up),
+    /// so this test guards the builds of one package: the command line, the
+    /// wheel, the npm package and CI's `-p` runs.
     #[test]
     fn floats_round_trip_exactly() {
         for value in [
