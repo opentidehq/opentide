@@ -520,8 +520,8 @@ fn parse<'env>(env: Env, text: &str) -> napi::Result<Unknown<'env>> {
 /// `no_json_document`, `usage_invalid_choice`, `tenant_refused`, ...), a
 /// message, and the vendor's own words when a tenant gave a reason. A failed
 /// deploy also says what it stops (`rule` or `tenant`), the HTTP status the
-/// tenant answered with, the fields that locate it, and what it did before
-/// failing when the caller must keep it.
+/// tenant answered with, the fields that locate it, what it did before
+/// failing when the caller must keep it, and its further failures.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Failure {
     code: &'static str,
@@ -530,7 +530,15 @@ struct Failure {
     scope: Option<&'static str>,
     status: Option<u16>,
     fields: Vec<(String, String)>,
-    partial: Option<Box<tenants::DeployOutcome>>,
+    after: Option<Box<After>>,
+}
+
+/// What a failed deploy did before failing, and the rule's further
+/// failures: boxed, as most failures have neither.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct After {
+    partial: Option<tenants::DeployOutcome>,
+    more: Vec<Failure>,
 }
 
 impl Failure {
@@ -542,7 +550,7 @@ impl Failure {
             scope: None,
             status: None,
             fields: Vec::new(),
-            partial: None,
+            after: None,
         }
     }
 
@@ -584,7 +592,25 @@ impl From<opentide::Error> for Failure {
                 });
                 failure.status = failed.status;
                 failure.fields = failed.fields;
-                failure.partial = failed.partial.map(|done| Box::new((*done).into()));
+                let more: Vec<Failure> = failed
+                    .more_failures
+                    .into_iter()
+                    .map(|further| Self {
+                        code: further.code,
+                        detail: further.field("detail").map(str::to_owned),
+                        message: further.message,
+                        scope: failure.scope,
+                        status: further.status,
+                        fields: further.fields,
+                        after: None,
+                    })
+                    .collect();
+                if failed.partial.is_some() || !more.is_empty() {
+                    failure.after = Some(Box::new(After {
+                        partial: failed.partial.map(|done| (*done).into()),
+                        more,
+                    }));
+                }
             }
             _ => {}
         }
@@ -597,9 +623,11 @@ impl From<opentide::Error> for Failure {
 /// A failed deploy's also has its `scope` (`'rule'` or `'tenant'`), the HTTP
 /// `status` (or `null`), its `fields`, an object in order, and its `partial`:
 /// what it did before failing when the caller must keep it, a
-/// `DeployOutcome` whose `remoteId` is an id to record (or `null`). Any other
-/// failure's `scope`, `status` and `partial` are `null` and its `fields`
-/// empty.
+/// `DeployOutcome` whose `remoteId` is an id to record (or `null`), and its
+/// `moreFailures`: the rule's further failures, in order, each an object with
+/// the same `code`, `message`, `detail`, `scope`, `status` and `fields`. Any
+/// other failure's `scope`, `status` and `partial` are `null` and its
+/// `fields` and `moreFailures` empty.
 fn throw(env: Env, failure: Failure) -> napi::Error {
     let built = env
         .create_error(napi::Error::new(
@@ -607,31 +635,46 @@ fn throw(env: Env, failure: Failure) -> napi::Error {
             failure.message.clone(),
         ))
         .and_then(|mut object| {
-            object.set_named_property("code", failure.code)?;
-            match failure.detail.as_deref() {
-                Some(detail) => object.set_named_property("detail", detail)?,
-                None => object.set_named_property("detail", Null)?,
-            }
-            match failure.scope {
-                Some(scope) => object.set_named_property("scope", scope)?,
-                None => object.set_named_property("scope", Null)?,
-            }
-            match failure.status {
-                Some(status) => object.set_named_property("status", u32::from(status))?,
-                None => object.set_named_property("status", Null)?,
-            }
-            let mut fields = Object::new(&env)?;
-            for (key, value) in &failure.fields {
-                fields.set_named_property(key, value.as_str())?;
-            }
-            object.set_named_property("fields", fields)?;
-            match &failure.partial {
-                Some(done) => object.set_named_property("partial", env.to_js_value(&**done)?)?,
+            describe(env, &mut object, &failure)?;
+            let after = failure.after.as_deref();
+            match after.and_then(|after| after.partial.as_ref()) {
+                Some(done) => object.set_named_property("partial", env.to_js_value(done)?)?,
                 None => object.set_named_property("partial", Null)?,
             }
+            let mut more = env.create_array(0)?;
+            for further in after.map_or(&[][..], |after| after.more.as_slice()) {
+                let mut item = Object::new(&env)?;
+                item.set_named_property("message", further.message.as_str())?;
+                describe(env, &mut item, further)?;
+                more.insert(item)?;
+            }
+            object.set_named_property("moreFailures", more)?;
             Ok(napi::Error::from(object.to_unknown()))
         });
     built.unwrap_or_else(|error| error)
+}
+
+/// Sets `failure`'s `code`, `detail`, `scope`, `status` and `fields` on
+/// `object`.
+fn describe(env: Env, object: &mut Object<'_>, failure: &Failure) -> napi::Result<()> {
+    object.set_named_property("code", failure.code)?;
+    match failure.detail.as_deref() {
+        Some(detail) => object.set_named_property("detail", detail)?,
+        None => object.set_named_property("detail", Null)?,
+    }
+    match failure.scope {
+        Some(scope) => object.set_named_property("scope", scope)?,
+        None => object.set_named_property("scope", Null)?,
+    }
+    match failure.status {
+        Some(status) => object.set_named_property("status", u32::from(status))?,
+        None => object.set_named_property("status", Null)?,
+    }
+    let mut fields = Object::new(&env)?;
+    for (key, value) in &failure.fields {
+        fields.set_named_property(key, value.as_str())?;
+    }
+    object.set_named_property("fields", fields)
 }
 
 fn validate_options(options: ValidateOptions) -> Result<opentide::ValidateOptions, Failure> {
@@ -721,9 +764,32 @@ mod tests {
             DeployError::rule(DeployFailure::new("sysdig_request_failed", "HTTP 409"))
                 .with_partial(created.clone()),
         ));
-        assert_eq!(failure.partial, Some(Box::new(created.into())));
+        let after = failure.after.unwrap();
+        assert_eq!(after.partial, Some(created.into()));
+        assert!(after.more.is_empty());
         let usage = Failure::usage("no".into());
-        assert_eq!(usage.partial, None);
+        assert_eq!(usage.after, None);
+    }
+
+    #[test]
+    fn a_rule_that_failed_twice_keeps_both_failures() {
+        use opentide::connectors::{DeployError, DeployFailure};
+        let failure = Failure::from(opentide::Error::from(
+            DeployError::rule(DeployFailure::new("google_secops_text_failed", "HTTP 400"))
+                .with_more(vec![
+                    DeployFailure::new("google_secops_deployment_failed", "HTTP 500")
+                        .with_status(500)
+                        .with_field("detail", "down"),
+                ]),
+        ));
+        let more = failure.after.unwrap().more;
+        assert_eq!(more.len(), 1);
+        assert_eq!(more[0].code, "google_secops_deployment_failed");
+        assert_eq!(more[0].scope, Some("rule"));
+        assert_eq!(
+            (more[0].status, more[0].detail.as_deref()),
+            (Some(500), Some("down"))
+        );
     }
 
     #[test]

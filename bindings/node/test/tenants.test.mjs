@@ -217,7 +217,7 @@ test('a failed deploy rejects with its scope, status and fields (#1142)', async 
   assert.equal(unreachable.partial, null)
   // Any other error has no scope or status, and no fields.
   const usage = await rejects(connection.deploy('x', 'upsert', '{}'), 'usage_invalid_choice')
-  assert.deepEqual([usage.scope, usage.status, usage.fields, usage.partial], [null, null, {}, null])
+  assert.deepEqual([usage.scope, usage.status, usage.fields, usage.partial, usage.moreFailures], [null, null, {}, null, []])
 })
 
 test('a deploy takes the rule\'s policies, which only Sysdig sends', async () => {
