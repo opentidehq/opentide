@@ -25,7 +25,6 @@ dunce = "1"
 jiff.workspace = true
 # `files::sha256_hex`: the vocabulary bundle's and its sources' digests.
 sha2 = "0.11"
-opentide-compare.workspace = true
 # `cargo xtask cassettes` (UC-4.1, #831): the recording proxy and the cassettes.
 opentide-cassette.workspace = true
 # The object models' oracle comparisons (`corpus faults --engine rust`), the

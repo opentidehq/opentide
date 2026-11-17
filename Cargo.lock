@@ -3296,18 +3296,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "opentide-compare"
-version = "0.12.0"
-dependencies = [
- "jiff",
- "regex",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "toml 0.8.23",
-]
-
-[[package]]
 name = "opentide-compile"
 version = "0.12.0"
 dependencies = [
@@ -6563,7 +6551,6 @@ dependencies = [
  "opentide-analysis",
  "opentide-cassette",
  "opentide-cli",
- "opentide-compare",
  "opentide-core",
  "opentide-lsp",
  "opentide-schema",

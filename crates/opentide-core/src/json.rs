@@ -4,7 +4,7 @@
 //! key by key, and the order is part of what a reader sees. `serde_json::Value`
 //! sorts its keys unless serde_json's `preserve_order` feature is on, and that
 //! feature is unified across a build: it would change the map of every crate,
-//! `opentide-compare` and the goldens included. So the workspace keeps it off
+//! the snapshot tests included. So the workspace keeps it off
 //! and builds ordered documents with this [`Json`], whose objects are
 //! [`IndexMap`]s. It is read and written with serde, so serde_json's parser and
 //! formatters do the text.
