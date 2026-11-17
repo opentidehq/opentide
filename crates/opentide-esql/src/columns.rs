@@ -742,6 +742,29 @@ mod tests {
         assert_eq!(cols("FROM a | KEEP a, b | KEEP z"), None, "unknown column");
     }
 
+    /// A query cut short at its end does not parse: Elasticsearch rejects
+    /// it, so it has no known columns, and no indices either (#1498).
+    #[test]
+    fn a_query_cut_short_has_no_columns() {
+        for query in [
+            "ROW a = 1 | EVAL b =",
+            "ROW a = 1 | STATS c =",
+            "ROW a = 1 | ENRICH p ON a WITH x =",
+        ] {
+            assert_eq!(cols(query), None, "{query}");
+        }
+        assert_eq!(cols("ROW a = 1 | EVAL b = 2"), v(&["a", "b"]));
+        assert_eq!(crate::source_indices("FROM a | EVAL c ="), None);
+        assert_eq!(
+            crate::source_indices("FROM a | EVAL c = 1"),
+            Some(vec!["a".to_string()])
+        );
+        // Nor ECS findings.
+        let ecs = "FROM logs-endpoint.events.process-* | WHERE process.nmae == \"x\" | EVAL b =";
+        assert!(crate::ecs_diagnostics(ecs).is_empty());
+        assert!(!crate::ecs_diagnostics(&format!("{ecs} 1")).is_empty());
+    }
+
     #[test]
     fn stats_fixes_the_columns() {
         assert_eq!(
