@@ -502,9 +502,14 @@ pub fn detail_line(record: &CveRecord) -> String {
         .filter(|text| !text.is_empty())
         .or(record.description.as_deref())
         .unwrap_or_default();
+    // The record's text comes from the CVE service: escaped, so it cannot
+    // open a link or raw HTML on the page.
     let summary = Some(super::text::truncate(source, 280))
         .filter(|summary| !summary.is_empty())
-        .unwrap_or_else(|| "no summary".to_owned());
+        .map_or_else(
+            || "no summary".to_owned(),
+            |summary| super::text::markdown_text(&summary),
+        );
     let mut parts = vec![format!(
         "- **{}**: {}.",
         record.identifier,
@@ -515,7 +520,7 @@ pub fn detail_line(record: &CveRecord) -> String {
             .affected
             .iter()
             .take(AFFECTED_SHOWN)
-            .cloned()
+            .map(|affected| super::text::markdown_text(affected))
             .collect::<Vec<_>>()
             .join(", ");
         let more = record.affected.len().saturating_sub(AFFECTED_SHOWN);
@@ -565,6 +570,21 @@ mod detail_tests {
             kev_added: Some("2023-10-18".into()),
             ..CveRecord::default()
         }
+    }
+
+    /// A CVE record's text comes from the network: it cannot open a link or
+    /// raw HTML on the page.
+    #[test]
+    fn a_records_text_is_escaped() {
+        let mut record = citrix_bleed();
+        record.title = Some("[click](javascript:alert(1)) <img src=x>".into());
+        record.affected = vec!["<b>ADC</b>".into()];
+        let line = detail_line(&record);
+        assert!(
+            line.contains("\\[click\\](javascript:alert(1)) \\<img src=x\\>"),
+            "{line}"
+        );
+        assert!(line.contains("Affects \\<b\\>ADC\\</b\\>."), "{line}");
     }
 
     #[test]

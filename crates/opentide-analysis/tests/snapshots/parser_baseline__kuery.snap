@@ -38,9 +38,8 @@ kuery_parse_error error 0:23-0:26 Kibana needs whitespace around `and`
 37..38 operator
 38..43 string
 == corpus/kuery/field__invalid.kuery
-kuery_parse_error error 0:7-0:8 KQL syntax error near `\`; expected `or`, `and`, `:`, a range operator, or end of input
-0..7 string
-8..13 property
+kuery_parse_error error 0:0-0:21 KQL syntax error: a quoted string is never closed
+1..13 property
 13..14 operator
 14..21 string
 == corpus/kuery/field__valid.kuery
@@ -176,7 +175,7 @@ kuery_parse_error error 0:8-0:21 KQL syntax error: a quoted string is never clos
 7..8 operator
 8..22 string
 == corpus/kuery/range_expression__invalid.kuery
-kuery_parse_error error 0:13-0:14 KQL syntax error: a value is missing after `>=`
+kuery_parse_error error 0:13-0:13 KQL syntax error: a value is missing after `>=`
 kuery_range_type hint 0:0-0:13 ECS v9.5.0 maps `event.code` as `keyword`: a range compares it as text, so "10" sorts before "9"
 0..10 property
 11..13 operator

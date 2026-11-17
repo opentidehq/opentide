@@ -20,7 +20,7 @@
 use std::collections::HashMap;
 
 use super::flavor::Flavor;
-use super::text::{join, table_cell};
+use super::text::{escape_pipes, join, markdown_text, table_cell};
 
 /// A page with fewer listed sections than this gets no contents line.
 pub const CONTENTS_THRESHOLD: usize = 4;
@@ -190,7 +190,7 @@ impl Page {
             blocks.push(self.breadcrumb.clone());
         } else {
             blocks.push(self.breadcrumb.clone());
-            blocks.push(heading(1, &self.title));
+            blocks.push(heading(1, &markdown_text(&self.title)));
         }
         blocks.extend(self.lead.iter().cloned());
         blocks.push(self.contents());
@@ -217,7 +217,12 @@ impl Page {
             .iter()
             .zip(self.top_anchors())
             .filter(|(item, _)| item.in_contents)
-            .map(|(item, anchor)| Flavor::link(&table_cell(&item.title), &format!("#{anchor}")))
+            .map(|(item, anchor)| {
+                Flavor::link(
+                    &table_cell(&markdown_text(&item.title)),
+                    &format!("#{anchor}"),
+                )
+            })
             .collect();
         paragraph(&format!("**On this page:** {}", links.join(" · ")))
     }
@@ -234,7 +239,10 @@ fn descendants(section: &Section) -> usize {
 
 /// A section and its children as Markdown.
 fn section_text(section: &Section, level: usize) -> String {
-    let mut parts = vec![heading(level, &section.title), section.body.clone()];
+    let mut parts = vec![
+        heading(level, &markdown_text(&section.title)),
+        section.body.clone(),
+    ];
     parts.extend(
         section
             .children
@@ -286,9 +294,15 @@ pub fn code_block(language: &str, body: &str) -> String {
     format!("```{language}\n{body}\n```\n\n")
 }
 
-/// GitLab wiki front matter naming the page.
+/// GitLab wiki front matter naming the page. The title is always a YAML
+/// double-quoted scalar: a name with `: `, ` #`, `[`, a quote or a line
+/// break, or one that reads as another type (`yes`, `null`, `1.0`), would
+/// otherwise break the front matter or change what it says.
 pub fn frontmatter(title: &str) -> String {
-    format!("---\ntitle: {title}\n---\n\n")
+    format!(
+        "---\ntitle: {}\n---\n\n",
+        opentide_schema::node::double_quoted(title)
+    )
 }
 
 /// The flavour's own table of contents: `[[_TOC_]]` on GitLab and Azure
@@ -304,17 +318,7 @@ pub fn table_of_contents(flavor: Flavor) -> &'static str {
 /// a bare `|` the cell.
 pub fn cell(text: &str) -> String {
     let lines: Vec<&str> = text.lines().collect();
-    let joined = lines.join(" ");
-    let mut out = String::with_capacity(joined.len());
-    let mut previous = '\0';
-    for c in joined.chars() {
-        if c == '|' && previous != '\\' {
-            out.push('\\');
-        }
-        out.push(c);
-        previous = c;
-    }
-    out
+    escape_pipes(&lines.join(" "))
 }
 
 /// A Markdown table.
@@ -398,6 +402,45 @@ mod tests {
         Section::new(title, [body])
     }
 
+    /// Names that break or change hand-built YAML: a `: `, a comment, a flow
+    /// sequence, words read as other types, quotes, a line break, a leading
+    /// `-`, a leading space and a tab.
+    const HOSTILE_TITLES: [&str; 14] = [
+        "Mimikatz: dump [x] #1",
+        "a #b",
+        "[x]",
+        "{a: b}",
+        "yes",
+        "null",
+        "1.0",
+        "it's",
+        "say \"hi\"",
+        "two\nlines",
+        "- item",
+        " lead",
+        "back\\slash\tand tab",
+        "&anchor *alias !tag %dir @at `tick` |pipe >fold",
+    ];
+
+    #[test]
+    fn front_matter_reads_back_as_the_title() {
+        for title in HOSTILE_TITLES {
+            let page = Page::new(Flavor::Gitlab, title, true, "crumb\n".to_owned());
+            let rendered = page.render();
+            let yaml = rendered
+                .strip_prefix("---\n")
+                .and_then(|rest| rest.split_once("\n---\n"))
+                .map(|(yaml, _)| yaml)
+                .unwrap_or_else(|| panic!("no front matter in {rendered:?}"));
+            let document = opentide_schema::node::load(yaml)
+                .unwrap_or_else(|error| panic!("{title:?}: {error:?} in {yaml:?}"));
+            let root = document.root().expect("a document");
+            let read = root.get("title").and_then(|node| node.value.as_str());
+            assert_eq!(read, Some(title), "{yaml}");
+            assert_eq!(yaml.lines().count(), 1, "{yaml}");
+        }
+    }
+
     #[test]
     fn empty_sections_are_dropped() {
         let mut page = Page::new(Flavor::Generic, "T", false, String::new());
@@ -435,7 +478,7 @@ mod tests {
             page.add(section(title, "x"));
         }
         let text = page.render();
-        assert!(text.starts_with("---\ntitle: T\n---\n\ncrumb\n\n[[_TOC_]]\n\n## A"));
+        assert!(text.starts_with("---\ntitle: \"T\"\n---\n\ncrumb\n\n[[_TOC_]]\n\n## A"));
     }
 
     #[test]

@@ -599,7 +599,20 @@ impl CarbonBlack {
             )
             .await?
             .map_err(refused)?;
-            let body: Json = serde_json::from_slice(&page.body).unwrap_or(Json::Null);
+            // A page that is not JSON is an error, never an empty page (#1142).
+            let Some(body) = page.json() else {
+                return Err(ConnectorError::Answer {
+                    platform: PLATFORM.into(),
+                    tenant: cx.tenant.label.tenant.clone(),
+                    address: url::Url::parse(&org.server)
+                        .map(|url| crate::error::origin(&url))
+                        .unwrap_or_else(|_| org.server.clone()),
+                    reason: format!(
+                        "reading the search's results: {}",
+                        page.not_json_page().unwrap_or_default()
+                    ),
+                });
+            };
             let total = match body.get("num_available") {
                 Some(Json::Int(total)) => usize::try_from(*total).unwrap_or(0),
                 _ => 0,
@@ -753,6 +766,7 @@ impl Deployer for CarbonBlack {
                 remote_id: matches!(change, ReportChange::Created | ReportChange::Updated)
                     .then(|| request.rule_id.clone()),
                 operation: request.operation,
+                warnings: Vec::new(),
             })
         })
     }

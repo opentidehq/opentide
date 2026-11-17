@@ -101,9 +101,11 @@ export declare class TenantConfig {
 export declare class Workspace {
   /**
    * Opens the workspace at `path` on disk: a repository holding
-   * `.opentide/` or `objects/`, or a folder inside one.
+   * `.opentide/` or `objects/`, or a folder inside one. The files are read
+   * and indexed off Node's event loop; the promise resolves to the
+   * workspace.
    */
-  static open(path: string, options?: OpenOptions | undefined | null): Workspace
+  static open(path: string, options?: OpenOptions | undefined | null): Promise<Workspace>
   /**
    * Opens a workspace held in memory, rooted at `root`: each key of
    * `files` is a path (relative to `root`, or absolute), each value its
@@ -153,9 +155,10 @@ export declare class Workspace {
   /**
    * The deploy plan: what `opentide deploy --dry-run` would send, computed
    * locally. Nothing is sent and nothing is written. `document` is
-   * `deploy --dry-run --json`'s `result`.
+   * `deploy --dry-run --json`'s `result`. The rules are compiled off
+   * Node's event loop.
    */
-  deployPlan(options?: DeployPlanOptions | undefined | null): { document: any; summary: any | null; ok: boolean }
+  deployPlan(options?: DeployPlanOptions | undefined | null): Promise<{ document: any; summary: any | null; ok: boolean }>
   /**
    * The tenants the workspace configures for `platform` (the
    * `[[tenants]]` of `.opentide/configurations/platforms/<platform>.toml`),
@@ -229,6 +232,11 @@ export interface DeployOutcome {
   remoteId: string | null
   /** What was done. */
   operation: 'create' | 'update' | 'disable' | 'delete'
+  /**
+   * What the deploy raised without failing: the rule is deployed, and
+   * these say what to check, as `opentide deploy` warns of them.
+   */
+  warnings: Array<DeployWarning>
 }
 
 /** What `Workspace.deployPlan` plans: `opentide deploy --dry-run`'s options. */
@@ -246,6 +254,14 @@ export interface DeployPlanOptions {
    * unset: the configuration's.
    */
   keepDeprecated?: boolean
+}
+
+/** A warning a deploy raised: the rule is deployed, with something to check. */
+export interface DeployWarning {
+  /** The event `opentide deploy` logs it as (`sysdig_rule_recreated`). */
+  code: string
+  /** What happened. */
+  message: string
 }
 
 /**
@@ -278,8 +294,11 @@ export interface LiveCheck {
  *
  * Ctrl-C stops the run, which then returns 130 (`error: interrupted`); a
  * second Ctrl-C ends the process at once, as the PyPI CLI does.
+ *
+ * The promise resolves to the exit code; the run happens off Node's event
+ * loop, which keeps serving timers and I/O meanwhile.
  */
-export declare function main(argv: Array<string>): number
+export declare function main(argv: Array<string>): Promise<number>
 
 /** How `Workspace.open` opens a workspace. */
 export interface OpenOptions {
@@ -375,10 +394,11 @@ export interface QueryResult {
  * `command`, `result`, `failure`, ...) or, for `commands`, the command tree.
  * A command that fails still returns its document, with `ok: false`.
  *
- * Throws an `Error` whose `code` is `no_json_document` when the command
- * wrote no document (`--version`).
+ * The promise rejects with an `Error` whose `code` is `no_json_document`
+ * when the command wrote no document (`--version`). The command runs off
+ * Node's event loop.
  */
-export declare function runJson(argv: Array<string>): any
+export declare function runJson(argv: Array<string>): Promise<any>
 
 /** What `Workspace.validate` runs: `opentide validate`'s options. */
 export interface ValidateOptions {

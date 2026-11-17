@@ -74,6 +74,19 @@ pub mod support {
         token_in(parent, &[kind])
     }
 
+    /// Every token directly under `parent` whose kind is one of `kinds`, in
+    /// order: a choice of tokens under `*` (`(op:('+' | '-') Expr)*`).
+    pub fn tokens_in<L: Language>(
+        parent: &SyntaxNode<L>,
+        kinds: &[L::Kind],
+    ) -> Vec<SyntaxToken<L>> {
+        parent
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| kinds.contains(&token.kind()))
+            .collect()
+    }
+
     /// The first token directly under `parent` whose kind is one of `kinds`.
     pub fn token_in<L: Language>(
         parent: &SyntaxNode<L>,

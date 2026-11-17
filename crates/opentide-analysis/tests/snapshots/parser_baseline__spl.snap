@@ -2673,11 +2673,14 @@ spl_parse_error error 0:23-0:24 SPL syntax error: '[' is never closed
 73..74 number
 74..75 punctuation.bracket
 == corpus/spl/head_command__invalid.spl
+spl_parse_error error 0:24-0:24 SPL syntax error: missing the value of the option
 0..5 property
 5..6 operator
 6..10 variable
 11..12 operator.pipe
 13..17 keyword
+18..23 property
+23..24 operator
 == corpus/spl/head_command__valid.spl
 0..5 property
 5..6 operator
@@ -2920,13 +2923,14 @@ spl_parse_error error 0:16-0:16 SPL syntax error: expected a regular expression
 23..27 property
 28..40 string
 == corpus/spl/search_command__invalid.spl
-spl_parse_error error 0:11-0:12 SPL syntax error: expected a command before '|'
-0..6 keyword
-7..8 variable
-9..10 operator.pipe
+spl_parse_error error 0:22-0:22 SPL syntax error: missing the value of the comparison
+0..5 property
+5..6 operator
+6..10 variable
 11..12 operator.pipe
-13..18 keyword
-19..24 function.builtin
+13..19 keyword
+20..21 property
+21..22 operator
 == corpus/spl/search_command__valid.loose_operators.spl
 spl_search_operator error 0:26-0:28 '==' is not a search operator: Splunk accepts it but the comparison never matches; use '='
 spl_search_operator error 0:39-0:41 '<>' is not a search operator: Splunk accepts it but the comparison never matches; use '!='
@@ -2958,15 +2962,14 @@ spl_empty_command warning 0:0-0:6 `search` with no arguments does nothing
 0..6 keyword
 7..8 operator.pipe
 == corpus/spl/search_expression__invalid.spl
-spl_parse_error error 0:15-0:17 SPL syntax error: unexpected 'OR'
+spl_parse_error error 0:17-0:18 SPL syntax error: expected a search term before ')'
 0..5 property
 5..6 operator
 6..10 variable
-11..14 operator
-15..17 operator
-18..22 property
-22..23 operator
-23..29 variable
+11..12 punctuation.bracket
+12..13 variable
+14..16 operator
+17..18 punctuation.bracket
 == corpus/spl/search_expression__valid.spl
 0..5 property
 5..6 operator
@@ -3141,11 +3144,13 @@ spl_parse_error error 0:18-0:18 SPL syntax error: expected a field
 23..24 punctuation.delimiter
 25..31 property
 == corpus/spl/tail_command__invalid.spl
+spl_parse_error error 0:18-0:21 SPL syntax error: unexpected 'abc'
 0..5 property
 5..6 operator
 6..10 variable
 11..12 operator.pipe
 13..17 keyword
+18..21 variable
 == corpus/spl/tail_command__valid.spl
 0..5 property
 5..6 operator
@@ -3316,13 +3321,16 @@ spl_command_without_pipe error 0:0-0:6 the search starts with the command name `
 170..171 punctuation.delimiter
 172..186 property
 == corpus/spl/unknown_command__invalid.spl
-spl_unknown_command warning 0:13-0:26 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
+spl_parse_error error 0:27-0:28 unbalanced parentheses: this '(' is never closed
+spl_unknown_command warning 0:13-0:28 'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it
 0..5 property
 5..6 operator
 6..10 variable
 11..12 operator.pipe
 13..24 error
-25..26 variable
+25..26 property
+26..27 operator
+27..28 punctuation.bracket
 == corpus/spl/unknown_command__valid.spl
 spl_unknown_command warning 0:13-0:26 'bogus' is not a command opentide knows; if an app on the search head provides it, declare it
 0..5 property

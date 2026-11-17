@@ -1,2 +1,2 @@
 # prod:boolean_query invalid
-event.category:process AND
+a AND b AND

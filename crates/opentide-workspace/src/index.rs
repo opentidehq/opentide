@@ -48,7 +48,7 @@ impl Object {
         self.document.root().map(AsRef::as_ref)
     }
 
-    /// The file's name (`files` in the Python index).
+    /// The file's name (the value [`Index::files`] maps its UUID to).
     pub fn file_name(&self) -> String {
         file_name(&self.path)
     }
@@ -229,7 +229,8 @@ pub fn holds_name(node: &Node) -> bool {
     }
 }
 
-/// A value as a key or reference: its text (`str()` in Python).
+/// A value as a key or reference: a string as itself, another scalar as
+/// YAML writes it, a sequence or mapping bracketed (`[...]`, `{...}`).
 fn text(node: &Node) -> String {
     node.value.to_string()
 }

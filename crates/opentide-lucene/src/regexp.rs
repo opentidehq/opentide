@@ -62,7 +62,19 @@ pub enum Verdict {
     /// Lucene 9 only: a finite automaton deeper than its 1000-level
     /// recursion limit (`input automaton is too large`).
     TooLarge,
+    /// Nested deeper than [`MAX_DEPTH`] levels: past what this checker
+    /// reads (Lucene's own parser has no limit of its own but the stack).
+    TooDeep,
 }
+
+/// The deepest expression the checker reads, in levels of operators: each
+/// group, `~`, repetition and `&`, and each `|` or concatenation chain
+/// (however long), is one level over what it holds. Past it, one warning and
+/// no other finding. The checker runs in loops at any depth; the bound keeps
+/// its work on pathological bodies predictable, and it is the bound
+/// Elasticsearch puts on EQL (`eql_expression_depth`) and the YARA checker
+/// puts on groups. A detection's regexp nests a handful of levels.
+pub const MAX_DEPTH: usize = 250;
 
 /// The Lucene line an Elasticsearch stack builds regexps with. Syntax is the
 /// same; the automaton constructions, and so the determinization effort,
@@ -105,6 +117,7 @@ pub fn check(body: &str, stack: Stack) -> Verdict {
     let chars: Vec<char> = body.chars().collect();
     let parsed = match Parser::new(&chars, stack).parse() {
         Ok(re) => re,
+        Err(e) if e.too_deep => return Verdict::TooDeep,
         Err(e) => {
             return Verdict::Invalid {
                 at: e.at,
@@ -112,6 +125,9 @@ pub fn check(body: &str, stack: Stack) -> Verdict {
             };
         }
     };
+    if parsed.depth() > MAX_DEPTH {
+        return Verdict::TooDeep;
+    }
     if let Some(name) = parsed.first_automaton_name() {
         return Verdict::Invalid {
             at: 0,
@@ -159,8 +175,35 @@ pub fn elasticsearch_problems(body: &str) -> Vec<Problem> {
     use opentide_core::Severity;
     let es9 = check(body, Stack::Es9);
     let es8 = check(body, Stack::Es8);
+    let deep = |stack: &str| {
+        format!(
+            "{stack} reads it this far, but it nests more than {MAX_DEPTH} levels, which opentide does not check"
+        )
+    };
     // Lucene 9 and 10 read `[\x-y]` differently; everything else parses alike.
+    // So one stack can stop on a syntax error before the depth the other
+    // reaches: that error is still a finding.
     let invalid = match (&es8, &es9) {
+        (Verdict::Invalid { at, message }, Verdict::TooDeep) => Some((
+            Severity::Warning,
+            *at,
+            format!("{message} (Elasticsearch 8.19 rejects it; {})", deep("9.x")),
+        )),
+        (Verdict::TooDeep, Verdict::Invalid { at, message }) => Some((
+            Severity::Warning,
+            *at,
+            format!("{message} (Elasticsearch 9.x rejects it; {})", deep("8.19")),
+        )),
+        (Verdict::TooDeep, _) | (_, Verdict::TooDeep) => {
+            return vec![Problem {
+                severity: Severity::Warning,
+                at: None,
+                message: format!(
+                    "this regular expression nests more than {MAX_DEPTH} levels (each group, `~`, repetition, `&`, and `|` or concatenation counts one); opentide does not check it"
+                ),
+                syntax: false,
+            }];
+        }
         (Verdict::Invalid { at, message }, Verdict::Invalid { .. }) => {
             Some((Severity::Error, *at, message.clone()))
         }
@@ -228,8 +271,7 @@ pub fn elasticsearch_problems(body: &str) -> Vec<Problem> {
 fn too_complex(re: &Re, stack: Stack) -> Option<Verdict> {
     WORK.with(|w| w.set(0));
     let built = match stack {
-        Stack::Es9 => re.to_automaton(),
-        Stack::Es8 => re.to_automaton_9(),
+        Stack::Es9 | Stack::Es8 => re.build(stack),
     };
     let a = match built {
         Ok(a) => a,
@@ -354,8 +396,10 @@ pub fn collapse_quantifiers(pattern: &str) -> String {
     out
 }
 
-/// The parsed expression, as Lucene's `RegExp` tree.
-#[derive(Debug, Clone)]
+/// The parsed expression, as Lucene's `RegExp` tree. Not `Clone`, and
+/// dropped by a loop: a tree can be a million levels deep before
+/// [`Re::depth`] refuses it.
+#[derive(Debug)]
 enum Re {
     Union(Box<Re>, Box<Re>),
     Concat(Box<Re>, Box<Re>),
@@ -380,64 +424,184 @@ enum Re {
 }
 
 impl Re {
-    fn first_automaton_name(&self) -> Option<&str> {
+    /// The children of a node, left to right.
+    fn children(&self) -> [Option<&Re>; 2] {
         match self {
-            Re::Automaton(name) => Some(name),
-            Re::Union(a, b) | Re::Concat(a, b) | Re::Intersection(a, b) => a
-                .first_automaton_name()
-                .or_else(|| b.first_automaton_name()),
+            Re::Union(a, b) | Re::Concat(a, b) | Re::Intersection(a, b) => [Some(a), Some(b)],
             Re::Optional(a)
             | Re::Repeat(a)
             | Re::RepeatMin(a, _)
             | Re::RepeatMinMax(a, _, _)
             | Re::Complement(a)
-            | Re::DeprecatedComplement(a) => a.first_automaton_name(),
-            _ => None,
+            | Re::DeprecatedComplement(a) => [Some(a), None],
+            _ => [None, None],
         }
+    }
+
+    /// The first `<name>` in the expression, left to right (a loop: the
+    /// tree's depth is not bounded yet when this runs).
+    fn first_automaton_name(&self) -> Option<&str> {
+        let mut stack = vec![self];
+        while let Some(re) = stack.pop() {
+            if let Re::Automaton(name) = re {
+                return Some(name);
+            }
+            let [a, b] = re.children();
+            stack.extend(b);
+            stack.extend(a);
+        }
+        None
+    }
+
+    /// The levels of operators in [`Re::build`]'s operand tree: a `|` or a
+    /// concatenation chain is one level over its leaves ([`Re::leaves`]),
+    /// any other operator one level over its children, a character, string
+    /// or class none. A loop.
+    fn depth(&self) -> usize {
+        let mut deepest = 0;
+        let mut stack = vec![(self, 0)];
+        while let Some((re, level)) = stack.pop() {
+            deepest = deepest.max(level);
+            match re {
+                Re::Union(..) | Re::Concat(..) => {
+                    let mut leaves = Vec::new();
+                    re.leaves(&mut leaves, matches!(re, Re::Union(..)));
+                    stack.extend(leaves.into_iter().map(|l| (l, level + 1)));
+                }
+                _ => {
+                    let [a, b] = re.children();
+                    stack.extend(a.into_iter().chain(b).map(|c| (c, level + 1)));
+                }
+            }
+        }
+        deepest
     }
 
     fn is_char_or_string(&self) -> bool {
         matches!(self, Re::Char(_) | Re::Str(_))
     }
 
-    fn string_parts(&self) -> Vec<u32> {
+    /// The characters of a `Char` or `Str`, taken out of it (no copy: a
+    /// long run of literal characters stays linear).
+    fn take_string(&mut self) -> Vec<u32> {
         match self {
             Re::Char(c) => vec![*c],
-            Re::Str(s) => s.clone(),
+            Re::Str(s) => std::mem::take(s),
             _ => Vec::new(),
         }
     }
 }
 
-/// Lucene merges adjacent characters and strings into one string node.
-fn make_concatenation(e1: Re, e2: Re) -> Re {
+/// A tree can be as deep as its input is long (`a&a&...`, `a***...`) until
+/// [`Re::depth`] refuses it: the children are moved to a stack and dropped
+/// one at a time, never recursively.
+impl Drop for Re {
+    fn drop(&mut self) {
+        fn take(re: &mut Re, out: &mut Vec<Re>) {
+            match re {
+                Re::Union(a, b) | Re::Concat(a, b) | Re::Intersection(a, b) => {
+                    out.push(std::mem::replace(&mut **a, Re::Empty));
+                    out.push(std::mem::replace(&mut **b, Re::Empty));
+                }
+                Re::Optional(a)
+                | Re::Repeat(a)
+                | Re::RepeatMin(a, _)
+                | Re::RepeatMinMax(a, _, _)
+                | Re::Complement(a)
+                | Re::DeprecatedComplement(a) => {
+                    out.push(std::mem::replace(&mut **a, Re::Empty));
+                }
+                _ => {}
+            }
+        }
+        let mut stack = Vec::new();
+        take(self, &mut stack);
+        while let Some(mut re) = stack.pop() {
+            take(&mut re, &mut stack);
+        }
+    }
+}
+
+/// Lucene merges adjacent characters and strings into one string node. The
+/// parts are moved, not copied (Lucene builds a new node over the same
+/// children; a copy here made a long concatenation quadratic and recursive).
+fn make_concatenation(mut e1: Re, mut e2: Re) -> Re {
     if e1.is_char_or_string() && e2.is_char_or_string() {
-        let mut s = e1.string_parts();
-        s.extend(e2.string_parts());
+        let mut s = e1.take_string();
+        s.extend(e2.take_string());
         return Re::Str(s);
     }
-    if let Re::Concat(a, b) = &e1
+    if let Re::Concat(_, b) = &mut e1
         && b.is_char_or_string()
         && e2.is_char_or_string()
     {
-        let mut s = b.string_parts();
-        s.extend(e2.string_parts());
-        return Re::Concat(a.clone(), Box::new(Re::Str(s)));
+        let mut s = b.take_string();
+        s.extend(e2.take_string());
+        **b = Re::Str(s);
+        return e1;
     }
-    if let Re::Concat(a, b) = &e2
+    if let Re::Concat(a, _) = &mut e2
         && e1.is_char_or_string()
         && a.is_char_or_string()
     {
-        let mut s = e1.string_parts();
-        s.extend(a.string_parts());
-        return Re::Concat(Box::new(Re::Str(s)), b.clone());
+        let mut s = e1.take_string();
+        s.extend(a.take_string());
+        **a = Re::Str(s);
+        return e2;
     }
     Re::Concat(Box::new(e1), Box::new(e2))
+}
+
+/// `~` applied `tildes` times (Lucene's `complement`, innermost first).
+fn complemented(mut e: Re, tildes: usize) -> Re {
+    for _ in 0..tildes {
+        e = Re::DeprecatedComplement(Box::new(e));
+    }
+    e
+}
+
+/// One level of [`Parser::union`]'s loop: the body, or a group being read.
+#[derive(Default)]
+struct Level {
+    /// The `|` operands so far, folded.
+    union: Option<Re>,
+    /// The `&` operands of the current `|` operand, folded.
+    intersection: Option<Re>,
+    /// The concatenation of the current `&` operand.
+    concat: Option<Re>,
+    /// The `~`s before the group's `(`.
+    tildes: usize,
+    /// Where the group's `(` is.
+    open: usize,
+}
+
+impl Level {
+    /// A concatenation ends: it becomes the next `&` operand.
+    fn end_intersection_operand(&mut self) {
+        if let Some(c) = self.concat.take() {
+            self.intersection = Some(match self.intersection.take() {
+                None => c,
+                Some(i) => Re::Intersection(Box::new(i), Box::new(c)),
+            });
+        }
+    }
+
+    /// An intersection ends: it becomes the next `|` operand.
+    fn end_union_operand(&mut self) {
+        if let Some(i) = self.intersection.take() {
+            self.union = Some(match self.union.take() {
+                None => i,
+                Some(u) => Re::Union(Box::new(u), Box::new(i)),
+            });
+        }
+    }
 }
 
 struct ParseError {
     at: usize,
     message: String,
+    /// Groups nest deeper than [`MAX_DEPTH`]: not a syntax error, a limit.
+    too_deep: bool,
 }
 
 type Parsed = Result<Re, ParseError>;
@@ -463,6 +627,7 @@ impl<'a> Parser<'a> {
         Err(ParseError {
             at: self.pos.min(self.s.len()),
             message: message.into(),
+            too_deep: false,
         })
     }
 
@@ -507,35 +672,89 @@ impl<'a> Parser<'a> {
         Ok(e)
     }
 
+    /// `union`, `intersection`, `concatenation`, `repeat` and `complement`
+    /// of Lucene's `RegExp` (as this port reads them: `|`, `&` and
+    /// concatenation fold to the left), in one loop with an explicit stack of
+    /// the groups open around it. Lucene recurses once per group, `~` and
+    /// operator; a loop keeps a deep body off the end of a small stack (the
+    /// browser module's 1 MB held fewer than 150 groups recursively).
     fn union(&mut self) -> Parsed {
-        let mut e = self.intersection()?;
-        while self.eat('|') {
-            let r = self.intersection()?;
-            e = Re::Union(Box::new(e), Box::new(r));
+        let mut open: Vec<Level> = Vec::new();
+        let mut level = Level::default();
+        loop {
+            // One `repeat`: `~`s, a character class, a group or a simple
+            // atom, then its repetitions.
+            let mut tildes = 0;
+            while self.eat('~') {
+                tildes += 1;
+            }
+            let mut atom = if self.peek("(") && self.s.get(self.pos + 1).is_none_or(|&c| c != ')') {
+                // A group: its own level, closed by `)` below.
+                if open.len() >= MAX_DEPTH {
+                    return Err(ParseError {
+                        at: self.pos,
+                        message: format!("groups nest more than {MAX_DEPTH} levels"),
+                        too_deep: true,
+                    });
+                }
+                let at = self.pos;
+                self.pos += 1;
+                open.push(std::mem::replace(
+                    &mut level,
+                    Level {
+                        tildes,
+                        open: at,
+                        ..Level::default()
+                    },
+                ));
+                continue;
+            } else {
+                complemented(self.char_class_exp()?, tildes)
+            };
+            loop {
+                atom = self.repetitions(atom)?;
+                level.concat = Some(match level.concat.take() {
+                    None => atom,
+                    Some(e) => make_concatenation(e, atom),
+                });
+                if self.more() && !self.peek(")|&") {
+                    break;
+                }
+                level.end_intersection_operand();
+                if self.eat('&') {
+                    break;
+                }
+                level.end_union_operand();
+                if self.eat('|') {
+                    break;
+                }
+                // The level is done: the whole body, or a group.
+                let done = level.union.take().unwrap_or(Re::Empty);
+                let Some(outer) = open.pop() else {
+                    return Ok(done);
+                };
+                if !self.eat(')') {
+                    let message = if self.more() {
+                        format!(
+                            "expected `)` to close the group opened at position {}",
+                            level.open
+                        )
+                    } else {
+                        format!(
+                            "the group opened at position {} is never closed",
+                            level.open
+                        )
+                    };
+                    return self.err(message);
+                }
+                atom = complemented(done, level.tildes);
+                level = outer;
+            }
         }
-        Ok(e)
     }
 
-    fn intersection(&mut self) -> Parsed {
-        let mut e = self.concatenation()?;
-        while self.eat('&') {
-            let r = self.concatenation()?;
-            e = Re::Intersection(Box::new(e), Box::new(r));
-        }
-        Ok(e)
-    }
-
-    fn concatenation(&mut self) -> Parsed {
-        let mut e = self.repeat()?;
-        while self.more() && !self.peek(")|&") {
-            let r = self.repeat()?;
-            e = make_concatenation(e, r);
-        }
-        Ok(e)
-    }
-
-    fn repeat(&mut self) -> Parsed {
-        let mut e = self.complement()?;
+    /// The `?`, `*`, `+` and `{n,m}` after an atom (`repeat`'s loop).
+    fn repetitions(&mut self, mut e: Re) -> Parsed {
         while self.peek("?*+{") {
             if self.eat('?') {
                 e = Re::Optional(Box::new(e));
@@ -585,14 +804,6 @@ impl<'a> Parser<'a> {
         match digits.parse::<i32>() {
             Ok(n) => Ok(Some(n as u32)),
             Err(_) => self.err(format!("repetition count `{digits}` is too large")),
-        }
-    }
-
-    fn complement(&mut self) -> Parsed {
-        if self.eat('~') {
-            Ok(Re::DeprecatedComplement(Box::new(self.complement()?)))
-        } else {
-            self.char_class_exp()
         }
     }
 
@@ -730,21 +941,13 @@ impl<'a> Parser<'a> {
                     .collect(),
             ));
         }
+        // `()`; any other group is [`Parser::union`]'s, which never calls
+        // this on a `(` it opens.
         if self.eat('(') {
             if self.eat(')') {
                 return Ok(Re::Str(Vec::new()));
             }
-            let open = self.pos - 1;
-            let e = self.union()?;
-            if !self.eat(')') {
-                let message = if self.more() {
-                    format!("expected `)` to close the group opened at position {open}")
-                } else {
-                    format!("the group opened at position {open} is never closed")
-                };
-                return self.err(message);
-            }
-            return Ok(e);
+            return self.err("expected `)`");
         }
         if self.eat('<') {
             let open = self.pos - 1;
@@ -1628,34 +1831,61 @@ fn minimize_9(a: Automaton) -> Built {
     Ok(remove_dead_states(out.finish()))
 }
 
+/// The next operand automaton [`Re::build`] handed over.
+fn next(it: &mut std::vec::IntoIter<Automaton>) -> Built {
+    it.next().ok_or(Build::Unknown)
+}
+
 impl Re {
-    fn to_automaton(&self) -> Built {
+    /// The automaton Lucene 10 (`stack` [`Stack::Es9`]) or Lucene 9
+    /// ([`Stack::Es8`]) builds. A post-order loop over an explicit stack,
+    /// operands left to right as the recursive original evaluated them, so
+    /// a tree as deep as [`MAX_DEPTH`] costs heap, not call stack.
+    fn build(&self, stack: Stack) -> Built {
+        enum Task<'r> {
+            Visit(&'r Re),
+            Combine(&'r Re, usize),
+        }
+        let mut tasks = vec![Task::Visit(self)];
+        let mut done: Vec<Automaton> = Vec::new();
+        while let Some(task) = tasks.pop() {
+            match task {
+                Task::Visit(re) => {
+                    let operands = re.operands();
+                    if operands.is_empty() {
+                        done.push(re.build_leaf()?);
+                    } else {
+                        tasks.push(Task::Combine(re, operands.len()));
+                        tasks.extend(operands.into_iter().rev().map(Task::Visit));
+                    }
+                }
+                Task::Combine(re, n) => {
+                    let parts = done.split_off(done.len().saturating_sub(n));
+                    done.push(match stack {
+                        Stack::Es9 => re.combine(parts)?,
+                        Stack::Es8 => re.combine_9(parts)?,
+                    });
+                }
+            }
+        }
+        done.pop().ok_or(Build::Unknown)
+    }
+
+    /// What [`Re::build`] builds this node from: a `|` or concatenation
+    /// chain's leaves, another node's children, nothing for a leaf.
+    fn operands(&self) -> Vec<&Re> {
+        let mut out = Vec::new();
+        match self {
+            Re::Union(..) => self.leaves(&mut out, true),
+            Re::Concat(..) => self.leaves(&mut out, false),
+            _ => out.extend(self.children().into_iter().flatten()),
+        }
+        out
+    }
+
+    /// A node without operands, alike in both stacks.
+    fn build_leaf(&self) -> Built {
         let a = match self {
-            Re::Union(..) => {
-                let mut leaves = Vec::new();
-                self.leaves(&mut leaves, true);
-                let parts = leaves
-                    .into_iter()
-                    .map(Re::to_automaton)
-                    .collect::<Result<Vec<_>, _>>()?;
-                union(&parts)?
-            }
-            Re::Concat(..) => {
-                let mut leaves = Vec::new();
-                self.leaves(&mut leaves, false);
-                let parts = leaves
-                    .into_iter()
-                    .map(Re::to_automaton)
-                    .collect::<Result<Vec<_>, _>>()?;
-                concatenate(&parts)?
-            }
-            Re::Intersection(a, b) => intersection(&a.to_automaton()?, &b.to_automaton()?)?,
-            Re::Optional(a) => optional(a.to_automaton()?),
-            Re::Repeat(a) => repeat_star(a.to_automaton()?),
-            Re::RepeatMin(a, n) => repeat_min(a.to_automaton()?, *n)?,
-            Re::RepeatMinMax(a, n, m) => repeat_min_max(a.to_automaton()?, *n, *m)?,
-            Re::Complement(a) => complement(&a.to_automaton()?, u64::MAX / 10)?,
-            Re::DeprecatedComplement(a) => complement(&a.to_automaton()?, DETERMINIZE_WORK_LIMIT)?,
             Re::Char(c) => make_class(&[(*c, *c)]),
             Re::CharRange(a, b) => make_class(&[(*a, *b)]),
             Re::CharClass(ranges) => make_class(ranges),
@@ -1663,73 +1893,73 @@ impl Re {
             Re::Empty => make_empty(),
             Re::Str(s) => make_string(s),
             Re::AnyString => make_any_string(),
-            Re::Automaton(_) | Re::Interval => return Err(Build::Unknown),
+            _ => return Err(Build::Unknown),
         };
         a.guard()
     }
 
-    fn to_automaton_9(&self) -> Built {
+    /// Lucene 10: this node over its operands' automata.
+    fn combine(&self, parts: Vec<Automaton>) -> Built {
+        let mut it = parts.into_iter();
         let a = match self {
-            Re::Union(..) => {
-                let mut leaves = Vec::new();
-                self.leaves(&mut leaves, true);
-                let parts = leaves
-                    .into_iter()
-                    .map(Re::to_automaton_9)
-                    .collect::<Result<Vec<_>, _>>()?;
-                minimize_9(union_9(&parts)?)?
-            }
-            Re::Concat(..) => {
-                let mut leaves = Vec::new();
-                self.leaves(&mut leaves, false);
-                let parts = leaves
-                    .into_iter()
-                    .map(Re::to_automaton_9)
-                    .collect::<Result<Vec<_>, _>>()?;
-                minimize_9(concatenate_9(&parts)?)?
-            }
-            Re::Intersection(a, b) => {
-                minimize_9(intersection(&a.to_automaton_9()?, &b.to_automaton_9()?)?)?
-            }
-            Re::Optional(a) => minimize_9(optional_9(a.to_automaton_9()?))?,
-            Re::Repeat(a) => minimize_9(repeat_star_9(a.to_automaton_9()?))?,
-            Re::RepeatMin(a, n) => {
-                let a = a.to_automaton_9()?;
+            Re::Union(..) => union(&it.collect::<Vec<_>>())?,
+            Re::Concat(..) => concatenate(&it.collect::<Vec<_>>())?,
+            Re::Intersection(..) => intersection(&next(&mut it)?, &next(&mut it)?)?,
+            Re::Optional(_) => optional(next(&mut it)?),
+            Re::Repeat(_) => repeat_star(next(&mut it)?),
+            Re::RepeatMin(_, n) => repeat_min(next(&mut it)?, *n)?,
+            Re::RepeatMinMax(_, n, m) => repeat_min_max(next(&mut it)?, *n, *m)?,
+            Re::Complement(_) => complement(&next(&mut it)?, u64::MAX / 10)?,
+            Re::DeprecatedComplement(_) => complement(&next(&mut it)?, DETERMINIZE_WORK_LIMIT)?,
+            _ => return Err(Build::Unknown),
+        };
+        a.guard()
+    }
+
+    /// Lucene 9: this node over its operands' automata, minimized as
+    /// Lucene 9 minimizes after each operation.
+    fn combine_9(&self, parts: Vec<Automaton>) -> Built {
+        let mut it = parts.into_iter();
+        let a = match self {
+            Re::Union(..) => minimize_9(union_9(&it.collect::<Vec<_>>())?)?,
+            Re::Concat(..) => minimize_9(concatenate_9(&it.collect::<Vec<_>>())?)?,
+            Re::Intersection(..) => minimize_9(intersection(&next(&mut it)?, &next(&mut it)?)?)?,
+            Re::Optional(_) => minimize_9(optional_9(next(&mut it)?))?,
+            Re::Repeat(_) => minimize_9(repeat_star_9(next(&mut it)?))?,
+            Re::RepeatMin(_, n) => {
+                let a = next(&mut it)?;
                 if (a.len() as u64).saturating_sub(1) * u64::from(*n) > DETERMINIZE_WORK_LIMIT {
                     return Err(Build::TooComplex);
                 }
                 minimize_9(repeat_min_9(a, *n)?)?
             }
-            Re::RepeatMinMax(a, n, m) => {
-                let a = a.to_automaton_9()?;
+            Re::RepeatMinMax(_, n, m) => {
+                let a = next(&mut it)?;
                 if (a.len() as u64).saturating_sub(1) * u64::from(*m) > DETERMINIZE_WORK_LIMIT {
                     return Err(Build::TooComplex);
                 }
                 repeat_min_max_9(a, *n, *m)?
             }
-            Re::Complement(a) | Re::DeprecatedComplement(a) => {
-                minimize_9(complement(&a.to_automaton_9()?, DETERMINIZE_WORK_LIMIT)?)?
+            Re::Complement(_) | Re::DeprecatedComplement(_) => {
+                minimize_9(complement(&next(&mut it)?, DETERMINIZE_WORK_LIMIT)?)?
             }
-            Re::Char(_)
-            | Re::CharRange(..)
-            | Re::CharClass(_)
-            | Re::AnyChar
-            | Re::Empty
-            | Re::Str(_)
-            | Re::AnyString
-            | Re::Automaton(_)
-            | Re::Interval => return self.to_automaton(),
+            _ => return Err(Build::Unknown),
         };
         a.guard()
     }
 
+    /// The operands of a `|` (`union`) or concatenation chain, left to
+    /// right: a loop, as a chain is as long as its input.
     fn leaves<'r>(&'r self, out: &mut Vec<&'r Re>, union: bool) {
-        match (self, union) {
-            (Re::Union(a, b), true) | (Re::Concat(a, b), false) => {
-                a.leaves(out, union);
-                b.leaves(out, union);
+        let mut stack = vec![self];
+        while let Some(re) = stack.pop() {
+            match (re, union) {
+                (Re::Union(a, b), true) | (Re::Concat(a, b), false) => {
+                    stack.push(b);
+                    stack.push(a);
+                }
+                _ => out.push(re),
             }
-            _ => out.push(self),
         }
     }
 }

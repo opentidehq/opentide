@@ -108,7 +108,9 @@ pub struct BenchArgs {
     /// Benchmark this workspace instead of generating one
     #[arg(long, value_name = "DIR", value_parser = absolute, conflicts_with = "check")]
     workspace: Option<PathBuf>,
-    /// Run this opentide instead of installing the oracle
+    /// Run this opentide: under --engine python instead of installing the
+    /// oracle, under --engine rust instead of building this checkout's
+    /// release binary
     #[arg(long, value_name = "PATH", value_parser = absolute, conflicts_with = "check")]
     opentide: Option<PathBuf>,
     /// Run this language server for --engine rust
@@ -459,7 +461,8 @@ pub struct Options {
     pub only: Option<Vec<String>>,
     /// A workspace to benchmark instead of the generated one.
     pub workspace: Option<PathBuf>,
-    /// An opentide to run instead of the oracle.
+    /// An opentide to run instead of the oracle (`python`) or of this
+    /// checkout's release binary (`rust`).
     pub opentide: Option<PathBuf>,
     /// A language server to run for `rust`.
     pub lsp: Option<PathBuf>,
@@ -643,6 +646,59 @@ fn rust_cli(scenario: &Scenario) -> bool {
     scenario.kind == Kind::Cli && !LAUNCHER.contains(&scenario.id)
 }
 
+/// What `--engine rust` runs for its command-line scenarios.
+#[derive(Debug, PartialEq, Eq)]
+enum RustCli {
+    /// `--opentide`, which the report records as its `oracle`.
+    Given(PathBuf),
+    /// The release binary built from this checkout.
+    Build,
+    /// No selected scenario runs the Rust CLI.
+    Neither,
+}
+
+/// The Rust CLI `--engine rust` runs for `selected`. `--opentide` was
+/// ignored under `--engine rust`, so two binaries compared from one checkout
+/// measured that checkout's code twice. With it given, a selected scenario
+/// that would still run this checkout's build is refused: the language
+/// server without `--lsp`, `startup` and `explain` without `--launcher`, and
+/// `load`, which has no override.
+///
+/// # Errors
+///
+/// The scenarios `--opentide` would not cover, or none that runs it.
+fn rust_cli_plan(selected: &[&Scenario], options: &Options) -> Result<RustCli, String> {
+    let cli = selected.iter().any(|s| rust_cli(s));
+    let Some(given) = &options.opentide else {
+        return Ok(if cli {
+            RustCli::Build
+        } else {
+            RustCli::Neither
+        });
+    };
+    let checkouts: Vec<&str> = selected
+        .iter()
+        .filter(|s| {
+            s.kind == Kind::Load
+                || (s.kind == Kind::Lsp && options.lsp.is_none())
+                || (LAUNCHER.contains(&s.id) && options.launcher.is_none())
+        })
+        .map(|s| s.id)
+        .collect();
+    if !checkouts.is_empty() {
+        return Err(format!(
+            "--opentide measures that binary, but {} would run this checkout's build: \
+             pass --lsp and --launcher for theirs, or leave them out with --only \
+             (load has no override)",
+            checkouts.join(", ")
+        ));
+    }
+    if !cli {
+        return Err("--opentide is given, but no selected command runs the Rust CLI".into());
+    }
+    Ok(RustCli::Given(given.clone()))
+}
+
 /// The programs a run has: what it built or installed, or was given.
 #[derive(Clone, Copy, Debug, Default)]
 struct Programs<'a> {
@@ -813,10 +869,14 @@ fn run_in(options: &Options, root: &Path, base: &Path, work: &Path) -> Result<()
             let (path, version) = oracle::ensure_oracle(root, &base.join("oracle"))?;
             (Some(path), Some(version))
         }
-        (Engine::Rust, _) if selected.iter().any(|s| rust_cli(s)) => {
-            (Some(oracle::build_cli(root)?), None)
-        }
-        (Engine::Rust, _) => (None, None),
+        (Engine::Rust, _) => match rust_cli_plan(&selected, options).map_err(anyhow::Error::msg)? {
+            RustCli::Given(path) => {
+                let shown = path.display().to_string();
+                (Some(path), Some(shown))
+            }
+            RustCli::Build => (Some(oracle::build_cli(root)?), None),
+            RustCli::Neither => (None, None),
+        },
     };
     let load_bin = match options.engine {
         Engine::Rust if selected.iter().any(|s| s.kind == Kind::Load) => {
@@ -1409,6 +1469,49 @@ mod tests {
         assert_eq!(ids.len(), SCENARIOS.len());
         let budgeted: Vec<&str> = budgets.commands.keys().map(String::as_str).collect();
         assert_eq!(ids, budgeted);
+    }
+
+    #[test]
+    fn rust_runs_the_given_opentide_and_refuses_what_it_would_not_cover() {
+        let Mode::Run(mut options) = parse_args(&args("--engine rust")).unwrap() else {
+            panic!("not a run");
+        };
+        let pick = |ids: &[&str]| -> Vec<&'static Scenario> {
+            SCENARIOS.iter().filter(|s| ids.contains(&s.id)).collect()
+        };
+        let cli = pick(&["validate_clean", "lint"]);
+        // Without --opentide: this checkout's build, or nothing to build.
+        assert_eq!(rust_cli_plan(&cli, &options), Ok(RustCli::Build));
+        assert_eq!(
+            rust_cli_plan(&pick(&["load"]), &options),
+            Ok(RustCli::Neither)
+        );
+        // With it: that binary, never this checkout's.
+        options.opentide = Some(PathBuf::from("/x/opentide"));
+        assert_eq!(
+            rust_cli_plan(&cli, &options),
+            Ok(RustCli::Given(PathBuf::from("/x/opentide")))
+        );
+        // Scenarios it does not run would measure this checkout's build.
+        for ids in [
+            &["lint", "load"][..],
+            &["lint", "startup"],
+            &["lint", "lsp_first_diagnostics"],
+        ] {
+            let refused = rust_cli_plan(&pick(ids), &options).unwrap_err();
+            assert!(refused.contains(ids[1]), "{refused}");
+        }
+        // Their own overrides cover the language server and the launcher.
+        options.lsp = Some(PathBuf::from("/x/opentide-lsp"));
+        options.launcher = Some(PathBuf::from("/x/launcher"));
+        assert!(
+            rust_cli_plan(
+                &pick(&["lint", "startup", "lsp_first_diagnostics"]),
+                &options
+            )
+            .is_ok()
+        );
+        assert!(rust_cli_plan(&pick(&["startup"]), &options).is_err());
     }
 
     #[test]

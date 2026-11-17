@@ -134,5 +134,14 @@ fn an_unreachable_instance_is_a_connectivity_failure() {
     let failed = client.get_version().unwrap_err();
     assert_eq!(failed.kind, Kind::Connectivity);
     assert_eq!(failed.reason, "connectivity_failed");
+    // #1142: why the call failed is kept, not swallowed; never in the reason.
+    let detail = failed.detail.as_deref().unwrap_or_default();
+    assert!(
+        detail.starts_with(&format!(
+            "Cannot reach misp tenant 'gone' at http://127.0.0.1:{port}"
+        )),
+        "{detail}"
+    );
+    assert_eq!(failed.to_string(), "connectivity_failed");
     assert!(client.delete_event("1").is_err());
 }

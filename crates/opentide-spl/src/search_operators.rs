@@ -20,7 +20,7 @@
 //! `|`, not from grammar rule names.
 
 use super::Catalog;
-use super::scan::{Order, closing_bracket, walk_pipelines};
+use super::scan::{Order, closing_bracket, count_nested_scan, walk_pipelines};
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
 
 /// Where a search clause sits, which decides what Splunk does with the
@@ -169,6 +169,9 @@ fn top_level_words(source: &str, start: usize, end: usize) -> Vec<(usize, usize)
                 i = close + 1;
             }
             b'[' | b'(' => {
+                if bytes[i] == b'[' {
+                    count_nested_scan();
+                }
                 depth += 1;
                 i += 1;
             }
@@ -232,6 +235,7 @@ fn scan(
                 continue;
             }
             b'[' => {
+                count_nested_scan();
                 brackets += 1;
                 i += 1;
                 field_before = false;

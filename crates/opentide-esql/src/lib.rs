@@ -45,6 +45,15 @@ mod lexer;
 mod parser;
 mod syntax;
 mod tree;
+
+// What the generated typed AST names from the crate root (`use crate::{..}`).
+#[doc(hidden)]
+pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
+
+/// The typed AST `cargo xtask codegen` writes from `esql.ungram`.
+#[doc(hidden)]
+#[path = "generated/ast.rs"]
+pub mod ast;
 pub mod version;
 
 pub use catalog::{Catalog, CommandRow, FunctionRow, Lifecycle, StackVersion, TypeRow};
@@ -95,11 +104,26 @@ pub fn debug_kinds(source: &str) -> (bool, Vec<&'static str>) {
     tree::named_kinds(source)
 }
 
+/// For each syntax error of `source`, the production names of the nodes it was recorded in,
+/// for the corpus gate in `opentide-analysis`. Not API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_error_kinds(source: &str) -> Vec<Vec<&'static str>> {
+    tree::error_kinds(source)
+}
+
 /// How many times this thread has parsed an ES|QL query: one per call of an
 /// entry point (`tests/entry_points.rs`). Not API.
 #[doc(hidden)]
 pub fn parses() -> usize {
     tree::parses()
+}
+
+/// The lossless tree of `source`, for the typed AST's tests
+/// (`tests/ast_accessors.rs`). Not API.
+#[doc(hidden)]
+pub fn syntax_tree(source: &str) -> SyntaxNode {
+    SyntaxNode::new_root(parser::parse(source).green)
 }
 
 /// Analyze against every supported stack (8.19 and 9.x). Same as
@@ -144,8 +168,10 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
     }
     let to_range = |span: ByteSpan| range(source, span);
     walk(root, |node| {
-        for gate in gates::syntax_gates(node, source) {
-            diagnostics.extend(gate.diagnostic(target, to_range));
+        if let Some(syntax) = node.syntax() {
+            for gate in gates::syntax_gates(syntax, source) {
+                diagnostics.extend(gate.diagnostic(target, to_range));
+            }
         }
         if let Some((spacing, span)) = gates::command_spacing(node, source) {
             let word = node.child(0).map(|k| text(k, source)).unwrap_or_default();
@@ -242,7 +268,7 @@ fn analyze_with_lines(source: &str, target: Option<StackTarget>) -> AnalyzeResul
     }
     // The indices `FROM` reads: undeclared ones, and ECS field checks when
     // every one holds ECS documents.
-    opentide_ecs::merge(&mut diagnostics, ecs::dataset_diagnostics(root, source));
+    opentide_ecs::merge(&mut diagnostics, ecs::dataset_diagnostics(&tree, source));
     // The tree the checks read: a second parse doubled the cost of a long query.
     let tokens = highlight(&spec, &tree, source, catalog);
     AnalyzeResult {
@@ -478,25 +504,11 @@ fn expression_depth(root: Node) -> (usize, Option<ByteSpan>) {
 fn parse_problem(tree: &tree::Tree, source: &str) -> Option<Diagnostic> {
     let problem = tree.problems.first()?;
     let at = problem.at.min(source.len());
-    if source.get(at..).is_none_or(|rest| rest.trim().is_empty()) {
-        // At the end of the query: on its last character. An empty span past
-        // it has no place in a host document (a Tide `query: |` block maps it
-        // to the start of the query), nor does the line after a block's newline.
-        let end = source.trim_end().len();
-        let start = source[..end]
-            .char_indices()
-            .next_back()
-            .map_or(end, |(i, _)| i);
-        return Some(Diagnostic::error(
-            codes::ESQL_PARSE_ERROR,
-            format!(
-                "ES|QL syntax error at the end of the query: {}",
-                problem.message
-            ),
-            range(source, ByteSpan::new(start, end)),
-        ));
-    }
-    let rest = source.get(at..).unwrap_or("");
+    let rest = if problem.at_end {
+        ""
+    } else {
+        source.get(at..).unwrap_or("")
+    };
     // A bracket, pipe or operator is quoted alone; a word with its dots
     // (`host.name`) up to the next one: a whitespace-delimited chunk ran on
     // over `("a",`, or to the end of a query written without spaces.
@@ -633,6 +645,18 @@ pub(crate) fn command_name(node: Node, source: &str) -> Option<String> {
 
 fn display_name(name: &str) -> String {
     name.to_ascii_uppercase()
+}
+
+/// The command's keyword on a rowan node (`LIMIT`), for the version gates:
+/// [`keyword_span`] of a one-keyword command.
+pub(crate) fn keyword_span_of(node: &SyntaxNode) -> ByteSpan {
+    let start = usize::from(node.text_range().start());
+    let end = node
+        .children_with_tokens()
+        .next()
+        .filter(|first| first.as_token().is_some())
+        .map_or(start, |first| usize::from(first.text_range().end()));
+    ByteSpan::new(start, end.max(start + 1))
 }
 
 /// The command's leading keywords (`LOOKUP JOIN`, `INLINE STATS`).
@@ -1905,7 +1929,7 @@ mod tests {
     }
 
     #[test]
-    fn an_error_at_the_end_sits_after_the_last_token() {
+    fn an_error_at_the_end_is_an_empty_span_after_the_last_token() {
         let d = analyze("FROM logs-* | WHERE (\n")
             .diagnostics
             .into_iter()
@@ -1916,8 +1940,9 @@ mod tests {
             "{}",
             d.message
         );
-        // The last character, `(`: a span a host document can place.
-        assert_eq!((d.range.start.line, d.range.start.character), (0, 20));
+        // Right after the last token, `(`, not past the final newline: as
+        // every engine reports the end of a query (#1431 follow-up).
+        assert_eq!((d.range.start.line, d.range.start.character), (0, 21));
         assert_eq!((d.range.end.line, d.range.end.character), (0, 21));
     }
 }

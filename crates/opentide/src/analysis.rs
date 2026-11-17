@@ -76,7 +76,7 @@ mod tests {
     fn a_query_on_its_own_never_waits_for_or_sees_a_workspace_run() {
         let (done, finished) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let _engine = opentide_cli::queries::ENGINE
+            let _engine = opentide_analysis::queries::ENGINE
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let _restore = opentide_analysis::save_visibility();

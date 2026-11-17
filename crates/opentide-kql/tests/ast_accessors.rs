@@ -60,6 +60,25 @@ impl Lift for Option<SyntaxToken> {
     }
 }
 
+/// A repeated choice of tokens: every one it returned.
+struct Tokens(Vec<SyntaxToken>);
+
+impl Reached for Tokens {
+    fn reached(self) -> Vec<(rowan::TextRange, Option<SyntaxNode>)> {
+        self.0
+            .into_iter()
+            .map(|t| (t.text_range(), t.parent()))
+            .collect()
+    }
+}
+
+impl Lift for Vec<SyntaxToken> {
+    type Out = Tokens;
+    fn lift(self) -> Tokens {
+        Tokens(self)
+    }
+}
+
 macro_rules! lift_node {
     ($($t:ident),* $(,)?) => {
         $(
@@ -88,19 +107,35 @@ macro_rules! accessors {
 
         /// Casts `node` to every typed node that takes it and calls each
         /// accessor; returns `(type, accessor, problem)` for any element that
-        /// is not a direct child of `node`, and the types it cast to.
-        fn visit(node: &SyntaxNode, casts: &mut Vec<&'static str>, bad: &mut Vec<String>) {
+        /// is not a direct child of `node`, and the types it cast to. With
+        /// `unreached`, also the token children no accessor of a typed node
+        /// returns ([`unreached_tokens`]).
+        fn visit(
+            node: &SyntaxNode,
+            casts: &mut Vec<&'static str>,
+            bad: &mut Vec<String>,
+            mut unreached: Option<&mut Vec<String>>,
+        ) {
             $(
                 if let Some(typed) = <$t as AstNode>::cast(node.clone()) {
                     casts.push(stringify!($t));
                     assert_eq!(typed.syntax(), node);
-                    $(
-                        for (range, parent) in typed.$a().lift().reached() {
-                            if parent.as_ref() != Some(node) || !node.text_range().contains_range(range) {
-                                bad.push(format!("{}::{} at {range:?}", stringify!($t), stringify!($a)));
+                    // What each accessor returned; a choice of nodes (an
+                    // enum) has no accessors of its own.
+                    let results: Vec<(&str, Vec<(rowan::TextRange, Option<SyntaxNode>)>)> =
+                        vec![$((stringify!($a), typed.$a().lift().reached())),*];
+                    for (accessor, reached) in &results {
+                        for (range, parent) in reached {
+                            if parent.as_ref() != Some(node) || !node.text_range().contains_range(*range) {
+                                bad.push(format!("{}::{accessor} at {range:?}", stringify!($t)));
                             }
                         }
-                    )*
+                    }
+                    if let Some(out) = unreached.as_deref_mut().filter(|_| !results.is_empty()) {
+                        let reached: Vec<rowan::TextRange> =
+                            results.iter().flat_map(|(_, r)| r.iter().map(|(range, _)| *range)).collect();
+                        out.extend(unreached_tokens(stringify!($t), node, &reached));
+                    }
                 }
             )*
         }
@@ -250,14 +285,50 @@ fn corpus() -> Vec<String> {
         .collect()
 }
 
+/// The direct token children of `node` (blanks, comments and error tokens
+/// aside) whose kind no accessor of its typed node `ty` returned: a token
+/// the grammar puts there that the typed AST cannot reach (#1454: a
+/// labelled optional choice of tokens read its first token only, so
+/// `desc` was out of reach). By kind, so that a second `,` of a list is
+/// reached through the accessor that returns the first.
+fn unreached_tokens(ty: &str, node: &SyntaxNode, reached: &[rowan::TextRange]) -> Vec<String> {
+    let tokens: Vec<SyntaxToken> = node
+        .children_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .collect();
+    let kind = |t: &SyntaxToken| format!("{:?}", t.kind());
+    let reached: Vec<String> = tokens
+        .iter()
+        .filter(|t| reached.contains(&t.text_range()))
+        .map(kind)
+        .collect();
+    tokens
+        .iter()
+        .filter(|t| !matches!(kind(t).as_str(), "WHITESPACE" | "COMMENT" | "ERROR_TOKEN"))
+        .filter(|t| !reached.contains(&kind(t)))
+        .map(|t| format!("{ty}: `{}` ({}) at {:?}", t.text(), kind(t), t.text_range()))
+        .collect()
+}
+
+/// Whether the tree holds no error node or token: there every token is
+/// where the grammar puts it.
+fn is_clean(root: &SyntaxNode) -> bool {
+    !root
+        .descendants_with_tokens()
+        .any(|e| format!("{:?}", e.kind()).starts_with("ERROR"))
+}
+
 #[test]
 fn every_accessor_reaches_a_child_of_its_node() {
     let (mut casts, mut bad, mut nodes) = (Vec::new(), Vec::new(), 0);
+    let (mut unreached, mut clean_trees) = (Vec::new(), 0);
     for source in corpus() {
         let root = tree(&source);
+        let clean = is_clean(&root);
+        clean_trees += usize::from(clean);
         for node in root.descendants() {
             nodes += 1;
-            visit(&node, &mut casts, &mut bad);
+            visit(&node, &mut casts, &mut bad, clean.then_some(&mut unreached));
         }
     }
     assert!(
@@ -267,6 +338,16 @@ fn every_accessor_reaches_a_child_of_its_node() {
         bad[..bad.len().min(20)].join("\n")
     );
     assert!(nodes > 5_000, "visited {nodes} nodes");
+    // Every token child of a tree without errors is reachable through some
+    // accessor of its node.
+    unreached.sort_unstable();
+    unreached.dedup_by(|a, b| a.split(" at ").next() == b.split(" at ").next());
+    assert!(
+        unreached.is_empty(),
+        "{} token kinds no accessor reaches (in {clean_trees} trees without errors):\n{}",
+        unreached.len(),
+        unreached[..unreached.len().min(20)].join("\n")
+    );
     // Every node kind of the ungram occurs in the corpus, and casts.
     casts.sort_unstable();
     casts.dedup();

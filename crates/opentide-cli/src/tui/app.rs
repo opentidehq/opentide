@@ -1565,8 +1565,8 @@ impl App {
         );
     }
 
-    /// Highlights the configuration file `key` (tests, and the Python UI's
-    /// `move_cursor`).
+    /// Highlights the configuration file `key`, as moving the cursor to it
+    /// does (for tests).
     pub fn select_configuration(&mut self, key: &str) {
         let at = self.catalogue.as_ref().and_then(|catalogue| {
             catalogue

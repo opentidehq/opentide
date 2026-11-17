@@ -248,3 +248,100 @@ fn defender_validate_checks_one_row_and_the_custom_detection_columns() {
         ]
     );
 }
+
+/// The cassette `defender/deploy`'s sign-in, then one page of the rules
+/// whose `@odata.nextLink` is *link*.
+fn listing_linking_to(link: &str) -> opentide_cassette::Cassette {
+    let full = support::cassette("defender/deploy");
+    let mut page = full.interactions[5].clone();
+    page.request.method = "GET".into();
+    page.request.url = defender::DETECTION_RULES_ENDPOINT.into();
+    page.response.status = 200;
+    page.response.headers = vec![("content-type".into(), "application/json".into())];
+    page.response.body = Body::Text(
+        serde_json::json!({"value": [{"id": "42"}], "@odata.nextLink": link}).to_string(),
+    );
+    opentide_cassette::Cassette::new(
+        &full.scenario,
+        full.recorded_from,
+        vec![full.interactions[0].clone(), page],
+    )
+}
+
+fn list_through(link: &str) -> (Result<Vec<Json>, DefenderError>, Replayed) {
+    let tenant = Replayed::start_with(
+        listing_linking_to(link),
+        defender::PLATFORM,
+        SETUP,
+        "DEFENDER_CLIENT_SECRET",
+        &defender::http_settings(),
+    );
+    let listed = block_on(async { Defender::new().list_rules(tenant.cx()).await }).unwrap();
+    (listed, tenant)
+}
+
+/// #1142: an `@odata.nextLink` to another host is not followed, so Graph's
+/// bearer token never reaches it; the listing fails and says why.
+#[test]
+fn defender_a_next_link_to_another_host_receives_no_token() {
+    let (listed, tenant) = list_through("https://evil.example/loop");
+    let error = listed.unwrap_err();
+    assert!(
+        matches!(
+            error,
+            DefenderError::Connector(ConnectorError::Answer { .. })
+        ),
+        "{error:?}"
+    );
+    assert!(
+        error
+            .to_string()
+            .contains("points to https://evil.example, not to https://graph.microsoft.com"),
+        "{error}"
+    );
+    assert_eq!(tenant.verify(), Vec::new(), "nothing sent to evil.example");
+}
+
+/// #1142: an `@odata.nextLink` back to the page itself ends the listing
+/// with an error, never an endless loop.
+#[test]
+fn defender_a_next_link_that_loops_is_not_followed() {
+    let (listed, tenant) = list_through(defender::DETECTION_RULES_ENDPOINT);
+    let error = listed.unwrap_err().to_string();
+    assert!(error.contains("repeats one already followed"), "{error}");
+    assert_eq!(tenant.verify(), Vec::new());
+}
+
+/// #1142: a page of the rules that is not JSON is an error naming its
+/// content type, never an empty listing.
+#[test]
+fn defender_a_list_page_that_is_not_json_is_an_error() {
+    let full = support::cassette("defender/deploy");
+    let mut page = full.interactions[5].clone();
+    page.request.method = "GET".into();
+    page.request.url = defender::DETECTION_RULES_ENDPOINT.into();
+    page.response.status = 200;
+    page.response.headers = vec![("content-type".into(), "text/plain".into())];
+    page.response.body = Body::Text("maintenance".into());
+    let tenant = Replayed::start_with(
+        opentide_cassette::Cassette::new(
+            &full.scenario,
+            full.recorded_from,
+            vec![full.interactions[0].clone(), page],
+        ),
+        defender::PLATFORM,
+        SETUP,
+        "DEFENDER_CLIENT_SECRET",
+        &defender::http_settings(),
+    );
+    let listed = block_on(async { Defender::new().list_rules(tenant.cx()).await }).unwrap();
+    let error = listed.unwrap_err().to_string();
+    assert!(
+        error.ends_with(
+            "listing the detection rules: the page is not JSON (Content-Type text/plain): HTTP \
+             200 with a body that is not JSON (\"maintenance\")"
+        ),
+        "{error}"
+    );
+    assert_eq!(tenant.verify(), Vec::new());
+}

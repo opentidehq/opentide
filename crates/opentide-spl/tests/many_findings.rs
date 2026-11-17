@@ -42,6 +42,8 @@ fn no_finding_scans_the_query_from_its_start() {
     assert!(offenders.is_empty(), "{}", offenders.join("\n"));
 }
 
+/// The counter is in debug builds only, as tests run.
+#[cfg(debug_assertions)]
 #[test]
 fn an_unknown_command_is_checked_once_per_name() {
     let built = |query: &str| {

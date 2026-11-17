@@ -127,3 +127,47 @@ fn nesting_past_the_limit_is_one_diagnostic_on_a_small_stack() {
         }
     }
 }
+
+/// A call whose argument runs through every precedence of an eval expression and a sign
+/// before the next level: `f(a OR b AND NOT c == d + e * -(`. Found by review (#1473):
+/// each operator's operand recursed without a level, so 450 of these aborted a 1 MB stack.
+/// Each nesting step of the chain is now a level of `max_depth`: the call, the four operands
+/// that have operators of their own (`b AND`, `NOT c ==`, `d +`, `e *`) and the parenthesis,
+/// so the shape stops with one `TooDeep`.
+fn eval_ladder(n: usize) -> String {
+    format!(
+        "| eval z={}1{}",
+        "f(a OR b AND NOT c == d + e * -(".repeat(n),
+        "))".repeat(n)
+    )
+}
+
+/// The levels one step of [`eval_ladder`] takes.
+const LADDER_LEVELS: usize = 6;
+
+#[test]
+fn an_eval_precedence_chain_in_every_level_stops_with_one_diagnostic() {
+    // 170 levels take 1,020 of the 1,024; the 171st is past them.
+    let clean = MAX_DEPTH as usize / LADDER_LEVELS;
+    let (errors, too_deep) = on_small_stack(eval_ladder(clean));
+    assert_eq!((errors, too_deep), (0, false), "{clean} levels");
+    for n in [clean + 1, 450, 20_000] {
+        let (errors, too_deep) = on_small_stack(eval_ladder(n));
+        assert!(too_deep, "{n} levels: no TooDeep ({errors} errors)");
+        assert_eq!(errors, 1, "{n} levels");
+    }
+}
+
+/// Two precedences are enough: `| eval z=a + b * f(` aborted a 1 MB stack at 903 levels.
+/// Each level is now two of `max_depth` (the call, and `b *`), so it stops at 512.
+#[test]
+fn a_call_in_a_nested_operand_at_every_level_stops_with_one_diagnostic() {
+    let nested = |n: usize| format!("| eval z={}1{}", "a + b * f(".repeat(n), ")".repeat(n));
+    let (errors, too_deep) = on_small_stack(nested(500));
+    assert_eq!((errors, too_deep), (0, false));
+    for n in [600, 903, 20_000] {
+        let (errors, too_deep) = on_small_stack(nested(n));
+        assert!(too_deep, "{n} levels: no TooDeep ({errors} errors)");
+        assert_eq!(errors, 1, "{n} levels");
+    }
+}

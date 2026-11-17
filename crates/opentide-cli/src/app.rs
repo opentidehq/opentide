@@ -686,7 +686,8 @@ impl Run<'_> {
                 command: Some(crate::tree::LspCommand::Start(_)),
             })) => {
                 // The server blocks on stdin and polls no interrupt: Ctrl-C
-                // ends it at once, with 130, as it ends the Python host.
+                // ends it at once, with exit 130 (interrupted), as for every
+                // other command.
                 self.host.interrupt.stop_at_once();
                 // stdout is the protocol's: nothing is emitted around the server.
                 return crate::commands::lsp::start_stdio(&self.host.version, err);
@@ -3802,8 +3803,7 @@ mod tests {
             "{}",
             bare.stdout
         );
-        // `-h` is no option, as in the Python CLI (#841): `--help` is the
-        // one help option.
+        // `-h` is no option (#841): `--help` is the one help option.
         let short = dispatched("--json -h", &[], false);
         assert_eq!(short.code, 2, "{}", short.stdout);
         assert!(
@@ -3876,7 +3876,7 @@ mod tests {
         );
         let home = tempfile::tempdir().unwrap();
         let home_text = home.path().display().to_string();
-        // The home folder is USERPROFILE on Windows, as Python's Path.home().
+        // The home folder is USERPROFILE on Windows, HOME elsewhere.
         let home_variable = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
         let installed = dispatched(
             "--json --install-completion bash",

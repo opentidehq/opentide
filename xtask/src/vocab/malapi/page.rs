@@ -3,9 +3,8 @@
 //! categories and API names ([`front_page`]), and one API's page as a
 //! vocabulary key ([`api_page`]).
 //!
-//! The Python scraper (`generate_malapi.py`) read the front page with lxml,
-//! whose lenient tree keeps markup where the source puts it. html5ever moves
-//! what a table may not hold (foster parenting), so the API names are not
+//! A lenient parser (lxml) keeps markup where the source puts it; html5ever
+//! moves what a table may not hold (foster parenting), so the API names are not
 //! looked for by their place in `#main-table`'s rows but by what they are:
 //! the links to a `/winapi/<name>` page. A front page with no such link is an
 //! error, never an empty scrape that would remove every key.

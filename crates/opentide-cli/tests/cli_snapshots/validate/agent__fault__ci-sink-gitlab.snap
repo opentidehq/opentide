@@ -341,11 +341,11 @@ error[invalid_uuid]: UUID "bad-1" is not a valid UUIDv4
   ╰─ help: replace it with a UUID v4: python -c "import uuid; print(uuid.uuid4())"
 
 error[esql_parse_error]: ES|QL syntax error at the end of the query: expected an expression
-   ╭─▶ objects/rules/lateral-pivot-rule-0104.yaml:76:40
+   ╭─▶ objects/rules/lateral-pivot-rule-0104.yaml:76:41
    │
 75 │     query: |
 76 │       FROM logs-* METADATA _id | WHERE (
-   │                                        ━
+   │                                         ━
    │
    ╰─ help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
 
@@ -613,11 +613,11 @@ error[schema_validation]: configurations.sysdig: SysdigConfig validation failed 
    ╰─ help: the template in .opentide/templates/ shows the field and its values
 
 error[lucene_parse_error]: Lucene syntax error: missing `)`
-   ╭─▶ objects/rules/scheduled-harvest-rule-0099.yaml:59:7
+   ╭─▶ objects/rules/scheduled-harvest-rule-0099.yaml:59:19
    │
 58 │     query: |
 59 │       name:(a OR b
-   │       ━━━━━━━━━━━━
+   │                   ━
    │
    ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
 
@@ -891,7 +891,7 @@ tip: add --json for machine-readable output
 | error | [`falco_unknown_event`](https://opentide.org/docs/cli/diagnostics#falco_unknown_event) | `objects/rules/lateral-downgrade-rule-0139.yaml:58:18` | unknown event type opne — help: did you mean "open"? |
 | error | [`schema_validation`](https://opentide.org/docs/cli/diagnostics#schema_validation) | `objects/rules/lateral-dropper-rule-0026.yaml:1:1` | missing required field "description" — help: the template in .opentide/templates/ shows the field and its values |
 | error | [`invalid_uuid`](https://opentide.org/docs/cli/diagnostics#invalid_uuid) | `objects/rules/lateral-dropper-rule-0026.yaml:4:9` | UUID "bad-1" is not a valid UUIDv4 — help: replace it with a UUID v4: python -c "import uuid; print\(uuid.uuid4\(\)\)" |
-| error | [`esql_parse_error`](https://opentide.org/docs/cli/diagnostics#esql_parse_error) | `objects/rules/lateral-pivot-rule-0104.yaml:76:40` | ES\|QL syntax error at the end of the query: expected an expression — help: the ES\|QL reference: https://www.elastic.co/docs/reference/query-languages/esql |
+| error | [`esql_parse_error`](https://opentide.org/docs/cli/diagnostics#esql_parse_error) | `objects/rules/lateral-pivot-rule-0104.yaml:76:41` | ES\|QL syntax error at the end of the query: expected an expression — help: the ES\|QL reference: https://www.elastic.co/docs/reference/query-languages/esql |
 | warning | [`nested_object_file`](https://opentide.org/docs/cli/diagnostics#nested_object_file) | `objects/rules/nested/encoded-spray-rule-0017.yaml` | objects/rules/nested/encoded-spray-rule-0017.yaml is in a subfolder of objects/rules and is not an object instance: it is not indexed, validated, shared, documented or deployed \(opentide reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/584\) |
 | error | [`duplicate_id`](https://opentide.org/docs/cli/diagnostics#duplicate_id) | `objects/rules/persistent-beacon-rule-0004.yaml:4:9` | UUID not-a-uuid is also used by "Encoded Exfiltration Rule 0005" — help: give one of them a fresh UUID v4; keep the UUID on the object that is deployed or referenced |
 | error | [`invalid_uuid`](https://opentide.org/docs/cli/diagnostics#invalid_uuid) | `objects/rules/persistent-beacon-rule-0004.yaml:4:9` | UUID "not-a-uuid" is not a valid UUIDv4 — help: replace it with a UUID v4: python -c "import uuid; print\(uuid.uuid4\(\)\)" |
@@ -922,7 +922,7 @@ tip: add --json for machine-readable output
 | error | [`falco_parse_error`](https://opentide.org/docs/cli/diagnostics#falco_parse_error) | `objects/rules/rogue-spray-rule-0113.yaml:46:37` | expected a string value or a field with a valid transformer: 'val', 'tolower', 'toupper', 'b64', 'basename', 'len', 'join', 'concat', 'getopt' \(libsinsp\) — help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/ |
 | error | [`falco_rhs_field`](https://opentide.org/docs/cli/diagnostics#falco_rhs_field) | `objects/rules/scheduled-beacon-rule-0116.yaml:67:39` | field 'proc.name' has type 'a string \(CHARBUF\)' while the right-hand side field 'proc.pid' has incompatible type 'a number \(INT64\)' — help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/ |
 | error | [`schema_validation`](https://opentide.org/docs/cli/diagnostics#schema_validation) | `objects/rules/scheduled-exfiltration-rule-0038.yaml:61:3` | configurations.sysdig: SysdigConfig validation failed with code\(s\): sysdig\_exception\_shape — help: the template in .opentide/templates/ shows the field and its values |
-| error | [`lucene_parse_error`](https://opentide.org/docs/cli/diagnostics#lucene_parse_error) | `objects/rules/scheduled-harvest-rule-0099.yaml:59:7` | Lucene syntax error: missing \`\)\` — help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query |
+| error | [`lucene_parse_error`](https://opentide.org/docs/cli/diagnostics#lucene_parse_error) | `objects/rules/scheduled-harvest-rule-0099.yaml:59:19` | Lucene syntax error: missing \`\)\` — help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query |
 | error | [`schema_validation`](https://opentide.org/docs/cli/diagnostics#schema_validation) | `objects/rules/scheduled-loader-rule-0030.yaml:65:3` | configurations.sysdig: SysdigConfig validation failed with code\(s\): sysdig\_rule\_shape — help: the template in .opentide/templates/ shows the field and its values |
 | error | [`eql_function_arity`](https://opentide.org/docs/cli/diagnostics#eql_function_arity) | `objects/rules/scheduled-relay-rule-0151.yaml:57:21` | \`length\` takes 1 arguments, found 2 — help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql |
 | error | [`schema_validation`](https://opentide.org/docs/cli/diagnostics#schema_validation) | `objects/rules/scheduled-relay-rule-0243.yaml:38:3` | configurations.sysdig: SysdigConfig validation failed with code\(s\): sysdig\_tuning\_keys — help: the template in .opentide/templates/ shows the field and its values |

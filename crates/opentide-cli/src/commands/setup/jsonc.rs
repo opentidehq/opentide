@@ -100,6 +100,31 @@ fn root_object(root: &CstRootNode) -> Result<CstObject, MergeError> {
 /// The text is not JSON with comments, its document is not an object, or
 /// a member to merge into is not an object.
 pub fn merge(text: &str, template: &Json) -> Result<String, MergeError> {
+    merge_with(text, template, false).map(|(merged, _)| merged)
+}
+
+/// [`merge`] for an MCP host's configuration: an entry the file already has
+/// under a server map (its own `opentide` server) is the user's. It gains
+/// the template's fields it lacks, and an object field (`env`) the entries
+/// it lacks; a field it has keeps its value. The second value lists the
+/// fields kept with a value other than the template's (`command`, `args`,
+/// `env.OPENTIDE_REPO_ROOT`), for a warning.
+///
+/// # Errors
+///
+/// As [`merge`].
+pub fn merge_keeping_entries(
+    text: &str,
+    template: &Json,
+) -> Result<(String, Vec<String>), MergeError> {
+    merge_with(text, template, true)
+}
+
+fn merge_with(
+    text: &str,
+    template: &Json,
+    keep_entries: bool,
+) -> Result<(String, Vec<String>), MergeError> {
     let (bom, body) = match text.strip_prefix(BOM) {
         Some(body) => (BOM, body),
         None => ("", text),
@@ -108,8 +133,9 @@ pub fn merge(text: &str, template: &Json) -> Result<String, MergeError> {
         .map_err(|error| MergeError::Invalid(error.to_string()))?;
     let object = root_object(&root)?;
     let Json::Object(members) = template else {
-        return Ok(text.to_owned());
+        return Ok((text.to_owned(), Vec::new()));
     };
+    let mut kept = Vec::new();
     for (key, value) in members {
         let Some(current) = object.get(key) else {
             object.append(key, input(value));
@@ -132,6 +158,16 @@ pub fn merge(text: &str, template: &Json) -> Result<String, MergeError> {
         };
         for (name, entry) in entries {
             match existing.get(name) {
+                Some(prop) if keep_entries => {
+                    match (prop.object_value(), entry) {
+                        (Some(own), Json::Object(fields)) => {
+                            keep_fields(&own, fields, "", &mut kept);
+                        }
+                        // Not an object (`null`, a string): not an entry
+                        // anyone could have customised; opentide's replaces it.
+                        _ => prop.set_value(input(entry)),
+                    }
+                }
                 Some(prop) => prop.set_value(input(entry)),
                 None => {
                     existing.append(name, input(entry));
@@ -142,7 +178,45 @@ pub fn merge(text: &str, template: &Json) -> Result<String, MergeError> {
     let merged = format!("{bom}{root}");
     // The edit must read back as a document: never write one that does not.
     parse(&merged).map_err(MergeError::Invalid)?;
-    Ok(merged)
+    Ok((merged, kept))
+}
+
+/// Adds to `own` each of `fields` it lacks, one object level down too; a
+/// field `own` has stays, and is listed in `kept` (as `prefix` + its name)
+/// when its value is not the template's.
+fn keep_fields(
+    own: &CstObject,
+    fields: &crate::json::Object,
+    prefix: &str,
+    kept: &mut Vec<String>,
+) {
+    for (name, value) in fields {
+        let Some(prop) = own.get(name) else {
+            own.append(name, input(value));
+            continue;
+        };
+        // `null` is no value, as at the top level: the template's fills it.
+        if prop
+            .value()
+            .is_some_and(|node| node.as_null_keyword().is_some())
+        {
+            prop.set_value(input(value));
+            continue;
+        }
+        if prefix.is_empty()
+            && let (Some(inner), Json::Object(inner_fields)) = (prop.object_value(), value)
+        {
+            keep_fields(&inner, inner_fields, &format!("{name}."), kept);
+            continue;
+        }
+        let same = prop
+            .value()
+            .and_then(|node| node_json(&node))
+            .is_some_and(|current| &current == value);
+        if !same {
+            kept.push(format!("{prefix}{name}"));
+        }
+    }
 }
 
 /// `text` with `edit` applied to its root object on the concrete syntax
@@ -320,6 +394,39 @@ mod tests {
         let value = parse(&after).unwrap();
         assert_eq!(value["servers"]["opentide"]["command"], "opentide");
         assert_eq!(after.lines().last(), Some("}"));
+    }
+
+    #[test]
+    fn a_kept_entry_keeps_its_fields_and_gains_the_missing_ones() {
+        let before = "\u{feff}{\r\n  \"servers\": {\r\n    // mine\r\n    \"opentide\": {\"command\": \"/x/opentide\", \"env\": {\"A\": \"1\", \"OPENTIDE_REPO_ROOT\": null}, \"args\": null}\r\n  }\r\n}\r\n";
+        let (after, kept) = merge_keeping_entries(before, &template()).unwrap();
+        assert!(
+            after.starts_with("\u{feff}{\r\n  \"servers\": {\r\n    // mine\r\n"),
+            "{after:?}"
+        );
+        let value = parse(&after).unwrap();
+        let server = &value["servers"]["opentide"];
+        assert_eq!(server["command"], "/x/opentide");
+        assert_eq!(server["env"]["A"], "1");
+        // `null` is filled from the template, as a missing field is.
+        assert_eq!(server["args"], serde_json::json!(["mcp", "start"]));
+        assert_eq!(kept, ["command"]);
+        // An entry that is not an object is no one's: the template's.
+        for entry in ["null", "\"x\"", "[1]"] {
+            let before = format!("{{\"servers\": {{\"opentide\": {entry}}}}}");
+            let (after, kept) = merge_keeping_entries(&before, &template()).unwrap();
+            assert_eq!(
+                parse(&after).unwrap()["servers"]["opentide"]["command"],
+                "opentide"
+            );
+            assert!(kept.is_empty());
+        }
+        // `merge` still replaces the entry (other callers' behaviour).
+        let after = merge(before, &template()).unwrap();
+        assert_eq!(
+            parse(&after).unwrap()["servers"]["opentide"]["command"],
+            "opentide"
+        );
     }
 
     #[test]

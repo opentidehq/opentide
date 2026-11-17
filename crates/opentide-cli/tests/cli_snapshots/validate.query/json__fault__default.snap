@@ -372,8 +372,8 @@ exit: 1
     },
     {
       "code": "esql_parse_error",
-      "column": 40,
-      "end_column": 41,
+      "column": 41,
+      "end_column": 42,
       "end_line": 76,
       "explain": "opentide explain esql_parse_error",
       "field_path": [
@@ -676,8 +676,8 @@ exit: 1
     },
     {
       "code": "lucene_parse_error",
-      "column": 7,
-      "end_column": 19,
+      "column": 19,
+      "end_column": 20,
       "end_line": 59,
       "explain": "opentide explain lucene_parse_error",
       "field_path": [

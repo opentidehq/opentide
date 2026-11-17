@@ -2654,6 +2654,7 @@ checksum = "7e036b411754132fd6b74e94b74e9a13c5cf606fa93d1885c35860d3060820b1"
 name = "opentide-analysis"
 version = "0.12.0"
 dependencies = [
+ "indexmap",
  "opentide-core",
  "opentide-cql",
  "opentide-ecs",
@@ -2665,10 +2666,13 @@ dependencies = [
  "opentide-kql",
  "opentide-kuery",
  "opentide-lucene",
+ "opentide-schema",
  "opentide-spl",
  "opentide-tide",
+ "opentide-workspace",
  "opentide-yara",
  "opentide-yaral",
+ "rayon",
  "regex",
  "serde_json",
  "toml_edit",

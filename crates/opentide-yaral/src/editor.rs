@@ -462,10 +462,11 @@ mod tests {
     /// Found by review (#1398): hover found its token with rowan's
     /// `token_at_offset`, which recurses once per level, and a valid rule whose
     /// tree is near the depth limit (4,085 chained comparisons, nested to the
-    /// left) aborted the process on a 1 MB stack.
+    /// left) aborted the process on a 1 MB stack. The chain sits just under the
+    /// toolkit's budget for a tree (`TREE_BUDGET`, #1427).
     #[test]
     fn hover_in_a_deep_tree_fits_a_small_stack() {
-        let chain = vec!["$e.principal.hostname"; 4_085].join(" = ");
+        let chain = vec!["$e.principal.hostname"; opentide_parse::TREE_BUDGET - 50].join(" = ");
         let source = format!("rule r {{\n events:\n  {chain}\n condition:\n  $e\n}}\n");
         let deepest = source.find("hostname").unwrap_or(0);
         let middle = source.len() / 2 + source[source.len() / 2..].find("hostname").unwrap_or(0);

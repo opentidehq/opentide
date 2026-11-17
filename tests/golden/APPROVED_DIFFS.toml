@@ -6606,66 +6606,6 @@ reason = "YAML emitted by serde-saphyr, not a port of PyYAML (the maintainer's d
 issue = "https://github.com/opentidehq/opentide/issues/834"
 changelog = "**`generate extract` and `opentide new` quote YAML by other rules, with the same data**"
 
-# UC-4.4e (#834): generate extract sentinel on the Rust command line. Its one-line
-# values are emitted by serde-saphyr where the oracle used PyYAML; the same data.
-# The comparison is crates/opentide-cli/tests/extract_sentinel.rs', on the
-# connector's cassette (case `cassette:sentinel/extract`), not a golden case's.
-
-[[diff]]
-command = "generate extract sentinel"
-case = "cassette:sentinel/extract"
-target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc  00000000.yaml"
-rule = "text"
-oracle = "        - key: '1' "
-candidate = "        - key: \"1\" "
-reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
-issue = "https://github.com/opentidehq/opentide/issues/834"
-changelog = "**`generate extract` and `opentide new` quote YAML by other rules, with the same data**"
-
-[[diff]]
-command = "generate extract sentinel"
-case = "cassette:sentinel/extract"
-target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc  00000000.yaml"
-rule = "text"
-oracle = "          column: 'yes'"
-candidate = "          column: \"yes\""
-reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
-issue = "https://github.com/opentidehq/opentide/issues/834"
-changelog = "**`generate extract` and `opentide new` quote YAML by other rules, with the same data**"
-
-[[diff]]
-command = "generate extract sentinel"
-case = "cassette:sentinel/extract"
-target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc  00000000.yaml"
-rule = "text"
-oracle = "          column: ''"
-candidate = "          column: \"\""
-reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
-issue = "https://github.com/opentidehq/opentide/issues/834"
-changelog = "**`generate extract` and `opentide new` quote YAML by other rules, with the same data**"
-
-[[diff]]
-command = "generate extract sentinel"
-case = "cassette:sentinel/extract"
-target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc .yaml"
-rule = "text"
-oracle = "      title: '{{Computer}} ran PowerShell: encoded' "
-candidate = "      title: \"{{Computer}} ran PowerShell: encoded\" "
-reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
-issue = "https://github.com/opentidehq/opentide/issues/834"
-changelog = "**`generate extract` and `opentide new` quote YAML by other rules, with the same data**"
-
-[[diff]]
-command = "generate extract sentinel"
-case = "cassette:sentinel/extract"
-target = "file:ws/Imported/ Quotes  and  back slash  a  name  - soc .yaml"
-rule = "text"
-oracle = "      title: 'Audit: {{OperationName}}' "
-candidate = "      title: \"Audit: {{OperationName}}\" "
-reason = "A one-line value the importer writes (`_scalar`) is emitted by serde-saphyr, not by a port of PyYAML (the maintainer's standing rule, #994): a string that must be quoted (`{{...}}`, `: ` inside, a number, `yes`, an empty string) is double-quoted where PyYAML 6's `safe_dump` single-quoted it. Both files load to the same data, every value and key in the oracle's order: `sentinel_rules_are_extracted_as_the_oracle_extracted_them` (crates/opentide-cli/tests/extract_sentinel.rs) runs the command against the cassette recorded from the oracle (tests/cassettes/sentinel/extract.json), loads the oracle's file (crates/opentide-cli/tests/extract_sentinel/oracle/) and Rust's and compares them as data, then byte for byte under these entries. No golden case can replay the command: MSAL and azure-core stamp the oracle's requests with random ids."
-issue = "https://github.com/opentidehq/opentide/issues/834"
-changelog = "**`generate extract` and `opentide new` quote YAML by other rules, with the same data**"
-
 # UC-4.4e (#834): generate extract sentinel's runs without a tenant, in human mode.
 
 [[diff]]
@@ -23986,72 +23926,6 @@ rule = "json:/result/content/0/text/json/issues/0/message"
 oracle = "\"Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry\""
 candidate = "\"Value \\\"clearr\\\" is not a valid \\\"tlp::1.0\\\" vocabulary entry\""
 reason = "The message quotes a value in double quotes with Rust's escapes and writes any other value as YAML and JSON write it (`null`, `true`), where the oracle used Python's repr ('x', None, True); the rest of the line is the oracle's."
-issue = "https://github.com/opentidehq/opentide/issues/841"
-changelog = "**Messages quote values the same way everywhere**"
-
-[[diff]]
-command = "generate extract sentinel"
-case = "cassette:sentinel/extract"
-target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc  00000000.yaml"
-rule = "lines"
-oracle = "      create_incident: True"
-candidate = "      create_incident: true"
-reason = "An extracted rule writes a boolean as YAML writes it (`create_incident: true`), where the oracle wrote Python's `str()` (`True`); YAML reads both as the same boolean."
-issue = "https://github.com/opentidehq/opentide/issues/841"
-changelog = "**Messages quote values the same way everywhere**"
-
-[[diff]]
-command = "generate extract sentinel"
-case = "cassette:sentinel/extract"
-target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc .yaml"
-rule = "lines"
-oracle = "      create_incident: True"
-candidate = "      create_incident: true"
-reason = "An extracted rule writes a boolean as YAML writes it (`create_incident: true`), where the oracle wrote Python's `str()` (`True`); YAML reads both as the same boolean."
-issue = "https://github.com/opentidehq/opentide/issues/841"
-changelog = "**Messages quote values the same way everywhere**"
-
-[[diff]]
-command = "generate extract sentinel"
-case = "cassette:sentinel/extract"
-target = "file:ws/Imported/ Quotes  and  back slash  a  name  - soc .yaml"
-rule = "lines"
-oracle = "      create_incident: False"
-candidate = "      create_incident: false"
-reason = "An extracted rule writes a boolean as YAML writes it (`create_incident: true`), where the oracle wrote Python's `str()` (`True`); YAML reads both as the same boolean."
-issue = "https://github.com/opentidehq/opentide/issues/841"
-changelog = "**Messages quote values the same way everywhere**"
-
-[[diff]]
-command = "generate extract sentinel"
-case = "cassette:sentinel/extract"
-target = "file:ws/Imported/ Sign-in from a new country - soc .yaml"
-rule = "lines"
-oracle = "      create_incident: False"
-candidate = "      create_incident: false"
-reason = "An extracted rule writes a boolean as YAML writes it (`create_incident: true`), where the oracle wrote Python's `str()` (`True`); YAML reads both as the same boolean."
-issue = "https://github.com/opentidehq/opentide/issues/841"
-changelog = "**Messages quote values the same way everywhere**"
-
-[[diff]]
-command = "generate extract sentinel"
-case = "cassette:sentinel/extract"
-target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc  00000000.yaml"
-rule = "lines"
-oracle = "        reopen_closed_incidents: True"
-candidate = "        reopen_closed_incidents: true"
-reason = "An extracted rule writes a boolean as YAML writes it (`create_incident: true`), where the oracle wrote Python's `str()` (`True`); YAML reads both as the same boolean."
-issue = "https://github.com/opentidehq/opentide/issues/841"
-changelog = "**Messages quote values the same way everywhere**"
-
-[[diff]]
-command = "generate extract sentinel"
-case = "cassette:sentinel/extract"
-target = "file:ws/Imported/ Encoded PowerShell — Ünïcode - soc .yaml"
-rule = "lines"
-oracle = "        reopen_closed_incidents: False"
-candidate = "        reopen_closed_incidents: false"
-reason = "An extracted rule writes a boolean as YAML writes it (`create_incident: true`), where the oracle wrote Python's `str()` (`True`); YAML reads both as the same boolean."
 issue = "https://github.com/opentidehq/opentide/issues/841"
 changelog = "**Messages quote values the same way everywhere**"
 

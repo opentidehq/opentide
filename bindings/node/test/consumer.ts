@@ -8,6 +8,7 @@ import type {
   DeployOptions,
   DeployOutcome,
   DeployPlanOptions,
+  DeployWarning,
   LintOptions,
   LiveCheck,
   QueryOptions,
@@ -16,8 +17,10 @@ import type {
 } from '@opentide/opentide'
 
 const options: ValidateOptions = { check: 'schema', files: ['objects/rules/a.yaml'], strict: true, queries: 'warn' }
-const ws: Workspace = Workspace.open('.', { cwd: '.' })
+// Opening a workspace on disk is a promise; one in memory is not.
+const opened: Promise<Workspace> = Workspace.open('.', { cwd: '.' })
 const memory: Workspace = Workspace.fromFiles('/ws', { 'objects/rules/a.yaml': 'name: A\n' })
+const ws: Workspace = memory
 const root: string = ws.root
 
 const validation = ws.validate(options)
@@ -36,11 +39,11 @@ const rules: any[] = ws.rules()
 const families: number = ws.objectives().length + ws.threats().length
 
 const planOptions: DeployPlanOptions = { strategies: ['PREVIEW'], platform: 'sentinel', keepDeprecated: false }
-const plan = ws.deployPlan(planOptions)
-const ok: boolean = plan.ok
+const planned = ws.deployPlan(planOptions)
+const ok: Promise<boolean> = planned.then((plan) => plan.ok)
 
-const tree = runJson(['commands'])
-const code: number = main(['--version'])
+const tree: Promise<any> = runJson(['commands'])
+const code: Promise<number> = main(['--version'])
 const version: string = VERSION
 
 // The tenant operations: synchronous configuration, promises for the network.
@@ -59,6 +62,7 @@ const queryOptions: QueryOptions = { language: 's1ql', start: new Date(0).toISOS
 const found: Promise<QueryResult> = connection.query('x', queryOptions)
 const checked: Promise<LiveCheck> = connection.validateQuery('x')
 const deployed: Promise<DeployOutcome> = connection.deploy('id', 'create', new Uint8Array())
+const raised: Promise<DeployWarning[]> = deployed.then((outcome) => outcome.warnings)
 // Dates and RFC 3339 strings for the window; an AbortSignal for one operation.
 const controller = new AbortController()
 const dated: QueryOptions = { start: new Date(0), end: '2026-11-12T10:00:00Z', signal: controller.signal }
@@ -85,4 +89,4 @@ ws.validate({ check: 'everything' })
 ws.validate({ queries: 'loud' })
 
 export { aborted, abortable, cancelled, keys, known, live, read, sysdig, timed }
-export { covering, code, families, rules, exitCode, failed, failure, lintStatus, ok, root, status, tree, version }
+export { opened, covering, code, families, rules, exitCode, failed, failure, lintStatus, ok, root, status, tree, version }

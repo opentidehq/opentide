@@ -206,6 +206,13 @@ fn parse_error(
             }
         }
     };
+    // At the end of the query: an empty span after its last token, not one
+    // over the blanks that follow it.
+    let span = if span.start >= source.trim_end().len() {
+        ByteSpan::new(span.start, span.start)
+    } else {
+        span
+    };
     Some(Diagnostic::error(
         codes::KUERY_PARSE_ERROR,
         message,
@@ -875,6 +882,15 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
 #[must_use]
 pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
     opentide_parse::debug_kinds::<syntax::Kuery>(&parser::parse(source, false).1)
+}
+
+/// For each syntax error of `source`, the `Debug` names of the nodes it was recorded in: what
+/// the corpus gate of `opentide-analysis` reads to check that an invalid fixture fails in
+/// the production it names. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_error_kinds(source: &str) -> Vec<Vec<String>> {
+    opentide_parse::debug_error_kinds::<syntax::Kuery>(&parser::parse(source, false).1)
 }
 
 /// The `Debug` names of the node kinds the grammar declares, the error node

@@ -3,7 +3,7 @@ source: crates/opentide-analysis/tests/parser_baseline.rs
 expression: baseline(language)
 ---
 == conformance/external/lucene-carbon-black/file_event_win_adsi_cache_creation_by_uncommon_tool.broken.lucene
-lucene_parse_error error 0:1039-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:1039-0:1039 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -193,7 +193,7 @@ lucene_parse_error error 0:1039-1:0 Lucene syntax error: missing `)`
 1036..1037 punctuation.bracket
 1037..1038 punctuation.bracket
 == conformance/external/lucene-carbon-black/file_event_win_advanced_ip_scanner.broken.lucene
-lucene_parse_error error 0:81-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:81-0:81 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -209,7 +209,7 @@ lucene_parse_error error 0:81-1:0 Lucene syntax error: missing `)`
 30..31 operator
 31..80 string
 == conformance/external/lucene-carbon-black/file_event_win_anydesk_artefact.broken.lucene
-lucene_parse_error error 0:131-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:131-0:131 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -237,7 +237,7 @@ lucene_parse_error error 0:131-1:0 Lucene syntax error: missing `)`
 88..129 string
 129..130 punctuation.bracket
 == conformance/external/lucene-carbon-black/file_event_win_anydesk_writing_susp_binaries.broken.lucene
-lucene_parse_error error 0:153-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:153-0:153 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -303,7 +303,7 @@ lucene_parse_error error 0:153-1:0 Lucene syntax error: missing `)`
 150..151 punctuation.bracket
 151..152 punctuation.bracket
 == conformance/external/lucene-carbon-black/file_event_win_arcsoc_susp_file_created.broken.lucene
-lucene_parse_error error 0:338-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:338-0:338 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -437,7 +437,7 @@ lucene_parse_error error 0:338-1:0 Lucene syntax error: missing `)`
 335..336 punctuation.bracket
 336..337 punctuation.bracket
 == conformance/external/lucene-carbon-black/file_event_win_aspnet_temp_files.broken.lucene
-lucene_parse_error error 0:152-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:152-0:152 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -479,7 +479,7 @@ lucene_parse_error error 0:152-1:0 Lucene syntax error: missing `)`
 149..150 punctuation.bracket
 150..151 punctuation.bracket
 == conformance/external/lucene-carbon-black/file_event_win_bloodhound_collection.broken.lucene
-lucene_parse_error error 0:354-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:354-0:354 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -579,7 +579,7 @@ lucene_parse_error error 0:354-1:0 Lucene syntax error: missing `)`
 351..352 punctuation.bracket
 352..353 punctuation.bracket
 == conformance/external/lucene-carbon-black/file_event_win_comodo_itsm_potentially_suspicious_file_creation.broken.lucene
-lucene_parse_error error 0:390-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:390-0:390 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -721,7 +721,7 @@ lucene_parse_error error 0:390-1:0 Lucene syntax error: missing `)`
 387..388 punctuation.bracket
 388..389 punctuation.bracket
 == conformance/external/lucene-carbon-black/image_load_clfs_load.broken.lucene
-lucene_parse_error error 0:425-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:425-0:425 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -855,7 +855,7 @@ lucene_parse_error error 0:425-1:0 Lucene syntax error: missing `)`
 422..423 punctuation.bracket
 423..424 punctuation.bracket
 == conformance/external/lucene-carbon-black/image_load_cmstp_load_dll_from_susp_location.broken.lucene
-lucene_parse_error error 0:239-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:239-0:239 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -935,7 +935,7 @@ lucene_parse_error error 0:239-1:0 Lucene syntax error: missing `)`
 236..237 punctuation.bracket
 237..238 punctuation.bracket
 == conformance/external/lucene-carbon-black/image_load_dll_amsi_suspicious_process.broken.lucene
-lucene_parse_error error 0:137-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:137-0:137 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -981,7 +981,7 @@ lucene_parse_error error 0:137-1:0 Lucene syntax error: missing `)`
 134..135 punctuation.bracket
 135..136 punctuation.bracket
 == conformance/external/lucene-carbon-black/image_load_dll_credui_uncommon_process_load.broken.lucene
-lucene_parse_error error 0:877-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:877-0:877 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -1203,7 +1203,7 @@ lucene_parse_error error 0:877-1:0 Lucene syntax error: missing `)`
 874..875 punctuation.bracket
 875..876 punctuation.bracket
 == conformance/external/lucene-carbon-black/image_load_dll_pcre_dotnet_dll_load.broken.lucene
-lucene_parse_error error 0:91-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:91-0:91 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -1219,7 +1219,7 @@ lucene_parse_error error 0:91-1:0 Lucene syntax error: missing `)`
 30..31 operator
 31..90 string
 == conformance/external/lucene-carbon-black/image_load_dll_rstrtmgr_suspicious_load.broken.lucene
-lucene_parse_error error 0:380-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:380-0:380 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -1339,7 +1339,7 @@ lucene_parse_error error 0:380-1:0 Lucene syntax error: missing `)`
 377..378 punctuation.bracket
 378..379 punctuation.bracket
 == conformance/external/lucene-carbon-black/image_load_dll_rstrtmgr_uncommon_load.broken.lucene
-lucene_parse_error error 0:1065-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:1065-0:1065 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -1583,7 +1583,7 @@ lucene_parse_error error 0:1065-1:0 Lucene syntax error: missing `)`
 1062..1063 punctuation.bracket
 1063..1064 punctuation.bracket
 == conformance/external/lucene-carbon-black/image_load_dll_sdiageng_load_by_msdt.broken.lucene
-lucene_parse_error error 0:72-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:72-0:72 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -1609,7 +1609,7 @@ lucene_parse_error error 0:72-1:0 Lucene syntax error: missing `)`
 56..70 string
 70..71 punctuation.bracket
 == conformance/external/lucene-carbon-black/net_connection_win_domain_crypto_mining_pools.broken.lucene
-lucene_parse_error error 0:11546-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:11546-0:11546 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -4141,7 +4141,7 @@ lucene_parse_error error 0:11546-1:0 Lucene syntax error: missing `)`
 11534..11544 string
 11544..11545 punctuation.bracket
 == conformance/external/lucene-carbon-black/net_connection_win_domain_external_ip_lookup.broken.lucene
-lucene_parse_error error 0:2602-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:2602-0:2602 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -4715,7 +4715,7 @@ lucene_parse_error error 0:2602-1:0 Lucene syntax error: missing `)`
 2599..2600 punctuation.bracket
 2600..2601 punctuation.bracket
 == conformance/external/lucene-carbon-black/net_connection_win_domain_ngrok_tunnel.broken.lucene
-lucene_parse_error error 0:290-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:290-0:290 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -4783,7 +4783,7 @@ lucene_parse_error error 0:290-1:0 Lucene syntax error: missing `)`
 268..288 string
 288..289 punctuation.bracket
 == conformance/external/lucene-carbon-black/net_connection_win_domain_notion_api_susp_communication.broken.lucene
-lucene_parse_error error 0:1283-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:1283-0:1283 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -5017,7 +5017,7 @@ lucene_parse_error error 0:1283-1:0 Lucene syntax error: missing `)`
 1280..1281 punctuation.bracket
 1281..1282 punctuation.bracket
 == conformance/external/lucene-carbon-black/net_connection_win_domain_telegram_api_non_browser_access.broken.lucene
-lucene_parse_error error 0:1222-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:1222-0:1222 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -5243,7 +5243,7 @@ lucene_parse_error error 0:1222-1:0 Lucene syntax error: missing `)`
 1219..1220 punctuation.bracket
 1220..1221 punctuation.bracket
 == conformance/external/lucene-carbon-black/net_connection_win_eqnedt.broken.lucene
-lucene_parse_error error 0:46-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:46-0:46 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -5259,7 +5259,7 @@ lucene_parse_error error 0:46-1:0 Lucene syntax error: missing `)`
 30..31 operator
 31..45 string
 == conformance/external/lucene-carbon-black/net_connection_win_notepad.broken.lucene
-lucene_parse_error error 0:68-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:68-0:68 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -5291,7 +5291,7 @@ lucene_parse_error error 0:68-1:0 Lucene syntax error: missing `)`
 65..66 punctuation.bracket
 66..67 punctuation.bracket
 == conformance/external/lucene-carbon-black/net_connection_win_susp_outbound_mobsync_connection.broken.lucene
-lucene_parse_error error 0:1335-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:1335-0:1335 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -5759,7 +5759,7 @@ lucene_parse_error error 0:1335-1:0 Lucene syntax error: missing `)`
 1332..1333 punctuation.bracket
 1333..1334 punctuation.bracket
 == conformance/external/lucene-carbon-black/proc_creation_win_7zip_exfil_dmp_files.broken.lucene
-lucene_parse_error error 0:322-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:322-0:322 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -5865,7 +5865,7 @@ lucene_parse_error error 0:322-1:0 Lucene syntax error: missing `)`
 319..320 punctuation.bracket
 320..321 punctuation.bracket
 == conformance/external/lucene-carbon-black/proc_creation_win_7zip_password_compression.broken.lucene
-lucene_parse_error error 0:320-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:320-0:320 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -5969,7 +5969,7 @@ lucene_parse_error error 0:320-1:0 Lucene syntax error: missing `)`
 317..318 punctuation.bracket
 318..319 punctuation.bracket
 == conformance/external/lucene-carbon-black/proc_creation_win_acccheckconsole_execution.broken.lucene
-lucene_parse_error error 0:201-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:201-0:201 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -6027,7 +6027,7 @@ lucene_parse_error error 0:201-1:0 Lucene syntax error: missing `)`
 198..199 punctuation.bracket
 199..200 punctuation.bracket
 == conformance/external/lucene-carbon-black/proc_creation_win_addinutil_suspicious_cmdline.broken.lucene
-lucene_parse_error error 0:683-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:683-0:683 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -6209,7 +6209,7 @@ lucene_parse_error error 0:683-1:0 Lucene syntax error: missing `)`
 680..681 punctuation.bracket
 681..682 punctuation.bracket
 == conformance/external/lucene-carbon-black/proc_creation_win_addinutil_uncommon_child_process.broken.lucene
-lucene_parse_error error 0:205-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:205-0:205 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -6261,7 +6261,7 @@ lucene_parse_error error 0:205-1:0 Lucene syntax error: missing `)`
 202..203 punctuation.bracket
 203..204 punctuation.bracket
 == conformance/external/lucene-carbon-black/proc_creation_win_addinutil_uncommon_cmdline.broken.lucene
-lucene_parse_error error 0:586-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:586-0:586 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -6355,7 +6355,7 @@ lucene_parse_error error 0:586-1:0 Lucene syntax error: missing `)`
 583..584 punctuation.bracket
 584..585 punctuation.bracket
 == conformance/external/lucene-carbon-black/proc_creation_win_addinutil_uncommon_dir_exec.broken.lucene
-lucene_parse_error error 0:373-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:373-0:373 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -6435,7 +6435,7 @@ lucene_parse_error error 0:373-1:0 Lucene syntax error: missing `)`
 370..371 punctuation.bracket
 371..372 punctuation.bracket
 == conformance/external/lucene-carbon-black/proc_creation_win_adplus_memory_dump.broken.lucene
-lucene_parse_error error 0:291-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:291-0:291 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -6525,7 +6525,7 @@ lucene_parse_error error 0:291-1:0 Lucene syntax error: missing `)`
 288..289 punctuation.bracket
 289..290 punctuation.bracket
 == conformance/external/lucene-carbon-black/registry_set_bginfo_custom_db.broken.lucene
-lucene_parse_error error 0:71-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:71-0:71 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -6541,7 +6541,7 @@ lucene_parse_error error 0:71-1:0 Lucene syntax error: missing `)`
 29..30 operator
 30..70 string
 == conformance/external/lucene-carbon-black/registry_set_change_sysmon_driver_altitude.broken.lucene
-lucene_parse_error error 0:98-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:98-0:98 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -6567,7 +6567,7 @@ lucene_parse_error error 0:98-1:0 Lucene syntax error: missing `)`
 57..96 string
 96..97 punctuation.bracket
 == conformance/external/lucene-carbon-black/registry_set_chrome_extension.broken.lucene
-lucene_parse_error error 0:5301-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:5301-0:5301 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -7447,7 +7447,7 @@ lucene_parse_error error 0:5301-1:0 Lucene syntax error: missing `)`
 5298..5299 punctuation.bracket
 5299..5300 punctuation.bracket
 == conformance/external/lucene-carbon-black/registry_set_comhijack_sdclt.broken.lucene
-lucene_parse_error error 0:98-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:98-0:98 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -7463,7 +7463,7 @@ lucene_parse_error error 0:98-1:0 Lucene syntax error: missing `)`
 29..30 operator
 30..97 string
 == conformance/external/lucene-carbon-black/registry_set_create_minint_key.broken.lucene
-lucene_parse_error error 0:92-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:92-0:92 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -7479,7 +7479,7 @@ lucene_parse_error error 0:92-1:0 Lucene syntax error: missing `)`
 29..30 operator
 30..91 string
 == conformance/external/lucene-carbon-black/registry_set_defender_exclusions.broken.lucene
-lucene_parse_error error 0:74-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:74-0:74 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -7495,7 +7495,7 @@ lucene_parse_error error 0:74-1:0 Lucene syntax error: missing `)`
 29..30 operator
 30..73 string
 == conformance/external/lucene-carbon-black/registry_set_dhcp_calloutdll.broken.lucene
-lucene_parse_error error 0:146-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:146-0:146 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -7523,7 +7523,7 @@ lucene_parse_error error 0:146-1:0 Lucene syntax error: missing `)`
 94..144 string
 144..145 punctuation.bracket
 == conformance/external/lucene-carbon-black/registry_set_dns_server_level_plugin_dll.broken.lucene
-lucene_parse_error error 0:80-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:80-0:80 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -7539,7 +7539,7 @@ lucene_parse_error error 0:80-1:0 Lucene syntax error: missing `)`
 29..30 operator
 30..79 string
 == conformance/external/lucene/aws_cloudtrail_bucket_block_public_access_weakened.broken.lucene
-lucene_parse_error error 0:432-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:432-0:432 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..2 punctuation.bracket
 2..13 property
@@ -7623,7 +7623,7 @@ lucene_parse_error error 0:432-1:0 Lucene syntax error: missing `)`
 429..430 punctuation.bracket
 430..431 punctuation.bracket
 == conformance/external/lucene/azure_ad_certificate_based_authencation_enabled.broken.lucene
-lucene_parse_error error 0:122-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:122-0:122 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..14 property
 14..15 operator
@@ -7641,7 +7641,7 @@ lucene_parse_error error 0:122-1:0 Lucene syntax error: missing `)`
 91..92 operator
 92..121 string
 == conformance/external/lucene/dns_query_win_common_malware_hosting_services.broken.lucene
-lucene_parse_error error 0:140-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:140-0:140 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..10 property
 10..11 operator
@@ -7679,7 +7679,7 @@ lucene_parse_error error 0:140-1:0 Lucene syntax error: missing `)`
 125..138 string
 138..139 punctuation.bracket
 == conformance/external/lucene/file_event_win_susp_dpapi_backup_and_cert_export_ioc.broken.lucene
-lucene_parse_error error 0:125-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:125-0:125 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..2 punctuation.bracket
 2..16 property
@@ -7733,7 +7733,7 @@ lucene_parse_error error 0:125-1:0 Lucene syntax error: missing `)`
 122..123 punctuation.bracket
 123..124 punctuation.bracket
 == conformance/external/lucene/gcp_access_policy_deleted.broken.lucene
-lucene_parse_error error 0:400-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:400-0:400 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..2 punctuation.bracket
 2..48 property
@@ -7779,7 +7779,7 @@ lucene_parse_error error 0:400-1:0 Lucene syntax error: missing `)`
 363..364 operator
 364..399 string
 == conformance/external/lucene/net_connection_lnx_ngrok_tunnel.broken.lucene
-lucene_parse_error error 0:194-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:194-0:194 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..20 property
 20..21 operator
@@ -7817,7 +7817,7 @@ lucene_parse_error error 0:194-1:0 Lucene syntax error: missing `)`
 171..192 string
 192..193 punctuation.bracket
 == conformance/external/lucene/okta_fastpass_phishing_detection.broken.lucene
-lucene_parse_error error 0:126-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:126-0:126 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..15 property
 15..16 operator
@@ -7843,7 +7843,7 @@ lucene_parse_error error 0:126-1:0 Lucene syntax error: missing `)`
 92..93 operator
 93..125 string
 == conformance/external/lucene/posh_ps_invoke_obfuscation_via_rundll.broken.lucene
-lucene_parse_error error 0:137-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:137-0:137 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..16 property
 16..17 operator
@@ -7877,7 +7877,7 @@ lucene_parse_error error 0:137-1:0 Lucene syntax error: missing `)`
 123..124 operator
 124..136 string
 == conformance/external/lucene/proc_creation_win_powershell_base64_encoded_obfusc.broken.lucene
-lucene_parse_error error 0:835-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:835-0:835 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..12 property
 12..13 operator
@@ -7983,7 +7983,7 @@ lucene_parse_error error 0:835-1:0 Lucene syntax error: missing `)`
 802..833 string
 833..834 punctuation.bracket
 == conformance/external/lucene/win_security_access_token_abuse.broken.lucene
-lucene_parse_error error 0:127-1:0 Lucene syntax error: missing `)`
+lucene_parse_error error 0:127-0:127 Lucene syntax error: missing `)`
 0..1 punctuation.bracket
 1..8 property
 8..9 operator
@@ -8025,11 +8025,11 @@ lucene_parse_error error 0:127-1:0 Lucene syntax error: missing `)`
 119..120 operator
 120..126 string
 == corpus/lucene/boolean_query__invalid.lucene
-lucene_parse_error error 0:26-0:26 Lucene syntax error: a clause is missing after `AND`
-0..14 property
-14..15 operator
-15..22 string
-23..26 keyword
+lucene_parse_error error 0:11-0:11 Lucene syntax error: a clause is missing after `AND`
+0..1 string
+2..5 keyword
+6..7 string
+8..11 keyword
 == corpus/lucene/boolean_query__valid.lucene
 0..14 property
 14..15 operator
@@ -8366,7 +8366,7 @@ lucene_regexp error 0:13-0:17 invalid Lucene regular expression: expected `]` to
 lucene_regexp warning 0:0-0:4 invalid Lucene regular expression: expected `]` to close the character class; with no field, Elasticsearch searches every field leniently, so this term silently matches nothing
 0..4 string
 == oracles/elasticsearch/lucene/syntax_unbalanced.lucene
-lucene_parse_error error 0:18-1:0 Lucene syntax error: a clause is missing after `OR`
+lucene_parse_error error 0:18-0:18 Lucene syntax error: a clause is missing after `OR`
 0..12 property
 12..13 operator
 13..14 punctuation.bracket
