@@ -382,7 +382,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Security
 
-- **Sentinel and Defender for Endpoint listings send the tenant's token only to the tenant's API** ([#1142](https://github.com/opentidehq/opentide/issues/1142)). `generate extract sentinel` followed ARM's `nextLink`, and `generate extract defender` Graph's `@odata.nextLink`, to whatever URL the answer named, with the bearer token, and for as many pages as it kept naming: an answer linking to another host sent it the token, and a link back to a page listed forever. A next-page link is now followed only on the first page's scheme, host and port, each link once, and for at most 1,000 pages; otherwise the listing fails, naming the link's host and why (`tenant_answer_invalid` through the SDKs).
+- **Sentinel and Defender for Endpoint listings send the tenant's token only to the tenant's API** ([#1142](https://github.com/opentidehq/opentide/issues/1142)). `generate extract sentinel` followed ARM's `nextLink`, and `generate extract defender` Graph's `@odata.nextLink`, to whatever URL the answer named, with the bearer token, and for as many pages as it kept naming: an answer linking to another host sent it the token, and a link back to a page listed forever. A next-page link is now followed only on the first page's scheme, host and port, each link once, and for at most 1,000 pages; otherwise the listing fails and says which rule the link broke, naming its host when it leaves the tenant's (`tenant_answer_invalid` through the SDKs).
 
 ## [0.28.1] — 2026-11-13
 
