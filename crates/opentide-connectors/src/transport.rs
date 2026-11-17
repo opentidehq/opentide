@@ -567,6 +567,47 @@ pub struct ReqwestTransport {
     read_timeout: Duration,
 }
 
+/// How many redirects one request follows, as reqwest's default.
+#[cfg(not(target_os = "wasi"))]
+const MAX_REDIRECTS: usize = 10;
+
+/// Whether a redirect from *from* to *to* is followed: on the same origin,
+/// or from `http` to `https` on the same host (the credentials already went
+/// out in clear on the first request). Any other hop leaves the tenant:
+/// reqwest strips `Authorization` there, but not a platform's own header
+/// (Carbon Black's `X-Auth-Token`, Bitdefender's `X-API-Key`), which would
+/// reach that host (#1142).
+pub fn follows_redirect(from: &url::Url, to: &url::Url) -> bool {
+    if from.origin() == to.origin() {
+        return true;
+    }
+    from.scheme() == "http"
+        && to.scheme() == "https"
+        && from.host() == to.host()
+        && from.port().is_none()
+        && to.port().is_none()
+}
+
+/// [`follows_redirect`]'s hops, at most [`MAX_REDIRECTS`]; a redirect it
+/// stops at is the answer, a 3xx the connectors take as a failure.
+#[cfg(not(target_os = "wasi"))]
+fn redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() > MAX_REDIRECTS {
+            return attempt.error("too many redirects");
+        }
+        let follows = attempt
+            .previous()
+            .last()
+            .is_none_or(|from| follows_redirect(from, attempt.url()));
+        if follows {
+            attempt.follow()
+        } else {
+            attempt.stop()
+        }
+    })
+}
+
 #[cfg(not(target_os = "wasi"))]
 impl ReqwestTransport {
     /// The client of the tenant *spec* describes.
@@ -590,6 +631,7 @@ impl ReqwestTransport {
             // as one (a connect failure), never as a slow answer. The body's
             // reads are held to `timeout` each below.
             .read_timeout(connect_timeout.saturating_add(settings.timeout))
+            .redirect(redirect_policy())
             .no_proxy();
         for proxy in spec.proxies.proxies()? {
             builder = builder.proxy(proxy);

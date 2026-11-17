@@ -417,3 +417,50 @@ fn crowdstrike_stops_the_search_a_cancelled_run_stops_waiting_for() {
         "{mismatches:?}"
     );
 }
+
+/// #1142: a search the API answers with a redirect it cannot follow (a 307
+/// without `Location`) is refused, not read as a started job.
+#[test]
+fn crowdstrike_a_redirect_answer_is_a_refusal() {
+    let full = cassette_support::cassette("crowdstrike/query");
+    let mut started = full.interactions[1].clone();
+    started.response.status = 307;
+    started
+        .response
+        .headers
+        .retain(|(name, _)| name != "location");
+    let replay = cassette_support::replay_cassette(
+        opentide_cassette::Cassette::new(
+            &full.scenario,
+            full.recorded_from,
+            vec![full.interactions[0].clone(), started],
+        ),
+        &[SECRET],
+    );
+    let (tenant, http) = tenant(
+        &replay,
+        "crowdstrike",
+        "falcon",
+        SETUP,
+        &crowdstrike::http_defaults(),
+    );
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let request = query(
+        "#event_simpleName=ProcessRollup2",
+        1,
+        &[],
+        DEFAULT_QUERY_TIMEOUT,
+    );
+    let outcome = block_on(async {
+        opentide_connectors::connector::QueryRunner::run(&Crowdstrike::new(), cx, &request).await
+    })
+    .unwrap();
+    let error = outcome.unwrap_err();
+    assert!(matches!(error, ConnectorError::Refused { .. }), "{error:?}");
+    assert!(error.to_string().contains("(HTTP 307)"), "{error}");
+}

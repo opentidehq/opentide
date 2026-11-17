@@ -550,7 +550,8 @@ pub fn decode(status: u16, body: &[u8]) -> Result<Json, MispCallError> {
         ));
     }
     let text = String::from_utf8_lossy(body);
-    if status >= 400 {
+    // A 3xx is a refusal too: a redirect the client could not follow.
+    if !(200..300).contains(&status) {
         if too_large(&text) {
             return Err(MispCallError::new(
                 Kind::AttributeTooLarge,
@@ -886,6 +887,9 @@ mod tests {
         assert_eq!(kind(502, "<html>").kind, Kind::Connectivity);
         assert_eq!(kind(400, "Value Too Long").kind, Kind::AttributeTooLarge);
         assert_eq!(kind(422, "nope").reason, "remote_rejected");
+        // #1142: a redirect the client could not follow is no success.
+        assert_eq!(kind(307, "{}").reason, "remote_rejected");
+        assert_eq!(kind(307, "{}").status, Some(307));
         assert_eq!(kind(200, "<html>").reason, "connectivity_failed");
         assert_eq!(
             kind(200, r#"{"errors": [403, {"message": "x"}]}"#).kind,
