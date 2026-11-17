@@ -458,6 +458,25 @@ pub struct DeployOutcome {
     /// What the deploy raised without failing: the rule is deployed, and
     /// these say what to check, as `opentide deploy` warns of them.
     pub warnings: Vec<DeployWarning>,
+    /// What the deploy did, as the events `opentide deploy` logs at info
+    /// level (`sysdig_rule_created`): nothing to act on.
+    pub events: Vec<DeployEvent>,
+}
+
+/// Something a deploy did: the event's name and its fields, in order.
+#[napi(
+    object,
+    object_to_js = false,
+    object_from_js = false,
+    use_nullable = true
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DeployEvent {
+    /// The event's name, as `opentide deploy` logs it (`sysdig_rule_created`).
+    pub name: String,
+    /// Its fields, in order, as `[key, value]` pairs.
+    #[napi(ts_type = "Array<[string, string]>")]
+    pub fields: Vec<Vec<String>>,
 }
 
 /// A warning a deploy raised: the rule is deployed, with something to check.
@@ -473,6 +492,10 @@ pub struct DeployWarning {
     pub code: String,
     /// What happened.
     pub message: String,
+    /// Whether it raises the run's warnings, as `opentide deploy` ends with
+    /// its warnings exit code; `false` for one that only says what was done
+    /// (`splunk_alert_deleted`).
+    pub raised: bool,
 }
 
 impl From<connectors::DeployOutcome> for DeployOutcome {
@@ -486,6 +509,19 @@ impl From<connectors::DeployOutcome> for DeployOutcome {
                 .map(|warning| DeployWarning {
                     code: warning.code,
                     message: warning.message,
+                    raised: warning.raised,
+                })
+                .collect(),
+            events: outcome
+                .events
+                .into_iter()
+                .map(|event| DeployEvent {
+                    name: event.name,
+                    fields: event
+                        .fields
+                        .into_iter()
+                        .map(|(key, value)| vec![key, value])
+                        .collect(),
                 })
                 .collect(),
         }
@@ -1225,16 +1261,24 @@ mod tests {
         let deployed = connectors::DeployOutcome::new(Some("42".into()), Operation::Disable);
         assert_eq!(
             serde_json::to_string(&DeployOutcome::from(deployed)).unwrap(),
-            r#"{"remoteId":"42","operation":"disable","warnings":[]}"#
+            r#"{"remoteId":"42","operation":"disable","warnings":[],"events":[]}"#
         );
         let recreated = connectors::DeployOutcome::new(Some("43".into()), Operation::Update)
-            .with_warnings(vec![connectors::DeployWarning::new(
-                "sysdig_rule_recreated",
-                "creating it again",
-            )]);
+            .with_warnings(vec![
+                connectors::DeployWarning::new("sysdig_rule_recreated", "creating it again"),
+                connectors::DeployWarning::new("splunk_alert_deleted", "Rule").unraised(),
+            ])
+            .with_events(vec![
+                connectors::DeployEvent::new("sysdig_rule_created").with_field("rule_id", "43"),
+            ]);
         assert_eq!(
             serde_json::to_string(&DeployOutcome::from(recreated)).unwrap(),
-            r#"{"remoteId":"43","operation":"update","warnings":[{"code":"sysdig_rule_recreated","message":"creating it again"}]}"#
+            concat!(
+                r#"{"remoteId":"43","operation":"update","warnings":["#,
+                r#"{"code":"sysdig_rule_recreated","message":"creating it again","raised":true},"#,
+                r#"{"code":"splunk_alert_deleted","message":"Rule","raised":false}],"#,
+                r#""events":[{"name":"sysdig_rule_created","fields":[["rule_id","43"]]}]}"#
+            )
         );
     }
 

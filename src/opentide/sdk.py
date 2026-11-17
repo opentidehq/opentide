@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
@@ -426,6 +426,20 @@ class DeployWarning:
     code: str
     #: What happened.
     message: str
+    #: Whether it raises the run's warnings, as ``opentide deploy`` ends with its
+    #: warnings exit code; ``False`` for one that only says what was done
+    #: (``splunk_alert_deleted``).
+    raised: bool = True
+
+
+@dataclass(frozen=True)
+class DeployEvent:
+    """Something a deploy did, as the event ``opentide deploy`` logs at info level."""
+
+    #: The event's name (``sysdig_rule_created``).
+    name: str
+    #: Its fields, in order (``rule_id``).
+    fields: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -438,6 +452,8 @@ class DeployOutcome:
     #: What the deploy raised without failing (a rule created again because the
     #: tenant lost it, a partial deployment), as ``opentide deploy`` warns of them.
     warnings: list[DeployWarning]
+    #: What the deploy did (a rule created, with its id): nothing to act on.
+    events: list[DeployEvent] = field(default_factory=list)
 
 
 def _capabilities(flags: tuple[bool, bool, bool]) -> Capabilities:
@@ -723,6 +739,10 @@ class Connection:
             remote_id=data["remote_id"],
             operation=data["operation"],
             warnings=[DeployWarning(**warning) for warning in data["warnings"]],
+            events=[
+                DeployEvent(event["name"], dict(event["fields"]))
+                for event in data.get("events", [])
+            ],
         )
 
     def __repr__(self) -> str:

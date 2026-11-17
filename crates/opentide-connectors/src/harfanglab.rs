@@ -423,6 +423,7 @@ impl Deployer for HarfangLab {
                 (_, Kind::Yara) => client.post_yara_rule(&request.body).await?,
             }
             Ok(DeployOutcome {
+                events: Vec::new(),
                 remote_id: None,
                 operation: request.operation,
                 warnings: Vec::new(),

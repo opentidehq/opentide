@@ -328,7 +328,7 @@ impl Deployer for GoogleSecops {
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
-        crate::connector::deploying(async move {
+        crate::connector::deploying_for(request, async move {
             let body: Json = serde_json::from_slice(&request.body).unwrap_or(Json::Null);
             let text = body
                 .get("text")
@@ -375,7 +375,10 @@ impl Deployer for GoogleSecops {
                     .get("deletion")
                     .and_then(crate::Credential::secret)
                     .is_some_and(|value| value.expose() == "delete"),
-                recreate_refusal: None,
+                recreate_refusal: request
+                    .recreate_refusal
+                    .as_ref()
+                    .map(|refusal| (refusal.code.to_owned(), refusal.message.clone())),
             };
             let outcome = deploy::deploy_rule(
                 cx,
@@ -394,6 +397,7 @@ impl Deployer for GoogleSecops {
                 ));
             }
             Ok(DeployOutcome {
+                events: Vec::new(),
                 remote_id: match outcome.state {
                     deploy::StateChange::Record(id) => Some(id),
                     deploy::StateChange::Keep => Some(request.rule_id.clone()),

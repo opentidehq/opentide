@@ -208,6 +208,14 @@ export interface ConnectOptions {
   timeout?: number
 }
 
+/** Something a deploy did: the event's name and its fields, in order. */
+export interface DeployEvent {
+  /** The event's name, as `opentide deploy` logs it (`sysdig_rule_created`). */
+  name: string
+  /** Its fields, in order, as `[key, value]` pairs. */
+  fields: Array<[string, string]>
+}
+
 /**
  * `deploy`'s options: the signal that aborts it, and a Sysdig rule's
  * runtime policies.
@@ -239,6 +247,11 @@ export interface DeployOutcome {
    * these say what to check, as `opentide deploy` warns of them.
    */
   warnings: Array<DeployWarning>
+  /**
+   * What the deploy did, as the events `opentide deploy` logs at info
+   * level (`sysdig_rule_created`): nothing to act on.
+   */
+  events: Array<DeployEvent>
 }
 
 /** What `Workspace.deployPlan` plans: `opentide deploy --dry-run`'s options. */
@@ -264,6 +277,12 @@ export interface DeployWarning {
   code: string
   /** What happened. */
   message: string
+  /**
+   * Whether it raises the run's warnings, as `opentide deploy` ends with
+   * its warnings exit code; `false` for one that only says what was done
+   * (`splunk_alert_deleted`).
+   */
+  raised: boolean
 }
 
 /**

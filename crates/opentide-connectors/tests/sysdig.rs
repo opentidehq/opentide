@@ -296,6 +296,60 @@ fn sysdig_the_generic_deployer_reports_a_rule_created_again() {
     rt.block_on(server.verify());
 }
 
+/// A recorded rule the tenant lost, when deployment state cannot record a
+/// new id: the generic deployer fails the rule with the request's refusal,
+/// its code kept, and creates nothing.
+#[test]
+fn sysdig_the_generic_deployer_refuses_to_create_again_with_the_requests_refusal() {
+    use opentide_connectors::connector::{DeployFailure, DeployRequest, DeployScope, Operation};
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/secure/rules/42"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(404).set_body_string(r#"{"message": "not found"}"#),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/secure/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(r#"{"id": 43}"#))
+            .expect(0)
+            .mount(&server)
+            .await;
+    });
+    let (tenant, http) = local(&server);
+    let cancel = CancellationToken::new();
+    let cx = TenantContext {
+        tenant: &tenant,
+        http: &http,
+        cancel: &cancel,
+    };
+    let (_, body, _) = compiled("STAGING", None);
+    let refusal = DeployFailure::new(
+        "deployment_state_unpersisted",
+        "deployment state is not kept here, so the new id would be lost",
+    );
+    let request = DeployRequest::new("42".to_owned(), Operation::Update, body)
+        .with_policies(Some(Vec::new()))
+        .refusing_recreate(refusal.clone());
+    let error = block_on(async {
+        sysdig::Sysdig
+            .deployer()
+            .unwrap()
+            .deploy(cx, &request)
+            .await
+    })
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(error.scope, DeployScope::Rule);
+    assert_eq!(error.failure.code, "deployment_state_unpersisted");
+    assert_eq!(error.failure.message, refusal.message);
+    rt.block_on(server.verify());
+}
+
 /// The cassette's first step: the create, the policies read, the policy
 /// that takes the rule.
 fn cassette_first_step() -> opentide_cassette::Cassette {

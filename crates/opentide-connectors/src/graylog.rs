@@ -1064,7 +1064,7 @@ impl Deployer for Graylog {
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
-        crate::connector::deploying(async move {
+        crate::connector::deploying_for(request, async move {
             let setup = |message: String| ConnectorError::Setup {
                 platform: PLATFORM.to_owned(),
                 tenant: cx.tenant.label.tenant.clone(),
@@ -1138,7 +1138,10 @@ impl Deployer for Graylog {
                 },
                 compiled,
                 disable: request.operation == Operation::Disable,
-                recreate_refusal: None,
+                recreate_refusal: request
+                    .recreate_refusal
+                    .as_ref()
+                    .map(|refusal| refusal.message.clone()),
             };
             let outcome = deploy_rule(cx, &rule).await?;
             if let Some(failure) = outcome.failure {
@@ -1150,6 +1153,7 @@ impl Deployer for Graylog {
                 });
             }
             Ok(DeployOutcome {
+                events: Vec::new(),
                 remote_id: match outcome.state {
                     StateChange::Record(id) => Some(id),
                     StateChange::Keep => Some(request.rule_id.clone()),

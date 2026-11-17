@@ -805,6 +805,7 @@ impl Deployer for Defender {
                 }
             };
             Ok(DeployOutcome {
+                events: Vec::new(),
                 remote_id,
                 operation: request.operation,
                 warnings,

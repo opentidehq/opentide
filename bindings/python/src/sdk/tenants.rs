@@ -477,6 +477,7 @@ struct DeployJson<'a> {
     remote_id: Option<&'a str>,
     operation: &'static str,
     warnings: Vec<DeployWarningJson<'a>>,
+    events: Vec<DeployEventJson<'a>>,
 }
 
 /// A deploy's warning as `DeployWarning` reads it.
@@ -484,6 +485,15 @@ struct DeployJson<'a> {
 struct DeployWarningJson<'a> {
     code: &'a str,
     message: &'a str,
+    raised: bool,
+}
+
+/// A deploy's event as `DeployEvent` reads it: its fields as `[key, value]`
+/// pairs, in order.
+#[derive(Serialize)]
+struct DeployEventJson<'a> {
+    name: &'a str,
+    fields: &'a [(String, String)],
 }
 
 impl<'a> From<&'a DeployOutcome> for DeployJson<'a> {
@@ -502,6 +512,15 @@ impl<'a> From<&'a DeployOutcome> for DeployJson<'a> {
                 .map(|warning| DeployWarningJson {
                     code: &warning.code,
                     message: &warning.message,
+                    raised: warning.raised,
+                })
+                .collect(),
+            events: outcome
+                .events
+                .iter()
+                .map(|event| DeployEventJson {
+                    name: &event.name,
+                    fields: &event.fields,
                 })
                 .collect(),
         }
@@ -511,7 +530,7 @@ impl<'a> From<&'a DeployOutcome> for DeployJson<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use opentide::connectors::DeployWarning;
+    use opentide::connectors::{DeployEvent, DeployWarning};
 
     #[test]
     fn a_window_defaults_to_the_minute_before_its_end() {
@@ -600,15 +619,26 @@ mod tests {
         let deployed = DeployOutcome::new(Some("42".into()), Operation::Disable);
         assert_eq!(
             serde_json::to_string(&DeployJson::from(&deployed)).unwrap(),
-            r#"{"remote_id":"42","operation":"disable","warnings":[]}"#
+            r#"{"remote_id":"42","operation":"disable","warnings":[],"events":[]}"#
         );
-        let recreated =
-            DeployOutcome::new(Some("43".into()), Operation::Update).with_warnings(vec![
+        let recreated = DeployOutcome::new(Some("43".into()), Operation::Update)
+            .with_warnings(vec![
                 DeployWarning::new("sysdig_rule_recreated", "creating it again"),
+                DeployWarning::new("splunk_alert_deleted", "Rule").unraised(),
+            ])
+            .with_events(vec![
+                DeployEvent::new("sysdig_rule_created")
+                    .with_field("uuid", "u1")
+                    .with_field("rule_id", "43"),
             ]);
         assert_eq!(
             serde_json::to_string(&DeployJson::from(&recreated)).unwrap(),
-            r#"{"remote_id":"43","operation":"update","warnings":[{"code":"sysdig_rule_recreated","message":"creating it again"}]}"#
+            concat!(
+                r#"{"remote_id":"43","operation":"update","warnings":["#,
+                r#"{"code":"sysdig_rule_recreated","message":"creating it again","raised":true},"#,
+                r#"{"code":"splunk_alert_deleted","message":"Rule","raised":false}],"#,
+                r#""events":[{"name":"sysdig_rule_created","fields":[["uuid","u1"],["rule_id","43"]]}]}"#
+            )
         );
     }
 }
