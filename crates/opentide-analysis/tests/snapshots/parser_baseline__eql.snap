@@ -864,7 +864,7 @@ eql_parse_error error 0:26-0:27 EQL syntax error: use `==` for equality; `=` is 
 47..49 operator
 50..51 number
 == corpus/eql/event_query__invalid.eql
-eql_parse_error error 0:13-0:13 EQL syntax error: the query ends too early; expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `true`, `+`, `-`, `(`, or `?`
+eql_parse_error error 0:13-0:13 EQL syntax error: the query ends too early; expected an expression or `not`
 0..7 type
 8..13 keyword
 == corpus/eql/event_query__valid.eql
@@ -959,7 +959,7 @@ eql_unsupported error 0:0-0:4 Elasticsearch EQL does not support `join`; use `se
 38..42 boolean
 42..43 punctuation.bracket
 == corpus/eql/missing_event_open__invalid.eql
-eql_parse_error error 0:23-0:25 EQL syntax error near `![`; expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `true`, `+`, `-`, `(`, or `?`
+eql_parse_error error 0:23-0:25 EQL syntax error near `![`; expected an expression or `not`
 0..7 type
 8..13 keyword
 14..18 boolean
@@ -985,7 +985,7 @@ eql_parse_error error 0:23-0:25 EQL syntax error near `![`; expected a name, a f
 63..67 boolean
 67..68 punctuation.bracket
 == corpus/eql/number__invalid.eql
-eql_parse_error error 0:20-0:23 EQL syntax error near `x10`; expected `and`, `in`, `like`, `not`, `or`, `regex`, `in~`, `like~`, `regex~`, `|`, `+`, `-`, `*`, `/`, `%`, or `:`
+eql_parse_error error 0:20-0:23 EQL syntax error near `x10`; expected `and`, a match operator such as `in`, `not`, `or`, `|`, or an arithmetic operator such as `+`
 0..7 type
 8..13 keyword
 14..15 property
@@ -1024,7 +1024,7 @@ eql_unsupported error 0:21-0:27 Elasticsearch EQL does not support the `unique` 
 21..25 keyword
 26..27 number
 == corpus/eql/predicate_expression__invalid.eql
-eql_parse_error error 0:31-0:32 EQL syntax error near `)`; expected a name, a function, a number, a string, a quoted name, `false`, `not`, `null`, `true`, `+`, `-`, `(`, or `?`
+eql_parse_error error 0:31-0:32 EQL syntax error near `)`; expected an expression or `not`
 0..7 type
 8..13 keyword
 14..21 property

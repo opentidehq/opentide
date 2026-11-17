@@ -92,9 +92,7 @@ pub(crate) fn parse(source: &str) -> Parsed {
                 span: ByteSpan::new(usize::from(e.gap.start()), at),
                 token: ByteSpan::new(at, end),
                 message: e.message.clone(),
-                expected: opentide_parse::describe_expected(e.expected, |k| {
-                    K::from_raw(k).describe()
-                }),
+                expected: expected_list(e.expected),
                 too_deep: matches!(
                     e.kind,
                     opentide_parse::ErrorKind::TooDeep { .. }
@@ -112,5 +110,94 @@ pub(crate) fn parse(source: &str) -> Parsed {
         problems,
         token_starts,
         gap_starts,
+    }
+}
+
+/// The kinds that start an expression: where the parser expected all of them, the message says
+/// "an expression" once, not each of them (`a name, a function, a number, …, \`(\`, or \`?\``).
+const EXPRESSION_START: [K; 12] = [
+    K::WORD,
+    K::TILDE_WORD,
+    K::NUMBER_TOKEN,
+    K::STRING_TOKEN,
+    K::QUOTED_IDENT_TOKEN,
+    K::FALSE_KW,
+    K::NULL_KW,
+    K::TRUE_KW,
+    K::PLUS,
+    K::MINUS,
+    K::L_PAREN,
+    K::QUESTION,
+];
+
+/// What a syntax error says the parser expected, as one phrase. Operators are named by their
+/// class with an example, as KQL names "a comparison operator" (a list ran to 24 items); where
+/// an expression could start, "an expression" stands for its first tokens.
+pub(crate) fn expected_list(expected: opentide_parse::TokenSet) -> Option<String> {
+    let expression = EXPRESSION_START
+        .iter()
+        .all(|&k| expected.contains(rowan::SyntaxKind(k as u16)));
+    opentide_parse::describe_expected(expected, |raw| {
+        let kind = K::from_raw(raw);
+        if expression && EXPRESSION_START.contains(&kind) {
+            // Named once, by the first kind of the set (`WORD` comes first).
+            return if kind == K::WORD { "an expression" } else { "" };
+        }
+        match kind {
+            K::EQ_EQ | K::NOT_EQ | K::LT | K::LT_EQ | K::GT | K::GT_EQ => {
+                "a comparison operator such as `==`"
+            }
+            K::PLUS | K::MINUS | K::STAR | K::SLASH | K::PERCENT => {
+                "an arithmetic operator such as `+`"
+            }
+            K::IN_KW
+            | K::IN_TILDE
+            | K::COLON
+            | K::LIKE_KW
+            | K::LIKE_TILDE
+            | K::REGEX_KW
+            | K::REGEX_TILDE => "a match operator such as `in`",
+            other => other.describe(),
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn message(query: &str) -> String {
+        parse(query)
+            .problems
+            .first()
+            .and_then(|p| p.expected.clone())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn operators_are_named_by_class() {
+        assert_eq!(
+            message("process where a b"),
+            "an index, `and`, a match operator such as `in`, `not`, `or`, `|`, a comparison \
+             operator such as `==`, an arithmetic operator such as `+`, or `.`"
+        );
+    }
+
+    #[test]
+    fn where_an_expression_starts_it_is_one_item() {
+        assert_eq!(message("process where a == "), "an expression");
+        assert_eq!(message("process where "), "an expression or `not`");
+        assert_eq!(message("process where f("), "an expression, `not`, or `)`");
+    }
+
+    #[test]
+    fn a_partial_set_keeps_its_kinds() {
+        // After `:` only constants: no expression, so each is named.
+        assert_eq!(
+            message("process where a : "),
+            "a number, a string, `false`, `null`, `true`, or `(`"
+        );
+        assert_eq!(message("process where a == 1 | "), "a name");
+        assert_eq!(message("any where a.b."), "a name or a quoted name");
     }
 }
