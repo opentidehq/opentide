@@ -45,6 +45,8 @@ pub struct AzureMonitorColumn {
     pub description: Option<String>,
 }
 
+/// The whole file, as the test reads it to compare.
+#[cfg(test)]
 #[derive(Debug, Deserialize)]
 struct AzureMonitorFile {
     tables: Vec<AzureMonitorTable>,
@@ -58,13 +60,88 @@ struct AzureMonitorFile {
 pub fn azure_monitor() -> &'static BTreeMap<String, AzureMonitorTable> {
     static TABLES: OnceLock<BTreeMap<String, AzureMonitorTable>> = OnceLock::new();
     TABLES.get_or_init(|| {
-        let file: AzureMonitorFile =
-            toml::from_str(AZURE_MONITOR_TOML).expect("azure-monitor/tables.toml");
-        file.tables
-            .into_iter()
-            .map(|t| (t.name.clone(), t))
-            .collect()
+        let tables: Vec<AzureMonitorTable> =
+            array_items(AZURE_MONITOR_TOML, "tables").expect("azure-monitor/tables.toml");
+        tables.into_iter().map(|t| (t.name.clone(), t)).collect()
     })
+}
+
+/// The items of the array of tables `[[key]]` in the generated catalog
+/// `text`, each parsed on its own: `toml` builds a whole document before it
+/// deserialises, and the 3.4 MB Azure Monitor reference's took tens of MiB
+/// more than the tables it holds (#1071). Only one item's is alive at a
+/// time here.
+///
+/// The catalog is made of top-level arrays of tables, as the sync scripts
+/// write them: each item starts at a line `[[name]]`, its sub-tables are
+/// `[name.<sub>]` or `[[name.<sub>]]`, and nothing but comments and blank
+/// lines comes before the first. Items of another array are skipped. A test
+/// holds the result to the whole file's.
+///
+/// # Errors
+///
+/// An item does not parse, or a line outside every item is not a comment.
+pub(crate) fn array_items<T: serde::de::DeserializeOwned>(
+    text: &str,
+    key: &str,
+) -> Result<Vec<T>, String> {
+    let nested = format!("{key}.");
+    let mut items = Vec::new();
+    // The item being read: `Some` while in one of `key`'s, `None` in
+    // another array's or before the first.
+    let mut item: Option<String> = None;
+    let mut started = false;
+    for line in text.split_inclusive('\n') {
+        let trimmed = line.trim_end();
+        let header = trimmed
+            .strip_prefix("[[")
+            .and_then(|rest| rest.strip_suffix("]]"))
+            .map(|name| (true, name))
+            .or_else(|| {
+                trimmed
+                    .strip_prefix('[')
+                    .and_then(|rest| rest.strip_suffix(']'))
+                    .map(|name| (false, name))
+            });
+        if let Some((array, name)) = header
+            && !name.contains('.')
+        {
+            // A new top-level item: the one read so far is done.
+            if let Some(done) = item.take() {
+                items.push(toml::from_str(&done).map_err(|err| err.to_string())?);
+            }
+            if !array {
+                return Err(format!("{trimmed:?} is not an array of tables"));
+            }
+            started = true;
+            if name == key {
+                item = Some(String::new());
+            }
+            continue;
+        }
+        let Some(body) = item.as_mut() else {
+            let rest = trimmed.trim_start();
+            if started || rest.is_empty() || rest.starts_with('#') {
+                continue;
+            }
+            return Err(format!("{trimmed:?} before the first array item"));
+        };
+        // `[[key.columns]]` is the item's own `[[columns]]`.
+        match header.and_then(|(array, name)| Some((array, name.strip_prefix(nested.as_str())?))) {
+            Some((array, sub)) => {
+                let (open, close) = if array { ("[[", "]]") } else { ("[", "]") };
+                body.push_str(open);
+                body.push_str(sub);
+                body.push_str(close);
+                body.push('\n');
+            }
+            None => body.push_str(line),
+        }
+    }
+    if let Some(done) = item {
+        items.push(toml::from_str(&done).map_err(|err| err.to_string())?);
+    }
+    Ok(items)
 }
 
 /// Columns every Log Analytics table has, whether or not the reference lists
@@ -128,6 +205,8 @@ pub struct AsimParser {
     pub unifying: bool,
 }
 
+/// The whole file, as the test reads it to compare.
+#[cfg(test)]
 #[derive(Debug, Deserialize)]
 struct AsimFile {
     schemas: Vec<AsimSchema>,
@@ -146,18 +225,13 @@ pub struct Asim {
 pub fn asim() -> &'static Asim {
     static ASIM: OnceLock<Asim> = OnceLock::new();
     ASIM.get_or_init(|| {
-        let file: AsimFile = toml::from_str(ASIM_TOML).expect("asim/asim.toml");
+        let schemas: Vec<AsimSchema> =
+            array_items(ASIM_TOML, "schemas").expect("asim/asim.toml schemas");
+        let parsers: Vec<AsimParser> =
+            array_items(ASIM_TOML, "parsers").expect("asim/asim.toml parsers");
         Asim {
-            schemas: file
-                .schemas
-                .into_iter()
-                .map(|s| (s.name.clone(), s))
-                .collect(),
-            parsers: file
-                .parsers
-                .into_iter()
-                .map(|p| (p.name.clone(), p))
-                .collect(),
+            schemas: schemas.into_iter().map(|s| (s.name.clone(), s)).collect(),
+            parsers: parsers.into_iter().map(|p| (p.name.clone(), p)).collect(),
         }
     })
 }
@@ -183,6 +257,42 @@ impl Asim {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// [`array_items`] reads the generated catalogs as `toml` reads the
+    /// whole file, item for item (#1071).
+    #[test]
+    fn the_catalogs_read_item_by_item_are_the_whole_files() {
+        let whole: AzureMonitorFile = toml::from_str(AZURE_MONITOR_TOML).unwrap();
+        let items: Vec<AzureMonitorTable> = array_items(AZURE_MONITOR_TOML, "tables").unwrap();
+        assert_eq!(format!("{items:?}"), format!("{:?}", whole.tables));
+        assert!(items.len() > 900);
+        let whole: AsimFile = toml::from_str(ASIM_TOML).unwrap();
+        let schemas: Vec<AsimSchema> = array_items(ASIM_TOML, "schemas").unwrap();
+        let parsers: Vec<AsimParser> = array_items(ASIM_TOML, "parsers").unwrap();
+        assert_eq!(format!("{schemas:?}"), format!("{:?}", whole.schemas));
+        assert_eq!(format!("{parsers:?}"), format!("{:?}", whole.parsers));
+        assert!(schemas.len() > 10 && parsers.len() > 1000);
+        // A sub-table, an array of them, comments and the last item.
+        let text = "# c\n\n[[t]]\nname = \"a\"\n[t.meta]\nx = 1\n[[t.columns]]\nname = \"c\"\n\
+                    [[t.columns]]\nname = \"d\"\n# between\n[[t]]\nname = \"b\"\n";
+        #[derive(Debug, Deserialize)]
+        struct File {
+            t: Vec<toml::Value>,
+        }
+        let whole: File = toml::from_str(text).unwrap();
+        let items: Vec<toml::Value> = array_items(text, "t").unwrap();
+        assert_eq!(items, whole.t);
+        assert_eq!(items.len(), 2);
+        // Another array's items, before and after, are skipped.
+        let mixed = format!("[[u]]\nname = \"x\"\n[[u.sub]]\nk = 1\n{text}[[u]]\nname = \"y\"\n");
+        let items: Vec<toml::Value> = array_items(&mixed, "t").unwrap();
+        assert_eq!(items, whole.t);
+        // A top-level table that is not an array item is refused.
+        assert!(array_items::<toml::Value>("[[t]]\nname = \"a\"\n[x]\nk = 1\n", "t").is_err());
+        // Anything else before the first item is refused, not dropped.
+        assert!(array_items::<toml::Value>("x = 1\n[[t]]\nname = \"a\"\n", "t").is_err());
+        assert!(array_items::<toml::Value>("[[t]]\nname = \n", "t").is_err());
+    }
 
     #[test]
     fn azure_monitor_has_sentinel_and_defender_xdr_tables() {
