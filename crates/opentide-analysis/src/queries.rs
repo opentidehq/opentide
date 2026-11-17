@@ -389,18 +389,12 @@ impl Profiles {
         document: &opentide_core::node::Document,
     ) -> Vec<Finding> {
         let lines = LineStarts::new(text);
-        let response = opentide_analysis::analyze_tide_parsed(
-            &self.host,
-            &path.to_string_lossy(),
-            text,
-            document,
-        );
+        let response =
+            crate::analyze_tide_parsed(&self.host, &path.to_string_lossy(), text, document);
         response
             .diagnostics
             .into_iter()
-            .chain(opentide_analysis::analyze_blocks_parsed(
-                &self.host, text, document,
-            ))
+            .chain(crate::analyze_blocks_parsed(&self.host, text, document))
             .map(|diagnostic| finding(text, &lines, diagnostic))
             .collect()
     }
