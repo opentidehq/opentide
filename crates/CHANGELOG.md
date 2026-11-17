@@ -8,6 +8,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Upgrade
 
+- If you call the Node package's `main`, `runJson`, `Workspace.open` or `Workspace.deployPlan` from `@opentide/opentide`, `await` them: each returns a promise now (`main(argv).then(process.exit)`, `(await Workspace.open('.')).validate()`), and its failure rejects the promise instead of throwing.
 - If you build an `opentide_connectors::connector::DeployOutcome` (or `opentide::connectors::DeployOutcome`) with a struct literal, in a `Deployer` of your own, call `DeployOutcome::new(remote_id, operation)` instead, and `.with_warnings(..)` for what the deploy raised. Read `warnings` where you want what `opentide deploy` would have warned of.
 - If you read `opentide_yara::catalog::Member::{libyara, yara_x, yara_x_kind}`, `Overload::{libyara, yara_x, yara_x_ret}` or call `Catalog::has_libyara_declarations`, drop them: every member is YARA-X's, and `kind` and `ret` are YARA-X's types.
 - If you called `opentide_cql::check::diagnostics`, call `opentide_cql::analyze_with` and keep the diagnostics after its `cql_parse_error`.
@@ -29,6 +30,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - If you build the engine crates from source, use Rust 1.95 or later: `rust-version` is 1.95, which the YARA parser crates (`yara-x-parser`, `yara-x-fmt`) need.
 
 ### Breaking
+
+- **The Node package no longer blocks Node's event loop: `main`, `runJson`, `Workspace.open` and `Workspace.deployPlan` return promises** ([opentide#1142](https://github.com/opentidehq/opentide/issues/1142)). Each ran the command line or read and compiled a workspace on Node's thread, so a server or an editor host froze until it finished. They now run on the binding's own runtime and settle on Node's thread; a failure rejects with the same `code`. Every exported function is also `#[napi(catch_unwind)]`, so a panic in the core throws (`internal_error` for the four above) instead of aborting the process. See Upgrade.
 
 - **`DeployOutcome` carries the deploy's warnings, and is `#[non_exhaustive]`** ([opentide#1142](https://github.com/opentidehq/opentide/issues/1142)). `opentide_connectors::connector::DeployOutcome` has a new `warnings: Vec<DeployWarning>` (`code`, `message`; `#[non_exhaustive]`, built with `DeployWarning::new`): what a deploy raised without failing, which `Deployer::deploy` dropped. Sysdig and Bitdefender report a rule created again because the tenant lost it, Graylog a definition created again or forgotten, its query validation's warnings and `graylog_version_vulnerable` (a version that does not revoke access tokens reliably), Google SecOps and Exabeam their deploy warnings, and Defender for Endpoint a rule created with the safer configuration (`opentide_connectors::defender::PARTIAL_DEPLOYMENT`). Each `code` is the event `opentide deploy` logs. A struct literal no longer builds one outside the crate: see Upgrade.
 
