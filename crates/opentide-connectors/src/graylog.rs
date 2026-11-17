@@ -31,8 +31,9 @@ use regex::Regex;
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
-    Operation, Platform, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
+    BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest, DeployScope,
+    DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, QueryColumn,
+    QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -1042,82 +1043,106 @@ fn refused(cx: TenantContext<'_>, error: &ApiError) -> ConnectorError {
 }
 
 /// The platform: a deployer, a live validator and a query runner.
-#[derive(Debug, Default)]
-pub struct Graylog;
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Graylog {
+    /// The tenant's version, when the caller has read it.
+    version: Option<Version>,
+}
+
+impl Graylog {
+    /// The platform; its deployer reads the tenant's version before each
+    /// rule.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The platform for a tenant whose version the caller has read
+    /// ([`Client::version`]), as `opentide deploy` reads it once per tenant:
+    /// its deployer sends no `GET /api/system`.
+    pub fn on_version(version: Version) -> Self {
+        Self {
+            version: Some(version),
+        }
+    }
+}
+
+/// The event a created definition's id is logged with.
+pub const DEFINITION_CREATED: &str = "graylog_definition_created";
+/// A version opentide cannot deploy to, or no version (a tenant's failure).
+pub const VERSION_UNSUPPORTED: &str = "graylog_version_unsupported";
+/// A version that does not revoke access tokens reliably (a warning).
+pub const VERSION_VULNERABLE: &str = "graylog_version_vulnerable";
+/// A token Graylog refuses (a tenant's failure).
+pub const TENANT_UNAUTHORIZED: &str = "graylog_tenant_unauthorized";
+/// A body that carries fields the tenant's version does not take.
+pub const FIELD_UNSUPPORTED: &str = "graylog_field_unsupported_version";
 
 impl Deployer for Graylog {
     /// One rule, from the compiled create body alone (a delete needs none):
     /// the definition is read back from it (flat, or wrapped in `entity`),
     /// then the tenant's version is read, as `opentide deploy` reads it
-    /// before any write: a version below 6.3, a refused token or an
-    /// unreachable tenant stops the deploy. A body that carries fields the
-    /// version does not take ([`graylog::unsupported_fields`]: `deploy_plan`
-    /// compiles for 7.2) is refused before any write
-    /// (`graylog_field_unsupported_version`), since Graylog would drop them;
-    /// one that fits is sent in the shape the version takes (6.3 flat, 7.x
-    /// wrapped in `entity`). A version that does not revoke access tokens
-    /// reliably is the outcome's `graylog_version_vulnerable` warning, as
-    /// `opentide deploy` warns of it. [`deploy_rule`] takes the compiled
+    /// before any write, unless the platform was made for it
+    /// ([`Graylog::on_version`]). A body that carries fields the version
+    /// does not take ([`graylog::unsupported_fields`]: `deploy_plan`
+    /// compiles for 7.2) fails the rule before any write
+    /// ([`FIELD_UNSUPPORTED`]), since Graylog would drop them; one that fits
+    /// is sent in the shape the version takes (6.3 flat, 7.x wrapped in
+    /// `entity`). A version that does not revoke access tokens reliably is
+    /// the outcome's `graylog_version_vulnerable` warning, as `opentide
+    /// deploy` warns of it. What was done is the outcome's event
+    /// ([`DEFINITION_CREATED`], `graylog_definition_updated`,
+    /// `graylog_definition_deleted`, each with its `definition_id`).
+    ///
+    /// A rule Graylog refuses fails with its own code (`graylog_query_invalid`,
+    /// `graylog_request_failed`, `graylog_create_unconfirmed`, ...), the
+    /// answer's status and its `detail`, or the request's recreate refusal;
+    /// [`DeployError::partial`] keeps the warnings raised before the
+    /// failure. A version read Graylog refuses (`graylog_forbidden`,
+    /// `graylog_request_failed`), a version below 6.3
+    /// ([`VERSION_UNSUPPORTED`]), a refused token ([`TENANT_UNAUTHORIZED`])
+    /// or no answer fail the tenant. [`deploy_rule`] takes the compiled
     /// definition itself.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
-    ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
-        crate::connector::deploying_for(request, async move {
-            let setup = |message: String| ConnectorError::Setup {
-                platform: PLATFORM.to_owned(),
-                tenant: cx.tenant.label.tenant.clone(),
-                message,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        Box::pin(async move {
+            let tenant = cx.tenant.label.tenant.as_str();
+            let located = |failure: DeployFailure| {
+                failure
+                    .with_field("platform", PLATFORM)
+                    .with_field("tenant", tenant)
             };
-            // A delete reads nothing from the body, as `opentide deploy`'s.
-            let definition = if request.operation == Operation::Delete {
-                opentide_compile::json::Object::new()
-            } else {
-                let body: Json = serde_json::from_slice(&request.body)
-                    .map_err(|error| setup(format!("the compiled body is not JSON: {error}")))?;
-                let Some(Json::Object(definition)) = body.get("entity").or(Some(&body)) else {
-                    return Err(setup(
-                        "the compiled body carries no event definition".to_owned(),
-                    ));
-                };
-                // A 6.3 create body carries `share_request` beside the
-                // definition; `create_body` puts it back where the version
-                // wants it.
-                let mut definition = definition.clone();
-                definition.shift_remove("share_request");
-                definition
-            };
-            let version = Client::new(cx).version().await?.map_err(|error| {
-                let code = if error.forbidden() {
-                    "graylog_forbidden"
-                } else {
-                    "graylog_request_failed"
-                };
-                ConnectorError::Refused {
-                    platform: PLATFORM.to_owned(),
-                    tenant: cx.tenant.label.tenant.clone(),
-                    message: format!("{code}: {}", error.reason()),
-                    detail: Some(error.detail()),
-                }
+            let definition = definition_of(request).map_err(|message| {
+                DeployError::from(ConnectorError::refused(PLATFORM, tenant, message, None))
             })?;
+            let version = match self.version {
+                Some(version) => version,
+                None => tenant_version(cx).await.map_err(|failure| match failure {
+                    Failure::Rule(error) => DeployError::tenant(located(failed_with(&error))),
+                    Failure::Tenant(error) => tenant_failure(error),
+                })?,
+            };
             let unsupported = graylog::unsupported_fields(&definition, version);
             if !unsupported.is_empty() {
-                return Err(ConnectorError::Refused {
-                    platform: PLATFORM.to_owned(),
-                    tenant: cx.tenant.label.tenant.clone(),
-                    message: format!(
-                        "graylog_field_unsupported_version: tenant {} runs Graylog {version}, \
-                         which does not take {} of the body, so nothing is sent; compile the \
-                         rule for Graylog {version} (`opentide deploy` does)",
-                        cx.tenant.label.tenant,
+                return Err(DeployError::rule(located(DeployFailure::new(
+                    FIELD_UNSUPPORTED,
+                    format!(
+                        "tenant {tenant} runs Graylog {version}, which does not take {} of the \
+                         body, so nothing is sent; compile the rule for Graylog {version} \
+                         (`opentide deploy` does)",
                         unsupported.join(", ")
                     ),
-                    detail: None,
-                });
+                ))));
             }
+            let refusal = request
+                .recreate_refusal
+                .as_ref()
+                .filter(|refusal| !refusal.message.is_empty());
             let compiled = CompiledDefinition {
-                uuid: request.rule_id.clone(),
+                uuid: rule_uuid(&definition, &request.rule_id)
+                    .unwrap_or_else(|| request.rule_id.clone()),
                 title: definition
                     .get("title")
                     .and_then(Json::as_str)
@@ -1138,32 +1163,128 @@ impl Deployer for Graylog {
                 },
                 compiled,
                 disable: request.operation == Operation::Disable,
-                recreate_refusal: request
-                    .recreate_refusal
-                    .as_ref()
-                    .map(|refusal| refusal.message.clone()),
+                recreate_refusal: refusal.map(|refusal| refusal.message.clone()),
             };
-            let outcome = deploy_rule(cx, &rule).await?;
-            if let Some(failure) = outcome.failure {
-                return Err(ConnectorError::Refused {
-                    platform: PLATFORM.to_owned(),
-                    tenant: cx.tenant.label.tenant.clone(),
-                    message: format!("{}: {}", failure.code, failure.reason),
-                    detail: failure.detail,
-                });
-            }
-            Ok(DeployOutcome {
-                events: Vec::new(),
-                remote_id: match outcome.state {
-                    StateChange::Record(id) => Some(id),
+            let outcome = deploy_rule(cx, &rule).await.map_err(tenant_failure)?;
+            let mut done = DeployOutcome::new(
+                match &outcome.state {
+                    StateChange::Record(id) => Some(id.clone()),
                     StateChange::Keep => Some(request.rule_id.clone()),
                     StateChange::Forget => None,
                 },
-                operation: request.operation,
-                warnings: deploy_warnings(version, outcome.warnings),
-            })
+                request.operation,
+            )
+            .with_warnings(deploy_warnings(version, outcome.warnings));
+            done.events = outcome
+                .event
+                .into_iter()
+                .map(|(name, id)| DeployEvent::new(name).with_field("definition_id", id))
+                .collect();
+            let Some(failure) = outcome.failure else {
+                return Ok(done);
+            };
+            let failed = match refusal {
+                // `recreate` refuses with the message alone, and no status.
+                Some(refusal)
+                    if failure.code == "graylog_request_failed"
+                        && failure.status.is_none()
+                        && refusal.message == failure.reason =>
+                {
+                    located(refusal.clone())
+                }
+                _ => {
+                    let mut failed = located(DeployFailure::new(failure.code, failure.reason));
+                    if let Some(status) = failure.status {
+                        failed = failed.with_status(status);
+                    }
+                    match failure.detail {
+                        Some(detail) => failed.with_field("detail", detail),
+                        None => failed,
+                    }
+                }
+            };
+            // A failure leaves no id to record: only the warnings before it.
+            done.remote_id = None;
+            done.events.clear();
+            Err(DeployError::rule(failed).with_partial(done))
         })
     }
+}
+
+/// The definition a request's body carries (flat, or wrapped in `entity`),
+/// without the `share_request` a 6.3 create body has beside it; a delete
+/// reads nothing from its body, as `opentide deploy`'s.
+fn definition_of(request: &DeployRequest) -> Result<opentide_compile::json::Object, String> {
+    if request.operation == Operation::Delete {
+        return Ok(opentide_compile::json::Object::new());
+    }
+    let body: Json = serde_json::from_slice(&request.body)
+        .map_err(|error| format!("the compiled body is not JSON: {error}"))?;
+    let Some(Json::Object(definition)) = body.get("entity").or(Some(&body)) else {
+        return Err("the compiled body carries no event definition".to_owned());
+    };
+    let mut definition = definition.clone();
+    definition.shift_remove("share_request");
+    Ok(definition)
+}
+
+/// The rule's UUID, from its `opentide.<uuid>` tag (7.2 and later), which a
+/// create that got no answer names the definition by: `rule_id` when its tag
+/// is there (a create's), else the tag `derive_tags` puts right after the
+/// bare `opentide` one, never a block's own tag naming another rule.
+fn rule_uuid(definition: &opentide_compile::json::Object, rule_id: &str) -> Option<String> {
+    let Some(Json::Array(tags)) = definition.get("tags") else {
+        return None;
+    };
+    let tags: Vec<&str> = tags.iter().filter_map(Json::as_str).collect();
+    let own = format!("opentide.{rule_id}").to_lowercase();
+    if tags.contains(&own.as_str()) {
+        return Some(rule_id.to_owned());
+    }
+    let after = tags.iter().position(|tag| *tag == "opentide")? + 1;
+    tags.get(after)
+        .and_then(|tag| tag.strip_prefix("opentide."))
+        .filter(|rest| uuid::Uuid::parse_str(rest).is_ok())
+        .map(str::to_owned)
+}
+
+/// The tenant's version (`GET /api/system`).
+async fn tenant_version(cx: TenantContext<'_>) -> Result<Version, Failure> {
+    Ok(Client::new(cx).version().await??)
+}
+
+/// A refused version read: `graylog_forbidden` or `graylog_request_failed`,
+/// with the answer's status and `detail`.
+fn failed_with(error: &ApiError) -> DeployFailure {
+    let code = if error.forbidden() {
+        "graylog_forbidden"
+    } else {
+        "graylog_request_failed"
+    };
+    DeployFailure::new(code, error.reason())
+        .with_status(error.status)
+        .with_field("detail", error.detail())
+}
+
+/// A tenant's failure, with its own code when it names one
+/// ([`VERSION_UNSUPPORTED`], [`TENANT_UNAUTHORIZED`]): each of its rules
+/// would fail the same way.
+fn tenant_failure(error: ConnectorError) -> DeployError {
+    let own = match &error {
+        ConnectorError::Refused { message, .. }
+        | ConnectorError::Authentication { message, .. } => {
+            [VERSION_UNSUPPORTED, TENANT_UNAUTHORIZED]
+                .into_iter()
+                .find(|code| message.starts_with(&format!("{code}: ")))
+        }
+        _ => None,
+    };
+    let mut failed = DeployError::from(error);
+    failed.scope = DeployScope::Tenant;
+    if let Some(code) = own {
+        failed.failure.code = code;
+    }
+    failed
 }
 
 /// What a deploy on a tenant running `version` raised: the warning of a
@@ -1172,7 +1293,7 @@ impl Deployer for Graylog {
 fn deploy_warnings(version: Version, raised: Vec<Warning>) -> Vec<DeployWarning> {
     let vulnerable = opentide_compile::graylog::is_vulnerable(version).then(|| {
         DeployWarning::new(
-            "graylog_version_vulnerable",
+            VERSION_VULNERABLE,
             format!(
                 "Graylog {version} does not revoke access tokens reliably ({}); upgrade to \
                  6.3.12, 7.0.16, 7.1.12 or later",
