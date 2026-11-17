@@ -334,8 +334,27 @@ fn blank_or_comment(line: &str) -> bool {
 }
 
 /// `text` with the opentide hook as the last `repos` entry
-/// (`_with_local_hook`); `None` when the layout is not one this extends.
+/// (`_with_local_hook`); `None` when the layout is not one this extends. A
+/// file whose every line ends in CRLF keeps CRLF, the added lines too.
 fn with_local_hook(text: &str, relative: &str) -> Option<String> {
+    // A CRLF cut after its CR: complete it.
+    let completed;
+    let text = if text.ends_with('\r') {
+        completed = format!("{text}\n");
+        completed.as_str()
+    } else {
+        text
+    };
+    let crlf = text.contains("\r\n") && text.matches('\n').count() == text.matches("\r\n").count();
+    if crlf {
+        let added = with_local_hook_lf(&text.replace("\r\n", "\n"), relative)?;
+        return Some(added.replace('\n', "\r\n"));
+    }
+    with_local_hook_lf(text, relative)
+}
+
+/// [`with_local_hook`] on a text whose lines end in LF.
+fn with_local_hook_lf(text: &str, relative: &str) -> Option<String> {
     let text = if text.ends_with('\n') {
         text.to_owned()
     } else {
@@ -801,6 +820,63 @@ mod tests {
         let before = parse_config(text).unwrap();
         let after = parse_config(&added).unwrap();
         assert!(adds_only_the_hook(before.as_ref(), after.as_ref(), ""));
+    }
+
+    #[test]
+    fn a_crlf_config_keeps_crlf_on_the_added_lines() {
+        let before = "# mine\r\nrepos:\r\n- repo: https://example.invalid/x\r\n  rev: v1\r\n  hooks:\r\n  - id: a\r\n";
+        let added = with_local_hook(before, "").unwrap();
+        assert!(added.starts_with(before), "{added:?}");
+        assert!(added.contains("- repo: local\r\n"), "{added:?}");
+        assert_eq!(
+            added.matches('\n').count(),
+            added.matches("\r\n").count(),
+            "a bare LF in {added:?}"
+        );
+        assert!(added.ends_with("\r\n"), "{added:?}");
+        // Without a final line break: one is added before the hook, in CRLF.
+        let unterminated = before.strip_suffix("\r\n").unwrap();
+        let added = with_local_hook(unterminated, "").unwrap();
+        assert!(added.starts_with(before), "{added:?}");
+        assert_eq!(added.matches('\n').count(), added.matches("\r\n").count());
+        // Cut after the last CR: the CRLF is completed, not doubled.
+        let added = with_local_hook(&format!("{unterminated}\r"), "").unwrap();
+        assert!(added.starts_with(before), "{added:?}");
+        assert!(!added.contains("\r\r"), "{added:?}");
+        // A file of no repos yet.
+        let added = with_local_hook("ci:\r\n  skip: []\r\n", "").unwrap();
+        assert!(
+            added.starts_with("ci:\r\n  skip: []\r\nrepos:\r\n  - repo: local\r\n"),
+            "{added:?}"
+        );
+        assert_eq!(added.matches('\n').count(), added.matches("\r\n").count());
+    }
+
+    #[test]
+    fn a_crlf_config_gets_the_hook_through_setup() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let before =
+            "repos:\r\n- repo: https://example.invalid/x\r\n  rev: v1\r\n  hooks:\r\n  - id: a";
+        std::fs::write(root.join(PRE_COMMIT_CONFIG_PATH), before).unwrap();
+        let mut stage = Stage::new();
+        let mut warnings = Vec::new();
+        assert!(ensure_pre_commit_config(&mut stage, root, &mut warnings, "").unwrap());
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let after = String::from_utf8(
+            stage
+                .read(&root.join(PRE_COMMIT_CONFIG_PATH))
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(after.starts_with(&format!("{before}\r\n")), "{after:?}");
+        assert!(after.contains("id: opentide-validate\r\n"), "{after:?}");
+        assert_eq!(
+            after.matches('\n').count(),
+            after.matches("\r\n").count(),
+            "{after:?}"
+        );
     }
 
     #[test]
