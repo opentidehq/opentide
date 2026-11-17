@@ -55,6 +55,7 @@ fn regexp_verdicts_match_lucene() {
             Verdict::Invalid { .. } => "SYNTAX",
             Verdict::TooComplex => "COMPLEX",
             Verdict::TooLarge => "DEPTH",
+            Verdict::TooDeep => "TOO_DEEP_TO_CHECK",
         }
         .to_string();
         if got != expected && mismatches.len() < 40 {

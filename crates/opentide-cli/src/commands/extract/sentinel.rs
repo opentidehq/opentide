@@ -27,8 +27,11 @@ use super::{
 };
 
 const SENTINEL: &str = "sentinel";
-/// Every line holding it is left out of a file (`OPENTIDE::REMOVE`).
-const REMOVE: &str = "OPENTIDE::REMOVE";
+/// A line that is only this is left out of a file (`OPENTIDE::REMOVE`).
+/// The control characters around it are ones no value can bring in: a
+/// scalar escapes them and [`block_text`] refuses them, so a rule whose
+/// text says `OPENTIDE::REMOVE` loses no line.
+const REMOVE: &str = "\u{1}OPENTIDE::REMOVE\u{1}";
 
 const GROUPING_CONFIGURATION: &str = "      grouping_lookback: {grouping_lookback}\n      matching: {grouping_matching_method}\n      {group_by_entities}\n      {group_by_alert_details}\n      {group_by_custom_details}";
 const DYNAMIC_PROPERTIES_TEMPLATE: &str = "      #- property: \n        #column: ";
@@ -194,6 +197,56 @@ pub(crate) fn scalar(value: &CJson) -> String {
     json_string(&text)
 }
 
+/// `text` as the content of a YAML block scalar (`|`): every line break
+/// YAML knows (CR, CRLF, NEL, U+2028, U+2029) an LF, so a lone `\r` cannot
+/// end the block and start a key of its own. A character YAML does not
+/// allow in a file (a control character, U+FFFE) cannot be written in a
+/// block: the rule is not imported, and `field` names why.
+pub(crate) fn block_text(text: &str, field: &str) -> Result<String, FieldError> {
+    let text = text
+        .replace("\r\n", "\n")
+        .replace(['\r', '\u{85}', '\u{2028}', '\u{2029}'], "\n");
+    let printable = |c: char| {
+        matches!(c, '\t' | '\n' | '\u{20}'..='\u{7e}' | '\u{a0}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}')
+            || c >= '\u{10000}'
+    };
+    if text.chars().all(printable) {
+        Ok(text)
+    } else {
+        Err(FieldError::not(field, "text without control characters"))
+    }
+}
+
+/// A boolean or a number as YAML writes it; any other value as [`scalar`]
+/// writes it, so a string cannot break the line it is on.
+fn literal(value: &CJson) -> String {
+    match value {
+        CJson::Bool(_) | CJson::Int(_) | CJson::UInt(_) | CJson::Float(_) => json_text(value),
+        _ => scalar(value),
+    }
+}
+
+/// A date as the importer writes it: `YYYY-MM-DD` bare, as the oracle wrote
+/// it; anything else as [`scalar`] writes it, so it cannot break the line.
+pub(crate) fn date_scalar(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let is_date = bytes.len() == 10
+        && bytes.iter().enumerate().all(|(at, byte)| match at {
+            4 | 7 => *byte == b'-',
+            _ => byte.is_ascii_digit(),
+        });
+    if is_date {
+        text.to_owned()
+    } else {
+        scalar(&CJson::Str(text.to_owned()))
+    }
+}
+
+/// [`convert_period`]'s duration as a YAML scalar ([`scalar`]).
+fn period(text: &str) -> String {
+    scalar(&CJson::Str(convert_period(text)))
+}
+
 /// `_block_style`: `|`, or `|2` when the first non-blank line starts with a
 /// space, which YAML would otherwise read as the block's indentation.
 fn block_style(text: &str) -> &'static str {
@@ -311,9 +364,9 @@ pub(crate) fn render(
         (TRIGGER_TEMPLATE.to_owned(), NRT_SCHEDULING.to_owned())
     } else if kind == Some(&CJson::Str("Scheduled".into())) {
         let operator = scalar(required(rule, "trigger_operator")?);
-        let threshold = json_text(required(rule, "trigger_threshold")?);
-        let frequency = convert_period(required_text(rule, "query_frequency")?);
-        let lookback = convert_period(required_text(rule, "query_period")?);
+        let threshold = literal(required(rule, "trigger_threshold")?);
+        let frequency = period(required_text(rule, "query_frequency")?);
+        let lookback = period(required_text(rule, "query_period")?);
         (
             fill(
                 TRIGGER,
@@ -329,13 +382,13 @@ pub(crate) fn render(
     };
     let create_incident = mapping(rule, "incident_configuration")?
         .and_then(|incident| incident.get("create_incident"))
-        .map_or_else(|| "false".to_owned(), json_text);
+        .map_or_else(|| "false".to_owned(), literal);
     let alert_suppression = if rule.get("suppression_enabled").is_none()
         || rule.get("suppression_enabled") == Some(&CJson::Bool(false))
     {
         "false".to_owned()
     } else {
-        convert_period(required_text(rule, "suppression_duration")?)
+        period(required_text(rule, "suppression_duration")?)
     };
 
     let (custom_details_commented, custom_details) = match given(rule, "custom_details") {
@@ -382,6 +435,10 @@ pub(crate) fn render(
                         "a string",
                     ));
                 };
+                let description = &block_text(
+                    description,
+                    "alert_details_override.alert_description_format",
+                )?;
                 alert_description_commented = "";
                 alert_description_style = block_style(description);
                 alert_description_override = indent_lines(description, "      ");
@@ -452,9 +509,8 @@ pub(crate) fn render(
     } else {
         let reopen = grouping
             .get("reopen_closed_incident")
-            .map_or_else(|| "false".to_owned(), json_text);
-        let lookback =
-            convert_period(required_text(grouping, "lookback_duration").map_err(in_grouping)?);
+            .map_or_else(|| "false".to_owned(), literal);
+        let lookback = period(required_text(grouping, "lookback_duration").map_err(in_grouping)?);
         let matching = scalar(required(grouping, "matching_method").map_err(in_grouping)?);
         let group = |key: &str, label: &str| -> Result<String, FieldError> {
             Ok(match given(grouping, key) {
@@ -530,7 +586,7 @@ pub(crate) fn render(
         None => ("#", ENTITIES_TEMPLATE.to_owned()),
     };
 
-    let query = required_text(rule, "query")?;
+    let query = &block_text(required_text(rule, "query")?, "query")?;
     let block = fill(
         BLOCK,
         &[
@@ -569,7 +625,7 @@ pub(crate) fn render(
     let block = block.trim_matches('\n');
 
     let display_name = format!("{} - {tenant_name}", required_text(rule, "display_name")?);
-    let description = required_text(rule, "description")?;
+    let description = &block_text(required_text(rule, "description")?, "description")?;
     let created = required_text(rule, "last_modified_utc")?
         .split('T')
         .next()
@@ -578,10 +634,13 @@ pub(crate) fn render(
     let text = fill(
         MDR,
         &[
-            ("rule_name", &json_string(&display_name)),
+            (
+                "rule_name",
+                &opentide_schema::node::double_quoted(&display_name),
+            ),
             ("rule_uuid", &scalar(required(rule, "name")?)),
-            ("rule_creation", &created),
-            ("rule_modified", &created),
+            ("rule_creation", &date_scalar(&created)),
+            ("rule_modified", &date_scalar(&created)),
             ("rule_author", "opentide Sentinel Importer"),
             ("rule_description_style", block_style(description)),
             ("rule_description", &indent_lines(description, "  ")),
@@ -592,7 +651,7 @@ pub(crate) fn render(
     let text = text
         .trim_matches('\n')
         .split('\n')
-        .filter(|line| !line.contains(REMOVE))
+        .filter(|line| line.trim() != REMOVE)
         .collect::<Vec<_>>()
         .join("\n");
     Ok(Some((display_name, text)))
@@ -807,6 +866,93 @@ mod tests {
             "groupingConfiguration": {"enabled": false}},
         "lastModifiedUtc": "2026-01-02T03:04:05Z"}}"#;
 
+    /// The tenant's values reach the file as YAML scalars: a threshold, a
+    /// period or a date that is not what the importer expects cannot break
+    /// the file or change what it reads as.
+    #[test]
+    fn hostile_values_read_back_as_written() {
+        let rule = RULE
+            .replace(r#""triggerThreshold": 0"#, r#""triggerThreshold": "5 #x""#)
+            .replace(
+                r#""queryFrequency": "PT1H""#,
+                r#""queryFrequency": "PT1H: [x]""#,
+            )
+            .replace(
+                r#""createIncident": true"#,
+                r#""createIncident": "yes: no""#,
+            )
+            .replace("2026-01-02T03:04:05Z", "2026: 01 #x");
+        let (_, text) = render(&object(&rule), "soc").unwrap().unwrap();
+        let document =
+            opentide_schema::node::load(&text).unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+        let root = document.root().unwrap();
+        let at = |path: &[&str]| -> Option<String> {
+            let mut node = root;
+            for key in path {
+                node = node.get(key)?;
+            }
+            node.value.as_str().map(str::to_owned)
+        };
+        assert_eq!(
+            at(&["metadata", "created"]).as_deref(),
+            Some("2026: 01 #x"),
+            "{text}"
+        );
+        let block = |rest: &[&str]| at(&[&["configurations", "sentinel"][..], rest].concat());
+        assert_eq!(
+            block(&["trigger", "threshold"]).as_deref(),
+            Some("5 #x"),
+            "{text}"
+        );
+        assert_eq!(
+            block(&["scheduling", "frequency"]).as_deref(),
+            Some("1h: [x]"),
+            "{text}"
+        );
+        assert_eq!(
+            block(&["alert", "create_incident"]).as_deref(),
+            Some("yes: no"),
+            "{text}"
+        );
+    }
+
+    /// A lone CR in a query or description stays in its block, and a value
+    /// that says `OPENTIDE::REMOVE` loses no line.
+    #[test]
+    fn tenant_text_cannot_end_a_block_or_remove_a_line() {
+        let rule = RULE
+            .replace(r#""query": "T""#, r#""query": "T\rname: INJECTED""#)
+            .replace(
+                r#""description": "D""#,
+                r#""description": "D\u2028status: X""#,
+            )
+            .replace(
+                r#""displayName": "Rule""#,
+                r#""displayName": "Rule OPENTIDE::REMOVE""#,
+            );
+        let (_, text) = render(&object(&rule), "soc").unwrap().unwrap();
+        let document =
+            opentide_schema::node::load(&text).unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+        let root = document.root().unwrap();
+        assert_eq!(
+            root.get("name").unwrap().value.as_str(),
+            Some("Rule OPENTIDE::REMOVE - soc"),
+            "{text}"
+        );
+        assert!(root.get("status").is_none(), "{text}");
+        let query = root
+            .get("configurations")
+            .and_then(|block| block.get("sentinel"))
+            .and_then(|block| block.get("query"))
+            .unwrap();
+        assert_eq!(query.value.as_str(), Some("T\nname: INJECTED\n"), "{text}");
+        let refused = RULE.replace(r#""query": "T""#, r#""query": "T\u0001""#);
+        assert_eq!(
+            render(&object(&refused), "soc").unwrap_err().to_string(),
+            "field `query` is not text without control characters"
+        );
+    }
+
     #[test]
     fn a_rule_renders_to_a_file_that_loads() {
         let (name, text) = render(&object(RULE), "soc").unwrap().unwrap();
@@ -867,7 +1013,7 @@ mod tests {
 
     /// A single string where a list is expected is the one item it is: a
     /// rule's `tactics: "Execution"` is `- Execution`, not one item per
-    /// character (the Python importer iterated the string).
+    /// character.
     #[test]
     fn a_single_string_is_one_item_of_a_list() {
         let rule = RULE.replace(

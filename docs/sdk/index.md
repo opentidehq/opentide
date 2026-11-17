@@ -26,7 +26,7 @@ print(__version__, len(ws.rules()), "rules,", validation.summary["objects"], "ob
 | `opentide.TenantConfig` | A tenant: what `Workspace.tenants` returns, or one configured in code |
 | `opentide.OpentideError` | What a call that cannot run raises, with a stable `code` |
 | `opentide.Validation`, `opentide.LintReport`, `opentide.DeployPlan` | What `validate`, `lint` and `deploy_plan` return |
-| `opentide.QueryResult`, `opentide.LiveCheck`, `opentide.DeployOutcome` | What `query`, `validate_query` and `deploy` return |
+| `opentide.QueryResult`, `opentide.LiveCheck`, `opentide.DeployOutcome`, `opentide.DeployWarning` | What `query`, `validate_query` and `deploy` return |
 | `opentide.models` | The Tide models: `DetectionRule`, `ThreatVector`, `DetectionObjective`, the platform blocks |
 | `opentide.plugins` | The plugin API: `PlatformPlugin`, which adds a detection platform |
 | `opentide.analysis` | `check_query`: one query checked offline |

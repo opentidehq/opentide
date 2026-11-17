@@ -170,7 +170,8 @@ fn deep_outcome_values_with_match_are_clean() {
 }
 
 /// Past the limits, one syntax error each and no overflow: 1,100 levels of
-/// nesting, and the toolkit's 4,096 tree levels (a run of comparisons).
+/// nesting, and the toolkit's budget of tree nodes (a run of comparisons, nested
+/// to the left: one `TooDeep` naming it, never `TreeTooDeep`, #1427).
 #[test]
 fn past_the_limits_there_is_one_error() {
     let term = "$e.principal.hostname = \"x\"";
@@ -189,7 +190,7 @@ fn past_the_limits_there_is_one_error() {
         ),
         (
             vec!["$e.a"; 5_000].join(" = "),
-            "the syntax tree nests deeper than 4096 nodes",
+            "nesting deeper than the syntax tree allows (4032 nodes)",
         ),
     ] {
         let found = every_entry_point(rule(&expr));

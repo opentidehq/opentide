@@ -575,6 +575,7 @@ impl Deployer for Sentinel {
                 return Ok(DeployOutcome {
                     remote_id: None,
                     operation: request.operation,
+                    warnings: Vec::new(),
                 });
             }
             let body: Json =
@@ -589,6 +590,7 @@ impl Deployer for Sentinel {
             Ok(DeployOutcome {
                 remote_id: Some(request.rule_id.clone()),
                 operation: request.operation,
+                warnings: Vec::new(),
             })
         })
     }

@@ -1,2 +1,2 @@
 ``` prod:unknown_command invalid
-index=main | notacommand x
+index=main | notacommand x=(

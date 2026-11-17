@@ -915,6 +915,36 @@ fn profiles() {
         ),
         [("yara_module_unconfirmed".to_string(), W)]
     );
+    // Bitdefender's confirmed modules are yara-1.0's (`pe`, `elf`, `math`,
+    // `hash`, `time`): another known module is the warning (#1252).
+    for module in ["pe", "elf", "math", "hash", "time"] {
+        assert_eq!(
+            codes(
+                &format!("import \"{module}\" rule a {{ condition: true }}"),
+                &bd
+            ),
+            [],
+            "{module}"
+        );
+    }
+    let catalog = opentide_yara::catalog::Catalog::cached();
+    let confirmed = &catalog.profiles["bitdefender"].confirmed_modules;
+    let unconfirmed: Vec<&String> = catalog
+        .known_modules
+        .iter()
+        .filter(|m| !confirmed.contains(m))
+        .collect();
+    assert_eq!(unconfirmed.len(), catalog.known_modules.len() - 5);
+    for module in unconfirmed {
+        assert_eq!(
+            codes(
+                &format!("import \"{module}\" rule a {{ condition: true }}"),
+                &bd
+            ),
+            [("yara_module_unconfirmed".to_string(), W)],
+            "{module}"
+        );
+    }
     assert_eq!(
         codes("rule a { meta: d = \"é\" condition: true }", &bd),
         [("bitdefender_yara_ascii".to_string(), E)]

@@ -1016,8 +1016,7 @@ fn framework_a_read_timeout_is_not_retried() {
 
 #[test]
 fn framework_upper_case_no_proxy_alone_is_read() {
-    // NO_PROXY with no lower-case spelling set is the list, as Python's
-    // getproxies_environment reads it.
+    // NO_PROXY is the list when no lower-case `no_proxy` is set.
     let env = Environment::from_pairs([
         ("HTTPS_PROXY", "http://upper-https:1"),
         ("NO_PROXY", "internal.example,127.0.0.1"),
@@ -1072,8 +1071,8 @@ fn framework_credentials_placeholders_and_errors() {
     let legacy = credentials::resolve("$AZ-SECRET", &env, Resolve::Required, origin).unwrap();
     assert_eq!(legacy.credential.secret().unwrap().expose(), "legacy-value");
     assert_eq!(legacy.legacy_variable.as_deref(), Some("AZ-SECRET"));
-    // A variable set to nothing is the value, as Python sends it
-    // (`os.environ.get(name, "")`): only an unset one is missing.
+    // A variable set to nothing is the value, the empty string: only an
+    // unset one is missing.
     let empty = env.clone().with("EMPTY_TOKEN", "");
     for mode in [Resolve::Required, Resolve::Counting] {
         let resolved = credentials::resolve("$EMPTY_TOKEN", &empty, mode, origin).unwrap();

@@ -406,7 +406,9 @@ pub fn document(words: &[String], text: &str, exit_code: i32) -> RunOutcome {
     }
 }
 
-/// The envelope's own keys after `payload`, as the Python CLI's `envelope` adds them.
+/// `payload` followed by the envelope's own keys: `schema_version`,
+/// `command`, `duration_ms`, `exit_code`, `summary`, `next_actions` and
+/// `failure`.
 fn envelope(
     mut payload: Vec<(String, Json)>,
     words: &[String],
