@@ -248,3 +248,37 @@ fn defender_validate_checks_one_row_and_the_custom_detection_columns() {
         ]
     );
 }
+
+/// #1142: a page of the rules that is not JSON is an error naming its
+/// content type, never an empty listing.
+#[test]
+fn defender_a_list_page_that_is_not_json_is_an_error() {
+    let full = support::cassette("defender/deploy");
+    let mut page = full.interactions[5].clone();
+    page.request.method = "GET".into();
+    page.request.url = defender::DETECTION_RULES_ENDPOINT.into();
+    page.response.status = 200;
+    page.response.headers = vec![("content-type".into(), "text/plain".into())];
+    page.response.body = Body::Text("maintenance".into());
+    let tenant = Replayed::start_with(
+        opentide_cassette::Cassette::new(
+            &full.scenario,
+            full.recorded_from,
+            vec![full.interactions[0].clone(), page],
+        ),
+        defender::PLATFORM,
+        SETUP,
+        "DEFENDER_CLIENT_SECRET",
+        &defender::http_settings(),
+    );
+    let listed = block_on(async { Defender::new().list_rules(tenant.cx()).await }).unwrap();
+    let error = listed.unwrap_err().to_string();
+    assert!(
+        error.ends_with(
+            "listing the detection rules: the page is not JSON (Content-Type text/plain): HTTP \
+             200 with a body that is not JSON (\"maintenance\")"
+        ),
+        "{error}"
+    );
+    assert_eq!(tenant.verify(), Vec::new());
+}

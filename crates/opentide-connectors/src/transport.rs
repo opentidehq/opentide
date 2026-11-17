@@ -39,7 +39,10 @@ pub use http::{Method, StatusCode};
 /// the request's own timeout when it sets one (HarfangLab's telemetry
 /// search), and whether it may be sent again after an answer when that is
 /// not its method's (Sysdig's versioned `PUT`).
-#[derive(Clone, Debug)]
+///
+/// Its `Debug` shows the URL without its query or credentials, each header
+/// name with a credential's value hidden, and the body's length only.
+#[derive(Clone)]
 pub struct Request {
     method: Method,
     url: url::Url,
@@ -47,6 +50,52 @@ pub struct Request {
     body: Option<Vec<u8>>,
     timeout: Option<Duration>,
     idempotent: Option<bool>,
+}
+
+/// The headers that carry a credential (#1142): marked sensitive when set,
+/// so no `Debug` and no HTTP/2 header table shows or keeps their value.
+const CREDENTIAL_HEADERS: [&str; 5] = [
+    "authorization",
+    "proxy-authorization",
+    "cookie",
+    "x-auth-token",
+    "x-api-key",
+];
+
+/// Whether *name* carries a credential ([`CREDENTIAL_HEADERS`]).
+pub fn is_credential_header(name: &HeaderName) -> bool {
+    CREDENTIAL_HEADERS.contains(&name.as_str())
+}
+
+impl std::fmt::Debug for Request {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut url = self.url.clone();
+        url.set_query(None);
+        url.set_fragment(None);
+        let _ = url.set_username("");
+        let _ = url.set_password(None);
+        let headers: Vec<(&str, &dyn std::fmt::Debug)> = self
+            .headers
+            .iter()
+            .map(|(name, value)| {
+                let shown: &dyn std::fmt::Debug =
+                    if value.is_sensitive() || is_credential_header(name) {
+                        &"***"
+                    } else {
+                        value
+                    };
+                (name.as_str(), shown)
+            })
+            .collect();
+        f.debug_struct("Request")
+            .field("method", &self.method)
+            .field("url", &url.as_str())
+            .field("headers", &headers)
+            .field("body_bytes", &self.body.as_ref().map(Vec::len))
+            .field("timeout", &self.timeout)
+            .field("idempotent", &self.idempotent)
+            .finish()
+    }
 }
 
 impl Request {
@@ -188,8 +237,11 @@ impl RequestBuilder {
         self.with(|request| {
             let name = HeaderName::try_from(name)
                 .map_err(|error| format!("builder error: {}", error.into()))?;
-            let value = HeaderValue::try_from(value)
+            let mut value = HeaderValue::try_from(value)
                 .map_err(|error| format!("builder error: {}", error.into()))?;
+            if is_credential_header(&name) {
+                value.set_sensitive(true);
+            }
             request.headers.append(name, value);
             Ok(())
         })
@@ -626,6 +678,46 @@ impl Transport for ReqwestTransport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #1142: a request's credentials are sensitive, and its `Debug` shows
+    /// none of them: not the headers, the URL's query or user, or the body.
+    #[test]
+    fn a_requests_credentials_are_sensitive_and_never_shown() {
+        let mut builder = RequestBuilder::new(
+            Method::POST,
+            "https://user:pass@tenant.example/api?key=query-secret",
+        )
+        .header("Authorization", "Bearer bearer-secret")
+        .header("X-Auth-Token", "token-secret")
+        .header("X-API-Key", "key-secret")
+        .header("Accept", "application/json")
+        .body(b"client_secret=body-secret".to_vec());
+        builder = builder.basic_auth("u", Some("basic-secret"));
+        let request = builder.build().unwrap();
+        for name in ["x-auth-token", "x-api-key", "authorization"] {
+            assert!(
+                request.headers().get(name).unwrap().is_sensitive(),
+                "{name}"
+            );
+        }
+        assert!(!request.headers().get("accept").unwrap().is_sensitive());
+        let shown = format!("{request:?}");
+        for secret in [
+            "bearer-secret",
+            "token-secret",
+            "key-secret",
+            "query-secret",
+            "pass",
+            "body-secret",
+            "basic",
+        ] {
+            assert!(!shown.contains(secret), "{secret} in {shown}");
+        }
+        assert!(
+            shown.contains("application/json") && shown.contains("https://tenant.example/api"),
+            "{shown}"
+        );
+    }
 
     /// A URL or header that does not parse is refused in words, with no URL
     /// in them, whichever step failed first.
