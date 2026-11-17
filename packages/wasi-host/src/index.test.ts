@@ -657,13 +657,17 @@ for (const server of SERVERS) {
 
 // `opentide mcp start` in the WASI module (#1180, #1142). A live `deploy_rule`
 // runs the command line's deploy inside the server's runtime, and WASI has
-// no other thread to hand it to: tokio cannot block on a second runtime
-// there. The deploy must fail naming why (opentide_connectors::runtime's
-// refusal), not panic into "the deploy stopped unexpectedly", and the server
-// must go on answering.
+// no other thread to hand it to. The deploy built a runtime of its own there
+// and dropped it inside the server's, which tokio refuses with a panic, a
+// trap in the module: the server died and answered nothing more. Through
+// opentide_connectors::runtime the deploy builds none there; it fails as
+// any deploy without the network does in this build, and the server goes on.
 test(
-  "mcp (wasi): a live deploy_rule inside the server's runtime fails by name, not by a panic",
-  { skip: wasiModule === undefined ? "wasi: no WASI module (OPENTIDE_WASI_CLI)" : false },
+  "mcp (wasi): a live deploy_rule fails without taking the server down",
+  {
+    skip: wasiModule === undefined ? "wasi: no WASI module (OPENTIDE_WASI_CLI)" : false,
+    timeout: 120_000,
+  },
   async () => {
     const scratch = realpathSync(mkdtempSync(join(tmpdir(), "wasi-host-")));
     const ws = join(scratch, "ws");
@@ -691,8 +695,9 @@ test(
     server.stderr.on("data", (chunk: string) => {
       stderr += chunk;
     });
-    // A server that dies (a panic is a trap in the module) answers nothing more.
-    const exited = new Promise<void>((resolve) => server.once("exit", () => resolve()));
+    // A server that dies (a panic is a trap in the module) answers nothing
+    // more. `close`, not `exit`: its last lines may still be in the pipe.
+    const exited = new Promise<void>((resolve) => server.once("close", () => resolve()));
     void exited.then(() => {
       for (const { reject } of waiting.values()) {
         reject(new Error(`the server exited before answering:\n${stderr.slice(-2000)}`));
@@ -742,6 +747,7 @@ test(
       const result = (await deployed).result as { content: { text: string }[] };
       const text = result.content.map((part) => part.text).join("\n");
       assert.match(text, /"status": ?"failed"/, text);
+      assert.match(text, /needs the network, which the WASI build of opentide does not have/, text);
       assert.doesNotMatch(text, /stopped unexpectedly/, text);
       // The server still serves after the deploy.
       assert.ok(Array.isArray(((await listed).result as { tools: unknown[] }).tools));
