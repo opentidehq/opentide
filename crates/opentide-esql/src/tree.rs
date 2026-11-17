@@ -163,7 +163,7 @@ pub(crate) fn parse(source: &str) -> Tree {
         .errors
         .iter()
         .map(|e| Problem {
-            at: usize::from(e.gap.end()),
+            at: usize::from(e.anchor(source.len())),
             message: e.message.clone(),
         })
         .collect();

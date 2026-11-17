@@ -1917,7 +1917,7 @@ mod tests {
     }
 
     #[test]
-    fn an_error_at_the_end_is_an_empty_span_where_the_text_stops() {
+    fn an_error_at_the_end_is_an_empty_span_after_the_last_token() {
         let d = analyze("FROM logs-* | WHERE (\n")
             .diagnostics
             .into_iter()
@@ -1928,10 +1928,9 @@ mod tests {
             "{}",
             d.message
         );
-        // Where the text stops, after its final newline, as every engine
-        // reports it: a host document places it right after the query's last
-        // character (`opentide_tide::remap_span`, #1431).
-        assert_eq!((d.range.start.line, d.range.start.character), (1, 0));
-        assert_eq!((d.range.end.line, d.range.end.character), (1, 0));
+        // Right after the last token, `(`, not past the final newline: as
+        // every engine reports the end of a query (#1431 follow-up).
+        assert_eq!((d.range.start.line, d.range.start.character), (0, 21));
+        assert_eq!((d.range.end.line, d.range.end.character), (0, 21));
     }
 }

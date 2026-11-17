@@ -191,7 +191,16 @@ pub fn diagnostics(source: &str, ctx: &Context) -> Vec<Diagnostic> {
             (s.start(), s.end())
         })
         .collect();
-    findings.extend(ast.errors().iter().map(|e| errors::classify(e, source)));
+    // An error past the last token (at the end of the text) is reported
+    // right after that token, not past the blanks and comments after it.
+    let last = cst::significant_end(source);
+    findings.extend(ast.errors().iter().map(|e| {
+        let mut finding = errors::classify(e, source);
+        if finding.start > last {
+            (finding.start, finding.end) = (last, last);
+        }
+        finding
+    }));
     // A rule runs from its name to the next rule's: a parse error there
     // stops the compiler before the semantic checks.
     let starts: Vec<usize> = ast

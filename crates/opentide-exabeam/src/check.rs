@@ -1123,8 +1123,19 @@ impl<'a> Parser<'a> {
 
     fn parse(mut self) -> Checked {
         if let Err(err) = self.top() {
+            // At the end of the text: right after its last character, not
+            // past the blanks after it (#1431 follow-up).
+            let pos = if self
+                .text
+                .get(err.pos..)
+                .is_some_and(|rest| rest.trim().is_empty())
+            {
+                err.pos.min(self.text.trim_end().len())
+            } else {
+                err.pos
+            };
             // One character from the error, never part of one (`diag`).
-            self.diag(codes::EXABEAM_PARSE_ERROR, err.message, err.pos, err.pos);
+            self.diag(codes::EXABEAM_PARSE_ERROR, err.message, pos, pos);
         }
         self.check_context_tables();
         self.out.context_tables.clone_from(&self.context_tables);

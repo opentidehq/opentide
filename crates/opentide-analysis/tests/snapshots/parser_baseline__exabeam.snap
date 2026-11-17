@@ -794,7 +794,7 @@ exabeam_time_exact error 1:62-1:84 time takes a range, not an exact value: write
 166..170 property
 171..175 keyword
 == conformance/external/exabeam/dns-tunnel-length.broken.rule.exabeam
-exabeam_parse_error error 3:0-3:0 expected a term
+exabeam_parse_error error 2:43-3:0 expected a term
 0..13 property
 13..14 operator
 14..27 string

@@ -76,7 +76,7 @@ pub(crate) fn parse(source: &str) -> Parsed {
         .errors
         .iter()
         .map(|e| {
-            let at = usize::from(e.gap.end());
+            let at = usize::from(e.anchor(source.len()));
             // The token that starts at the gap's end, the first non-empty one.
             let first = tokens.partition_point(|&(start, _)| {
                 crate::step();

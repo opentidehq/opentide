@@ -28,6 +28,18 @@ const CATALOGUE_CODES: [&str; 3] = [
 /// column (`exabeam_group_by_column`) or the `*` (`exabeam_group_by_select_star`).
 const NARROWED: [&str; 2] = ["exabeam_group_by_column", "exabeam_group_by_select_star"];
 
+/// A parse error at the end of the text: the reference checker reports it
+/// past the blanks after the query's last token; the engine right after that
+/// token, where the query stops (#1431 follow-up). The reference's range is
+/// read there.
+fn at_the_end(text: &str, d: &mut (String, usize, usize)) {
+    let last = text.trim_end().len();
+    if d.0 == "exabeam_parse_error" && d.1 >= last && d.1 > 0 {
+        d.1 = last;
+        d.2 = last + 1;
+    }
+}
+
 /// Queries where the engine and the reference checker may disagree, each with
 /// its reason. None today: the checker refuses and rewrites the syntax RE2 and
 /// Python's `re` read differently (`$?`, an escaped non-ASCII character), as
@@ -69,6 +81,7 @@ fn the_engine_agrees_with_the_reference_checker() {
             .collect();
         for list in [&mut expected, &mut found] {
             for d in list.iter_mut() {
+                at_the_end(text, d);
                 if NARROWED.contains(&d.0.as_str()) {
                     d.1 = 0;
                     d.2 = 0;

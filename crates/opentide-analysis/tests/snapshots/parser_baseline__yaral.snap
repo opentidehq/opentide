@@ -49594,7 +49594,7 @@ yaral_unfiltered_event warning 4:20-4:22 `$g` has no equality on metadata.event_
 251..253 variable
 254..255 punctuation.bracket
 == corpus/yaral/stage__invalid.yaral
-yaral_parse_error error 2:0-2:0 YARA-L expects `nocase` or `}` here
+yaral_parse_error error 1:44-1:44 YARA-L expects `nocase` or `}` here
 0..5 keyword
 6..11 type
 12..13 punctuation.bracket

@@ -1959,7 +1959,7 @@ esql_metadata_id warning 0:10-0:25 non-aggregating ES|QL query lacks `METADATA _
 80..83 string
 84..85 punctuation.bracket
 == corpus/esql/row_command__invalid.esql
-esql_parse_error error 0:8-0:8 ES|QL syntax error at the end of the query: expected an expression
+esql_parse_error error 0:7-0:7 ES|QL syntax error at the end of the query: expected an expression
 0..3 keyword
 4..5 property
 6..7 operator
