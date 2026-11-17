@@ -150,7 +150,7 @@ fn main() -> Result<(), opentide::Error> {
 
 ## Query, check and deploy on tenants
 
-With the `connectors` feature, a `Connection` reaches one tenant through the platform connectors that `opentide query`, `opentide validate query --live` and `opentide deploy` run on: one HTTP client per tenant, with that tenant's own TLS, CA bundle, proxy, timeout and retries, and its credentials resolved from the environment (an unset `$NAME` is an error naming the variable, never sent). `Workspace::tenants(platform)` lists the tenants a workspace configures (`[[tenants]]` in `.opentide/configurations/platforms/<platform>.toml`); `TenantConfig::new` describes one in code.
+With the `connectors` feature, a `Connection` reaches one tenant through the platform connectors that `opentide query`, `opentide validate query --live` and `opentide deploy` run on: one HTTP client per tenant, with that tenant's own TLS, CA bundle, proxy, timeout and retries, and its credentials resolved from the environment, `ConnectOptions::environment` when it names one, Google SecOps's Application Default Credentials too (an unset `$NAME` is an error naming the variable, never sent). `Workspace::tenants(platform)` lists the tenants a workspace configures (`[[tenants]]` in `.opentide/configurations/platforms/<platform>.toml`); `TenantConfig::new` describes one in code.
 
 | Operation | Command line | Returns |
 |-----------|--------------|---------|
