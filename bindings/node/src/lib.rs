@@ -45,12 +45,21 @@ pub const VERSION: &str = opentide::cli::VERSION;
 ///
 /// Ctrl-C stops the run, which then returns 130 (`error: interrupted`); a
 /// second Ctrl-C ends the process at once, as the PyPI CLI does.
-#[napi]
-pub fn main(argv: Vec<String>) -> i32 {
-    let code = opentide::cli::main(&argv);
-    // Node exits without Rust's runtime: flush what the run left buffered.
-    let _ignored = std::io::stdout().flush();
-    code
+///
+/// The promise resolves to the exit code; the run happens off Node's event
+/// loop, which keeps serving timers and I/O meanwhile.
+#[napi(catch_unwind, ts_return_type = "Promise<number>")]
+pub fn main(env: &Env, argv: Vec<String>) -> napi::Result<Object<'_>> {
+    blocking(
+        env,
+        move || {
+            let code = opentide::cli::main(&argv);
+            // Node exits without Rust's runtime: flush what the run left buffered.
+            let _ignored = std::io::stdout().flush();
+            Ok(code)
+        },
+        |_env, code| Ok(code),
+    )
 }
 
 /// Runs `opentide --json <argv>` in this process and returns its JSON
@@ -58,12 +67,51 @@ pub fn main(argv: Vec<String>) -> i32 {
 /// `command`, `result`, `failure`, ...) or, for `commands`, the command tree.
 /// A command that fails still returns its document, with `ok: false`.
 ///
-/// Throws an `Error` whose `code` is `no_json_document` when the command
-/// wrote no document (`--version`).
-#[napi(ts_return_type = "any")]
-pub fn run_json(env: &Env, argv: Vec<String>) -> napi::Result<Unknown<'_>> {
-    let document = json_document(argv).map_err(|e| throw(*env, e))?;
-    parse(env, &document)
+/// The promise rejects with an `Error` whose `code` is `no_json_document`
+/// when the command wrote no document (`--version`). The command runs off
+/// Node's event loop.
+#[napi(catch_unwind, ts_return_type = "Promise<any>")]
+pub fn run_json(env: &Env, argv: Vec<String>) -> napi::Result<Object<'_>> {
+    blocking(
+        env,
+        move || json_document(argv),
+        |env, document| parse(env, &document),
+    )
+}
+
+/// A promise of `work`'s result: `work` runs on a blocking thread of the
+/// SDK's runtime, never on Node's event loop, and `settle` makes its
+/// JavaScript value on Node's thread. A failure rejects the promise with its
+/// code; a panic in `work` rejects it with `internal_error`, never ending
+/// the process.
+fn blocking<T, D>(
+    env: &Env,
+    work: impl FnOnce() -> Result<T, Failure> + Send + 'static,
+    settle: impl FnOnce(Env, T) -> napi::Result<D> + Send + 'static,
+) -> napi::Result<Object<'_>>
+where
+    T: Send + 'static,
+    D: napi::bindgen_prelude::ToNapiValue + 'static,
+{
+    type Settle<D> = Box<dyn FnOnce(Env) -> napi::Result<D> + Send>;
+    let (deferred, promise) = env.create_deferred::<D, Settle<D>>()?;
+    let finish = move |outcome: Result<T, Failure>| {
+        deferred.resolve(Box::new(move |env| match outcome {
+            Ok(value) => settle(env, value),
+            Err(failure) => Err(throw(env, failure)),
+        }));
+    };
+    match tenants::runtime() {
+        Ok(runtime) => {
+            runtime.spawn_blocking(move || {
+                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
+                    .unwrap_or_else(|panic| Err(Failure::panicked(panic.as_ref())));
+                finish(outcome);
+            });
+        }
+        Err(failure) => finish(Err(failure)),
+    }
+    Ok(promise)
 }
 
 /// [`run_json`]'s document as the command line wrote it.
@@ -141,22 +189,32 @@ pub struct DeployPlanOptions {
 /// read and parsed once into one index. Each method reads that index.
 #[napi]
 pub struct Workspace {
-    inner: opentide::Workspace,
+    inner: std::sync::Arc<opentide::Workspace>,
 }
 
 #[napi]
 impl Workspace {
     /// Opens the workspace at `path` on disk: a repository holding
-    /// `.opentide/` or `objects/`, or a folder inside one.
-    #[napi(factory)]
-    pub fn open(env: &Env, path: String, options: Option<OpenOptions>) -> napi::Result<Self> {
-        open_workspace(path, options).map_err(|e| throw(*env, e))
+    /// `.opentide/` or `objects/`, or a folder inside one. The files are read
+    /// and indexed off Node's event loop; the promise resolves to the
+    /// workspace.
+    #[napi(catch_unwind, ts_return_type = "Promise<Workspace>")]
+    pub fn open(env: &Env, path: String, options: Option<OpenOptions>) -> napi::Result<Object<'_>> {
+        // The working directory is the caller's at the call, not whenever
+        // the work starts: `process.chdir` after `open` changes nothing.
+        let path = at_call(path);
+        let cwd = options.and_then(|options| options.cwd).map(at_call);
+        blocking(
+            env,
+            move || open_workspace(path, cwd),
+            |_env, workspace| Ok(workspace),
+        )
     }
 
     /// Opens a workspace held in memory, rooted at `root`: each key of
     /// `files` is a path (relative to `root`, or absolute), each value its
     /// text. Nothing is read from or written to the disk.
-    #[napi(factory)]
+    #[napi(catch_unwind, factory)]
     pub fn from_files(
         env: &Env,
         root: String,
@@ -166,7 +224,7 @@ impl Workspace {
     }
 
     /// The workspace folder: the one that holds `.opentide/` and `objects/`.
-    #[napi(getter)]
+    #[napi(catch_unwind, getter)]
     pub fn root(&self) -> String {
         self.inner.root().to_string_lossy().into_owned()
     }
@@ -175,6 +233,7 @@ impl Workspace {
     /// `summary` as `validate --json` writes them, whether the run fails, and
     /// its exit code.
     #[napi(
+        catch_unwind,
         ts_return_type = "{ checks: Record<string, { check: string; status: string }>; report: any; summary: any; failed: boolean; warned: boolean; exitCode: number }"
     )]
     pub fn validate<'env>(
@@ -190,6 +249,7 @@ impl Workspace {
     /// without fixing anything: `findings` and `summary` as `lint --json`
     /// writes them, the status, the message and the exit code.
     #[napi(
+        catch_unwind,
         ts_return_type = "{ path: string; checks: string[]; findings: any[]; status: 'completed' | 'issues' | 'failed'; message: string; exitCode: number; failureCode: string | null; summary: any | null; outcome: string | null; unmatched: string[]; warnings: string[]; nextActions: Array<{ command: string; reason: string }> }"
     )]
     pub fn lint<'env>(
@@ -204,7 +264,7 @@ impl Workspace {
     /// What `opentide info` reports: the object counts, the files that did
     /// not load and each platform with its tenants (the environment
     /// variables each reads and whether each is set, never their values).
-    #[napi(ts_return_type = "any")]
+    #[napi(catch_unwind, ts_return_type = "any")]
     pub fn info<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
         env.to_js_value(&self.inner.info())
     }
@@ -212,26 +272,26 @@ impl Workspace {
     /// The catalogue (`opentide info catalog`): every object with its
     /// techniques and platforms, every edge, the signals and the ATT&CK
     /// matrix.
-    #[napi(ts_return_type = "any")]
+    #[napi(catch_unwind, ts_return_type = "any")]
     pub fn catalog<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
         env.to_js_value(&self.inner.catalog())
     }
 
     /// The detection rules: their rows of the catalogue (`uuid`, `type`,
     /// `schema`, `name`, `path`, `techniques`, ...), in index order.
-    #[napi(ts_return_type = "any[]")]
+    #[napi(catch_unwind, ts_return_type = "any[]")]
     pub fn rules<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
         env.to_js_value(&self.inner.rules())
     }
 
     /// The detection objectives: their rows of the catalogue.
-    #[napi(ts_return_type = "any[]")]
+    #[napi(catch_unwind, ts_return_type = "any[]")]
     pub fn objectives<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
         env.to_js_value(&self.inner.objectives())
     }
 
     /// The threat vectors: their rows of the catalogue.
-    #[napi(ts_return_type = "any[]")]
+    #[napi(catch_unwind, ts_return_type = "any[]")]
     pub fn threats<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
         env.to_js_value(&self.inner.threats())
     }
@@ -239,6 +299,7 @@ impl Workspace {
     /// The rules that cover the ATT&CK `technique` (`opentide info coverage
     /// --technique`), their own techniques or inherited ones.
     #[napi(
+        catch_unwind,
         ts_return_type = "{ technique: string; rules: string[]; count: number; own: string[]; inherited: string[]; matched_techniques: string[] }"
     )]
     pub fn coverage<'env>(&self, env: &'env Env, technique: String) -> napi::Result<Unknown<'env>> {
@@ -247,29 +308,43 @@ impl Workspace {
 
     /// The deploy plan: what `opentide deploy --dry-run` would send, computed
     /// locally. Nothing is sent and nothing is written. `document` is
-    /// `deploy --dry-run --json`'s `result`.
-    #[napi(ts_return_type = "{ document: any; summary: any | null; ok: boolean }")]
+    /// `deploy --dry-run --json`'s `result`. The rules are compiled off
+    /// Node's event loop.
+    #[napi(
+        catch_unwind,
+        ts_return_type = "Promise<{ document: any; summary: any | null; ok: boolean }>"
+    )]
     pub fn deploy_plan<'env>(
         &self,
         env: &'env Env,
         options: Option<DeployPlanOptions>,
-    ) -> napi::Result<Unknown<'env>> {
-        let plan = self.plan(options).map_err(|e| throw(*env, e))?;
-        let mut object = Object::new(env)?;
-        object.set_named_property("document", parse(env, &plan.document)?)?;
-        match &plan.summary {
-            Some(summary) => object.set_named_property("summary", parse(env, summary)?)?,
-            None => object.set_named_property("summary", Null)?,
-        }
-        object.set_named_property("ok", plan.ok)?;
-        Ok(object.to_unknown())
+    ) -> napi::Result<Object<'env>> {
+        let workspace = Self {
+            inner: std::sync::Arc::clone(&self.inner),
+        };
+        blocking(
+            env,
+            move || workspace.plan(options),
+            |env, plan| {
+                let mut object = Object::new(&env)?;
+                object.set_named_property("document", parse(env, &plan.document)?)?;
+                match &plan.summary {
+                    Some(summary) => {
+                        object.set_named_property("summary", parse(env, summary)?)?;
+                    }
+                    None => object.set_named_property("summary", Null)?,
+                }
+                object.set_named_property("ok", plan.ok)?;
+                Ok(object.to_unknown())
+            },
+        )
     }
 
     /// The tenants the workspace configures for `platform` (the
     /// `[[tenants]]` of `.opentide/configurations/platforms/<platform>.toml`),
     /// in file order; empty when it configures none. Open one with
     /// `Connection.open`.
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn tenants(&self, platform: String) -> Vec<TenantConfig> {
         self.inner
             .tenants(&platform)
@@ -307,14 +382,23 @@ impl Workspace {
 }
 
 /// `Workspace.open`'s workspace.
-fn open_workspace(path: String, options: Option<OpenOptions>) -> Result<Workspace, Failure> {
+fn open_workspace(
+    path: std::path::PathBuf,
+    cwd: Option<std::path::PathBuf>,
+) -> Result<Workspace, Failure> {
     let mut open = opentide::Options::default();
-    if let Some(cwd) = options.and_then(|options| options.cwd) {
+    if let Some(cwd) = cwd {
         open = open.cwd(cwd);
     }
     Ok(Workspace {
-        inner: opentide::Workspace::open(path, &open)?,
+        inner: std::sync::Arc::new(opentide::Workspace::open(path, &open)?),
     })
+}
+
+/// *path* made absolute against the process's working directory now; as
+/// given when it cannot be (the open then reports why).
+fn at_call(path: String) -> std::path::PathBuf {
+    std::path::absolute(&path).unwrap_or_else(|_| path.into())
 }
 
 /// `Workspace.fromFiles`'s workspace.
@@ -323,7 +407,7 @@ fn workspace_from_files(
     files: HashMap<String, String>,
 ) -> Result<Workspace, Failure> {
     Ok(Workspace {
-        inner: opentide::Workspace::from_files(root, files)?,
+        inner: std::sync::Arc::new(opentide::Workspace::from_files(root, files)?),
     })
 }
 
@@ -426,7 +510,7 @@ impl<'a> LintJs<'a> {
 }
 
 /// `text` (a JSON document) through `JSON.parse`, which keeps its key order.
-fn parse<'env>(env: &'env Env, text: &str) -> napi::Result<Unknown<'env>> {
+fn parse<'env>(env: Env, text: &str) -> napi::Result<Unknown<'env>> {
     let json: JSON = env.get_global()?.get_named_property_unchecked("JSON")?;
     let parse: Function<String, Unknown> = json.get_named_property_unchecked("parse")?;
     parse.call(text.to_owned())
@@ -449,6 +533,19 @@ impl Failure {
             message,
             detail: None,
         }
+    }
+
+    /// A call that panicked: `internal_error`, with the panic's text.
+    fn panicked(payload: &(dyn std::any::Any + Send)) -> Self {
+        let text = payload
+            .downcast_ref::<&str>()
+            .map(|text| (*text).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "a panic".to_owned());
+        Self::new(
+            "internal_error",
+            format!("opentide stopped unexpectedly: {text}"),
+        )
     }
 
     /// A choice the command line would refuse: `usage_invalid_choice`.
@@ -851,7 +948,7 @@ mod tests {
                 &dir.path().join("objects").join(family),
             );
         }
-        let ws = open_workspace(dir.path().to_string_lossy().into_owned(), None).unwrap();
+        let ws = open_workspace(dir.path().to_path_buf(), None).unwrap();
         let plan = ws.plan(None).unwrap();
         assert!(plan.ok, "{}", plan.document);
         let summary: serde_json::Value =
@@ -866,14 +963,9 @@ mod tests {
         std::fs::create_dir_all(&configurations).unwrap();
         std::fs::create_dir_all(dir.path().join("objects/rules")).unwrap();
         std::fs::write(configurations.join("paths.toml"), "this is = = not toml").unwrap();
-        let failure = open_workspace(
-            dir.path().to_string_lossy().into_owned(),
-            Some(OpenOptions {
-                cwd: Some(dir.path().to_string_lossy().into_owned()),
-            }),
-        )
-        .err()
-        .unwrap();
+        let failure = open_workspace(dir.path().to_path_buf(), Some(dir.path().to_path_buf()))
+            .err()
+            .unwrap();
         assert_eq!(failure.code, "config_parse", "{failure:?}");
         assert!(!failure.message.is_empty());
     }
