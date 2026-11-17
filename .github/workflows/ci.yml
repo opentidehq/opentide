@@ -1119,13 +1119,14 @@ jobs:
       # Tenant commands under `opentide serve` in Node's WASI, every request
       # made by @opentide/wasi-host's FetchHost and answered from the golden
       # cassettes (no network in the module; the extension host performs the
-      # requests).
-      - name: Tenant commands through the host's opentide/fetch, in the WASI module
+      # requests); and `opentide mcp start` answering a client that waits for
+      # each answer before its next request.
+      - name: opentide serve and mcp start, in the WASI module
         env:
           OPENTIDE_WASI_CLI: target/wasm32-wasip1/wasi/opentide.wasm
         run: |
           (cd packages/wasi-host && npm ci)
-          node --experimental-strip-types --test --test-name-pattern='^serve \(wasi\)' packages/wasi-host/src/index.test.ts
+          node --experimental-strip-types --test --test-name-pattern='^(serve|mcp start) \(wasi\)' packages/wasi-host/src/index.test.ts
 
       - name: npm packages build and pack
         run: |
