@@ -1472,7 +1472,7 @@ impl Deployer for Exabeam {
                     .with_field("platform", PLATFORM)
                     .with_field("tenant", tenant)
             };
-            let body: Json = if request.body.is_empty() {
+            let body: Json = if request.operation == Operation::Delete && request.body.is_empty() {
                 Json::Null
             } else {
                 serde_json::from_slice(&request.body).map_err(|error| {
@@ -1494,7 +1494,10 @@ impl Deployer for Exabeam {
                 Operation::Update | Operation::Disable => Action::Update(request.rule_id.clone()),
                 Operation::Delete => Action::Delete(request.rule_id.clone()),
             };
-            let refusal = request.recreate_refusal.as_ref();
+            let refusal = request
+                .recreate_refusal
+                .as_ref()
+                .filter(|refusal| !refusal.message.is_empty());
             let rule = RuleDeploy {
                 action,
                 body,

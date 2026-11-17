@@ -1268,6 +1268,8 @@ fn exabeam_stand(server: &wiremock::MockServer, rt: &tokio::runtime::Runtime) ->
             .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(
                 r#"{"access_token": "t1", "token_type": "Bearer", "expires_in": 14400}"#,
             ))
+            // One token for the tenant, across its rules.
+            .expect(1)
             .mount(server),
     );
     let setup = format!(
@@ -1368,7 +1370,7 @@ fn exabeam_does_not_create_again_a_lost_rule_git_would_not_keep() {
     use wiremock::matchers::{method, path};
     let rt = tokio::runtime::Runtime::new().unwrap();
     let server = rt.block_on(wiremock::MockServer::start());
-    let (setup, env) = exabeam_stand(&server, &rt);
+    let (setup, _) = exabeam_stand(&server, &rt);
     let stored = "016dbc1d-a727-43df-a143-9546dcc81a5a";
     rt.block_on(async {
         wiremock::Mock::given(method("PUT"))
@@ -1390,7 +1392,6 @@ fn exabeam_does_not_create_again_a_lost_rule_git_would_not_keep() {
         &[("a.yaml", uuid, EXABEAM_BLOCK.to_owned(), stored)],
     );
     std::fs::write(ws.path().join(".gitignore"), ".opentide/states/\n").unwrap();
-    let _ = env;
     let (code, _, err) = cli(
         ws.path(),
         &[
@@ -1410,9 +1411,14 @@ fn exabeam_does_not_create_again_a_lost_rule_git_would_not_keep() {
     );
     rt.block_on(server.verify());
     assert_eq!(code, 1, "{err}");
-    assert!(err.contains("git ignores"), "{err}");
-    // The warning raised before the refusal is logged, as before.
-    assert!(err.contains("exabeam_rule_recreated"), "{err}");
+    // The warning raised before the refusal, then the state's refusal
+    // itself (`report_failure`'s `detail`), never a rule error.
+    let warned = err.find("code: exabeam_rule_recreated").expect(&err);
+    let refused = err
+        .find("error: Deployment state ignored · detail: git ignores")
+        .expect(&err);
+    assert!(warned < refused, "{err}");
+    assert!(!err.contains("· error: git ignores"), "{err}");
 }
 
 /// Runs `opentide <argv>` on the command line, in `ws`, with `env`: the

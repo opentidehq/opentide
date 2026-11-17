@@ -1165,6 +1165,12 @@ async fn the_platform_deploys_through_the_generic_interface() {
     assert_eq!(error.partial, None);
     request.body = b"not json".to_vec();
     assert!(deployer.deploy(stand2.cx(), &request).await.is_err());
+    // Only a delete takes an empty body: a create without one sends nothing.
+    let sent = stand2.requests().await.len();
+    request.body = Vec::new();
+    let error = deployer.deploy(stand2.cx(), &request).await.unwrap_err();
+    assert!(error.failure.message.contains("not JSON"), "{error}");
+    assert_eq!(stand2.requests().await.len(), sent);
     // A delete takes no body.
     stand2
         .on(
@@ -1182,7 +1188,12 @@ async fn the_platform_deploys_through_the_generic_interface() {
         deleted.events,
         [DeployEvent::new("exabeam_rule_deleted").with_field("rule_id", FIRST_ID)]
     );
-    // A refused key fails the tenant, with Exabeam's own code.
+}
+
+/// A refused key fails the tenant through the generic interface, with
+/// Exabeam's own code.
+#[tokio::test]
+async fn a_refused_key_fails_the_tenant_through_the_generic_interface() {
     let stand3 = Stand::start().await;
     stand3.token().await;
     stand3
@@ -1192,9 +1203,8 @@ async fn the_platform_deploys_through_the_generic_interface() {
             ResponseTemplate::new(401).set_body_string("token expired"),
         )
         .await;
-    request.rule_id = FIRST_ID.to_owned();
-    request.operation = Operation::Update;
-    request.body = body;
+    let body = serde_json::to_vec(&golden("rule-exabeam-threshold-1.0.create.api.json")).unwrap();
+    let request = DeployRequest::new(FIRST_ID, Operation::Update, body);
     let error = Exabeam::with_pacer(Arc::clone(&stand3.pacer))
         .deploy(stand3.cx(), &request)
         .await
